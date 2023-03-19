@@ -1,0 +1,7 @@
+var: 7949
+    num $a
+    num $b
+    num $c
+    load $b var
+    add $a $b $c a
+    mul $c $b $c

@@ -1,0 +1,25 @@
+[01:26:30] [Thread 20928] 
+####   Tokenizer   ####
+[01:26:30] [Thread 20928] 
+####   31 Tokens   ####
+[01:26:30] [Thread 20928] [1:1] var [1:4] : [1:6] 7949 [2:5] num [2:9] $ [2:10] a [3:5] num [3:9] $ [3:10] b [4:5] num [4:9] $ [4:10] c [5:5] load [5:10] $ [5:11] b [5:13] var [6:5] add [6:9] $ [6:10] a [6:12] $
+[01:26:30] [Thread 20928] [6:13] b [6:15] $ [6:16] c [6:18] a [7:5] mul [7:9] $ [7:10] c [7:12] $ [7:13] b [7:15] $ [7:16] c 
+[01:26:30] [Thread 20928] 
+#### Compile Instructions ####
+[01:26:30] [Thread 20928] Constant var=7949.000000 to 0
+[01:26:30] [Thread 20928] BC_MAKE_NUMBER $0
+[01:26:30] [Thread 20928] BC_MAKE_NUMBER $0
+[01:26:30] [Thread 20928] BC_MAKE_NUMBER $0
+[01:26:30] [Thread 20928] BC_LOAD_CONST $1 $0
+[01:26:30] [Thread 20928] BC_ADD $0 $1 $2
+[Thread 7332] CompileError at 6:18: Expected something after a
+[01:26:18] [Thread 7332] BC_MUL $2 $1 $2
+[01:26:18] [Thread 7332] 
+####   Execute   ####
+[01:26:18] [Thread 7332] BC_MAKE_NUMBER $0[0] new
+[01:26:18] [Thread 7332] BC_MAKE_NUMBER $0[1] new
+[01:26:18] [Thread 7332] BC_MAKE_NUMBER $0[2] new
+[01:26:18] [Thread 7332] BC_LOAD_CONST $1 $0[1] = 7949.000000
+[01:26:18] [Thread 7332] BC_ADD $0 $1 $2[2]7949.000000 = [0]0.000000 + [1]7949.000000
+[01:26:18] [Thread 7332] BC_MUL $2 $1 $2[2]63186601.000000 = [2]7949.000000 * [1]7949.000000
+MUL $2 $1 $2[2]63186601.000000 = [2]7949.000000 * [1]7949.000000

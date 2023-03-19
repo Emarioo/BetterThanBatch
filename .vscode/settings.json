@@ -2,6 +2,33 @@
     "files.associations": {
         "vector": "cpp",
         "xstring": "cpp",
-        "xutility": "cpp"
-    }
+        "xutility": "cpp",
+        "bit": "cpp",
+        "cctype": "cpp",
+        "cmath": "cpp",
+        "compare": "cpp",
+        "concepts": "cpp",
+        "cstddef": "cpp",
+        "cstdint": "cpp",
+        "cstdio": "cpp",
+        "cstdlib": "cpp",
+        "cstring": "cpp",
+        "cwchar": "cpp",
+        "exception": "cpp",
+        "list": "cpp",
+        "string": "cpp",
+        "unordered_map": "cpp",
+        "initializer_list": "cpp",
+        "iosfwd": "cpp",
+        "limits": "cpp",
+        "new": "cpp",
+        "tuple": "cpp",
+        "type_traits": "cpp",
+        "utility": "cpp",
+        "xhash": "cpp",
+        "xmemory": "cpp",
+        "xstddef": "cpp",
+        "xtr1common": "cpp"
+    },
+    "cmake.configureOnOpen": false
 }
