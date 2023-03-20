@@ -11,7 +11,7 @@ int main(int argc, const char** argv){
     // Bytecode bytecode = CompileScript(tokens);
 
     Tokens toks = Tokenize(ReadFile("tests/inst/asm.txt"));
-    toks.printTokens(20,TOKEN_PRINT_LN_COL);
+    toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
     Bytecode bytecode = CompileInstructions(toks);
     
     Context context{};

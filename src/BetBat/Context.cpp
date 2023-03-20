@@ -37,6 +37,7 @@ void Context::execute(){
     log::out << "\n####   Execute   ####\n";
     int index=0;
     while(true){
+        Sleep(0.001); // prevent CPU from overheating if there is a bug with infinite loop
         if(activeCode.length() == index)
             break;
         Instruction inst = activeCode.get(index++);
@@ -103,7 +104,7 @@ void Context::execute(){
                 r0.type = REF_NUMBER;
                 r0.index = makeNumber();
                 
-                inst.print(); log::out<<"["<<r0.index<<"] new\n";
+                inst.print(); log::out<<" ["<<r0.index<<"]\n";
                 
                 break;
             }
@@ -128,15 +129,18 @@ void Context::execute(){
                 
                 // note that address is refers to the instruction position/index and not the byte memory address.
 
-                if(activeCode.length()>address){
-                     log::out << "ContextError at "<<index<<" ["; inst.print(); log::out << "] invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
+                if(activeCode.length()<address){
+                    log::out << "ContextError at "<<index<<" ["; inst.print(); log::out << "] invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
+                }else if(index == address){
+                    log::out << "ContextWarning at "<<index<<" ["; inst.print(); log::out << "] jumping to next instruction is redundant\n";   
                 }else{
                     index = address;
+                    log::out << inst << "\n";
                 }
                 break;
             }
             default:{
-                inst.print(); log::out << "Not implemented\n";
+                log::out << inst << "Not implemented\n";
             }
         }
     }

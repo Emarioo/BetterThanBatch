@@ -18,6 +18,8 @@
 #define BC_MUL (BC_R3|0x03)
 #define BC_DIV (BC_R3|0x04)
 
+#define BC_DIV (BC_R3|0x05)
+
 #define BC_LOAD_CONST (BC_R2|0x01)
 
 #define BC_MAKE_NUMBER (BC_R1|0x01)
@@ -39,6 +41,7 @@ struct Instruction {
 
     void print();
 };
+engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction);
 
 struct Bytecode {
     engone::Memory codeSegment{sizeof(Instruction)};
@@ -48,28 +51,35 @@ struct Bytecode {
     bool add(uint8 type, uint8 reg0, uint8 reg1, uint8 reg2);
     bool add(uint8 type, uint8 reg0, uint16 reg12);
     bool add(uint8 type, uint reg012);
-    Instruction get(int index);
+    Instruction& get(uint index);
     
-    int addConstNumber(double number);
-    Number* getConstNumber(int index);
-    int length();
+    uint addConstNumber(double number);
+    Number* getConstNumber(uint index);
+    uint length();
 };
 struct GenerationInfo {
     Bytecode code{};
-    int index=0;
+    uint index=0;
     Tokens tokens{};
     
     int baseIndex=-1;
 
-    std::unordered_map<double,int> constNumberMap;
+    std::unordered_map<double,uint> constNumberMap;
 
-    std::unordered_map<std::string,int> nameNumberMap;
+    std::unordered_map<std::string,uint> nameNumberMap;
 
-    std::unordered_map<std::string,int> addressMap;
+    std::unordered_map<std::string,uint> addressMap;
+
+    struct AddressInst{
+        uint instIndex=0;
+        Token addrName;
+    };
+    std::vector<AddressInst> instructionsToResolve;
 
     // Does not handle out of bounds
     Token prev();
     Token next();
+    Token now();
     int at();
     bool end();
     void finish();

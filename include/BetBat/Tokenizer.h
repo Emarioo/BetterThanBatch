@@ -28,6 +28,7 @@ struct Token {
     // prints the string, does not print suffix, line or column
     void print(int printFlags = TOKEN_PRINT_QUOTES);
 };
+engone::Logger& operator<<(engone::Logger& logger, Token& token);
 struct Tokens {
     engone::Memory tokens{sizeof(Token)}; // the tokens themselves
     engone::Memory tokenData{1}; // the data the tokens refer to
@@ -37,7 +38,7 @@ struct Tokens {
     Token& get(int index);
     int length();
     // flags is a bitmask, TOKEN_PRINT_...
-    void printTokens(int tokensPerLine = 20, int flags = TOKEN_PRINT_QUOTES);
+    void printTokens(int tokensPerLine = 14, int flags = TOKEN_PRINT_QUOTES);
     
     void printData(int charsPerLine = 40);
 };

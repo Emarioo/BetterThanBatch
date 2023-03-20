@@ -39,7 +39,11 @@ void Instruction::print(){
     if((type&BC_MASK) == BC_R2)
         log::out << InstToString(type)<<" $" <<reg0<<" $"<< reg12;
     if((type&BC_MASK) == BC_R1)
-        log::out << InstToString(type)<<" $"<< reg12;
+        log::out << InstToString(type)<<" $"<< (reg0 | (reg12<<8));
+}
+engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
+    instruction.print();
+    return logger;
 }
 bool Bytecode::add(Instruction instruction){
     if(codeSegment.max == codeSegment.used){
@@ -71,7 +75,7 @@ bool Bytecode::add(uint8 type, uint reg012){
     inst.reg12 = reg012>>8;
     return add(inst);
 }
-int Bytecode::addConstNumber(double number){
+uint Bytecode::addConstNumber(double number){
     if(constNumbers.max == constNumbers.used){
         if(!constNumbers.resize(constNumbers.max*2 + 100))
             return false;   
@@ -81,15 +85,14 @@ int Bytecode::addConstNumber(double number){
     constNumbers.used++;
     return index;
 }
-Number* Bytecode::getConstNumber(int index){
+Number* Bytecode::getConstNumber(uint index){
     return (Number*)constNumbers.data + index;
 }
-int Bytecode::length(){
+uint Bytecode::length(){
     return codeSegment.used;   
 }
-Instruction Bytecode::get(int index){
-    if(index<0 || index >= codeSegment.used)
-        return {};
+Instruction& Bytecode::get(uint index){
+    Assert(index<codeSegment.used);
     return *((Instruction*)codeSegment.data + index);
 }
 
@@ -115,7 +118,7 @@ int IsDecimal(Token& token){
             hasNums=true;
         bool found=false;
         for(int j=0;j<sizeof(numchars);j++){
-            if(token.str[i]!=numchars[j]){
+            if(token.str[i]==numchars[j]){
                 found = true;
                 break;
             }
@@ -150,6 +153,9 @@ Token GenerationInfo::next(){
 }
 Token GenerationInfo::prev(){
     return tokens.get(index-1);
+}
+Token GenerationInfo::now(){
+    return tokens.get(index);
 }
 bool GenerationInfo::end(){
     Assert(index<=tokens.length());
@@ -230,8 +236,9 @@ Bytecode CompileScript(Tokens tokens){
 
     return info.code;
 }
-
-bool CompileInstructionArg(GenerationInfo& info, int& num, bool allowVariable){
+#define COMPILE_ARG_VAR 1
+#define COMPILE_ARG_ADDR 2
+bool CompileInstructionArg(GenerationInfo& info, int& num, int flags){
     using namespace engone;
     Token prev = info.prev(); // make sure prev exists
     if(prev.flags&TOKEN_SUFFIX_LINE_FEED){
@@ -244,13 +251,28 @@ bool CompileInstructionArg(GenerationInfo& info, int& num, bool allowVariable){
     }
     CHECK_ENDR;
     Token token = info.next();
-    if(!allowVariable){
+    if((flags&COMPILE_ARG_VAR)){
+        auto find = info.nameNumberMap.find(token);
+        if(find==info.nameNumberMap.end()){
+            ERRTOK token.print(); log::out<<" is undefined\n";
+            return false;
+        }
+        num = find->second;
+    }else if((flags&COMPILE_ARG_ADDR)){
+        if(IsInteger(token)){
+            num = ConvertInteger(token);
+        }else{
+            // Todo: Verify valid token name
+            num = 0;
+            info.instructionsToResolve.push_back({info.code.length(),token});
+        }
+    }else{
         if(token=="$"){
             if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-                ERRTOKL log::out <<"Expected an integer ($registernumber)\n";
+                ERRTOKL log::out <<"Expected a register ($integer or $ab)\n";
                 return false;
             } else if(token.flags&TOKEN_SUFFIX_SPACE){
-                ERRTOKL log::out << "Expected an integer without space ($registernumber)\n";
+                ERRTOKL log::out << "Expected a register without space ($integer or $ab)\n";
                 return false;
             } else {
                 CHECK_ENDR
@@ -286,15 +308,18 @@ bool CompileInstructionArg(GenerationInfo& info, int& num, bool allowVariable){
             ERRTOK log::out<<"Expected $\n";
             return false;
         }
-    }else {
-        auto find = info.nameNumberMap.find(token);
-        if(find==info.nameNumberMap.end()){
-            ERRTOK token.print(); log::out<<" is undefined\n";
-            return false;
-        }
-        num = find->second;
     }
     return true;
+}
+bool LineEndError(GenerationInfo& info){
+    using namespace engone;
+    Token prev = info.prev();
+    if(0==(prev.flags&TOKEN_SUFFIX_LINE_FEED) && !info.end()){
+        ERRTL(prev) log::out << "Expected line feed found "<<info.now()<<"\n";
+        info.nextLine();
+        return true;
+    }
+    return false;
 }
 Bytecode CompileInstructions(Tokens tokens){
     using namespace engone;
@@ -340,9 +365,9 @@ Bytecode CompileInstructions(Tokens tokens){
             // Jump address or constant
             if(token.flags & TOKEN_SUFFIX_LINE_FEED){
                 // Jump adress
-                int address = info.at();
+                int address = info.code.length();
                 info.addressMap[name] = address;
-                log::out<<"Address ";name.print(); log::out<<" to "<<address<<"\n";
+                log::out<<"Address ";name.print(); log::out<<" = "<<address<<"\n";
             }else{
                 CHECK_END
                 token = info.next();
@@ -394,23 +419,19 @@ Bytecode CompileInstructions(Tokens tokens){
                 info.code.add(instType,regs[0],regs[1],regs[2]);
                 info.code.get(info.code.length()-1).print();log::out<<("\n");
 
-                Token prev = info.prev();
-                if(0==prev.flags&TOKEN_SUFFIX_LINE_FEED && !info.end()){
-                    ERRTOK log::out << "Expected line feed\n";
-                    info.nextLine();
+                if(LineEndError(info))
                     continue;
-                }
             } else if((instType & BC_MASK) == BC_R2){
                 int reg=0;
                 int var=0;
 
-                if(!CompileInstructionArg(info,reg,false)){
+                if(!CompileInstructionArg(info,reg,0)){
                     info.nextLine();
                     continue;
                 }
 
                 // if(instType==BC_LOAD_CONST){
-                if(!CompileInstructionArg(info,var,true)){
+                if(!CompileInstructionArg(info,var,COMPILE_ARG_VAR)){
                     info.nextLine();
                     continue;
                 }
@@ -420,30 +441,45 @@ Bytecode CompileInstructions(Tokens tokens){
                 info.code.add(instType,reg,var);
                 info.code.get(info.code.length()-1).print();log::out<<("\n");
                 
-                Token prev = info.prev();
-                if(0==prev.flags&TOKEN_SUFFIX_LINE_FEED && !info.end()){
-                    ERRTOK log::out << "Expected line feed\n";
-                    info.nextLine();
+                if(LineEndError(info))
                     continue;
-                }
             } else if((instType & BC_MASK) == BC_R1){
                 int reg=0;
-                if(!CompileInstructionArg(info,reg,false)){
-                    info.nextLine();
-                    continue;
+
+                if(instType == BC_JUMP){
+                    if(!CompileInstructionArg(info,reg,COMPILE_ARG_ADDR)){
+                        info.nextLine();
+                        continue;
+                    }
+                }else{
+                    if(!CompileInstructionArg(info,reg,0)){
+                        info.nextLine();
+                        continue;
+                    }
                 }
 
                 info.code.add(instType,reg);
                 info.code.get(info.code.length()-1).print();log::out<<("\n");
 
-                Token prev = info.prev();
-                if(0==prev.flags&TOKEN_SUFFIX_LINE_FEED && !info.end()){
-                    ERRTOK log::out << "Expected line feed\n";
-                    info.nextLine();
+                if(LineEndError(info))
                     continue;
-                }
             }
         }
     }
+
+    for(auto& addr : info.instructionsToResolve){
+        // Todo: check if instruction is of a type that uses addresses?
+        auto find = info.addressMap.find(addr.addrName);
+        int address = addr.instIndex + 1;
+        if(find==info.addressMap.end()){
+            log::out << "CompileError at "<<addr.addrName.line<<":"<<addr.addrName.column<<" : Address "<<addr.addrName<<" could not be resolved\n";
+        }else{
+            address = find->second;
+        }
+        
+        info.code.get(addr.instIndex).reg0 = address&0xFF;
+        info.code.get(addr.instIndex).reg12 = address>>8;
+    }
+
     return info.code;
 }

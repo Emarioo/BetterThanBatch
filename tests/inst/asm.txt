@@ -1,7 +1,10 @@
-var: 7949
-    num $a
+var: 9
+    num  $a
     num $b
     num $c
+    jump kekw
     load $b var
-    add $a $b $c a
+    jumpif $a kekw
+kekw:
+    add $a $b $c
     mul $c $b $c

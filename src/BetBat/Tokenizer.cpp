@@ -33,6 +33,10 @@ bool Token::operator==(const char* text){
     }
     return true;
 }
+engone::Logger& operator<<(engone::Logger& logger, Token& token){
+    token.print();
+    return logger;
+}
 Token::operator std::string(){
     return std::string(std::string_view(str,length));
 }
@@ -160,7 +164,7 @@ Tokens Tokenize(engone::Memory textData){
         }
         
         column++;
-        if(chr == '\n'){
+        if(chr == '\n'&&!inQuotes){
             line++;
             column=1;
         }
@@ -205,10 +209,13 @@ Tokens Tokenize(engone::Memory textData){
             continue;
         }
         
+        if(chr=='\n'){
+            Token& last = outTokens.get(outTokens.length()-1);
+            last.flags = (last.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
+        }
         if(token.length==0 && isDelim){
             continue;
         }
-        
         if(!isDelim&&!isSpecial&&!isQuotes){
             if(token.length!=0){
                 _TOKENIZER_LOG(log::out << "-";)
