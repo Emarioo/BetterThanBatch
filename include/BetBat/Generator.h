@@ -1,49 +1,91 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
-#include "BetBat/Values.h"
+#include "BetBat/Value.h"
+#include "Engone/Typedefs.h"
 
-// Operators
-#define BC_ADD 0x01
-#define BC_SUB 0x02
-#define BC_MUL 0x03
-#define BC_DIV 0x04
+#include <unordered_map>
 
-// Variable/register management
-#define BC_MAKE_NUMBER 0x11
-#define BC_MAKE_STRING 0x12
-#define BC_LOAD_CONST 0x13
+// 2 bits to indicate instruction structure
+// 3 register OR 1 register + 1 variable OR 1 register
+#define BC_MASK (0b11<<6)
+#define BC_R3 (0b00<<6)
+#define BC_R2 (0b01<<6)
+#define BC_R1 (0b10<<6)
 
-const char* InstToString(int instructionType);
+#define BC_ADD (BC_R3|0x01)
+#define BC_SUB (BC_R3|0x02)
+#define BC_MUL (BC_R3|0x03)
+#define BC_DIV (BC_R3|0x04)
+
+#define BC_DIV (BC_R3|0x05)
+
+#define BC_LOAD_CONST (BC_R2|0x01)
+
+#define BC_MAKE_NUMBER (BC_R1|0x01)
+#define BC_JUMP (BC_R1|0x02)
+
+
+const char* InstToString(int type);
 
 struct Instruction {
-    uint8 type=0;
+    uint8 type;
     uint8 reg0;
     union {
         struct {
             uint8 reg1;
             uint8 reg2;
         };
-        uint16 var0;
+        uint16 reg12;
     };
+
+    void print();
 };
-Instruction CreateInstruction(uint8 type, uint8 reg0, uint8 reg1, uint8 reg2);
-Instruction CreateInstruction(uint8 type, uint8 reg0, uint16 var0);
-Instruction CreateInstruction(uint8 type, uint8 reg0);
+engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction);
 
 struct Bytecode {
-    engone::Memory constNumbers{sizeof(Number)};
-    engone::Memory stringNumbers{sizeof(String)};
     engone::Memory codeSegment{sizeof(Instruction)};
+    engone::Memory constNumbers{sizeof(Number)};
+
+    bool add(Instruction inst);
+    bool add(uint8 type, uint8 reg0, uint8 reg1, uint8 reg2);
+    bool add(uint8 type, uint8 reg0, uint16 reg12);
+    bool add(uint8 type, uint reg012);
+    Instruction& get(uint index);
     
-    bool add(Instruction instruction);
-    Instruction get(int index);
+    uint addConstNumber(double number);
+    Number* getConstNumber(uint index);
+    uint length();
+};
+struct GenerationInfo {
+    Bytecode code{};
+    uint index=0;
+    Tokens tokens{};
     
-    int addConstNumber(double number);
-    Number* getConstNumber(int index);
-    
-    int length();
+    int baseIndex=-1;
+
+    std::unordered_map<double,uint> constNumberMap;
+
+    std::unordered_map<std::string,uint> nameNumberMap;
+
+    std::unordered_map<std::string,uint> addressMap;
+
+    struct AddressInst{
+        uint instIndex=0;
+        Token addrName;
+    };
+    std::vector<AddressInst> instructionsToResolve;
+
+    // Does not handle out of bounds
+    Token prev();
+    Token next();
+    Token now();
+    int at();
+    bool end();
+    void finish();
+
+    void nextLine();
 };
 
-
-Bytecode Generate(Tokens tokens);
+Bytecode CompileScript(Tokens tokens);
+Bytecode CompileInstructions(Tokens tokens);

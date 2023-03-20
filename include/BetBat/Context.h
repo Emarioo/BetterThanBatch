@@ -1,29 +1,24 @@
 #pragma once
 
-#include "BetBat/Values.h"
-
 #include "BetBat/Generator.h"
 
-#define REF_STRING 1
-#define REF_NUMBER 2
-struct Ref {
-    int type=0;
-    int index=0;
-};
 const char* RefToString(int type);
+#define REF_NUMBER 1
+#define REF_STRING 2
+struct Ref {
+    int type;
+    int index;
+};
 struct Context {
     engone::Memory numbers{sizeof(Number)};
-    engone::Memory strings{sizeof(String)};
-    
-    Ref references[256]{0};
-    
-    Bytecode activeCode{};
-    
-    Number* getNumber(int index);
-    String* getString(int index);
+
+    Ref references[256];    
+
+    Bytecode activeCode;
+
     int makeNumber();
-    int makeString();
-    
-    void load(Bytecode bytecode);
+    Number* getNumber(int index);
+
+    void load(Bytecode code);
     void execute();
 };

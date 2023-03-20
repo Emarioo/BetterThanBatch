@@ -1,0 +1,10 @@
+var: 9
+    num  $a
+    num $b
+    num $c
+    jump kekw
+    load $b var
+    jumpif $a kekw
+kekw:
+    add $a $b $c
+    mul $c $b $c

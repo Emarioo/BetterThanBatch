@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <string.h>
 
 #include "BetBat/Tokenizer.h"
 #include "Engone/PlatformLayer.h"
@@ -9,17 +10,35 @@
 #define _TOKENIZER_LOG(x)
 #endif
 void Token::print(int printFlags){
+    using namespace engone;
     if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_QUOTED)
-            printf("\"");
+            log::out << "\"";
     }
     for(int i=0;i<length;i++){
-        printf("%c",*(str+i));
+        log::out << *(str+i);
     }
     if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_QUOTED)
-            printf("\"");
+            log::out << "\"";
     }
+}
+bool Token::operator==(const char* text){
+    int len = strlen(text);
+    if(len!=length)
+        return false;
+    for(int i=0;i<len;i++){
+        if(str[i]!=text[i])
+            return false;
+    }
+    return true;
+}
+engone::Logger& operator<<(engone::Logger& logger, Token& token){
+    token.print();
+    return logger;
+}
+Token::operator std::string(){
+    return std::string(std::string_view(str,length));
 }
 bool Tokens::add(Token token){
     if(tokens.max == tokens.used){
@@ -40,47 +59,61 @@ bool Tokens::add(Token token){
     tokens.used++;
     return true;
 }
-    
+Token& Tokens::get(int index){
+    return *((Token*)tokens.data + index);
+}
+int Tokens::length(){
+    return tokens.used;
+}
 void Tokens::printTokens(int tokensPerLine, int flags){
-    printf("\n####   %lld Tokens   ####\n",tokens.used);
+    using namespace engone;
+    log::out << "\n####   "<<tokens.used<<" Tokens   ####\n";
     int i=0;
     for(;i<tokens.used;i++){
         Token* token = ((Token*)tokens.data + i);
         if(flags&TOKEN_PRINT_LN_COL)
-            printf("[%d:%d] ",token->line,token->column);
+            log::out << "["<<token->line << ":"<<token->column<<"] ";
+            // printf("[%d:%d] ",token->line,token->column);
         
         token->print(flags);
         if(flags&TOKEN_PRINT_SUFFIXES){
             if(token->flags&TOKEN_SUFFIX_LINE_FEED)
-                printf("\\n");
+                log::out << "\\n";
+                // printf("\\n");
         }
         if((i+1)%tokensPerLine==0)
-            printf("\n");
+            log::out << "\n";
+            // printf("\n");
         else
-            printf(" ");
+            log::out << " ";
+            // printf(" ");
     }
     if(i%tokensPerLine != 0)
-        printf("\n");
+        log::out << "\n";
 }
 void Tokens::printData(int charsPerLine){
-    printf("\n####   Token Data   ####\n");
+    using namespace engone;
+    log::out << "\n####   Token Data   ####\n";
     int i=0;
     for(;i<tokenData.used;i++){
         char chr = *((char*)tokenData.data+i);
-        printf("%c",chr);
+        // printf("%c",chr);
+        log::out << chr;
         // printf("%c:%d ",chr,(int)chr);
         if((i+1)%charsPerLine==0)
-            printf("\n");
+            log::out << "\n";
     }
     if((i)%charsPerLine!=0)
-        printf("\n");
+        log::out << "\n";
 }
 Tokens Tokenize(engone::Memory textData){
+    using namespace engone;
     if(textData.m_typeSize!=1) {
-        printf("Tokenize : size of type in textData must be one (was %d)\n",textData.m_typeSize);
+        log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
+        // printf("Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
         return {};
     }
-    printf("\n####   Tokenizer   ####\n");
+    log::out << "\n####   Tokenizer   ####\n";
     // Todo: handle errors like outTokens.add returning false
     
     char* text = (char*)textData.data;
@@ -90,9 +123,9 @@ Tokens Tokenize(engone::Memory textData){
     outTokens.tokenData.resize(textData.used); // tokenData will probably never be larger than the original text
     
     engone::Memory& tokenData = outTokens.tokenData;
-    memset(tokenData.data,'¤',tokenData.max); // Good indicator for issues
+    memset(tokenData.data,'_',tokenData.max); // Good indicator for issues
     
-    const char* specials = "+-*/=<>" "#{}()[]";
+    const char* specials = "+-*/=<>" "$#{}()[]" ":;";
     int specialLength = strlen(specials);
     Token token = {text,0};
     
@@ -131,7 +164,7 @@ Tokens Tokenize(engone::Memory textData){
         }
         
         column++;
-        if(chr == '\n'){
+        if(chr == '\n'&&!inQuotes){
             line++;
             column=1;
         }
@@ -143,7 +176,7 @@ Tokens Tokenize(engone::Memory textData){
                 token.length = 0;
                 token.line = ln;
                 token.column = col;
-                _TOKENIZER_LOG(printf("\" : Begin quote\n");)
+                _TOKENIZER_LOG(log::out << "\" : Begin quote\n";)
                 continue;
             }
         } else {
@@ -158,16 +191,16 @@ Tokens Tokenize(engone::Memory textData){
                     token.flags |= TOKEN_SUFFIX_SPACE;
                 token.flags |= TOKEN_QUOTED;
                 
-                _TOKENIZER_LOG(printf(" : Add ");token.print();printf("\n");)
-                _TOKENIZER_LOG(printf("\" : End quote\n");)
+                _TOKENIZER_LOG(log::out << " : Add ";token.print();log::out << "\n";)
+                _TOKENIZER_LOG(log::out << "\" : End quote\n";)
                 
                 outTokens.add(token);
                 token = {};
             } else if(!(chr=='\\'&&nextChr=='"')) {
                 if(token.length!=0){
-                    _TOKENIZER_LOG(printf("-");)
+                    _TOKENIZER_LOG(log::out << "-";)
                 }
-                _TOKENIZER_LOG(printf("%c",chr);)
+                _TOKENIZER_LOG(log::out << chr;)
                 
                 *((char*)tokenData.data+tokenData.used) = chr;
                 tokenData.used++;
@@ -176,15 +209,18 @@ Tokens Tokenize(engone::Memory textData){
             continue;
         }
         
+        if(chr=='\n'){
+            Token& last = outTokens.get(outTokens.length()-1);
+            last.flags = (last.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
+        }
         if(token.length==0 && isDelim){
             continue;
         }
-        
         if(!isDelim&&!isSpecial&&!isQuotes){
             if(token.length!=0){
-                _TOKENIZER_LOG(printf("-");)
+                _TOKENIZER_LOG(log::out << "-";)
             }
-            _TOKENIZER_LOG(printf("%c",chr);)
+            _TOKENIZER_LOG(log::out << chr;)
             if(token.length==0){
                 token.str = (char*)tokenData.data+tokenData.used;
                 token.line = ln;
@@ -202,7 +238,7 @@ Tokens Tokenize(engone::Memory textData){
             else if(chr==' ')
                 token.flags |= TOKEN_SUFFIX_SPACE;
                 
-            _TOKENIZER_LOG(printf(" : Add ");token.print();printf("\n");)
+            _TOKENIZER_LOG(log::out << " : Add ";token.print();log::out << "\n";)
                 
             outTokens.add(token);
             token = {};
@@ -213,7 +249,7 @@ Tokens Tokenize(engone::Memory textData){
                 token.length = 0;
                 token.line = ln;
                 token.column = col;
-                _TOKENIZER_LOG(printf("\" : Begin quote\n");)   
+                _TOKENIZER_LOG(log::out << "\" : Begin quote\n";)   
             }
         }
         if(isSpecial){
@@ -230,7 +266,7 @@ Tokens Tokenize(engone::Memory textData){
                 else if(chrTemp==' ')
                     token.flags = TOKEN_SUFFIX_SPACE;
             }
-            _TOKENIZER_LOG(printf(" : Add ");token.print();printf("\n");)
+            _TOKENIZER_LOG(log::out << " : Add ";token.print();log::out <<"\n";)
             outTokens.add(token);
             token = {};
         }
@@ -241,15 +277,15 @@ Tokens Tokenize(engone::Memory textData){
     }
     
     if(inQuotes){
-        printf("TokenError: Missing end quote for '");
+        log::out<<"TokenError: Missing end quote for '";
         token.print();
-        printf("' at %d:%d\n",token.line,token.column);
+        log::out << "' at "<< token.line<<":"<<token.column<<"\n";
         goto Tokenize_END;
     }
     if(token.length!=0){
-        printf("TokenError: Token '");
+        log::out << "TokenError: Token '";
         token.print();
-        printf("' was left incomplete\n");
+        log::out << "' was left incomplete\n";
         goto Tokenize_END;
     }
     if(outTokens.tokens.used!=0){
@@ -258,10 +294,10 @@ Tokens Tokenize(engone::Memory textData){
         int64 extraSpace2 = tokenData.max-tokenData.used;
         
         if(extraSpace!=extraSpace2)
-            printf("TokenError: Used memory in tokenData does not match last token's used memory (%lld != %lld)\n",tokenData.used,(int64)lastToken->str - (int64)tokenData.data + lastToken->length);
+            log::out << "TokenError: Used memory in tokenData does not match last token's used memory ("<<tokenData.used<<" != "<<((int64)lastToken->str - (int64)tokenData.data + lastToken->length)<<")\n";
             
         if(extraSpace<0||extraSpace2<0)
-            printf("TokenError: Buffer of tokenData was to small (estimated %llu but needed %llu bytes)\n'",tokenData.max,tokenData.used);
+            log::out << "TokenError: Buffer of tokenData was to small (estimated "<<tokenData.max<<" but needed "<<tokenData.used<<" bytes)\n'";
         
         if(extraSpace!=extraSpace2 || extraSpace<0 || extraSpace2<0)
             goto Tokenize_END;

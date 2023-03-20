@@ -3,13 +3,17 @@
 
 set /a startTime=6000*( 100%time:~3,2% %% 100 ) + 100* ( 100%time:~6,2% %% 100 ) + ( 100%time:~9,2% %% 100 )
 
-SET INCLUDE_DIRS=/Iinclude
-SET DEFINITIONS=/DWIN32
+@REM SET INCLUDE_DIRS=/Iinclude
+@REM SET DEFINITIONS=/DWIN32
 
-SET LIBRARIES=shell32.lib
+@REM SET LIBRARIES=-lshell32
 
-SET COMPILE_OPTIONS=/DEBUG /std:c++14 /EHsc /TP /Z7 /MTd /nologo
-SET LINK_OPTIONS=/IGNORE:4006 /DEBUG /NOLOGO /MACHINE:X64
+@REM SET COMPILE_OPTIONS=/DEBUG /std:c++14 /EHsc /TP /Z7 /MTd /nologo
+@REM SET LINK_OPTIONS=/IGNORE:4006 /DEBUG /NOLOGO /MACHINE:X64
+
+SET INCLUDE_DIRS=-Iinclude
+SET DEFINITIONS=-DWIN32
+SET COMPILE_OPTIONS=-g -std=c++17
 
 mkdir bin 2> nul
 
@@ -28,7 +32,9 @@ for /r %%i in (*.cpp) do (
     )
 )
 
-cl !COMPILE_OPTIONS! !INCLUDE_DIRS! !DEFINITIONS! !srcfile! /Fobin\all.obj /link !LINK_OPTIONS! !LIBRARIES! /OUT:bin/program.exe
+@REM cl !COMPILE_OPTIONS! !INCLUDE_DIRS! !DEFINITIONS! !srcfile! /Fobin\all.obj /link !LINK_OPTIONS! !LIBRARIES! /OUT:bin/program.exe
+
+g++ !COMPILE_OPTIONS! !INCLUDE_DIRS! !DEFINITIONS! !srcfile! -o bin/program.exe
 
 set /a endTime=6000*(100%time:~3,2% %% 100 )+100*(100%time:~6,2% %% 100 )+(100%time:~9,2% %% 100 )
 

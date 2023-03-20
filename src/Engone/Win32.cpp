@@ -10,6 +10,7 @@
 
 #include <unordered_map>
 #include <vector>
+#include <string>
 
 // #define NOMINMAX
 // #define _WIN32_WINNT 0x0601
