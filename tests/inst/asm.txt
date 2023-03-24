@@ -1,10 +1,25 @@
-var: 9
-    num  $a
+// Calculates 5+5*(5-23)
+big: 23
+five: 5
+    num $a
     num $b
-    num $c
-    jump kekw
-    load $b var
-    jumpif $a kekw
-kekw:
-    add $a $b $c
-    mul $c $b $c
+    load $a big
+    load $b five
+    sub $b $a $a
+    mul $b $a $a
+    add $b $a $a
+    del $b
+    less $a $b $c
+    
+    run addr
+    jumpif $c addr
+    
+    jump
+addr:
+    add $0 $1 $2
+    
+    return 
+    
+    
+addr_end:
+    wow thats the end

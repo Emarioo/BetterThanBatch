@@ -1,0 +1,21 @@
+one: 13
+    num $a
+    num $rl
+    num $ra
+    load one
+    copy $rl $a
+    
+    run $a func
+    
+    num $b
+    copy $rv $b
+    add $a $b $b
+    
+    jump END
+func:
+    //num $a
+    add $rz $rz $rz
+    return $rz
+    
+    
+END:

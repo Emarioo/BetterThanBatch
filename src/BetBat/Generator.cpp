@@ -1,10 +1,11 @@
 #include "BetBat/Generator.h"
 
-#define ERRT(T) engone::log::out<< "CompileError at "<<T.line<<":"<<T.column<<": ";
-#define ERRTL(T) engone::log::out<<"CompileError at "<<T.line<<":"<<T.column+T.length<<": ";
-#define ERRTOK engone::log::out<<"CompileError at "<<token.line<<":"<<token.column<<": ";
-#define ERRTOKL engone::log::out<<"CompileError at "<<token.line<<":"<<token.column + token.length<<": ";
-#define ERRAT(L,C) engone::log::out << "CompileError at "<<L<<":"<<C<<": ";
+#define ERRAT(L,C) engone::log::out << "CompileError "<<(L)<<":"<<(C)<<", "
+#define ERRT(T) ERRAT(T.line,T.column)
+#define ERRTL(T) ERRAT(T.line,T.column+T.length)
+#define ERRTOK ERRAT(token.line,token.column)
+#define ERRTOKL ERRAT(token.line,token.column+token.length)
+
 #define CHECK_END if(info.end()){\
         engone::log::out << "CompileError: Unexpected end of file\n";\
         break;\
@@ -22,12 +23,24 @@ const char* InstToString(int type){
         INSTCASE(BC_SUB)
         INSTCASE(BC_MUL)
         INSTCASE(BC_DIV)
+        INSTCASE(BC_LESS)
+        INSTCASE(BC_GREATER)
+        INSTCASE(BC_EQUAL)
         
-        INSTCASE(BC_LOAD_CONST)
+        INSTCASE(BC_JUMPIF)
+        
+        INSTCASE(BC_COPY)
+        INSTCASE(BC_MOV)
+        INSTCASE(BC_RUN)
 
-        INSTCASE(BC_MAKE_NUMBER)
-
+        INSTCASE(BC_NUM)
+        INSTCASE(BC_STR)
+        INSTCASE(BC_DEL)
         INSTCASE(BC_JUMP)
+        INSTCASE(BC_LOAD)
+        INSTCASE(BC_RETURN)
+        INSTCASE(BC_ENTERSCOPE)
+        INSTCASE(BC_EXITSCOPE)
     }
     return "BC_?";
 }
@@ -37,9 +50,14 @@ void Instruction::print(){
     if((type&BC_MASK) == BC_R3)
         log::out<<InstToString(type)<<" $"<<reg0<<" $"<<reg1<<" $"<<reg2;
     if((type&BC_MASK) == BC_R2)
-        log::out << InstToString(type)<<" $" <<reg0<<" $"<< reg12;
-    if((type&BC_MASK) == BC_R1)
-        log::out << InstToString(type)<<" $"<< (reg0 | (reg12<<8));
+        log::out << InstToString(type)<<" $" <<reg0<<" $"<< reg1;
+    if((type&BC_MASK) == BC_R1){
+        if(type==BC_LOAD){
+            log::out << InstToString(type)<<" ["<< singleReg()<<"]";
+        }else
+            log::out << InstToString(type)<<" $"<< singleReg();
+        
+    }
 }
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
     instruction.print();
@@ -65,20 +83,22 @@ bool Bytecode::add(uint8 type, uint8 reg0, uint16 reg12){
     Instruction inst{};
     inst.type = type;
     inst.reg0 = reg0;
-    inst.reg12 = reg12;
+    inst.reg1 = reg12;
+    // inst.reg12 = reg12;
     return add(inst);
 }
 bool Bytecode::add(uint8 type, uint reg012){
     Instruction inst{};
     inst.type = type;
-    inst.reg0 = reg012&0xFF;
-    inst.reg12 = reg012>>8;
+    inst.reg0 = reg012;
+    // &0xFF;
+    // inst.reg12 = reg012>>8;
     return add(inst);
 }
 uint Bytecode::addConstNumber(double number){
     if(constNumbers.max == constNumbers.used){
         if(!constNumbers.resize(constNumbers.max*2 + 100))
-            return false;   
+            return false;
     }
     int index = constNumbers.used;
     *((Number*)constNumbers.data + index) = {number};
@@ -86,7 +106,30 @@ uint Bytecode::addConstNumber(double number){
     return index;
 }
 Number* Bytecode::getConstNumber(uint index){
+    if(index>=constNumbers.used) return 0;
     return (Number*)constNumbers.data + index;
+}
+uint Bytecode::addConstString(Token& token){
+    if(constStrings.max == constStrings.used){
+        if(!constStrings.resize(constStrings.max*2 + 100))
+            return -1;
+    }
+    int index = constStrings.used;
+    String* str = ((String*)constStrings.data + index);
+    new(str)String();
+    
+    if(!str->memory.resize(token.length)){
+        return -1;   
+    }
+    memcpy(str->memory.data,token.str,token.length);
+    str->memory.used = token.length;
+    
+    constStrings.used++;
+    return index;
+}
+String* Bytecode::getConstString(uint index){
+    if(index>=constStrings.used) return 0;
+    return (String*)constStrings.data + index;
 }
 uint Bytecode::length(){
     return codeSegment.used;   
@@ -95,38 +138,78 @@ Instruction& Bytecode::get(uint index){
     Assert(index<codeSegment.used);
     return *((Instruction*)codeSegment.data + index);
 }
-
+bool Bytecode::addUnresolved(Token& token, uint address){
+    if(unresolveds.max == unresolveds.used){
+        if(!unresolveds.resize(unresolveds.max*2 + 10))
+            return false;   
+    }
+    Unresolved* ptr = ((Unresolved*)unresolveds.data+unresolveds.used);
+    unresolveds.used++;
+    new(ptr)Unresolved();
+    ptr->name = token;
+    ptr->address = address;
+    return true;
+}
+Bytecode::Unresolved* Bytecode::getUnresolved(uint address){
+    for(int i=0;i<unresolveds.used;i++) {
+        Unresolved* ptr = ((Unresolved*)unresolveds.data+i);
+        if(ptr->address == address)
+            return ptr;
+    }
+    return 0;
+}
+Bytecode::Unresolved* Bytecode::getUnresolved(const std::string& str){
+     for(int i=0;i<unresolveds.used;i++) {
+        Unresolved* ptr = ((Unresolved*)unresolveds.data+i);
+        if(ptr->name == str)
+            return ptr;
+    }
+    return 0;
+}
+bool Bytecode::linkUnresolved(const std::string& name, APICall funcPtr){
+    Unresolved* ptr = getUnresolved(name);
+    if(!ptr)
+        return false;
+    ptr->func = funcPtr;
+    return true;
+}
 int IsInteger(Token& token){
-    const char numchars[]="0123456789";
-    int len = sizeof(numchars);
     for(int i=0;i<token.length;i++){
-        for(int j=0;j<sizeof(numchars);j++){
-            if(token.str[i]!=numchars[j]){
-                return false;
-            }
+        char chr = token.str[i];
+        if(chr<'0'||chr>'9'){
+            return false;
         }
+    }
+    return true;
+}
+bool IsName(Token& token){
+    for(int i=0;i<token.length;i++){
+        char chr = token.str[i];
+        if(i==0)
+            if(!((chr>='A'&&chr<='Z')||
+            (chr>='a'&&chr<='z')||chr=='_'))
+                return false;
+        else
+            if(!((chr>='A'&&chr<='Z')||
+            (chr>='a'&&chr<='z')||
+            (chr>='0'&&chr<='9')||chr=='_'))
+                return false;
     }
     return true;
 }
 // Can also be an integer
 int IsDecimal(Token& token){
-    const char numchars[]="0123456789.";
-    int len = sizeof(numchars);
-    int hasNums=false;
+    int hasDot=false;
     for(int i=0;i<token.length;i++){
-        if(token.str[i]!='.')
-            hasNums=true;
-        bool found=false;
-        for(int j=0;j<sizeof(numchars);j++){
-            if(token.str[i]==numchars[j]){
-                found = true;
-                break;
-            }
-        }
-        if(!found)
+        char chr = token.str[i];
+        if(hasDot && chr=='.')
+            return false; // cannot have 2 dots
+        if(chr=='.')
+            hasDot = true;
+        else if(chr<'0'||chr>'9')
             return false;
     }
-    return hasNums;
+    return true;
 }
 double ConvertInteger(Token& token){
     // Todo: string is not null terminated
@@ -202,8 +285,8 @@ void EvaluateExpression(GenerationInfo& info){
             Token tmp = info.tokens.get(info.baseIndex);
             double num = ConvertDecimal(tmp);
             int dataIndex = info.code.addConstNumber(num);
-            info.code.add(BC_MAKE_NUMBER,1);
-            info.code.add(BC_LOAD_CONST,1,dataIndex);
+            info.code.add(BC_NUM,1);
+            info.code.add(BC_LOAD,1,dataIndex);
             info.code.add(BC_ADD,1,2,3);
         }
     }
@@ -219,103 +302,169 @@ Bytecode CompileScript(Tokens tokens){
         EvaluateExpression(info);
     }
 
-    info.code.add(BC_MAKE_NUMBER,0);
-    info.code.add(BC_MAKE_NUMBER,1);
-    info.code.add(BC_MAKE_NUMBER,2);
+    // info.code.add(BC_MAKE_NUMBER,0);
+    // info.code.add(BC_MAKE_NUMBER,1);
+    // info.code.add(BC_MAKE_NUMBER,2);
     
-    int a = info.code.addConstNumber(5);
-    int b = info.code.addConstNumber(9);
+    // int a = info.code.addConstNumber(5);
+    // int b = info.code.addConstNumber(9);
     
-    info.code.add(BC_LOAD_CONST,0,a);
-    info.code.add(BC_LOAD_CONST,1,b);
+    // info.code.add(BC_LOAD_CONST,0,a);
+    // info.code.add(BC_LOAD_CONST,1,b);
     
-    info.code.add(BC_ADD,0,1,2);
-    info.code.add(BC_ADD,2,1,2);
+    // info.code.add(BC_ADD,0,1,2);
+    // info.code.add(BC_ADD,2,1,2);
     
     // Todo: Cleanup memory in GenerationInfo
 
     return info.code;
 }
-#define COMPILE_ARG_VAR 1
-#define COMPILE_ARG_ADDR 2
-bool CompileInstructionArg(GenerationInfo& info, int& num, int flags){
+#define ARG_REG 1
+#define ARG_CONST 2
+#define ARG_NUMBER 4
+#define ARG_STRING 8
+// regIndex: index of the register in the instruction
+bool CompileInstructionArg(GenerationInfo& info, int instType, int& num, int flags, uint8 regIndex){
     using namespace engone;
+    Assert(("CompileArg... flags must be ARG_REG or so ...",flags!=0));
+    
     Token prev = info.prev(); // make sure prev exists
     if(prev.flags&TOKEN_SUFFIX_LINE_FEED){
-        ERRTL(prev) log::out << "Expected an integer ($registernumber)\n";
+        ERRTL(prev) << "Expected arguments\n";
         return false;
     }
-    if(0==prev.flags&TOKEN_SUFFIX_SPACE){
-        ERRTL(prev) log::out << "Expected a space after "; prev.print(); log::out<<"\n";
+    if(0==(prev.flags&TOKEN_SUFFIX_SPACE)){
+        ERRTL(prev) << "Expected a space after "<< prev <<"\n";
         return false;
     }
     CHECK_ENDR;
     Token token = info.next();
-    if((flags&COMPILE_ARG_VAR)){
-        auto find = info.nameNumberMap.find(token);
-        if(find==info.nameNumberMap.end()){
-            ERRTOK token.print(); log::out<<" is undefined\n";
-            return false;
-        }
-        num = find->second;
-    }else if((flags&COMPILE_ARG_ADDR)){
-        if(IsInteger(token)){
-            num = ConvertInteger(token);
-        }else{
-            // Todo: Verify valid token name
-            num = 0;
-            info.instructionsToResolve.push_back({info.code.length(),token});
-        }
-    }else{
+    if(flags&ARG_REG){
         if(token=="$"){
             if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-                ERRTOKL log::out <<"Expected a register ($integer or $ab)\n";
+                ERRTOKL <<"Expected a register ($integer or $ab)\n";
                 return false;
             } else if(token.flags&TOKEN_SUFFIX_SPACE){
-                ERRTOKL log::out << "Expected a register without space ($integer or $ab)\n";
+                ERRTOKL << "Expected a register without space ($integer or $ab)\n";
                 return false;
-            } else {
-                CHECK_ENDR
-                token = info.next();
-                
-                if(IsInteger(token)){
-                    num = ConvertInteger(token);
-                }else{
-                    int value = 0;
-                    if(token.length==1){
-                        if(*token.str>='a'&&*token.str<='z')
-                            num = *token.str-'a';
-                        else{
-                            ERRTOK log::out <<"Expected $integer or $ab\n";
-                            return false;
-                        }
-                    }else if(token.length==2){
-                        char s0 = *token.str;
-                        char s1 = *(token.str+1);
-                        if(s0>='a'&&s0<='z' && s1>='a'&&s1<='z')
-                            num = s1-'a' + ('z'-'a')*(s0-'a');
-                        else{
-                            ERRTOK log::out << "Expected $integer or $ab\n";
-                            return false;
-                        }
-                    }else{
-                        ERRTOK log::out <<"Expected $integer or $ab\n";
-                        return false;
-                    }
-                }
             }
-        }else{
-            ERRTOK log::out<<"Expected $\n";
-            return false;
+            CHECK_ENDR
+            token = info.next();
+            
+            if(IsInteger(token)){
+                num = ConvertInteger(token);
+                return true;
+            }
+            if(token.length==1){
+                char s = *token.str;
+                if(*token.str>='a'&&*token.str<='z')
+                    num = s-'a' + 10;
+                else if(*token.str>='A'&&*token.str<='Z')
+                    num = s-'A' + 10;
+                else{
+                    ERRTOK <<"Expected $integer or $ab\n";
+                    return false;
+                }
+            }else if(token.length==2){
+                char s0 = *token.str;
+                char s1 = *(token.str+1);
+                if(token == DEFAULT_REG_RETURN_ADDR_S)
+                    num = DEFAULT_REG_RETURN_ADDR;
+                else if(token == DEFAULT_REG_RETURN_VALUE_S)
+                    num = DEFAULT_REG_RETURN_VALUE;
+                else if(token == DEFAULT_REG_ARGUMENT_S)
+                    num = DEFAULT_REG_ARGUMENT;
+                else if(s0>='a'&&s0<='z' && s1>='a'&&s1<='z')
+                    num = s1-'a' + ('z'-'a')*(s0-'a') + 10;
+                else if(s0>='A'&&s0<='Z' && s1>='A'&&s1<='Z')
+                    num = s1-'A' + ('Z'-'A')*(s0-'A') + 10;
+                else{
+                    ERRTOK << "Expected $integer or $ab\n";
+                    return false;
+                }
+            }else{
+                ERRTOK  <<"Expected $integer or $ab\n";
+                return false;
+            }
+            return true;
         }
     }
-    return true;
+    if(flags&ARG_CONST){
+        if((token.flags&TOKEN_QUOTED)==0&&IsName(token)){
+            if(instType!=BC_LOAD){
+                // resolve other instruction like jump by using load const
+                num = DEFAULT_REG_TEMP0 + regIndex;
+                info.code.add(BC_LOAD,num);
+                int index=0;
+                info.code.add(*(Instruction*)&index);
+                info.instructionsToResolve.push_back({info.code.length()-1,token});
+                log::out << info.code.get(info.code.length()-1) << "\n";
+            }else{
+                // resolve bc_load_const directly
+                // num = DEFAULT_REG_TEMP0 + regIndex;
+                info.instructionsToResolve.push_back({info.code.length()+1,token});
+            }
+            return true;
+        }
+    }
+    if(flags&ARG_NUMBER){
+        if(IsDecimal(token)){
+            double number = ConvertDecimal(token);
+            uint index = info.code.addConstNumber(number);
+            num = DEFAULT_REG_TEMP0 + regIndex;
+            info.code.add(BC_NUM,num);
+            log::out << info.code.get(info.code.length()-1) << "\n";
+            info.code.add(BC_LOAD,num);
+            log::out << info.code.get(info.code.length()-1) << "\n";
+            info.code.add(*(Instruction*)&index); // address/index
+            return true;
+        }
+    }
+    if(flags&ARG_STRING){
+        if(token.flags&TOKEN_QUOTED){
+            uint index = info.code.addConstString(token);
+            num = DEFAULT_REG_TEMP0 + regIndex;
+            info.code.add(BC_STR,num);
+            log::out << info.code.get(info.code.length()-1) << "\n";
+            info.code.add(BC_LOAD,num);
+            log::out << info.code.get(info.code.length()-1) << "\n";
+            info.code.add(*(Instruction*)&index); // address/index
+            return true;
+        }
+    }
+    ERRTOK <<"Expected ";
+    if(flags&ARG_REG){
+        log::out <<"register (eg. $23, $d)";
+    }
+    if(flags&ARG_CONST){
+        if(flags&ARG_REG)
+            if((flags&ARG_NUMBER)||(flags&ARG_STRING))
+                log::out << ", ";
+            else
+                log::out << " or ";
+        log::out <<"constant";
+    }
+    if(flags&ARG_NUMBER){
+        if((flags&ARG_REG)||(flags&ARG_CONST))
+            if((flags&ARG_NUMBER)||(flags&ARG_STRING))
+                log::out << ", ";
+            else
+                log::out << " or ";
+        log::out <<"decimal";
+    }
+    if(flags&ARG_STRING){
+        if((flags&ARG_REG)||(flags&ARG_CONST)||(flags&ARG_NUMBER))
+            log::out << " or ";
+        log::out <<"quotes";
+    }
+    log::out << "\n";
+    return false;
 }
 bool LineEndError(GenerationInfo& info){
     using namespace engone;
     Token prev = info.prev();
     if(0==(prev.flags&TOKEN_SUFFIX_LINE_FEED) && !info.end()){
-        ERRTL(prev) log::out << "Expected line feed found "<<info.now()<<"\n";
+        ERRTL(prev) << "Expected line feed found "<<info.now()<<"\n";
         info.nextLine();
         return true;
     }
@@ -330,27 +479,35 @@ Bytecode CompileInstructions(Tokens tokens){
     
     MAP("add",BC_ADD)
     MAP("sub",BC_SUB)
-    MAP("div",BC_DIV)
     MAP("mul",BC_MUL)
+    MAP("div",BC_DIV)
+    MAP("less",BC_LESS)
+    MAP("greater",BC_GREATER)
+    MAP("equal",BC_EQUAL)
+    
+    MAP("jumpif",BC_JUMPIF)
 
-    MAP("load",BC_LOAD_CONST)
+    MAP("mov",BC_MOV)
+    MAP("copy",BC_COPY)
+    MAP("run",BC_RUN)
 
-    MAP("num",BC_MAKE_NUMBER)
+    MAP("num",BC_NUM)
+    MAP("str",BC_STR)
+    MAP("del",BC_DEL)
     MAP("jump",BC_JUMP)
+    MAP("load",BC_LOAD)
+    MAP("return",BC_RETURN)
+    MAP("enter",BC_ENTERSCOPE)
+    MAP("exit",BC_EXITSCOPE)
 
     GenerationInfo info{};
     info.tokens = tokens;
 
-    // Todo: It is easy to handle multiple syntax errors in assembly.
-    //  Each line in assembly is independent of other lines.
-    //  Because of this you can skip the to the new line and continue
-    //  generating instructions and catch more syntax errors.
-
     while(!info.end()){
         Token token = info.next();
-
+        
         if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-            ERRTOK log::out << "Expected something after ";token.print();log::out<<"\n";
+            ERRTOK << "Expected something after " << token << "\n";
             info.nextLine();
             continue;
         }
@@ -363,123 +520,281 @@ Bytecode CompileInstructions(Tokens tokens){
 
         if(token == ":"){
             // Jump address or constant
-            if(token.flags & TOKEN_SUFFIX_LINE_FEED){
+            if((token.flags & TOKEN_SUFFIX_LINE_FEED)||info.end()){
                 // Jump adress
-                int address = info.code.length();
-                info.addressMap[name] = address;
-                log::out<<"Address ";name.print(); log::out<<" = "<<address<<"\n";
+                uint address = info.code.length();
+                int index = info.code.addConstNumber(address);
+                info.nameOfNumberMap[name] = index;
+                log::out<<"Address " << name <<" = "<<address<<"\n";
             }else{
                 CHECK_END
                 token = info.next();
+                if(0==(token.flags&TOKEN_SUFFIX_LINE_FEED)){
+                    ERRTOK <<"Expected line feed after "<<token<<"\n";
+                    info.nextLine();
+                    continue;
+                }
                 if(IsDecimal(token)){
                     double number = ConvertDecimal(token);
                     int index = info.code.addConstNumber(number);
-                    // std::string str = token;
-                    info.nameNumberMap[name] = index;
-                    log::out<<"Constant ";name.print(); log::out<<"="<<number<<" to "<<index<<"\n";
-                }else{
-                    ERRTOK log::out<<"String constant not implemented\n";
+                    info.nameOfNumberMap[name] = index;
+                    log::out<<"Constant " << name<<" = "<<number<<" to "<<index<<"\n";
+                }else if(token.flags&TOKEN_QUOTED){
+                    int index = info.code.addConstString(token);
+                    info.nameOfStringMap[name] = index;
+                    log::out<<"Constant " << name<<" = "<<token<<" to "<<index<<"\n";
+                }else {
+                    ERRTOK << " " <<token<<" cannot be a constant\n";
                     info.nextLine();
-                    continue;
-                }
-                if(0==token.flags&TOKEN_SUFFIX_LINE_FEED){
-                    ERRTOKL log::out<<"Expected line feed (\\n)\n";
-                    info.nextLine();
-                    continue;
+                    continue;   
                 }
             }
-        } else if(0==name.flags & TOKEN_SUFFIX_SPACE){
-            ERRTL(name) log::out<<"Expected a space\n";
+        } else if(0==(name.flags & TOKEN_SUFFIX_SPACE)){
+            ERRTL(name) <<"Expected a space\n";
             info.nextLine();
             continue;
         } else {
             // Instruction confirmed
             auto find = instructionMap.find(name);
             if(find==instructionMap.end()){
-                ERRTOK log::out<<"Invalid instruction "; name.print(); log::out<<"\n";
+                ERRTOK <<"Invalid instruction " << name<<"\n";
                 info.nextLine();
                 continue;
             }
             int instType = find->second;
             info.index--;
-            if((instType & BC_MASK) == BC_R3){
-                int regs[3]{0};
-                bool error=false;
-                for(int i=0;i<3;i++){
-                    if(!CompileInstructionArg(info,regs[i],false)) {
-                        error=true;
-                        break;
-                    }
+            
+            int regCount = ((instType & BC_MASK) >> 6);
+            
+            Instruction inst{};
+            inst.type = instType;
+            
+            bool error=false;
+            int tmp=0;
+            for(int i=0;i<regCount;i++){
+                // if(i==2 && instType==BC_JUMPIF){
+                //     if(!CompileInstructionArg(info,tmp,ARG_CONST_NUMBER|ARG_REG)){
+                //         info.nextLine();
+                //         continue;
+                //     }
+                // } else 
+                if(!CompileInstructionArg(info,instType,tmp,ARG_REG|ARG_CONST|ARG_NUMBER|ARG_STRING,i)) {
+                    error=true;
+                    break;
                 }
-                if(error){
-                    info.nextLine();
-                    continue;
-                }
-
-                info.code.add(instType,regs[0],regs[1],regs[2]);
-                info.code.get(info.code.length()-1).print();log::out<<("\n");
-
-                if(LineEndError(info))
-                    continue;
-            } else if((instType & BC_MASK) == BC_R2){
-                int reg=0;
-                int var=0;
-
-                if(!CompileInstructionArg(info,reg,0)){
-                    info.nextLine();
-                    continue;
-                }
-
-                // if(instType==BC_LOAD_CONST){
-                if(!CompileInstructionArg(info,var,COMPILE_ARG_VAR)){
-                    info.nextLine();
-                    continue;
-                }
-                // }
-
-                
-                info.code.add(instType,reg,var);
-                info.code.get(info.code.length()-1).print();log::out<<("\n");
-                
-                if(LineEndError(info))
-                    continue;
-            } else if((instType & BC_MASK) == BC_R1){
-                int reg=0;
-
-                if(instType == BC_JUMP){
-                    if(!CompileInstructionArg(info,reg,COMPILE_ARG_ADDR)){
-                        info.nextLine();
-                        continue;
-                    }
-                }else{
-                    if(!CompileInstructionArg(info,reg,0)){
-                        info.nextLine();
-                        continue;
-                    }
-                }
-
-                info.code.add(instType,reg);
-                info.code.get(info.code.length()-1).print();log::out<<("\n");
-
-                if(LineEndError(info))
-                    continue;
+                inst.regs[i] = tmp;
             }
+            if(error){
+                info.nextLine();
+                continue;
+            }
+            
+            if(instType == BC_LOAD){
+                if(!CompileInstructionArg(info,instType,tmp,ARG_CONST,1)) {
+                    info.nextLine();
+                    continue;
+                }
+            }
+            
+            info.code.add(inst);
+            log::out << info.code.get(info.code.length()-1)<<("\n");
+            if(instType==BC_LOAD){
+                int zeroInst=0;
+                info.code.add(*(Instruction*)&zeroInst);
+            }
+            if(LineEndError(info))
+                continue;
+                    
+            // if((instType & BC_MASK) == BC_R3){
+            //     int regs[3]{0};
+            //     bool error=false;
+            //     for(int i=0;i<3;i++){
+            //         if(i==2 && instType==BC_JUMPIF){
+            //             if(!CompileInstructionArg(info,regs[i],ARG_CONST_NUMBER|ARG_REG)){
+            //                 info.nextLine();
+            //                 continue;
+            //             }
+            //         } else if(!CompileInstructionArg(info,regs[i],ARG_REG)) {
+            //             error=true;
+            //             break;
+            //         }
+            //     }
+            //     if(error){
+            //         info.nextLine();
+            //         continue;
+            //     }
+
+            //     info.code.add(instType,regs[0],regs[1],regs[2]);
+            //     log::out << info.code.get(info.code.length()-1)<<("\n");
+
+            //     if(LineEndError(info))
+            //         continue;
+            // } else if((instType & BC_MASK) == BC_R2){
+            //     int reg=0;
+            //     int var=0;
+
+            //     if(!CompileInstructionArg(info,reg,ARG_REG)){
+            //         info.nextLine();
+            //         continue;
+            //     }
+                
+            //     if(instType==BC_RUN){
+            //         if(!CompileInstructionArg(info,var,ARG_REG|ARG_CONST_NUMBER)){
+            //             info.nextLine();
+            //             continue;
+            //         }
+            //     }else{
+            //         if(!CompileInstructionArg(info,var,ARG_REG)){
+            //             info.nextLine();
+            //             continue;
+            //         }
+            //     }
+                
+            //     info.code.add(instType,reg,var);
+            //     info.code.get(info.code.length()-1).print();log::out<<("\n");
+                
+            //     if(LineEndError(info))
+            //         continue;
+            // } else if((instType & BC_MASK) == BC_R1){
+            //     int reg=0;
+
+            //     if(instType == BC_JUMP){
+            //         if(!CompileInstructionArg(info,reg,ARG_CONST_NUMBER|ARG_REG)){
+            //             info.nextLine();
+            //             continue;
+            //         }
+            //     }else if(instType == BC_LOAD_CONST){
+            //         if(!CompileInstructionArg(info,reg,ARG_CONST_NUMBER)){
+            //             info.nextLine();
+            //             continue;
+            //         }
+            //     }else{
+            //         if(!CompileInstructionArg(info,reg,ARG_REG)){
+            //             info.nextLine();
+            //             continue;
+            //         }
+            //     }
+
+            //     info.code.add(instType,reg);
+            //     log::out << info.code.get(info.code.length()-1) << ("\n");
+
+            //     if(LineEndError(info))
+            //         continue;
+            // }
         }
     }
 
     for(auto& addr : info.instructionsToResolve){
-        // Todo: check if instruction is of a type that uses addresses?
-        auto find = info.addressMap.find(addr.addrName);
-        int address = addr.instIndex + 1;
-        if(find==info.addressMap.end()){
-            log::out << "CompileError at "<<addr.addrName.line<<":"<<addr.addrName.column<<" : Address "<<addr.addrName<<" could not be resolved\n";
+        Instruction& inst = info.code.get(addr.instIndex);
+        auto find = info.nameOfNumberMap.find(addr.token);
+        int index = -1;
+        if(find==info.nameOfNumberMap.end()){
+            auto find2 = info.nameOfStringMap.find(addr.token);
+            if(find2==info.nameOfStringMap.end()){
+                // Bytecode::Unresolved* ptr = info.code.getUnresolved(addr.token);
+                // if(ptr){
+                //     index = ptr->address;
+                // }else{
+                //     index = info.code.nextUnresolvedAddress++;
+                //     info.code.addUnresolved(addr.token,index);
+                //     log::out << "Unresolved "<<addr.token << " (first found at "<<addr.token.line<<":"<<addr.token.column<<")\n";
+                // }
+                log::out << "CompileError at "<<addr.token.line<<":"<<addr.token.column<<" : Constant "<<addr.token<<" could not be resolved\n";
+            }else{
+                index = find2->second;
+            }
         }else{
-            address = find->second;
+            index = find->second;
         }
-        
-        info.code.get(addr.instIndex).reg0 = address&0xFF;
-        info.code.get(addr.instIndex).reg12 = address>>8;
+        inst = *(Instruction*)&index;
+        // if((inst.type&BC_MASK)==BC_R1){
+        //     inst.reg0 = index&0xFF;
+        //     inst.reg12 = index>>8;
+        //     if(inst.singleReg()!=index){
+        //         log::out << "CompileWarning "<<addr.token.line<<":"<<addr.token.column<<", index/address did not fit in 24 bits, expect bugs!\n";
+        //     }
+        // } else if((inst.type&BC_MASK)==BC_R2){
+        //     inst.reg12 = index;
+        //     if(inst.reg12!=index){
+        //         log::out << "CompileWarning "<<addr.token.line<<":"<<addr.token.column<<", index/address did not fit in 16 bits, expect bugs!\n";
+        //     }
+        // } else {
+        //     log::out << "CompileError at "<<addr.token.line<<":"<<addr.token.column<<" : Instruction must be of type R1 or R2 to resolve constants\n";
+        // }
     }
 
     return info.code;
+}
+
+std::string Disassemble(Bytecode code){
+    using namespace engone;
+    // engone::Memory buffer{1};
+    std::string buffer="";
+    
+    // #define CHECK_MEMORY if(!buffer.resize(buffer.max*2+1000)) {log::out << "Failed allocation\n"; return {};}
+    
+    for(int i=0;i<code.constNumbers.used;i++){
+        Number* num = code.getConstNumber(i);
+        buffer += "num_";
+        buffer += std::to_string(i);
+        buffer += ": ";
+        buffer += std::to_string(num->value);
+        buffer += "\n";
+    }
+    for(int i=0;i<code.constStrings.used;i++){
+        String* num = code.getConstString(i);
+        buffer += "str_";
+        buffer += std::to_string(i);
+        buffer += ": \"";
+        buffer += *num; // careful with new line?
+        buffer += "\"\n";
+    }
+    
+    #define REF_NUM 1
+    #define REF_STR 2
+    int refTypes[256]{0};
+    
+    int programCounter = 0;
+    while(true){
+        if(programCounter>=code.length())
+            break;
+        Instruction& inst = code.get(programCounter++);
+        
+        // necessary to know which register are of what type
+        // that info is needed so load knows which constant it should load
+        if(inst.type==BC_NUM){
+            refTypes[inst.reg0] = REF_NUM;   
+        }else if(inst.type==BC_STR){
+            refTypes[inst.reg0] = REF_STR;
+        }else if(inst.type==BC_MOV){
+            refTypes[inst.reg1] = refTypes[inst.reg0];
+        }else if(inst.type==BC_COPY){
+            refTypes[inst.reg1] = refTypes[inst.reg0];
+        }else if(inst.type==BC_RETURN){
+            // refTypes[DEFAULT_REG_RETURN_VALUE] = refTypes[inst.];
+        }else if(inst.type==BC_RUN){
+            
+        }
+        
+        const char* name = InstToString(inst.type); // Todo: load, add instead of BC_LOAD, BC_ADD
+        buffer += "    ";
+        buffer += name;
+        int regCount = (inst.type&BC_MASK)>>6;
+        for(int i=0;i<regCount;i++){
+            buffer += " ";
+            buffer += "$";
+            buffer += std::to_string(inst.regs[i]);
+        }
+        
+        if(inst.type==BC_LOAD){
+            uint extraData = *(uint*)&code.get(programCounter++);
+            if(refTypes[inst.reg0]==REF_STR)
+                buffer += " str_";
+            else
+                buffer += " num_";
+            buffer+=std::to_string(extraData);
+        }
+        buffer +="\n";
+    }   
+    return buffer; 
 }

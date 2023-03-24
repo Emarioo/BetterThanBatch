@@ -1,0 +1,13 @@
+//num: 13.92
+//    num $a
+//    num $rl
+//    load num
+//    mov $rl $a
+//    add $a $a $a
+
+str: "HAHA"
+    str $a
+    str $rl
+    load str
+    mov $rl $a
+    add $a $a $a

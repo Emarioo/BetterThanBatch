@@ -899,10 +899,33 @@ namespace engone {
 			freopen_s((FILE**)stdin, "CONIN$", "r", stdin);
 		}
 	}
-	bool StartProgram(const std::string& path, char* commandLine) {
-		if (!FileExist(path)) {
-			return false;
+	std::string EnvironmentVariable(const std::string& name){
+		std::string buffer{};
+		DWORD length = GetEnvironmentVariableA(name.c_str(),(char*)buffer.data(),0);
+		if(length==0){
+			DWORD err = GetLastError();
+			if(err=ERROR_ENVVAR_NOT_FOUND){
+				printf("[WinError %lu] EnvironmentVariable 1, %s not found\n",err,name.c_str());
+			}else{
+				printf("[WinError %lu] EnvironmentVariable 1, %s\n",err,name.c_str());
+			}
+			return "";
 		}
+		buffer.resize(length-1);
+		length = GetEnvironmentVariableA(name.c_str(),(char*)buffer.data(),length);
+		
+		// printf("%lu != %lu\n",length,buffer.length());
+		if(length != buffer.length()){
+			DWORD err = GetLastError();
+			printf("[WinError %lu] EnvironmentVariable 2, %s\n",err,name.c_str());
+			return ""; // failed
+		}
+		return buffer;
+	}
+	bool StartProgram(const std::string& path, char* commandLine, int flags) {
+		// if (!FileExist(path)) {
+		// 	return false;
+		// }
         
 		// additional information
 		STARTUPINFOA si;
@@ -914,28 +937,42 @@ namespace engone {
 		ZeroMemory(&pi, sizeof(pi));
         
 		int slashIndex = path.find_last_of("\\");
+    
+		std::string workingDir{};
+		const char* dir = NULL;
+		if(slashIndex!=-1)
+			workingDir = path.substr(0, slashIndex);
+		// else
+		// 	workingDir = GetWorkingDirectory();
         
-		std::string workingDir = path.substr(0, slashIndex);
-        
-		//#ifdef NDEBUG
-		//		std::wstring exeFile = convert(path);
-		//		std::wstring workDir = convert(workingDir);
-		//#else
-		const std::string& exeFile = path;
-		std::string& workDir = workingDir;
-		//#endif
-		CreateProcessA(exeFile.c_str(),   // the path
+		if(!workingDir.empty())
+			dir = workingDir.c_str();
+			
+		DWORD createFlags = 0;
+		if(flags&PROGRAM_NEW_CONSOLE)
+			createFlags |= CREATE_NEW_CONSOLE;
+			
+		char* exepath = 0;
+		if(!path.empty())
+			exepath = (char*)path.data();
+		BOOL yes = CreateProcessA(exepath,   // the path
                        commandLine,        // Command line
                        NULL,           // Process handle not inheritable
                        NULL,           // Thread handle not inheritable
                        FALSE,          // Set handle inheritance to FALSE
-                       0,              // No creation flags
+                       createFlags,              // No creation flags
                        NULL,           // Use parent's environment block
-                       workDir.c_str(),   // starting directory 
+                       dir,   // starting directory 
                        &si,            // Pointer to STARTUPINFO structure
                        &pi             // Pointer to PROCESS_INFORMATION structure (removed extra parentheses)
                        );
-        
+        if(!yes){
+			DWORD err = GetLastError();
+			printf("[WinError %lu] StartProgram, could not start %s\n",err,path.c_str());	
+			return false;
+		}
+		if(flags&PROGRAM_WAIT)
+			WaitForSingleObject(pi.hProcess,INFINITE);
 		// Close process and thread handles. 
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);

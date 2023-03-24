@@ -20,6 +20,7 @@ namespace engone {
 
 		// count is not in bytes.
 		// Rename to reserve?
+		// will only return false if typeSize is 0
 		bool resize(uint64 count);
 		
 		// read only, changing it will ruin things internally

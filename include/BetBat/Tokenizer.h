@@ -4,6 +4,7 @@
 #include "Engone/Logger.h"
 
 #define TOKEN_SUFFIX_LINE_FEED 1
+// SPACE suffic is remove if LINE_FEED is present in mask/flag 
 #define TOKEN_SUFFIX_SPACE 2
 #define TOKEN_QUOTED 4
 
@@ -22,6 +23,7 @@ struct Token {
     int column=0;
 
     bool operator==(const char* str);
+    bool operator!=(const char* str);
     
     operator std::string();
 

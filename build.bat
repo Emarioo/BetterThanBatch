@@ -44,5 +44,5 @@ set /a finS2=(endTime-startTime)%%100
 echo Finished in %finS%.%finS2% seconds
 
 if !errorlevel! == 0 (
-    bin\program
+    bin\program tests/inst/apicalls.txt
 )

@@ -1,0 +1,28 @@
+text: "hehe haha"
+    str $a
+    num $ra
+    load $a text
+    
+    //run $a "D:\Backup\CodeProjects\BetterThanBatch\test.bat"
+    //run $a "gcc.exe"
+test: "test.bat"
+    str $b
+    load $b test
+    run $a $b
+    
+    //run $a func
+    
+    run $a "hej"
+
+//args: "src/BetBat/Value.cpp"
+//    str $a
+//    str $rl
+//    load args
+//    mov $rl $a
+//    num $rl
+//    run $a "gcc.exe"
+    
+    //run $a print
+    
+    //load print
+    //run $a $rl

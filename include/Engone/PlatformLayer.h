@@ -74,9 +74,10 @@ namespace engone {
 	bool DirectoryCreate(const std::string& path);
     bool FileLastWriteSeconds(const std::string& path, double* seconds);
     
-	// Not thread safe if you change working directory or if used within shared libraries. (from msdcindows doc)
-	// string is 
+	// Not thread safe if you change working directory or if used within shared libraries. (from windows docs)
 	std::string GetWorkingDirectory();
+
+	std::string EnvironmentVariable(const std::string& name);
 	
 	bool FileCopy(const std::string& src, const std::string& dst);
     // Todo: Remove the simple directory iterator. Skipping directories in the recursive directory iterator
@@ -170,9 +171,11 @@ namespace engone {
 		void* m_internalHandle = 0;
 	};
 	
+	#define PROGRAM_NEW_CONSOLE 1
+	#define PROGRAM_WAIT 2
 	// Starts an exe at path. Uses CreateProcess from windows.h
 	// commandLine cannot be constant (CreateProcessA in windows api says so)
-	bool StartProgram(const std::string& path, char* commandLine=NULL);
+	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0);
 
 	typedef void(*VoidFunction)();
 	// @return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 

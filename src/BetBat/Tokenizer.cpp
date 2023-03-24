@@ -16,7 +16,11 @@ void Token::print(int printFlags){
             log::out << "\"";
     }
     for(int i=0;i<length;i++){
-        log::out << *(str+i);
+        char chr = *(str+i);
+        if(chr=='\n'){
+            log::out << "\\n"; // Is this okay?
+        }else
+            log::out << chr;
     }
     if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_QUOTED)
@@ -33,6 +37,9 @@ bool Token::operator==(const char* text){
     }
     return true;
 }
+bool Token::operator!=(const char* text){
+    return !(*this == text);
+}
 engone::Logger& operator<<(engone::Logger& logger, Token& token){
     token.print();
     return logger;
@@ -45,14 +52,6 @@ bool Tokens::add(Token token){
         if(!tokens.resize(tokens.max*2 + 100))
             return false;
     }
-    // if(tokenData.max < tokenData.used + token.length){
-    //     if(!tokenData.resize(tokenData.max*2 + 100 + token.length))
-    //         return false;
-    // }
-    // char* ptr = (char*)tokenData.data+tokenData.used;
-    // memcpy(ptr,token.str,token.length);
-    // token.str = ptr;
-    // tokenData.used+=token.length;
     
     *((Token*)tokens.data + tokens.used) = token;
     
@@ -73,20 +72,16 @@ void Tokens::printTokens(int tokensPerLine, int flags){
         Token* token = ((Token*)tokens.data + i);
         if(flags&TOKEN_PRINT_LN_COL)
             log::out << "["<<token->line << ":"<<token->column<<"] ";
-            // printf("[%d:%d] ",token->line,token->column);
         
         token->print(flags);
         if(flags&TOKEN_PRINT_SUFFIXES){
             if(token->flags&TOKEN_SUFFIX_LINE_FEED)
                 log::out << "\\n";
-                // printf("\\n");
         }
         if((i+1)%tokensPerLine==0)
             log::out << "\n";
-            // printf("\n");
         else
             log::out << " ";
-            // printf(" ");
     }
     if(i%tokensPerLine != 0)
         log::out << "\n";
@@ -97,9 +92,7 @@ void Tokens::printData(int charsPerLine){
     int i=0;
     for(;i<tokenData.used;i++){
         char chr = *((char*)tokenData.data+i);
-        // printf("%c",chr);
         log::out << chr;
-        // printf("%c:%d ",chr,(int)chr);
         if((i+1)%charsPerLine==0)
             log::out << "\n";
     }
@@ -110,7 +103,6 @@ Tokens Tokenize(engone::Memory textData){
     using namespace engone;
     if(textData.m_typeSize!=1) {
         log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
-        // printf("Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
         return {};
     }
     log::out << "\n####   Tokenizer   ####\n";
@@ -125,21 +117,24 @@ Tokens Tokenize(engone::Memory textData){
     engone::Memory& tokenData = outTokens.tokenData;
     memset(tokenData.data,'_',tokenData.max); // Good indicator for issues
     
-    const char* specials = "+-*/=<>" "$#{}()[]" ":;";
+    const char* specials = "+-*/=<>" "$#{}()[]" ":;.,";
     int specialLength = strlen(specials);
-    Token token = {text,0};
-    
     int line=1;
     int column=1;
     
+    Token token = {};
+    token.str = text;
     token.line = line;
     token.column = column;
     
     bool inQuotes = false;
+    bool inComment = false;
+    bool inEnclosedComment = false;
     
-    int index=-1;
+    bool canBeDot = false; // used to deal with decimals (eg. 255.92) as one token
+    
+    int index=0;
     while(true){
-        index++;
         if(index==length)
             break;
         char prevChr = 0;
@@ -149,37 +144,45 @@ Tokens Tokenize(engone::Memory textData){
         if(index+1<length)
             nextChr = text[index+1];
         char chr = text[index];
+        index++;
         
         int col = column;
         int ln = line;
         
         bool isQuotes = chr == '"';
+        bool isComment = chr=='/' && (nextChr == '/' || nextChr=='*');
         bool isDelim = chr==' ' || chr=='\t' || chr=='\n' || chr=='\r';
         bool isSpecial = false;
-        for(int i=0;i<specialLength;i++){
-            if(chr==specials[i]){
-                isSpecial = true;
-                break;
+        if(!isQuotes&&!isComment&&!isDelim){
+            for(int i=0;i<specialLength;i++){ // No need to run if delim, comment or quote
+                if(chr==specials[i]){
+                    isSpecial = true;
+                    break;
+                }
             }
         }
         
         column++;
-        if(chr == '\n'&&!inQuotes){
+        if(chr == '\n'){
             line++;
             column=1;
         }
-        if(!inQuotes){
-            if(token.length==0&&isQuotes){
-                // Start reading string token
-                inQuotes = true;
-                token.str = (char*)tokenData.data+tokenData.used;
-                token.length = 0;
-                token.line = ln;
-                token.column = col;
-                _TOKENIZER_LOG(log::out << "\" : Begin quote\n";)
-                continue;
+        if(inComment){
+            if(inEnclosedComment){
+                if(chr=='*'&&nextChr=='/'){
+                    inComment=false;
+                    index++;
+                    inEnclosedComment=false;
+                    _TOKENIZER_LOG(log::out << "// : End comment\n";)
+                }
+            }else{
+                if(chr=='\n'){
+                    inComment=false;
+                    _TOKENIZER_LOG(log::out << "// : End comment\n";)
+                }
             }
-        } else {
+            continue;
+        } else if(inQuotes) {
             if(isQuotes && prevChr!='\\'){
                 // Stop reading string token
                 inQuotes=false;
@@ -191,7 +194,7 @@ Tokens Tokenize(engone::Memory textData){
                     token.flags |= TOKEN_SUFFIX_SPACE;
                 token.flags |= TOKEN_QUOTED;
                 
-                _TOKENIZER_LOG(log::out << " : Add ";token.print();log::out << "\n";)
+                _TOKENIZER_LOG(log::out << " : Add " << token << "\n";)
                 _TOKENIZER_LOG(log::out << "\" : End quote\n";)
                 
                 outTokens.add(token);
@@ -202,7 +205,12 @@ Tokens Tokenize(engone::Memory textData){
                 }
                 _TOKENIZER_LOG(log::out << chr;)
                 
-                *((char*)tokenData.data+tokenData.used) = chr;
+                char tmp = chr;
+                if(chr=='\\'&&nextChr=='n'){
+                    tmp = '\n';
+                    index++;
+                }
+                *((char*)tokenData.data+tokenData.used) = tmp;
                 tokenData.used++;
                 token.length++;
             }
@@ -210,13 +218,20 @@ Tokens Tokenize(engone::Memory textData){
         }
         
         if(chr=='\n'){
-            Token& last = outTokens.get(outTokens.length()-1);
-            last.flags = (last.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
+            if(outTokens.length()-1>=0){
+                Token& last = outTokens.get(outTokens.length()-1);
+                last.flags = (last.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
+            }
         }
-        if(token.length==0 && isDelim){
+        if(token.length==0 && isDelim)
             continue;
+        
+        // Treat decimals with . as one token
+        if(canBeDot && chr=='.'){
+            isSpecial = false;
+            canBeDot=false;
         }
-        if(!isDelim&&!isSpecial&&!isQuotes){
+        if(!isDelim&&!isSpecial&&!isQuotes&&!isComment){
             if(token.length!=0){
                 _TOKENIZER_LOG(log::out << "-";)
             }
@@ -225,67 +240,83 @@ Tokens Tokenize(engone::Memory textData){
                 token.str = (char*)tokenData.data+tokenData.used;
                 token.line = ln;
                 token.column = col;
+                
+                if(chr>='0'&&chr<='9')
+                    canBeDot=true;
+                else
+                    canBeDot=false;
             }
+            if(!(chr>='0'&&chr<='9') && chr!='.')
+                canBeDot=false;
             *((char*)tokenData.data+tokenData.used) = chr;
             tokenData.used++;
             token.length++;
         }
         
-        if(token.length!=0 && (isDelim || isQuotes || isSpecial || index+1==length)){
+        if(token.length!=0 && (isDelim || isQuotes || isComment || isSpecial || index==length)){
             token.flags = 0;
+            // Todo: is checking line feed necessary? line feed flag of last token is set further up.
             if(chr=='\r'||chr=='\n')
                 token.flags |= TOKEN_SUFFIX_LINE_FEED;
             else if(chr==' ')
                 token.flags |= TOKEN_SUFFIX_SPACE;
                 
-            _TOKENIZER_LOG(log::out << " : Add ";token.print();log::out << "\n";)
-                
+            _TOKENIZER_LOG(log::out << " : Add " << token << "\n";)
+            
+            canBeDot=false;
             outTokens.add(token);
             token = {};
-            
-            if(isQuotes){
+        }
+        if(!inComment&&!inQuotes){
+            if(isComment){
+                inComment=true;
+                if(chr=='/' && nextChr=='*')
+                    inEnclosedComment=true;
+                index++; // skip the next slash
+                _TOKENIZER_LOG(log::out << "// : Begin comment\n";)
+                continue;
+            }else if(isQuotes){
                 inQuotes = true;
                 token.str = (char*)tokenData.data+tokenData.used;
                 token.length = 0;
                 token.line = ln;
                 token.column = col;
-                _TOKENIZER_LOG(log::out << "\" : Begin quote\n";)   
+                _TOKENIZER_LOG(log::out << "\" : Begin quote\n";)
+                continue;
             }
         }
         if(isSpecial){
+            // this scope only adds special token
             _TOKENIZER_LOG(printf("%c",chr);)
             token = {(char*)tokenData.data+tokenData.used,1};
             *((char*)tokenData.data+tokenData.used) = chr;
             tokenData.used++;
             token.line = ln;
             token.column = col;
-            if(index+1<length){
-                char chrTemp = *(text+index+1); 
-                if(chrTemp=='\r' || chrTemp =='\n')
-                    token.flags = TOKEN_SUFFIX_LINE_FEED;
-                else if(chrTemp==' ')
-                    token.flags = TOKEN_SUFFIX_SPACE;
-            }
-            _TOKENIZER_LOG(log::out << " : Add ";token.print();log::out <<"\n";)
+            if(nextChr=='\r' || nextChr =='\n')
+                token.flags = TOKEN_SUFFIX_LINE_FEED;
+            else if(nextChr==' ')
+                token.flags = TOKEN_SUFFIX_SPACE;
+            _TOKENIZER_LOG(log::out << " : Add " << token <<"\n";)
             outTokens.add(token);
             token = {};
         }
     }
     if(token.length!=0){
         // error happened in a way where we need to add a line feed
-        _TOKENIZER_LOG(printf("\n");)
+        _TOKENIZER_LOG(log::out << "\n";)
     }
     
     if(inQuotes){
-        log::out<<"TokenError: Missing end quote for '";
-        token.print();
-        log::out << "' at "<< token.line<<":"<<token.column<<"\n";
+        log::out<<"TokenError: Missing end quote for '"<<token << "' at "<< token.line<<":"<<token.column<<"\n";
+        goto Tokenize_END;
+    }
+    if(inComment){
+        log::out<<"TokenError: Missing end comment for "<<token.line<<":"<<token.column<<"\n";
         goto Tokenize_END;
     }
     if(token.length!=0){
-        log::out << "TokenError: Token '";
-        token.print();
-        log::out << "' was left incomplete\n";
+        log::out << "TokenError: Token '" << token << "' was left incomplete\n";
         goto Tokenize_END;
     }
     if(outTokens.tokens.used!=0){
