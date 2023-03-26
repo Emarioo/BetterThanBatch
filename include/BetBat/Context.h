@@ -6,9 +6,6 @@ const char* RefToString(int type);
 #define REF_NUMBER 1
 #define REF_STRING 2
 
-// Define/undefine to enable/disable
-#define CLOG
-
 #define DEFAULT_LOAD_CONST_REG 9
 struct Ref {
     int type=0;

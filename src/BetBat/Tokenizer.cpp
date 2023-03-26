@@ -4,10 +4,10 @@
 #include "BetBat/Tokenizer.h"
 #include "Engone/PlatformLayer.h"
 
-#ifdef TOKENIZER_LOG
-#define _TOKENIZER_LOG(x) x;
+#ifdef TLOG
+#define _TLOG(x) x;
 #else
-#define _TOKENIZER_LOG(x)
+#define _TLOG(x) ;
 #endif
 void Token::print(int printFlags){
     using namespace engone;
@@ -87,7 +87,7 @@ void Tokens::printTokens(int tokensPerLine, int flags){
         }
         if((i+1)%tokensPerLine==0)
             log::out << "\n";
-        else
+        else if((token->flags&TOKEN_SUFFIX_SPACE)==0)
             log::out << " ";
     }
     if(i%tokensPerLine != 0)
@@ -179,12 +179,12 @@ Tokens Tokenize(engone::Memory textData){
                     inComment=false;
                     index++;
                     inEnclosedComment=false;
-                    _TOKENIZER_LOG(log::out << "// : End comment\n";)
+                    _TLOG(log::out << "// : End comment\n";)
                 }
             }else{
                 if(chr=='\n'){
                     inComment=false;
-                    _TOKENIZER_LOG(log::out << "// : End comment\n";)
+                    _TLOG(log::out << "// : End comment\n";)
                 }
             }
             continue;
@@ -200,16 +200,16 @@ Tokens Tokenize(engone::Memory textData){
                     token.flags |= TOKEN_SUFFIX_SPACE;
                 token.flags |= TOKEN_QUOTED;
                 
-                _TOKENIZER_LOG(log::out << " : Add " << token << "\n";)
-                _TOKENIZER_LOG(log::out << "\" : End quote\n";)
+                _TLOG(log::out << " : Add " << token << "\n";)
+                _TLOG(log::out << "\" : End quote\n";)
                 
                 outTokens.add(token);
                 token = {};
             } else if(!(chr=='\\'&&nextChr=='"')) {
                 if(token.length!=0){
-                    _TOKENIZER_LOG(log::out << "-";)
+                    _TLOG(log::out << "-";)
                 }
-                _TOKENIZER_LOG(log::out << chr;)
+                _TLOG(log::out << chr;)
                 
                 char tmp = chr;
                 if(chr=='\\'&&nextChr=='n'){
@@ -229,7 +229,7 @@ Tokens Tokenize(engone::Memory textData){
             }else if(outTokens.length()>0){
                 Token& last = outTokens.get(outTokens.length()-1);
                 last.flags = (last.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
-                // _TOKENIZER_LOG(log::out << ", line feed";)
+                // _TLOG(log::out << ", line feed";)
             }
         }
         if(token.length==0 && isDelim)
@@ -242,9 +242,9 @@ Tokens Tokenize(engone::Memory textData){
         }
         if(!isDelim&&!isSpecial&&!isQuotes&&!isComment){
             if(token.length!=0){
-                _TOKENIZER_LOG(log::out << "-";)
+                _TLOG(log::out << "-";)
             }
-            _TOKENIZER_LOG(log::out << chr;)
+            _TLOG(log::out << chr;)
             if(token.length==0){
                 token.str = (char*)tokenData.data+tokenData.used;
                 token.line = ln;
@@ -270,7 +270,7 @@ Tokens Tokenize(engone::Memory textData){
             else if(chr==' ')
                 token.flags |= TOKEN_SUFFIX_SPACE;
                 
-            _TOKENIZER_LOG(log::out << " : Add " << token << "\n";)
+            _TLOG(log::out << " : Add " << token << "\n";)
             
             canBeDot=false;
             outTokens.add(token);
@@ -282,7 +282,7 @@ Tokens Tokenize(engone::Memory textData){
                 if(chr=='/' && nextChr=='*')
                     inEnclosedComment=true;
                 index++; // skip the next slash
-                _TOKENIZER_LOG(log::out << "// : Begin comment\n";)
+                _TLOG(log::out << "// : Begin comment\n";)
                 continue;
             }else if(isQuotes){
                 inQuotes = true;
@@ -290,13 +290,13 @@ Tokens Tokenize(engone::Memory textData){
                 token.length = 0;
                 token.line = ln;
                 token.column = col;
-                _TOKENIZER_LOG(log::out << "\" : Begin quote\n";)
+                _TLOG(log::out << "\" : Begin quote\n";)
                 continue;
             }
         }
         if(isSpecial){
             // this scope only adds special token
-            _TOKENIZER_LOG(printf("%c",chr);)
+            _TLOG(printf("%c",chr);)
             token = {(char*)tokenData.data+tokenData.used,1};
             *((char*)tokenData.data+tokenData.used) = chr;
             tokenData.used++;
@@ -306,14 +306,14 @@ Tokens Tokenize(engone::Memory textData){
                 token.flags = TOKEN_SUFFIX_LINE_FEED;
             else if(nextChr==' ')
                 token.flags = TOKEN_SUFFIX_SPACE;
-            _TOKENIZER_LOG(log::out << " : Add " << token <<"\n";)
+            _TLOG(log::out << " : Add " << token <<"\n";)
             outTokens.add(token);
             token = {};
         }
     }
     if(token.length!=0){
         // error happened in a way where we need to add a line feed
-        _TOKENIZER_LOG(log::out << "\n";)
+        _TLOG(log::out << "\n";)
     }
     
     if(inQuotes){

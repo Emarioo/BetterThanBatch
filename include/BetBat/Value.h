@@ -16,7 +16,8 @@ struct String {
 std::string& operator+=(std::string& str, String& str2);
 // \n is replaced with \\n
 void PrintRawString(String& str);
+typedef float Decimal;
 engone::Logger& operator<<(engone::Logger& logger, String& str);
 struct Number{
-    double value;    
+    Decimal value;    
 };

@@ -34,7 +34,8 @@ for /r %%i in (*.cpp) do (
 set /a startTime=6000*( 100%time:~3,2% %% 100 ) + 100* ( 100%time:~6,2% %% 100 ) + ( 100%time:~9,2% %% 100 )
 
 @REM if !DEBUG!==1 (
-start /b g++ !WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/program_debug.exe > nul
+    start /b g++ !WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/program_debug.exe
+@REM  > nul
 @REM ) else (
     cl !COMPILE_OPTIONS! !INCLUDE_DIRS! !DEFINITIONS! !srcfile! /Fobin/all.obj /link shell32.lib /OUT:bin/program.exe
 @REM )

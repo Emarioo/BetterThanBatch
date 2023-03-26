@@ -203,7 +203,7 @@ void Context::execute(){
 
         Bytecode::DebugLine* debugLine = activeCode.getDebugLine(programCounter,&latestDebugLine);
         if(debugLine){
-            // log::out <<"\n    ---   "<< *debugLine <<"    ---\n";
+            log::out << *debugLine;
         }
 
         Instruction inst = activeCode.get(programCounter++);
@@ -231,7 +231,7 @@ void Context::execute(){
                         continue;
                     }
                     
-                    double num;
+                    Decimal num;
                     
                     if(inst.type==BC_ADD)
                         num = v0->value + v1->value;
@@ -366,7 +366,7 @@ void Context::execute(){
                         CERR<< ", nummbers are null\n";
                     }else{
                         n1->value = n0->value;
-                        _CLOG(log::out << inst <<", copied "<< n1->value <<"\n";)
+                        _CLOG(log::out << inst <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
                     }
                 }else if(r0.type==REF_STRING){
                     r1.type = r0.type;
@@ -379,7 +379,7 @@ void Context::execute(){
                         CERR << ", values are null\n";
                     }else{
                         v0->copy(v1);
-                        _CLOG(log::out << inst <<", copied ";PrintRawString(*v1);log::out<<"\n";)  
+                        _CLOG(log::out << inst <<" ["<<r1.index<<"], copied ";PrintRawString(*v1);log::out<<"\n";)  
                     }
                 }else{
                     CERR<< ", cannot copy "<<RefToString(r0.type)<<"\n";   
@@ -415,7 +415,7 @@ void Context::execute(){
                 r0.type = REF_NUMBER;
                 r0.index = makeNumber();
                 
-                _CLOG(log::out << inst <<"\n";)
+                _CLOG(log::out << inst <<" ["<<r0.index<<"]\n";)
                 
                 break;
             }
@@ -425,7 +425,7 @@ void Context::execute(){
                 r0.type = REF_STRING;
                 r0.index = makeString();
                 
-                _CLOG(log::out << inst <<"\n";)
+                _CLOG(log::out << inst <<" ["<<r0.index<<"]\n";)
                 
                 break;
             }
@@ -446,7 +446,8 @@ void Context::execute(){
             }
             case BC_LOADC: {
                 Ref& r0 = references[inst.reg0];
-                uint extraData =  *(uint*)&activeCode.get(programCounter++);
+                // uint extraData =  *(uint*)&activeCode.get(programCounter++);
+                uint extraData = (uint)inst.reg1|((uint)inst.reg2<<8);
                 // Todo: BC_MAKE_NUMBER if ref doesn't have a number? option in the compiler to make numbers when necessary?
                 if (r0.type == REF_NUMBER){
                     Number* n0 = getNumber(r0.index);
@@ -461,7 +462,6 @@ void Context::execute(){
                     //     PrintRef(this,LOAD_CONST_REG);
                     //     log::out << " = "<< unresolved->name <<" (unresolved)\n";
                     // }else{
-                    
                     Number* num = activeCode.getConstNumber(extraData);
                     if(!num){
                         CERR << ", number constant at "<< extraData<<" does not exist\n";   
@@ -501,7 +501,7 @@ void Context::execute(){
                     continue;
                 }
                 Number* stackNumber = getNumber(sp.index);
-                if(stackNumber->value!=(double)(uint)stackNumber->value){
+                if(stackNumber->value!=(Decimal)(uint)stackNumber->value){
                     CERR << ", $sp cannot have decimals  ($sp = "<<stackNumber->value<<")\n";
                     continue;
                 }
@@ -533,7 +533,7 @@ void Context::execute(){
                     continue;
                 }
                 Number* stackNumber = getNumber(sp.index);
-                if(stackNumber->value!=(double)(uint)stackNumber->value){
+                if(stackNumber->value!=(Decimal)(uint)stackNumber->value){
                     CERR << ", $sp cannot have decimals ($sp = "<<stackNumber->value<<")\n";
                     continue;
                 }
@@ -567,7 +567,7 @@ void Context::execute(){
                     CERR << ", $fp cannot be null\n";
                     continue;
                 }
-                if(stackNumber->value!=(double)(uint)stackNumber->value){
+                if(stackNumber->value!=(Decimal)(uint)stackNumber->value){
                     CERR << ", $fp cannot have decimals ($sp = "<<stackNumber->value<<")\n";
                     continue;
                 }
@@ -576,7 +576,7 @@ void Context::execute(){
                 //     CERR<<", $r1 (offset reg.) cannot be null\n";
                 //     continue;
                 // }
-                // if(offset->value!=(double)(uint)offset->value){
+                // if(offset->value!=(Decimal)(uint)offset->value){
                 //     CERR << ", $r1 (offset reg.) cannot have decimals  ($sp = "<<offset->value<<")\n";
                 //     continue;
                 // }
@@ -603,8 +603,8 @@ void Context::execute(){
                     uint address = n0->value;
                 
                     // note that address is refers to the instruction position/index and not the byte memory address.
-                    if(n0->value != (double)(uint)n0->value){
-                        CERR<< ", decimal in register not allowed ("<<n0->value<<"!="<<((double)(uint)n0->value)<<")\n";   
+                    if(n0->value != (Decimal)(uint)n0->value){
+                        CERR<< ", decimal in register not allowed ("<<n0->value<<"!="<<((Decimal)(uint)n0->value)<<")\n";   
                     } else if(activeCode.length()<address){
                         CERR << ", invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
                     }else if(programCounter == address){
@@ -628,8 +628,8 @@ void Context::execute(){
                     uint address = n2->value;
                     
                     // note that address is refers to the instruction position/index and not the byte memory address.
-                    if(n2->value != (double)(uint)n2->value){
-                        CERR<< ", decimal in register not allowed ("<<n2->value<<"!="<<((double)(uint)n2->value)<<")\n";
+                    if(n2->value != (Decimal)(uint)n2->value){
+                        CERR<< ", decimal in register not allowed ("<<n2->value<<"!="<<((Decimal)(uint)n2->value)<<")\n";
                         continue;
                     } else if(activeCode.length()<address){
                         CERR << ", invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
@@ -759,7 +759,7 @@ void Context::execute(){
                         CERR << ", $r1 is null\n";
                         continue;
                     }
-                    if(n1->value!=(double)(uint)n1->value){
+                    if(n1->value!=(Decimal)(uint)n1->value){
                         CERR << ", $r1 cannot be decimal ("<<n1->value<<")\n";
                         continue;
                     }

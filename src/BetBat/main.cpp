@@ -7,8 +7,10 @@ int main(int argc, const char** argv){
         CompileScript(argv[i]);
     }
     if(argc<2){
-        TestVariableLimit(100);
+        TestVariableLimit(10);
         // TestMathExpression(100);
+
+        // CompileDisassemble("tests/varlimit.txt");
 
         // CompileScript("tests/script/vars.txt");
         // CompileScript("tests/script/math.txt");
@@ -18,7 +20,6 @@ int main(int argc, const char** argv){
         // CompileInstructions("tests/inst/numstr.txt");
         // CompileInstructions("tests/inst/apicalls.txt");
     }
-
 
     int finalMemory = GetAllocatedBytes()-log::out.getMemoryUsage();
     if(finalMemory!=0)

@@ -6,7 +6,8 @@
 #define ERRTOK ERRAT(token.line,token.column)
 #define ERRTOKL ERRAT(token.line,token.column+token.length)
 
-#define INST engone::log::out << (info.code.get(info.code.length()-2).type==BC_LOADC ? info.code.get(info.code.length()-2) : info.code.get(info.code.length()-1)) << ", "
+#define INST engone::log::out << (info.code.get(info.code.length()-1)) << ", "
+// #define INST engone::log::out << (info.code.get(info.code.length()-2).type==BC_LOADC ? info.code.get(info.code.length()-2) : info.code.get(info.code.length()-1)) << ", "
 
 #define ERRLINE engone::log::out <<log::RED<<" [Line "<<info.now().line<<"] ";info.printLine();engone::log::out<<"\n";
 
@@ -59,7 +60,9 @@ const char* InstToString(int type){
 
 void Instruction::print(){
     using namespace engone;
-    if((type&BC_MASK) == BC_R1){
+    if(type==BC_LOADC){
+        log::out <<" "<< InstToString(type) << " $"<<reg0 << " "<<((uint)reg1|((uint)reg2<<8));
+    } else if((type&BC_MASK) == BC_R1){
         log::out <<" "<< InstToString(type);
         if(reg1==0&&reg2==0){
             log::out << " $"<<reg0;
@@ -82,10 +85,11 @@ engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
     return logger;
 }
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine){
-    logger << "LN:"<<debugLine.line<<" ";
+    logger << "\nLine: "<<debugLine.line<<"  ";
     for(uint i=0;i<debugLine.length;i++){
         logger<<*(debugLine.str+i);
     }
+    logger<<"\n";
     return logger;
 }
 bool Bytecode::add(Instruction instruction){
@@ -120,7 +124,7 @@ bool Bytecode::add(uint8 type, uint reg012){
     inst.reg2 = (reg012>>16)&0xFF;
     return add(inst);
 }
-uint Bytecode::addConstNumber(double number){
+uint Bytecode::addConstNumber(Decimal number){
     if(constNumbers.max == constNumbers.used){
         if(!constNumbers.resize(constNumbers.max*2 + 100))
             return false;
@@ -163,8 +167,10 @@ uint Bytecode::addConstString(Token& token){
     return index;
 }
 bool Bytecode::addLoadC(uint8 reg0, uint constIndex){
-    if(!add(BC_LOADC,reg0)) return false;
-    if(!add(*(Instruction*)&constIndex)) return false;
+    if((constIndex>>16)!=0)
+        engone::log::out << "ByteCode: addLoadC, TO SMALL FOR 32 bit integer ("<<constIndex<<")\n";
+    if(!add(BC_LOADC,reg0,constIndex)) return false;
+    // if(!add(*(Instruction*)&constIndex)) return false;
     return true;
 }
 
@@ -335,6 +341,9 @@ void GenerationInfo::printLine(){
     }
 }
 bool GenerationInfo::addDebugLine(uint tokenIndex){
+    #ifndef USE_DEBUG_INFO
+    return false;
+    #endif
     int startToken = tokenIndex-1;
     while(true){
         if(startToken<0){
@@ -438,14 +447,14 @@ int EvaluateExpression(GenerationInfo& info, int accDepth){
             info.code.add(BC_NUM,acc0+regCount);
             _GLOG(INST << "\n";)
             info.code.addLoadC(acc0+regCount,constIndex);
-            INST << "constant "<<token<<"\n";
+            _GLOG(INST << "constant "<<token<<"\n";)
             regCount++;
         }else if((opType = IsOperation(token))){
             if(token=="-" && regCount==0){
                 // info.code.add(BC_NUM,acc0+regCount);
                 // INST << "\n";
                 info.code.add(BC_COPY,REG_ZERO,acc0+regCount);
-                INST << " constant 0\n";
+                _GLOG(INST << " constant 0\n";)
                 regCount++;
             }
             operations[opCount++] = opType;
@@ -485,13 +494,13 @@ int EvaluateExpression(GenerationInfo& info, int accDepth){
                 break;
             }
             assignment=true;
-            log::out << "Assignment\n";
+            _GLOG(log::out << "Assignment\n";)
         }else{
             auto find = info.variables.find(token);
             if(find==info.variables.end()){
                 if(regCount==0 && !assignment){
                     variableName = token;
-                    log::out << "varname "<<token<<"\n";
+                    _GLOG(log::out << "varname "<<token<<"\n";)
                 }else{
                     ERRTOK << "undefined "<<token<<"\n";
                     ERRLINE;
@@ -500,9 +509,9 @@ int EvaluateExpression(GenerationInfo& info, int accDepth){
                 }
             }else{
                 info.code.add(BC_LOADV,acc0+regCount,find->second.frameIndex);
-                INST << "get variable "<<find->second.frameIndex<<"\n";
+                _GLOG(INST << "get variable "<<find->second.frameIndex<<"\n";)
                 info.code.add(BC_COPY,acc0+regCount,acc0+regCount);
-                INST << "\n";
+                _GLOG(INST << "\n";)
                 regCount++;
             }
         }
@@ -525,21 +534,21 @@ int EvaluateExpression(GenerationInfo& info, int accDepth){
                     operations[opCount-2] = op2;
                     opCount--;
                     info.code.add(op1,acc0+regCount-2,acc0+regCount-1,acc0+regCount-2);
-                    INST<<"pre\n";
+                    _GLOG(INST<<"pre\n";)
                     info.code.add(BC_DEL,acc0+regCount-1);
-                    INST << "\n";
+                    _GLOG(INST << "\n";)
                     regCount--;
                 }else{
-                    log::out << "break\n";
+                    _GLOG(log::out << "break\n";)
                     break;
                 }
             }else if(ending){
                 int op = operations[opCount-1];
                 opCount--;
                 info.code.add(op,acc0+regCount-2,acc0+regCount-1,acc0+regCount-2);
-                INST<<"post\n";
+                _GLOG(INST<<"post\n";)
                 info.code.add(BC_DEL,acc0+regCount-1);
-                INST << "\n";
+                _GLOG(INST << "\n";)
                 regCount--;
             }else{
                 break;
@@ -558,10 +567,10 @@ int EvaluateExpression(GenerationInfo& info, int accDepth){
                         var.frameIndex = info.frameOffsetIndex++;
                         
                         info.code.add(BC_PUSH, acc0+regCount-1);
-                        INST << "push variable\n";
+                        _GLOG(INST << "push variable\n";)
                         returnFlags |= EVAL_FLAG_NO_DEL;
                         // info.code.add(BC_ADD, REG_STACK_POINTER, REG_ONE, REG_STACK_POINTER);
-                        INST << "stack increment\n";
+                        // _GLOG(INST << "stack increment\n";)
 
                     } else {
                         ERRTOK << "variable token was null (should be impossible)\n";
@@ -585,7 +594,7 @@ int EvaluateExpression(GenerationInfo& info, int accDepth){
         if(token.flags&TOKEN_SUFFIX_LINE_FEED){
             if(info.tokens.length()>info.index){
                 info.addDebugLine(info.index);
-                log::out <<"\n   ---  "<<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1)<<"   ---  \n";
+                _GLOG(log::out <<"\n   ---  "<<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1)<<"   ---  \n";)
             }
         }
         if(ending){
@@ -597,9 +606,21 @@ int EvaluateExpression(GenerationInfo& info, int accDepth){
     }
     return returnFlags;
 }
+void Bytecode::printStats(){
+    using namespace engone;
+    log::out << "\n##   Summary (total: "<<getMemoryUsage()<<" bytes)   ##\n";
+    // Note: BC_LOADC counts as two instructions
+    log::out <<" Instructions: "<<codeSegment.used<<" (max "<<(codeSegment.max*codeSegment.m_typeSize) <<" bytes) \n";
+    log::out <<" Numbers: "<<constNumbers.used<<" (max "<<(constNumbers.max*constNumbers.m_typeSize)<<" bytes)\n";
+    log::out <<" Strings: "<<constStrings.used<<" (max "<<(constStrings.max*constStrings.m_typeSize)<<" bytes)\n";
+    log::out <<" StringText: "<<constStringText.used<<" (max "<<(constStringText.max*constStringText.m_typeSize)<<" bytes)\n";
+    log::out <<" DebugLines: "<<debugLines.used<<" (max "<<(debugLines.max*debugLines.m_typeSize)<<" bytes)\n";
+    log::out <<" DebugText: "<<debugLineText.used<<" (max "<<(debugLineText.max*debugLineText.m_typeSize)<<" bytes)\n";
+
+}
 Bytecode GenerateScript(Tokens tokens){
     using namespace engone;
-    log::out << "\n####  Compile Script  ####\n";
+    log::out << "\n##   Generator   ##\n";
     
     GenerationInfo info{};
     info.tokens = tokens;
@@ -611,7 +632,7 @@ Bytecode GenerateScript(Tokens tokens){
     int accDepth = 1;
     
     info.addDebugLine(0);
-    log::out <<"\n   ---  "<<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1)<<"   ---  \n";
+    _GLOG(log::out <<"\n   ---  "<<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1)<<"   ---  \n";)
     while (!info.end()){
         int flags = EvaluateExpression(info,accDepth);
         if(0==(flags&EVAL_FLAG_NO_DEL)){
@@ -626,17 +647,11 @@ Bytecode GenerateScript(Tokens tokens){
     }
 
     info.code.add(BC_DEL,REG_ZERO);
-    INST<<"\n";
+    _GLOG(INST<<"\n";)
     info.code.add(BC_DEL,REG_STACK_POINTER);
-    INST<<"\n";
+    _GLOG(INST<<"\n";)
     info.code.add(BC_DEL,REG_FRAME_POINTER);
-    INST<<"\n";
-
-    log::out << "\n####  Bytecode Summay (total: "<<info.code.getMemoryUsage()<<" bytes)  ####\n";
-    // Note: BC_LOADC counts as two instructions
-    log::out <<" Instructions: "<<info.code.length()<<"\n";
-    log::out <<" Numbers: "<<info.code.constNumbers.used<<"\n";
-    log::out <<" Strings: "<<info.code.constStrings.used<<"\n";
+    _GLOG(INST<<"\n";)
 
     return info.code;
 }
@@ -719,43 +734,55 @@ bool GenInstructionArg(GenerationInfo& info, int instType, int& num, int flags, 
             if(instType!=BC_LOADC){
                 // resolve other instruction like jump by using load const
                 num = REG_ACC0 + regIndex;
-                info.code.add(BC_LOADC,num);
                 int index=0;
-                info.code.add(*(Instruction*)&index);
+                // info.code.add(BC_LOADC,num);
+                // info.code.add(*(Instruction*)&index);
+                
+                info.code.addLoadC(num,index);
+
                 info.instructionsToResolve.push_back({info.code.length()-1,token});
-                log::out << info.code.get(info.code.length()-2) << " (resolve "<<token<<")\n";
+                log::out << info.code.get(info.code.length()-1) << " (resolve "<<token<<")\n";
+                // log::out << info.code.get(info.code.length()-2) << " (resolve "<<token<<")\n";
             }else{
                 // resolve bc_load_const directly
                 // num = REG_TEMP0 + regIndex;
-                info.instructionsToResolve.push_back({info.code.length()+1,token});
+                // info.instructionsToResolve.push_back({info.code.length()+1,token});
+                info.instructionsToResolve.push_back({info.code.length(),token});
             }
             return true;
         }
     }
     if(flags&ARG_NUMBER){
         if(IsDecimal(token)){
-            double number = ConvertDecimal(token);
+            Decimal number = ConvertDecimal(token);
             uint index = info.code.addConstNumber(number);
-            log::out<<"Constant ? = "<<number<<" to "<<index<<"\n";
+            _GLOG(log::out<<"Constant ? = "<<number<<" to "<<index<<"\n";)
             num = REG_ACC0 + regIndex;
             info.code.add(BC_NUM,num);
-            log::out << info.code.get(info.code.length()-1) << "\n";
-            info.code.add(BC_LOADC,num);
-            log::out << info.code.get(info.code.length()-1) << "\n";
-            info.code.add(*(Instruction*)&index); // address/index
+            _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
+            info.code.addLoadC(num,index);
+            _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
+
+            // info.code.add(BC_LOADC,num);
+            // _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
+            // info.code.add(*(Instruction*)&index); // address/index
             return true;
         }
     }
     if(flags&ARG_STRING){
         if(token.flags&TOKEN_QUOTED){
             uint index = info.code.addConstString(token);
-            log::out<<"Constant ? = "<<token<<" to "<<index<<"\n";
+            _GLOG(log::out<<"Constant ? = "<<token<<" to "<<index<<"\n";)
             num = REG_ACC0 + regIndex;
             info.code.add(BC_STR,num);
-            log::out << info.code.get(info.code.length()-1) << "\n";
-            info.code.add(BC_LOADC,num);
-            log::out << info.code.get(info.code.length()-1) << "\n";
-            info.code.add(*(Instruction*)&index); // address/index
+            _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
+
+            info.code.addLoadC(num,index);
+            _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
+
+            // info.code.add(BC_LOADC,num);
+            // _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
+            // info.code.add(*(Instruction*)&index); // address/index
             return true;
         }
     }
@@ -801,7 +828,7 @@ bool LineEndError(GenerationInfo& info){
 }
 Bytecode GenerateInstructions(Tokens tokens){
     using namespace engone;
-    log::out<<"\n#### Compile Instructions ####\n";
+    log::out<<"\n##   Generator (instructions)   ##\n";
     
     std::unordered_map<std::string,int> instructionMap;
     #define MAP(K,V) instructionMap[K] = V;
@@ -857,7 +884,7 @@ Bytecode GenerateInstructions(Tokens tokens){
                 uint address = info.code.length();
                 int index = info.code.addConstNumber(address);
                 info.nameOfNumberMap[name] = index;
-                log::out<<"Address " << name <<" = "<<address<<"\n";
+                _GLOG(log::out<<"Address " << name <<" = "<<address<<"\n";)
             }else{
                 CHECK_END
                 token = info.next();
@@ -867,14 +894,14 @@ Bytecode GenerateInstructions(Tokens tokens){
                     continue;
                 }
                 if(IsDecimal(token)){
-                    double number = ConvertDecimal(token);
+                    Decimal number = ConvertDecimal(token);
                     int index = info.code.addConstNumber(number);
                     info.nameOfNumberMap[name] = index;
-                    log::out<<"Constant " << name<<" = "<<number<<" to "<<index<<"\n";
+                    _GLOG(log::out<<"Constant " << name<<" = "<<number<<" to "<<index<<"\n";)
                 }else if(token.flags&TOKEN_QUOTED){
                     int index = info.code.addConstString(token);
                     info.nameOfStringMap[name] = index;
-                    log::out<<"Constant " << name<<" = "<<token<<" to "<<index<<"\n";
+                    _GLOG(log::out<<"Constant " << name<<" = "<<token<<" to "<<index<<"\n";)
                 }else {
                     ERRTOK << " " <<token<<" cannot be a constant\n";
                     info.nextLine();
@@ -929,11 +956,11 @@ Bytecode GenerateInstructions(Tokens tokens){
             }
             
             info.code.add(inst);
-            log::out << info.code.get(info.code.length()-1)<<("\n");
-            if(instType==BC_LOADC){
-                int zeroInst=0;
-                info.code.add(*(Instruction*)&zeroInst);
-            }
+            _GLOG(log::out << info.code.get(info.code.length()-1)<<("\n");)
+            // if(instType==BC_LOADC){
+            //     int zeroInst=0;
+            //     info.code.add(*(Instruction*)&zeroInst);
+            // }
             if(LineEndError(info))
                 continue;
         }
@@ -946,14 +973,21 @@ Bytecode GenerateInstructions(Tokens tokens){
         if(find==info.nameOfNumberMap.end()){
             auto find2 = info.nameOfStringMap.find(addr.token);
             if(find2==info.nameOfStringMap.end()){
-                log::out << "CompileError at "<<addr.token.line<<":"<<addr.token.column<<" : Constant "<<addr.token<<" could not be resolved\n";
+                ERRT(addr.token) <<"Constant "<<addr.token<<" could not be resolved\n";
             }else{
                 index = find2->second;
             }
         }else{
             index = find->second;
         }
-        inst = *(Instruction*)&index;
+        if(inst.type==BC_LOADC){
+            inst.reg1 = index&0xFF;
+            inst.reg2 = (index>>8)&0xFF;
+            // inst = *(Instruction*)&index;
+
+        }else{
+            ERRT(addr.token)<<"Cannot resolve\n";
+        }
     }
 
     return info.code;

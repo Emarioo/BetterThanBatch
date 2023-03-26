@@ -3,6 +3,8 @@
 #include "Engone/Alloc.h"
 #include "Engone/Logger.h"
 
+#include "BetBat/Config.h"
+
 #define TOKEN_SUFFIX_LINE_FEED 1
 // SPACE suffic is remove if LINE_FEED is present in mask/flag 
 #define TOKEN_SUFFIX_SPACE 2
@@ -11,9 +13,6 @@
 #define TOKEN_PRINT_LN_COL 1
 #define TOKEN_PRINT_SUFFIXES 2
 #define TOKEN_PRINT_QUOTES 4
-
-// If defined, Tokenize will print information
-// #define TOKENIZER_LOG
 
 struct Token {
     char* str=0; // NOT null terminated

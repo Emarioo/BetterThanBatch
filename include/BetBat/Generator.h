@@ -63,9 +63,6 @@
 
 #define REG_ACC0 10
 
-// define/undefine to enabled/disable logging
-#define GLOG
-
 const char* InstToString(int type);
 
 struct Instruction {
@@ -95,9 +92,9 @@ struct Bytecode {
     //      each string having it's own allocation.
     struct DebugLine{
         char* str=0;
-        uint length=0;
         uint instructionIndex=0;
-        uint line=0;
+        uint16 length=0;
+        uint16 line=0;
     };
     engone::Memory debugLines{sizeof(DebugLine)};
     engone::Memory debugLineText{1};
@@ -117,11 +114,13 @@ struct Bytecode {
     Instruction& get(uint index);
     uint length();
     
-    uint addConstNumber(double number);
+    uint addConstNumber(Decimal number);
     Number* getConstNumber(uint index);
     
     uint addConstString(Token& token);
     String* getConstString(uint index);
+
+    void printStats();
 };
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
 struct GenerationInfo {
