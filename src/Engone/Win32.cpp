@@ -276,7 +276,7 @@ namespace engone {
         
 		if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){
 			std::string temp;
-			int i=0;
+			uint i=0;
 			int at = path.find_first_of(':');
 			if(at!=-1){
 				i = at+1;
@@ -348,14 +348,14 @@ namespace engone {
 	}
 	bool FileSetHead(APIFile* file, uint64 position){
 		DWORD success = 0;
-		if(position==-1){
+		if(position==(uint64)-1){
 			success = SetFilePointerEx(file,{0},NULL,FILE_END);
 		}else{
 			success = SetFilePointerEx(file,*(LARGE_INTEGER*)&position,NULL,FILE_BEGIN);
 		}
 		if(success) return true;
 		
-		int err = GetLastError();
+		DWORD err = GetLastError();
 		PL_PRINTF("[WinError %lu] FileSetHead '%llu'\n",err,(uint64)file);
 		return false;
 	}
@@ -413,7 +413,7 @@ namespace engone {
         BOOL success = GetFileTime(handle,&creation,&access,&modified);
         if(!success){
             DWORD err = GetLastError();
-            PL_PRINTF("[WinError %u] GetFileTime '%s'\n",err,path.c_str());
+            PL_PRINTF("[WinError %lu] GetFileTime '%s'\n",err,path.c_str());
             return false;
         }
         success = CloseHandle(handle);
@@ -432,7 +432,7 @@ namespace engone {
 		bool yes = CopyFileA(src.c_str(),dst.c_str(),0);
 		if(!yes){
 			DWORD err = GetLastError();
-            PL_PRINTF("[WinError %u] CopyFile '%s' '%s'\n",err,src.c_str(),dst.c_str());
+            PL_PRINTF("[WinError %lu] CopyFile '%s' '%s'\n",err,src.c_str(),dst.c_str());
             return false;
 		}
 		return true;
@@ -607,7 +607,7 @@ namespace engone {
             BOOL yes = CloseHandle(TO_HANDLE(m_internalHandle));
             if(!yes){
                 DWORD err = GetLastError();
-                PL_PRINTF("[WinError %u] CloseHandle\n",err);
+                PL_PRINTF("[WinError %lu] CloseHandle\n",err);
             }
 			m_internalHandle=0;
         }
@@ -617,7 +617,7 @@ namespace engone {
 			HANDLE handle = CreateSemaphore(NULL, m_initial, m_max, NULL);
 			if (handle == INVALID_HANDLE_VALUE) {
 				DWORD err = GetLastError();
-                PL_PRINTF("[WinError %u] CreateSemaphore\n",err);
+                PL_PRINTF("[WinError %lu] CreateSemaphore\n",err);
 			}else
                 m_internalHandle = TO_INTERNAL(handle);
 		}
@@ -625,7 +625,7 @@ namespace engone {
 			DWORD res = WaitForSingleObject(TO_HANDLE(m_internalHandle), INFINITE);
 			if (res == WAIT_FAILED) {
 				DWORD err = GetLastError();
-				PL_PRINTF("[WinError %u] WaitForSingleObject\n",err);
+				PL_PRINTF("[WinError %lu] WaitForSingleObject\n",err);
 			}
 		}
 	}
@@ -634,7 +634,7 @@ namespace engone {
 			BOOL yes = ReleaseSemaphore(TO_HANDLE(m_internalHandle), count, NULL);
 			if (!yes) {
 				DWORD err = GetLastError();
-				PL_PRINTF("[WinError %u] ReleaseSemaphore\n",err);
+				PL_PRINTF("[WinError %lu] ReleaseSemaphore\n",err);
 			}
 		}
 	}
@@ -646,7 +646,7 @@ namespace engone {
             BOOL yes = CloseHandle(TO_HANDLE(m_internalHandle));
             if(!yes){
                 DWORD err = GetLastError();
-                PL_PRINTF("[WinError %u] CloseHandle\n",err);
+                PL_PRINTF("[WinError %lu] CloseHandle\n",err);
             }
 			m_internalHandle=0;
         }
@@ -655,8 +655,8 @@ namespace engone {
 		if (m_internalHandle == 0) {
 			HANDLE handle = CreateMutex(NULL, false, NULL);
 			if (handle == INVALID_HANDLE_VALUE) {
-				BOOL err = GetLastError();
-				PL_PRINTF("[WinError %u] CreateMutex\n",err);
+				DWORD err = GetLastError();
+				PL_PRINTF("[WinError %lu] CreateMutex\n",err);
 			}else
                 m_internalHandle = TO_INTERNAL(handle);
 		}
@@ -670,7 +670,7 @@ namespace engone {
 			if (res == WAIT_FAILED) {
                 // Todo: What happened do the old thread who locked the mutex. Was it okay to ownerThread = newId
 				DWORD err = GetLastError();
-                PL_PRINTF("[WinError %u] WaitForSingleObject\n",err);
+                PL_PRINTF("[WinError %lu] WaitForSingleObject\n",err);
 			}
 		}
 	}
@@ -680,7 +680,7 @@ namespace engone {
 			BOOL yes = ReleaseMutex(TO_HANDLE(m_internalHandle));
 			if (!yes) {
 				DWORD err = GetLastError();
-                PL_PRINTF("[WinError %u] ReleaseMutex\n",err);
+                PL_PRINTF("[WinError %lu] ReleaseMutex\n",err);
 			}
 		}
 	}
@@ -699,7 +699,7 @@ namespace engone {
             BOOL yes = CloseHandle(TO_HANDLE(m_internalHandle));
             if(!yes){
                 DWORD err = GetLastError();
-                PL_PRINTF("[WinError %u] CloseHandle\n",err);
+                PL_PRINTF("[WinError %lu] CloseHandle\n",err);
             }
 			m_internalHandle=0;
 		}
@@ -710,7 +710,7 @@ namespace engone {
 			HANDLE handle = CreateThread(NULL, 0, (DWORD(*)(void*))func, arg, 0,(DWORD*)&m_threadId);
 			if (handle==INVALID_HANDLE_VALUE) {
 				DWORD err = GetLastError();
-                PL_PRINTF("[WinError %u] CreateThread\n",err);
+                PL_PRINTF("[WinError %lu] CreateThread\n",err);
 			}else
                 m_internalHandle = TO_INTERNAL(handle);
 		}
@@ -721,12 +721,12 @@ namespace engone {
 		DWORD res = WaitForSingleObject(TO_HANDLE(m_internalHandle), INFINITE);
 		if (res==WAIT_FAILED) {
 			DWORD err = GetLastError();
-            PL_PRINTF("[WinError %u] WaitForSingleObject\n",err);
+            PL_PRINTF("[WinError %lu] WaitForSingleObject\n",err);
 		}
 		BOOL yes = CloseHandle(TO_HANDLE(m_internalHandle));
         if(!yes){
             DWORD err = GetLastError();
-            PL_PRINTF("[WinError %u] CloseHandle\n",err);
+            PL_PRINTF("[WinError %lu] CloseHandle\n",err);
         }
 		m_internalHandle = 0;
 	}
@@ -780,9 +780,9 @@ namespace engone {
 		if (proc == NULL) {
 			int err = GetLastError();
 			if(err==ERROR_PROC_NOT_FOUND){
-				printf("[WinError %lu] GetFunctionPointer, could not find '%s'\n", err, name.c_str());
+				printf("[WinError %u] GetFunctionPointer, could not find '%s'\n", err, name.c_str());
 			}else
-				printf("[WinError %lu] GetFunctionPointer %s\n", err, name.c_str());
+				printf("[WinError %u] GetFunctionPointer %s\n", err, name.c_str());
 		}
 		return (VoidFunction)proc;
 	}
@@ -904,7 +904,7 @@ namespace engone {
 		DWORD length = GetEnvironmentVariableA(name.c_str(),(char*)buffer.data(),0);
 		if(length==0){
 			DWORD err = GetLastError();
-			if(err=ERROR_ENVVAR_NOT_FOUND){
+			if(err==ERROR_ENVVAR_NOT_FOUND){
 				printf("[WinError %lu] EnvironmentVariable 1, %s not found\n",err,name.c_str());
 			}else{
 				printf("[WinError %lu] EnvironmentVariable 1, %s\n",err,name.c_str());
@@ -1158,7 +1158,7 @@ namespace engone {
 			m_callback = callback;
 			m_flags = flags;
 
-			int attributes = GetFileAttributesA(m_root.c_str());
+			DWORD attributes = GetFileAttributesA(m_root.c_str());
 			if (attributes == INVALID_FILE_ATTRIBUTES) {
 
 			} else if (attributes & FILE_ATTRIBUTE_DIRECTORY) {

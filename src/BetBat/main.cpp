@@ -1,49 +1,26 @@
-#include <stdio.h>
+#include "BetBat/TestGenerator.h"
+#include "BetBat/Compiler.h"
 
-#include "BetBat/Utility.h"
-#include "BetBat/Tokenizer.h"
-#include "BetBat/Generator.h"
-#include "BetBat/Context.h"
-
-void run(const char* path){
-    Tokens toks = Tokenize(ReadFile(path));
-    toks.printTokens(14,TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
-    // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
-    Bytecode bytecode = CompileInstructions(toks);
-    
-    std::string text = Disassemble(bytecode);
-    
-    auto file = engone::FileOpen("out.txt",0,engone::FILE_WILL_CREATE);
-    engone::FileWrite(file,text.data(),text.length());
-    engone::FileClose(file);
-    
-    Context::Execute(bytecode);
-}
 int main(int argc, const char** argv){
-    // engone::Memory sample = ReadFile("tests/token/words.txt");
-    // Tokens tokens = Tokenize(sample);
-    // Bytecode bytecode = CompileScript(tokens);
-
-    // Tokens toks = Tokenize(ReadFile("tests/token/words.txt"));
-    // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
-    
-    // run("tests/inst/func.txt");
-    // run("tests/inst/numstr.txt");
-    // run("tests/inst/apicalls.txt");
+    using namespace engone;
     for(int i=1;i<argc;i++){
-        run(argv[i]);
+        CompileScript(argv[i]);
     }
-    
     if(argc<2){
-        run("tests/inst/apicalls.txt");
+        TestVariableLimit(100);
+        // TestMathExpression(100);
+
+        // CompileScript("tests/script/vars.txt");
+        // CompileScript("tests/script/math.txt");
+
+        // CompileInstructions("tests/inst/stack.txt");
+        // CompileInstructions("tests/inst/func.txt");
+        // CompileInstructions("tests/inst/numstr.txt");
+        // CompileInstructions("tests/inst/apicalls.txt");
     }
-    
-    
-    // // Tokens toks = Tokenize(ReadFile("tests/inst/func.txt"));
-    // Tokens toks = Tokenize(ReadFile("tests/inst/main.txt"));
-    // toks.printTokens(14,TOKEN_PRINT_SUFFIXES);
-    // // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
-    // Bytecode bytecode = CompileInstructions(toks);
-    
-    // Context::Execute(bytecode);
+
+
+    int finalMemory = GetAllocatedBytes()-log::out.getMemoryUsage();
+    if(finalMemory!=0)
+        log::out << "Final memory: "<<finalMemory<<"\n";
 }

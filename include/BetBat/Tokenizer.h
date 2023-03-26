@@ -34,11 +34,12 @@ engone::Logger& operator<<(engone::Logger& logger, Token& token);
 struct Tokens {
     engone::Memory tokens{sizeof(Token)}; // the tokens themselves
     engone::Memory tokenData{1}; // the data the tokens refer to
-    engone::Memory sourceText{1}; // the original text source
     
+    void cleanup();
+
     bool add(Token token);
-    Token& get(int index);
-    int length();
+    Token& get(uint index);
+    uint length();
     // flags is a bitmask, TOKEN_PRINT_...
     void printTokens(int tokensPerLine = 14, int flags = TOKEN_PRINT_QUOTES);
     

@@ -28,7 +28,11 @@
         "xhash": "cpp",
         "xmemory": "cpp",
         "xstddef": "cpp",
-        "xtr1common": "cpp"
+        "xtr1common": "cpp",
+        "functional": "cpp",
+        "system_error": "cpp",
+        "xiosbase": "cpp",
+        "iterator": "cpp"
     },
     "cmake.configureOnOpen": false
 }

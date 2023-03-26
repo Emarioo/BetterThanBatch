@@ -96,6 +96,13 @@ namespace engone {
 		print((char*)info.lineBuffer.data, info.lineBuffer.used);
 		info.lineBuffer.used = 0; // flush buffer
 	}
+	uint64 Logger::getMemoryUsage(){
+		uint64 sum=0;
+		for(auto& pair : m_threadInfos){
+			sum+=pair.second.lineBuffer.max;
+		}
+		return sum;
+	}
 	void Logger::print(char* str, int len) {
 		auto& info = getThreadInfo();
 		m_printMutex.lock();
@@ -184,7 +191,13 @@ namespace engone {
 			return m_masterColor;
 	}
 	Logger& Logger::operator<<(log::Color value) {
-		getThreadInfo().color = value;
+		auto& inf = getThreadInfo();
+		if(inf.color!=value){
+			if(inf.lineBuffer.used){
+				flush();
+			}
+			inf.color = value;
+		}
 		return *this;
 	}
 	Logger& Logger::operator<<(log::Filter value) {

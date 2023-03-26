@@ -32,11 +32,15 @@
 #define BC_MOV           (BC_R2|0x02)
 #define BC_RUN           (BC_R2|0x03)
 
+#define BC_LOADV         (BC_R2|0x10)
+
 #define BC_NUM           (BC_R1|0x01)
 #define BC_STR           (BC_R1|0x02)
 #define BC_DEL           (BC_R1|0x03)
 
-#define BC_LOAD          (BC_R1|0x10)
+#define BC_LOADC         (BC_R1|0x10)
+#define BC_PUSH          (BC_R1|0x12)
+#define BC_POP           (BC_R1|0x13)
 
 #define BC_RETURN        (BC_R1|0x15)
 #define BC_ENTERSCOPE    (BC_R1|0x16)
@@ -44,31 +48,23 @@
 
 #define BC_JUMP          (BC_R1|0x30)
 
-#define DEFAULT_REG_ZERO 0
-#define DEFAULT_REG_ACC 1
-#define DEFAULT_REG_TEMP0 4
-#define DEFAULT_REG_TEMP1 5
-#define DEFAULT_REG_TEMP2 6
+#define REG_ZERO 0
+#define REG_ONE 1
+#define REG_RETURN_ADDR 2
+#define REG_RETURN_VALUE 3
+#define REG_ARGUMENT 4
+#define REG_RETURN_ADDR_S "ra"
+#define REG_RETURN_VALUE_S "rv"
+#define REG_ARGUMENT_S "rz"
+#define REG_FRAME_POINTER 5
+#define REG_STACK_POINTER 6
+#define REG_FRAME_POINTER_S "fp"
+#define REG_STACK_POINTER_S "sp"
 
-// #define DEFAUlT_REG_NTEMP0 1
-// #define DEFAUlT_REG_NTEMP1 2
-// #define DEFAUlT_REG_NTEMP2 3
-// #define DEFAUlT_REG_STEMP0 4
-// #define DEFAUlT_REG_STEMP1 5
-// #define DEFAUlT_REG_STEMP2 6
-// #define DEFAUlT_REG_NTEMP0_s "n0"
-// #define DEFAUlT_REG_NTEMP1_s "n1"
-// #define DEFAUlT_REG_NTEMP2_s "n2"
-// #define DEFAULT_REG_STEMP0_S "s0"
-// #define DEFAULT_REG_STEMP1_S "s1"
-// #define DEFAULT_REG_STEMP2_S "s2"
+#define REG_ACC0 10
 
-#define DEFAULT_REG_RETURN_ADDR 7
-#define DEFAULT_REG_RETURN_VALUE 8
-#define DEFAULT_REG_ARGUMENT 9
-#define DEFAULT_REG_RETURN_ADDR_S "ra"
-#define DEFAULT_REG_RETURN_VALUE_S "rv"
-#define DEFAULT_REG_ARGUMENT_S "rz"
+// define/undefine to enabled/disable logging
+#define GLOG
 
 const char* InstToString(int type);
 
@@ -94,27 +90,30 @@ struct Bytecode {
     engone::Memory codeSegment{sizeof(Instruction)};
     engone::Memory constNumbers{sizeof(Number)};
     engone::Memory constStrings{sizeof(String)};
+    engone::Memory constStringText{1};
     //Todo: One array which contains the memory for all strings instead of
     //      each string having it's own allocation.
-    
-    struct Unresolved{
-        uint address=-1;
-        std::string name;
-        APICall func=0;
+    struct DebugLine{
+        char* str=0;
+        uint length=0;
+        uint instructionIndex=0;
+        uint line=0;
     };
-    engone::Memory unresolveds{sizeof(Unresolved)};
-    bool addUnresolved(Token& token, uint address);
-    Unresolved* getUnresolved(uint address);
-    Unresolved* getUnresolved(const std::string& name);
-    bool linkUnresolved(const std::string& name, APICall funcPtr);
+    engone::Memory debugLines{sizeof(DebugLine)};
+    engone::Memory debugLineText{1};
     
-    // std::unordered_map<uint, uint> unresolvedConstants;
-    uint nextUnresolvedAddress=0x400000; // note that BC_LOAD_CONST has 24 bits of address space.
+    void cleanup();
+
+    uint32 getMemoryUsage();
+
+    // latestIndex is used to skip already read debug lines. 
+    DebugLine* getDebugLine(uint instructionIndex, uint* latestIndex);
 
     bool add(Instruction inst);
     bool add(uint8 type, uint8 reg0, uint8 reg1, uint8 reg2);
     bool add(uint8 type, uint8 reg0, uint16 reg12);
     bool add(uint8 type, uint reg012);
+    bool addLoadC(uint8 reg0, uint constIndex);
     Instruction& get(uint index);
     uint length();
     
@@ -124,15 +123,21 @@ struct Bytecode {
     uint addConstString(Token& token);
     String* getConstString(uint index);
 };
+engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
 struct GenerationInfo {
     Bytecode code{};
     uint index=0;
     Tokens tokens{};
-    
-    int baseIndex=-1;
 
     // std::unordered_map<double,uint> constNumberMap;
-    
+    int frameOffsetIndex = 0;
+    #define VAR_FUNC 1
+    struct Variable{
+        int type=0;
+        int frameIndex=0;
+    };
+    std::unordered_map<std::string,Variable> variables;
+
     // Todo: converting from Token to std::string can be slow since it may
     //   require memory to be allocated. Make a custom hash map?
     std::unordered_map<std::string,uint> nameOfNumberMap;
@@ -145,17 +150,24 @@ struct GenerationInfo {
     std::vector<IncompleteInstruction> instructionsToResolve;
 
     // Does not handle out of bounds
-    Token prev();
-    Token next();
-    Token now();
+    Token &prev();
+    Token& next();
+    Token& now();
+    Token& get(uint index);
     int at();
     bool end();
     void finish();
 
+    bool addDebugLine(uint tokenIndex);
+
+    // print line of where current token exists
+    // not including \n
+    void printLine();
+
     void nextLine();
 };
 
-Bytecode CompileScript(Tokens tokens);
-Bytecode CompileInstructions(Tokens tokens);
+Bytecode GenerateScript(Tokens tokens);
+Bytecode GenerateInstructions(Tokens tokens);
 
 std::string Disassemble(Bytecode code);

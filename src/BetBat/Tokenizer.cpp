@@ -26,6 +26,9 @@ void Token::print(int printFlags){
         if(flags&TOKEN_QUOTED)
             log::out << "\"";
     }
+    if(flags&TOKEN_SUFFIX_SPACE){
+        log::out << " ";
+    }
 }
 bool Token::operator==(const char* text){
     int len = strlen(text);
@@ -41,11 +44,11 @@ bool Token::operator!=(const char* text){
     return !(*this == text);
 }
 engone::Logger& operator<<(engone::Logger& logger, Token& token){
-    token.print();
+    token.print(TOKEN_PRINT_QUOTES);
     return logger;
 }
 Token::operator std::string(){
-    return std::string(std::string_view(str,length));
+    return std::string(str,length);
 }
 bool Tokens::add(Token token){
     if(tokens.max == tokens.used){
@@ -58,16 +61,20 @@ bool Tokens::add(Token token){
     tokens.used++;
     return true;
 }
-Token& Tokens::get(int index){
+Token& Tokens::get(uint index){
     return *((Token*)tokens.data + index);
 }
-int Tokens::length(){
+uint32 Tokens::length(){
     return tokens.used;
+}
+void Tokens::cleanup(){
+    tokens.resize(0);
+    tokenData.resize(0);
 }
 void Tokens::printTokens(int tokensPerLine, int flags){
     using namespace engone;
     log::out << "\n####   "<<tokens.used<<" Tokens   ####\n";
-    int i=0;
+    uint i=0;
     for(;i<tokens.used;i++){
         Token* token = ((Token*)tokens.data + i);
         if(flags&TOKEN_PRINT_LN_COL)
@@ -89,7 +96,7 @@ void Tokens::printTokens(int tokensPerLine, int flags){
 void Tokens::printData(int charsPerLine){
     using namespace engone;
     log::out << "\n####   Token Data   ####\n";
-    int i=0;
+    uint i=0;
     for(;i<tokenData.used;i++){
         char chr = *((char*)tokenData.data+i);
         log::out << chr;
@@ -111,7 +118,6 @@ Tokens Tokenize(engone::Memory textData){
     char* text = (char*)textData.data;
     int length = textData.used;
     Tokens outTokens{};
-    outTokens.sourceText = textData;
     outTokens.tokenData.resize(textData.used); // tokenData will probably never be larger than the original text
     
     engone::Memory& tokenData = outTokens.tokenData;
@@ -218,9 +224,12 @@ Tokens Tokenize(engone::Memory textData){
         }
         
         if(chr=='\n'){
-            if(outTokens.length()-1>=0){
+            if(token.str){
+               token.flags = (token.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
+            }else if(outTokens.length()>0){
                 Token& last = outTokens.get(outTokens.length()-1);
                 last.flags = (last.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
+                // _TOKENIZER_LOG(log::out << ", line feed";)
             }
         }
         if(token.length==0 && isDelim)

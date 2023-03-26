@@ -27,3 +27,10 @@ ReadFileFailed:
     printf("ReadFile : Error %s\n",path);
     return {0};
 }
+bool WriteFile(const char* path, engone::Memory buffer){
+    auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);
+    if(!file) return false;
+    if(!engone::FileWrite(file,buffer.data,buffer.used)) return false;
+    engone::FileClose(file);
+    return true;
+}

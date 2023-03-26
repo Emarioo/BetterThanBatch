@@ -7,7 +7,5 @@
 
 str: "HAHA"
     str $a
-    str $rl
-    load str
-    mov $rl $a
-    add $a $a $a
+    load $a str
+    add $a "wow" $a
