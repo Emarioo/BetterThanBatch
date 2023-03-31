@@ -3,22 +3,19 @@
 #include "BetBat/Generator.h"
 
 const char* RefToString(int type);
-#define REF_NUMBER 1
-#define REF_STRING 2
-
-#define DEFAULT_LOAD_CONST_REG 9
-struct Ref {
-    int type=0;
-    int index=0;
-};
 // engone::Logger operator<<(engone::Logger logger, Ref& ref);
 struct Scope{
-    Ref references[256]{0};  
+    Ref references[256]{0};
+    
+    int returnAddress=0; 
 };
 struct Context {
     engone::Memory numbers{sizeof(Number)};
     engone::Memory strings{sizeof(String)};
     engone::Memory infoValues{sizeof(uint8)};
+
+    int numberCount=0;
+    int stringCount=0;
 
     engone::Memory scopes{sizeof(Scope)};
     uint currentScope=0;
@@ -42,8 +39,7 @@ struct Context {
     void deleteString(uint index);
     String* getString(uint index);
 
-    void load(Bytecode code);
-    void execute();
+    void execute(Bytecode code);
     
     static void Execute(Bytecode code);
 };

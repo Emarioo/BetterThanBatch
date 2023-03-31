@@ -37,8 +37,10 @@
 #define BC_NUM           (BC_R1|0x01)
 #define BC_STR           (BC_R1|0x02)
 #define BC_DEL           (BC_R1|0x03)
+// #define BC_DELNV         (BC_R1|0x04)
 
 #define BC_LOADC         (BC_R1|0x10)
+// #define BC_LOADNC        (BC_R1|0x11)
 #define BC_PUSH          (BC_R1|0x12)
 #define BC_POP           (BC_R1|0x13)
 
@@ -48,17 +50,15 @@
 
 #define BC_JUMP          (BC_R1|0x30)
 
-#define REG_ZERO 0
-#define REG_ONE 1
-#define REG_RETURN_ADDR 2
+#define REG_NULL 0
+#define REG_ZERO 1
 #define REG_RETURN_VALUE 3
-#define REG_ARGUMENT 4
-#define REG_RETURN_ADDR_S "ra"
 #define REG_RETURN_VALUE_S "rv"
+#define REG_ARGUMENT 4
 #define REG_ARGUMENT_S "rz"
 #define REG_FRAME_POINTER 5
-#define REG_STACK_POINTER 6
 #define REG_FRAME_POINTER_S "fp"
+#define REG_STACK_POINTER 6
 #define REG_STACK_POINTER_S "sp"
 
 #define REG_ACC0 10
@@ -82,7 +82,7 @@ struct Instruction {
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction);
 
 class Context;
-typedef void(*APICall)(Context*, int refType, void*);
+typedef Ref(*APICall)(Context*, int refType, void*);
 struct Bytecode {
     engone::Memory codeSegment{sizeof(Instruction)};
     engone::Memory constNumbers{sizeof(Number)};
@@ -117,7 +117,7 @@ struct Bytecode {
     uint addConstNumber(Decimal number);
     Number* getConstNumber(uint index);
     
-    uint addConstString(Token& token);
+    uint addConstString(Token& token, const char* padding=0);
     String* getConstString(uint index);
 
     void printStats();
@@ -127,15 +127,21 @@ struct GenerationInfo {
     Bytecode code{};
     uint index=0;
     Tokens tokens{};
+    int parDepth=0;
+    
+    int errors=0;
 
     // std::unordered_map<double,uint> constNumberMap;
     int frameOffsetIndex = 0;
     #define VAR_FUNC 1
     struct Variable{
-        int type=0;
+        // int type=0;
         int frameIndex=0;
+        int constIndex=-1;
     };
     std::unordered_map<std::string,Variable> variables;
+    
+    std::unordered_map<std::string,bool> internalFunctions;
 
     // Todo: converting from Token to std::string can be slow since it may
     //   require memory to be allocated. Make a custom hash map?
@@ -165,8 +171,14 @@ struct GenerationInfo {
 
     void nextLine();
 };
+struct ExpressionInfo {
+    int acc0Reg = 0;
+    int regCount=0;
+    int operations[5]{0};
+    int opCount=0;  
+};
 
-Bytecode GenerateScript(Tokens tokens);
-Bytecode GenerateInstructions(Tokens tokens);
+Bytecode GenerateScript(Tokens tokens, int* outErr=0);
+Bytecode GenerateInstructions(Tokens tokens, int* outErr=0);
 
 std::string Disassemble(Bytecode code);

@@ -1,13 +1,13 @@
 text: "hehe haha"
     str $a
     num $ra
-    load $a text
+    loadc $a text
     
     //run $a "D:\Backup\CodeProjects\BetterThanBatch\test.bat"
     //run $a "gcc.exe"
 test: "test.bat"
     str $b
-    load $b test
+    loadc $b test
     run $a $b
     
     //run $a func

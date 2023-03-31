@@ -922,10 +922,14 @@ namespace engone {
 		}
 		return buffer;
 	}
-	bool StartProgram(const std::string& path, char* commandLine, int flags) {
+	bool StartProgram(const std::string& path, char* commandLine, int flags, int* exitCode) {
 		// if (!FileExist(path)) {
 		// 	return false;
 		// }
+		
+		if(path.empty() && !commandLine){
+			return false;
+		}
         
 		// additional information
 		STARTUPINFOA si;
@@ -968,12 +972,39 @@ namespace engone {
                        );
         if(!yes){
 			DWORD err = GetLastError();
-			printf("[WinError %lu] StartProgram, could not start %s\n",err,path.c_str());	
+			if(err == ERROR_BAD_EXE_FORMAT){
+				if(path.empty())
+					printf("[WinError %lu] StartProgram, bad_exe_format %s\n",err,commandLine);
+				else
+					printf("[WinError %lu] StartProgram, bad_exe_format %s\n",err,path.c_str());
+			}else{
+				if(path.empty())
+					printf("[WinError %lu] StartProgram, could not start %s\n",err,commandLine);
+				else
+					printf("[WinError %lu] StartProgram, could not start %s\n",err,path.c_str());
+				// Todo: does the handles need to be closed? probably not since CreateProcess failed. double check.	
+			}
 			return false;
 		}
-		if(flags&PROGRAM_WAIT)
+		if(flags&PROGRAM_WAIT){
 			WaitForSingleObject(pi.hProcess,INFINITE);
-		// Close process and thread handles. 
+			if(exitCode){
+				BOOL success = GetExitCodeProcess(pi.hProcess, (DWORD*)exitCode);
+				if(!success){
+					DWORD err = GetLastError();
+					printf("[WinError %lu] StartProgram, failed aquring exit code (path: %s)\n",err,path.c_str());	
+				}else{
+					if(success==STILL_ACTIVE){
+						printf("[WinWarning] StartProgram, cannot get exit code, process is active (path: %s)\n",path.c_str());	
+					}else{
+						
+					}
+				}
+			}
+		}else{
+			// Todo: what happens with return value when we don't wait for the process?	
+		}
+		
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 		return true;

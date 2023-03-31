@@ -1,4 +1,5 @@
-
+#include "Value.h"
 class Context;
 class String;
-void APIPrint(Context* context, int refType, void* value);
+
+Ref APIPrint(Context* context, int refType, void* value);

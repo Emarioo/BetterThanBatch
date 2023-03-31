@@ -1,5 +1,25 @@
 #include "BetBat/Compiler.h"
 
+#include <string.h>
+
+void CompilerFile(const char* path){
+    int pathlen = strlen(path);
+    Token extension{};
+    for(int i=pathlen-1;i>=0;i++){
+        char chr = path[i];
+        if(chr == '.'){
+            extension.str = (char*)(path + i); // Note: Extension.str is never modified. Casting away const should therfore be fine.
+            extension.length = pathlen-i;
+            break;
+        }
+    }
+    if(extension == ".btb"){
+        CompileScript(path);
+    }else if(extension == ".btbi"){
+        CompileInstructions(path);
+    }
+}
+
 void CompileScript(const char* path){
     using namespace engone;
     auto text = ReadFile(path);
@@ -8,15 +28,23 @@ void CompileScript(const char* path){
     Tokens toks = Tokenize(text);
     // toks.printTokens(14,TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
     // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
-    Bytecode bytecode = GenerateScript(toks);
-    bytecode.printStats();
-    OptimizeBytecode(bytecode);
-    bytecode.printStats();
-    double seconds = engone::StopMeasure(startCompileTime);
+    int err=0;
+    Bytecode bytecode = GenerateScript(toks,&err);
+    double seconds=0;
+    if(err){
+        // log::out << log::RED<<"Errors\n";
+        goto COMP_SCRIPT_END;
+        // return;
+    }
+    // bytecode.printStats();
+    // OptimizeBytecode(bytecode);
+    // bytecode.printStats();
+    seconds = engone::StopMeasure(startCompileTime);
     log::out << "Compiled in "<<seconds<<" seconds\n";
 
     Context::Execute(bytecode);
 
+COMP_SCRIPT_END:
     text.resize(0);
     bytecode.cleanup();
     toks.cleanup();

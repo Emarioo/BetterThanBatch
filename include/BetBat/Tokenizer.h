@@ -5,6 +5,8 @@
 
 #include "BetBat/Config.h"
 
+#include <string.h>
+
 #define TOKEN_SUFFIX_LINE_FEED 1
 // SPACE suffic is remove if LINE_FEED is present in mask/flag 
 #define TOKEN_SUFFIX_SPACE 2
@@ -15,6 +17,9 @@
 #define TOKEN_PRINT_QUOTES 4
 
 struct Token {
+    Token() = default;
+    Token(const char* str) : str((char*)str), length(strlen(str)) {};
+    
     char* str=0; // NOT null terminated
     int length=0;
     int flags=0; // bit mask, TOKEN_...
@@ -35,7 +40,8 @@ struct Tokens {
     engone::Memory tokenData{1}; // the data the tokens refer to
     
     void cleanup();
-
+    
+    bool add(const char* str);
     bool add(Token token);
     Token& get(uint index);
     uint length();

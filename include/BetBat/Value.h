@@ -2,6 +2,14 @@
 
 #include "Engone/Alloc.h"
 #include "Engone/Logger.h"
+#include "BetBat/Config.h"
+
+#define REF_NUMBER 1
+#define REF_STRING 2
+struct Ref {
+    int type=0;
+    int index=0;
+};
 
 struct String {
     engone::Memory memory{1};
@@ -16,8 +24,8 @@ struct String {
 std::string& operator+=(std::string& str, String& str2);
 // \n is replaced with \\n
 void PrintRawString(String& str);
-typedef float Decimal;
+
 engone::Logger& operator<<(engone::Logger& logger, String& str);
 struct Number{
-    Decimal value;    
+    Decimal value;
 };

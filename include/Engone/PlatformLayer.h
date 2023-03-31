@@ -175,7 +175,7 @@ namespace engone {
 	#define PROGRAM_WAIT 2
 	// Starts an exe at path. Uses CreateProcess from windows.h
 	// commandLine cannot be constant (CreateProcessA in windows api says so)
-	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0);
+	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0, int* exitCode=0);
 
 	typedef void(*VoidFunction)();
 	// @return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 

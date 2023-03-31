@@ -1,2 +1,41 @@
+//print hello"\n"
 
-print "HELLO DUDE!"
+//he = 21
+//print = 32
+//print hello
+
+//err = he/gcc.exe "hello\n"
+//hey = "sup"
+
+//print = 232
+
+//tests = first.txt second.txt
+
+//"gcc.exe"
+//("gcc.exe") (hello)
+//(print kkk) yes
+
+//gcc print
+//( hej print print hej )
+
+//print hello ()
+
+err = #run gcc.exe ( main.c 1 maj)
+print - + err
+
+//err = #run "gcc.exe"
+//err = (hello)
+
+//ak = soup
+//program = "gcc.exe"
+//sup = #run tests/program.exe
+
+//program
+
+//kekw.
+
+//tests\a.exe tests
+
+//a = 29
+
+//tests\a.exe

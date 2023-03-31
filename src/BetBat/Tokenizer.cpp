@@ -11,10 +11,10 @@
 #endif
 void Token::print(int printFlags){
     using namespace engone;
-    if(printFlags&TOKEN_PRINT_QUOTES){
+    // if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_QUOTED)
             log::out << "\"";
-    }
+    // }
     for(int i=0;i<length;i++){
         char chr = *(str+i);
         if(chr=='\n'){
@@ -22,10 +22,10 @@ void Token::print(int printFlags){
         }else
             log::out << chr;
     }
-    if(printFlags&TOKEN_PRINT_QUOTES){
+    // if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_QUOTED)
             log::out << "\"";
-    }
+    // }
     if(flags&TOKEN_SUFFIX_SPACE){
         log::out << " ";
     }
@@ -49,6 +49,32 @@ engone::Logger& operator<<(engone::Logger& logger, Token& token){
 }
 Token::operator std::string(){
     return std::string(str,length);
+}
+bool Tokens::add(const char* str){
+    if(tokens.max == tokens.used){
+        if(!tokens.resize(tokens.max*2 + 100))
+            return false;
+    }
+    int length = strlen(str);
+    if(tokenData.max < tokenData.used + length){
+        if(!tokenData.resize(tokenData.max*2 + 2*length))
+            return false;
+    }
+    
+    char* ptr = (char*)tokenData.data+tokenData.used;
+    memcpy(ptr,str,length);
+    tokenData.used+=length;
+    
+    Token token{};
+    token.str = ptr;
+    token.length = length;
+    token.line = -1;
+    token.column = -1;
+    
+    *((Token*)tokens.data + tokens.used) = token;
+    
+    tokens.used++;
+    return true;
 }
 bool Tokens::add(Token token){
     if(tokens.max == tokens.used){
@@ -112,13 +138,13 @@ Tokens Tokenize(engone::Memory textData){
         log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
         return {};
     }
-    log::out << "\n####   Tokenizer   ####\n";
+    log::out << log::BLUE<< "\n##   Tokenizer   ##\n";
     // Todo: handle errors like outTokens.add returning false
     
     char* text = (char*)textData.data;
     int length = textData.used;
     Tokens outTokens{};
-    outTokens.tokenData.resize(textData.used); // tokenData will probably never be larger than the original text
+    outTokens.tokenData.resize(textData.used); // Todo: do not assume token data will be same or less than textData. It's just asking for a bug
     
     engone::Memory& tokenData = outTokens.tokenData;
     memset(tokenData.data,'_',tokenData.max); // Good indicator for issues
@@ -182,7 +208,7 @@ Tokens Tokenize(engone::Memory textData){
                     _TLOG(log::out << "// : End comment\n";)
                 }
             }else{
-                if(chr=='\n'){
+                if(chr=='\n'||index==length){
                     inComment=false;
                     _TLOG(log::out << "// : End comment\n";)
                 }
@@ -297,7 +323,9 @@ Tokens Tokenize(engone::Memory textData){
         if(isSpecial){
             // this scope only adds special token
             _TLOG(printf("%c",chr);)
-            token = {(char*)tokenData.data+tokenData.used,1};
+            token = {};
+            token.str = (char*)tokenData.data+tokenData.used;
+            token.length = 1;
             *((char*)tokenData.data+tokenData.used) = chr;
             tokenData.used++;
             token.line = ln;
@@ -317,15 +345,15 @@ Tokens Tokenize(engone::Memory textData){
     }
     
     if(inQuotes){
-        log::out<<"TokenError: Missing end quote for '"<<token << "' at "<< token.line<<":"<<token.column<<"\n";
+        log::out<<log::RED<<"TokenError: Missing end quote for '"<<token << "' at "<< token.line<<":"<<token.column<<"\n";
         goto Tokenize_END;
     }
     if(inComment){
-        log::out<<"TokenError: Missing end comment for "<<token.line<<":"<<token.column<<"\n";
+        log::out<<log::RED<<"TokenError: Missing end comment for "<<token.line<<":"<<token.column<<"\n";
         goto Tokenize_END;
     }
     if(token.length!=0){
-        log::out << "TokenError: Token '" << token << "' was left incomplete\n";
+        log::out << log::RED<<"TokenError: Token '" << token << "' was left incomplete\n";
         goto Tokenize_END;
     }
     if(outTokens.tokens.used!=0){
@@ -334,10 +362,10 @@ Tokens Tokenize(engone::Memory textData){
         int64 extraSpace2 = tokenData.max-tokenData.used;
         
         if(extraSpace!=extraSpace2)
-            log::out << "TokenError: Used memory in tokenData does not match last token's used memory ("<<tokenData.used<<" != "<<((int64)lastToken->str - (int64)tokenData.data + lastToken->length)<<")\n";
+            log::out << log::RED<<"TokenError: Used memory in tokenData does not match last token's used memory ("<<tokenData.used<<" != "<<((int64)lastToken->str - (int64)tokenData.data + lastToken->length)<<")\n";
             
         if(extraSpace<0||extraSpace2<0)
-            log::out << "TokenError: Buffer of tokenData was to small (estimated "<<tokenData.max<<" but needed "<<tokenData.used<<" bytes)\n'";
+            log::out << log::RED<<"TokenError: Buffer of tokenData was to small (estimated "<<tokenData.max<<" but needed "<<tokenData.used<<" bytes)\n'";
         
         if(extraSpace!=extraSpace2 || extraSpace<0 || extraSpace2<0)
             goto Tokenize_END;

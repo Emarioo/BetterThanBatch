@@ -43,14 +43,13 @@ void PrintRefValue(Context* context, Ref& ref){
         else
             PrintRawString(*str);
     }else{
-        log::out<<"?";
+        log::out<<log::RED<<"null"<<log::SILVER;
     }
-}
-void Context::load(Bytecode code){
-    activeCode = code;
 }
 Number* Context::getNumber(uint32 index){
     if(numbers.used<=index) return 0;
+    uint8* info = (uint8*)infoValues.data + index;
+    if((*info & REF_NUMBER) == 0) return 0; 
     return (Number*)numbers.data + index;
 }
 uint32 Context::makeNumber(){
@@ -65,7 +64,7 @@ uint32 Context::makeNumber(){
         memset((char*)infoValues.data+oldMax,0,(infoValues.max-oldMax)*infoValues.m_typeSize);
     }
     int index = -1;
-    for(uint i=0;i<numbers.used;i++){
+    for(int i=(int)numbers.used-1;i>-1;i--){
         uint8* info = (uint8*)infoValues.data + i;
         if((*info & REF_NUMBER) == 0){
             index = i;
@@ -78,12 +77,14 @@ uint32 Context::makeNumber(){
     new(num)Number();
     uint8* info = (uint8*)infoValues.data + index;
     *info |= REF_NUMBER;
+    numberCount++;
     return index;
 }
 void Context::deleteNumber(uint32 index){
     uint8* info = (uint8*)infoValues.data + index;
     if((*info) & REF_NUMBER){
         *info = (*info) & (~REF_NUMBER);
+        numberCount--;
 
         if(index+1==numbers.used){
             numbers.used--;
@@ -97,7 +98,9 @@ void Context::deleteNumber(uint32 index){
     }
 }
 String* Context::getString(uint32 index){
-     if(strings.used<=index) return 0;
+    if(strings.used<=index) return 0;
+    uint8* info = (uint8*)infoValues.data + index;
+    if((*info & REF_STRING) == 0) return 0; 
     return (String*)strings.data + index;
 }
 uint32 Context::makeString(){
@@ -112,7 +115,7 @@ uint32 Context::makeString(){
         memset((char*)infoValues.data+oldMax,0,(infoValues.max-oldMax)*infoValues.m_typeSize);
     }
     int index = -1;
-    for(uint i=0;i<strings.used;i++){
+    for(int i=(int)strings.used-1;i>-1;i--){
         uint8* info = (uint8*)infoValues.data + i;
         if((*info & REF_STRING) == 0){
             index = i;
@@ -126,15 +129,18 @@ uint32 Context::makeString(){
     new(str)String();
     uint8* info = (uint8*)infoValues.data + index;
     *info |= REF_STRING;
+    stringCount++;
     return index;
 }
 void Context::cleanup(){
     numbers.resize(0);
     for(uint i=0;i<strings.used;i++){
         String* str = (String*)strings.data+i;
-        if((*(uint8*)infoValues.data + i)&REF_STRING)
+        uint8* val = (uint8*)infoValues.data + i;
+        if((*(val))&REF_STRING)
             str->memory.resize(0);
     }
+    strings.resize(0);
     infoValues.resize(0);
     scopes.resize(0);
     valueStack.resize(0);
@@ -143,9 +149,12 @@ void Context::deleteString(uint32 index){
     uint8* info = (uint8*)infoValues.data + index;
     if((*info) & REF_STRING){
         *info = (*info) & (~REF_STRING);
+        stringCount--;
         
         String* str = (String*)strings.data + index;
         str->memory.resize(0);
+        // Todo: Optimize by not resizing memory since it might be used later.
+        //  Unnecessary to deallocate and then allocate again.
 
         if(index+1==strings.used){
             strings.used--;
@@ -173,10 +182,10 @@ bool Context::ensureScopes(uint depth){
     }
     return true;
 }
-// void LinkFunction(Bytecode*)
-void Context::execute(){
+void Context::execute(Bytecode code){
     using namespace engone;
-    log::out << "\n####   Execute   ####\n";
+    activeCode = code;
+    log::out << log::BLUE<< "\n##   Execute   ##\n";
     uint programCounter=0;
 
     uint latestDebugLine=0;
@@ -185,8 +194,8 @@ void Context::execute(){
     
     ensureScopes(1);
 
-    #define CERR log::out << log::RED<< "ContextError "<<programCounter<<", "<<inst
-    #define CWARN log::out << log::YELLOW<< "ContextWarning "<<programCounter<<", "<<inst
+    #define CERR log::out << log::RED<< "ContextError "<<programCounter<<","<<inst
+    #define CWARN log::out << log::YELLOW<< "ContextWarning "<<programCounter<<","<<inst
     
     auto startTime = MeasureSeconds();
 
@@ -201,12 +210,19 @@ void Context::execute(){
         if(activeCode.length() == programCounter)
             break;
 
-        Bytecode::DebugLine* debugLine = activeCode.getDebugLine(programCounter,&latestDebugLine);
-        if(debugLine){
-            log::out << *debugLine;
+        Bytecode::DebugLine* debugLine = 0;
+        while((debugLine = activeCode.getDebugLine(programCounter,&latestDebugLine))){
+            _CLOG(log::out <<"\n";)
+            log::out << *debugLine<<"\n";
         }
 
         Instruction inst = activeCode.get(programCounter++);
+        
+        if(inst.type==0){
+            _CLOG(log::out << inst<<", skipping null instruction\n");
+            continue;   
+        }
+        
         Ref* references = getScope(currentScope)->references;
 
         switch(inst.type){
@@ -320,7 +336,11 @@ void Context::execute(){
                         if(v0!=v2) {
                             memcpy((char*)v2->memory.data,v0->memory.data, v0->memory.used);
                         }
-                        int written = sprintf((char*)v2->memory.data+v0->memory.used,"%lf",v1->value);
+                        int written = 0;
+                        if(v1->value!=(Decimal)(int64)v1->value)
+                            written = sprintf((char*)v2->memory.data+v0->memory.used,"%lf",v1->value);
+                        else
+                            written = sprintf((char*)v2->memory.data+v0->memory.used,"%lld",(int64)v1->value);
                         if(written>numlength){
                             CERR << ", double turned into "<<written<<" chars (max "<<numlength<<")\n";
                             continue;
@@ -370,10 +390,11 @@ void Context::execute(){
                     }
                 }else if(r0.type==REF_STRING){
                     r1.type = r0.type;
+                    int tempIndex = r0.index;
                     r1.index = makeString();
                     // Todo: check if makeString failed
                     
-                    String* v0 = getString(r0.index);
+                    String* v0 = getString(tempIndex);
                     String* v1 = getString(r1.index);
                     if(!v0||!v1){
                         CERR << ", values are null\n";
@@ -382,7 +403,9 @@ void Context::execute(){
                         _CLOG(log::out << inst <<" ["<<r1.index<<"], copied ";PrintRawString(*v1);log::out<<"\n";)  
                     }
                 }else{
-                    CERR<< ", cannot copy "<<RefToString(r0.type)<<"\n";   
+                    r1 = r0;
+                    _CLOG(log::out << inst <<" ["<<r1.index<<"], copied null\n";)  
+                    // CERR<< ", cannot copy "<<RefToString(r0.type)<<"\n";
                 }
                 break;
             }
@@ -436,6 +459,8 @@ void Context::execute(){
                     deleteNumber(r0.index);
                 }else if(r0.type==REF_STRING){
                     deleteString(r0.index);
+                }else if(r0.type==0&&r0.index==0){
+                    CWARN << ", cannot delete "<<RefToString(r0.type)<<"\n";
                 }else{
                     CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";
                     continue;
@@ -495,6 +520,13 @@ void Context::execute(){
             case BC_PUSH:{
                 Ref& r0 = references[inst.reg0];
                 Ref& sp = references[REG_STACK_POINTER];
+
+                if(r0.type!=REF_NUMBER&&r0.type!=REF_STRING){
+                    CWARN << ", did you mean to push null?\n";
+                    // continue; 
+                    // Note: you cannot continue here because other instructions depend on the
+                    //  increment of the stack pointer
+                }
 
                 if(sp.type != REF_NUMBER){
                     CERR << ", $sp must be a number\n";
@@ -583,11 +615,11 @@ void Context::execute(){
                 // int index = stackNumber->value + offset->value;
                 int index = stackNumber->value + offsetFrameIndex;
                 if(index<0){
-                    CERR << ", $fp + $r1 cannot be negative ($fp+$r1 = "<<index<<")\n";
+                    CERR << ", $fp + $r1 cannot be negative ($fp + $r1 = "<<index<<")\n";
                     continue;
                 }
                 if((uint)index>=valueStack.max){
-                    CERR << ", $fp + $r1 goes beyond the allocated stack ($fp+$r1 = "<<index<<")\n";
+                    CERR << ", $fp + $r1 goes beyond the allocated stack ($fp + $r1 = "<<index<<" >= "<<valueStack.max<<")\n";
                     continue;
                 }
                 Ref* ref = (Ref*)valueStack.data+index;
@@ -697,6 +729,7 @@ void Context::execute(){
                     CERR << ", cannot return from global scope (currentScope == "<<currentScope<<")\n";   
                     continue;
                 }else{
+                    programCounter = getScope(currentScope)->returnAddress;
                     currentScope--;
                     Ref* refs = getScope(currentScope)->references;
                     
@@ -706,20 +739,20 @@ void Context::execute(){
                     rv = r0;
                     
                     // jump to address
-                    Ref& ra = refs[REG_RETURN_ADDR];
-                    if(ra.type!=REF_NUMBER){
-                        CERR<<", $ra must be a number (was ";
-                        PrintRefValue(this,ra);
-                        log::out << ")\n";
-                        continue;
-                    }
-                    Number* n0 = getNumber(ra.index);
-                    if(!n0){
-                        CERR<<", value was null\n";
-                        continue;
-                    }
+                    // Ref& ra = refs[REG_RETURN_ADDR];
+                    // if(ra.type!=REF_NUMBER){
+                    //     CERR<<", $ra must be a number (was ";
+                    //     PrintRefValue(this,ra);
+                    //     log::out << ")\n";
+                    //     continue;
+                    // }
+                    // Number* n0 = getNumber(ra.index);
+                    // if(!n0){
+                    //     CERR<<", value was null\n";
+                    //     continue;
+                    // }
                     // Todo: error decimal number
-                    programCounter = n0->value;
+                    // programCounter = n0->value;
                     _CLOG(log::out << inst << ", jumped to "<<programCounter<<", returned ";
                     PrintRefValue(this,rv);
                     log::out << "\n";)
@@ -738,23 +771,23 @@ void Context::execute(){
                 
                 Ref* refs = getScope(currentScope+1)->references;
                 Ref& rz = refs[REG_ARGUMENT];
-                Ref& ra = references[REG_RETURN_ADDR];
+                // Ref& ra = references[REG_RETURN_ADDR];
                 
-                if(ra.type!=REF_NUMBER){
-                    CERR<<", $ra must be a number (was ";
-                    PrintRefValue(this,ra);
-                    log::out << ")\n";
-                    continue;
-                }
-                Number* na = getNumber(ra.index);
+                // if(ra.type!=REF_NUMBER){
+                //     CERR<<", $ra must be a number (was ";
+                //     PrintRefValue(this,ra);
+                //     log::out << ")\n";
+                //     continue;
+                // }
+                // Number* na = getNumber(ra.index);
                 if(r1.type==REF_NUMBER){
                     // CERR << ", jump register must be a number (was "<<RefToString(r1)<<")\n";
                     // continue;
                     Number* n1 = getNumber(r1.index);
-                    if(!na){
-                        CERR<<", $ra was null\n";
-                        continue;
-                    }
+                    // if(!na){
+                    //     CERR<<", $ra was null\n";
+                    //     continue;
+                    // }
                     if(!n1){
                         CERR << ", $r1 is null\n";
                         continue;
@@ -764,7 +797,8 @@ void Context::execute(){
                         continue;
                     }
                     currentScope++;
-                    na->value = programCounter;
+                    // na->value = programCounter;
+                    getScope(currentScope)->returnAddress=programCounter;
                     rz = r0;
                     programCounter = n1->value;
                     
@@ -786,21 +820,34 @@ void Context::execute(){
                         else if(r0.type==REF_NUMBER)
                             arg = getNumber(r0.index);
                         else{
-                            CERR << ", unresolved function does not allow "<<RefToString(r0.type)<<" as argument\n";
-                            continue;
+                            // CERR << ", unresolved function does not allow "<<RefToString(r0.type)<<" as argument\n";
+                            // continue;
                         }
                         _CLOG(log::out << inst << ", arg: ";
                         PrintRefValue(this,r0);
                         log::out<<", api call "<<name<<"\n";)
                         if(find->second){
-                            find->second(this,r0.type,arg);
+                            Ref returnValue = find->second(this,r0.type,arg);
+                            
+                            if(returnValue.type!=0){
+                                Ref& rv = references[REG_RETURN_VALUE];
+                                rv = returnValue;
+                            }else{
+                                   
+                            }
                         }else{
                             CERR << ", api call was null\n";
                         }
                     }else{
                         std::string foundPath="";
                         
-                        if(FileExist(name)){
+                        std::string temp=name;
+                        if(temp.find("\"")==0)
+                            temp = temp.substr(1);
+                        if(temp.find_last_of("\"")==temp.length()-1)
+                            temp = temp.substr(0,temp.length()-1);
+                        
+                        if(FileExist(temp)){
                             foundPath = name;
                         }else{
                             std::string paths = EnvironmentVariable("PATH");
@@ -837,27 +884,35 @@ void Context::execute(){
                         if(foundPath.empty()){
                             CERR << ", "<<name<<" could not be found\n";
                         }else{
-                            std::string temp=std::move(foundPath);
+                            std::string finaltemp=std::move(foundPath);
                             if(r0.type==REF_NUMBER){
                                 Number* v0 = getNumber(r0.index);
                                 if(v0){
-                                    temp += " ";
-                                    temp += std::to_string(v0->value);
+                                    finaltemp += " ";
+                                    finaltemp += std::to_string(v0->value);
                                 }
                             }else if(r0.type==REF_STRING){
                                 String* v0 = getString(r0.index);
-                                temp += " ";
-                                temp += *v0;
+                                finaltemp += " ";
+                                finaltemp += *v0;
                             }
-                            bool yes = StartProgram("",(char*)temp.data(),PROGRAM_WAIT);
-                            // bool yes = StartProgram(foundPath.c_str(),buffer,PROGRAM_WAIT);
-                            // bool yes = StartProgram(foundPath.c_str(),args,PROGRAM_WAIT|PROGRAM_NEW_CONSOLE);
+                            _CLOG(log::out << inst << ", arg: ";
+                            PrintRefValue(this,r0);
+                            log::out<<", exe call "<<name<<"\n";)
+                            int exitCode = 0;
+                            int flags = PROGRAM_WAIT;
+                            bool yes = StartProgram("",(char*)finaltemp.data(),flags,&exitCode);
                             if(!yes){
                                 CERR << ", "<<name<<" found but cannot start\n";
                             }else{
-                                _CLOG(log::out << inst << ", arg: ";
-                                PrintRefValue(this,r0);
-                                log::out<<", exe call "<<name<<"\n";)
+                                Ref& rv = references[REG_RETURN_VALUE];
+                                uint index = makeNumber();
+                                if(index!=(uint)-1){
+                                    rv.type = REF_NUMBER;
+                                    rv.index = index;
+                                    Number* rv = getNumber(index);
+                                    rv->value = exitCode;
+                                }
                             }
                         }
                     }
@@ -871,13 +926,12 @@ void Context::execute(){
     }
     double executionTime = StopMeasure(startTime);
     log::out << "Executed in "<<executionTime<<" seconds\n";
-    if(numbers.used!=0||strings.used!=0){
-        log::out << log::YELLOW<<"Ended with "<<numbers.used << " numbers and "<<strings.used << " strings (based on .used)\n";
+    if(numberCount!=0||stringCount!=0){
+        log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
     }
 }
 void Context::Execute(Bytecode code){
     Context context{};
-    context.load(code);
-    context.execute(); 
-    context.cleanup();  
+    context.execute(code);
+    context.cleanup();
 }

@@ -1,0 +1,26 @@
+// a.h
+
+static int hello=1;
+
+
+// b.c
+
+void whatb(){
+	printf("B %d\n",hello);
+	hello+=2;
+	printf("B %d/\n",hello);
+}
+
+// c.c
+
+void whatc(){
+	printf("C %d\n",hello);
+	hello+=2;
+	printf("C %d/\n",hello);
+}
+
+void main(){
+	
+	whata();
+	whatc();
+}

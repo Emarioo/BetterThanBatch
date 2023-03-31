@@ -1,0 +1,4 @@
+
+
+prints = 132
+gcc.exe prints
