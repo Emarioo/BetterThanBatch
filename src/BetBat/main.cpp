@@ -3,7 +3,7 @@
 
 int main(int argc, const char** argv){
     using namespace engone;
-    
+
     bool compileInst=false;
     for(int i=1;i<argc;i++){
         if(strcmp(argv[i],"-inst")==0){
@@ -38,4 +38,6 @@ int main(int argc, const char** argv){
         log::out << "Final memory: "<<finalMemory<<"\n";
         
     log::out.cleanup();
+
+    log::out << "Done!\n";
 }

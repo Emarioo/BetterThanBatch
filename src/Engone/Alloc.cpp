@@ -4,6 +4,7 @@
 
 namespace engone {
 	bool Memory::resize(uint64 count){
+		// printf("## Resize %p %lld %lld\n",data,max*m_typeSize,count*m_typeSize);
 		if(m_typeSize==0) return false;
 		if (count == 0) {
 			if (data) {

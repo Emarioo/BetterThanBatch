@@ -132,7 +132,7 @@ void Tokens::printData(int charsPerLine){
     if((i)%charsPerLine!=0)
         log::out << "\n";
 }
-Tokens Tokenize(engone::Memory textData){
+Tokens Tokenize(engone::Memory& textData){
     using namespace engone;
     if(textData.m_typeSize!=1) {
         log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
@@ -144,7 +144,8 @@ Tokens Tokenize(engone::Memory textData){
     char* text = (char*)textData.data;
     int length = textData.used;
     Tokens outTokens{};
-    outTokens.tokenData.resize(textData.used); // Todo: do not assume token data will be same or less than textData. It's just asking for a bug
+    // Todo: do not assume token data will be same or less than textData. It's just asking for a bug
+    outTokens.tokenData.resize(textData.used);
     
     engone::Memory& tokenData = outTokens.tokenData;
     memset(tokenData.data,'_',tokenData.max); // Good indicator for issues

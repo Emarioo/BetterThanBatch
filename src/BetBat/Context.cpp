@@ -9,6 +9,12 @@
 #define _CLOG(x) ;
 #endif
 
+#ifdef CLOG_LEAKS
+#define _CLOG_LEAKS(X) X
+#else
+#define _CLOG_LEAKS(X)
+#endif
+
 const char* RefToString(int type){
     #define REFCASE(x) case x: return #x;
     switch(type){
@@ -182,7 +188,7 @@ bool Context::ensureScopes(uint depth){
     }
     return true;
 }
-void Context::execute(Bytecode code){
+void Context::execute(Bytecode& code){
     using namespace engone;
     activeCode = code;
     log::out << log::BLUE<< "\n##   Execute   ##\n";
@@ -386,7 +392,7 @@ void Context::execute(Bytecode code){
                         CERR<< ", nummbers are null\n";
                     }else{
                         n1->value = n0->value;
-                        _CLOG(log::out << inst <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
+                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<<inst <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
                     }
                 }else if(r0.type==REF_STRING){
                     r1.type = r0.type;
@@ -400,7 +406,7 @@ void Context::execute(Bytecode code){
                         CERR << ", values are null\n";
                     }else{
                         v0->copy(v1);
-                        _CLOG(log::out << inst <<" ["<<r1.index<<"], copied ";PrintRawString(*v1);log::out<<"\n";)  
+                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst <<" ["<<r1.index<<"], copied ";PrintRawString(*v1);log::out<<"\n";)  
                     }
                 }else{
                     r1 = r0;
@@ -438,7 +444,7 @@ void Context::execute(Bytecode code){
                 r0.type = REF_NUMBER;
                 r0.index = makeNumber();
                 
-                _CLOG(log::out << inst <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst <<" ["<<r0.index<<"]\n";)
                 
                 break;
             }
@@ -448,7 +454,7 @@ void Context::execute(Bytecode code){
                 r0.type = REF_STRING;
                 r0.index = makeString();
                 
-                _CLOG(log::out << inst <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst <<" ["<<r0.index<<"]\n";)
                 
                 break;
             }
@@ -465,7 +471,7 @@ void Context::execute(Bytecode code){
                     CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";
                     continue;
                 }
-                _CLOG(log::out << inst <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out _CLOG_LEAKS(<< log::PURPLE)<< inst <<" ["<<r0.index<<"]\n";)
                 r0 = {};
                 break;
             }
@@ -823,7 +829,7 @@ void Context::execute(Bytecode code){
                             // CERR << ", unresolved function does not allow "<<RefToString(r0.type)<<" as argument\n";
                             // continue;
                         }
-                        _CLOG(log::out << inst << ", arg: ";
+                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst << ", arg: ";
                         PrintRefValue(this,r0);
                         log::out<<", api call "<<name<<"\n";)
                         if(find->second){
@@ -896,7 +902,7 @@ void Context::execute(Bytecode code){
                                 finaltemp += " ";
                                 finaltemp += *v0;
                             }
-                            _CLOG(log::out << inst << ", arg: ";
+                            _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst << ", arg: ";
                             PrintRefValue(this,r0);
                             log::out<<", exe call "<<name<<"\n";)
                             int exitCode = 0;
@@ -930,7 +936,7 @@ void Context::execute(Bytecode code){
         log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
     }
 }
-void Context::Execute(Bytecode code){
+void Context::Execute(Bytecode& code){
     Context context{};
     context.execute(code);
     context.cleanup();

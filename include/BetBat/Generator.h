@@ -51,7 +51,9 @@
 #define BC_JUMP          (BC_R1|0x30)
 
 #define REG_NULL 0
+#define REG_NULL_S "null"
 #define REG_ZERO 1
+#define REG_ZERO_S "zero"
 #define REG_RETURN_VALUE 3
 #define REG_RETURN_VALUE_S "rv"
 #define REG_ARGUMENT 4
@@ -124,9 +126,10 @@ struct Bytecode {
 };
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
 struct GenerationInfo {
+    GenerationInfo(Tokens& tokens) : tokens(tokens){}
     Bytecode code{};
     uint index=0;
-    Tokens tokens{};
+    Tokens& tokens;
     int parDepth=0;
     
     int errors=0;
@@ -178,7 +181,7 @@ struct ExpressionInfo {
     int opCount=0;  
 };
 
-Bytecode GenerateScript(Tokens tokens, int* outErr=0);
-Bytecode GenerateInstructions(Tokens tokens, int* outErr=0);
+Bytecode GenerateScript(Tokens& tokens, int* outErr=0);
+Bytecode GenerateInstructions(Tokens& tokens, int* outErr=0);
 
-std::string Disassemble(Bytecode code);
+std::string Disassemble(Bytecode& code);

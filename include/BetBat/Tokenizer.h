@@ -50,6 +50,4 @@ struct Tokens {
     
     void printData(int charsPerLine = 40);
 };
-// DO NOT FREE textData! 
-// The function is responsible for that.
-Tokens Tokenize(engone::Memory textData);
+Tokens Tokenize(engone::Memory& textData);

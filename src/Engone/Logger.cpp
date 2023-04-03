@@ -50,10 +50,11 @@ namespace engone {
 		m_logFiles.clear();
 	}
 	char* Logger::ThreadInfo::ensure(uint32 bytes) {
-		if (lineBuffer.max < lineBuffer.used + bytes + 1) {
+		if (lineBuffer.max < lineBuffer.used + bytes + 1) { // +1 for \0
 			// Todo: increase by max*2x instead of used+bytes?
-			bool yes = lineBuffer.resize(lineBuffer.used + bytes + 1);
-			if (!yes) return nullptr;
+			bool yes = lineBuffer.resize(lineBuffer.max*2 + bytes + 1);
+			if (!yes)
+				return nullptr;
 		}
 		return ((char*)lineBuffer.data + lineBuffer.used);
 	}

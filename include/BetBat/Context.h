@@ -39,7 +39,7 @@ struct Context {
     void deleteString(uint index);
     String* getString(uint index);
 
-    void execute(Bytecode code);
+    void execute(Bytecode& code);
     
-    static void Execute(Bytecode code);
+    static void Execute(Bytecode& code);
 };

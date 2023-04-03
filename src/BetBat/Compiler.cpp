@@ -26,11 +26,11 @@ void CompileScript(const char* path){
     
     auto startCompileTime = engone::MeasureSeconds();
     Tokens toks = Tokenize(text);
-    // toks.printTokens(14,TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
-    // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
+    // // toks.printTokens(14,TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
+    // // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
     int err=0;
     Bytecode bytecode = GenerateScript(toks,&err);
-    double seconds=0;
+    double seconds=0; // here because goto wants it here
     if(err){
         // log::out << log::RED<<"Errors\n";
         goto COMP_SCRIPT_END;
@@ -45,9 +45,9 @@ void CompileScript(const char* path){
     Context::Execute(bytecode);
 
 COMP_SCRIPT_END:
-    text.resize(0);
     bytecode.cleanup();
     toks.cleanup();
+    text.resize(0);
 }
 void CompileInstructions(const char* path){
     using namespace engone;

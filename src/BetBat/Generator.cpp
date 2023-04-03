@@ -93,6 +93,8 @@ static const char* crazyMap[260]{
 
 const char* RegToString(uint8 reg){
     switch(reg){
+        case REG_NULL: return REG_NULL_S;
+        case REG_ZERO: return REG_ZERO_S;
         case REG_RETURN_VALUE: return REG_RETURN_VALUE_S;
         case REG_ARGUMENT: return REG_ARGUMENT_S;
         case REG_FRAME_POINTER: return REG_FRAME_POINTER_S;
@@ -512,29 +514,32 @@ Token CombineTokens(GenerationInfo& info){
     while(!info.end()) {
         Token token = info.next();
         // Todo: stop at ( # ) and such 
-        if((token.flags&TOKEN_QUOTED) && !outToken.str){
+        if((token.flags&TOKEN_QUOTED) && outToken.str){
             info.index--;
             break;
         }
         if(!outToken.str)
             outToken.str = token.str;
         outToken.length += token.length;
+        if(token.flags&TOKEN_QUOTED)
+            break;
         if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED))
             break;
     }
     return outToken;
 }
 
-int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo);
+int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt);
+int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt);
 
-int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo){
+int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
     
-    log::out << "-- try ParseExpression\n";
+    _GLOG(log::out << "-- try ParseExpression\n";)
     
-    if(ParseAssignment(info,exprInfo)){
-        log::out << "-- exit ParseExpression\n";
-        return 1;   
+    if(ParseAssignment(info,exprInfo,true)){
+        _GLOG(log::out << "-- exit ParseExpression\n";)
+        return 1;
     }
     if(info.end())
         return 0;
@@ -543,8 +548,37 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo){
         Token token = info.next();
         
         int opType = 0;
-        if(token == "null"){
-            
+
+        if (token == "#"){
+            if(exprInfo.regCount == 0){
+                if(token.flags&TOKEN_SUFFIX_SPACE){
+                    ERRTOK << "expected a directive\n";
+                    return 0;
+                }
+                token = info.next();
+                if(token == "run"){
+                    ExpressionInfo expr{};
+                    expr.acc0Reg = exprInfo.acc0Reg + exprInfo.regCount;
+                    int success = ParseCommand(info,expr,false);
+                    if(success){
+                        exprInfo.regCount++;
+                    }else{
+                        return 0;
+                    }
+                }else{
+                    ERRTOK << "undefined directive\n";
+                    info.nextLine();
+                    return 0;
+                }
+            }else{
+                ERRTOK << "directive not allowed\n";
+                info.nextLine();
+                return 0;
+            }
+        } else if(token == "null"){
+            info.code.add(BC_MOV,REG_NULL,exprInfo.acc0Reg+exprInfo.regCount);
+            _GLOG(INST << "\n";)
+            exprInfo.regCount++;
         } else if(IsDecimal(token)){
             int constIndex = info.code.addConstNumber(ConvertDecimal(token));
             info.code.add(BC_NUM,exprInfo.acc0Reg+exprInfo.regCount);
@@ -580,7 +614,7 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo){
                 // _GLOG(INST << "\n";)
                 // exprInfo.regCount++;
             } else{
-                if(exprInfo.regCount==0){
+                if(attempt){
                     // Note: wrong parse functions was chosen OR syntax error but we don't handle that here
                     info.index--;
                 }else{
@@ -594,7 +628,7 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo){
             expr.acc0Reg = exprInfo.acc0Reg+exprInfo.regCount;
             log::out<<"Par ( \n";
             info.parDepth++;
-            if(ParseExpression(info,expr)){
+            if(ParseExpression(info,expr,false)){
                 exprInfo.regCount++;
                 info.parDepth--;
                 log::out<<"Par ) \n";
@@ -610,11 +644,10 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo){
             exprInfo.operations[exprInfo.opCount++] = opType;
             _GLOG(log::out << "Operator "<<token<<"\n";)
         }else {
-            if(exprInfo.regCount==0){
+            if(attempt){
                 // Note: wrong parse functions was chosen OR syntax error but we don't handle that here
                 info.index--;
-            } else{
-                // Todo: fails on () should it?
+            }else{
                 ERR_GENERIC;
                 info.nextLine();
             }
@@ -667,19 +700,19 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo){
         }
         
         if(ending){
-            log::out << "-- exit ParseExpression\n";
+            _GLOG(log::out << "-- exit ParseExpression\n";)
             if(exprInfo.regCount>1){
                 log::out<<log::RED<<"CompilerWarning: exprInfo.regCount > 1 at end of expression";             
             }
-            return 1;   
+            return 1;
         }
     }
 }
 int ParseBody(GenerationInfo& info);
 // returns 0 if syntax is wrong for flow parsing
-int ParseFlow(GenerationInfo& info){
+int ParseFlow(GenerationInfo& info, bool attempt){
     using namespace engone;
-    log::out << "-- try ParseFlow\n";
+    _GLOG(log::out << "-- try ParseFlow\n";)
     
     if(info.end()){
         return 0;
@@ -689,7 +722,7 @@ int ParseFlow(GenerationInfo& info){
     if(token=="if"){
         ExpressionInfo expr{};
         expr.acc0Reg = REG_ACC0;
-        ParseExpression(info,expr);
+        ParseExpression(info,expr,false);
         
         // Todo: add jump instructions to resolve
         
@@ -698,18 +731,28 @@ int ParseFlow(GenerationInfo& info){
         // Todo: add address to resolve?
         return 1;
     }else{
-        // ERR_GENERIC;
-        info.index--; // go back, token should not be parsed by this function
+        if(attempt){
+            info.index--;
+        }else{
+            ERR_GENERIC;
+            info.nextLine();
+        }
         return 0;   
     }
 }
-int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo){
+int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
     
-    log::out << "-- try ParseAssignment\n";
+    _GLOG(log::out << "-- try ParseAssignment\n";)
     
     if(info.tokens.length() < info.index+2){
         // not enough tokens for assignment
+        if(attempt){
+
+        }else{
+            _GLOG(log::out <<log::RED<< "CompilerError: to few tokens for assignment\n");
+            info.nextLine();
+        }
         return 0;
     }
     Token token = info.next();
@@ -717,15 +760,19 @@ int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo){
     if((IsName(token) && !(token.flags&TOKEN_QUOTED)) && assign=="="){
         // good
     }else{
-        // ERR_GENERIC;
-        info.index-=2;
+        if(attempt){
+            info.index-=2;
+        }else{
+            ERR_GENERIC;
+            info.nextLine();
+        }
         return 0;
     }
     
     // ExpressionInfo expr{};
     // expr.acc0Reg = REG_ACC0;
     
-    if(ParseExpression(info,exprInfo)){
+    if(ParseExpression(info,exprInfo,false)){
         int finalReg = exprInfo.acc0Reg + exprInfo.regCount-1;
         // Todo: properly deal with regCount==0
         Assert(exprInfo.regCount!=0);
@@ -780,16 +827,16 @@ int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo){
             _GLOG(INST << "prevent modifications\n";)
         }
     }else{
-        ERR_GENERIC;
-        info.nextLine();
+        _GLOG(log::out <<log::RED<< "CompilerError: quitting assignment\n");
+        // info.nextLine();
         return 0;
     }
-    log::out << "-- exit Assignment\n";
+    _GLOG(log::out << "-- exit Assignment\n";)
     return 1;
 }
-int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo){
+int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
-    log::out << "-- try ParseCommand\n";
+    _GLOG(log::out << "-- try ParseCommand\n";)
     
     if(info.end()){
         return 0;
@@ -829,9 +876,9 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo){
         info.code.add(BC_STR,tempReg);
         _GLOG(INST << "temp1\n";)
         
-        int tempRegN = exprInfo.acc0Reg+exprInfo.regCount+2;
-        info.code.add(BC_NUM,tempRegN);
-        _GLOG(INST << "tempN\n";)
+        // int tempRegN = exprInfo.acc0Reg+exprInfo.regCount+2;
+        // info.code.add(BC_NUM,tempRegN);
+        // _GLOG(INST << "tempN\n";)
         
         int tempReg2 = exprInfo.acc0Reg+exprInfo.regCount+3;
         // info.code.add(BC_STR,tempReg2);
@@ -849,7 +896,7 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo){
                 expr.acc0Reg = tempReg2;
                 // log::out<<"Par ( \n";
                 info.parDepth++;
-                int success = ParseExpression(info,expr);
+                int success = ParseExpression(info,expr,false);
                 if(success){
                     if(expr.regCount!=0){
                        whichArg=1;
@@ -867,12 +914,13 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo){
                 if(!(token.flags&TOKEN_QUOTED)&&IsName(token)){
                     auto varPair = info.variables.find(token);
                     if(varPair!=info.variables.end()){
-                        info.code.add(BC_LOADV,tempRegN,varPair->second.frameIndex);
+                        info.code.add(BC_LOADV,tempReg2,varPair->second.frameIndex);
                         _GLOG(INST << "get variable "<<varPair->second.frameIndex<<"\n";)
-                        info.code.add(BC_COPY,tempRegN,tempRegN);
+                        info.code.add(BC_COPY,tempReg2,tempReg2);
                         _GLOG(INST << "\n";)
                         
-                        whichArg = 3;
+                        whichArg = 1;
+                        delTemp2=true;
                         goto CMD_ACC; // Note: careful when changing behaviour, goto can be wierd
                     }
                     // not variable? then continue below
@@ -905,10 +953,11 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo){
             }else if(whichArg==2){
                 info.code.add(BC_ADD,argReg, tempReg, argReg);
                 _GLOG(INST << "\n";)
-            }else if(whichArg==3){
-                info.code.add(BC_ADD,argReg, tempRegN, argReg);
-                _GLOG(INST << "\n";)
             }
+            //  else if(whichArg==3){
+            //     info.code.add(BC_ADD,argReg, tempRegN, argReg);
+            //     _GLOG(INST << "\n";)
+            // }
             token = info.now();
             if(token.flags&TOKEN_SUFFIX_LINE_FEED){
                 break;
@@ -916,8 +965,8 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo){
         }
         info.code.add(BC_DEL,tempReg);
         _GLOG(INST << "temp\n";)
-        info.code.add(BC_DEL,tempRegN);
-        _GLOG(INST << "tempN\n";)
+        // info.code.add(BC_DEL,tempRegN);
+        // _GLOG(INST << "tempN\n";)
         if(delTemp2){
             info.code.add(BC_DEL,tempReg2);
             _GLOG(INST << "temp2\n";)
@@ -942,7 +991,7 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo){
     // Note: the parsed instructions add a new value in the accumulation
     //  Don't forget to use and delete it.
     
-    log::out << "-- exit ParseCommand\n";
+    _GLOG(log::out << "-- exit ParseCommand\n";)
     return 1;
 }
 int ParseBody(GenerationInfo& info){
@@ -951,15 +1000,20 @@ int ParseBody(GenerationInfo& info){
     expr.acc0Reg = REG_ACC0;
     ExpressionInfo expr2{};
     expr2.acc0Reg = REG_ACC0;
-    if (ParseFlow(info)) {
+    if (ParseFlow(info,true)) {
         
-    } else if(ParseAssignment(info,expr)) { // Note: cannot be ParseExpression since it collides with ParseCommand
+    } else if(ParseAssignment(info,expr,true)) { // Note: cannot be ParseExpression since it collides with ParseCommand
         info.code.add(BC_DEL,expr.acc0Reg);
+        _GLOG(INST << "\n";)
         expr.regCount--;
-    } else if(ParseCommand(info,expr2)) {
+    } else if(ParseCommand(info,expr2,true)) {
         info.code.add(BC_DEL,expr2.acc0Reg);
+        _GLOG(INST << "\n";)
         expr2.regCount--;
     } else{
+        // Todo: we may fail because current token is unexpected or we may fail because
+        //  some other reason deep within the recursive parsing. Somehow we need to know
+        //  what happened so don't print a message if another function already has.
         if(!info.end()&&info.index>0){
             ERRT(info.now()) << "unexpected "<<info.now()<<"\n";
         }else {
@@ -1396,12 +1450,11 @@ void Bytecode::printStats(){
     log::out <<" DebugText: "<<debugLineText.used<<" (max "<<(debugLineText.max*debugLineText.m_typeSize)<<" bytes)\n";
 
 }
-Bytecode GenerateScript(Tokens tokens, int* outErr){
+Bytecode GenerateScript(Tokens& tokens, int* outErr){
     using namespace engone;
     log::out <<log::BLUE<<  "\n##   Generator   ##\n";
     
-    GenerationInfo info{};
-    info.tokens = tokens;
+    GenerationInfo info{tokens};
     
     info.internalFunctions["print"]=true;
     
@@ -1633,7 +1686,7 @@ bool LineEndError(GenerationInfo& info){
     }
     return false;
 }
-Bytecode GenerateInstructions(Tokens tokens, int* outErr){
+Bytecode GenerateInstructions(Tokens& tokens, int* outErr){
     using namespace engone;
     log::out<<"\n##   Generator (instructions)   ##\n";
     
@@ -1666,8 +1719,7 @@ Bytecode GenerateInstructions(Tokens tokens, int* outErr){
     MAP("enter",BC_ENTERSCOPE)
     MAP("exit",BC_EXITSCOPE)
 
-    GenerationInfo info{};
-    info.tokens = tokens;
+    GenerationInfo info{tokens};
 
     while(!info.end()){
         Token token = info.next();
@@ -1800,7 +1852,7 @@ Bytecode GenerateInstructions(Tokens tokens, int* outErr){
     return info.code;
 }
 
-std::string Disassemble(Bytecode code){
+std::string Disassemble(Bytecode& code){
     using namespace engone;
     // engone::Memory buffer{1};
     std::string buffer="";

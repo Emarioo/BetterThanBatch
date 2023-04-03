@@ -523,8 +523,8 @@ namespace engone {
 	static uint64 s_numberAllocations=0;
 	void* Allocate(uint64 bytes){
 		if(bytes==0) return nullptr;
-		void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
-        //void* ptr = malloc(bytes);
+		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
+        void* ptr = malloc(bytes);
 		if(!ptr) return nullptr;
 		
 		// s_allocStatsMutex.lock();
@@ -547,8 +547,8 @@ namespace engone {
                 if(oldBytes==0){
                     PL_PRINTF("Reallocate : oldBytes is zero while the ptr isn't!?\n");   
                 }
-                void* newPtr = HeapReAlloc(GetProcessHeap(),0,ptr,newBytes);
-                // void* newPtr = realloc(ptr,newBytes);
+                // void* newPtr = HeapReAlloc(GetProcessHeap(),0,ptr,newBytes);
+                void* newPtr = realloc(ptr,newBytes);
                 if(!newPtr)
                     return nullptr;
                 
@@ -564,8 +564,8 @@ namespace engone {
     }
 	void Free(void* ptr, uint64 bytes){
 		if(!ptr) return;
-		// free(ptr);
-		HeapFree(GetProcessHeap(),0,ptr);
+		free(ptr);
+		// HeapFree(GetProcessHeap(),0,ptr);
 		
 		// s_allocStatsMutex.lock();
 		s_allocatedBytes-=bytes;

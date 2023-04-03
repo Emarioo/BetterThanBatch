@@ -6,3 +6,5 @@ typedef double Decimal;
 #define GLOG
 // #define OLOG
 #define CLOG
+
+// #define CLOG_LEAKS
