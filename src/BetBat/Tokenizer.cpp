@@ -118,6 +118,7 @@ void Tokens::printTokens(int tokensPerLine, int flags){
     }
     if(i%tokensPerLine != 0)
         log::out << "\n";
+    // log::out << "$END$";
 }
 void Tokens::printData(int charsPerLine){
     using namespace engone;
@@ -150,7 +151,7 @@ Tokens Tokenize(engone::Memory& textData){
     engone::Memory& tokenData = outTokens.tokenData;
     memset(tokenData.data,'_',tokenData.max); // Good indicator for issues
     
-    const char* specials = "+-*/=<>" "$#{}()[]" ":;.,";
+    const char* specials = "+-*/=<>!&|" "$#{}()[]" ":;.,";
     int specialLength = strlen(specials);
     int line=1;
     int column=1;
@@ -181,6 +182,11 @@ Tokens Tokenize(engone::Memory& textData){
         
         int col = column;
         int ln = line;
+        column++;
+        if(chr == '\n'){
+            line++;
+            column=1;
+        }
         
         bool isQuotes = chr == '"';
         bool isComment = chr=='/' && (nextChr == '/' || nextChr=='*');
@@ -195,11 +201,6 @@ Tokens Tokenize(engone::Memory& textData){
             }
         }
         
-        column++;
-        if(chr == '\n'){
-            line++;
-            column=1;
-        }
         if(inComment){
             if(inEnclosedComment){
                 if(chr=='*'&&nextChr=='/'){
@@ -328,7 +329,20 @@ Tokens Tokenize(engone::Memory& textData){
             token.str = (char*)tokenData.data+tokenData.used;
             token.length = 1;
             *((char*)tokenData.data+tokenData.used) = chr;
-            tokenData.used++;
+            if((chr=='='&&nextChr=='=')||
+                (chr=='!'&&nextChr=='=')||
+                (chr=='&'&&nextChr=='&')||
+                (chr=='|'&&nextChr=='|')
+                ){
+                index++;
+                column++;
+                token.length++;
+                _TLOG(printf("%c",nextChr);)
+                *((char*)tokenData.data+tokenData.used+1) = nextChr;
+                nextChr = text[index]; // code below needs the updated nextChr
+            }
+            
+            tokenData.used+=token.length;
             token.line = ln;
             token.column = col;
             if(nextChr=='\r' || nextChr =='\n')
@@ -340,6 +354,10 @@ Tokens Tokenize(engone::Memory& textData){
             token = {};
         }
     }
+    // Last token should have line feed.
+    if(outTokens.length()>0)
+        outTokens.get(outTokens.length()-1).flags |=TOKEN_SUFFIX_LINE_FEED;
+    
     if(token.length!=0){
         // error happened in a way where we need to add a line feed
         _TLOG(log::out << "\n";)

@@ -192,11 +192,12 @@ void Context::execute(Bytecode& code){
     using namespace engone;
     activeCode = code;
     log::out << log::BLUE<< "\n##   Execute   ##\n";
-    uint programCounter=0;
+    int programCounter=0;
 
-    uint latestDebugLine=0;
+    int latestDebugLine=-1;
     
     apiCalls["print"]=APIPrint;
+    apiCalls["time"]=APITime;
     
     ensureScopes(1);
 
@@ -205,29 +206,29 @@ void Context::execute(Bytecode& code){
     
     auto startTime = MeasureSeconds();
 
-    int limit = activeCode.length()*1.5;
+    uint64 executedInsts = 0;
+    uint64 limit = 10000;
     while(true){
-        limit--;
-        if(limit==0){
+        if(executedInsts>=limit){
             // prevent infinite loop
-            log::out << "REACHED SAFETY LIMIT\n";
+            log::out << log::RED<<"REACHED SAFETY LIMIT. EXPECT INCOMPLETE CLEANUP\n";
             break;
         }
         if(activeCode.length() == programCounter)
             break;
-
-        Bytecode::DebugLine* debugLine = 0;
-        while((debugLine = activeCode.getDebugLine(programCounter,&latestDebugLine))){
-            _CLOG(log::out <<"\n";)
-            log::out << *debugLine<<"\n";
-        }
-
         Instruction inst = activeCode.get(programCounter++);
-        
         if(inst.type==0){
             _CLOG(log::out << inst<<", skipping null instruction\n");
             continue;   
         }
+
+        Bytecode::DebugLine* debugLine = 0;
+        while((debugLine = activeCode.getDebugLine(programCounter-1,&latestDebugLine))){
+            _CLOG(log::out <<"\n";)
+            log::out << *debugLine<<"\n";
+        }
+
+        executedInsts++;
         
         Ref* references = getScope(currentScope)->references;
 
@@ -238,7 +239,10 @@ void Context::execute(Bytecode& code){
             case BC_DIV:
             case BC_LESS:
             case BC_GREATER:
-            case BC_EQUAL: {
+            case BC_EQUAL:
+            case BC_NOT_EQUAL:
+            case BC_AND:
+            case BC_OR: {
                 Ref& r0 = references[inst.reg0];
                 Ref& r1 = references[inst.reg1];
                 Ref& r2 = references[inst.reg2];
@@ -249,7 +253,7 @@ void Context::execute(Bytecode& code){
                     Number* v2 = getNumber(r2.index);
                     
                     if(!v0||!v1||!v2){
-                        CERR << ", values were null\n";   
+                        CERR << ", values were null\n";
                         continue;
                     }
                     
@@ -269,6 +273,12 @@ void Context::execute(Bytecode& code){
                         num = v0->value > v1->value;
                     else if(inst.type==BC_EQUAL)
                         num = v0->value == v1->value;
+                    else if(inst.type==BC_NOT_EQUAL)
+                        num = v0->value != v1->value;
+                    else if(inst.type==BC_AND)
+                        num = v0->value!=0 && v1->value!=0;
+                    else if(inst.type==BC_OR)
+                        num = v0->value!=0 || v1->value!=0;
                     else {
                         CERR << ", inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
@@ -287,6 +297,12 @@ void Context::execute(Bytecode& code){
                         log::out <<">";
                     else if(inst.type==BC_EQUAL)
                         log::out <<"==";
+                         else if(inst.type==BC_NOT_EQUAL)
+                        log::out <<"!=";
+                         else if(inst.type==BC_AND)
+                        log::out <<"&&";
+                         else if(inst.type==BC_OR)
+                        log::out <<"||";
                     else {
                         CERR <<", BUG AT "<<__FILE__<<":"<<__LINE__<<"\n";   
                     })
@@ -353,6 +369,24 @@ void Context::execute(Bytecode& code){
                         }
                         v2->memory.used = v0->memory.used + written;
                         _CLOG(log::out << inst <<", \"";PrintRawString(*v2);log::out<<"\"\n";)
+                    } else {
+                        CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
+                    }
+                }else if(r0.type==REF_STRING && r1.type == REF_STRING && r2.type == REF_NUMBER){
+                    String* v0 = getString(r0.index);
+                    String* v1 = getString(r1.index);
+                    Number* v2 = getNumber(r2.index);
+                    
+                    if(!v0||!v1||!v2){
+                        CERR <<", one value were null ";PrintRefValue(this,r0);log::out<<" ";
+                            PrintRefValue(this,r1);log::out<<" ";PrintRefValue(this,r2);log::out<<"\n";   
+                        continue;
+                    }
+                    
+                    if(inst.type==BC_EQUAL){
+                        
+                        _CLOG(log::out << "== not implemented for strings\n")
+                        
                     } else {
                         CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
@@ -638,7 +672,7 @@ void Context::execute(Bytecode& code){
                 
                 if(r0.type==REF_NUMBER){
                     Number* n0 = getNumber(r0.index);
-                    uint address = n0->value;
+                    int address = n0->value;
                 
                     // note that address is refers to the instruction position/index and not the byte memory address.
                     if(n0->value != (Decimal)(uint)n0->value){
@@ -656,18 +690,17 @@ void Context::execute(Bytecode& code){
                 }
                 break;
             }
-            case BC_JUMPIF: {
+            case BC_JUMPNIF: {
                 Ref& r0 = references[inst.reg0];
                 Ref& r1 = references[inst.reg1];
-                Ref& r2 = references[inst.reg2];
                 
-                if(r2.type==REF_NUMBER){
-                    Number* n2 = getNumber(r2.index);
-                    uint address = n2->value;
+                if(r1.type==REF_NUMBER){
+                    Number* n1 = getNumber(r1.index);
+                    int address = n1->value;
                     
                     // note that address is refers to the instruction position/index and not the byte memory address.
-                    if(n2->value != (Decimal)(uint)n2->value){
-                        CERR<< ", decimal in register not allowed ("<<n2->value<<"!="<<((Decimal)(uint)n2->value)<<")\n";
+                    if(n1->value != (Decimal)(uint)n1->value){
+                        CERR<< ", decimal in register not allowed ("<<n1->value<<"!="<<((Decimal)(uint)n1->value)<<")\n";
                         continue;
                     } else if(activeCode.length()<address){
                         CERR << ", invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
@@ -677,38 +710,24 @@ void Context::execute(Bytecode& code){
                         continue;
                     }
                     
-                    if(r0.type==REF_NUMBER&&r1.type==REF_NUMBER){
+                    if(r0.type==REF_NUMBER){
                         Number* n0 = getNumber(r0.index);
-                        Number* n1 = getNumber(r1.index);
-                        if(!n0||!n1){
+                        if(!n0){
                             CERR << ", numbers where null\n";  
                             continue;   
                         }
-                        if(n0->value == n1->value){
+                        if(n0->value == 0){
                             programCounter = address;
-                            _CLOG(log::out << inst << ", "<<n0->value<<" == "<<n1->value<<", jumped to "<<programCounter<<"\n";)
+                            _CLOG(log::out << inst << ", "<<n0->value<<" == 0, jumped to "<<programCounter<<"\n";)
                         }else{
-                            _CLOG(log::out << inst << ", "<<n0->value<<" != "<<n1->value<<", no jumping\n";)
-                        }
-                    } else if(r0.type==REF_STRING&&r1.type==REF_STRING){
-                        String* v0 = getString(r0.index);
-                        String* v1 = getString(r1.index);
-                        if(!v0||!v1){
-                            CERR << ", numbers where null\n";  
-                            continue;   
-                        }
-                        if(*v0 == *v1){
-                            programCounter = address;
-                            _CLOG(log::out << inst << ", ";PrintRawString(*v0);log::out<<" == "<<*v1<<", jumped to "<<programCounter<<"\n";)
-                        }else{
-                            _CLOG(log::out << inst << ", ";PrintRawString(*v0);log::out<<" != ";PrintRawString(*v1);log::out<<", no jumping\n";)
+                            _CLOG(log::out << inst << ", "<<n0->value<<" != 0, no jumping\n";)
                         }
                     } else{
                         CERR << ", invalid type "<<RefToString(r0.type)<<" "<<RefToString(r1.type)<<"\n";  
                         continue;
                     }
                 }else{
-                    CERR << ", invalid type "<<RefToString(r0.type)<<" in registers (should be number)\n";   
+                    CERR << ", invalid type "<<RefToString(r1.type)<<" in r1 (should be number)\n";   
                 }
                 break;
             } case BC_ENTERSCOPE: {
@@ -930,11 +949,35 @@ void Context::execute(Bytecode& code){
             }
         }
     }
+    auto formatUnit = [&](uint64 instructions){
+        
+    };
+    char temp[30];
+    
+    if(executedInsts<1000) sprintf(temp,"%llu",executedInsts);
+    else if(executedInsts<1e6) sprintf(temp,"%.2lf K",executedInsts/1000.f);
+    else if(executedInsts<1e9) sprintf(temp,"%.2lf M",executedInsts/1e6);
+    else sprintf(temp,"%.2lf G",executedInsts/1e9);
+    
     double executionTime = StopMeasure(startTime);
-    log::out << "Executed in "<<executionTime<<" seconds\n";
+    double nsPerInst = executionTime/executedInsts*1e9;
+    // Todo: note that APICalls and executables are included. When calling those
+    //  you can measure the time in those functions and subtract it from instruction time.
+    log::out << "Executed "<<temp<<" instructions in "<<executionTime<<" seconds\n";
+    log::out << "Average of "<<nsPerInst<<" ns/instruction\n";
+    
     if(numberCount!=0||stringCount!=0){
         log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
     }
+    
+    auto tp = MeasureSeconds();
+    int i=0;
+    while(i<2000000){
+        i=i+1;
+    }
+    auto sec = StopMeasure(tp);
+    log::out << "TIME "<<sec<<"\n";
+    
 }
 void Context::Execute(Bytecode& code){
     Context context{};

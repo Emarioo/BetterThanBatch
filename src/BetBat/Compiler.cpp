@@ -26,8 +26,8 @@ void CompileScript(const char* path){
     
     auto startCompileTime = engone::MeasureSeconds();
     Tokens toks = Tokenize(text);
-    // // toks.printTokens(14,TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
-    // // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
+    toks.printTokens(14,TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
+    // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
     int err=0;
     Bytecode bytecode = GenerateScript(toks,&err);
     double seconds=0; // here because goto wants it here
@@ -40,7 +40,7 @@ void CompileScript(const char* path){
     // OptimizeBytecode(bytecode);
     // bytecode.printStats();
     seconds = engone::StopMeasure(startCompileTime);
-    log::out << "Compiled in "<<seconds<<" seconds\n";
+    log::out << "\nFully compiled "<<bytecode.getMemoryUsage()<<" bytes of bytecode in "<<seconds<<" seconds\n";
 
     Context::Execute(bytecode);
 

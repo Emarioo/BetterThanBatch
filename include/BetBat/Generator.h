@@ -25,12 +25,15 @@
 #define BC_LESS          (BC_R3|0x05)
 #define BC_GREATER       (BC_R3|0x06)
 #define BC_EQUAL         (BC_R3|0x07)
-
-#define BC_JUMPIF        (BC_R3|0x30)
+#define BC_NOT_EQUAL     (BC_R3|0x08)
+#define BC_AND           (BC_R3|0x09)
+#define BC_OR            (BC_R3|0x10)
+// Todo: BC_NOT
 
 #define BC_COPY          (BC_R2|0x01)
 #define BC_MOV           (BC_R2|0x02)
 #define BC_RUN           (BC_R2|0x03)
+#define BC_JUMPNIF        (BC_R2|0x04)
 
 #define BC_LOADV         (BC_R2|0x10)
 
@@ -90,23 +93,25 @@ struct Bytecode {
     engone::Memory constNumbers{sizeof(Number)};
     engone::Memory constStrings{sizeof(String)};
     engone::Memory constStringText{1};
-    //Todo: One array which contains the memory for all strings instead of
-    //      each string having it's own allocation.
+    
     struct DebugLine{
         char* str=0;
-        uint instructionIndex=0;
+        int instructionIndex=0;
         uint16 length=0;
         uint16 line=0;
     };
     engone::Memory debugLines{sizeof(DebugLine)};
     engone::Memory debugLineText{1};
+    // Todo: A map<instructionIndex,DebugLine> instead of an array.
+    //  There may be some benefit if you have many jump instructions.
     
     void cleanup();
 
     uint32 getMemoryUsage();
 
     // latestIndex is used to skip already read debug lines. 
-    DebugLine* getDebugLine(uint instructionIndex, uint* latestIndex);
+    DebugLine* getDebugLine(int instructionIndex, int* latestIndex);
+    void forwardDebugLines(int fromInst, int toInst, int* latestIndex);
 
     bool add(Instruction inst);
     bool add(uint8 type, uint8 reg0, uint8 reg1, uint8 reg2);
@@ -114,7 +119,9 @@ struct Bytecode {
     bool add(uint8 type, uint reg012);
     bool addLoadC(uint8 reg0, uint constIndex);
     Instruction& get(uint index);
-    uint length();
+    int length();
+    bool removeLast();
+    bool remove(int index);
     
     uint addConstNumber(Decimal number);
     Number* getConstNumber(uint index);
@@ -133,6 +140,8 @@ struct GenerationInfo {
     int parDepth=0;
     
     int errors=0;
+    
+    int spaceConstIndex=-1;
 
     // std::unordered_map<double,uint> constNumberMap;
     int frameOffsetIndex = 0;
@@ -152,7 +161,7 @@ struct GenerationInfo {
     std::unordered_map<std::string,uint> nameOfStringMap;
 
     struct IncompleteInstruction{
-        uint instIndex=0;
+        int instIndex=0;
         Token token;
     };
     std::vector<IncompleteInstruction> instructionsToResolve;
@@ -161,6 +170,7 @@ struct GenerationInfo {
     Token &prev();
     Token& next();
     Token& now();
+    bool revert();
     Token& get(uint index);
     int at();
     bool end();
