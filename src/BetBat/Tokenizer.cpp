@@ -164,6 +164,8 @@ Tokens Tokenize(engone::Memory& textData){
     bool inQuotes = false;
     bool inComment = false;
     bool inEnclosedComment = false;
+
+    // int commentNestDepth = 0; // C doesn't have this and it's not very good. /*/**/*/
     
     bool canBeDot = false; // used to deal with decimals (eg. 255.92) as one token
     
@@ -204,11 +206,16 @@ Tokens Tokenize(engone::Memory& textData){
         if(inComment){
             if(inEnclosedComment){
                 if(chr=='*'&&nextChr=='/'){
-                    inComment=false;
+                    // commentNestDepth--;
                     index++;
-                    inEnclosedComment=false;
-                    _TLOG(log::out << "// : End comment\n";)
+                    // if(commentNestDepth==0){
+                        inComment=false;
+                        inEnclosedComment=false;
+                        _TLOG(log::out << "// : End comment\n";)
+                    // }
                 }
+                // else if(chr=='/' && nextChr=='*')
+                    // commentNestDepth++;
             }else{
                 if(chr=='\n'||index==length){
                     inComment=false;
@@ -307,8 +314,10 @@ Tokens Tokenize(engone::Memory& textData){
         if(!inComment&&!inQuotes){
             if(isComment){
                 inComment=true;
-                if(chr=='/' && nextChr=='*')
+                if(chr=='/' && nextChr=='*'){
                     inEnclosedComment=true;
+                    // commentNestDepth++;
+                }
                 index++; // skip the next slash
                 _TLOG(log::out << "// : Begin comment\n";)
                 continue;

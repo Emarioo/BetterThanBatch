@@ -4,10 +4,11 @@
 
 const char* RefToString(int type);
 // engone::Logger operator<<(engone::Logger logger, Ref& ref);
+// A function scope. StackFrame? not if, for or while scope
 struct Scope{
     Ref references[256]{0};
     
-    int returnAddress=0; 
+    int returnAddress=0;
 };
 struct Context {
     engone::Memory numbers{sizeof(Number)};
@@ -30,6 +31,9 @@ struct Context {
 
     Scope* getScope(uint index);
     bool ensureScopes(uint depth);
+
+    void enterScope();
+    void exitScope();
 
     uint32 makeNumber();
     void deleteNumber(uint index);

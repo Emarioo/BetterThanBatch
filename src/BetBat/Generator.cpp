@@ -22,12 +22,27 @@
         return false;\
     }
 
+#define ENTER log::out << log::GRAY << "    enter "<< __FUNCTION__<<"\n";
+#define TRY  if(attempt){log::out << log::GRAY << "    try   "<< __FUNCTION__<<"\n";}\
+    else{ENTER}
+#define EXIT log::out << log::GRAY << "    exit  "<< __FUNCTION__<<"\n";
+
 #ifdef GLOG
 #define _GLOG(x) x;
 #else
 #define _GLOG(x) ;
 #endif
 
+#define CASE(x) case x: return #x;
+const char* ParseResultToString(int result){
+    switch(result){
+        CASE(PARSE_SUCCESS)
+        CASE(PARSE_NO_VALUE)
+        CASE(PARSE_ERROR)
+        CASE(PARSE_BAD_ATTEMPT)
+    }
+    return "?";
+}
 const char* InstToString(int type){
     #define INSTCASE(x) case x: return #x;
     switch(type){
@@ -48,17 +63,23 @@ const char* InstToString(int type){
         INSTCASE(BC_MOV)
         INSTCASE(BC_RUN)
         INSTCASE(BC_LOADV)
+        INSTCASE(BC_STOREV)
+
+        INSTCASE(BC_LEN)
+        INSTCASE(BC_SUBSTR)
+        INSTCASE(BC_TYPE)
+
 
         INSTCASE(BC_NUM)
         INSTCASE(BC_STR)
         INSTCASE(BC_DEL)
         INSTCASE(BC_JUMP)
         INSTCASE(BC_LOADC)
-        INSTCASE(BC_PUSH)
-        INSTCASE(BC_POP)
+        // INSTCASE(BC_PUSH)
+        // INSTCASE(BC_POP)
         INSTCASE(BC_RETURN)
-        INSTCASE(BC_ENTERSCOPE)
-        INSTCASE(BC_EXITSCOPE)
+        // INSTCASE(BC_ENTERSCOPE)
+        // INSTCASE(BC_EXITSCOPE)
     }
     return "BC_?";
 }
@@ -101,7 +122,7 @@ const char* RegToString(uint8 reg){
         case REG_RETURN_VALUE: return REG_RETURN_VALUE_S;
         case REG_ARGUMENT: return REG_ARGUMENT_S;
         case REG_FRAME_POINTER: return REG_FRAME_POINTER_S;
-        case REG_STACK_POINTER: return REG_STACK_POINTER_S;
+        // case REG_STACK_POINTER: return REG_STACK_POINTER_S;
     }
     return crazyMap[reg];
     
@@ -113,32 +134,32 @@ const char* RegToString(uint8 reg){
 }
 void Instruction::print(){
     using namespace engone;
-    if(type==BC_LOADC){
-        log::out <<" "<< InstToString(type) << " $"<<RegToString(reg0) << " "<<((uint)reg1|((uint)reg2<<8));
+    if(type==BC_LOADC||type==BC_LOADV||type==BC_STOREV){
+        log::out << InstToString(type) << " $"<<RegToString(reg0) << " "<<((uint)reg1|((uint)reg2<<8));
     } else if((type&BC_MASK) == BC_R1){
-        log::out <<" "<< InstToString(type);
+        log::out << InstToString(type);
         if(reg1==0&&reg2==0){
             log::out << " $"<<RegToString(reg0);
         }else{
             log::out << " "<<((uint)reg0|((uint)reg1<<8)|((uint)reg2<<8));
         }
     }else if((type&BC_MASK) == BC_R2){
-        log::out <<" "<< InstToString(type)<<" $" <<RegToString(reg0);
-        if(reg2!=0||type==BC_LOADV){
-            log::out << " "<<((uint)reg1|((uint)reg2<<8));
-        }else{
+        log::out << InstToString(type)<<" $" <<RegToString(reg0);
+        // if(reg2!=0||type==BC_LOADV){
+        //     log::out << " "<<((uint)reg1|((uint)reg2<<8));
+        // }else{
             log::out << " $"<<RegToString(reg1);
-        }
+        // }
     // if((type&BC_MASK) == BC_R3)
     } else
-        log::out<<" "<<InstToString(type)<<" $"<<RegToString(reg0)<<" $"<<RegToString(reg1)<<" $"<<RegToString(reg2);
+        log::out<<InstToString(type)<<" $"<<RegToString(reg0)<<" $"<<RegToString(reg1)<<" $"<<RegToString(reg2);
 }
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
     instruction.print();
     return logger;
 }
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine){
-    logger << engone::log::GRAY <<"Line: "<<debugLine.line<<"  ";
+    logger << engone::log::GRAY <<"Line "<<debugLine.line<<": ";
     for(uint i=0;i<debugLine.length;i++){
         logger<<*(debugLine.str+i);
     }
@@ -254,20 +275,21 @@ bool Bytecode::remove(int index){
     return true;
 }
 Bytecode::DebugLine* Bytecode::getDebugLine(int instructionIndex, int* latestIndex){
+#ifdef PRINT_DUPLICATE_DEBUG_LINES
+    for(int i=0;i<(int)debugLines.used;i++){
+        DebugLine* line = (DebugLine*)debugLines.data + i;
+        
+        if(line->instructionIndex==instructionIndex&&(int)*latestIndex<i){
+            *latestIndex = i;
+            return line;
+        }
+        if(instructionIndex<line->instructionIndex)
+            break;
+    }
+    return 0;
+#else
     if(latestIndex==0)
         return 0;
-    // for(int i=0;i<(int)debugLines.used;i++){
-    //     DebugLine* line = (DebugLine*)debugLines.data + i;
-        
-    //     if(line->instructionIndex==instructionIndex&&(int)*latestIndex!=i){
-    //         *latestIndex = i;
-    //         return line;
-    //     }
-    //     if(instructionIndex<line->instructionIndex)
-    //         break;
-    // }
-    // return 0;
-    
     int index = *latestIndex;
     DebugLine* line = 0;
     while(true){
@@ -281,24 +303,53 @@ Bytecode::DebugLine* Bytecode::getDebugLine(int instructionIndex, int* latestInd
     if(latestIndex)
         *latestIndex = index;
     return line;
+#endif
 }
-void Bytecode::forwardDebugLines(int fromInst, int toInst, int* latestIndex){
-    // if(fromInst<toInst){
-    //     latestIndex
-    //     while(fromInst!=toInst){
-            
-    //         fromInst++;
-    //     }
-    // }else if(fromInst>toInst){
-    //     while(fromInst!=toInst){
-            
-            
-    //         fromInst--;
-    //     }
-    // }
+Bytecode::DebugLine* Bytecode::getDebugLine(int instructionIndex){
+    for(int i=0;i<(int)debugLines.used;i++){
+        DebugLine* line = (DebugLine*)debugLines.data + i;
+        
+        if(instructionIndex==line->instructionIndex){
+            return line;
+        }else if(instructionIndex<line->instructionIndex){
+            if(i==0)
+                return 0;
+            return (DebugLine*)debugLines.data + i-1;
+        }
+    }
+    return 0;
+}
+void GenerationInfo::makeScope(){
+    using namespace engone;
+    log::out << log::GRAY<< "   Enter scope "<<scopes.size()<<"\n";
+    scopes.push_back({});
+}
+void GenerationInfo::dropScope(int index){
+    using namespace engone;
+    if(index==-1)
+        log::out << log::GRAY<<"   Exit  scope "<<(scopes.size()-1)<<"\n";
+    Scope& scope = index==-1? scopes.back() : scopes[index];
+    auto& info = *this;
+    for(Token& token : scope.variableNames){
+        auto pair = variables.find(token);
+        if(pair!=variables.end()){
+            code.add(BC_LOADV,REG_ACC0-1,pair->second.frameIndex);
+            _GLOG(INST << "\n";)
+            code.add(BC_DEL,REG_ACC0-1);
+            _GLOG(INST << "'"<<token<<"'\n";)
+            if(index==-1)
+                variables.erase(pair);
+        }
+    }
+    for(int reg : scope.delRegisters){
+        code.add(BC_DEL,reg);
+        _GLOG(INST << "\n";)
+    }
+    if(index==-1)
+        scopes.pop_back();
 }
 int Bytecode::length(){
-    return (int)codeSegment.used;   
+    return (int)codeSegment.used;
 }
 bool Bytecode::removeLast(){
     if(codeSegment.used>0)
@@ -595,16 +646,15 @@ Token CombineTokens(GenerationInfo& info){
         
     Token outToken{};
     while(!info.end()) {
-        Token token = info.next();
+        Token token = info.get(info.at()+1);
         // Todo: stop at ( # ) and such
         if(token==";"){
-            info.revert();
             break;   
         }
         if((token.flags&TOKEN_QUOTED) && outToken.str){
-            info.revert();
             break;
         }
+        token = info.next();
         if(!outToken.str)
             outToken.str = token.str;
         outToken.length += token.length;
@@ -617,20 +667,20 @@ Token CombineTokens(GenerationInfo& info){
     return outToken;
 }
 
-int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt);
+int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy);
 int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt);
 
 int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
     
-    _GLOG(log::out << log::GRAY<<"-- try ParseExpression\n";)
+    _GLOG(TRY)
     
     // if(ParseAssignment(info,exprInfo,true)){
     //     _GLOG(log::out << "-- exit ParseExpression\n";)
     //     return 1;
     // }
     if(info.end())
-        return 0;
+        return PARSE_ERROR;
     bool expectOperator=false;
     while(true){
         Token token = info.get(info.at()+1);
@@ -658,33 +708,55 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
             //     exprInfo.regCount++;
             // } else
             if (token == "#"&&!(token.flags&TOKEN_QUOTED)){
-                if(exprInfo.regCount == 0){
+                // if(exprInfo.regCount == 0){
+                    token = info.next();
                     if(token.flags&TOKEN_SUFFIX_SPACE){
-                        token = info.next();
+                        // token = info.next();
                         ERRTOK << "expected a directive\n";
-                        return 0;
+                        return PARSE_ERROR;
                     }
                     token = info.next();
                     if(token == "run"){
-                        token = info.next();
+                        // token = info.next();
                         ExpressionInfo expr{};
                         expr.acc0Reg = exprInfo.acc0Reg + exprInfo.regCount;
                         int success = ParseCommand(info,expr,false);
                         if(success){
                             exprInfo.regCount++;
                         }else{
-                            return 0;
+                            return PARSE_ERROR;
                         }
-                    }else{
-                        ERRTOK << "undefined directive\n";
-                        info.nextLine();
-                        return 0;
+                    }else if(token == "arg"){
+                        int reg = exprInfo.acc0Reg+exprInfo.regCount;
+                        info.code.add(BC_COPY,REG_ARGUMENT,reg);
+                        _GLOG(INST << "\n";)
+                        exprInfo.regCount++;
+                    }else if(token == "i"){
+                        if(info.loopScopes.size()==0){
+                            ERRTOK << "must be in a loop to use '#"<<token<<"'\n";
+                            ERRLINE
+                            // info.nextLine();
+                            return PARSE_ERROR;
+                        }else{
+                            int reg = exprInfo.acc0Reg+exprInfo.regCount;
+                            info.code.add(BC_COPY,info.loopScopes.back().varReg,reg);
+                            _GLOG(INST << "\n";)
+                            exprInfo.regCount++;
+                        }
+                    }else {
+                        ERRTOK << "undefined directive '"<<token<<"'\n";
+                        ERRLINE
+                        // info.nextLine();
+                        return PARSE_ERROR;
                     }
-                }else{
-                    ERRTOK << "directive not allowed\n";
-                    info.nextLine();
-                    return 0;
-                }
+                // Todo: some directives should not toggle expectOperator.
+                //  The toggle is currently forced at the end of this loop.
+
+                // }else{
+                //     ERRTOK << "directive not allowed\n";
+                //     info.nextLine();
+                //     return 0;
+                // }
             } else if(IsDecimal(token)){
                 token = info.next();
                 int constIndex = info.code.addConstNumber(ConvertDecimal(token));
@@ -709,25 +781,22 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
                 if(varPair!=info.variables.end()){
                     token = info.next();
                     int reg = exprInfo.acc0Reg + exprInfo.regCount;
+                    int tempReg = exprInfo.acc0Reg + exprInfo.regCount+1;
+
+                    // normal variable nothing special
                     info.code.add(BC_LOADV,reg,varPair->second.frameIndex);
                     _GLOG(INST << "get variable "<<varPair->second.frameIndex<<"\n";)
                     info.code.add(BC_COPY,reg,reg);
                     _GLOG(INST << "\n";)
                     exprInfo.regCount++;
                 }else{
-                    if(exprInfo.opCount==exprInfo.regCount){
-                        ERRTOK << "undefined variable "<<token<<"\n";
-                        ERRLINE
-                        info.nextLine();
-                        return 0;
+                    if(attempt){
+                        return PARSE_BAD_ATTEMPT;
                     }else{
-                    // if(attempt){
-                        ending = true;
-                        // info.revert();
+                        ERRTOK << "undefined variable '"<<token<<"'\n";
+                        ERRLINE
+                        return PARSE_ERROR;
                     }
-                    // }else{
-                    // }
-                    // return 0;
                 } 
                 // if(funcPair!=info.internalFunctions.end()){
                 //     log::out << log::RED << "Func pair in expr. not implemented!\n";
@@ -760,7 +829,8 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
                 expr.acc0Reg = exprInfo.acc0Reg+exprInfo.regCount;
                 log::out<<"Par ( \n";
                 info.parDepth++;
-                if(ParseExpression(info,expr,false)){
+                int result = ParseExpression(info,expr,false);
+                if(result==PARSE_SUCCESS){
                     exprInfo.regCount++;
                     info.parDepth--;
                     log::out<<"Par ) \n";
@@ -768,40 +838,141 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
                     // info.parDepth--;
                     // ERR_GENERIC;
                     // info.nextLine();
-                    return 0;
+                    return PARSE_ERROR;
                 }
             } else{
-                ending = true;
+                if(attempt){
+                    // can happen first time
+                    return PARSE_BAD_ATTEMPT;
+                }else{
+                    ERR_GENERIC;
+                    ERRLINE
+                    return PARSE_ERROR;
+                }
+                // ending = true;
                 // info.revert();
+            }
+        }
+
+
+        if(exprInfo.regCount!=0){
+            int reg = exprInfo.acc0Reg + exprInfo.regCount-1;
+            int tempReg = exprInfo.acc0Reg + exprInfo.regCount;
+            Token prop = info.get(info.at()+1);
+            if(prop=="."){
+                // property of a variable
+                info.next();
+                
+                prop = info.next();
+                if(prop == "type"){
+                    info.code.add(BC_STR,tempReg);
+                    _GLOG(INST << "\n";)
+                    info.code.add(BC_TYPE,reg,tempReg);
+                    _GLOG(INST << "\n";)
+                    info.code.add(BC_DEL,reg);
+                    _GLOG(INST << "\n";)
+                    info.code.add(BC_MOV,tempReg,reg);
+                    _GLOG(INST << "\n";)
+                    // exprInfo.regCount++;
+                }else if(prop=="length"){
+                    info.code.add(BC_NUM,tempReg);
+                    _GLOG(INST << "\n";)
+                    info.code.add(BC_LEN,reg,tempReg);
+                    _GLOG(INST << "\n";)
+                    info.code.add(BC_DEL,reg);
+                    _GLOG(INST << "\n";)
+                    info.code.add(BC_MOV,tempReg,reg);
+                    _GLOG(INST << "\n";)
+                    // exprInfo.regCount++;
+                }else{
+                    ERRTOK << "unknown property '"<<prop<<"'\n";
+                    ERRLINE
+                    return PARSE_ERROR;
+                }
+            }else if(prop=="["){
+                // substring of a string
+                prop = info.next(); // prop = "["
+                
+                ExpressionInfo expr{};
+                expr.acc0Reg = tempReg;
+                ExpressionInfo expr2{};
+                expr2.acc0Reg = tempReg+1;
+                int result = ParseExpression(info,expr,false);
+                if(result!=PARSE_SUCCESS){
+                    return PARSE_ERROR;
+                }
+                
+                prop = info.get(info.at()+1);
+                if(prop==":"){
+                    prop = info.next();
+                    int result = ParseExpression(info,expr2,false);
+                    if(result!=PARSE_SUCCESS){
+                        return PARSE_ERROR;
+                    }
+                    prop = info.get(info.at()+1); // next should be ]
+                }
+
+                if(prop != "]"){
+                    ERRTOK << "exprected ] got '"<<prop<<"'\n";
+                    ERRLINE
+                    return PARSE_ERROR;
+                }
+                prop = info.next();
+
+                info.code.add(BC_MOV,reg,tempReg+2);
+                _GLOG(INST << "temp 2\n";)
+                if(expr2.regCount==0)
+                    info.code.add(BC_SUBSTR,reg,tempReg,tempReg); // var[5]
+                else
+                    info.code.add(BC_SUBSTR,reg,tempReg,tempReg+1); // var[3:4]
+                _GLOG(INST << "\n";)
+
+                info.code.add(BC_DEL,tempReg);
+                _GLOG(INST << "temp 0\n";)
+                if(expr2.regCount!=0){
+                    info.code.add(BC_DEL,tempReg+1);
+                    _GLOG(INST << "temp 1\n";)
+                }
+                info.code.add(BC_DEL,tempReg+2);
+                _GLOG(INST << "temp 2\n";)
             }
         }
         
         if(exprInfo.opCount==1&&exprInfo.regCount==0){
-            if(attempt){
-                // Unexpected token for the expression. Since we did an attempt
-                //  there may be another parse function who does allow the token.
-                //  Therefore we go back to prev. token.
-                info.revert();
-            }else{
-                ERR_GENERIC;
-                info.nextLine();
-            }
-            return 0;
+            // if(attempt){
+            //     // Unexpected token for the expression. Since we did an attempt
+            //     //  there may be another parse function who does allow the token.
+            //     //  Therefore we go back to prev. token.
+            //     info.revert();
+            //     return PARSE_ERROR;
+            // }else{
+            //     ERR_GENERIC;
+            //     // info.nextLine();
+            // }
+            log::out << log::RED<<"DevError: ParseExpression, can this happen?\n";
+            info.errors++;
+            return PARSE_ERROR;
         }
-        if(exprInfo.regCount==0&&ending){
-            ERRTOK << "undefined variable "<<token<<"\n";
-            ERRLINE
-            info.nextLine();
-            return 0;
+        if(exprInfo.regCount==exprInfo.opCount&&ending){
+            info.errors++;
+            log::out << log::RED<<"DevError: ParseExpression, can this happen?\n";
+            // ERRTOK << "undefined variable "<<token<<"\n";
+            // ERRLINE
+            // info.nextLine();
+            return PARSE_ERROR;
         }
          
         if(!(exprInfo.regCount==exprInfo.opCount || exprInfo.regCount==exprInfo.opCount+1)){
-            ERRTOK << "uneven numbers and operators, tokens: "<<info.prev()<<" "<<token<<"\n";
-            ERRLINE
-            info.nextLine();
-            return 0;
+            info.errors++;
+            log::out << log::RED<<"DevError: ParseExpression, can this happen?\n";
+            // ERRTOK << "uneven numbers and operators, tokens: "<<info.prev()<<" "<<token<<"\n";
+            // ERRLINE
+            // info.nextLine();
+            return PARSE_ERROR;
         }
         ending = ending || info.end() || token == ")";
+        if(token==")")
+            info.next();
         
         while(exprInfo.regCount>1){
             if(exprInfo.opCount>=2&&!ending){
@@ -812,10 +983,9 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
                     exprInfo.opCount--;
                     int reg0 = exprInfo.acc0Reg+exprInfo.regCount-2;
                     int reg1 = exprInfo.acc0Reg+exprInfo.regCount-1;
-                    info.code.add(op1,exprInfo.acc0Reg+exprInfo.regCount-2,
-                        exprInfo.acc0Reg+exprInfo.regCount-1,exprInfo.acc0Reg+exprInfo.regCount-2);
+                    info.code.add(op1,reg0,reg1,reg0);
                     _GLOG(INST<<"pre\n";)
-                    info.code.add(BC_DEL,exprInfo.acc0Reg+exprInfo.regCount-1);
+                    info.code.add(BC_DEL,reg1);
                     _GLOG(INST << "\n";)
                     
                     // info.code.add(op1,reg0,reg1,reg0);
@@ -826,12 +996,13 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
                     break;
                 }
             }else if(ending){
+                int reg0 = exprInfo.acc0Reg+exprInfo.regCount-2;
+                int reg1 = exprInfo.acc0Reg+exprInfo.regCount-1;
                 int op = exprInfo.operations[exprInfo.opCount-1];
                 exprInfo.opCount--;
-                info.code.add(op,exprInfo.acc0Reg+exprInfo.regCount-2,
-                    exprInfo.acc0Reg+exprInfo.regCount-1,exprInfo.acc0Reg+exprInfo.regCount-2);
+                info.code.add(op,reg0,reg1,reg0);
                 _GLOG(INST<<"post\n";)
-                info.code.add(BC_DEL,exprInfo.acc0Reg+exprInfo.regCount-1);
+                info.code.add(BC_DEL,reg1);
                 _GLOG(INST << "\n";)
                 exprInfo.regCount--;
             }else{
@@ -842,11 +1013,13 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
         attempt = true;
         expectOperator=!expectOperator;
         if(ending){
-            _GLOG(log::out << log::GRAY<<"-- exit ParseExpression\n";)
             if(exprInfo.regCount>1){
-                log::out<<log::RED<<"CompilerWarning: exprInfo.regCount > 1 at end of expression";             
+                log::out<<log::YELLOW<<"CompilerWarning: exprInfo.regCount > 1 at end of expression";             
+            }else if(exprInfo.regCount==0){
+                log::out<<log::YELLOW<<"CompilerWarning: exprInfo.regCount = 0 at end of expression";             
             }
-            return 1;
+            _GLOG(EXIT)
+            return PARSE_SUCCESS;
         }
     }
 }
@@ -854,37 +1027,114 @@ int ParseBody(GenerationInfo& info, int acc0reg);
 // returns 0 if syntax is wrong for flow parsing
 int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
     using namespace engone;
-    _GLOG(log::out << log::GRAY<<"-- try ParseFlow\n";)
+    
+    _GLOG(TRY)
     
     if(info.end()){
-        return 0;
+        return PARSE_ERROR;
     }
     Token token = info.get(info.at()+1);
     
-    if(token=="if"){
+    if(token=="return"){
         token = info.next();
         ExpressionInfo expr{};
         expr.acc0Reg = acc0reg;
-        if(!ParseExpression(info,expr,false)){
-            return 0;
+        int result = ParseExpression(info,expr,true);
+        if(result!=PARSE_SUCCESS&&result!=PARSE_BAD_ATTEMPT){
+            return PARSE_ERROR;
+        }
+        GenerationInfo::FuncScope& funcScope = info.funcScopes.back();
+
+        for(int i = info.scopes.size()-1;i>=funcScope.scopeIndex;i--){
+            info.dropScope(i);
+        }
+        if(result==PARSE_SUCCESS)
+            info.code.add(BC_RETURN, expr.acc0Reg);
+        else
+            info.code.add(BC_RETURN, REG_NULL);
+        _GLOG(INST << "\n";)
+    }else if(token == "break"){
+        token = info.next();
+        if(info.loopScopes.empty()){
+            ERRTOK << token<<" only allowed in a loop\n";
+            ERRLINE
+            return PARSE_ERROR;
+        }
+        GenerationInfo::LoopScope& loop = info.loopScopes.back();
+
+        for(int i = info.scopes.size()-1;i>loop.scopeIndex;i--){
+            info.dropScope(i);
+        }
+
+        info.code.addLoadC(loop.jumpReg,loop.endConstant);
+        _GLOG(INST << "\n";)
+        info.code.add(BC_JUMP, loop.jumpReg);
+        _GLOG(INST << "\n";)
+    }else if(token=="continue"){
+        token = info.next();
+        if(info.loopScopes.empty()){
+            ERRTOK << token<<" only allowed in a loop\n";
+            ERRLINE
+            return PARSE_ERROR;
+        }
+        GenerationInfo::LoopScope& loop = info.loopScopes.back();
+        for(int i = info.scopes.size()-1;i>loop.scopeIndex;i--){
+            info.dropScope(i);
+        }
+        info.code.addLoadC(loop.jumpReg,loop.startConstant);
+        _GLOG(INST << "\n";)
+        info.code.add(BC_JUMP, loop.jumpReg);
+        _GLOG(INST << "\n";)
+    } else if(token=="if"){
+        token = info.next();
+        ExpressionInfo expr{};
+        expr.acc0Reg = acc0reg;
+
+        info.makeScope();
+
+        int result = ParseExpression(info,expr,false);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
         }
         
         int jumpAddress = info.code.addConstNumber(-1);
         int jumpReg = expr.acc0Reg+1;
         info.code.add(BC_NUM,jumpReg);
-        _GLOG(INST << "\n";)
+        _GLOG(INST << "jump\n";)
         info.code.addLoadC(jumpReg,jumpAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF,expr.acc0Reg,jumpReg);
         _GLOG(INST << "\n";)
-        
-        ParseBody(info,acc0reg+2);
+
+        GenerationInfo::Scope& scope = info.scopes.back();
+        scope.delRegisters.push_back(expr.acc0Reg);
+        scope.delRegisters.push_back(jumpReg);
+
+        result = ParseBody(info,acc0reg+2);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
+        }
+        // info.dropScope();
         
         if(info.end()){
             info.code.getConstNumber(jumpAddress)->value = info.code.length();
         }else{
-            token = info.next();
+            token = info.get(info.at()+1);
             if(token=="else"){
+                token = info.next();
+                
+                // we don't want to drop jumpReg here. code in else scope uses it.
+                // way may have wanted to drop jumpreg in if body which is why
+                // it needs to be in delRegisteers
+                for(int i = 0;i<(int)scope.delRegisters.size();i++){
+                    if(scope.delRegisters[i]==jumpReg){
+                        scope.delRegisters.erase(scope.delRegisters.begin()+i);
+                        break;
+                    }
+                }
+                info.dropScope();
+                info.makeScope();
+                scope.delRegisters.push_back(jumpReg);
                 int elseAddr = info.code.addConstNumber(-1);
                 info.code.addLoadC(jumpReg,elseAddr);
                 _GLOG(INST << "\n";)
@@ -893,31 +1143,42 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
                 
                 info.code.getConstNumber(jumpAddress)->value = info.code.length();
                 
-                ParseBody(info,acc0reg+2);
+                int result = ParseBody(info,acc0reg+2);
+                if(result!=PARSE_SUCCESS){
+                    return PARSE_ERROR;
+                }
+                // info.dropScope();
                 
                 info.code.getConstNumber(elseAddr)->value = info.code.length();
             }else{
-                info.revert();
                 info.code.getConstNumber(jumpAddress)->value = info.code.length();
             }   
         }
-        info.code.add(BC_DEL,expr.acc0Reg);
-        _GLOG(INST << "\n";)
-        info.code.add(BC_DEL,jumpReg);
-        _GLOG(INST << "\n";)
-        return 1;
+        // info.code.add(BC_DEL,expr.acc0Reg);
+        // _GLOG(INST << "\n";)
+        // info.code.add(BC_DEL,jumpReg);
+        // _GLOG(INST << "\n";)
+        
+        info.dropScope();
     } else if(token=="while"){
         token = info.next();
+        info.makeScope();
+
         int jumpReg = acc0reg;
         info.code.add(BC_NUM,jumpReg);
         _GLOG(INST << "\n";)
+        GenerationInfo::Scope& scope = info.scopes.back();
+        scope.delRegisters.push_back(jumpReg);
         int startAddress = info.code.addConstNumber(info.code.length());
         int endAddress = info.code.addConstNumber(-1);
-        
+
+
         ExpressionInfo expr{};
         expr.acc0Reg = acc0reg+1;
-        if(!ParseExpression(info,expr,false)){
-            return 0;
+        scope.delRegisters.push_back(expr.acc0Reg);
+        int result = ParseExpression(info,expr,false);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
         }
         
         info.code.addLoadC(jumpReg,endAddress);
@@ -927,7 +1188,10 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
         info.code.add(BC_DEL,expr.acc0Reg);
         _GLOG(INST << "\n";)
         
-        ParseBody(info,acc0reg+2);
+        result = ParseBody(info,acc0reg+2);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
+        }
         
         info.code.addLoadC(jumpReg,startAddress);
         _GLOG(INST << "\n";)
@@ -935,94 +1199,240 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
         _GLOG(INST << "\n";)
         
         info.code.getConstNumber(endAddress)->value = info.code.length();
-        info.code.add(BC_DEL,expr.acc0Reg);
-        _GLOG(INST << "\n";)
-        info.code.add(BC_DEL,jumpReg);
-        _GLOG(INST << "\n";)
-        return 1;
+        // info.code.add(BC_DEL,expr.acc0Reg);
+        // _GLOG(INST << "\n";)
+        // info.code.add(BC_DEL,jumpReg);
+        // _GLOG(INST << "\n";)
+
+        info.dropScope();
     } else if(token=="for") {
         token = info.next();
-        Token token = info.next();
-        if(IsDecimal(token)){ 
-            // Handle constant case, for 10 {body}
-            double range = ConvertDecimal(token);
-            int rangeIndex = info.code.addConstNumber(range);
-            
-            int varReg = acc0reg;
-            int tempReg = acc0reg+1;
-            int jumpReg = acc0reg+2;
-            
-            info.code.add(BC_NUM,varReg);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_NUM,tempReg);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_NUM,jumpReg);
-            _GLOG(INST << "\n";)
-            
-            int startAddress = info.code.addConstNumber(info.code.length());
-            int endAddress = info.code.addConstNumber(-1);
-            
-            info.code.addLoadC(tempReg,rangeIndex);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_LESS, varReg, tempReg, tempReg);
-            _GLOG(INST << "\n";)
-            
-            info.code.addLoadC(jumpReg,endAddress);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_JUMPNIF, tempReg, jumpReg);
-            _GLOG(INST << "\n";)
-            
-            ParseBody(info,acc0reg+3);
-            
-            int incrIndex = info.code.addConstNumber(1);
-            info.code.addLoadC(tempReg,incrIndex);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_ADD,varReg,tempReg,varReg);
-            _GLOG(INST << "\n";)
-            
-            info.code.addLoadC(jumpReg,startAddress);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_JUMP, jumpReg);
-            _GLOG(INST << "\n";)
-            
-            info.code.getConstNumber(endAddress)->value = info.code.length();
-            
-            info.code.add(BC_DEL,varReg);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_DEL,tempReg);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_DEL,jumpReg);
-            _GLOG(INST << "\n";)
-        }else{
-            log::out << log::RED<<"CompilerError: For must have constant number\n";   
-            info.nextLine();
-            return 0;
+        
+        bool createdVar=false;
+        bool createdMax=false;
+        int varReg = acc0reg;
+        int maxReg = acc0reg+1;
+        int tempReg = acc0reg+2;
+        int jumpReg = acc0reg+3;
+        int unusedReg = acc0reg+4; // passed to parse functions
+
+        info.makeScope();
+
+        info.code.add(BC_NUM,tempReg);
+        _GLOG(INST << "temp\n";)
+        info.code.add(BC_NUM,jumpReg);
+        _GLOG(INST << "jump\n";)
+
+        GenerationInfo::Scope& scope = info.scopes.back();
+        scope.delRegisters.push_back(tempReg);
+        scope.delRegisters.push_back(jumpReg);
+
+        int startAddress = info.code.addConstNumber(-1);
+        
+        ExpressionInfo expr{};
+        expr.acc0Reg = unusedReg;
+
+        int stumpIndex = info.code.length();
+        info.code.add(Instruction{0,(uint8)varReg}); // add stump
+        _GLOG(INST << "May become BC_NUM\n";)
+
+        bool wasAssigned=0;
+        int result = ParseAssignment(info,expr,true,false);
+        if(result==PARSE_SUCCESS)
+            wasAssigned=true;
+        if(result==PARSE_BAD_ATTEMPT){
+            result = ParseExpression(info,expr,true);
         }
-        return 1;
+
+        if(result==PARSE_ERROR){
+            return PARSE_ERROR;
+        } else if(result==PARSE_NO_VALUE){
+            ERRT(info.now()) << "Expected value from assignment '"<<info.now()<<"'\n";
+            ERRLINE
+            return PARSE_ERROR;
+        } else if(result==PARSE_BAD_ATTEMPT){
+            // undefined variable "for i : 5"
+            token = info.get(info.at()+1);
+            Token next = info.get(info.at()+2);
+            if(IsName(token) && next == ":"){
+                info.next();
+                auto varPair = info.variables.find(token);
+                if(varPair==info.variables.end()){
+                    // Turn token into variable?
+                    GenerationInfo::Variable& var = info.variables[token] = {};
+                    var.frameIndex = info.frameOffsetIndex++;
+
+                    scope.variableNames.push_back(token);
+                    
+                    // createdVar=true;
+                    info.code.add(BC_NUM, varReg);
+                    _GLOG(INST << "var reg\n";)
+                    // info.code.add(BC_PUSH, varReg);
+                    // _GLOG(INST << "push "<<token<<"\n";)
+
+                    info.code.add(BC_STOREV, varReg,var.frameIndex);
+                    _GLOG(INST << "store "<<token<<"\n";)
+                }else{
+                    ERRT(token) << "for cannot loop with a defined variable ("<<token<<") \n";
+                    // info.nextLine();
+                    return PARSE_ERROR;
+                }
+                token = info.next();
+            }else{
+                ERR_GENERIC;
+                // ERRLINE
+                // info.nextLine();
+                return PARSE_ERROR;
+            }
+        } else if(result==PARSE_SUCCESS){
+            // max or var
+            // we got start in acc0reg or max.
+            token = info.get(info.at()+1);
+            if(token==":"){
+                token = info.next();
+
+                // createdVar=true;
+                info.code.add(BC_MOV,expr.acc0Reg,varReg);
+                _GLOG(INST << "acc -> var\n";)
+            } else {
+                // "for i = 5"
+                createdVar=true;
+                Instruction& inst = info.code.get(stumpIndex);
+                inst.type = BC_NUM;
+                inst.reg0 = varReg;
+              
+                scope.delRegisters.push_back(varReg);
+
+                info.code.getConstNumber(startAddress)->value = stumpIndex+1;
+                
+                // createdMax=true;
+                if(!wasAssigned){
+                    createdMax=true;
+                }
+                info.code.add(BC_MOV,expr.acc0Reg,maxReg);
+                _GLOG(INST << "acc -> max\n";)
+            }
+        }
+            
+        if(token==":"){
+            ExpressionInfo expr{};
+            expr.acc0Reg = unusedReg;
+            
+            info.code.getConstNumber(startAddress)->value = info.code.length();
+            // log::out << "For Start Address\n";
+            bool wasAssigned=false;
+            int result = ParseAssignment(info,expr,true,true);
+            if(result==PARSE_SUCCESS)
+                wasAssigned=true;
+            if(result==PARSE_BAD_ATTEMPT){
+                result = ParseExpression(info,expr,true);
+            }
+            if(result==PARSE_SUCCESS){
+                if(!wasAssigned)
+                    createdMax=true;
+                info.code.add(BC_MOV,expr.acc0Reg,maxReg);
+                _GLOG(INST << "acc -> max\n";)
+            }else if(result==PARSE_NO_VALUE){
+                ERRT(info.now()) << "Expected value from assignment '"<<info.now()<<"'\n";
+                ERRLINE;
+                return PARSE_ERROR;
+            }else if(result ==PARSE_BAD_ATTEMPT){
+                ERRTL(info.now()) << "Bad attempt '"<<info.now()<<"'\n";
+                ERRLINE;
+                return PARSE_ERROR;
+            }else{
+                // Todo: detect type of failure in parser. If the attempt failed
+                //  then we log here. If other type of error we don't print here.
+                // ERRTL(token) << "Parsing failed after '"<<token<<"'\n";
+                // ERRLINE
+                // info.nextLine();
+                return PARSE_ERROR;
+            }
+        }
+        _GLOG(log::out << "    Start Address: "<<info.code.getConstNumber(startAddress)->value<<"\n";)
+
+        int endAddress = info.code.addConstNumber(-1);
+
+        info.loopScopes.push_back({});
+        GenerationInfo::LoopScope& loop = info.loopScopes.back();
+        loop.varReg = varReg;
+        loop.jumpReg = jumpReg;
+        loop.startConstant = startAddress;
+        loop.endConstant = endAddress;
+        loop.scopeIndex = info.scopes.size()-1;
+        
+        info.code.add(BC_LESS, varReg, maxReg, tempReg);
+        _GLOG(INST << "\n";)
+        if(createdMax){ 
+            info.code.add(BC_DEL,maxReg);
+            _GLOG(INST << "\n";)
+        }
+
+        info.code.addLoadC(jumpReg,endAddress);
+        _GLOG(INST << "\n";)
+        info.code.add(BC_JUMPNIF, tempReg, jumpReg);
+        _GLOG(INST << "\n";)
+        
+        result = ParseBody(info,unusedReg);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
+        }
+        
+        int incrIndex = info.code.addConstNumber(1);
+        info.code.addLoadC(tempReg,incrIndex);
+        _GLOG(INST << "\n";)
+        info.code.add(BC_ADD,varReg,tempReg,varReg);
+        _GLOG(INST << "increment var\n";)
+        
+        info.code.addLoadC(jumpReg,startAddress);
+        _GLOG(INST << "\n";)
+        info.code.add(BC_JUMP, jumpReg);
+        _GLOG(INST << "\n";)
+        
+        info.code.getConstNumber(endAddress)->value = info.code.length();
+        _GLOG(log::out << "    End Address: "<<info.code.getConstNumber(endAddress)->value<<"\n";)
+        
+        // if(createdVar){
+        //     info.code.add(BC_DEL,varReg);
+        //     _GLOG(INST << "\n";)
+        // }
+        // info.code.add(BC_DEL,tempReg);
+        // _GLOG(INST << "\n";)
+        // info.code.add(BC_DEL,jumpReg);
+        // _GLOG(INST << "\n";)
+        
+        info.loopScopes.erase(info.loopScopes.begin()+info.loopScopes.size()-1);
+
+        // If the loop didn't run once we would delete a potential variable in the
+        // scope even though it wasn't made.
+        info.dropScope();
     } else {
         if(attempt){
-            // info.revert();
+            return PARSE_BAD_ATTEMPT;
         }else{
             ERR_GENERIC;
-            info.nextLine();
+            ERRLINE
+            // info.nextLine();
+            return PARSE_ERROR;
         }
-        return 0;   
     }
+    _GLOG(EXIT)
+    return PARSE_SUCCESS;
 }
-int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
+int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy){
     using namespace engone;
     
-    _GLOG(log::out << log::GRAY<<"-- try ParseAssignment\n";)
+    _GLOG(TRY)
     
     if(info.tokens.length() < info.index+2){
         // not enough tokens for assignment
         if(attempt){
-            
+            return PARSE_BAD_ATTEMPT;
         }else{
             _GLOG(log::out <<log::RED<< "CompilerError: to few tokens for assignment\n");
-            info.nextLine();
+            // info.nextLine();
+            return PARSE_ERROR;
         }
-        return 0;
     }
     Token token = info.get(info.at()+1);
     Token assign = info.get(info.at()+2);
@@ -1030,97 +1440,180 @@ int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
         // good
     }else{
         if(attempt){
-            // info.revert();
-            // info.revert();
+            return PARSE_BAD_ATTEMPT;
         }else{
             ERR_GENERIC;
-            info.nextLine();
+            // info.nextLine();
+            return PARSE_ERROR;
         }
-        return 0;
     }
     token = info.next();
     assign = info.next();
     
     // ExpressionInfo expr{};
     // expr.acc0Reg = REG_ACC0;
-    
-    if(ParseExpression(info,exprInfo,false)){
-        int finalReg = exprInfo.acc0Reg + exprInfo.regCount-1;
-        // Todo: properly deal with regCount==0
-        Assert(exprInfo.regCount!=0);
-        if(exprInfo.regCount==0){
-            log::out << log::RED<<"CompilerWarning: regCount == 0 after expression from assignment\n";   
-        }
-                
-        auto find = info.variables.find(token);
-        if(find==info.variables.end()){
+    int result=0;
+
+    Token tok = info.get(info.at()+1);
+    if(tok=="{"){
+        // info.next();
+        auto funcPair = info.functions.find(token);
+        auto varPair = info.variables.find(token);
+        if(varPair != info.variables.end()){
+            ERRT(token) << "'"<<token<<"' already defined as variable\n";
+            // info.nextLine();
+            return PARSE_ERROR;
+        }else if(funcPair==info.functions.end()){
             // Note: assign new variable
-            GenerationInfo::Variable& var = info.variables[token] = {};
-            var.frameIndex = info.frameOffsetIndex++;
+            GenerationInfo::Function& func = info.functions[token] = {};
+            int constIndex = info.code.addConstNumber(-1);
+            int jumpReg = exprInfo.acc0Reg;
+            info.code.add(BC_NUM,jumpReg);
+            _GLOG(INST << "jump\n";)
+            info.code.addLoadC(jumpReg,constIndex);
+            _GLOG(INST << "\n";)
+            info.code.add(BC_JUMP, jumpReg);
+            _GLOG(INST << "Skip function body '"<<token<<"'\n";)
             
-            info.code.add(BC_PUSH, finalReg);
-            _GLOG(INST << "push "<<token<<"\n";)
-            
-            info.code.add(BC_COPY,finalReg,finalReg);
-            _GLOG(INST << "prevent modifications\n";)
-        }else{
-            // Note: replace old variable
-            
-            int tempReg = exprInfo.acc0Reg + exprInfo.regCount;
-            
-            info.code.add(BC_LOADV,tempReg,find->second.frameIndex);
-            _GLOG(INST << "load "<<token<<"\n";)
-            info.code.add(BC_DEL,tempReg);
-            _GLOG(INST << "del "<<token<<"\n";)
-            
-            GenerationInfo::Variable& var = find->second;
-            
-            // Todo: cache const number for frameIndex
-            if(var.constIndex==-1){
-                var.constIndex = info.code.addConstNumber(var.frameIndex);
+            func.jumpAddress = info.code.length();
+
+            info.makeScope();
+            info.funcScopes.push_back({(int)info.scopes.size()-1});
+
+            // token = info.next will be {
+            int result = ParseBody(info,exprInfo.acc0Reg+1);
+
+            info.dropScope();
+            // Todo: consider not returning when failed since the
+            //  final code would have a higher chance of executing
+            //  correctly with the "tailing" instructions below.
+            // Todo: remove the function from the map on failure.
+            //  It shouldn't exist since we failed.
+            if(result!=PARSE_SUCCESS){
+                return PARSE_ERROR;
             }
-            
-            // load frameIndex into stack pointer while storing current stack pointer
-            info.code.add(BC_COPY,REG_STACK_POINTER,tempReg);
-            _GLOG(INST << "keep stack pointer\n";)
-            info.code.addLoadC(REG_STACK_POINTER,var.constIndex);
+
+            info.code.add(BC_RETURN,REG_NULL);
             _GLOG(INST << "\n";)
-            
-            info.code.add(BC_PUSH, finalReg);
-            _GLOG(INST << "load new "<<token<<"\n";)
-            
-            // set stack pointer to earlier value
-            info.code.add(BC_DEL,REG_STACK_POINTER);
-            _GLOG(INST << "\n";)
-            info.code.add(BC_MOV,tempReg,REG_STACK_POINTER);
-            _GLOG(INST << "restore stack pointer\n";)
-            
-            info.code.add(BC_COPY,finalReg,finalReg);
-            _GLOG(INST << "prevent modifications\n";)
+
+            info.code.getConstNumber(constIndex)->value = info.code.length();
+            info.code.add(BC_DEL,jumpReg);
+            _GLOG(INST << "skipped to here\n";)
+
+            _GLOG(EXIT)
+            return PARSE_NO_VALUE;
+        }else{
+            ERRT(token) << "function '"<<token<<"' already defined\n";
+            // info.nextLine();
+            return PARSE_ERROR;
         }
-    }else{
-        _GLOG(log::out <<log::RED<< "CompilerError: quitting assignment\n");
-        // info.nextLine();
-        return 0;
+        _GLOG(EXIT)
+        return PARSE_SUCCESS;
+        // log::out << log::RED << "Function creating not implemented!\n";
     }
-    _GLOG(log::out <<log::GRAY<< "-- exit Assignment\n";)
-    return 1;
+    result = ParseExpression(info,exprInfo,false);
+    if(result!=PARSE_SUCCESS){
+        return PARSE_ERROR;
+    }
+    int finalReg = exprInfo.acc0Reg + exprInfo.regCount-1;
+    // Todo: properly deal with regCount==0
+    Assert(exprInfo.regCount!=0);
+    if(exprInfo.regCount==0){
+        log::out << log::RED<<"CompilerWarning: regCount == 0 after expression from assignment\n";   
+    }
+            
+    auto find = info.variables.find(token);
+    if(find==info.variables.end()){
+        // Note: assign new variable
+        GenerationInfo::Variable& var = info.variables[token] = {};
+        var.frameIndex = info.frameOffsetIndex++;
+        
+        // Todo: bound check on scopes
+        auto& scope = info.scopes.back();
+        scope.variableNames.push_back(token);
+
+        info.code.add(BC_STOREV,finalReg,var.frameIndex);
+        _GLOG(INST << "store new "<<token<<"\n";)
+        // info.code.add(BC_PUSH, finalReg);
+        // _GLOG(INST << "push "<<token<<"\n";)
+        
+        if(requestCopy){
+            info.code.add(BC_COPY,finalReg,finalReg);
+            _GLOG(INST << "copy requested\n";)
+            _GLOG(EXIT)
+            return PARSE_SUCCESS;
+        }
+        _GLOG(EXIT)
+        return PARSE_SUCCESS;
+        // return PARSE_NO_VALUE;
+    }else{
+        // Note: replace old variable
+        
+        // int tempReg = exprInfo.acc0Reg + exprInfo.regCount;
+        
+        // info.code.add(BC_LOADV,tempReg,find->second.frameIndex);
+        // _GLOG(INST << "load "<<token<<"\n";)
+        // info.code.add(BC_DEL,tempReg);
+        // _GLOG(INST << "del "<<token<<"\n";)
+        
+        GenerationInfo::Variable& var = find->second;
+        
+        // Todo: cache const number for frameIndex
+        // if(var.constIndex==-1){
+        //     var.constIndex = info.code.addConstNumber(var.frameIndex);
+        // }
+        
+        // load frameIndex into stack pointer while storing current stack pointer
+        // info.code.add(BC_COPY,REG_STACK_POINTER,tempReg);
+        // _GLOG(INST << "keep stack pointer\n";)
+        // info.code.addLoadC(REG_STACK_POINTER,var.constIndex);
+        // _GLOG(INST << "\n";)
+        
+        // info.code.add(BC_PUSH, finalReg);
+        // _GLOG(INST << "load new "<<token<<"\n";)
+        info.code.add(BC_STOREV, finalReg, var.frameIndex);
+        _GLOG(INST << "store "<<token<<"\n";)
+        
+        // set stack pointer to earlier value
+        // info.code.add(BC_DEL,REG_STACK_POINTER);
+        // _GLOG(INST << "\n";)
+        // info.code.add(BC_MOV,tempReg,REG_STACK_POINTER);
+        // _GLOG(INST << "restore stack pointer\n";)
+        
+        if(requestCopy){
+            info.code.add(BC_COPY,finalReg,finalReg);
+            _GLOG(INST << "copy requested\n";)
+            _GLOG(EXIT)
+            return PARSE_SUCCESS;
+        }
+        _GLOG(EXIT)
+        return PARSE_SUCCESS;
+        // return PARSE_NO_VALUE;
+    }
 }
 int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
-    _GLOG(log::out <<log::GRAY<< "-- try ParseCommand\n";)
+    _GLOG(TRY)
     
     if(info.end()){
-        return 0;
+        log::out <<log::RED<< "Sudden end in ParseCommand?";
+        return PARSE_ERROR;
     }
     // Token token = info.next();
     
     Token token = CombineTokens(info);
     Token cmdName = token;
     if(!token.str){
-        ERRTOK << "token was null, probably bug in compilerl\n";
-        info.nextLine();
-        return 0;
+        // info.errors++;
+        // log::out <<log::RED <<"DevError ParseCommand, token.str was null\n";
+        // return PARSE_ERROR;
+        token = info.next(); 
+        // we didn't get a token from CombineTokens but we have to move forward
+        // to prevent infinite loop.
+        return PARSE_NO_VALUE;
+        // succeeded with doing nothing
+        // happens with a single ; in body parsing.
+
     }
     
     if(token.flags&TOKEN_QUOTED){
@@ -1130,67 +1623,101 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     } else{
         // raw exe command
     }
-    int nameReg = exprInfo.acc0Reg+exprInfo.regCount;
+    int funcReg = exprInfo.acc0Reg+exprInfo.regCount;
     exprInfo.regCount++;
-    int index = info.code.addConstString(token);
-    info.code.add(BC_STR,nameReg);
-    _GLOG(INST << "name\n";)
-    info.code.addLoadC(nameReg, index);
-    _GLOG(INST << "constant "<<token<<"\n";)
+    auto funcPair = info.functions.find(token);
+    // bool codeFunc=false;
+    if(funcPair!=info.functions.end()){
+        // func in bytecode
+        GenerationInfo::Function& func = funcPair->second;
+        if(func.constIndex==-1){
+            func.constIndex = info.code.addConstNumber(func.jumpAddress);
+        }
+        info.code.add(BC_NUM,funcReg);
+        _GLOG(INST << "\n";)
+        info.code.addLoadC(funcReg,func.constIndex);
+        _GLOG(INST << "index to '"<<token<<"'\n";)
+        // codeFunc=true;
+
+    }else{
+        // executable or internal func
+        int index = info.code.addConstString(token);
+        info.code.add(BC_STR,funcReg);
+        _GLOG(INST << "name\n";)
+        info.code.addLoadC(funcReg, index);
+        _GLOG(INST << "constant "<<token<<"\n";)
+    }
     
     int argReg = 0;
     
     bool ending = (token.flags&TOKEN_SUFFIX_LINE_FEED) | info.end();
     if(!ending){
         
-        int tempReg = exprInfo.acc0Reg+exprInfo.regCount+1;
-        info.code.add(BC_STR,tempReg);
-        _GLOG(INST << "temp1\n";)
+        int tempStrReg = exprInfo.acc0Reg+exprInfo.regCount+1;
+        info.code.add(BC_STR,tempStrReg);
+        _GLOG(INST << "temp str\n";)
         
-        int tempReg2 = exprInfo.acc0Reg+exprInfo.regCount+2;
+        int tempReg = exprInfo.acc0Reg+exprInfo.regCount+2;
         
         bool addSpace=false;
         while(!info.end()){
             Token prev = info.now();
             token = info.next();
             // log::out << "TOK: '"<<token<<"'\n";
+            #define ARG_STR 1
+            #define ARG_TEMP 2
+            #define ARG_DEL 4
             int whichArg=0;
             if(token=="#"&&!(token.flags&TOKEN_QUOTED)){
                 if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
                     ERRTOK << "expected a directive\n";
-                    return 0;
+                    return PARSE_ERROR;
                 }
                 token = info.next();
                 if(token == "run"){
                     ExpressionInfo expr{};
-                    expr.acc0Reg = tempReg2;
-                    int success = ParseCommand(info,expr,false);
-                    if(success){
+                    expr.acc0Reg = tempReg;
+                    int result = ParseCommand(info,expr,false);
+                    if(result==PARSE_SUCCESS){
                         if(expr.regCount!=0){
-                            whichArg=1;
+                            whichArg=ARG_TEMP|ARG_DEL;
                         }
                     }else{
-                        return 0;
+                        return PARSE_ERROR;
+                    }
+                }else if(token=="arg"){
+                    info.code.add(BC_MOV,REG_ARGUMENT,tempReg);
+                    _GLOG(INST << "\n";)
+                    whichArg=ARG_TEMP;
+                }else if(token == "i"){
+                    if(info.loopScopes.size()==0){
+                        ERRTOK << "must be in a loop to use '#"<<token<<"'\n";
+                        // info.nextLine();
+                        return PARSE_ERROR;
+                    }else{
+                        info.code.add(BC_MOV,info.loopScopes.back().varReg,tempReg);
+                        _GLOG(INST << "\n";)
+                        whichArg=ARG_TEMP;
                     }
                 }else{
-                    ERRTOK << "undefined directive "<<token<<"\n";
-                    info.nextLine();
-                    return 0;
+                    ERRTOK << "undefined directive '"<<token<<"'\n";
+                    // info.nextLine();
+                    return PARSE_ERROR;
                 }
             } else if(token=="("){
                 // Todo: parse expression
                 ExpressionInfo expr{};
-                expr.acc0Reg = tempReg2;
+                expr.acc0Reg = tempReg;
                 // log::out<<"Par ( \n";
                 info.parDepth++;
-                int success = ParseExpression(info,expr,false);
+                int result = ParseExpression(info,expr,false);
                 info.parDepth--;
-                if(success){
+                if(result==PARSE_SUCCESS){
                     if(expr.regCount!=0){
-                       whichArg=1;
+                       whichArg=ARG_TEMP|ARG_DEL;
                     }
                 }else{
-                    return 0;   
+                    return PARSE_ERROR;
                 }
             } else if(token==";") {
                 // argReg = exprInfo.acc0Reg+exprInfo.regCount;
@@ -1221,19 +1748,21 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 if(!(token.flags&TOKEN_QUOTED)&&IsName(token)){
                     auto varPair = info.variables.find(token);
                     if(varPair!=info.variables.end()){
-                        info.code.add(BC_LOADV,tempReg2,varPair->second.frameIndex);
+                        info.code.add(BC_LOADV,tempReg,varPair->second.frameIndex);
                         _GLOG(INST << "get variable "<<varPair->second.frameIndex<<"\n";)
-                        // info.code.add(BC_COPY,tempReg2,tempReg2);
-                        // _GLOG(INST << "\n";)
+
+                        // . for property, eg. type, length
+                        // [] for substring [2] single character, [2:3] an inclusive range of character
                         
-                        whichArg = 1;
+
+                        
+                        whichArg = ARG_TEMP;
                         goto CMD_ACC; // Note: careful when changing behaviour, goto can be wierd
                     }
                     // not variable? then continue below
                 }
                 
-                // log::out << "NOW: "<<token<<"\n";
-                info.revert();
+                info.revert(); // is revert okay here? will it mess up debug lines?
                 token = CombineTokens(info);
                 const char* padding=0;
                 // if(info.now().flags&TOKEN_SUFFIX_SPACE)
@@ -1242,9 +1771,9 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 // log::out << "tok: "<<combinedTokens<<"\n";
                 int constIndex = info.code.addConstString(token,padding);
                 // printf("eh %d\n",constIndex);
-                info.code.addLoadC(tempReg, constIndex);
+                info.code.addLoadC(tempStrReg, constIndex);
                 _GLOG(INST << "constant '"<<token<<"'\n";)
-                whichArg = 2;
+                whichArg = ARG_STR;
             }
             CMD_ACC:
             // Todo: if there is just one arg you can skip some ADD, STR/NUM and DEL instructions
@@ -1257,7 +1786,7 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
                     temp.length = 1;
                     info.spaceConstIndex = info.code.addConstString(temp);
                 }
-                int spaceReg = tempReg2+1;
+                int spaceReg = tempReg+1;
                 // Todo: This is flawed. Space is added before when it should be added afterwards.
                 
                 addSpace = (prev.flags&TOKEN_SUFFIX_SPACE) || (prev.flags&TOKEN_SUFFIX_LINE_FEED);
@@ -1283,16 +1812,26 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 // }
             }
             
+            // Todo: handle properties and substring here too. Not only in ParseExpression.
+            //  It's not just a copy and paste though, tempReg and ARG_TEMP, ARG_DEL needs to
+            //  be taken into account. If more properties are added then you would need to change
+            //  it in both places so making a function out of it would be a good idea.
+            
             if(argReg==0&&whichArg!=0){
                 argReg = exprInfo.acc0Reg+exprInfo.regCount;
                 info.code.add(BC_STR,argReg);
                 _GLOG(INST << "arg\n";)
             }
-            if(whichArg==1){
-                info.code.add(BC_ADD,argReg, tempReg2, argReg);
+            if(whichArg&ARG_STR){
+                info.code.add(BC_ADD,argReg, tempStrReg, argReg);
                 _GLOG(INST << "\n";)
-            }else if(whichArg==2){
+            }
+            if(whichArg&ARG_TEMP){
                 info.code.add(BC_ADD,argReg, tempReg, argReg);
+                _GLOG(INST << "\n";)
+            }
+            if(whichArg&ARG_DEL){
+                info.code.add(BC_DEL,tempReg);
                 _GLOG(INST << "\n";)
             }
             token = info.now();
@@ -1300,19 +1839,21 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 break;
             }
         }
-        info.code.add(BC_DEL,tempReg);
+        info.code.add(BC_DEL,tempStrReg);
         _GLOG(INST << "temp\n";)
-        
-        // if(delTemp2){
-        //     info.code.add(BC_DEL,tempReg2);
-        //     _GLOG(INST << "temp2\n";)
-        // }
     }
     
-    info.code.add(BC_RUN,argReg,nameReg);
+    // if(codeFunc){
+    //     info.makeScope();
+    //     info.funcScopes.push_back({(int)info.scopes.size()-1});
+    // }
+    info.code.add(BC_RUN,argReg,funcReg);
     _GLOG(INST << "run "<<cmdName<<"\n";)
-    
-    info.code.add(BC_DEL,nameReg);
+    // if(codeFunc){
+    //     info.dropScope();
+    // }
+
+    info.code.add(BC_DEL,funcReg);
     _GLOG(INST << "name\n";)
     exprInfo.regCount--;
     
@@ -1327,88 +1868,100 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     // Note: the parsed instructions add a new value in the accumulation
     //  Don't forget to use and delete it.
     
-    _GLOG(log::out << log::GRAY<<"-- exit ParseCommand\n";)
-    return 1;
+    _GLOG(EXIT)
+    return PARSE_SUCCESS;
 }
 int ParseBody(GenerationInfo& info, int acc0reg){
     using namespace engone;
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
-    
+    _GLOG(ENTER)
+
     if(info.end()){
         log::out << log::YELLOW<<"ParseBody: sudden end?\n";
-        return 0;   
+        return PARSE_ERROR;
     }
     Token token = info.get(info.at()+1);
-    // Token& token = info.next();
     if(token=="{"){
         token = info.next();
         while(!info.end()){
-            Token& token = info.next();
+            Token& token = info.get(info.at()+1);
             if(token=="}"){
-                break;   
+                info.next();
+                break;
             }
-            info.revert();
             
             ExpressionInfo expr{};
             expr.acc0Reg = acc0reg;
-            ExpressionInfo expr2{};
-            expr2.acc0Reg = acc0reg;
             
-            if (ParseFlow(info,acc0reg,true)) {
-                
-            } else if(ParseAssignment(info,expr,true)) { // Note: cannot be ParseExpression since it collides with ParseCommand
+            int result = ParseFlow(info,acc0reg,true);
+            if(result==PARSE_BAD_ATTEMPT)
+                result = ParseAssignment(info,expr,true, false);
+            if(result==PARSE_SUCCESS)
+                continue;
+            if(result==PARSE_BAD_ATTEMPT)
+                result = ParseCommand(info,expr,true);
+
+            if(result==PARSE_SUCCESS){
                 info.code.add(BC_DEL,expr.acc0Reg);
                 _GLOG(INST << "\n";)
                 expr.regCount--;
-            } else if(ParseCommand(info,expr2,true)) {
-                info.code.add(BC_DEL,expr2.acc0Reg);
-                _GLOG(INST << "\n";)
-                expr2.regCount--;
-            } else{
-                // Todo: we may fail because current token is unexpected or we may fail because
-                //  some other reason deep within the recursive parsing. Somehow we need to know
-                //  what happened so don't print a message if another function already has.
+            } else if(result==PARSE_NO_VALUE){
+                
+            } else if(result==PARSE_BAD_ATTEMPT){
                 if(!info.end()&&info.index>0){
                     ERRT(info.now()) << "unexpected "<<info.now()<<"\n";
                 }else {
                     ERRT(info.get(0)) << "unexpected "<<info.get(0)<<"\n";
                 }
-                return 0;
+                info.nextLine();
+                return PARSE_ERROR;
+            }else {
+                info.nextLine();
+                // Error ? do waht?
+                // Todo: we may fail because current token is unexpected or we may fail because
+                //  some other reason deep within the recursive parsing. Somehow we need to know
+                //  what happened so don't print a message if another function already has.
             }
         }
-    }else{
-        // info.revert();
+    }else {
         ExpressionInfo expr{};
         expr.acc0Reg = acc0reg;
-        ExpressionInfo expr2{};
-        expr2.acc0Reg = acc0reg;
         
-        // Token token = info.next();
-        if (ParseFlow(info,acc0reg,true)) {
-            
-        } else if(ParseAssignment(info,expr,true)) { // Note: cannot be ParseExpression since it collides with ParseCommand
+        int result = ParseFlow(info,acc0reg,true);
+        if(result==PARSE_BAD_ATTEMPT){
+            result = ParseAssignment(info,expr,true, false);
+        }
+        if(result==PARSE_SUCCESS){
+            // ParseFlow and ParseAssignment will not return a value
+            // and we don't want to delete any potential ones so we skip
+            // the BC_DEL below.
+            goto Scope_123; // Forgive me programmer god for I have sinned
+        }
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseCommand(info,expr,true);
+        
+        if(result==PARSE_BAD_ATTEMPT){
+            ERRT(info.now()) << "Bad attempt '"<<info.now()<<"'\n";
+            return PARSE_ERROR;
+        }else if(result==PARSE_NO_VALUE){
+
+        }else if(result==PARSE_SUCCESS){
             info.code.add(BC_DEL,expr.acc0Reg);
             _GLOG(INST << "\n";)
             expr.regCount--;
-        } else if(ParseCommand(info,expr2,true)) {
-            info.code.add(BC_DEL,expr2.acc0Reg);
-            _GLOG(INST << "\n";)
-            expr2.regCount--;
-        } else{
-            // Todo: we may fail because current token is unexpected or we may fail because
-            //  some other reason deep within the recursive parsing. Somehow we need to know
-            //  what happened so don't print a message if another function already has.
-            if(!info.end()&&info.index>0){
-                ERRT(info.now()) << "unexpected "<<info.now()<<"\n";
-            }else {
-                ERRT(info.get(0)) << "bad something?\n";
-            }
-            return 0;
+        }else {
+            // if(!info.end()&&info.index>0){
+            //     ERRT(info.now()) << "unexpected "<<info.now()<<"\n";
+            // }else {
+            //     ERRT(info.get(0)) << "bad something?\n";
+            // }
+            return PARSE_ERROR;
         }
     }
-    
-    return 1;
+    Scope_123:
+    _GLOG(EXIT)
+    return PARSE_SUCCESS;
 }
 void Bytecode::printStats(){
     using namespace engone;
@@ -1432,20 +1985,26 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
     //  Better to define in one place.
     info.internalFunctions["print"]=true;
     info.internalFunctions["time"]=true;
+    info.internalFunctions["tonum"]=true;
     
-    info.code.add(BC_NUM,REG_ZERO);
-    info.code.add(BC_NUM,REG_STACK_POINTER);
-    info.code.add(BC_NUM,REG_FRAME_POINTER);
+    // info.code.add(BC_NUM,REG_ZERO);
+    // info.code.add(BC_NUM,REG_STACK_POINTER);
+    // info.code.add(BC_NUM,REG_FRAME_POINTER);
     
+    
+    info.makeScope();
     while (!info.end()){
         // info.addDebugLine(info.index);
         // #ifdef USE_DEBUG_INFO
         // _GLOG(log::out <<"\n"<<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1)<<"\n";)
         // #endif
-        if(!ParseBody(info, REG_ACC0)){
+        int result = ParseBody(info, REG_ACC0);
+        if(result!=PARSE_SUCCESS){
             info.nextLine();
+            // skip line or token until successful
         }
     }
+    info.dropScope();
     
     // int accDepth = 1;
     // info.addDebugLine(0);
@@ -1477,11 +2036,11 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
         info.code.add(BC_DEL,REG_ACC0);
     }
 
-    info.code.add(BC_DEL,REG_ZERO);
+    // info.code.add(BC_DEL,REG_ZERO);
     // _GLOG(INST<<"\n";)
-    info.code.add(BC_DEL,REG_STACK_POINTER);
+    // info.code.add(BC_DEL,REG_STACK_POINTER);
     // _GLOG(INST<<"\n";)
-    info.code.add(BC_DEL,REG_FRAME_POINTER);
+    // info.code.add(BC_DEL,REG_FRAME_POINTER);
     // _GLOG(INST<<"\n";)
     
     if(outErr){
@@ -1543,8 +2102,8 @@ bool GenInstructionArg(GenerationInfo& info, int instType, int& num, int flags, 
                 char s1 = *(token.str+1);
                 if(token == REG_FRAME_POINTER_S)
                     num = REG_FRAME_POINTER;
-                else if(token == REG_STACK_POINTER_S)
-                    num = REG_STACK_POINTER;
+                // else if(token == REG_STACK_POINTER_S)
+                //     num = REG_STACK_POINTER;
                 else if(token == REG_RETURN_VALUE_S)
                     num = REG_RETURN_VALUE;
                 else if(token == REG_ARGUMENT_S)
@@ -1685,17 +2244,18 @@ Bytecode GenerateInstructions(Tokens& tokens, int* outErr){
     MAP("copy",BC_COPY)
     MAP("run",BC_RUN)
     MAP("loadv",BC_LOADV)
+    MAP("storev",BC_STOREV)
 
     MAP("num",BC_NUM)
     MAP("str",BC_STR)
     MAP("del",BC_DEL)
     MAP("jump",BC_JUMP)
     MAP("loadc",BC_LOADC)
-    MAP("push",BC_PUSH)
-    MAP("pop",BC_POP)
+    // MAP("push",BC_PUSH)
+    // MAP("pop",BC_POP)
     MAP("return",BC_RETURN)
-    MAP("enter",BC_ENTERSCOPE)
-    MAP("exit",BC_EXITSCOPE)
+    // MAP("enter",BC_ENTERSCOPE)
+    // MAP("exit",BC_EXITSCOPE)
 
     GenerationInfo info{tokens};
 

@@ -32,7 +32,21 @@
         "functional": "cpp",
         "system_error": "cpp",
         "xiosbase": "cpp",
-        "iterator": "cpp"
+        "iterator": "cpp",
+        "algorithm": "cpp",
+        "atomic": "cpp",
+        "clocale": "cpp",
+        "ctime": "cpp",
+        "ios": "cpp",
+        "memory": "cpp",
+        "random": "cpp",
+        "stdexcept": "cpp",
+        "streambuf": "cpp",
+        "typeinfo": "cpp",
+        "xfacet": "cpp",
+        "xlocale": "cpp",
+        "xlocinfo": "cpp",
+        "xlocnum": "cpp"
     },
     "cmake.configureOnOpen": false
 }

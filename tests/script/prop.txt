@@ -1,0 +1,4 @@
+func = { return "hello" }
+print (#run func;.length)
+
+print ok;.length

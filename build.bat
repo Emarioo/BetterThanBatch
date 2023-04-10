@@ -3,6 +3,13 @@
 
 @REM SET LIBRARIES=-lshell32
 
+@REM ########
+@REM  Hello! cl from MSVC is used to compile the project.
+@REM  g++ is used when debugging. You will unfortunately
+@REM  have to try to make this project build by yourself
+@REM  at this moment in time.
+@REM ########
+
 SET DEBUG=1
 
 SET GCC_INCLUDE_DIRS=-Iinclude
@@ -11,7 +18,7 @@ SET GCC_COMPILE_OPTIONS=-std=c++14 -g
 SET WARN=-Wall -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
 SET COMPILE_OPTIONS=/std:c++17 /nologo /TP /EHsc
-SET LINK_OPTIONS=/DEBUG /nologo
+SET LINK_OPTIONS=/nologo
 SET INCLUDE_DIRS=/Iinclude
 SET DEFINITIONS=/DWIN32
 
@@ -48,5 +55,6 @@ echo Finished in %finS%.%finS2% seconds
 
 if !errorlevel! == 0 (
     @REM bin\program_debug
-    bin\program
+    echo f | XCOPY /y /q bin\program.exe prog.exe > nul
+    prog
 )

@@ -116,26 +116,31 @@ namespace engone {
 			printf("%s", str);
 		}
 		if(m_enabledReports){
+
 			const char* te = "[Thread 65536] ";
 			char extraBuffer[11+15+1]{0};
-			extraBuffer[0]='[';
-			extraBuffer[9]=']';
-			extraBuffer[10]=' ';
-			_GetClock(extraBuffer+1);
-			sprintf(extraBuffer+11,"[Thread %u] ",Thread::GetThisThreadId());
+			bool printExtra=false;
+			if(printExtra){
+				extraBuffer[0]='[';
+				extraBuffer[9]=']';
+				extraBuffer[10]=' ';
+				_GetClock(extraBuffer+1);
+				sprintf(extraBuffer+11,"[Thread %u] ",Thread::GetThisThreadId());
+			}
 			if(!m_masterReportPath.empty()){
 				std::string path = m_rootDirectory+"/"+m_masterReportPath;
 				auto find = m_logFiles.find(path);
 				APIFile* file=nullptr;
 				if(find==m_logFiles.end()){
-					file = FileOpen(path,0,FILE_CAN_CREATE);
+					file = FileOpen(path,0,FILE_WILL_CREATE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
 					file = find->second;
 				}
 				if(file){
-					FileWrite(file,extraBuffer,strlen(extraBuffer));
+					if(printExtra)
+						FileWrite(file,extraBuffer,strlen(extraBuffer));
 					uint64 bytes = FileWrite(file,str,len);
 					// Todo: check for failure
 				}
@@ -152,7 +157,8 @@ namespace engone {
 					file = find->second;
 				}
 				if(file){
-					FileWrite(file,extraBuffer,strlen(extraBuffer));
+					if(printExtra)
+						FileWrite(file,extraBuffer,strlen(extraBuffer));
 					uint64 bytes = FileWrite(file,str,len);
 					// Todo: check for failure
 				}
@@ -170,7 +176,8 @@ namespace engone {
 					file = find->second;
 				}
 				if(file){
-					FileWrite(file,extraBuffer,strlen(extraBuffer));
+					if(printExtra)
+						FileWrite(file,extraBuffer,strlen(extraBuffer));
 					uint64 bytes = FileWrite(file,str,len);
 					// Todo: check for failure
 				}
@@ -259,8 +266,8 @@ namespace engone {
 	GEN_LOG_NUM(int16, 6, "%hd")
 	GEN_LOG_NUM(uint16, 5, "%hu")
 	GEN_LOG_NUM(uint8, 3, "%hu")
-	GEN_LOG_NUM(double, 27, "%lf")
-	GEN_LOG_NUM(float, 20, "%.5f")
+	GEN_LOG_NUM(double, 27, "%.2lf")
+	GEN_LOG_NUM(float, 20, "%.2f")
 
 #define GEN_LOG_GEN(TYPE,ENSURE,PRINT)\
 	Logger& Logger::operator<<(TYPE value) {\

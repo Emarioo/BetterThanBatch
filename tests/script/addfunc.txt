@@ -1,0 +1,31 @@
+add = {
+    split = 0
+    for i : #arg.length {
+        if #arg[i] == " " {
+            split = i
+            break
+        }
+    }
+    a = #run tonum (#arg[0:split-1])
+    b = #run tonum (#arg[split+1:#arg.length-1])
+
+    return a + b
+}
+//a = 9
+//print (#run add 123 921)
+
+/*fun = {
+    //split = 0
+    for i : 5 {
+        if #arg[i] == " " {
+            split = i
+            break
+        }
+    }
+    //a = #run tonum (#arg[0:split-1])
+    //b = #run tonum (#arg[split+1:#arg.length-1])
+
+    //return
+}*/
+//a = 9
+//print #run fun

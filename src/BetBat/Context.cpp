@@ -176,15 +176,33 @@ void Context::deleteString(uint32 index){
 Scope* Context::getScope(uint index){
     return (Scope*)scopes.data + index;
 }
+void Context::enterScope(){
+    // currentScope++;
+    Scope* scope = getScope(currentScope);
+
+    scope->references[REG_ZERO].type = REF_NUMBER;
+    scope->references[REG_ZERO].index = makeNumber();
+
+    scope->references[REG_FRAME_POINTER].type = REF_NUMBER;
+    scope->references[REG_FRAME_POINTER].index = makeNumber();
+}
+void Context::exitScope(){
+    Scope* scope = getScope(currentScope);
+
+    deleteNumber(scope->references[REG_ZERO].index);
+    deleteNumber(scope->references[REG_FRAME_POINTER].index);
+
+    // currentScope--;
+}
 bool Context::ensureScopes(uint depth){
-    if(scopes.used<depth){
-        if(!scopes.resize(depth))
-            return false;
-        while(scopes.used<depth){
-            Scope* scope = (Scope*)scopes.data+scopes.used;
-            new(scope)Scope();
-            scopes.used++;
-        }
+    if(scopes.max>depth)
+        return true;
+    if(!scopes.resize(depth+1))
+        return false;
+    while(scopes.used<=depth){
+        Scope* scope = (Scope*)scopes.data+scopes.used;
+        new(scope)Scope();
+        scopes.used++;
     }
     return true;
 }
@@ -194,42 +212,60 @@ void Context::execute(Bytecode& code){
     log::out << log::BLUE<< "\n##   Execute   ##\n";
     int programCounter=0;
 
-    int latestDebugLine=-1;
-    
     apiCalls["print"]=APIPrint;
     apiCalls["time"]=APITime;
+    apiCalls["tonum"]=APIToNum;
     
     ensureScopes(1);
 
-    #define CERR log::out << log::RED<< "ContextError "<<programCounter<<","<<inst
-    #define CWARN log::out << log::YELLOW<< "ContextWarning "<<programCounter<<","<<inst
+    #define CERR log::out << log::RED<< "ContextError "<<(nowProgramCounter)<<","<<inst
+    #define CWARN log::out << log::YELLOW<< "ContextWarning "<<(nowProgramCounter)<<","<<inst
     
+    #define LINST " "<<(programCounter-1)<<": "<<inst
+
     auto startTime = MeasureSeconds();
 
+    int atLine=-1;
+
+    enterScope();
+
     uint64 executedInsts = 0;
-    uint64 limit = 10000;
+    uint64 executedLines = 0;
     while(true){
-        if(executedInsts>=limit){
+        if(executedInsts>=INST_LIMIT){
             // prevent infinite loop
             log::out << log::RED<<"REACHED SAFETY LIMIT. EXPECT INCOMPLETE CLEANUP\n";
             break;
         }
         if(activeCode.length() == programCounter)
             break;
+        int nowProgramCounter=programCounter;
         Instruction inst = activeCode.get(programCounter++);
         if(inst.type==0){
-            _CLOG(log::out << inst<<", skipping null instruction\n");
-            continue;   
+            _CLOG(log::out << LINST<<", skipping null instruction\n");
+            continue;
         }
 
-        Bytecode::DebugLine* debugLine = 0;
-        while((debugLine = activeCode.getDebugLine(programCounter-1,&latestDebugLine))){
+        #ifdef USE_DEBUG_INFO
+        Bytecode::DebugLine* debugLine = activeCode.getDebugLine(programCounter-1);
+        if(debugLine&&debugLine->line!=atLine){
+            atLine = debugLine->line;
+            executedLines++;
+            
+            #ifdef PRINT_DEBUG_LINES
             _CLOG(log::out <<"\n";)
             log::out << *debugLine<<"\n";
+            #endif
         }
+        #endif
 
         executedInsts++;
         
+        bool yes = ensureScopes(currentScope+1);
+        if(!yes){
+            log::out << log::RED<<"ContextError: Could not allocate scope\n";
+            break;
+        }
         Ref* references = getScope(currentScope)->references;
 
         switch(inst.type){
@@ -282,7 +318,7 @@ void Context::execute(Bytecode& code){
                     else {
                         CERR << ", inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
-                    _CLOG(log::out << inst << ", "<<v0->value<<" ";
+                    _CLOG(log::out << LINST<< ", "<<v0->value<<" ";
                     if(inst.type==BC_ADD)
                         log::out <<"+";
                     else if(inst.type==BC_SUB)
@@ -334,7 +370,26 @@ void Context::execute(Bytecode& code){
                             memcpy((char*)v2->memory.data,v0->memory.data, v0->memory.used);
                         }
                         v2->memory.used = v0->memory.used + v1->memory.used;
-                        _CLOG(log::out << inst <<", \"";PrintRawString(*v2);log::out<<"\"\n";)
+                        _CLOG(log::out << LINST <<", \"";PrintRawString(*v2);log::out<<"\"\n";)
+                    } else if(inst.type==BC_EQUAL){
+                        if(v0->memory.used!=v1->memory.used){
+                            v2->memory.used=0;
+                            _CLOG(log::out << LINST <<",  no\n";)
+                            continue;
+                        }
+                        if(0!=strncmp((char*)v0->memory.data,(char*)v1->memory.data,v0->memory.used)){
+                            v2->memory.used=0;
+                            _CLOG(log::out << LINST <<",  no\n";)
+                            continue;
+                        }
+                        if(!v2->memory.resize(1)){
+                            CERR <<", bad alloc\n";
+                            continue;
+                        }
+                        v2->memory.used=1;
+                        *(char*)v2->memory.data = '1';
+
+                        _CLOG(log::out << LINST <<",  yes\n";)
                     } else {
                         CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
@@ -368,31 +423,158 @@ void Context::execute(Bytecode& code){
                             continue;
                         }
                         v2->memory.used = v0->memory.used + written;
-                        _CLOG(log::out << inst <<", \"";PrintRawString(*v2);log::out<<"\"\n";)
+                        _CLOG(log::out << LINST <<", \"";PrintRawString(*v2);log::out<<"\"\n";)
                     } else {
                         CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
-                }else if(r0.type==REF_STRING && r1.type == REF_STRING && r2.type == REF_NUMBER){
-                    String* v0 = getString(r0.index);
-                    String* v1 = getString(r1.index);
-                    Number* v2 = getNumber(r2.index);
+                }
+                // else if(r0.type==REF_STRING && r1.type == REF_STRING && r2.type == REF_STRING){
+                //     String* v0 = getString(r0.index);
+                //     String* v1 = getString(r1.index);
+                //     String* v2 = getString(r2.index);
                     
+                //     if(!v0||!v1||!v2){
+                //         CERR <<", one value were null ";PrintRefValue(this,r0);log::out<<" ";
+                //             PrintRefValue(this,r1);log::out<<" ";PrintRefValue(this,r2);log::out<<"\n";   
+                //         continue;
+                //     }
+                //     if(inst.type==BC_EQUAL){
+                //         if(v0->memory.used!=v1->memory.used){
+                //             v2->memory.used=0;
+                //             _CLOG(log::out << LINST <<",  no\n";)
+                //             continue;
+                //         }
+                //         if(0!=strncmp((char*)v0->memory.data,(char*)v1->memory.data,v0->memory.used)){
+                //             v2->memory.used=0;
+                //             _CLOG(log::out << LINST <<",  no\n";)
+                //             continue;
+                //         }
+                //         if(!v2->memory.resize(1)){
+                //             CERR <<", bad alloc\n";
+                //             continue;
+                //         }
+                //         v2->memory.used=1;
+                //         *(char*)v2->memory.data = '1';
+
+                //         _CLOG(log::out << LINST <<",  yes\n";)
+                //     } else {
+                //         CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
+                //     }
+                // }
+                else{
+                    CERR<<", invalid types "<<
+                        RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<RefToString(r2.type)<<" in registers\n";   
+                }
+                break;
+            }
+            case BC_SUBSTR: {
+                Ref& r0 = references[inst.reg0];
+                Ref& r1 = references[inst.reg1];
+                Ref& r2 = references[inst.reg2];
+
+                if(r0.type==REF_STRING && r1.type == REF_NUMBER && r2.type == REF_NUMBER){
+                    String* v0 = getString(r0.index);
+                    Number* v1 = getNumber(r1.index);
+                    Number* v2 = getNumber(r2.index);
+
                     if(!v0||!v1||!v2){
                         CERR <<", one value were null ";PrintRefValue(this,r0);log::out<<" ";
                             PrintRefValue(this,r1);log::out<<" ";PrintRefValue(this,r2);log::out<<"\n";   
                         continue;
                     }
                     
-                    if(inst.type==BC_EQUAL){
-                        
-                        _CLOG(log::out << "== not implemented for strings\n")
-                        
-                    } else {
-                        CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
+                    if(v1->value>v2->value){
+                        CERR << ", r1 <= r2 was false ("<<v1->value<<" <= "<<v2->value<<")\n";
+                        continue;
                     }
+                    if(0>v1->value){
+                        CERR << ", 0 <= r1 was false  (0 <= "<<v1->value<<")\n";
+                        continue;
+                    }
+                    if(v2->value >= v0->memory.used){
+                        CERR << ", r2 < r0.length was false  ("<<v2->value<<" < "<<v0->memory.used<<")\n";
+                        continue;
+                    }
+                    
+                    // Todo: handle decimals in v1, v2 by throwing error
+                    int index0 = v1->value;
+                    int index1 = v2->value;
+                    int length = v2->value - v1->value + 1; // +1 to be inclusive, "hej"[0:0] = "h"
+
+                    int outIndex = makeString();
+                    String* out = getString(outIndex);
+                    if(!out){
+                        CERR <<", out string could not be allocated\n";
+                        continue;
+                    }
+                    if(!out->memory.resize(length)){
+                        CERR <<", out string could not be allocated\n";
+                        continue;
+                    }
+
+                    memcpy(out->memory.data,(char*)v0->memory.data+index0,length);
+                    out->memory.used = length;
+
+                    r0.index = outIndex;
+                    
+                    _CLOG(log::out << LINST <<", substr '"<<*out<<"'\n";)
+                    // now the first register contains the substring of the original
                 }else{
                     CERR<<", invalid types "<<
                         RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<RefToString(r2.type)<<" in registers\n";   
+                }
+                break;
+            }
+            case BC_TYPE: {
+                Ref& r0 = references[inst.reg0];
+                Ref& r1 = references[inst.reg1];
+
+                if(r1.type==REF_STRING){
+                    String* v1 = getString(r1.index);
+
+                    if(!v1){
+                        CERR <<", r1 was null ";PrintRefValue(this,r1);log::out<<"\n";   
+                        continue;
+                    }
+
+                    const char* type = 0;
+                    int length = 0;
+                    if(r0.type==REF_STRING){
+                        type = "string";
+                    } else if(r0.type==REF_NUMBER){
+                        type = "number";
+                    } else
+                        type = "null";
+                    length = strlen(type);
+                    
+                    if(!v1->memory.resize(length)){
+                        CERR << ", failed resizing\n";
+                        continue;
+                    }
+                    memcpy(v1->memory.data,type,length);
+                    v1->memory.used = length;
+                    _CLOG(log::out << LINST <<", type '"<<*v1<<"'\n";)
+                }else{
+                    CERR<<", invalid type "<<RefToString(r1.type)<<" in r1\n";   
+                }
+                break;
+            }
+             case BC_LEN: {
+                Ref& r0 = references[inst.reg0];
+                Ref& r1 = references[inst.reg1];
+
+                if(r0.type==REF_STRING && r1.type==REF_NUMBER){
+                    String* v0 = getString(r0.index);
+                    Number* v1 = getNumber(r1.index);
+
+                    if(!v0&&!v1){
+                        CERR <<", r1 was null ";PrintRefValue(this,r1);log::out<<"\n";   
+                        continue;
+                    }
+                    v1->value = v0->memory.used;
+                    _CLOG(log::out << LINST <<", len "<<v1->value<<"\n";)
+                }else{
+                    CERR<<", invalid types "<<RefToString(r0.type)<<", "<<RefToString(r1.type)<<" in r0, r1\n";   
                 }
                 break;
             }
@@ -426,7 +608,7 @@ void Context::execute(Bytecode& code){
                         CERR<< ", nummbers are null\n";
                     }else{
                         n1->value = n0->value;
-                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<<inst <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
+                        _CLOG(log::out _CLOG_LEAKS(<<log::AQUA) << LINST <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
                     }
                 }else if(r0.type==REF_STRING){
                     r1.type = r0.type;
@@ -440,11 +622,11 @@ void Context::execute(Bytecode& code){
                         CERR << ", values are null\n";
                     }else{
                         v0->copy(v1);
-                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst <<" ["<<r1.index<<"], copied ";PrintRawString(*v1);log::out<<"\n";)  
+                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST <<" ["<<r1.index<<"], copied ";PrintRawString(*v1);log::out<<"\n";)  
                     }
                 }else{
                     r1 = r0;
-                    _CLOG(log::out << inst <<" ["<<r1.index<<"], copied null\n";)  
+                    _CLOG(log::out << LINST <<" ["<<r1.index<<"], copied null\n";)  
                     // CERR<< ", cannot copy "<<RefToString(r0.type)<<"\n";
                 }
                 break;
@@ -460,16 +642,25 @@ void Context::execute(Bytecode& code){
 
                 r1 = r0;
                 
+                _CLOG(log::out << LINST <<", moved ";)
                 if(r0.type==REF_NUMBER){
                     Number* v0 = getNumber(r0.index);
-                    _CLOG(log::out << inst <<", moved " <<v0->value<<"\n";)
+                    if(v0)
+                        _CLOG(log::out << v0->value)
+                    else
+                        _CLOG(log::out << "?")
+
                 } else if(r0.type==REF_STRING){
                     String* v0 = getString(r0.index);
-                    _CLOG(log::out << inst <<", moved \"" ;PrintRawString(*v0);log::out << "\"\n";)
+                    if(v0)
+                        _CLOG(log::out << *v0)
+                    else
+                        _CLOG(log::out << "?")
+
                 } else {
-                    _CLOG(log::out << inst <<", moved ?\n";)
-                    continue;
+                    _CLOG(log::out << "?";)
                 }
+                _CLOG(log::out<<"\n";)
                 break;   
             }
             case BC_NUM: {
@@ -478,7 +669,7 @@ void Context::execute(Bytecode& code){
                 r0.type = REF_NUMBER;
                 r0.index = makeNumber();
                 
-                _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST <<" ["<<r0.index<<"]\n";)
                 
                 break;
             }
@@ -488,7 +679,7 @@ void Context::execute(Bytecode& code){
                 r0.type = REF_STRING;
                 r0.index = makeString();
                 
-                _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST <<" ["<<r0.index<<"]\n";)
                 
                 break;
             }
@@ -505,7 +696,7 @@ void Context::execute(Bytecode& code){
                     CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";
                     continue;
                 }
-                _CLOG(log::out _CLOG_LEAKS(<< log::PURPLE)<< inst <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out _CLOG_LEAKS(<< log::PURPLE)<< LINST <<" ["<<r0.index<<"]\n";)
                 r0 = {};
                 break;
             }
@@ -523,7 +714,7 @@ void Context::execute(Bytecode& code){
                     // auto unresolved = activeCode.getUnresolved(inst.singleReg());
                     // if(unresolved){
                     //     n0->value = unresolved->address;
-                    //     log::out << inst << ", ";
+                    //     LINST << ", ";
                     //     PrintRef(this,LOAD_CONST_REG);
                     //     log::out << " = "<< unresolved->name <<" (unresolved)\n";
                     // }else{
@@ -533,7 +724,7 @@ void Context::execute(Bytecode& code){
                         continue;
                     }
                     n0->value = num->value;
-                    _CLOG(log::out << inst << ", reg = " << n0->value<<"\n";)
+                    _CLOG(log::out << LINST << ", reg = " << n0->value<<"\n";)
                     // PrintRef(this,inst.reg0);
                     // log::out << " = "<< n0->value <<"\n";
                     // }
@@ -549,79 +740,12 @@ void Context::execute(Bytecode& code){
                        continue;
                     }
                     vc->copy(v0);
-                    _CLOG(log::out << inst << ", reg = ";PrintRawString(*v0);log::out<<"\n";)
+                    _CLOG(log::out << LINST << ", reg = ";PrintRawString(*v0);log::out<<"\n";)
                     // PrintRef(this,inst.reg0);
                     // log::out << " = \""; PrintRawString(*v0); log::out<<"\"\n";
                 }else{
                     CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";   
                 }
-                break;
-            }
-            case BC_PUSH:{
-                Ref& r0 = references[inst.reg0];
-                Ref& sp = references[REG_STACK_POINTER];
-
-                if(r0.type!=REF_NUMBER&&r0.type!=REF_STRING){
-                    CWARN << ", did you mean to push null?\n";
-                    // continue; 
-                    // Note: you cannot continue here because other instructions depend on the
-                    //  increment of the stack pointer
-                }
-
-                if(sp.type != REF_NUMBER){
-                    CERR << ", $sp must be a number\n";
-                    continue;
-                }
-                Number* stackNumber = getNumber(sp.index);
-                if(stackNumber->value!=(Decimal)(uint)stackNumber->value){
-                    CERR << ", $sp cannot have decimals  ($sp = "<<stackNumber->value<<")\n";
-                    continue;
-                }
-                if(valueStack.max <= (uint)stackNumber->value){
-                    if(!valueStack.resize(valueStack.max*2+10)){
-                        CERR << ", stack allocation failed\n";
-                        continue;
-                    }
-                }
-                if(stackNumber->value<0){
-                    CERR<<", $sp cannot be negative ($sp = "<<(uint)stackNumber->value<<")\n";
-                    continue;
-                }
-                uint index = stackNumber->value;
-                Ref* ref = (Ref*)valueStack.data+index;
-                stackNumber->value++;
-
-                *ref = r0;
-                _CLOG(log::out << inst << ", pushed ";PrintRefValue(this,r0);log::out<<" at "<<index<<"\n";)
-                    
-                break;
-            }
-            case BC_POP:{
-                Ref& r0 = references[inst.reg0];
-                Ref& sp = references[REG_STACK_POINTER];
-
-                if(sp.type != REF_NUMBER){
-                    CERR << ", $sp must be a number\n";
-                    continue;
-                }
-                Number* stackNumber = getNumber(sp.index);
-                if(stackNumber->value!=(Decimal)(uint)stackNumber->value){
-                    CERR << ", $sp cannot have decimals ($sp = "<<stackNumber->value<<")\n";
-                    continue;
-                }
-                if(stackNumber->value<1){
-                    CERR<<", $sp cannot be negative or zero ($sp = "<<(uint)stackNumber->value<<")\n";
-                    continue;
-                }
-                if(stackNumber->value>=valueStack.max){
-                    CERR << ", cannot pop beyond the allocated stack ($sp = "<<(uint)stackNumber->value<<")\n";
-                    continue;
-                }
-                stackNumber->value--;
-                Ref* ref = (Ref*)valueStack.data+(uint)stackNumber->value;
-                r0 = *ref;
-                _CLOG(log::out << inst << ", popped ";PrintRefValue(this, r0);log::out<<"\n";)
-                  
                 break;
             }
             case BC_LOADV:{
@@ -664,7 +788,71 @@ void Context::execute(Bytecode& code){
                 }
                 Ref* ref = (Ref*)valueStack.data+index;
                 r0 = *ref;
-                _CLOG(log::out << inst << ", loaded ";PrintRefValue(this,r0);log::out<<" from "<<index<<"\n";)
+                _CLOG(log::out << LINST << ", loaded '";PrintRefValue(this,r0);log::out<<"' from "<<index<<"\n";)
+                break;
+            }
+            case BC_STOREV:{
+                Ref& r0 = references[inst.reg0];
+                int frameOffset = (uint)inst.reg1 | ((uint)inst.reg2<<8);
+                Ref& fp = references[REG_FRAME_POINTER];
+
+                if(fp.type != REF_NUMBER){
+                    CERR << ", $fp must be a number\n";
+                    continue;
+                }
+                Number* framePointer = getNumber(fp.index);
+                if(!framePointer){
+                    CERR << ", $fp cannot be null\n";
+                    continue;
+                }
+                if(framePointer->value!=(Decimal)(uint)framePointer->value){
+                    CERR << ", $fp cannot have decimals ($sp = "<<framePointer->value<<")\n";
+                    continue;
+                }
+                // Number* offset = getNumber(r1.index);
+                // if(!offset){
+                //     CERR<<", $r1 (offset reg.) cannot be null\n";
+                //     continue;
+                // }
+                // if(offset->value!=(Decimal)(uint)offset->value){
+                //     CERR << ", $r1 (offset reg.) cannot have decimals  ($sp = "<<offset->value<<")\n";
+                //     continue;
+                // }
+                // int index = stackNumber->value + offset->value;
+                int index = framePointer->value + frameOffset;
+                if(index<0){
+                    CERR << ", $fp + $r1 cannot be negative ($fp + $r1 = "<<index<<")\n";
+                    continue;
+                }
+                Ref* ref = 0;
+                if((uint)index<valueStack.max){
+                    ref = (Ref*)valueStack.data+index;
+                    // CERR << ", $fp + $r1 goes beyond the allocated stack ($fp + $r1 = "<<index<<" >= "<<valueStack.max<<")\n";
+                    // continue;
+
+                    if(ref->index==r0.index && ref->type==r0.type){
+                        continue;
+                    }
+                    // delete previous value
+                    if(ref->type==REF_NUMBER){
+                        deleteNumber(ref->index);
+                    }else if(ref->type==REF_STRING){
+                        deleteString(ref->index);
+                    }
+                }else{
+                    int oldMax = valueStack.max;
+                    if(!valueStack.resize(valueStack.max+index+10)){
+                        CERR << ", stack allocation failed\n";
+                        continue;
+                    }
+                    // zero-initalize the new values. Random memory could indicate
+                    for(int i=oldMax;i<(int)valueStack.max;i++){
+                        *((Ref*)valueStack.data+i) = {};
+                    }
+                    ref = (Ref*)valueStack.data+index;
+                }
+                *ref = r0;
+                _CLOG(log::out << LINST << ", stored '";PrintRefValue(this,r0);log::out<<"' at "<<index<<"\n";)
                 break;
             }
             case BC_JUMP: {
@@ -683,7 +871,7 @@ void Context::execute(Bytecode& code){
                         _CLOG(log::out << "ContextWarning at "<<programCounter<<", " << inst << ", jumping to next instruction is redundant\n";)
                     }else{
                         programCounter = address;
-                        _CLOG(log::out << inst << ", jumped to "<<programCounter<<"\n";)
+                        _CLOG(log::out << LINST << ", jumped to "<<programCounter<<"\n";)
                     }
                 }else{
                     CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";   
@@ -710,17 +898,24 @@ void Context::execute(Bytecode& code){
                         continue;
                     }
                     
-                    if(r0.type==REF_NUMBER){
-                        Number* n0 = getNumber(r0.index);
-                        if(!n0){
-                            CERR << ", numbers where null\n";  
-                            continue;   
+                    if(r0.type==REF_NUMBER||r0.type==REF_STRING){
+                        bool willJump = false;
+                        if(r0.type==REF_NUMBER){
+                            Number* n0 = getNumber(r0.index);
+                            if(!n0){
+                                CERR << ", numbers where null\n";  
+                                continue;   
+                            }
+                            willJump = n0->value == 0;
+                        }else if(r0.type==REF_STRING){
+                            String* n0 = getString(r0.index);
+                            willJump = n0->memory.used==0;
                         }
-                        if(n0->value == 0){
+                        if(willJump){
                             programCounter = address;
-                            _CLOG(log::out << inst << ", "<<n0->value<<" == 0, jumped to "<<programCounter<<"\n";)
+                            _CLOG(log::out << LINST << ", jumped to "<<programCounter<<"\n";)
                         }else{
-                            _CLOG(log::out << inst << ", "<<n0->value<<" != 0, no jumping\n";)
+                            _CLOG(log::out << LINST << ", no jumping\n";)
                         }
                     } else{
                         CERR << ", invalid type "<<RefToString(r0.type)<<" "<<RefToString(r1.type)<<"\n";  
@@ -730,24 +925,26 @@ void Context::execute(Bytecode& code){
                     CERR << ", invalid type "<<RefToString(r1.type)<<" in r1 (should be number)\n";   
                 }
                 break;
-            } case BC_ENTERSCOPE: {
-                bool yes = ensureScopes(currentScope+1);
-                if(yes){
-                    currentScope++;
-                    _CLOG(log::out << inst << "\n";)
-                }else{
-                    CERR << ", could not ensure scope (allocation failure)\n";   
-                }
-                break;
-            } case BC_EXITSCOPE: {
-                if(currentScope>0){
-                    currentScope--;
-                    _CLOG(log::out << inst << "\n";)
-                }else{
-                    CERR << ", cannot exit at global scope (currentScope == "<<currentScope<<")\n";   
-                }
-                break;
-            }case BC_RETURN: {
+            } 
+            // case BC_ENTERSCOPE: {
+            //     // bool yes = ensureScopes(currentScope+1);
+            //     if(yes){
+            //         currentScope++;
+            //         _CLOG(log::out << LINST << "\n";)
+            //     }else{
+            //         CERR << ", could not ensure scope (allocation failure)\n";   
+            //     }
+            //     break;
+            // } case BC_EXITSCOPE: {
+            //     if(currentScope>0){
+            //         currentScope--;
+            //         _CLOG(log::out << LINST << "\n";)
+            //     }else{
+            //         CERR << ", cannot exit at global scope (currentScope == "<<currentScope<<")\n";   
+            //     }
+            //     break;
+            // }
+            case BC_RETURN: {
                 Ref& r0 = references[inst.reg0];
                 
                 if(currentScope<=0){
@@ -755,6 +952,7 @@ void Context::execute(Bytecode& code){
                     continue;
                 }else{
                     programCounter = getScope(currentScope)->returnAddress;
+                    exitScope();
                     currentScope--;
                     Ref* refs = getScope(currentScope)->references;
                     
@@ -778,7 +976,7 @@ void Context::execute(Bytecode& code){
                     // }
                     // Todo: error decimal number
                     // programCounter = n0->value;
-                    _CLOG(log::out << inst << ", jumped to "<<programCounter<<", returned ";
+                    _CLOG(log::out << LINST << ", jumped to "<<programCounter<<", returned ";
                     PrintRefValue(this,rv);
                     log::out << "\n";)
                     
@@ -788,31 +986,10 @@ void Context::execute(Bytecode& code){
                 Ref& r0 = references[inst.reg0];
                 Ref& r1 = references[inst.reg1];
                 
-                bool yes = ensureScopes(currentScope+1);
-                if(!yes){
-                    CERR << ", could not ensure scope (allocation failure)\n";
-                    continue;  
-                }
-                
-                Ref* refs = getScope(currentScope+1)->references;
-                Ref& rz = refs[REG_ARGUMENT];
-                // Ref& ra = references[REG_RETURN_ADDR];
-                
-                // if(ra.type!=REF_NUMBER){
-                //     CERR<<", $ra must be a number (was ";
-                //     PrintRefValue(this,ra);
-                //     log::out << ")\n";
-                //     continue;
-                // }
-                // Number* na = getNumber(ra.index);
                 if(r1.type==REF_NUMBER){
-                    // CERR << ", jump register must be a number (was "<<RefToString(r1)<<")\n";
-                    // continue;
+                    Ref* refs = getScope(currentScope+1)->references;
+                    Ref& rz = refs[REG_ARGUMENT];
                     Number* n1 = getNumber(r1.index);
-                    // if(!na){
-                    //     CERR<<", $ra was null\n";
-                    //     continue;
-                    // }
                     if(!n1){
                         CERR << ", $r1 is null\n";
                         continue;
@@ -822,15 +999,17 @@ void Context::execute(Bytecode& code){
                         continue;
                     }
                     currentScope++;
+                    enterScope();
                     // na->value = programCounter;
                     getScope(currentScope)->returnAddress=programCounter;
                     rz = r0;
-                    programCounter = n1->value;
                     
                     // check if rz is number
-                    _CLOG(log::out << inst << ", arg: ";
+                    _CLOG(log::out << LINST << ", arg: ";
                     PrintRefValue(this,rz);
                     log::out<<", jump to "<<n1->value<<"\n";)
+
+                    programCounter = n1->value;
                 }else if(r1.type==REF_STRING){
                     String* v1 = getString(r1.index);
                 // auto unresolved = activeCode.getUnresolved(n1->value);
@@ -848,18 +1027,18 @@ void Context::execute(Bytecode& code){
                             // CERR << ", unresolved function does not allow "<<RefToString(r0.type)<<" as argument\n";
                             // continue;
                         }
-                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst << ", arg: ";
+                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", arg: ";
                         PrintRefValue(this,r0);
                         log::out<<", api call "<<name<<"\n";)
                         if(find->second){
                             Ref returnValue = find->second(this,r0.type,arg);
                             
-                            if(returnValue.type!=0){
-                                Ref& rv = references[REG_RETURN_VALUE];
-                                rv = returnValue;
-                            }else{
+                            // if(returnValue.type!=0){
+                            Ref& rv = references[REG_RETURN_VALUE];
+                            rv = returnValue;
+                            // }else{
                                    
-                            }
+                            // }
                         }else{
                             CERR << ", api call was null\n";
                         }
@@ -921,7 +1100,7 @@ void Context::execute(Bytecode& code){
                                 finaltemp += " ";
                                 finaltemp += *v0;
                             }
-                            _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< inst << ", arg: ";
+                            _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", arg: ";
                             PrintRefValue(this,r0);
                             log::out<<", exe call "<<name<<"\n";)
                             int exitCode = 0;
@@ -941,6 +1120,8 @@ void Context::execute(Bytecode& code){
                             }
                         }
                     }
+                }else{
+                     CERR << ", bad registers ";PrintRefValue(this,r0);log::out <<", ";PrintRefValue(this,r1);log::out<<"\n";
                 }
                 break;
             }
@@ -949,34 +1130,60 @@ void Context::execute(Bytecode& code){
             }
         }
     }
-    auto formatUnit = [&](uint64 instructions){
-        
-    };
+    exitScope();
+
     char temp[30];
+    auto formatUnit = [&](double number){
+        if(number<1000) sprintf(temp,"%llu",(uint64)number);
+        else if(number<1e6) sprintf(temp,"%.2lf K",number/1000.f);
+        else if(number<1e9) sprintf(temp,"%.2lf M",number/1e6);
+        else sprintf(temp,"%.2lf G",number/1e9);
+    };
+
     
-    if(executedInsts<1000) sprintf(temp,"%llu",executedInsts);
-    else if(executedInsts<1e6) sprintf(temp,"%.2lf K",executedInsts/1000.f);
-    else if(executedInsts<1e9) sprintf(temp,"%.2lf M",executedInsts/1e6);
-    else sprintf(temp,"%.2lf G",executedInsts/1e9);
     
     double executionTime = StopMeasure(startTime);
     double nsPerInst = executionTime/executedInsts*1e9;
+    double nsPerLine = executionTime/executedLines*1e9;
     // Todo: note that APICalls and executables are included. When calling those
     //  you can measure the time in those functions and subtract it from instruction time.
-    log::out << "Executed "<<temp<<" instructions in "<<executionTime<<" seconds\n";
-    log::out << "Average of "<<nsPerInst<<" ns/instruction\n";
+    log::out << log::BLUE<<"##   Summary   ##\n";
     
+    // Note: In reality executedLines stands for how often execution switched to a different line.
+    // It doesn't represent how many complex lines were executed.
+    formatUnit(executedLines);
+    log::out << " "<<temp<<" lines in "<<executionTime<<" seconds (avg "<<nsPerLine<<" ns/line)\n";
+    
+    formatUnit(executedInsts);
+    log::out << " "<< temp<<" instructions in "<<executionTime<<" seconds (avg "<<nsPerInst<<" ns/inst)\n";
+    
+    double instPerS = executedInsts/executionTime;
+    formatUnit(instPerS);
+    log::out << " "<< temp<<" instructions per second ("<<temp<<"Hz)\n";
+    
+    // double target = 3e9;
+    // log::out.flush(); printf(" %d",(int)(target/instPerS)); log::out<<" times slower than 3 GHz ("<<temp<<"Hz / 3 GHz)\n";
+
     if(numberCount!=0||stringCount!=0){
         log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
     }
     
     auto tp = MeasureSeconds();
+    int sum = 0;
     int i=0;
-    while(i<2000000){
-        i=i+1;
+    int j=0;
+    int N=1000;
+    while(i<N){
+        sum += i;
+        j=0;
+        while(j<N-i){
+            sum += j;
+            j++;
+        }
+        i++;
     }
     auto sec = StopMeasure(tp);
-    log::out << "TIME "<<sec<<"\n";
+    log::out << "Res "<<sum<<" "<<(sec*1000000)<<" us\n";
     
 }
 void Context::Execute(Bytecode& code){

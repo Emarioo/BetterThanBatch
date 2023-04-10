@@ -30,10 +30,21 @@ bool OptimizeBytecode(Bytecode& code){
     add $a $b $a
     del $b
     
+    add $a $b $a
+    add $a $b $b
+    add $a $b $c
+
     run $a
     del $a
     
     */
+
+    // Instruction& inst = code.get(0);
+    // inst.type==BC_ADD;
+    // needed[inst.reg0].needed == false
+    // needed[inst.reg1].needed == false
+    // inst.reg2 = 0
+    
     
     // Todo: code is barely tested. there are probably many edge cases not taken into account
     
@@ -41,14 +52,37 @@ bool OptimizeBytecode(Bytecode& code){
     //  anything with them.
     for(int i=0;i<code.length();i++){
         Instruction& inst = code.get(i);
-        
-        if(inst.type==BC_NUM){
+        if(inst.type==0){
+            _OLOG(log::out << log::LIME<<"Delete "<<i<<": "<<code.get(i) << "\n";)
+            code.remove(i);
+            removedInsts.push_back(i);
+        }
+        // if(inst.type==BC_ADD){
+        //     // OptInfo& r0 = needed[inst.reg0];
+        //     // OptInfo& r1 = needed[inst.reg1];
+        //     // OptInfo& r2 = needed[inst.reg2];
+
+            
+
+        //     // if(!r0.needed&&!r1.needed){
+        //     //     // instruction is guarranteed to be r2 = 0
+        //     //     if(!r2.needed){
+        //     //         // 0 = 0 + 0 is useless
+        //     //         // remove instructions
+        //     //     } else{
+        //     //         // hmm?
+        //     //     }
+        //     // }
+        // Note: DON'T DO ELSE on inst.type. BC_ADD affects code below, don't skip it with
+        // else if
+        // }
+        if(inst.type==BC_NUM||inst.type==BC_STR){
             if(inst.reg0>=REG_ACC0){
                 OptInfo& info = needed[inst.reg0] = {};
                 info.needed = false;
                 info.createdBy = i;
                 info.wasted.clear();
-            }        
+            }
         } else if(inst.type==BC_COPY){
             if(inst.reg1>=REG_ACC0){
                 OptInfo& info = needed[inst.reg1] = {};

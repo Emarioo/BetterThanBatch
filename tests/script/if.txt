@@ -1,24 +1,11 @@
-//if 3==3; +gcc 1
-// {
-//    print YES
-//    print YES2
-//} else {
-//    print NO   
-//    print NO2 
-//}
-//print after
+test=0
+if test!=0
+    if test==1
+        print test 1
+    else
+        print test ?
+else
+    print test 0
 
-//startTime = #run time
-
-//i=0
-//while i < 1 {
-//    i=i+1
-//}
-
-for 10
-    print hej
-
-//endTime = #run time startTime
-//print  #run   
-// time   ea
-// startTime;   he   + there 
+if test==0 print test 0; else if test==1 print test 1; else print test ?
+if test!=0 { print test ?; if test==1 print test 1; } else print test 0

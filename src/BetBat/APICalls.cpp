@@ -2,7 +2,6 @@
 
 #include "BetBat/Context.h"
 
-
 Ref APIPrint(Context* context, int refType, void* value){
     if(refType==REF_STRING){
         String* str = (String*)value;
@@ -18,6 +17,37 @@ Ref APIPrint(Context* context, int refType, void* value){
     context->getNumber(index)->value=1;
     return {REF_NUMBER,index};
     // return {};
+}
+Ref APIToNum(Context* context, int refType, void* value){
+    using namespace engone;
+    double number=0;
+    if(refType==REF_STRING){
+        String* str = (String*)value;
+        static char* buffer=0;
+        static const int BUFFER_SIZE=50;
+        if(!buffer){
+            buffer=(char*)malloc(BUFFER_SIZE+1);
+            if(!buffer){
+                log::out << log::RED<<__FUNCTION__<<": Alloc failed\n";
+                return {};
+            }
+        }
+        if(BUFFER_SIZE<str->memory.used){
+            log::out <<log::RED<< __FUNCTION__<<": Buffer to small\n";
+            return {};
+        }
+        memcpy(buffer,str->memory.data,str->memory.used);
+        buffer[str->memory.used]=0;
+        number = atof(buffer);
+    }else if(refType==REF_NUMBER){
+        Number* num = (Number*)value;
+        number = num->value;
+    } else {
+        return {}; // failed
+    }
+    int index = context->makeNumber();
+    context->getNumber(index)->value=number;
+    return {REF_NUMBER,index};
 }
 Ref APITime(Context* context, int refType, void* value){
     using namespace engone;
@@ -38,12 +68,12 @@ Ref APITime(Context* context, int refType, void* value){
         if(!buffer){
             buffer=(char*)malloc(BUFFER_SIZE+1);
             if(!buffer){
-                log::out << log::RED<<"APITime: Alloc failed\n";
+                log::out << log::RED<<__FUNCTION__<<": Alloc failed\n";
                 return {};
             }
         }
         if(BUFFER_SIZE<str->memory.used){
-            log::out <<log::RED<< "APITime: Buffer to small\n";
+            log::out <<log::RED<< __FUNCTION__<<": Buffer to small\n";
             return {};
         }
         memcpy(buffer,str->memory.data,str->memory.used);
