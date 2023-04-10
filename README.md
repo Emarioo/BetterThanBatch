@@ -32,6 +32,7 @@ for 1000000 {
 }
 ```
 ![](docs/img/perf-23-04-08.png)
+
 The statistics comes from the code above.
 The compiler and intepreter was compiled with MSVC
 and O2 optimizations (no debug). The image
