@@ -60,7 +60,7 @@ FILES = main.cpp compiler.cpp
 g++ FILES -o program.exe
 ```
 GCC and any other executable found in environment variables
-can be run like a shell script.
+can be run like a shell script. Just like batch.
 
 ## Example (bytecode)
 ```
