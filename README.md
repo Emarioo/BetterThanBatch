@@ -2,7 +2,7 @@
 A compiler and runtime for a new scripting language which
 doesn't use any libraries.
 
-Currently the things below works but need some tweaks.
+Some basic features so far (not completed however, I have most likely missed many bugs)
 - Variables
 - Math expressions
 - If statements
@@ -25,19 +25,20 @@ compiling scripts with it doesn't really work
 yet. Things will probably work in May.
 
 ## Performance (rough measures)
-![](docs/img/perf-23-04-08.png)
-The statistics comes from the code below.
-The compiler and intepreter was compiled with MSVC
-and O2 optimizations (no debug). The image
-is there to give some idea of how slow the intepreter
-is and more thorough results with hardware
-specification will be done later.
-````
+```
 sum = 0
 for 1000000 {
     sum = sum + #i
 }
 ```
+![](docs/img/perf-23-04-08.png)
+
+The statistics comes from the code above.
+The compiler and intepreter was compiled with MSVC
+and O2 optimizations (no debug). The statistics
+is there to give some idea of how slow the intepreter
+is. More thorough testing with consideration to hardware
+specification will be done later.
 
 ## Example (Fibonacci)
 ```
@@ -53,6 +54,14 @@ for N {
 }
 ```
 
+## La spécialité
+```
+FILES = main.cpp compiler.cpp
+g++ FILES -o program.exe
+```
+GCC and any other executable found in environment variables
+can be run like a shell script. Just like batch.
+
 ## Example (bytecode)
 ```
 number: 29.12
@@ -61,11 +70,3 @@ number: 29.12
     load $f number
     add $f $f $f
 ```
-
-## La spécialité
-```
-FILES = main.cpp compiler.cpp
-g++ FILES -o program.exe
-```
-GCC and any other executable found in environment variables
-can be run like a shell script.
