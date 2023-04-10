@@ -35,9 +35,9 @@ for 1000000 {
 
 The statistics comes from the code above.
 The compiler and intepreter was compiled with MSVC
-and O2 optimizations (no debug). The image
+and O2 optimizations (no debug). The statistics
 is there to give some idea of how slow the intepreter
-is and more thorough results with hardware
+is. More thorough testing with consideration to hardware
 specification will be done later.
 
 ## Example (Fibonacci)
