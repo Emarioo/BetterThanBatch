@@ -1,6 +1,6 @@
-#include "BetBat/Context.h"
+#include "BetBat/Interpreter.h"
 
-#include "BetBat/APICalls.h"
+#include "BetBat/ExternalCalls.h"
 #include <string.h>
 
 #ifdef CLOG
@@ -212,9 +212,9 @@ void Context::execute(Bytecode& code){
     log::out << log::BLUE<< "\n##   Execute   ##\n";
     int programCounter=0;
 
-    apiCalls["print"]=APIPrint;
-    apiCalls["time"]=APITime;
-    apiCalls["tonum"]=APIToNum;
+    externalCalls["print"]=ExtPrint;
+    externalCalls["time"]=ExtTime;
+    externalCalls["tonum"]=ExtToNum;
     
     ensureScopes(1);
 
@@ -1016,8 +1016,8 @@ void Context::execute(Bytecode& code){
                 // if(!unresolved){
                 // }else{
                     std::string name = *v1;
-                    auto find = apiCalls.find(name);
-                    if(find!=apiCalls.end()){
+                    auto find = externalCalls.find(name);
+                    if(find!=externalCalls.end()){
                         void* arg=0;
                         if(r0.type==REF_STRING)
                             arg = getString(r0.index);

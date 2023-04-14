@@ -44,11 +44,31 @@ bool Token::operator!=(const char* text){
     return !(*this == text);
 }
 engone::Logger& operator<<(engone::Logger& logger, Token& token){
-    token.print(TOKEN_PRINT_QUOTES);
+    // token.print(TOKEN_PRINT_QUOTES);
+    token.print(0);
     return logger;
 }
 Token::operator std::string(){
     return std::string(str,length);
+}
+bool Tokens::copy(Tokens& out){
+    out.cleanup();
+    if(!out.tokenData.resize(tokenData.max))
+        return false;
+    out.tokenData.used = tokenData.used;
+    memcpy(out.tokenData.data,tokenData.data,tokenData.max);
+    if(!out.tokens.resize(tokenData.max))
+        return false;
+    out.tokens.used = tokens.used;
+    memcpy(out.tokens.data,tokens.data,tokens.max);
+    
+    for(int i=0;i<(int)tokens.used;i++){
+        Token& tok = *((Token*)tokens.data+i);
+        Token& outTok = *((Token*)out.tokens.data+i);
+        uint64 offset = (uint64)tok.str-(uint64)tokenData.data;
+        outTok.str = (char*)out.tokenData.data + offset;
+    }
+    return true;
 }
 bool Tokens::add(const char* str){
     if(tokens.max == tokens.used){
@@ -103,14 +123,14 @@ void Tokens::printTokens(int tokensPerLine, int flags){
     uint i=0;
     for(;i<tokens.used;i++){
         Token* token = ((Token*)tokens.data + i);
-        if(flags&TOKEN_PRINT_LN_COL)
-            log::out << "["<<token->line << ":"<<token->column<<"] ";
+        // if(flags&TOKEN_PRINT_LN_COL)
+        //     log::out << "["<<token->line << ":"<<token->column<<"] ";
         
         token->print(flags);
-        if(flags&TOKEN_PRINT_SUFFIXES){
+        // if(flags&TOKEN_PRINT_SUFFIXES){
             if(token->flags&TOKEN_SUFFIX_LINE_FEED)
                 log::out << "\\n";
-        }
+        // }
         if((i+1)%tokensPerLine==0)
             log::out << "\n";
         else if((token->flags&TOKEN_SUFFIX_SPACE)==0)
@@ -119,6 +139,26 @@ void Tokens::printTokens(int tokensPerLine, int flags){
     if(i%tokensPerLine != 0)
         log::out << "\n";
     // log::out << "$END$";
+}
+void Tokens::print(){
+    using namespace engone;
+    for(int j=0;j<(int)tokens.used;j++){
+        Token& token = *((Token*)tokens.data + j);
+        
+        if(token.flags&TOKEN_QUOTED)
+            log::out << "\"";
+    
+        for(int i=0;i<token.length;i++){
+            char chr = *(token.str+i);
+            log::out << chr;
+        }
+        if(token.flags&TOKEN_QUOTED)
+            log::out << "\"";
+        if(token.flags&TOKEN_SUFFIX_LINE_FEED)
+            log::out << "\n";
+        if(token.flags&TOKEN_SUFFIX_SPACE)
+            log::out << " ";
+    }
 }
 void Tokens::printData(int charsPerLine){
     using namespace engone;
@@ -132,6 +172,26 @@ void Tokens::printData(int charsPerLine){
     }
     if((i)%charsPerLine!=0)
         log::out << "\n";
+}
+bool Tokens::append(char chr){
+    if(tokenData.max < tokenData.used + 1){
+        if(!tokenData.resize(tokenData.max*2 + 20))
+            return false;
+    }
+    *((char*)tokenData.data+tokenData.used) = chr;
+    tokenData.used++;
+    return true;
+}
+bool Tokens::append(Token& tok){
+    if(tokenData.max < tokenData.used + tok.length){
+        if(!tokenData.resize(tokenData.max*2 + 2*tok.length))
+            return false;
+    }
+    for(int i=0;i<tok.length;i++){
+        *((char*)tokenData.data+tokenData.used+i) = tok.str[i];
+    }
+    tokenData.used += tok.length;
+    return true;
 }
 Tokens Tokenize(engone::Memory& textData){
     using namespace engone;
@@ -151,7 +211,7 @@ Tokens Tokenize(engone::Memory& textData){
     engone::Memory& tokenData = outTokens.tokenData;
     memset(tokenData.data,'_',tokenData.max); // Good indicator for issues
     
-    const char* specials = "+-*/=<>!&|" "$#{}()[]" ":;.,";
+    const char* specials = "+-*/=<>!&|" "$@#{}()[]" ":;.,";
     int specialLength = strlen(specials);
     int line=1;
     int column=1;
@@ -175,10 +235,13 @@ Tokens Tokenize(engone::Memory& textData){
             break;
         char prevChr = 0;
         char nextChr = 0;
+        char nextChr2 = 0;
         if(index>0)
             prevChr = text[index-1];
         if(index+1<length)
             nextChr = text[index+1];
+        if(index+2<length)
+            nextChr2 = text[index+2];
         char chr = text[index];
         index++;
         
@@ -348,7 +411,24 @@ Tokens Tokenize(engone::Memory& textData){
                 token.length++;
                 _TLOG(printf("%c",nextChr);)
                 *((char*)tokenData.data+tokenData.used+1) = nextChr;
-                nextChr = text[index]; // code below needs the updated nextChr
+                if(index<length)
+                    nextChr = text[index]; // code below needs the updated nextChr
+                else
+                    nextChr = 0;
+            }
+            if(chr=='.'&&nextChr=='.'&&nextChr2=='.'){
+                index+=2;
+                column+=2;
+                token.length+=2;
+                _TLOG(printf("%c",nextChr);)
+                _TLOG(printf("%c",nextChr2);)
+                *((char*)tokenData.data+tokenData.used+1) = nextChr;
+                *((char*)tokenData.data+tokenData.used+2) = nextChr2;
+                
+                if(index<length)
+                    nextChr = text[index]; // code below needs the updated nextChr
+                else
+                    nextChr = 0;
             }
             
             tokenData.used+=token.length;

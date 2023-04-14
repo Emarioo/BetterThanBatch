@@ -1,0 +1,13 @@
+
+/*
+@define NotBug(...) Here NotBug(0,...)
+@define NotBug(a,b,c,d,e,f,g) Why!
+
+NotBug()
+*/
+
+
+@define Mass(M,...) print M; Mass(...)
+@define Mass(M) print M
+
+Mass(Hey, you, cool?)

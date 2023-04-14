@@ -2,6 +2,7 @@
 
 #include "Engone/Alloc.h"
 #include "Engone/Logger.h"
+#include "Engone/Typedefs.h"
 
 #include "BetBat/Config.h"
 
@@ -12,9 +13,9 @@
 #define TOKEN_SUFFIX_SPACE 2
 #define TOKEN_QUOTED 4
 
-#define TOKEN_PRINT_LN_COL 1
-#define TOKEN_PRINT_SUFFIXES 2
-#define TOKEN_PRINT_QUOTES 4
+// #define TOKEN_PRINT_LN_COL 1
+// #define TOKEN_PRINT_SUFFIXES 2
+// #define TOKEN_PRINT_QUOTES 4
 
 struct Token {
     Token() = default;
@@ -32,7 +33,7 @@ struct Token {
     operator std::string();
 
     // prints the string, does not print suffix, line or column
-    void print(int printFlags = TOKEN_PRINT_QUOTES);
+    void print(int printFlags = 0);
 };
 engone::Logger& operator<<(engone::Logger& logger, Token& token);
 struct Tokens {
@@ -41,13 +42,22 @@ struct Tokens {
     
     void cleanup();
     
+    // modifies tokenData
+    bool append(char chr);
+    bool append(Token& tok);
+    
     bool add(const char* str);
     bool add(Token token);
     Token& get(uint index);
     uint length();
     // flags is a bitmask, TOKEN_PRINT_...
-    void printTokens(int tokensPerLine = 14, int flags = TOKEN_PRINT_QUOTES);
+    void printTokens(int tokensPerLine = 14, int flags = 0);
     
     void printData(int charsPerLine = 40);
+    
+    // normal print of all tokens
+    void print();
+    
+    bool copy(Tokens& out);
 };
 Tokens Tokenize(engone::Memory& textData);

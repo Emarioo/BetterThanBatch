@@ -2,7 +2,6 @@
 
 #include "BetBat/Tokenizer.h"
 #include "BetBat/Value.h"
-#include "Engone/Typedefs.h"
 
 #include <unordered_map>
 
@@ -95,7 +94,7 @@ struct Instruction {
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction);
 
 class Context;
-typedef Ref(*APICall)(Context*, int refType, void*);
+typedef Ref(*ExternalCall)(Context*, int refType, void*);
 struct Bytecode {
     engone::Memory codeSegment{sizeof(Instruction)};
     engone::Memory constNumbers{sizeof(Number)};
@@ -150,8 +149,8 @@ struct Bytecode {
 // success but no accumulation
 #define PARSE_NO_VALUE 3
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
-struct GenerationInfo {
-    GenerationInfo(Tokens& tokens) : tokens(tokens){}
+struct ParseInfo {
+    ParseInfo(Tokens& tokens) : tokens(tokens){}
     Bytecode code{};
     uint index=0;
     Tokens& tokens;
@@ -185,7 +184,7 @@ struct GenerationInfo {
     };
     std::unordered_map<std::string,Function> functions;
     
-    std::unordered_map<std::string,bool> internalFunctions;
+    std::unordered_map<std::string,bool> externalFunctions;
 
     struct LoopScope{
         int varReg=0;
