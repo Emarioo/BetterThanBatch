@@ -1,4 +1,4 @@
-#include "BetBat/Generator.h"
+#include "BetBat/Parser.h"
 
 #define ERRAT(L,C) info.errors++;engone::log::out <<engone::log::RED<< "CompileError "<<(L)<<":"<<(C)<<", "
 #define ERRT(T) ERRAT(T.line,T.column)
@@ -319,15 +319,16 @@ Bytecode::DebugLine* Bytecode::getDebugLine(int instructionIndex){
     }
     return 0;
 }
-void GenerationInfo::makeScope(){
+void ParseInfo::makeScope(){
     using namespace engone;
-    log::out << log::GRAY<< "   Enter scope "<<scopes.size()<<"\n";
+    _GLOG(log::out << log::GRAY<< "   Enter scope "<<scopes.size()<<"\n";)
     scopes.push_back({});
 }
-void GenerationInfo::dropScope(int index){
+void ParseInfo::dropScope(int index){
     using namespace engone;
-    if(index==-1)
-        log::out << log::GRAY<<"   Exit  scope "<<(scopes.size()-1)<<"\n";
+    if(index==-1){
+        _GLOG(log::out << log::GRAY<<"   Exit  scope "<<(scopes.size()-1)<<"\n";)
+    }
     Scope& scope = index==-1? scopes.back() : scopes[index];
     auto& info = *this;
     for(Token& token : scope.variableNames){
@@ -447,7 +448,7 @@ double ConvertDecimal(Token& token){
     *(token.str+token.length) = tmp;
     return num;
 }
-Token& GenerationInfo::next(){
+Token& ParseInfo::next(){
     Token& temp = tokens.get(index++);
     // if(temp.flags&TOKEN_SUFFIX_LINE_FEED||index==1){
         if(code.debugLines.used==0){
@@ -466,7 +467,7 @@ Token& GenerationInfo::next(){
     // }
     return temp;
 }
-bool GenerationInfo::revert(){
+bool ParseInfo::revert(){
     if(index==0)
         return false;
     index--;
@@ -481,26 +482,26 @@ bool GenerationInfo::revert(){
     // }
     return true;
 }
-Token& GenerationInfo::prev(){
+Token& ParseInfo::prev(){
     return tokens.get(index-2);
 }
-Token& GenerationInfo::now(){
+Token& ParseInfo::now(){
     return tokens.get(index-1);
 }
-Token& GenerationInfo::get(uint _index){
+Token& ParseInfo::get(uint _index){
     return tokens.get(_index);
 }
-bool GenerationInfo::end(){
+bool ParseInfo::end(){
     Assert(index<=tokens.length());
     return index==tokens.length();
 }
-void GenerationInfo::finish(){
+void ParseInfo::finish(){
     index = tokens.length();
 }
-int GenerationInfo::at(){
+int ParseInfo::at(){
     return index-1;
 }
-void GenerationInfo::printLine(){
+void ParseInfo::printLine(){
     using namespace engone;
     int startToken = at()-1;
     while(true){
@@ -531,7 +532,7 @@ void GenerationInfo::printLine(){
         log::out << get(i);
     }
 }
-bool GenerationInfo::addDebugLine(uint tokenIndex){
+bool ParseInfo::addDebugLine(uint tokenIndex){
     #ifndef USE_DEBUG_INFO
     return false;
     #endif
@@ -616,7 +617,7 @@ bool GenerationInfo::addDebugLine(uint tokenIndex){
     }
     return true;
 }
-void GenerationInfo::nextLine(){
+void ParseInfo::nextLine(){
     int extra=index==0;
     if(index==0){
         next();   
@@ -641,7 +642,7 @@ int OpPriority(int op){
 }
 // Concatenates current token with the next tokens not seperated by space, linefeed or such
 // operators and special characters are seen as normal letters
-Token CombineTokens(GenerationInfo& info){
+Token CombineTokens(ParseInfo& info){
     using namespace engone;
         
     Token outToken{};
@@ -667,10 +668,10 @@ Token CombineTokens(GenerationInfo& info){
     return outToken;
 }
 
-int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy);
-int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt);
+int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy);
+int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt);
 
-int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
+int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
     
     _GLOG(TRY)
@@ -777,7 +778,7 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
             } else if(IsName(token)){
                 // Todo: handle variable or function
                 auto varPair = info.variables.find(token);
-                auto funcPair = info.internalFunctions.find(token);
+                auto funcPair = info.externalFunctions.find(token);
                 if(varPair!=info.variables.end()){
                     token = info.next();
                     int reg = exprInfo.acc0Reg + exprInfo.regCount;
@@ -798,7 +799,7 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
                         return PARSE_ERROR;
                     }
                 } 
-                // if(funcPair!=info.internalFunctions.end()){
+                // if(funcPair!=info.externalFunctions.end()){
                 //     log::out << log::RED << "Func pair in expr. not implemented!\n";
                     
                 //     // Todo: ParseCommand?
@@ -1023,9 +1024,9 @@ int ParseExpression(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
         }
     }
 }
-int ParseBody(GenerationInfo& info, int acc0reg);
+int ParseBody(ParseInfo& info, int acc0reg);
 // returns 0 if syntax is wrong for flow parsing
-int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
+int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
     using namespace engone;
     
     _GLOG(TRY)
@@ -1043,7 +1044,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
         if(result!=PARSE_SUCCESS&&result!=PARSE_BAD_ATTEMPT){
             return PARSE_ERROR;
         }
-        GenerationInfo::FuncScope& funcScope = info.funcScopes.back();
+        ParseInfo::FuncScope& funcScope = info.funcScopes.back();
 
         for(int i = info.scopes.size()-1;i>=funcScope.scopeIndex;i--){
             info.dropScope(i);
@@ -1060,7 +1061,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
             ERRLINE
             return PARSE_ERROR;
         }
-        GenerationInfo::LoopScope& loop = info.loopScopes.back();
+        ParseInfo::LoopScope& loop = info.loopScopes.back();
 
         for(int i = info.scopes.size()-1;i>loop.scopeIndex;i--){
             info.dropScope(i);
@@ -1077,7 +1078,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
             ERRLINE
             return PARSE_ERROR;
         }
-        GenerationInfo::LoopScope& loop = info.loopScopes.back();
+        ParseInfo::LoopScope& loop = info.loopScopes.back();
         for(int i = info.scopes.size()-1;i>loop.scopeIndex;i--){
             info.dropScope(i);
         }
@@ -1106,7 +1107,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
         info.code.add(BC_JUMPNIF,expr.acc0Reg,jumpReg);
         _GLOG(INST << "\n";)
 
-        GenerationInfo::Scope& scope = info.scopes.back();
+        ParseInfo::Scope& scope = info.scopes.back();
         scope.delRegisters.push_back(expr.acc0Reg);
         scope.delRegisters.push_back(jumpReg);
 
@@ -1167,7 +1168,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
         int jumpReg = acc0reg;
         info.code.add(BC_NUM,jumpReg);
         _GLOG(INST << "\n";)
-        GenerationInfo::Scope& scope = info.scopes.back();
+        ParseInfo::Scope& scope = info.scopes.back();
         scope.delRegisters.push_back(jumpReg);
         int startAddress = info.code.addConstNumber(info.code.length());
         int endAddress = info.code.addConstNumber(-1);
@@ -1223,7 +1224,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
         info.code.add(BC_NUM,jumpReg);
         _GLOG(INST << "jump\n";)
 
-        GenerationInfo::Scope& scope = info.scopes.back();
+        ParseInfo::Scope& scope = info.scopes.back();
         scope.delRegisters.push_back(tempReg);
         scope.delRegisters.push_back(jumpReg);
 
@@ -1259,7 +1260,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
                 auto varPair = info.variables.find(token);
                 if(varPair==info.variables.end()){
                     // Turn token into variable?
-                    GenerationInfo::Variable& var = info.variables[token] = {};
+                    ParseInfo::Variable& var = info.variables[token] = {};
                     var.frameIndex = info.frameOffsetIndex++;
 
                     scope.variableNames.push_back(token);
@@ -1354,7 +1355,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
         int endAddress = info.code.addConstNumber(-1);
 
         info.loopScopes.push_back({});
-        GenerationInfo::LoopScope& loop = info.loopScopes.back();
+        ParseInfo::LoopScope& loop = info.loopScopes.back();
         loop.varReg = varReg;
         loop.jumpReg = jumpReg;
         loop.startConstant = startAddress;
@@ -1419,7 +1420,7 @@ int ParseFlow(GenerationInfo& info, int acc0reg, bool attempt){
     _GLOG(EXIT)
     return PARSE_SUCCESS;
 }
-int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy){
+int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy){
     using namespace engone;
     
     _GLOG(TRY)
@@ -1465,7 +1466,7 @@ int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
             return PARSE_ERROR;
         }else if(funcPair==info.functions.end()){
             // Note: assign new variable
-            GenerationInfo::Function& func = info.functions[token] = {};
+            ParseInfo::Function& func = info.functions[token] = {};
             int constIndex = info.code.addConstNumber(-1);
             int jumpReg = exprInfo.acc0Reg;
             info.code.add(BC_NUM,jumpReg);
@@ -1525,7 +1526,7 @@ int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
     auto find = info.variables.find(token);
     if(find==info.variables.end()){
         // Note: assign new variable
-        GenerationInfo::Variable& var = info.variables[token] = {};
+        ParseInfo::Variable& var = info.variables[token] = {};
         var.frameIndex = info.frameOffsetIndex++;
         
         // Todo: bound check on scopes
@@ -1556,7 +1557,7 @@ int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
         // info.code.add(BC_DEL,tempReg);
         // _GLOG(INST << "del "<<token<<"\n";)
         
-        GenerationInfo::Variable& var = find->second;
+        ParseInfo::Variable& var = find->second;
         
         // Todo: cache const number for frameIndex
         // if(var.constIndex==-1){
@@ -1591,7 +1592,7 @@ int ParseAssignment(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt
         // return PARSE_NO_VALUE;
     }
 }
-int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
+int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
     _GLOG(TRY)
     
@@ -1629,7 +1630,7 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     // bool codeFunc=false;
     if(funcPair!=info.functions.end()){
         // func in bytecode
-        GenerationInfo::Function& func = funcPair->second;
+        ParseInfo::Function& func = funcPair->second;
         if(func.constIndex==-1){
             func.constIndex = info.code.addConstNumber(func.jumpAddress);
         }
@@ -1871,7 +1872,7 @@ int ParseCommand(GenerationInfo& info, ExpressionInfo& exprInfo, bool attempt){
     _GLOG(EXIT)
     return PARSE_SUCCESS;
 }
-int ParseBody(GenerationInfo& info, int acc0reg){
+int ParseBody(ParseInfo& info, int acc0reg){
     using namespace engone;
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
@@ -1979,13 +1980,13 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
     using namespace engone;
     log::out <<log::BLUE<<  "\n##   Generator   ##\n";
     
-    GenerationInfo info{tokens};
+    ParseInfo info{tokens};
     
     // Todo: some better way to define this since they have to be defined here and in context.
     //  Better to define in one place.
-    info.internalFunctions["print"]=true;
-    info.internalFunctions["time"]=true;
-    info.internalFunctions["tonum"]=true;
+    info.externalFunctions["print"]=true;
+    info.externalFunctions["time"]=true;
+    info.externalFunctions["tonum"]=true;
     
     // info.code.add(BC_NUM,REG_ZERO);
     // info.code.add(BC_NUM,REG_STACK_POINTER);
@@ -2056,7 +2057,7 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
 #define ARG_NUMBER 4
 #define ARG_STRING 8
 // regIndex: index of the register in the instruction
-bool GenInstructionArg(GenerationInfo& info, int instType, int& num, int flags, uint8 regIndex){
+bool GenInstructionArg(ParseInfo& info, int instType, int& num, int flags, uint8 regIndex){
     using namespace engone;
     Assert(("CompileArg... flags must be ARG_REG or so ...",flags!=0));
     
@@ -2210,7 +2211,7 @@ bool GenInstructionArg(GenerationInfo& info, int instType, int& num, int flags, 
     log::out << "\n";
     return false;
 }
-bool LineEndError(GenerationInfo& info){
+bool LineEndError(ParseInfo& info){
     using namespace engone;
     Token now = info.now();
     if(0==(now.flags&TOKEN_SUFFIX_LINE_FEED) && !info.end()){
@@ -2257,7 +2258,7 @@ Bytecode GenerateInstructions(Tokens& tokens, int* outErr){
     // MAP("enter",BC_ENTERSCOPE)
     // MAP("exit",BC_EXITSCOPE)
 
-    GenerationInfo info{tokens};
+    ParseInfo info{tokens};
 
     while(!info.end()){
         Token token = info.next();

@@ -1,122 +1,18 @@
 
 ##   Tokenizer   ##
 
-##   Generator   ##
-   Enter scope 0
-    enter ParseBody
-    try   ParseFlow
-    try   ParseAssignment
+####   23 Tokens   ####
+@ define Base 1 , 2\n @ define Alt ( A , B ) 
+A + B\n Alt ( @ unwrap Base )\n 
 
-Line 1: a = 1
-    enter ParseExpression
-0: BC_NUM $10, 
-1: BC_LOADC $10 0, constant 1
-    exit  ParseExpression
-2: BC_STOREV $10 0, store new a 
-    exit  ParseAssignment
-    exit  ParseBody
-    enter ParseBody
-    try   ParseFlow
-    try   ParseAssignment
-
-Line 2: b = 2
-    enter ParseExpression
-3: BC_NUM $10, 
-4: BC_LOADC $10 1, constant 2
-    exit  ParseExpression
-5: BC_STOREV $10 1, store new b 
-    exit  ParseAssignment
-    exit  ParseBody
-    enter ParseBody
-    try   ParseFlow
-    try   ParseAssignment
-
-Line 3: sum = a + b
-    enter ParseExpression
-6: BC_LOADV $10 0, get variable 0
-7: BC_COPY $10 $10, 
-Operator + 
-8: BC_LOADV $11 1, get variable 1
-9: BC_COPY $11 $11, 
-10: BC_ADD $10 $11 $10, post
-11: BC_DEL $11, 
-    exit  ParseExpression
-12: BC_STOREV $10 2, store new sum 
-    exit  ParseAssignment
-    exit  ParseBody
-    enter ParseBody
-    try   ParseFlow
-    try   ParseAssignment
-    try   ParseCommand
-
-Line 5: _test_ sum 
-13: BC_STR $10, name
-14: BC_LOADC $10 0, constant _test_ 
-15: BC_STR $12, temp str
-16: BC_LOADV $13 2, get variable 2
-17: BC_STR $11, arg
-18: BC_ADD $11 $13 $11, 
-19: BC_DEL $12, temp
-20: BC_RUN $11 $10, run _test_ 
-21: BC_DEL $10, name
-22: BC_DEL $11, arg
-23: BC_MOV $rv $10, 
-    exit  ParseCommand
-24: BC_DEL $10, 
-    exit  ParseBody
-   Exit  scope 0
-25: BC_LOADV $9 0, 
-26: BC_DEL $9, 'a '
-27: BC_LOADV $9 1, 
-28: BC_DEL $9, 'b '
-29: BC_LOADV $9 2, 
-30: BC_DEL $9, 'sum '
-
-##   Execute   ##
-
-Line 1: a = 1
- 0: BC_NUM $10 [2]
- 1: BC_LOADC $10 0, reg = 1.00
- 2: BC_STOREV $10 0, stored '1.00' at 0
-
-Line 2: b = 2
- 3: BC_NUM $10 [3]
- 4: BC_LOADC $10 1, reg = 2.00
- 5: BC_STOREV $10 1, stored '2.00' at 1
-
-Line 3: sum = a + b
- 6: BC_LOADV $10 0, loaded '1.00' from 0
- 7: BC_COPY $10 $10 [4], copied 1.00
- 8: BC_LOADV $11 1, loaded '2.00' from 1
- 9: BC_COPY $11 $11 [5], copied 2.00
- 10: BC_ADD $10 $11 $10, 1.00 + 2.00 = 3.00
- 11: BC_DEL $11 [5]
- 12: BC_STOREV $10 2, stored '3.00' at 2
-
-Line 5: _test_ sum 
- 13: BC_STR $10 [0]
- 14: BC_LOADC $10 0, reg = _test_
- 15: BC_STR $12 [1]
- 16: BC_LOADV $13 2, loaded '3.00' from 2
- 17: BC_STR $11 [2]
- 18: BC_ADD $11 $13 $11, "3"
- 19: BC_DEL $12 [1]
-_test_ 3
- 21: BC_DEL $10 [0]
- 22: BC_DEL $11 [2]
- 23: BC_MOV $rv $10, moved ?
-ContextWarning 24,BC_DEL $10, cannot delete REF_?
- 24: BC_DEL $10 [0]
- 25: BC_LOADV $9 0, loaded '1.00' from 0
- 26: BC_DEL $9 [2]
- 27: BC_LOADV $9 1, loaded '2.00' from 1
- 28: BC_DEL $9 [3]
- 29: BC_LOADV $9 2, loaded '3.00' from 2
- 30: BC_DEL $9 [4]
-##   Summary   ##
- 4 lines in 0.02 seconds (avg 5583775.00 ns/line)
- 31 instructions in 0.02 seconds (avg 720487.10 ns/inst)
- 1.39 K instructions per second (1.39 KHz)
-Res 167166000 1951.90 us
-Success with 1 / 1 test
-end of main!
+##   Preprocessor   ##
+@define 'Base ' 3 tokens
+loaded 2 arg names
+@define 'Alt' 2 args, 3 tokens
+ argv[0] += @
+ argv[0] += unwrap 
+ argv[0] += Base
+Eval 1 arguments
+PreProcError 6:1: Define 'Alt' with 1 args does not exist
+Preprocessor failed with 1 errors
+### # # #  #  #  #    #    #

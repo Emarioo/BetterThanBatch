@@ -23,30 +23,38 @@ void CompilerFile(const char* path){
 void CompileScript(const char* path){
     using namespace engone;
     auto text = ReadFile(path);
+    Tokens tokens{};
+    int err=0;
+    Bytecode bytecode{};
+    double seconds=0;
     
     auto startCompileTime = engone::MeasureSeconds();
-    Tokens toks = Tokenize(text);
-    toks.printTokens(14,TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
+    tokens = Tokenize(text);
+    tokens.printTokens(14,0);
+    // TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
     // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
-    int err=0;
-    Bytecode bytecode = GenerateScript(toks,&err);
-    double seconds=0; // here because goto wants it here
-    if(err){
-        // log::out << log::RED<<"Errors\n";
+    
+    Preprocess(tokens,&err);
+    
+    if(err)
         goto COMP_SCRIPT_END;
-        // return;
-    }
-    // bytecode.printStats();
+    
+    tokens.print();
+    
+    // bytecode = GenerateScript(tokens,&err);
+    if(err)
+        goto COMP_SCRIPT_END;
+    
     // OptimizeBytecode(bytecode);
-    // bytecode.printStats();
+    
     seconds = engone::StopMeasure(startCompileTime);
-    log::out << "\nFully compiled "<<bytecode.getMemoryUsage()<<" bytes of bytecode in "<<seconds<<" seconds\n";
+    log::out << "\nFully compiled "<<bytecode.getMemoryUsage()<<" bytes of bytecode in "<<(seconds*1e6)<<" us\n";
 
-    Context::Execute(bytecode);
+    // Context::Execute(bytecode);
 
 COMP_SCRIPT_END:
     bytecode.cleanup();
-    toks.cleanup();
+    tokens.cleanup();
     text.resize(0);
 }
 void CompileInstructions(const char* path){

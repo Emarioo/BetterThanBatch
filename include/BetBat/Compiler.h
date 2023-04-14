@@ -1,7 +1,8 @@
 #include "BetBat/Tokenizer.h"
-#include "BetBat/Generator.h"
+#include "BetBat/Preprocessor.h"
+#include "BetBat/Parser.h"
 #include "BetBat/Optimizer.h"
-#include "BetBat/Context.h"
+#include "BetBat/Interpreter.h"
 #include "BetBat/Utility.h"
 
 // compiles based on file format/extension

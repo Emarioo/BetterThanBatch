@@ -1,8 +1,8 @@
-#include "BetBat/APICalls.h"
+#include "BetBat/ExternalCalls.h"
 
-#include "BetBat/Context.h"
+#include "BetBat/Interpreter.h"
 
-Ref APIPrint(Context* context, int refType, void* value){
+Ref ExtPrint(Context* context, int refType, void* value){
     if(refType==REF_STRING){
         String* str = (String*)value;
         engone::log::out <<*str;
@@ -18,7 +18,7 @@ Ref APIPrint(Context* context, int refType, void* value){
     return {REF_NUMBER,index};
     // return {};
 }
-Ref APIToNum(Context* context, int refType, void* value){
+Ref ExtToNum(Context* context, int refType, void* value){
     using namespace engone;
     double number=0;
     if(refType==REF_STRING){
@@ -49,7 +49,7 @@ Ref APIToNum(Context* context, int refType, void* value){
     context->getNumber(index)->value=number;
     return {REF_NUMBER,index};
 }
-Ref APITime(Context* context, int refType, void* value){
+Ref ExtTime(Context* context, int refType, void* value){
     using namespace engone;
     // Arguments are ignored
     if(refType==0||!value){
@@ -83,7 +83,7 @@ Ref APITime(Context* context, int refType, void* value){
         context->getNumber(index)->value=engone::StopMeasure(number);
         return {REF_NUMBER,index};
     }else{
-        log::out << "APITime: Expected Number or null as argument (got "<<RefToString(refType)<<")\n";
+        log::out << __FUNCTION__<<": Expected Number or null as argument (got "<<RefToString(refType)<<")\n";
         return {};
     }
 }

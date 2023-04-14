@@ -1,0 +1,45 @@
+
+
+@define Base 1,2
+@define Alt(A,B) A + B 
+
+Alt(@unwrap Base)
+
+/*
+@define CONST a, b
+
+
+@define REC(X,Y) X || Y
+
+REC(@unwrap CONST)
+/**/
+/*
+@define ENUM(T,...) enum T { ENUM_REC(...) }
+@define ENUM_REC(E,...) E, ENUM_REC(...)
+@define ENUM_REC(E) E
+
+
+@multidefine ENUM_STR(T,...)
+const char* ToString(T type){
+    switch(type){
+        STR_REC(...)
+    }
+}
+@enddef
+@multidefine STR_REC(E,...)
+    case E: return E;
+    STR_REC(...)
+@enddef
+@define STR_REC(A) case A: return A;
+
+
+@define ENUM_ABC a,b,c
+
+//ENUM(a,b,c)
+
+//ENUM_ABC
+ENUM(ABC,ENUM_ABC)
+
+ENUM_STR(ABC,ENUM_ABC)
+
+/**/
