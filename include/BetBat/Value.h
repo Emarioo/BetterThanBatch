@@ -18,6 +18,9 @@ struct String {
     bool copy(String* str);
     
     bool operator==(String& str);
+    bool operator!=(String& str);
+    bool operator==(const char* str);
+    bool operator!=(const char* str);
     
     operator std::string();
 };

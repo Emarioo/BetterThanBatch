@@ -1,5 +1,6 @@
 #include "BetBat/TestGenerator.h"
 #include "BetBat/Compiler.h"
+#include "BetBat/TestSuite.h"
 
 // void split(){
 //     const char* str="bool compileInst = false ; for ( int i = 1 ; i < argc ; i++) {";
@@ -32,12 +33,20 @@ int main(int argc, const char** argv){
 
     bool compileInst=false;
     for(int i=1;i<argc;i++){
-        if(strcmp(argv[i],"-inst")==0){
-            compileInst=true;
-        }else if(compileInst){
-            CompileInstructions(argv[i]);
+        const char* str = argv[i];
+        int len = strlen(argv[i]);
+        if(len>0 && str[0]=='-'){
+            if(!strcmp(argv[i],"-test")){
+                TestSuite();
+            }
         }else{
-            CompileScript(argv[i]);
+            if(strcmp(argv[i],"-inst")==0){
+                compileInst=true;
+            }else if(compileInst){
+                CompileInstructions(argv[i]);
+            }else{
+                CompileScript(argv[i]);
+            }
         }
     }
     

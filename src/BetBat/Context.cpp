@@ -1015,7 +1015,25 @@ void Context::execute(Bytecode& code){
                 // auto unresolved = activeCode.getUnresolved(n1->value);
                 // if(!unresolved){
                 // }else{
+
                     std::string name = *v1;
+                    
+                    if(name=="_test_"){
+                        log::out << log::MAGENTA<<"_test_ ";
+                        PrintRefValue(this,r0);
+                        log::out <<"\n";
+                        TestValue testValue{r0.type};
+                        if(r0.type==REF_STRING){
+                            String* v0 = getString(r0.index);
+                            testValue.string = *v0;
+                        }else if(r0.type==REF_NUMBER){
+                            Number* v0 = getNumber(r0.index);
+                            testValue.number = *v0;
+                        }
+                        testValues.push_back(testValue);
+                        continue;
+                    }
+
                     auto find = apiCalls.find(name);
                     if(find!=apiCalls.end()){
                         void* arg=0;

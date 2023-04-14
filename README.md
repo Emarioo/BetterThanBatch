@@ -17,12 +17,7 @@ Some basic features so far (not completed however, I have most likely missed man
 - Preprocessor
 - Generator (parser and compiler for bytecode)
 - Optimizer (optional)
-- Execution (intepreter for final bytecode)
-
-## Building (currently only on windows)
-build.bat is used to compile the project but
-compiling scripts with it doesn't really work
-yet. Things will probably work in May.
+- Intepreter
 
 ## Performance (rough measures)
 ```
@@ -61,6 +56,11 @@ g++ FILES -o program.exe
 ```
 GCC and any other executable found in environment variables
 can be run like a shell script. Just like batch.
+
+## Building (currently only on windows)
+build.bat is used to compile the project but
+compiling scripts with it doesn't really work
+yet. Things will probably work in May.
 
 ## Example (bytecode)
 ```

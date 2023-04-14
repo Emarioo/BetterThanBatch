@@ -25,6 +25,15 @@ struct Context {
 
     std::unordered_map<std::string, APICall> apiCalls;
 
+    struct TestValue {
+        int type=0;
+        union {
+            String string;
+            Number number;
+        };
+    };
+    std::vector<TestValue> testValues;
+
     Bytecode activeCode;
     
     void cleanup();

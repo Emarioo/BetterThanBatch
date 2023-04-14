@@ -1,267 +1,122 @@
 
 ##   Tokenizer   ##
 
-####   71 Tokens   ####
-add = {\n split = 0\n for i : # arg . length {\n
-if # arg [ i ] == " " {\n split = i\n break\n }\n
-}\n a = # run tonum ( # arg [ 0 : split -
-1 ] )\n b = # run tonum ( # arg [ split +
-1 : # arg . length - 1 ] )\n return a + b\n
-}\n 
-
 ##   Generator   ##
    Enter scope 0
     enter ParseBody
     try   ParseFlow
     try   ParseAssignment
 
-Line 1: add = {
-0: BC_NUM $10, jump
-1: BC_LOADC $10 0, 
-2: BC_JUMP $10, Skip function body 'add '
-   Enter scope 1
-    enter ParseBody
-    try   ParseFlow
-    try   ParseAssignment
-
-Line 2: split = 0
+Line 1: a = 1
     enter ParseExpression
-3: BC_NUM $11, 
-4: BC_LOADC $11 1, constant 0
+0: BC_NUM $10, 
+1: BC_LOADC $10 0, constant 1
     exit  ParseExpression
-5: BC_STOREV $11 0, store new split 
+2: BC_STOREV $10 0, store new a 
     exit  ParseAssignment
-    try   ParseFlow
-
-Line 3: for i : #arg.length {
-   Enter scope 2
-6: BC_NUM $13, temp
-7: BC_NUM $14, jump
-8: BC_? $11 $null $null, May become BC_NUM
-    try   ParseAssignment
-    try   ParseExpression
-9: BC_NUM $11, var reg
-10: BC_STOREV $11 1, store i 
-    try   ParseAssignment
-    try   ParseExpression
-11: BC_COPY $rz $15, 
-12: BC_NUM $16, 
-13: BC_LEN $15 $16, 
-14: BC_DEL $15, 
-15: BC_MOV $16 $15, 
-    exit  ParseExpression
-16: BC_MOV $15 $12, acc -> max
-    Start Address: 11.00
-17: BC_LESS $11 $12 $13, 
-18: BC_DEL $12, 
-19: BC_LOADC $14 3, 
-20: BC_JUMPNIF $13 $14, 
-    enter ParseBody
-    try   ParseFlow
-
-Line 4: if #arg[i] == " " {
-   Enter scope 3
-    enter ParseExpression
-21: BC_COPY $rz $15, 
-    enter ParseExpression
-22: BC_LOADV $16 1, get variable 1
-23: BC_COPY $16 $16, 
-    exit  ParseExpression
-24: BC_MOV $15 $18, temp 2
-25: BC_SUBSTR $15 $16 $16, 
-26: BC_DEL $16, temp 0
-27: BC_DEL $18, temp 2
-Operator == 
-28: BC_STR $16, 
-29: BC_LOADC $16 0, constant " " 
-30: BC_EQUAL $15 $16 $15, post
-31: BC_DEL $16, 
-    exit  ParseExpression
-32: BC_NUM $16, jump
-33: BC_LOADC $16 4, 
-34: BC_JUMPNIF $15 $16, 
-    enter ParseBody
-    try   ParseFlow
-    try   ParseAssignment
-
-Line 5: split = i
-    enter ParseExpression
-35: BC_LOADV $17 1, get variable 1
-36: BC_COPY $17 $17, 
-    exit  ParseExpression
-37: BC_STOREV $17 0, store split 
-    exit  ParseAssignment
-    try   ParseFlow
-
-Line 6: break
-38: BC_DEL $15, 
-39: BC_DEL $16, 
-40: BC_LOADC $14 3, 
-41: BC_JUMP $14, 
-    exit  ParseFlow
-
-Line 7: }
     exit  ParseBody
-   Exit  scope 3
-42: BC_DEL $15, 
-43: BC_DEL $16, 
-    exit  ParseFlow
+    enter ParseBody
+    try   ParseFlow
+    try   ParseAssignment
 
-Line 8: }
+Line 2: b = 2
+    enter ParseExpression
+3: BC_NUM $10, 
+4: BC_LOADC $10 1, constant 2
+    exit  ParseExpression
+5: BC_STOREV $10 1, store new b 
+    exit  ParseAssignment
     exit  ParseBody
-44: BC_LOADC $13 5, 
-45: BC_ADD $11 $13 $11, increment var
-46: BC_LOADC $14 2, 
-47: BC_JUMP $14, 
-    End Address: 48.00
-   Exit  scope 2
-48: BC_LOADV $9 1, 
-49: BC_DEL $9, 'i '
-50: BC_DEL $13, 
-51: BC_DEL $14, 
-    exit  ParseFlow
+    enter ParseBody
     try   ParseFlow
     try   ParseAssignment
 
-Line 9: a = #run tonum (#arg[0:split-1])
+Line 3: sum = a + b
     enter ParseExpression
-    enter ParseCommand
-52: BC_STR $11, name
-53: BC_LOADC $11 1, constant tonum 
-54: BC_STR $13, temp str
-    enter ParseExpression
-55: BC_COPY $rz $14, 
-    enter ParseExpression
-56: BC_NUM $15, 
-57: BC_LOADC $15 6, constant 0
-    exit  ParseExpression
-    enter ParseExpression
-58: BC_LOADV $16 0, get variable 0
-59: BC_COPY $16 $16, 
-Operator -
-60: BC_NUM $17, 
-61: BC_LOADC $17 7, constant 1
-62: BC_SUB $16 $17 $16, post
-63: BC_DEL $17, 
-    exit  ParseExpression
-64: BC_MOV $14 $17, temp 2
-65: BC_SUBSTR $14 $15 $16, 
-66: BC_DEL $15, temp 0
-67: BC_DEL $16, temp 1
-68: BC_DEL $17, temp 2
-    exit  ParseExpression
-69: BC_STR $12, arg
-70: BC_ADD $12 $14 $12, 
-71: BC_DEL $14, 
-72: BC_DEL $13, temp
-73: BC_RUN $12 $11, run tonum 
-74: BC_DEL $11, name
-75: BC_DEL $12, arg
-76: BC_MOV $rv $11, 
-    exit  ParseCommand
-    exit  ParseExpression
-77: BC_STOREV $11 2, store new a 
-    exit  ParseAssignment
-    try   ParseFlow
-    try   ParseAssignment
-
-Line 10: b = #run tonum (#arg[split+1:#arg.length-1])
-    enter ParseExpression
-    enter ParseCommand
-78: BC_STR $11, name
-79: BC_LOADC $11 2, constant tonum 
-80: BC_STR $13, temp str
-    enter ParseExpression
-81: BC_COPY $rz $14, 
-    enter ParseExpression
-82: BC_LOADV $15 0, get variable 0
-83: BC_COPY $15 $15, 
-Operator +
-84: BC_NUM $16, 
-85: BC_LOADC $16 8, constant 1
-86: BC_ADD $15 $16 $15, post
-87: BC_DEL $16, 
-    exit  ParseExpression
-    enter ParseExpression
-88: BC_COPY $rz $16, 
-89: BC_NUM $17, 
-90: BC_LEN $16 $17, 
-91: BC_DEL $16, 
-92: BC_MOV $17 $16, 
-Operator -
-93: BC_NUM $17, 
-94: BC_LOADC $17 9, constant 1
-95: BC_SUB $16 $17 $16, post
-96: BC_DEL $17, 
-    exit  ParseExpression
-97: BC_MOV $14 $17, temp 2
-98: BC_SUBSTR $14 $15 $16, 
-99: BC_DEL $15, temp 0
-100: BC_DEL $16, temp 1
-101: BC_DEL $17, temp 2
-    exit  ParseExpression
-102: BC_STR $12, arg
-103: BC_ADD $12 $14 $12, 
-104: BC_DEL $14, 
-105: BC_DEL $13, temp
-106: BC_RUN $12 $11, run tonum 
-107: BC_DEL $11, name
-108: BC_DEL $12, arg
-109: BC_MOV $rv $11, 
-    exit  ParseCommand
-    exit  ParseExpression
-110: BC_STOREV $11 3, store new b 
-    exit  ParseAssignment
-    try   ParseFlow
-
-Line 12: return a + b
-    try   ParseExpression
-111: BC_LOADV $11 2, get variable 2
-112: BC_COPY $11 $11, 
+6: BC_LOADV $10 0, get variable 0
+7: BC_COPY $10 $10, 
 Operator + 
-113: BC_LOADV $12 3, get variable 3
-114: BC_COPY $12 $12, 
-115: BC_ADD $11 $12 $11, post
-116: BC_DEL $12, 
+8: BC_LOADV $11 1, get variable 1
+9: BC_COPY $11 $11, 
+10: BC_ADD $10 $11 $10, post
+11: BC_DEL $11, 
     exit  ParseExpression
-117: BC_LOADV $9 0, 
-118: BC_DEL $9, 'split '
-119: BC_LOADV $9 2, 
-120: BC_DEL $9, 'a '
-121: BC_LOADV $9 3, 
-122: BC_DEL $9, 'b '
-123: BC_RETURN $11, 
-    exit  ParseFlow
-
-Line 13: }
-    exit  ParseBody
-   Exit  scope 1
-124: BC_LOADV $9 0, 
-125: BC_DEL $9, 'split '
-126: BC_LOADV $9 2, 
-127: BC_DEL $9, 'a '
-128: BC_LOADV $9 3, 
-129: BC_DEL $9, 'b '
-130: BC_RETURN $null, 
-131: BC_DEL $10, skipped to here
+12: BC_STOREV $10 2, store new sum 
     exit  ParseAssignment
+    exit  ParseBody
+    enter ParseBody
+    try   ParseFlow
+    try   ParseAssignment
+    try   ParseCommand
+
+Line 5: _test_ sum 
+13: BC_STR $10, name
+14: BC_LOADC $10 0, constant _test_ 
+15: BC_STR $12, temp str
+16: BC_LOADV $13 2, get variable 2
+17: BC_STR $11, arg
+18: BC_ADD $11 $13 $11, 
+19: BC_DEL $12, temp
+20: BC_RUN $11 $10, run _test_ 
+21: BC_DEL $10, name
+22: BC_DEL $11, arg
+23: BC_MOV $rv $10, 
+    exit  ParseCommand
+24: BC_DEL $10, 
     exit  ParseBody
    Exit  scope 0
-
-Fully compiled 5920 bytes of bytecode in 0.05 seconds
+25: BC_LOADV $9 0, 
+26: BC_DEL $9, 'a '
+27: BC_LOADV $9 1, 
+28: BC_DEL $9, 'b '
+29: BC_LOADV $9 2, 
+30: BC_DEL $9, 'sum '
 
 ##   Execute   ##
 
-Line 1: add = {
+Line 1: a = 1
  0: BC_NUM $10 [2]
- 1: BC_LOADC $10 0, reg = 131.00
- 130: BC_JUMP $10, jumped to 131
+ 1: BC_LOADC $10 0, reg = 1.00
+ 2: BC_STOREV $10 0, stored '1.00' at 0
 
-Line 13: }
- 131: BC_DEL $10 [2]
+Line 2: b = 2
+ 3: BC_NUM $10 [3]
+ 4: BC_LOADC $10 1, reg = 2.00
+ 5: BC_STOREV $10 1, stored '2.00' at 1
+
+Line 3: sum = a + b
+ 6: BC_LOADV $10 0, loaded '1.00' from 0
+ 7: BC_COPY $10 $10 [4], copied 1.00
+ 8: BC_LOADV $11 1, loaded '2.00' from 1
+ 9: BC_COPY $11 $11 [5], copied 2.00
+ 10: BC_ADD $10 $11 $10, 1.00 + 2.00 = 3.00
+ 11: BC_DEL $11 [5]
+ 12: BC_STOREV $10 2, stored '3.00' at 2
+
+Line 5: _test_ sum 
+ 13: BC_STR $10 [0]
+ 14: BC_LOADC $10 0, reg = _test_
+ 15: BC_STR $12 [1]
+ 16: BC_LOADV $13 2, loaded '3.00' from 2
+ 17: BC_STR $11 [2]
+ 18: BC_ADD $11 $13 $11, "3"
+ 19: BC_DEL $12 [1]
+_test_ 3
+ 21: BC_DEL $10 [0]
+ 22: BC_DEL $11 [2]
+ 23: BC_MOV $rv $10, moved ?
+ContextWarning 24,BC_DEL $10, cannot delete REF_?
+ 24: BC_DEL $10 [0]
+ 25: BC_LOADV $9 0, loaded '1.00' from 0
+ 26: BC_DEL $9 [2]
+ 27: BC_LOADV $9 1, loaded '2.00' from 1
+ 28: BC_DEL $9 [3]
+ 29: BC_LOADV $9 2, loaded '3.00' from 2
+ 30: BC_DEL $9 [4]
 ##   Summary   ##
- 2 lines in 0.00 seconds (avg 759800.00 ns/line)
- 4 instructions in 0.00 seconds (avg 379900.00 ns/inst)
- 2.63 K instructions per second (2.63 KHz)
-Res 167166000 1088.10 us
+ 4 lines in 0.02 seconds (avg 5583775.00 ns/line)
+ 31 instructions in 0.02 seconds (avg 720487.10 ns/inst)
+ 1.39 K instructions per second (1.39 KHz)
+Res 167166000 1951.90 us
+Success with 1 / 1 test
 end of main!
