@@ -1,31 +1,18 @@
 
 ##   Tokenizer   ##
 
-####   31 Tokens   ####
-@ define Mass ( M , ... ) print M ; Mass ( ...
-)\n @ define Mass ( M ) print M\n Mass ( Hey , you
-, cool? )\n 
+####   23 Tokens   ####
+@ define Base 1 , 2\n @ define Alt ( A , B ) 
+A + B\n Alt ( @ unwrap Base )\n 
 
 ##   Preprocessor   ##
+@define 'Base ' 3 tokens
+loaded 2 arg names
+@define 'Alt' 2 args, 3 tokens
+ argv[0] += @
+ argv[0] += unwrap 
+ argv[0] += Base
+Eval 1 arguments
+PreProcError 6:1: Define 'Alt' with 1 args does not exist
+Preprocessor failed with 1 errors
 ### # # #  #  #  #    #    #
-
-##   Generator   ##
-
-Fully compiled 4900 bytes of bytecode in 1926.40 us
-
-##   Execute   ##
-Line 10: print Hey; print you; print cool?
-Line 13: print Hey; print you; print cool?
-Line 10: print Hey; print you; print cool?
-Hey
-Line 13: print Hey; print you; print cool?
-Line 10: print Hey; print you; print cool?
-you
-Line 11: print Hey; print you; print cool?
-Line 13: print Hey; print you; print cool?
-cool?
-##   Summary   ##
- 7 lines in 0.00 seconds (avg 61549.86 ns/line)
- 36 instructions in 0.00 seconds (avg 11968.03 ns/inst)
- 83.56 K instructions per second (83.56 KHz)
-Res 167166000 847.62 us

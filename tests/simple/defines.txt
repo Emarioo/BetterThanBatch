@@ -52,11 +52,16 @@ REV(1,2,3,4)
 @define NotBug(A,...) NotBug0(...)
 @define NotBug0(...) NotBug(A,B,...)
 
+// increment
+@define NotBug(...) Here NotBug(0,...)
+@define NotBug(a,a,a,a,a,a)
+NotBug()
+
 // print
 @define Mass(M,...) print M; Mass(...)
 @define Mass(M) print M
 Mass(Hey, you, cool?)
 
-// BUG HERE?
+// Empty base
 @define Mass(M,...) print M Mass(...)
 @define Mass()

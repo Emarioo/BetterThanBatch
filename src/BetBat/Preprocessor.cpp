@@ -6,10 +6,13 @@
 #define PWARNT(token) engone::log::out << engone::log::YELLOW << "PreProcWarning "<< token.line <<":"<<token.column<<": "
 
 #ifdef PLOG
-#define _PLOG(X) X;
+#define _PLOG(X) X
 #else
 #define _PLOG(X) ;
 #endif
+
+// #define PLOG_MATCH(X) X
+#define PLOG_MATCH(X)
 
 // used for std::vector<int> tokens
 #define INT_ENCODE(I) (I<<3)
@@ -34,13 +37,30 @@ Token& PreprocInfo::get(int index){
 Token& PreprocInfo::now(){
     return inTokens.get(index-1);   
 }
+PreprocInfo::Defined* PreprocInfo::matchDefine(Token& token){
+    if(token.flags&TOKEN_QUOTED)
+        return 0;
+    auto pair = defines.find(token);
+    if(pair==defines.end()){
+        return 0;
+    }
+    // if(pair->second.called){
+    //     auto& info = *this;
+    //     PERRT(token) << "Infinite recursion not allowed ("<<token<<")\n";
+    //     return 0;
+    // }
+    _PLOG(PLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<token<<"\n";))
+    return &pair->second;
+}
 int PreprocInfo::CertainDefined::matchArg(Token& token){
     if(token.flags&TOKEN_QUOTED)
         return -1;
     for(int i=0;i<(int)argumentNames.size();i++){
         std::string& str = argumentNames[i];
-        if(token == str.c_str())
+        if(token == str.c_str()){
+            _PLOG(PLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match tok with arg "<<token<<"\n";))
             return i;
+        }
     }
     return -1;
 }
@@ -51,7 +71,7 @@ PreprocInfo::CertainDefined* PreprocInfo::Defined::matchArgCount(int count, bool
             return 0;
         if(hasInfinite){
             if((int)infDefined.argumentNames.size()-1<=count){
-                _PLOG(engone::log::out << "matchedarg "<<infDefined.argumentNames.size()<<" "<<count<<"\n";)
+                _PLOG(PLOG_MATCH(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< infDefined.argumentNames.size()<<" (inf)\n";))
                 return &infDefined;
             }else{
                 return 0;
@@ -60,6 +80,7 @@ PreprocInfo::CertainDefined* PreprocInfo::Defined::matchArgCount(int count, bool
             return 0;   
         }
     }else{
+        _PLOG(PLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< infDefined.argumentNames.size()<<"\n";))
         return &pair->second;
     }
 }
@@ -167,7 +188,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     if(!rootDefined){
         rootDefined = &(info.defines[name] = {});
     }
-    
+    int suffixFlags = name.flags;
     PreprocInfo::CertainDefined defTemp{};
     if((name.flags&TOKEN_SUFFIX_SPACE) || (name.flags&TOKEN_SUFFIX_LINE_FEED)){
     
@@ -181,6 +202,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         while(!info.end()){
             Token token = info.next();
             if(token==")"){
+                suffixFlags = token.flags;
                 break;   
             }
             
@@ -191,6 +213,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
             defTemp.argumentNames.push_back(token);
             token = info.next();
             if(token==")"){
+                suffixFlags = token.flags;
                 break;   
             } else if(token==","){
                 // cool
@@ -228,7 +251,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     
     int startToken = info.at()+1;
     int endToken = startToken;
-    if(!multiline&&(name.flags&TOKEN_SUFFIX_LINE_FEED))
+    if(!multiline&&(suffixFlags&TOKEN_SUFFIX_LINE_FEED))
         goto while_skip_194;
     while(!info.end()){
         Token token = info.next();
@@ -250,6 +273,9 @@ int ParseDefine(PreprocInfo& info, bool attempt){
                 endToken = info.at()+1;
                 break;
             }
+        }
+        if(info.end()&&multiline){
+            PERRTL(token) << "Missing enddef!\n";
         }
     }
     while_skip_194:
@@ -359,20 +385,6 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
     //  log::out << "     exit  ifdef loop\n";
     return error;
 }
-PreprocInfo::Defined* PreprocInfo::matchDefine(Token& token){
-    if(token.flags&TOKEN_QUOTED)
-        return 0;
-    auto pair = defines.find(token);
-    if(pair==defines.end()){
-        return 0;
-    }
-    // if(pair->second.called){
-    //     auto& info = *this;
-    //     PERRT(token) << "Infinite recursion not allowed ("<<token<<")\n";
-    //     return 0;
-    // }
-    return &pair->second;
-}
 void EvaluateRange(PreprocInfo& info, Token& name, PreprocInfo::Defined* defined, std::vector<std::vector<int>>& argValues);
 
 int EvaluateArgValues(PreprocInfo& info, Token& name, PreprocInfo::CertainDefined* topDefined,
@@ -399,14 +411,16 @@ int EvaluateArgValues(PreprocInfo& info, Token& name, PreprocInfo::CertainDefine
         index++;
         return PARSE_SUCCESS; // once again, no args
     }
-        
+    
     int parDepth = 0;
+    int valueIndex=outValues.size();
+    // bool unwrapNext=false;
     while(index<(int)tokens.size()){
         Token token = info.get(INT_DECODE(tokens[index]));
         index++;
         if(token==","){
             if(parDepth==0){
-                outValues.push_back({});
+                valueIndex++;
                 continue;
             }
         }else if(token=="("){
@@ -418,12 +432,19 @@ int EvaluateArgValues(PreprocInfo& info, Token& name, PreprocInfo::CertainDefine
             }
             parDepth--;
         }
-        _PLOG(log::out <<log::GRAY << " range "<<outValues.size()<<" "<< token<<"\n";)
-        
+        // _PLOG(log::out <<log::GRAY << " range "<<outValues.size()<<" "<< token<<"\n";)
+        // if(token=="@"){
+        //     Token nextTok = info.get(INT_DECODE(tokens[index]));
+        //     if(nextTok=="unwrap"){
+        //         unwrapNext=true;
+        //         index++;
+        //         continue;   
+        //     }
+        // }
         int argIndex = -1;
         if(topDefined!=0){
             if(-1!=(argIndex = topDefined->matchArg(token))){
-                _PLOG(log::out << log::GRAY<<" match arg "<<token <<", index: "<<argIndex<<"\n";)
+                // _PLOG(log::out << log::GRAY<<" match arg "<<token <<", index: "<<argIndex<<"\n";)
                 int argStart = argIndex;
                 int argEnd = argIndex+1;
                 
@@ -438,8 +459,10 @@ int EvaluateArgValues(PreprocInfo& info, Token& name, PreprocInfo::CertainDefine
                     std::vector<int> list = argValues[i];
                     // log::out << log::GRAY<< "range"<<i<<" "<<argRange.start << " "<<argRange.end<<"\n";
                     outValues.push_back({});
+                    valueIndex++;
                     int ind=0;
                     while(ind<(int)list.size()){
+                        _PLOG(log::out <<log::GRAY << " argv["<<(outValues.size()-1)<<"] += "<<info.get(INT_DECODE(list[ind]))<<" (from arg)\n";)
                         outValues.back().push_back(list[ind]);
                         ind++;
                     }
@@ -448,16 +471,17 @@ int EvaluateArgValues(PreprocInfo& info, Token& name, PreprocInfo::CertainDefine
         }
         
         if(argIndex==-1){
-            if(outValues.size()==0)
+            if((int)outValues.size()==valueIndex)
                 outValues.push_back({});
+            _PLOG(log::out <<log::GRAY << " argv["<<(outValues.size()-1)<<"] += "<<token<<"\n";)
             outValues.back().push_back(tokens[index-1]);
         }
     }
-    _PLOG(log::out << "loaded "<<outValues.size()<<" ranges\n";)
+    _PLOG(log::out << "Eval "<<outValues.size()<<" arguments\n";)
     return PARSE_SUCCESS;
 }
 void EvaluateRange(PreprocInfo& info, Token& name, PreprocInfo::CertainDefined* defined,
-    std::vector<std::vector<int>>& argValues, int extraFlags){
+    std::vector<std::vector<int>>& argValues, int extraFlags, bool unwrapping){
     using namespace engone;
     if(info.evaluationDepth>=PREPROC_REC_LIMIT){
         PERR << "Hit recursion limit of "<<PREPROC_REC_LIMIT<<"\n";
@@ -469,22 +493,29 @@ void EvaluateRange(PreprocInfo& info, Token& name, PreprocInfo::CertainDefined* 
     for(int i=defined->start;i<defined->end;i++){
         tokens.push_back(INT_ENCODE(i));
     }
-    _PLOG(log::out << log::GRAY<<"EvalRange flags:"<<extraFlags<<"\n";)
+    _PLOG(log::out <<"Eval "<<name<<" "<<tokens.size()<<" toks\n";)
     int index=0;
+    bool unwrapNext = false;
     while(index<(int)tokens.size()){
         Token token = info.get(INT_DECODE(tokens[index]));
         index++;
+        
+        if(token=="@"){
+            Token nextTok = info.get(INT_DECODE(tokens[index]));
+            if(nextTok=="unwrap"){
+                unwrapNext=true; // Not handled on arguments  Base(A) @unwrap A <- nothing happens
+                index++;
+                continue;
+            }
+        }
         
         PreprocInfo::Defined* rootDefined=0;
         int argIndex = -1;
         if((rootDefined = info.matchDefine(token))){
             
-            // calculate arguments
-            // and other stuff
             std::vector<std::vector<int>> ranges;
             int newExtraFlags=0;
             
-            // Todo: with infinite args we can expect 0
             EvaluateArgValues(info,token,defined,argValues, ranges, newExtraFlags, index,tokens);
             
             if(index==(int)tokens.size())
@@ -492,7 +523,7 @@ void EvaluateRange(PreprocInfo& info, Token& name, PreprocInfo::CertainDefined* 
             
             PreprocInfo::CertainDefined* defined = rootDefined->matchArgCount(ranges.size());
             if(defined){
-                EvaluateRange(info,token, defined, ranges, newExtraFlags);
+                EvaluateRange(info,token, defined, ranges, newExtraFlags,unwrapNext);
             }else{
                 PERRT(token)<<"Define '"<<token<<"' with "<<ranges.size()<<" args does not exist\n";
                 //  return PARSE_ERROR;
@@ -512,7 +543,6 @@ void EvaluateRange(PreprocInfo& info, Token& name, PreprocInfo::CertainDefined* 
                 } else if(argIndex==defined->infiniteArg){
                     argEnd += extraArgs;
                 }
-                
             }
             _PLOG(log::out << " argValues "<<argValues.size()<<"\n";)
             for(int i=argStart;i<argEnd;i++){
@@ -530,7 +560,7 @@ void EvaluateRange(PreprocInfo& info, Token& name, PreprocInfo::CertainDefined* 
                         
                         PreprocInfo::CertainDefined* defined = rootDefined->matchArgCount(ranges.size());
                         if(defined){
-                            EvaluateRange(info,argTok,defined,ranges,newExtraFlags);
+                            EvaluateRange(info,argTok,defined,ranges,newExtraFlags,false);
                         }else{
                             PERRT(token)<<"Define '"<<token<<"' with "<<ranges.size()<<" args does not exist\n";
                             //  return PARSE_ERROR;
@@ -541,7 +571,7 @@ void EvaluateRange(PreprocInfo& info, Token& name, PreprocInfo::CertainDefined* 
                         if(index==(int)tokens.size()&&i+1==argEnd&&indexArg==(int)args.size())
                             argTok.flags = extraFlags;
                         info.addToken(argTok);
-                        _PLOG(log::out << log::GRAY <<"  insert "<<argTok<<"\n");
+                        _PLOG(log::out << log::GRAY <<"  out << "<<argTok<<"\n");
                     }
                 }
             }
@@ -550,8 +580,9 @@ void EvaluateRange(PreprocInfo& info, Token& name, PreprocInfo::CertainDefined* 
             if(index==(int)tokens.size())
                 token.flags = extraFlags;
             info.addToken(token);
-            _PLOG(log::out << log::GRAY <<" insert "<<token<<"\n");
+            _PLOG(log::out << log::GRAY <<" out << "<<token<<"\n");
         }
+        unwrapNext=false;
     }
     defined->called=false;
     info.evaluationDepth--;
@@ -591,7 +622,7 @@ int ParseToken(PreprocInfo& info){
             
         PreprocInfo::CertainDefined* defined = rootDefined->matchArgCount(argValues.size());
         if(defined){
-            EvaluateRange(info,token,defined,argValues,newExtraFlags);
+            EvaluateRange(info,token,defined,argValues,newExtraFlags,false);
         }else{
             PERRT(token)<<"Define '"<<token<<"' with "<<argValues.size()<<" args does not exist\n";
             return PARSE_ERROR;

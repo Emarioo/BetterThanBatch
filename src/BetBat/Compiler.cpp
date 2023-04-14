@@ -39,9 +39,9 @@ void CompileScript(const char* path){
     if(err)
         goto COMP_SCRIPT_END;
     
-    // tokens.print();
+    tokens.print();
     
-    bytecode = GenerateScript(tokens,&err);
+    // bytecode = GenerateScript(tokens,&err);
     if(err)
         goto COMP_SCRIPT_END;
     
@@ -50,7 +50,7 @@ void CompileScript(const char* path){
     seconds = engone::StopMeasure(startCompileTime);
     log::out << "\nFully compiled "<<bytecode.getMemoryUsage()<<" bytes of bytecode in "<<(seconds*1e6)<<" us\n";
 
-    Context::Execute(bytecode);
+    // Context::Execute(bytecode);
 
 COMP_SCRIPT_END:
     bytecode.cleanup();

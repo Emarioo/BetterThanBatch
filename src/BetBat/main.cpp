@@ -26,7 +26,7 @@ int main(int argc, const char** argv){
         // CompileScript("tests/benchmark/loop.txt");
         // CompileScript("tests/script/prop.txt");
         // CompileScript("tests/script/addfunc.txt");
-        // CompileScript("example/preproc.txt");
+        CompileScript("example/preproc.txt");
 
         // CompileInstructions("tests/inst/stack.txt");
         // CompileInstructions("tests/inst/func.txt");
