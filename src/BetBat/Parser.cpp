@@ -1036,7 +1036,27 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
     }
     Token token = info.get(info.at()+1);
     
-    if(token=="return"){
+    if(token=="_test_"){
+        info.next();
+
+        Token name = info.get(info.at()+1);
+        if(!IsName(name)){
+            ERRT(name) << "Expected a valid variable name '"<<name<<"'\n";
+            return PARSE_ERROR;
+        }
+        info.next();
+        
+        auto pair = info.variables.find(name);
+        if(pair==info.variables.end()){
+            ERRT(name) << "Undefined variable '"<<name<<"'\n";
+            return PARSE_ERROR;
+        }
+        int reg = acc0reg;
+        info.code.add(BC_LOADV, reg, pair->second.frameIndex);
+        _GLOG(INST << "\n";)
+        info.code.add(BC_TEST, reg);
+        _GLOG(INST << "var '"<<name<<"'\n";)
+    }else if(token=="return"){
         token = info.next();
         ExpressionInfo expr{};
         expr.acc0Reg = acc0reg;

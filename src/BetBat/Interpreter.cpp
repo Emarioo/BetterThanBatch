@@ -982,6 +982,21 @@ void Context::execute(Bytecode& code){
                     
                 }
                 break;
+            } case BC_TEST: {
+                Ref& r0 = references[inst.reg0];
+                TestValue testValue{r0.type};
+                if(r0.type==REF_STRING){
+                    String* v0 = getString(r0.index);
+                    testValue.string = *v0;
+                }else if(r0.type==REF_NUMBER){
+                    Number* v0 = getNumber(r0.index);
+                    testValue.number = *v0;
+                }
+                testValues.push_back(testValue);
+                log::out << log::MAGENTA<<"_test_ ";
+                PrintRefValue(this,r0);
+                log::out <<"\n";
+                break;
             } case BC_RUN: {
                 Ref& r0 = references[inst.reg0];
                 Ref& r1 = references[inst.reg1];
@@ -1012,30 +1027,25 @@ void Context::execute(Bytecode& code){
                     programCounter = n1->value;
                 }else if(r1.type==REF_STRING){
                     String* v1 = getString(r1.index);
-                // auto unresolved = activeCode.getUnresolved(n1->value);
-                // if(!unresolved){
-                // }else{
 
                     std::string name = *v1;
                     
-                    if(name=="_test_"){
-                        log::out << log::MAGENTA<<"_test_ ";
-                        PrintRefValue(this,r0);
-                        log::out <<"\n";
-                        TestValue testValue{r0.type};
-                        if(r0.type==REF_STRING){
-                            String* v0 = getString(r0.index);
-                            testValue.string = *v0;
-                        }else if(r0.type==REF_NUMBER){
-                            Number* v0 = getNumber(r0.index);
-                            testValue.number = *v0;
-                        }
-                        testValues.push_back(testValue);
-                        continue;
-                    }
+                    // if(name=="_test_"){
+                    //     log::out << log::MAGENTA<<"_test_ ";
+                    //     PrintRefValue(this,r0);
+                    //     log::out <<"\n";
+                    //     TestValue testValue{r0.type};
+                    //     if(r0.type==REF_STRING){
+                    //         String* v0 = getString(r0.index);
+                    //         testValue.string = *v0;
+                    //     }else if(r0.type==REF_NUMBER){
+                    //         Number* v0 = getNumber(r0.index);
+                    //         testValue.number = *v0;
+                    //     }
+                    //     testValues.push_back(testValue);
+                    //     continue;
+                    // }
 
-                    // auto find = apiCalls.find(name);
-                    // if(find!=apiCalls.end()){
                     auto find = externalCalls.find(name);
                     if(find!=externalCalls.end()){
                         void* arg=0;
@@ -1160,51 +1170,52 @@ void Context::execute(Bytecode& code){
         else sprintf(temp,"%.2lf G",number/1e9);
     };
 
-    
-    
-    double executionTime = StopMeasure(startTime);
-    double nsPerInst = executionTime/executedInsts*1e9;
-    double nsPerLine = executionTime/executedLines*1e9;
-    // Todo: note that APICalls and executables are included. When calling those
-    //  you can measure the time in those functions and subtract it from instruction time.
-    log::out << log::BLUE<<"##   Summary   ##\n";
-    
-    // Note: In reality executedLines stands for how often execution switched to a different line.
-    // It doesn't represent how many complex lines were executed.
-    formatUnit(executedLines);
-    log::out << " "<<temp<<" lines in "<<executionTime<<" seconds (avg "<<nsPerLine<<" ns/line)\n";
-    
-    formatUnit(executedInsts);
-    log::out << " "<< temp<<" instructions in "<<executionTime<<" seconds (avg "<<nsPerInst<<" ns/inst)\n";
-    
-    double instPerS = executedInsts/executionTime;
-    formatUnit(instPerS);
-    log::out << " "<< temp<<" instructions per second ("<<temp<<"Hz)\n";
-    
-    // double target = 3e9;
-    // log::out.flush(); printf(" %d",(int)(target/instPerS)); log::out<<" times slower than 3 GHz ("<<temp<<"Hz / 3 GHz)\n";
+    bool summary=false;    
 
-    if(numberCount!=0||stringCount!=0){
-        log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
-    }
-    
-    auto tp = MeasureSeconds();
-    int sum = 0;
-    int i=0;
-    int j=0;
-    int N=1000;
-    while(i<N){
-        sum += i;
-        j=0;
-        while(j<N-i){
-            sum += j;
-            j++;
+    double executionTime = StopMeasure(startTime);
+
+    if(summary){
+        double nsPerInst = executionTime/executedInsts*1e9;
+        double nsPerLine = executionTime/executedLines*1e9;
+        // Todo: note that APICalls and executables are included. When calling those
+        //  you can measure the time in those functions and subtract it from instruction time.
+        log::out << log::BLUE<<"##   Summary   ##\n";
+        
+        // Note: In reality executedLines stands for how often execution switched to a different line.
+        // It doesn't represent how many complex lines were executed.
+        formatUnit(executedLines);
+        log::out << " "<<temp<<" lines in "<<executionTime<<" seconds (avg "<<nsPerLine<<" ns/line)\n";
+        
+        formatUnit(executedInsts);
+        log::out << " "<< temp<<" instructions in "<<executionTime<<" seconds (avg "<<nsPerInst<<" ns/inst)\n";
+        
+        double instPerS = executedInsts/executionTime;
+        formatUnit(instPerS);
+        log::out << " "<< temp<<" instructions per second ("<<temp<<"Hz)\n";
+        
+        // double target = 3e9;
+        // log::out.flush(); printf(" %d",(int)(target/instPerS)); log::out<<" times slower than 3 GHz ("<<temp<<"Hz / 3 GHz)\n";
+
+        if(numberCount!=0||stringCount!=0){
+            log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
         }
-        i++;
     }
-    auto sec = StopMeasure(tp);
-    log::out << "Res "<<sum<<" "<<(sec*1000000)<<" us\n";
-    
+    // auto tp = MeasureSeconds();
+    // int sum = 0;
+    // int i=0;
+    // int j=0;
+    // int N=1000;
+    // while(i<N){
+    //     sum += i;
+    //     j=0;
+    //     while(j<N-i){
+    //         sum += j;
+    //         j++;
+    //     }
+    //     i++;
+    // }
+    // auto sec = StopMeasure(tp);
+    // log::out << "Res "<<sum<<" "<<(sec*1000000)<<" us\n";
 }
 void Context::Execute(Bytecode& code){
     Context context{};

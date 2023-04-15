@@ -1,0 +1,25 @@
+#define ADD(X,...) X + ADD(...)
+#define ADD(X) X
+
+ADD(1,2)
+ADD(1,2,)
+ADD()
+
+#define REV(F,...) REV(...), F
+#define REV(F) F
+
+#define CHAOS(F,S,...) S CHAOS(...) F
+#define CHAOS
+
+#define NAND(X,...) !X || NAND(...)
+#define NAND(X) !X
+
+#define ORS(T,X,...) T==X || ORS(T,...)
+#define ORS(T,X) T==X
+
+#define PART0 a,b
+#define PART1 1,2
+
+NAND(v0,v1,v2,v3,v4)
+ORS(t,b,c,d,e,f)
+ORS(type,#unwrap PART0,#unwrap PART1)

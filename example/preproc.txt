@@ -1,45 +1,41 @@
 
+#define NAND(X,...) !X || NAND(...)
+#define NAND(X) !X
 
-@define Base 1,2
-@define Alt(A,B) A + B 
+#define ORS(T,X,...) T==X || ORS(T,...)
+#define ORS(T,X) T==X
 
-Alt(@unwrap Base)
+#define PART0 a,b
+#define PART1 1,2
+
+NAND(v0,v1,v2,v3,v4)
+ORS(t,b,c,d,e,f)
+ORS(type,#unwrap PART0,#unwrap PART1)
 
 /*
-@define CONST a, b
+#define ENUM(T,...) enum T { ENUM_REC(...) }
+#define ENUM_REC(E,...) E, ENUM_REC(...)
+#define ENUM_REC(E) E
 
 
-@define REC(X,Y) X || Y
-
-REC(@unwrap CONST)
-/**/
-/*
-@define ENUM(T,...) enum T { ENUM_REC(...) }
-@define ENUM_REC(E,...) E, ENUM_REC(...)
-@define ENUM_REC(E) E
-
-
-@multidefine ENUM_STR(T,...)
+#multidefine ENUM_STR(T,...)
 const char* ToString(T type){
     switch(type){
         STR_REC(...)
     }
 }
-@enddef
-@multidefine STR_REC(E,...)
+#enddef
+#multidefine STR_REC(E,...)
     case E: return E;
     STR_REC(...)
-@enddef
-@define STR_REC(A) case A: return A;
+#enddef
+#define STR_REC(A) case A: return A;
 
 
-@define ENUM_ABC a,b,c
+#define ENUM_ABC a,b,c
 
-//ENUM(a,b,c)
+ENUM(ABC,#unwrap ENUM_ABC)
 
-//ENUM_ABC
-ENUM(ABC,ENUM_ABC)
-
-ENUM_STR(ABC,ENUM_ABC)
+ENUM_STR(ABC,#unwrap ENUM_ABC)
 
 /**/

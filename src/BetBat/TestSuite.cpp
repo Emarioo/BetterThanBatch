@@ -1,9 +1,7 @@
 #include "BetBat/TestSuite.h"
-#include "BetBat/Context.h"
-#include "BetBat/Generator.h"
+#include "BetBat/Interpreter.h"
+#include "BetBat/Parser.h"
 #include "BetBat/Utility.h"
-
-#include <functional>
 
 #define SERR engone::log::out << engone::log::RED<<"Error: "
 
@@ -131,6 +129,10 @@ int TestSumtest(){
     context.cleanup();
     return error;
 }
+int TestMacro(){
+    return 0;
+}
+
 void TestSuite(){
     using namespace engone;
     int failedCases = 0;
@@ -142,11 +144,13 @@ void TestSuite(){
 
     RUN_TEST(TestSumtest)
 
-    if(failedCases==0){
-        log::out << log::GREEN << "Success with ";
-    }else{
-        log::out << log::RED << "Failed with ";
-    }
     int successfulCases = totalCases-failedCases;
-    log::out << (totalCases-failedCases)<<" / "<<totalCases<< PLURAL(successfulCases," test")<< "\n";
+
+    float rate = (float)successfulCases/totalCases;
+    if(rate<1.f) log::out << log::GOLD;
+    else log::out << log::GREEN;
+    log::out << (100.f*rate)<<"% Success ("<<successfulCases<<" correct cases)\n";
+    if(rate!=1.f){
+        log::out << log::RED << failedCases<<" cases failed\n";
+    }
 }

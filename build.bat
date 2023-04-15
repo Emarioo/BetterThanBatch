@@ -56,5 +56,6 @@ echo Finished in %finS%.%finS2% seconds
 if !errorlevel! == 0 (
     @REM bin\program_debug
     echo f | XCOPY /y /q bin\program.exe prog.exe > nul
-    prog -test
+    @REM prog -test
+    prog
 )

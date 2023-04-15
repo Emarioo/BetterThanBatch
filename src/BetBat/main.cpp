@@ -2,28 +2,33 @@
 #include "BetBat/Compiler.h"
 #include "BetBat/TestSuite.h"
 
+
 int main(int argc, const char** argv){
     using namespace engone;
 
-    // log::out.enableReport(false);
+    log::out.enableReport(false);
+
+    #define IfArg(X) if(!strcmp(arg,X))
+    #define MODE_TEST 1
+    #define MODE_RUN 2
+    int mode = MODE_RUN;
 
     for(int i=1;i<argc;i++){
-        const char* str = argv[i];
+        const char* arg = argv[i];
         int len = strlen(argv[i]);
-        if(len>0 && str[0]=='-'){
-            if(!strcmp(argv[i],"-test")){
-                TestSuite();
-            }
-        }else{
-            // if(strcmp(argv[i],"-inst")==0){
-            //     compileInst=true;
-            // }else if(compileInst){
-            //     CompileInstructions(argv[i]);
-            // }else{
-                CompileScript(argv[i]);
-            // }
+        log::out << "arg["<<i<<"] "<<arg<<"\n";
+        IfArg("-test") {
+            mode = MODE_TEST;
+        } else IfArg("-testall") {
+            TestSuite();
+        } else IfArg("-run") {
+            mode = MODE_RUN;
+        } else if(mode==MODE_RUN){
+            CompileScript(argv[i]);
+        } else if(mode==MODE_TEST){
+            // test specific?
+            log::out << log::YELLOW<< "No named tests yet\n";
         }
-        CompileScript(argv[i]);
     }
     if(argc<2){
         log::out << "No input files!\n";

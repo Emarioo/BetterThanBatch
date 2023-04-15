@@ -36,10 +36,10 @@ void CompileScript(const char* path){
     
     Preprocess(tokens,&err);
     
+    tokens.print();
     if(err)
         goto COMP_SCRIPT_END;
     
-    tokens.print();
     
     // bytecode = GenerateScript(tokens,&err);
     if(err)

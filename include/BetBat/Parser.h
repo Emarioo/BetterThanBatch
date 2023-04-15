@@ -52,6 +52,8 @@
 // #define BC_PUSH          (BC_R1|0x12)
 // #define BC_POP           (BC_R1|0x13)
 
+#define BC_TEST          (BC_R1|0x13)
+
 #define BC_RETURN        (BC_R1|0x15)
 // #define BC_ENTERSCOPE    (BC_R1|0x16)
 // #define BC_EXITSCOPE     (BC_R1|0x17)
