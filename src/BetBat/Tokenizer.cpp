@@ -9,6 +9,27 @@
 #else
 #define _TLOG(x) ;
 #endif
+
+int IsInteger(Token& token){
+    for(int i=0;i<token.length;i++){
+        char chr = token.str[i];
+        if(chr<'0'||chr>'9'){
+            return false;
+        }
+    }
+    return true;
+}
+int ConvertInteger(Token& token){
+    // Todo: string is not null terminated
+    //  temporariy changing character after token
+    //  is not safe since it could be a memory violation
+    char tmp = *(token.str+token.length);
+    *(token.str+token.length) = 0;
+    int num = atoi(token.str);
+    *(token.str+token.length) = tmp;
+    return num;
+}
+
 void Token::print(int printFlags){
     using namespace engone;
     // if(printFlags&TOKEN_PRINT_QUOTES){
@@ -411,12 +432,7 @@ Tokens Tokenize(engone::Memory& textData){
                 token.length++;
                 _TLOG(printf("%c",nextChr);)
                 *((char*)tokenData.data+tokenData.used+1) = nextChr;
-                if(index<length)
-                    nextChr = text[index]; // code below needs the updated nextChr
-                else
-                    nextChr = 0;
-            }
-            if(chr=='.'&&nextChr=='.'&&nextChr2=='.'){
+            }else if(chr=='.'&&nextChr=='.'&&nextChr2=='.'){
                 index+=2;
                 column+=2;
                 token.length+=2;
@@ -424,12 +440,17 @@ Tokens Tokenize(engone::Memory& textData){
                 _TLOG(printf("%c",nextChr2);)
                 *((char*)tokenData.data+tokenData.used+1) = nextChr;
                 *((char*)tokenData.data+tokenData.used+2) = nextChr2;
-                
-                if(index<length)
-                    nextChr = text[index]; // code below needs the updated nextChr
-                else
-                    nextChr = 0;
+            }else if(chr=='.'&&nextChr=='.'){
+                index+=1;
+                column+=1;
+                token.length+=1;
+                _TLOG(printf("%c",nextChr);)
+                *((char*)tokenData.data+tokenData.used+1) = nextChr;
             }
+            if(index<length)
+                nextChr = text[index]; // code below needs the updated nextChr
+            else
+                nextChr = 0;
             
             tokenData.used+=token.length;
             token.line = ln;

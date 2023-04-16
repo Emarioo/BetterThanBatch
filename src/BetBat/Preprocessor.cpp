@@ -11,8 +11,8 @@
 #define _PLOG(X) ;
 #endif
 
-#define PLOG_MATCH(X) X
-// #define PLOG_MATCH(X)
+// #define PLOG_MATCH(X) X
+#define PLOG_MATCH(X)
 
 // used for std::vector<int> tokens
 #define INT_ENCODE(I) (I<<3)
@@ -89,15 +89,16 @@ void PreprocInfo::nextline(){
     if(index==0){
         next();
     }
+    Token nowT = now();
+    if(nowT.flags&TOKEN_SUFFIX_LINE_FEED){
+        next();
+        return;
+    }
     while(!end()){
-        Token nowT = now();
         if(nowT.flags&TOKEN_SUFFIX_LINE_FEED){
             break;
         }
-        Token token = next();
-        // if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-        //     break;
-        // }
+        nowT = next();
     }
 }
 bool EvalInfo::matchSuperArg(Token& name, CertainMacro*& superMacro, Arguments*& args, int& argIndex){
@@ -309,6 +310,89 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     else log::out << " tokens\n";)
     return PARSE_SUCCESS;
 }
+int ParseUndef(PreprocInfo& info, bool attempt){
+    using namespace engone;
+
+    // Todo: check of end
+
+    Token token = info.get(info.at()+1);
+    if(token!="#" || (token.flags&TOKEN_QUOTED)){
+        if(attempt){
+            return PARSE_BAD_ATTEMPT;
+        }else{
+            PERRT(token) << "Expected # since this wasn't an attempt found '"<<token<<"'\n";
+            return PARSE_ERROR;
+        }
+    }
+    if(token.flags&TOKEN_SUFFIX_SPACE){
+        PERRT(token) << "Cannot have space after preprocessor directive\n";
+        return PARSE_ERROR;
+    }
+    token = info.get(info.at()+2);
+    if(token!="undef"){
+        if(attempt){
+            return PARSE_BAD_ATTEMPT;
+        }
+        PERRT(token) << "Expected undef (since this wasn't an attempt)\n";
+        return PARSE_ERROR;
+    }
+    if(token.flags&TOKEN_SUFFIX_LINE_FEED){
+        PERRTL(token) << "Unexpected line feed (expected a macro name)\n";
+        return PARSE_ERROR;
+    }
+
+    info.next();
+    info.next();
+    
+    Token name = info.next();
+
+    auto pair = info.macros.find(name);
+    if(pair==info.macros.end()){
+        PWARNT(name) << "Cannot undefine '"<<name<<"' (doesn't exist)\n";
+        return PARSE_SUCCESS;
+    }
+
+    if(name.flags&TOKEN_SUFFIX_LINE_FEED){
+        info.macros.erase(pair);
+        return PARSE_SUCCESS;
+    }
+    token = info.next();
+
+    if(token!="..." && !IsInteger(token)){
+        PERRT(token) << "Expected an integer (or ...) to indicate argument count not '"<<token<<"'\n";
+        return PARSE_ERROR;
+    }
+    if(!(token.flags&TOKEN_SUFFIX_LINE_FEED)){
+        PERRT(token) << "Expected line feed after '"<<token<<"'\n";
+        return PARSE_ERROR;
+    }
+
+    if(token=="..."){
+        if(!pair->second.hasInfinite){
+            PWARNT(name) << "Cannot undefine '"<<name<<"' [inf] (doesn't exist)\n";
+            return PARSE_SUCCESS;
+        }
+        pair->second.hasInfinite=false;
+        pair->second.infDefined = {};
+        return PARSE_SUCCESS;
+    }
+
+    int argCount = ConvertInteger(token);
+    if(argCount<0){
+        PERRT(token) << "ArgCount cannot be negative '"<<argCount<<"'\n";
+        return PARSE_ERROR;
+    }
+
+    auto cert = pair->second.certainMacros.find(argCount);
+    if(cert==pair->second.certainMacros.end()){
+        PWARNT(name) << "Cannot undefine '"<<name<<"' ["<<argCount<<" args] (doesn't exist)\n";
+        return PARSE_SUCCESS;
+    }
+    pair->second.certainMacros.erase(cert);
+
+    return PARSE_SUCCESS;
+}
+        
 int ParseToken(PreprocInfo& info);
 // both #ifdef and #ifndef
 int ParseIfdef(PreprocInfo& info, bool attempt){
@@ -587,7 +671,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
     while(index<(int)tokens.size()){
         Token token = info.get(tokens[index]);
         index++;
-        
+
         RootMacro* rootMacro=0;
         int argIndex = -1;
         if(evalInfo.macro && -1!=(argIndex = evalInfo.macro->matchArg(token))){
@@ -674,6 +758,7 @@ int ParseMacro(PreprocInfo& info, int attempt){
         PERRT(name) << "Undefined macro '"<<name<<"'\n";
         return PARSE_ERROR;
     }
+
     info.next();
     
     EvalInfo evalInfo{};
@@ -700,9 +785,40 @@ int ParseMacro(PreprocInfo& info, int attempt){
     // evaluate the real deal
     EvalMacro(info,evalInfo);
     for(int i=0;i<(int)evalInfo.output.size();i++){
-        Token token = info.get(evalInfo.output[i]);
-        token.flags = evalInfo.output[i].flags;
-        info.addToken(token);
+        Token baseToken = info.get(evalInfo.output[i]);
+        int offset = info.tokens.tokenData.used;
+        info.tokens.append(baseToken);
+        baseToken.str = (char*)info.tokens.tokenData.data + offset;
+        
+        while(true){
+            Token nextToken{};
+            if(i+1<(int)evalInfo.output.size()){
+                nextToken=info.get(evalInfo.output[i+1]);
+            }
+            if(nextToken==".."){
+                if(i+2<(int)evalInfo.output.size()){
+                    Token token2 = info.get(evalInfo.output[i+2]);
+                    info.tokens.append(token2);
+                    baseToken.length += token2.length;
+                    i+=2;
+                    continue;
+                }
+                i++;
+            }
+            info.tokens.add(baseToken);
+            break;
+        }
+
+            // from info.addToken
+            //    int offset = tokens.tokenData.used;
+            //    tokens.append(inToken);
+            //    inToken.str = (char*)tokens.tokenData.data + offset;
+            //    tokens.add(inToken);
+
+        // }else{
+        //     token.flags = evalInfo.output[i].flags;
+        //     info.addToken(token);
+        // }
     }
 
     return PARSE_SUCCESS;
@@ -712,9 +828,12 @@ int ParseMacro(PreprocInfo& info, int attempt){
 int ParseToken(PreprocInfo& info){
     using namespace engone;
     int result = ParseDefine(info,true);
-            
+    if(result == PARSE_BAD_ATTEMPT)
+        result = ParseUndef(info,true);
     if(result == PARSE_BAD_ATTEMPT)
         result = ParseIfdef(info,true);
+    if(result == PARSE_BAD_ATTEMPT)
+        result = ParseMacro(info,true);
     
     if(result==PARSE_SUCCESS)
         return result;
@@ -723,46 +842,9 @@ int ParseToken(PreprocInfo& info){
         return result;
     }
     
-    result = ParseMacro(info,true);
-    if(result==PARSE_SUCCESS)
-        return result;
-    if(result==PARSE_ERROR)
-        return result;
-
     Token token = info.next();
     _PLOG(log::out << "Append "<<token<<"\n";)
     info.addToken(token);
-    return PARSE_SUCCESS;
-
-    // Token token = info.next();
-    // RootMacro* rootDefined=0;
-    // if((rootDefined = info.matchMacro(token))){
-    //     std::vector<std::vector<int>> argValues;
-        
-    //     std::vector<int> tokens;
-    //     // better solution here. pushing to many tokens
-    //     for(int i=info.at()+1;i<(int)info.length();i++){
-    //         tokens.push_back(INT_ENCODE(i));
-    //     }
-    //     int index=0;
-        
-    //     std::vector<std::vector<int>> empty;
-    //     int newExtraFlags=0;
-    //     EvaluateArgValues(info,token,0,empty,argValues,newExtraFlags,index,tokens);
-    //     for(int i=0;i<index;i++)
-    //         info.next();
-            
-    //     CertainMacro* defined = rootDefined->matchArgCount(argValues.size());
-    //     if(defined){
-    //         EvaluateRange(info,token,defined,argValues,newExtraFlags,false);
-    //     }else{
-    //         PERRT(token)<<"Define '"<<token<<"' with "<<argValues.size()<<" args does not exist\n";
-    //         return PARSE_ERROR;
-    //     }
-    // }else{
-    //     _PLOG(log::out << "Append "<<token<<"\n";)
-    //     info.addToken(token);
-    // }
     return PARSE_SUCCESS;
 }
 void Preprocess(Tokens& inTokens, int* error){

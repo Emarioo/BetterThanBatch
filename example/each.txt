@@ -1,0 +1,53 @@
+// each with for loop
+
+/*
+while 1 {
+    //i=9
+    break
+    //i=0
+}*/
+
+/*
+list = "h b"
+
+
+findspace = {
+    print " find in" #arg
+    for i : #arg.length {
+        if #arg[i]==" " 
+            return i
+    }
+    return #arg.length
+}
+begin = 0
+while begin < list.length {
+    end = #run findspace (list[begin:list.length-1])
+
+    //print begin : (begin+end-1)
+    //print (list[begin:begin+end-1])
+    if begin+end == list.length
+        break
+    begin = begin + end + 1
+}
+*/
+// Option 1
+/*
+begin = 0
+for i : list.length {
+    chr = list[i]
+    if chr==" " || i==list.length-1 {
+        str = list[begin:i]
+        begin = i+1
+        if(str.length!=0){
+            print str
+        }
+    }
+}
+/**/
+
+
+/*
+each str : list {
+    print str
+}
+/**/

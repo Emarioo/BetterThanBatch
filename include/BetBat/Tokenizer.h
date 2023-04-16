@@ -60,4 +60,6 @@ struct Tokens {
     
     bool copy(Tokens& out);
 };
+int IsInteger(Token& token);
+int ConvertInteger(Token& token);
 Tokens Tokenize(engone::Memory& textData);

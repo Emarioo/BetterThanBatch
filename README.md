@@ -11,19 +11,21 @@ Some basic features so far (not completed however, I have most likely missed man
 - Functions
 - Usage of C++ functions within a script
 - Calling executables like gcc.exe
-- @define (#define in C) (with recursion unlike C)
-- @ifdef (#ifdef in C)
+- #define, #multidefine and #undef (macros/defines are recursive)
+- #ifdef (exactly like C)
+- #unwrap (for macros)
+- Concatenation (.. instead of ## from C)
 
 Structs and arrays will probably be left out unless a good idea on how
 to deal with them comes to mind.
 Language has weak typing at the moment (C is strong while Javascript is weak)
 
 ## How it works (or will work)
-- Tokenizer (lexer)
-- Preprocessor
-- Generator (parser and compiler for bytecode)
-- Optimizer (optional)
-- Intepreter
+- Tokenizer     (text -> tokens)
+- Preprocessor  (manipulates tokens)
+- Parser        (tokens -> bytecode)
+- Optimizer     (improve speed and size of bytecode)
+- Interpreter   (runs the bytecode)
 
 ## Performance (rough measures)
 ```
