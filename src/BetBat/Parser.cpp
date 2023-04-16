@@ -324,6 +324,16 @@ void ParseInfo::makeScope(){
     _GLOG(log::out << log::GRAY<< "   Enter scope "<<scopes.size()<<"\n";)
     scopes.push_back({});
 }
+int ParseInfo::Scope::getVariableCleanupCount(ParseInfo& info){
+    int offset=0;
+    for(Token& token : variableNames){
+        auto pair = info.variables.find(token);
+        if(pair!=info.variables.end()){
+            offset+=2; // based on drop scope
+        }
+    }
+    return offset;
+}
 void ParseInfo::dropScope(int index){
     using namespace engone;
     if(index==-1){
@@ -334,9 +344,13 @@ void ParseInfo::dropScope(int index){
     for(Token& token : scope.variableNames){
         auto pair = variables.find(token);
         if(pair!=variables.end()){
-            code.add(BC_LOADV,REG_ACC0-1,pair->second.frameIndex);
-            _GLOG(INST << "\n";)
-            code.add(BC_DEL,REG_ACC0-1);
+            // code.add(BC_LOADV,REG_ACC0-1,pair->second.frameIndex);
+            // _GLOG(INST << "\n";)
+            // code.add(BC_DEL,REG_ACC0-1);
+            // _GLOG(INST << "'"<<token<<"'\n";)
+            
+            // deletes previous value
+            code.add(BC_STOREV,REG_NULL,pair->second.frameIndex);
             _GLOG(INST << "'"<<token<<"'\n";)
             if(index==-1)
                 variables.erase(pair);
@@ -371,15 +385,6 @@ uint32 Bytecode::getMemoryUsage(){
         debugLines.max*debugLines.m_typeSize+
         debugLineText.max*debugLineText.m_typeSize;
     return sum;
-}
-int IsInteger(Token& token){
-    for(int i=0;i<token.length;i++){
-        char chr = token.str[i];
-        if(chr<'0'||chr>'9'){
-            return false;
-        }
-    }
-    return true;
 }
 bool IsName(Token& token){
     for(int i=0;i<token.length;i++){
@@ -427,16 +432,6 @@ int IsOperation(Token& token){
     if(token=="&&") return BC_AND;
     if(token=="||") return BC_OR;
     return 0;
-}
-double ConvertInteger(Token& token){
-    // Todo: string is not null terminated
-    //  temporariy changing character after token
-    //  is not safe since it could be a memory violation
-    char tmp = *(token.str+token.length);
-    *(token.str+token.length) = 0;
-    double num = atoi(token.str);
-    *(token.str+token.length) = tmp;
-    return num;
 }
 double ConvertDecimal(Token& token){
     // Todo: string is not null terminated
@@ -634,10 +629,10 @@ void ParseInfo::nextLine(){
     }
 }
 int OpPriority(int op){
-    if(op==BC_ADD||op==BC_SUB) return 1;
-    if(op==BC_MUL||op==BC_DIV) return 2;
-    if(op==BC_LESS||op==BC_GREATER||op==BC_EQUAL||op==BC_NOT_EQUAL) return 3;
-    if(op==BC_AND||op==BC_OR) return 4;
+    if(op==BC_AND||op==BC_OR) return 1;
+    if(op==BC_LESS||op==BC_GREATER||op==BC_EQUAL||op==BC_NOT_EQUAL) return 5;
+    if(op==BC_ADD||op==BC_SUB) return 9;
+    if(op==BC_MUL||op==BC_DIV) return 10;
     return 0;
 }
 // Concatenates current token with the next tokens not seperated by space, linefeed or such
@@ -828,13 +823,13 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 
                 ExpressionInfo expr{};
                 expr.acc0Reg = exprInfo.acc0Reg+exprInfo.regCount;
-                log::out<<"Par ( \n";
+                _GLOG(log::out<<"Par ( \n";)
                 info.parDepth++;
                 int result = ParseExpression(info,expr,false);
                 if(result==PARSE_SUCCESS){
                     exprInfo.regCount++;
                     info.parDepth--;
-                    log::out<<"Par ) \n";
+                    _GLOG(log::out<<"Par ) \n";)
                 }else{
                     // info.parDepth--;
                     // ERR_GENERIC;
@@ -1111,12 +1106,12 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         ExpressionInfo expr{};
         expr.acc0Reg = acc0reg;
 
-        info.makeScope();
-
         int result = ParseExpression(info,expr,false);
         if(result!=PARSE_SUCCESS){
             return PARSE_ERROR;
         }
+        
+        info.makeScope();
         
         int jumpAddress = info.code.addConstNumber(-1);
         int jumpReg = expr.acc0Reg+1;
@@ -1127,59 +1122,54 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         info.code.add(BC_JUMPNIF,expr.acc0Reg,jumpReg);
         _GLOG(INST << "\n";)
 
-        ParseInfo::Scope& scope = info.scopes.back();
-        scope.delRegisters.push_back(expr.acc0Reg);
-        scope.delRegisters.push_back(jumpReg);
+        ParseInfo::Scope* scope = &info.scopes.back();
+        scope->delRegisters.push_back(expr.acc0Reg);
+        scope->delRegisters.push_back(jumpReg);
 
         result = ParseBody(info,acc0reg+2);
         if(result!=PARSE_SUCCESS){
             return PARSE_ERROR;
         }
-        // info.dropScope();
-        
-        if(info.end()){
-            info.code.getConstNumber(jumpAddress)->value = info.code.length();
-        }else{
+        scope = &info.scopes.back();
+
+        token = {};
+        if(!info.end())
             token = info.get(info.at()+1);
-            if(token=="else"){
-                token = info.next();
-                
-                // we don't want to drop jumpReg here. code in else scope uses it.
-                // way may have wanted to drop jumpreg in if body which is why
-                // it needs to be in delRegisteers
-                for(int i = 0;i<(int)scope.delRegisters.size();i++){
-                    if(scope.delRegisters[i]==jumpReg){
-                        scope.delRegisters.erase(scope.delRegisters.begin()+i);
-                        break;
-                    }
+        if(token=="else"){
+            token = info.next();
+            
+            // we don't want to drop jumpReg here. code in else scope uses it.
+            // way may have wanted to drop jumpreg in if body which is why
+            // it needs to be in delRegisteers
+            for(int i = 0;i<(int)scope->delRegisters.size();i++){
+                if(scope->delRegisters[i]==jumpReg){
+                    scope->delRegisters.erase(scope->delRegisters.begin()+i);
+                    break;
                 }
-                info.dropScope();
-                info.makeScope();
-                scope.delRegisters.push_back(jumpReg);
-                int elseAddr = info.code.addConstNumber(-1);
-                info.code.addLoadC(jumpReg,elseAddr);
-                _GLOG(INST << "\n";)
-                info.code.add(BC_JUMP,jumpReg);
-                _GLOG(INST << "\n";)
-                
-                info.code.getConstNumber(jumpAddress)->value = info.code.length();
-                
-                int result = ParseBody(info,acc0reg+2);
-                if(result!=PARSE_SUCCESS){
-                    return PARSE_ERROR;
-                }
-                // info.dropScope();
-                
-                info.code.getConstNumber(elseAddr)->value = info.code.length();
-            }else{
-                info.code.getConstNumber(jumpAddress)->value = info.code.length();
-            }   
-        }
-        // info.code.add(BC_DEL,expr.acc0Reg);
-        // _GLOG(INST << "\n";)
-        // info.code.add(BC_DEL,jumpReg);
-        // _GLOG(INST << "\n";)
-        
+            }
+            info.dropScope();
+            info.makeScope();
+            scope->delRegisters.push_back(jumpReg);
+            int elseAddr = info.code.addConstNumber(-1);
+            info.code.addLoadC(jumpReg,elseAddr);
+            _GLOG(INST << "\n";)
+            info.code.add(BC_JUMP,jumpReg);
+            _GLOG(INST << "\n";)
+            
+            info.code.getConstNumber(jumpAddress)->value = info.code.length();
+            
+            int result = ParseBody(info,acc0reg+2);
+            if(result!=PARSE_SUCCESS){
+                return PARSE_ERROR;
+            }
+            // info.dropScope();
+            
+            info.code.getConstNumber(elseAddr)->value = info.code.length()
+                + scope->getVariableCleanupCount(info);
+        }else{
+            info.code.getConstNumber(jumpAddress)->value = info.code.length()
+                + scope->getVariableCleanupCount(info);
+        }   
         info.dropScope();
     } else if(token=="while"){
         token = info.next();
@@ -1187,21 +1177,23 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
 
         int jumpReg = acc0reg;
         info.code.add(BC_NUM,jumpReg);
-        _GLOG(INST << "\n";)
+        _GLOG(INST << "jump\n";)
         ParseInfo::Scope& scope = info.scopes.back();
         scope.delRegisters.push_back(jumpReg);
         int startAddress = info.code.addConstNumber(info.code.length());
+        _GLOG(log::out<<log::GOLD<<"  : START ADDRESS ["<<startAddress<<"]\n";)
         int endAddress = info.code.addConstNumber(-1);
-
+        int breakAddress = info.code.addConstNumber(-1);
 
         ExpressionInfo expr{};
         expr.acc0Reg = acc0reg+1;
-        scope.delRegisters.push_back(expr.acc0Reg);
+        // scope.delRegisters.push_back(expr.acc0Reg);
         int result = ParseExpression(info,expr,false);
         if(result!=PARSE_SUCCESS){
             return PARSE_ERROR;
         }
-        
+
+
         info.code.addLoadC(jumpReg,endAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF,expr.acc0Reg,jumpReg);
@@ -1209,10 +1201,21 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         info.code.add(BC_DEL,expr.acc0Reg);
         _GLOG(INST << "\n";)
         
-        result = ParseBody(info,acc0reg+2);
+        info.loopScopes.push_back({});
+        ParseInfo::LoopScope& loop = info.loopScopes.back();
+        loop.varReg = 0; // Todo: add value for #i
+        loop.jumpReg = jumpReg;
+        loop.startConstant = startAddress;
+        loop.endConstant = breakAddress;
+        loop.scopeIndex = info.scopes.size()-1;
+
+        result = ParseBody(info,expr.acc0Reg+1);
         if(result!=PARSE_SUCCESS){
             return PARSE_ERROR;
         }
+
+        info.loopScopes.erase(info.loopScopes.begin()+info.loopScopes.size()-1);
+
         
         info.code.addLoadC(jumpReg,startAddress);
         _GLOG(INST << "\n";)
@@ -1220,10 +1223,13 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         _GLOG(INST << "\n";)
         
         info.code.getConstNumber(endAddress)->value = info.code.length();
-        // info.code.add(BC_DEL,expr.acc0Reg);
-        // _GLOG(INST << "\n";)
-        // info.code.add(BC_DEL,jumpReg);
-        // _GLOG(INST << "\n";)
+        _GLOG(log::out << log::GOLD<<"  : END ADDRESS ["<<endAddress<<"]\n")
+
+        info.code.add(BC_DEL,expr.acc0Reg);
+        _GLOG(INST << "\n";)
+
+        info.code.getConstNumber(breakAddress)->value = info.code.length();
+        _GLOG(log::out << log::GOLD<<"  : END BREAK ADDRESS ["<<breakAddress<<"]\n")
 
         info.dropScope();
     } else if(token=="for") {
@@ -1427,6 +1433,10 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         // If the loop didn't run once we would delete a potential variable in the
         // scope even though it wasn't made.
         info.dropScope();
+    } else if(token=="each"){
+        info.next();
+
+        log::out << log::RED<<"each not implemented\n";
     } else {
         if(attempt){
             return PARSE_BAD_ATTEMPT;

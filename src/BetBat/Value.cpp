@@ -27,6 +27,14 @@ bool String::operator==(const char* str){
 bool String::operator!=(const char* str){
     return !(*this==str);
 }
+String& String::operator=(const char* str){
+    int len = strlen(str);
+    if(memory.resize(len)) {
+        memory.used = len;
+        memcpy(memory.data,str,len);
+    }
+    return *this;
+}
 std::string& operator+=(std::string& str, String& str2){
     int len = str.length();
     str.resize(len+str2.memory.used);

@@ -22,6 +22,8 @@ struct String {
     bool operator==(const char* str);
     bool operator!=(const char* str);
     
+    String& operator=(const char* str);
+
     operator std::string();
 };
 std::string& operator+=(std::string& str, String& str2);

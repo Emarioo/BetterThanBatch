@@ -2,9 +2,9 @@
 typedef double Decimal;
 
 // #define TLOG
-// #define GLOG
+#define GLOG
 // #define OLOG
-#define PLOG
+// #define PLOG
 
 #define INST_LIMIT 999999999
 #define PREPROC_REC_LIMIT 100
@@ -12,4 +12,4 @@ typedef double Decimal;
 
 #define PRINT_DEBUG_LINES
 #define CLOG_LEAKS
-// #define CLOG
+#define CLOG

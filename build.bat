@@ -17,7 +17,7 @@ SET GCC_DEFINITIONS=-DWIN32
 SET GCC_COMPILE_OPTIONS=-std=c++14 -g
 SET WARN=-Wall -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
-SET COMPILE_OPTIONS=/std:c++17 /nologo /TP /EHsc
+SET COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
 SET LINK_OPTIONS=/nologo
 SET INCLUDE_DIRS=/Iinclude
 SET DEFINITIONS=/DWIN32

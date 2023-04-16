@@ -1,0 +1,21 @@
+// this produces wrong spacing
+
+#define Nom(a,b,c) a + b + c
+#define Grub 1,2,3
+Nom(#unwrap Grub)
+#define Grub2 1,2
+Nom(9,#unwrap Grub2)
+/*
+1+ 2+ 3
+9+ 1+ 2
+*/
+
+
+#define RValues sugar,sand,snow,wood
+#define Rev(x,...) Rev(...), x
+#define Rev(x) x
+Rev(#unwrap RValues)
+/*
+wood
+, snow, sand, sugar
+*/

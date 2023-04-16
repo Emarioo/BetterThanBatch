@@ -165,6 +165,9 @@ struct ParseInfo {
     struct Scope{
         std::vector<Token> variableNames;
         std::vector<int> delRegisters;
+        // how many instructions it takes to
+        // delete variables
+        int getVariableCleanupCount(ParseInfo& info);
     };
     std::vector<Scope> scopes;
 

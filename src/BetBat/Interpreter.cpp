@@ -101,6 +101,8 @@ void Context::deleteNumber(uint32 index){
                 numbers.used--;
             }
         }
+    }else{
+        // engone::log::out << engone::log::YELLOW<<"Cannot delete number at "<<index<<"\n";
     }
 }
 String* Context::getString(uint32 index){
@@ -171,6 +173,8 @@ void Context::deleteString(uint32 index){
                 strings.used--;
             }
         }
+    }else{
+        // engone::log::out << engone::log::YELLOW<<"Cannot delete string at "<<index<<"\n";
     }
 }
 Scope* Context::getScope(uint index){
@@ -269,6 +273,51 @@ void Context::execute(Bytecode& code){
         Ref* references = getScope(currentScope)->references;
 
         switch(inst.type){
+            case BC_AND:
+            case BC_OR: {
+                Ref& r0 = references[inst.reg0];
+                Ref& r1 = references[inst.reg1];
+                Ref& r2 = references[inst.reg2];
+
+                bool left=false,right=false;
+                if(r0.type==REF_NUMBER){
+                    Number* v0 = getNumber(r0.index);
+                    left = v0->value!=0;
+                } else if(r0.type==REF_STRING){
+                    String* v0 = getString(r0.index);
+                    left = v0->memory.used!=0;
+                }
+                if(r1.type==REF_NUMBER){
+                    Number* v1 = getNumber(r1.index);
+                    right = v1->value!=0;
+                } else if(r1.type==REF_STRING){
+                    String* v1 = getString(r1.index);
+                    right = v1->memory.used!=0;
+                }
+
+                bool out=false;
+                if(inst.type==BC_AND){
+                    out = left && right;
+                }else if(inst.type==BC_OR){
+                    out = left || right;
+                }
+
+                if(out){
+                    _CLOG(log::out << LINST <<",  "<<left<<"?"<<right<<" yes\n";)
+                }else{
+                    _CLOG(log::out << LINST <<", "<<left<<"?"<<right<<"  no\n";)
+                }
+                
+                if(r2.type==REF_NUMBER){
+                    Number* v = getNumber(r2.index);
+                    v->value = out;
+                } else if(r2.type==REF_STRING){
+                    String* v = getString(r2.index);
+                    *v = out ? "1" : "";
+                }
+
+                break;
+            }
             case BC_ADD:
             case BC_SUB:
             case BC_MUL:
@@ -276,13 +325,11 @@ void Context::execute(Bytecode& code){
             case BC_LESS:
             case BC_GREATER:
             case BC_EQUAL:
-            case BC_NOT_EQUAL:
-            case BC_AND:
-            case BC_OR: {
+            case BC_NOT_EQUAL:{
                 Ref& r0 = references[inst.reg0];
                 Ref& r1 = references[inst.reg1];
                 Ref& r2 = references[inst.reg2];
-                
+
                 if(r0.type==REF_NUMBER && r1.type == REF_NUMBER && r2.type == REF_NUMBER){
                     Number* v0 = getNumber(r0.index);
                     Number* v1 = getNumber(r1.index);
@@ -351,7 +398,7 @@ void Context::execute(Bytecode& code){
                     String* v2 = getString(r2.index);
                     
                     if(!v0||!v1||!v2){
-                        CERR <<", values were null\n";   
+                        CERR <<", values were null\n";
                         continue;
                     }
                     
@@ -382,12 +429,7 @@ void Context::execute(Bytecode& code){
                             _CLOG(log::out << LINST <<",  no\n";)
                             continue;
                         }
-                        if(!v2->memory.resize(1)){
-                            CERR <<", bad alloc\n";
-                            continue;
-                        }
-                        v2->memory.used=1;
-                        *(char*)v2->memory.data = '1';
+                        *v2 = "1";
 
                         _CLOG(log::out << LINST <<",  yes\n";)
                     } else {
@@ -428,39 +470,6 @@ void Context::execute(Bytecode& code){
                         CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
                 }
-                // else if(r0.type==REF_STRING && r1.type == REF_STRING && r2.type == REF_STRING){
-                //     String* v0 = getString(r0.index);
-                //     String* v1 = getString(r1.index);
-                //     String* v2 = getString(r2.index);
-                    
-                //     if(!v0||!v1||!v2){
-                //         CERR <<", one value were null ";PrintRefValue(this,r0);log::out<<" ";
-                //             PrintRefValue(this,r1);log::out<<" ";PrintRefValue(this,r2);log::out<<"\n";   
-                //         continue;
-                //     }
-                //     if(inst.type==BC_EQUAL){
-                //         if(v0->memory.used!=v1->memory.used){
-                //             v2->memory.used=0;
-                //             _CLOG(log::out << LINST <<",  no\n";)
-                //             continue;
-                //         }
-                //         if(0!=strncmp((char*)v0->memory.data,(char*)v1->memory.data,v0->memory.used)){
-                //             v2->memory.used=0;
-                //             _CLOG(log::out << LINST <<",  no\n";)
-                //             continue;
-                //         }
-                //         if(!v2->memory.resize(1)){
-                //             CERR <<", bad alloc\n";
-                //             continue;
-                //         }
-                //         v2->memory.used=1;
-                //         *(char*)v2->memory.data = '1';
-
-                //         _CLOG(log::out << LINST <<",  yes\n";)
-                //     } else {
-                //         CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
-                //     }
-                // }
                 else{
                     CERR<<", invalid types "<<
                         RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<RefToString(r2.type)<<" in registers\n";   
@@ -912,8 +921,8 @@ void Context::execute(Bytecode& code){
                             willJump = n0->memory.used==0;
                         }
                         if(willJump){
+                            _CLOG(log::out << LINST << ", jumped to "<<address<<"\n";)
                             programCounter = address;
-                            _CLOG(log::out << LINST << ", jumped to "<<programCounter<<"\n";)
                         }else{
                             _CLOG(log::out << LINST << ", no jumping\n";)
                         }
