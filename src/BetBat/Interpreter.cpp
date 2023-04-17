@@ -216,9 +216,7 @@ void Context::execute(Bytecode& code){
     log::out << log::BLUE<< "\n##   Execute   ##\n";
     int programCounter=0;
 
-    externalCalls["print"]=ExtPrint;
-    externalCalls["time"]=ExtTime;
-    externalCalls["tonum"]=ExtToNum;
+    // ProvideDefaultCalls(externalCalls);
     
     ensureScopes(1);
 
@@ -432,7 +430,21 @@ void Context::execute(Bytecode& code){
                         *v2 = "1";
 
                         _CLOG(log::out << LINST <<",  yes\n";)
-                    } else {
+                    }  else if(inst.type==BC_NOT_EQUAL){
+                        if(v0->memory.used!=v1->memory.used){
+                            *v2 = "1";
+                            _CLOG(log::out << LINST <<",  yes\n";)
+                            continue;
+                        }
+                        if(0!=strncmp((char*)v0->memory.data,(char*)v1->memory.data,v0->memory.used)){
+                            *v2 = "1";
+                            _CLOG(log::out << LINST <<",  yes\n";)
+                            continue;
+                        }
+                        *v2 = "";
+
+                        _CLOG(log::out << LINST <<",  no\n";)
+                    }else {
                         CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
                 } else if(r0.type==REF_STRING && r1.type == REF_NUMBER && r2.type == REF_STRING){
@@ -576,7 +588,7 @@ void Context::execute(Bytecode& code){
                     String* v0 = getString(r0.index);
                     Number* v1 = getNumber(r1.index);
 
-                    if(!v0&&!v1){
+                    if(!v0||!v1){
                         CERR <<", r1 was null ";PrintRefValue(this,r1);log::out<<"\n";   
                         continue;
                     }
@@ -879,8 +891,8 @@ void Context::execute(Bytecode& code){
                     }else if(programCounter == address){
                         _CLOG(log::out << "ContextWarning at "<<programCounter<<", " << inst << ", jumping to next instruction is redundant\n";)
                     }else{
+                        _CLOG(log::out << LINST << ", jumped to "<<address<<"\n";)
                         programCounter = address;
-                        _CLOG(log::out << LINST << ", jumped to "<<programCounter<<"\n";)
                     }
                 }else{
                     CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";   
@@ -1055,8 +1067,10 @@ void Context::execute(Bytecode& code){
                     //     continue;
                     // }
 
-                    auto find = externalCalls.find(name);
-                    if(find!=externalCalls.end()){
+                    // auto find = externalCalls.map.find(name);
+                    auto func = GetExternalCall(name);
+                    // if(find!=externalCalls.map.end()){
+                    if(func){
                         void* arg=0;
                         if(r0.type==REF_STRING)
                             arg = getString(r0.index);
@@ -1069,8 +1083,9 @@ void Context::execute(Bytecode& code){
                         _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", arg: ";
                         PrintRefValue(this,r0);
                         log::out<<", api call "<<name<<"\n";)
-                        if(find->second){
-                            Ref returnValue = find->second(this,r0.type,arg);
+                        // if(find->second){
+                            // Ref returnValue = find->second(this,r0.type,arg);
+                            Ref returnValue = func(this,r0.type,arg);
                             
                             // if(returnValue.type!=0){
                             Ref& rv = references[REG_RETURN_VALUE];
@@ -1078,9 +1093,9 @@ void Context::execute(Bytecode& code){
                             // }else{
                                    
                             // }
-                        }else{
-                            CERR << ", api call was null\n";
-                        }
+                        // }else{
+                        //     CERR << ", api call was null\n";
+                        // }
                     }else{
                         std::string foundPath="";
                         

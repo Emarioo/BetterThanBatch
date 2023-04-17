@@ -99,7 +99,7 @@ namespace engone {
 	// result must be valid memory.
 	// path should be a valid directory.
 	// empty string as path assumes working directory.
-	RecursiveDirectoryIterator* RecursiveDirectoryIteratorCreate(const std::string& path, DirectoryIteratorData* result);
+	RecursiveDirectoryIterator* RecursiveDirectoryIteratorCreate(const std::string& path);
 	// false is returned on failure (invalid iterator, no more files/directories)
 	bool RecursiveDirectoryIteratorNext(RecursiveDirectoryIterator* iterator, DirectoryIteratorData* result);
 	// Skip the latest directory in the internal recursive queue. The latest found directory will be last in the queue.

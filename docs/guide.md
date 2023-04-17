@@ -41,7 +41,7 @@ don't exist. You will have to use strings as arrays and
 substring to access the "elements".
 Use `(#run tonum "3.24")` to convert a string into a number.
 
-## If, While and For (not complete)
+## If, while, for and each (not complete)
 ```
 if {expression} {body} else {body}
 ```
@@ -68,6 +68,13 @@ for 10 {
 }
 print sum
 ```
+```
+list = "one two three"
+each list {
+    print item: #v
+}
+```
+
 
 ## Functions and executables (not complete)
 Some quick examples. More details will come later.
@@ -167,4 +174,4 @@ in any order as long as the macro exists at the time of evaluation.
 
 I want to end with the best for last and that is the idea of recursive macros.
 I encourage you to explore it for yourself before continuing reading but if
-you just want to know what it's about check out ()[advanced.md]
+you just want to know what it's about check out [](advanced.md)

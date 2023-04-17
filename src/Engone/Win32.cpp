@@ -125,17 +125,18 @@ namespace engone {
 	static std::unordered_map<RecursiveDirectoryIterator*,RDIInfo> s_rdiInfos;
 	static uint64 s_uniqueRDI=0;
 	
-	RecursiveDirectoryIterator* RecursiveDirectoryIteratorCreate(const std::string& path, DirectoryIteratorData* result){
+	RecursiveDirectoryIterator* RecursiveDirectoryIteratorCreate(const std::string& path){
 		RecursiveDirectoryIterator* iterator = (RecursiveDirectoryIterator*)(++s_uniqueRDI);
-		s_rdiInfos[iterator] = {path};
-		s_rdiInfos[iterator].handle=INVALID_HANDLE_VALUE;
-		s_rdiInfos[iterator].directories.push_back(path);
+		auto& info = s_rdiInfos[iterator] = {};
+		info.root = path;
+		info.handle=INVALID_HANDLE_VALUE;
+		info.directories.push_back(path);
 		
-		bool success = RecursiveDirectoryIteratorNext(iterator,result);
-		if(!success){
-			RecursiveDirectoryIteratorDestroy(iterator);
-			return 0;
-		}
+		// bool success = RecursiveDirectoryIteratorNext(iterator,result);
+		// if(!success){
+		// 	RecursiveDirectoryIteratorDestroy(iterator);
+		// 	return 0;
+		// }
 		return iterator;
 	}
 	bool RecursiveDirectoryIteratorNext(RecursiveDirectoryIterator* iterator, DirectoryIteratorData* result){
@@ -161,11 +162,13 @@ namespace engone {
                     temp += "\\";
                 
                 temp+="*";
+				// printf("FindFirstFile %s\n",temp.c_str());
 				info->second.directories.erase(info->second.directories.begin());
 				HANDLE handle = FindFirstFileA(temp.c_str(),&data);
 				
 				if(handle==INVALID_HANDLE_VALUE){
-					// print error?
+					DWORD err = GetLastError();
+					PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(uint64)iterator);
 					continue;
 				}
 				info->second.handle = handle;
@@ -750,7 +753,7 @@ namespace engone {
 			return "";
 		} else {
 			std::string out{};
-			out.resize(length);
+			out.resize(length-1); // -1 to exclude \0
 			length = GetCurrentDirectoryA(length,(char*)out.data());
 			if(length==0){
 				DWORD err = GetLastError();

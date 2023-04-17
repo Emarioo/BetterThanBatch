@@ -308,7 +308,7 @@ Tokens Tokenize(engone::Memory& textData){
             }
             continue;
         } else if(inQuotes) {
-            if(isQuotes && prevChr!='\\'){
+            if(isQuotes){
                 // Stop reading string token
                 inQuotes=false;
                 
@@ -324,16 +324,26 @@ Tokens Tokenize(engone::Memory& textData){
                 
                 outTokens.add(token);
                 token = {};
-            } else if(!(chr=='\\'&&nextChr=='"')) {
+            } else {
                 if(token.length!=0){
                     _TLOG(log::out << "-";)
                 }
                 _TLOG(log::out << chr;)
                 
                 char tmp = chr;
-                if(chr=='\\'&&nextChr=='n'){
-                    tmp = '\n';
+                if(chr=='\\'){
                     index++;
+                    if(nextChr=='n'){
+                        tmp = '\n';
+                    }else if(nextChr=='\\'){
+                        tmp = '\\';
+                    }else if(nextChr=='"'){
+                        tmp = '"';
+                    }else if(nextChr=='t'){
+                        tmp = '\t';
+                    }else{
+                        tmp = '?';
+                    }
                 }
                 *((char*)tokenData.data+tokenData.used) = tmp;
                 tokenData.used++;

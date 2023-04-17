@@ -27,6 +27,7 @@ void CompileScript(const char* path){
     int err=0;
     Bytecode bytecode{};
     double seconds=0;
+    std::string dis;
     
     auto startCompileTime = engone::MeasureSeconds();
     tokens = Tokenize(text);
@@ -36,21 +37,24 @@ void CompileScript(const char* path){
     
     Preprocess(tokens,&err);
     
-    tokens.print();
+    // tokens.print();
     if(err)
         goto COMP_SCRIPT_END;
     
     
-    // bytecode = GenerateScript(tokens,&err);
+    bytecode = GenerateScript(tokens,&err);
     if(err)
         goto COMP_SCRIPT_END;
+
+    // dis = Disassemble(bytecode);
+    // WriteFile("dis.txt",dis);
     
     // OptimizeBytecode(bytecode);
     
     seconds = engone::StopMeasure(startCompileTime);
     log::out << "\nFully compiled "<<bytecode.getMemoryUsage()<<" bytes of bytecode in "<<(seconds*1e6)<<" us\n";
 
-    // Context::Execute(bytecode);
+    Context::Execute(bytecode);
 
 COMP_SCRIPT_END:
     bytecode.cleanup();

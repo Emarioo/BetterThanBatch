@@ -2,6 +2,7 @@
 
 #include "BetBat/Tokenizer.h"
 #include "BetBat/Value.h"
+#include "BetBat/ExternalCalls.h"
 
 #include <unordered_map>
 
@@ -96,7 +97,6 @@ struct Instruction {
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction);
 
 class Context;
-typedef Ref(*ExternalCall)(Context*, int refType, void*);
 struct Bytecode {
     engone::Memory codeSegment{sizeof(Instruction)};
     engone::Memory constNumbers{sizeof(Number)};
@@ -189,10 +189,11 @@ struct ParseInfo {
     };
     std::unordered_map<std::string,Function> functions;
     
-    std::unordered_map<std::string,bool> externalFunctions;
+    // ExternalCalls externalCalls;
 
     struct LoopScope{
-        int varReg=0;
+        int iReg=0;
+        int vReg=0;
         int jumpReg=0;
         int startConstant=0;
         int endConstant=0;

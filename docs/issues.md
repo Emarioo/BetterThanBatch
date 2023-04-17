@@ -7,7 +7,7 @@ while 1 {
 }
 ```
 Parsing the code above results in the instructions below.
-!()[img/issue-while-break.png]
+![](img/issue-while-break.png)
 
 The image shows the flow of the bytecode in orange.
 The blue and red represents the creation and deletion
@@ -20,7 +20,7 @@ on deleting nothing. The parser isn't made to
 handle sudden jumps out of the while body.
 Hence, the second delete.
 
-!()[img/issue-while-break-2.png]
+![](img/issue-while-break-2.png)
 
 The solution is rather simple (see above image).
 Since the jump out of the while body is the issue

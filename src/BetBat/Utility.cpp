@@ -34,3 +34,10 @@ bool WriteFile(const char* path, engone::Memory buffer){
     engone::FileClose(file);
     return true;
 }
+bool WriteFile(const char* path, std::string& buffer){
+    auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);
+    if(!file) return false;
+    if(!engone::FileWrite(file,buffer.data(),buffer.length())) return false;
+    engone::FileClose(file);
+    return true;
+}

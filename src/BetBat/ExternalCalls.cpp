@@ -87,3 +87,109 @@ Ref ExtTime(Context* context, int refType, void* value){
         return {};
     }
 }
+Ref ExtFilterFiles(Context* context, int refType, void* value){
+    using namespace engone;
+    if(refType!=REF_STRING)
+        return {};
+
+    std::vector<std::string> list;
+    
+    String* str = (String*)value;
+    
+    int begin = 0;
+    int end=0;
+    uint64 i=0;
+    while(i<str->memory.used){
+        char chr = ((char*)str->memory.data)[i];
+        i++;
+        if (chr==' ') {
+            end = i-2;
+        } else if (i == str->memory.used) {
+            end = i-1;
+        } else {
+            continue;
+        }
+        if (end-begin+1>0) {
+            std::string tmp;
+            tmp.resize(end-begin+1,0);
+            memcpy((char*)tmp.data(),str->memory.data,str->memory.used);
+            list.push_back(tmp);
+            // log::out << "Item "<<tmp<<"\n";
+        }
+        begin = i;
+    }
+
+    std::string cwd = GetWorkingDirectory();
+    RecursiveDirectoryIterator* iter = RecursiveDirectoryIteratorCreate(cwd);
+
+    int outIndex = context->makeString();
+    String* out = context->getString(outIndex);
+    // Todo: check valid outIndex
+    DirectoryIteratorData result;
+    while(1){
+        bool yes = RecursiveDirectoryIteratorNext(iter,&result);
+        if(!yes)
+            break;
+
+        if(result.isDirectory)
+            continue;
+
+        // log::out << "path "<<result.name<<"\n";
+
+        bool allowed=false;
+        for(std::string& tmp : list){
+            if(tmp[0]=='*'){
+                if(tmp.length()==1u){
+                    allowed=true;
+                    break;
+                }
+                int correct = 1; // * is always correct
+                for(int i=0;i<(int)result.name.length();i++){
+                    if(result.name[i] == tmp[correct]){
+                        correct++;
+                        if(correct==(int)tmp.length()){
+                            break;
+                        }
+                    }else{
+                        correct=1;
+                    }
+                }
+                if(correct==(int)tmp.length()){
+                    allowed = true;
+                    break;
+                }
+            } else {
+                if (result.name==tmp){
+                    allowed = true;
+                    break;
+                }
+            }
+        }
+        if(allowed){
+            if(out->memory.max < out->memory.used + result.name.length() + 1){
+                out->memory.resize(out->memory.max + 2*result.name.length() + 20);
+            }
+            memcpy((char*)out->memory.data+out->memory.used, result.name.data(),result.name.length());
+            out->memory.used += result.name.length();
+            *((char*)out->memory.data+out->memory.used) = ' ';
+            out->memory.used += 1;
+            // log::out << "Added "<<result.name<<"\n";
+        }
+    }
+    RecursiveDirectoryIteratorDestroy(iter);
+
+    return {REF_STRING,outIndex};
+}
+ExternalCall GetExternalCall(const std::string& name){
+    #define GETEXT(X,Y) if(name==X) return Y;
+    GETEXT("print",ExtPrint)
+    GETEXT("time",ExtTime)
+    GETEXT("tonum",ExtToNum)
+    GETEXT("filterfiles",ExtFilterFiles)
+}
+// void ProvideDefaultCalls(ExternalCalls& calls){
+//     calls.map["print"]=ExtPrint;
+//     calls.map["time"]=ExtTime;
+//     calls.map["tonum"]=ExtToNum;
+//     calls.map["filterfiles"]=ExtFilterFiles;
+// }

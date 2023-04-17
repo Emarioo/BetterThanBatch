@@ -2,11 +2,12 @@
 #include "BetBat/Compiler.h"
 #include "BetBat/TestSuite.h"
 
-
 int main(int argc, const char** argv){
     using namespace engone;
 
     log::out.enableReport(false);
+
+
 
     #define IfArg(X) if(!strcmp(arg,X))
     #define MODE_TEST 1
@@ -48,7 +49,8 @@ int main(int argc, const char** argv){
         // CompileScript("tests/script/prop.txt");
         // CompileScript("tests/script/addfunc.txt");
         // CompileScript("example/preproc.txt");
-        CompileScript("example/each.txt");
+        // CompileScript("example/each.txt");
+        CompileScript("example/filter.txt");
 
         // CompileInstructions("tests/inst/stack.txt");
         // CompileInstructions("tests/inst/func.txt");

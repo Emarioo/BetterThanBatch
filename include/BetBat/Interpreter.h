@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BetBat/Parser.h"
+#include "BetBat/ExternalCalls.h"
 
 const char* RefToString(int type);
 // engone::Logger operator<<(engone::Logger logger, Ref& ref);
@@ -23,7 +24,7 @@ struct Context {
 
     engone::Memory valueStack{sizeof(Ref)}; // holds references to values
 
-    std::unordered_map<std::string, ExternalCall> externalCalls;
+    // ExternalCalls externalCalls;
 
     struct TestValue {
         int type=0;

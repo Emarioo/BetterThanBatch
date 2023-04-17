@@ -123,11 +123,11 @@ void PreprocInfo::addToken(Token inToken){
 int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
     using namespace engone;
     Token token = info.get(info.at()+1);
-    if(token!="#" || (token.flags&TOKEN_QUOTED)){
+    if(token!=PREPROC_TERM || (token.flags&TOKEN_QUOTED)){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            PERRT(token) << "Expected # since this wasn't an attempt found '"<<token<<"'\n";
+            PERRT(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
             return PARSE_ERROR;
         }
     }
@@ -153,11 +153,11 @@ int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
 int ParseDefine(PreprocInfo& info, bool attempt){
     using namespace engone;
     Token token = info.get(info.at()+1);
-    if(token!="#" || (token.flags&TOKEN_QUOTED)){
+    if(token!=PREPROC_TERM || (token.flags&TOKEN_QUOTED)){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            PERRT(token) << "Expected # since this wasn't an attempt found '"<<token<<"'\n";
+            PERRT(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
             return PARSE_ERROR;
         }
     }
@@ -269,9 +269,9 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         goto while_skip_194;
     while(!info.end()){
         Token token = info.next();
-        if(token=="#"){
+        if(token==PREPROC_TERM){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-                PERRT(token) << "SPACE AFTER #!\n";
+                PERRT(token) << "SPACE AFTER "<<token<<"!\n";
                 return PARSE_ERROR;
             }
             Token token = info.get(info.at()+1);
@@ -298,7 +298,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     defined->end = endToken;
     int count = endToken-startToken;
     int argc = defined->argumentNames.size();
-    _PLOG(log::out << log::LIME<< "#define '"<<name<<"' ";
+    _PLOG(log::out << log::LIME<< PREPROC_TERM<<"define '"<<name<<"' ";
     if(argc!=0){
         log::out<< argc;
         if(argc==1) log::out << " arg, ";
@@ -316,11 +316,11 @@ int ParseUndef(PreprocInfo& info, bool attempt){
     // Todo: check of end
 
     Token token = info.get(info.at()+1);
-    if(token!="#" || (token.flags&TOKEN_QUOTED)){
+    if(token!=PREPROC_TERM || (token.flags&TOKEN_QUOTED)){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            PERRT(token) << "Expected # since this wasn't an attempt found '"<<token<<"'\n";
+            PERRT(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
             return PARSE_ERROR;
         }
     }
@@ -394,7 +394,7 @@ int ParseUndef(PreprocInfo& info, bool attempt){
 }
         
 int ParseToken(PreprocInfo& info);
-// both #ifdef and #ifndef
+// both ifdef and ifndef
 int ParseIfdef(PreprocInfo& info, bool attempt){
     using namespace engone;
     bool notDefined=false;
@@ -423,9 +423,9 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
     // log::out << "     enter ifdef loop\n";
     while(!info.end()){
         Token token = info.get(info.at()+1);
-        if(token=="#"){
+        if(token==PREPROC_TERM){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-                PERRT(token) << "SPACE AFTER #!\n";
+                PERRT(token) << "SPACE AFTER "<<token<<"!\n";
                 return PARSE_ERROR;
             }
             Token token = info.get(info.at()+2);
@@ -454,7 +454,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
                     info.next();
                     info.next();
                     if(hadElse){
-                        PERRT(info.get(info.at()-1)) << "Already had #else\n";
+                        PERRT(info.get(info.at()-1)) << "Already had else\n";
                         error = PARSE_ERROR;
                         // best option is to continue
                         // things will break more if we return suddenly
@@ -475,7 +475,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
             // log::out << log::GRAY<<" skip "<<skip << "\n";
         }
         if(info.end()){
-            PERRT(info.get(info.length()-1)) << "Missing #endif somewhere for ifdef or ifndef\n";
+            PERRT(info.get(info.length()-1)) << "Missing endif somewhere for ifdef or ifndef\n";
             return PARSE_ERROR;   
         }
     }
@@ -545,10 +545,10 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
             parDepth--;
         }
 
-        if(token=="#"){
+        if(token==PREPROC_TERM){
             Token nextTok = info.get(tokens[index]);
             if(nextTok=="unwrap"){
-                log::out << log::MAGENTA<<"unwrap\n";
+                _PLOG(log::out << log::MAGENTA<<"unwrap\n";)
                 unwrapNext=true;
                 index++;
                 continue;
@@ -639,7 +639,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
                 if((int)evalInfo.arguments.size()==evalInfo.argIndex)
                         evalInfo.arguments.push_back({});
                 if(unwrapNext){
-                    log::out << log::MAGENTA<<"actual unwrap\n";
+                    _PLOG(log::out << log::MAGENTA<<"actual unwrap\n";)
                 }
                 Transfer(info,newEvalInfo.output,evalInfo.arguments.back(),unwrapNext,&evalInfo.arguments,&evalInfo.argIndex);
             }
@@ -712,7 +712,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
 
             newEvalInfo.superMacros.push_back(evalInfo.macro);
             newEvalInfo.superArgs.push_back(&evalInfo.arguments);
-            log::out <<log::GRAY<<"push super\n";
+            _PLOG(log::out <<log::GRAY<<"push super\n";)
 
             for(int i=index;i<(int)tokens.size();i++){
                 newEvalInfo.workingRange.push_back(tokens[i]);
@@ -722,7 +722,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
 
             newEvalInfo.superMacros.pop_back();
             newEvalInfo.superArgs.pop_back();
-            log::out <<log::GRAY<<"pop super\n";
+            _PLOG(log::out <<log::GRAY<<"pop super\n";)
 
             if(index==(int)tokens.size())
                 newEvalInfo.finalFlags = evalInfo.finalFlags;
@@ -862,7 +862,7 @@ void Preprocess(Tokens& inTokens, int* error){
     if(info.errors)
         log::out << log::RED << "Preprocessor failed with "<<info.errors<<" errors\n";
     
-    log::out << log::BLUE<<"### # # #  #  #  #    #    #\n";
+    // log::out << log::BLUE<<"### # # #  #  #  #    #    #\n";
     inTokens.cleanup();
     inTokens = info.tokens;
     if(error)

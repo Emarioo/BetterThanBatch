@@ -1,7 +1,12 @@
+#pragma once
 #include "Value.h"
 class Context;
 class String;
 
-Ref ExtPrint(Context* context, int refType, void* value);
-Ref ExtTime(Context* context, int refType, void* value);
-Ref ExtToNum(Context* context, int refType, void* value);
+typedef Ref(*ExternalCall)(Context*, int refType, void*);
+
+ExternalCall GetExternalCall(const std::string& name);
+// struct ExternalCalls{
+//     std::unordered_map<std::string,ExternalCall> map;
+// };
+// void ProvideDefaultCalls(ExternalCalls& calls);

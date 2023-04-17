@@ -1,0 +1,177 @@
+num_3: 13.000000
+num_4: 149.000000
+num_5: 150.000000
+num_6: 1.000000
+num_7: 61.000000
+num_8: 2.000000
+num_9: 89.000000
+num_10: 84.000000
+num_11: 1.000000
+num_12: 88.000000
+num_14: 0.000000
+num_15: 143.000000
+str_1: " "
+str_2: "print"
+str_4: """
+    BC_STR $10
+str_0: " h 9 "
+    BC_LOADC $10 str_0
+    BC_STOREV $10 $0
+    BC_NUM $10
+num_0: 0.000000
+    BC_LOADC $10 num_0
+    BC_STOREV $10 $1
+    BC_NUM $10
+num_1: 0.000000
+    BC_LOADC $10 num_1
+    BC_STOREV $10 $2
+    BC_NUM $10
+num_2: 0.000000
+    BC_LOADC $10 num_2
+    BC_STOREV $10 $3
+    BC_NUM $10
+    BC_LOADV $11 $3
+    BC_COPY $11 $11
+    BC_LOADV $12 $0
+    BC_COPY $12 $12
+    BC_NUM $13
+    BC_LEN $12 $13
+    BC_DEL $12
+    BC_MOV $13 $12
+    BC_LESS $11 $12 $11
+    BC_DEL $12
+    BC_LOADC $10 num_4
+    BC_JUMPNIF $11 $10
+    BC_DEL $11
+    BC_LOADV $12 $0
+    BC_COPY $12 $12
+    BC_LOADV $13 $3
+    BC_COPY $13 $13
+    BC_MOV $12 $15
+    BC_SUBSTR $12 $13 $13
+    BC_DEL $13
+    BC_DEL $15
+    BC_STOREV $12 $4
+    BC_LOADV $12 $3
+    BC_COPY $12 $12
+    BC_NUM $13
+    BC_LOADC $13 num_6
+    BC_ADD $12 $13 $12
+    BC_DEL $13
+    BC_STOREV $12 $3
+    BC_LOADV $12 $4
+    BC_COPY $12 $12
+    BC_STR $13
+    BC_LOADC $13 str_1
+    BC_EQUAL $12 $13 $12
+    BC_DEL $13
+    BC_NUM $13
+    BC_LOADC $13 num_7
+    BC_JUMPNIF $12 $13
+    BC_LOADV $14 $3
+    BC_COPY $14 $14
+    BC_NUM $15
+    BC_LOADC $15 num_8
+    BC_SUB $14 $15 $14
+    BC_DEL $15
+    BC_STOREV $14 $2
+    BC_DEL $12
+    BC_LOADC $13 num_9
+    BC_JUMP $13
+    BC_LOADV $14 $3
+    BC_COPY $14 $14
+    BC_LOADV $15 $0
+    BC_COPY $15 $15
+    BC_NUM $16
+    BC_LEN $15 $16
+    BC_DEL $15
+    BC_MOV $16 $15
+    BC_EQUAL $14 $15 $14
+    BC_DEL $15
+    BC_NUM $15
+    BC_LOADC $15 num_10
+    BC_JUMPNIF $14 $15
+    BC_LOADV $16 $3
+    BC_COPY $16 $16
+    BC_NUM $17
+    BC_LOADC $17 num_11
+    BC_SUB $16 $17 $16
+    BC_DEL $17
+    BC_STOREV $16 $2
+    BC_DEL $14
+    BC_LOADC $15 num_12
+    BC_JUMP $15
+    BC_DEL $15
+    BC_DEL $13
+    BC_LOADC $10 num_3
+    BC_JUMP $10
+    BC_DEL $15
+    BC_DEL $13
+    BC_LOADV $12 $2
+    BC_COPY $12 $12
+    BC_LOADV $13 $1
+    BC_COPY $13 $13
+    BC_SUB $12 $13 $12
+    BC_DEL $13
+    BC_NUM $13
+num_13: 1.000000
+    BC_LOADC $13 num_13
+    BC_ADD $12 $13 $12
+    BC_DEL $13
+    BC_NUM $13
+    BC_LOADC $13 num_14
+    BC_GREATER $12 $13 $12
+    BC_DEL $13
+    BC_NUM $13
+    BC_LOADC $13 num_15
+    BC_JUMPNIF $12 $13
+    BC_LOADV $14 $0
+    BC_COPY $14 $14
+    BC_LOADV $15 $1
+    BC_COPY $15 $15
+    BC_LOADV $16 $2
+    BC_COPY $16 $16
+    BC_MOV $14 $17
+    BC_SUBSTR $14 $15 $16
+    BC_DEL $15
+    BC_DEL $16
+    BC_DEL $17
+    BC_STOREV $14 $5
+    BC_STR $14
+    BC_LOADC $14 str_2
+    BC_STR $16
+    BC_STR $17
+str_3: """
+    BC_LOADC $17 str_3
+    BC_LOADV $18 $5
+    BC_COPY $18 $18
+    BC_ADD $17 $18 $17
+    BC_DEL $18
+    BC_STR $18
+    BC_LOADC $18 str_4
+    BC_ADD $17 $18 $17
+    BC_DEL $18
+    BC_STR $15
+    BC_ADD $15 $17 $15
+    BC_DEL $17
+    BC_DEL $16
+    BC_RUN $15 $14
+    BC_DEL $14
+    BC_DEL $15
+    BC_MOV $3 $14
+    BC_DEL $14
+    BC_STOREV $0 $5
+    BC_DEL $12
+    BC_DEL $13
+    BC_LOADV $12 $3
+    BC_COPY $12 $12
+    BC_STOREV $12 $1
+    BC_LOADC $10 num_3
+    BC_JUMP $10
+    BC_DEL $11
+    BC_STOREV $0 $4
+    BC_DEL $10
+    BC_STOREV $0 $0
+    BC_STOREV $0 $1
+    BC_STOREV $0 $2
+    BC_STOREV $0 $3
