@@ -35,15 +35,27 @@ struct Token {
     // prints the string, does not print suffix, line or column
     void print(int printFlags = 0);
 };
+#define LAYER_PREPROCESSOR 1
+#define LAYER_PARSER 2
+#define LAYER_OPTIMIZER 4
+#define LAYER_INTERPRETER 8
 engone::Logger& operator<<(engone::Logger& logger, Token& token);
 struct Tokens {
     engone::Memory tokens{sizeof(Token)}; // the tokens themselves
     engone::Memory tokenData{1}; // the data the tokens refer to
     
+    void finalizePointers();
+    
+    int lines=0; // counts token suffix.
+    // new line in the middle of a token is not counted, multiline strings doesn't work very well
+    
+    int enabled=0;
+    
     void cleanup();
     
     // modifies tokenData
     bool append(char chr);
+    // Make sure token has a valid char* pointer
     bool append(Token& tok);
     
     bool add(const char* str);
@@ -57,6 +69,8 @@ struct Tokens {
     
     // normal print of all tokens
     void print();
+    // copys everything except tokens
+    bool copyInfo(Tokens& out);
     
     bool copy(Tokens& out);
 };

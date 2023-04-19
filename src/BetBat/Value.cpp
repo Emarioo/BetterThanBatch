@@ -48,14 +48,22 @@ String::operator std::string(){
     memcpy((void*)out.data(),memory.data,memory.used);
     return out;
 }
-void PrintRawString(String& str){
-    for(uint i=0;i<str.memory.used;i++){
+void PrintRawString(String& str, int truncate){
+    using namespace engone;
+    int limit = str.memory.used;
+    if(truncate>0&&(int)str.memory.used>truncate){
+        limit = truncate;
+    }
+    for(int i=0;i<limit;i++){
         char chr =*((char*)str.memory.data+i);
         if(chr=='\n'){ 
             engone::log::out << "\\n";
         }else{
             engone::log::out << chr;
         }
+    }
+    if(truncate>0&&(int)str.memory.used>truncate){
+        log::out << "...";
     }
 }
 engone::Logger& operator<<(engone::Logger& logger, String& str){

@@ -23,6 +23,8 @@ void CompilerFile(const char* path){
 void CompileScript(const char* path){
     using namespace engone;
     auto text = ReadFile(path);
+    if(!text.data)
+        return;
     Tokens tokens{};
     int err=0;
     Bytecode bytecode{};
@@ -31,30 +33,48 @@ void CompileScript(const char* path){
     
     auto startCompileTime = engone::MeasureSeconds();
     tokens = Tokenize(text);
-    tokens.printTokens(14,0);
+    if(tokens.enabled==0)
+        tokens.printTokens(14,0);
     // TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
     // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
     
-    Preprocess(tokens,&err);
-    
-    // tokens.print();
+    if(tokens.enabled&LAYER_PREPROCESSOR){
+        Preprocess(tokens,&err);
+        if(tokens.enabled==LAYER_PREPROCESSOR)
+            tokens.print();
+    }
     if(err)
         goto COMP_SCRIPT_END;
     
-    
-    bytecode = GenerateScript(tokens,&err);
+    if(tokens.enabled&LAYER_PARSER)
+        bytecode = GenerateScript(tokens,&err);
     if(err)
         goto COMP_SCRIPT_END;
 
     // dis = Disassemble(bytecode);
     // WriteFile("dis.txt",dis);
-    
-    // OptimizeBytecode(bytecode);
+    if(tokens.enabled&LAYER_OPTIMIZER)
+        OptimizeBytecode(bytecode);
     
     seconds = engone::StopMeasure(startCompileTime);
-    log::out << "\nFully compiled "<<bytecode.getMemoryUsage()<<" bytes of bytecode in "<<(seconds*1e6)<<" us\n";
-
-    Context::Execute(bytecode);
+    log::out << "\nFully compiled "<<bytecode.getMemoryUsage()<<" bytes of bytecode in "<<(seconds*1e3)<<" ms\n";
+    log::out << "Compiled "<<tokens.lines<<" lines in "<<(seconds*1e3)<<" ms\n";
+    
+    if(tokens.enabled&LAYER_INTERPRETER){
+        int totalinst = 0;
+        double combinedtime = 0;
+        Performance perf;
+        int times=10;
+        for(int i=0;i<times;i++){
+            Context::Execute(bytecode,&perf);
+            totalinst += perf.instructions;
+            combinedtime += perf.runtime;
+        }
+        log::out << "Total " << totalinst<<" insts (avg "<<(totalinst/times)<<")\n";
+        log::out << "Combined " << combinedtime<<" time (avg "<<(combinedtime/times)<<")\n";
+    }
+        
+        
 
 COMP_SCRIPT_END:
     bytecode.cleanup();

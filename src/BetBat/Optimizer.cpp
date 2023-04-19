@@ -119,9 +119,9 @@ bool OptimizeBytecode(Bytecode& code){
             info1.needed = true;
         }
     }
-    
+    bool rearrange=false;
     // Remove and rearrange instructions
-    if(true&&removedInsts.size()!=0){
+    if(rearrange&&removedInsts.size()!=0){
         // Todo: relocate jump address numbers
         // go through all instructions, find the an instructions jump address
         
@@ -203,18 +203,18 @@ bool OptimizeBytecode(Bytecode& code){
     //  to be relocated because of optimizations which would affect the normal number)
     
     #define MIN_SIZE(ARR) code.ARR.resize(code.ARR.used);
-    MIN_SIZE(codeSegment)
-    MIN_SIZE(constNumbers)
-    MIN_SIZE(constStrings)
-    MIN_SIZE(constStringText)
-    MIN_SIZE(debugLines)
-    MIN_SIZE(debugLineText)
+    // MIN_SIZE(codeSegment)
+    // MIN_SIZE(constNumbers)
+    // MIN_SIZE(constStrings)
+    // MIN_SIZE(constStringText)
+    // MIN_SIZE(debugLines)
+    // MIN_SIZE(debugLineText)
     
     int freedMemory = oldMemory-code.getMemoryUsage();
     
     log::out << "Optimized away "<<removedInsts.size()<<" instructions, ";
     if(freedMemory!=0)
-        log::out <<freedMemory<<" bytes\n";
+        log::out <<"freed "<<freedMemory<<" bytes\n";
     
     return true;
 }

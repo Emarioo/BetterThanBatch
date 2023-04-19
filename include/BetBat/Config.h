@@ -2,7 +2,7 @@
 typedef double Decimal;
 
 // #define TLOG
-// #define GLOG
+#define GLOG
 // #define OLOG
 // #define PLOG
 
@@ -11,7 +11,6 @@ typedef double Decimal;
 #define USE_DEBUG_INFO
 
 // #define PRINT_DEBUG_LINES
-#define CLOG_LEAKS
 // #define CLOG
 
 #define PREPROC_TERM "#"

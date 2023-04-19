@@ -1,0 +1,131 @@
+No input files!
+
+##   Tokenizer   ##
+// : Begin comment
+// : End comment
+ : Add t 
+= : Add = 
+# : Add #
+ : Add run 
+ : Add time 
+// : Begin comment
+// : End comment
+// : Begin comment
+// : End comment
+ : Add buffer 
+= : Add = 
+" : Begin quote
+
+++++++++++++++++++++++++++++++++++++++++
+#pragma once
+
+#include "Engone/Alloc.h"
+#include "Engone/Logger.h"
+#include "BetBat/Config.h"
+
+#define REF_NUMBER 1
+#define REF_STRING 2faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaahhhhhhhhhhhhhhhhhh
+struct Ref {
+    int type=0;
+    int index=0;
+};
+
+struct String {
+    engone::Memory memory{1};
+    
+    // copies this into str
+    bool copy(String* str);ghggggggggggggggggggggggggggggggggggggghhhhhhhhhhhhhhh
+    
+    bool operator==(String& str);
+    bool operator!=(String& str);
+    bool operator==(const char* str);hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+    bool operator!=(const char* str);
+    
+    String& operator=(const char* str);
+
+    operator std::string();
+};
+std::string& operator+=(std::string& str, String& str2);hhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+// 
+ is replaced with \nhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+void PrintRawString(String& str, int truncate=0);hhhhhhhhhhhhhhhhhhhhhhh
+
+engone::Logger& operator<<(engone::Logger& logger, String& str);
+struct Number{
+    Decimal value;
+};
+#pragma once
+
+#include "Engone/Alloc.h"
+#include "Engone/Logger.h"
+#include "BetBat/Config.h"
+
+#define REF_NUMBER 1
+#define REF_STRING 2
+struct Ref {
+    int type=0;
+    ##############################################
+ : Add "\n++++++++++++++++++++++++++++++++++++++++\n#pragma once\n\n#include "Engone/Alloc.h"\n#include "Engone/Logger.h"\n#include "BetBat/Config.h"\n\n#define REF_NUMBER 1\n#define REF_STRING 2faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaahhhhhhhhhhhhhhhhhh\nstruct Ref {\n    int type=0;\n    int index=0;\n};\n\nstruct String {\n    engone::Memory memory{1};\n    \n    // copies this into str\n    bool copy(String* str);ghggggggggggggggggggggggggggggggggggggghhhhhhhhhhhhhhh\n    \n    bool operator==(String& str);\n    bool operator!=(String& str);\n    bool operator==(const char* str);hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh\n    bool operator!=(const char* str);\n    \n    String& operator=(const char* str);\n\n    operator std::string();\n};\nstd::string& operator+=(std::string& str, String& str2);hhhhhhhhhhhhhhhhhhhhhhhhhhhhh\n// \n is replaced with \nhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh\nvoid PrintRawString(String& str, int truncate=0);hhhhhhhhhhhhhhhhhhhhhhh\n\nengone::Logger& operator<<(engone::Logger& logger, String& str);\nstruct Number{\n    Decimal value;\n};\n#pragma once\n\n#include "Engone/Alloc.h"\n#include "Engone/Logger.h"\n#include "BetBat/Config.h"\n\n#define REF_NUMBER 1\n#define REF_STRING 2\nstruct Ref {\n    int type=0;\n    ##############################################\n"
+" : End quote
+ : Add lines 
+= : Add = 
+ : Add 0
+ : Add for 
+ : Add 1 
+{ : Add {
+ : Add for 
+ : Add i 
+: : Add : 
+ : Add buffer
+. : Add .
+ : Add length 
+{ : Add {
+ : Add chr 
+= : Add = 
+ : Add buffer
+[ : Add [
+ : Add i
+] : Add ]
+ : Add if 
+ : Add chr
+== : Add ==
+" : Begin quote
+
+ : Add "\n"
+" : End quote
+ : Add lines 
+= : Add = 
+ : Add lines 
++ : Add + 
+ : Add 1
+} : Add }
+} : Add }
+ : Add print 
+ : Add lines 
+" : Begin quote
+lines : Add "lines" 
+" : End quote
+ : Add in 
+( : Add (
+# : Add #
+ : Add run 
+ : Add time 
+ : Add t
+) : Add ) 
+ : Add seconds
+
+##   Generator   ##
+
+Fully compiled 86770 bytes of bytecode in 1.79 ms
+Compiled 9 lines in 1.79 ms
+
+##   Execute   ##
+[]
+[WinError 2] StartProgram, could not start 
+ContextError 2,BC_RUN $null $10,  found but cannot start
+ContextError 103,BC_ADD $14 $16 $14, invalid types REF_STRING REF_? REF_STRING in registers
+50 lines in 72969.629400
+##   Summary   ##
+ 6.66 K lines in 0.01 seconds (avg 1171.56 ns/line)
+ 46.97 K instructions in 0.01 seconds (avg 165.99 ns/inst)
+ 6.02 M instructions per second (6.02 MHz)

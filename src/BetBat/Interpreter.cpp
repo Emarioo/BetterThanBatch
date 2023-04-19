@@ -1,6 +1,7 @@
 #include "BetBat/Interpreter.h"
 
 #include "BetBat/ExternalCalls.h"
+#include "BetBat/Utility.h"
 #include <string.h>
 
 #ifdef CLOG
@@ -47,7 +48,7 @@ void PrintRefValue(Context* context, Ref& ref){
         if(!str)
             log::out <<log::RED<< "null"<<log::SILVER;
         else
-            PrintRawString(*str);
+            PrintRawString(*str,14);
     }else{
         log::out<<log::RED<<"null"<<log::SILVER;
     }
@@ -112,6 +113,7 @@ String* Context::getString(uint32 index){
     return (String*)strings.data + index;
 }
 uint32 Context::makeString(){
+    using namespace engone;
     if(strings.max == strings.used){
         if(!strings.resize(strings.max*2 + 10))
             return 0;
@@ -138,6 +140,7 @@ uint32 Context::makeString(){
     uint8* info = (uint8*)infoValues.data + index;
     *info |= REF_STRING;
     stringCount++;
+    // log::out << "string++\n";
     return index;
 }
 void Context::cleanup(){
@@ -152,12 +155,22 @@ void Context::cleanup(){
     infoValues.resize(0);
     scopes.resize(0);
     valueStack.resize(0);
+    // reseting like this is not very fail safe.
+    // what if more variables are added which are managed
+    // in functions like makeNumber, deleteNumber.
+    // if you don't call those the variables won't reset
+    // unless specified here. And you will forget to put them here
+    // so call the functions instead of reseting memory like we do above.
+    stringCount=0;
+    numberCount=0;
 }
 void Context::deleteString(uint32 index){
+    using namespace engone;
     uint8* info = (uint8*)infoValues.data + index;
     if((*info) & REF_STRING){
         *info = (*info) & (~REF_STRING);
         stringCount--;
+        // log::out << "string--\n";
         
         String* str = (String*)strings.data + index;
         str->memory.resize(0);
@@ -210,7 +223,7 @@ bool Context::ensureScopes(uint depth){
     }
     return true;
 }
-void Context::execute(Bytecode& code){
+void Context::execute(Bytecode& code, Performance* perf){
     using namespace engone;
     activeCode = code;
     log::out << log::BLUE<< "\n##   Execute   ##\n";
@@ -388,7 +401,7 @@ void Context::execute(Bytecode& code){
                         CERR <<", BUG AT "<<__FILE__<<":"<<__LINE__<<"\n";   
                     })
                     
-                    _CLOG(log::out << " "<<v1->value<<" = "<<num<<"\n";)
+                    _CLOG(log::out << " ";PrintRefValue(this,r1);log::out<<" = "<<num<<"\n";)
                     v2->value = num;
                 } else if(r0.type==REF_STRING && r1.type == REF_STRING && r2.type == REF_STRING){
                     String* v0 = getString(r0.index);
@@ -415,7 +428,7 @@ void Context::execute(Bytecode& code){
                             memcpy((char*)v2->memory.data,v0->memory.data, v0->memory.used);
                         }
                         v2->memory.used = v0->memory.used + v1->memory.used;
-                        _CLOG(log::out << LINST <<", \"";PrintRawString(*v2);log::out<<"\"\n";)
+                        _CLOG(log::out << LINST <<", \"";PrintRefValue(this,r2);log::out<<"\"\n";)
                     } else if(inst.type==BC_EQUAL){
                         if(v0->memory.used!=v1->memory.used){
                             v2->memory.used=0;
@@ -477,7 +490,7 @@ void Context::execute(Bytecode& code){
                             continue;
                         }
                         v2->memory.used = v0->memory.used + written;
-                        _CLOG(log::out << LINST <<", \"";PrintRawString(*v2);log::out<<"\"\n";)
+                        _CLOG(log::out << LINST <<", \"";PrintRefValue(this,r2);log::out<<"\"\n";)
                     } else {
                         CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
@@ -538,7 +551,7 @@ void Context::execute(Bytecode& code){
 
                     r0.index = outIndex;
                     
-                    _CLOG(log::out << LINST <<", substr '"<<*out<<"'\n";)
+                    _CLOG(log::out _CLOG_LEAKS(<<log::AQUA) << LINST <<", substr '"<<*out<<"'\n";)
                     // now the first register contains the substring of the original
                 }else{
                     CERR<<", invalid types "<<
@@ -614,41 +627,48 @@ void Context::execute(Bytecode& code){
                 //     CWARN << ", redundant copying same value (["<<r1.index<<"] = ["<<r0.index<<"])\n";
                 //     continue;
                 // }
-
-                if(r0.type==REF_NUMBER){
-                    r1.type = r0.type;
-                    // if r0==r1 then r1.index=makeNumber will overwrite r0.index
-                    //  temp variable will solve it
-                    int tempIndex = r0.index;
-                    r1.index = makeNumber();
-                    // Todo: check if makeNumber failed
-                    
-                    Number* n0 = getNumber(tempIndex);
-                    Number* n1 = getNumber(r1.index);
-                    if(!n0||!n1){
-                        CERR<< ", nummbers are null\n";
-                    }else{
-                        n1->value = n0->value;
-                        _CLOG(log::out _CLOG_LEAKS(<<log::AQUA) << LINST <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
+                switch(r0.type){
+                    case REF_STRING:
+                    {
+                        r1.type = r0.type;
+                        int tempIndex = r0.index;
+                        r1.index = makeString();
+                        // Todo: check if makeString failed
+                        
+                        String* v0 = getString(tempIndex);
+                        String* v1 = getString(r1.index);
+                        if(!v0||!v1){
+                            CERR << ", values are null\n";
+                        }else{
+                            v0->copy(v1);
+                            _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST <<" ["<<r1.index<<"], copied ";PrintRefValue(this,r1);log::out<<"\n";)  
+                        }
+                        break;
                     }
-                }else if(r0.type==REF_STRING){
-                    r1.type = r0.type;
-                    int tempIndex = r0.index;
-                    r1.index = makeString();
-                    // Todo: check if makeString failed
-                    
-                    String* v0 = getString(tempIndex);
-                    String* v1 = getString(r1.index);
-                    if(!v0||!v1){
-                        CERR << ", values are null\n";
-                    }else{
-                        v0->copy(v1);
-                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST <<" ["<<r1.index<<"], copied ";PrintRawString(*v1);log::out<<"\n";)  
+                    case REF_NUMBER:
+                    {
+                        r1.type = r0.type;
+                        // if r0==r1 then r1.index=makeNumber will overwrite r0.index
+                        //  temp variable will solve it
+                        int tempIndex = r0.index;
+                        r1.index = makeNumber();
+                        // Todo: check if makeNumber failed
+                        
+                        Number* n0 = getNumber(tempIndex);
+                        Number* n1 = getNumber(r1.index);
+                        if(!n0||!n1){
+                            CERR<< ", nummbers are null\n";
+                        }else{
+                            n1->value = n0->value;
+                            _CLOG(log::out _CLOG_LEAKS(<<log::AQUA) << LINST <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
+                        }
+                        break;
                     }
-                }else{
-                    r1 = r0;
-                    _CLOG(log::out << LINST <<" ["<<r1.index<<"], copied null\n";)  
-                    // CERR<< ", cannot copy "<<RefToString(r0.type)<<"\n";
+                    default:
+                        r1 = r0;
+                        _CLOG(log::out << LINST <<" ["<<r1.index<<"], copied null\n";)  
+                        // CERR<< ", cannot copy "<<RefToString(r0.type)<<"\n";
+                        break;
                 }
                 break;
             }
@@ -1003,7 +1023,8 @@ void Context::execute(Bytecode& code){
                     
                 }
                 break;
-            } case BC_TEST: {
+            }
+            case BC_TEST: {
                 Ref& r0 = references[inst.reg0];
                 TestValue testValue{r0.type};
                 if(r0.type==REF_STRING){
@@ -1017,6 +1038,105 @@ void Context::execute(Bytecode& code){
                 log::out << log::MAGENTA<<"_test_ ";
                 PrintRefValue(this,r0);
                 log::out <<"\n";
+                break;
+            }
+            case BC_WRITE_FILE:
+            case BC_APPEND_FILE:
+            case BC_READ_FILE: {
+                Ref& r0 = references[inst.reg0];
+                Ref& r1 = references[inst.reg1];
+                
+                // write works with number and string, read doesn't
+                if(inst.type==BC_READ_FILE&&r0.type!=REF_STRING){
+                    CERR << ", r0 must be a string not "<<RefToString(r0.type)<<"\n";
+                    return;
+                }
+                if(r1.type!=REF_STRING){
+                    CERR << ", r1 must be a string not "<<RefToString(r1.type)<<"\n";
+                    return;
+                }
+                
+                String* v1 = getString(r1.index);
+                if(!v1){
+                    CERR << ", r1 must be a string not "<<RefToString(r1.type)<<"\n";
+                    continue;   
+                }
+                // Todo: opening and closing files frequently is inefficient.
+                //  If we could maintain the file for a few milliseconds and if file hasn't been
+                //  accessed, THEN we can close it.
+                
+                uint64 fileSize=0;
+                APIFile* file=0;
+                
+                // Block .cpp and .h in case you mess up and the compiler is overwritten with garbage
+                if(v1->memory.used>4 && inst.type!=BC_READ_FILE){
+                    const char* forbidden[]{".cpp",".h",".bat",".btb"};
+                    bool bad = false;
+                    int i=0;
+                    for(;i<(int)(sizeof(forbidden)/sizeof(*forbidden));i++){
+                        const char* str = forbidden[i];
+                        int len = strlen(str);
+                        if(strncmp((const char*)v1->memory.data+v1->memory.used-len,str,len)==0){
+                            bad=true;
+                            break;
+                        }
+                    }
+                    if(bad){
+                        log::out << log::YELLOW << LINST << ", blocked: '"<<*v1<<"' ('"<<forbidden[i]<<"' is forbidden)\n";
+                        continue;
+                    }
+                }
+                #define CHECK_V0 if(!v0){CERR << ", r0 must be a string not "<<RefToString(r0.type)<<"\n";continue;}
+                // Todo: handle errors and make the code neater
+                if(inst.type==BC_WRITE_FILE){
+                    uint64 written=0;
+                    if(r0.type==REF_STRING){
+                        String* v0 = getString(r0.index);
+                        CHECK_V0
+                        file = FileOpen(*v1,&fileSize,FILE_WILL_CREATE);
+                        written = FileWrite(file,v0->memory.data,v0->memory.used);
+                    }else if(r0.type==REF_NUMBER){
+                        Number* v0 = getNumber(r0.index);
+                        CHECK_V0
+                        char buf[100];
+                        written = sprintf(buf,"%lf",v0->value);
+                        file = FileOpen(*v1,&fileSize,FILE_WILL_CREATE);
+                        written = FileWrite(file,buf,written);
+                    }
+                }else if(inst.type==BC_APPEND_FILE){
+                    uint64 written=0;
+                    if(r0.type==REF_STRING){
+                        String* v0 = getString(r0.index);
+                        CHECK_V0
+                        file = FileOpen(*v1,&fileSize,FILE_CAN_CREATE);
+                        bool err = FileSetHead(file,fileSize);
+                        written = FileWrite(file,v0->memory.data,v0->memory.used);
+                    }else if(r0.type==REF_NUMBER){
+                        Number* v0 = getNumber(r0.index);
+                        CHECK_V0
+                        char buf[100];
+                        written = sprintf(buf,"%lf",v0->value);
+                        file = FileOpen(*v1,&fileSize,FILE_CAN_CREATE);
+                        bool err = FileSetHead(file,fileSize);
+                        written = FileWrite(file,buf,written);
+                    }
+                }else if(inst.type==BC_READ_FILE){
+                    String* v0 = getString(r0.index);
+                    CHECK_V0
+                    file = FileOpen(*v1,&fileSize,FILE_ONLY_READ);
+                    // Todo: don't read large files (500 MB)? Maybe use a stream instruction?
+                    //   May
+                    // log::out << "FILESIZE: "<<fileSize<<"\n";
+                    bool yes = v0->memory.resize(fileSize);
+                    if(yes){
+                        uint64 read = FileRead(file,v0->memory.data,fileSize);
+                        v0->memory.used = read;
+                        // log::out << "Read bytes: "<<read<<"\n";
+                    }
+                }
+                FileClose(file);
+                
+                _CLOG(log::out << LINST << ", from: '"<<*v1<<"' content: '";PrintRefValue(this,r0);log::out <<"'\n";)
                 break;
             } case BC_RUN: {
                 Ref& r0 = references[inst.reg0];
@@ -1050,22 +1170,6 @@ void Context::execute(Bytecode& code){
                     String* v1 = getString(r1.index);
 
                     std::string name = *v1;
-                    
-                    // if(name=="_test_"){
-                    //     log::out << log::MAGENTA<<"_test_ ";
-                    //     PrintRefValue(this,r0);
-                    //     log::out <<"\n";
-                    //     TestValue testValue{r0.type};
-                    //     if(r0.type==REF_STRING){
-                    //         String* v0 = getString(r0.index);
-                    //         testValue.string = *v0;
-                    //     }else if(r0.type==REF_NUMBER){
-                    //         Number* v0 = getNumber(r0.index);
-                    //         testValue.number = *v0;
-                    //     }
-                    //     testValues.push_back(testValue);
-                    //     continue;
-                    // }
 
                     // auto find = externalCalls.map.find(name);
                     auto func = GetExternalCall(name);
@@ -1080,9 +1184,8 @@ void Context::execute(Bytecode& code){
                             // CERR << ", unresolved function does not allow "<<RefToString(r0.type)<<" as argument\n";
                             // continue;
                         }
-                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", arg: ";
-                        PrintRefValue(this,r0);
-                        log::out<<", api call "<<name<<"\n";)
+                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", external: '"<<name<<"' arg: '";
+                        PrintRefValue(this,r0); log::out<<"'\n";)
                         // if(find->second){
                             // Ref returnValue = find->second(this,r0.type,arg);
                             Ref returnValue = func(this,r0.type,arg);
@@ -1097,52 +1200,64 @@ void Context::execute(Bytecode& code){
                         //     CERR << ", api call was null\n";
                         // }
                     }else{
-                        std::string foundPath="";
+                        // std::string foundPath="";
                         
-                        std::string temp=name;
-                        if(temp.find("\"")==0)
-                            temp = temp.substr(1);
-                        if(temp.find_last_of("\"")==temp.length()-1)
-                            temp = temp.substr(0,temp.length()-1);
+                        // std::string temp=name;
+                        // if(temp.find("\"")==0)
+                        //     temp = temp.substr(1);
+                        // if(temp.find_last_of("\"")==temp.length()-1)
+                        //     temp = temp.substr(0,temp.length()-1);
                         
-                        if(FileExist(temp)){
-                            foundPath = name;
-                        }else{
-                            std::string paths = EnvironmentVariable("PATH");
-                            uint at=0;
-                            const char* str=paths.data();
-                            bool found=false;
-                            while(true){
-                                if(at>=paths.length())
-                                    break;
-                                uint end = paths.find(";",at);
-                                if(at>end) {
-                                    at = end +1;
-                                    continue;
-                                }
-                                if(end==(uint)-1)
-                                    end = paths.length();
-                                std::string view = paths.substr(at,end-at);
-                                // log::out << view.data()<<"\n";
-                                if(view.length()==0)
-                                    break;
-                                // ((char*)view.data())[end] = 0;
-                                at = end+1;
+                        // if(FileExist(temp)){
+                        //     foundPath = name;
+                        // }else{
+                        //     std::string paths = EnvironmentVariable("PATH");
+                        //     uint at=0;
+                        //     const char* str=paths.data();
+                        //     bool found=false;
+                        //     while(true){
+                        //         if(at>=paths.length())
+                        //             break;
+                        //         uint end = paths.find(";",at);
+                        //         if(at>end) {
+                        //             at = end +1;
+                        //             continue;
+                        //         }
+                        //         if(end==(uint)-1)
+                        //             end = paths.length();
+                        //         std::string view = paths.substr(at,end-at);
+                        //         // log::out << view.data()<<"\n";
+                        //         if(view.length()==0)
+                        //             break;
+                        //         // ((char*)view.data())[end] = 0;
+                        //         at = end+1;
                                 
-                                std::string exepath = "";
-                                exepath += view;
-                                exepath += "\\";
-                                exepath += name;
-                                if(FileExist(exepath)){
-                                    foundPath = exepath;
-                                    break;
-                                }
+                        //         std::string exepath = "";
+                        //         exepath += view;
+                        //         exepath += "\\";
+                        //         exepath += name;
+                        //         if(FileExist(exepath)){
+                        //             foundPath = exepath;
+                        //             break;
+                        //         }
+                        //     }
+                        // }
+                        // if(foundPath.empty()){
+                        //     CERR << ", "<<name<<" could not be found\n";
+                        // }else{
+                            // std::string finaltemp=std::move(foundPath);
+                            // ReplaceChar((char*)finaltemp.data(),finaltemp.length(),'/','\\');
+                            
+                            int index = name.find("cmd");
+                            std::string finaltemp;
+                            if(index==0){
+                                // Todo: what if name has /k and stuff?
+                                if(name.length()>strlen("strlen"))
+                                if(name[4])
+                                finaltemp = "cmd.exe /K " + name.substr(3);
+                            }else{
+                                finaltemp = name;
                             }
-                        }
-                        if(foundPath.empty()){
-                            CERR << ", "<<name<<" could not be found\n";
-                        }else{
-                            std::string finaltemp=std::move(foundPath);
                             if(r0.type==REF_NUMBER){
                                 Number* v0 = getNumber(r0.index);
                                 if(v0){
@@ -1154,11 +1269,13 @@ void Context::execute(Bytecode& code){
                                 finaltemp += " ";
                                 finaltemp += *v0;
                             }
-                            _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", arg: ";
-                            PrintRefValue(this,r0);
-                            log::out<<", exe call "<<name<<"\n";)
+                            _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", exe: '"<<name<<"' arg: '";
+                            PrintRefValue(this,r0); log::out<<"'\n";)
                             int exitCode = 0;
                             int flags = PROGRAM_WAIT;
+                            
+                            
+                            log::out << "["<<finaltemp<<"]\n";
                             bool yes = StartProgram("",(char*)finaltemp.data(),flags,&exitCode);
                             if(!yes){
                                 CERR << ", "<<name<<" found but cannot start\n";
@@ -1172,7 +1289,7 @@ void Context::execute(Bytecode& code){
                                     rv->value = exitCode;
                                 }
                             }
-                        }
+                        // }
                     }
                 }else{
                      CERR << ", bad registers ";PrintRefValue(this,r0);log::out <<", ";PrintRefValue(this,r1);log::out<<"\n";
@@ -1194,10 +1311,15 @@ void Context::execute(Bytecode& code){
         else sprintf(temp,"%.2lf G",number/1e9);
     };
 
-    bool summary=false;    
+    bool summary=true;    
+    // bool summary=false;
 
     double executionTime = StopMeasure(startTime);
-
+    
+    if(perf){
+        perf->instructions = executedInsts;
+        perf->runtime = executionTime;   
+    }
     if(summary){
         double nsPerInst = executionTime/executedInsts*1e9;
         double nsPerLine = executionTime/executedLines*1e9;
@@ -1219,10 +1341,9 @@ void Context::execute(Bytecode& code){
         
         // double target = 3e9;
         // log::out.flush(); printf(" %d",(int)(target/instPerS)); log::out<<" times slower than 3 GHz ("<<temp<<"Hz / 3 GHz)\n";
-
-        if(numberCount!=0||stringCount!=0){
-            log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
-        }
+    }
+    if(numberCount!=0||stringCount!=0){
+        log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
     }
     // auto tp = MeasureSeconds();
     // int sum = 0;
@@ -1241,8 +1362,8 @@ void Context::execute(Bytecode& code){
     // auto sec = StopMeasure(tp);
     // log::out << "Res "<<sum<<" "<<(sec*1000000)<<" us\n";
 }
-void Context::Execute(Bytecode& code){
+void Context::Execute(Bytecode& code, Performance* perf){
     Context context{};
-    context.execute(code);
+    context.execute(code,perf);
     context.cleanup();
 }

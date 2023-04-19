@@ -4,6 +4,9 @@
 
 #include "Engone/PlatformLayer.h"
 
+// Temporary
+#include "Engone/Win32Includes.h"
+
 #include <time.h>
 
 namespace engone {
@@ -94,6 +97,7 @@ namespace engone {
 		auto& info = getThreadInfo();
 		if(info.lineBuffer.used==0)
 			return;
+		*((char*)info.lineBuffer.data+info.lineBuffer.used) = 0;
 		print((char*)info.lineBuffer.data, info.lineBuffer.used);
 		info.lineBuffer.used = 0; // flush buffer
 	}
@@ -113,7 +117,7 @@ namespace engone {
 			SetConsoleColor(m_masterColor);
 
 		if(m_enabledConsole){
-			printf("%s", str);
+			fwrite(str,1,len,stdout);
 		}
 		if(m_enabledReports){
 

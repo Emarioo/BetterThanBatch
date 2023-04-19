@@ -28,7 +28,7 @@ struct String {
 };
 std::string& operator+=(std::string& str, String& str2);
 // \n is replaced with \\n
-void PrintRawString(String& str);
+void PrintRawString(String& str, int truncate=0);
 
 engone::Logger& operator<<(engone::Logger& logger, String& str);
 struct Number{

@@ -276,7 +276,7 @@ namespace engone {
 			creation = OPEN_ALWAYS;
 		if(flags&FILE_WILL_CREATE)
 			creation = CREATE_ALWAYS;
-        
+		
 		if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){
 			std::string temp;
 			uint i=0;
@@ -925,7 +925,80 @@ namespace engone {
 		}
 		return buffer;
 	}
-	bool StartProgram(const std::string& path, char* commandLine, int flags, int* exitCode) {
+	struct PipeInfo{
+		HANDLE readH=0;	
+		HANDLE writeH=0;	
+	};
+	std::unordered_map<APIFile*,PipeInfo> pipes;
+	uint64 pipeIndex=0x500000;
+	APIFile* PipeCreate(bool inheritRead,bool inheritWrite){
+		PipeInfo info{};
+		
+		SECURITY_ATTRIBUTES saAttr; 
+		saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
+		saAttr.bInheritHandle = inheritRead||inheritWrite;
+		saAttr.lpSecurityDescriptor = NULL; 
+		
+		DWORD err = CreatePipe(&info.readH,&info.writeH,&saAttr,0);
+		if(!err){
+			err = GetLastError();
+			PL_PRINTF("[WinError %lu] Cannot create pipe\n",err);
+			return 0;
+		}
+		
+		if(!inheritRead){
+			err = SetHandleInformation(info.readH, HANDLE_FLAG_INHERIT, 0);
+			if(!err){
+				err = GetLastError();
+				PL_PRINTF("[WinError %lu] Pipe setting information failed\n",err);	
+			}
+		}
+		if(!inheritWrite){
+			err = SetHandleInformation(info.writeH, HANDLE_FLAG_INHERIT, 0);
+			if(!err){
+				err = GetLastError();
+				PL_PRINTF("[WinError %lu] Pipe setting information failed\n",err);	
+			}
+		}
+		
+		pipes[(APIFile*)pipeIndex] = info;
+		return (APIFile*)(pipeIndex++);
+	}
+	void PipeDestroy(APIFile* pipe){
+		auto& info = pipes[pipe];
+		if(info.readH)
+			CloseHandle(info.readH);
+		if(info.writeH)
+			CloseHandle(info.writeH);
+		pipes.erase(pipe);
+	}
+	int PipeRead(APIFile* pipe,void* buffer, int size){
+		auto& info = pipes[pipe];
+		DWORD read=0;
+		DWORD err = ReadFile(info.readH,buffer,size,&read,0);
+		if(!err){
+			err = GetLastError();
+			if(err==ERROR_BROKEN_PIPE){
+				return 0; // pipe is closed, nothing to read
+			}
+			PL_PRINTF("[WinError %lu] Pipe read failed\n",err);
+			return 0;
+		}
+		
+		return read;
+	}
+	int PipeWrite(APIFile* pipe,void* buffer, int size){
+		auto& info = pipes[pipe];
+		DWORD written=0;
+		DWORD err = WriteFile(info.writeH,buffer,size,&written,0);
+		if(!err){
+			err = GetLastError();
+			PL_PRINTF("[WinError %lu] Pipe write failed\n",err);
+			return 0;
+		}
+		return written;
+	}
+	bool StartProgram(const std::string& path, char* commandLine, int flags, int* exitCode, APIFile* fStdin, APIFile* fStdout) {
 		// if (!FileExist(path)) {
 		// 	return false;
 		// }
@@ -943,6 +1016,21 @@ namespace engone {
 		si.cb = sizeof(si);
 		ZeroMemory(&pi, sizeof(pi));
         
+		if(fStdin){
+			auto& info = pipes[fStdin];
+			si.hStdInput = info.readH;
+		}
+		if(fStdout){
+			auto& info = pipes[fStdout];
+			si.hStdOutput = info.writeH;
+			si.hStdError = info.writeH;
+		}
+		bool inheritHandles=false;
+		if(fStdin||fStdout){
+			si.dwFlags |= STARTF_USESTDHANDLES;
+			inheritHandles = true;
+		}
+		 
 		int slashIndex = path.find_last_of("\\");
     
 		std::string workingDir{};
@@ -966,7 +1054,7 @@ namespace engone {
                        commandLine,        // Command line
                        NULL,           // Process handle not inheritable
                        NULL,           // Thread handle not inheritable
-                       FALSE,          // Set handle inheritance to FALSE
+                       inheritHandles,          // Set handle inheritance to FALSE
                        createFlags,              // No creation flags
                        NULL,           // Use parent's environment block
                        dir,   // starting directory 
@@ -1010,6 +1098,17 @@ namespace engone {
 		
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
+		
+		if(fStdin){
+			auto& info = pipes[fStdin];
+			CloseHandle(info.readH);
+			info.readH = 0;
+		}
+		if(fStdout){
+			auto& info = pipes[fStdout];
+			CloseHandle(info.writeH);
+			info.writeH=0;
+		}
 		return true;
 	}
 	FileMonitor::~FileMonitor() { cleanup(); }

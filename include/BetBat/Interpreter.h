@@ -11,6 +11,10 @@ struct Scope{
     
     int returnAddress=0;
 };
+struct Performance {
+    int instructions;
+    double runtime;
+};
 struct Context {
     engone::Memory numbers{sizeof(Number)};
     engone::Memory strings{sizeof(String)};
@@ -53,7 +57,7 @@ struct Context {
     void deleteString(uint index);
     String* getString(uint index);
 
-    void execute(Bytecode& code);
+    void execute(Bytecode& code, Performance* perf=0);
     
-    static void Execute(Bytecode& code);
+    static void Execute(Bytecode& code, Performance* perf=0);
 };

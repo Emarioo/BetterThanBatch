@@ -1,0 +1,23 @@
+
+// print "hello" | file.txt
+
+//gcc < file.txt
+
+// var = "+3"
+// var >> example/pipes.btb
+
+t = #run time
+for i : 10
+    print #run random
+
+t = #run time t
+print Time: t
+
+t = ""+t+" ms"
+
+t > sar.cpp
+t > sour.h
+t > pine.bat
+t > suf.btab
+
+// print (3+3+3

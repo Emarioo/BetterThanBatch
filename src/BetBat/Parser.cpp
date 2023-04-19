@@ -68,7 +68,10 @@ const char* InstToString(int type){
         INSTCASE(BC_LEN)
         INSTCASE(BC_SUBSTR)
         INSTCASE(BC_TYPE)
-
+        
+        INSTCASE(BC_WRITE_FILE)
+        INSTCASE(BC_APPEND_FILE)
+        INSTCASE(BC_READ_FILE)
 
         INSTCASE(BC_NUM)
         INSTCASE(BC_STR)
@@ -134,6 +137,11 @@ const char* RegToString(uint8 reg){
 }
 void Instruction::print(){
     using namespace engone;
+    auto color = log::out.getColor();
+    if(type==BC_NUM||type==BC_STR||type==BC_SUBSTR||type==BC_COPY)
+        log::out << log::AQUA;
+    if(type==BC_DEL)
+        log::out << log::PURPLE;
     if(type==BC_LOADC||type==BC_LOADV||type==BC_STOREV){
         log::out << InstToString(type) << " $"<<RegToString(reg0) << " "<<((uint)reg1|((uint)reg2<<8));
     } else if((type&BC_MASK) == BC_R1){
@@ -153,6 +161,8 @@ void Instruction::print(){
     // if((type&BC_MASK) == BC_R3)
     } else
         log::out<<InstToString(type)<<" $"<<RegToString(reg0)<<" $"<<RegToString(reg1)<<" $"<<RegToString(reg2);
+        
+    log::out << color;
 }
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
     instruction.print();
@@ -211,6 +221,16 @@ Number* Bytecode::getConstNumber(uint index){
     if(index>=constNumbers.used) return 0;
     return (Number*)constNumbers.data + index;
 }
+void Bytecode::finalizePointers(){
+    for(int i=0;i<(int)constStrings.used;i++){
+        String* str = (String*)constStrings.data+i;
+        str->memory.data = (char*)constStringText.data + (uint64)str->memory.data;
+    }
+    for(int i=0;i<(int)debugLines.used;i++){
+        DebugLine* line = (DebugLine*)debugLines.data+i;
+        line->str = (char*)debugLineText.data + (uint64)line->str;
+    }
+}
 uint Bytecode::addConstString(Token& token, const char* padding){
     int padlen = 0;
     if(padding)
@@ -233,16 +253,19 @@ uint Bytecode::addConstString(Token& token, const char* padding){
     // }
     // str->memory.used = token.length;
 
-    str->memory.data = (char*)constStringText.data + constStringText.used;
+    str->memory.data = (char*)constStringText.used;
+    // can't use consStringText.data since it may be reallocated
+    // str->memory.data = (char*)constStringText.data + constStringText.used;
     str->memory.max = str->memory.used = length;
     str->memory.m_typeSize=0;
-    constStringText.used+=length;
-
-    memcpy(str->memory.data,token.str,token.length);
+    
+    char* ptr = (char*)constStringText.data + constStringText.used;
+    memcpy(ptr,token.str,token.length);
     if(padding&&padlen!=0)
-        memcpy((char*)str->memory.data + token.length,padding,padlen);
+        memcpy(ptr + token.length,padding,padlen);
 
     constStrings.used++;
+    constStringText.used+=length;
     return index;
 }
 bool Bytecode::addLoadC(uint8 reg0, uint constIndex){
@@ -275,19 +298,6 @@ bool Bytecode::remove(int index){
     return true;
 }
 Bytecode::DebugLine* Bytecode::getDebugLine(int instructionIndex, int* latestIndex){
-#ifdef PRINT_DUPLICATE_DEBUG_LINES
-    for(int i=0;i<(int)debugLines.used;i++){
-        DebugLine* line = (DebugLine*)debugLines.data + i;
-        
-        if(line->instructionIndex==instructionIndex&&(int)*latestIndex<i){
-            *latestIndex = i;
-            return line;
-        }
-        if(instructionIndex<line->instructionIndex)
-            break;
-    }
-    return 0;
-#else
     if(latestIndex==0)
         return 0;
     int index = *latestIndex;
@@ -303,7 +313,6 @@ Bytecode::DebugLine* Bytecode::getDebugLine(int instructionIndex, int* latestInd
     if(latestIndex)
         *latestIndex = index;
     return line;
-#endif
 }
 Bytecode::DebugLine* Bytecode::getDebugLine(int instructionIndex){
     for(int i=0;i<(int)debugLines.used;i++){
@@ -333,6 +342,14 @@ int ParseInfo::Scope::getVariableCleanupCount(ParseInfo& info){
         }
     }
     return offset;
+}
+void ParseInfo::Scope::removeReg(int reg){
+    for(int i = 0;i<(int)delRegisters.size();i++){
+        if(delRegisters[i]==reg){
+            delRegisters.erase(delRegisters.begin()+i);
+            break;
+        }
+    }   
 }
 void ParseInfo::dropScope(int index){
     using namespace engone;
@@ -377,6 +394,12 @@ Instruction& Bytecode::get(uint index){
     return *((Instruction*)codeSegment.data + index);
 }
 
+ParseInfo::Variable* ParseInfo::getVariable(const std::string& name){
+    auto pair = variables.find(name);
+    if(pair==variables.end())
+        return 0;
+    return &pair->second;
+}
 uint32 Bytecode::getMemoryUsage(){
     uint32 sum = codeSegment.max*codeSegment.m_typeSize+
         constNumbers.max*constNumbers.m_typeSize+
@@ -448,14 +471,25 @@ Token& ParseInfo::next(){
     // if(temp.flags&TOKEN_SUFFIX_LINE_FEED||index==1){
         if(code.debugLines.used==0){
             if(addDebugLine(index-1)){
-                _GLOG(engone::log::out <<"\n"<<*((Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used-1)<<"\n";)
+                Bytecode::DebugLine* line = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used-1;
+                uint64 offset = (uint64)line->str;
+                line->str = (char*)code.debugLineText.data + offset;
+                // line->str doesn't point to debugLineText yet since it may resize.
+                // we do some special stuff to deal with it.
+                _GLOG(engone::log::out <<"\n"<<*line<<"\n";)
+                line->str = (char*)offset;
             }
         }else{
             Bytecode::DebugLine* lastLine = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used - 1;
             if(temp.line != lastLine->line){
                 if(addDebugLine(index-1)){
-                    // Todo: should not print if you revert later. 
-                    _GLOG(engone::log::out <<"\n"<<*((Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used-1)<<"\n";)
+                    Bytecode::DebugLine* line = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used-1;
+                    uint64 offset = (uint64)line->str;
+                    line->str = (char*)code.debugLineText.data + offset;
+                    // line->str doesn't point to debugLineText yet since it may resize.
+                    // we do some special stuff to deal with it.
+                    _GLOG(engone::log::out <<"\n"<<*line<<"\n";)
+                    line->str = (char*)offset;
                 }
             }
         }
@@ -577,7 +611,7 @@ bool ParseInfo::addDebugLine(uint tokenIndex){
     }
     Bytecode::DebugLine* line = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used;
     code.debugLines.used++;
-    line->str = (char*)code.debugLineText.data+code.debugLineText.used;
+    line->str = (char*)code.debugLineText.used;
     line->length = length;
     line->instructionIndex = code.length();
     line->line = get(tokenIndex).line;
@@ -589,9 +623,10 @@ bool ParseInfo::addDebugLine(uint tokenIndex){
         
         // memcpy((char*)code.debugLineText.data + code.debugLineText.used,token.str,token.length);
         // code.debugLineText.used+=token.length;
-        
         for(int j=0;j<token.length;j++){
-            char chr = *((char*)token.str+j);
+            // uint64 offset = (uint64)token.str;
+            char* ptr = token.str;
+            char chr = *((char*)ptr+j);
             if(chr=='\n'){
                 if(code.debugLineText.used+2>code.debugLineText.max){
                     if(!code.debugLineText.resize(code.debugLineText.max+10)){
@@ -612,10 +647,38 @@ bool ParseInfo::addDebugLine(uint tokenIndex){
     }
     return true;
 }
+bool ParseInfo::addDebugLine(const char* str, int lineIndex){
+    #ifndef USE_DEBUG_INFO
+    return false;
+    #endif
+    int length = strlen(str);
+    if(code.debugLineText.used+length>code.debugLineText.max){
+        if(!code.debugLineText.resize(code.debugLineText.max*2+length*30)){
+            return false;
+        }
+    }
+    if(code.debugLines.used==code.debugLines.max){
+        if(!code.debugLines.resize(code.debugLines.max*2+10)){
+            return false;
+        }
+    }
+    Bytecode::DebugLine* line = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used;
+    code.debugLines.used++;
+    line->str = (char*)code.debugLineText.used;
+    line->length = length;
+    line->instructionIndex = code.length();
+    line->line = lineIndex;
+        
+    for(int j=0;j<length;j++){
+        char chr = str[j];
+        *((char*)code.debugLineText.data + code.debugLineText.used++) = chr;
+    }
+    return true;
+}
 void ParseInfo::nextLine(){
     int extra=index==0;
     if(index==0){
-        next();   
+        next();
     }
     while(!end()){
         Token nowT = now();
@@ -1174,21 +1237,20 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
             // we don't want to drop jumpReg here. code in else scope uses it.
             // way may have wanted to drop jumpreg in if body which is why
             // it needs to be in delRegisteers
-            for(int i = 0;i<(int)scope->delRegisters.size();i++){
-                if(scope->delRegisters[i]==jumpReg){
-                    scope->delRegisters.erase(scope->delRegisters.begin()+i);
-                    break;
-                }
-            }
+            scope->removeReg(jumpReg);
+            scope->removeReg(expr.acc0Reg);
             info.dropScope();
             info.makeScope();
             scope->delRegisters.push_back(jumpReg);
+            scope->delRegisters.push_back(expr.acc0Reg);
+            
             int elseAddr = info.code.addConstNumber(-1);
             info.code.addLoadC(jumpReg,elseAddr);
             _GLOG(INST << "\n";)
             info.code.add(BC_JUMP,jumpReg);
             _GLOG(INST << "\n";)
             
+            _GLOG(log::out<<log::GREEN<<"  : JUMP ADDRESS ["<<jumpAddress<<"]\n";)
             info.code.getConstNumber(jumpAddress)->value = info.code.length();
             
             int result = ParseBody(info,acc0reg+2);
@@ -1197,11 +1259,14 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
             }
             // info.dropScope();
             
+            _GLOG(log::out<<log::GREEN<<"  : ELSE ADDRESS ["<<elseAddr<<"]\n";)
             info.code.getConstNumber(elseAddr)->value = info.code.length()
                 + scope->getVariableCleanupCount(info);
         }else{
             info.code.getConstNumber(jumpAddress)->value = info.code.length()
                 + scope->getVariableCleanupCount(info);
+            _GLOG(log::out<<log::GREEN<<"  : JUMP ADDRESS (roughly) ["<<jumpAddress<<"]\n";)
+                
         }   
         info.dropScope();
     } else if(token=="while"){
@@ -1409,7 +1474,8 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
                 return PARSE_ERROR;
             }
         }
-        _GLOG(log::out << "    Start Address: "<<info.code.getConstNumber(startAddress)->value<<"\n";)
+        // _GLOG(log::out << "    Start Address: "<<info.code.getConstNumber(startAddress)->value<<"\n";)
+        _GLOG(log::out<<log::GREEN<<"  : START ADDRESS ["<<startAddress<<"]\n";)
 
         int endAddress = info.code.addConstNumber(-1);
 
@@ -1564,6 +1630,8 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         _GLOG(INST << "\n";)
         info.code.add(BC_EQUAL,chrReg,tempStrReg,tempStrReg);
         _GLOG(INST << "\n";)
+        info.code.add(BC_DEL,chrReg);
+        _GLOG(INST << "\n";)
         
         info.code.addLoadC(jumpReg,elseAddress);
         _GLOG(INST << "\n";)
@@ -1641,6 +1709,9 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         if(result2!=PARSE_SUCCESS){
             return PARSE_ERROR;
         }
+        
+        info.code.add(BC_DEL,chrReg);
+        _GLOG(INST << "\n";)
 
         info.loopScopes.erase(info.loopScopes.begin()+info.loopScopes.size()-1);
         
@@ -1854,6 +1925,59 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     }
     // Token token = info.next();
     
+    Token varName = info.get(info.at()+1);
+    auto var = info.getVariable(varName);
+    if(var){
+        info.next();
+        Token token = info.get(info.at()+1);
+        int instruction = 0;
+        if(token=="<") instruction = BC_READ_FILE;
+        else if(token==">") instruction = BC_WRITE_FILE;
+        else if(token==">>") instruction = BC_APPEND_FILE;
+        if(instruction){
+            info.next();
+            
+            int varReg = exprInfo.acc0Reg;
+            int fileReg = exprInfo.acc0Reg+1;
+            
+            info.code.add(BC_LOADV,varReg,var->frameIndex);
+            _GLOG(INST << varName<<"\n";)
+            
+            token = info.get(info.at()+1);
+            auto fileVar = info.getVariable(token);
+            if(fileVar){
+                info.next();
+                info.code.add(BC_LOADV,fileReg,fileVar->frameIndex);
+                _GLOG(INST << varName<<"\n";)
+                info.code.add(instruction,varReg,fileReg);
+                _GLOG(INST << "\n";)
+            }else{
+                token = CombineTokens(info); // read file
+                // we assume it's valid?
+            
+                info.code.add(BC_STR,fileReg);
+                _GLOG(INST << "\n";)
+                int constIndex = info.code.addConstString(token);
+                info.code.addLoadC(fileReg,constIndex);
+                _GLOG(INST << token<<"\n";)
+                
+                info.code.add(instruction,varReg,fileReg);
+                _GLOG(INST << "\n";)
+                info.code.add(BC_DEL,fileReg);
+                _GLOG(INST << "\n";)
+            }
+            // Note: PARSE_SUCCESS would indicated varReg (eg, variable value) to be "returned".
+            //   That's maybe not quite right since we would need to copy the value otherwise
+            //   we would have two variables pointing to the same value.
+            return PARSE_NO_VALUE;
+        }
+        else{
+            ERRT(token) << "Expected piping (not '"<<token<<"', | not supported yet) after variable '"<<varName<<"'\n";
+            return PARSE_ERROR;   
+        }
+           
+    }
+    
     Token token = CombineTokens(info);
     Token cmdName = token;
     if(!token.str){
@@ -1982,7 +2106,7 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 }else{
                     return PARSE_ERROR;
                 }
-            } else if(token==";") {
+            } else if(token==";"||token==")") {
                 // argReg = exprInfo.acc0Reg+exprInfo.regCount;
                 // info.code.add(BC_STR,argReg);
                 // _GLOG(INST << "arg\n";)
@@ -2241,7 +2365,7 @@ void Bytecode::printStats(){
 }
 Bytecode GenerateScript(Tokens& tokens, int* outErr){
     using namespace engone;
-    log::out <<log::BLUE<<  "\n##   Generator   ##\n";
+    log::out <<log::BLUE<<  "\n##   Parser   ##\n";
     
     ParseInfo info{tokens};
     
@@ -2261,6 +2385,7 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
             // skip line or token until successful
         }
     }
+    info.addDebugLine("(End of global scope)");
     info.dropScope();
     
     // int accDepth = 1;
@@ -2277,21 +2402,17 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
     // }
     
     
-    // Note: code below adds some cleanup instructions which isn't necessary but good practise
     
-    info.tokens.get(info.tokens.length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
-    info.tokens.add("(Clean instructions)");
-    info.addDebugLine(info.tokens.length()-1);
-    
-    // #ifdef USE_DEBUG_INFO
-    // _GLOG(log::out <<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1);)
-    // #endif
+    if(info.variables.size()!=0){
+        log::out << log::YELLOW<<"ParseWarning: "<<info.variables.size()<<" variables remain?\n";
 
-    for(auto& pair : info.variables){
-        // log::out << "del "<<pair.first<<"\n";
-        info.code.add(BC_LOADV,REG_ACC0,pair.second.frameIndex);
-        info.code.add(BC_DEL,REG_ACC0);
     }
+    // we drop scope so we don't need this anymore
+    // for(auto& pair : info.variables){
+    //     // log::out << "del "<<pair.first<<"\n";
+    //     info.code.add(BC_LOADV,REG_ACC0,pair.second.frameIndex);
+    //     info.code.add(BC_DEL,REG_ACC0);
+    // }
 
     if(outErr){
         *outErr = info.errors;
@@ -2299,6 +2420,10 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
     if(info.errors)
         log::out << log::RED<<"Generator failed with "<<info.errors<<" errors\n";
     
+    info.code.finalizePointers();
+    #ifdef USE_DEBUG_INFO
+    _GLOG(log::out <<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1);)
+    #endif
     return info.code;
 }
 #define ARG_REG 1

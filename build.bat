@@ -1,8 +1,6 @@
 @echo off
 @setlocal enabledelayedexpansion
 
-@REM SET LIBRARIES=-lshell32
-
 @REM ########
 @REM  Hello! cl from MSVC is used to compile the project.
 @REM  g++ is used when debugging. You will unfortunately
@@ -10,24 +8,23 @@
 @REM  at this moment in time.
 @REM ########
 
-SET DEBUG=1
+SET USE_GCC=1
+SET USE_MSVC=1
 
 SET GCC_INCLUDE_DIRS=-Iinclude
 SET GCC_DEFINITIONS=-DWIN32
 SET GCC_COMPILE_OPTIONS=-std=c++14 -g
-SET WARN=-Wall -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
+SET GCC_WARN=-Wall -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
-SET COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
-SET LINK_OPTIONS=/nologo
-SET INCLUDE_DIRS=/Iinclude
-SET DEFINITIONS=/DWIN32
+SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
+SET MSVC_LINK_OPTIONS=/nologo /debug
+SET MSVC_INCLUDE_DIRS=/Iinclude
+SET MSVC_DEFINITIONS=/DWIN32
 
+@REM #############  Unity build
 mkdir bin 2> nul
-
 SET srcfile=bin\all.cpp
-
 type nul > !srcfile!
-
 for /r %%i in (*.cpp) do (
     SET file=%%i
     if "x!file:__=!"=="x!file!" if "x!file:bin=!"=="x!file!" (
@@ -38,24 +35,27 @@ for /r %%i in (*.cpp) do (
         )
     )
 )
+
+@REM #####   Compiling
 set /a startTime=6000*( 100%time:~3,2% %% 100 ) + 100* ( 100%time:~6,2% %% 100 ) + ( 100%time:~9,2% %% 100 )
 
-@REM if !DEBUG!==1 (
-    start /b g++ !WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/program_debug.exe
-@REM  > nul
-@REM ) else (
-    cl !COMPILE_OPTIONS! !INCLUDE_DIRS! !DEFINITIONS! !srcfile! /Fobin/all.obj /link shell32.lib /OUT:bin/program.exe
-@REM )
-set /a endTime=6000*(100%time:~3,2% %% 100 )+100*(100%time:~6,2% %% 100 )+(100%time:~9,2% %% 100 )
+if !USE_MSVC!==1 (
+    if !USE_GCC!==1 (
+        @REM Compiling this too when using GDB debugger in vscode
+        start /b g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/program_debug.exe
+    )
+    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Z7 /Fobin/all.obj /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:bin/program.exe
+) else (
+    g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/program.exe
+)
 
+set /a endTime=6000*(100%time:~3,2% %% 100 )+100*(100%time:~6,2% %% 100 )+(100%time:~9,2% %% 100 )
 set /a finS=(endTime-startTime)/100
 set /a finS2=(endTime-startTime)%%100
 
-echo Finished in %finS%.%finS2% seconds
+echo Compiled in %finS%.%finS2% seconds
 
 if !errorlevel! == 0 (
-    @REM bin\program_debug
     echo f | XCOPY /y /q bin\program.exe prog.exe > nul
-    @REM prog -test
     prog
 )

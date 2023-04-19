@@ -1,10 +1,10 @@
 
-list = " kake0 kea 9e19 1"
+list = "d ja opa opao aop ao doa wjo nn wao onao a oa ao ao a oa dwi wn a ni ani an a na"
 
+count = 0
 each str : list {
-    print #i : #v
-    if str == "kea"
-        list = "aa da ad dmr rvay taw 8au"
+    if str[0] == "a"
+        count = count + 1
 }
 
 /*

@@ -41,6 +41,10 @@
 #define BC_LOADV         (BC_R2|0x10)
 #define BC_STOREV        (BC_R2|0x11)
 
+#define BC_WRITE_FILE    (BC_R2|0x12)
+#define BC_APPEND_FILE   (BC_R2|0x13)
+#define BC_READ_FILE     (BC_R2|0x14)
+
 // #define BC_TONUM         (BC_R2|0x12)
 
 #define BC_NUM           (BC_R1|0x01)
@@ -112,6 +116,11 @@ struct Bytecode {
     engone::Memory debugLines{sizeof(DebugLine)};
     engone::Memory debugLineText{1};
 
+    // Const strings and debug lines use char pointers to other memory.
+    // that memory may be reallocated and thus invalidate the char pointers.
+    // This is prevented by treating char* as an offest in the memory first.
+    // then call this function to replace the char* with base + offset
+    void finalizePointers(); 
 
     // engone::Memory linePointers{sizeof(uint16)};
 
@@ -168,6 +177,7 @@ struct ParseInfo {
         // how many instructions it takes to
         // delete variables
         int getVariableCleanupCount(ParseInfo& info);
+        void removeReg(int reg);
     };
     std::vector<Scope> scopes;
 
@@ -187,6 +197,7 @@ struct ParseInfo {
         int jumpAddress=0;
         int constIndex=-1;
     };
+    Variable* getVariable(const std::string& name);
     std::unordered_map<std::string,Function> functions;
     
     // ExternalCalls externalCalls;
@@ -227,6 +238,7 @@ struct ParseInfo {
     void finish();
 
     bool addDebugLine(uint tokenIndex);
+    bool addDebugLine(const char* str, int line=65565);
 
     // print line of where current token exists
     // not including \n

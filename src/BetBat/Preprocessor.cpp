@@ -115,9 +115,9 @@ bool EvalInfo::matchSuperArg(Token& name, CertainMacro*& superMacro, Arguments*&
     return false;
 }
 void PreprocInfo::addToken(Token inToken){
-    int offset = tokens.tokenData.used;
+    uint64 offset = tokens.tokenData.used;
     tokens.append(inToken);
-    inToken.str = (char*)tokens.tokenData.data + offset;
+    inToken.str = (char*)offset;
     tokens.add(inToken);
 }
 int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
@@ -786,9 +786,11 @@ int ParseMacro(PreprocInfo& info, int attempt){
     EvalMacro(info,evalInfo);
     for(int i=0;i<(int)evalInfo.output.size();i++){
         Token baseToken = info.get(evalInfo.output[i]);
-        int offset = info.tokens.tokenData.used;
+        baseToken.flags = evalInfo.output[i].flags;
+        uint64 offset = info.tokens.tokenData.used;
         info.tokens.append(baseToken);
-        baseToken.str = (char*)info.tokens.tokenData.data + offset;
+        baseToken.str = (char*)offset;
+        // baseToken.str = (char*)info.tokens.tokenData.data + offset;
         
         while(true){
             Token nextToken{};
@@ -858,11 +860,13 @@ void Preprocess(Tokens& inTokens, int* error){
     while(!info.end()){
         int result = ParseToken(info);
     }
+    info.tokens.lines = info.inTokens.lines;
     
     if(info.errors)
         log::out << log::RED << "Preprocessor failed with "<<info.errors<<" errors\n";
-    
+    info.tokens.finalizePointers();
     // log::out << log::BLUE<<"### # # #  #  #  #    #    #\n";
+    inTokens.copyInfo(info.tokens);
     inTokens.cleanup();
     inTokens = info.tokens;
     if(error)

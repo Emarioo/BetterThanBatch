@@ -1,0 +1,10 @@
+@disable all
+@enable preprocessor
+
+#define END ko
+#multidefine HAHA(X,...) Ha HAHA(...)
+END
+#enddef
+#define HAHA() a
+
+beg HAHA(1,2,3,4) WAIT

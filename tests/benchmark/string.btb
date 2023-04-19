@@ -1,0 +1,64 @@
+// files = #run filterfiles *.cpp *.h // Goodness me this code is soooo slow.
+t = #run time // Average time is 2 seconds for 9300 lines of code (roughly 30 files)
+
+// buffer = "hjehjejha\neae\naeaoe"
+
+buffer = "
+++++++++++++++++++++++++++++++++++++++++
+#pragma once
+
+#include \"Engone/Alloc.h\"
+#include \"Engone/Logger.h\"
+#include \"BetBat/Config.h\"
+
+#define REF_NUMBER 1
+#define REF_STRING 2faaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaahhhhhhhhhhhhhhhhhh
+struct Ref {
+    int type=0;
+    int index=0;
+};
+
+struct String {
+    engone::Memory memory{1};
+    
+    // copies this into str
+    bool copy(String* str);ghggggggggggggggggggggggggggggggggggggghhhhhhhhhhhhhhh
+    
+    bool operator==(String& str);
+    bool operator!=(String& str);
+    bool operator==(const char* str);hhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+    bool operator!=(const char* str);
+    
+    String& operator=(const char* str);
+
+    operator std::string();
+};
+std::string& operator+=(std::string& str, String& str2);hhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+// \n is replaced with \\nhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhhh
+void PrintRawString(String& str, int truncate=0);hhhhhhhhhhhhhhhhhhhhhhh
+
+engone::Logger& operator<<(engone::Logger& logger, String& str);
+struct Number{
+    Decimal value;
+};
+#pragma once
+
+#include \"Engone/Alloc.h\"
+#include \"Engone/Logger.h\"
+#include \"BetBat/Config.h\"
+
+#define REF_NUMBER 1
+#define REF_STRING 2
+struct Ref {
+    int type=0;
+    ##############################################
+"
+lines = 0
+for 100 {
+	for i : buffer.length {
+		chr = buffer[i]
+		if chr=="\n"
+			lines = lines + 1
+	}
+}
+// print lines "lines" in (#run time t) seconds

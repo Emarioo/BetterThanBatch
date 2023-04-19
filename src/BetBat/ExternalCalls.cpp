@@ -1,6 +1,9 @@
 #include "BetBat/ExternalCalls.h"
-
 #include "BetBat/Interpreter.h"
+#include "BetBat/Utility.h"
+
+#include <random>
+#include <chrono>
 
 Ref ExtPrint(Context* context, int refType, void* value){
     if(refType==REF_STRING){
@@ -16,7 +19,15 @@ Ref ExtPrint(Context* context, int refType, void* value){
     int index = context->makeNumber();
     context->getNumber(index)->value=1;
     return {REF_NUMBER,index};
-    // return {};
+}
+
+Ref ExtRandom(Context* context, int refType, void* value){
+    static std::uniform_real_distribution<double> dist(0.,1.);
+    static std::mt19937 thing(std::chrono::system_clock::now().time_since_epoch().count());
+    
+    int index = context->makeNumber();
+    context->getNumber(index)->value = dist(thing);
+    return {REF_NUMBER,index};
 }
 Ref ExtToNum(Context* context, int refType, void* value){
     using namespace engone;
@@ -79,6 +90,9 @@ Ref ExtTime(Context* context, int refType, void* value){
         memcpy(buffer,str->memory.data,str->memory.used);
         buffer[str->memory.used]=0;
         double number = atof(buffer);
+        // Todo: atof evaluates "214) hello" to 214.
+        //   If pass a combination of number and string it's probably a bug.
+        //   Print an error message if so.
         int index = context->makeNumber();
         context->getNumber(index)->value=engone::StopMeasure(number);
         return {REF_NUMBER,index};
@@ -112,7 +126,7 @@ Ref ExtFilterFiles(Context* context, int refType, void* value){
         if (end-begin+1>0) {
             std::string tmp;
             tmp.resize(end-begin+1,0);
-            memcpy((char*)tmp.data(),str->memory.data,str->memory.used);
+            memcpy((char*)tmp.data(),(char*)str->memory.data+begin,end-begin+1);
             list.push_back(tmp);
             // log::out << "Item "<<tmp<<"\n";
         }
@@ -143,18 +157,21 @@ Ref ExtFilterFiles(Context* context, int refType, void* value){
                     allowed=true;
                     break;
                 }
-                int correct = 1; // * is always correct
-                for(int i=0;i<(int)result.name.length();i++){
-                    if(result.name[i] == tmp[correct]){
+                int correct = 0;
+                for(int i=result.name.length()-1;i>-1;i--){
+                    int ti = tmp.length()-1-correct;
+                    if(result.name[i] == tmp[ti]){
                         correct++;
-                        if(correct==(int)tmp.length()){
+                        // log::out << "Right "<<result.name[i]<<" "<<result.name<<"\n";
+                        if(correct==(int)tmp.length()-1){
                             break;
                         }
                     }else{
-                        correct=1;
+                        break;
+                        // correct=0;
                     }
                 }
-                if(correct==(int)tmp.length()){
+                if(correct==(int)tmp.length()-1){
                     allowed = true;
                     break;
                 }
@@ -178,6 +195,8 @@ Ref ExtFilterFiles(Context* context, int refType, void* value){
     }
     RecursiveDirectoryIteratorDestroy(iter);
 
+    ReplaceChar((char*)out->memory.data,out->memory.used,'\\','/');
+
     return {REF_STRING,outIndex};
 }
 ExternalCall GetExternalCall(const std::string& name){
@@ -185,7 +204,10 @@ ExternalCall GetExternalCall(const std::string& name){
     GETEXT("print",ExtPrint)
     GETEXT("time",ExtTime)
     GETEXT("tonum",ExtToNum)
+    GETEXT("random",ExtRandom)
     GETEXT("filterfiles",ExtFilterFiles)
+    
+    return 0;
 }
 // void ProvideDefaultCalls(ExternalCalls& calls){
 //     calls.map["print"]=ExtPrint;
