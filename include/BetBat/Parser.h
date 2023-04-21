@@ -7,7 +7,8 @@
 #include <unordered_map>
 
 // 2 bits to indicate instruction structure
-// 3 register OR 1 register + 1 variable OR 1 register
+// 3, 2 or 1 register. 2 registers can also be interpreted as
+// 1 register + contant integer
 // #define BC_MASK (0b11<<6)
 // #define BC_R3 (0b00<<6)
 // #define BC_R2 (0b01<<6)
@@ -22,13 +23,13 @@
 #define BC_SUB           (BC_R3|0x02)
 #define BC_MUL           (BC_R3|0x03)
 #define BC_DIV           (BC_R3|0x04)
-#define BC_LESS          (BC_R3|0x05)
+#define BC_MOD           (BC_R3|0x05)
 #define BC_GREATER       (BC_R3|0x06)
 #define BC_EQUAL         (BC_R3|0x07)
 #define BC_NOT_EQUAL     (BC_R3|0x08)
 #define BC_AND           (BC_R3|0x09)
 #define BC_OR            (BC_R3|0x10)
-// Todo: BC_NOT
+#define BC_LESS          (BC_R3|0x011)
 #define BC_SUBSTR        (BC_R3|0x12)
 
 #define BC_COPY          (BC_R2|0x01)
@@ -37,6 +38,7 @@
 #define BC_JUMPNIF       (BC_R2|0x04)
 #define BC_TYPE          (BC_R2|0x05)
 #define BC_LEN           (BC_R2|0x06)
+#define BC_NOT           (BC_R2|0x07)
 
 #define BC_LOADV         (BC_R2|0x10)
 #define BC_STOREV        (BC_R2|0x11)
@@ -52,7 +54,8 @@
 #define BC_DEL           (BC_R1|0x03)
 // #define BC_DELNV         (BC_R1|0x04)
 
-#define BC_LOADC         (BC_R1|0x10)
+#define BC_LOADSC         (BC_R1|0x10)
+#define BC_LOADNC         (BC_R1|0x11)
 // #define BC_LOADNC        (BC_R1|0x11)
 // #define BC_PUSH          (BC_R1|0x12)
 // #define BC_POP           (BC_R1|0x13)
@@ -139,7 +142,8 @@ struct Bytecode {
     bool add(uint8 type, uint8 reg0, uint8 reg1, uint8 reg2);
     bool add(uint8 type, uint8 reg0, uint16 reg12);
     bool add(uint8 type, uint reg012);
-    bool addLoadC(uint8 reg0, uint constIndex);
+    bool addLoadNC(uint8 reg0, uint constIndex);
+    bool addLoadSC(uint8 reg0, uint constIndex);
     Instruction& get(uint index);
     int length();
     bool removeLast();
@@ -206,8 +210,8 @@ struct ParseInfo {
         int iReg=0;
         int vReg=0;
         int jumpReg=0;
-        int startConstant=0;
-        int endConstant=0;
+        int continueConstant=0;
+        int breakConstant=0;
         int scopeIndex = 0; // reference to scopes
     };
     struct FuncScope{

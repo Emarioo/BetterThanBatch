@@ -68,6 +68,7 @@ const char* InstToString(int type){
         INSTCASE(BC_LEN)
         INSTCASE(BC_SUBSTR)
         INSTCASE(BC_TYPE)
+        INSTCASE(BC_NOT)
         
         INSTCASE(BC_WRITE_FILE)
         INSTCASE(BC_APPEND_FILE)
@@ -77,7 +78,8 @@ const char* InstToString(int type){
         INSTCASE(BC_STR)
         INSTCASE(BC_DEL)
         INSTCASE(BC_JUMP)
-        INSTCASE(BC_LOADC)
+        INSTCASE(BC_LOADNC)
+        INSTCASE(BC_LOADSC)
         // INSTCASE(BC_PUSH)
         // INSTCASE(BC_POP)
         INSTCASE(BC_RETURN)
@@ -142,7 +144,7 @@ void Instruction::print(){
         log::out << log::AQUA;
     if(type==BC_DEL)
         log::out << log::PURPLE;
-    if(type==BC_LOADC||type==BC_LOADV||type==BC_STOREV){
+    if(type==BC_LOADNC||type==BC_LOADSC||type==BC_LOADV||type==BC_STOREV){
         log::out << InstToString(type) << " $"<<RegToString(reg0) << " "<<((uint)reg1|((uint)reg2<<8));
     } else if((type&BC_MASK) == BC_R1){
         log::out << InstToString(type);
@@ -268,10 +270,18 @@ uint Bytecode::addConstString(Token& token, const char* padding){
     constStringText.used+=length;
     return index;
 }
-bool Bytecode::addLoadC(uint8 reg0, uint constIndex){
+bool Bytecode::addLoadNC(uint8 reg0, uint constIndex){
     if((constIndex>>16)!=0)
         engone::log::out << engone::log::RED<< "ByteCode::addLoadC, TO SMALL FOR 32 bit integer ("<<constIndex<<")\n";
-    if(!add(BC_LOADC,reg0,constIndex))
+    if(!add(BC_LOADNC,reg0,constIndex))
+        return false;
+    // if(!add(*(Instruction*)&constIndex)) return false;
+    return true;
+}
+bool Bytecode::addLoadSC(uint8 reg0, uint constIndex){
+    if((constIndex>>16)!=0)
+        engone::log::out << engone::log::RED<< "ByteCode::addLoadC, TO SMALL FOR 32 bit integer ("<<constIndex<<")\n";
+    if(!add(BC_LOADSC,reg0,constIndex))
         return false;
     // if(!add(*(Instruction*)&constIndex)) return false;
     return true;
@@ -390,7 +400,7 @@ bool Bytecode::removeLast(){
     return true;
 }
 Instruction& Bytecode::get(uint index){
-    Assert(index<codeSegment.used);
+    // Assert(index<codeSegment.used);
     return *((Instruction*)codeSegment.data + index);
 }
 
@@ -410,6 +420,7 @@ uint32 Bytecode::getMemoryUsage(){
     return sum;
 }
 bool IsName(Token& token){
+    if(token.flags&TOKEN_QUOTED) return false;
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
         if(i==0){
@@ -454,6 +465,7 @@ int IsOperation(Token& token){
     if(token=="!=") return BC_NOT_EQUAL;
     if(token=="&&") return BC_AND;
     if(token=="||") return BC_OR;
+    if(token=="%") return BC_MOD;
     return 0;
 }
 double ConvertDecimal(Token& token){
@@ -695,7 +707,7 @@ int OpPriority(int op){
     if(op==BC_AND||op==BC_OR) return 1;
     if(op==BC_LESS||op==BC_GREATER||op==BC_EQUAL||op==BC_NOT_EQUAL) return 5;
     if(op==BC_ADD||op==BC_SUB) return 9;
-    if(op==BC_MUL||op==BC_DIV) return 10;
+    if(op==BC_MUL||op==BC_DIV||op==BC_MOD) return 10;
     return 0;
 }
 // Concatenates current token with the next tokens not seperated by space, linefeed or such
@@ -741,6 +753,7 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     if(info.end())
         return PARSE_ERROR;
     bool expectOperator=false;
+    bool hadNot = false;
     while(true){
         Token token = info.get(info.at()+1);
         // Token token = info.next();
@@ -777,13 +790,18 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                     int constIndex = info.code.addConstNumber(-ConvertDecimal(token));
                     info.code.add(BC_NUM,exprInfo.acc0Reg+exprInfo.regCount);
                     _GLOG(INST << "\n";)
-                    info.code.addLoadC(exprInfo.acc0Reg+exprInfo.regCount,constIndex);
+                    info.code.addLoadNC(exprInfo.acc0Reg+exprInfo.regCount,constIndex);
                     _GLOG(INST << "constant "<<token<<"\n";)
                     exprInfo.regCount++;
                 }else{
                     // bad
                 }
             }
+            // if(token=="!"){
+            //     token = info.next();
+            //     hadNot=true;
+            //     continue;   
+            // }
             if(no){
                 // nothing
             }else if (token == "#"&&!(token.flags&TOKEN_QUOTED)){
@@ -853,7 +871,7 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 int constIndex = info.code.addConstNumber(ConvertDecimal(token));
                 info.code.add(BC_NUM,exprInfo.acc0Reg+exprInfo.regCount);
                 _GLOG(INST << "\n";)
-                info.code.addLoadC(exprInfo.acc0Reg+exprInfo.regCount,constIndex);
+                info.code.addLoadNC(exprInfo.acc0Reg+exprInfo.regCount,constIndex);
                 _GLOG(INST << "constant "<<token<<"\n";)
                 exprInfo.regCount++;
             } else if(token.flags&TOKEN_QUOTED){
@@ -862,7 +880,7 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 int constIndex = info.code.addConstString(token);
                 info.code.add(BC_STR,reg);
                 _GLOG(INST << "\n";)
-                info.code.addLoadC(reg,constIndex);
+                info.code.addLoadSC(reg,constIndex);
                 _GLOG(INST << "constant "<<token<<"\n";)
                 exprInfo.regCount++;
             } else if(IsName(token)){
@@ -1030,6 +1048,13 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
             }
         }
         
+        if(hadNot){
+            int reg = exprInfo.acc0Reg+exprInfo.regCount-1;
+            info.code.add(BC_NOT,reg,reg);
+            _GLOG(INST << "\n";)
+            hadNot=false;
+        }
+        
         if(exprInfo.opCount==1&&exprInfo.regCount==0){
             // if(attempt){
             //     // Unexpected token for the expression. Since we did an attempt
@@ -1178,7 +1203,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
             info.dropScope(i);
         }
 
-        info.code.addLoadC(loop.jumpReg,loop.endConstant);
+        info.code.addLoadNC(loop.jumpReg,loop.breakConstant);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMP, loop.jumpReg);
         _GLOG(INST << "\n";)
@@ -1193,7 +1218,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         for(int i = info.scopes.size()-1;i>loop.scopeIndex;i--){
             info.dropScope(i);
         }
-        info.code.addLoadC(loop.jumpReg,loop.startConstant);
+        info.code.addLoadNC(loop.jumpReg,loop.continueConstant);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMP, loop.jumpReg);
         _GLOG(INST << "\n";)
@@ -1213,7 +1238,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         int jumpReg = expr.acc0Reg+1;
         info.code.add(BC_NUM,jumpReg);
         _GLOG(INST << "jump\n";)
-        info.code.addLoadC(jumpReg,jumpAddress);
+        info.code.addLoadNC(jumpReg,jumpAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF,expr.acc0Reg,jumpReg);
         _GLOG(INST << "\n";)
@@ -1245,7 +1270,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
             scope->delRegisters.push_back(expr.acc0Reg);
             
             int elseAddr = info.code.addConstNumber(-1);
-            info.code.addLoadC(jumpReg,elseAddr);
+            info.code.addLoadNC(jumpReg,elseAddr);
             _GLOG(INST << "\n";)
             info.code.add(BC_JUMP,jumpReg);
             _GLOG(INST << "\n";)
@@ -1292,7 +1317,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         }
 
 
-        info.code.addLoadC(jumpReg,endAddress);
+        info.code.addLoadNC(jumpReg,endAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF,expr.acc0Reg,jumpReg);
         _GLOG(INST << "\n";)
@@ -1303,8 +1328,8 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         ParseInfo::LoopScope& loop = info.loopScopes.back();
         loop.iReg = 0; // Todo: add value for #i
         loop.jumpReg = jumpReg;
-        loop.startConstant = startAddress;
-        loop.endConstant = breakAddress;
+        loop.continueConstant = startAddress;
+        loop.breakConstant = breakAddress;
         loop.scopeIndex = info.scopes.size()-1;
 
         result = ParseBody(info,expr.acc0Reg+1);
@@ -1315,7 +1340,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         info.loopScopes.erase(info.loopScopes.begin()+info.loopScopes.size()-1);
 
         
-        info.code.addLoadC(jumpReg,startAddress);
+        info.code.addLoadNC(jumpReg,startAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMP,jumpReg);
         _GLOG(INST << "\n";)
@@ -1483,8 +1508,8 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         ParseInfo::LoopScope& loop = info.loopScopes.back();
         loop.iReg = iReg;
         loop.jumpReg = jumpReg;
-        loop.startConstant = startAddress;
-        loop.endConstant = endAddress;
+        loop.continueConstant = startAddress;
+        loop.breakConstant = endAddress;
         loop.scopeIndex = info.scopes.size()-1;
         
         info.code.add(BC_LESS, iReg, maxReg, tempReg);
@@ -1494,7 +1519,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
             _GLOG(INST << "\n";)
         }
 
-        info.code.addLoadC(jumpReg,endAddress);
+        info.code.addLoadNC(jumpReg,endAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF, tempReg, jumpReg);
         _GLOG(INST << "\n";)
@@ -1505,12 +1530,12 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         }
         
         int incrIndex = info.code.addConstNumber(1);
-        info.code.addLoadC(tempReg,incrIndex);
+        info.code.addLoadNC(tempReg,incrIndex);
         _GLOG(INST << "\n";)
         info.code.add(BC_ADD,iReg,tempReg,iReg);
         _GLOG(INST << "increment var\n";)
         
-        info.code.addLoadC(jumpReg,startAddress);
+        info.code.addLoadNC(jumpReg,startAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMP, jumpReg);
         _GLOG(INST << "\n";)
@@ -1601,13 +1626,14 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         int elseAddress = info.code.addConstNumber(-1);
         int bodyIfAddress = info.code.addConstNumber(-1);
         int lastAddress = info.code.addConstNumber(-1);
+        int continueAddress = info.code.addConstNumber(-1);
         
         info.code.add(BC_LEN, varReg,tempReg);
         _GLOG(INST << "\n";)
         info.code.add(BC_LESS,iReg,tempReg,tempReg);
         _GLOG(INST << "\n";)
 
-        info.code.addLoadC(jumpReg,endAddress);
+        info.code.addLoadNC(jumpReg,endAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF,tempReg,jumpReg);
         _GLOG(INST << "\n";)
@@ -1618,7 +1644,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         _GLOG(INST << "\n";)
 
         int oneConstant = info.code.addConstNumber(1);
-        info.code.addLoadC(tempReg,oneConstant);
+        info.code.addLoadNC(tempReg,oneConstant);
         _GLOG(INST << "\n";)
         info.code.add(BC_ADD,iReg,tempReg,iReg);
         _GLOG(INST << "\n";)
@@ -1626,26 +1652,26 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         Token spaceToken = " ";
         int spaceConstant = info.code.addConstString(spaceToken);
         
-        info.code.addLoadC(tempStrReg,spaceConstant);
+        info.code.addLoadSC(tempStrReg,spaceConstant);
         _GLOG(INST << "\n";)
         info.code.add(BC_EQUAL,chrReg,tempStrReg,tempStrReg);
         _GLOG(INST << "\n";)
         info.code.add(BC_DEL,chrReg);
         _GLOG(INST << "\n";)
         
-        info.code.addLoadC(jumpReg,elseAddress);
+        info.code.addLoadNC(jumpReg,elseAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF,tempStrReg,jumpReg);
         _GLOG(INST << "\n";)
 
         // end = i-2
         int twoConstant = info.code.addConstNumber(2);
-        info.code.addLoadC(tempReg,twoConstant);
+        info.code.addLoadNC(tempReg,twoConstant);
         _GLOG(INST << "\n";)
         info.code.add(BC_SUB,iReg,tempReg,endReg);
         _GLOG(INST << "\n";)
 
-        info.code.addLoadC(jumpReg,bodyIfAddress);
+        info.code.addLoadNC(jumpReg,bodyIfAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMP,jumpReg);
         _GLOG(INST << "\n";)
@@ -1658,20 +1684,20 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         info.code.add(BC_EQUAL,iReg,tempReg,tempReg);
         _GLOG(INST << "\n";)
 
-        info.code.addLoadC(jumpReg,startAddress);
+        info.code.addLoadNC(jumpReg,startAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF,tempReg,jumpReg);
         _GLOG(INST << "\n";)
 
-        info.code.addLoadC(tempReg,oneConstant);
+        info.code.addLoadNC(tempReg,oneConstant);
         _GLOG(INST << "\n";)
         info.code.add(BC_SUB,iReg,tempReg,endReg);
         _GLOG(INST << "\n";)
 
         info.code.getConstNumber(bodyIfAddress)->value = info.code.length();
-        _GLOG(log::out << log::GREEN<<"  : BDOY IF ADDRESS ["<<elseAddress<<"]\n")
+        _GLOG(log::out << log::GREEN<<"  : BODY IF ADDRESS ["<<elseAddress<<"]\n")
 
-        info.code.addLoadC(tempReg,oneConstant);
+        info.code.addLoadNC(tempReg,oneConstant);
         _GLOG(INST << "\n";)
         info.code.add(BC_ADD,tempReg,endReg,tempReg);
         _GLOG(INST << "\n";)
@@ -1680,7 +1706,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         info.code.add(BC_GREATER,tempReg,REG_ZERO,tempReg);
         _GLOG(INST << "\n";)
 
-        info.code.addLoadC(jumpReg,lastAddress);
+        info.code.addLoadNC(jumpReg,lastAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMPNIF,tempReg,jumpReg);
         _GLOG(INST << "\n";)
@@ -1701,14 +1727,17 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         loop.iReg = iReg; // Todo: add value for #i
         loop.vReg = chrReg; // Todo: add value for #i
         loop.jumpReg = jumpReg;
-        loop.startConstant = startAddress;
-        loop.endConstant = endAddress;
+        loop.continueConstant = continueAddress;
+        loop.breakConstant = continueAddress;
         loop.scopeIndex = info.scopes.size()-1;
 
         int result2 = ParseBody(info,unusedReg);
         if(result2!=PARSE_SUCCESS){
             return PARSE_ERROR;
         }
+        
+        info.code.getConstNumber(continueAddress)->value = info.code.length();
+        _GLOG(log::out << log::GREEN<<"  : CONTINUE/BREAK ADDRESS ["<<continueAddress<<"]\n")
         
         info.code.add(BC_DEL,chrReg);
         _GLOG(INST << "\n";)
@@ -1721,7 +1750,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         info.code.add(BC_ADD,iReg,REG_ZERO,beginReg);
         _GLOG(INST << "\n";)
 
-        info.code.addLoadC(jumpReg,startAddress);
+        info.code.addLoadNC(jumpReg,startAddress);
         _GLOG(INST << "\n";)
         info.code.add(BC_JUMP,jumpReg);
         _GLOG(INST << "\n";)
@@ -1752,35 +1781,71 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
         // not enough tokens for assignment
         if(attempt){
             return PARSE_BAD_ATTEMPT;
-        }else{
-            _GLOG(log::out <<log::RED<< "CompilerError: to few tokens for assignment\n");
-            // info.nextLine();
-            return PARSE_ERROR;
         }
+        _GLOG(log::out <<log::RED<< "CompilerError: to few tokens for assignment\n");
+        // info.nextLine();
+        return PARSE_ERROR;
     }
-    Token token = info.get(info.at()+1);
+    Token name = info.get(info.at()+1);
     Token assign = info.get(info.at()+2);
-    if((IsName(token) && !(token.flags&TOKEN_QUOTED)) && assign=="="){
-        // good
-    }else{
+    Token token = info.get(info.at()+3);
+    
+    // Todo: handle ++a
+    
+    if(assign=="++"||assign=="--"){
+        // a++
+        auto find = info.variables.find(name);
+        if(find==info.variables.end()){
+            if(attempt){
+                return PARSE_BAD_ATTEMPT;
+            }
+            ERRT(name) << "variable '"<<name<<"' must be defined when using '"<<assign<<"'\n";
+            return PARSE_ERROR;   
+        }
+        ParseInfo::Variable& var = find->second;
+        info.next();
+        info.next();
+        // Todo: a=9;b = a++ <- b would be 10 with current code. Change it to
+        //  make a copy which b is set to then do addition on variable.
+        //  how does it work with requestCopy?
+        int finalReg = exprInfo.acc0Reg;
+        info.code.add(BC_LOADV,finalReg,var.frameIndex);
+        _GLOG(INST << "load var '"<<name<<"'\n";)
+        int constone = info.code.addConstNumber(1);
+        info.code.add(BC_NUM,finalReg+1);
+        info.code.addLoadNC(finalReg+1,constone);
+        if(assign == "++")
+            info.code.add(BC_ADD,finalReg,finalReg+1,finalReg);
+        if(assign == "--")
+            info.code.add(BC_SUB,finalReg,finalReg+1,finalReg);
+        _GLOG(INST <<"\n";)
+        info.code.add(BC_DEL,finalReg+1);
+        _GLOG(INST <<"\n";)
+        
+        if(requestCopy){
+            info.code.add(BC_COPY,finalReg,finalReg);
+            _GLOG(INST << "copy requested\n";)
+            _GLOG(EXIT)
+            return PARSE_SUCCESS;
+        }
+        
+        return PARSE_SUCCESS;
+    }
+    
+    if(!IsName(name)){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            ERR_GENERIC;
+            info.next();
+            ERRT(name) << "unexpected "<<name<<", wanted a variable for assignment\n";
             // info.nextLine();
             return PARSE_ERROR;
         }
     }
-    token = info.next();
-    assign = info.next();
-    
-    // ExpressionInfo expr{};
-    // expr.acc0Reg = REG_ACC0;
-    int result=0;
-
-    Token tok = info.get(info.at()+1);
-    if(tok=="{"){
-        // info.next();
+    if(assign=="="&&token=="{"){
+        info.next();
+        info.next();
+        info.next();
         auto funcPair = info.functions.find(token);
         auto varPair = info.variables.find(token);
         if(varPair != info.variables.end()){
@@ -1794,7 +1859,7 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
             int jumpReg = exprInfo.acc0Reg;
             info.code.add(BC_NUM,jumpReg);
             _GLOG(INST << "jump\n";)
-            info.code.addLoadC(jumpReg,constIndex);
+            info.code.addLoadNC(jumpReg,constIndex);
             _GLOG(INST << "\n";)
             info.code.add(BC_JUMP, jumpReg);
             _GLOG(INST << "Skip function body '"<<token<<"'\n";)
@@ -1833,87 +1898,78 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
         }
         _GLOG(EXIT)
         return PARSE_SUCCESS;
-        // log::out << log::RED << "Function creating not implemented!\n";
     }
+    
+    if(!(assign=="=" ||assign=="+=" ||assign=="-=" ||assign=="*=" ||assign=="/=")){
+        if(attempt){
+            return PARSE_BAD_ATTEMPT;
+        }else{
+            info.next(); // move forward to prevent infinite loop? altough nextline would fix it?
+            ERRT(name) << "unexpected "<<name<<", wanted a variable for assignment\n";
+            // info.nextLine();
+            return PARSE_ERROR;
+        }
+    }
+    info.next();
+    info.next();
+    // ExpressionInfo expr{};
+    // expr.acc0Reg = REG_ACC0;
+    int result=0;
+
     result = ParseExpression(info,exprInfo,false);
     if(result!=PARSE_SUCCESS){
         return PARSE_ERROR;
     }
-    int finalReg = exprInfo.acc0Reg + exprInfo.regCount-1;
-    // Todo: properly deal with regCount==0
-    Assert(exprInfo.regCount!=0);
+    int finalReg = exprInfo.acc0Reg;
     if(exprInfo.regCount==0){
         log::out << log::RED<<"CompilerWarning: regCount == 0 after expression from assignment\n";   
     }
             
-    auto find = info.variables.find(token);
+    auto find = info.variables.find(name);
+    ParseInfo::Variable* var = 0;
     if(find==info.variables.end()){
+        if(assign != "="){
+            ERRT(name) << "variable '"<<name<<"' must be defined when using '"<<assign<<"'\n";
+            return PARSE_ERROR;   
+        }
+        var = &(info.variables[name] = {});
         // Note: assign new variable
-        ParseInfo::Variable& var = info.variables[token] = {};
-        var.frameIndex = info.frameOffsetIndex++;
-        
-        // Todo: bound check on scopes
+        var->frameIndex = info.frameOffsetIndex++;
+        // Todo: bound check on scopes, global scope should exist though
         auto& scope = info.scopes.back();
-        scope.variableNames.push_back(token);
-
-        info.code.add(BC_STOREV,finalReg,var.frameIndex);
-        _GLOG(INST << "store new "<<token<<"\n";)
-        // info.code.add(BC_PUSH, finalReg);
-        // _GLOG(INST << "push "<<token<<"\n";)
-        
-        if(requestCopy){
-            info.code.add(BC_COPY,finalReg,finalReg);
-            _GLOG(INST << "copy requested\n";)
-            _GLOG(EXIT)
-            return PARSE_SUCCESS;
-        }
-        _GLOG(EXIT)
-        return PARSE_SUCCESS;
-        // return PARSE_NO_VALUE;
+        scope.variableNames.push_back(name);
     }else{
-        // Note: replace old variable
+        var = &find->second;
+    }
+    if(assign=="="){
+        info.code.add(BC_STOREV, finalReg, var->frameIndex);
+        _GLOG(INST << "store "<<name<<"\n";)
+    } else {
+        info.code.add(BC_LOADV,finalReg+1,var->frameIndex);
+        _GLOG(INST << "load var '"<<name<<"'\n";)
+        if(assign == "+=")
+            info.code.add(BC_ADD,finalReg+1,finalReg,finalReg+1);
+        if(assign == "-=")
+            info.code.add(BC_SUB,finalReg+1,finalReg,finalReg+1);
+        if(assign == "*=")
+            info.code.add(BC_MUL,finalReg+1,finalReg,finalReg+1);
+        if(assign == "/=")
+            info.code.add(BC_DIV,finalReg+1,finalReg,finalReg+1);
+        _GLOG(INST <<"\n";)
+        info.code.add(BC_DEL,finalReg);
+        _GLOG(INST <<"\n";)
+        info.code.add(BC_MOV,finalReg+1,finalReg);
+        _GLOG(INST <<"\n";)
+    }
         
-        // int tempReg = exprInfo.acc0Reg + exprInfo.regCount;
-        
-        // info.code.add(BC_LOADV,tempReg,find->second.frameIndex);
-        // _GLOG(INST << "load "<<token<<"\n";)
-        // info.code.add(BC_DEL,tempReg);
-        // _GLOG(INST << "del "<<token<<"\n";)
-        
-        ParseInfo::Variable& var = find->second;
-        
-        // Todo: cache const number for frameIndex
-        // if(var.constIndex==-1){
-        //     var.constIndex = info.code.addConstNumber(var.frameIndex);
-        // }
-        
-        // load frameIndex into stack pointer while storing current stack pointer
-        // info.code.add(BC_COPY,REG_STACK_POINTER,tempReg);
-        // _GLOG(INST << "keep stack pointer\n";)
-        // info.code.addLoadC(REG_STACK_POINTER,var.constIndex);
-        // _GLOG(INST << "\n";)
-        
-        // info.code.add(BC_PUSH, finalReg);
-        // _GLOG(INST << "load new "<<token<<"\n";)
-        info.code.add(BC_STOREV, finalReg, var.frameIndex);
-        _GLOG(INST << "store "<<token<<"\n";)
-        
-        // set stack pointer to earlier value
-        // info.code.add(BC_DEL,REG_STACK_POINTER);
-        // _GLOG(INST << "\n";)
-        // info.code.add(BC_MOV,tempReg,REG_STACK_POINTER);
-        // _GLOG(INST << "restore stack pointer\n";)
-        
-        if(requestCopy){
-            info.code.add(BC_COPY,finalReg,finalReg);
-            _GLOG(INST << "copy requested\n";)
-            _GLOG(EXIT)
-            return PARSE_SUCCESS;
-        }
+    if(requestCopy){
+        info.code.add(BC_COPY,finalReg,finalReg);
+        _GLOG(INST << "copy requested\n";)
         _GLOG(EXIT)
         return PARSE_SUCCESS;
-        // return PARSE_NO_VALUE;
     }
+    _GLOG(EXIT)
+    return PARSE_SUCCESS;   
 }
 int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
@@ -1958,7 +2014,7 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 info.code.add(BC_STR,fileReg);
                 _GLOG(INST << "\n";)
                 int constIndex = info.code.addConstString(token);
-                info.code.addLoadC(fileReg,constIndex);
+                info.code.addLoadSC(fileReg,constIndex);
                 _GLOG(INST << token<<"\n";)
                 
                 info.code.add(instruction,varReg,fileReg);
@@ -2012,7 +2068,7 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
         }
         info.code.add(BC_NUM,funcReg);
         _GLOG(INST << "\n";)
-        info.code.addLoadC(funcReg,func.constIndex);
+        info.code.addLoadNC(funcReg,func.constIndex);
         _GLOG(INST << "index to '"<<token<<"'\n";)
         // codeFunc=true;
 
@@ -2021,7 +2077,7 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
         int index = info.code.addConstString(token);
         info.code.add(BC_STR,funcReg);
         _GLOG(INST << "name\n";)
-        info.code.addLoadC(funcReg, index);
+        info.code.addLoadSC(funcReg, index);
         _GLOG(INST << "constant "<<token<<"\n";)
     }
     
@@ -2158,7 +2214,7 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 // log::out << "tok: "<<combinedTokens<<"\n";
                 int constIndex = info.code.addConstString(token,padding);
                 // printf("eh %d\n",constIndex);
-                info.code.addLoadC(tempStrReg, constIndex);
+                info.code.addLoadSC(tempStrReg, constIndex);
                 _GLOG(INST << "constant '"<<token<<"'\n";)
                 whichArg = ARG_STR;
             }
@@ -2180,7 +2236,7 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 if(addSpace){
                     info.code.add(BC_STR,spaceReg);
                     _GLOG(INST << "\n";)
-                    info.code.addLoadC(spaceReg,info.spaceConstIndex);
+                    info.code.addLoadSC(spaceReg,info.spaceConstIndex);
                     _GLOG(INST << "constant ' '\n";)
                     info.code.add(BC_ADD,argReg,spaceReg,argReg);
                     _GLOG(INST << "extra space\n";)
@@ -2365,7 +2421,7 @@ void Bytecode::printStats(){
 }
 Bytecode GenerateScript(Tokens& tokens, int* outErr){
     using namespace engone;
-    log::out <<log::BLUE<<  "\n##   Parser   ##\n";
+    _SILENT(log::out <<log::BLUE<<  "\n##   Parser   ##\n";)
     
     ParseInfo info{tokens};
     
@@ -2500,14 +2556,14 @@ bool GenInstructionArg(ParseInfo& info, int instType, int& num, int flags, uint8
     }
     if(flags&ARG_CONST){
         if((token.flags&TOKEN_QUOTED)==0&&IsName(token)){
-            if(instType!=BC_LOADC){
+            if(instType!=BC_LOADNC){
                 // resolve other instruction like jump by using load const
                 num = REG_ACC0 + regIndex;
                 int index=0;
                 // info.code.add(BC_LOADC,num);
                 // info.code.add(*(Instruction*)&index);
                 
-                info.code.addLoadC(num,index);
+                info.code.addLoadNC(num,index);
 
                 info.instructionsToResolve.push_back({info.code.length()-1,token});
                 log::out << info.code.get(info.code.length()-1) << " (resolve "<<token<<")\n";
@@ -2529,7 +2585,7 @@ bool GenInstructionArg(ParseInfo& info, int instType, int& num, int flags, uint8
             num = REG_ACC0 + regIndex;
             info.code.add(BC_NUM,num);
             _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
-            info.code.addLoadC(num,index);
+            info.code.addLoadNC(num,index);
             _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
 
             // info.code.add(BC_LOADC,num);
@@ -2546,7 +2602,7 @@ bool GenInstructionArg(ParseInfo& info, int instType, int& num, int flags, uint8
             info.code.add(BC_STR,num);
             _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
 
-            info.code.addLoadC(num,index);
+            info.code.addLoadSC(num,index);
             _GLOG(log::out << info.code.get(info.code.length()-1) << "\n";)
 
             // info.code.add(BC_LOADC,num);
@@ -2597,7 +2653,7 @@ bool LineEndError(ParseInfo& info){
 }
 Bytecode GenerateInstructions(Tokens& tokens, int* outErr){
     using namespace engone;
-    log::out<<"\n##   Generator (instructions)   ##\n";
+    _SILENT(log::out<<"\n##   Generator (instructions)   ##\n";)
     
     std::unordered_map<std::string,int> instructionMap;
     #define MAP(K,V) instructionMap[K] = V;
@@ -2625,7 +2681,7 @@ Bytecode GenerateInstructions(Tokens& tokens, int* outErr){
     MAP("str",BC_STR)
     MAP("del",BC_DEL)
     MAP("jump",BC_JUMP)
-    MAP("loadc",BC_LOADC)
+    MAP("loadc",BC_LOADNC)
     // MAP("push",BC_PUSH)
     // MAP("pop",BC_POP)
     MAP("return",BC_RETURN)
@@ -2720,7 +2776,7 @@ Bytecode GenerateInstructions(Tokens& tokens, int* outErr){
                 continue;
             }
             
-            if(instType == BC_LOADC){
+            if(instType == BC_LOADNC||instType==BC_LOADSC){
                 if(!GenInstructionArg(info,instType,tmp,ARG_CONST,1)) {
                     info.nextLine();
                     continue;
@@ -2752,7 +2808,7 @@ Bytecode GenerateInstructions(Tokens& tokens, int* outErr){
         }else{
             index = find->second;
         }
-        if(inst.type==BC_LOADC){
+        if(inst.type==BC_LOADNC||inst.type==BC_LOADSC){
             inst.reg1 = index&0xFF;
             inst.reg2 = (index>>8)&0xFF;
             // inst = *(Instruction*)&index;
@@ -2856,13 +2912,16 @@ std::string Disassemble(Bytecode& code){
             buffer += std::to_string(inst.regs[i]);
         }
 
-        if(inst.type==BC_LOADC){
+        if(inst.type==BC_LOADNC){
             // uint extraData = *(uint*)&code.get(programCounter);
             uint extraData = (uint)inst.reg1|((uint)inst.reg2<<8);
-            if(refTypes[inst.reg0]==REF_STR)
-                buffer += " str_";
-            else
-                buffer += " num_";
+            buffer += " num_";
+            buffer+=std::to_string(extraData);
+        }
+        if(inst.type==BC_LOADSC){
+            // uint extraData = *(uint*)&code.get(programCounter);
+            uint extraData = (uint)inst.reg1|((uint)inst.reg2<<8);
+            buffer += " str_";
             buffer+=std::to_string(extraData);
         }
         buffer +="\n";

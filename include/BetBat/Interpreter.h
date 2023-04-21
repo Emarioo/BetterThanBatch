@@ -13,15 +13,24 @@ struct Scope{
 };
 struct Performance {
     int instructions;
-    double runtime;
+    double exectime;
 };
+
+
+#define USE_INFO_VALUES
+
 struct Context {
     engone::Memory numbers{sizeof(Number)};
     engone::Memory strings{sizeof(String)};
+    #ifdef USE_INFO_VALUES
     engone::Memory infoValues{sizeof(uint8)};
-
+    #else
+    engone::Memory afreeNumbers{sizeof(int)};
+    engone::Memory afreeStrings{sizeof(int)};
+    #endif
     int numberCount=0;
     int stringCount=0;
+
 
     engone::Memory scopes{sizeof(Scope)};
     uint currentScope=0;

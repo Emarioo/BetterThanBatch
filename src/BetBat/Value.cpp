@@ -1,10 +1,12 @@
 #include "BetBat/Value.h"
 
 bool String::copy(String* str){
-    if(!str->memory.resize(memory.used))
-        return false;
-    memcpy((char*)str->memory.data,memory.data,memory.used);
+    if(str->memory.max<memory.used){
+        if(!str->memory.resize(memory.used))
+            return false;
+    }
     str->memory.used = memory.used;
+    memcpy((char*)str->memory.data,memory.data,memory.used);
     return true;
 }
 bool String::operator==(String& str){
@@ -28,11 +30,14 @@ bool String::operator!=(const char* str){
     return !(*this==str);
 }
 String& String::operator=(const char* str){
-    int len = strlen(str);
-    if(memory.resize(len)) {
-        memory.used = len;
-        memcpy(memory.data,str,len);
+    uint64 len = strlen(str);
+    if(memory.max<len){
+        if(!memory.resize(len)) {
+            return *this;
+        }
     }
+    memory.used = len;
+    memcpy(memory.data,str,len);
     return *this;
 }
 std::string& operator+=(std::string& str, String& str2){
@@ -63,7 +68,7 @@ void PrintRawString(String& str, int truncate){
         }
     }
     if(truncate>0&&(int)str.memory.used>truncate){
-        log::out << "...";
+        log::out << "..."<<(str.memory.used-truncate);
     }
 }
 engone::Logger& operator<<(engone::Logger& logger, String& str){

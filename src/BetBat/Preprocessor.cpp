@@ -198,10 +198,6 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     //     PWARNT(name) << "Intentional redefinition of '"<<name<<"'?\n";   
     // }
     
-    RootMacro* rootDefined = info.matchMacro(name);
-    if(!rootDefined){
-        rootDefined = &(info.macros[name] = {});
-    }
     int suffixFlags = name.flags;
     CertainMacro defTemp{};
     if((name.flags&TOKEN_SUFFIX_SPACE) || (name.flags&TOKEN_SUFFIX_LINE_FEED)){
@@ -209,7 +205,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     }else{
         Token token = info.next();
         if(token!="("){
-            PERRT(token) << "Expected ( found '"<<token<<"'\n";
+            PERRT(token) << "Unexpected '"<<token<<"' did you forget a space or '(' to indicate arguments?\n";
             return PARSE_ERROR;
         }
         
@@ -242,6 +238,10 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         else
             log::out << " (infinite)\n";)
     
+    }
+    RootMacro* rootDefined = info.matchMacro(name);
+    if(!rootDefined){
+        rootDefined = &(info.macros[name] = {});
     }
     
     CertainMacro* defined = 0;
@@ -419,7 +419,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
     
     int depth = 0;
     int error = PARSE_SUCCESS;
-    bool hadElse=false;
+    // bool hadElse=false;
     // log::out << "     enter ifdef loop\n";
     while(!info.end()){
         Token token = info.get(info.at()+1);
@@ -449,20 +449,20 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
                 depth--;
                 // log::out << log::GRAY<< " depth "<<depth<<"\n";
             }
-            if(token == "else"){
+            if(token == "else"){ // we allow multiple elses, they toggle active and inactive sections
                 if(depth==0){
                     info.next();
                     info.next();
-                    if(hadElse){
-                        PERRT(info.get(info.at()-1)) << "Already had else\n";
-                        error = PARSE_ERROR;
-                        // best option is to continue
-                        // things will break more if we return suddenly
-                    }else{
+                    // if(hadElse){
+                    //     PERRT(info.get(info.at()-1)) << "Already had else\n";
+                    //     error = PARSE_ERROR;
+                    //     // best option is to continue
+                    //     // things will break more if we return suddenly
+                    // }else{
                         // log::out << log::GRAY<< " flip\n";
                         yes = !yes;
-                        hadElse=true;
-                    }
+                        // hadElse=true;
+                    // }
                 }
             }
         }
@@ -475,7 +475,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
             // log::out << log::GRAY<<" skip "<<skip << "\n";
         }
         if(info.end()){
-            PERRT(info.get(info.length()-1)) << "Missing endif somewhere for ifdef or ifndef\n";
+            PERRTL(info.get(info.length()-1)) << "Missing endif somewhere for ifdef or ifndef\n";
             return PARSE_ERROR;   
         }
     }
@@ -851,7 +851,7 @@ int ParseToken(PreprocInfo& info){
 }
 void Preprocess(Tokens& inTokens, int* error){
     using namespace engone;
-    log::out <<log::BLUE<<  "\n##   Preprocessor   ##\n";
+    _SILENT(log::out <<log::BLUE<<  "\n##   Preprocessor   ##\n";)
     
     PreprocInfo info{};
     info.tokens.tokenData.resize(inTokens.tokenData.max*10); // hopeful estimation

@@ -19,22 +19,18 @@
 const char* RefToString(int type){
     #define REFCASE(x) case x: return #x;
     switch(type){
+        case 0: return "REF_NONE";
         REFCASE(REF_NUMBER)
         REFCASE(REF_STRING)
     }
     return "REF_?";
 }
 const char* RefToString(Ref& ref){
-    #define REFCASE(x) case x: return #x;
-    switch(ref.type){
-        REFCASE(REF_NUMBER)
-        REFCASE(REF_STRING)
-    }
-    return "REF_?";
+    return RefToString(ref.type);
 }
-void PrintRef(Context* context, int index){
-    engone::log::out << "$"<<index;
-}
+// void PrintRef(Context* context, int index){
+//     engone::log::out << "$"<<index;
+// }
 void PrintRefValue(Context* context, Ref& ref){
     using namespace engone;
     if(ref.type==REF_NUMBER){
@@ -54,22 +50,29 @@ void PrintRefValue(Context* context, Ref& ref){
     }
 }
 Number* Context::getNumber(uint32 index){
-    if(numbers.used<=index) return 0;
-    uint8* info = (uint8*)infoValues.data + index;
-    if((*info & REF_NUMBER) == 0) return 0; 
+    // if(numbers.used<=index) return 0;
+    // uint8* info = (uint8*)infoValues.data + index;
+    // if((*info & REF_NUMBER) == 0) return 0; 
     return (Number*)numbers.data + index;
 }
 uint32 Context::makeNumber(){
     if(numbers.max == numbers.used){
+        int oldMax = numbers.max;
         if(!numbers.resize(numbers.max*2 + 10))
-            return 0;   
+            return 0;
+        for(int i=oldMax;i<(int)numbers.max;i++){
+            Number* num = (Number*)numbers.data + i;
+            new(num)Number();
+        }
     }
-     if(infoValues.max <= numbers.used){
+    #ifdef USE_INFO_VALUES
+    if(infoValues.max <= numbers.used){
         int oldMax = infoValues.max;
         if(!infoValues.resize(infoValues.max*2 + 10))
             return 0; 
         memset((char*)infoValues.data+oldMax,0,(infoValues.max-oldMax)*infoValues.m_typeSize);
     }
+    
     int index = -1;
     for(int i=(int)numbers.used-1;i>-1;i--){
         uint8* info = (uint8*)infoValues.data + i;
@@ -80,44 +83,80 @@ uint32 Context::makeNumber(){
     if(index==-1){
         index = numbers.used++;
     }
-    Number* num = (Number*)numbers.data + index;
-    new(num)Number();
     uint8* info = (uint8*)infoValues.data + index;
     *info |= REF_NUMBER;
+    #elif defined(USE_FREE_VECTOR)
+    int index = -1;
+    if(!freeNumbers.empty()){
+        index = freeNumbers.back();
+        freeNumbers.pop_back();   
+    }else{
+        index = numbers.used++;
+    }
+    #else
+    int index = -1;
+    if(afreeNumbers.used!=0){
+        index = *((int*)afreeNumbers.data+afreeNumbers.used-1);
+        --afreeNumbers.used;
+    }else{
+        index = numbers.used++;
+    }
+    #endif
+    // Number* num = (Number*)numbers.data + index;
     numberCount++;
     return index;
 }
 void Context::deleteNumber(uint32 index){
-    uint8* info = (uint8*)infoValues.data + index;
-    if((*info) & REF_NUMBER){
-        *info = (*info) & (~REF_NUMBER);
-        numberCount--;
-
-        if(index+1==numbers.used){
-            numbers.used--;
-            while(numbers.used>0){
-                uint8* info = (uint8*)infoValues.data + numbers.used-1;
-                if(((*info)&REF_NUMBER))
-                    break;
+    // if(index==-1)
+    //     return;
+    #ifdef USE_INFO_VALUES
+        uint8* info = (uint8*)infoValues.data + index;
+        if((*info) & REF_NUMBER){
+            *info = (*info) & (~REF_NUMBER);
+            Number* num = (Number*)numbers.data + index;
+            num->value = 0;
+            numberCount--;
+            
+            if(index+1==numbers.used){
                 numbers.used--;
+                while(numbers.used>0){
+                    uint8* info = (uint8*)infoValues.data + numbers.used-1;
+                    if(((*info)&REF_NUMBER))
+                        break;
+                    numbers.used--;
+                }
             }
+        }else{
+            // engone::log::out << engone::log::YELLOW<<"Cannot delete number at "<<index<<"\n";
         }
-    }else{
-        // engone::log::out << engone::log::YELLOW<<"Cannot delete number at "<<index<<"\n";
-    }
+    #else
+        Number* num = (Number*)numbers.data + index;
+        num->value = 0;
+        numberCount--;
+        if(afreeNumbers.max<afreeNumbers.used+1){
+            afreeNumbers.resize(afreeNumbers.max*2+10);   
+        }
+        *((int*)afreeNumbers.data + afreeNumbers.used++) = index;
+    #endif
 }
 String* Context::getString(uint32 index){
-    if(strings.used<=index) return 0;
-    uint8* info = (uint8*)infoValues.data + index;
-    if((*info & REF_STRING) == 0) return 0; 
+    // if(strings.used<=index) return 0;
+    // uint8* info = (uint8*)infoValues.data + index;
+    // if((*info & REF_STRING) == 0) return 0; 
     return (String*)strings.data + index;
 }
 uint32 Context::makeString(){
     using namespace engone;
     if(strings.max == strings.used){
+        int oldMax = strings.max;
         if(!strings.resize(strings.max*2 + 10))
             return 0;
+        for(int i=oldMax;i<(int)strings.max;i++){
+            String* str = (String*)strings.data + i;
+            new(str)String();   
+        }
     }
+    #ifdef USE_INFO_VALUES
     if(infoValues.max <= strings.used){
         int oldMax = infoValues.max;
         if(!infoValues.resize(infoValues.max*2 + 10))
@@ -134,25 +173,44 @@ uint32 Context::makeString(){
     if(index==-1){
         index = strings.used++;
     }
-
-    String* str = (String*)strings.data + index;
-    new(str)String();
     uint8* info = (uint8*)infoValues.data + index;
     *info |= REF_STRING;
+    #elif defined(USE_FREE_VECTOR)
+    int index = -1;
+    if(!freeStrings.empty()){
+        index = freeStrings.back();
+        freeStrings.pop_back();   
+    }else{
+        index = strings.used++;
+    }
+    #else
+    int index = -1;
+    if(afreeStrings.used!=0){
+        index = *((int*)afreeStrings.data+ --afreeStrings.used);
+    }else{
+        index = strings.used++;
+    }
+    #endif
+    // log::out << "+string "<<index<<"\n";
     stringCount++;
-    // log::out << "string++\n";
+    // String* str = (String*)strings.data + index;
     return index;
 }
 void Context::cleanup(){
     numbers.resize(0);
-    for(uint i=0;i<strings.used;i++){
+    for(uint i=0;i<strings.max;i++){
         String* str = (String*)strings.data+i;
-        uint8* val = (uint8*)infoValues.data + i;
-        if((*(val))&REF_STRING)
-            str->memory.resize(0);
+        // uint8* val = (uint8*)infoValues.data + i;
+        // if((*(val))&REF_STRING)
+        str->memory.resize(0);
     }
     strings.resize(0);
+    #ifdef USE_INFO_VALUES
     infoValues.resize(0);
+    #else
+    afreeNumbers.resize(0);
+    afreeStrings.resize(0);
+    #endif
     scopes.resize(0);
     valueStack.resize(0);
     // reseting like this is not very fail safe.
@@ -166,16 +224,17 @@ void Context::cleanup(){
 }
 void Context::deleteString(uint32 index){
     using namespace engone;
+    // if(index==-1)
+    //     return;
+    
+    #ifdef USE_INFO_VALUES
     uint8* info = (uint8*)infoValues.data + index;
     if((*info) & REF_STRING){
         *info = (*info) & (~REF_STRING);
-        stringCount--;
-        // log::out << "string--\n";
         
         String* str = (String*)strings.data + index;
-        str->memory.resize(0);
-        // Todo: Optimize by not resizing memory since it might be used later.
-        //  Unnecessary to deallocate and then allocate again.
+        str->memory.used = 0;
+        stringCount--;
 
         if(index+1==strings.used){
             strings.used--;
@@ -189,6 +248,15 @@ void Context::deleteString(uint32 index){
     }else{
         // engone::log::out << engone::log::YELLOW<<"Cannot delete string at "<<index<<"\n";
     }
+    #else
+        String* str = (String*)strings.data + index;
+        str->memory.used = 0;
+        stringCount--;
+        if(afreeStrings.max<afreeStrings.used+1){
+            afreeStrings.resize(afreeStrings.max*2+10);   
+        }
+        *((int*)afreeStrings.data + afreeStrings.used++) = index;
+    #endif
 }
 Scope* Context::getScope(uint index){
     return (Scope*)scopes.data + index;
@@ -226,7 +294,7 @@ bool Context::ensureScopes(uint depth){
 void Context::execute(Bytecode& code, Performance* perf){
     using namespace engone;
     activeCode = code;
-    log::out << log::BLUE<< "\n##   Execute   ##\n";
+    _SILENT(log::out << log::BLUE<< "\n##   Execute   ##\n";)
     int programCounter=0;
 
     // ProvideDefaultCalls(externalCalls);
@@ -247,43 +315,56 @@ void Context::execute(Bytecode& code, Performance* perf){
     uint64 executedInsts = 0;
     uint64 executedLines = 0;
     while(true){
-        if(executedInsts>=INST_LIMIT){
-            // prevent infinite loop
-            log::out << log::RED<<"REACHED SAFETY LIMIT. EXPECT INCOMPLETE CLEANUP\n";
-            break;
-        }
+        // if(executedInsts>=INST_LIMIT){
+        //     // prevent infinite loop
+        //     log::out << log::RED<<"REACHED SAFETY LIMIT. EXPECT INCOMPLETE CLEANUP\n";
+        //     break;
+        // }
         if(activeCode.length() == programCounter)
             break;
         int nowProgramCounter=programCounter;
-        Instruction inst = activeCode.get(programCounter++);
-        if(inst.type==0){
-            _CLOG(log::out << LINST<<", skipping null instruction\n");
-            continue;
-        }
+        // Instruction inst = activeCode.get(nowProgramCounter); // slower
+        Instruction inst = *((Instruction*)activeCode.codeSegment.data + nowProgramCounter);
+        ++programCounter;
 
         #ifdef USE_DEBUG_INFO
+        #ifdef PRINT_DEBUG_LINES
         Bytecode::DebugLine* debugLine = activeCode.getDebugLine(programCounter-1);
         if(debugLine&&debugLine->line!=atLine){
             atLine = debugLine->line;
             executedLines++;
             
-            #ifdef PRINT_DEBUG_LINES
             _CLOG(log::out <<"\n";)
             log::out << *debugLine<<"\n";
-            #endif
         }
+        #endif
         #endif
 
         executedInsts++;
         
-        bool yes = ensureScopes(currentScope+1);
-        if(!yes){
-            log::out << log::RED<<"ContextError: Could not allocate scope\n";
-            break;
+        uint64 depth = currentScope+1;
+        if(scopes.max<=depth){
+            int old = scopes.max;
+            scopes.resize(depth+1);
+            while(scopes.used<=depth){
+                Scope* scope = (Scope*)scopes.data+scopes.used;
+                new(scope)Scope();
+                scopes.used++;
+            }
         }
+        
+        // bool yes = ensureScopes(currentScope+1);
+        // if(!yes){
+        //     log::out << log::RED<<"ContextError: Could not allocate scope\n";
+        //     break;
+        // }
         Ref* references = getScope(currentScope)->references;
 
         switch(inst.type){
+            case 0:{
+                _CLOG(log::out << LINST<<", skipping null instruction\n");
+                continue;
+            }
             case BC_AND:
             case BC_OR: {
                 Ref& r0 = references[inst.reg0];
@@ -333,6 +414,7 @@ void Context::execute(Bytecode& code, Performance* perf){
             case BC_SUB:
             case BC_MUL:
             case BC_DIV:
+            case BC_MOD:
             case BC_LESS:
             case BC_GREATER:
             case BC_EQUAL:
@@ -361,6 +443,8 @@ void Context::execute(Bytecode& code, Performance* perf){
                         num = v0->value * v1->value;
                     else if(inst.type==BC_DIV)
                         num = v0->value / v1->value;
+                    else if(inst.type==BC_MOD)
+                        num = fmod(v0->value,v1->value);
                     else if(inst.type==BC_LESS)
                         num = v0->value < v1->value;
                     else if(inst.type==BC_GREATER)
@@ -414,9 +498,12 @@ void Context::execute(Bytecode& code, Performance* perf){
                     }
                     
                     if(inst.type==BC_ADD){
-                        if(!v2->memory.resize(v0->memory.used + v1->memory.used)){
-                            CERR <<", allocation failed\n";   
-                            continue;
+                        uint64 size = v0->memory.used + v1->memory.used;
+                        if(v2->memory.max<size){
+                            if(!v2->memory.resize(size)){
+                                CERR <<", allocation failed\n";   
+                                continue;
+                            }
                         }
                         if(v0==v2){
                             // append
@@ -427,7 +514,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                             memcpy((char*)v2->memory.data+v0->memory.used, v1->memory.data, v1->memory.used);
                             memcpy((char*)v2->memory.data,v0->memory.data, v0->memory.used);
                         }
-                        v2->memory.used = v0->memory.used + v1->memory.used;
+                        v2->memory.used = size;
                         _CLOG(log::out << LINST <<", \"";PrintRefValue(this,r2);log::out<<"\"\n";)
                     } else if(inst.type==BC_EQUAL){
                         if(v0->memory.used!=v1->memory.used){
@@ -473,9 +560,12 @@ void Context::execute(Bytecode& code, Performance* perf){
                     
                     if(inst.type==BC_ADD){
                         int numlength = 20; // Todo: how large can a decimal be? should include \0 because of sprintf
-                        if(!v2->memory.resize(v0->memory.used + numlength)){
-                            CERR <<", allocation failed\n";   
-                            continue;
+                        uint64 size = v0->memory.used + numlength;
+                        if(v2->memory.max<size){
+                            if(!v2->memory.resize(size)){
+                                CERR <<", allocation failed\n";   
+                                continue;
+                            }
                         }
                         if(v0!=v2) {
                             memcpy((char*)v2->memory.data,v0->memory.data, v0->memory.used);
@@ -499,6 +589,45 @@ void Context::execute(Bytecode& code, Performance* perf){
                     CERR<<", invalid types "<<
                         RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<RefToString(r2.type)<<" in registers\n";   
                 }
+                break;
+            }
+            case BC_NOT:{
+                Ref& r0 = references[inst.reg0];
+                Ref& r1 = references[inst.reg1];
+                
+                if(r0.type==REF_NUMBER && r1.type == REF_NUMBER){
+                    Number* v0 = getNumber(r0.index);
+                    Number* v1 = getNumber(r1.index);
+                    
+                    if(!v0||!v1){
+                        CERR <<", one value were null ";PrintRefValue(this,r0);log::out<<" ";
+                            PrintRefValue(this,r1);log::out<<"\n";   
+                        continue;
+                    }
+                    
+                    v1->value = v0->value == 0;
+                    _CLOG(log::out << LINST <<", not '";PrintRefValue(this,r1);log::out<<"'\n";)
+                }else if(r0.type==REF_STRING&& r1.type==REF_STRING){
+                    String* v0 = getString(r0.index);
+                    String* v1 = getString(r1.index);
+                    
+                    if(!v0||!v1){
+                        CERR <<", one value were null ";PrintRefValue(this,r0);log::out<<" ";
+                            PrintRefValue(this,r1);log::out<<"\n";   
+                        continue;
+                    }
+                    
+                    if(v0->memory.used)
+                        *v1 = "";
+                    else
+                        *v1 = "1";
+                        
+                    _CLOG(log::out << LINST <<", not '";PrintRefValue(this,r1);log::out<<"'\n";)
+                }else{
+                    CERR<<", invalid types "<<
+                        RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<" in registers\n";   
+                }
+                
                 break;
             }
             case BC_SUBSTR: {
@@ -533,7 +662,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     // Todo: handle decimals in v1, v2 by throwing error
                     int index0 = v1->value;
                     int index1 = v2->value;
-                    int length = v2->value - v1->value + 1; // +1 to be inclusive, "hej"[0:0] = "h"
+                    uint64 length = v2->value - v1->value + 1; // +1 to be inclusive, "hej"[0:0] = "h"
 
                     int outIndex = makeString();
                     String* out = getString(outIndex);
@@ -541,9 +670,11 @@ void Context::execute(Bytecode& code, Performance* perf){
                         CERR <<", out string could not be allocated\n";
                         continue;
                     }
-                    if(!out->memory.resize(length)){
-                        CERR <<", out string could not be allocated\n";
-                        continue;
+                    if(out->memory.max<length){
+                        if(!out->memory.resize(length)){
+                            CERR <<", out string could not be allocated\n";
+                            continue;
+                        }
                     }
 
                     memcpy(out->memory.data,(char*)v0->memory.data+index0,length);
@@ -572,7 +703,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     }
 
                     const char* type = 0;
-                    int length = 0;
+                    uint64 length = 0;
                     if(r0.type==REF_STRING){
                         type = "string";
                     } else if(r0.type==REF_NUMBER){
@@ -580,10 +711,11 @@ void Context::execute(Bytecode& code, Performance* perf){
                     } else
                         type = "null";
                     length = strlen(type);
-                    
-                    if(!v1->memory.resize(length)){
-                        CERR << ", failed resizing\n";
-                        continue;
+                    if(v1->memory.max<length){
+                        if(!v1->memory.resize(length)){
+                            CERR << ", failed resizing\n";
+                            continue;
+                        }
                     }
                     memcpy(v1->memory.data,type,length);
                     v1->memory.used = length;
@@ -686,17 +818,18 @@ void Context::execute(Bytecode& code, Performance* perf){
                 _CLOG(log::out << LINST <<", moved ";)
                 if(r0.type==REF_NUMBER){
                     Number* v0 = getNumber(r0.index);
-                    if(v0)
-                        _CLOG(log::out << v0->value)
-                    else
-                        _CLOG(log::out << "?")
+                    // if(v0)
+                    //     _CLOG(log::out << v0->value)
+                    // else
+                    //     _CLOG(log::out << "?")
+                    _CLOG(PrintRefValue(this,r0);)
 
                 } else if(r0.type==REF_STRING){
                     String* v0 = getString(r0.index);
-                    if(v0)
-                        _CLOG(log::out << *v0)
-                    else
-                        _CLOG(log::out << "?")
+                    // if(v0)
+                        _CLOG(PrintRefValue(this,r0);)
+                    // else
+                    //     _CLOG(log::out << "?")
 
                 } else {
                     _CLOG(log::out << "?";)
@@ -741,24 +874,15 @@ void Context::execute(Bytecode& code, Performance* perf){
                 r0 = {};
                 break;
             }
-            case BC_LOADC: {
+            case BC_LOADNC: {
                 Ref& r0 = references[inst.reg0];
-                // uint extraData =  *(uint*)&activeCode.get(programCounter++);
                 uint extraData = (uint)inst.reg1|((uint)inst.reg2<<8);
-                // Todo: BC_MAKE_NUMBER if ref doesn't have a number? option in the compiler to make numbers when necessary?
                 if (r0.type == REF_NUMBER){
                     Number* n0 = getNumber(r0.index);
                     if(!n0){
                        CERR << ", register was null\n";
                        continue;
                     }
-                    // auto unresolved = activeCode.getUnresolved(inst.singleReg());
-                    // if(unresolved){
-                    //     n0->value = unresolved->address;
-                    //     LINST << ", ";
-                    //     PrintRef(this,LOAD_CONST_REG);
-                    //     log::out << " = "<< unresolved->name <<" (unresolved)\n";
-                    // }else{
                     Number* num = activeCode.getConstNumber(extraData);
                     if(!num){
                         CERR << ", number constant at "<< extraData<<" does not exist\n";   
@@ -766,10 +890,15 @@ void Context::execute(Bytecode& code, Performance* perf){
                     }
                     n0->value = num->value;
                     _CLOG(log::out << LINST << ", reg = " << n0->value<<"\n";)
-                    // PrintRef(this,inst.reg0);
-                    // log::out << " = "<< n0->value <<"\n";
-                    // }
-                }else if (r0.type == REF_STRING){
+                }else{
+                    CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";   
+                }
+                break;
+            }
+            case BC_LOADSC:{
+                Ref& r0 = references[inst.reg0];
+                uint extraData = (uint)inst.reg1|((uint)inst.reg2<<8);
+                if (r0.type == REF_STRING){
                     String* v0 = getString(r0.index);
                     if(!v0){
                        CERR << ", register was null\n";
@@ -782,8 +911,6 @@ void Context::execute(Bytecode& code, Performance* perf){
                     }
                     vc->copy(v0);
                     _CLOG(log::out << LINST << ", reg = ";PrintRawString(*v0);log::out<<"\n";)
-                    // PrintRef(this,inst.reg0);
-                    // log::out << " = \""; PrintRawString(*v0); log::out<<"\"\n";
                 }else{
                     CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";   
                 }
@@ -1126,13 +1253,15 @@ void Context::execute(Bytecode& code, Performance* perf){
                     file = FileOpen(*v1,&fileSize,FILE_ONLY_READ);
                     // Todo: don't read large files (500 MB)? Maybe use a stream instruction?
                     //   May
-                    // log::out << "FILESIZE: "<<fileSize<<"\n";
-                    bool yes = v0->memory.resize(fileSize);
-                    if(yes){
+                    if(v0->memory.max<fileSize){
+                        v0->memory.resize(fileSize);
+                        // Todo: check resize, don't forget to close file if continuing
+                    }
+                    // if(yes){
                         uint64 read = FileRead(file,v0->memory.data,fileSize);
                         v0->memory.used = read;
                         // log::out << "Read bytes: "<<read<<"\n";
-                    }
+                    // }
                 }
                 FileClose(file);
                 
@@ -1249,12 +1378,10 @@ void Context::execute(Bytecode& code, Performance* perf){
                             // ReplaceChar((char*)finaltemp.data(),finaltemp.length(),'/','\\');
                             
                             int index = name.find("cmd");
+                            int index2 = name.find("cmd.exe");
                             std::string finaltemp;
-                            if(index==0){
-                                // Todo: what if name has /k and stuff?
-                                if(name.length()>strlen("strlen"))
-                                if(name[4])
-                                finaltemp = "cmd.exe /K " + name.substr(3);
+                            if(index==0 && index2!=0){
+                                finaltemp = "cmd.exe /C " + name.substr(3);
                             }else{
                                 finaltemp = name;
                             }
@@ -1275,10 +1402,10 @@ void Context::execute(Bytecode& code, Performance* perf){
                             int flags = PROGRAM_WAIT;
                             
                             
-                            log::out << "["<<finaltemp<<"]\n";
+                            // log::out << "["<<finaltemp<<"]\n";
                             bool yes = StartProgram("",(char*)finaltemp.data(),flags,&exitCode);
                             if(!yes){
-                                CERR << ", "<<name<<" found but cannot start\n";
+                                CERR << ", "<<name<<" could not start\n";
                             }else{
                                 Ref& rv = references[REG_RETURN_VALUE];
                                 uint index = makeNumber();
@@ -1311,15 +1438,16 @@ void Context::execute(Bytecode& code, Performance* perf){
         else sprintf(temp,"%.2lf G",number/1e9);
     };
 
-    bool summary=true;    
-    // bool summary=false;
-
     double executionTime = StopMeasure(startTime);
     
     if(perf){
         perf->instructions = executedInsts;
-        perf->runtime = executionTime;   
+        perf->exectime = executionTime;   
     }
+
+    bool summary=false;
+    _SILENT(summary=true;)
+
     if(summary){
         double nsPerInst = executionTime/executedInsts*1e9;
         double nsPerLine = executionTime/executedLines*1e9;
@@ -1343,7 +1471,7 @@ void Context::execute(Bytecode& code, Performance* perf){
         // log::out.flush(); printf(" %d",(int)(target/instPerS)); log::out<<" times slower than 3 GHz ("<<temp<<"Hz / 3 GHz)\n";
     }
     if(numberCount!=0||stringCount!=0){
-        log::out << log::YELLOW<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
+        log::out << log::RED<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
     }
     // auto tp = MeasureSeconds();
     // int sum = 0;

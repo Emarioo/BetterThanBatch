@@ -76,73 +76,74 @@ bool hasTokens(Tokens& tokens, int min, int max=-1){
 
 
 #define TEST_VALUE(S) {\
-        Context::TestValue& val = context.testValues[testValueIndex++];\
+        Context::TestValue& val = data->context.testValues[data->testValueIndex++];\
         if(val.type==REF_STRING && !(val.string == S)){\
-            error = TEST_FAILED;\
-            goto GOTO_NAME;\
+            return TEST_FAILED;\
         }}
 
 #define TEST_FAILED 0
 #define TEST_SUCCESS 1
-int TestSumtest(){
-    using namespace engone;
-    const char* path = "tests/sumtest.txt";
-    int error=TEST_SUCCESS;
-    int err=0;
-    int testValueIndex=0;
-#define GOTO_NAME clean_117
-
+struct TestData {
     engone::Memory text{0};
     Tokens tokens{};
     Bytecode bytecode{};
     Context context{};
-
-    text = ReadFile(path);
-
-    tokens = Tokenize(text);
-
-    if(!hasTokens(tokens,13)){
-        error = TEST_FAILED;
-        goto GOTO_NAME;
+    int testValueIndex = 0;
+    
+    void init(const char* path){
+        text = ReadFile(path);
+        tokens = Tokenize(text);
     }
-
-    bytecode = GenerateScript(tokens,&err);
-
-    if(
-        err||
-        !hasConstraint(bytecode,1,1)||
-        !hasConstraint(bytecode,2,1)||
-        !hasNumbers(bytecode,2)
-    ){
-        error = TEST_FAILED;
-        goto GOTO_NAME;
+    ~TestData(){
+        text.resize(0);
+        tokens.cleanup();
+        bytecode.cleanup();
+        context.cleanup();
     }
+};
+typedef int (*TestCase(TestData* data));
 
-    context.execute(bytecode);
+int TestSumtest(TestData* data){
+    using namespace engone;
+    int err=0;
+
+    if(!hasTokens(data->tokens,13))
+        return TEST_FAILED;
+
+    data->bytecode = GenerateScript(data->tokens,&err);
+    if(err||
+        !hasConstraint(data->bytecode,1,1)||
+        !hasConstraint(data->bytecode,2,1)||
+        !hasNumbers(data->bytecode,2)
+    ) return TEST_FAILED;
+
+    data->context.execute(data->bytecode);
 
     TEST_VALUE("3");
     
-    GOTO_NAME:
-    text.resize(0);
-    tokens.cleanup();
-    bytecode.cleanup();
-    context.cleanup();
-    return error;
+    return TEST_SUCCESS;
 }
 int TestMacro(){
     return 0;
 }
 
-void TestSuite(){
+bool VectorContains(std::vector<std::string>& list, const std::string& str){
+    for(std::string& it : list){
+        if (it == str) 
+            return true;
+    }
+    return false;
+}
+
+void TestSuite(std::vector<std::string>& tests, bool testall){
     using namespace engone;
     int failedCases = 0;
     int totalCases = 0;
 
-#define RUN_TEST(F) {int result = F();totalCases++;if(result==TEST_FAILED) failedCases++; }
+#define RUN_TEST(P,F) {TestData data;data.init(P);int result = F(&data);totalCases++;if(result==TEST_FAILED) failedCases++; }
 
-#define PLURAL(N,S) (N==1 ? S : S "s")
-
-    RUN_TEST(TestSumtest)
+    if(testall||VectorContains(tests,"sumtest"))
+        RUN_TEST("tests/sumtest.btb",TestSumtest)
 
     int successfulCases = totalCases-failedCases;
 

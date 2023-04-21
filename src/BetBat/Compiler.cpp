@@ -20,7 +20,7 @@ void CompilerFile(const char* path){
     }
 }
 
-void CompileScript(const char* path){
+void CompileScript(const char* path, int extra){
     using namespace engone;
     auto text = ReadFile(path);
     if(!text.data)
@@ -57,25 +57,22 @@ void CompileScript(const char* path){
         OptimizeBytecode(bytecode);
     
     seconds = engone::StopMeasure(startCompileTime);
-    log::out << "\nFully compiled "<<bytecode.getMemoryUsage()<<" bytes of bytecode in "<<(seconds*1e3)<<" ms\n";
-    log::out << "Compiled "<<tokens.lines<<" lines in "<<(seconds*1e3)<<" ms\n";
+    _SILENT(log::out << "Compiled "<<tokens.lines<<" lines in "<<(seconds*1e3)<<" ms ("<<bytecode.getMemoryUsage()<<" bytes of bytecode)\n";)
     
     if(tokens.enabled&LAYER_INTERPRETER){
         int totalinst = 0;
         double combinedtime = 0;
         Performance perf;
-        int times=10;
+        int times=extra;
         for(int i=0;i<times;i++){
             Context::Execute(bytecode,&perf);
             totalinst += perf.instructions;
-            combinedtime += perf.runtime;
+            combinedtime += perf.exectime;
         }
-        log::out << "Total " << totalinst<<" insts (avg "<<(totalinst/times)<<")\n";
-        log::out << "Combined " << combinedtime<<" time (avg "<<(combinedtime/times)<<")\n";
+        // log::out << "Total " << totalinst<<" insts (avg "<<(totalinst/times)<<")\n";
+        _SILENT(log::out << "Combined " << (combinedtime*1000)<<" ms time (avg "<<(combinedtime/times*1000)<<" ms)\n";)
     }
         
-        
-
 COMP_SCRIPT_END:
     bytecode.cleanup();
     tokens.cleanup();

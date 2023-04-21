@@ -92,4 +92,4 @@ struct PreprocInfo {
     void nextline();
 };
 
-void Preprocess(Tokens& tokens, int* error);
+void Preprocess(Tokens& tokens, int* error=0);

@@ -11,7 +11,7 @@
 bool OptimizeBytecode(Bytecode& code){
     using namespace engone;
     
-    log::out <<log::BLUE<< "\n##   Optimizer\n";
+    _SILENT(log::out <<log::BLUE<< "\n##   Optimizer\n";)
     
     int oldMemory = code.getMemoryUsage();
     std::vector<int> removedInsts;
@@ -107,7 +107,7 @@ bool OptimizeBytecode(Bytecode& code){
                     removedInsts.push_back(i);
                 }
             }
-        } else if(inst.type==BC_LOADC){
+        } else if(inst.type==BC_LOADNC||inst.type==BC_LOADSC){
             OptInfo& info = needed[inst.reg0];
             info.wasted.push_back(i);
         } else if(inst.type!=BC_LOADV) {
@@ -141,7 +141,7 @@ bool OptimizeBytecode(Bytecode& code){
                 // Todo: for loop to check multiple previous instructions.
                 //  Not necessary if loadc is guarranteed to exist before jump
                 
-                if(prev.type==BC_LOADC && prev.reg0==reg){
+                if((prev.type==BC_LOADNC||prev.type==BC_LOADSC) && prev.reg0==reg){
                     int constIndex = (int)prev.reg1 | ((int)prev.reg2<<8);
                     constAddresses.push_back(code.getConstNumber(constIndex));
                     // double num = code.getConstNumber(constIndex)->value -= offset;
@@ -202,6 +202,95 @@ bool OptimizeBytecode(Bytecode& code){
     //  jump address may be combined with a normal number but the address may need
     //  to be relocated because of optimizations which would affect the normal number)
     
+    std::unordered_map<double, int> numberConstants;
+    engone::Memory numberArray{sizeof(Number)};
+    struct ConstString {
+        char* str=0;
+        int length=0;
+        int constIndex=0;  
+    };
+    // std::vector<ConstString> stringConstants;
+    std::unordered_map<std::string,int> stringConstants; // is this fine with larger strings?
+    engone::Memory stringArray{sizeof(String)};
+    engone::Memory stringData{1};
+    
+    for(int i=0;i<(int)code.codeSegment.used;i++){
+        Instruction& inst = *((Instruction*)code.codeSegment.data+i);  
+        
+        if(inst.type==BC_LOADNC){
+            int constIndex = (uint)inst.reg1 | ((uint)inst.reg2<<8);
+            
+            Number* num = code.getConstNumber(constIndex);
+            
+            auto pair = numberConstants.find(num->value);
+            if(pair != numberConstants.end()){
+                inst.reg1 = pair->second&0xFF;
+                inst.reg2 = pair->second>>8;
+            }else{
+                if(numberArray.max<numberArray.used+1)
+                    numberArray.resize(numberArray.max*2+10);
+                int newIndex = numberArray.used;
+                *((Number*)numberArray.data + newIndex) = *num;
+                numberArray.used++;
+                numberConstants[num->value] = newIndex;
+                inst.reg1 = newIndex&0xFF;
+                inst.reg2 = newIndex>>8;
+            }
+        } else if(inst.type==BC_LOADSC){
+            // Note: Not optimizing strings because most will probably be unique anyway.
+            //   Should still optimize though but it's not very important right now.
+            // Note: I ended up implementing this too. I might as well have.
+            //   Should work well for small strings not sure about the larger ones.
+            //   Duplicates should at least be removed even it it may be slow.
+            
+            int constIndex = (uint)inst.reg1 | ((uint)inst.reg2<<8);
+            
+            String* str = code.getConstString(constIndex);
+            
+            auto pair = stringConstants.find(*str);
+            if(pair != stringConstants.end()){
+                inst.reg1 = pair->second&0xFF;
+                inst.reg2 = pair->second>>8;
+            }else{
+                if(stringArray.max<stringArray.used+1)
+                    stringArray.resize(stringArray.max*2+10);
+                if(stringData.max<stringData.used+str->memory.used)
+                    stringData.resize(stringData.max*2+str->memory.used*2 + 10);
+                int newIndex = stringArray.used;
+                
+                char* ptr = (char*)stringData.used;
+                String newStr{};
+                newStr.memory.data = ptr;
+                newStr.memory.used = str->memory.used;
+                
+                *((String*)stringArray.data + newIndex) = newStr;
+                memcpy((char*)stringData.data+stringData.used, str->memory.data,str->memory.used);
+                stringData.used+=str->memory.used;
+                stringArray.used++;
+                stringConstants[*str] = newIndex;
+                inst.reg1 = newIndex&0xFF;
+                inst.reg2 = newIndex>>8;
+            }
+        }
+    }
+    int removedNumbers = code.constNumbers.used-numberArray.used;
+    int removedStrings = code.constStrings.used-stringArray.used;
+    _SILENT(if(removedNumbers!=0)log::out << "Removed "<<(removedNumbers)<<" const. numbers\n";)
+    _SILENT(if(removedStrings!=0)log::out << "Removed "<<(removedStrings)<<" const. strings\n";)
+    
+    code.constNumbers.resize(0);
+    code.constNumbers = numberArray;
+    
+    code.constStrings.resize(0);
+    code.constStringText.resize(0);
+    code.constStrings = stringArray;
+    code.constStringText = stringData;
+    // finish pointers
+    for(int i=0;i<(int)code.constStrings.used;i++){
+        String* str = (String*)code.constStrings.data + i;
+        str->memory.data = (char*)code.constStringText.data + (uint64)str->memory.data;
+    }
+    
     #define MIN_SIZE(ARR) code.ARR.resize(code.ARR.used);
     // MIN_SIZE(codeSegment)
     // MIN_SIZE(constNumbers)
@@ -212,9 +301,10 @@ bool OptimizeBytecode(Bytecode& code){
     
     int freedMemory = oldMemory-code.getMemoryUsage();
     
-    log::out << "Optimized away "<<removedInsts.size()<<" instructions, ";
-    if(freedMemory!=0)
-        log::out <<"freed "<<freedMemory<<" bytes\n";
-    
+    _SILENT(log::out << "Optimized away "<<removedInsts.size()<<" instructions, ";)
+    if(freedMemory!=0){
+        _SILENT(log::out <<"freed "<<freedMemory<<" bytes";)
+    }
+    log::out << "\n";
     return true;
 }

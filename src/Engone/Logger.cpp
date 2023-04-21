@@ -117,7 +117,8 @@ namespace engone {
 			SetConsoleColor(m_masterColor);
 
 		if(m_enabledConsole){
-			fwrite(str,1,len,stdout);
+			printf("%s",str);
+			// fwrite(str,1,len,stdout);
 		}
 		if(m_enabledReports){
 

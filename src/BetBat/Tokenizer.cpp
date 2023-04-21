@@ -234,7 +234,7 @@ Tokens Tokenize(engone::Memory& textData){
         log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
         return {};
     }
-    log::out << log::BLUE<< "\n##   Tokenizer   ##\n";
+    _SILENT(log::out << log::BLUE<< "\n##   Tokenizer   ##\n";)
     // Todo: handle errors like outTokens.add returning false
     
     char* text = (char*)textData.data;
@@ -246,7 +246,7 @@ Tokens Tokenize(engone::Memory& textData){
     
     memset(outTokens.tokenData.data,'_',outTokens.tokenData.max); // Good indicator for issues
     
-    const char* specials = "+-*/=<>!&|" "$@#{}()[]" ":;.,";
+    const char* specials = "+-*/%=<>!&|" "$@#{}()[]" ":;.,";
     int specialLength = strlen(specials);
     int line=1;
     int column=1;
@@ -559,6 +559,12 @@ Tokens Tokenize(engone::Memory& textData){
             outTokens.append(chr);
             if((chr=='='&&nextChr=='=')||
                 (chr=='!'&&nextChr=='=')||
+                (chr=='+'&&nextChr=='=')||
+                (chr=='-'&&nextChr=='=')||
+                (chr=='*'&&nextChr=='=')||
+                (chr=='/'&&nextChr=='=')||
+                (chr=='+'&&nextChr=='+')||
+                (chr=='-'&&nextChr=='-')||
                 (chr=='&'&&nextChr=='&')||
                 (chr=='>'&&nextChr=='>')||
                 (chr=='|'&&nextChr=='|')

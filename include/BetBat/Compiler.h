@@ -1,3 +1,5 @@
+#pragma once
+
 #include "BetBat/Tokenizer.h"
 #include "BetBat/Preprocessor.h"
 #include "BetBat/Parser.h"
@@ -8,6 +10,6 @@
 // compiles based on file format/extension
 void CompileFile(const char* path);
 
-void CompileScript(const char* path);
+void CompileScript(const char* path, int extra = 1);
 void CompileInstructions(const char* path);
 void CompileDisassemble(const char* path);

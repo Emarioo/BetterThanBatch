@@ -54,7 +54,7 @@ struct Ref {
     ##############################################
 "
 lines = 0
-for 100 {
+for 1000 {
 	for i : buffer.length {
 		chr = buffer[i]
 		if chr=="\n"

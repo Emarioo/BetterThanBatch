@@ -25,7 +25,6 @@ int main(int argc, const char** argv){
     // FileWrite((APIFile*)((uint64)h+1),hm,strlen(hm));
     // FileWrite((APIFile*)((uint64)h+1),hm,strlen(hm));
     // return 0;
-    // log::out.enableReport(false);
     
     // auto pipe = PipeCreate(false,true);
     
@@ -48,28 +47,38 @@ int main(int argc, const char** argv){
     // PipeDestroy(pipe);
     
     // return 0;
+    
+    log::out.enableReport(false);
 
     #define IfArg(X) if(!strcmp(arg,X))
     #define MODE_TEST 1
     #define MODE_RUN 2
     int mode = MODE_RUN;
 
+    std::vector<std::string> tests; // could be const char*
+    std::vector<std::string> files;
+
     for(int i=1;i<argc;i++){
         const char* arg = argv[i];
         int len = strlen(argv[i]);
-        log::out << "arg["<<i<<"] "<<arg<<"\n";
+        // log::out << "arg["<<i<<"] "<<arg<<"\n";
         IfArg("-test") {
             mode = MODE_TEST;
         } else IfArg("-testall") {
-            TestSuite();
+            TestSuite(tests,true);
         } else IfArg("-run") {
             mode = MODE_RUN;
         } else if(mode==MODE_RUN){
-            CompileScript(argv[i]);
+            files.push_back(arg);
         } else if(mode==MODE_TEST){
-            // test specific?
-            log::out << log::YELLOW<< "No named tests yet\n";
+            tests.push_back(arg);
         }
+    }
+    if(!tests.empty()){
+        TestSuite(tests);
+    }
+    for(std::string& file : files){
+        CompileScript(file.c_str());
     }
     if(argc<2){
         log::out << "No input files!\n";
@@ -93,16 +102,21 @@ int main(int argc, const char** argv){
         // CompileScript("example/filter.btb");
         // CompileScript("example/pipes.btb");
         // CompileScript("example/lines.btb");
-        CompileScript("tests/benchmark/string.btb");
+        // CompileScript("tests/constoptim.btb");
+        // CompileScript("tests/benchmark/string.btb", 1);
+        // CompileScript("tests/script/eh.btb");
+        CompileScript("example/build.btb");
+        // CompileScript("tests/simple/ops.btb");
 
         // CompileInstructions("tests/inst/stack.btb");
         // CompileInstructions("tests/inst/func.btb");
         // CompileInstructions("tests/inst/numstr.btb");
         // CompileInstructions("tests/inst/apicalls.btb");
     }else{
-        int finalMemory = GetAllocatedBytes()-log::out.getMemoryUsage();
-        if(finalMemory!=0)
-            log::out << "Final memory: "<<finalMemory<<"\n";            
-        log::out.cleanup();
+        
     }
+    int finalMemory = GetAllocatedBytes()-log::out.getMemoryUsage();
+    if(finalMemory!=0)
+        log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";            
+    log::out.cleanup();
 }

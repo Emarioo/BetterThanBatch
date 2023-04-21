@@ -1,10 +1,22 @@
-@disable all
-@enable preprocessor
+// @disable all
+// @enable preprocessor
 
-#define END ko
-#multidefine HAHA(X,...) Ha HAHA(...)
-END
-#enddef
-#define HAHA() a
+// #define END ko
+// #multidefine HAHA(X,...) Ha HAHA(...)
+// END
+// #enddef
+// #define HAHA() a
 
-beg HAHA(1,2,3,4) WAIT
+// beg HAHA(1,2,3,4) WAIT
+
+#if
+print hey
+#endif
+
+#ifdef A
+print yes
+#else
+print no
+#else
+print yes2
+#endif

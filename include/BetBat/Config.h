@@ -1,16 +1,31 @@
 
 typedef double Decimal;
 
+// Major config
+#define DEBUG
+// #define SILENT
+
+// Language config
+#define INST_LIMIT 999999999
+#define PREPROC_REC_LIMIT 100
+#define PREPROC_TERM "#"
+
+// Debug config
+#ifdef DEBUG
+
 // #define TLOG
 #define GLOG
 // #define OLOG
 // #define PLOG
-
-#define INST_LIMIT 999999999
-#define PREPROC_REC_LIMIT 100
 #define USE_DEBUG_INFO
+#define PRINT_DEBUG_LINES
+#define CLOG
 
-// #define PRINT_DEBUG_LINES
-// #define CLOG
+#endif
 
-#define PREPROC_TERM "#"
+
+#ifndef SILENT
+#define _SILENT(X) X
+#else
+#define _SILENT(X)
+#endif
