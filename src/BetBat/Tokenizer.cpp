@@ -152,16 +152,16 @@ void Tokens::cleanup(){
     tokenData.resize(0);
     lines=0;
 }
-void Tokens::printTokens(int tokensPerLine, int flags){
+void Tokens::printTokens(int tokensPerLine, bool showlncol){
     using namespace engone;
     log::out << "\n####   "<<tokens.used<<" Tokens   ####\n";
     uint i=0;
     for(;i<tokens.used;i++){
         Token* token = ((Token*)tokens.data + i);
-        // if(flags&TOKEN_PRINT_LN_COL)
-        //     log::out << "["<<token->line << ":"<<token->column<<"] ";
+        if(showlncol)
+            log::out << "["<<token->line << ":"<<token->column<<"] ";
         
-        token->print(flags);
+        token->print(0);
         // if(flags&TOKEN_PRINT_SUFFIXES){
             if(token->flags&TOKEN_SUFFIX_LINE_FEED)
                 log::out << "\\n";
@@ -282,7 +282,10 @@ Tokens Tokenize(engone::Memory& textData){
         
         int col = column;
         int ln = line;
-        column++;
+        if(chr=='\t')
+            column+=4;
+        else
+            column++;
         if(chr == '\n'){
             line++;
             column=1;
@@ -481,7 +484,10 @@ Tokens Tokenize(engone::Memory& textData){
                         if(index+1<length)
                             nc = text[index+1];
                         index++;
-                        column++;
+                        if(c=='\t')
+                            column+=4;
+                        else
+                            column++;
                         if(c == '\n'){
                             line++;
                             column=1;
@@ -563,6 +569,8 @@ Tokens Tokenize(engone::Memory& textData){
                 (chr=='-'&&nextChr=='=')||
                 (chr=='*'&&nextChr=='=')||
                 (chr=='/'&&nextChr=='=')||
+                (chr=='<'&&nextChr=='=')||
+                (chr=='>'&&nextChr=='=')||
                 (chr=='+'&&nextChr=='+')||
                 (chr=='-'&&nextChr=='-')||
                 (chr=='&'&&nextChr=='&')||

@@ -202,15 +202,13 @@ bool OptimizeBytecode(Bytecode& code){
     //  jump address may be combined with a normal number but the address may need
     //  to be relocated because of optimizations which would affect the normal number)
     
-    std::unordered_map<double, int> numberConstants;
-    engone::Memory numberArray{sizeof(Number)};
-    struct ConstString {
-        char* str=0;
-        int length=0;
-        int constIndex=0;  
+    struct ConstData {
+        int index;
+        int count; // occurrences
     };
-    // std::vector<ConstString> stringConstants;
-    std::unordered_map<std::string,int> stringConstants; // is this fine with larger strings?
+    std::unordered_map<double, ConstData> numberConstants;
+    engone::Memory numberArray{sizeof(Number)};
+    std::unordered_map<std::string,ConstData> stringConstants; // is this fine with larger strings?
     engone::Memory stringArray{sizeof(String)};
     engone::Memory stringData{1};
     
@@ -224,15 +222,16 @@ bool OptimizeBytecode(Bytecode& code){
             
             auto pair = numberConstants.find(num->value);
             if(pair != numberConstants.end()){
-                inst.reg1 = pair->second&0xFF;
-                inst.reg2 = pair->second>>8;
+                inst.reg1 = pair->second.index&0xFF;
+                inst.reg2 = pair->second.index>>8;
+                pair->second.count++;
             }else{
                 if(numberArray.max<numberArray.used+1)
                     numberArray.resize(numberArray.max*2+10);
                 int newIndex = numberArray.used;
                 *((Number*)numberArray.data + newIndex) = *num;
                 numberArray.used++;
-                numberConstants[num->value] = newIndex;
+                numberConstants[num->value] = {newIndex,1};
                 inst.reg1 = newIndex&0xFF;
                 inst.reg2 = newIndex>>8;
             }
@@ -249,8 +248,9 @@ bool OptimizeBytecode(Bytecode& code){
             
             auto pair = stringConstants.find(*str);
             if(pair != stringConstants.end()){
-                inst.reg1 = pair->second&0xFF;
-                inst.reg2 = pair->second>>8;
+                inst.reg1 = pair->second.index&0xFF;
+                inst.reg2 = pair->second.index>>8;
+                pair->second.count++;
             }else{
                 if(stringArray.max<stringArray.used+1)
                     stringArray.resize(stringArray.max*2+10);
@@ -267,7 +267,7 @@ bool OptimizeBytecode(Bytecode& code){
                 memcpy((char*)stringData.data+stringData.used, str->memory.data,str->memory.used);
                 stringData.used+=str->memory.used;
                 stringArray.used++;
-                stringConstants[*str] = newIndex;
+                stringConstants[*str] = {newIndex,1};
                 inst.reg1 = newIndex&0xFF;
                 inst.reg2 = newIndex>>8;
             }
@@ -275,9 +275,25 @@ bool OptimizeBytecode(Bytecode& code){
     }
     int removedNumbers = code.constNumbers.used-numberArray.used;
     int removedStrings = code.constStrings.used-stringArray.used;
-    _SILENT(if(removedNumbers!=0)log::out << "Removed "<<(removedNumbers)<<" const. numbers\n";)
-    _SILENT(if(removedStrings!=0)log::out << "Removed "<<(removedStrings)<<" const. strings\n";)
-    
+    // Note: count in ConstData represents how many times a number or string was used.
+    //  Not how many actual constants there were. removedNumbers/Strings still
+    //  represent how many constants were removed
+
+    _SILENT(
+    if(removedNumbers!=0)log::out << "Removed "<<(removedNumbers)<<" const. numbers\n";
+    _OLOG(for(auto& pair : numberConstants){
+        if(pair.second.count>1){
+            log::out << " "<<pair.first<<": "<<pair.second.count<<" usages\n";
+        }
+    })
+    if(removedStrings!=0)log::out << "Removed "<<(removedStrings)<<" const. strings\n";
+    _OLOG(for(auto& pair : stringConstants){
+        if(pair.second.count>1){
+            log::out << " "<<pair.first<<": "<<pair.second.count<<" usages\n";
+        }
+    })
+    )
+
     code.constNumbers.resize(0);
     code.constNumbers = numberArray;
     
@@ -305,6 +321,6 @@ bool OptimizeBytecode(Bytecode& code){
     if(freedMemory!=0){
         _SILENT(log::out <<"freed "<<freedMemory<<" bytes";)
     }
-    log::out << "\n";
+    _SILENT(log::out << "\n";)
     return true;
 }

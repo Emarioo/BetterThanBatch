@@ -11,10 +11,11 @@
 // print a
 // a--
 // print a
-
 // a = !0
-print (!1) - (!0)
-print (!"hey") - (!"")
+//print (!1) - (!0)
+//print (!"hey") - (!"")
+
+print (1<=2) (1<=1) (2<=1)
 
 // ++a
 // print a

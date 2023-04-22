@@ -34,7 +34,7 @@ void CompileScript(const char* path, int extra){
     auto startCompileTime = engone::MeasureSeconds();
     tokens = Tokenize(text);
     if(tokens.enabled==0)
-        tokens.printTokens(14,0);
+        tokens.printTokens(14,true);
     // TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
     // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
     
@@ -55,7 +55,7 @@ void CompileScript(const char* path, int extra){
     // WriteFile("dis.txt",dis);
     if(tokens.enabled&LAYER_OPTIMIZER)
         OptimizeBytecode(bytecode);
-    
+    _SILENT(log::out <<"\n";)
     seconds = engone::StopMeasure(startCompileTime);
     _SILENT(log::out << "Compiled "<<tokens.lines<<" lines in "<<(seconds*1e3)<<" ms ("<<bytecode.getMemoryUsage()<<" bytes of bytecode)\n";)
     

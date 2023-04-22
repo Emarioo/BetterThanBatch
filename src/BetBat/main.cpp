@@ -48,7 +48,7 @@ int main(int argc, const char** argv){
     
     // return 0;
     
-    log::out.enableReport(false);
+    // log::out.enableReport(false);
 
     #define IfArg(X) if(!strcmp(arg,X))
     #define MODE_TEST 1
@@ -102,10 +102,13 @@ int main(int argc, const char** argv){
         // CompileScript("example/filter.btb");
         // CompileScript("example/pipes.btb");
         // CompileScript("example/lines.btb");
+        // CompileScript("example/typedefify.btb");
+        CompileScript("example/loggifier.btb");
+        // CompileScript("example/findmax.btb");
         // CompileScript("tests/constoptim.btb");
-        // CompileScript("tests/benchmark/string.btb", 1);
+        // CompileScript("tests/benchmark/string.btb", 10);
         // CompileScript("tests/script/eh.btb");
-        CompileScript("example/build.btb");
+        // CompileScript("example/build.btb");
         // CompileScript("tests/simple/ops.btb");
 
         // CompileInstructions("tests/inst/stack.btb");
@@ -115,7 +118,7 @@ int main(int argc, const char** argv){
     }else{
         
     }
-    int finalMemory = GetAllocatedBytes()-log::out.getMemoryUsage();
+    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
     if(finalMemory!=0)
         log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";            
     log::out.cleanup();

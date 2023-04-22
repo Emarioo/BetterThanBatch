@@ -63,7 +63,7 @@ struct Tokens {
     Token& get(uint index);
     uint length();
     // flags is a bitmask, TOKEN_PRINT_...
-    void printTokens(int tokensPerLine = 14, int flags = 0);
+    void printTokens(int tokensPerLine = 14, bool showlncol=false);
     
     void printData(int charsPerLine = 40);
     

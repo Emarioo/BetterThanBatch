@@ -1,5 +1,5 @@
-// @disable all
-// @enable preprocessor
+@disable all
+@enable preprocessor
 
 // #define END ko
 // #multidefine HAHA(X,...) Ha HAHA(...)
@@ -9,14 +9,23 @@
 
 // beg HAHA(1,2,3,4) WAIT
 
-#if
-print hey
-#endif
+#define SEC haha coool
+#define CON #quoted SEC
 
-#ifdef A
-print yes
-#else
-print no
-#else
-print yes2
-#endif
+cool CON
+
+// NOTE! #quoted CON where CON is {haha cool} should not become
+//  "haha" "cool" but "haha cool". It's more useful the latter is more useful!
+//  you may want #quotes which do them separately.
+
+// #if
+// print hey
+// #endif
+// 
+// #ifdef A
+// print yes
+// #else
+// print no
+// #else
+// print yes2
+// #endif
