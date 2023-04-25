@@ -438,6 +438,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
                     depth++;
                     // log::out << log::GRAY<< " depth "<<depth<<"\n";
                 }
+                continue;
             }
             if(token=="endif"){
                 if(depth==0){
@@ -447,6 +448,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
                     break;
                 }
                 depth--;
+                continue;
                 // log::out << log::GRAY<< " depth "<<depth<<"\n";
             }
             if(token == "else"){ // we allow multiple elses, they toggle active and inactive sections
@@ -463,6 +465,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
                         yes = !yes;
                         // hadElse=true;
                     // }
+                    continue;
                 }
             }
         }
@@ -483,11 +486,14 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
     return error;
 }
 
-void Transfer(PreprocInfo& info, TokenList& from, TokenList& to,bool unwrap=false,Arguments* args=0,int* argIndex=0){
+void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bool unwrap=false,Arguments* args=0,int* argIndex=0){
     // Todo: optimize with some resize and memcpy?
     for(int i=0;i<(int)from.size();i++){
         if(!unwrap){
-            to.push_back(from[i]);
+            auto tmp = from[i];
+            if(quoted)
+                tmp.flags |= TOKEN_QUOTED;
+            to.push_back(tmp);
         }else{
             Token tok = info.get(from[i]);
             if(tok==","){
@@ -496,7 +502,10 @@ void Transfer(PreprocInfo& info, TokenList& from, TokenList& to,bool unwrap=fals
             }
             if((int)args->size()==*argIndex)
                 args->push_back({});
-            args->back().push_back(from[i]);
+            auto tmp = from[i];
+            if(quoted)
+                tmp.flags |= TOKEN_QUOTED;
+            args->back().push_back(tmp);
         }
     }
 }
@@ -522,7 +531,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
         evalInfo.finalFlags = token2.flags&(TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE);
         return PARSE_SUCCESS; // no arguments
     }
-
+    bool wasQuoted=false;
     int parDepth = 0;
     bool unwrapNext=false;
     while(index<(int)tokens.size()){
@@ -606,10 +615,13 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
                         }else{
                             newEvalInfo.macro = macro;
                             EvalMacro(info,newEvalInfo);
-                            Transfer(info,newEvalInfo.output,evalInfo.arguments.back());
+                            Transfer(info,newEvalInfo.output,evalInfo.arguments.back(),wasQuoted);
                         }
                     }else{
-                        evalInfo.arguments.back().push_back(argTokens[indexArg-1]);
+                        auto tmp = argTokens[indexArg-1];
+                        if(wasQuoted)
+                            tmp.flags|=TOKEN_QUOTED;
+                        evalInfo.arguments.back().push_back(tmp);
                         _PLOG(log::out <<log::GRAY << " argv["<<(evalInfo.arguments.size()-1)<<"] += "<<argTok<<"\n";)
                     }
                 }
@@ -641,11 +653,13 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
                 if(unwrapNext){
                     _PLOG(log::out << log::MAGENTA<<"actual unwrap\n";)
                 }
-                Transfer(info,newEvalInfo.output,evalInfo.arguments.back(),unwrapNext,&evalInfo.arguments,&evalInfo.argIndex);
+                Transfer(info,newEvalInfo.output,evalInfo.arguments.back(),wasQuoted,unwrapNext,&evalInfo.arguments,&evalInfo.argIndex);
             }
         }else {
             if((int)evalInfo.arguments.size()==evalInfo.argIndex)
                 evalInfo.arguments.push_back({});
+            if(wasQuoted)
+                tokenRef.flags|=TOKEN_QUOTED;
             evalInfo.arguments.back().push_back(tokenRef);
             _PLOG(log::out <<log::GRAY << " argv["<<(evalInfo.arguments.size()-1)<<"] += "<<token<<"\n";)
         }
@@ -668,9 +682,20 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
     }
     _PLOG(log::out <<"Eval "<<evalInfo.macroName<<", "<<tokens.size()<<" tokens\n";)
     int index=0;
+    bool wasQuoted=false;
     while(index<(int)tokens.size()){
         Token token = info.get(tokens[index]);
         index++;
+
+        if(token==PREPROC_TERM&&!(token.flags&TOKEN_SUFFIX_SPACE)){
+            // Todo: bound check
+            Token token2 = info.get(tokens[index]);
+            if(token2=="quoted"){
+                index++;
+                wasQuoted=true;
+                continue;
+            }   
+        }
 
         RootMacro* rootMacro=0;
         int argIndex = -1;
@@ -691,20 +716,25 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
                 }
             }
             for(int i=argStart;i<argEnd;i++){
-                TokenList args = evalInfo.arguments[i];
+                TokenList& args = evalInfo.arguments[i];
                 int indexArg=0;
                 while(indexArg<(int)args.size()){
                     Token argTok = info.get(args[indexArg]);
+                    auto ref = args[indexArg];
                     indexArg++;
                     
                     if(i+1==argEnd&&indexArg==(int)args.size())
-                        args[indexArg-1].flags |= token.flags & (TOKEN_SUFFIX_SPACE|TOKEN_SUFFIX_LINE_FEED);
+                        ref.flags |= token.flags & (TOKEN_SUFFIX_SPACE|TOKEN_SUFFIX_LINE_FEED);
                     if(index==(int)tokens.size()&&i+1==argEnd&&indexArg==(int)args.size())
-                        args[indexArg-1].flags = evalInfo.finalFlags;
-                    evalInfo.output.push_back(args[indexArg-1]);
+                        ref.flags = evalInfo.finalFlags;
+                    if(wasQuoted){
+                        ref.flags |= TOKEN_QUOTED;
+                    }
+                    evalInfo.output.push_back(ref);
                     _PLOG(log::out << log::GRAY <<"  eval.out << "<<argTok<<"\n");
                 }
             }
+            wasQuoted=false;
         }else if((rootMacro = info.matchMacro(token))){
             EvalInfo newEvalInfo{};
             newEvalInfo.rootMacro = rootMacro;
@@ -734,12 +764,18 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
             }else{
                 newEvalInfo.macro = macro;
                 EvalMacro(info,newEvalInfo);
-                Transfer(info,newEvalInfo.output,evalInfo.output);
+                Transfer(info,newEvalInfo.output,evalInfo.output,wasQuoted);
+                wasQuoted=false;
             }
         } else{
             if(index==(int)tokens.size())
                 tokens[index-1].flags = evalInfo.finalFlags;
             
+            if(wasQuoted){
+                tokens[index-1].flags |= TOKEN_QUOTED;
+                wasQuoted=false;
+            }
+
             evalInfo.output.push_back(tokens[index-1]);
             _PLOG(log::out << log::GRAY <<" eval.out << "<<token<<"\n");
         }

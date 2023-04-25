@@ -20,12 +20,12 @@ cmd mkdir bin 2> nul
 find = {
     correct = 0
     for #arg.length {
-        if #arg[#i] == "bin"[correct] {
+        if #arg[#i] == "/bin/"[correct] {
             correct++
-            if correct == "bin".length {
+            if correct == "/bin/".length
                 return 1
-            }
-        } else correct = 0
+        } else
+            correct = 0
     }
     return 0
 }

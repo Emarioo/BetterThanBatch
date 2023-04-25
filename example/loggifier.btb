@@ -1,0 +1,152 @@
+// printf("Hello %s, you have %d %s",name,lives,Type(2,6));
+// should be replace with
+// logger << "Hello "<<name<<", you have "<<lives<<" "<<Type(2,6);
+
+input = "
+printf(\"Hello %s, you have %d %s\",name,lives,Type(2,6));
+hej
+printf(\"%s says %s to %s\",name,getmsg(name,2),\"to\");
+"
+
+/* Assumptions:
+    printf marks the start, ; marks the end (kaprintf counts)
+    % is followed by one character which indicate the spot
+      of replacement (%5s will not be possible)
+    each % has an argument. There cannot be more % than arguments or
+      vice versa. Argument refers to one of name, lives, Type(2,6)
+    the format string does not have any quotes in it
+    the arguments are correctly done. no uneven paranthesis or commas.
+*/
+
+//@disable interpreter
+//@disable optimizer
+
+#define FIND_PRINTF 0
+#define FIND_PAR 1
+#define FIND_FORMAT 2
+#define EVAL_WORK 4
+
+out = ""
+argHead = 0
+mode = FIND_PRINTF
+correct = 0
+acc = ""
+for i : input.length {
+    chr = input[i]
+    
+    if mode == FIND_PRINTF {
+        acc += chr
+        if chr == "printf"[correct] {
+            correct++
+            if correct == "printf".length {
+                mode = FIND_FORMAT
+                out += "logger << "
+                correct = 0 // reset for next time
+                acc = ""
+            }
+        }else{
+            correct = 0
+            out += acc
+            acc = ""
+        }
+    } else if mode == FIND_PAR {
+        if chr == "(" {
+            mode = FIND_FORMAT
+        }
+    } else if mode == FIND_FORMAT {
+        if chr == "\"" {
+            argHead = i + 1
+            what = 0 // find quote
+            while argHead < input.length {
+                c = input[argHead]
+                if what == 0 {
+                    if c == "\"" {
+                        what = 1 // find ,
+                    }
+                } else {
+                    if c == "," {
+                        argHead++
+                        break;
+                    }
+                }
+                argHead++
+            }
+            mode = EVAL_WORK
+            out += "\""
+        }
+    } else if mode == EVAL_WORK {
+        if chr == "%" {
+            out+= "\" << "
+            i++ // skip character after % (%s, %d)
+            pardepth = 0
+            findEnd = 0
+            while argHead < input.length {
+                c = input[argHead]
+                //print c
+                if findEnd {
+                    argHead++
+                    if c == ";"{
+                        break
+                    }
+                    continue
+                }
+                if c == "(" {
+                    pardepth++
+                } else if c==")" {
+                    if pardepth == 0 {
+                        argHead++;
+                        findEnd = 1
+                        continue;
+                    }
+                    pardepth--
+                }
+                if pardepth==0 && c == "," {
+                    argHead++
+                    break
+                }
+                out += c
+                argHead++
+            }
+            out+= " << \""
+        } else {
+            out += chr
+            if chr=="\"" {
+                mode = FIND_PRINTF
+                out+=";"
+                i = argHead
+            }
+        }
+    }
+}
+print out
+
+/*
+Thoughts about my experience with the language:
+    Language is fairly straight forward. The things you want to do like substring,
+    length are very easy to do (.length and [3:6]).
+    Overall it is nice to use.
+    However, there are some missing features. Mainly some functions to check
+    if a string contains another string.
+    A bigger issue is the bugs in the language. There were 3 bugs I had to fix.
+    Most of my time was spent fixing those.
+    Debugging your script is a little difficult since there is no debugger.
+    But python, javascript and batch doesn't really have those either.
+    (you may be able to download one though)
+    Debugging consists of the normal "loads of prints". You can turn detailed information
+    about which instructions the interpreter is running and also which lines it is on.
+    This helped a bit in my case but it is rather cryptic and a little hard to realize
+    what and which variables the registers are for.
+    The error messages are amazing when they work but when you run in to ContextError
+    you are in a bit of trouble. Can be hard to figure out why your code caused it.
+
+
+Conclusion:
+    - More detailed debug info which connects variables to registers.
+    - The logged instructions should also show what the registers point to and
+      not just which register an instruction uses.
+
+Todo:
+    How can the code be made simpler? What functions can the language provide
+    to make it easier and faster to code up the solution?
+
+*/

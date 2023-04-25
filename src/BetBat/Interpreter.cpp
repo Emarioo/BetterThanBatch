@@ -66,7 +66,7 @@ uint32 Context::makeNumber(){
         }
     }
     #ifdef USE_INFO_VALUES
-    if(infoValues.max <= numbers.used){
+    if(infoValues.max < numbers.used + 1){
         int oldMax = infoValues.max;
         if(!infoValues.resize(infoValues.max*2 + 10))
             return 0; 
@@ -85,14 +85,6 @@ uint32 Context::makeNumber(){
     }
     uint8* info = (uint8*)infoValues.data + index;
     *info |= REF_NUMBER;
-    #elif defined(USE_FREE_VECTOR)
-    int index = -1;
-    if(!freeNumbers.empty()){
-        index = freeNumbers.back();
-        freeNumbers.pop_back();   
-    }else{
-        index = numbers.used++;
-    }
     #else
     int index = -1;
     if(afreeNumbers.used!=0){
@@ -157,7 +149,7 @@ uint32 Context::makeString(){
         }
     }
     #ifdef USE_INFO_VALUES
-    if(infoValues.max <= strings.used){
+    if(infoValues.max < strings.used + 1){
         int oldMax = infoValues.max;
         if(!infoValues.resize(infoValues.max*2 + 10))
             return 0; 
@@ -175,14 +167,6 @@ uint32 Context::makeString(){
     }
     uint8* info = (uint8*)infoValues.data + index;
     *info |= REF_STRING;
-    #elif defined(USE_FREE_VECTOR)
-    int index = -1;
-    if(!freeStrings.empty()){
-        index = freeStrings.back();
-        freeStrings.pop_back();   
-    }else{
-        index = strings.used++;
-    }
     #else
     int index = -1;
     if(afreeStrings.used!=0){
@@ -307,6 +291,7 @@ void Context::execute(Bytecode& code, Performance* perf){
     #define LINST " "<<(programCounter-1)<<": "<<inst
 
     auto startTime = MeasureSeconds();
+    double excessTime = 0;
 
     int atLine=-1;
 
@@ -417,6 +402,8 @@ void Context::execute(Bytecode& code, Performance* perf){
             case BC_MOD:
             case BC_LESS:
             case BC_GREATER:
+            case BC_LESS_EQ:
+            case BC_GREATER_EQ:
             case BC_EQUAL:
             case BC_NOT_EQUAL:{
                 Ref& r0 = references[inst.reg0];
@@ -449,6 +436,10 @@ void Context::execute(Bytecode& code, Performance* perf){
                         num = v0->value < v1->value;
                     else if(inst.type==BC_GREATER)
                         num = v0->value > v1->value;
+                        else if(inst.type==BC_LESS_EQ)
+                        num = v0->value <= v1->value;
+                    else if(inst.type==BC_GREATER_EQ)
+                        num = v0->value >= v1->value;
                     else if(inst.type==BC_EQUAL)
                         num = v0->value == v1->value;
                     else if(inst.type==BC_NOT_EQUAL)
@@ -472,6 +463,10 @@ void Context::execute(Bytecode& code, Performance* perf){
                     else if(inst.type==BC_LESS)
                         log::out <<"<";
                     else if(inst.type==BC_GREATER)
+                        log::out <<">";
+                    else if(inst.type==BC_LESS_EQ)
+                        log::out <<"<";
+                    else if(inst.type==BC_GREATER_EQ)
                         log::out <<">";
                     else if(inst.type==BC_EQUAL)
                         log::out <<"==";
@@ -1186,7 +1181,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                 String* v1 = getString(r1.index);
                 if(!v1){
                     CERR << ", r1 must be a string not "<<RefToString(r1.type)<<"\n";
-                    continue;   
+                    continue;
                 }
                 // Todo: opening and closing files frequently is inefficient.
                 //  If we could maintain the file for a few milliseconds and if file hasn't been
@@ -1403,7 +1398,9 @@ void Context::execute(Bytecode& code, Performance* perf){
                             
                             
                             // log::out << "["<<finaltemp<<"]\n";
+                            auto extraTime = MeasureSeconds();
                             bool yes = StartProgram("",(char*)finaltemp.data(),flags,&exitCode);
+                            excessTime += StopMeasure(extraTime);
                             if(!yes){
                                 CERR << ", "<<name<<" could not start\n";
                             }else{
@@ -1437,8 +1434,11 @@ void Context::execute(Bytecode& code, Performance* perf){
         else if(number<1e9) sprintf(temp,"%.2lf M",number/1e6);
         else sprintf(temp,"%.2lf G",number/1e9);
     };
-
-    double executionTime = StopMeasure(startTime);
+    // Note: excessTime comes from time spent in other programs with engone::StartProgram
+    //  Not sure how accurate the time measuring if you call StartProgram a lot
+    //  and each time use MeasureSeconds and StopMeasure.
+    //  Maybe everything is fine I am just not sure if you want precise data.
+    double executionTime = StopMeasure(startTime) - excessTime;
     
     if(perf){
         perf->instructions = executedInsts;
@@ -1457,21 +1457,42 @@ void Context::execute(Bytecode& code, Performance* perf){
         
         // Note: In reality executedLines stands for how often execution switched to a different line.
         // It doesn't represent how many complex lines were executed.
+        #ifdef USE_DEBUG_INFO
         formatUnit(executedLines);
         log::out << " "<<temp<<" lines in "<<executionTime<<" seconds (avg "<<nsPerLine<<" ns/line)\n";
-        
+        #endif
         formatUnit(executedInsts);
         log::out << " "<< temp<<" instructions in "<<executionTime<<" seconds (avg "<<nsPerInst<<" ns/inst)\n";
         
         double instPerS = executedInsts/executionTime;
         formatUnit(instPerS);
         log::out << " "<< temp<<" instructions per second ("<<temp<<"Hz)\n";
-        
-        // double target = 3e9;
-        // log::out.flush(); printf(" %d",(int)(target/instPerS)); log::out<<" times slower than 3 GHz ("<<temp<<"Hz / 3 GHz)\n";
     }
     if(numberCount!=0||stringCount!=0){
         log::out << log::RED<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";
+        
+        #ifdef USE_INFO_VALUES
+        for(int i=0;i<(int)infoValues.max;i++){
+            uint8 v = *((uint8*)infoValues.data + i);
+            if(v&REF_NUMBER){
+                Number* num = (Number*)numbers.data + i;
+                log::out << " "<<i<<":"<<num->value<<"\n";
+            }
+            if(v&REF_STRING){
+                String* str = (String*)strings.data + i;
+                log::out << " "<<i<<": '"<<*str<<"'\n";
+            }
+        }
+        #else
+        Memory markedNumbers{1};
+        markedNumbers.resize(numbers.used);
+        for (int& ind : ){
+
+        }
+        numbers.
+        #endif
+
+
     }
     // auto tp = MeasureSeconds();
     // int sum = 0;

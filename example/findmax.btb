@@ -1,0 +1,12 @@
+//@disable all
+
+findmax = { 
+    max = 0 
+    each #arg { 
+        num = #run tonum #v;
+        if num > max 
+            max = num
+    }
+    return max
+}
+print (#run findmax 23 93 28 11 43 61 82 3)

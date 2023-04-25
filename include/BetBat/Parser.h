@@ -29,8 +29,10 @@
 #define BC_NOT_EQUAL     (BC_R3|0x08)
 #define BC_AND           (BC_R3|0x09)
 #define BC_OR            (BC_R3|0x10)
-#define BC_LESS          (BC_R3|0x011)
+#define BC_LESS          (BC_R3|0x11)
 #define BC_SUBSTR        (BC_R3|0x12)
+#define BC_LESS_EQ       (BC_R3|0x13)
+#define BC_GREATER_EQ    (BC_R3|0x14)
 
 #define BC_COPY          (BC_R2|0x01)
 #define BC_MOV           (BC_R2|0x02)
