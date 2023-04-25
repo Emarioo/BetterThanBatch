@@ -1,0 +1,25 @@
+{
+  "name": "btb-lang",
+  "displayName": "BTB Lang",
+  "description": "Syntax highlight for btb language",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.77.0"
+  },
+  "categories": [
+    "Programming Languages"
+  ],
+  "contributes": {
+    "languages": [{
+      "id": "betterthanbatch",
+      "aliases": ["Better Than Batch", "betterthanbatch"],
+      "extensions": [".btb"],
+      "configuration": "./language-configuration.json"
+    }],
+    "grammars": [{
+      "language": "betterthanbatch",
+      "scopeName": "source.btb",
+      "path": "./syntaxes/betterthanbatch.tmLanguage.json"
+    }]
+  }
+}

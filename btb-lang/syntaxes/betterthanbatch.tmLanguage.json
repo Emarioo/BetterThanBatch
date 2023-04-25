@@ -1,0 +1,93 @@
+{
+	"$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+	"name": "Better Than Batch",
+	"patterns": [
+		{
+			"include": "#keywords"
+		},
+		{
+			"include": "#strings"
+		},
+		{
+			"include": "#commentline"
+		},
+		{
+			"include":"#commentblock"	
+		},
+		{
+			"include": "#operators"
+		},
+		{
+			"include": "#numbers"
+		},
+		{
+			"include": "#functions"
+		},
+		{
+			"include": "#compiler"
+		}
+	],
+	"repository": {
+		"commentline":{
+			"name":"comment.line",
+			"begin":"//",
+			"end":"\n"
+		},
+		"commentblock": {
+			"name": "comment.block",
+			"begin": "/\\*",
+			"end": "\\*/"
+		},
+		"keywords": {
+			"patterns": [{
+				"name": "keyword.control.betterthanbatch",
+				"match": "\\b(if|else|while|for|break|continue|return|each|_test_)\\b|(#\\w+)"
+			}]
+		},
+		"compiler":{
+			"name":"keyword.control",
+			"begin":"(@enable|@disable)\\s+",
+			"end":"(?<=\n)",
+			"patterns":[{
+				"name":"entity.name.tag",
+				"match":"(?<=\\s+)(parser|optimizer|preprocessor|interpreter|all)\\s+"
+			}]
+		},
+		"functions":{
+			"patterns":[{
+				"name":"entity.name.function",
+				"match": "\\b(time|random|filterfiles|print)\\b"
+			}]
+		},
+		"strings": {
+			"name": "string.quoted.double.betterthanbatch",
+			"begin": "\"",
+			"end": "\"",
+			"patterns": [
+				{
+					"name": "constant.character.escape.betterthanbatch",
+					"match": "\\\\."
+				}
+			]
+		},
+		"operators":{
+			"name":"keyword.operator",
+			"patterns":[
+				{
+					"name": "keyword.operator",
+					"match":"(\\=\\=)|(\\=)|(\\+)|(\\-)|(\\*)|(\\/)|(\\<)|(\\>)|(\\&\\&)|(\\!\\=)|(\\|\\|)"
+				}
+			]
+		},
+		"numbers": {
+			"name": "constant.numeric",
+			"patterns": [
+				{
+					"name": "constant.numeric",
+					"match": "(\\b\\d+(\\.)\\d+\\b)|(\\b\\d+\\b)"
+				}
+			]
+		}
+	},
+	"scopeName": "source.btb"
+}
