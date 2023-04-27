@@ -12,10 +12,17 @@ struct Scope{
     int returnAddress=0;
 };
 struct Performance {
-    int instructions;
-    double exectime;
+    int instructions=0;
+    double exectime=0;
 };
-
+struct UserThread {
+    int programCounter=0;
+    engone::Memory scopes{sizeof(Scope)};
+    uint currentScope=0;
+    engone::Memory valueStack{sizeof(Ref)}; // holds references to values
+    
+    bool active=false;
+};
 
 #define USE_INFO_VALUES
 
@@ -31,13 +38,12 @@ struct Context {
     int numberCount=0;
     int stringCount=0;
 
-
-    engone::Memory scopes{sizeof(Scope)};
-    uint currentScope=0;
-
-    engone::Memory valueStack{sizeof(Ref)}; // holds references to values
-
-    // ExternalCalls externalCalls;
+    // engone::Memory scopes{sizeof(Scope)};
+    // uint currentScope=0;
+    // engone::Memory valueStack{sizeof(Ref)}; // holds references to values
+    
+    int currentThread = -1; // -1 indicates no thread
+    engone::Memory userThreads{sizeof(UserThread)}; // holds references to values
 
     struct TestValue {
         int type=0;
@@ -51,6 +57,13 @@ struct Context {
     Bytecode activeCode;
     
     void cleanup();
+
+    UserThread* getThread(int index);
+    // Making a new thread may cause a reallocation which will
+    // invalidate references to members in user thread such as program counter. 
+    int makeThread();
+    // NOTE: we never destroy or reallocate the thread array as it results in
+    //  unnecessary complications.
 
     Scope* getScope(uint index);
     bool ensureScopes(uint depth);

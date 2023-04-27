@@ -33,6 +33,8 @@
 #define BC_SUBSTR        (BC_R3|0x12)
 #define BC_LESS_EQ       (BC_R3|0x13)
 #define BC_GREATER_EQ    (BC_R3|0x14)
+#define BC_THREAD        (BC_R3|0x15)
+#define BC_SETCHAR       (BC_R3|0x16)
 
 #define BC_COPY          (BC_R2|0x01)
 #define BC_MOV           (BC_R2|0x02)
@@ -56,11 +58,9 @@
 #define BC_DEL           (BC_R1|0x03)
 // #define BC_DELNV         (BC_R1|0x04)
 
-#define BC_LOADSC         (BC_R1|0x10)
-#define BC_LOADNC         (BC_R1|0x11)
-// #define BC_LOADNC        (BC_R1|0x11)
-// #define BC_PUSH          (BC_R1|0x12)
-// #define BC_POP           (BC_R1|0x13)
+#define BC_LOADSC        (BC_R1|0x10)
+#define BC_LOADNC        (BC_R1|0x11)
+#define BC_JOIN          (BC_R1|0x12)
 
 #define BC_TEST          (BC_R1|0x13)
 

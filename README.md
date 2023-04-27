@@ -20,12 +20,15 @@ Structs and arrays will probably be left out unless a good idea on how
 to deal with them comes to mind.
 Language has weak typing at the moment (C is strong while Javascript is weak)
 
-## How it works (or will work)
+## The processs
 - Tokenizer     (text -> tokens)
 - Preprocessor  (manipulates tokens)
 - Parser        (tokens -> bytecode)
 - Optimizer     (improve speed and size of bytecode)
 - Interpreter   (runs the bytecode)
+
+A normal parser doesn't do bytecode generation but it does here.
+This may change. Parser (tokens -> AST), Generator (AST -> bytecode)
 
 ## Performance (rough measures)
 ```
@@ -66,9 +69,8 @@ GCC and any other executable found in environment variables
 can be run like a shell script. Just like batch.
 
 ## Building (currently only on windows)
-build.bat is used to compile the project but
-compiling scripts with it doesn't really work
-yet. Things will probably work in May.
+build.bat is used to compile the project.
+More on this in the future.
 
 ## What will not change?
 The tokenizer and preprocessor will stay as they are for the most part.
@@ -82,13 +84,5 @@ chosen because they seem easier to implement than their opposites.
 Each side has positive and negatives depending on what the
 language will be used for. The language will be used
 for mundane and repetitive tasks on your own computer which
-is why weak typing and the syntax has been chosen.
-
-## Another example (bytecode)
-```
-number: 29.12
-    num $a
-    num $f
-    load $f number
-    add $f $f $f
-```
+is why weak typing and the syntax has been chosen. This may change
+though since you can use implicit types.

@@ -103,8 +103,11 @@ int main(int argc, const char** argv){
         // CompileScript("example/pipes.btb");
         // CompileScript("example/lines.btb");
         // CompileScript("example/typedefify.btb");
-        CompileScript("example/loggifier.btb");
+        // CompileScript("example/loggifier.btb");
         // CompileScript("example/findmax.btb");
+        // CompileScript("example/async.btb");
+        // CompileScript("tests/simple/assignment.btb");
+        CompileScript("example/func.btb");
         // CompileScript("tests/constoptim.btb");
         // CompileScript("tests/benchmark/string.btb", 10);
         // CompileScript("tests/script/eh.btb");

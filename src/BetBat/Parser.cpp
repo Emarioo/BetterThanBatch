@@ -71,6 +71,10 @@ const char* InstToString(int type){
         INSTCASE(BC_SUBSTR)
         INSTCASE(BC_TYPE)
         INSTCASE(BC_NOT)
+        INSTCASE(BC_SETCHAR)
+
+        INSTCASE(BC_THREAD)
+        INSTCASE(BC_JOIN)
         
         INSTCASE(BC_WRITE_FILE)
         INSTCASE(BC_APPEND_FILE)
@@ -1946,6 +1950,8 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
             func.jumpAddress = info.code.length();
 
             info.makeScope();
+            auto& scope = info.scopes.back();
+            scope.delRegisters.push_back(REG_ARGUMENT);
             info.funcScopes.push_back({(int)info.scopes.size()-1});
 
             // token = info.next will be {
@@ -1978,29 +1984,62 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
         _GLOG(EXIT)
         return PARSE_SUCCESS;
     }
+    int unusedReg = exprInfo.acc0Reg;
+    int indexReg = 0;
+    if (assign=="["){
+        auto varName = info.getVariable(name);
+        if(!varName){
+            ERRT(name) << "variable must be defined to use [x] ('"<<varName<<"' wasn't)\n";
+            ERRLINE
+            return PARSE_ERROR;
+        }
+        info.next();
+        info.next();
+        int result = ParseExpression(info,exprInfo,false);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
+        }
+        indexReg = exprInfo.acc0Reg;
+        unusedReg = indexReg+1;
+        Token token = info.get(info.at()+1);
+        if (token!="]"){
+            ERRT(token) << "expected ], not "<<token<<"\n";
+            return PARSE_ERROR;
+        }
+        info.next();
+        assign = info.get(info.at()+1);
+
+        if(assign!="="){
+            ERRT(assign) << "char assignment only works for = (not '"<<assign<<"')\n";
+            ERRLINE
+            return PARSE_ERROR;
+        }
+    } 
     
     if(!(assign=="=" ||assign=="+=" ||assign=="-=" ||assign=="*=" ||assign=="/=")){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
             info.next(); // move forward to prevent infinite loop? altough nextline would fix it?
-            ERRT(name) << "unexpected "<<name<<", wanted a variable for assignment\n";
+            ERRT(assign) << "unexpected "<<name<<", wanted token for assignment\n";
             // info.nextLine();
             return PARSE_ERROR;
         }
     }
+    if (indexReg==0) {
+        info.next();
+    }
     info.next();
-    info.next();
-    // ExpressionInfo expr{};
-    // expr.acc0Reg = REG_ACC0;
+    ExpressionInfo expr{};
+    expr.acc0Reg = unusedReg;
     int result=0;
 
-    result = ParseExpression(info,exprInfo,false);
+    result = ParseExpression(info,expr,false);
     if(result!=PARSE_SUCCESS){
         return PARSE_ERROR;
     }
-    int finalReg = exprInfo.acc0Reg;
-    if(exprInfo.regCount==0){
+    int finalReg = expr.acc0Reg;
+    if(expr.regCount==0){
         log::out << log::RED<<"CompilerWarning: regCount == 0 after expression from assignment\n";   
     }
             
@@ -2020,25 +2059,44 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
     }else{
         var = &find->second;
     }
-    if(assign=="="){
-        info.code.add(BC_STOREV, finalReg, var->frameIndex);
-        _GLOG(INST << "store "<<name<<"\n";)
-    } else {
+
+    if(indexReg!=0){
         info.code.add(BC_LOADV,finalReg+1,var->frameIndex);
         _GLOG(INST << "load var '"<<name<<"'\n";)
-        if(assign == "+=")
-            info.code.add(BC_ADD,finalReg+1,finalReg,finalReg+1);
-        if(assign == "-=")
-            info.code.add(BC_SUB,finalReg+1,finalReg,finalReg+1);
-        if(assign == "*=")
-            info.code.add(BC_MUL,finalReg+1,finalReg,finalReg+1);
-        if(assign == "/=")
-            info.code.add(BC_DIV,finalReg+1,finalReg,finalReg+1);
-        _GLOG(INST <<"\n";)
-        info.code.add(BC_DEL,finalReg);
-        _GLOG(INST <<"\n";)
-        info.code.add(BC_MOV,finalReg+1,finalReg);
-        _GLOG(INST <<"\n";)
+
+        if (assign=="="){
+            info.code.add(BC_SETCHAR,finalReg,indexReg,finalReg+1);
+            _GLOG(INST <<"\n";)
+            info.code.add(BC_DEL,indexReg);
+            _GLOG(INST <<"\n";)
+            info.code.add(BC_DEL,finalReg);
+            _GLOG(INST <<"\n";)
+            info.code.add(BC_MOV,finalReg+1,finalReg);
+            _GLOG(INST <<"\n";)
+        }else {
+            // handle above
+        }
+    }else{
+        if(assign=="="){
+            info.code.add(BC_STOREV, finalReg, var->frameIndex);
+            _GLOG(INST << "store "<<name<<"\n";)
+        } else {
+            info.code.add(BC_LOADV,finalReg+1,var->frameIndex);
+            _GLOG(INST << "load var '"<<name<<"'\n";)
+            if(assign == "+=")
+                info.code.add(BC_ADD,finalReg+1,finalReg,finalReg+1);
+            if(assign == "-=")
+                info.code.add(BC_SUB,finalReg+1,finalReg,finalReg+1);
+            if(assign == "*=")
+                info.code.add(BC_MUL,finalReg+1,finalReg,finalReg+1);
+            if(assign == "/=")
+                info.code.add(BC_DIV,finalReg+1,finalReg,finalReg+1);
+            _GLOG(INST <<"\n";)
+            info.code.add(BC_DEL,finalReg);
+            _GLOG(INST <<"\n";)
+            info.code.add(BC_MOV,finalReg+1,finalReg);
+            _GLOG(INST <<"\n";)
+        }
     }
         
     if(requestCopy){
@@ -2059,8 +2117,20 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
         return PARSE_ERROR;
     }
     // Token token = info.next();
-    
     Token varName = info.get(info.at()+1);
+    bool isAsync=false;
+
+    if (varName == "#" && !(varName.flags&TOKEN_SUFFIX_SPACE)){
+        Token token = info.get(info.at()+2);
+        if (token=="async"){
+            isAsync = true;
+            varName = info.get(info.at()+3);
+            info.next();
+            info.next();
+        }
+    }
+    // TODO: don't allow async when piping variables
+
     auto var = info.getVariable(varName);
     if(var){
         info.next();
@@ -2159,7 +2229,7 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
         _GLOG(INST << "cmd constant "<<token<<"\n";)
     }
     
-    int argReg = 0;
+    int argReg = REG_NULL;
     
     bool ending = (token.flags&TOKEN_SUFFIX_LINE_FEED) | info.end();
     if(!ending){
@@ -2368,8 +2438,15 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     //     info.makeScope();
     //     info.funcScopes.push_back({(int)info.scopes.size()-1});
     // }
-    info.code.add(BC_RUN,argReg,funcReg);
-    _GLOG(INST << "run "<<cmdName<<"\n";)
+    if(isAsync){
+        info.code.add(BC_NUM,REG_RETURN_VALUE);
+        _GLOG(INST << "\n";)
+        info.code.add(BC_THREAD,argReg,funcReg,REG_RETURN_VALUE);
+        _GLOG(INST << "thread on "<<cmdName<<"\n";)
+    }else{
+        info.code.add(BC_RUN,argReg,funcReg);
+        _GLOG(INST << "run "<<cmdName<<"\n";)
+    }
     // if(codeFunc){
     //     info.dropScope();
     // }
@@ -2378,10 +2455,11 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     _GLOG(INST << "name\n";)
     exprInfo.regCount--;
     
-    if(argReg!=0){
-        info.code.add(BC_DEL,argReg);
-        _GLOG(INST << "arg\n";)
-    }
+    // the function is responsible for deleting argument
+    // if(argReg!=0){
+    //     info.code.add(BC_DEL,argReg);
+    //     _GLOG(INST << "arg\n";)
+    // }
     
     info.code.add(BC_MOV,REG_RETURN_VALUE,exprInfo.acc0Reg+exprInfo.regCount);
     _GLOG(INST << "\n";)

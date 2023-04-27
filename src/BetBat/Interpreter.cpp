@@ -10,10 +10,10 @@
 #define _CLOG(x) ;
 #endif
 
-#ifdef CLOG_LEAKS
-#define _CLOG_LEAKS(X) X
+#ifdef CLOG_THREAD
+#define _CLOG_THREAD(X) X
 #else
-#define _CLOG_LEAKS(X)
+#define _CLOG_THREAD(X)
 #endif
 
 const char* RefToString(int type){
@@ -22,6 +22,7 @@ const char* RefToString(int type){
         case 0: return "REF_NONE";
         REFCASE(REF_NUMBER)
         REFCASE(REF_STRING)
+        REFCASE(REF_NULL)
     }
     return "REF_?";
 }
@@ -45,8 +46,10 @@ void PrintRefValue(Context* context, Ref& ref){
             log::out <<log::RED<< "null"<<log::SILVER;
         else
             PrintRawString(*str,14);
-    }else{
+    }else if (ref.type==REF_NULL){
         log::out<<log::RED<<"null"<<log::SILVER;
+    } else{
+        log::out<<log::RED<<"none"<<log::SILVER;
     }
 }
 Number* Context::getNumber(uint32 index){
@@ -195,8 +198,15 @@ void Context::cleanup(){
     afreeNumbers.resize(0);
     afreeStrings.resize(0);
     #endif
-    scopes.resize(0);
-    valueStack.resize(0);
+    // scopes.resize(0);
+    // valueStack.resize(0);
+
+    for (int i=0;i<(int)userThreads.used;i++){
+        UserThread* thread = (UserThread*)userThreads.data + i;
+        thread->scopes.resize(0);
+        thread->valueStack.resize(0);
+    }
+    userThreads.resize(0);
     // reseting like this is not very fail safe.
     // what if more variables are added which are managed
     // in functions like makeNumber, deleteNumber.
@@ -242,12 +252,19 @@ void Context::deleteString(uint32 index){
         *((int*)afreeStrings.data + afreeStrings.used++) = index;
     #endif
 }
+
+UserThread* Context::getThread(int index){
+    return (UserThread*)userThreads.data + index;
+}
 Scope* Context::getScope(uint index){
-    return (Scope*)scopes.data + index;
+    return (Scope*)getThread(currentThread)->scopes.data + index;
 }
 void Context::enterScope(){
     // currentScope++;
-    Scope* scope = getScope(currentScope);
+    Scope* scope = getScope(getThread(currentThread)->currentScope);
+
+    scope->references[REG_NULL].type = REF_NULL;
+    scope->references[REG_NULL].index = 0;
 
     scope->references[REG_ZERO].type = REF_NUMBER;
     scope->references[REG_ZERO].index = makeNumber();
@@ -256,14 +273,22 @@ void Context::enterScope(){
     scope->references[REG_FRAME_POINTER].index = makeNumber();
 }
 void Context::exitScope(){
-    Scope* scope = getScope(currentScope);
+    Scope* scope = getScope(getThread(currentThread)->currentScope);
 
     deleteNumber(scope->references[REG_ZERO].index);
     deleteNumber(scope->references[REG_FRAME_POINTER].index);
-
-    // currentScope--;
+}
+int Context::makeThread(){
+    if (userThreads.max < userThreads.used + 1 )
+        if(!userThreads.resize(userThreads.max + 2))
+            return false;
+    int index = userThreads.used++;
+    UserThread* thread = (UserThread*)userThreads.data + index;
+    new(thread)UserThread();
+    return index;
 }
 bool Context::ensureScopes(uint depth){
+    auto& scopes = getThread(currentThread)->scopes;
     if(scopes.max>depth)
         return true;
     if(!scopes.resize(depth+1))
@@ -279,10 +304,14 @@ void Context::execute(Bytecode& code, Performance* perf){
     using namespace engone;
     activeCode = code;
     _SILENT(log::out << log::BLUE<< "\n##   Execute   ##\n";)
-    int programCounter=0;
+    // int programCounter=0;
 
     // ProvideDefaultCalls(externalCalls);
     
+    int threadIndex = makeThread();
+    getThread(threadIndex)->active=true;
+    currentThread = threadIndex;
+
     ensureScopes(1);
 
     #define CERR log::out << log::RED<< "ContextError "<<(nowProgramCounter)<<","<<inst
@@ -299,19 +328,57 @@ void Context::execute(Bytecode& code, Performance* perf){
 
     uint64 executedInsts = 0;
     uint64 executedLines = 0;
+
+    int instPerThread = 50;
+    int roundRobinTick = 0;
     while(true){
         // if(executedInsts>=INST_LIMIT){
         //     // prevent infinite loop
         //     log::out << log::RED<<"REACHED SAFETY LIMIT. EXPECT INCOMPLETE CLEANUP\n";
         //     break;
         // }
-        if(activeCode.length() == programCounter)
-            break;
-        int nowProgramCounter=programCounter;
-        // Instruction inst = activeCode.get(nowProgramCounter); // slower
-        Instruction inst = *((Instruction*)activeCode.codeSegment.data + nowProgramCounter);
-        ++programCounter;
+        
+        //-- Round robin on user threads
+        if (roundRobinTick==0 || !getThread(currentThread)->active) {
+            roundRobinTick = instPerThread;
+            int newIndex = currentThread;
+            bool fullBreak=false;
+            while (true) {
+                newIndex = (newIndex + 1) % userThreads.used;
+                UserThread* t = (UserThread*)userThreads.data + newIndex;
+                if (t->active){
+                    if(currentThread!=newIndex){
+                        _CLOG_THREAD(log::out<<"Switching thread "<<currentThread<<" -> "<<newIndex<<"\n";)
+                        currentThread = newIndex;
+                    }
+                    break;
+                }
+                if (newIndex == currentThread) {
+                    log::out << "All user threads are inactive, stopping...\n";
+                    fullBreak=true;
+                    break;
+                }
+            }
+            if (fullBreak)
+                break;
+        }
+        roundRobinTick--;
 
+        // NOTE: is reference to programCounter okay here. A lot of code uses it though.
+        //   What if you switch threads? is it still fine?
+        auto& programCounter = getThread(currentThread)->programCounter;
+        Instruction inst{};
+        if(activeCode.length() == programCounter){
+            UserThread* t = getThread(currentThread);
+            t->active = false;
+            _CLOG_THREAD(log::out<<"Thread "<<currentThread<<" finished\n";)
+            exitScope();
+            continue;
+        }
+        int nowProgramCounter=programCounter++;
+        // inst = activeCode.get(nowProgramCounter); // slower
+        inst = *((Instruction*)activeCode.codeSegment.data + nowProgramCounter);
+        
         #ifdef USE_DEBUG_INFO
         #ifdef PRINT_DEBUG_LINES
         Bytecode::DebugLine* debugLine = activeCode.getDebugLine(programCounter-1);
@@ -326,8 +393,9 @@ void Context::execute(Bytecode& code, Performance* perf){
         #endif
 
         executedInsts++;
-        
-        uint64 depth = currentScope+1;
+        {
+        auto& scopes = getThread(currentThread)->scopes;
+        uint64 depth = getThread(currentThread)->currentScope+1;
         if(scopes.max<=depth){
             int old = scopes.max;
             scopes.resize(depth+1);
@@ -337,13 +405,14 @@ void Context::execute(Bytecode& code, Performance* perf){
                 scopes.used++;
             }
         }
+        }
         
         // bool yes = ensureScopes(currentScope+1);
         // if(!yes){
         //     log::out << log::RED<<"ContextError: Could not allocate scope\n";
         //     break;
         // }
-        Ref* references = getScope(currentScope)->references;
+        Ref* references = getScope(getThread(currentThread)->currentScope)->references;
 
         switch(inst.type){
             case 0:{
@@ -677,7 +746,44 @@ void Context::execute(Bytecode& code, Performance* perf){
 
                     r0.index = outIndex;
                     
-                    _CLOG(log::out _CLOG_LEAKS(<<log::AQUA) << LINST <<", substr '"<<*out<<"'\n";)
+                    _CLOG(log::out <<log::AQUA << LINST <<", substr '"<<*out<<"'\n";)
+                    // now the first register contains the substring of the original
+                }else{
+                    CERR<<", invalid types "<<
+                        RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<RefToString(r2.type)<<" in registers\n";   
+                }
+                break;
+            }
+            case BC_SETCHAR: {
+                Ref& r0 = references[inst.reg0]; // src char, first character
+                Ref& r1 = references[inst.reg1]; // index
+                Ref& r2 = references[inst.reg2]; // dst str
+
+                if(r0.type==REF_STRING && r1.type == REF_NUMBER && r2.type == REF_STRING){
+                    String* v0 = getString(r0.index);
+                    Number* v1 = getNumber(r1.index);
+                    String* v2 = getString(r2.index);
+
+                    if(!v0||!v1||!v2){
+                        CERR <<", one value were null ";PrintRefValue(this,r0);log::out<<" ";
+                            PrintRefValue(this,r1);log::out<<" ";PrintRefValue(this,r2);log::out<<"\n";   
+                        continue;
+                    }
+                    if(v0->memory.used!=1){
+                        CERR << ", src string must have on character (not '";PrintRefValue(this,r0);log::out<<"')\n";
+                        continue;
+                    }
+                    if(v1->value>=v2->memory.used || v1->value<0){
+                        CERR << ", index is out of bounds (0 <= "<<v1->value<<" < "<<v2->memory.used<<")\n";
+                        continue;
+                    }
+                    
+                    // Todo: handle decimals in v1, v2 by throwing error
+                    int index = v1->value;
+                    char chr = *(char*)v0->memory.data;
+                    *((char*)v2->memory.data + index) = chr;
+                    
+                    _CLOG(log::out << LINST <<", set '"<< chr <<" at "<<index<<"'\n";)
                     // now the first register contains the substring of the original
                 }else{
                     CERR<<", invalid types "<<
@@ -768,7 +874,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                             CERR << ", values are null\n";
                         }else{
                             v0->copy(v1);
-                            _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST <<" ["<<r1.index<<"], copied ";PrintRefValue(this,r1);log::out<<"\n";)  
+                            _CLOG(log::out << log::AQUA<< LINST <<" ["<<r1.index<<"], copied ";PrintRefValue(this,r1);log::out<<"\n";)  
                         }
                         break;
                     }
@@ -787,7 +893,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                             CERR<< ", nummbers are null\n";
                         }else{
                             n1->value = n0->value;
-                            _CLOG(log::out _CLOG_LEAKS(<<log::AQUA) << LINST <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
+                            _CLOG(log::out <<log::AQUA << LINST <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
                         }
                         break;
                     }
@@ -838,7 +944,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                 r0.type = REF_NUMBER;
                 r0.index = makeNumber();
                 
-                _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out << log::AQUA<< LINST <<" ["<<r0.index<<"]\n";)
                 
                 break;
             }
@@ -848,7 +954,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                 r0.type = REF_STRING;
                 r0.index = makeString();
                 
-                _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out << log::AQUA<< LINST <<" ["<<r0.index<<"]\n";)
                 
                 break;
             }
@@ -859,13 +965,15 @@ void Context::execute(Bytecode& code, Performance* perf){
                     deleteNumber(r0.index);
                 }else if(r0.type==REF_STRING){
                     deleteString(r0.index);
+                }else if(r0.type==REF_NULL){
+                    // it's okay, nothing to delete, we expect this
                 }else if(r0.type==0&&r0.index==0){
                     CWARN << ", cannot delete "<<RefToString(r0.type)<<"\n";
                 }else{
                     CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";
                     continue;
                 }
-                _CLOG(log::out _CLOG_LEAKS(<< log::PURPLE)<< LINST <<" ["<<r0.index<<"]\n";)
+                _CLOG(log::out << log::PURPLE << LINST <<" ["<<r0.index<<"]\n";)
                 r0 = {};
                 break;
             }
@@ -945,6 +1053,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     CERR << ", $fp + $r1 cannot be negative ($fp + $r1 = "<<index<<")\n";
                     continue;
                 }
+                auto& valueStack = getThread(currentThread)->valueStack;
                 if((uint)index>=valueStack.max){
                     CERR << ", $fp + $r1 goes beyond the allocated stack ($fp + $r1 = "<<index<<" >= "<<valueStack.max<<")\n";
                     continue;
@@ -987,7 +1096,9 @@ void Context::execute(Bytecode& code, Performance* perf){
                     CERR << ", $fp + $r1 cannot be negative ($fp + $r1 = "<<index<<")\n";
                     continue;
                 }
+                auto& valueStack = getThread(currentThread)->valueStack;
                 Ref* ref = 0;
+                bool deletedValue=false;
                 if((uint)index<valueStack.max){
                     ref = (Ref*)valueStack.data+index;
                     // CERR << ", $fp + $r1 goes beyond the allocated stack ($fp + $r1 = "<<index<<" >= "<<valueStack.max<<")\n";
@@ -999,8 +1110,10 @@ void Context::execute(Bytecode& code, Performance* perf){
                     // delete previous value
                     if(ref->type==REF_NUMBER){
                         deleteNumber(ref->index);
+                        deletedValue=true;
                     }else if(ref->type==REF_STRING){
                         deleteString(ref->index);
+                        deletedValue=true;
                     }
                 }else{
                     int oldMax = valueStack.max;
@@ -1015,7 +1128,9 @@ void Context::execute(Bytecode& code, Performance* perf){
                     ref = (Ref*)valueStack.data+index;
                 }
                 *ref = r0;
-                _CLOG(log::out << LINST << ", stored '";PrintRefValue(this,r0);log::out<<"' at "<<index<<"\n";)
+                
+                _CLOG( if(deletedValue) log::out << log::PURPLE;
+                    log::out << LINST << ", stored '";PrintRefValue(this,r0);log::out<<"' at "<<index<<"\n";)
                 break;
             }
             case BC_JUMP: {
@@ -1107,16 +1222,97 @@ void Context::execute(Bytecode& code, Performance* perf){
             //     }
             //     break;
             // }
+            case BC_THREAD: {
+                Ref& r0 = references[inst.reg0]; // arg
+                Ref& r1 = references[inst.reg1]; // func index
+                Ref& r2 = references[inst.reg2]; // out thread index
+                
+                if (r2.type!=REF_NUMBER){
+                    CERR << ", r2 must be a number\n";
+                    continue;
+                }
+                Number* n2 = getNumber(r2.index);
+                if(!n2){
+                    CERR << ", r2 cannot be null\n";
+                    continue;
+                }
+
+                if (r1.type==REF_NUMBER){
+                    Number* n1 = getNumber(r1.index);
+                    if(!n1){
+                        CERR << ", $r1 is null\n";
+                        continue;
+                    }
+                    // continue;
+                    // Make a new thread...
+                    int threadIndex = makeThread();
+                    UserThread* thread = getThread(threadIndex);
+                    thread->active=true;
+                    n2->value = threadIndex;
+
+                    int temp = currentThread;
+                    currentThread = threadIndex;
+
+                    auto& currentScope = getThread(currentThread)->currentScope;
+                    currentScope = 0;
+                    ensureScopes(1);
+                    enterScope();
+                    
+                    getScope(currentScope)->returnAddress=-1;
+                    
+                    Ref* refs = getScope(currentScope)->references;
+                    Ref& rz = refs[REG_ARGUMENT];
+                    rz = r0;
+   
+                    currentThread = temp;
+
+                    
+                    _CLOG(log::out << LINST << ", arg: ";
+                    PrintRefValue(this,rz);
+                    log::out<<", new thread, pc= "<<n1->value<<"\n";)
+
+                    thread->programCounter = n1->value;
+                    // programCounter = n1->value;
+                }else{
+                    CERR << ", only numbers in r1\n";
+                }
+                break;
+            }
+            case BC_JOIN: {
+
+                break;
+            }
             case BC_RETURN: {
                 Ref& r0 = references[inst.reg0];
                 
-                if(currentScope<=0){
-                    CERR << ", cannot return from global scope (currentScope == "<<currentScope<<")\n";   
+                auto& currentScope = getThread(currentThread)->currentScope;
+
+                if(currentScope<0){
+                    CERR << ", scope index was negative (currentScope = "<<currentScope<<")\n";   
                     continue;
                 }else{
                     programCounter = getScope(currentScope)->returnAddress;
                     exitScope();
+                    if (currentScope==0){
+                        getThread(currentThread)->active = false;
+                        // TODO: memory leak, return value needs to be deleted. Is it fixed now?
+                        if(r0.type==REF_NUMBER){
+                            Number* n0 = getNumber(r0.index);
+                            if(n0)
+                                deleteNumber(r0.index);
+                        } else if(r0.type==REF_STRING){
+                            String* n0 = getString(r0.index);
+                            if(n0)
+                                deleteString(r0.index);
+                        }
+                        _CLOG_THREAD(log::out<<"Thread "<<currentThread<<" finished\n";)
+                        exitScope();
+                        break;
+                    }
+
                     currentScope--;
+
+
                     Ref* refs = getScope(currentScope)->references;
                     
                     Ref& rv = refs[REG_RETURN_VALUE];
@@ -1262,11 +1458,14 @@ void Context::execute(Bytecode& code, Performance* perf){
                 
                 _CLOG(log::out << LINST << ", from: '"<<*v1<<"' content: '";PrintRefValue(this,r0);log::out <<"'\n";)
                 break;
-            } case BC_RUN: {
+            }
+            case BC_RUN: {
                 Ref& r0 = references[inst.reg0];
                 Ref& r1 = references[inst.reg1];
                 
                 if(r1.type==REF_NUMBER){
+                    auto& currentScope = getThread(currentThread)->currentScope;
+
                     Ref* refs = getScope(currentScope+1)->references;
                     Ref& rz = refs[REG_ARGUMENT];
                     Number* n1 = getNumber(r1.index);
@@ -1280,7 +1479,6 @@ void Context::execute(Bytecode& code, Performance* perf){
                     }
                     currentScope++;
                     enterScope();
-                    // na->value = programCounter;
                     getScope(currentScope)->returnAddress=programCounter;
                     rz = r0;
                     
@@ -1308,12 +1506,18 @@ void Context::execute(Bytecode& code, Performance* perf){
                             // CERR << ", unresolved function does not allow "<<RefToString(r0.type)<<" as argument\n";
                             // continue;
                         }
-                        _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", external: '"<<name<<"' arg: '";
+                        _CLOG(log::out << log::AQUA << LINST << ", external: '"<<name<<"' arg: '";
                         PrintRefValue(this,r0); log::out<<"'\n";)
                         // if(find->second){
                             // Ref returnValue = find->second(this,r0.type,arg);
                             Ref returnValue = func(this,r0.type,arg);
                             
+                            if(r0.type==REF_NUMBER){
+                                deleteNumber(r0.index);
+                            } else if(r0.type==REF_STRING){
+                                deleteString(r0.index);
+                            }
+
                             // if(returnValue.type!=0){
                             Ref& rv = references[REG_RETURN_VALUE];
                             rv = returnValue;
@@ -1391,11 +1595,16 @@ void Context::execute(Bytecode& code, Performance* perf){
                                 finaltemp += " ";
                                 finaltemp += *v0;
                             }
-                            _CLOG(log::out _CLOG_LEAKS(<< log::AQUA)<< LINST << ", exe: '"<<name<<"' arg: '";
+                            _CLOG(log::out << log::AQUA << LINST << ", exe: '"<<name<<"' arg: '";
                             PrintRefValue(this,r0); log::out<<"'\n";)
                             int exitCode = 0;
                             int flags = PROGRAM_WAIT;
                             
+                            if(r0.type==REF_NUMBER){
+                                deleteNumber(r0.index);
+                            } else if(r0.type==REF_STRING){
+                                deleteString(r0.index);
+                            }
                             
                             // log::out << "["<<finaltemp<<"]\n";
                             auto extraTime = MeasureSeconds();
@@ -1425,7 +1634,7 @@ void Context::execute(Bytecode& code, Performance* perf){
             }
         }
     }
-    exitScope();
+    // exitScope();
 
     char temp[30];
     auto formatUnit = [&](double number){

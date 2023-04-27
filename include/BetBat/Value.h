@@ -6,6 +6,10 @@
 
 #define REF_NUMBER 1
 #define REF_STRING 2
+#define REF_NULL 3
+// NOTE: REF_NULL isn't 0 because we may be able to catch some errors if we find 0.
+//  0 is the default value indicating that we never touched or care about the value.
+//  if we suddenly use such a ref then there is a bug in the parser or interpreter.
 struct Ref {
     int type=0;
     int index=0;

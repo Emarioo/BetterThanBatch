@@ -10,15 +10,17 @@ typedef double Decimal;
 #define PREPROC_REC_LIMIT 100
 #define PREPROC_TERM "#"
 
+
 // Debug config
 #ifdef DEBUG
 
 // #define TLOG
 // #define PLOG
-// #define GLOG
+#define GLOG
 // #define OLOG
-#define USE_DEBUG_INFO
-#define PRINT_DEBUG_LINES
+// #define USE_DEBUG_INFO
+// #define PRINT_DEBUG_LINES
+// #define CLOG_THREAD
 // #define CLOG
 #endif
 
