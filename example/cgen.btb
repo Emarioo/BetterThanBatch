@@ -1,0 +1,15 @@
+
+buffer=""
+count=10
+buffer+="void main(){\n"
+for count {
+    buffer+="  int var"+#i+"="+#i+";\n"
+}
+buffer+="  int sum="
+for count-1 {
+    buffer+="var"+#i+"+"
+}
+buffer+="var"+(count-1)+";\n"
+buffer+="}"
+
+print buffer

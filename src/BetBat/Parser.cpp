@@ -2238,16 +2238,19 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
             
             info.code.add(BC_LOADV,varReg,var->frameIndex);
             _GLOG(INST << varName<<"\n";)
-            
-            token = info.get(info.at()+1);
-            auto fileVar = info.getVariable(token);
-            if(fileVar){
-                info.next();
-                info.code.add(BC_LOADV,fileReg,fileVar->frameIndex);
-                _GLOG(INST << varName<<"\n";)
+
+            ExpressionInfo expr{};
+            expr.acc0Reg = fileReg;
+            int result = ParseExpression(info,expr,true);
+            if(result==PARSE_SUCCESS){
+                // info.next();
+                // info.code.add(BC_LOADV,fileReg,fileVar->frameIndex);
+                // _GLOG(INST << varName<<"\n";)
                 info.code.add(instruction,varReg,fileReg);
                 _GLOG(INST << "\n";)
-            }else{
+                info.code.add(BC_DEL,fileReg);
+                _GLOG(INST << "\n";)
+            } else if (result==PARSE_BAD_ATTEMPT){
                 token = CombineTokens(info); // read file
                 // we assume it's valid?
             
@@ -2261,7 +2264,10 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 _GLOG(INST << "\n";)
                 info.code.add(BC_DEL,fileReg);
                 _GLOG(INST << "\n";)
-            }
+            }else
+                return PARSE_ERROR;
+            // TODO: check for regcount == 0?
+            
             // Note: PARSE_SUCCESS would indicated varReg (eg, variable value) to be "returned".
             //   That's maybe not quite right since we would need to copy the value otherwise
             //   we would have two variables pointing to the same value.
@@ -2524,36 +2530,25 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
         _GLOG(INST << "temp\n";)
     }
     
-    // if(codeFunc){
-    //     info.makeScope();
-    //     info.funcScopes.push_back({(int)info.scopes.size()-1});
-    // }
     if(isAsync){
-        info.code.add(BC_NUM,REG_RETURN_VALUE);
+        int treg = REG_RETURN_VALUE;
+        info.code.add(BC_NUM,treg);
         _GLOG(INST << "\n";)
-        info.code.add(BC_THREAD,argReg,funcReg,REG_RETURN_VALUE);
+        info.code.add(BC_THREAD,argReg,funcReg,treg);
         _GLOG(INST << "thread on "<<cmdName<<"\n";)
     }else{
         info.code.add(BC_RUN,argReg,funcReg);
         _GLOG(INST << "run "<<cmdName<<"\n";)
     }
-    // if(codeFunc){
-    //     info.dropScope();
-    // }
 
     info.code.add(BC_DEL,funcReg);
     _GLOG(INST << "name\n";)
     exprInfo.regCount--;
     
-    // the function is responsible for deleting argument
-    // if(argReg!=0){
-    //     info.code.add(BC_DEL,argReg);
-    //     _GLOG(INST << "arg\n";)
-    // }
-    
     info.code.add(BC_MOV,REG_RETURN_VALUE,exprInfo.acc0Reg+exprInfo.regCount);
     _GLOG(INST << "\n";)
     exprInfo.regCount++;
+
     // Note: the parsed instructions add a new value in the accumulation
     //  Don't forget to use and delete it.
     

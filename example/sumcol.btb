@@ -1,0 +1,15 @@
+files = "f1.txt " + "f2.txt " + "f3.txt"
+
+sum = 0
+each files {
+    content = ""
+    content < "example/extra/"+#v
+    isfirst = 1
+    each content {
+        if !isfirst {
+            sum += #run tonum #v
+        }
+        isfirst = 0
+    }
+}
+print Sum: sum

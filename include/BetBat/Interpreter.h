@@ -32,6 +32,10 @@ struct UserThread {
     State state=Inactive;
     int waitingFor = -1; // thread to wait for, relevant with Waiting
     int inRef = -1;
+
+    // union for os/user thread?
+
+    engone::Thread osThread{};
 };
 
 #define USE_INFO_VALUES
@@ -74,6 +78,10 @@ struct Context {
     int makeThread();
     // NOTE: we never destroy or reallocate the thread array as it results in
     //  unnecessary complications.
+    
+    // will also run the thread
+    int makeOSThread(ExternalCall func, int refType, void* value);
+    int makeOSThread(const std::string& cmd);
 
     Scope* getScope(uint index);
     bool ensureScopes(uint depth);
