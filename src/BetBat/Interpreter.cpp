@@ -287,6 +287,51 @@ int Context::makeThread(){
     new(thread)UserThread();
     return index;
 }
+struct OSThreadParam {
+    Context* context=0;
+    // union {
+        // struct {
+    int reftype = 0;
+    void* value = 0;
+    ExternalCall func=0;
+        // };
+    const std::string cmd;
+    // };
+};
+uint32 OSThreadFunc(void* ptr){
+    OSThreadParam* param = (OSThreadParam*)ptr;
+
+    if(param->cmd.empty()){
+        
+        // / delete argument
+        if(r0.type==REF_NUMBER){
+            deleteNumber(r0.index);
+        } else if(r0.type==REF_STRING){
+            deleteString(r0.index);
+        }
+    } else {
+
+    }
+
+    engone::Free(param,sizeof(OSThreadParam));
+    return 0;
+}
+int Context::makeOSThread(ExternalCall func,int refType, void* value){
+    return 0;
+}
+int Context::makeOSThread(const std::string& cmd){
+    int ti = makeThread();
+    UserThread* t = getThread(ti);
+
+    OSThreadParam* param = (OSThreadParam*)engone::Allocate(sizeof(OSThreadParam));
+    new(param)OSThreadParam();
+    // t->state = UserThread::?
+    param->context = this;
+    param->cmd = cmd;
+
+    t->osThread.init(OSThreadFunc,param);
+    return 0;
+}
 bool Context::ensureScopes(uint depth){
     auto& scopes = getThread(currentThread)->scopes;
     if(scopes.max>depth)
@@ -826,7 +871,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                 }
                 break;
             }
-             case BC_LEN: {
+            case BC_LEN: {
                 Ref& r0 = references[inst.reg0];
                 Ref& r1 = references[inst.reg1];
 
@@ -1203,25 +1248,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     CERR << ", invalid type "<<RefToString(r1.type)<<" in r1 (should be number)\n";   
                 }
                 break;
-            } 
-            // case BC_ENTERSCOPE: {
-            //     // bool yes = ensureScopes(currentScope+1);
-            //     if(yes){
-            //         currentScope++;
-            //         _CLOG(log::out << LINST << "\n";)
-            //     }else{
-            //         CERR << ", could not ensure scope (allocation failure)\n";   
-            //     }
-            //     break;
-            // } case BC_EXITSCOPE: {
-            //     if(currentScope>0){
-            //         currentScope--;
-            //         _CLOG(log::out << LINST << "\n";)
-            //     }else{
-            //         CERR << ", cannot exit at global scope (currentScope == "<<currentScope<<")\n";   
-            //     }
-            //     break;
-            // }
+            }
             case BC_THREAD: {
                 Ref& r0 = references[inst.reg0]; // arg
                 Ref& r1 = references[inst.reg1]; // func index
@@ -1273,8 +1300,38 @@ void Context::execute(Bytecode& code, Performance* perf){
 
                     thread->programCounter = n1->value;
                     // programCounter = n1->value;
+                }else if (r1.type==REF_STRING){
+                    String* v1 = getString(r1.index);
+                    if(!v1){
+                        CERR << "v1 is null\n";
+                        break;
+                    }
+                    std::string name = *v1;
+
+                    auto func = GetExternalCall(name);
+                    if(func){
+                        void* arg=0;
+                        if(r0.type==REF_STRING)
+                            arg = getString(r0.index);
+                        else if(r0.type==REF_NUMBER)
+                            arg = getNumber(r0.index);
+                        
+                        int ti = makeOSThread(func,r0.type,arg);
+                        n2->value = ti;
+
+                        _CLOG(log::out << log::AQUA << LINST << ", external: '"<<name<<"' arg: '";
+                        PrintRefValue(this,r0); log::out<<"'\n";)
+                        // Ref returnValue = func(this,r0.type,arg);
+                        
+                        // delete argument
+                        if(r0.type==REF_NUMBER){
+                            deleteNumber(r0.index);
+                        } else if(r0.type==REF_STRING){
+                            deleteString(r0.index);
+                        }
+                    }
                 }else{
-                    CERR << ", only numbers in r1\n";
+                    CERR << ", bad type in r1\n";
                 }
                 break;
             }
@@ -1528,101 +1585,52 @@ void Context::execute(Bytecode& code, Performance* perf){
                         //     CERR << ", api call was null\n";
                         // }
                     }else{
-                        // std::string foundPath="";
-                        
-                        // std::string temp=name;
-                        // if(temp.find("\"")==0)
-                        //     temp = temp.substr(1);
-                        // if(temp.find_last_of("\"")==temp.length()-1)
-                        //     temp = temp.substr(0,temp.length()-1);
-                        
-                        // if(FileExist(temp)){
-                        //     foundPath = name;
-                        // }else{
-                        //     std::string paths = EnvironmentVariable("PATH");
-                        //     uint at=0;
-                        //     const char* str=paths.data();
-                        //     bool found=false;
-                        //     while(true){
-                        //         if(at>=paths.length())
-                        //             break;
-                        //         uint end = paths.find(";",at);
-                        //         if(at>end) {
-                        //             at = end +1;
-                        //             continue;
-                        //         }
-                        //         if(end==(uint)-1)
-                        //             end = paths.length();
-                        //         std::string view = paths.substr(at,end-at);
-                        //         // log::out << view.data()<<"\n";
-                        //         if(view.length()==0)
-                        //             break;
-                        //         // ((char*)view.data())[end] = 0;
-                        //         at = end+1;
-                                
-                        //         std::string exepath = "";
-                        //         exepath += view;
-                        //         exepath += "\\";
-                        //         exepath += name;
-                        //         if(FileExist(exepath)){
-                        //             foundPath = exepath;
-                        //             break;
-                        //         }
-                        //     }
-                        // }
-                        // if(foundPath.empty()){
-                        //     CERR << ", "<<name<<" could not be found\n";
-                        // }else{
-                            // std::string finaltemp=std::move(foundPath);
-                            // ReplaceChar((char*)finaltemp.data(),finaltemp.length(),'/','\\');
-                            
-                            int index = name.find("cmd");
-                            int index2 = name.find("cmd.exe");
-                            std::string finaltemp;
-                            if(index==0 && index2!=0){
-                                finaltemp = "cmd.exe /C " + name.substr(3);
-                            }else{
-                                finaltemp = name;
-                            }
-                            if(r0.type==REF_NUMBER){
-                                Number* v0 = getNumber(r0.index);
-                                if(v0){
-                                    finaltemp += " ";
-                                    finaltemp += std::to_string(v0->value);
-                                }
-                            }else if(r0.type==REF_STRING){
-                                String* v0 = getString(r0.index);
+                        int index = name.find("cmd");
+                        int index2 = name.find("cmd.exe");
+                        std::string finaltemp;
+                        if(index==0 && index2!=0){
+                            finaltemp = "cmd.exe /C " + name.substr(3);
+                        }else{
+                            finaltemp = name;
+                        }
+                        if(r0.type==REF_NUMBER){
+                            Number* v0 = getNumber(r0.index);
+                            if(v0){
                                 finaltemp += " ";
-                                finaltemp += *v0;
+                                finaltemp += std::to_string(v0->value);
                             }
-                            _CLOG(log::out << log::AQUA << LINST << ", exe: '"<<name<<"' arg: '";
-                            PrintRefValue(this,r0); log::out<<"'\n";)
-                            int exitCode = 0;
-                            int flags = PROGRAM_WAIT;
-                            
-                            if(r0.type==REF_NUMBER){
-                                deleteNumber(r0.index);
-                            } else if(r0.type==REF_STRING){
-                                deleteString(r0.index);
+                        }else if(r0.type==REF_STRING){
+                            String* v0 = getString(r0.index);
+                            finaltemp += " ";
+                            finaltemp += *v0;
+                        }
+                        _CLOG(log::out << log::AQUA << LINST << ", exe: '"<<name<<"' arg: '";
+                        PrintRefValue(this,r0); log::out<<"'\n";)
+                        int exitCode = 0;
+                        int flags = PROGRAM_WAIT;
+                        
+                        if(r0.type==REF_NUMBER){
+                            deleteNumber(r0.index);
+                        } else if(r0.type==REF_STRING){
+                            deleteString(r0.index);
+                        }
+                        
+                        // log::out << "["<<finaltemp<<"]\n";
+                        auto extraTime = MeasureSeconds();
+                        bool yes = StartProgram("",(char*)finaltemp.data(),flags,&exitCode);
+                        excessTime += StopMeasure(extraTime);
+                        if(!yes){
+                            CERR << ", "<<name<<" could not start\n";
+                        }else{
+                            Ref& rv = references[REG_RETURN_VALUE];
+                            uint index = makeNumber();
+                            if(index!=(uint)-1){
+                                rv.type = REF_NUMBER;
+                                rv.index = index;
+                                Number* rv = getNumber(index);
+                                rv->value = exitCode;
                             }
-                            
-                            // log::out << "["<<finaltemp<<"]\n";
-                            auto extraTime = MeasureSeconds();
-                            bool yes = StartProgram("",(char*)finaltemp.data(),flags,&exitCode);
-                            excessTime += StopMeasure(extraTime);
-                            if(!yes){
-                                CERR << ", "<<name<<" could not start\n";
-                            }else{
-                                Ref& rv = references[REG_RETURN_VALUE];
-                                uint index = makeNumber();
-                                if(index!=(uint)-1){
-                                    rv.type = REF_NUMBER;
-                                    rv.index = index;
-                                    Number* rv = getNumber(index);
-                                    rv->value = exitCode;
-                                }
-                            }
-                        // }
+                        }
                     }
                 }else{
                      CERR << ", bad registers ";PrintRefValue(this,r0);log::out <<", ";PrintRefValue(this,r1);log::out<<"\n";

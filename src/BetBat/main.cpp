@@ -107,7 +107,10 @@ int main(int argc, const char** argv){
         // CompileScript("example/findmax.btb");
         // CompileScript("example/async.btb");
         // CompileScript("tests/simple/assignment.btb");
-        CompileScript("example/func.btb");
+        // CompileScript("example/func.btb");
+        // CompileScript("example/sumcol.btb");
+        // CompileScript("example/cgen.btb");
+        CompileScript("example/osthread.btb");
         // CompileScript("tests/constoptim.btb");
         // CompileScript("tests/benchmark/string.btb", 10);
         // CompileScript("tests/script/eh.btb");

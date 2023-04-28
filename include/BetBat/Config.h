@@ -18,10 +18,10 @@ typedef double Decimal;
 // #define PLOG
 #define GLOG
 // #define OLOG
-// #define USE_DEBUG_INFO
-// #define PRINT_DEBUG_LINES
+#define USE_DEBUG_INFO
+#define PRINT_DEBUG_LINES
 // #define CLOG_THREAD
-// #define CLOG
+#define CLOG
 #endif
 
 
