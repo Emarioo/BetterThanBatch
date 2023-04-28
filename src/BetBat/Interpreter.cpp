@@ -279,10 +279,21 @@ void Context::exitScope(){
     deleteNumber(scope->references[REG_FRAME_POINTER].index);
 }
 int Context::makeThread(){
-    if (userThreads.max < userThreads.used + 1 )
-        if(!userThreads.resize(userThreads.max + 2))
-            return false;
-    int index = userThreads.used++;
+    int index = -1;
+    for(int i=0;i<(int)userThreads.used;i++){
+        UserThread* thread = (UserThread*)userThreads.data + i;
+        if(thread->state == UserThread::Inactive){
+            index = i;
+            break;   
+        }
+    }
+            
+    if (index==-1){
+        if (userThreads.max < userThreads.used + 1 )
+            if(!userThreads.resize(userThreads.max*1.5 + 3))
+                return -1;
+        index = userThreads.used++;
+    }
     UserThread* thread = (UserThread*)userThreads.data + index;
     new(thread)UserThread();
     return index;
@@ -309,13 +320,13 @@ void Context::execute(Bytecode& code, Performance* perf){
     // ProvideDefaultCalls(externalCalls);
     
     int threadIndex = makeThread();
-    getThread(threadIndex)->active=true;
+    getThread(threadIndex)->state=UserThread::Active;
     currentThread = threadIndex;
 
     ensureScopes(1);
 
-    #define CERR log::out << log::RED<< "ContextError "<<(nowProgramCounter)<<","<<inst
-    #define CWARN log::out << log::YELLOW<< "ContextWarning "<<(nowProgramCounter)<<","<<inst
+    #define CERR log::out << log::RED<< "ContextError "<<(nowProgramCounter)<<","<<inst<<", "
+    #define CWARN log::out << log::YELLOW<< "ContextWarning "<<(nowProgramCounter)<<","<<inst<<", "
     
     #define LINST " "<<(programCounter-1)<<": "<<inst
 
@@ -339,14 +350,25 @@ void Context::execute(Bytecode& code, Performance* perf){
         // }
         
         //-- Round robin on user threads
-        if (roundRobinTick==0 || !getThread(currentThread)->active) {
+        if (roundRobinTick==0 || getThread(currentThread)->state!=UserThread::Active) {
             roundRobinTick = instPerThread;
             int newIndex = currentThread;
             bool fullBreak=false;
             while (true) {
                 newIndex = (newIndex + 1) % userThreads.used;
                 UserThread* t = (UserThread*)userThreads.data + newIndex;
-                if (t->active){
+                if(t->state == UserThread::Waiting){
+                    UserThread* tj = (UserThread*)userThreads.data + t->waitingFor;
+                    if(tj->state==UserThread::Finished){
+                        t->state = UserThread::Active;
+                        Ref& reg = ((Scope*)t->scopes.data + t->currentScope)->references[t->inRef];
+                        reg = tj->outRef;
+                        t->waitingFor = -1;
+                        
+                        tj->state = UserThread::Inactive;   
+                    }
+                }
+                if (t->state == UserThread::Active){
                     if(currentThread!=newIndex){
                         _CLOG_THREAD(log::out<<"Switching thread "<<currentThread<<" -> "<<newIndex<<"\n";)
                         currentThread = newIndex;
@@ -354,7 +376,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     break;
                 }
                 if (newIndex == currentThread) {
-                    log::out << "All user threads are inactive, stopping...\n";
+                    log::out << "All user threads are inactive or blocked, stopping...\n";
                     fullBreak=true;
                     break;
                 }
@@ -370,7 +392,8 @@ void Context::execute(Bytecode& code, Performance* perf){
         Instruction inst{};
         if(activeCode.length() == programCounter){
             UserThread* t = getThread(currentThread);
-            t->active = false;
+            t->state = UserThread::Inactive;
+            // we don't finish with a return value
             _CLOG_THREAD(log::out<<"Thread "<<currentThread<<" finished\n";)
             exitScope();
             continue;
@@ -485,7 +508,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     Number* v2 = getNumber(r2.index);
                     
                     if(!v0||!v1||!v2){
-                        CERR << ", values were null\n";
+                        CERR << "values were null\n";
                         continue;
                     }
                     
@@ -518,7 +541,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     else if(inst.type==BC_OR)
                         num = v0->value!=0 || v1->value!=0;
                     else {
-                        CERR << ", inst. not available for "<<RefToString(r0.type)<<"\n";   
+                        CERR << "inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
                     _CLOG(log::out << LINST<< ", "<<v0->value<<" ";
                     if(inst.type==BC_ADD)
@@ -609,7 +632,7 @@ void Context::execute(Bytecode& code, Performance* perf){
 
                         _CLOG(log::out << LINST <<",  no\n";)
                     }else {
-                        CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
+                        CERR << "inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
                 } else if(r0.type==REF_STRING && r1.type == REF_NUMBER && r2.type == REF_STRING){
                     String* v0 = getString(r0.index);
@@ -640,17 +663,17 @@ void Context::execute(Bytecode& code, Performance* perf){
                         else
                             written = sprintf((char*)v2->memory.data+v0->memory.used,"%lld",(int64)v1->value);
                         if(written>numlength){
-                            CERR << ", double turned into "<<written<<" chars (max "<<numlength<<")\n";
+                            CERR << "double turned into "<<written<<" chars (max "<<numlength<<")\n";
                             continue;
                         }
                         v2->memory.used = v0->memory.used + written;
                         _CLOG(log::out << LINST <<", \"";PrintRefValue(this,r2);log::out<<"\"\n";)
                     } else {
-                        CERR<<", inst. not available for "<<RefToString(r0.type)<<"\n";   
+                        CERR << "inst. not available for "<<RefToString(r0.type)<<"\n";   
                     }
                 }
                 else{
-                    CERR<<", invalid types "<<
+                    CERR << "invalid types "<<
                         RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<RefToString(r2.type)<<" in registers\n";   
                 }
                 break;
@@ -688,7 +711,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         
                     _CLOG(log::out << LINST <<", not '";PrintRefValue(this,r1);log::out<<"'\n";)
                 }else{
-                    CERR<<", invalid types "<<
+                    CERR << "invalid types "<<
                         RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<" in registers\n";   
                 }
                 
@@ -711,15 +734,15 @@ void Context::execute(Bytecode& code, Performance* perf){
                     }
                     
                     if(v1->value>v2->value){
-                        CERR << ", r1 <= r2 was false ("<<v1->value<<" <= "<<v2->value<<")\n";
+                        CERR << "r1 <= r2 was false ("<<v1->value<<" <= "<<v2->value<<")\n";
                         continue;
                     }
                     if(0>v1->value){
-                        CERR << ", 0 <= r1 was false  (0 <= "<<v1->value<<")\n";
+                        CERR << "0 <= r1 was false  (0 <= "<<v1->value<<")\n";
                         continue;
                     }
                     if(v2->value >= v0->memory.used){
-                        CERR << ", r2 < r0.length was false  ("<<v2->value<<" < "<<v0->memory.used<<")\n";
+                        CERR << "r2 < r0.length was false  ("<<v2->value<<" < "<<v0->memory.used<<")\n";
                         continue;
                     }
                     
@@ -749,7 +772,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     _CLOG(log::out <<log::AQUA << LINST <<", substr '"<<*out<<"'\n";)
                     // now the first register contains the substring of the original
                 }else{
-                    CERR<<", invalid types "<<
+                    CERR << "invalid types "<<
                         RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<RefToString(r2.type)<<" in registers\n";   
                 }
                 break;
@@ -770,11 +793,11 @@ void Context::execute(Bytecode& code, Performance* perf){
                         continue;
                     }
                     if(v0->memory.used!=1){
-                        CERR << ", src string must have on character (not '";PrintRefValue(this,r0);log::out<<"')\n";
+                        CERR << "src string must have on character (not '";PrintRefValue(this,r0);log::out<<"')\n";
                         continue;
                     }
                     if(v1->value>=v2->memory.used || v1->value<0){
-                        CERR << ", index is out of bounds (0 <= "<<v1->value<<" < "<<v2->memory.used<<")\n";
+                        CERR << "index is out of bounds (0 <= "<<v1->value<<" < "<<v2->memory.used<<")\n";
                         continue;
                     }
                     
@@ -786,7 +809,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     _CLOG(log::out << LINST <<", set '"<< chr <<" at "<<index<<"'\n";)
                     // now the first register contains the substring of the original
                 }else{
-                    CERR<<", invalid types "<<
+                    CERR << "invalid types "<<
                         RefToString(r0.type)<<" "<<RefToString(r1.type)<<" "<<RefToString(r2.type)<<" in registers\n";   
                 }
                 break;
@@ -814,7 +837,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     length = strlen(type);
                     if(v1->memory.max<length){
                         if(!v1->memory.resize(length)){
-                            CERR << ", failed resizing\n";
+                            CERR << "failed resizing\n";
                             continue;
                         }
                     }
@@ -822,7 +845,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     v1->memory.used = length;
                     _CLOG(log::out << LINST <<", type '"<<*v1<<"'\n";)
                 }else{
-                    CERR<<", invalid type "<<RefToString(r1.type)<<" in r1\n";   
+                    CERR << "invalid type "<<RefToString(r1.type)<<" in r1\n";   
                 }
                 break;
             }
@@ -841,7 +864,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     v1->value = v0->memory.used;
                     _CLOG(log::out << LINST <<", len "<<v1->value<<"\n";)
                 }else{
-                    CERR<<", invalid types "<<RefToString(r0.type)<<", "<<RefToString(r1.type)<<" in r0, r1\n";   
+                    CERR << "invalid types "<<RefToString(r0.type)<<", "<<RefToString(r1.type)<<" in r0, r1\n";   
                 }
                 break;
             }
@@ -852,12 +875,12 @@ void Context::execute(Bytecode& code, Performance* perf){
                 // not redundant since you are copying the value.
                 // the original value may still exist on the stack
                 // if(inst.reg0==inst.reg1){
-                //     CERR << ", redundant move to same register\n";
+                //     CERR << "redundant move to same register\n";
                 //     continue;
                 // }
                 
                 // if(r0.type==r1.type&&r0.index==r1.index){
-                //     CWARN << ", redundant copying same value (["<<r1.index<<"] = ["<<r0.index<<"])\n";
+                //     CWARN << "redundant copying same value (["<<r1.index<<"] = ["<<r0.index<<"])\n";
                 //     continue;
                 // }
                 switch(r0.type){
@@ -871,7 +894,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         String* v0 = getString(tempIndex);
                         String* v1 = getString(r1.index);
                         if(!v0||!v1){
-                            CERR << ", values are null\n";
+                            CERR << "values are null\n";
                         }else{
                             v0->copy(v1);
                             _CLOG(log::out << log::AQUA<< LINST <<" ["<<r1.index<<"], copied ";PrintRefValue(this,r1);log::out<<"\n";)  
@@ -890,7 +913,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         Number* n0 = getNumber(tempIndex);
                         Number* n1 = getNumber(r1.index);
                         if(!n0||!n1){
-                            CERR<< ", nummbers are null\n";
+                            CERR << "nummbers are null\n";
                         }else{
                             n1->value = n0->value;
                             _CLOG(log::out <<log::AQUA << LINST <<" ["<<r1.index<<"], copied "<< n1->value <<"\n";)
@@ -900,7 +923,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                     default:
                         r1 = r0;
                         _CLOG(log::out << LINST <<" ["<<r1.index<<"], copied null\n";)  
-                        // CERR<< ", cannot copy "<<RefToString(r0.type)<<"\n";
+                        // CERR << "cannot copy "<<RefToString(r0.type)<<"\n";
                         break;
                 }
                 break;
@@ -910,7 +933,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                 Ref& r1 = references[inst.reg1];
                 
                 if(inst.reg0==inst.reg1){
-                    CERR << ", redundant move to same register\n";
+                    CERR << "redundant move to same register\n";
                     continue;
                 }
 
@@ -968,9 +991,9 @@ void Context::execute(Bytecode& code, Performance* perf){
                 }else if(r0.type==REF_NULL){
                     // it's okay, nothing to delete, we expect this
                 }else if(r0.type==0&&r0.index==0){
-                    CWARN << ", cannot delete "<<RefToString(r0.type)<<"\n";
+                    CWARN << "cannot delete "<<RefToString(r0.type)<<"\n";
                 }else{
-                    CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";
+                    CERR << "invalid type "<<RefToString(r0.type)<<" in registers\n";
                     continue;
                 }
                 _CLOG(log::out << log::PURPLE << LINST <<" ["<<r0.index<<"]\n";)
@@ -983,18 +1006,18 @@ void Context::execute(Bytecode& code, Performance* perf){
                 if (r0.type == REF_NUMBER){
                     Number* n0 = getNumber(r0.index);
                     if(!n0){
-                       CERR << ", register was null\n";
+                       CERR << "register was null\n";
                        continue;
                     }
                     Number* num = activeCode.getConstNumber(extraData);
                     if(!num){
-                        CERR << ", number constant at "<< extraData<<" does not exist\n";   
+                        CERR << "number constant at "<< extraData<<" does not exist\n";   
                         continue;
                     }
                     n0->value = num->value;
                     _CLOG(log::out << LINST << ", reg = " << n0->value<<"\n";)
                 }else{
-                    CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";   
+                    CERR << "invalid type "<<RefToString(r0.type)<<" in registers\n";   
                 }
                 break;
             }
@@ -1004,58 +1027,58 @@ void Context::execute(Bytecode& code, Performance* perf){
                 if (r0.type == REF_STRING){
                     String* v0 = getString(r0.index);
                     if(!v0){
-                       CERR << ", register was null\n";
+                       CERR << "register was null\n";
                        continue;
                     }
                     String* vc = activeCode.getConstString(extraData);
                     if(!vc){
-                       CERR << ", string constant at "<<extraData<<" was null\n";   
+                       CERR << "string constant at "<<extraData<<" was null\n";   
                        continue;
                     }
                     vc->copy(v0);
                     _CLOG(log::out << LINST << ", reg = ";PrintRawString(*v0);log::out<<"\n";)
                 }else{
-                    CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";   
+                    CERR << "invalid type "<<RefToString(r0.type)<<" in registers\n";   
                 }
                 break;
             }
             case BC_LOADV:{
-                Ref& r0 = references[inst.reg0];
+                Ref& r0 = references[inst.reg0]; // reg to load into
                 // Ref& r1 = references[inst.reg1];
                 int offsetFrameIndex = (uint)inst.reg1 | ((uint)inst.reg2<<8);
                 Ref& fp = references[REG_FRAME_POINTER];
 
                 if(fp.type != REF_NUMBER){
-                    CERR << ", $fp must be a number\n";
+                    CERR << "$fp must be a number\n";
                     continue;
                 }
                 Number* stackNumber = getNumber(fp.index);
                 if(!stackNumber){
-                    CERR << ", $fp cannot be null\n";
+                    CERR << "$fp cannot be null\n";
                     continue;
                 }
                 if(stackNumber->value!=(Decimal)(uint)stackNumber->value){
-                    CERR << ", $fp cannot have decimals ($sp = "<<stackNumber->value<<")\n";
+                    CERR << "$fp cannot have decimals ($sp = "<<stackNumber->value<<")\n";
                     continue;
                 }
                 // Number* offset = getNumber(r1.index);
                 // if(!offset){
-                //     CERR<<", $r1 (offset reg.) cannot be null\n";
+                //     CERR << "$r1 (offset reg.) cannot be null\n";
                 //     continue;
                 // }
                 // if(offset->value!=(Decimal)(uint)offset->value){
-                //     CERR << ", $r1 (offset reg.) cannot have decimals  ($sp = "<<offset->value<<")\n";
+                //     CERR << "$r1 (offset reg.) cannot have decimals  ($sp = "<<offset->value<<")\n";
                 //     continue;
                 // }
                 // int index = stackNumber->value + offset->value;
                 int index = stackNumber->value + offsetFrameIndex;
                 if(index<0){
-                    CERR << ", $fp + $r1 cannot be negative ($fp + $r1 = "<<index<<")\n";
+                    CERR << "stack pointer cannot be negative ("<<index<<")\n";
                     continue;
                 }
                 auto& valueStack = getThread(currentThread)->valueStack;
                 if((uint)index>=valueStack.max){
-                    CERR << ", $fp + $r1 goes beyond the allocated stack ($fp + $r1 = "<<index<<" >= "<<valueStack.max<<")\n";
+                    CERR << "stack pointer goes beyond the allocated stack (sp: "<<index<<", max: "<<valueStack.max<<")\n";
                     continue;
                 }
                 Ref* ref = (Ref*)valueStack.data+index;
@@ -1069,31 +1092,31 @@ void Context::execute(Bytecode& code, Performance* perf){
                 Ref& fp = references[REG_FRAME_POINTER];
 
                 if(fp.type != REF_NUMBER){
-                    CERR << ", $fp must be a number\n";
+                    CERR << "$fp must be a number\n";
                     continue;
                 }
                 Number* framePointer = getNumber(fp.index);
                 if(!framePointer){
-                    CERR << ", $fp cannot be null\n";
+                    CERR << "$fp cannot be null\n";
                     continue;
                 }
                 if(framePointer->value!=(Decimal)(uint)framePointer->value){
-                    CERR << ", $fp cannot have decimals ($sp = "<<framePointer->value<<")\n";
+                    CERR << "$fp cannot have decimals ($sp = "<<framePointer->value<<")\n";
                     continue;
                 }
                 // Number* offset = getNumber(r1.index);
                 // if(!offset){
-                //     CERR<<", $r1 (offset reg.) cannot be null\n";
+                //     CERR << "$r1 (offset reg.) cannot be null\n";
                 //     continue;
                 // }
                 // if(offset->value!=(Decimal)(uint)offset->value){
-                //     CERR << ", $r1 (offset reg.) cannot have decimals  ($sp = "<<offset->value<<")\n";
+                //     CERR << "$r1 (offset reg.) cannot have decimals  ($sp = "<<offset->value<<")\n";
                 //     continue;
                 // }
                 // int index = stackNumber->value + offset->value;
                 int index = framePointer->value + frameOffset;
                 if(index<0){
-                    CERR << ", $fp + $r1 cannot be negative ($fp + $r1 = "<<index<<")\n";
+                    CERR << "$fp + $r1 cannot be negative ($fp + $r1 = "<<index<<")\n";
                     continue;
                 }
                 auto& valueStack = getThread(currentThread)->valueStack;
@@ -1101,7 +1124,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                 bool deletedValue=false;
                 if((uint)index<valueStack.max){
                     ref = (Ref*)valueStack.data+index;
-                    // CERR << ", $fp + $r1 goes beyond the allocated stack ($fp + $r1 = "<<index<<" >= "<<valueStack.max<<")\n";
+                    // CERR << "$fp + $r1 goes beyond the allocated stack ($fp + $r1 = "<<index<<" >= "<<valueStack.max<<")\n";
                     // continue;
 
                     if(ref->index==r0.index && ref->type==r0.type){
@@ -1118,7 +1141,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                 }else{
                     int oldMax = valueStack.max;
                     if(!valueStack.resize(valueStack.max+index+10)){
-                        CERR << ", stack allocation failed\n";
+                        CERR << "stack allocation failed\n";
                         continue;
                     }
                     // zero-initalize the new values. Random memory could indicate
@@ -1142,9 +1165,9 @@ void Context::execute(Bytecode& code, Performance* perf){
                 
                     // note that address is refers to the instruction position/index and not the byte memory address.
                     if(n0->value != (Decimal)(uint)n0->value){
-                        CERR<< ", decimal in register not allowed ("<<n0->value<<"!="<<((Decimal)(uint)n0->value)<<")\n";   
+                        CERR << "decimal in register not allowed ("<<n0->value<<"!="<<((Decimal)(uint)n0->value)<<")\n";   
                     } else if(activeCode.length()<address){
-                        CERR << ", invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
+                        CERR << "invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
                     }else if(programCounter == address){
                         _CLOG(log::out << "ContextWarning at "<<programCounter<<", " << inst << ", jumping to next instruction is redundant\n";)
                     }else{
@@ -1152,7 +1175,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         programCounter = address;
                     }
                 }else{
-                    CERR << ", invalid type "<<RefToString(r0.type)<<" in registers\n";   
+                    CERR << "invalid type "<<RefToString(r0.type)<<" in registers\n";   
                 }
                 break;
             }
@@ -1166,13 +1189,13 @@ void Context::execute(Bytecode& code, Performance* perf){
                     
                     // note that address is refers to the instruction position/index and not the byte memory address.
                     if(n1->value != (Decimal)(uint)n1->value){
-                        CERR<< ", decimal in register not allowed ("<<n1->value<<"!="<<((Decimal)(uint)n1->value)<<")\n";
+                        CERR << "decimal in register not allowed ("<<n1->value<<"!="<<((Decimal)(uint)n1->value)<<")\n";
                         continue;
                     } else if(activeCode.length()<address){
-                        CERR << ", invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
+                        CERR << "invalid address "<<address<<" (max "<<activeCode.length()<<")\n";   
                         continue;
                     }else if(programCounter == address){
-                        CWARN << ", jumping to next instruction is redundant\n";   
+                        CWARN << "jumping to next instruction is redundant\n";   
                         continue;
                     }
                     
@@ -1181,7 +1204,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         if(r0.type==REF_NUMBER){
                             Number* n0 = getNumber(r0.index);
                             if(!n0){
-                                CERR << ", numbers where null\n";  
+                                CERR << "numbers where null\n";  
                                 continue;   
                             }
                             willJump = n0->value == 0;
@@ -1196,58 +1219,40 @@ void Context::execute(Bytecode& code, Performance* perf){
                             _CLOG(log::out << LINST << ", no jumping\n";)
                         }
                     } else{
-                        CERR << ", invalid type "<<RefToString(r0.type)<<" "<<RefToString(r1.type)<<"\n";  
+                        CERR << "invalid type "<<RefToString(r0.type)<<" "<<RefToString(r1.type)<<"\n";  
                         continue;
                     }
                 }else{
-                    CERR << ", invalid type "<<RefToString(r1.type)<<" in r1 (should be number)\n";   
+                    CERR << "invalid type "<<RefToString(r1.type)<<" in r1 (should be number)\n";   
                 }
                 break;
             } 
-            // case BC_ENTERSCOPE: {
-            //     // bool yes = ensureScopes(currentScope+1);
-            //     if(yes){
-            //         currentScope++;
-            //         _CLOG(log::out << LINST << "\n";)
-            //     }else{
-            //         CERR << ", could not ensure scope (allocation failure)\n";   
-            //     }
-            //     break;
-            // } case BC_EXITSCOPE: {
-            //     if(currentScope>0){
-            //         currentScope--;
-            //         _CLOG(log::out << LINST << "\n";)
-            //     }else{
-            //         CERR << ", cannot exit at global scope (currentScope == "<<currentScope<<")\n";   
-            //     }
-            //     break;
-            // }
             case BC_THREAD: {
                 Ref& r0 = references[inst.reg0]; // arg
                 Ref& r1 = references[inst.reg1]; // func index
                 Ref& r2 = references[inst.reg2]; // out thread index
                 
                 if (r2.type!=REF_NUMBER){
-                    CERR << ", r2 must be a number\n";
+                    CERR << "r2 must be a number\n";
                     continue;
                 }
                 Number* n2 = getNumber(r2.index);
                 if(!n2){
-                    CERR << ", r2 cannot be null\n";
+                    CERR << "r2 cannot be null\n";
                     continue;
                 }
 
                 if (r1.type==REF_NUMBER){
                     Number* n1 = getNumber(r1.index);
                     if(!n1){
-                        CERR << ", $r1 is null\n";
+                        CERR << "$r1 is null\n";
                         continue;
                     }
                     // continue;
                     // Make a new thread...
                     int threadIndex = makeThread();
                     UserThread* thread = getThread(threadIndex);
-                    thread->active=true;
+                    thread->state=UserThread::Active;
                     n2->value = threadIndex;
 
                     int temp = currentThread;
@@ -1274,12 +1279,29 @@ void Context::execute(Bytecode& code, Performance* perf){
                     thread->programCounter = n1->value;
                     // programCounter = n1->value;
                 }else{
-                    CERR << ", only numbers in r1\n";
+                    CERR << "only numbers in r1\n";
                 }
                 break;
             }
             case BC_JOIN: {
-
+                Ref& r0 = references[inst.reg0];
+                Ref& r1 = references[inst.reg1];
+                
+                if (r0.type != REF_NUMBER){
+                    
+                    continue;
+                }
+                Number* v0 = getNumber(r0.index);
+                if(!v0){
+                    
+                    continue;   
+                }
+                
+                getThread(currentThread)->state = UserThread::Waiting;
+                getThread(currentThread)->waitingFor = v0->value;
+                getThread(currentThread)->inRef = inst.reg1;
+                _CLOG(log::out << LINST << ", wait for thread "<<v0->value<<"\n";)
+                
                 break;
             }
             case BC_RETURN: {
@@ -1288,23 +1310,24 @@ void Context::execute(Bytecode& code, Performance* perf){
                 auto& currentScope = getThread(currentThread)->currentScope;
 
                 if(currentScope<0){
-                    CERR << ", scope index was negative (currentScope = "<<currentScope<<")\n";   
+                    CERR << "scope index was negative (currentScope = "<<currentScope<<")\n";   
                     continue;
                 }else{
                     programCounter = getScope(currentScope)->returnAddress;
                     exitScope();
                     if (currentScope==0){
-                        getThread(currentThread)->active = false;
-                        // TODO: memory leak, return value needs to be deleted. Is it fixed now?
-                        if(r0.type==REF_NUMBER){
-                            Number* n0 = getNumber(r0.index);
-                            if(n0)
-                                deleteNumber(r0.index);
-                        } else if(r0.type==REF_STRING){
-                            String* n0 = getString(r0.index);
-                            if(n0)
-                                deleteString(r0.index);
-                        }
+                        getThread(currentThread)->state = UserThread::Finished;
+                        // TODO: memory leak, with outRef if thread isn't joined
+                        getThread(currentThread)->outRef = r0;
+                        // if(r0.type==REF_NUMBER){
+                        //     Number* n0 = getNumber(r0.index);
+                        //     if(n0)
+                        //         deleteNumber(r0.index);
+                        // } else if(r0.type==REF_STRING){
+                        //     String* n0 = getString(r0.index);
+                        //     if(n0)
+                        //         deleteString(r0.index);
+                        // }
                         _CLOG_THREAD(log::out<<"Thread "<<currentThread<<" finished\n";)
                         exitScope();
                         break;
@@ -1323,14 +1346,14 @@ void Context::execute(Bytecode& code, Performance* perf){
                     // jump to address
                     // Ref& ra = refs[REG_RETURN_ADDR];
                     // if(ra.type!=REF_NUMBER){
-                    //     CERR<<", $ra must be a number (was ";
+                    //     CERR << "$ra must be a number (was ";
                     //     PrintRefValue(this,ra);
                     //     log::out << ")\n";
                     //     continue;
                     // }
                     // Number* n0 = getNumber(ra.index);
                     // if(!n0){
-                    //     CERR<<", value was null\n";
+                    //     CERR << "value was null\n";
                     //     continue;
                     // }
                     // Todo: error decimal number
@@ -1366,17 +1389,17 @@ void Context::execute(Bytecode& code, Performance* perf){
                 
                 // write works with number and string, read doesn't
                 if(inst.type==BC_READ_FILE&&r0.type!=REF_STRING){
-                    CERR << ", r0 must be a string not "<<RefToString(r0.type)<<"\n";
+                    CERR << "r0 must be a string not "<<RefToString(r0.type)<<"\n";
                     return;
                 }
                 if(r1.type!=REF_STRING){
-                    CERR << ", r1 must be a string not "<<RefToString(r1.type)<<"\n";
+                    CERR << "r1 must be a string not "<<RefToString(r1.type)<<"\n";
                     return;
                 }
                 
                 String* v1 = getString(r1.index);
                 if(!v1){
-                    CERR << ", r1 must be a string not "<<RefToString(r1.type)<<"\n";
+                    CERR << "r1 must be a string not "<<RefToString(r1.type)<<"\n";
                     continue;
                 }
                 // Todo: opening and closing files frequently is inefficient.
@@ -1404,7 +1427,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         continue;
                     }
                 }
-                #define CHECK_V0 if(!v0){CERR << ", r0 must be a string not "<<RefToString(r0.type)<<"\n";continue;}
+                #define CHECK_V0 if(!v0){CERR << "r0 must be a string not "<<RefToString(r0.type)<<"\n";continue;}
                 // Todo: handle errors and make the code neater
                 if(inst.type==BC_WRITE_FILE){
                     uint64 written=0;
@@ -1470,11 +1493,11 @@ void Context::execute(Bytecode& code, Performance* perf){
                     Ref& rz = refs[REG_ARGUMENT];
                     Number* n1 = getNumber(r1.index);
                     if(!n1){
-                        CERR << ", $r1 is null\n";
+                        CERR << "$r1 is null\n";
                         continue;
                     }
                     if(n1->value!=(Decimal)(uint)n1->value){
-                        CERR << ", $r1 cannot be decimal ("<<n1->value<<")\n";
+                        CERR << "$r1 cannot be decimal ("<<n1->value<<")\n";
                         continue;
                     }
                     currentScope++;
@@ -1503,7 +1526,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         else if(r0.type==REF_NUMBER)
                             arg = getNumber(r0.index);
                         else{
-                            // CERR << ", unresolved function does not allow "<<RefToString(r0.type)<<" as argument\n";
+                            // CERR << "unresolved function does not allow "<<RefToString(r0.type)<<" as argument\n";
                             // continue;
                         }
                         _CLOG(log::out << log::AQUA << LINST << ", external: '"<<name<<"' arg: '";
@@ -1525,7 +1548,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                                    
                             // }
                         // }else{
-                        //     CERR << ", api call was null\n";
+                        //     CERR << "api call was null\n";
                         // }
                     }else{
                         // std::string foundPath="";
@@ -1571,7 +1594,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         //     }
                         // }
                         // if(foundPath.empty()){
-                        //     CERR << ", "<<name<<" could not be found\n";
+                        //     CERR << ""<<name<<" could not be found\n";
                         // }else{
                             // std::string finaltemp=std::move(foundPath);
                             // ReplaceChar((char*)finaltemp.data(),finaltemp.length(),'/','\\');
@@ -1611,7 +1634,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                             bool yes = StartProgram("",(char*)finaltemp.data(),flags,&exitCode);
                             excessTime += StopMeasure(extraTime);
                             if(!yes){
-                                CERR << ", "<<name<<" could not start\n";
+                                CERR << ""<<name<<" could not start\n";
                             }else{
                                 Ref& rv = references[REG_RETURN_VALUE];
                                 uint index = makeNumber();
@@ -1625,7 +1648,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                         // }
                     }
                 }else{
-                     CERR << ", bad registers ";PrintRefValue(this,r0);log::out <<", ";PrintRefValue(this,r1);log::out<<"\n";
+                     CERR << "bad registers ";PrintRefValue(this,r0);log::out <<", ";PrintRefValue(this,r1);log::out<<"\n";
                 }
                 break;
             }

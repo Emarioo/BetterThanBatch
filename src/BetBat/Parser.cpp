@@ -349,11 +349,11 @@ void ParseInfo::makeScope(){
     _GLOG(log::out << log::GRAY<< "   Enter scope "<<scopes.size()<<"\n";)
     scopes.push_back({});
 }
-int ParseInfo::Scope::getVariableCleanupCount(ParseInfo& info){
+int ParseInfo::Scope::getInstsBeforeDelReg(ParseInfo& info){
     int offset=0;
     for(Token& token : variableNames){
-        auto pair = info.variables.find(token);
-        if(pair!=info.variables.end()){
+        auto var = info.getVariable(token);
+        if(var){
             offset+=1; // based on drop scope
         }
     }
@@ -375,20 +375,22 @@ void ParseInfo::dropScope(int index){
     Scope& scope = index==-1? scopes.back() : scopes[index];
     auto& info = *this;
     for(Token& token : scope.variableNames){
-        auto pair = variables.find(token);
-        if(pair!=variables.end()){
-            // code.add(BC_LOADV,REG_ACC0-1,pair->second.frameIndex);
-            // _GLOG(INST << "\n";)
-            // code.add(BC_DEL,REG_ACC0-1);
-            // _GLOG(INST << "'"<<token<<"'\n";)
-            
+        auto var = getVariable(token);
+        if(var){
             // NOTE: don't forget to change offset in variable cleanup  count
             //  offset should be however many instruction you add here!
             // deletes previous value
-            code.add(BC_STOREV,REG_NULL,pair->second.frameIndex);
+            code.add(BC_STOREV,REG_NULL,var->frameIndex);
             _GLOG(INST << "'"<<token<<"'\n";)
             if(index==-1)
-                variables.erase(pair);
+                removeVariable(token);
+        }
+    }
+    for(Token& token : scope.functionsNames){
+        auto pair = functions.find(token);
+        if(pair!=functions.end()){
+            if(index==-1)
+                functions.erase(pair);
         }
     }
     for(int reg : scope.delRegisters){
@@ -413,10 +415,47 @@ Instruction& Bytecode::get(uint index){
 }
 
 ParseInfo::Variable* ParseInfo::getVariable(const std::string& name){
-    auto pair = variables.find(name);
-    if(pair==variables.end())
+    auto pair = globalVariables.find(name);
+    if(pair!=globalVariables.end())
+        return &pair->second;
+    
+    if(currentFunction.empty())
+        return 0;
+        
+    auto func = getFunction(currentFunction);
+    auto pair2 = func->variables.find(name);
+    if(pair2!=func->variables.end()) 
+        return &pair2->second;
+    return 0;
+}
+void ParseInfo::removeVariable(const std::string& name){
+    auto pair = globalVariables.find(name);
+    if(pair!=globalVariables.end()){
+        globalVariables.erase(pair);
+    }
+    if(currentFunction.empty())
+        return;
+        
+    auto func = getFunction(currentFunction);
+    auto pair2 = func->variables.find(name);
+    if(pair2!=func->variables.end()) 
+        func->variables.erase(pair2);
+}
+ParseInfo::Variable* ParseInfo::addVariable(const std::string& name){
+    if(currentFunction.empty()){
+        return &(globalVariables[name] = {});   
+    }
+    auto func = getFunction(currentFunction);
+    return &(func->variables[name] = {});
+}
+ParseInfo::Function* ParseInfo::getFunction(const std::string& name){
+    auto pair = functions.find(name);
+    if(pair==functions.end())
         return 0;
     return &pair->second;
+}
+ParseInfo::Function* ParseInfo::addFunction(const std::string& name){
+    return &(functions[name] = {});
 }
 uint32 Bytecode::getMemoryUsage(){
     uint32 sum = codeSegment.max*codeSegment.m_typeSize+
@@ -753,6 +792,7 @@ Token CombineTokens(ParseInfo& info){
 int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy);
 int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt);
 
+// #fex
 int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     using namespace engone;
     
@@ -835,6 +875,18 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                         }else{
                             return PARSE_ERROR;
                         }
+                    }else if(token == "async"&& !(token.flags&TOKEN_QUOTED)){
+                        // token = info.next();
+                        info.revert();
+                        info.revert();
+                        ExpressionInfo expr{};
+                        expr.acc0Reg = exprInfo.acc0Reg + exprInfo.regCount;
+                        int success = ParseCommand(info,expr,false);
+                        if(success){
+                            exprInfo.regCount++;
+                        }else{
+                            return PARSE_ERROR;
+                        }
                     }else if(token == "arg"&& !(token.flags&TOKEN_QUOTED)){
                         int reg = exprInfo.acc0Reg+exprInfo.regCount;
                         info.code.add(BC_COPY,REG_ARGUMENT,reg);
@@ -864,12 +916,50 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                             _GLOG(INST << "\n";)
                             exprInfo.regCount++;
                         }
+                    }else if(token == "join"&& !(token.flags&TOKEN_QUOTED)){
+                        token = info.next();
+                        if(!IsName(token)){
+                            ERRT(token) << "Expected a valid variable name (not '"<<token<<"')\n";
+                            return PARSE_ERROR;   
+                        }
+                        auto var = info.getVariable(token);
+                        if(!var){
+                            ERRT(token) << "Expected a defined variable ('"<<token<<"' isn't)\n";
+                            return PARSE_ERROR;
+                        }
+                        int reg = exprInfo.acc0Reg+exprInfo.regCount;
+                        int tempReg = exprInfo.acc0Reg+exprInfo.regCount+1;
+                        info.code.add(BC_LOADV, tempReg,var->frameIndex);
+                        _GLOG(INST << "var '"<<token<<"'\n";)
+                        info.code.add(BC_JOIN, tempReg, reg);
+                        _GLOG(INST << "\n";)
+                        exprInfo.regCount++;
                     }else {
                         ERRTOK << "undefined directive '"<<token<<"'\n";
                         ERRLINE
                         // info.nextLine();
                         return PARSE_ERROR;
                     }
+    //                 if(token=="#" && !(token.flags&TOKEN_SUFFIX_SPACE)){
+    //     Token token = info.get(info.get()+2);
+    //     if(token=="join"){
+    //         info.next();   
+    //         info.next();
+            
+    //         token = info.next();
+    //         if(!IsName(token)){
+    //             ERRT(token) << "Expected a valid variable name (not '"<<token<<"')\n";
+    //             return PARSE_ERROR;   
+    //         }
+    //         auto var = info.getVariable(token);
+    //         if(!var){
+    //             ERRT(token) << "Expected a defined variable ('"<<token<<"' isn't)\n";
+    //             return PARSE_ERROR;
+    //         }
+            
+    //         info.code.add(BC_JOIN,);
+    //     }
+    // }
                 // Todo: some directives should not toggle expectOperator.
                 //  The toggle is currently forced at the end of this loop.
 
@@ -897,17 +987,17 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
                 exprInfo.regCount++;
             } else if(IsName(token)){
                 // Todo: handle variable or function
-                auto varPair = info.variables.find(token);
+                auto var = info.getVariable(token);
                 // auto funcPair = info.externalCalls.map.find(token);
                 auto func = GetExternalCall(token);
-                if(varPair!=info.variables.end()){
+                if(var){
                     token = info.next();
                     int reg = exprInfo.acc0Reg + exprInfo.regCount;
                     int tempReg = exprInfo.acc0Reg + exprInfo.regCount+1;
 
                     // normal variable nothing special
-                    info.code.add(BC_LOADV,reg,varPair->second.frameIndex);
-                    _GLOG(INST << "get variable "<<varPair->second.frameIndex<<"\n";)
+                    info.code.add(BC_LOADV,reg,var->frameIndex);
+                    _GLOG(INST << "get variable "<<var->frameIndex<<"\n";)
                     info.code.add(BC_COPY,reg,reg);
                     _GLOG(INST << "\n";)
                     exprInfo.regCount++;
@@ -1079,6 +1169,7 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
             //     // info.nextLine();
             // }
             log::out << log::RED<<"DevError: ParseExpression, can this happen?\n";
+            ERRLINE
             info.errors++;
             return PARSE_ERROR;
         }
@@ -1086,7 +1177,7 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
             info.errors++;
             log::out << log::RED<<"DevError: ParseExpression, can this happen?\n";
             // ERRTOK << "undefined variable "<<token<<"\n";
-            // ERRLINE
+            ERRLINE
             // info.nextLine();
             return PARSE_ERROR;
         }
@@ -1094,6 +1185,7 @@ int ParseExpression(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
         if(!(exprInfo.regCount==exprInfo.opCount || exprInfo.regCount==exprInfo.opCount+1)){
             info.errors++;
             log::out << log::RED<<"DevError: ParseExpression, can this happen?\n";
+            ERRLINE
             // ERRTOK << "uneven numbers and operators, tokens: "<<info.prev()<<" "<<token<<"\n";
             // ERRLINE
             // info.nextLine();
@@ -1174,13 +1266,13 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         }
         info.next();
         
-        auto pair = info.variables.find(name);
-        if(pair==info.variables.end()){
+        auto var = info.getVariable(name);
+        if(!var){
             ERRT(name) << "Undefined variable '"<<name<<"'\n";
             return PARSE_ERROR;
         }
         int reg = acc0reg;
-        info.code.add(BC_LOADV, reg, pair->second.frameIndex);
+        info.code.add(BC_LOADV, reg, var->frameIndex);
         _GLOG(INST << "\n";)
         info.code.add(BC_TEST, reg);
         _GLOG(INST << "var '"<<name<<"'\n";)
@@ -1298,10 +1390,10 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
             
             _GLOG(log::out<<log::GREEN<<"  : ELSE ADDRESS scope: "<<(info.scopes.size()-1)<<"\n";)
             info.code.getConstNumber(elseAddr)->value = info.code.length()
-                + scope->getVariableCleanupCount(info);
+                + scope->getInstsBeforeDelReg(info);
         }else{
             info.code.getConstNumber(jumpAddress)->value = info.code.length()
-                + scope->getVariableCleanupCount(info);
+                + scope->getInstsBeforeDelReg(info);
             _GLOG(log::out<<log::GREEN<<"  : JUMP ADDRESS scope: "<<(info.scopes.size()-1)<<"\n";)
                 
         }   
@@ -1418,11 +1510,12 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
             Token next = info.get(info.at()+2);
             if(IsName(token) && next == ":" && !(next.flags&TOKEN_QUOTED)){
                 info.next();
-                auto varPair = info.variables.find(token);
-                if(varPair==info.variables.end()){
+                auto var = info.getVariable(token);
+                if(!var){
                     // Turn token into variable?
-                    ParseInfo::Variable& var = info.variables[token] = {};
-                    var.frameIndex = info.frameOffsetIndex++;
+                    
+                    auto var = info.addVariable(token);
+                    var->frameIndex = info.frameOffsetIndex++;
                     varName = token;
                     scope.variableNames.push_back(token);
                     
@@ -1430,7 +1523,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
                     info.code.add(BC_NUM, iReg);
                     _GLOG(INST << "var reg\n";)
 
-                    info.code.add(BC_STOREV, iReg,var.frameIndex);
+                    info.code.add(BC_STOREV, iReg,var->frameIndex);
                     _GLOG(INST << "store "<<token<<"\n";)
                 }else{
                     ERRT(token) << "for cannot loop with a defined variable ("<<token<<") \n";
@@ -1623,14 +1716,14 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
                 ERRT(name) << "Expected a variable name ('"<<name<<"' is not valid)\n";
                 return PARSE_ERROR;
             }
-            auto pair = info.variables.find(name);
-            if(pair!=info.variables.end()){
+            auto var = info.getVariable(name);
+            if(var){
                 ERRT(name) << "Expected a non-defined variable ('"<<name<<"' is defined)\n";
                 return PARSE_ERROR;
             }
 
-            ParseInfo::Variable& var = info.variables[name] = {};
-            var.frameIndex = info.frameOffsetIndex++;
+            var = info.addVariable(name);
+            var->frameIndex = info.frameOffsetIndex++;
             // scope.variableNames.push_back(name);
             // Note: chrReg which is what var will refer to is added to
             //  delRegisters when we don't specify a variable.
@@ -1644,7 +1737,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         
         // only allow variable not expression (each tmp : onlyvar)
         // Token listName = info.next();
-        // auto pair = info.variables.find(listName);
+        // auto pair = info.var.find(listName);
         // if(pair==info.variables.end()){
         //     ERRT(listName) << "Must be a defined variable ('"<<listName<<"' is not)\n";
         //     return PARSE_ERROR;
@@ -1779,8 +1872,8 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
         _GLOG(INST << "\n";)
 
         if(createdVar){
-            ParseInfo::Variable& var = info.variables[name];
-            info.code.add(BC_STOREV, chrReg, var.frameIndex);
+            auto var = info.getVariable(name);
+            info.code.add(BC_STOREV, chrReg, var->frameIndex);
             _GLOG(INST << "store "<<name<<"\n";)
         }
 
@@ -1855,6 +1948,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
     _GLOG(EXIT)
     return PARSE_SUCCESS;
 }
+// #fass
 int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy){
     using namespace engone;
     
@@ -1877,22 +1971,21 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
     
     if(assign=="++"||assign=="--"){
         // a++
-        auto find = info.variables.find(name);
-        if(find==info.variables.end()){
+        auto var = info.getVariable(name);
+        if(!var){
             if(attempt){
                 return PARSE_BAD_ATTEMPT;
             }
             ERRT(name) << "variable '"<<name<<"' must be defined when using '"<<assign<<"'\n";
             return PARSE_ERROR;   
         }
-        ParseInfo::Variable& var = find->second;
         info.next();
         info.next();
         // Todo: a=9;b = a++ <- b would be 10 with current code. Change it to
         //  make a copy which b is set to then do addition on variable.
         //  how does it work with requestCopy?
         int finalReg = exprInfo.acc0Reg;
-        info.code.add(BC_LOADV,finalReg,var.frameIndex);
+        info.code.add(BC_LOADV,finalReg,var->frameIndex);
         _GLOG(INST << "load var '"<<name<<"'\n";)
         int constone = info.code.addConstNumber(1);
         info.code.add(BC_NUM,finalReg+1);
@@ -1929,15 +2022,16 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
         info.next();
         info.next();
         // don't next on {, ParseBody needs it.
-        auto funcPair = info.functions.find(token);
-        auto varPair = info.variables.find(token);
-        if(varPair != info.variables.end()){
+        auto func = info.getFunction(token);
+        auto var = info.getVariable(token);
+        if(var){
             ERRT(token) << "'"<<token<<"' already defined as variable\n";
             // info.nextLine();
             return PARSE_ERROR;
-        }else if(funcPair==info.functions.end()){
-            // Note: assign new variable
-            ParseInfo::Function& func = info.functions[name] = {};
+        }else if(!func){
+            // Note: assign new function
+            func = info.addFunction(name);
+            info.scopes.back().functionsNames.push_back(name);
             int constIndex = info.code.addConstNumber(-1);
             int jumpReg = exprInfo.acc0Reg;
             info.code.add(BC_NUM,jumpReg);
@@ -1947,13 +2041,13 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
             info.code.add(BC_JUMP, jumpReg);
             _GLOG(INST << "Skip function body '"<<name<<"'\n";)
             
-            func.jumpAddress = info.code.length();
+            func->jumpAddress = info.code.length();
 
             info.makeScope();
             auto& scope = info.scopes.back();
             scope.delRegisters.push_back(REG_ARGUMENT);
             info.funcScopes.push_back({(int)info.scopes.size()-1});
-
+            
             // token = info.next will be {
             int result = ParseBody(info,exprInfo.acc0Reg+1);
 
@@ -2043,21 +2137,18 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
         log::out << log::RED<<"CompilerWarning: regCount == 0 after expression from assignment\n";   
     }
             
-    auto find = info.variables.find(name);
-    ParseInfo::Variable* var = 0;
-    if(find==info.variables.end()){
+    auto var = info.getVariable(name);
+    if(!var){
         if(assign != "="){
             ERRT(name) << "variable '"<<name<<"' must be defined when using '"<<assign<<"'\n";
             return PARSE_ERROR;   
         }
-        var = &(info.variables[name] = {});
+        var = info.addVariable(name);
         // Note: assign new variable
         var->frameIndex = info.frameOffsetIndex++;
         // Todo: bound check on scopes, global scope should exist though
         auto& scope = info.scopes.back();
         scope.variableNames.push_back(name);
-    }else{
-        var = &find->second;
     }
 
     if(indexReg!=0){
@@ -2206,17 +2297,16 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     // }
     int funcReg = exprInfo.acc0Reg+exprInfo.regCount;
     exprInfo.regCount++;
-    auto funcPair = info.functions.find(token);
+    auto func = info.getFunction(token);
     // bool codeFunc=false;
-    if(funcPair!=info.functions.end()){
+    if(func){
         // func in bytecode
-        ParseInfo::Function& func = funcPair->second;
-        if(func.constIndex==-1){
-            func.constIndex = info.code.addConstNumber(func.jumpAddress);
+        if(func->constIndex==-1){
+            func->constIndex = info.code.addConstNumber(func->jumpAddress);
         }
         info.code.add(BC_NUM,funcReg);
         _GLOG(INST << "\n";)
-        info.code.addLoadNC(funcReg,func.constIndex);
+        info.code.addLoadNC(funcReg,func->constIndex);
         _GLOG(INST << "func index to '"<<token<<"'\n";)
         // codeFunc=true;
 
@@ -2337,10 +2427,10 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
             } else{
                 // Todo: find variables
                 if(!(token.flags&TOKEN_QUOTED)&&IsName(token)){
-                    auto varPair = info.variables.find(token);
-                    if(varPair!=info.variables.end()){
-                        info.code.add(BC_LOADV,tempReg,varPair->second.frameIndex);
-                        _GLOG(INST << "get variable "<<varPair->second.frameIndex<<"\n";)
+                    auto var = info.getVariable(token);
+                    if(var){
+                        info.code.add(BC_LOADV,tempReg,var->frameIndex);
+                        _GLOG(INST << "get variable "<<var->frameIndex<<"\n";)
 
                         // . for property, eg. type, length
                         // [] for substring [2] single character, [2:3] an inclusive range of character
@@ -2482,6 +2572,7 @@ int ParseBody(ParseInfo& info, int acc0reg){
     }
     Token token = info.get(info.at()+1);
     if(token=="{"){
+        info.makeScope();
         token = info.next();
         while(!info.end()){
             Token& token = info.get(info.at()+1);
@@ -2524,6 +2615,8 @@ int ParseBody(ParseInfo& info, int acc0reg){
                 //  what happened so don't print a message if another function already has.
             }
         }
+        
+        info.dropScope();
     }else {
         ExpressionInfo expr{};
         expr.acc0Reg = acc0reg;
@@ -2615,10 +2708,9 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
     
     
     
-    if(info.variables.size()!=0){
-        log::out << log::YELLOW<<"ParseWarning: "<<info.variables.size()<<" variables remain?\n";
-
-    }
+    // if(info.variables.size()!=0){
+    //     log::out << log::YELLOW<<"ParseWarning: "<<info.variables.size()<<" variables remain?\n";
+    // }
     // we drop scope so we don't need this anymore
     // for(auto& pair : info.variables){
     //     // log::out << "del "<<pair.first<<"\n";

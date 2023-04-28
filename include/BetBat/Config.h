@@ -2,7 +2,7 @@
 typedef double Decimal;
 
 // Major config
-// #define DEBUG
+#define DEBUG
 // #define SILENT
 
 // Language config

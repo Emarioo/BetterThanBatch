@@ -50,6 +50,7 @@
 #define BC_WRITE_FILE    (BC_R2|0x12)
 #define BC_APPEND_FILE   (BC_R2|0x13)
 #define BC_READ_FILE     (BC_R2|0x14)
+#define BC_JOIN          (BC_R2|0x15)
 
 // #define BC_TONUM         (BC_R2|0x12)
 
@@ -60,7 +61,6 @@
 
 #define BC_LOADSC        (BC_R1|0x10)
 #define BC_LOADNC        (BC_R1|0x11)
-#define BC_JOIN          (BC_R1|0x12)
 
 #define BC_TEST          (BC_R1|0x13)
 
@@ -179,10 +179,11 @@ struct ParseInfo {
 
     struct Scope{
         std::vector<Token> variableNames;
+        std::vector<Token> functionsNames;
         std::vector<int> delRegisters;
         // how many instructions it takes to
         // delete variables
-        int getVariableCleanupCount(ParseInfo& info);
+        int getInstsBeforeDelReg(ParseInfo& info);
         void removeReg(int reg);
     };
     std::vector<Scope> scopes;
@@ -190,21 +191,27 @@ struct ParseInfo {
     void makeScope();
     void dropScope(int index=-1);
 
-    // std::unordered_map<double,uint> constNumberMap;
     int frameOffsetIndex = 0;
     #define VAR_FUNC 1
     struct Variable{
         // int type=0;
         int frameIndex=0;
-        int constIndex=-1;
+        // int constIndex=-1;
     };
-    std::unordered_map<std::string,Variable> variables;
-     struct Function{
+    std::unordered_map<std::string,Variable> globalVariables;
+    Variable* getVariable(const std::string& name);
+    void removeVariable(const std::string& name);
+    Variable* addVariable(const std::string& name);
+    
+    struct Function {
         int jumpAddress=0;
         int constIndex=-1;
+        std::unordered_map<std::string,Variable> variables;
     };
-    Variable* getVariable(const std::string& name);
     std::unordered_map<std::string,Function> functions;
+    Function* getFunction(const std::string& name);
+    Function* addFunction(const std::string& name);
+    std::string currentFunction; // empty means global
     
     // ExternalCalls externalCalls;
 

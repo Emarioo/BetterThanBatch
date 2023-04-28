@@ -30,6 +30,12 @@ and get a substring with \[x:y\]. X is the start index while Y
 is the end (inclusive). \[0:0\] is the same as \[0\].
 
 ```
+a = "123"
+a[1] = "-"
+```
+With the above you can copy a character into the string.
+
+```
 a = 3.type
 b = "what".type
 c = "how long".length
@@ -84,6 +90,22 @@ gcc.exe main.c     <- runs gcc
 print hello        <- print to console (stdout)
 ```
 
+You can run a function asynchronously.
+```
+fun = { for 10 print #arg }
+#async fun 1
+fun 2
+```
+#async fun will create a new user thread and
+the interpreter will switch between the active threads.
+The output of the code above will be mashed up ones and twos.
+
+The interpreter itself runs on one thread and so you will
+not gain any performance boost by using asynchronous functions.
+
+Every 50 or so instructions the interpreter does a round robin
+on active user threads. Each user thread has it's own
+program counter, stack and registers.
 
 ## Preprocessor directives
 Note that these directives remove, add and rearrange tokens.

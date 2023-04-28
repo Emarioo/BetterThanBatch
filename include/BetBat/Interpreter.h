@@ -16,12 +16,22 @@ struct Performance {
     double exectime=0;
 };
 struct UserThread {
+    enum State : uint {
+        Inactive=0,
+        Active,
+        Finished, // thread finished but hasn't joined
+        Waiting, // waiting for thread to finish or signal 
+    };
     int programCounter=0;
     engone::Memory scopes{sizeof(Scope)};
     uint currentScope=0;
     engone::Memory valueStack{sizeof(Ref)}; // holds references to values
     
-    bool active=false;
+    Ref outRef{};
+    
+    State state=Inactive;
+    int waitingFor = -1; // thread to wait for, relevant with Waiting
+    int inRef = -1;
 };
 
 #define USE_INFO_VALUES
