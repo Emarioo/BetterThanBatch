@@ -1989,6 +1989,7 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
         _GLOG(INST << "load var '"<<name<<"'\n";)
         int constone = info.code.addConstNumber(1);
         info.code.add(BC_NUM,finalReg+1);
+        _GLOG(INST << "\n";)
         info.code.addLoadNC(finalReg+1,constone);
         if(assign == "++")
             info.code.add(BC_ADD,finalReg,finalReg+1,finalReg);
@@ -2004,7 +2005,6 @@ int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, boo
             _GLOG(EXIT)
             return PARSE_SUCCESS;
         }
-        
         return PARSE_SUCCESS;
     }
     

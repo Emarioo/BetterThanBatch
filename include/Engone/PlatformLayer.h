@@ -127,7 +127,7 @@ namespace engone {
 		void join();
 		
         // True: Thread is doing stuff or finished and waiting to be joined.
-        // False: Thread is not active. Call init to start the thread. 
+        // False: Thread is not linked to an os thread. Call init to start the thread.
 		bool isActive();
 		bool joinable();
 

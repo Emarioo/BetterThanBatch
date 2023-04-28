@@ -20,6 +20,8 @@ Structs and arrays will probably be left out unless a good idea on how
 to deal with them comes to mind.
 Language has weak typing at the moment (C is strong while Javascript is weak)
 
+See the Guide/Walkthrough [](docs/guide.md)
+
 ## The processs
 - Tokenizer     (text -> tokens)
 - Preprocessor  (manipulates tokens)

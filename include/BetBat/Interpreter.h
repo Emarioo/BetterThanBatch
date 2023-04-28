@@ -15,10 +15,12 @@ struct Performance {
     int instructions=0;
     double exectime=0;
 };
+
 struct UserThread {
     enum State : uint {
         Inactive=0,
         Active,
+        OSActive,
         Finished, // thread finished but hasn't joined
         Waiting, // waiting for thread to finish or signal 
     };
@@ -37,6 +39,7 @@ struct UserThread {
 
     engone::Thread osThread{};
 };
+const char* ThreadStateToString(UserThread::State type);
 
 #define USE_INFO_VALUES
 
@@ -80,7 +83,7 @@ struct Context {
     //  unnecessary complications.
     
     // will also run the thread
-    int makeOSThread(ExternalCall func, int refType, void* value);
+    int makeOSThread(ExternalCall func, int refType, int valueIndex, void* value);
     int makeOSThread(const std::string& cmd);
 
     Scope* getScope(uint index);

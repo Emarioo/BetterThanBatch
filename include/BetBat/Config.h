@@ -2,7 +2,7 @@
 typedef double Decimal;
 
 // Major config
-#define DEBUG
+// #define DEBUG
 // #define SILENT
 
 // Language config
@@ -19,9 +19,9 @@ typedef double Decimal;
 #define GLOG
 // #define OLOG
 #define USE_DEBUG_INFO
-#define PRINT_DEBUG_LINES
+// #define PRINT_DEBUG_LINES
 // #define CLOG_THREAD
-#define CLOG
+// #define CLOG
 #endif
 
 

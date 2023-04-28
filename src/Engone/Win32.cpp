@@ -731,13 +731,14 @@ namespace engone {
             DWORD err = GetLastError();
             PL_PRINTF("[WinError %lu] CloseHandle\n",err);
         }
+		m_threadId = 0;
 		m_internalHandle = 0;
 	}
 	bool Thread::isActive() {
 		return m_internalHandle!=0;
 	}
 	bool Thread::joinable() {
-		return m_threadId != GetCurrentThreadId();
+		return m_threadId!=0 && m_threadId != GetCurrentThreadId();
 	}
 	ThreadId Thread::getId() {
 		return m_threadId;

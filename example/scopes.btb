@@ -1,15 +1,26 @@
-glob = 2
-{
-    loc0 = 1
-    // fun =  { kek = 9 var = 3 print he: var; }
-    fun = {
-        print glob, loc0
-        loc1 = 9
-        wow = {
-            print glob, loc0, loc1 
-        }
-        wow
+glob = 0
+
+// loc0 = 1
+// fun = {
+//     print glob, loc0
+//     loc1 = 9
+//     wow = {
+//         print glob, loc0, loc1 
+//     }
+//     wow
+// }
+// fun
+
+fun = {
+    loc = 0
+    for 10 {
+        loc++
+        // glob++
     }
-    // wow
-    fun
+    return loc
 }
+
+extra = #async fun
+fun
+
+print glob, extra

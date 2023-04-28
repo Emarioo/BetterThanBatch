@@ -110,8 +110,8 @@ int main(int argc, const char** argv){
         // CompileScript("example/func.btb");
         // CompileScript("example/sumcol.btb");
         // CompileScript("example/cgen.btb");
-        CompileScript("example/osthread.btb");
-        // CompileScript("example/scopes.btb");
+        // CompileScript("example/osthread.btb");
+        CompileScript("example/scopes.btb");
         // CompileScript("tests/constoptim.btb");
         // CompileScript("tests/benchmark/string.btb", 10);
         // CompileScript("tests/script/eh.btb");

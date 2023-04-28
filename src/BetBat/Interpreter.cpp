@@ -32,6 +32,19 @@ const char* RefToString(Ref& ref){
 // void PrintRef(Context* context, int index){
 //     engone::log::out << "$"<<index;
 // }
+
+const char* ThreadStateToString(UserThread::State type){
+    #define CASE(X) case UserThread::State::X: return #X;
+    switch (type) {
+        CASE(Inactive)
+        CASE(Active)
+        CASE(OSActive)
+        CASE(Waiting)
+        CASE(Finished)
+    }
+    #undef CASE
+    return "?";   
+}
 void PrintRefValue(Context* context, Ref& ref){
     using namespace engone;
     if(ref.type==REF_NUMBER){
@@ -300,35 +313,72 @@ int Context::makeThread(){
 }
 struct OSThreadParam {
     Context* context=0;
+    int threadIndex=0;
     // union {
         // struct {
     int reftype = 0;
+    int valueIndex = 0;
     void* value = 0;
     ExternalCall func=0;
         // };
-    const std::string cmd;
+    std::string cmd;
     // };
 };
 uint32 OSThreadFunc(void* ptr){
     OSThreadParam* param = (OSThreadParam*)ptr;
 
     if(param->cmd.empty()){
-        
+        Ref ref = param->func(param->context, param->reftype, param->value);
         // / delete argument
-        if(r0.type==REF_NUMBER){
-            deleteNumber(r0.index);
-        } else if(r0.type==REF_STRING){
-            deleteString(r0.index);
+        if(param->reftype==REF_NUMBER){
+            param->context->deleteNumber(param->valueIndex);
+        } else if(param->reftype==REF_STRING){
+            param->context->deleteString(param->valueIndex);
         }
+        UserThread* t = param->context->getThread(param->threadIndex);
+        t->outRef = ref;
+        t->state = UserThread::Finished;
     } else {
-
+        int exitCode = 0;
+        int flags = PROGRAM_WAIT;
+        bool yes = engone::StartProgram("",(char*)param->cmd.data(),flags,&exitCode);
+        UserThread* t = param->context->getThread(param->threadIndex);
+        if(!yes){
+            engone::log::out << "ContexError: could not start '"<<param->cmd<<"'\n";
+            // CERR << ", "<<name<<" could not start\n";
+        }else{
+            // TODO: Mutex is needed here, this thread and the main execution may 
+            ///  add numbers at the same time.
+            uint index = param->context->makeNumber();
+            if(index!=(uint)-1){
+                t->outRef.type = REF_NUMBER;
+                t->outRef.index = index;
+                Number* v = param->context->getNumber(index);
+                v->value = exitCode;
+            }
+        }
+        t->state = UserThread::Finished;
     }
 
     engone::Free(param,sizeof(OSThreadParam));
     return 0;
 }
-int Context::makeOSThread(ExternalCall func,int refType, void* value){
-    return 0;
+int Context::makeOSThread(ExternalCall func, int refType, int valueIndex, void* value){
+    int ti = makeThread();
+    UserThread* t = getThread(ti);
+
+    OSThreadParam* param = (OSThreadParam*)engone::Allocate(sizeof(OSThreadParam));
+    new(param)OSThreadParam();
+    t->state = UserThread::OSActive;
+    param->context = this;
+    param->func = func;
+    param->reftype = refType;
+    param->valueIndex = valueIndex;
+    param->value = value;
+    param->threadIndex=ti;
+
+    t->osThread.init(OSThreadFunc,param);
+    return ti;
 }
 int Context::makeOSThread(const std::string& cmd){
     int ti = makeThread();
@@ -336,12 +386,13 @@ int Context::makeOSThread(const std::string& cmd){
 
     OSThreadParam* param = (OSThreadParam*)engone::Allocate(sizeof(OSThreadParam));
     new(param)OSThreadParam();
-    // t->state = UserThread::?
+    t->state = UserThread::OSActive;
     param->context = this;
     param->cmd = cmd;
+    param->threadIndex=ti;
 
     t->osThread.init(OSThreadFunc,param);
-    return 0;
+    return ti;
 }
 bool Context::ensureScopes(uint depth){
     auto& scopes = getThread(currentThread)->scopes;
@@ -386,6 +437,7 @@ void Context::execute(Bytecode& code, Performance* perf){
     uint64 executedLines = 0;
 
     int instPerThread = 50;
+    double threadSleep = 0.05;
     int roundRobinTick = 0;
     while(true){
         // if(executedInsts>=INST_LIMIT){
@@ -399,19 +451,28 @@ void Context::execute(Bytecode& code, Performance* perf){
             roundRobinTick = instPerThread;
             int newIndex = currentThread;
             bool fullBreak=false;
+            bool fullContinue=false;
+            bool waitForOSThread=false;
             while (true) {
                 newIndex = (newIndex + 1) % userThreads.used;
                 UserThread* t = (UserThread*)userThreads.data + newIndex;
+                // log::out << "[T "<<newIndex<<"] "<<ThreadStateToString(t->state)<<"\n";
                 if(t->state == UserThread::Waiting){
                     UserThread* tj = (UserThread*)userThreads.data + t->waitingFor;
                     if(tj->state==UserThread::Finished){
                         t->state = UserThread::Active;
                         Ref& reg = ((Scope*)t->scopes.data + t->currentScope)->references[t->inRef];
+                        // log::out <<"OS result: "<< tj->outRef.type << " "<<tj->outRef.index<<"\n";
                         reg = tj->outRef;
                         t->waitingFor = -1;
                         
-                        tj->state = UserThread::Inactive;   
+                        tj->state = UserThread::Inactive;
+                        if(tj->osThread.joinable())
+                            tj->osThread.join();
                     }
+                }
+                if(t->state==UserThread::OSActive){
+                    waitForOSThread = true;   
                 }
                 if (t->state == UserThread::Active){
                     if(currentThread!=newIndex){
@@ -421,11 +482,19 @@ void Context::execute(Bytecode& code, Performance* perf){
                     break;
                 }
                 if (newIndex == currentThread) {
+                    if(waitForOSThread){
+                        _CLOG_THREAD(log::out << "Waiting for OSThread to finish\n";)
+                        fullContinue=true;
+                        engone::Sleep(threadSleep); // Semaphore might be better, but this is much easier
+                        break;
+                    }
                     log::out << "All user threads are inactive or blocked, stopping...\n";
                     fullBreak=true;
                     break;
                 }
             }
+            if(fullContinue)
+                continue;
             if (fullBreak)
                 break;
         }
@@ -1339,19 +1408,43 @@ void Context::execute(Bytecode& code, Performance* perf){
                         else if(r0.type==REF_NUMBER)
                             arg = getNumber(r0.index);
                         
-                        int ti = makeOSThread(func,r0.type,arg);
-                        n2->value = ti;
-
                         _CLOG(log::out << log::AQUA << LINST << ", external: '"<<name<<"' arg: '";
                         PrintRefValue(this,r0); log::out<<"'\n";)
-                        // Ref returnValue = func(this,r0.type,arg);
                         
-                        // delete argument
+                        int ti = makeOSThread(func,r0.type,r0.index,arg);
+                        n2->value = ti;
+
+                    }else{
+                        int index = name.find("cmd");
+                        int index2 = name.find("cmd.exe");
+                        std::string finaltemp;
+                        if(index==0 && index2!=0){
+                            finaltemp = "cmd.exe /C " + name.substr(3);
+                        }else{
+                            finaltemp = name;
+                        }
+                        if(r0.type==REF_NUMBER){
+                            Number* v0 = getNumber(r0.index);
+                            if(v0){
+                                finaltemp += " ";
+                                finaltemp += std::to_string(v0->value);
+                            }
+                        }else if(r0.type==REF_STRING){
+                            String* v0 = getString(r0.index);
+                            finaltemp += " ";
+                            finaltemp += *v0;
+                        }
+                        _CLOG(log::out << log::AQUA << LINST << ", exe: '"<<name<<"' arg: '";
+                        PrintRefValue(this,r0); log::out<<"'\n";)
+                        
                         if(r0.type==REF_NUMBER){
                             deleteNumber(r0.index);
                         } else if(r0.type==REF_STRING){
                             deleteString(r0.index);
                         }
+                        
+                        int ti = makeOSThread(finaltemp);
+                        n2->value = ti;
                     }
                 }else{
                     CERR << ", bad type in r1\n";
@@ -1369,7 +1462,7 @@ void Context::execute(Bytecode& code, Performance* perf){
                 Number* v0 = getNumber(r0.index);
                 if(!v0){
                     
-                    continue;   
+                    continue;
                 }
                 
                 getThread(currentThread)->state = UserThread::Waiting;
@@ -1683,6 +1776,19 @@ void Context::execute(Bytecode& code, Performance* perf){
             }
         }
     }
+    
+    for(int i=0;i<(int)userThreads.used;i++){
+        UserThread* t = (UserThread*)userThreads.data + i;
+        if(t->state!=UserThread::Inactive){
+            log::out << log::YELLOW << "Thread "<<i << ": "<<ThreadStateToString(t->state);
+            if(t->state==UserThread::Finished){
+                log::out <<" (should have joined with another thread to become Inactive)\n";
+            }else{
+                log::out <<" (bug in the compiler?)\n";
+            }
+        }
+    }
+    
     // exitScope();
 
     char temp[30];

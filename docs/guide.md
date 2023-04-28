@@ -1,6 +1,5 @@
 # Guide to the language
 A quick guide which doesn't go much into detail since things might change.
-I will have to excuse for some of the informal parts.
 
 ## Variables and expressions
 ```
@@ -13,11 +12,10 @@ the variable name. The right side is an expression.
 a = 1 + 2 - 3 * 4 / 5
 b = 1 + 2 * ( 3 * 4 - 5 ) / 5
 c = 1+1 == 2 && (9 || 0)
-z = a + b + c
+z = a + b % c
 ```
 Math works as you would expect from other languages like Javascript.
 Using variables in expressions also works like Javascript.
-There is no modulus operation yet.
 
 ```
 a = "hello"
@@ -81,15 +79,111 @@ each list {
 }
 ```
 
+## External functions
+These are implemented in C++. There are two places you can call them.
+In a body or where a statement begins like below.
+```
+print hello
+if 1 {
+    print Hello
+}
+```
+Or within an expression
+```
+result = #run tonum "911"
+if 1 == #run tonum "1"
+    print result
+```
 
-## Functions and executables (not complete)
-Some quick examples. More details will come later.
+#run is used when calling functions inside an expression.
+```
+rand = random        ->   ERROR: undefined random
+rand = #run random   ->   SUCCESS
+```
+
+Functions currently only allow one string as argument.
+This will certainly change at some point. Most tokens
+after the function name will be treated as a string (even if not quoted)
+unless it is a variable name. Tokens inside paranthesis
+will be treated as an expression.
+```
+print Milkshake: (is) tasty    ->     Error, undefined is
+```
+Line feed (\n) or semi-colon marks the end of the arguments.
+```
+print Okay; a = #run random   ->   STDOUT: 'Okay'  ASSIGN: a = some random number
+print Okay a = #run random    ->   STDOUT: 'Okay a = 0.2561'
+```
+
+Functions return a value as you may have noticed with '#run random'.
+The function below gives you a "list" of files from the current working directory
+based on the arguments. This is recursive meaning files in subfolder as well.
+```
+files = filterfiles *.cpp
+```
+
+You can find all external functions in
+[](src/BetBat/ExternalCalls.cpp)
+At the bottom you will find a function called GetExternalCall.
+This is what the interpreter uses to map strings to C++ functions.
+
+## Calling executables
+Simular to how it works in a shell.
 ```
 gcc.exe main.c     <- runs gcc
-
-print hello        <- print to console (stdout)
 ```
 
+The first part is the path to the executable.
+It can be a quoted token or a few tokens without a space.
+'gcc.exe' has three tokens and no space. Everything
+after are the command line arguments.
+
+You have to use .exe at the end. (may change but this is how it works right now)
+
+cmd is an abbreviation of 'cmd.exe /K'. No .exe is needed here.
+```
+cmd gcc main.c
+```
+
+## User functions
+These are defined like this:
+```
+log = {
+    print hey from log
+}
+```
+You can call them as you would with other functions
+```
+log
+a = 1 + (#run log)
+```
+
+The argument you pass is once again just one string.
+It is used like this:
+```
+add = {
+    sum = 0
+    each #arg {         #arg is "2 3"
+        sum += #tonum #v
+    }
+    return sum
+}
+print (#run add 2 3)   ->  STDOUT: '5'
+```
+#arg is the argument passed to the function.
+A function normally returns null but you can 
+return your own value.
+(read up on each in a previous section if you are wondering
+what it does)
+
+You can make functions inside functions and access
+variables outside the function.
+
+NOTE:
+How functions should access variables outside isn't decided yet.
+There are some problems when using asynchronous functions.
+
+## Asynchronous functions
 You can run a function asynchronously.
 ```
 fun = { for 10 print #arg }
@@ -100,12 +194,53 @@ fun 2
 the interpreter will switch between the active threads.
 The output of the code above will be mashed up ones and twos.
 
-The interpreter itself runs on one thread and so you will
-not gain any performance boost by using asynchronous functions.
+The interpreter itself runs on one thread and does a round
+robin on which user thread to run so you willnot gain
+any performance boost by using asynchronous functions.
 
-Every 50 or so instructions the interpreter does a round robin
-on active user threads. Each user thread has it's own
-program counter, stack and registers.
+However, executables and external functions can be
+run on another thread.
+```
+numThread = #async tonum "5"
+print TI: numThread
+print (10 + #join he)
+
+gccThread = #async gcc
+print Before GCC [gccThread]
+print Exit code: (#join g)
+```
+
+## Reading and writing to files
+This is done using <, > and >>.
+Code below reads a file and prints the content
+```
+content = ""
+content < file.txt
+print content
+```
+
+Write to a file
+```
+content = "Hello from a script"
+content > file.txt
+```
+
+Append to a file. > will overwrite the content of the file while >> will append.
+```
+content = "Hello from a script\n"
+content >> file.txt
+content = "A second message"
+content >> file.txt
+```
+
+The file path must be a string but it can also come from an expression
+```
+path = "file.txt"
+content = ""
+content < path
+
+content < ("file" + ".txt")
+```
 
 ## Preprocessor directives
 Note that these directives remove, add and rearrange tokens.
@@ -196,4 +331,4 @@ in any order as long as the macro exists at the time of evaluation.
 
 I want to end with the best for last and that is the idea of recursive macros.
 I encourage you to explore it for yourself before continuing reading but if
-you just want to know what it's about check out [](advanced.md)
+you just want to know what it's about check out [](docs/advanced.md)
