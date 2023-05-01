@@ -1,11 +1,10 @@
 #include "Engone/Logger.h"
 
+// Temporary
 //#include "Engone/Win32Includes.h"
 
 #include "Engone/PlatformLayer.h"
 
-// Temporary
-#include "Engone/Win32Includes.h"
 
 #include <time.h>
 

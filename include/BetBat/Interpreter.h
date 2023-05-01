@@ -57,7 +57,7 @@ struct Context {
 
     // engone::Memory scopes{sizeof(Scope)};
     // uint currentScope=0;
-    // engone::Memory valueStack{sizeof(Ref)}; // holds references to values
+    engone::Memory globalValueStack{sizeof(Ref)}; // holds references to values
     
     int currentThread = -1; // -1 indicates no thread
     engone::Memory userThreads{sizeof(UserThread)}; // holds references to values

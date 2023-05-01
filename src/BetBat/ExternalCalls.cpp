@@ -20,7 +20,6 @@ Ref ExtPrint(Context* context, int refType, void* value){
     context->getNumber(index)->value=1;
     return {REF_NUMBER,index};
 }
-
 Ref ExtRandom(Context* context, int refType, void* value){
     static std::uniform_real_distribution<double> dist(0.,1.);
     static std::mt19937 thing(std::chrono::system_clock::now().time_since_epoch().count());
@@ -29,27 +28,43 @@ Ref ExtRandom(Context* context, int refType, void* value){
     context->getNumber(index)->value = dist(thing);
     return {REF_NUMBER,index};
 }
+double Numify(String* str){
+    using namespace engone;
+    static char* buffer=0;
+    static const int BUFFER_SIZE=50;
+    if(!buffer){
+        buffer=(char*)malloc(BUFFER_SIZE+1);
+        if(!buffer){
+            log::out << log::RED<<__FUNCTION__<<": Alloc failed\n";
+            return {};
+        }
+    }
+    if(BUFFER_SIZE<str->memory.used){
+        log::out <<log::RED<< __FUNCTION__<<": Buffer to small\n";
+        return {};
+    }
+    memcpy(buffer,str->memory.data,str->memory.used);
+    buffer[str->memory.used]=0;
+    return atof(buffer);
+}
+Ref ExtFloor(Context* context, int refType, void* value){
+    if(!value) return {};
+    double num = 0;
+    if(refType==REF_NUMBER)
+        num = ((Number*)value)->value;
+    else if(refType==REF_STRING)
+        num = Numify((String*)value);
+    // engone::log::out << refType << " "<<value<<"\n";
+    int index = context->makeNumber();
+    context->getNumber(index)->value = floor(num);
+    return {REF_NUMBER,index};
+}
 Ref ExtToNum(Context* context, int refType, void* value){
     using namespace engone;
     double number=0;
     if(refType==REF_STRING){
         String* str = (String*)value;
-        static char* buffer=0;
-        static const int BUFFER_SIZE=50;
-        if(!buffer){
-            buffer=(char*)malloc(BUFFER_SIZE+1);
-            if(!buffer){
-                log::out << log::RED<<__FUNCTION__<<": Alloc failed\n";
-                return {};
-            }
-        }
-        if(BUFFER_SIZE<str->memory.used){
-            log::out <<log::RED<< __FUNCTION__<<": Buffer to small\n";
-            return {};
-        }
-        memcpy(buffer,str->memory.data,str->memory.used);
-        buffer[str->memory.used]=0;
-        number = atof(buffer);
+        number = Numify(str);
     }else if(refType==REF_NUMBER){
         Number* num = (Number*)value;
         number = num->value;
@@ -199,13 +214,16 @@ Ref ExtFilterFiles(Context* context, int refType, void* value){
 
     return {REF_STRING,outIndex};
 }
+
 ExternalCall GetExternalCall(const std::string& name){
     #define GETEXT(X,Y) if(name==X) return Y;
     GETEXT("print",ExtPrint)
     GETEXT("time",ExtTime)
+    GETEXT("filterfiles",ExtFilterFiles)
+
     GETEXT("tonum",ExtToNum)
     GETEXT("random",ExtRandom)
-    GETEXT("filterfiles",ExtFilterFiles)
+    GETEXT("floor",ExtFloor)
     
     return 0;
 }

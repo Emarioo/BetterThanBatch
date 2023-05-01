@@ -17,8 +17,8 @@
 // glfw3.h defines APIENTRY, redefinition in minwindef.h is found, it is annoying
 // #pragma warning( disable : 4005 )
 
-#include <winsock2.h>
-#include <ws2tcpip.h>
+// #include <winsock2.h>
+// #include <ws2tcpip.h>
 
 #include <windows.h>
 

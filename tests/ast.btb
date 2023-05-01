@@ -1,0 +1,4 @@
+@disable all
+@enable parser
+
+a = 8

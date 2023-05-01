@@ -2,7 +2,12 @@
 A compiler and runtime for a new scripting language which
 doesn't use any libraries.
 
-Some basic features so far (not completed however, I have most likely missed many bugs)
+## Disclaimer
+- No automatic tests. Expect old broken features.
+- Limited functions to to interract with the operating system.
+- Windows only.
+
+## Features
 - Variables
 - Math expressions
 - If statements
@@ -15,6 +20,7 @@ Some basic features so far (not completed however, I have most likely missed man
 - #ifdef (exactly like C)
 - #unwrap (for macros)
 - Concatenation (.. instead of ## from C)
+- Asynchronous functions and multithreading (no locks)
 
 Structs and arrays will probably be left out unless a good idea on how
 to deal with them comes to mind.

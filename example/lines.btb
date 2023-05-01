@@ -1,4 +1,4 @@
-@disable interpreter
+// @disable interpreter
 files = #run filterfiles *.cpp *.h // Goodness me this code is soooo slow.
 t = #run time // Average time is 2 seconds for 9300 lines of code (roughly 30 files)
 
@@ -15,4 +15,4 @@ each file : files {
 			lines = lines + 1
 	}
 }
-// print lines "lines" in filecount "files" in (#run time t) seconds
+print lines "lines" in filecount "files" in (#run time t) seconds

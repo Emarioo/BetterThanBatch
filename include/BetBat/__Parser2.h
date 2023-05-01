@@ -70,8 +70,6 @@ struct ParseInfo {
     Function* addFunction(const std::string& name);
     std::string currentFunction; // empty means global
     
-    AST* ast=0;
-
     struct LoopScope{
         int iReg=0;
         int vReg=0;
@@ -86,6 +84,16 @@ struct ParseInfo {
     std::vector<LoopScope> loopScopes;
     std::vector<FuncScope> funcScopes;
 
+    // Todo: converting from Token to std::string can be slow since it may
+    //   require memory to be allocated. Make a custom hash map?
+    std::unordered_map<std::string,uint> nameOfNumberMap;
+    std::unordered_map<std::string,uint> nameOfStringMap;
+
+    struct IncompleteInstruction{
+        int instIndex=0;
+        Token token;
+    };
+    std::vector<IncompleteInstruction> instructionsToResolve;
 
     // Does not handle out of bounds
     Token &prev();
@@ -106,5 +114,14 @@ struct ParseInfo {
 
     void nextLine();
 };
+struct ExpressionInfo {
+    int acc0Reg = 0;
+    int regCount=0;
+    int operations[5]{0};
+    int opCount=0;  
+};
 
-AST* ParseTokens(Tokens& tokens, int* outErr=0);
+Bytecode GenerateScript(Tokens& tokens, int* outErr=0);
+Bytecode GenerateInstructions(Tokens& tokens, int* outErr=0);
+
+std::string Disassemble(Bytecode& code);

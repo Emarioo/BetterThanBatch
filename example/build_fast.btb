@@ -1,0 +1,125 @@
+/*
+    Slightly faster and messier script
+*/
+
+// @disable optimizer
+
+// #define USE_GCC
+
+#define USE_MSVC
+
+#define GCC_INCLUDE_DIRS -Iinclude
+#define GCC_DEFINITIONS -DWIN32
+#define GCC_COMPILE_OPTIONS -std=c++14 -g
+#define GCC_WARN -Wall -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
+
+#define MSVC_COMPILE_OPTIONS /std:c++14 /nologo /TP /EHsc
+#define MSVC_LINK_OPTIONS /nologo /debug
+#define MSVC_INCLUDE_DIRS /Iinclude
+#define MSVC_DEFINITIONS /DWIN32
+
+cmd mkdir bin 2> nul
+
+find = {
+    correct = 0
+    for #arg.length {
+        if #arg[#i] == "/bin/"[correct] {
+            correct++
+            if correct == "/bin/".length
+                return 1
+        } else
+            correct = 0
+    }
+    return 0
+}
+
+
+srcfile = "bin\\all2.txt"
+
+srcfiles = ""
+
+temp = ""
+temp > srcfile
+files = #run filterfiles *.cpp
+count = 0
+each file : files {
+    // t = file
+    // print (file.length)
+    hasbin = #run find file
+    // print hasbin
+    if hasbin
+        continue
+    // print file
+    temp = "#include \""+file+"\"\n"
+    temp >> srcfile
+
+    srcfiles+=" "+file
+    count++;
+}
+
+startTime = #run time
+
+files = ""
+index = 0
+threads = ""
+BATCH = 1
+each srcfiles {
+    if BATCH == 1 {
+        name = "bin/"+index+".obj"
+        namef = "/Fo"+name
+        index++
+        t = #async cl.exe /c MSVC_COMPILE_OPTIONS MSVC_INCLUDE_DIRS MSVC_DEFINITIONS #v /Z7 namef
+        threads += " "+t
+        files += name+" "
+    } else {
+        f = "bin/" + ( #run floor (index / BATCH))
+        f += ".txt"
+        if index % BATCH == 0 {
+            text = ""
+            text > f
+        }
+        text = "#include \""+#v+"\"\n";
+        text >> f
+
+        index++
+        if index % BATCH == 0 || index == count {
+            name = "bin/"+index+".obj"
+            namef = "/Fo"+name
+            t = #async cl.exe /c MSVC_COMPILE_OPTIONS MSVC_INCLUDE_DIRS MSVC_DEFINITIONS f /Z7 namef
+            threads += " "+t
+            files += name+" "
+        }
+    }
+}
+print THREADS: threads
+each threads {
+    nam = #run tonum #v
+    val = #join nam
+}
+print final
+// err = #run cl.exe MSVC_COMPILE_OPTIONS MSVC_INCLUDE_DIRS MSVC_DEFINITIONS srcfile /Z7 /Fobin/all.obj /link MSVC_LINK_OPTIONS shell32.lib /OUT:bin/program2.exe
+err = #run link.exe MSVC_LINK_OPTIONS shell32.lib files /OUT:bin/program2.exe
+
+    //  /link MSVC_LINK_OPTIONS shell32.lib /OUT:bin/program2.exe
+
+// // err = 0
+
+// // #ifdef USE_MSVC
+// //     #ifdef USE_GCC
+// //         g++ GCC_WARN GCC_COMPILE_OPTIONS GCC_INCLUDE_DIRS GCC_DEFINITIONS srcfile -o bin/program_debug.exe
+// //     #endif
+
+// //     err = #run cl.exe MSVC_COMPILE_OPTIONS MSVC_INCLUDE_DIRS MSVC_DEFINITIONS srcfile /Z7 /Fobin/all.obj /link MSVC_LINK_OPTIONS shell32.lib /OUT:bin/program2.exe
+
+// // #else
+// //     err = #run g++ GCC_WARN GCC_COMPILE_OPTIONS GCC_INCLUDE_DIRS GCC_DEFINITIONS srcfile -o bin/program.exe
+// // #endif
+
+// seconds = #run time startTime
+
+// print Compile in seconds "seconds"
+
+// // if err==0 {
+//     // copy exe?
+//     // run prog?
+// // }

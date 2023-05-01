@@ -1,0 +1,25 @@
+/*
+    At the time of writing recursion doesn't work with
+    the current way registers and variables are stored and used.
+*/
+
+fun = {
+    at = (#run tonum #arg) - 1
+
+    print > at
+
+    if at == 0
+        return;
+
+    fun at
+    // at is shared in each recursive call and is therfore
+    // destroyed at some point, it can't be used after 
+    // the recursive call
+
+    at = (#run tonum #arg) -1
+    // we can assign again since #arg exist in a register.
+    // registers exist in a call stack. I know, they aren't really registers.
+    print < at
+}
+
+fun 4

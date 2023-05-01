@@ -1,17 +1,9 @@
 #include "BetBat/Optimizer.h"
 
-// #include "BetBat/Generator.h"
-
-#ifdef OLOG
-#define _OLOG(x) x;
-#else
-#define _OLOG(x) ;
-#endif
-
 bool OptimizeBytecode(Bytecode& code){
     using namespace engone;
     
-    _SILENT(log::out <<log::BLUE<< "\n##   Optimizer\n";)
+    _VLOG(log::out <<log::BLUE<< "##   Optimizer   ##\n";)
     
     int oldMemory = code.getMemoryUsage();
     std::vector<int> removedInsts;
@@ -279,14 +271,14 @@ bool OptimizeBytecode(Bytecode& code){
     //  Not how many actual constants there were. removedNumbers/Strings still
     //  represent how many constants were removed
 
-    _SILENT(
-    if(removedNumbers!=0)log::out << "Removed "<<(removedNumbers)<<" const. numbers\n";
+    _VLOG(
+    if(removedNumbers!=0)log::out << "Removed "<<FormatUnit((uint64)removedNumbers)<<" const. numbers\n";
     _OLOG(for(auto& pair : numberConstants){
         if(pair.second.count>1){
             log::out << " "<<pair.first<<": "<<pair.second.count<<" usages\n";
         }
     })
-    if(removedStrings!=0)log::out << "Removed "<<(removedStrings)<<" const. strings\n";
+    if(removedStrings!=0)log::out << "Removed "<<FormatUnit((uint64)removedStrings)<<" const. strings\n";
     _OLOG(for(auto& pair : stringConstants){
         if(pair.second.count>1){
             log::out << " "<<pair.first<<": "<<pair.second.count<<" usages\n";
@@ -317,10 +309,10 @@ bool OptimizeBytecode(Bytecode& code){
     
     int freedMemory = oldMemory-code.getMemoryUsage();
     
-    _SILENT(log::out << "Optimized away "<<removedInsts.size()<<" instructions, ";)
+    _VLOG(log::out << "Optimized away "<<FormatUnit(removedInsts.size())<<" instructions, ";)
     if(freedMemory!=0){
-        _SILENT(log::out <<"freed "<<freedMemory<<" bytes";)
+        _VLOG(log::out <<"freed "<<FormatBytes(freedMemory);)
     }
-    _SILENT(log::out << "\n";)
+    _VLOG(log::out << "\n";)
     return true;
 }

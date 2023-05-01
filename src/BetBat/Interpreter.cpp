@@ -4,17 +4,6 @@
 #include "BetBat/Utility.h"
 #include <string.h>
 
-#ifdef CLOG
-#define _CLOG(x) x;
-#else
-#define _CLOG(x) ;
-#endif
-
-#ifdef CLOG_THREAD
-#define _CLOG_THREAD(X) X
-#else
-#define _CLOG_THREAD(X)
-#endif
 
 const char* RefToString(int type){
     #define REFCASE(x) case x: return #x;
@@ -410,7 +399,7 @@ bool Context::ensureScopes(uint depth){
 void Context::execute(Bytecode& code, Performance* perf){
     using namespace engone;
     activeCode = code;
-    _SILENT(log::out << log::BLUE<< "\n##   Execute   ##\n";)
+    _VLOG(log::out << log::BLUE<< "##   Execute   ##\n";)
     // int programCounter=0;
 
     // ProvideDefaultCalls(externalCalls);
@@ -485,10 +474,12 @@ void Context::execute(Bytecode& code, Performance* perf){
                     if(waitForOSThread){
                         _CLOG_THREAD(log::out << "Waiting for OSThread to finish\n";)
                         fullContinue=true;
+                        auto extraTime = MeasureSeconds();
                         engone::Sleep(threadSleep); // Semaphore might be better, but this is much easier
+                        excessTime += StopMeasure(extraTime);
                         break;
                     }
-                    log::out << "All user threads are inactive or blocked, stopping...\n";
+                    _VLOG(log::out << log::GRAY<< "All user threads are inactive or blocked, stopping...\n";)
                     fullBreak=true;
                     break;
                 }
@@ -517,16 +508,18 @@ void Context::execute(Bytecode& code, Performance* perf){
         inst = *((Instruction*)activeCode.codeSegment.data + nowProgramCounter);
         
         #ifdef USE_DEBUG_INFO
-        #ifdef PRINT_DEBUG_LINES
         Bytecode::DebugLine* debugLine = activeCode.getDebugLine(programCounter-1);
         if(debugLine&&debugLine->line!=atLine){
             atLine = debugLine->line;
             executedLines++;
             
+            // we need print_debug inside because we want to calculate
+            // executed lines
+            #ifdef PRINT_DEBUG_LINES
             _CLOG(log::out <<"\n";)
             log::out << *debugLine<<"\n";
+            #endif
         }
-        #endif
         #endif
 
         executedInsts++;
@@ -1789,20 +1782,12 @@ void Context::execute(Bytecode& code, Performance* perf){
         }
     }
     
-    // exitScope();
 
-    char temp[30];
-    auto formatUnit = [&](double number){
-        if(number<1000) sprintf(temp,"%llu",(uint64)number);
-        else if(number<1e6) sprintf(temp,"%.2lf K",number/1000.f);
-        else if(number<1e9) sprintf(temp,"%.2lf M",number/1e6);
-        else sprintf(temp,"%.2lf G",number/1e9);
-    };
     // Note: excessTime comes from time spent in other programs with engone::StartProgram
     //  Not sure how accurate the time measuring if you call StartProgram a lot
     //  and each time use MeasureSeconds and StopMeasure.
     //  Maybe everything is fine I am just not sure if you want precise data.
-    double executionTime = StopMeasure(startTime) - excessTime;
+    double executionTime = StopMeasure(startTime);
     
     if(perf){
         perf->instructions = executedInsts;
@@ -1810,27 +1795,27 @@ void Context::execute(Bytecode& code, Performance* perf){
     }
 
     bool summary=false;
-    _SILENT(summary=true;)
+    _VLOG(summary=true;)
 
     if(summary){
-        double nsPerInst = executionTime/executedInsts*1e9;
-        double nsPerLine = executionTime/executedLines*1e9;
+        double nsPerInst = executionTime/executedInsts;
+        double nsPerLine = executionTime/executedLines;
+        double instPerS = executedInsts/executionTime;
         // Todo: note that APICalls and executables are included. When calling those
         //  you can measure the time in those functions and subtract it from instruction time.
         log::out << log::BLUE<<"##   Summary   ##\n";
         
         // Note: In reality executedLines stands for how often execution switched to a different line.
         // It doesn't represent how many complex lines were executed.
+        log::out << " Execution time: "<<FormatTime(executionTime);
+        if (excessTime!=0) log::out<<" ("<<FormatTime(executionTime-excessTime)<<" not including time calling executables)\n";
+        else log::out<<"\n";
         #ifdef USE_DEBUG_INFO
-        formatUnit(executedLines);
-        log::out << " "<<temp<<" lines in "<<executionTime<<" seconds (avg "<<nsPerLine<<" ns/line)\n";
+        log::out << " "<<FormatUnit((uint64)executedLines)<<" lines (avg "<<FormatTime(nsPerLine)<<"/line)\n";
         #endif
-        formatUnit(executedInsts);
-        log::out << " "<< temp<<" instructions in "<<executionTime<<" seconds (avg "<<nsPerInst<<" ns/inst)\n";
+        log::out << " Instructions: "<< FormatUnit((uint64)executedInsts)<<"\n  "<<"(avg "<<FormatTime(nsPerInst)<<"/inst, "
+            << FormatUnit(instPerS)<<" insts/s)\n";
         
-        double instPerS = executedInsts/executionTime;
-        formatUnit(instPerS);
-        log::out << " "<< temp<<" instructions per second ("<<temp<<"Hz)\n";
     }
     if(numberCount!=0||stringCount!=0){
         log::out << log::RED<<"Context finished with "<<numberCount << " numbers and "<<stringCount << " strings (n.used "<<numbers.used<<", s.used "<<strings.used<<")\n";

@@ -5,12 +5,6 @@
 #define PERRTL(token) info.errors++;engone::log::out << engone::log::RED << "PreProcError "<< token.line <<":"<<(token.column+token.length)<<": "
 #define PWARNT(token) engone::log::out << engone::log::YELLOW << "PreProcWarning "<< token.line <<":"<<token.column<<": "
 
-#ifdef PLOG
-#define _PLOG(X) X
-#else
-#define _PLOG(X) ;
-#endif
-
 // #define PLOG_MATCH(X) X
 #define PLOG_MATCH(X)
 
@@ -398,6 +392,14 @@ int ParseToken(PreprocInfo& info);
 int ParseIfdef(PreprocInfo& info, bool attempt){
     using namespace engone;
     bool notDefined=false;
+
+    // Token ch = info.get(info.at()+1);
+    // Token ch2 = info.get(info.at()+2);
+    // if(ch2=="#"){
+    //     log::out << "maybe stop\n";
+
+    // }
+
     int result = ParseDirective(info,attempt,"ifdef");
     if(result==PARSE_BAD_ATTEMPT){
         result = ParseDirective(info,attempt,"ifndef");
@@ -410,17 +412,17 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
     // otherwise success!
     
     attempt = false;
-    Token token = info.next();
+    Token name = info.next();
     
     RootMacro* defined = 0;
-    bool yes = nullptr != info.matchMacro(token);
+    bool active = info.matchMacro(name);
     if(notDefined)
-        yes = !yes;
+        active = !active;
     
     int depth = 0;
     int error = PARSE_SUCCESS;
     // bool hadElse=false;
-    // log::out << "     enter ifdef loop\n";
+    _PLOG(log::out << log::GRAY<< "   ifdef - "<<name<<"\n";)
     while(!info.end()){
         Token token = info.get(info.at()+1);
         if(token==PREPROC_TERM){
@@ -432,46 +434,36 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
             // If !yes we can skip these tokens, otherwise we will have
             //  to skip them later which is unnecessary computation
             if(token=="ifdef" || token=="ifndef"){
-                if(!yes){
+                if(!active){
                     info.next();
                     info.next();
                     depth++;
-                    // log::out << log::GRAY<< " depth "<<depth<<"\n";
+                    // log::out << log::GRAY<< "   ifdef - new depth "<<depth<<"\n";
                 }
-                continue;
-            }
-            if(token=="endif"){
+                // continue;
+            }else if(token=="endif"){
                 if(depth==0){
                     info.next();
                     info.next();
-                    // log::out << log::GRAY<< " break\n";
+                    _PLOG(log::out << log::GRAY<< "   endif - "<<name<<"\n";)
                     break;
                 }
+                // log::out << log::GRAY<< "   endif - new depth "<<depth<<"\n";
                 depth--;
                 continue;
-                // log::out << log::GRAY<< " depth "<<depth<<"\n";
-            }
-            if(token == "else"){ // we allow multiple elses, they toggle active and inactive sections
+            }else if(token == "else"){ // we allow multiple elses, they toggle active and inactive sections
                 if(depth==0){
                     info.next();
                     info.next();
-                    // if(hadElse){
-                    //     PERRT(info.get(info.at()-1)) << "Already had else\n";
-                    //     error = PARSE_ERROR;
-                    //     // best option is to continue
-                    //     // things will break more if we return suddenly
-                    // }else{
-                        // log::out << log::GRAY<< " flip\n";
-                        yes = !yes;
-                        // hadElse=true;
-                    // }
+                    active = !active;
+                    _PLOG(log::out << log::GRAY<< "   else - "<<name<<"\n";)
                     continue;
                 }
             }
         }
         // Todo: what about errors?
         
-        if(yes){
+        if(active){
             result = ParseToken(info);
         }else{
             Token skip = info.next();
@@ -731,7 +723,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
                         ref.flags |= TOKEN_QUOTED;
                     }
                     evalInfo.output.push_back(ref);
-                    _PLOG(log::out << log::GRAY <<"  eval.out << "<<argTok<<"\n");
+                    _PLOG(log::out << log::GRAY <<"  eval.out << "<<argTok<<"\n";);
                 }
             }
             wasQuoted=false;
@@ -777,7 +769,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
             }
 
             evalInfo.output.push_back(tokens[index-1]);
-            _PLOG(log::out << log::GRAY <<" eval.out << "<<token<<"\n");
+            _PLOG(log::out << log::GRAY <<" eval.out << "<<token<<"\n";);
         }
     }
     info.evaluationDepth--;
@@ -887,7 +879,7 @@ int ParseToken(PreprocInfo& info){
 }
 void Preprocess(Tokens& inTokens, int* error){
     using namespace engone;
-    _SILENT(log::out <<log::BLUE<<  "\n##   Preprocessor   ##\n";)
+    _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
     
     PreprocInfo info{};
     info.tokens.tokenData.resize(inTokens.tokenData.max*10); // hopeful estimation

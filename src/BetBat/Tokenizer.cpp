@@ -4,18 +4,55 @@
 #include "BetBat/Tokenizer.h"
 #include "Engone/PlatformLayer.h"
 
-#ifdef TLOG
-#define _TLOG(x) x;
-#else
-#define _TLOG(x) ;
-#endif
-
 int IsInteger(Token& token){
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
         if(chr<'0'||chr>'9'){
             return false;
         }
+    }
+    return true;
+}
+double ConvertDecimal(Token& token){
+    // Todo: string is not null terminated
+    //  temporariy changing character after token
+    //  is not safe since it could be a memory violation
+    char tmp = *(token.str+token.length);
+    *(token.str+token.length) = 0;
+    double num = atof(token.str);
+    *(token.str+token.length) = tmp;
+    return num;
+}
+bool IsName(Token& token){
+    if(token.flags&TOKEN_QUOTED) return false;
+    for(int i=0;i<token.length;i++){
+        char chr = token.str[i];
+        if(i==0){
+            if(!((chr>='A'&&chr<='Z')||
+            (chr>='a'&&chr<='z')||chr=='_'))
+                return false;
+        } else {
+            if(!((chr>='A'&&chr<='Z')||
+            (chr>='a'&&chr<='z')||
+            (chr>='0'&&chr<='9')||chr=='_'))
+                return false;
+        }
+    }
+    return true;
+}
+// Can also be an integer
+int IsDecimal(Token& token){
+    if(token.flags&TOKEN_QUOTED) return false;
+    if(token==".") return false;
+    int hasDot=false;
+    for(int i=0;i<token.length;i++){
+        char chr = token.str[i];
+        if(hasDot && chr=='.')
+            return false; // cannot have 2 dots
+        if(chr=='.')
+            hasDot = true;
+        else if(chr<'0'||chr>'9')
+            return false;
     }
     return true;
 }
@@ -234,7 +271,7 @@ Tokens Tokenize(engone::Memory& textData){
         log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
         return {};
     }
-    _SILENT(log::out << log::BLUE<< "\n##   Tokenizer   ##\n";)
+    _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
     // Todo: handle errors like outTokens.add returning false
     
     char* text = (char*)textData.data;
@@ -341,7 +378,7 @@ Tokens Tokenize(engone::Memory& textData){
                 token.flags |= TOKEN_QUOTED;
                 
                 // _TLOG(log::out << " : Add " << token << "\n";)
-                _TLOG(log::out << "\" : End quote\n";)
+                _TLOG(if(token.length!=0) log::out << "\n"; log::out << "\" : End quote\n";)
                 
                 outTokens.add(token);
                 token = {};
@@ -430,6 +467,7 @@ Tokens Tokenize(engone::Memory& textData){
             canBeDot=false;
             outTokens.add(token);
             token = {};
+            _TLOG(log::out << "\n";)
         }
         if(!inComment&&!inQuotes){
             if(isComment){
@@ -558,7 +596,7 @@ Tokens Tokenize(engone::Memory& textData){
             }
             
             // this scope only adds special token
-            _TLOG(printf("%c",chr);)
+            _TLOG(log::out << chr;)
             token = {};
             token.str = (char*)outTokens.tokenData.used;
             token.length = 1;
@@ -580,21 +618,21 @@ Tokens Tokenize(engone::Memory& textData){
                 index++;
                 column++;
                 token.length++;
-                _TLOG(printf("%c",nextChr);)
+                _TLOG(log::out << nextChr;)
                 outTokens.append(nextChr);
             }else if(chr=='.'&&nextChr=='.'&&nextChr2=='.'){
                 index+=2;
                 column+=2;
                 token.length+=2;
-                _TLOG(printf("%c",nextChr);)
-                _TLOG(printf("%c",nextChr2);)
+                _TLOG(log::out << nextChr;)
+                _TLOG(log::out << nextChr2;)
                 outTokens.append(nextChr);
                 outTokens.append(nextChr2);
             }else if(chr=='.'&&nextChr=='.'){
                 index+=1;
                 column+=1;
                 token.length+=1;
-                _TLOG(printf("%c",nextChr);)
+                _TLOG(log::out << nextChr;)
                 outTokens.append(nextChr);
             }
             if(index<length)
@@ -609,6 +647,7 @@ Tokens Tokenize(engone::Memory& textData){
             else if(nextChr==' ')
                 token.flags = TOKEN_SUFFIX_SPACE;
             // _TLOG(log::out << " : Add " << token <<"\n";)
+            _TLOG(log::out << " : special\n";)
             outTokens.add(token);
             token = {};
         }

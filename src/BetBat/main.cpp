@@ -2,57 +2,38 @@
 #include "BetBat/Compiler.h"
 #include "BetBat/TestSuite.h"
 
-// #include "Engone/Win32Includes.h"
-
 #include "BetBat/Utility.h"
+
+void print_help(){
+    using namespace engone;
+    log::out << log::BLUE << "##   HELP   ##\n";
+    log::out << log::GOLD << "compiler.exe [file0 file1 ...]: "<<log::SILVER;
+    log::out << "Arguments after the executable specifies script files to compile. "
+             << "They will be compiled and run seperately.\n";
+    log::out << log::LIME << " Examples:\n";
+    log::out << "  compiler.exe file0.btb script.txt\n";
+    log::out << "\n";
+    log::out << log::GOLD << "compiler.exe -log [type0,type1,...]: "<<log::SILVER;
+    log::out << "Prints debug info. The argument after determines what "
+             << "type of info to print. Types are tokenizer, preprocessor, parser, "
+             << "optimizer, interpreter and threads. Comma can be used to specify multiple. "
+             << "Script files can be specified before and after\n";
+    log::out << log::LIME << " Examples:\n";
+    log::out << "  compiler.exe script.btb -log  "<<log::GRAY<<"(log by itself gives some basic information)\n";
+    log::out << "  -log tok          "<<log::GRAY<<"(extra info about tokenizer)\n";
+    log::out << "  -log pre,par,thr  "<<log::GRAY<<"(extra info about preprocessor, parser and threads)\n";
+    log::out << "  -log opt,int      "<<log::GRAY<<"(extra info about optimizer and interpreter)\n";
+}
 
 int main(int argc, const char** argv){
     using namespace engone;
 
-    // const char* hm = R"(
-    // // Okay koapjdopaJDOPjAODjoöAJDoajodpJAPdjkpajkdpakPDKpakdpakpakdpAKdpjAPJDpAKDpaKPDkAPKDpaKDkAPKDpAKPDkaPDkpAKDpAKPDkaPDKpAKPDkaPKDpaKDdapdkmpadkpöakldpaklpdkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkkk___D:ADKPAD_AD__DA_DPA_DP-D-HF_AH_FhaFh-iawHF_ha_F__paklfalflaflak,fp<jkbpm hyO IWHBRTOAWHJOÖBTJMAPÄWJNPTÄAin2åpbtImawäpå-tib,äawåtbiäåaJODjaodjAOJdoajDoaJKOdjaoJDoaJodjaOdjaoJdoaJKODkaopKDpoAKPODkaPKDpkaPDkap Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess Okay i guess
-    // )";
-    
-    // auto mem = ReadFile("tests/benchmark/string.btb");
-    // fwrite(mem.data,1,mem.used,stdout);
-    // return 0;
-    // printf("%s",hm);
-    // printf("%s",hm);
-    // printf("%s",hm);
-    // fwrite(file);
-    // HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
-    // printf("%p\n",h);
-    // FileWrite((APIFile*)((uint64)h+1),hm,strlen(hm));
-    // FileWrite((APIFile*)((uint64)h+1),hm,strlen(hm));
-    // return 0;
-    
-    // auto pipe = PipeCreate(false,true);
-    
-    // std::string cmd = "cmd /C \"dir\"";
-    // StartProgram("",(char*)cmd.data(),0,0,0,pipe);
-    
-    // char buffer[1024];
-    // while(1){
-    //     int bytes = PipeRead(pipe,buffer,sizeof(buffer));
-    //     printf("Read %d\n",bytes);
-    //     if(!bytes)
-    //         break;
-    //     for(int i=0;i<bytes;i++){
-    //         printf("%c",buffer[i]);
-    //     }
-    //     printf("\n");
-    // }
-    // printf("Done\n");
-    
-    // PipeDestroy(pipe);
-    
-    // return 0;
-    
-    // log::out.enableReport(false);
+    log::out.enableReport(false);
 
     #define IfArg(X) if(!strcmp(arg,X))
     #define MODE_TEST 1
     #define MODE_RUN 2
+    #define MODE_LOG 3
     int mode = MODE_RUN;
 
     std::vector<std::string> tests; // could be const char*
@@ -66,12 +47,54 @@ int main(int argc, const char** argv){
             mode = MODE_TEST;
         } else IfArg("-testall") {
             TestSuite(tests,true);
-        } else IfArg("-run") {
-            mode = MODE_RUN;
-        } else if(mode==MODE_RUN){
+        } else IfArg("-log") {
+            mode = MODE_LOG;
+            SetLog(LOG_OVERVIEW,true);
+        }else if(mode==MODE_RUN){
             files.push_back(arg);
         } else if(mode==MODE_TEST){
+            mode = MODE_RUN;
             tests.push_back(arg);
+        } else if(mode==MODE_LOG) {
+            mode = MODE_RUN;
+            
+            int corrects[6]{0};
+            const char* strs[]{"tokenizer","preprocessor","parser","optimizer","interpreter","threads"};
+            
+            for (int j=0;j<len;j++){
+                char chr = arg[j];
+                if(chr!=','){
+                    for (int k=0;k<6;k++){
+                        // log::out << "T "<<k<<" "<<chr<<"\n";
+                        if(strs[k][corrects[k]] == chr){
+                            // log::out << "R "<<k<<" "<<chr<<"\n";
+                            corrects[k]++;
+                            if(corrects[k] == (int)strlen(strs[k])){
+                                corrects[k] = 0;
+                                SetLog(1<<k,true);
+                            }
+                        }else{
+                            corrects[k]=0;
+                        }
+                    }
+                }
+                if(chr == ',' || j+1 == len){
+                    int max = 0;
+                    int index = -1;
+                    for (int k=0;k<6;k++){
+                        if(corrects[k] >= max){
+                            index = k;
+                            max = corrects[k];
+                        }
+                        corrects[k] = 0;
+                    }
+                    // log::out << "on "<<index<<"\n";
+                    if(index!=-1){
+                        SetLog(1<<index,true);
+                    }
+                    continue;
+                }
+            }
         }
     }
     if(!tests.empty()){
@@ -80,8 +103,11 @@ int main(int argc, const char** argv){
     for(std::string& file : files){
         CompileScript(file.c_str());
     }
-    if(argc<2){
-        log::out << "No input files!\n";
+    if(files.size()==0){
+        // print_help();
+        // log::out << "No input files!\n";
+
+        // CompileScript("tests/ast.btb");
         
         // log::out.enableConsole(false);
         // TestVariableLimit(10000);
@@ -103,7 +129,7 @@ int main(int argc, const char** argv){
         // CompileScript("example/pipes.btb");
         // CompileScript("example/lines.btb");
         // CompileScript("example/typedefify.btb");
-        // CompileScript("example/loggifier.btb");
+        CompileScript("example/loggifier.btb");
         // CompileScript("example/findmax.btb");
         // CompileScript("example/async.btb");
         // CompileScript("tests/simple/assignment.btb");
@@ -111,11 +137,12 @@ int main(int argc, const char** argv){
         // CompileScript("example/sumcol.btb");
         // CompileScript("example/cgen.btb");
         // CompileScript("example/osthread.btb");
-        CompileScript("example/scopes.btb");
+        // CompileScript("example/recursion.btb");
         // CompileScript("tests/constoptim.btb");
         // CompileScript("tests/benchmark/string.btb", 10);
         // CompileScript("tests/script/eh.btb");
         // CompileScript("example/build.btb");
+        // CompileScript("example/build_fast.btb");
         // CompileScript("tests/simple/ops.btb");
 
         // CompileInstructions("tests/inst/stack.btb");

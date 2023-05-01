@@ -1,6 +1,6 @@
 //@disable all
 
-findmax = { 
+findmax = (a,x) { 
     max = 0 
     each #arg { 
         num = #run tonum #v;
@@ -9,4 +9,15 @@ findmax = {
     }
     return max
 }
+
+// hey : (()->void,) {
+
+// }
+// print ((){
+    
+// })
+
+// print findmax
+
 print (#run findmax 23 93 28 11 43 61 82 3)
+// print (#run findmax #spaced [23 93 28 11 43 61 82 3])

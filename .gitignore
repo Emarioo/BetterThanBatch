@@ -1,4 +1,6 @@
 bin
-*.exe
 logs
+.exe
 .vs
+
+!versions/

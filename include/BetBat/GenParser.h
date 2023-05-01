@@ -4,7 +4,6 @@
 #include "BetBat/Value.h"
 #include "BetBat/ExternalCalls.h"
 #include "BetBat/Bytecode.h"
-#include "BetBat/AST.h"
 
 #include <unordered_map>
 
@@ -23,8 +22,8 @@
 // success but no accumulation
 #define PARSE_NO_VALUE 3
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
-struct ParseInfo {
-    ParseInfo(Tokens& tokens) : tokens(tokens){}
+struct GenParseInfo {
+    GenParseInfo(Tokens& tokens) : tokens(tokens){}
     Bytecode code{};
     uint index=0;
     Tokens& tokens;
@@ -40,7 +39,7 @@ struct ParseInfo {
         std::vector<int> delRegisters;
         // how many instructions it takes to
         // delete variables
-        int getInstsBeforeDelReg(ParseInfo& info);
+        int getInstsBeforeDelReg(GenParseInfo& info);
         void removeReg(int reg);
     };
     std::vector<Scope> scopes;
@@ -70,8 +69,6 @@ struct ParseInfo {
     Function* addFunction(const std::string& name);
     std::string currentFunction; // empty means global
     
-    AST* ast=0;
-
     struct LoopScope{
         int iReg=0;
         int vReg=0;
@@ -86,6 +83,16 @@ struct ParseInfo {
     std::vector<LoopScope> loopScopes;
     std::vector<FuncScope> funcScopes;
 
+    // Todo: converting from Token to std::string can be slow since it may
+    //   require memory to be allocated. Make a custom hash map?
+    std::unordered_map<std::string,uint> nameOfNumberMap;
+    std::unordered_map<std::string,uint> nameOfStringMap;
+
+    struct IncompleteInstruction{
+        int instIndex=0;
+        Token token;
+    };
+    std::vector<IncompleteInstruction> instructionsToResolve;
 
     // Does not handle out of bounds
     Token &prev();
@@ -106,5 +113,14 @@ struct ParseInfo {
 
     void nextLine();
 };
+struct ExpressionInfo {
+    int acc0Reg = 0;
+    int regCount=0;
+    int operations[5]{0};
+    int opCount=0;  
+};
 
-AST* ParseTokens(Tokens& tokens, int* outErr=0);
+Bytecode GenerateScript(Tokens& tokens, int* outErr=0);
+Bytecode GenerateInstructions(Tokens& tokens, int* outErr=0);
+
+std::string Disassemble(Bytecode& code);

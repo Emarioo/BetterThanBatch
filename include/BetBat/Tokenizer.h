@@ -4,6 +4,7 @@
 #include "Engone/Logger.h"
 #include "Engone/Typedefs.h"
 
+#include "BetBat/Utility.h"
 #include "BetBat/Config.h"
 
 #include <string.h>
@@ -74,6 +75,10 @@ struct Tokens {
     
     bool copy(Tokens& out);
 };
+double ConvertDecimal(Token& token);
 int IsInteger(Token& token);
 int ConvertInteger(Token& token);
+bool IsName(Token& token);
+// Can also be an integer
+int IsDecimal(Token& token);
 Tokens Tokenize(engone::Memory& textData);

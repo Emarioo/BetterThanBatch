@@ -4,6 +4,8 @@
 #include "Engone/Logger.h"
 #include "BetBat/Config.h"
 
+#include <string>
+
 #define REF_NUMBER 1
 #define REF_STRING 2
 #define REF_NULL 3
