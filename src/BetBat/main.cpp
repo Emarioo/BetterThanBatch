@@ -107,7 +107,7 @@ int main(int argc, const char** argv){
         // print_help();
         // log::out << "No input files!\n";
 
-        // CompileScript("tests/ast.btb");
+        CompileScript("tests/ast.btb");
         
         // log::out.enableConsole(false);
         // TestVariableLimit(10000);
@@ -129,7 +129,7 @@ int main(int argc, const char** argv){
         // CompileScript("example/pipes.btb");
         // CompileScript("example/lines.btb");
         // CompileScript("example/typedefify.btb");
-        CompileScript("example/loggifier.btb");
+        // CompileScript("example/loggifier.btb");
         // CompileScript("example/findmax.btb");
         // CompileScript("example/async.btb");
         // CompileScript("tests/simple/assignment.btb");

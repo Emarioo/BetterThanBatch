@@ -421,11 +421,11 @@ Token CombineTokens(ParseInfo& info){
     return outToken;
 }
 
-int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy);
-int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt);
+// int ParseAssignment(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt, bool requestCopy);
+// int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt);
 
 // #fex
-int ParseExpression(ParseInfo& info, ASTExpression** expression, bool attempt){
+int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     using namespace engone;
     
     _GLOG(TRY)
@@ -523,13 +523,13 @@ int ParseExpression(ParseInfo& info, ASTExpression** expression, bool attempt){
         attempt = false;
         expectOperator=!expectOperator;
         if(ending){
-            *expression = values.back();
+            expression = values.back();
             _GLOG(EXIT)
             return PARSE_SUCCESS;
         }
     }
 }
-int ParseBody(ParseInfo& info, ASTBody** body, bool multiple);
+int ParseBody(ParseInfo& info, ASTBody*& body, bool multiple);
 // returns 0 if syntax is wrong for flow parsing
 int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
     using namespace engone;
@@ -1234,7 +1234,7 @@ int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
     return PARSE_SUCCESS;
 }
 // #fass
-int ParseAssignment(ParseInfo& info, ASTStatement** statement, bool attempt){
+int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
     
     _GLOG(TRY)
@@ -1252,10 +1252,10 @@ int ParseAssignment(ParseInfo& info, ASTStatement** statement, bool attempt){
     Token assign = info.get(info.at()+2);
     Token token = info.get(info.at()+3);
     
-    if(Equal(assign,"=")){
+    if(!Equal(assign,"=")){
         return PARSE_BAD_ATTEMPT;
     }
-    if(IsName(name)){
+    if(!IsName(name)){
         info.next(); // prevent loop
         ERRT(name) << "expected a valid name for assignment ('"<<name<<"' isn't)\n";
         return PARSE_ERROR;
@@ -1264,21 +1264,22 @@ int ParseAssignment(ParseInfo& info, ASTStatement** statement, bool attempt){
     info.next();
     info.next();
 
-    *statement = info.ast->createStatement(ASTStatement::ASSIGN);
+    statement = info.ast->createStatement(ASTStatement::ASSIGN);
 
-    info.ast->relocate(*statement)->name = new std::string(name);
-
+    ASTStatement* reloc = info.ast->relocate(statement);
+    // log::out << reloc<<"\n";
+    reloc->name = new std::string(name);
 
     ASTExpression* expression=0;
 
     int result = 0;
-    result = ParseExpression(info,&expression,false);
+    result = ParseExpression(info,expression,false);
 
     if(result!=PARSE_SUCCESS){
         return PARSE_ERROR;
     }
 
-    info.ast->relocate(*statement)->expression = expression;
+    info.ast->relocate(statement)->expression = expression;
 
     // memcpy(info.ast->relocate(*statement)->name.str);
 
@@ -1507,9 +1508,9 @@ int ParseAssignment(ParseInfo& info, ASTStatement** statement, bool attempt){
     _GLOG(EXIT)
     return PARSE_SUCCESS;   
 }
-int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
-    using namespace engone;
-    _GLOG(TRY)
+// int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
+//     using namespace engone;
+//     _GLOG(TRY)
     
     // if(info.end()){
     //     log::out <<log::RED<< "Sudden end in ParseCommand?";
@@ -1860,10 +1861,10 @@ int ParseCommand(ParseInfo& info, ExpressionInfo& exprInfo, bool attempt){
     // // Note: the parsed instructions add a new value in the accumulation
     // //  Don't forget to use and delete it.
     
-    _GLOG(EXIT)
-    return PARSE_SUCCESS;
-}
-int ParseBody(ParseInfo& info, ASTBody** bodyLoc, bool multiple=false){
+//     _GLOG(EXIT)
+//     return PARSE_SUCCESS;
+// }
+int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool multiple=false){
     using namespace engone;
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
@@ -1874,7 +1875,7 @@ int ParseBody(ParseInfo& info, ASTBody** bodyLoc, bool multiple=false){
         return PARSE_ERROR;
     }
     
-    *bodyLoc = info.ast->createBody();
+    bodyLoc = info.ast->createBody();
 
     bool scoped=false;
     Token token = info.get(info.at()+1);
@@ -1885,6 +1886,8 @@ int ParseBody(ParseInfo& info, ASTBody** bodyLoc, bool multiple=false){
     } 
 
     info.makeScope();
+
+    ASTStatement* prev=0;
     
     while(!info.end()){
         Token& token = info.get(info.at()+1);
@@ -1896,8 +1899,16 @@ int ParseBody(ParseInfo& info, ASTBody** bodyLoc, bool multiple=false){
         
         int result=0;
 
-        result = ParseAssignment(info,&temp,true);
-        // info.ast->relocate(temp)
+        result = ParseAssignment(info,temp,true);
+
+        if (temp){
+            if(prev){
+                info.ast->relocate(prev)->next = temp;
+            }else{
+                info.ast->relocate(bodyLoc)->statement = temp;
+                prev = temp;
+            }
+        }
         
         // result = ParseFlow(info,acc0reg,true);
         // if(result==PARSE_BAD_ATTEMPT)
@@ -1951,8 +1962,9 @@ AST* ParseTokens(Tokens& tokens, int* outErr){
     info.ast = AST::Create();
 
     // info.makeScope();
-    int result = ParseBody(info, &info.ast->body,true);
+    int result = ParseBody(info, info.ast->body,true);
 
+    info.ast->print();
     // while (!info.end()){
     //     // info.addDebugLine(info.index);
     //     // #ifdef USE_DEBUG_INFO
@@ -1963,9 +1975,11 @@ AST* ParseTokens(Tokens& tokens, int* outErr){
     //         // skip line or token until successful
     //     }
     // }
-    info.addDebugLine("(End of global scope)");
+    // info.addDebugLine("(End of global scope)");
     // info.dropScope();
     
+
+
     // int accDepth = 1;
     // info.addDebugLine(0);
     // #ifdef USE_DEBUG_INFO

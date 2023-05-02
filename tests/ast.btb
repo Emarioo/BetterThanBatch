@@ -1,4 +1,4 @@
 @disable all
 @enable parser
 
-a = 8
+a = 8 + 8

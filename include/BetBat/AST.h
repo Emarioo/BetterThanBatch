@@ -3,6 +3,9 @@
 #include "BetBat/Tokenizer.h"
 #include "Engone/Alloc.h"
 
+#define AST_MEM_OFFSET 8
+
+struct AST;
 struct ASTArg {
     // expression
     ASTArg* next;
@@ -38,10 +41,8 @@ struct ASTExpression {
     // operation, +-/
     // left input (optional)
     // right input
-};
-struct ASTAssignment {
-    // variable name
-    // expression
+    
+    void print(AST* ast, int depth);
 };
 struct ASTFunction {
     // name
@@ -70,12 +71,16 @@ struct ASTStatement {
     // for, each, if
 
     ASTStatement* next=0;
+
+    void print(AST* ast, int depth);
 };
 struct ASTBody {
     // functions
     // statements
     
     ASTStatement* statement = 0;
+
+    void print(AST* ast, int depth);
 };
 struct AST {
     /*
@@ -96,13 +101,17 @@ struct AST {
 
     void init();
     static AST* Create();
+    static void Destroy(AST* ast);
     void cleanup();
     ASTBody* createBody();
     ASTStatement* createStatement(int type);
     ASTExpression* createExpression(int type);
 
+    void print(int depth = 0);
+
     template<typename T>
     T* relocate(T* offset){
-        return (T*)memory.data + (u64)offset;
+        return offset;
+        // return (T*)memory.data + ((u64)offset - AST_MEM_OFFSET);
     }
 };

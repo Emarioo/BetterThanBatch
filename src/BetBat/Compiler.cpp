@@ -34,6 +34,7 @@ void CompileScript(const char *path, int extra)
         return;
     Tokens tokens{};
     int err = 0;
+    AST* ast=0;
     Bytecode bytecode{};
     double seconds = 0;
     std::string dis;
@@ -54,8 +55,11 @@ void CompileScript(const char *path, int extra)
     if (err)
         goto COMP_SCRIPT_END;
 
-    if (tokens.enabled & LAYER_PARSER)
-        bytecode = GenerateScript(tokens, &err);
+    if (tokens.enabled & LAYER_PARSER){
+        ast = ParseTokens(tokens, &err);
+        // bytecode = GenerateScript(tokens, &err);
+
+    }
     if (err)
         goto COMP_SCRIPT_END;
 
@@ -86,6 +90,8 @@ void CompileScript(const char *path, int extra)
     }
 
 COMP_SCRIPT_END:
+    ast->cleanup();
+    AST::Destroy(ast);
     bytecode.cleanup();
     tokens.cleanup();
     text.resize(0);
