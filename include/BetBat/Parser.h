@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
-#include "BetBat/Value.h"
 #include "BetBat/ExternalCalls.h"
 #include "BetBat/Bytecode.h"
 #include "BetBat/AST.h"
@@ -25,14 +24,11 @@
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
 struct ParseInfo {
     ParseInfo(Tokens& tokens) : tokens(tokens){}
-    Bytecode code{};
     uint index=0;
     Tokens& tokens;
-    int parDepth=0;
     
     int errors=0;
     
-    int spaceConstIndex=-1;
 
     struct Scope{
         std::vector<Token> variableNames;

@@ -50,7 +50,7 @@
 			"end":"(?<=\n)",
 			"patterns":[{
 				"name":"entity.name.tag",
-				"match":"(?<=\\s+)(parser|optimizer|preprocessor|interpreter|all)\\s+"
+				"match":"(?<=\\s+)(preprocessor|parser|generator|optimizer|interpreter|all)\\s+"
 			}]
 		},
 		"functions":{

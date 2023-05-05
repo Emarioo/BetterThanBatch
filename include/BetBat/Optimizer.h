@@ -1,3 +1,5 @@
+#pragma once
+
 #include "BetBat/Parser.h"
 
 // returns false if something failed.

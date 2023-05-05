@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Engone/Typedefs.h"
 
 // linear allocation for nows

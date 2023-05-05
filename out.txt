@@ -1,0 +1,3 @@
+all.cpp
+D:\Backup\CodeProjects\BetterThanBatch\src\BetBat\Generator.cpp(91) : error C4716: 'GenerateExpression': must return a value
+D:\Backup\CodeProjects\BetterThanBatch\src\BetBat\Generator.cpp(116) : error C4716: 'Generate': must return a value

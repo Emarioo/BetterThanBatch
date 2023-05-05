@@ -1,3 +1,4 @@
+#pragma once
 #include "Engone/Alloc.h"
 
 void TestMathExpression(int length);

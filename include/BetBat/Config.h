@@ -1,3 +1,4 @@
+#pragma once
 
 typedef double Decimal;
 
@@ -14,21 +15,23 @@ typedef double Decimal;
 #ifdef DEBUG
 
 // #define TLOG
-// #define PLOG
+// #define MLOG
+#define PLOG
 #define GLOG
 // #define OLOG
-// #define CLOG_THREAD
-// #define CLOG
+// #define ILOG_THREAD
+#define ILOG
+#define VLOG
 
 // #define USE_DEBUG_INFO
 // #define PRINT_DEBUG_LINES
 #endif
 
-#ifdef GLOG
+#ifdef PLOG
 #define USE_DEBUG_INFO
 #endif
 
-#ifdef CLOG
+#ifdef ILOG
 #ifndef USE_DEBUG_INFO
 #define USE_DEBUG_INFO
 #endif
@@ -39,6 +42,7 @@ typedef double Decimal;
 #define LOG_TOKENIZER 1
 #define LOG_PREPROCESSOR 2
 #define LOG_PARSER 4
+#define LOG_GENERATOR 4
 #define LOG_OPTIMIZER 8
 #define LOG_INTERPRETER 16
 #define LOG_THREADS 32
@@ -54,16 +58,22 @@ bool GetLog(int type);
 #define _TLOG(x) if(GetLog(LOG_TOKENIZER)){x}
 #endif
 
+#ifdef MLOG
+#define _MLOG(x) x
+#else
+#define _MLOG(x) if(GetLog(LOG_PREPROCESSOR)){x}
+#endif
+
 #ifdef PLOG
 #define _PLOG(x) x
 #else
-#define _PLOG(x) if(GetLog(LOG_PREPROCESSOR)){x}
+#define _PLOG(x) if(GetLog(LOG_PARSER)){x}
 #endif
 
 #ifdef GLOG
 #define _GLOG(x) x
 #else
-#define _GLOG(x) if(GetLog(LOG_PARSER)){x}
+#define _GLOG(x) if(GetLog(LOG_INTERPRETER)){x;}
 #endif
 
 #ifdef OLOG
@@ -72,16 +82,16 @@ bool GetLog(int type);
 #define _OLOG(x) if(GetLog(LOG_OPTIMIZER)){x;}
 #endif
 
-#ifdef CLOG
-#define _CLOG(x) x
+#ifdef ILOG
+#define _ILOG(x) x
 #else
-#define _CLOG(x) if(GetLog(LOG_INTERPRETER)){x;}
+#define _ILOG(x) if(GetLog(LOG_INTERPRETER)){x;}
 #endif
 
-#ifdef CLOG_THREAD
-#define _CLOG_THREAD(x) x
+#ifdef ILOG_THREAD
+#define _ILOG_THREAD(x) x
 #else
-#define _CLOG_THREAD(x) if(GetLog(LOG_THREADS)){x;}
+#define _ILOG_THREAD(x) if(GetLog(LOG_THREADS)){x;}
 #endif
 
 #ifdef VLOG

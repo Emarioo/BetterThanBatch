@@ -38,8 +38,9 @@ struct Token {
 };
 #define LAYER_PREPROCESSOR 1
 #define LAYER_PARSER 2
-#define LAYER_OPTIMIZER 4
-#define LAYER_INTERPRETER 8
+#define LAYER_GENERATOR 4
+#define LAYER_OPTIMIZER 8
+#define LAYER_INTERPRETER 16
 engone::Logger& operator<<(engone::Logger& logger, Token& token);
 struct Tokens {
     engone::Memory tokens{sizeof(Token)}; // the tokens themselves

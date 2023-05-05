@@ -1,6 +1,42 @@
 #include "BetBat/AST.h"
 #include "Engone/PlatformLayer.h"
 
+const char* OpToStr(int optype){
+    #define CASE(A,B) case AST_##A: return #B;
+    switch(optype){
+        CASE(ADD,+)
+        CASE(SUB,-)
+        CASE(MUL,*)
+        CASE(DIV,/)
+    }
+    #undef CASE
+    return "?";
+}
+const char* StateToStr(int type){
+    #define CASE(A,B) case ASTStatement::A: return #B;
+    switch(type){
+        CASE(ASSIGN,assign)
+    }
+    #undef CASE
+    return "?";
+}
+const char* DataTypeToStr(int type){
+    #define CASE(A,B) case AST_##A: return #B;
+    switch(type){
+        CASE(FLOAT32,f32)
+        CASE(INT32,i32)
+        CASE(BOOL8,bool)
+        
+        CASE(VAR,var)
+        
+        // CASE(ADD,+)
+        // CASE(SUB,-)
+        // CASE(MUL,*)
+        // CASE(DIV,/)
+    }
+    #undef CASE
+    return "?";
+}
 AST* AST::Create(){
     AST* ast = (AST*)engone::Allocate(sizeof(AST));
     new(ast)AST();
@@ -55,19 +91,14 @@ ASTStatement* AST::createStatement(int type){
     // offset+=AST_MEM_OFFSET;
     // return (ASTStatement*)offset;
 }
-ASTExpression* AST::createExpression(int type){
+ASTExpression* AST::createExpression(DataType type){
     ASTExpression* ptr = new ASTExpression();
 
     // u64 offset = CreateGeneral(this,sizeof(ASTExpression));
     // ASTExpression* ptr = (ASTExpression*)memory.data + offset;
     // new(ptr)ASTExpression();
-
-    ptr->innerType = type;
-    if(type>ASTExpression::OPERATION) {
-        ptr->type = ASTExpression::OPERATION;
-    } else if(type>ASTExpression::OPERATION) {
-        ptr->type = ASTExpression::VALUE;
-    }
+    ptr->isValue = (u32)type<AST_PRIMITIVE_COUNT;
+    ptr->dataType = type;
     return ptr;
 
     // offset+=AST_MEM_OFFSET;
@@ -96,15 +127,17 @@ void ASTBody::print(AST* ast, int depth){
 void ASTStatement::print(AST* ast, int depth){
     using namespace engone;
     PrintSpace(depth);
-    log::out << "Statement "<<type;
+    log::out << "Statement "<<StateToStr(type);
 
     if(type==ASSIGN){
-        log::out << ", Assign "<<*name<<"\n";
+        if(dataType!=0)
+            log::out << " "<<DataTypeToStr(dataType)<<"";
+        log::out << " "<<*name<<"\n";
         if(expression){
             ast->relocate(expression)->print(ast, depth+1);
         }
     }
-    log::out << "\n";
+    // log::out << "\n";
     if(next){
         ast->relocate(next)->print(ast, depth);
     }
@@ -112,11 +145,19 @@ void ASTStatement::print(AST* ast, int depth){
 void ASTExpression::print(AST* ast, int depth){
     using namespace engone;
     PrintSpace(depth);
-    if(innerType==F32){
-        log::out << "Expr "<<f32Value<<"\n";
-    }
-    if(type==OPERATION){
-        log::out << "ExprOP: "<<innerType<<"\n";
+    
+    if(isValue){
+        log::out << "Expr "<<DataTypeToStr(dataType)<<" ";
+        if(dataType==AST_FLOAT32) log::out << f32Value;
+        else if(dataType==AST_INT32) log::out << i32Value;
+        else if(dataType==AST_BOOL8) log::out << b8Value;
+        else if(dataType==AST_VAR) log::out << *varName;
+        else
+            log::out << "missing print conversion";
+        log::out << "\n";
+    } else {
+        log::out << "Expr "<<OpToStr(dataType)<<" ";
+        log::out << "\n";
         if(left){
             ast->relocate(left)->print(ast, depth+1);
         }

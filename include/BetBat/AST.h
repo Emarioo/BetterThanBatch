@@ -5,33 +5,37 @@
 
 #define AST_MEM_OFFSET 8
 
+typedef u32 DataType;
+enum PrimitiveType : u32 {
+    AST_NONETYPE=0,
+    AST_FLOAT32=1,
+    AST_INT32,
+    AST_BOOL8,
+    
+    AST_VAR,
+    
+    AST_PRIMITIVE_COUNT,
+};
+enum OperationType : u32 {
+    AST_ADD=AST_PRIMITIVE_COUNT,  
+    AST_SUB,  
+    AST_MUL,  
+    AST_DIV,
+};
 struct AST;
-struct ASTArg {
-    // expression
-    ASTArg* next;
-};
-struct ASTFuncCall {
-    // name
-    // ASTExpression
-};
+const char* OpToStr(int op);
 struct ASTExpression {
-    ASTExpression() : left(0), right(0) {}
-    enum Type : int {
-        VALUE,
-        F32,
-
-        OPERATION,
-        ADD,
-        SUB,
-        MUL,
-        DIV,
-    };
-    int type = 0;
-    int innerType = 0;
+    Token token{};
+    bool isValue=false;
+    DataType dataType = 0;
+    
+    // NOTE: Variables in union are not zero initialized. Only use the 
+    //   variables indicated by isValue and type
     union {
-        struct {
-            float f32Value;
-        };
+        float f32Value;
+        int i32Value;
+        bool b8Value;
+        std::string* varName;
         struct {
             ASTExpression* left;
             ASTExpression* right;
@@ -44,14 +48,8 @@ struct ASTExpression {
     
     void print(AST* ast, int depth);
 };
-struct ASTFunction {
-    // name
-    // args
-    // return types
-    // body
-};
 struct ASTStatement {
-    ASTStatement() : name(0), expression(0) {}
+    ASTStatement() : name(0), dataType(0), expression(0) {}
     enum Type {
         IF,
         FOR,
@@ -62,6 +60,7 @@ struct ASTStatement {
     union {
         struct {
             std::string* name; // TODO: don't use std::string
+            int dataType;
             ASTExpression* expression;
         };
     };
@@ -105,7 +104,7 @@ struct AST {
     void cleanup();
     ASTBody* createBody();
     ASTStatement* createStatement(int type);
-    ASTExpression* createExpression(int type);
+    ASTExpression* createExpression(DataType type);
 
     void print(int depth = 0);
 
@@ -115,3 +114,4 @@ struct AST {
         // return (T*)memory.data + ((u64)offset - AST_MEM_OFFSET);
     }
 };
+const char* DataTypeToStr(int type);

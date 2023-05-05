@@ -561,15 +561,20 @@ Tokens Tokenize(engone::Memory& textData){
                                     if(type==1)
                                         outTokens.enabled |= LAYER_PARSER;
                                     else if(type==2)
-                                        outTokens.enabled &= ~(LAYER_PARSER|LAYER_INTERPRETER); // interpreter doesn't work without parser
+                                        outTokens.enabled &= ~(LAYER_PARSER|LAYER_GENERATOR|LAYER_OPTIMIZER|LAYER_INTERPRETER); // interpreter doesn't work without parser
+                                }else if(!strcmp(word,"generator")){
+                                    if(type==1)
+                                        outTokens.enabled |= LAYER_GENERATOR|LAYER_PARSER;
+                                    else if(type==2)
+                                        outTokens.enabled &= ~(LAYER_GENERATOR|LAYER_OPTIMIZER|LAYER_INTERPRETER); // interpreter doesn't work without parser
                                 }else if(!strcmp(word,"optimizer")){
                                     if(type==1)
-                                        outTokens.enabled |= LAYER_OPTIMIZER | LAYER_PARSER; // optimizer requires parser
+                                        outTokens.enabled |= LAYER_OPTIMIZER | LAYER_PARSER | LAYER_GENERATOR; // optimizer requires parser
                                     else if(type==2)
                                         outTokens.enabled &= ~LAYER_OPTIMIZER;
                                 }else if(!strcmp(word,"interpreter")){
                                     if(type==1)
-                                        outTokens.enabled |= LAYER_INTERPRETER | LAYER_PARSER; // intepreter requires parser
+                                        outTokens.enabled |= LAYER_INTERPRETER | LAYER_GENERATOR | LAYER_PARSER; // intepreter requires parser
                                     else if(type==2)
                                         outTokens.enabled &= ~LAYER_INTERPRETER;
                                 }else{

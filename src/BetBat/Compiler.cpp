@@ -26,8 +26,7 @@ void CompilerFile(const char *path)
     }
 }
 
-void CompileScript(const char *path, int extra)
-{
+void CompileScript(const char *path, int extra) {
     using namespace engone;
     auto text = ReadFile(path);
     if (!text.data)
@@ -36,8 +35,11 @@ void CompileScript(const char *path, int extra)
     int err = 0;
     AST* ast=0;
     Bytecode bytecode{};
+    BytecodeX bytecodeX{};
     double seconds = 0;
     std::string dis;
+    
+    // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
 
     auto startCompileTime = engone::MeasureSeconds();
     tokens = Tokenize(text);
@@ -58,7 +60,12 @@ void CompileScript(const char *path, int extra)
     if (tokens.enabled & LAYER_PARSER){
         ast = ParseTokens(tokens, &err);
         // bytecode = GenerateScript(tokens, &err);
-
+    }
+    if (err)
+        goto COMP_SCRIPT_END;
+    
+    if (tokens.enabled & LAYER_GENERATOR){
+        bytecodeX = Generate(ast, &err);
     }
     if (err)
         goto COMP_SCRIPT_END;
@@ -71,28 +78,35 @@ void CompileScript(const char *path, int extra)
     seconds = engone::StopMeasure(startCompileTime);
     _VLOG(log::out << "Compiled " << FormatUnit((uint64)tokens.lines) << " lines in " << FormatTime(seconds) << "\n (" << FormatUnit(tokens.lines / seconds) << " lines/s, " << FormatBytes(bytecode.getMemoryUsage()) << ")\n";)
 
-    if (tokens.enabled & LAYER_INTERPRETER)
-    {
-        int totalinst = 0;
-        double combinedtime = 0;
-        Performance perf;
-        int times = extra;
-        for (int i = 0; i < times; i++)
-        {
-            Context::Execute(bytecode, &perf);
-            totalinst += perf.instructions;
-            combinedtime += perf.exectime;
-        }
-        // log::out << "Total " << totalinst<<" insts (avg "<<(totalinst/times)<<")\n";
-        if (times!=1){
-            _VLOG(log::out << "Combined " << FormatTime(combinedtime) << " time (avg " << FormatTime(combinedtime / times) << ")\n";)
-        }
+    
+    if (tokens.enabled & LAYER_INTERPRETER) {
+        Interpreter inp{};
+        inp.execute(&bytecodeX);
+        inp.cleanup();
     }
 
+    // if (tokens.enabled & LAYER_INTERPRETER) {
+    //     int totalinst = 0;
+    //     double combinedtime = 0;
+    //     Performance perf;
+    //     int times = extra;
+    //     for (int i = 0; i < times; i++)
+    //     {
+    //         Context::Execute(bytecode, &perf);
+    //         totalinst += perf.instructions;
+    //         combinedtime += perf.exectime;
+    //     }
+    //     // log::out << "Total " << totalinst<<" insts (avg "<<(totalinst/times)<<")\n";
+    //     if (times!=1){
+    //         _VLOG(log::out << "Combined " << FormatTime(combinedtime) << " time (avg " << FormatTime(combinedtime / times) << ")\n";)
+    //     }
+    // }
+
 COMP_SCRIPT_END:
+    bytecode.cleanup();
+    bytecodeX.cleanup();
     ast->cleanup();
     AST::Destroy(ast);
-    bytecode.cleanup();
     tokens.cleanup();
     text.resize(0);
 }
