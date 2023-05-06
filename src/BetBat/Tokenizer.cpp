@@ -112,6 +112,9 @@ Token::operator std::string(){
 bool Tokens::copyInfo(Tokens& out){
     out.lines = lines;
     out.enabled = enabled;
+    memcpy(out.version,version,VERSION_MAX+1);
+    // This is dumb, I have forgotten to copy variables
+    // twice and I will keep doing it.
     return true;
 }
 bool Tokens::copy(Tokens& out){
@@ -492,6 +495,7 @@ Tokens Tokenize(engone::Memory& textData){
             if(chr=='@'){
                 const char* str_enable = "enable";
                 const char* str_disable = "disable";
+                const char* str_version = "version";
                 int type=0;
                 if(length-index>=(int)strlen(str_enable)){
                     if(0==strncmp(text+index,str_enable,strlen(str_enable))){
@@ -509,7 +513,66 @@ Tokens Tokenize(engone::Memory& textData){
                         }
                     }
                 }
-                if(type!=0){
+                if(type==0){
+                    if(length-index>=(int)strlen(str_version)){
+                        if(0==strncmp(text+index,str_version,strlen(str_version))){
+                            type = 3;
+                            index += strlen(str_version);
+                            ln = column += strlen(str_version);
+                        }
+                    }
+                }
+                if(type==3){
+                    int startIndex=-1;
+                    bool bad=false;
+                    // TODO: Code below WILL have some edge cases not accounted for. Check it out.
+                    while(index<length){
+                        char c = text[index];
+                        char nc = 0;
+                        char pc = 0;
+
+                        if(index>0)
+                            pc = text[index-1];
+                        if(index+1<length)
+                            nc = text[index+1];
+                        index++;
+                        if(c=='\t')
+                            column+=4;
+                        else
+                            column++;
+                        if(c == '\n'){
+                            line++;
+                            column=1;
+                        }
+                        if(startIndex!=-1){
+                            if(c==' '||c=='\t'||c=='\r'||c=='\n'||index==length){
+                                int len = index-startIndex-1;
+                                if(len>Tokens::VERSION_MAX){
+                                    log::out << log::RED << "TokenError "<<ln<<":"<<col<<": version to big for buffer (was "<<len<<",max "<<Tokens::VERSION_MAX<<")\n"; 
+                                    bad=true;
+                                }else{
+                                    memcpy(outTokens.version,text+startIndex,len);
+                                    outTokens.version[len] = 0;
+                                }
+                                break;
+                            }
+                        }
+                        if(c=='\r'&&(nc=='\n'||pc=='\n')){
+                            break;
+                        }
+
+                        if(c==' '||c=='\t'){
+                            
+                        }else{
+                            if(startIndex==-1){
+                                startIndex = index-1;
+                            }
+                        }
+                    }
+                    if(!bad)
+                        log::out <<log::GREEN<< "@version '"<<outTokens.version<<"'\n";
+                    continue;
+                }else if(type!=0){
                     const int WORDMAX = 100;
                     char word[WORDMAX];
                     int len = 0;

@@ -19,11 +19,22 @@ const char* InstToStringX(int type){
         CASE(BC_JMP)
         CASE(BC_CALL)
         CASE(BC_RET)
+        CASE(BC_JE)
+        CASE(BC_JNE)
         
         CASE(BC_PUSH)
         CASE(BC_POP)
-        
         CASE(BC_LI)
+
+        CASE(BC_EQ)
+        CASE(BC_NEQ)
+        CASE(BC_LT) 
+        CASE(BC_LTE)
+        CASE(BC_GT) 
+        CASE(BC_GTE)
+        CASE(BC_ANDI)
+        CASE(BC_ORI) 
+        CASE(BC_NOTB)
     }
     #undef CASE
     return "BC_?";
@@ -75,11 +86,8 @@ engone::Logger& operator<<(engone::Logger& logger, InstructionX& instruction){
 // }
 uint32 BytecodeX::getMemoryUsage(){
     uint32 sum = codeSegment.max*codeSegment.m_typeSize
-        // +constNumbers.max*constNumbers.m_typeSize
-        // +constStrings.max*constStrings.m_typeSize
-        // +constStringText.max*constStringText.m_typeSize
-        // +debugLines.max*debugLines.m_typeSize
-        // +debugLineText.max*debugLineText.m_typeSize
+        +debugSegment.max*debugSegment.m_typeSize
+        // debugtext?        
         ;
     return sum;
 }
@@ -336,7 +344,7 @@ void BytecodeX::addDebugText(const std::string& text, u32 instructionIndex){
     debugText.push_back(text);
     *((u32*)debugSegment.data + instructionIndex) = index;
 }
-const std::string& BytecodeX::getDebugText(u32 instructionIndex){
+const char* BytecodeX::getDebugText(u32 instructionIndex){
     using namespace engone;
     if(instructionIndex>=debugSegment.max){
         log::out<<log::RED << __FILE__<<":"<<__LINE__<<", can't add debug text at "<<instructionIndex<<", debug segment to small ("<<debugSegment.max<<").\n";   
@@ -347,5 +355,5 @@ const std::string& BytecodeX::getDebugText(u32 instructionIndex){
         log::out<<log::RED << __FILE__ << ":"<<__LINE__<<", instruction index out of bounds\n";
         return "";   
     }
-    return debugText[index];
+    return debugText[index].c_str();
 }

@@ -18,9 +18,19 @@ enum PrimitiveType : u32 {
 };
 enum OperationType : u32 {
     AST_ADD=AST_PRIMITIVE_COUNT,  
-    AST_SUB,  
-    AST_MUL,  
+    AST_SUB,
+    AST_MUL,
     AST_DIV,
+    
+    AST_EQUAL,
+    AST_NOT_EQUAL,
+    AST_LESS,
+    AST_GREATER,
+    AST_LESS_EQUAL,
+    AST_GREATER_EQUAL,
+    AST_AND,
+    AST_OR,
+    AST_NOT,
 };
 struct AST;
 const char* OpToStr(int op);
@@ -48,6 +58,7 @@ struct ASTExpression {
     
     void print(AST* ast, int depth);
 };
+struct ASTBody;
 struct ASTStatement {
     ASTStatement() : name(0), dataType(0), expression(0) {}
     enum Type {
@@ -58,12 +69,14 @@ struct ASTStatement {
     };
     int type=0;
     union {
-        struct {
+        struct { // assign
             std::string* name; // TODO: don't use std::string
-            int dataType;
-            ASTExpression* expression;
+            DataType dataType;
         };
     };
+    ASTExpression* expression;
+    ASTBody* body;
+    ASTBody* elseBody;
     // assignment
     // function call
     // return, continue, break

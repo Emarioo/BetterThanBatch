@@ -19,10 +19,26 @@
 #define BC_JMP 20
 #define BC_CALL 21
 #define BC_RET 22
+// jump if not zero
+#define BC_JE 23
+// jump if zero
+#define BC_JNE 24
 
 #define BC_PUSH 30
 #define BC_POP 31
 #define BC_LI 32
+
+#define BC_EQ 50
+#define BC_NEQ  51
+#define BC_LT   52
+#define BC_LTE  53
+#define BC_GT   54
+#define BC_GTE  55
+#define BC_ANDI  56
+#define BC_ORI   57
+#define BC_NOTB  58
+
+// NOTE: Some instructions have odd names to avoid collision with Bytecode.h.
 
 #define BC_REG_MASK 0xC0
 #define BC_REG_8 0
@@ -96,7 +112,7 @@ struct BytecodeX {
     std::vector<std::string> debugText;
     // -1 as index will add text to last instruction
     void addDebugText(const std::string& text, u32 instructionIndex=-1);
-    const std::string& getDebugText(u32 instructionIndex);
+    const char* getDebugText(u32 instructionIndex);
     
     // struct DebugLine{
     //     char* str=0;

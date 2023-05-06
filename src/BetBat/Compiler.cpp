@@ -35,9 +35,10 @@ void CompileScript(const char *path, int extra) {
     int err = 0;
     AST* ast=0;
     Bytecode bytecode{};
-    BytecodeX bytecodeX{};
+    BytecodeX* bytecodeX=0;
     double seconds = 0;
     std::string dis;
+    int bytes = 0;
     
     // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
 
@@ -47,9 +48,8 @@ void CompileScript(const char *path, int extra) {
         tokens.printTokens(14, true);
     // TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
     // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
-
-    if (tokens.enabled & LAYER_PREPROCESSOR)
-    {
+    
+    if (tokens.enabled & LAYER_PREPROCESSOR) {
         Preprocess(tokens, &err);
         if (tokens.enabled == LAYER_PREPROCESSOR)
             tokens.print();
@@ -58,53 +58,65 @@ void CompileScript(const char *path, int extra) {
         goto COMP_SCRIPT_END;
 
     if (tokens.enabled & LAYER_PARSER){
-        ast = ParseTokens(tokens, &err);
-        // bytecode = GenerateScript(tokens, &err);
+        if(tokens.isVersion("2"))
+            ast = ParseTokens(tokens, &err);
+        else
+            bytecode = GenerateScript(tokens, &err);
     }
     if (err)
         goto COMP_SCRIPT_END;
     
     if (tokens.enabled & LAYER_GENERATOR){
-        bytecodeX = Generate(ast, &err);
+        if(ast)
+            bytecodeX = Generate(ast, &err);
     }
     if (err)
         goto COMP_SCRIPT_END;
 
     // dis = Disassemble(bytecode);
     // WriteFile("dis.txt",dis);
-    if (tokens.enabled & LAYER_OPTIMIZER)
-        OptimizeBytecode(bytecode);
+    if (tokens.enabled & LAYER_OPTIMIZER){
+        if(bytecodeX)
+            ;
+        else
+            OptimizeBytecode(bytecode);
+    }
     _VLOG(log::out << "\n";)
     seconds = engone::StopMeasure(startCompileTime);
-    _VLOG(log::out << "Compiled " << FormatUnit((uint64)tokens.lines) << " lines in " << FormatTime(seconds) << "\n (" << FormatUnit(tokens.lines / seconds) << " lines/s, " << FormatBytes(bytecode.getMemoryUsage()) << ")\n";)
+    if(bytecodeX)
+        bytes = bytecodeX->getMemoryUsage();
+    else
+        bytes = bytecode.getMemoryUsage();
+    _VLOG(log::out << "Compiled " << FormatUnit((uint64)tokens.lines) << " lines in " << FormatTime(seconds) << "\n (" << FormatUnit(tokens.lines / seconds) << " lines/s, " << FormatBytes(bytes) << ")\n";)
 
-    
     if (tokens.enabled & LAYER_INTERPRETER) {
-        Interpreter inp{};
-        inp.execute(&bytecodeX);
-        inp.cleanup();
+        if(bytecodeX){
+            Interpreter inp{};
+            inp.execute(bytecodeX);
+            inp.cleanup();
+        } else
+            Context::Execute(bytecode);
+
+        // int totalinst = 0;
+        // double combinedtime = 0;
+        // Performance perf;
+        // int times = extra;
+        // for (int i = 0; i < times; i++)
+        // {
+            // Context::Execute(bytecode, &perf);
+            // totalinst += perf.instructions;
+            // combinedtime += perf.exectime;
+        // }
+        // // log::out << "Total " << totalinst<<" insts (avg "<<(totalinst/times)<<")\n";
+        // if (times!=1){
+        //     _VLOG(log::out << "Combined " << FormatTime(combinedtime) << " time (avg " << FormatTime(combinedtime / times) << ")\n";)
+        // }
     }
 
-    // if (tokens.enabled & LAYER_INTERPRETER) {
-    //     int totalinst = 0;
-    //     double combinedtime = 0;
-    //     Performance perf;
-    //     int times = extra;
-    //     for (int i = 0; i < times; i++)
-    //     {
-    //         Context::Execute(bytecode, &perf);
-    //         totalinst += perf.instructions;
-    //         combinedtime += perf.exectime;
-    //     }
-    //     // log::out << "Total " << totalinst<<" insts (avg "<<(totalinst/times)<<")\n";
-    //     if (times!=1){
-    //         _VLOG(log::out << "Combined " << FormatTime(combinedtime) << " time (avg " << FormatTime(combinedtime / times) << ")\n";)
-    //     }
-    // }
 
 COMP_SCRIPT_END:
     bytecode.cleanup();
-    bytecodeX.cleanup();
+    BytecodeX::Destroy(bytecodeX);
     ast->cleanup();
     AST::Destroy(ast);
     tokens.cleanup();

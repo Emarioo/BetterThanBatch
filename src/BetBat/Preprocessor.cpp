@@ -5,8 +5,8 @@
 #define PERRTL(token) info.errors++;engone::log::out << engone::log::RED << "PreProcError "<< token.line <<":"<<(token.column+token.length)<<": "
 #define PWARNT(token) engone::log::out << engone::log::YELLOW << "PreProcWarning "<< token.line <<":"<<token.column<<": "
 
-// #define PLOG_MATCH(X) X
-#define PLOG_MATCH(X)
+// #define MLOG_MATCH(X) X
+#define MLOG_MATCH(X)
 
 // used for std::vector<int> tokens
 #define INT_ENCODE(I) (I<<3)
@@ -43,7 +43,7 @@ RootMacro* PreprocInfo::matchMacro(Token& token){
     //     PERRT(token) << "Infinite recursion not allowed ("<<token<<")\n";
     //     return 0;
     // }
-    _PLOG(PLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<token<<"\n";))
+    _MLOG(MLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<token<<"\n";))
     return &pair->second;
 }
 int CertainMacro::matchArg(Token& token){
@@ -52,7 +52,7 @@ int CertainMacro::matchArg(Token& token){
     for(int i=0;i<(int)argumentNames.size();i++){
         std::string& str = argumentNames[i];
         if(token == str.c_str()){
-            _PLOG(PLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match tok with arg "<<token<<"\n";))
+            _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match tok with arg "<<token<<"\n";))
             return i;
         }
     }
@@ -65,7 +65,7 @@ CertainMacro* RootMacro::matchArgCount(int count, bool includeInf){
             return 0;
         if(hasInfinite){
             if((int)infDefined.argumentNames.size()-1<=count){
-                _PLOG(PLOG_MATCH(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< infDefined.argumentNames.size()<<" (inf)\n";))
+                _MLOG(MLOG_MATCH(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< infDefined.argumentNames.size()<<" (inf)\n";))
                 return &infDefined;
             }else{
                 return 0;
@@ -74,7 +74,7 @@ CertainMacro* RootMacro::matchArgCount(int count, bool includeInf){
             return 0;   
         }
     }else{
-        _PLOG(PLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< pair->second.argumentNames.size()<<"\n";))
+        _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< pair->second.argumentNames.size()<<"\n";))
         return &pair->second;
     }
 }
@@ -226,7 +226,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
             }
         }
         
-        _PLOG(log::out << "loaded "<<defTemp.argumentNames.size()<<" arg names";
+        _MLOG(log::out << "loaded "<<defTemp.argumentNames.size()<<" arg names";
         if(defTemp.infiniteArg==-1)
             log::out << "\n";
         else
@@ -292,7 +292,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     defined->end = endToken;
     int count = endToken-startToken;
     int argc = defined->argumentNames.size();
-    _PLOG(log::out << log::LIME<< PREPROC_TERM<<"define '"<<name<<"' ";
+    _MLOG(log::out << log::LIME<< PREPROC_TERM<<"define '"<<name<<"' ";
     if(argc!=0){
         log::out<< argc;
         if(argc==1) log::out << " arg, ";
@@ -422,7 +422,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
     int depth = 0;
     int error = PARSE_SUCCESS;
     // bool hadElse=false;
-    _PLOG(log::out << log::GRAY<< "   ifdef - "<<name<<"\n";)
+    _MLOG(log::out << log::GRAY<< "   ifdef - "<<name<<"\n";)
     while(!info.end()){
         Token token = info.get(info.at()+1);
         if(token==PREPROC_TERM){
@@ -445,7 +445,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
                 if(depth==0){
                     info.next();
                     info.next();
-                    _PLOG(log::out << log::GRAY<< "   endif - "<<name<<"\n";)
+                    _MLOG(log::out << log::GRAY<< "   endif - "<<name<<"\n";)
                     break;
                 }
                 // log::out << log::GRAY<< "   endif - new depth "<<depth<<"\n";
@@ -456,7 +456,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
                     info.next();
                     info.next();
                     active = !active;
-                    _PLOG(log::out << log::GRAY<< "   else - "<<name<<"\n";)
+                    _MLOG(log::out << log::GRAY<< "   else - "<<name<<"\n";)
                     continue;
                 }
             }
@@ -549,7 +549,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
         if(token==PREPROC_TERM){
             Token nextTok = info.get(tokens[index]);
             if(nextTok=="unwrap"){
-                _PLOG(log::out << log::MAGENTA<<"unwrap\n";)
+                _MLOG(log::out << log::MAGENTA<<"unwrap\n";)
                 unwrapNext=true;
                 index++;
                 continue;
@@ -561,7 +561,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
         Arguments* superArgs = 0;
         int argIndex=-1;
         if(evalInfo.matchSuperArg(token,superMacro,superArgs,argIndex)){
-            _PLOG(log::out << log::GRAY<<" match arg "<<token <<", index: "<<argIndex<<"\n";)
+            _MLOG(log::out << log::GRAY<<" match arg "<<token <<", index: "<<argIndex<<"\n";)
             int argStart = argIndex;
             int argEnd = argIndex+1;
             
@@ -576,7 +576,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
                     argEnd += extraArgs;
                 }
             }
-            // _PLOG(log::out << " argValues "<<superArgs->size()<<"\n";)
+            // _MLOG(log::out << " argValues "<<superArgs->size()<<"\n";)
             for(int i=argStart;i<argEnd;i++){
                 TokenList argTokens = (*superArgs)[i];
                 evalInfo.arguments.push_back({});
@@ -614,7 +614,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
                         if(wasQuoted)
                             tmp.flags|=TOKEN_QUOTED;
                         evalInfo.arguments.back().push_back(tmp);
-                        _PLOG(log::out <<log::GRAY << " argv["<<(evalInfo.arguments.size()-1)<<"] += "<<argTok<<"\n";)
+                        _MLOG(log::out <<log::GRAY << " argv["<<(evalInfo.arguments.size()-1)<<"] += "<<argTok<<"\n";)
                     }
                 }
             }
@@ -643,7 +643,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
                 if((int)evalInfo.arguments.size()==evalInfo.argIndex)
                         evalInfo.arguments.push_back({});
                 if(unwrapNext){
-                    _PLOG(log::out << log::MAGENTA<<"actual unwrap\n";)
+                    _MLOG(log::out << log::MAGENTA<<"actual unwrap\n";)
                 }
                 Transfer(info,newEvalInfo.output,evalInfo.arguments.back(),wasQuoted,unwrapNext,&evalInfo.arguments,&evalInfo.argIndex);
             }
@@ -653,11 +653,11 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
             if(wasQuoted)
                 tokenRef.flags|=TOKEN_QUOTED;
             evalInfo.arguments.back().push_back(tokenRef);
-            _PLOG(log::out <<log::GRAY << " argv["<<(evalInfo.arguments.size()-1)<<"] += "<<token<<"\n";)
+            _MLOG(log::out <<log::GRAY << " argv["<<(evalInfo.arguments.size()-1)<<"] += "<<token<<"\n";)
         }
         unwrapNext=false;
     }
-    _PLOG(log::out << "Eval "<<evalInfo.arguments.size()<<" arguments\n";)
+    _MLOG(log::out << "Eval "<<evalInfo.arguments.size()<<" arguments\n";)
     return PARSE_SUCCESS;
 }
 int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
@@ -672,7 +672,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
     for(int i=evalInfo.macro->start;i<evalInfo.macro->end;i++){
         tokens.push_back({(uint16)i,(uint16)info.get(i).flags});
     }
-    _PLOG(log::out <<"Eval "<<evalInfo.macroName<<", "<<tokens.size()<<" tokens\n";)
+    _MLOG(log::out <<"Eval "<<evalInfo.macroName<<", "<<tokens.size()<<" tokens\n";)
     int index=0;
     bool wasQuoted=false;
     while(index<(int)tokens.size()){
@@ -692,7 +692,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
         RootMacro* rootMacro=0;
         int argIndex = -1;
         if(evalInfo.macro && -1!=(argIndex = evalInfo.macro->matchArg(token))){
-            _PLOG(log::out << log::GRAY<<" match arg "<<token <<", index: "<<argIndex<<"\n";)
+            _MLOG(log::out << log::GRAY<<" match arg "<<token <<", index: "<<argIndex<<"\n";)
             int argStart = argIndex;
             int argEnd = argIndex+1;
             
@@ -723,7 +723,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
                         ref.flags |= TOKEN_QUOTED;
                     }
                     evalInfo.output.push_back(ref);
-                    _PLOG(log::out << log::GRAY <<"  eval.out << "<<argTok<<"\n";);
+                    _MLOG(log::out << log::GRAY <<"  eval.out << "<<argTok<<"\n";);
                 }
             }
             wasQuoted=false;
@@ -734,7 +734,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
 
             newEvalInfo.superMacros.push_back(evalInfo.macro);
             newEvalInfo.superArgs.push_back(&evalInfo.arguments);
-            _PLOG(log::out <<log::GRAY<<"push super\n";)
+            _MLOG(log::out <<log::GRAY<<"push super\n";)
 
             for(int i=index;i<(int)tokens.size();i++){
                 newEvalInfo.workingRange.push_back(tokens[i]);
@@ -744,7 +744,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
 
             newEvalInfo.superMacros.pop_back();
             newEvalInfo.superArgs.pop_back();
-            _PLOG(log::out <<log::GRAY<<"pop super\n";)
+            _MLOG(log::out <<log::GRAY<<"pop super\n";)
 
             if(index==(int)tokens.size())
                 newEvalInfo.finalFlags = evalInfo.finalFlags;
@@ -769,7 +769,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
             }
 
             evalInfo.output.push_back(tokens[index-1]);
-            _PLOG(log::out << log::GRAY <<" eval.out << "<<token<<"\n";);
+            _MLOG(log::out << log::GRAY <<" eval.out << "<<token<<"\n";);
         }
     }
     info.evaluationDepth--;
@@ -873,7 +873,7 @@ int ParseToken(PreprocInfo& info){
     }
     
     Token token = info.next();
-    _PLOG(log::out << "Append "<<token<<"\n";)
+    _MLOG(log::out << "Append "<<token<<"\n";)
     info.addToken(token);
     return PARSE_SUCCESS;
 }

@@ -8,6 +8,16 @@ const char* OpToStr(int optype){
         CASE(SUB,-)
         CASE(MUL,*)
         CASE(DIV,/)
+
+        CASE(EQUAL,==)
+        CASE(NOT_EQUAL,!=)
+        CASE(LESS,<)
+        CASE(LESS_EQUAL,<=)
+        CASE(GREATER,>)
+        CASE(GREATER_EQUAL,>=)
+        CASE(AND,&&)
+        CASE(OR,||)
+        CASE(NOT,!)
     }
     #undef CASE
     return "?";
@@ -16,6 +26,7 @@ const char* StateToStr(int type){
     #define CASE(A,B) case ASTStatement::A: return #B;
     switch(type){
         CASE(ASSIGN,assign)
+        CASE(IF,if)
     }
     #undef CASE
     return "?";
@@ -45,9 +56,6 @@ AST* AST::Create(){
 void AST::Destroy(AST* ast){
     ast->~AST();
     engone::Free(ast,sizeof(AST));
-}
-void AST::init(){
-
 }
 void AST::cleanup(){
     memory.resize(0);
@@ -136,8 +144,15 @@ void ASTStatement::print(AST* ast, int depth){
         if(expression){
             ast->relocate(expression)->print(ast, depth+1);
         }
+    }else if(type==IF){
+        log::out << "\n";
+        if(expression){
+            ast->relocate(expression)->print(ast,depth+1);
+        }
+        if(body){
+            ast->relocate(body)->print(ast,depth+1);
+        }
     }
-    // log::out << "\n";
     if(next){
         ast->relocate(next)->print(ast, depth);
     }

@@ -33,6 +33,8 @@ void* Interpreter::getReg(u8 id){
         case BC_REG_SP: return &sp;
         case BC_REG_FP: return &fp;
     }
+    engone::log::out <<"(RegID: "<<id<<")\n";
+    Assert("tried to access bad register")
     return 0;
 }
 
@@ -60,7 +62,16 @@ void Interpreter::execute(BytecodeX* bytecode){
         case BC_ADDI:
         case BC_SUBI:
         case BC_MULI:
-        case BC_DIVI:{
+        case BC_DIVI:
+        case BC_EQ:
+        case BC_NEQ:
+        case BC_LT:
+        case BC_LTE:
+        case BC_GT:
+        case BC_GTE:
+        case BC_ANDI:
+        case BC_ORI:
+        {
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             u8 r2 = DECODE_REG2(inst);
@@ -82,7 +93,16 @@ void Interpreter::execute(BytecodeX* bytecode){
                 case BC_ADDI: GEN_OP(+)   
                 case BC_SUBI: GEN_OP(-)   
                 case BC_MULI: GEN_OP(*)   
-                case BC_DIVI: GEN_OP(/)   
+                case BC_DIVI: GEN_OP(/)
+
+                case BC_EQ: GEN_OP(==)
+                case BC_NEQ: GEN_OP(!=)
+                case BC_LT: GEN_OP(<)
+                case BC_LTE: GEN_OP(<=)
+                case BC_GT: GEN_OP(>)
+                case BC_GTE: GEN_OP(>=)
+                case BC_ANDI: GEN_OP(&&)
+                case BC_ORI: GEN_OP(||)
             }
             #undef GEN_OP
             
@@ -94,6 +114,29 @@ void Interpreter::execute(BytecodeX* bytecode){
             // else
             //      log::out << log::RED<< __FILE__<<"unknown reg type\n";
             // #undef GEN_BIT
+            log::out << "\n";
+            break;
+        }
+        case BC_NOTB:{
+            u8 r0 = DECODE_REG0(inst);
+            u8 r1 = DECODE_REG1(inst);
+
+            if (DECODE_REG_TYPE(r0) != DECODE_REG_TYPE(r1)){
+                log::out << log::RED<<"register bit mismatch\n";
+                continue;   
+            }
+            void* xp = getReg(r0);
+            void* outp = getReg(r1);
+            
+            u64 x = *(u64*)xp;
+            u64& out = *(u64*)outp;
+            
+            #define GEN_OP(OP) out = OP x; log::out << out << " = "<<#OP <<" "<< x; break;
+            switch(opcode){
+                case BC_NOTB: GEN_OP(!)
+            }
+            #undef GEN_OP
+            
             log::out << "\n";
             break;
         }
@@ -209,6 +252,39 @@ void Interpreter::execute(BytecodeX* bytecode){
             
             *(u64*)ptr = *((u64*) stackPtr);
             log::out << (*(u64*)ptr);
+            log::out << "\n";
+            break;
+        }
+        case BC_JMP: {
+            // load immediate
+            u32 data = *(u32*)bytecode->get(pc);
+            pc++;
+            // TODO: relative immediate instead?
+            //   can't see any benefit right now.
+            log::out << "\n";
+            pc = data;
+            break;
+        }
+        case BC_JE:
+        case BC_JNE: {
+            u8 r0 = DECODE_REG0(inst);
+
+            u32 data = *(u32*)bytecode->get(pc);
+            pc++;
+
+            void* ptr = getReg(r0);
+            u64 testValue = *((u64*)ptr);
+
+            log::out << testValue;
+            
+            bool yes=false;
+            switch (opcode){
+                case BC_JE: yes = testValue!=0; break;
+                case BC_JNE: yes = testValue==0; break;
+            }
+            if(yes){
+                pc = data;
+            }
             log::out << "\n";
             break;
         }

@@ -1,10 +1,13 @@
 #include "BetBat/Parser.h"
 
+#undef ERR
+
 #define ERRAT(L,C) info.errors++;engone::log::out <<engone::log::RED<< "CompileError "<<(L)<<":"<<(C)<<", "
 #define ERRT(T) ERRAT(T.line,T.column)
 #define ERRTL(T) ERRAT(T.line,T.column+T.length)
 #define ERRTOK ERRAT(token.line,token.column)
 #define ERRTOKL ERRAT(token.line,token.column+token.length)
+#define ERR info.errors++;engone::log::out << engone::log::RED
 
 #define ERR_GENERIC ERRTOK << "unexpected "<<token<<" "<<__FUNCTION__<<"\n"
 
@@ -32,16 +35,16 @@ void ParseInfo::makeScope(){
     _PLOG(log::out << log::GRAY<< "   Enter scope "<<scopes.size()<<"\n";)
     scopes.push_back({});
 }
-int ParseInfo::Scope::getInstsBeforeDelReg(ParseInfo& info){
-    int offset=0;
-    for(Token& token : variableNames){
-        auto var = info.getVariable(token);
-        if(var){
-            offset+=1; // based on drop scope
-        }
-    }
-    return offset;
-}
+// int ParseInfo::Scope::getInstsBeforeDelReg(ParseInfo& info){
+//     int offset=0;
+//     for(Token& token : variableNames){
+//         auto var = info.getVariable(token);
+//         if(var){
+//             offset+=1; // based on drop scope
+//         }
+//     }
+//     return offset;
+// }
 void ParseInfo::Scope::removeReg(int reg){
     for(int i = 0;i<(int)delRegisters.size();i++){
         if(delRegisters[i]==reg){
@@ -55,78 +58,78 @@ void ParseInfo::dropScope(int index){
     if(index==-1){
         _PLOG(log::out << log::GRAY<<"   Exit  scope "<<(scopes.size()-1)<<"\n";)
     }
-    Scope& scope = index==-1? scopes.back() : scopes[index];
-    auto& info = *this;
-    for(Token& token : scope.variableNames){
-        auto var = getVariable(token);
-        if(var){
-            // NOTE: don't forget to change offset in variable cleanup  count
-            //  offset should be however many instruction you add here!
-            // deletes previous value
-            // code.add(BC_STOREV,REG_NULL,var->frameIndex);
-            // _PLOG(INST << "'"<<token<<"'\n";)
-            if(index==-1)
-                removeVariable(token);
-        }
-    }
-    for(Token& token : scope.functionsNames){
-        auto pair = functions.find(token);
-        if(pair!=functions.end()){
-            if(index==-1)
-                functions.erase(pair);
-        }
-    }
-    for(int reg : scope.delRegisters){
-        // code.add(BC_DEL,reg);
-        // _PLOG(INST << "\n";)
-    }
-    if(index==-1)
-        scopes.pop_back();
+    // Scope& scope = index==-1? scopes.back() : scopes[index];
+    // auto& info = *this;
+    // for(Token& token : scope.variableNames){
+    //     auto var = getVariable(token);
+    //     if(var){
+    //         // NOTE: don't forget to change offset in variable cleanup  count
+    //         //  offset should be however many instruction you add here!
+    //         // deletes previous value
+    //         // code.add(BC_STOREV,REG_NULL,var->frameIndex);
+    //         // _PLOG(INST << "'"<<token<<"'\n";)
+    //         if(index==-1)
+    //             removeVariable(token);
+    //     }
+    // }
+    // for(Token& token : scope.functionsNames){
+    //     auto pair = functions.find(token);
+    //     if(pair!=functions.end()){
+    //         if(index==-1)
+    //             functions.erase(pair);
+    //     }
+    // }
+    // for(int reg : scope.delRegisters){
+    //     // code.add(BC_DEL,reg);
+    //     // _PLOG(INST << "\n";)
+    // }
+    // if(index==-1)
+    //     scopes.pop_back();
 }
 
-ParseInfo::Variable* ParseInfo::getVariable(const std::string& name){
-    auto pair = globalVariables.find(name);
-    if(pair!=globalVariables.end())
-        return &pair->second;
+// ParseInfo::Variable* ParseInfo::getVariable(const std::string& name){
+//     auto pair = globalVariables.find(name);
+//     if(pair!=globalVariables.end())
+//         return &pair->second;
     
-    if(currentFunction.empty())
-        return 0;
+//     if(currentFunction.empty())
+//         return 0;
         
-    auto func = getFunction(currentFunction);
-    auto pair2 = func->variables.find(name);
-    if(pair2!=func->variables.end()) 
-        return &pair2->second;
-    return 0;
-}
-void ParseInfo::removeVariable(const std::string& name){
-    auto pair = globalVariables.find(name);
-    if(pair!=globalVariables.end()){
-        globalVariables.erase(pair);
-    }
-    if(currentFunction.empty())
-        return;
+//     auto func = getFunction(currentFunction);
+//     auto pair2 = func->variables.find(name);
+//     if(pair2!=func->variables.end()) 
+//         return &pair2->second;
+//     return 0;
+// }
+// void ParseInfo::removeVariable(const std::string& name){
+//     auto pair = globalVariables.find(name);
+//     if(pair!=globalVariables.end()){
+//         globalVariables.erase(pair);
+//     }
+//     if(currentFunction.empty())
+//         return;
         
-    auto func = getFunction(currentFunction);
-    auto pair2 = func->variables.find(name);
-    if(pair2!=func->variables.end()) 
-        func->variables.erase(pair2);
-}
-ParseInfo::Variable* ParseInfo::addVariable(const std::string& name){
-    if(currentFunction.empty()){
-        return &(globalVariables[name] = {});   
-    }
-    auto func = getFunction(currentFunction);
-    return &(func->variables[name] = {});
-}
-ParseInfo::Function* ParseInfo::getFunction(const std::string& name){
-    auto pair = functions.find(name);
-    if(pair==functions.end())
-        return 0;
-    return &pair->second;
-}
-ParseInfo::Function* ParseInfo::addFunction(const std::string& name){
-    return &(functions[name] = {});
-}
+//     auto func = getFunction(currentFunction);
+//     auto pair2 = func->variables.find(name);
+//     if(pair2!=func->variables.end()) 
+//         func->variables.erase(pair2);
+// }
+// ParseInfo::Variable* ParseInfo::addVariable(const std::string& name){
+//     if(currentFunction.empty()){
+//         return &(globalVariables[name] = {});   
+//     }
+//     auto func = getFunction(currentFunction);
+//     return &(func->variables[name] = {});
+// }
+// ParseInfo::Function* ParseInfo::getFunction(const std::string& name){
+//     auto pair = functions.find(name);
+//     if(pair==functions.end())
+//         return 0;
+//     return &pair->second;
+// }
+// ParseInfo::Function* ParseInfo::addFunction(const std::string& name){
+//     return &(functions[name] = {});
+// }
 // non-quoted
 bool Equal(Token& token, const char* str){
     return !(token.flags&TOKEN_QUOTED) && token == str;
@@ -139,26 +142,27 @@ int IsOp(Token& token){
     if(token=="-") return AST_SUB;
     if(token=="*") return AST_MUL;
     if(token=="/") return AST_DIV;
-    // if(token=="<") return BC_LESS;
-    // if(token==">") return BC_GREATER;
-    // if(token=="<=") return BC_LESS_EQ;
-    // if(token==">=") return BC_GREATER_EQ;
-    // if(token=="==") return BC_EQUAL;
-    // if(token=="!=") return BC_NOT_EQUAL;
-    // if(token=="&&") return BC_AND;
-    // if(token=="||") return BC_OR;
+    if(token=="==") return AST_EQUAL;
+    if(token=="!=") return AST_NOT_EQUAL;
+    if(token=="<") return AST_LESS;
+    if(token==">") return AST_GREATER;
+    if(token=="<=") return AST_LESS_EQUAL;
+    if(token==">=") return AST_GREATER_EQUAL;
+    if(token=="&&") return AST_AND;
+    if(token=="||") return AST_OR;
+    // NOT operation is special
+
     // if(token=="%") return BC_MOD;
     return 0;
 }
 int OpPrecedence(int op){
     using namespace engone;
+    if(op==AST_AND||op==AST_OR) return 1;
+    if(op==AST_LESS||op==AST_GREATER||op==AST_LESS_EQUAL||op==AST_GREATER_EQUAL
+        ||op==AST_EQUAL||op==AST_NOT_EQUAL) return 5;
     if(op==AST_ADD||op==AST_SUB) return 9;
     if(op==AST_MUL||op==AST_DIV) return 10;
-    // if(op==BC_AND||op==BC_OR) return 1;
-    // if(op==BC_LESS||op==BC_GREATER||op==BC_LESS_EQ||op==BC_GREATER_EQ
-    //     ||op==BC_EQUAL||op==BC_NOT_EQUAL) return 5;
-    // if(op==BC_MUL||op==BC_DIV||op==BC_MOD) return 10;
-    log::out << log::RED<<"Parser: OpPrecedence "<<op<<"\n";
+    log::out << log::RED<<__FILE__<<":"<<__LINE__<<", missing "<<op<<"\n";
     return 0;
 }
 Token& ParseInfo::next(){
@@ -421,14 +425,19 @@ Token CombineTokens(ParseInfo& info){
 int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     using namespace engone;
     
-    _PLOG(TRY)
+    _PLOG(FUNC_ENTER)
+    // _PLOG(TRY)
     
     // if(ParseAssignment(info,exprInfo,true)){
     //     _PLOG(log::out << "-- exit ParseExpression\n";)
     //     return 1;
     // }
-    if(info.end())
+    if(info.end()){
+        if(attempt)
+            return PARSE_BAD_ATTEMPT;
+        ERR << "Sudden end\n";
         return PARSE_ERROR;
+    }
 
     std::vector<ASTExpression*> values;
     std::vector<int> ops;
@@ -547,25 +556,56 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
         expectOperator=!expectOperator;
         if(ending){
             expression = values.back();
-            _PLOG(EXIT)
+            // _PLOG(EXIT)
             return PARSE_SUCCESS;
         }
     }
 }
-int ParseBody(ParseInfo& info, ASTBody*& body, bool multiple);
+int ParseBody(ParseInfo& info, ASTBody*& body, bool forceBrackets=false);
 // returns 0 if syntax is wrong for flow parsing
-int ParseFlow(ParseInfo& info, int acc0reg, bool attempt){
+int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
-    
-    _PLOG(TRY)
+    _PLOG(FUNC_ENTER)
     
     if(info.end()){
         return PARSE_ERROR;
     }
     Token token = info.get(info.at()+1);
-    
-    _PLOG(EXIT)
-    return PARSE_SUCCESS;
+
+    if(Equal(token,"if")){
+        info.next();
+        ASTExpression* expr=0;
+        int result = ParseExpression(info,expr,false);
+        if(result!=PARSE_SUCCESS){
+            // TODO: should more stuff be done here?
+            return PARSE_ERROR;
+        }
+        ASTBody* body=0;
+        result = ParseBody(info,body);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
+        }
+        
+        ASTBody* elseBody=0;
+        token = info.get(info.at()+1);
+        if(Equal(token,"else")){
+            info.next();
+            result = ParseBody(info,elseBody);
+            if(result!=PARSE_SUCCESS){
+                return PARSE_ERROR;
+            }   
+        }
+
+        statement = info.ast->createStatement(ASTStatement::IF);
+        ASTStatement* reloc = info.ast->relocate(statement);
+        reloc->expression = expr;
+        reloc->body = body;
+        reloc->elseBody = elseBody;
+        return PARSE_SUCCESS;
+    }
+    if(attempt)
+        return PARSE_BAD_ATTEMPT;
+    return PARSE_ERROR;
 }
 int GetDataType(Token& token){
     if(token=="i32") return AST_INT32;
@@ -576,8 +616,8 @@ int GetDataType(Token& token){
 // #fass
 int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
-    
-    _PLOG(TRY)
+    _PLOG(FUNC_ENTER)
+    // _PLOG(TRY)
     
     if(info.tokens.length() < info.index+2){
         // not enough tokens for assignment
@@ -641,17 +681,18 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
     info.ast->relocate(statement)->expression = expression;
 
-    _PLOG(EXIT)
+    // _PLOG(EXIT)
     return PARSE_SUCCESS;   
 }
-int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool multiple=false){
+int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets){
     using namespace engone;
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
-    _PLOG(ENTER)
+    _PLOG(FUNC_ENTER)
+    // _PLOG(ENTER)
 
     if(info.end()){
-        log::out << log::YELLOW<<"ParseBody: sudden end?\n";
+        ERR << "Sudden end\n";
         return PARSE_ERROR;
     }
     
@@ -660,7 +701,7 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool multiple=false){
     bool scoped=false;
     Token token = info.get(info.at()+1);
     if(Equal(token,"{")) {
-        multiple = true;
+        forceBrackets = true;
         scoped=true;
         token = info.next();
     } 
@@ -680,8 +721,20 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool multiple=false){
         int result=0;
 
         result = ParseAssignment(info,temp,true);
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseFlow(info,temp,true);
 
-        if (temp){
+        if(result==PARSE_BAD_ATTEMPT){
+            Token& token = info.get(info.at()+1);
+            ERRT(token) << "Unexpected '"<<token<<"'\n";
+            // test other parse type
+            info.next(); // prevent infinite loop
+        }
+        if(result==PARSE_ERROR){
+            
+        }
+        if(result==PARSE_SUCCESS){
+            Assert(temp);
             if(prev){
                 info.ast->relocate(prev)->next = temp;
                 prev = temp;
@@ -691,12 +744,12 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool multiple=false){
             }
         }
         
-        if(!multiple)
+        if(!forceBrackets)
             break;
     }
     info.dropScope();
         
-    _PLOG(EXIT)
+    // _PLOG(EXIT)
     return PARSE_SUCCESS;
 }
 

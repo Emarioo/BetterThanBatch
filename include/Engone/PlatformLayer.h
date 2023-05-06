@@ -10,7 +10,7 @@
 // Todo: Get last modified date of a file
 // Todo: Check if file exists.
 
-#define Assert(expression) if(!(expression)) {printf("[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__);*((char*)0) = 0;}
+#define Assert(expression) if(!(expression)) {fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__);*((char*)0) = 0;}
 
 #define PL_PRINT_ERRORS
 

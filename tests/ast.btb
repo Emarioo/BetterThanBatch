@@ -1,12 +1,16 @@
-@disable all
-@enable parser generator interpreter
+@version 2
+// @disable all
+// @enable parser
+// @enable generator
+// @enable interpreter
 
-a = 1
-b = 2 * a
+// a : f32 = 2.67
+// b = a + 9.
+if 1 && 0 {
+    k = 9
+}
 
-// if true {
-//     k = 9   
-// }
+
 
 // a : i32 = 8 - 3.2 * ( 5 + 2 )
 // b = (1-2)/9

@@ -5,8 +5,9 @@
 #include "BetBat/Config.h"
 
 struct GenInfo {
-    BytecodeX code{};
+    BytecodeX* code=0;
     AST* ast=0;
+    int errors=0;
     
     struct Variable {
         u32 frameOffset=0;
@@ -28,4 +29,4 @@ struct GenInfo {
     
 };
 
-BytecodeX Generate(AST* ast, int* err);
+BytecodeX* Generate(AST* ast, int* err);

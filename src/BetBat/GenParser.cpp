@@ -2349,7 +2349,7 @@ Bytecode GenerateScript(Tokens& tokens, int* outErr){
     
     info.code.finalizePointers();
     #ifdef USE_DEBUG_INFO
-    _PLOG(log::out <<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1);)
+    _PLOG(log::out <<*((Bytecode::DebugLine*)info.code.debugLines.data+info.code.debugLines.used-1)<<"\n";)
     #endif
     return info.code;
 }

@@ -17,3 +17,20 @@ const char* FormatBytes(uint64 bytes);
 const char* FormatTime(double seconds);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
+
+#define FUNC_ENTER ScopeDebug scopeDebug{__FUNCTION__};
+#define SCOPE_LOG(X) ScopeDebug scopeDebug{X};
+
+struct ScopeDebug {
+    ScopeDebug(const char* msg) : _msg(msg) {
+        // engone::log::out << engone::log::GRAY << "    \\ "<<_msg<<"\n";
+        // engone::log::out << engone::log::GRAY << "    > "<<_msg<<"\n";
+        engone::log::out << engone::log::GRAY << "    enter "<<_msg<<"\n";
+    }
+    ~ScopeDebug(){
+        // engone::log::out << engone::log::GRAY << "    / "<<_msg<<"\n";   
+        // engone::log::out << engone::log::GRAY << "    < "<<_msg<<"\n";   
+        engone::log::out << engone::log::GRAY << "    exit  "<<_msg<<"\n";   
+    }
+    const char* _msg=0;
+};

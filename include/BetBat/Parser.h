@@ -26,9 +26,7 @@ struct ParseInfo {
     ParseInfo(Tokens& tokens) : tokens(tokens){}
     uint index=0;
     Tokens& tokens;
-    
     int errors=0;
-    
 
     struct Scope{
         std::vector<Token> variableNames;
@@ -45,42 +43,42 @@ struct ParseInfo {
     void dropScope(int index=-1);
 
     int frameOffsetIndex = 0;
-    #define VAR_FUNC 1
-    struct Variable{
-        // int type=0;
-        int frameIndex=0;
-        // int constIndex=-1;
-    };
-    std::unordered_map<std::string,Variable> globalVariables;
-    Variable* getVariable(const std::string& name);
-    void removeVariable(const std::string& name);
-    Variable* addVariable(const std::string& name);
+    // #define VAR_FUNC 1
+    // struct Variable{
+    //     // int type=0;
+    //     int frameIndex=0;
+    //     // int constIndex=-1;
+    // };
+    // std::unordered_map<std::string,Variable> globalVariables;
+    // Variable* getVariable(const std::string& name);
+    // void removeVariable(const std::string& name);
+    // Variable* addVariable(const std::string& name);
     
-    struct Function {
-        int jumpAddress=0;
-        int constIndex=-1;
-        std::unordered_map<std::string,Variable> variables;
-    };
-    std::unordered_map<std::string,Function> functions;
-    Function* getFunction(const std::string& name);
-    Function* addFunction(const std::string& name);
-    std::string currentFunction; // empty means global
+    // struct Function {
+    //     int jumpAddress=0;
+    //     int constIndex=-1;
+    //     std::unordered_map<std::string,Variable> variables;
+    // };
+    // std::unordered_map<std::string,Function> functions;
+    // Function* getFunction(const std::string& name);
+    // Function* addFunction(const std::string& name);
+    // std::string currentFunction; // empty means global
     
     AST* ast=0;
 
-    struct LoopScope{
-        int iReg=0;
-        int vReg=0;
-        int jumpReg=0;
-        int continueConstant=0;
-        int breakConstant=0;
-        int scopeIndex = 0; // reference to scopes
-    };
-    struct FuncScope{
-        int scopeIndex = 0; // reference to scopes
-    };
-    std::vector<LoopScope> loopScopes;
-    std::vector<FuncScope> funcScopes;
+    // struct LoopScope{
+    //     int iReg=0;
+    //     int vReg=0;
+    //     int jumpReg=0;
+    //     int continueConstant=0;
+    //     int breakConstant=0;
+    //     int scopeIndex = 0; // reference to scopes
+    // };
+    // struct FuncScope{
+    //     int scopeIndex = 0; // reference to scopes
+    // };
+    // std::vector<LoopScope> loopScopes;
+    // std::vector<FuncScope> funcScopes;
 
 
     // Does not handle out of bounds

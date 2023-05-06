@@ -36,6 +36,9 @@ struct Token {
     // prints the string, does not print suffix, line or column
     void print(int printFlags = 0);
 };
+
+// #define INT_TO_VERSION(x) ()
+
 #define LAYER_PREPROCESSOR 1
 #define LAYER_PARSER 2
 #define LAYER_GENERATOR 4
@@ -52,7 +55,11 @@ struct Tokens {
     // new line in the middle of a token is not counted, multiline strings doesn't work very well
     
     int enabled=0;
-    
+    static const int VERSION_MAX = 5;
+    char version[VERSION_MAX+1]{0};
+    bool isVersion(const char* ver){return !strcmp(version,ver);}
+    // TODO: version with major, minor and revision
+
     void cleanup();
     
     // modifies tokenData
