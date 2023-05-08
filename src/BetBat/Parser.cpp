@@ -1,6 +1,7 @@
 #include "BetBat/Parser.h"
 
 #undef ERR
+#undef ERRLINE
 
 #define ERRAT(L,C) info.errors++;engone::log::out <<engone::log::RED<< "CompileError "<<(L)<<":"<<(C)<<", "
 #define ERRT(T) ERRAT(T.line,T.column)
@@ -14,7 +15,7 @@
 #define INST engone::log::out << (info.code.length()-1)<<": " <<(info.code.get(info.code.length()-1)) << ", "
 // #define INST engone::log::out << (info.code.get(info.code.length()-2).type==BC_LOADC ? info.code.get(info.code.length()-2) : info.code.get(info.code.length()-1)) << ", "
 
-#define ERRLINE engone::log::out <<log::RED<<" [Line "<<info.now().line<<"] ";info.printLine();engone::log::out<<"\n";
+#define ERRLINE engone::log::out <<engone::log::RED<<" [Line "<<info.now().line<<"] ";info.printLine();engone::log::out<<"\n";
 
 #define CHECK_END if(info.end()){\
         engone::log::out <<log::RED<<  "CompileError: Unexpected end of file\n";\
@@ -441,6 +442,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
 
     std::vector<ASTExpression*> values;
     std::vector<int> ops;
+    std::vector<int> directOps; // ! & *
 
     bool expectOperator=false;
     while(true){
@@ -466,23 +468,41 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 ending = true;
             }
         }else{
-            // GetDataTypeFromToken(), returns a type, f32, i32, string...
+            if(Equal(token,"&")){
+                info.next();
+                directOps.push_back(AST_REFER);
+                attempt = false;
+                continue;
+            }
+            if(Equal(token,"*")){
+                info.next();
+                directOps.push_back(AST_DEREF);
+                attempt = false;
+                continue;
+            }
+            if(Equal(token,"!")){
+                info.next();
+                directOps.push_back(AST_NOT);
+                attempt = false;
+                continue;
+            }
+
             if(IsInteger(token)){
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(AST_INT32);
-                info.ast->relocate(tmp)->i32Value = ConvertInteger(token);
+                tmp->i32Value = ConvertInteger(token);
                 values.push_back(tmp);
                 tmp->token = token;
             } else if(IsDecimal(token)){
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(AST_FLOAT32);
-                info.ast->relocate(tmp)->f32Value = ConvertDecimal(token);
+                tmp->f32Value = ConvertDecimal(token);
                 values.push_back(tmp);
                 tmp->token = token;
             } else if(IsName(token)){
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(AST_VAR);
-                info.ast->relocate(tmp)->varName = new std::string(token);
+                tmp->varName = new std::string(token);
                 values.push_back(tmp);
                 tmp->token = token;
             } else if(Equal(token,"(")){
@@ -506,6 +526,19 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }
             }
         }
+
+        while(directOps.size()>0){
+            int op = directOps.back();
+            directOps.pop_back();
+
+            auto val = values.back();
+            values.pop_back();
+            
+            auto newVal = info.ast->createExpression(op);
+            newVal->left = val;
+
+            values.push_back(newVal);
+        }
         
         ending = ending || info.end();
 
@@ -523,8 +556,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     values.pop_back();
 
                     auto val = info.ast->createExpression(op1);
-                    info.ast->relocate(val)->left = el;
-                    info.ast->relocate(val)->right = er;
+                    val->left = el;
+                    val->right = er;
                     // val->token = operator +?
 
                     values.push_back(val);
@@ -542,8 +575,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 ops.pop_back();
 
                 auto val = info.ast->createExpression(op);
-                info.ast->relocate(val)->left = el;
-                info.ast->relocate(val)->right = er;
+                val->left = el;
+                val->right = er;
                 // val->token = ...
 
                 values.push_back(val);
@@ -597,10 +630,26 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         }
 
         statement = info.ast->createStatement(ASTStatement::IF);
-        ASTStatement* reloc = info.ast->relocate(statement);
-        reloc->expression = expr;
-        reloc->body = body;
-        reloc->elseBody = elseBody;
+        statement->expression = expr;
+        statement->body = body;
+        statement->elseBody = elseBody;
+        return PARSE_SUCCESS;
+    }else if(Equal(token,"while")){
+        info.next();
+        ASTExpression* expr=0;
+        int result = ParseExpression(info,expr,false);
+        if(result!=PARSE_SUCCESS){
+            // TODO: should more stuff be done here?
+            return PARSE_ERROR;
+        }
+        ASTBody* body=0;
+        result = ParseBody(info,body);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
+        }
+        statement = info.ast->createStatement(ASTStatement::WHILE);
+        statement->expression = expr;
+        statement->body = body;
         return PARSE_SUCCESS;
     }
     if(attempt)
@@ -612,6 +661,119 @@ int GetDataType(Token& token){
     if(token=="f32") return AST_FLOAT32;
     if(token=="bool") return AST_BOOL8;
     return AST_NONETYPE;
+}
+// out token contains a newly allocated string. use delete[] on it
+int ParseDataType(ParseInfo& info, Token& outDataType){
+    using namespace engone;
+    int startToken = info.at()+1;
+    int endTok = info.at()+1; // exclusive
+    int totalLength=0;
+    
+    while(true){
+        Token& tok = info.get(endTok);
+        if(tok.flags&TOKEN_QUOTED){
+            ERRT(tok) << "Cannot have quotes in data type "<<tok<<"\n";
+            ERRLINE
+            // error = PARSE_ERROR;
+            // NOTE: Don't return in order to stay synchronized.
+            //   continue parsing like nothing happen.
+        }
+        // if(Equal(tok,"=")){
+        // Todo: Array<T,A> wouldn't work since comma is detected as end of data type.
+        //      tuples won't work with paranthesis.
+        if(Equal(tok,",")
+            ||Equal(tok,")")
+        ){
+            break;
+        }
+        endTok++;
+        totalLength+=tok.length;
+        info.next();
+        if(tok.flags&TOKEN_SUFFIX_LINE_FEED)
+            break;
+    }
+    outDataType = {};
+    outDataType.str = new char[totalLength];
+    outDataType.length = totalLength;
+
+    int sofar=0;
+    for (int i=startToken;i!=endTok;i++){
+        Token& tok = info.get(i);
+        memcpy(outDataType.str+sofar,tok.str,tok.length);
+        sofar+=tok.length;
+    }
+
+    // defer {
+    //     delete[] dataType.str;
+    // };
+    return PARSE_SUCCESS;
+}
+int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
+    using namespace engone;
+    _PLOG(FUNC_ENTER)
+    Token& token = info.get(info.at()+1);
+    if(!Equal(token,"fn")){
+        if(attempt) return PARSE_BAD_ATTEMPT;
+        ERRT(token) << "expected fn for function not "<<token<<"\n";
+        return PARSE_ERROR;
+    }
+    info.next();
+    attempt = false;
+    
+    Token& name = info.next();
+    if(!IsName(name)){
+        ERRT(token) << "expected a valid name, "<<token<<" isn't\n";
+        return PARSE_ERROR;
+    }
+    
+    Token tok = info.next();
+    if(!Equal(tok,"(")){
+        ERRT(token) << "expected a (, not "<<token<<"\n";
+        return PARSE_ERROR;
+    }
+
+    function = info.ast->createFunction(name);
+    
+    while(true){
+        Token& arg = info.next();
+        if(!IsName(arg)){
+            return PARSE_ERROR;
+        }
+        tok = info.next();
+        if(!Equal(tok,":")){
+            return PARSE_ERROR;
+        }
+
+        Token dataType;
+        int result = ParseDataType(info,dataType);
+        defer {
+            delete[] dataType.str;
+        };
+        auto id = info.ast->getOrAddDataType(dataType);
+        function->arguments.push_back({(std::string)arg,id});
+
+        tok = info.next();
+        if(Equal(tok,",")){
+            continue;
+        }else if(Equal(tok,")")){
+            break;
+        }else{
+            return PARSE_ERROR;
+        }
+    }
+    // TODO: check token out of bounds
+    tok = info.get(info.at()+1);
+    Token tok2 = info.get(info.at()+2);
+    if(Equal(tok,"-") && !(tok.flags&TOKEN_SUFFIX_SPACE) && Equal(tok2,">")){
+        // TODO: return types
+    }
+
+    ASTBody* body;
+    int result = ParseBody(info,body);
+
+    function->body = body;
+
+    return PARSE_SUCCESS;
 }
 // #fass
 int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
@@ -628,50 +790,114 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         // info.nextLine();
         return PARSE_ERROR;
     }
+    int error=PARSE_SUCCESS;
+
     Token name = info.get(info.at()+1);
     Token assign = info.get(info.at()+2);
     
     int assignType = 0;
     if(Equal(assign,":")){
-        // expect type
-        Token token = info.get(info.at()+3);
-        int type = GetDataType(token);
-        if(type==0){
-            if(attempt){
-                return PARSE_BAD_ATTEMPT;
+        // we expect a data type which can be comprised of multiple tokens.
+        
+        /*
+        {name} : {data type}\n   <-  line feed marks end of data type
+        {name} :     <-  line feed is okay here
+             {data type}\n
+
+        nums : i32[      <-  data type is cut off.
+            ]
+        */
+
+        info.next();
+        info.next();
+        attempt=false;
+
+        // i32 *
+        // i32 []*
+        // Array<i32>
+        // (i32, f32)
+        // TODO: quoted tokens should not be allowed, var : "i32"*  <-  BAD
+        // TODO: is var := ...  allowed. : without data type? I guess it's fine?
+        // TODO: what about sudden end?
+        int startToken = info.at()+1;
+        int endTok = info.at()+1; // exclusive
+        int totalLength=0;
+        
+        while(true){
+            Token& tok = info.get(endTok);
+            if(tok.flags&TOKEN_QUOTED){
+                ERRT(tok) << "Cannot have quotes in data type "<<tok<<"\n";
+                ERRLINE
+                error = PARSE_ERROR;
+                // NOTE: Don't return in order to stay synchronized.
+                //   continue parsing like nothing happen.
             }
-            ERRT(token) << "expectd data type not '"<<token<<"'\n";
-            ERRLINE
-            return PARSE_ERROR;   
+            if(Equal(tok,"=")){
+                break;
+            }
+            endTok++;
+            totalLength+=tok.length;
+            info.next();
+            if(tok.flags&TOKEN_SUFFIX_LINE_FEED)
+                break;
         }
-        assignType = type;
-        assign = info.get(info.at()+4);
-        info.next();
-        info.next();
+        Token dataType{};
+        dataType.str = new char[totalLength];
+        dataType.length = totalLength;
+        defer {
+            delete[] dataType.str;
+        };
+        
+        // std::function<void()> shit{};
+        // DeferStruct de(shit);
+        // shit = [&](){};
+        // defer {};
+
+        int sofar=0;
+        for (int i=startToken;i!=endTok;i++){
+            Token& tok = info.get(i);
+            memcpy(dataType.str+sofar,tok.str,tok.length);
+            sofar+=tok.length;
+        }
+
+        DataType dtId = info.ast->getDataType(dataType);
+        if(dtId==AST_NONETYPE){
+            // create data type, whether it's defined doesn't matter.
+            // we handle that later
+            dtId = info.ast->addDataType(dataType);
+        }
+        assignType = dtId;
+        assign = info.get(info.at()+1);
+
+        if (error==PARSE_SUCCESS)
+            log::out << "Created datatype "<<dataType<<" "<<dtId<<"\n";
     }
     
     if(!Equal(assign,"=")){
-        return PARSE_BAD_ATTEMPT;
+        if(attempt)
+            return PARSE_BAD_ATTEMPT;
+        ERRT(assign) << "Expected =\n";
+        ERRLINE;
+        return PARSE_ERROR;
     }
     if(!IsName(name)){
         info.next(); // prevent loop
         ERRT(name) << "expected a valid name for assignment ('"<<name<<"' isn't)\n";
         return PARSE_ERROR;
     }
+    if(assignType==0)
+        info.next(); // next on name if : part didn't do it
 
-    info.next();
     info.next();
 
     statement = info.ast->createStatement(ASTStatement::ASSIGN);
 
-    ASTStatement* reloc = info.ast->relocate(statement);
     // log::out << reloc<<"\n";
-    reloc->name = new std::string(name);
+    statement->name = new std::string(name);
     if(assignType!=0)
-        reloc->dataType = assignType;
+        statement->dataType = assignType;
 
     ASTExpression* expression=0;
-
     int result = 0;
     result = ParseExpression(info,expression,false);
 
@@ -679,10 +905,10 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         return PARSE_ERROR;
     }
 
-    info.ast->relocate(statement)->expression = expression;
+    statement->expression = expression;
 
     // _PLOG(EXIT)
-    return PARSE_SUCCESS;   
+    return error;   
 }
 int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets){
     using namespace engone;
@@ -709,6 +935,7 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets){
     info.makeScope();
 
     ASTStatement* prev=0;
+    ASTFunction* prevf=0;
     
     while(!info.end()){
         Token& token = info.get(info.at()+1);
@@ -717,10 +944,14 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets){
             break;
         }
         ASTStatement* temp=0;
+        ASTFunction* func=0;
         
-        int result=0;
+        int result=PARSE_BAD_ATTEMPT;
 
-        result = ParseAssignment(info,temp,true);
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseFunction(info,func,true);
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseAssignment(info,temp,true);
         if(result==PARSE_BAD_ATTEMPT)
             result = ParseFlow(info,temp,true);
 
@@ -734,13 +965,23 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets){
             
         }
         if(result==PARSE_SUCCESS){
-            Assert(temp);
-            if(prev){
-                info.ast->relocate(prev)->next = temp;
-                prev = temp;
-            }else{
-                info.ast->relocate(bodyLoc)->statement = temp;
-                prev = temp;
+            if(temp){
+                if(prev){
+                    prev->next = temp;
+                    prev = temp;
+                }else{
+                    bodyLoc->statement = temp;
+                    prev = temp;
+                }
+            }
+            if(func){
+                if(prevf){
+                    prevf->next = func;
+                    prevf = func;
+                }else{
+                    bodyLoc->function = func;
+                    prevf = func;
+                }
             }
         }
         

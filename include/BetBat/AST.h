@@ -3,8 +3,6 @@
 #include "BetBat/Tokenizer.h"
 #include "Engone/Alloc.h"
 
-#define AST_MEM_OFFSET 8
-
 typedef u32 DataType;
 enum PrimitiveType : u32 {
     AST_NONETYPE=0,
@@ -13,6 +11,7 @@ enum PrimitiveType : u32 {
     AST_BOOL8,
     
     AST_VAR,
+    AST_FNCALL,
     
     AST_PRIMITIVE_COUNT,
 };
@@ -31,6 +30,9 @@ enum OperationType : u32 {
     AST_AND,
     AST_OR,
     AST_NOT,
+
+    AST_REFER, // take reference
+    AST_DEREF, // dereference
 };
 struct AST;
 const char* OpToStr(int op);
@@ -47,6 +49,10 @@ struct ASTExpression {
         bool b8Value;
         std::string* varName;
         struct {
+            std::string* funcName;
+            ASTExpression* inArg;
+        };
+        struct {
             ASTExpression* left;
             ASTExpression* right;
         };
@@ -56,16 +62,19 @@ struct ASTExpression {
     // left input (optional)
     // right input
     
+    // used for function calls
+    ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
 struct ASTBody;
 struct ASTStatement {
     ASTStatement() : name(0), dataType(0), expression(0) {}
     enum Type {
+        ASSIGN,
         IF,
+        WHILE,
         FOR,
         EACH,
-        ASSIGN,
     };
     int type=0;
     union {
@@ -86,15 +95,33 @@ struct ASTStatement {
 
     void print(AST* ast, int depth);
 };
+struct ASTFunction {
+    std::string* name=0;
+    struct Arg{
+        std::string name;
+        DataType dataType;
+    };
+    std::vector<Arg> arguments;
+    std::vector<DataType> returnTypes;
+
+    ASTBody* body=0;
+
+    ASTFunction* next=0;
+
+    void print(AST* ast, int depth);
+};
 struct ASTBody {
     // functions
     // statements
-    
+    ASTFunction* function = 0;
     ASTStatement* statement = 0;
 
     void print(AST* ast, int depth);
 };
 struct AST {
+    static AST* Create();
+    static void Destroy(AST* ast);
+    void cleanup();
     /*
     functions
     structs
@@ -106,25 +133,29 @@ struct AST {
     */
     ASTBody* body=0;
 
-    engone::Memory memory{1};
+    std::unordered_map<std::string, DataType> dataTypes;
+    DataType nextDataTypeId=0x100;
+    static const DataType POINTER_BIT = 0x40000000;
+    DataType nextPointerTypeId=POINTER_BIT;
+    DataType getDataType(const std::string& name);
+    // do not save the returned string reference, add a data type and then use the reference.
+    // it may be invalid.
+    const std::string* getDataType(DataType id);
+    DataType addDataType(const std::string& name);
+
+    DataType getOrAddDataType(const std::string& name);
+
+    static bool IsPointer(DataType id);
+
     // engone::Memory text{1};
 
-    uint createName(Token& token);
+    // uint createName(Token& token);
 
-    void init();
-    static AST* Create();
-    static void Destroy(AST* ast);
-    void cleanup();
     ASTBody* createBody();
+    ASTFunction* createFunction(const std::string& name);
     ASTStatement* createStatement(int type);
     ASTExpression* createExpression(DataType type);
 
     void print(int depth = 0);
-
-    template<typename T>
-    T* relocate(T* offset){
-        return offset;
-        // return (T*)memory.data + ((u64)offset - AST_MEM_OFFSET);
-    }
 };
 const char* DataTypeToStr(int type);

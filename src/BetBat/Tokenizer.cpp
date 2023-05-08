@@ -69,6 +69,7 @@ int ConvertInteger(Token& token){
 
 void Token::print(int printFlags){
     using namespace engone;
+    if(!str) return;
     // if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_QUOTED)
             log::out << "\"";

@@ -16,10 +16,10 @@ void Interpreter::cleanup(){
 
 void Interpreter::printRegisters(){
     using namespace engone;
-    log::out << "RAX: "<<rax<<"\n";
-    log::out << "RBX: "<<rbx<<"\n";
-    log::out << "RCX: "<<rcx<<"\n";
-    log::out << "RDX: "<<rdx<<"\n";
+    log::out << "RAX: "<<rax<<" "<<*(float*)&rax<<"\n";
+    log::out << "RBX: "<<rbx<<" "<<*(float*)&rbx<<"\n";
+    log::out << "RCX: "<<rcx<<" "<<*(float*)&rcx<<"\n";
+    log::out << "RDX: "<<rdx<<" "<<*(float*)&rdx<<"\n";
     log::out << "SP: "<<sp<<"\n";
     log::out << "FP: "<<fp<<"\n";
     log::out << "PC: "<<pc<<"\n";
@@ -63,6 +63,10 @@ void Interpreter::execute(BytecodeX* bytecode){
         case BC_SUBI:
         case BC_MULI:
         case BC_DIVI:
+        case BC_ADDF:
+        case BC_SUBF:
+        case BC_MULF:
+        case BC_DIVF:
         case BC_EQ:
         case BC_NEQ:
         case BC_LT:
@@ -89,11 +93,16 @@ void Interpreter::execute(BytecodeX* bytecode){
             u64& out = *(u64*)outp;
             
             #define GEN_OP(OP) out = x OP y; log::out << out << " = "<<x <<" "<< #OP << " "<<y; break;
+            #define GEN_OPF(OP) *(float*)&out = *(float*)&x OP *(float*)&y; log::out << *(float*)&out << " = "<<*(float*)&x <<" "<< #OP << " "<<*(float*)&y; break;
             switch(opcode){
                 case BC_ADDI: GEN_OP(+)   
                 case BC_SUBI: GEN_OP(-)   
                 case BC_MULI: GEN_OP(*)   
                 case BC_DIVI: GEN_OP(/)
+                case BC_ADDF: GEN_OPF(+)   
+                case BC_SUBF: GEN_OPF(-)   
+                case BC_MULF: GEN_OPF(*)   
+                case BC_DIVF: GEN_OPF(/)
 
                 case BC_EQ: GEN_OP(==)
                 case BC_NEQ: GEN_OP(!=)

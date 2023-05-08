@@ -107,7 +107,7 @@ int main(int argc, const char** argv){
         // print_help();
         // log::out << "No input files!\n";
 
-        CompileScript("tests/ast.btb");
+        CompileScript("example/v2/ast.btb");
         
         // log::out.enableConsole(false);
         // TestVariableLimit(10000);

@@ -18,6 +18,9 @@ const char* OpToStr(int optype){
         CASE(AND,&&)
         CASE(OR,||)
         CASE(NOT,!)
+
+        CASE(REFER,&)
+        CASE(DEREF,*)
     }
     #undef CASE
     return "?";
@@ -27,6 +30,7 @@ const char* StateToStr(int type){
     switch(type){
         CASE(ASSIGN,assign)
         CASE(IF,if)
+        CASE(WHILE,while)
     }
     #undef CASE
     return "?";
@@ -39,11 +43,6 @@ const char* DataTypeToStr(int type){
         CASE(BOOL8,bool)
         
         CASE(VAR,var)
-        
-        // CASE(ADD,+)
-        // CASE(SUB,-)
-        // CASE(MUL,*)
-        // CASE(DIV,/)
     }
     #undef CASE
     return "?";
@@ -51,66 +50,71 @@ const char* DataTypeToStr(int type){
 AST* AST::Create(){
     AST* ast = (AST*)engone::Allocate(sizeof(AST));
     new(ast)AST();
+    // initialize default data types
+    ast->dataTypes["none"] = AST_NONETYPE;
+    ast->dataTypes["i32"] = AST_INT32;
+    ast->dataTypes["f32"] = AST_FLOAT32;
+    ast->dataTypes["bool"] = AST_BOOL8;
+    ast->dataTypes["var"] = AST_VAR;
     return ast;
 }
+
 void AST::Destroy(AST* ast){
     ast->~AST();
     engone::Free(ast,sizeof(AST));
 }
 void AST::cleanup(){
-    memory.resize(0);
-}
-u64 CreateGeneral(AST* ast, u64 size){
     using namespace engone;
-
-    if(ast->memory.max < ast->memory.used + size*2)
-        if(!ast->memory.resize(ast->memory.max*2 + size*2+10))
-            return 0;
-    u64 offset = ast->memory.used;
-    ast->memory.used += size;
-
-    u64 mods = 8-((u64)ast->memory.data + offset)%8;
-    if(mods==8) mods = 0;
-    offset+=mods;
-    ast->memory.used+=mods;
-
-    // log::out << "Create "<<offset<<" "<<(u64)ast->memory.data<<"\n";
-    // TODO: alignment
-    return offset;
+    log::out << log::RED << "AST::cleanup not implemented\n";
+}
+DataType AST::getDataType(const std::string& name){
+    auto pair = dataTypes.find(name);
+    if (pair==dataTypes.end())
+        return AST_NONETYPE;
+    return pair->second;
+}
+const std::string* AST::getDataType(DataType id){
+    for (auto& pair : dataTypes){
+        if(pair.second == id){
+            return &pair.first;
+        }
+    }
+    return 0;
+}
+DataType AST::getOrAddDataType(const std::string& name){
+    auto id = getDataType(name);
+    if(!id)
+        id = addDataType(name);
+    return id;
+}
+DataType AST::addDataType(const std::string& name){
+    Assert(!name.empty())
+    if(name.back()=='*')
+        return dataTypes[name] = nextPointerTypeId++;
+    else
+        return dataTypes[name] = nextDataTypeId++;
+}
+bool AST::IsPointer(DataType id){
+    return id & POINTER_BIT;
 }
 ASTBody* AST::createBody(){
     return new ASTBody();
-
-    u64 offset = CreateGeneral(this,sizeof(ASTBody));
-    ASTBody* ptr = (ASTBody*)memory.data + offset;
-    new(ptr)ASTBody();
-    offset+=AST_MEM_OFFSET;
-    return (ASTBody*)offset;
 }
 ASTStatement* AST::createStatement(int type){
     ASTStatement* ptr = new ASTStatement();
     ptr->type = type;
     return ptr;
-
-    // u64 offset = CreateGeneral(this,sizeof(ASTStatement));
-    // ASTStatement* ptr = (ASTStatement*)memory.data + offset;
-    // new(ptr)ASTStatement();
-    // ptr->type=type;
-    // offset+=AST_MEM_OFFSET;
-    // return (ASTStatement*)offset;
+}
+ASTFunction* AST::createFunction(const std::string& name){
+    ASTFunction* ptr = new ASTFunction();
+    ptr->name = new std::string(name);
+    return ptr;
 }
 ASTExpression* AST::createExpression(DataType type){
     ASTExpression* ptr = new ASTExpression();
-
-    // u64 offset = CreateGeneral(this,sizeof(ASTExpression));
-    // ASTExpression* ptr = (ASTExpression*)memory.data + offset;
-    // new(ptr)ASTExpression();
     ptr->isValue = (u32)type<AST_PRIMITIVE_COUNT;
     ptr->dataType = type;
     return ptr;
-
-    // offset+=AST_MEM_OFFSET;
-    // return (ASTExpression*)offset;
 }
 void PrintSpace(int count){
     using namespace engone;
@@ -121,16 +125,44 @@ void AST::print(int depth){
     if(body){
         PrintSpace(depth);
         log::out << "AST\n";
-        relocate(body)->print(this, depth+1);
+        body->print(this, depth+1);
     }
 }
 void ASTBody::print(AST* ast, int depth){
     using namespace engone;
     PrintSpace(depth);
     log::out << "Body\n";
+    if(function)
+        function->print(ast,depth+1);
     if(statement){
-        ast->relocate(statement)->print(ast, depth+1);
+        statement->print(ast, depth+1);
     }
+}
+void ASTFunction::print(AST* ast, int depth){
+    using namespace engone;
+    PrintSpace(depth);
+    log::out << "Func "<<*name<<" (";
+    for(int i=0;i<(int)arguments.size();i++){
+        auto& arg = arguments[i];
+        auto dtname = ast->getDataType(arg.dataType);
+        log::out << arg.name << ": "<<*dtname;
+        if(i+1!=(int)arguments.size()){
+            log::out << ", ";
+        }
+    }
+    log::out << ")";
+    if(!returnTypes.empty())
+        log::out << "->";
+    for(auto& ret : returnTypes){
+        auto dtname = ast->getDataType(ret);
+        log::out <<*dtname<<", ";
+    }
+    log::out << "\n";
+    if(body){
+        body->print(ast,depth+1);
+    }
+    if(next)
+        next->print(ast,depth);
 }
 void ASTStatement::print(AST* ast, int depth){
     using namespace engone;
@@ -138,23 +170,36 @@ void ASTStatement::print(AST* ast, int depth){
     log::out << "Statement "<<StateToStr(type);
 
     if(type==ASSIGN){
+        auto dtname = ast->getDataType(dataType);
         if(dataType!=0)
-            log::out << " "<<DataTypeToStr(dataType)<<"";
+            // log::out << " "<<DataTypeToStr(dataType)<<"";
+            log::out << " "<<*dtname<<"";
         log::out << " "<<*name<<"\n";
         if(expression){
-            ast->relocate(expression)->print(ast, depth+1);
+            expression->print(ast, depth+1);
         }
     }else if(type==IF){
         log::out << "\n";
         if(expression){
-            ast->relocate(expression)->print(ast,depth+1);
+            expression->print(ast,depth+1);
         }
         if(body){
-            ast->relocate(body)->print(ast,depth+1);
+            body->print(ast,depth+1);
+        }
+        if(elseBody){
+            elseBody->print(ast,depth+1);
+        }
+    }else if(type==WHILE){
+        log::out << "\n";
+        if(expression){
+            expression->print(ast,depth+1);
+        }
+        if(body){
+            body->print(ast,depth+1);
         }
     }
     if(next){
-        ast->relocate(next)->print(ast, depth);
+        next->print(ast, depth);
     }
 }
 void ASTExpression::print(AST* ast, int depth){
@@ -162,22 +207,24 @@ void ASTExpression::print(AST* ast, int depth){
     PrintSpace(depth);
     
     if(isValue){
-        log::out << "Expr "<<DataTypeToStr(dataType)<<" ";
+        auto dtname = ast->getDataType(dataType);
+        // log::out << "Expr "<<DataTypeToStr(dataType)<<" ";
+        log::out << "Expr "<<*dtname<<" ";
         if(dataType==AST_FLOAT32) log::out << f32Value;
         else if(dataType==AST_INT32) log::out << i32Value;
         else if(dataType==AST_BOOL8) log::out << b8Value;
         else if(dataType==AST_VAR) log::out << *varName;
         else
-            log::out << "missing print conversion";
+            log::out << "missing print impl.";
         log::out << "\n";
     } else {
         log::out << "Expr "<<OpToStr(dataType)<<" ";
         log::out << "\n";
         if(left){
-            ast->relocate(left)->print(ast, depth+1);
+            left->print(ast, depth+1);
         }
         if(right){
-            ast->relocate(right)->print(ast, depth+1);
+            right->print(ast, depth+1);
         }
     }
 }

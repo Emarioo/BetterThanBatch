@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Engone/Alloc.h"
+#include <functional>
 
 engone::Memory ReadFile(const char* path);
 bool WriteFile(const char* path, engone::Memory buffer);
@@ -34,3 +35,13 @@ struct ScopeDebug {
     }
     const char* _msg=0;
 };
+
+#define COMBINE1(X,Y) X##Y
+#define COMBINE(X,Y) COMBINE1(X,Y)
+
+#define defer std::function<void()> COMBINE(func,__LINE__){};DeferStruct COMBINE(defer,__LINE__)(COMBINE(func,__LINE__));COMBINE(func,__LINE__)=[&]()
+struct DeferStruct {
+    DeferStruct(std::function<void()>& func) : _func(func) {}
+    ~DeferStruct() { _func(); }
+    std::function<void()>& _func;
+};  

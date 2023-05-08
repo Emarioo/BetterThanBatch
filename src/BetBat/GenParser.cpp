@@ -1,6 +1,7 @@
 #include "BetBat/GenParser.h"
 
 #undef ERRT
+#undef ERRLINE
 
 #define ERRAT(L,C) info.errors++;engone::log::out <<engone::log::RED<< "CompileError "<<(L)<<":"<<(C)<<", "
 #define ERRT(T) ERRAT(T.line,T.column)

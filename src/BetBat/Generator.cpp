@@ -61,9 +61,6 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, DataType* outDa
             info.code->add({BC_LI,BC_REG_RAX});
             info.code->add(val);
             info.code->add({BC_PUSH,BC_REG_RAX});
-            // 1 + 3 + 8
-            // + (+ 1 2) (+ 3 4)
-            
         } else if(expression->dataType==AST_BOOL8){
             bool val = expression->b8Value;
             
@@ -105,59 +102,137 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, DataType* outDa
         }
         *outDataType = expression->dataType;
     }else{
-        DataType ltype,rtype;
-        int err = GenerateExpression(info,expression->left,&ltype);
-        if(err==GEN_ERROR) return err;
-        err = GenerateExpression(info,expression->right,&rtype);
-        if(err==GEN_ERROR) return err;
-        
-        if(ltype!=rtype){
-            ERRT(expression->token) << expression->token<<" mismatch of data types ("<<DataTypeToStr(ltype)<<" - "<<DataTypeToStr(rtype)<<")\n";
-            // log::out << log::RED<<"DataType mismatch\n";
-            *outDataType = AST_NONETYPE;
-            return GEN_ERROR;
-        }
         // pop $rdx
         // pop $rax
         // addi $rax $rdx $rax
         // push $rax
         
-        info.code->add({BC_POP,BC_REG_RDX});
-        info.code->add({BC_POP,BC_REG_RAX});
-        
-        #define GEN_OP(X,Y) if(expression->dataType==AST_##X) info.code->add({Y,BC_REG_RAX,BC_REG_RDX,BC_REG_RAX});
-        // if(ltype==AST_FLOAT32){
-        //     GEN_OP(ADD,BC_ADDF)
-        //     else GEN_OP(SUB,BC_SUBF)
-        //     else GEN_OP(MUL,BC_MULF)
-        //     else GEN_OP(DIV,BC_DIVF)
-        //     else
-        //         log::out << log::RED<<"GenExpr: operation not implemented\n";    
-        // }
-        GEN_OP(ADD,BC_ADDI)
-        else GEN_OP(SUB,BC_SUBI)
-        else GEN_OP(MUL,BC_MULI)
-        else GEN_OP(DIV,BC_DIVI)
+        DataType ltype;
+        if(expression->dataType==AST_REFER){
+            ASTExpression* expr = expression->left;
+            if(expr->dataType!=AST_VAR){
+                ERRT(expr->token) << expr->token<<", can only reference a variable\n";
+                *outDataType = AST_NONETYPE;
+                return GEN_ERROR;
+            }
+            auto var = info.getVariable(*expr->varName);
+            if(var){
+                // TODO: check data type?
+                info.code->add({BC_LI,BC_REG_RAX});
+                info.code->add(var->frameOffset);
+                info.code->add({BC_ADDI,BC_REG_FP,BC_REG_RAX, BC_REG_RAX}); // fp + offset
 
-        else GEN_OP(EQUAL,BC_EQ)
-        else GEN_OP(NOT_EQUAL,BC_NEQ)
-        else GEN_OP(LESS,BC_LT)
-        else GEN_OP(LESS_EQUAL,BC_LTE)
-        else GEN_OP(GREATER,BC_GT)
-        else GEN_OP(GREATER_EQUAL,BC_GTE)
-        else GEN_OP(AND,BC_ANDI)
-        else GEN_OP(OR,BC_ORI)
-        else
-            log::out << log::RED<<"GenExpr: operation not implemented\n";
-        #undef GEN_OP
+                // new pointer data type
+                auto dtname = info.ast->getDataType(var->dataType);
+                std::string temp = *dtname;
+                temp += "*";
+                auto id = info.ast->getDataType(temp);
+                if(!id)
+                    id = info.ast->addDataType(temp);
+                
+                *outDataType = id;
+            } else {
+                ERRT(expr->token) << expr->token<<" is undefined\n";
+                // log::out << log::RED<<"var "<<*expression->varName<<" undefined\n";   
+                *outDataType = AST_NONETYPE;
+                return GEN_ERROR;
+            }
+        }else if(expression->dataType==AST_DEREF){
+            int err = GenerateExpression(info,expression->left,&ltype);
+            if(err==GEN_ERROR) return err;
+
+            if(!AST::IsPointer(ltype)){
+                ERRT(expression->left->token) << expression->left->token<<", can only derefence a pointer variable\n";
+                *outDataType = AST_NONETYPE;
+                return GEN_ERROR;
+            }
+            info.code->add({BC_POP,BC_REG_RBX});
+            info.code->add({BC_MOV_MR,BC_REG_RBX,BC_REG_RAX});
+            // info.code->add({BC_PUSH,BC_REG_RAX});
+
+            auto dtname = info.ast->getDataType(ltype);
+            std::string temp = *dtname;
+            temp.pop_back(); // pop *
+            auto id = info.ast->getDataType(temp);
+            if(!id)
+                id = info.ast->addDataType(temp);
+            
+            *outDataType = id;
+        }else if(expression->dataType==AST_NOT){
+            int err = GenerateExpression(info,expression->left,&ltype);
+            if(err==GEN_ERROR) return err;
+            
+            info.code->add({BC_POP,BC_REG_RAX});
+            info.code->add({BC_NOTB,BC_REG_RAX,BC_REG_RAX});
+            
+            *outDataType = ltype;
+        }else{
+            // basic operations
+            DataType rtype;
+            int err = GenerateExpression(info,expression->left,&ltype);
+            if(err==GEN_ERROR) return err;
+            err = GenerateExpression(info,expression->right,&rtype);
+            if(err==GEN_ERROR) return err;
+            
+            info.code->add({BC_POP,BC_REG_RDX});
+            info.code->add({BC_POP,BC_REG_RAX});
+
+            if(AST::IsPointer(ltype)&&rtype==AST_INT32){
+                if(expression->dataType==AST_ADD){
+                    info.code->add({BC_ADDI,BC_REG_RAX,BC_REG_RDX,BC_REG_RAX});
+                    *outDataType = ltype;
+                    info.code->add({BC_PUSH,BC_REG_RAX});
+                    return GEN_SUCCESS;
+                }else{
+                    log::out << log::RED<<"GenExpr: operation not implemented\n";
+                    *outDataType = AST_NONETYPE;
+                    return GEN_ERROR;
+                }
+            }
+
+            if(ltype!=rtype){
+                ERRT(expression->token) << expression->token<<" mismatch of data types ("<<*info.ast->getDataType(ltype)<<" - "<<*info.ast->getDataType(rtype)<<")\n";
+                // log::out << log::RED<<"DataType mismatch\n";
+                *outDataType = AST_NONETYPE;
+                return GEN_ERROR;
+            }
+
+            #define GEN_OP(X,Y) if(expression->dataType==AST_##X) info.code->add({Y,BC_REG_RAX,BC_REG_RDX,BC_REG_RAX});
+            if(ltype==AST_FLOAT32){
+                GEN_OP(ADD,BC_ADDF)
+                else GEN_OP(SUB,BC_SUBF)
+                else GEN_OP(MUL,BC_MULF)
+                else GEN_OP(DIV,BC_DIVF)
+                else
+                    log::out << log::RED<<"GenExpr: operation not implemented\n";    
+            }else{
+                GEN_OP(ADD,BC_ADDI)
+                else GEN_OP(SUB,BC_SUBI)
+                else GEN_OP(MUL,BC_MULI)
+                else GEN_OP(DIV,BC_DIVI)
+
+                else GEN_OP(EQUAL,BC_EQ)
+                else GEN_OP(NOT_EQUAL,BC_NEQ)
+                else GEN_OP(LESS,BC_LT)
+                else GEN_OP(LESS_EQUAL,BC_LTE)
+                else GEN_OP(GREATER,BC_GT)
+                else GEN_OP(GREATER_EQUAL,BC_GTE)
+                else GEN_OP(AND,BC_ANDI)
+                else GEN_OP(OR,BC_ORI)
+                else
+                    log::out << log::RED<<"GenExpr: operation not implemented\n";
+            }
+            #undef GEN_OP
+            *outDataType = ltype;
+        }
         
         info.code->add({BC_PUSH,BC_REG_RAX});
         
-        *outDataType = ltype;
     }
     return GEN_SUCCESS;
 }
 int GenerateBody(GenInfo& info, ASTBody* body){
+    using namespace engone;
     Assert(body)
 
     bool first=true;
@@ -183,6 +258,9 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 ERR() << "datatype for assignment cannot be NONE\n";
             }else{
                 if(dtype==statement->dataType || statement->dataType==AST_NONETYPE){
+                    // TODO: nonetype is only valid for as implicit initial decleration.
+                    //    Not allowed afterwards? or maybe it's find we just check variable type
+                    //    not looking at the statement data type?
                     if(!var){
                         var = info.addVariable(*statement->name);
                         var->dataType = statement->dataType;
@@ -202,9 +280,12 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     info.code->add(8);
                     info.code->add({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
                 }else{
-                    ERR() << "type mismatch at assignment '"<<*statement->name<<"'\n";
+                    ERR() << "Type mismatch for variable "<<*statement->name<<". Should be "<<*info.ast->getDataType(statement->dataType)<<" but was "<<*info.ast->getDataType(dtype)<<"\n";
+                    continue;
+                    // TODO: Show were in the code
                 }
             }
+            log::out << " "<<*statement->name << " : "<<*info.ast->getDataType(dtype)<<"\n";
         } else if (statement->type == ASTStatement::IF){
             SCOPE_LOG("IF")
             DataType dtype=0;
@@ -244,6 +325,36 @@ int GenerateBody(GenInfo& info, ASTBody* body){
 
                 *(u32*)info.code->get(skipElseBodyIndex) = info.code->length();
             }
+        }else if(statement->type == ASTStatement::WHILE){
+            SCOPE_LOG("WHILE")
+
+            u32 loopAddress = info.code->length();
+
+            DataType dtype=0;
+            int result = GenerateExpression(info,statement->expression,&dtype);
+            if(result==GEN_ERROR){
+                // generate body anyway or not?
+                continue;
+            }
+            // if(dtype!=AST_BOOL8){
+            //     ERRT(statement->expression->token) << "Expected a boolean, not '"<<DataTypeToStr(dtype)<<"'\n";
+            //     continue;
+            // }
+
+            info.code->add({BC_POP,BC_REG_RAX});
+            info.code->add({BC_JNE,BC_REG_RAX});
+            u32 endIndex = info.code->length();
+            info.code->add(0);
+
+            result = GenerateBody(info,statement->body);
+            if(result==GEN_ERROR)
+                continue;
+
+            info.code->add({BC_JMP});
+            info.code->add(loopAddress);
+
+            // fix address for jump instruction
+            *(u32*)info.code->get(endIndex) = info.code->length();
         }
     }
     return GEN_SUCCESS;
