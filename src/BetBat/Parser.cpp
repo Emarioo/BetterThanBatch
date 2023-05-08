@@ -501,10 +501,53 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->token = token;
             } else if(IsName(token)){
                 token = info.next();
-                ASTExpression* tmp = info.ast->createExpression(AST_VAR);
-                tmp->varName = new std::string(token);
-                values.push_back(tmp);
-                tmp->token = token;
+                
+                token = info.get(info.at()+1);
+                if(Equal(token,"(")){
+                    // function call
+                    info.next();
+                    ASTExpression* tmp = info.ast->createExpression(AST_FNCALL);
+                    tmp->funcName = new std::string(token);
+                    ASTExpression* prev=0;
+                    // TODO: sudden end, error handling
+                    bool expectComma=false;
+                    while(true){
+                        Token& tok = info.get(info.at()+1);
+                        if(Equal(tok,")")){
+                            info.next();
+                            break;
+                        }
+                        if(expectComma){
+                            if(Equal(tok,",")){
+                                info.next();
+                                expectComma=false;
+                                continue;
+                            }
+                            ERRT(tok)<<"expected comma not "<<tok<<"\n";
+                            return PARSE_ERROR;
+                        }
+                        ASTExpression* expr=0;
+                        int result = ParseExpression(info,expr,false);
+                        if(result!=PARSE_SUCCESS){
+                            // TODO: error message, parse other arguments instead of returning?
+                            return PARSE_ERROR;                         
+                        }
+                        if(prev){
+                            prev->next = expr;
+                        }else{
+                            tmp->inArg = expr;
+                        }
+                        prev = prev->next;
+                        expectComma = true;
+                    }
+                    values.push_back(tmp);
+                    tmp->token = token;
+                }else{
+                    ASTExpression* tmp = info.ast->createExpression(AST_VAR);
+                    tmp->varName = new std::string(token);
+                    values.push_back(tmp);
+                    tmp->token = token;
+                }
             } else if(Equal(token,"(")){
                 // parse again
                 info.next();
@@ -736,6 +779,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
     
     while(true){
         Token& arg = info.next();
+        // Todo: what if function has no arguments, ) would appear here
         if(!IsName(arg)){
             return PARSE_ERROR;
         }

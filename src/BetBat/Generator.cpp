@@ -93,7 +93,27 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, DataType* outDa
                 *outDataType = AST_NONETYPE;
                 return GEN_ERROR;
             }
-        } else {
+        }  else if(expression->dataType==AST_FNCALL){
+            // check data type and get it
+            auto var = info.getVariable(*expression->varName);
+            if(var){
+                // TODO: check data type?
+                info.code->add({BC_LI,BC_REG_RAX});
+                info.code->add(var->frameOffset);
+                info.code->add({BC_ADDI,BC_REG_FP,BC_REG_RAX, BC_REG_RAX});
+                // fp + offset
+                info.code->add({BC_MOV_MR,BC_REG_RAX,BC_REG_RAX});
+                info.code->add({BC_PUSH,BC_REG_RAX});
+                
+                *outDataType = var->dataType;
+                return GEN_SUCCESS;
+            }else{
+                ERRT(expression->token) << expression->token<<" is undefined\n";
+                // log::out << log::RED<<"var "<<*expression->varName<<" undefined\n";   
+                *outDataType = AST_NONETYPE;
+                return GEN_ERROR;
+            }
+        }  else {
             info.code->add({BC_PUSH,BC_REG_RAX}); // push something so the stack stays synchronized
             ERRT(expression->token) << expression->token<<" is an unknown data type\n";
             // log::out <<  log::RED<<"GenExpr: data type not implemented\n";
@@ -235,6 +255,65 @@ int GenerateBody(GenInfo& info, ASTBody* body){
     using namespace engone;
     Assert(body)
 
+    bool first=true;
+    ASTFunction* function = 0;
+    while(true){
+        if(first){
+            first=false;
+            function = body->function;
+        } else
+            function = function->next;
+        if(!function)
+            break;
+        
+        {
+            SCOPE_LOG("FUNCTION")
+            
+            auto func = info.addFunction(*function->name);
+            func->astFunc = function;
+            
+            
+            info.code->add({BC_JMP});
+            int skipIndex=info.code->length();
+            info.code->add(0);
+            
+            func->address = info.code->length();
+            ASTBody* body;
+            int result = GenerateBody(info,body);
+            
+            *((u32*)info.code->get(skipIndex)) = info.code->length();
+            
+                    // TODO: nonetype is only valid for as implicit initial decleration.
+                    //    Not allowed afterwards? or maybe it's find we just check variable type
+                    //    not looking at the statement data type?
+                    if(!var){
+                        var = info.addVariable(*statement->name);
+                        var->dataType = statement->dataType;
+                        // data type may be zero if it wasn't specified during initial assignment
+                        // a = 9  <-  implicit / explicit  ->  a : i32 = 9
+                        var->frameOffset = info.nextFrameOffset;
+                        info.nextFrameOffset+=8;
+                    }
+                    var->dataType = dtype;
+                    info.code->add({BC_LI,BC_REG_RBX});
+                    info.code->add(var->frameOffset);
+                    info.code->add({BC_ADDI,BC_REG_FP,BC_REG_RBX,BC_REG_RBX}); // rbx = fp + offset
+                    info.code->add({BC_POP,BC_REG_RDX});
+                    info.code->add({BC_MOV_RM,BC_REG_RDX,BC_REG_RBX});
+                    // move forward stack pointer
+                    info.code->add({BC_LI,BC_REG_RCX});
+                    info.code->add(8);
+                    info.code->add({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
+                }else{
+                    ERR() << "Type mismatch for variable "<<*statement->name<<". Should be "<<*info.ast->getDataType(statement->dataType)<<" but was "<<*info.ast->getDataType(dtype)<<"\n";
+                    continue;
+                    // TODO: Show were in the code
+                }
+            }
+            log::out << " "<<*statement->name << " : "<<*info.ast->getDataType(dtype)<<"\n";   
+        }
+    }
+    
     bool first=true;
     ASTStatement* statement = 0;
     while(true){
