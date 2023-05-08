@@ -40,13 +40,15 @@ void* Interpreter::getReg(u8 id){
 
 void Interpreter::execute(BytecodeX* bytecode){
     using namespace engone;
-    log::out <<log::BLUE<< "##   Interpreter   ##\n";    
+    _VLOG(log::out <<log::BLUE<< "##   Interpreter   ##\n";)
     stack.resize(100*1024);
     
     pc = 0;
     sp = (u64)stack.data;
     fp = (u64)stack.data;
     
+    auto tp = MeasureSeconds();
+
     while (true) {
         // check used
 
@@ -55,7 +57,7 @@ void Interpreter::execute(BytecodeX* bytecode){
 
         InstructionX* inst = bytecode->get(pc);
         if(inst)
-            log::out << pc<<": "<<*inst<<", ";
+            _ILOG(log::out << pc<<": "<<*inst<<", ";)
         pc++;
         u8 opcode = DECODE_OPCODE(inst);
         switch (opcode) {
@@ -92,8 +94,8 @@ void Interpreter::execute(BytecodeX* bytecode){
             u64 y = *(u64*)yp;
             u64& out = *(u64*)outp;
             
-            #define GEN_OP(OP) out = x OP y; log::out << out << " = "<<x <<" "<< #OP << " "<<y; break;
-            #define GEN_OPF(OP) *(float*)&out = *(float*)&x OP *(float*)&y; log::out << *(float*)&out << " = "<<*(float*)&x <<" "<< #OP << " "<<*(float*)&y; break;
+            #define GEN_OP(OP) out = x OP y; _ILOG(log::out << out << " = "<<x <<" "<< #OP << " "<<y;) break;
+            #define GEN_OPF(OP) *(float*)&out = *(float*)&x OP *(float*)&y; _ILOG(log::out << *(float*)&out << " = "<<*(float*)&x <<" "<< #OP << " "<<*(float*)&y;) break;
             switch(opcode){
                 case BC_ADDI: GEN_OP(+)   
                 case BC_SUBI: GEN_OP(-)   
@@ -123,7 +125,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             // else
             //      log::out << log::RED<< __FILE__<<"unknown reg type\n";
             // #undef GEN_BIT
-            log::out << "\n";
+            _ILOG(log::out << "\n";)
             break;
         }
         case BC_NOTB:{
@@ -140,13 +142,13 @@ void Interpreter::execute(BytecodeX* bytecode){
             u64 x = *(u64*)xp;
             u64& out = *(u64*)outp;
             
-            #define GEN_OP(OP) out = OP x; log::out << out << " = "<<#OP <<" "<< x; break;
+            #define GEN_OP(OP) out = OP x; _ILOG(log::out << out << " = "<<#OP <<" "<< x;) break;
             switch(opcode){
                 case BC_NOTB: GEN_OP(!)
             }
             #undef GEN_OP
             
-            log::out << "\n";
+            _ILOG(log::out << "\n";)
             break;
         }
         case BC_MOV_MR:{
@@ -165,9 +167,8 @@ void Interpreter::execute(BytecodeX* bytecode){
             if(DECODE_REG_TYPE(r1)==BC_REG_32) *((u32*) to) = *((u32*) from);
             if(DECODE_REG_TYPE(r1)==BC_REG_64) *((u64*) to) = *((u64*) from);
 
-            log::out << " = "<<(*(u64* )to);
+            _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
 
-            log::out << "\n";
             break;
         }
         case BC_MOV_RM:{
@@ -188,9 +189,8 @@ void Interpreter::execute(BytecodeX* bytecode){
             // if(r1&BC_REG_32) *((u32*) to) = *((u32*) from);
             // if(r1&BC_REG_64) *((u64*) to) = *((u64*) from);
 
-            log::out << " = "<<(*(u64* )to);
+            _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
             
-            log::out << "\n";
             break;
         }
         case BC_MOV_RR:{
@@ -207,9 +207,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             if(r0&BC_REG_32) *((u32*) to) = *((u32*) from);
             if(r0&BC_REG_64) *((u64*) to) = *((u64*) from);
 
-            log::out << " = "<<(*(u64* )to);
-
-            log::out << "\n";
+            _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
             break;
         }
         case BC_LI:{
@@ -220,7 +218,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             u32 data = *(u32*)bytecode->get(pc);
             pc++;
             
-            log::out << data;
+            _ILOG(log::out << data<<"\n";)
             
             u8 t = DECODE_REG_TYPE(r0);
             if(t==BC_REG_8){ // higher 8 bit register doesn't align properly.
@@ -229,7 +227,6 @@ void Interpreter::execute(BytecodeX* bytecode){
             }
             
             *((u64*) out) = data; // NOTE: what if register is 16 bit?
-            log::out << "\n";
             break;
             
         }
@@ -237,8 +234,8 @@ void Interpreter::execute(BytecodeX* bytecode){
             u8 r0 = DECODE_REG0(inst);
             
             if(sp-8>=(uint64)stack.data + stack.max){
-                log::out <<__FILE__<< "stack overflow (sp: "<<sp<<", max: "<<stack.max<<")\n";
-                return;   
+                log::out <<__FILE__<< "stack overflow (sp: "<<sp<<", max: "<<((u64)stack.data+stack.max)<<")\n";
+                return;
             }
             
             void* ptr = getReg(r0);
@@ -247,8 +244,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             sp+=8; // +=1 may not work if you do +=4 after since memory would be unaligned.
             
             *((u64*) stackPtr) = *(u64*)ptr;
-            log::out << (*(u64*)stackPtr);
-            log::out << "\n";
+            _ILOG(log::out << (*(u64*)stackPtr)<<"\n";)
             break;
         }
         case BC_POP: {
@@ -260,8 +256,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             void* stackPtr = (void*)sp;
             
             *(u64*)ptr = *((u64*) stackPtr);
-            log::out << (*(u64*)ptr);
-            log::out << "\n";
+            _ILOG(log::out << (*(u64*)ptr)<<"\n";)
             break;
         }
         case BC_JMP: {
@@ -270,7 +265,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             pc++;
             // TODO: relative immediate instead?
             //   can't see any benefit right now.
-            log::out << "\n";
+            _ILOG(log::out << "\n";)
             pc = data;
             break;
         }
@@ -284,7 +279,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             void* ptr = getReg(r0);
             u64 testValue = *((u64*)ptr);
 
-            log::out << testValue;
+            _ILOG(log::out << testValue<<"\n";)
             
             bool yes=false;
             switch (opcode){
@@ -294,11 +289,12 @@ void Interpreter::execute(BytecodeX* bytecode){
             if(yes){
                 pc = data;
             }
-            log::out << "\n";
             break;
         }
         } // for switch
     }
-    
     printRegisters();
+    auto time = StopMeasure(tp);
+    log::out << "Time: "<<time<<"\n";
+       
 }

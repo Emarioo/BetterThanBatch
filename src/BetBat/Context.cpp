@@ -1796,6 +1796,7 @@ void Context::execute(Bytecode& code, Performance* perf){
 
     bool summary=false;
     _VLOG(summary=true;)
+    summary=true;
 
     if(summary){
         double nsPerInst = executionTime/executedInsts;

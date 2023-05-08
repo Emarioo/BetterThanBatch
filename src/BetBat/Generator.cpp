@@ -59,19 +59,19 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, DataType* outDa
             i32 val = expression->i32Value;
             
             info.code->add({BC_LI,BC_REG_RAX});
-            info.code->add(val);
+            info.code->addIm(val);
             info.code->add({BC_PUSH,BC_REG_RAX});
         } else if(expression->dataType==AST_BOOL8){
             bool val = expression->b8Value;
             
             info.code->add({BC_LI,BC_REG_RAX});
-            info.code->add(val);
+            info.code->addIm(val);
             info.code->add({BC_PUSH,BC_REG_RAX});
         } else if(expression->dataType==AST_FLOAT32){
             float val = expression->f32Value;
             
             info.code->add({BC_LI,BC_REG_RAX});
-            info.code->add(*(u32*)&val);
+            info.code->addIm(*(u32*)&val);
             info.code->add({BC_PUSH,BC_REG_RAX});
         }  else if(expression->dataType==AST_VAR){
             // check data type and get it
@@ -79,7 +79,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, DataType* outDa
             if(var){
                 // TODO: check data type?
                 info.code->add({BC_LI,BC_REG_RAX});
-                info.code->add(var->frameOffset);
+                info.code->addIm(var->frameOffset);
                 info.code->add({BC_ADDI,BC_REG_FP,BC_REG_RAX, BC_REG_RAX});
                 // fp + offset
                 info.code->add({BC_MOV_MR,BC_REG_RAX,BC_REG_RAX});
@@ -119,7 +119,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, DataType* outDa
             if(var){
                 // TODO: check data type?
                 info.code->add({BC_LI,BC_REG_RAX});
-                info.code->add(var->frameOffset);
+                info.code->addIm(var->frameOffset);
                 info.code->add({BC_ADDI,BC_REG_FP,BC_REG_RAX, BC_REG_RAX}); // fp + offset
 
                 // new pointer data type
@@ -261,6 +261,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     // TODO: nonetype is only valid for as implicit initial decleration.
                     //    Not allowed afterwards? or maybe it's find we just check variable type
                     //    not looking at the statement data type?
+                    bool decl = !var;
                     if(!var){
                         var = info.addVariable(*statement->name);
                         var->dataType = statement->dataType;
@@ -271,14 +272,16 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     }
                     var->dataType = dtype;
                     info.code->add({BC_LI,BC_REG_RBX});
-                    info.code->add(var->frameOffset);
+                    info.code->addIm(var->frameOffset);
                     info.code->add({BC_ADDI,BC_REG_FP,BC_REG_RBX,BC_REG_RBX}); // rbx = fp + offset
                     info.code->add({BC_POP,BC_REG_RDX});
                     info.code->add({BC_MOV_RM,BC_REG_RDX,BC_REG_RBX});
                     // move forward stack pointer
-                    info.code->add({BC_LI,BC_REG_RCX});
-                    info.code->add(8);
-                    info.code->add({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
+                    if(decl){
+                        info.code->add({BC_LI,BC_REG_RCX});
+                        info.code->addIm(8);
+                        info.code->add({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
+                    }
                 }else{
                     ERR() << "Type mismatch for variable "<<*statement->name<<". Should be "<<*info.ast->getDataType(statement->dataType)<<" but was "<<*info.ast->getDataType(dtype)<<"\n";
                     continue;
@@ -302,7 +305,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             info.code->add({BC_POP,BC_REG_RAX});
             info.code->add({BC_JNE,BC_REG_RAX});
             u32 skipIfBodyIndex = info.code->length();
-            info.code->add(0);
+            info.code->addIm(0);
 
             result = GenerateBody(info,statement->body);
             if(result==GEN_ERROR)
@@ -312,7 +315,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             if(statement->elseBody){
                 info.code->add({BC_JMP});
                 skipElseBodyIndex = info.code->length();
-                info.code->add(0);
+                info.code->addIm(0);
             }
 
             // fix address for jump instruction
@@ -344,14 +347,14 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             info.code->add({BC_POP,BC_REG_RAX});
             info.code->add({BC_JNE,BC_REG_RAX});
             u32 endIndex = info.code->length();
-            info.code->add(0);
+            info.code->addIm(0);
 
             result = GenerateBody(info,statement->body);
             if(result==GEN_ERROR)
                 continue;
 
             info.code->add({BC_JMP});
-            info.code->add(loopAddress);
+            info.code->addIm(loopAddress);
 
             // fix address for jump instruction
             *(u32*)info.code->get(endIndex) = info.code->length();

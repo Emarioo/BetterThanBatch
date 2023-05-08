@@ -140,7 +140,7 @@ struct BytecodeX {
     // DebugLine* getDebugLine(int instructionIndex);
 
     bool add(InstructionX inst);
-    bool add(u32 data);
+    bool addIm(u32 data);
     // bool add(uint8 type, uint8 reg0, uint8 reg1, uint8 reg2);
     // bool add(uint8 type, uint8 reg0, uint16 reg12);
     // bool add(uint8 type, uint reg012);
