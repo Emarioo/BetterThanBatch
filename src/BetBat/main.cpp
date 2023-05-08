@@ -107,11 +107,24 @@ int main(int argc, const char** argv){
         // print_help();
         // log::out << "No input files!\n";
 
-        CompileScript("example/v2/ast.btb");
+        // CompileScript("example/v2/ast.btb");
+        // CompileScript("tests/benchmark/loop.btb");
+        CompileScript("tests/benchmark/loop2.btb");
         
         // log::out.enableConsole(false);
         // TestVariableLimit(10000);
         // TestMathExpression(100);
+
+        auto tp = MeasureSeconds();
+        int sum = 0;
+        // int sum1 = 0;
+        // int sum2 = 0;
+        for (int i=0;i<1000000;i++) {
+            sum = sum + i;
+            // sum2 = sum1 + i*2;
+            // sum2 = sum2 + i*3;
+        }
+        log::out << (StopMeasure(tp)*1e3)<<"\n";
 
         // CompileDisassemble("tests/varlimit.btb");
 

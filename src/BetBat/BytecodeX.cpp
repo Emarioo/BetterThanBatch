@@ -96,16 +96,16 @@ bool BytecodeX::add(InstructionX instruction){
         if(!codeSegment.resize(codeSegment.max*2 + 100))
             return false;   
     }
-    engone::log::out <<length()<< ": "<<instruction<<"\n";
+    _GLOG(engone::log::out <<length()<< ": "<<instruction<<"\n";)
     *((InstructionX*)codeSegment.data + codeSegment.used++) = instruction;
     return true;
 }
-bool BytecodeX::add(u32 data){
+bool BytecodeX::addIm(u32 data){
     if(codeSegment.max == codeSegment.used){
         if(!codeSegment.resize(codeSegment.max*2 + 100))
             return false;   
     }
-    engone::log::out <<length()<< ": "<<data<<"\n";
+    _GLOG(engone::log::out <<length()<< ": "<<data<<"\n";)
     // NOTE: This function works because sizeof Instruction == sizeof u32
     *((u32*)codeSegment.data + codeSegment.used++) = data;
     return true;
@@ -328,6 +328,8 @@ BytecodeX* BytecodeX::Create(){
     return new BytecodeX();
 }
 void BytecodeX::Destroy(BytecodeX* code){
+    if(!code)
+        return;
     code->cleanup();
     delete code;
 }

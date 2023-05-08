@@ -60,6 +60,7 @@ AST* AST::Create(){
 }
 
 void AST::Destroy(AST* ast){
+    if(!ast) return;
     ast->~AST();
     engone::Free(ast,sizeof(AST));
 }
