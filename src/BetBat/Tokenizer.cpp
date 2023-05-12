@@ -305,6 +305,8 @@ Tokens Tokenize(engone::Memory& textData){
     
     bool canBeDot = false; // used to deal with decimals (eg. 255.92) as one token
     
+    bool foundHashtag=false;
+
     int index=0;
     while(true){
         if(index==length)
@@ -493,6 +495,9 @@ Tokens Tokenize(engone::Memory& textData){
             }
         }
         if(isSpecial){
+            if(chr=='#'){
+                foundHashtag=true; // if not found then preprocessor isn't necessary
+            }
             if(chr=='@'){
                 const char* str_enable = "enable";
                 const char* str_disable = "disable";
@@ -721,6 +726,12 @@ Tokens Tokenize(engone::Memory& textData){
             token = {};
         }
     }
+    if(!foundHashtag){
+        // preprocessor not necessary, save time by not running it.
+        outTokens.enabled &= ~LAYER_PREPROCESSOR;
+        _TLOG(log::out<<log::LIME<<"Couldn't find #. Disabling preprocessor.\n";)
+    }
+
     outTokens.lines = line;
     outTokens.finalizePointers();
     // Last token should have line feed.

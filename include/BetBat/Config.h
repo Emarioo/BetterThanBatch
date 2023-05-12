@@ -14,14 +14,14 @@ typedef double Decimal;
 // Debug config
 #ifdef DEBUG
 
-// #define TLOG
+#define TLOG
 // #define MLOG
 // #define PLOG
-#define GLOG
+// #define GLOG
 // #define OLOG
 // #define ILOG_THREAD
-#define ILOG
-// #define VLOG
+// #define ILOG
+#define VLOG
 
 // #define USE_DEBUG_INFO
 // #define PRINT_DEBUG_LINES
