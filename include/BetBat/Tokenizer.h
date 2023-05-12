@@ -59,8 +59,8 @@ struct Tokens {
     char version[VERSION_MAX+1]{0};
     bool isVersion(const char* ver){return !strcmp(version,ver);}
     // TODO: version with major, minor and revision
-
-    void cleanup();
+    
+    void cleanup(bool leaveAllocations=false);
     
     // modifies tokenData
     bool append(char chr);
@@ -89,4 +89,8 @@ int ConvertInteger(Token& token);
 bool IsName(Token& token);
 // Can also be an integer
 int IsDecimal(Token& token);
-Tokens Tokenize(engone::Memory& textData);
+Tokens Tokenize(const engone::Memory& textData, Tokens* optionalIn=0);
+
+// I would recommend testing on a large text for more accurate results.
+void PerfTestTokenize(const engone::Memory& textData, int times=1);
+void PerfTestTokenize(const char* file, int times=1);

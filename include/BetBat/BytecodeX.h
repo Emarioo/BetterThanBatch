@@ -38,6 +38,23 @@
 #define BC_ORI   57
 #define BC_NOTB  58
 
+#define BC_BXOR  60
+#define BC_BOR  61
+#define BC_BAND  62
+
+#define BC_CASTF32 90
+#define BC_CASTI64 91
+/*
+f32
+f64
+
+i32
+u32
+u64
+i64
+u16
+u8
+*/
 // NOTE: Some instructions have odd names to avoid collision with Bytecode.h.
 
 #define BC_REG_MASK 0xC0
@@ -75,9 +92,13 @@
 
 #define BC_REG_SP (ENCODE_REG_TYPE(BC_REG_64)|4)
 #define BC_REG_FP (ENCODE_REG_TYPE(BC_REG_64)|5)
-// #define BC_REG_SS (ENCODE_REG_TYPE(BC_REG_64)|5)
+#define BC_REG_PC (ENCODE_REG_TYPE(BC_REG_64)|6)
 
 const char* RegToStr(u8 reg);
+
+#define BC_EXT_ALLOC -1
+#define BC_EXT_REALLOC -2
+#define BC_EXT_FREE -3
 
 struct InstructionX {
     uint8 opcode=0;
@@ -90,12 +111,10 @@ struct InstructionX {
         };
     };
 
-    // uint32 singleReg(){return (uint32)reg0|((uint32)reg1<<8)|((uint32)reg2<<16);}
     void print(); 
 };
 engone::Logger& operator<<(engone::Logger& logger, InstructionX& instruction);
 
-// class Interpreter;
 struct BytecodeX {
     static BytecodeX* Create();
     static void Destroy(BytecodeX*);
@@ -104,59 +123,25 @@ struct BytecodeX {
     uint32 getMemoryUsage();
     
     engone::Memory codeSegment{sizeof(InstructionX)};
-    // engone::Memory constNumbers{sizeof(Number)};
-    // engone::Memory constStrings{sizeof(String)};
-    // engone::Memory constStringText{1};
     
     engone::Memory debugSegment{sizeof(u32)};
-    std::vector<std::string> debugText;
-    // -1 as index will add text to last instruction
+    std::vector<std::string*> debugText;
+    // std::vector<std::string> debugText;
+    // -1 as index will add text to next instruction
+    void addDebugText(const char* str, int length, u32 instructionIndex=-1);
     void addDebugText(const std::string& text, u32 instructionIndex=-1);
+    void addDebugText(Token& token, u32 instructionIndex=-1);
     const char* getDebugText(u32 instructionIndex);
-    
-    // struct DebugLine{
-    //     char* str=0;
-    //     int instructionIndex=0;
-    //     uint16 length=0;
-    //     uint16 line=0;
-    // };
-    // engone::Memory debugLines{sizeof(DebugLine)};
-    // engone::Memory debugLineText{1};
-
-    // Const strings and debug lines use char pointers to other memory.
-    // that memory may be reallocated and thus invalidate the char pointers.
-    // This is prevented by treating char* as an offest in the memory first.
-    // then call this function to replace the char* with base + offset
-    // void finalizePointers(); 
-
-    // engone::Memory linePointers{sizeof(uint16)};
-
-    // Todo: A map<instructionIndex,DebugLine> instead of an array.
-    //  There may be some benefit if you have many jump instructions.
-    
-
-    // latestIndex is used to skip already read debug lines. 
-    // DebugLine* getDebugLine(int instructionIndex, int* latestIndex);
-    // DebugLine* getDebugLine(int instructionIndex);
 
     bool add(InstructionX inst);
-    bool addIm(u32 data);
-    // bool add(uint8 type, uint8 reg0, uint8 reg1, uint8 reg2);
-    // bool add(uint8 type, uint8 reg0, uint16 reg12);
-    // bool add(uint8 type, uint reg012);
-    // bool addLoadNC(uint8 reg0, uint constIndex);
-    // bool addLoadSC(uint8 reg0, uint constIndex);
-    // bool addLoadV(uint8 reg0, uint stackIndex, bool global);
-    InstructionX* get(uint index);
-    int length();
+    bool addIm(i32 data);
+    inline InstructionX* get(uint index){
+        return ((InstructionX*)codeSegment.data + index);
+    }
+    inline int length(){
+        return codeSegment.used;
+    }
     bool removeLast();
-    // bool remove(int index);
-    
-    // uint addConstNumber(Decimal number);
-    // Number* getConstNumber(uint index);
-    
-    // uint addConstString(Token& token, const char* padding=0);
-    // String* getConstString(uint index);
 
     void printStats();
 };

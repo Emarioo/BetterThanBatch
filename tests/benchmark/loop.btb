@@ -1,3 +1,9 @@
+/*
+    C++ (MSVC) code: 2 ms
+    Interpreter: 0.8 s
+
+    Interpreter is 400 times slower with debug mode and no optimizations on C++ code.
+*/
 sum = 0
 for 1000000 {
     sum = sum + #i
