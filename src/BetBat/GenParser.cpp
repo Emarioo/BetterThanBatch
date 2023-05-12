@@ -2,6 +2,7 @@
 
 #undef ERRT
 #undef ERRLINE
+#undef ERRAT
 
 #define ERRAT(L,C) info.errors++;engone::log::out <<engone::log::RED<< "CompileError "<<(L)<<":"<<(C)<<", "
 #define ERRT(T) ERRAT(T.line,T.column)

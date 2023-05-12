@@ -1,6 +1,13 @@
 @version 2
 // @disable interpreter
 
+/*
+    C++ (MSVC) code: 2 ms
+    Interpreter: 0.6 s
+    
+    Interpreter is 300 times slower. (debug mode and no optimizations for C++ code)
+*/
+
 sum = 0
 i = 0
 while i < 1000000 {

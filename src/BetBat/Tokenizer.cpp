@@ -188,10 +188,20 @@ Token& Tokens::get(uint index){
 uint32 Tokens::length(){
     return tokens.used;
 }
-void Tokens::cleanup(){
-    tokens.resize(0);
-    tokenData.resize(0);
-    lines=0;
+void Tokens::cleanup(bool leaveAllocations){
+    if(leaveAllocations){
+        auto t0 = tokens;
+        t0.used = 0;
+        auto t1 = tokenData;
+        t1.used = 0;
+        *this = {};
+        tokens = t0;
+        tokenData = t1;
+    }else{
+        tokens.resize(0);
+        tokenData.resize(0);
+        *this = {};
+    }
 }
 void Tokens::printTokens(int tokensPerLine, bool showlncol){
     using namespace engone;
@@ -251,6 +261,7 @@ void Tokens::printData(int charsPerLine){
 }
 bool Tokens::append(char chr){
     if(tokenData.max < tokenData.used + 1){
+        // engone::log::out << "resize "<<__FUNCTION__<<"\n";
         if(!tokenData.resize(tokenData.max*2 + 20))
             return false;
     }
@@ -260,6 +271,7 @@ bool Tokens::append(char chr){
 }
 bool Tokens::append(Token& tok){
     if(tokenData.max < tokenData.used + tok.length){
+        // engone::log::out << "resize "<<__FUNCTION__<<"\n";
         if(!tokenData.resize(tokenData.max*2 + 2*tok.length))
             return false;
     }
@@ -269,7 +281,7 @@ bool Tokens::append(Token& tok){
     tokenData.used += tok.length;
     return true;
 }
-Tokens Tokenize(engone::Memory& textData){
+Tokens Tokenize(const engone::Memory& textData, Tokens* optionalIn){
     using namespace engone;
     if(textData.m_typeSize!=1) {
         log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
@@ -281,9 +293,17 @@ Tokens Tokenize(engone::Memory& textData){
     char* text = (char*)textData.data;
     int length = textData.used;
     Tokens outTokens{};
+    if(optionalIn){
+        outTokens = *optionalIn;
+        outTokens.cleanup(true); // clean except for allocations   
+    }
     outTokens.enabled=-1; // enable all layers by default
     // Todo: do not assume token data will be same or less than textData. It's just asking for a bug
-    outTokens.tokenData.resize(textData.used*5);
+    if(outTokens.tokenData.max<textData.used*5){
+        if(optionalIn)
+            log::out << "Tokenize : token resize even though optionalIn was used\n";
+        outTokens.tokenData.resize(textData.used*5);
+    }
     
     memset(outTokens.tokenData.data,'_',outTokens.tokenData.max); // Good indicator for issues
     
@@ -338,18 +358,6 @@ Tokens Tokenize(engone::Memory& textData){
             continue;
         }
         
-        bool isQuotes = chr == '"';
-        bool isComment = chr=='/' && (nextChr == '/' || nextChr=='*');
-        bool isDelim = chr==' ' || chr=='\t' || chr=='\n';
-        bool isSpecial = false;
-        if(!isQuotes&&!isComment&&!isDelim){
-            for(int i=0;i<specialLength;i++){ // No need to run if delim, comment or quote
-                if(chr==specials[i]){
-                    isSpecial = true;
-                    break;
-                }
-            }
-        }
         if(inComment){
             if(inEnclosedComment){
                 if(chr=='\n'){
@@ -372,7 +380,7 @@ Tokens Tokenize(engone::Memory& textData){
             }
             continue;
         } else if(inQuotes) {
-            if(isQuotes){
+            if(chr == '"'){
                 // Stop reading string token
                 inQuotes=false;
                 
@@ -420,6 +428,39 @@ Tokens Tokenize(engone::Memory& textData){
                 token.length++;
             }
             continue;
+        }
+        bool isQuotes = chr == '"';
+        bool isComment = chr=='/' && (nextChr == '/' || nextChr=='*');
+        bool isDelim = chr==' ' || chr=='\t' || chr=='\n';
+        bool isSpecial = false;
+        if(!isQuotes&&!isComment&&!isDelim){
+            
+            // quicker but do we identify a character as special when it shouldn't?
+            // isSpecial = !(false
+            //     || (chr>='a'&&chr<='z')
+            //     || (chr>='A'&&chr<='Z')
+            //     || (chr>='0'&&chr<='9')
+            //     || (chr!='_')
+            // );
+            
+            // faster than for loop slower than a-z, 0-9
+            // isSpecial = false
+            //     ||chr=='+'||chr=='-'||chr=='*'||chr=='/'
+            //     ||chr=='%'||chr=='='||chr=='<'||chr=='>'
+            //     ||chr=='!'||chr=='&'||chr=='|'||chr=='$'
+            //     ||chr=='@'||chr=='#'||chr=='{'||chr=='}'
+            //     ||chr=='('||chr==')'||chr=='['||chr==']'
+            //     ||chr==':'||chr==';'||chr=='.'||chr==','
+            // ;
+            // "+-*/%=<>!&|" "$@#{}()[]" ":;.,"
+            
+            // slow
+            for(int i=0;i<specialLength;i++){ // No need to run if delim, comment or quote
+                if(chr==specials[i]){
+                    isSpecial = true;
+                    break;
+                }
+            }
         }
         
         if(chr=='\n'){
@@ -675,7 +716,15 @@ Tokens Tokenize(engone::Memory& textData){
             token.str = (char*)outTokens.tokenData.used;
             token.length = 1;
             outTokens.append(chr);
-            if((chr=='='&&nextChr=='=')||
+            if(chr=='.'&&nextChr=='.'&&nextChr2=='.'){
+                index+=2;
+                column+=2;
+                token.length+=2;
+                _TLOG(log::out << nextChr;)
+                _TLOG(log::out << nextChr2;)
+                outTokens.append(nextChr);
+                outTokens.append(nextChr2);
+            }else if((chr=='='&&nextChr=='=')||
                 (chr=='!'&&nextChr=='=')||
                 (chr=='+'&&nextChr=='=')||
                 (chr=='-'&&nextChr=='=')||
@@ -687,25 +736,13 @@ Tokens Tokenize(engone::Memory& textData){
                 (chr=='-'&&nextChr=='-')||
                 (chr=='&'&&nextChr=='&')||
                 (chr=='>'&&nextChr=='>')||
+                (chr==':'&&nextChr==':')||
+                (chr=='.'&&nextChr=='.')||
                 (chr=='|'&&nextChr=='|')
                 ){
                 index++;
                 column++;
                 token.length++;
-                _TLOG(log::out << nextChr;)
-                outTokens.append(nextChr);
-            }else if(chr=='.'&&nextChr=='.'&&nextChr2=='.'){
-                index+=2;
-                column+=2;
-                token.length+=2;
-                _TLOG(log::out << nextChr;)
-                _TLOG(log::out << nextChr2;)
-                outTokens.append(nextChr);
-                outTokens.append(nextChr2);
-            }else if(chr=='.'&&nextChr=='.'){
-                index+=1;
-                column+=1;
-                token.length+=1;
                 _TLOG(log::out << nextChr;)
                 outTokens.append(nextChr);
             }
@@ -774,4 +811,48 @@ Tokens Tokenize(engone::Memory& textData){
 Tokenize_END:
     
     return outTokens;
+}
+
+int cmpd(const void* a, const void* b){ return (int)(1000000000*(*(double*)a - *(double*)b));}
+void PerfTestTokenize(const engone::Memory& textData, int times){
+    using namespace engone;
+    Tokens base = Tokenize(textData); // initial tokenize to get sufficient allocations
+    
+    log::out << "start\n";
+    double* measures = new double[times];
+    auto startT = engone::MeasureSeconds();
+    for(int i=0;i<times;i++){
+        // heap allocation is included.
+        auto mini = engone::MeasureSeconds();
+        // base = Tokenize(textData);
+        base = Tokenize(textData,&base);
+        measures[i] = engone::StopMeasure(mini);
+    }
+    double total = engone::StopMeasure(startT);
+    log::out << "end\n";
+    
+    qsort(measures,times,sizeof(double),cmpd);
+    
+    log::out << __FUNCTION__<<" total: "<<FormatTime(total)<<"\n";
+    double sum=0;
+    double minT=9999999;
+    double maxT=0;
+    double median = measures[(times+1)/2];
+    for(int i=0;i<times;i++){
+        sum+=measures[i];
+        if(minT>measures[i]) minT = measures[i];
+        if(maxT<measures[i]) maxT = measures[i];
+        // log::out << " "<<FormatTime(measures[i])<<"\n";
+    }
+    log::out << "   average on individuals: "<<FormatTime(sum/times)<<"\n";
+    log::out << "   min/max: "<<FormatTime(minT)<<" / "<<FormatTime(maxT)<<"\n";
+    log::out << "   median: "<<FormatTime(median)<<"\n";
+    base.cleanup();
+}
+void PerfTestTokenize(const char* file, int times){
+    auto text = ReadFile(file);
+    if (!text.data)
+        return;
+    PerfTestTokenize(text,times);    
+    text.resize(0);
 }

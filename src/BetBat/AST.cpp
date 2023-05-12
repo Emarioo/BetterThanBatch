@@ -18,9 +18,14 @@ const char* OpToStr(int optype){
         CASE(AND,&&)
         CASE(OR,||)
         CASE(NOT,!)
+        
+        CASE(CAST,cast)
+        CASE(PROP,prop)
+        CASE(INITIALIZER,initializer)
+        CASE(FROM_NAMESPACE,namespaced)
 
         CASE(REFER,&)
-        CASE(DEREF,*)
+        CASE(DEREF,* (deref))
     }
     #undef CASE
     return "?";
@@ -29,13 +34,16 @@ const char* StateToStr(int type){
     #define CASE(A,B) case ASTStatement::A: return #B;
     switch(type){
         CASE(ASSIGN,assign)
+        CASE(PROP_ASSIGN,prop_assign)
         CASE(IF,if)
         CASE(WHILE,while)
+        CASE(RETURN,return)
+        CASE(CALL,call)
     }
     #undef CASE
     return "?";
 }
-const char* DataTypeToStr(int type){
+const char* TypeIdToStr(int type){
     #define CASE(A,B) case AST_##A: return #B;
     switch(type){
         CASE(FLOAT32,f32)
@@ -51,11 +59,20 @@ AST* AST::Create(){
     AST* ast = (AST*)engone::Allocate(sizeof(AST));
     new(ast)AST();
     // initialize default data types
-    ast->dataTypes["none"] = AST_NONETYPE;
-    ast->dataTypes["i32"] = AST_INT32;
-    ast->dataTypes["f32"] = AST_FLOAT32;
-    ast->dataTypes["bool"] = AST_BOOL8;
-    ast->dataTypes["var"] = AST_VAR;
+    ast->typeInfos["void"]   = new TypeInfo{AST_VOID};
+    ast->typeInfos["u8"]     = new TypeInfo{AST_UINT8, 1};
+    ast->typeInfos["u16"]    = new TypeInfo{AST_UINT16, 2};
+    ast->typeInfos["u32"]    = new TypeInfo{AST_UINT32, 4};
+    ast->typeInfos["u64"]    = new TypeInfo{AST_UINT64, 8};
+    ast->typeInfos["i8"]     = new TypeInfo{AST_INT8, 1};
+    ast->typeInfos["i16"]    = new TypeInfo{AST_INT16,2};
+    ast->typeInfos["i32"]    = new TypeInfo{AST_INT32,4};
+    ast->typeInfos["i64"]    = new TypeInfo{AST_INT64,8};
+    ast->typeInfos["f32"]    = new TypeInfo{AST_FLOAT32,4};
+    ast->typeInfos["bool"]   = new TypeInfo{AST_BOOL8,1};
+    ast->typeInfos["null"]   = new TypeInfo{AST_NULL,8};
+    ast->typeInfos["var"]    = new TypeInfo{AST_VAR};
+    ast->typeInfos["call"]   = new TypeInfo{AST_FNCALL};
     return ast;
 }
 
@@ -68,42 +85,65 @@ void AST::cleanup(){
     using namespace engone;
     log::out << log::RED << "AST::cleanup not implemented\n";
 }
-DataType AST::getDataType(const std::string& name){
-    auto pair = dataTypes.find(name);
-    if (pair==dataTypes.end())
-        return AST_NONETYPE;
+TypeInfo* AST::getTypeInfo(const std::string& name){
+    auto pair = typeInfos.find(name);
+    if (pair==typeInfos.end()){
+        if(name.back()=='*')
+            return (typeInfos[name] = new TypeInfo{nextPointerTypeId++, 8}); // NOTE: fixed pointer size of 8
+        else
+            return (typeInfos[name] = new TypeInfo{nextTypeIdId++});
+    }
     return pair->second;
 }
-const std::string* AST::getDataType(DataType id){
-    for (auto& pair : dataTypes){
-        if(pair.second == id){
+TypeInfo* AST::getTypeInfo(TypeId id){
+    for (auto& pair : typeInfos){
+        if(pair.second->id == id){
+            return pair.second;
+        }
+    }
+    return 0;
+}
+TypeId AST::getTypeId(const std::string& name){
+    return getTypeInfo(name)->id;
+}
+const std::string* AST::getTypeId(TypeId id){
+    for (auto& pair : typeInfos){
+        if(pair.second->id == id){
             return &pair.first;
         }
     }
     return 0;
 }
-DataType AST::getOrAddDataType(const std::string& name){
-    auto id = getDataType(name);
-    if(!id)
-        id = addDataType(name);
-    return id;
+bool AST::IsPointer(Token& token){
+    if(!token.str || token.length==0) return false;
+    return token.str[token.length-1] == '*';
 }
-DataType AST::addDataType(const std::string& name){
-    Assert(!name.empty())
-    if(name.back()=='*')
-        return dataTypes[name] = nextPointerTypeId++;
-    else
-        return dataTypes[name] = nextDataTypeId++;
-}
-bool AST::IsPointer(DataType id){
+bool AST::IsPointer(TypeId id){
     return id & POINTER_BIT;
+}
+bool AST::IsInteger(TypeId id){
+    return AST_UINT8<=id && id <= AST_INT64;
+}
+bool AST::IsSigned(TypeId id){
+    return AST_INT8<=id && id <= AST_INT64;
 }
 ASTBody* AST::createBody(){
     return new ASTBody();
 }
 ASTStatement* AST::createStatement(int type){
+    
     ASTStatement* ptr = new ASTStatement();
     ptr->type = type;
+    return ptr;
+}
+ASTStruct* AST::createStruct(const std::string& name){
+    ASTStruct* ptr = new ASTStruct();
+    ptr->name = new std::string(name);
+    return ptr;
+}
+ASTEnum* AST::createEnum(const std::string& name){
+    ASTEnum* ptr = new ASTEnum();
+    ptr->name = new std::string(name);
     return ptr;
 }
 ASTFunction* AST::createFunction(const std::string& name){
@@ -111,10 +151,10 @@ ASTFunction* AST::createFunction(const std::string& name){
     ptr->name = new std::string(name);
     return ptr;
 }
-ASTExpression* AST::createExpression(DataType type){
+ASTExpression* AST::createExpression(TypeId type){
     ASTExpression* ptr = new ASTExpression();
     ptr->isValue = (u32)type<AST_PRIMITIVE_COUNT;
-    ptr->dataType = type;
+    ptr->typeId = type;
     return ptr;
 }
 void PrintSpace(int count){
@@ -133,11 +173,12 @@ void ASTBody::print(AST* ast, int depth){
     using namespace engone;
     PrintSpace(depth);
     log::out << "Body\n";
-    if(function)
-        function->print(ast,depth+1);
-    if(statement){
-        statement->print(ast, depth+1);
-    }
+    if(structs)
+        structs->print(ast, depth+1);
+    if(functions)
+        functions->print(ast,depth+1);
+    if(statements)
+        statements->print(ast, depth+1);
 }
 void ASTFunction::print(AST* ast, int depth){
     using namespace engone;
@@ -145,7 +186,7 @@ void ASTFunction::print(AST* ast, int depth){
     log::out << "Func "<<*name<<" (";
     for(int i=0;i<(int)arguments.size();i++){
         auto& arg = arguments[i];
-        auto dtname = ast->getDataType(arg.dataType);
+        auto dtname = ast->getTypeId(arg.typeId);
         log::out << arg.name << ": "<<*dtname;
         if(i+1!=(int)arguments.size()){
             log::out << ", ";
@@ -155,7 +196,7 @@ void ASTFunction::print(AST* ast, int depth){
     if(!returnTypes.empty())
         log::out << "->";
     for(auto& ret : returnTypes){
-        auto dtname = ast->getDataType(ret);
+        auto dtname = ast->getTypeId(ret);
         log::out <<*dtname<<", ";
     }
     log::out << "\n";
@@ -165,24 +206,62 @@ void ASTFunction::print(AST* ast, int depth){
     if(next)
         next->print(ast,depth);
 }
+void ASTStruct::print(AST* ast, int depth){
+    using namespace engone;
+    PrintSpace(depth);
+    log::out << "Struct "<<*name<<" {";
+    for(int i=0;i<(int)members.size();i++){
+        auto& member = members[i];
+        auto dtname = ast->getTypeId(member.typeId);
+        log::out << member.name << ": "<<*dtname;
+        if(i+1!=(int)members.size()){
+            log::out << ", ";
+        }
+    }
+    log::out << "}\n";
+    if(next)
+        next->print(ast,depth);
+}
+void ASTEnum::print(AST* ast, int depth){
+    using namespace engone;
+    PrintSpace(depth);
+    log::out << "Enum "<<*name<<" {";
+    for(int i=0;i<(int)members.size();i++){
+        auto& member = members[i];
+        log::out << member.name << "="<<member.id;
+        if(i+1!=(int)members.size()){
+            log::out << ", ";
+        }
+    }
+    log::out << "}\n";
+    if(next)
+        next->print(ast,depth);
+}
 void ASTStatement::print(AST* ast, int depth){
     using namespace engone;
     PrintSpace(depth);
     log::out << "Statement "<<StateToStr(type);
 
     if(type==ASSIGN){
-        auto dtname = ast->getDataType(dataType);
-        if(dataType!=0)
-            // log::out << " "<<DataTypeToStr(dataType)<<"";
+        auto dtname = ast->getTypeId(typeId);
+        if(typeId!=0)
+            // log::out << " "<<TypeIdToStr(dataType)<<"";
             log::out << " "<<*dtname<<"";
         log::out << " "<<*name<<"\n";
-        if(expression){
-            expression->print(ast, depth+1);
+        if(rvalue){
+            rvalue->print(ast, depth+1);
         }
+    }else if(type==PROP_ASSIGN){
+        log::out << "\n";
+        if(lvalue){
+            lvalue->print(ast, depth+1);
+        }
+        if(rvalue)
+            rvalue->print(ast, depth+1);
     }else if(type==IF){
         log::out << "\n";
-        if(expression){
-            expression->print(ast,depth+1);
+        if(rvalue){
+            rvalue->print(ast,depth+1);
         }
         if(body){
             body->print(ast,depth+1);
@@ -192,11 +271,21 @@ void ASTStatement::print(AST* ast, int depth){
         }
     }else if(type==WHILE){
         log::out << "\n";
-        if(expression){
-            expression->print(ast,depth+1);
+        if(rvalue){
+            rvalue->print(ast,depth+1);
         }
         if(body){
             body->print(ast,depth+1);
+        }
+    }else if(type==RETURN){
+        log::out << "\n";
+        if(rvalue){
+            rvalue->print(ast,depth+1);
+        }
+    }else if(type==CALL){
+        log::out << "\n";
+        if(rvalue){
+            rvalue->print(ast,depth+1);
         }
     }
     if(next){
@@ -208,24 +297,56 @@ void ASTExpression::print(AST* ast, int depth){
     PrintSpace(depth);
     
     if(isValue){
-        auto dtname = ast->getDataType(dataType);
-        // log::out << "Expr "<<DataTypeToStr(dataType)<<" ";
-        log::out << "Expr "<<*dtname<<" ";
-        if(dataType==AST_FLOAT32) log::out << f32Value;
-        else if(dataType==AST_INT32) log::out << i32Value;
-        else if(dataType==AST_BOOL8) log::out << b8Value;
-        else if(dataType==AST_VAR) log::out << *varName;
+        auto dtname = ast->getTypeId(typeId);
+        // log::out << "Expr "<<TypeIdToStr(dataType)<<" ";
+        log::out << "Expr ";
+        if(dtname) log::out <<*dtname;
+        log::out<<" ";
+        if(typeId==AST_FLOAT32) log::out << f32Value;
+        else if(typeId>=AST_UINT8&&typeId<=AST_INT64) log::out << i64Value;
+        else if(typeId==AST_BOOL8) log::out << b8Value;
+        else if(typeId==AST_VAR) log::out << *name;
+        else if(typeId==AST_FNCALL) log::out << *name;
+        else if(typeId==AST_NULL) log::out << "null";
         else
             log::out << "missing print impl.";
-        log::out << "\n";
+        if(typeId==AST_FNCALL){
+            if(left){
+                log::out << " args:\n";
+                left->print(ast,depth+1);
+            }else{
+                log::out << " no args\n";
+            }
+        }else
+            log::out << "\n";
     } else {
-        log::out << "Expr "<<OpToStr(dataType)<<" ";
-        log::out << "\n";
-        if(left){
-            left->print(ast, depth+1);
+        log::out << "Expr "<<OpToStr(typeId)<<" ";
+        if(typeId==AST_CAST){
+            log::out << *ast->getTypeId(castType);
+            log::out << "\n";
+            left->print(ast,depth+1);
+        }else if(typeId==AST_PROP){
+            log::out << *name;
+            log::out << "\n";
+            left->print(ast,depth+1);
+        }else if(typeId==AST_INITIALIZER){
+            log::out << *name;
+            log::out << "\n";
+            left->print(ast,depth+1);
+        }else if(typeId==AST_FROM_NAMESPACE){
+            log::out << *name<<" "<<*member;
+            log::out << "\n";
+        }else{
+            log::out << "\n";
+            if(left){
+                left->print(ast, depth+1);
+            }
+            if(right){
+                right->print(ast, depth+1);
+            }
         }
-        if(right){
-            right->print(ast, depth+1);
-        }
+    }
+    if(next){
+        next->print(ast, depth);
     }
 }

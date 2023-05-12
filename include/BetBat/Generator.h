@@ -11,21 +11,46 @@ struct GenInfo {
     
     struct Variable {
         u32 frameOffset=0;
-        DataType dataType=AST_NONETYPE;
+        TypeId typeId=AST_VOID;
     };
-    // struct FunctionScope {
-        
-    // };
+    struct Function {
+        ASTFunction* astFunc=0;
+        u64 address=0;
+    };
+    struct Identifier{
+        Identifier() {}
+        enum Type {
+            VAR, FUNC
+        };
+        Type type=VAR;
+        std::string name{};
+        int index=0;
+    };
+    std::vector<Variable> variables;
+    std::vector<Function> functions;
+    std::unordered_map<std::string,Identifier> identifiers;
+    
+    Variable* addVariable(const std::string& name);
+    Function* addFunction(const std::string& name);
+    
+    Identifier* getIdentifier(const std::string& name);
+    Variable* getVariable(int index);
+    Function* getFunction(int index);
+    
+    void removeIdentifier(const std::string& name);
+    
+    ASTFunction* currentFunction=0;
+    
+    int funcDepth=0;
+    
     // TODO: avoid vector and unordered_map. resizing vector may do unwanted things with the map (like whole a copy).
     // std::vector<FunctionScope*> functionScopes;
     // int currentFunctionScope=0;
     // FunctionScope* getFunctionScope(int index=-1);
-    int nextFrameOffset=0;
+    int currentFrameOffset=0;
+    static const int ARG_OFFSET=16;
+    // static const 
 
-    std::unordered_map<std::string,Variable*> variables;
-    Variable* getVariable(const std::string& name);
-    void removeVariable(const std::string& name);
-    Variable* addVariable(const std::string& name);
     
 };
 

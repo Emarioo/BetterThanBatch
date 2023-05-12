@@ -19,21 +19,24 @@ const char* FormatTime(double seconds);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
 
-#define FUNC_ENTER ScopeDebug scopeDebug{__FUNCTION__};
-#define SCOPE_LOG(X) ScopeDebug scopeDebug{X};
+#define FUNC_ENTER ScopeDebug scopeDebug{__FUNCTION__,info.funcDepth};
+#define SCOPE_LOG(X) ScopeDebug scopeDebug{X,info.funcDepth};
 
 struct ScopeDebug {
-    ScopeDebug(const char* msg) : _msg(msg) {
-        // engone::log::out << engone::log::GRAY << "    \\ "<<_msg<<"\n";
-        // engone::log::out << engone::log::GRAY << "    > "<<_msg<<"\n";
-        engone::log::out << engone::log::GRAY << "    enter "<<_msg<<"\n";
+    ScopeDebug(const char* msg, int& funcDepth) : _msg(msg), _depth(funcDepth) {
+        engone::log::out << engone::log::GRAY; 
+        for(int i=0;i<_depth;i++) engone::log::out << "  ";
+        engone::log::out << "enter "<<_msg<<"\n";
+        _depth++;
     }
     ~ScopeDebug(){
-        // engone::log::out << engone::log::GRAY << "    / "<<_msg<<"\n";   
-        // engone::log::out << engone::log::GRAY << "    < "<<_msg<<"\n";   
-        engone::log::out << engone::log::GRAY << "    exit  "<<_msg<<"\n";   
+        _depth--;
+        engone::log::out << engone::log::GRAY;
+        for(int i=0;i<_depth;i++) engone::log::out << "  ";
+        engone::log::out << "exit  "<<_msg<<"\n";   
     }
-    const char* _msg=0;
+    const char* _msg;
+    int& _depth;
 };
 
 #define COMBINE1(X,Y) X##Y
