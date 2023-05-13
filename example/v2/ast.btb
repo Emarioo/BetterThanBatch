@@ -1,150 +1,72 @@
 @version 2
 // @disable all
 // @enable preprocessor
-@disable interpreter
-/*
-    Data types...
-    Enum for primitive ones (i32, bool) 
-    As for structs and pointers. There can be many.
-    Pointer can have pointers to pointers to pointers.
-*/
-// i = 1
-// while i<5
-//     i = i + 1
+// @disable interpreter
 
-// fn ekae (a: i32, b: i32) -> i32 { 
-//     return 123 + a + b
+struct ByteArray { ptr: void*, len: u32 }
+fn create(len: u32) -> ByteArray {
+    out = ByteArray{null,0}
+    out.ptr = alloc(len)
+    printi(cast<i64>(out.ptr))
+    if out.ptr
+        out.len = len
+    return out
+}
+fn destroy(arr: ByteArray) { 
+    free(arr.ptr,arr.len) 
+}
+arr = create(5);
+// printi(cast<u64>(arr.ptr))
+// printi(arr.len)
+#define PTR(off) *(cast<u8*> (arr.ptr) + off) = 50 + off;
+
+// PTR(0)
+// PTR(1)
+// PTR(2)
+// PTR(3)
+*(cast<u8*> (arr.ptr) + 0) = 50 + 0;
+*(cast<u8*> (arr.ptr) + 2) = 50 + 2;
+*(cast<u8*> (arr.ptr) + 3) = 50 + 3;
+
+k = *(cast<u8*>(arr.ptr)+2)
+printi(k);
+
+destroy(arr)
+
+// if arr.ptr {
+//     printi(1)
+// }else{
+//     printi(2)
 // }
-// a =  ekae(9,7) + 0
+// arr = ByteArray{null,3}
+// arr.ptr = alloc(5)
+// printi(cast<u64>(arr.ptr))
 
-// alloc
-// realloc
-// free
-
-// fn Earth() -> Vec2 {
-//     return Vec2{92,912}   
+// struct vec {x:i32,y:i32}
+// fn te() -> vec {
+//     // v = vec{3,4}
+//     // return v
+//     return vec{3,4}
 // }
+// v = te()
+// // v.y = 9
+// printi(v.x)
+// printi(v.y)
+    // return v
+// printi(v.x)
+// printi(v.y)
 
-// struct Vec2 {
-//     x: u64,
-//     y: u64,
-// }
-// overload +(a: Vec2, b: Vec2) -> Vec2 {
-//     return Vec2{a.x+b.x,a.y+b.y}   
-// }
+// v.y = 5
 
-// arr: i32[] = [1,5,2,6]
-
-// each arr {
-//     nr
-//     va
-    
-// }
-
-// struct ByteArray { ptr: void*, len: u32 }
-// fn create(len: u32) -> ByteArray {
-//     out = ByteArray{null,0}
-//     out.ptr = alloc(len)
-//     if out.ptr
-//         out.len = len
-// }
-// fn destroy(arr: ByteArray) { free(arr.ptr,arr.len) }
-
-arr = cast<void*> 0;
-// create(5);
-
-// #define PTR(off) *(cast<u8*> (arr.ptr) + off)
-
-// PTR(0) = 50;
-// PTR(1) = 50;
-// PTR(2) = 50;
-// PTR(3) = 50;
 // *(cast<u8*> (arr.ptr) + 0) = 50;
-*(cast<u8*> (arr) + 0) = 50;
-*(cast<u8*> (arr) + 1) = 50;
+// *(cast<u8*> (arr.ptr) + 0) = 50;
+// *(cast<u8*> (arr) + 1) = 50;
 // *(cast<u8*> (arr.ptr) + 2) = 50;
 // *(cast<u8*> (arr.ptr) + 3) = 50;
 
-// k = *(cast<u8*>(arr.ptr)+2)
-
-// destroy(arr)
-
-// m = *arr.ptr
-
-// k = hey
-
-// fn vaargs(...) {
-    
-//     vaarg.type   
-// }
-
-// #define macro(X,...) #isint #isstr #isfloat
-
-// num = 0
-// str = ""
-// printf("Hello % %\n",str,num)
 
 
 
-// prints
-// printi
-// printd
-
-// i = 0
-// while i < 10 {
-    
-    
-//     i++   
-// }
-
-// for i {
-//     nr
-//     va   
-// }
-
-// for x..arr
-
-// for x..10 {
-    
-    
-// }
-
-// b = Earth()
-// // k = b.x
-// i = b.y
-
-// k = Vec2{99,33};
-
-// d = k.y
-
-
-// b = 92913 - 912
-
-// a = alloc(b)
-
-
-// free(a,b)
-// a = alloc()
-
-// a = 
-
-
-// a = cast<f32> 9923
-// a = alloc(cast<u64>8)
-
-// *a = 8
-
-// (*(p+8))[23] = 9
-// p[1] = 9
-// *p[23] = 9
-
-// *a = 5
-// b = * cast<u64*>a
-// b = a
-// free(a,cast<u64>8)
-
-// a : u8 = 2.5
-// b : u16 =  
 
 // push, u8
 

@@ -10,7 +10,7 @@ struct GenInfo {
     int errors=0;
     
     struct Variable {
-        u32 frameOffset=0;
+        i32 frameOffset=0;
         TypeId typeId=AST_VOID;
     };
     struct Function {

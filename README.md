@@ -2,6 +2,17 @@
 A compiler and runtime for a new scripting language which
 doesn't use any libraries.
 
+This readme and all docs is based on an earlier version of the language
+which doesn't hvae structs, pointers, enums, namespaces or bitwise operations.
+It uses two types: Number and String.
+For a small shell like scripting language this was fine but I wasn't happy with this.
+
+The earlier version uses the C++ code in GenParser and Context while the new version uses
+Parser, Generator and Interpreter. This new version does have structs and pointers.
+enums, namespaces and the rest is being worked on.
+
+The language will still support simple calls to executables.
+
 ## Disclaimer
 - No automatic tests. Expect old broken features.
 - Limited functions to to interract with the operating system.

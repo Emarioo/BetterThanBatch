@@ -99,6 +99,7 @@ const char* RegToStr(u8 reg);
 #define BC_EXT_ALLOC -1
 #define BC_EXT_REALLOC -2
 #define BC_EXT_FREE -3
+#define BC_EXT_PRINTI -4
 
 struct InstructionX {
     uint8 opcode=0;
@@ -125,7 +126,7 @@ struct BytecodeX {
     engone::Memory codeSegment{sizeof(InstructionX)};
     
     engone::Memory debugSegment{sizeof(u32)};
-    std::vector<std::string*> debugText;
+    std::vector<std::string> debugText;
     // std::vector<std::string> debugText;
     // -1 as index will add text to next instruction
     void addDebugText(const char* str, int length, u32 instructionIndex=-1);

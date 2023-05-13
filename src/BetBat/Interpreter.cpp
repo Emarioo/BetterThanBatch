@@ -345,6 +345,10 @@ void Interpreter::execute(BytecodeX* bytecode){
                     u64 size = *(u64*)(fp+argoffset);
                     engone::Free(ptr,size);
                     _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
+                } else if (addr==BC_EXT_PRINTI){
+                    i64 num = *(i64*)(fp+argoffset);
+                    log::out << "PRINTI: "<<num<<"\n";
+                    // _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
                 }
                 // bc ret here
                 _ILOG(log::out <<"\n";)

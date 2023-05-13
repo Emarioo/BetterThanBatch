@@ -162,13 +162,10 @@ void BytecodeX::addDebugText(const char* str, int length, u32 instructionIndex){
         int oldmax = debugSegment.max;
         if(!debugSegment.resize(newSize))
             return;
-        memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0,debugSegment.max*debugSegment.m_typeSize);
+        memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
     }
     int index = debugText.size();
-    debugText.push_back(new std::string("str,length"));
-    // debugText.push_back(std::string("str,length"));
-    // fprintf(stderr,"FUCK\n");
-    // log::out << "heee\n";
+    debugText.push_back(std::string(str,length));
     *((u32*)debugSegment.data + instructionIndex) = index + 1;
 }
 const char* BytecodeX::getDebugText(u32 instructionIndex){
@@ -186,6 +183,5 @@ const char* BytecodeX::getDebugText(u32 instructionIndex){
         log::out<<log::RED << __FILE__ << ":"<<__LINE__<<", instruction index out of bounds\n";
         return 0;   
     }
-    return debugText[index]->c_str();
-    // return debugText[index].c_str();
+    return debugText[index].c_str();
 }
