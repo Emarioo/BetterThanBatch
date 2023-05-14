@@ -1,6 +1,8 @@
 #include "BetBat/TestSuite.h"
 #include "BetBat/Interpreter.h"
+#include "BetBat/Context.h"
 #include "BetBat/Parser.h"
+#include "BetBat/GenParser.h"
 #include "BetBat/Utility.h"
 
 #define SERR engone::log::out << engone::log::RED<<"Error: "
@@ -59,7 +61,7 @@ bool hasNumbers(Bytecode& code, int min, int max=-1){
     }
     return yes;
 }
-bool hasTokens(Tokens& tokens, int min, int max=-1){
+bool hasTokens(TokenStream& tokens, int min, int max=-1){
     int count = tokens.length();
     bool yes=false;
     if(max==-1) yes = count==min;
@@ -85,14 +87,14 @@ bool hasTokens(Tokens& tokens, int min, int max=-1){
 #define TEST_SUCCESS 1
 struct TestData {
     engone::Memory text{0};
-    Tokens tokens{};
+    TokenStream tokens{};
     Bytecode bytecode{};
     Context context{};
     int testValueIndex = 0;
     
     void init(const char* path){
         text = ReadFile(path);
-        tokens = Tokenize(text);
+        tokens = TokenStream::Tokenize(text);
     }
     ~TestData(){
         text.resize(0);

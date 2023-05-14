@@ -91,16 +91,24 @@ void BytecodeX::cleanup(){
 }
 const char* RegToStr(u8 reg){
     #define CASE(K,V) case BC_REG_##K: return "$"#V;
+    #define CASER(K,V) case BC_REG_R##K##X: return "$r"#V"x";\
+    case BC_REG_E##K##X: return "$e"#V "x";\
+    case BC_REG_##K##X: return "$"#V "x";\
+    case BC_REG_##K##L: return "$"#V "l";\
+    case BC_REG_##K##H: return "$"#V "h";
     switch(reg){
-        CASE(RAX,rax)
-        CASE(RBX,rbx)
-        CASE(RCX,rcx)
-        CASE(RDX,rdx)
+        CASER(A,a)
+        CASER(B,b)
+        CASER(C,c)
+        CASER(D,d)
+
         CASE(SP,sp)
         CASE(FP,fp)
+        CASE(DP,dp)
         case 0: return "";
     }
     #undef CASE
+    #undef CASER
     return "$?";
 }
 void InstructionX::print(){
@@ -144,6 +152,15 @@ void BytecodeX::Destroy(BytecodeX* code){
         return;
     code->cleanup();
     delete code;
+}
+int BytecodeX::appendData(const void* data, int size){
+    if(dataSegment.max < dataSegment.used + size){
+        dataSegment.resize(dataSegment.max*2 + 50);
+    }
+    int index = dataSegment.used;
+    memcpy((char*)dataSegment.data + index,data,size);
+    dataSegment.used+=size;
+    return index;
 }
 void BytecodeX::addDebugText(Token& token, u32 instructionIndex){
     addDebugText(token.str,token.length,instructionIndex);

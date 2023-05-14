@@ -3,108 +3,42 @@
 // @enable preprocessor
 // @disable interpreter
 
-struct ByteArray { ptr: void*, len: u32 }
-fn create(len: u32) -> ByteArray {
-    out = ByteArray{null,0}
-    out.ptr = alloc(len)
-    printi(cast<i64>(out.ptr))
-    if out.ptr
-        out.len = len
-    return out
+
+struct C {
+    a: i32,
 }
-fn destroy(arr: ByteArray) { 
-    free(arr.ptr,arr.len) 
+
+struct B {
+    int: i32,
+    c: C,
 }
-arr = create(5);
-// printi(cast<u64>(arr.ptr))
-// printi(arr.len)
-#define PTR(off) *(cast<u8*> (arr.ptr) + off) = 50 + off;
-
-// PTR(0)
-// PTR(1)
-// PTR(2)
-// PTR(3)
-*(cast<u8*> (arr.ptr) + 0) = 50 + 0;
-*(cast<u8*> (arr.ptr) + 2) = 50 + 2;
-*(cast<u8*> (arr.ptr) + 3) = 50 + 3;
-
-k = *(cast<u8*>(arr.ptr)+2)
-printi(k);
-
-destroy(arr)
-
-// if arr.ptr {
-//     printi(1)
-// }else{
-//     printi(2)
-// }
-// arr = ByteArray{null,3}
-// arr.ptr = alloc(5)
-// printi(cast<u64>(arr.ptr))
-
-// struct vec {x:i32,y:i32}
-// fn te() -> vec {
-//     // v = vec{3,4}
-//     // return v
-//     return vec{3,4}
-// }
-// v = te()
-// // v.y = 9
-// printi(v.x)
-// printi(v.y)
-    // return v
-// printi(v.x)
-// printi(v.y)
-
-// v.y = 5
-
-// *(cast<u8*> (arr.ptr) + 0) = 50;
-// *(cast<u8*> (arr.ptr) + 0) = 50;
-// *(cast<u8*> (arr) + 1) = 50;
-// *(cast<u8*> (arr.ptr) + 2) = 50;
-// *(cast<u8*> (arr.ptr) + 3) = 50;
+struct A {
+    slice: i32[],
+    b: B,
+    a: bool,
+}
 
 
 
-
-
-// push, u8
-
-// fn poly<T>(ptr: T*) -> i32 { return ptr<T*>( }
-
-
-// a : i32 = (i32) 2.4
-
-// a = <i32> 2.4
-// a = <i32> 2.45 as i32
-
-// a = 9 <i32> <Array>koekoa +
-
-// 2.45 <i32>
-
-// 232 + cast<i32> koekao
-
-//  poly<Zombie>(&zombie)
- 
-//  poly   <   Zombie**  >   (&zombie)
-
-
-// poly < cake  && cake > poi
-// bool > poi
-
-
-// print "hello"
-
-// cast<i32> 0.293
-
-// cast<F,T> : (F t) -> T {
-//     ...
-// }
-// cast<>
-// fn function(a : i32,b : u32) -> bool {
-
+// struct Linked<T> {
+//     start: Item,
+//     struct Item {
+//         value: T,
+//         exist: Exist,
+//         next: Item*,
+//     }
+//     enum Available {
+//         Yes,
+//         No,
+//     }
 // }
 
-// p : i32* = &a
-// p : i32[] = {&a,1,length: 92}
-// p : i32[] = [1,9,2,5,7]
+// struct Array<T> {
+//     a: Item,
+//     struct Item {
+//         index: T,
+//         value: bool,
+//     }
+// }
+
+// Array<Array<i32>>

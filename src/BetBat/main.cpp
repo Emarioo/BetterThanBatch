@@ -28,6 +28,9 @@ void print_help(){
 int main(int argc, const char** argv){
     using namespace engone;
 
+    struct AE{bool a; u64 ok; bool c;};
+    log::out << " "<<sizeof(AE) << "\n";
+
     log::out.enableReport(false);
 
     #define IfArg(X) if(!strcmp(arg,X))

@@ -33,12 +33,16 @@ struct GenInfo {
     Variable* addVariable(const std::string& name);
     Function* addFunction(const std::string& name);
     
+    Identifier* addIdentifier(const std::string& name);
     Identifier* getIdentifier(const std::string& name);
     Variable* getVariable(int index);
     Function* getFunction(int index);
     
     void removeIdentifier(const std::string& name);
     
+
+    std::vector<int> constStringMapping;
+
     ASTFunction* currentFunction=0;
     
     int funcDepth=0;
@@ -53,5 +57,7 @@ struct GenInfo {
 
     
 };
+
+bool EvaluateTypes(GenInfo& info, AST* ast, int* err);
 
 BytecodeX* Generate(AST* ast, int* err);

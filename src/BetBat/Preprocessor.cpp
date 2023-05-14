@@ -877,7 +877,7 @@ int ParseToken(PreprocInfo& info){
     info.addToken(token);
     return PARSE_SUCCESS;
 }
-void Preprocess(Tokens& inTokens, int* error){
+void Preprocess(TokenStream& inTokens, int* error){
     using namespace engone;
     _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
     

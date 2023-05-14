@@ -21,6 +21,7 @@
 struct Token {
     Token() = default;
     Token(const char* str) : str((char*)str), length(strlen(str)) {};
+    Token(const std::string& str) : str((char*)str.c_str()), length(str.length()) {};
     
     char* str=0; // NOT null terminated
     int length=0;
@@ -45,43 +46,69 @@ struct Token {
 #define LAYER_OPTIMIZER 8
 #define LAYER_INTERPRETER 16
 engone::Logger& operator<<(engone::Logger& logger, Token& token);
-struct Tokens {
-    engone::Memory tokens{sizeof(Token)}; // the tokens themselves
-    engone::Memory tokenData{1}; // the data the tokens refer to
-    
-    void finalizePointers();
-    
-    int lines=0; // counts token suffix.
-    // new line in the middle of a token is not counted, multiline strings doesn't work very well
-    
-    int enabled=0;
-    static const int VERSION_MAX = 5;
-    char version[VERSION_MAX+1]{0};
-    bool isVersion(const char* ver){return !strcmp(version,ver);}
-    // TODO: version with major, minor and revision
-    
+struct TokenStream;
+struct TokenRange {
+    Token firstToken{};
+    int startIndex=0;
+    int endIndex=0; // exclusive
+    TokenStream* tokenStream=0; // should probably not be here
+
+    void print();
+};
+struct TokenStream {
+    // allocations in optionalBase will be used if not null
+    static TokenStream Tokenize(const engone::Memory& text, TokenStream* optionalBase=0);
+    static TokenStream Tokenize(const char* text, int length, TokenStream* optionalBase=0);
     void cleanup(bool leaveAllocations=false);
+    
+    //-- extra info like @disable/enable and @version
+    // TODO: version with major, minor and revision
+    bool isVersion(const char* ver){return !strcmp(version,ver);}
+    
+    // token count
+    int length();
     
     // modifies tokenData
     bool append(char chr);
     // Make sure token has a valid char* pointer
     bool append(Token& tok);
-    
     bool add(const char* str);
     bool add(Token token);
-    Token& get(uint index);
-    uint length();
+
+    Token& get(int index);
+
+    //-- For parsing
+
+    Token& now();
+    Token& next(); // move forward
+    int at();
+    bool end();
+    void finish();
+
+    TokenRange getLine(int index);
+    
+    //-- Extra
+
     // flags is a bitmask, TOKEN_PRINT_...
     void printTokens(int tokensPerLine = 14, bool showlncol=false);
-    
     void printData(int charsPerLine = 40);
     
     // normal print of all tokens
     void print();
-    // copys everything except tokens
-    bool copyInfo(Tokens& out);
-    
-    bool copy(Tokens& out);
+    // copies everything except tokens
+    bool copyInfo(TokenStream& out);
+    bool copy(TokenStream& out);
+
+    void finalizePointers();
+
+    engone::Memory tokens{sizeof(Token)}; // the tokens themselves
+    engone::Memory tokenData{1}; // the data the tokens refer to
+    int lines=0; // counts token suffix.
+    // new line in the middle of a token is not counted, multiline strings doesn't work very well
+    int enabled=0;
+    static const int VERSION_MAX = 5;
+    char version[VERSION_MAX+1]{0};
+    int readHead=0;
 };
 double ConvertDecimal(Token& token);
 int IsInteger(Token& token);
@@ -89,7 +116,6 @@ int ConvertInteger(Token& token);
 bool IsName(Token& token);
 // Can also be an integer
 int IsDecimal(Token& token);
-Tokens Tokenize(const engone::Memory& textData, Tokens* optionalIn=0);
 
 // I would recommend testing on a large text for more accurate results.
 void PerfTestTokenize(const engone::Memory& textData, int times=1);

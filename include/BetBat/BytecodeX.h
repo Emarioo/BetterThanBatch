@@ -66,7 +66,8 @@ u8
 #define DECODE_REG_TYPE(X) ((X&BC_REG_MASK)>>6)
 #define ENCODE_REG_TYPE(X) (X<<6)
 
-#define BC_REG_AL (ENCODE_REG_TYPE(BC_REG_8)|0)
+// BC_REG_ALL can't be 0 because it's seen as no register so we do 8.
+#define BC_REG_AL (ENCODE_REG_TYPE(BC_REG_8)|8)
 #define BC_REG_AH (ENCODE_REG_TYPE(BC_REG_8)|1)
 #define BC_REG_BL (ENCODE_REG_TYPE(BC_REG_8)|2)
 #define BC_REG_BH (ENCODE_REG_TYPE(BC_REG_8)|3)
@@ -93,6 +94,7 @@ u8
 #define BC_REG_SP (ENCODE_REG_TYPE(BC_REG_64)|4)
 #define BC_REG_FP (ENCODE_REG_TYPE(BC_REG_64)|5)
 #define BC_REG_PC (ENCODE_REG_TYPE(BC_REG_64)|6)
+#define BC_REG_DP (ENCODE_REG_TYPE(BC_REG_64)|7)
 
 const char* RegToStr(u8 reg);
 
@@ -112,7 +114,7 @@ struct InstructionX {
         };
     };
 
-    void print(); 
+    void print();
 };
 engone::Logger& operator<<(engone::Logger& logger, InstructionX& instruction);
 
@@ -124,15 +126,17 @@ struct BytecodeX {
     uint32 getMemoryUsage();
     
     engone::Memory codeSegment{sizeof(InstructionX)};
+    engone::Memory dataSegment{1};
     
     engone::Memory debugSegment{sizeof(u32)};
     std::vector<std::string> debugText;
-    // std::vector<std::string> debugText;
     // -1 as index will add text to next instruction
     void addDebugText(const char* str, int length, u32 instructionIndex=-1);
     void addDebugText(const std::string& text, u32 instructionIndex=-1);
     void addDebugText(Token& token, u32 instructionIndex=-1);
     const char* getDebugText(u32 instructionIndex);
+    // returns offset to beginning of data
+    int appendData(const void* data, int size);
 
     bool add(InstructionX inst);
     bool addIm(i32 data);

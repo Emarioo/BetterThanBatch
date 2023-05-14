@@ -135,7 +135,7 @@ void ParseInfo::printLine(){
     }
     int endToken = startToken;
     while(true){
-        if((uint)endToken>=tokens.length()){
+        if(endToken>=tokens.length()){
             endToken = tokens.length()-1;
             break;
         }
@@ -206,7 +206,7 @@ bool ParseInfo::addDebugLine(uint tokenIndex){
     }
     int endToken = startToken;
     while(true){
-        if((uint)endToken>=tokens.length()){
+        if(endToken>=tokens.length()){
             endToken = tokens.length()-1;
             break;
         }
@@ -344,12 +344,14 @@ Token CombineTokens(ParseInfo& info){
     }
     return outToken;
 }
+// don't forget to free data in outgoing token
 int ParseTypeId(ParseInfo& info, Token& outTypeId){
     using namespace engone;
     int startToken = info.at()+1;
     int endTok = info.at()+1; // exclusive
     int totalLength=0;
     
+    // TODO: check end of tokens
     while(true){
         Token& tok = info.get(endTok);
         if(tok.flags&TOKEN_QUOTED){
@@ -363,10 +365,13 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
         // Todo: Array<T,A> wouldn't work since comma is detected as end of data type.
         //      tuples won't work with paranthesis.
         if(Equal(tok,",") // (a: i32, b: i32)     struct {a: i32, b: i32}
+            ||Equal(tok,"=") // a: i32 = 9;
             ||Equal(tok,")") // (a: i32)
             ||Equal(tok,"{") // () -> i32 {
             ||Equal(tok,"}") // struct { x: f32 }
+            ||Equal(tok,"<") // ok: Map<i32>   i32 in poly list is handled afterwards
             ||Equal(tok,">") // cast<i32>
+            ||Equal(tok,";") // cast<i32>
         ){
             break;
         }
@@ -400,21 +405,62 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
         if(attempt) return PARSE_BAD_ATTEMPT;
         ERRT(structToken)<<"expected struct not "<<structToken<<"\n";
         ERRLINE
-        return PARSE_ERROR;   
+        return PARSE_ERROR;
     }
+    info.next(); // struct
+    attempt=false;
     
-    Token name = info.get(info.at()+2);
+    Token name = info.get(info.at()+1);
     if(!IsName(name)){
-        if(attempt) return PARSE_BAD_ATTEMPT;
         ERRT(name)<<"expected a name, "<<name<<" isn't\n";
         ERRLINE
         return PARSE_ERROR;
     }
-    info.next(); // struct
     info.next(); // name
-    attempt=false;
+
+    astStruct = info.ast->createStruct(name);
+    astStruct->tokenRange.firstToken = structToken;
+    astStruct->tokenRange.startIndex = startIndex;
     
     Token token = info.get(info.at()+1);
+    if(Equal(token,"<")){
+        info.next();
+        // polymorphic type
+    
+        while(true){
+            token = info.get(info.at()+1);
+            if(Equal(token,">")){
+                info.next();
+                if(astStruct->polyNames.size()==0){
+                    ERRT(token) << "empty polymorph list\n";
+                    ERRLINE
+                }
+                break;
+            }
+            if(!IsName(token)){
+                ERRT(token) << token<<" is not a valid name for polymorphism\n";
+                ERRLINE
+            }else{
+                info.next();
+                astStruct->polyNames.push_back(token);
+            }
+            
+            token = info.get(info.at()+1);
+            if(Equal(token,",")){
+                info.next();
+                continue;
+            }else if(Equal(token,">")){
+                info.next();
+                break;
+            } else{
+                ERRT(token) << token<<"is neither , or >\n";
+                ERRLINE
+                continue;
+            }
+        }
+    }
+    
+    token = info.get(info.at()+1);
     if(!Equal(token,"{")){
         ERRT(token)<<"expected { not "<<token<<"\n";
         ERRLINE
@@ -422,9 +468,6 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     }
     info.next();
     
-    astStruct = info.ast->createStruct(name);
-    astStruct->tokenRange.firstToken = structToken;
-    astStruct->tokenRange.startIndex = startIndex;
     int offset=0;
     int error = PARSE_SUCCESS;
     bool affectedByAlignment=false;
@@ -463,30 +506,41 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             ERRLINE;   
             continue;
         }
+        std::string temps = dtToken;
+        
+        int polyIndex = -1;
+        for(int i=0;i<(int)astStruct->polyNames.size();i++){
+            if(temps.find(astStruct->polyNames[i])!=std::string::npos){
+                polyIndex = i;
+                break;
+            }
+        }
         
         TypeInfo* typeInfo = info.ast->getTypeInfo(dtToken);
-        if(!typeInfo->size){
-            ERRT(dtToken) << "Member "<<name<<" in struct has 0 as size\n";
-            info.errors--; // it's okay
-            ERRLINE
-        }
+
+        // dealt with elsewhere
+        // if(!typeInfo->size() && polyIndex==-1){
+        //     ERRT(dtToken) << "Member "<<name<<" in struct has 0 as size\n";
+        //     info.errors--; // it's okay with custom type or struct?
+        //     ERRLINE
+        // }
+
         // TODO: default value
-        
-        // TODO: what about types which don't have a size yet?
-        
+        // TODO: what about types which don't have a size yet? Evaluation later
         // TODO: auto reallignment to optimize the member layout according to alignment?`
         //   Would this be confusing when debugging?
         // int size = typeInfo->size;
-        int size = 8;
-        int misalign = (offset%size);
-        if(misalign!=0){
-            // type isn't alligned
-            offset += size - misalign;
-            affectedByAlignment=true;
-        }
+        // int size = 8;
+        // int misalign = (offset%size);
+        // if(misalign!=0){
+        //     // type isn't alligned
+        //     offset += size - misalign;
+        //     affectedByAlignment=true;
+        // }
         
-        astStruct->members.push_back({(std::string)name,typeInfo->id,offset});
-        offset += size;
+        astStruct->members.push_back({(std::string)name,typeInfo->id,0,polyIndex});
+        // astStruct->members.push_back({(std::string)name,typeInfo->id,offset,polyIndex});
+        // offset += size;
         
         token = info.get(info.at()+1);
         if(Equal(token,",")){
@@ -503,11 +557,11 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
         }
     }
     astStruct->tokenRange.endIndex = info.at()+1;
-    astStruct->size = offset;
+    // astStruct->size = offset;
     auto typeInfo = info.ast->getTypeInfo(name);
     typeInfo->astStruct = astStruct;
-    typeInfo->size = astStruct->size;
-    _GLOG(log::out << "Parsed struct "<<name << " (size: "<<offset<< (affectedByAlignment?", align padding":"")<<") with "<<astStruct->members.size()<<" members\n";)
+    // typeInfo->_size = astStruct->size;
+    _GLOG(log::out << "Parsed struct "<<name << " with "<<astStruct->members.size()<<" members\n";)
     return error;
 }
 int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
@@ -592,7 +646,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     astEnum->tokenRange.endIndex = info.at()+1;
     auto typeInfo = info.ast->getTypeInfo(name);
     typeInfo->astEnum = astEnum;
-    typeInfo->size = 4; // i32
+    typeInfo->_size = 4; // i32
     _GLOG(log::out << "Parsed enum "<<name << " with "<<astEnum->members.size()<<" members\n";)
     return error;
 }
@@ -602,10 +656,6 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     
     _PLOG(FUNC_ENTER)
     
-    // if(ParseAssignment(info,,true)){
-    //     _PLOG(log::out << "-- exit ParseExpression\n";)
-    //     return 1;
-    // }
     if(info.end()){
         if(attempt)
             return PARSE_BAD_ATTEMPT;
@@ -637,7 +687,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }
                 info.next();
                 
-                ASTExpression* tmp = info.ast->createExpression(AST_PROP);
+                ASTExpression* tmp = info.ast->createExpression(AST_MEMBER);
                 tmp->name = new std::string(token);
                 tmp->left = values.back();
                 tmp->tokenRange.firstToken = tmp->left->tokenRange.firstToken;
@@ -702,8 +752,14 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }
                 info.next();
                 directOps.push_back(AST_CAST);
-                TypeId dt = info.ast->getTypeId(tokenTypeId);
+                TypeId dt = info.ast->getTypeInfo(tokenTypeId)->id;
                 castTypes.push_back(dt);
+                attempt=false;
+                continue;
+            }
+            if(Equal(token,"sizeof")){
+                info.next();
+                directOps.push_back(AST_SIZEOF);
                 attempt=false;
                 continue;
             }
@@ -766,6 +822,59 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
+            } else if(token.flags&TOKEN_QUOTED) {
+                info.next();
+
+                ASTExpression* tmp = info.ast->createExpression(AST_STRING);
+
+                tmp->constStrIndex = info.ast->constStrings.size();
+                info.ast->constStrings.push_back(token);
+                values.push_back(tmp);
+                tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.startIndex = info.at();
+                tmp->tokenRange.endIndex = info.at()+1;
+            } else if(Equal(token,"[")) {
+                info.next();
+
+                ASTExpression* tmp = info.ast->createExpression(AST_SLICE_INITIALIZER);
+
+                // TODO: what about slice type. u16[] for example.
+                //  you can do just [0,21] and it will auto assign a type in the generator
+                //  but we may want to specify one.
+ 
+                while(true){
+                    Token token = info.get(info.at()+1);
+                    if(Equal(token,"]")){
+                        info.next();
+                        break;
+                    }
+                    ASTExpression* expr;
+                    int result = ParseExpression(info,expr,false);
+                    // TODO: deal with result
+                    if(result==PARSE_SUCCESS){
+                        // NOTE: The list will be ordered in reverse.
+                        //   The generator wants this when pushing values to the stack.
+                        expr->next = tmp->left;
+                        tmp->left = expr;
+                    }
+                    
+                    token = info.get(info.at()+1);
+                    if(Equal(token,",")){
+                        info.next();
+                        continue;
+                    }else if(Equal(token,"]")){
+                        info.next();
+                        break;
+                    }else {
+                        ERRT(token) << "expected ] not "<<token<<"\n";
+                        continue;
+                    }
+                }
+                
+                values.push_back(tmp);
+                tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.startIndex = info.at();
+                tmp->tokenRange.endIndex = info.at()+1;
             } else if(Equal(token,"null")){
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(AST_NULL);
@@ -777,6 +886,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 info.next();
                 int startToken=info.at();
                 
+                // could be a slice if tok[]{}
+                // if something is within [] then it's a array access
                 Token& tok = info.get(info.at()+1);
                 if(Equal(tok,"(")){
                     // function call
@@ -817,7 +928,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         prev = expr;
                         expectComma = true;
                     }
-                    log::out << "Parsed call "<<count <<"\n";
+                    _PLOG(log::out << "Parsed call "<<count <<"\n";)
                     values.push_back(tmp);
                     tmp->tokenRange.firstToken = token;
                     tmp->tokenRange.startIndex = startToken;
@@ -930,6 +1041,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             values.pop_back();
             
             auto newVal = info.ast->createExpression(op);
+            // TODO: token range doesn't include the operation token. It should.
+            newVal->tokenRange = val->tokenRange;
             
             if(op==AST_CAST){
                 newVal->castType = castTypes.back();
@@ -999,7 +1112,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
         }
     }
 }
-int ParseBody(ParseInfo& info, ASTBody*& body, bool forceBrackets=false);
+int ParseBody(ParseInfo& info, ASTBody*& body, bool forceBrackets=false, bool predefinedBody=false);
 // returns 0 if syntax is wrong for flow parsing
 int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
@@ -1105,6 +1218,43 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement->tokenRange.startIndex = startIndex;
         statement->tokenRange.endIndex = info.at()+1;
         return PARSE_SUCCESS;
+    } else if(Equal(firstToken,"using")){
+        info.next();
+
+        // TODO: namespace environemnt, not just using X as Y
+
+        Token name = info.get(info.at()+1);
+        if(!IsName(name)){
+            ERRT(name) << "expected a name, "<<name <<" isn't one\n";
+            ERRLINE;
+            return PARSE_ERROR;
+        }
+        info.next(); 
+
+        Token token = info.get(info.at()+1);
+        if(!Equal(token,"as")){
+            ERRT(token) << "expected as not "<<token <<"\n";
+            ERRLINE;
+            return PARSE_ERROR;
+        }
+        info.next();
+        
+        Token alias = info.get(info.at()+1);
+        if(!IsName(alias)){
+            ERRT(alias) << "expected a name, "<<alias <<" isn't one\n";
+            ERRLINE;
+            return PARSE_ERROR;
+        }
+        info.next();
+        
+        statement = info.ast->createStatement(ASTStatement::USING);
+        statement->name = new std::string(name);
+        statement->alias = new std::string(alias);
+
+        statement->tokenRange.firstToken = firstToken;
+        statement->tokenRange.startIndex = startIndex;
+        statement->tokenRange.endIndex = info.at()+1;
+        return PARSE_SUCCESS;        
     }
     if(attempt)
         return PARSE_BAD_ATTEMPT;
@@ -1166,7 +1316,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
         defer {
             delete[] dataType.str;
         };
-        auto id = info.ast->getTypeId(dataType);
+        auto id = info.ast->getTypeInfo(dataType)->id;
         function->arguments.push_back({(std::string)arg,id});
 
         tok = info.next();
@@ -1206,7 +1356,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
                 if(result!=PARSE_SUCCESS){
                     return PARSE_ERROR;
                 }
-                auto id = info.ast->getTypeId(dt);
+                auto id = info.ast->getTypeInfo(dt)->id;
                 function->returnTypes.push_back(id);
             }
         }else{
@@ -1228,7 +1378,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
                 if(result!=PARSE_SUCCESS){
                     return PARSE_ERROR;
                 }
-                auto id = info.ast->getTypeId(dt);
+                auto id = info.ast->getTypeInfo(dt)->id;
                 function->returnTypes.push_back(id);
             }
         }
@@ -1322,50 +1472,59 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         // (i32, f32)
         // TODO: quoted tokens should not be allowed, var : "i32"*  <-  BAD
         // TODO: is var := ...  allowed. : without data type? I guess it's fine?
-        // TODO: what about sudden end?
-        int startToken = info.at()+1;
-        int endTok = info.at()+1; // exclusive
-        int totalLength=0;
         
-        while(true){
-            Token& tok = info.get(endTok);
-            if(tok.flags&TOKEN_QUOTED){
-                ERRT(tok) << "Cannot have quotes in data type "<<tok<<"\n";
-                ERRLINE
-                error = PARSE_ERROR;
-                // NOTE: Don't return in order to stay synchronized.
-                //   continue parsing like nothing happen.
-            }
-            if(Equal(tok,"=")||Equal(tok,";")){
-                break;
-            }
-            endTok++;
-            totalLength+=tok.length;
-            info.next();
-            if(tok.flags&TOKEN_SUFFIX_LINE_FEED)
-                break;
-        }
-        Token dataType{};
-        dataType.str = new char[totalLength];
-        dataType.length = totalLength;
+        Token typeToken{};
+        int result = ParseTypeId(info,typeToken);
         defer {
-            delete[] dataType.str;
+            delete[] typeToken.str;
         };
-        
-        // std::function<void()> shit{};
-        // DeferStruct de(shit);
-        // shit = [&](){};
-        // defer {};
+        Token token = info.get(info.at()+1);
+        std::vector<TypeId> polyList;
+        std::string typeString = typeToken;
+        TypeInfo* typeInfo = info.ast->getTypeInfo(typeString);
+        if(Equal(token,"<")){
+            info.next();
+            typeString+="<";
+            while(true){
+                Token token = info.get(info.at()+1);
+                if(Equal(token,">")){
+                    info.next();
+                    break;
+                }
+                Token polyToken{};
+                int result = ParseTypeId(info,polyToken);
+                if(result==PARSE_ERROR){
+                    
+                }
+                TypeId polyId = info.ast->getTypeInfo(polyToken)->id;
+                if(polyList.size()!=0){
+                    typeString+=",";
+                }
+                polyList.push_back(polyId);
+                typeString+=std::string(polyToken);
+                token = info.get(info.at()+1);
+                if(Equal(token,",")){
+                    info.next();
+                    continue;
+                } else if(Equal(token,">")){
+                    info.next();
+                    break;
+                }else{
+                    ERRT(token) << "Unexepcted "<<token<<". Should be , or >\n";
+                }
+            }
+            typeString+=">";
 
-        int sofar=0;
-        for (int i=startToken;i!=endTok;i++){
-            Token& tok = info.get(i);
-            memcpy(dataType.str+sofar,tok.str,tok.length);
-            sofar+=tok.length;
+            TypeInfo* polyInfo = info.ast->getTypeInfo(typeString);
+            polyInfo->polyOrigin = typeInfo;
+            polyInfo->polyTypes = polyList;
+            polyInfo->astStruct = typeInfo->astStruct;
+            polyInfo->_size = typeInfo->size(); // TODO: NOT CORRECT!
         }
 
-        TypeId dtId = info.ast->getTypeId(dataType);
+        TypeId dtId = info.ast->getTypeInfo(typeString)->id;
         assignType = dtId;
+
         assign = info.get(info.at()+1);
 
         // if (error==PARSE_SUCCESS)
@@ -1425,7 +1584,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     statement->tokenRange.endIndex = info.at()+1;
     return error;   
 }
-int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets){
+int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool predefinedBody){
     using namespace engone;
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
@@ -1437,7 +1596,8 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets){
         return PARSE_ERROR;
     }
     
-    bodyLoc = info.ast->createBody();
+    if(!predefinedBody)
+        bodyLoc = info.ast->createBody();
 
     bodyLoc->tokenRange.firstToken = info.get(info.at()+1);
     bodyLoc->tokenRange.startIndex = info.at()+1;
@@ -1523,7 +1683,7 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets){
     return PARSE_SUCCESS;
 }
 
-AST* ParseTokens(Tokens& tokens, int* outErr){
+AST* ParseTokens(TokenStream& tokens, int* outErr){
     using namespace engone;
     _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     
@@ -1531,7 +1691,20 @@ AST* ParseTokens(Tokens& tokens, int* outErr){
     
     info.ast = AST::Create();
 
-    int result = ParseBody(info, info.ast->body,true);
+    info.ast->body = info.ast->createBody();
+    {
+        // TODO: set size and offset of language structs here instead of letting the compiler do it.
+        // TODO: also, prioritize language structs
+        ASTStruct* astStruct = info.ast->createStruct("Slice");
+        auto voidInfo = info.ast->getTypeInfo("void*");
+        astStruct->members.push_back({"ptr",voidInfo->id});
+        astStruct->members.push_back({"len",info.ast->getTypeInfo("u64")->id});
+        auto structType = info.ast->getTypeInfo("Slice");
+        structType->astStruct = astStruct;
+        info.ast->body->add(astStruct);
+    }
+
+    int result = ParseBody(info, info.ast->body,true,true);
 
     _VLOG(info.ast->print();)
     

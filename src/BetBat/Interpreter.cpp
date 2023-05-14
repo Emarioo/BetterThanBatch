@@ -28,15 +28,24 @@ void Interpreter::printRegisters(){
     log::out << "PC: "<<pc<<"\n";
 }
 void* Interpreter::getReg(u8 id){
+    // #define CASE(K,V) case BC_REG_##K: return V;
+    #define CASER(K,V) case BC_REG_R##K##X: return &r##V##x;\
+    case BC_REG_E##K##X: return &r##V##x;\
+    case BC_REG_##K##X: return &r##V##x;\
+    case BC_REG_##K##L: return &r##V##x;\
+    case BC_REG_##K##H: return (void*)((u8*)&r##V##x+1);
     switch(id){
-        case BC_REG_RAX: return &rax;
-        case BC_REG_RBX: return &rbx;
-        case BC_REG_RCX: return &rcx;
-        case BC_REG_RDX: return &rdx;
+        CASER(A,a)
+        CASER(B,b)
+        CASER(C,c)
+        CASER(D,d)
+
         case BC_REG_SP: return &sp;
         case BC_REG_FP: return &fp;
         case BC_REG_PC: return &pc;
+        case BC_REG_DP: return &dp;
     }
+    #undef CASER
     engone::log::out <<"(RegID: "<<id<<")\n";
     Assert("tried to access bad register")
     return 0;
@@ -53,9 +62,15 @@ void Interpreter::execute(BytecodeX* bytecode){
     
     auto tp = MeasureSeconds();
     
-    log::out << "sp = "<<sp<<"\n";
+    _ILOG(log::out << "sp = "<<sp<<"\n";)
     
     // u64* savedFp = 0;
+    #define SET_TO_FROM(reg)\
+    *((u64*) to) = 0;\
+    if(DECODE_REG_TYPE(reg)==BC_REG_8 ) *((u8* ) to) = *((u8* ) from);\
+    if(DECODE_REG_TYPE(reg)==BC_REG_16) *((u16*) to) = *((u16*) from);\
+    if(DECODE_REG_TYPE(reg)==BC_REG_32) *((u32*) to) = *((u32*) from);\
+    if(DECODE_REG_TYPE(reg)==BC_REG_64) *((u64*) to) = *((u64*) from);
 
     u64 length = bytecode->codeSegment.used;
     InstructionX* codePtr = (InstructionX*)bytecode->codeSegment.data;
@@ -73,13 +88,13 @@ void Interpreter::execute(BytecodeX* bytecode){
         // if(savedFp)
         //     _ILOG(log::out <<" sfp: "<< *savedFp;)
         // _ILOG(log::out <<"\n";)
-        
+        _ILOG(
         const char* str = bytecode->getDebugText(pc);
         if(str)
-            log::out << log::GRAY<<  str<<"\n";
+            log::out << log::GRAY<<  str<<"\n";)
         
-        if(inst)
-            _ILOG(log::out << pc<<": "<<*inst<<", ";)
+        _ILOG(if(inst)
+                log::out << pc<<": "<<*inst<<", ";)
         pc++;
         u8 opcode = DECODE_OPCODE(inst);
         switch (opcode) {
@@ -169,7 +184,7 @@ void Interpreter::execute(BytecodeX* bytecode){
 
             if (DECODE_REG_TYPE(r0) != DECODE_REG_TYPE(r1)){
                 log::out << log::RED<<"register bit mismatch\n";
-                continue;   
+                continue;
             }
             void* xp = getReg(r0);
             void* outp = getReg(r1);
@@ -189,19 +204,24 @@ void Interpreter::execute(BytecodeX* bytecode){
         case BC_MOV_MR:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
-            u8 offset = DECODE_REG2(inst);
+            // u8 offset = DECODE_REG2(inst);
 
             if(DECODE_REG_TYPE(r0) != BC_REG_64){
                 log::out << log::RED<<"mov mr must use 64 bit regs\n";
                 continue;   
             }
-            void* from = (void*)(*(u64*)getReg(r0) + offset); // NOTE: Program can crash here
+            u64* fromptr = (u64*)getReg(r0);
+            void* from = (void*)(*fromptr); // NOTE: Program can crash here
+            // void* from = (void*)(*(u64*)getReg(r0) + offset); // NOTE: Program can crash here
             void* to = getReg(r1);
             
-            if(DECODE_REG_TYPE(r1)==BC_REG_8 ) *((u8* ) to) = *((u8* ) from);
-            if(DECODE_REG_TYPE(r1)==BC_REG_16) *((u16*) to) = *((u16*) from);
-            if(DECODE_REG_TYPE(r1)==BC_REG_32) *((u32*) to) = *((u32*) from);
-            if(DECODE_REG_TYPE(r1)==BC_REG_64) *((u64*) to) = *((u64*) from);
+            SET_TO_FROM(r1)
+            
+            // *((u64*) to) = 0;
+            // if(DECODE_REG_TYPE(r1)==BC_REG_8) *((u8* ) to) = *((u8* ) from);
+            // if(DECODE_REG_TYPE(r1)==BC_REG_16) *((u16*) to) = *((u16*) from);
+            // if(DECODE_REG_TYPE(r1)==BC_REG_32) *((u32*) to) = *((u32*) from);
+            // if(DECODE_REG_TYPE(r1)==BC_REG_64) *((u64*) to) = *((u64*) from);
 
             _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
 
@@ -210,17 +230,19 @@ void Interpreter::execute(BytecodeX* bytecode){
         case BC_MOV_RM:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
-            u8 offset = DECODE_REG2(inst);
+            // u8 offset = DECODE_REG2(inst);
 
             if(DECODE_REG_TYPE(r0) != BC_REG_64){
                 log::out << log::RED<<"mov mr must use 64 bit regs\n";
                 continue;
             }
             void* from = getReg(r0); // NOTE: Program can crash here
-            void* to = (void*)(*(u64*)getReg(r1)+offset);
+            void* to = (void*)(*(u64*)getReg(r1));
+            // void* to = (void*)(*(u64*)getReg(r1)+offset);
 
-            *((u64*) to)= *(u64*)from;
-
+            SET_TO_FROM(r1)
+            
+            // *((u64*) to) = 0;
             // if(r1&BC_REG_8 ) *((u8* ) to) = *((u8* ) from);
             // if(r1&BC_REG_16) *((u16*) to) = *((u16*) from);
             // if(r1&BC_REG_32) *((u32*) to) = *((u32*) from);
@@ -239,10 +261,8 @@ void Interpreter::execute(BytecodeX* bytecode){
             }
             void* from = getReg(r0);
             void* to = getReg(r1);
-            if(r0&BC_REG_8 ) *((u8* ) to) = *((u8* ) from);
-            if(r0&BC_REG_16) *((u16*) to) = *((u16*) from);
-            if(r0&BC_REG_32) *((u32*) to) = *((u32*) from);
-            if(r0&BC_REG_64) *((u64*) to) = *((u64*) from);
+
+            SET_TO_FROM(r1)
 
             _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
             break;
@@ -431,8 +451,8 @@ void Interpreter::execute(BytecodeX* bytecode){
         }
         } // for switch
     }
-    printRegisters();
     auto time = StopMeasure(tp);
-    log::out << "Time: "<<time<<"\n";
+    log::out << "Executed in "<<FormatTime(time)<<"\n";
+    printRegisters();
        
 }

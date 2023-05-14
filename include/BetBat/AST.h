@@ -7,12 +7,24 @@ typedef int TypeId;
 struct ASTStruct;
 struct ASTEnum;
 struct TypeInfo {
-    TypeInfo(TypeId id, int size=0) : id(id), size(size) {}
-    // name
-    TypeId id;
-    int size=0;
+    TypeInfo(const std::string& name, TypeId id, int size=0) :  name(name), id(id), _size(size) {}
+    TypeInfo(TypeId id, int size=0) : id(id), _size(size) {}
+    std::string name;
+    TypeId id=0;
+    int _size=0;
+    int _alignedSize=0;
+    int arrlen=0;
     ASTStruct* astStruct=0;
     ASTEnum* astEnum=0;
+    std::vector<TypeId> polyTypes;
+    TypeInfo* polyOrigin=0;
+
+    struct MemberOut { TypeId typeId;int index;};
+
+    int size();
+    // 1,2,4,8
+    int alignedSize();
+    MemberOut getMember(const std::string& name);
 };
 
 enum PrimitiveType : int {
@@ -26,10 +38,12 @@ enum PrimitiveType : int {
     AST_INT32,
     AST_INT64,
     
-    AST_BOOL8,
+    AST_BOOL,
+    AST_CHAR,
     
     AST_FLOAT32,
     
+    AST_STRING, // converted to another type, probably char[]
     AST_NULL, // usually converted to cast<void*> 0
     
     // TODO: should probably be moved
@@ -55,18 +69,14 @@ enum OperationType : int {
     AST_NOT,
     
     AST_CAST,
-    AST_PROP,
+    AST_MEMBER,
     AST_INITIALIZER,
+    AST_SLICE_INITIALIZER,
     AST_FROM_NAMESPACE,
-    // AST_SIZEOF,
+    AST_SIZEOF,
 
     AST_REFER, // take reference
     AST_DEREF, // dereference
-};
-struct TokenRange{
-    Token firstToken{};
-    int startIndex=0;
-    int endIndex=0;
 };
 struct AST;
 const char* OpToStr(int op);
@@ -83,10 +93,14 @@ struct ASTExpression {
     bool isValue=false;
     TypeId typeId = 0;
     
-    float f32Value=0;
-    i64 i64Value=0;
-    bool b8Value=0;
+    union {
+        i64 i64Value=0;
+        float f32Value;
+        bool boolValue;
+        char charValue;
+    };
     std::string* name=0;
+    int constStrIndex=0;
     std::string* member=0;
     ASTExpression* left=0;
     ASTExpression* right=0;
@@ -105,11 +119,13 @@ struct ASTStatement {
         WHILE,
         RETURN,
         CALL,
+        USING,
     };
     TokenRange tokenRange{};
     int type=0;
     // assign
     std::string* name=0;
+    std::string* alias=0;
     TypeId typeId=0;
     ASTExpression* lvalue=0;
     ASTExpression* rvalue=0;
@@ -129,11 +145,15 @@ struct ASTStruct {
     std::string* name=0;
     struct Member {
         std::string name;
-        TypeId typeId;
+        TypeId typeId=0;
         int offset=0;
+        int polyIndex=-1;
     };
     std::vector<Member> members{};
     int size=0;
+    int alignedSize=0;
+    bool typeComplete=false;
+    std::vector<std::string> polyNames;
 
     ASTStruct* next=0;
 
@@ -144,10 +164,12 @@ struct ASTEnum {
     std::string* name=0;
     struct Member {
         std::string name;
-        int id=0;
+        int enumValue=0;
     };
     std::vector<Member> members{};
     
+    bool getMember(const std::string& name, int* out);
+
     ASTEnum* next=0;
     void print(AST* ast, int depth);  
 };
@@ -174,6 +196,11 @@ struct ASTBody {
     ASTFunction* functions = 0;
     ASTStatement* statements = 0;
 
+    void add(ASTStruct* astStruct);
+    void add(ASTStatement* astStatement);
+    void add(ASTFunction* astFunction);
+    void add(ASTEnum* astEnum);
+
     void print(AST* ast, int depth);
 };
 struct AST {
@@ -184,29 +211,34 @@ struct AST {
     ASTBody* body=0;
     
     std::unordered_map<std::string, TypeInfo*> typeInfos;
+    std::unordered_map<int, TypeInfo*> typeInfosMap;
+    static const TypeId POINTER_BIT = 0x04000000;
+    static const TypeId SLICE_BIT = 0x08000000;
     TypeId nextTypeIdId=0x100;
-    static const TypeId POINTER_BIT = 0x40000000;
     TypeId nextPointerTypeId=POINTER_BIT;
-    // creates a new type if name doesn't exist 
-    TypeId getTypeId(const std::string& name);
+    TypeId nextSliceTypeId=SLICE_BIT;
+    
+    void addTypeInfo(const std::string& name, TypeId id, int size=0);
+    // creates a new type if name doesn't exist
+    // TypeId getTypeId(const std::string& name);
     // creates a new type if needed
-    TypeInfo* getTypeInfo(const std::string& name);
+    TypeInfo* getTypeInfo(const std::string& name, bool dontCreate=false);
     TypeInfo* getTypeInfo(TypeId id);
     // do not save the returned string reference, add a data type and then use the reference.
     // it may be invalid.
-    const std::string* getTypeId(TypeId id);
+    // const std::string* getTypeId(TypeId id);
 
     static bool IsPointer(TypeId id);
     static bool IsPointer(Token& token);
+    static bool IsSlice(TypeId id);
+    static bool IsSlice(Token& token);
     
     // true if id is one of u8-64, i8-64
     static bool IsInteger(TypeId id);
     // will return false for non number types
     static bool IsSigned(TypeId id);
 
-    // engone::Memory text{1};
-
-    // uint createName(Token& token);
+    std::vector<std::string> constStrings;
 
     ASTBody* createBody();
     ASTFunction* createFunction(const std::string& name);

@@ -23,10 +23,10 @@
 #define PARSE_NO_VALUE 3
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
 struct GenParseInfo {
-    GenParseInfo(Tokens& tokens) : tokens(tokens){}
+    GenParseInfo(TokenStream& tokens) : tokens(tokens){}
     Bytecode code{};
-    uint index=0;
-    Tokens& tokens;
+    int index=0;
+    TokenStream& tokens;
     int parDepth=0;
     
     int errors=0;
@@ -120,7 +120,7 @@ struct ExpressionInfo {
     int opCount=0;  
 };
 
-Bytecode GenerateScript(Tokens& tokens, int* outErr=0);
-Bytecode GenerateInstructions(Tokens& tokens, int* outErr=0);
+Bytecode GenerateScript(TokenStream& tokens, int* outErr=0);
+Bytecode GenerateInstructions(TokenStream& tokens, int* outErr=0);
 
 std::string Disassemble(Bytecode& code);

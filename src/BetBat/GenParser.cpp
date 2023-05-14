@@ -240,7 +240,7 @@ void GenParseInfo::printLine(){
     }
     int endToken = startToken;
     while(true){
-        if((uint)endToken>=tokens.length()){
+        if(endToken>=tokens.length()){
             endToken = tokens.length()-1;
             break;
         }
@@ -273,7 +273,7 @@ bool GenParseInfo::addDebugLine(uint tokenIndex){
     }
     int endToken = startToken;
     while(true){
-        if((uint)endToken>=tokens.length()){
+        if(endToken>=tokens.length()){
             endToken = tokens.length()-1;
             break;
         }
@@ -2293,7 +2293,7 @@ void Bytecode::printStats(){
     log::out <<" DebugText: "<<debugLineText.used<<" (max "<<(debugLineText.max*debugLineText.m_typeSize)<<" bytes)\n";
 
 }
-Bytecode GenerateScript(Tokens& tokens, int* outErr){
+Bytecode GenerateScript(TokenStream& tokens, int* outErr){
     using namespace engone;
     _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     

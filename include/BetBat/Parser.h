@@ -23,9 +23,9 @@
 #define PARSE_NO_VALUE 3
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
 struct ParseInfo {
-    ParseInfo(Tokens& tokens) : tokens(tokens){}
-    uint index=0;
-    Tokens& tokens;
+    ParseInfo(TokenStream& tokens) : tokens(tokens){}
+    int index=0;
+    TokenStream& tokens;
     int errors=0;
 
     int funcDepth=0;
@@ -55,4 +55,4 @@ struct ParseInfo {
     void nextLine();
 };
 
-AST* ParseTokens(Tokens& tokens, int* outErr=0);
+AST* ParseTokens(TokenStream& tokens, int* outErr=0);

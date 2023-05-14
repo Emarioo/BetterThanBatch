@@ -66,7 +66,11 @@ int ConvertInteger(Token& token){
     *(token.str+token.length) = tmp;
     return num;
 }
-
+void TokenRange::print(){
+    for(int i=startIndex;i<endIndex;i++){
+        tokenStream->get(i).print();
+    }
+}
 void Token::print(int printFlags){
     using namespace engone;
     if(!str) return;
@@ -110,7 +114,24 @@ engone::Logger& operator<<(engone::Logger& logger, Token& token){
 Token::operator std::string(){
     return std::string(str,length);
 }
-bool Tokens::copyInfo(Tokens& out){
+
+Token& TokenStream::next(){
+    return get(readHead++);
+}
+Token& TokenStream::now(){
+    return get(readHead-1);
+}
+bool TokenStream::end(){
+    Assert(readHead<=length());
+    return readHead==length();
+}
+void TokenStream::finish(){
+    readHead = length();
+}
+int TokenStream::at(){
+    return readHead-1;
+}
+bool TokenStream::copyInfo(TokenStream& out){
     out.lines = lines;
     out.enabled = enabled;
     memcpy(out.version,version,VERSION_MAX+1);
@@ -118,7 +139,10 @@ bool Tokens::copyInfo(Tokens& out){
     // twice and I will keep doing it.
     return true;
 }
-bool Tokens::copy(Tokens& out){
+Token& TokenStream::get(int index){
+    return *((Token*)tokens.data + index);
+}
+bool TokenStream::copy(TokenStream& out){
     out.cleanup();
     if(!out.tokenData.resize(tokenData.max))
         return false;
@@ -138,7 +162,7 @@ bool Tokens::copy(Tokens& out){
     copyInfo(out);
     return true;
 }
-bool Tokens::add(const char* str){
+bool TokenStream::add(const char* str){
     if(tokens.max == tokens.used){
         if(!tokens.resize(tokens.max*2 + 100))
             return false;
@@ -164,13 +188,44 @@ bool Tokens::add(const char* str){
     tokenData.used+=length;
     return true;
 }
-void Tokens::finalizePointers(){
+void TokenStream::finalizePointers(){
     for(int i=0;i<(int)tokens.used;i++){
         Token* tok = (Token*)tokens.data+i;
         tok->str = (char*)tokenData.data + (uint64)tok->str;
     }
 }
-bool Tokens::add(Token token){
+TokenRange TokenStream::getLine(int index){
+    if(index<0 || index>= length())
+        return {}; // bad
+    TokenRange range{};
+    range.tokenStream = this;
+    range.startIndex = index - 1;
+    range.endIndex = index;
+
+    while(range.startIndex>=0){
+        Token& token = get(range.startIndex);
+        if(token.flags&TOKEN_QUOTED){
+            range.startIndex++;
+            break;
+        }
+        range.startIndex--;
+    }
+    if(range.startIndex<0)
+        range.startIndex = 0;
+    while(range.endIndex<length()){
+        Token& token = get(range.endIndex);
+        if(token.flags&TOKEN_QUOTED){
+            range.endIndex++; // exclusive
+            break;
+        }
+        range.endIndex++;
+    }
+    if(range.endIndex>=length())
+        range.endIndex = length(); // not -1 because it should be exclusive
+
+    return range;
+}
+bool TokenStream::add(Token token){
     if(tokens.max == tokens.used){
         if(!tokens.resize(tokens.max*2 + 100))
             return false;
@@ -182,13 +237,10 @@ bool Tokens::add(Token token){
     tokens.used++;
     return true;
 }
-Token& Tokens::get(uint index){
-    return *((Token*)tokens.data + index);
-}
-uint32 Tokens::length(){
+int TokenStream::length(){
     return tokens.used;
 }
-void Tokens::cleanup(bool leaveAllocations){
+void TokenStream::cleanup(bool leaveAllocations){
     if(leaveAllocations){
         auto t0 = tokens;
         t0.used = 0;
@@ -203,7 +255,7 @@ void Tokens::cleanup(bool leaveAllocations){
         *this = {};
     }
 }
-void Tokens::printTokens(int tokensPerLine, bool showlncol){
+void TokenStream::printTokens(int tokensPerLine, bool showlncol){
     using namespace engone;
     log::out << "\n####   "<<tokens.used<<" Tokens   ####\n";
     uint i=0;
@@ -226,7 +278,7 @@ void Tokens::printTokens(int tokensPerLine, bool showlncol){
         log::out << "\n";
     // log::out << "$END$";
 }
-void Tokens::print(){
+void TokenStream::print(){
     using namespace engone;
     for(int j=0;j<(int)tokens.used;j++){
         Token& token = *((Token*)tokens.data + j);
@@ -246,7 +298,7 @@ void Tokens::print(){
             log::out << " ";
     }
 }
-void Tokens::printData(int charsPerLine){
+void TokenStream::printData(int charsPerLine){
     using namespace engone;
     log::out << "\n####   Token Data   ####\n";
     uint i=0;
@@ -259,7 +311,7 @@ void Tokens::printData(int charsPerLine){
     if((i)%charsPerLine!=0)
         log::out << "\n";
 }
-bool Tokens::append(char chr){
+bool TokenStream::append(char chr){
     if(tokenData.max < tokenData.used + 1){
         // engone::log::out << "resize "<<__FUNCTION__<<"\n";
         if(!tokenData.resize(tokenData.max*2 + 20))
@@ -269,7 +321,7 @@ bool Tokens::append(char chr){
     tokenData.used++;
     return true;
 }
-bool Tokens::append(Token& tok){
+bool TokenStream::append(Token& tok){
     if(tokenData.max < tokenData.used + tok.length){
         // engone::log::out << "resize "<<__FUNCTION__<<"\n";
         if(!tokenData.resize(tokenData.max*2 + 2*tok.length))
@@ -281,7 +333,15 @@ bool Tokens::append(Token& tok){
     tokenData.used += tok.length;
     return true;
 }
-Tokens Tokenize(const engone::Memory& textData, Tokens* optionalIn){
+
+TokenStream TokenStream::Tokenize(const char* text, int length, TokenStream* optionalBase){
+    engone::Memory temp{1};
+    temp.data = (char*)text;
+    temp.max = length;
+    temp.used = length;
+    return Tokenize(temp,optionalBase);
+}
+TokenStream TokenStream::Tokenize(const engone::Memory& textData, TokenStream* optionalIn){
     using namespace engone;
     if(textData.m_typeSize!=1) {
         log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
@@ -292,7 +352,7 @@ Tokens Tokenize(const engone::Memory& textData, Tokens* optionalIn){
     
     char* text = (char*)textData.data;
     int length = textData.used;
-    Tokens outTokens{};
+    TokenStream outTokens{};
     if(optionalIn){
         outTokens = *optionalIn;
         outTokens.cleanup(true); // clean except for allocations   
@@ -594,8 +654,8 @@ Tokens Tokenize(const engone::Memory& textData, Tokens* optionalIn){
                         if(startIndex!=-1){
                             if(c==' '||c=='\t'||c=='\r'||c=='\n'||index==length){
                                 int len = index-startIndex-1;
-                                if(len>Tokens::VERSION_MAX){
-                                    log::out << log::RED << "TokenError "<<ln<<":"<<col<<": version to big for buffer (was "<<len<<",max "<<Tokens::VERSION_MAX<<")\n"; 
+                                if(len>TokenStream::VERSION_MAX){
+                                    log::out << log::RED << "TokenError "<<ln<<":"<<col<<": version to big for buffer (was "<<len<<",max "<<TokenStream::VERSION_MAX<<")\n"; 
                                     bad=true;
                                 }else{
                                     memcpy(outTokens.version,text+startIndex,len);
@@ -616,8 +676,9 @@ Tokens Tokenize(const engone::Memory& textData, Tokens* optionalIn){
                             }
                         }
                     }
-                    if(!bad)
-                        log::out <<log::GREEN<< "@version '"<<outTokens.version<<"'\n";
+                    if(!bad){
+                        _TLOG(log::out <<log::GREEN<< "@version '"<<outTokens.version<<"'\n";)
+                    }
                     continue;
                 }else if(type!=0){
                     const int WORDMAX = 100;
@@ -816,7 +877,7 @@ Tokenize_END:
 int cmpd(const void* a, const void* b){ return (int)(1000000000*(*(double*)a - *(double*)b));}
 void PerfTestTokenize(const engone::Memory& textData, int times){
     using namespace engone;
-    Tokens base = Tokenize(textData); // initial tokenize to get sufficient allocations
+    TokenStream base = TokenStream::Tokenize(textData); // initial tokenize to get sufficient allocations
     
     log::out << "start\n";
     double* measures = new double[times];
@@ -825,7 +886,7 @@ void PerfTestTokenize(const engone::Memory& textData, int times){
         // heap allocation is included.
         auto mini = engone::MeasureSeconds();
         // base = Tokenize(textData);
-        base = Tokenize(textData,&base);
+        base = TokenStream::Tokenize(textData,&base);
         measures[i] = engone::StopMeasure(mini);
     }
     double total = engone::StopMeasure(startT);

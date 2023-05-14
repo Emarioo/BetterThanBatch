@@ -31,7 +31,7 @@ void CompileScript(const char *path, int extra) {
     auto text = ReadFile(path);
     if (!text.data)
         return;
-    Tokens tokens{};
+    TokenStream tokens{};
     int err = 0;
     AST* ast=0;
     Bytecode bytecode{};
@@ -43,7 +43,7 @@ void CompileScript(const char *path, int extra) {
     // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
 
     auto startCompileTime = engone::MeasureSeconds();
-    tokens = Tokenize(text);
+    tokens = TokenStream::Tokenize(text);
     if (tokens.enabled == 0)
         tokens.printTokens(14, true);
     // TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
@@ -87,7 +87,9 @@ void CompileScript(const char *path, int extra) {
         bytes = bytecodeX->getMemoryUsage();
     else
         bytes = bytecode.getMemoryUsage();
-    _VLOG(log::out << "Compiled " << FormatUnit((uint64)tokens.lines) << " lines in " << FormatTime(seconds) << "\n (" << FormatUnit(tokens.lines / seconds) << " lines/s, " << FormatBytes(bytes) << ")\n";)
+    // _VLOG(
+        log::out << "Compiled " << FormatUnit((uint64)tokens.lines) << " lines in " << FormatTime(seconds) << "\n (" << FormatUnit(tokens.lines / seconds) << " lines/s, " << FormatBytes(bytes) << ")\n";
+    // )
 
     if (tokens.enabled & LAYER_INTERPRETER) {
         if(bytecodeX){
@@ -146,7 +148,7 @@ void CompileDisassemble(const char *path)
     using namespace engone;
     auto text = ReadFile(path);
     auto startCompileTime = engone::MeasureSeconds();
-    Tokens toks = Tokenize(text);
+    TokenStream toks = TokenStream::Tokenize(text);
     Bytecode bytecode = GenerateScript(toks);
     OptimizeBytecode(bytecode);
     std::string textcode = Disassemble(bytecode);
