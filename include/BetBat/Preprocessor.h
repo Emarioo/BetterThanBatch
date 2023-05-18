@@ -56,8 +56,10 @@ struct EvalInfo {
     TokenList output{};
 };
 struct PreprocInfo {
-    TokenStream inTokens{};
-    TokenStream tokens{};
+    // TokenStream inTokens{};
+    // TokenStream tokens{};
+    TokenStream* inTokens = 0;
+    TokenStream* outTokens = 0;
     
     int errors=0;
     
@@ -92,4 +94,4 @@ struct PreprocInfo {
     void nextline();
 };
 
-void Preprocess(TokenStream& tokens, int* error=0);
+TokenStream* Preprocess(TokenStream* tokens, int* error=0);

@@ -55,33 +55,7 @@ int OpPrecedence(int op){
     return 0;
 }
 Token& ParseInfo::next(){
-    Token& temp = tokens.get(index++);
-    // if(temp.flags&TOKEN_SUFFIX_LINE_FEED||index==1){
-        // if(code.debugLines.used==0){
-        //     if(addDebugLine(index-1)){
-        //         Bytecode::DebugLine* line = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used-1;
-        //         uint64 offset = (uint64)line->str;
-        //         line->str = (char*)code.debugLineText.data + offset;
-        //         // line->str doesn't point to debugLineText yet since it may resize.
-        //         // we do some special stuff to deal with it.
-        //         _PLOG(engone::log::out <<"\n"<<*line<<"\n";)
-        //         line->str = (char*)offset;
-        //     }
-        // }else{
-        //     Bytecode::DebugLine* lastLine = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used - 1;
-        //     if(temp.line != lastLine->line){
-        //         if(addDebugLine(index-1)){
-        //             Bytecode::DebugLine* line = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used-1;
-        //             uint64 offset = (uint64)line->str;
-        //             line->str = (char*)code.debugLineText.data + offset;
-        //             // line->str doesn't point to debugLineText yet since it may resize.
-        //             // we do some special stuff to deal with it.
-        //             _PLOG(engone::log::out <<"\n"<<*line<<"\n";)
-        //             line->str = (char*)offset;
-        //         }
-        //     }
-        // }
-    // }
+    Token& temp = tokens->get(index++);
     return temp;
 }
 bool ParseInfo::revert(){
@@ -100,20 +74,20 @@ bool ParseInfo::revert(){
     return true;
 }
 Token& ParseInfo::prev(){
-    return tokens.get(index-2);
+    return tokens->get(index-2);
 }
 Token& ParseInfo::now(){
-    return tokens.get(index-1);
+    return tokens->get(index-1);
 }
 Token& ParseInfo::get(uint _index){
-    return tokens.get(_index);
+    return tokens->get(_index);
 }
 bool ParseInfo::end(){
-    Assert(index<=tokens.length());
-    return index==tokens.length();
+    Assert(index<=tokens->length());
+    return index==tokens->length();
 }
 void ParseInfo::finish(){
-    index = tokens.length();
+    index = tokens->length();
 }
 int ParseInfo::at(){
     return index-1;
@@ -135,8 +109,8 @@ void ParseInfo::printLine(){
     }
     int endToken = startToken;
     while(true){
-        if(endToken>=tokens.length()){
-            endToken = tokens.length()-1;
+        if(endToken>=tokens->length()){
+            endToken = tokens->length()-1;
             break;
         }
         Token token = get(endToken);
@@ -186,120 +160,6 @@ void ParseInfo::printPrevLine(){
     for(int i=startIndex;i<=endIndex;i++){
         log::out << get(i);
     }
-}
-bool ParseInfo::addDebugLine(uint tokenIndex){
-    #ifndef USE_DEBUG_INFO
-    return false;
-    #endif
-    int startToken = tokenIndex-1;
-    while(true){
-        if(startToken<0){
-            startToken = 0;
-            break;
-        }
-        Token& token = get(startToken);
-        if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-            startToken++;
-            break;
-        }
-        startToken--;
-    }
-    int endToken = startToken;
-    while(true){
-        if(endToken>=tokens.length()){
-            endToken = tokens.length()-1;
-            break;
-        }
-        Token& token = get(endToken);
-        if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-            break;
-        }
-        endToken++;
-    }
-    int length=0;
-    for(int i=startToken;i<=endToken;i++){
-        Token& token = get(i);
-        if(token.flags&TOKEN_QUOTED)
-            length += 2;
-        if(token.flags&TOKEN_SUFFIX_SPACE)
-            length += 1;
-        length+=token.length;
-    }
-    // if(code.debugLineText.used+length>code.debugLineText.max){
-    //     if(!code.debugLineText.resize(code.debugLineText.max*2+length*30)){
-    //         return false;
-    //     }
-    // }
-    // if(code.debugLines.used==code.debugLines.max){
-    //     if(!code.debugLines.resize(code.debugLines.max*2+10)){
-    //         return false;
-    //     }
-    // }
-    // Bytecode::DebugLine* line = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used;
-    // code.debugLines.used++;
-    // line->str = (char*)code.debugLineText.used;
-    // line->length = length;
-    // line->instructionIndex = code.length();
-    // line->line = get(tokenIndex).line;
-    // for(int i=startToken;i<=endToken;i++){
-    //     Token& token = get(i);
-        
-    //     if(token.flags&TOKEN_QUOTED)
-    //         *((char*)code.debugLineText.data + code.debugLineText.used++) = '"';
-        
-    //     // memcpy((char*)code.debugLineText.data + code.debugLineText.used,token.str,token.length);
-    //     // code.debugLineText.used+=token.length;
-    //     for(int j=0;j<token.length;j++){
-    //         // uint64 offset = (uint64)token.str;
-    //         char* ptr = token.str;
-    //         char chr = *((char*)ptr+j);
-    //         if(chr=='\n'){
-    //             if(code.debugLineText.used+2>code.debugLineText.max){
-    //                 if(!code.debugLineText.resize(code.debugLineText.max+10)){
-    //                     return false;
-    //                 }
-    //             }
-    //             *((char*)code.debugLineText.data + code.debugLineText.used++) = '\\';
-    //             *((char*)code.debugLineText.data + code.debugLineText.used++) = 'n';
-    //             line->length++; // extra for \n
-    //         }else{
-    //             *((char*)code.debugLineText.data + code.debugLineText.used++) = chr;
-    //         }
-    //     }
-    //     if(token.flags&TOKEN_QUOTED)
-    //         *((char*)code.debugLineText.data + code.debugLineText.used++) = '"';
-    //     if(token.flags&TOKEN_SUFFIX_SPACE)
-    //         *((char*)code.debugLineText.data + code.debugLineText.used++) = ' ';
-    // }
-    return true;
-}
-bool ParseInfo::addDebugLine(const char* str, int lineIndex){
-    #ifndef USE_DEBUG_INFO
-    return false;
-    #endif
-    int length = strlen(str);
-    // if(code.debugLineText.used+length>code.debugLineText.max){
-    //     if(!code.debugLineText.resize(code.debugLineText.max*2+length*30)){
-    //         return false;
-    //     }
-    // }
-    // if(code.debugLines.used==code.debugLines.max){
-    //     if(!code.debugLines.resize(code.debugLines.max*2+10)){
-    //         return false;
-    //     }
-    // }
-    // Bytecode::DebugLine* line = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used;
-    // code.debugLines.used++;
-    // line->str = (char*)code.debugLineText.used;
-    // line->length = length;
-    // line->instructionIndex = code.length();
-    // line->line = lineIndex;
-        
-    // for(int j=0;j<length;j++){
-    //     char chr = str[j];
-    //     *((char*)code.debugLineText.data + code.debugLineText.used++) = chr;
-    // }
-    return true;
 }
 void ParseInfo::nextLine(){
     int extra=index==0;
@@ -827,8 +687,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
 
                 ASTExpression* tmp = info.ast->createExpression(AST_STRING);
 
-                tmp->constStrIndex = info.ast->constStrings.size();
-                info.ast->constStrings.push_back(token);
+                // tmp->constStrIndex = info.ast->constStrings.size();
+                // info.ast->constStrings.push_back(token);
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
@@ -1434,7 +1294,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
     _PLOG(FUNC_ENTER)
     
-    if(info.tokens.length() < info.index+2){
+    if(info.tokens->length() < info.index+2){
         // not enough tokens for assignment
         if(attempt){
             return PARSE_BAD_ATTEMPT;
@@ -1601,6 +1461,7 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool prede
 
     bodyLoc->tokenRange.firstToken = info.get(info.at()+1);
     bodyLoc->tokenRange.startIndex = info.at()+1;
+    // bodyLoc->tokenRange.tokenStream = info.tok
     
     bool scoped=false;
     Token token = info.get(info.at()+1);
@@ -1683,36 +1544,29 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool prede
     return PARSE_SUCCESS;
 }
 
-AST* ParseTokens(TokenStream& tokens, int* outErr){
+ASTBody* ParseTokens(TokenStream* tokens, AST* ast, int* outErr){
     using namespace engone;
     _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     
     ParseInfo info{tokens};
+    info.tokens = tokens;
+    info.ast = ast;
     
-    info.ast = AST::Create();
+    // if(optionalAST)
+    //     info.ast = optionalAST;
+    // else{
+    //     info.ast = AST::Create();
+    // }
+    ASTBody* body = 0;
+    int result = ParseBody(info, body,true,false);
 
-    info.ast->body = info.ast->createBody();
-    {
-        // TODO: set size and offset of language structs here instead of letting the compiler do it.
-        // TODO: also, prioritize language structs
-        ASTStruct* astStruct = info.ast->createStruct("Slice");
-        auto voidInfo = info.ast->getTypeInfo("void*");
-        astStruct->members.push_back({"ptr",voidInfo->id});
-        astStruct->members.push_back({"len",info.ast->getTypeInfo("u64")->id});
-        auto structType = info.ast->getTypeInfo("Slice");
-        structType->astStruct = astStruct;
-        info.ast->body->add(astStruct);
-    }
-
-    int result = ParseBody(info, info.ast->body,true,true);
-
-    _VLOG(info.ast->print();)
+    // _VLOG(info.ast->print();)
     
     if(outErr){
-        *outErr = info.errors;
+        *outErr += info.errors;
     }
     if(info.errors)
         log::out << log::RED<<"Parser failed with "<<info.errors<<" errors\n";
     
-    return info.ast;
+    return body;
 }

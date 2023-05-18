@@ -56,9 +56,18 @@ struct TokenRange {
     void print();
 };
 struct TokenStream {
+    ~TokenStream() {
+        // TODO: cleanup does this too, if new allocations are done it needs
+        // to be freed in two locations. careful with memory leaks.
+        tokens.resize(0);
+        tokenData.resize(0);
+    }
+    static TokenStream* Create();
+    static void Destroy(TokenStream* stream);
     // allocations in optionalBase will be used if not null
-    static TokenStream Tokenize(const engone::Memory& text, TokenStream* optionalBase=0);
-    static TokenStream Tokenize(const char* text, int length, TokenStream* optionalBase=0);
+    static TokenStream* Tokenize(const std::string& filePath);
+    static TokenStream* Tokenize(const engone::Memory& text, std::vector<std::string>* importList=0, TokenStream* optionalBase=0);
+    static TokenStream* Tokenize(const char* text, int length, TokenStream* optionalBase=0);
     void cleanup(bool leaveAllocations=false);
     
     //-- extra info like @disable/enable and @version
@@ -98,12 +107,18 @@ struct TokenStream {
     // copies everything except tokens
     bool copyInfo(TokenStream& out);
     bool copy(TokenStream& out);
+    
+    TokenStream* copy();
 
     void finalizePointers();
+
+    std::string streamName; // filename/importname
+    std::vector<std::string> importList;
 
     engone::Memory tokens{sizeof(Token)}; // the tokens themselves
     engone::Memory tokenData{1}; // the data the tokens refer to
     int lines=0; // counts token suffix.
+    int readBytes=0;
     // new line in the middle of a token is not counted, multiline strings doesn't work very well
     int enabled=0;
     static const int VERSION_MAX = 5;

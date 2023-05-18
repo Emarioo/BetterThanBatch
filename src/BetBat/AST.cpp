@@ -78,7 +78,110 @@ AST* AST::Create(){
     ast->addTypeInfo("null", AST_NULL       ,8);
     ast->addTypeInfo("var" , AST_VAR        );
     ast->addTypeInfo("call", AST_FNCALL     );
+    
+    ast->mainBody = ast->createBody();
+    {
+        // TODO: set size and offset of language structs here instead of letting the compiler do it.
+        // TODO: also, prioritize language structs
+        ASTStruct* astStruct = ast->createStruct("Slice");
+        auto voidInfo = ast->getTypeInfo("void*");
+        astStruct->members.push_back({"ptr",voidInfo->id});
+        astStruct->members.push_back({"len",ast->getTypeInfo("u64")->id});
+        auto structType = ast->getTypeInfo("Slice");
+        structType->astStruct = astStruct;
+        ast->mainBody->add(astStruct);
+    }
     return ast;
+}
+void AST::appendToMainBody(ASTBody* body){
+    // TODO: Save cpu time by keeping track of tail for enums, functions, statements and structs.
+    //   This way you don't need to go through the list to get the tail.
+    if(body->enums){
+        ASTEnum* lastEnum = mainBody->enums;
+        while(lastEnum){
+            if(!lastEnum->next){
+                break;   
+            }
+            lastEnum = lastEnum->next;
+        }
+        if(!lastEnum){
+            mainBody->enums = body->enums;   
+        }else{
+            mainBody->enums->next = body->enums;
+        }
+    }
+    if(body->functions){
+        ASTFunction* last = mainBody->functions;
+        while(last){
+            if(!last->next){
+                break;   
+            }
+            last = last->next;
+        }
+        if(!last){
+            mainBody->functions = body->functions;   
+        }else{
+            mainBody->functions->next = body->functions;
+        }
+    }
+    if(body->structs){
+        ASTStruct* last = mainBody->structs;
+        while(last){
+            if(!last->next){
+                break;   
+            }
+            last = last->next;
+        }
+        if(!last){
+            mainBody->structs = body->structs;   
+        }else{
+            mainBody->structs->next = body->structs;
+        }
+    }
+    if(body->statements){
+        ASTStatement* lastState = mainBody->statements;
+        while(lastState){
+            if(!lastState->next){
+                break;   
+            }
+            lastState = lastState->next;
+        }
+        if(!lastState){
+            mainBody->statements = body->statements;   
+        }else{
+            mainBody->statements->next = body->statements;  
+        }
+    }
+    delete body;
+}
+ASTBody* AST::createBody(){
+    return new ASTBody();
+}
+ASTStatement* AST::createStatement(int type){
+    ASTStatement* ptr = new ASTStatement();
+    ptr->type = type;
+    return ptr;
+}
+ASTStruct* AST::createStruct(const std::string& name){
+    ASTStruct* ptr = new ASTStruct();
+    ptr->name = new std::string(name);
+    return ptr;
+}
+ASTEnum* AST::createEnum(const std::string& name){
+    ASTEnum* ptr = new ASTEnum();
+    ptr->name = new std::string(name);
+    return ptr;
+}
+ASTFunction* AST::createFunction(const std::string& name){
+    ASTFunction* ptr = new ASTFunction();
+    ptr->name = new std::string(name);
+    return ptr;
+}
+ASTExpression* AST::createExpression(TypeId type){
+    ASTExpression* ptr = new ASTExpression();
+    ptr->isValue = (u32)type<AST_PRIMITIVE_COUNT;
+    ptr->typeId = type;
+    return ptr;
 }
 
 void ASTBody::add(ASTStruct* astStruct){
@@ -99,6 +202,7 @@ void ASTBody::add(ASTEnum* astEnum){
 }
 void AST::Destroy(AST* ast){
     if(!ast) return;
+    ast->cleanup();
     ast->~AST();
     engone::Free(ast,sizeof(AST));
 }
@@ -157,55 +261,6 @@ TypeInfo* AST::getTypeInfo(TypeId id){
     }
     return pair->second;
 }
-// TypeId AST::getTypeId(const std::string& name){
-//     return getTypeInfo(name)->id;
-// }
-// const std::string* AST::getTypeId(TypeId id){
-//     for (auto& pair : typeInfos){
-//         if(pair.second->id == id){
-//             return &pair.first;
-//         }
-//     }
-//     return 0;
-// }
-bool AST::IsPointer(Token& token){
-    if(!token.str || token.length<2) return false;
-    return token.str[token.length-1] == '*';
-}
-bool AST::IsPointer(TypeId id){
-    return id & POINTER_BIT;
-}
-bool AST::IsSlice(TypeId id){
-    return id & SLICE_BIT;
-}
-bool AST::IsSlice(Token& token){
-    if(!token.str || token.length<3) return false;
-    return token.str[token.length-2] == '[' && token.str[token.length-1] == ']';
-}
-bool AST::IsInteger(TypeId id){
-    return AST_UINT8<=id && id <= AST_INT64;
-}
-bool AST::IsSigned(TypeId id){
-    return AST_INT8<=id && id <= AST_INT64;
-}
-ASTBody* AST::createBody(){
-    return new ASTBody();
-}
-ASTStatement* AST::createStatement(int type){
-    ASTStatement* ptr = new ASTStatement();
-    ptr->type = type;
-    return ptr;
-}
-ASTStruct* AST::createStruct(const std::string& name){
-    ASTStruct* ptr = new ASTStruct();
-    ptr->name = new std::string(name);
-    return ptr;
-}
-ASTEnum* AST::createEnum(const std::string& name){
-    ASTEnum* ptr = new ASTEnum();
-    ptr->name = new std::string(name);
-    return ptr;
-}
 TypeInfo::MemberOut TypeInfo::getMember(const std::string& name){
     if(astStruct){
         auto& members = astStruct->members;
@@ -246,16 +301,25 @@ bool ASTEnum::getMember(const std::string& name, int* out){
     }
     return true;
 }
-ASTFunction* AST::createFunction(const std::string& name){
-    ASTFunction* ptr = new ASTFunction();
-    ptr->name = new std::string(name);
-    return ptr;
+bool AST::IsPointer(Token& token){
+    if(!token.str || token.length<2) return false;
+    return token.str[token.length-1] == '*';
 }
-ASTExpression* AST::createExpression(TypeId type){
-    ASTExpression* ptr = new ASTExpression();
-    ptr->isValue = (u32)type<AST_PRIMITIVE_COUNT;
-    ptr->typeId = type;
-    return ptr;
+bool AST::IsPointer(TypeId id){
+    return id & POINTER_BIT;
+}
+bool AST::IsSlice(TypeId id){
+    return id & SLICE_BIT;
+}
+bool AST::IsSlice(Token& token){
+    if(!token.str || token.length<3) return false;
+    return token.str[token.length-2] == '[' && token.str[token.length-1] == ']';
+}
+bool AST::IsInteger(TypeId id){
+    return AST_UINT8<=id && id <= AST_INT64;
+}
+bool AST::IsSigned(TypeId id){
+    return AST_INT8<=id && id <= AST_INT64;
 }
 void PrintSpace(int count){
     using namespace engone;
@@ -263,10 +327,10 @@ void PrintSpace(int count){
 }
 void AST::print(int depth){
     using namespace engone;
-    if(body){
+    if(mainBody){
         PrintSpace(depth);
         log::out << "AST\n";
-        body->print(this, depth+1);
+        mainBody->print(this, depth+1);
     }
 }
 void ASTBody::print(AST* ast, int depth){
@@ -426,7 +490,7 @@ void ASTExpression::print(AST* ast, int depth){
         else if(typeId==AST_BOOL) log::out << boolValue;
         else if(typeId==AST_CHAR) log::out << charValue;
         else if(typeId==AST_VAR) log::out << *name;
-        else if(typeId==AST_STRING) log::out << ast->constStrings[constStrIndex];
+        // else if(typeId==AST_STRING) log::out << ast->constStrings[constStrIndex];
         else if(typeId==AST_FNCALL) log::out << *name;
         else if(typeId==AST_NULL) log::out << "null";
         else

@@ -25,6 +25,9 @@
 		},
 		{
 			"include": "#compiler"
+		},
+		{
+			"include": "#importer"
 		}
 	],
 	"repository": {
@@ -41,7 +44,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.betterthanbatch",
-				"match": "\\b(if|else|while|for|break|continue|return|each|_test_)\\b|(#\\w+)"
+				"match": "\\b(if|else|while|for|break|continue|return|each|_test_|struct|enum|namespace)\\b|(#\\w+)"
 			}]
 		},
 		"compiler":{
@@ -53,10 +56,21 @@
 				"match":"(?<=\\s+)(preprocessor|parser|generator|optimizer|interpreter|all)\\s+"
 			}]
 		},
+		"importer": {
+			"name": "keyword.control",
+			"begin": "(@import|@version)\\s+",
+			"end": "(?<=\n)",
+			"patterns": [
+				{
+					"name": "entity.name.tag",
+					"match": "(?<=\\s+)(\\S*)\\s+"
+				}
+			]
+		},
 		"functions":{
 			"patterns":[{
 				"name":"entity.name.function",
-				"match": "\\b(time|random|filterfiles|print)\\b"
+				"match": "\\b(alloc|free|realloc|printi)\\b"
 			}]
 		},
 		"strings": {

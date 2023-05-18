@@ -53,6 +53,11 @@ void* Interpreter::getReg(u8 id){
 
 void Interpreter::execute(BytecodeX* bytecode){
     using namespace engone;
+    if(!bytecode){
+        log::out << log::RED << __FUNCTION__<<"Cannot execute null bytecode\n";
+        return;   
+    }
+    
     _VLOG(log::out <<log::BLUE<< "##   Interpreter   ##\n";)
     stack.resize(100*1024);
     

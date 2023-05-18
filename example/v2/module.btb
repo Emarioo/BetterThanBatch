@@ -1,0 +1,6 @@
+@version 2
+
+struct Array {
+    ptr: void*,
+    size: u64,   
+}

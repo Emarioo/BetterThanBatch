@@ -39,6 +39,8 @@ struct ScopeDebug {
     int& _depth;
 };
 
+#define BROKEN engone::log::out << engone::log::RED<< __FUNCTION__<<" is broken\n"
+
 #define COMBINE1(X,Y) X##Y
 #define COMBINE(X,Y) COMBINE1(X,Y)
 

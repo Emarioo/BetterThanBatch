@@ -39,7 +39,10 @@ struct GenInfo {
     Function* getFunction(int index);
     
     void removeIdentifier(const std::string& name);
-    
+
+    int relativeStackPointer=0;
+    void addPop(int reg);
+    void addPush(int reg);    
 
     std::vector<int> constStringMapping;
 
@@ -58,6 +61,6 @@ struct GenInfo {
     
 };
 
-bool EvaluateTypes(GenInfo& info, AST* ast, int* err);
+bool EvaluateTypes(AST* ast, ASTBody* body, int* err);
 
 BytecodeX* Generate(AST* ast, int* err);

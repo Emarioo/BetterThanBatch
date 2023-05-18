@@ -23,15 +23,11 @@
 #define PARSE_NO_VALUE 3
 engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
 struct ParseInfo {
-    ParseInfo(TokenStream& tokens) : tokens(tokens){}
+    ParseInfo(TokenStream* tokens) : tokens(tokens){}
     int index=0;
-    TokenStream& tokens;
+    TokenStream* tokens;
     int errors=0;
-
     int funcDepth=0;
-
-    int frameOffsetIndex = 0;
-    
     AST* ast=0;
 
     // Does not handle out of bounds
@@ -44,9 +40,6 @@ struct ParseInfo {
     bool end();
     void finish();
 
-    bool addDebugLine(uint tokenIndex);
-    bool addDebugLine(const char* str, int line=65565);
-
     // print line of where current token exists
     // not including \n
     void printLine();
@@ -55,4 +48,4 @@ struct ParseInfo {
     void nextLine();
 };
 
-AST* ParseTokens(TokenStream& tokens, int* outErr=0);
+ASTBody* ParseTokens(TokenStream* tokens, AST* ast, int* outErr=0);

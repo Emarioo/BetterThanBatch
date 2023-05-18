@@ -208,7 +208,7 @@ struct AST {
     static void Destroy(AST* ast);
     void cleanup();
     
-    ASTBody* body=0;
+    ASTBody* mainBody=0;
     
     std::unordered_map<std::string, TypeInfo*> typeInfos;
     std::unordered_map<int, TypeInfo*> typeInfosMap;
@@ -219,26 +219,23 @@ struct AST {
     TypeId nextSliceTypeId=SLICE_BIT;
     
     void addTypeInfo(const std::string& name, TypeId id, int size=0);
-    // creates a new type if name doesn't exist
-    // TypeId getTypeId(const std::string& name);
     // creates a new type if needed
     TypeInfo* getTypeInfo(const std::string& name, bool dontCreate=false);
     TypeInfo* getTypeInfo(TypeId id);
-    // do not save the returned string reference, add a data type and then use the reference.
-    // it may be invalid.
-    // const std::string* getTypeId(TypeId id);
 
     static bool IsPointer(TypeId id);
     static bool IsPointer(Token& token);
     static bool IsSlice(TypeId id);
     static bool IsSlice(Token& token);
-    
     // true if id is one of u8-64, i8-64
     static bool IsInteger(TypeId id);
     // will return false for non number types
     static bool IsSigned(TypeId id);
+    
+    // body is now owned by AST. Do not use it.
+    void appendToMainBody(ASTBody* body);
 
-    std::vector<std::string> constStrings;
+    // std::vector<std::string> constStrings;
 
     ASTBody* createBody();
     ASTFunction* createFunction(const std::string& name);

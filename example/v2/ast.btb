@@ -3,20 +3,44 @@
 // @enable preprocessor
 // @disable interpreter
 
+// @import .\module.btb
 
-struct C {
-    a: i32,
-}
+// arr: Array;
+
+// arr.ptr = alloc(8);
+// arr.size = 8;
+
+// #define TYPE u64
+#define TYPE i32
 
 struct B {
-    int: i32,
-    c: C,
+    n : TYPE
 }
 struct A {
-    slice: i32[],
-    b: B,
-    a: bool,
+    ol: TYPE,
+    b: B
 }
+
+// a: A = A{3};
+a: A = A{3,B{5}};
+
+b = 9
+
+k = a.ol
+
+// struct C {
+//     a: i32,
+// }
+
+// struct B {
+//     int: i32,
+//     c: C,
+// }
+// struct A {
+//     slice: i32[],
+//     b: B,
+//     a: bool,
+// }
 
 
 

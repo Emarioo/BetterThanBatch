@@ -46,6 +46,16 @@ const char* InstToStringX(int type){
     #undef CASE
     return "BC_?";
 }
+int RegBySize(int regName, int size){
+    if(size==1) return ENCODE_REG_TYPE(BC_REG_8) | regName;
+    else if(size==2) return ENCODE_REG_TYPE(BC_REG_16) | regName;
+    else if(size==4) return ENCODE_REG_TYPE(BC_REG_32) | regName;
+    else if(size==8) return ENCODE_REG_TYPE(BC_REG_64) | regName;
+    else {
+        Assert("Bad size, only 1,2,4,8 are allowed")
+        return 0;
+    }
+}
 
 bool BytecodeX::removeLast(){
     if(codeSegment.used>0)
@@ -181,9 +191,16 @@ void BytecodeX::addDebugText(const char* str, int length, u32 instructionIndex){
             return;
         memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
     }
-    int index = debugText.size();
-    debugText.push_back(std::string(str,length));
-    *((u32*)debugSegment.data + instructionIndex) = index + 1;
+    int oldIndex = *((u32*)debugSegment.data + instructionIndex);
+    if(oldIndex==0){
+        int index = debugText.size();
+        debugText.push_back(std::string(str,length));
+        *((u32*)debugSegment.data + instructionIndex) = index + 1;
+    }else{
+        Assert((int)debugText.size()<=oldIndex)
+        debugText[oldIndex-1] += "\n"; // should line feed be forced?
+        debugText[oldIndex-1] += std::string(str,length);
+    }
 }
 const char* BytecodeX::getDebugText(u32 instructionIndex){
     using namespace engone;

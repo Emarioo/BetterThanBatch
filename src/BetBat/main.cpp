@@ -28,8 +28,16 @@ void print_help(){
 int main(int argc, const char** argv){
     using namespace engone;
 
-    struct AE{bool a; u64 ok; bool c;};
-    log::out << " "<<sizeof(AE) << "\n";
+    // uint64 a = 1;
+    // int b = 2;
+    // int c = 3;
+    // uint64 d = 4;
+    // auto p0 = &a;
+    // auto p1 = &b;
+    // auto p2 = &c;
+    // auto p3 = &d;
+    
+    // return 0;
 
     log::out.enableReport(false);
 

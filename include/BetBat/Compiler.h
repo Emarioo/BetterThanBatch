@@ -15,6 +15,24 @@
 #include "BetBat/Context.h"
 
 
+struct CompileInfo {
+    void cleanup();
+    
+    
+    // NOTE: struct since more info may be added to each import name
+    struct FileInfo{
+        TokenStream* stream;  
+    };
+    std::unordered_map<std::string, FileInfo> tokenStreams;
+    bool addStream(TokenStream* stream);
+    FileInfo* getStream(const std::string& name);
+    
+    int errors=0;
+    int lines=0; // based on token suffix, probably shouldn't be
+    int readBytes=0; // from the files
+    AST* ast=0;
+};
+
 // compiles based on file format/extension
 void CompileFile(const char* path);
 

@@ -162,6 +162,32 @@ bool TokenStream::copy(TokenStream& out){
     copyInfo(out);
     return true;
 }
+
+TokenStream* TokenStream::copy(){
+    auto out = TokenStream::Create();
+    out->tokenData.resize(tokenData.max);
+    out->tokenData.used = tokenData.used;
+    
+    BROKEN;
+    // out.cleanup();
+    // if(!out.tokenData.resize(tokenData.max))
+    //     return false;
+    // out.tokenData.used = tokenData.used;
+    // memcpy(out.tokenData.data,tokenData.data,tokenData.max);
+    // if(!out.tokens.resize(tokenData.max))
+    //     return false;
+    // out.tokens.used = tokens.used;
+    // memcpy(out.tokens.data,tokens.data,tokens.max);
+    
+    // for(int i=0;i<(int)tokens.used;i++){
+    //     Token& tok = *((Token*)tokens.data+i);
+    //     Token& outTok = *((Token*)out.tokens.data+i);
+    //     uint64 offset = (uint64)tok.str-(uint64)tokenData.data;
+    //     outTok.str = (char*)out.tokenData.data + offset;
+    // }
+    // copyInfo(out);
+    return 0;
+}
 bool TokenStream::add(const char* str){
     if(tokens.max == tokens.used){
         if(!tokens.resize(tokens.max*2 + 100))
@@ -333,36 +359,45 @@ bool TokenStream::append(Token& tok){
     tokenData.used += tok.length;
     return true;
 }
-
-TokenStream TokenStream::Tokenize(const char* text, int length, TokenStream* optionalBase){
-    engone::Memory temp{1};
-    temp.data = (char*)text;
-    temp.max = length;
-    temp.used = length;
-    return Tokenize(temp,optionalBase);
+TokenStream* TokenStream::Tokenize(const std::string& filePath){
+    engone::Memory memory = ReadFile(filePath.c_str());
+    if(!memory.data)
+        return 0;
+    auto stream = Tokenize((char*)memory.data,memory.used);
+    stream->streamName = filePath;
+    memory.resize(0);
+    return stream;
 }
-TokenStream TokenStream::Tokenize(const engone::Memory& textData, TokenStream* optionalIn){
+TokenStream* TokenStream::Create(){
+    return new TokenStream();
+}
+void TokenStream::Destroy(TokenStream* stream){
+    // stream->cleanup() not needed
+    delete stream;   
+}
+TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* optionalIn){
     using namespace engone;
-    if(textData.m_typeSize!=1) {
-        log::out << "Tokenize : size of type in textData must be one (was "<<textData.m_typeSize<<")\n";
-        return {};
-    }
     _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
     // Todo: handle errors like outTokens.add returning false
-    
-    char* text = (char*)textData.data;
-    int length = textData.used;
-    TokenStream outTokens{};
     if(optionalIn){
-        outTokens = *optionalIn;
-        outTokens.cleanup(true); // clean except for allocations   
+        log::out << log::RED << "tokenize optional in not implemented\n";   
     }
+    // char* text = (char*)textData.data;
+    // int length = textData.used;
+    TokenStream* outStream = TokenStream::Create();
+    TokenStream& outTokens = *outStream;
+    outStream->readBytes += length;
+    // TokenStream outTokens{};
+    // if(optionalIn){
+    //     outTokens = *optionalIn;
+    //     outTokens.cleanup(true); // clean except for allocations   
+    // }
     outTokens.enabled=-1; // enable all layers by default
     // Todo: do not assume token data will be same or less than textData. It's just asking for a bug
-    if(outTokens.tokenData.max<textData.used*5){
+    if((int)outTokens.tokenData.max<length*5){
         if(optionalIn)
             log::out << "Tokenize : token resize even though optionalIn was used\n";
-        outTokens.tokenData.resize(textData.used*5);
+        outTokens.tokenData.resize(length*5);
     }
     
     memset(outTokens.tokenData.data,'_',outTokens.tokenData.max); // Good indicator for issues
@@ -373,7 +408,7 @@ TokenStream TokenStream::Tokenize(const engone::Memory& textData, TokenStream* o
     int column=1;
     
     Token token = {};
-    token.str = text;
+    // token.str = text;
     token.line = line;
     token.column = column;
     
@@ -603,6 +638,7 @@ TokenStream TokenStream::Tokenize(const engone::Memory& textData, TokenStream* o
                 const char* str_enable = "enable";
                 const char* str_disable = "disable";
                 const char* str_version = "version";
+                const char* str_import = "import";
                 int type=0;
                 if(length-index>=(int)strlen(str_enable)){
                     if(0==strncmp(text+index,str_enable,strlen(str_enable))){
@@ -628,6 +664,66 @@ TokenStream TokenStream::Tokenize(const engone::Memory& textData, TokenStream* o
                             ln = column += strlen(str_version);
                         }
                     }
+                }
+                if(type==0){
+                    if(length-index>=(int)strlen(str_import)){
+                        if(0==strncmp(text+index,str_import,strlen(str_import))){
+                            type = 4;
+                            index += strlen(str_import);
+                            ln = column += strlen(str_import);
+                        }
+                    }
+                }
+                if(type==4){
+                    // @import anything\n
+                    int startIndex=-1;
+                    // TODO: Code below WILL have some edge cases not accounted for. Check it out.
+                    while(index<length){
+                        char c = text[index];
+                        char nc = 0;
+                        char pc = 0;
+
+                        if(index>0)
+                            pc = text[index-1];
+                        if(index+1<length)
+                            nc = text[index+1];
+                        index++;
+                        if(c=='\t')
+                            column+=4;
+                        else
+                            column++;
+                        if(c == '\n'){
+                            line++;
+                            column=1;
+                        }
+                        if(startIndex!=-1){
+                            if(c=='\r'||c=='\n'||index==length){
+                                int len = index-startIndex-1;
+                                Token temp{};
+                                temp.length = len;
+                                temp.str = (char*)text + startIndex;
+                                // if(outTokeimportList){
+                                outStream->importList.push_back(temp);
+                                ReplaceChar((char*)outStream->importList.back().data(),outStream->importList.back().length(),'\\','/');
+                                // }else{
+                                //     log::out << log::RED << "Import list was not available. Cannot import '"<<temp<<"'\n";   
+                                // }
+                                break;
+                            }
+                        }
+                        if(c=='\r'&&(nc=='\n'||pc=='\n')){
+                            break;
+                        }
+
+                        if(c==' '||c=='\t'){
+                            
+                        }else{
+                            if(startIndex==-1){
+                                startIndex = index-1;
+                            }
+                        }
+                    }
+                    continue;
                 }
                 if(type==3){
                     int startIndex=-1;
@@ -829,6 +925,10 @@ TokenStream TokenStream::Tokenize(const engone::Memory& textData, TokenStream* o
         outTokens.enabled &= ~LAYER_PREPROCESSOR;
         _TLOG(log::out<<log::LIME<<"Couldn't find #. Disabling preprocessor.\n";)
     }
+    
+    for(auto& str : outStream->importList){
+        _TLOG(log::out << log::LIME<<"@import '"<<str<<"'\n";)
+    }   
 
     outTokens.lines = line;
     outTokens.finalizePointers();
@@ -871,44 +971,45 @@ TokenStream TokenStream::Tokenize(const engone::Memory& textData, TokenStream* o
     
 Tokenize_END:
     
-    return outTokens;
+    return outStream;
 }
 
 int cmpd(const void* a, const void* b){ return (int)(1000000000*(*(double*)a - *(double*)b));}
 void PerfTestTokenize(const engone::Memory& textData, int times){
     using namespace engone;
-    TokenStream base = TokenStream::Tokenize(textData); // initial tokenize to get sufficient allocations
+    log::out <<log::RED<< __FUNCTION__ <<" is broken\n";
+    // TokenStream base = TokenStream::Tokenize(textData); // initial tokenize to get sufficient allocations
     
-    log::out << "start\n";
-    double* measures = new double[times];
-    auto startT = engone::MeasureSeconds();
-    for(int i=0;i<times;i++){
-        // heap allocation is included.
-        auto mini = engone::MeasureSeconds();
-        // base = Tokenize(textData);
-        base = TokenStream::Tokenize(textData,&base);
-        measures[i] = engone::StopMeasure(mini);
-    }
-    double total = engone::StopMeasure(startT);
-    log::out << "end\n";
+    // log::out << "start\n";
+    // double* measures = new double[times];
+    // auto startT = engone::MeasureSeconds();
+    // for(int i=0;i<times;i++){
+    //     // heap allocation is included.
+    //     auto mini = engone::MeasureSeconds();
+    //     // base = Tokenize(textData);
+    //     base = TokenStream::Tokenize(textData,0,&base);
+    //     measures[i] = engone::StopMeasure(mini);
+    // }
+    // double total = engone::StopMeasure(startT);
+    // log::out << "end\n";
     
-    qsort(measures,times,sizeof(double),cmpd);
+    // qsort(measures,times,sizeof(double),cmpd);
     
-    log::out << __FUNCTION__<<" total: "<<FormatTime(total)<<"\n";
-    double sum=0;
-    double minT=9999999;
-    double maxT=0;
-    double median = measures[(times+1)/2];
-    for(int i=0;i<times;i++){
-        sum+=measures[i];
-        if(minT>measures[i]) minT = measures[i];
-        if(maxT<measures[i]) maxT = measures[i];
-        // log::out << " "<<FormatTime(measures[i])<<"\n";
-    }
-    log::out << "   average on individuals: "<<FormatTime(sum/times)<<"\n";
-    log::out << "   min/max: "<<FormatTime(minT)<<" / "<<FormatTime(maxT)<<"\n";
-    log::out << "   median: "<<FormatTime(median)<<"\n";
-    base.cleanup();
+    // log::out << __FUNCTION__<<" total: "<<FormatTime(total)<<"\n";
+    // double sum=0;
+    // double minT=9999999;
+    // double maxT=0;
+    // double median = measures[(times+1)/2];
+    // for(int i=0;i<times;i++){
+    //     sum+=measures[i];
+    //     if(minT>measures[i]) minT = measures[i];
+    //     if(maxT<measures[i]) maxT = measures[i];
+    //     // log::out << " "<<FormatTime(measures[i])<<"\n";
+    // }
+    // log::out << "   average on individuals: "<<FormatTime(sum/times)<<"\n";
+    // log::out << "   min/max: "<<FormatTime(minT)<<" / "<<FormatTime(maxT)<<"\n";
+    // log::out << "   median: "<<FormatTime(median)<<"\n";
+    // base.cleanup();
 }
 void PerfTestTokenize(const char* file, int times){
     auto text = ReadFile(file);

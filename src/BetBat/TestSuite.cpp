@@ -87,18 +87,19 @@ bool hasTokens(TokenStream& tokens, int min, int max=-1){
 #define TEST_SUCCESS 1
 struct TestData {
     engone::Memory text{0};
-    TokenStream tokens{};
+    TokenStream* tokens=0;
     Bytecode bytecode{};
     Context context{};
     int testValueIndex = 0;
     
     void init(const char* path){
-        text = ReadFile(path);
-        tokens = TokenStream::Tokenize(text);
+        // text = ReadFile(path);
+        tokens = TokenStream::Tokenize(path);
     }
     ~TestData(){
         text.resize(0);
-        tokens.cleanup();
+        // tokens.cleanup();
+        delete tokens;
         bytecode.cleanup();
         context.cleanup();
     }
@@ -109,10 +110,10 @@ int TestSumtest(TestData* data){
     using namespace engone;
     int err=0;
 
-    if(!hasTokens(data->tokens,13))
+    if(!hasTokens(*data->tokens,13))
         return TEST_FAILED;
 
-    data->bytecode = GenerateScript(data->tokens,&err);
+    data->bytecode = GenerateScript(*data->tokens,&err);
     if(err||
         !hasConstraint(data->bytecode,1,1)||
         !hasConstraint(data->bytecode,2,1)||

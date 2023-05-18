@@ -8,6 +8,23 @@
 
 #define GEN_SUCCESS 0
 #define GEN_ERROR 1
+
+
+void GenInfo::addPop(int reg){
+    code->add({BC_POP,(u8)reg});
+}
+void GenInfo::addPush(int reg){
+    int type = DECODE_REG_TYPE(reg);
+    int size = 1<<type;
+    int diff = relativeStackPointer % size;
+    if(diff!=0){
+        relativeStackPointer += size - diff;
+        // code->addDebugText("align sp");
+    }
+    code->add({BC_PUSH,(u8)reg});
+    
+}
+
 GenInfo::Variable* GenInfo::addVariable(const std::string& name){
     using namespace engone;
     // log::out << "count "<<identifiers.size()<<"\n";
@@ -163,11 +180,19 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
         if(expression->typeId>=AST_UINT8 && expression->typeId<=AST_INT64){
             i32 val = expression->i64Value;
             
-            // TODO: immediate only allows 32 bits. but what about larger values?
+            
+            // TODO: immediate only allows 32 bits. What about larger values?
             info.code->addDebugText("  expr push int");
+            
             info.code->add({BC_LI,BC_REG_RAX});
             info.code->addIm(val);
             info.code->add({BC_PUSH,BC_REG_RAX});
+            
+            // TypeInfo* typeInfo = info.ast->getTypeInfo(expression->typeId);
+            // u8 reg = RegBySize(1,typeInfo->size());
+            // info.code->add({BC_LI,reg});
+            // info.code->addIm(val);
+            // info.addPush(reg);
         } else if(expression->typeId==AST_BOOL){
             bool val = expression->boolValue;
             
@@ -240,7 +265,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 *outTypeId = AST_VOID;
                 return GEN_ERROR;
             }
-        }  else if(expression->typeId==AST_FNCALL){
+        } else if(expression->typeId==AST_FNCALL){
             // check data type and get it
             auto id = info.getIdentifier(*expression->name);
             if(id && id->type == GenInfo::Identifier::FUNC){
@@ -467,13 +492,15 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 ||(AST::IsPointer(castType)&& AST::IsPointer(ltype))
                 ||(AST::IsPointer(castType)&& (ltype == (TypeId)AST_INT64||ltype==(TypeId)AST_UINT64||ltype==(TypeId)AST_INT32))
                 ||((castType == (TypeId)AST_INT64||castType==(TypeId)AST_UINT64||ltype==(TypeId)AST_INT32) && AST::IsPointer(ltype))
-            ){
+            ) {
                 // data is fine as it is, just change the data type
             } else if(AST::IsInteger(castType)&&ltype==AST_FLOAT32){
+                #define POP k
+                
                 info.code->add({BC_POP,BC_REG_RAX});
                 info.code->add({BC_CASTI64,BC_REG_RAX,BC_REG_RAX});
                 info.code->add({BC_PUSH,BC_REG_RAX});
-            }else if(castType == AST_FLOAT32 && AST::IsInteger(ltype)){
+            } else if(castType == AST_FLOAT32 && AST::IsInteger(ltype)){
                 info.code->add({BC_POP,BC_REG_RAX});
                 info.code->add({BC_CASTF32,BC_REG_RAX,BC_REG_RAX});
                 info.code->add({BC_PUSH,BC_REG_RAX});
@@ -496,6 +523,8 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
         }else if(expression->typeId==AST_MEMBER){
             // TODO: if propfrom is a variable we can directly take the member from it
             //  instead of pushing struct to the stack and then getting it.
+            
+            info.code->addDebugText("ast-member expr");
             TypeId exprId;
             int result = GenerateExpression(info,expression->left,&exprId);
             if(result!=GEN_SUCCESS) return result;
@@ -506,12 +535,13 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 
                 if(meminfo.index==-1){
                     *outTypeId = AST_VOID;
-                    ERRT(expression->tokenRange.firstToken) << *expression->name<<" is not a member in "<<info.ast->getTypeInfo(ltype)->name<<"\n";
+                    ERRT(expression->tokenRange.firstToken) << *expression->name<<" is not a member of struct "<<info.ast->getTypeInfo(ltype)->name<<"\n";
                     return GEN_ERROR;
                 }
                 
                 ltype = meminfo.typeId;
                 
+                info.code->addDebugText("ast-member extract");
                 for(int i=0;i<(int)typeInfo->astStruct->members.size();i++){
                     if(i==meminfo.index)
                         info.code->add({BC_POP,BC_REG_RAX});
@@ -535,7 +565,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 *outTypeId = AST_INT32;
             } else {
                 *outTypeId = AST_VOID;
-                ERRT(expression->tokenRange.firstToken) << "property access only works on structs and enums. "<<info.ast->getTypeInfo(exprId)->name<<" isn't one (astStruct/Enum was null at least)\n";
+                ERRT(expression->tokenRange.firstToken) << "member access only works on structs and enums. "<<info.ast->getTypeInfo(exprId)->name<<" isn't one (astStruct/Enum was null at least)\n";
                 return GEN_ERROR;
             }
 
@@ -738,17 +768,28 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 var->typeId = arg.typeId;
                 TypeInfo* typeInfo = info.ast->getTypeInfo(arg.typeId);
                 if(typeInfo->astStruct) {
+                    int diff = offset%typeInfo->size();
+                    if(diff!=0)
+                        offset += typeInfo->size() - diff;
+                    
                     var->frameOffset = GenInfo::ARG_OFFSET + offset + typeInfo->astStruct->size - 8;
                     // _GLOG(log::out << " "<<arg.name<<" "<<var->frameOffset<<"\n";)
-                    offset+=typeInfo->astStruct->size;
+                    offset+=typeInfo->size();
                 }else{
+                    // fix alignment
+                    int diff = offset%typeInfo->size();
+                    if(diff!=0)
+                        offset += typeInfo->size() - diff;
+                    
                     var->frameOffset = GenInfo::ARG_OFFSET + offset;
-                    offset+=8;
+                    
+                    offset+=typeInfo->size();
                 }
                 _GLOG(log::out << " "<<arg.name<<" "<<var->frameOffset<<"\n";)
             }
             _GLOG(log::out<<"\n";)
         }
+        // info.currentFrameOffset = 0;
         if(func->astFunc->returnTypes.size()!=0){
             _GLOG(log::out << "space for "<<func->astFunc->returnTypes.size()<<" return value(s) (struct may cause multiple push)\n");
             for(int i=0;i<(int)func->astFunc->returnTypes.size();i++){
@@ -897,11 +938,10 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                         // new declaration
                         // info.code->add({BC_POP,BC_REG_RAX});
                         // info.code->add({BC_PUSH,BC_REG_RAX});
-                        int count = (typeInfo->size()+7)/8; // +7 so that types not divisible by 8 is rounded up
-                        // if(count>1){
-                            info.currentFrameOffset-=count*8;
-                        // }
+                        int minSize = ((typeInfo->size()+7)/8) * 8; // +7 so that types not divisible by 8 is rounded up
+                        info.currentFrameOffset-=minSize;
                         // info.currentFrameOffset-=8;
+                        
                         var->frameOffset = info.currentFrameOffset;
                         _GLOG(log::out<<"declare "<<*statement->name<<" at "<<var->frameOffset;)
                         // NOTE: inconsistent
@@ -920,12 +960,12 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                             info.code->add({BC_ADDI,BC_REG_FP,BC_REG_RBX,BC_REG_RBX}); // rbx = fp + offset
                             info.code->add({BC_MOV_RM,BC_REG_RDX,BC_REG_RBX});
                         }else{
-                            int offset=typeInfo->astStruct->size;
+                            // int offset=typeInfo->astStruct->size;
                             for(int i=typeInfo->astStruct->members.size()-1;i>=0;i--){
                                 auto& member = typeInfo->astStruct->members[i];
                                 info.code->add({BC_POP,BC_REG_RDX});
                                 info.code->add({BC_LI,BC_REG_RBX});
-                                info.code->addIm(var->frameOffset-i*8);
+                                info.code->addIm(var->frameOffset + member.offset);
                                 info.code->add({BC_ADDI,BC_REG_FP,BC_REG_RBX,BC_REG_RBX}); // rbx = fp + offset
                                 info.code->add({BC_MOV_RM,BC_REG_RDX,BC_REG_RBX});
                             }
@@ -957,6 +997,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     return GEN_ERROR;
                 }
                 
+                info.code->addDebugText("prop-assign");
                 TypeId rtype=0;
                 result = GenerateExpression(info, statement->rvalue,&rtype);
                 if(result!=GEN_SUCCESS) return result;
@@ -990,6 +1031,8 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 }
                 auto& member = typeInfo->astStruct->members[meminfo.index];
                 
+                
+                info.code->addDebugText("prog-assign member expr");
                 //-- generate right side
                 TypeId typeId;
                 int result = GenerateExpression(info,statement->rvalue,&typeId);
@@ -1001,6 +1044,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     ERRT(statement->rvalue->tokenRange.firstToken) << "cannot cast to "<<memtypename<<"\n";
                 }
 
+                info.code->addDebugText("prop-assign member push");
                 //-- generate left side
                 info.code->add({BC_POP,BC_REG_RAX});
                 
@@ -1227,39 +1271,44 @@ BytecodeX* Generate(AST* ast, int* err){
     fun->address = BC_EXT_PRINTI;
     }
 
-    EvaluateTypes(info,ast,0);
+    // EvaluateTypes(ast,0);
 
     //-- Append static data
-    for(int i=0;i<(int)info.ast->constStrings.size();i++){
-        auto& str = info.ast->constStrings[i];
-        int offset = info.code->appendData(str.data(),str.length());
-        info.constStringMapping.push_back(offset);
-    }
+    // for(int i=0;i<(int)info.ast->constStrings.size();i++){
+    //     auto& str = info.ast->constStrings[i];
+    //     int offset = info.code->appendData(str.data(),str.length());
+    //     info.constStringMapping.push_back(offset);
+    // }
 
-    int result = GenerateBody(info,info.ast->body);
+    int result = GenerateBody(info,info.ast->mainBody);
     // TODO: What to do about result? nothing?
     
     if(info.errors)
         log::out << log::RED<<"Generator failed with "<<info.errors<<" errors\n";
     if(err)
-        *err = info.errors;
+        *err += info.errors;
     return info.code;
 }
-bool EvaluateTypes(GenInfo& info, AST* ast, int* err){
+bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
     using namespace engone;
+    if(!body){
+        return false;
+    }
+    
     //-- complete structs
     bool completedStructs=false;
     while(!completedStructs){
         completedStructs = true;
         bool changed=false;
-        ASTStruct* nextStruct=ast->body->structs;
+        ASTStruct* nextStruct=body->structs;
+        if(!nextStruct) changed=true;
         while(nextStruct){
             ASTStruct* astStruct = nextStruct;
             nextStruct = nextStruct->next;
 
             if(!astStruct->typeComplete){
                 TypeInfo* structInfo = ast->getTypeInfo(*astStruct->name);
-                // log::out << "Evaluating "<<*astStruct->name<<"\n";
+                log::out << "Evaluating "<<*astStruct->name<<"\n";
                 astStruct->typeComplete = true;
                 int offset=0;
                 int alignedSize=0; // offset will be aligned to match this at the end
@@ -1292,7 +1341,7 @@ bool EvaluateTypes(GenInfo& info, AST* ast, int* err){
                     if(misalign!=0){
                         offset+=typeInfo->size()-misalign;
                     }
-                    // log::out << " "<<offset<<": "<<member.name<<" ("<<typeInfo->size()<<" bytes)\n";
+                    log::out << " "<<offset<<": "<<member.name<<" ("<<typeInfo->size()<<" bytes)\n";
                     member.offset = offset;
                     offset+=typeInfo->size();
                 }
@@ -1314,9 +1363,10 @@ bool EvaluateTypes(GenInfo& info, AST* ast, int* err){
             }
         }
         if(!changed){
-            ERR() << "Some types could not be evaluated\n";
-            break;
+            err+=1; // TODO: shouldn't be 1. add how many errors actually occurred
+            log::out << log::RED << "Some types could not be evaluated\n";
+            return false;
         }
     }
-    return GEN_SUCCESS;
+    return true;
 }

@@ -13,23 +13,23 @@
 #define INT_DECODE(I) (I>>3)
 
 bool PreprocInfo::end(){
-    return index==(int)inTokens.length();
+    return index==(int)inTokens->length();
 }
 Token& PreprocInfo::next(){
-    Token& temp = inTokens.get(index++);
+    Token& temp = inTokens->get(index++);
     return temp;
 }
 int PreprocInfo::at(){
     return index-1;
 }
 int PreprocInfo::length(){
-    return inTokens.length();
+    return inTokens->length();
 }
 Token& PreprocInfo::get(int index){
-    return inTokens.get(index);
+    return inTokens->get(index);
 }
 Token& PreprocInfo::now(){
-    return inTokens.get(index-1);   
+    return inTokens->get(index-1);   
 }
 RootMacro* PreprocInfo::matchMacro(Token& token){
     if(token.flags&TOKEN_QUOTED)
@@ -109,10 +109,10 @@ bool EvalInfo::matchSuperArg(Token& name, CertainMacro*& superMacro, Arguments*&
     return false;
 }
 void PreprocInfo::addToken(Token inToken){
-    uint64 offset = tokens.tokenData.used;
-    tokens.append(inToken);
+    uint64 offset = outTokens->tokenData.used;
+    outTokens->append(inToken);
     inToken.str = (char*)offset;
-    tokens.add(inToken);
+    outTokens->add(inToken);
 }
 int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
     using namespace engone;
@@ -815,10 +815,10 @@ int ParseMacro(PreprocInfo& info, int attempt){
     for(int i=0;i<(int)evalInfo.output.size();i++){
         Token baseToken = info.get(evalInfo.output[i]);
         baseToken.flags = evalInfo.output[i].flags;
-        uint64 offset = info.tokens.tokenData.used;
-        info.tokens.append(baseToken);
+        uint64 offset = info.outTokens->tokenData.used;
+        info.outTokens->append(baseToken);
         baseToken.str = (char*)offset;
-        // baseToken.str = (char*)info.tokens.tokenData.data + offset;
+        // baseToken.str = (char*)info.outTokens->tokenData.data + offset;
         
         while(true){
             Token nextToken{};
@@ -828,14 +828,14 @@ int ParseMacro(PreprocInfo& info, int attempt){
             if(nextToken==".."){
                 if(i+2<(int)evalInfo.output.size()){
                     Token token2 = info.get(evalInfo.output[i+2]);
-                    info.tokens.append(token2);
+                    info.outTokens->append(token2);
                     baseToken.length += token2.length;
                     i+=2;
                     continue;
                 }
                 i++;
             }
-            info.tokens.add(baseToken);
+            info.outTokens->add(baseToken);
             break;
         }
 
@@ -877,26 +877,27 @@ int ParseToken(PreprocInfo& info){
     info.addToken(token);
     return PARSE_SUCCESS;
 }
-void Preprocess(TokenStream& inTokens, int* error){
+TokenStream* Preprocess(TokenStream* inTokens, int* error){
     using namespace engone;
     _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
     
     PreprocInfo info{};
-    info.tokens.tokenData.resize(inTokens.tokenData.max*10); // hopeful estimation
+    
+    info.outTokens = TokenStream::Create(); 
+    info.outTokens->tokenData.resize(inTokens->tokenData.max*10); // hopeful estimation
     info.inTokens = inTokens; // Note: don't modify inTokens
     
     while(!info.end()){
         int result = ParseToken(info);
     }
-    info.tokens.lines = info.inTokens.lines;
-    
+    // info.tokens->lines = info->inTokens.lines;
+    // info.inTokens.
     if(info.errors)
         log::out << log::RED << "Preprocessor failed with "<<info.errors<<" errors\n";
-    info.tokens.finalizePointers();
+    info.outTokens->finalizePointers();
     // log::out << log::BLUE<<"### # # #  #  #  #    #    #\n";
-    inTokens.copyInfo(info.tokens);
-    inTokens.cleanup();
-    inTokens = info.tokens;
+    inTokens->copyInfo(*info.outTokens);
     if(error)
         *error = info.errors;
+    return info.outTokens;
 }
