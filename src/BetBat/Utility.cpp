@@ -1,6 +1,8 @@
 #include "BetBat/Utility.h"
 #include "Engone/PlatformLayer.h"
 
+#include <math.h>
+
 engone::Memory ReadFile(const char* path){
     engone::Memory buffer{1};
     uint64 fileSize;

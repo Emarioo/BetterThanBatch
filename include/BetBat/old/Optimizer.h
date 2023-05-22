@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BetBat/Parser.h"
+#include "BetBat/old/GenParser.h"
 
 // returns false if something failed.
 // code may be modified during failure.

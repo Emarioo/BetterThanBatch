@@ -1,8 +1,8 @@
-#include "BetBat/TestSuite.h"
-#include "BetBat/Interpreter.h"
-#include "BetBat/Context.h"
-#include "BetBat/Parser.h"
-#include "BetBat/GenParser.h"
+#include "BetBat/old/TestSuite.h"
+// #include "BetBat/Interpreter.h"
+#include "BetBat/old/Context.h"
+// #include "BetBat/Parser.h"
+#include "BetBat/old/GenParser.h"
 #include "BetBat/Utility.h"
 
 #define SERR engone::log::out << engone::log::RED<<"Error: "

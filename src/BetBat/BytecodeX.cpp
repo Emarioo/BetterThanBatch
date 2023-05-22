@@ -15,6 +15,7 @@ const char* InstToStringX(int type){
         CASE(BC_MULF)
         CASE(BC_DIVI)
         CASE(BC_DIVF)
+        CASE(BC_INCR)
         
         CASE(BC_JMP)
         CASE(BC_CALL)
@@ -40,8 +41,10 @@ const char* InstToStringX(int type){
         CASE(BC_BOR)
         CASE(BC_BAND)
         
-        CASE(BC_CASTF32)
-        CASE(BC_CASTI64)
+        CASE(BC_CAST)
+
+        CASE(BC_ZERO_MEM)
+        CASE(BC_MEMCPY)
     }
     #undef CASE
     return "BC_?";
@@ -56,7 +59,6 @@ int RegBySize(int regName, int size){
         return 0;
     }
 }
-
 bool BytecodeX::removeLast(){
     if(codeSegment.used>0)
         return false;
@@ -123,8 +125,15 @@ const char* RegToStr(u8 reg){
 }
 void InstructionX::print(){
     using namespace engone;
-    
-    log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::SILVER;
+
+    if(opcode==BC_INCR)
+        log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (i8)op1 << log::SILVER;
+    else if(opcode==BC_ZERO_MEM)
+        log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::SILVER;
+    else if(opcode==BC_CAST)
+        log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<op0<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::SILVER;
+    else
+        log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::SILVER;
     
     // auto color = log::out.getColor();
     // if(type==BC_NUM||type==BC_STR||type==BC_SUBSTR||type==BC_COPY)

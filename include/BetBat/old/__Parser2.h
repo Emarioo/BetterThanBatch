@@ -1,9 +1,9 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
-#include "BetBat/Value.h"
-#include "BetBat/ExternalCalls.h"
-#include "BetBat/Bytecode.h"
+#include "BetBat/old/Value.h"
+#include "BetBat/old/ExternalCalls.h"
+#include "BetBat/old/Bytecode.h"
 #include "BetBat/AST.h"
 
 #include <unordered_map>

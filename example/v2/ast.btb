@@ -12,7 +12,6 @@
 
 // #define TYPE u64
 #define TYPE i32
-
 struct B {
     n : TYPE
 }
@@ -20,13 +19,47 @@ struct A {
     ol: TYPE,
     b: B
 }
-
-// a: A = A{3};
 a: A = A{3,B{5}};
+// b = 9
+a.b.ol = 9
 
-b = 9
+printi(a.ol)
+// printi(a.b.n)
 
-k = a.ol
+// k = a.ol
+
+// struct A {
+//     a: i32,
+//     // b: i64,
+//     c: i32,
+// }
+// fn print(a: A) {
+//     printi(a.a)
+//     // printi(a.b)
+//     printi(a.c)
+// }
+
+// print(A{1,cast<i64>2,3})
+
+// fn te(a: i32, b: i8) -> i32 {
+// // fn te(a: i32, b: u8, c: u16, d: i32) -> i32 {
+//     return 29 + a + cast<i32>b
+// }
+
+// a = te(22,-33)
+// // a: i8 = 29
+// printi(a)
+
+// c: i8 = 22
+// a = A{55,66}
+
+// k = a.c
+// k = c
+// k = b
+
+// a: A = A{1,cast<i64>2,3};
+// i32 = 5;
+// i64 = 10;
 
 // struct C {
 //     a: i32,

@@ -50,7 +50,26 @@ void* Interpreter::getReg(u8 id){
     Assert("tried to access bad register")
     return 0;
 }
-
+void yeah(int reg, void* from, void* to){
+    using namespace engone;
+    int size = DECODE_REG_TYPE(reg);
+    if(size==BC_REG_8 ){
+        *((u8* ) to) = *((u8* ) from);
+        _ILOG(log::out << (*(i8*)to);)
+    }else if(size==BC_REG_16) {
+        *((u16*) to) = *((u16*) from);
+        _ILOG(log::out << (*(i16*)to);)
+    }else if(size==BC_REG_32)   { 
+         *((u32*) to) = *((u32*) from);
+         _ILOG(log::out << (*(i32*)to);)
+    }else if(size==BC_REG_64){
+         *((u64*) to) = *((u64*) from);
+        _ILOG(log::out << (*(i64*)to);)
+    }else 
+        log::out <<log::RED <<"bad set to from\n";
+        
+    // _ILOG(log::out << (*(i64*)to)<<"\n";)
+}
 void Interpreter::execute(BytecodeX* bytecode){
     using namespace engone;
     if(!bytecode){
@@ -70,13 +89,7 @@ void Interpreter::execute(BytecodeX* bytecode){
     _ILOG(log::out << "sp = "<<sp<<"\n";)
     
     // u64* savedFp = 0;
-    #define SET_TO_FROM(reg)\
-    *((u64*) to) = 0;\
-    if(DECODE_REG_TYPE(reg)==BC_REG_8 ) *((u8* ) to) = *((u8* ) from);\
-    if(DECODE_REG_TYPE(reg)==BC_REG_16) *((u16*) to) = *((u16*) from);\
-    if(DECODE_REG_TYPE(reg)==BC_REG_32) *((u32*) to) = *((u32*) from);\
-    if(DECODE_REG_TYPE(reg)==BC_REG_64) *((u64*) to) = *((u64*) from);
-
+    
     u64 length = bytecode->codeSegment.used;
     InstructionX* codePtr = (InstructionX*)bytecode->codeSegment.data;
     while (true) {
@@ -133,14 +146,47 @@ void Interpreter::execute(BytecodeX* bytecode){
             }
             void* xp = getReg(r0);
             void* yp = getReg(r1);
-            void* outp = getReg(r2);
+            void* op = getReg(r2);
             
-            i64 x = *(i64*)xp;
-            i64 y = *(i64*)yp;
-            i64& out = *(i64*)outp;
+            i64 x = 0;
+            i64 y = 0;
+            int xs = 1<<DECODE_REG_TYPE(r0);
+            int ys = 1<<DECODE_REG_TYPE(r1);
+            int os = 1<<DECODE_REG_TYPE(r2);
+            if(xs==1){
+                x = *(i8*)xp;
+            }
+            if(xs==2){
+                x = *(i16*)xp;
+            }
+            if(xs==4){
+                x = *(i32*)xp;
+            }
+            if(xs==8){
+                x = *(i64*)xp;
+            }
+            if(ys==1){
+                y = *(i8*)yp;
+            }
+            if(ys==2){
+                y = *(i16*)yp;
+            }
+            if(ys==4){
+                y = *(i32*)yp;
+            }
+            if(ys==8){
+                y = *(i64*)yp;
+            }
+            i64 out = 0;
             
             u64 oldSp = sp;
-            
+
+            if(opcode==BC_ADDF||opcode==BC_SUBF||opcode==BC_MULF||opcode==BC_DIVF){
+                if(os!=4||xs!=4||ys!=4){
+                    log::out << log::RED << "float operation requires 4 byte register";
+                    return;
+                }
+            }
             #define GEN_OP(OP) out = x OP y; _ILOG(log::out << out << " = "<<x <<" "<< #OP << " "<<y;) break;
             #define GEN_OPF(OP) *(float*)&out = *(float*)&x OP *(float*)&y; _ILOG(log::out << *(float*)&out << " = "<<*(float*)&x <<" "<< #OP << " "<<*(float*)&y;) break;
             switch(opcode){
@@ -172,6 +218,18 @@ void Interpreter::execute(BytecodeX* bytecode){
             if(r2==BC_REG_SP){
                 SP_CHANGE(sp-oldSp)
             }
+            if(os==1){
+                *(i8*)op = out;
+            }
+            if(os==2){
+                *(i16*)op = out;
+            }
+            if(os==4){
+                *(i32*)op = out;
+            }
+            if(os==8){
+                *(i64*)op = out;
+            }
             
             // #define GEN_BIT(B, OP) if(DECODE_REG_TYPE(r0)==BC_REG_##B ) *((u##B* ) out) = *((u##B* ) x) OP *((u##B* ) y);
             // GEN_BIT(8,+)
@@ -181,6 +239,16 @@ void Interpreter::execute(BytecodeX* bytecode){
             // else
             //      log::out << log::RED<< __FILE__<<"unknown reg type\n";
             // #undef GEN_BIT
+            break;
+        }
+        case BC_INCR:{
+            u8 r0 = DECODE_REG0(inst);
+            i16 offset = (i16)((u16)DECODE_REG1(inst) | ((u16)DECODE_REG2(inst)<<8));
+            
+            i64* regValue = (i64*)getReg(r0);
+            *regValue += offset;
+            
+            _ILOG(log::out << "\n";)
             break;
         }
         case BC_NOTB:{
@@ -212,7 +280,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             // u8 offset = DECODE_REG2(inst);
 
             if(DECODE_REG_TYPE(r0) != BC_REG_64){
-                log::out << log::RED<<"mov mr must use 64 bit regs\n";
+                log::out << log::RED<<"r0 (pointer) must use 64 bit registers\n";
                 continue;   
             }
             u64* fromptr = (u64*)getReg(r0);
@@ -220,7 +288,8 @@ void Interpreter::execute(BytecodeX* bytecode){
             // void* from = (void*)(*(u64*)getReg(r0) + offset); // NOTE: Program can crash here
             void* to = getReg(r1);
             
-            SET_TO_FROM(r1)
+            // SET_TO_FROM(r1)
+            yeah(r1,from,to);
             
             // *((u64*) to) = 0;
             // if(DECODE_REG_TYPE(r1)==BC_REG_8) *((u8* ) to) = *((u8* ) from);
@@ -228,7 +297,8 @@ void Interpreter::execute(BytecodeX* bytecode){
             // if(DECODE_REG_TYPE(r1)==BC_REG_32) *((u32*) to) = *((u32*) from);
             // if(DECODE_REG_TYPE(r1)==BC_REG_64) *((u64*) to) = *((u64*) from);
 
-            _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
+            // _ILOG(log::out << " = "<<(*(u64*)to)<<"\n";)
+            _ILOG(log::out <<"\n";)
 
             break;
         }
@@ -237,15 +307,16 @@ void Interpreter::execute(BytecodeX* bytecode){
             u8 r1 = DECODE_REG1(inst);
             // u8 offset = DECODE_REG2(inst);
 
-            if(DECODE_REG_TYPE(r0) != BC_REG_64){
-                log::out << log::RED<<"mov mr must use 64 bit regs\n";
+            if(DECODE_REG_TYPE(r1) != BC_REG_64){
+                log::out << log::RED<<"r1 (pointer) must use 64 bit registers\n";
                 continue;
             }
             void* from = getReg(r0); // NOTE: Program can crash here
             void* to = (void*)(*(u64*)getReg(r1));
             // void* to = (void*)(*(u64*)getReg(r1)+offset);
 
-            SET_TO_FROM(r1)
+            // SET_TO_FROM(r0)
+            yeah(r0,from,to);
             
             // *((u64*) to) = 0;
             // if(r1&BC_REG_8 ) *((u8* ) to) = *((u8* ) from);
@@ -253,7 +324,7 @@ void Interpreter::execute(BytecodeX* bytecode){
             // if(r1&BC_REG_32) *((u32*) to) = *((u32*) from);
             // if(r1&BC_REG_64) *((u64*) to) = *((u64*) from);
 
-            _ILOG(log::out << " = "<<(*(u64* )from)<<"\n";)
+            _ILOG(log::out <<"\n";)
             
             break;
         }
@@ -267,9 +338,21 @@ void Interpreter::execute(BytecodeX* bytecode){
             void* from = getReg(r0);
             void* to = getReg(r1);
 
-            SET_TO_FROM(r1)
+            // SET_TO_FROM(r1)
+            yeah(r1,from,to);
 
             _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
+            break;
+        }
+        case BC_ZERO_MEM:{
+            u8 r0 = DECODE_REG0(inst);
+            u16 size = (u16)DECODE_REG1(inst) | ((u16)DECODE_REG2(inst)<<8);
+            
+            void* to = getReg(r0);
+
+            memset(to,0,size);
+
+            _ILOG(log::out << " [0-"<<size<<"]\n";)
             break;
         }
         case BC_LI:{
@@ -296,36 +379,50 @@ void Interpreter::execute(BytecodeX* bytecode){
         case BC_PUSH:{
             u8 r0 = DECODE_REG0(inst);
             
-            if((i64)sp-(i64)stack.data - 8 >= (i64)stack.max){ // >= takes care of underflow since we use unsigned integers
+            int rsize = 1<<DECODE_REG_TYPE(r0);
+
+            if((i64)sp-(i64)stack.data - rsize >= (i64)stack.max){
                 log::out <<log::RED<<__FILE__<< "stack "<<log::GOLD<<"overflow"<<log::RED<<" (sp: "<<
                 ((i64)sp-(i64)stack.data)<<", max: "<<
                 (stack.max)<<")\n";
                 return;
-            }else if((i64)sp-(i64)stack.data - 8 < (i64)0){ // >= takes care of underflow since we use unsigned integers
+            }else if((i64)sp-(i64)stack.data - rsize < (i64)0){
                 log::out<<log::RED <<__FILE__<< "stack "<<log::GOLD<<"underflow"<<log::RED<<" (sp: "<<
                 ((i64)sp-(i64)stack.data)<<", max: "<<
                 (stack.max)<<")\n";
                 return;
             }
             
-            void* ptr = getReg(r0);
+            sp-=rsize;
+            void* to = (void*)sp;
+            void* from = getReg(r0);
+
+            // *((u64*) sp) = *(u64*)ptr;
+
             
-            sp-=8;
-            *((u64*) sp) = *(u64*)ptr;
+            // SET_TO_FROM(r0)
+            yeah(r0,from,to);
             
-            _ILOG(log::out << (*(i64*)sp)<<"\n";)
-            SP_CHANGE(-8)
+            _ILOG(log::out <<"\n";)
+            SP_CHANGE(-rsize)
             break;
         }
         case BC_POP: {
             u8 r0 = DECODE_REG0(inst);
+
+            int rsize = 1<<DECODE_REG_TYPE(r0);
             
-            void* ptr = getReg(r0);
-            *(u64*)ptr = *((u64*) sp);
-            sp+=8; // +=1 may not work if you do +=4 after since memory would be unaligned.
+            void* to = getReg(r0);
+            void* from = (void*)sp;
+            // *(u64*)ptr = *((u64*) sp);
             
-            _ILOG(log::out << (*(i64*)ptr)<<"\n";)
-            SP_CHANGE(+8)
+            // SET_TO_FROM(r0)
+            yeah(r0,from,to);
+
+            sp+=rsize;
+            
+            _ILOG(log::out <<"\n";)
+            SP_CHANGE(+rsize)
             break;
         }
         case BC_CALL: {
@@ -432,28 +529,174 @@ void Interpreter::execute(BytecodeX* bytecode){
             }
             break;
         }
-        case BC_CASTF32: {
-            u8 r0 = DECODE_REG0(inst);
+        // case BC_CASTF32: {
+        //     u8 r0 = DECODE_REG0(inst);
+        //     u8 r1 = DECODE_REG1(inst);
+            
+        //     void* x = getReg(r0);
+        //     void* out = getReg(r1);
+            
+        //     *(float*)out = *(i64*)x;
+        //     _ILOG(log::out <<*(float*)out<<"\n";)
+        //     break;
+        // }
+        case BC_CAST: {
+            u8 type = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
+            u8 r2 = DECODE_REG2(inst);
+
+            void* xp = getReg(r1);
+            void* out = getReg(r2);
+            if(type==CAST_FLOAT_SINT){
+                int size = 1<<DECODE_REG_TYPE(r1);
+                if(size!=4){
+                    log::out << log::RED << "float needs 4 byte register\n";
+                }
+                int size2 = 1<<DECODE_REG_TYPE(r2);
+                // TODO: log out
+                if(size2==1) {
+                    *(i8*)out = *(float*)xp;
+                } else if(size2==2) {
+                    *(i16*)out = *(float*)xp;
+                } else if(size2==4) {
+                    *(i32*)out = *(float*)xp;
+                } else if(size2==8){
+                    *(i64*)out = *(float*)xp;
+                }
+            } else if(type==CAST_SINT_FLOAT){
+                int fsize = 1<<DECODE_REG_TYPE(r1);
+                int tsize = 1<<DECODE_REG_TYPE(r2);
+                if(tsize!=4){
+                    log::out << log::RED << "float needs 4 byte register\n";
+                }
+                // TODO: log out
+                if(fsize==1) {
+                    *(float*)out = *(i8*)xp;
+                } else if(fsize==2) {
+                    *(float*)out = *(i16*)xp;
+                } else if(fsize==4) {
+                    *(float*)out = *(i32*)xp;
+                } else if(fsize==8){
+                    *(float*)out = *(i64*)xp;
+                }
+            } else if(type==CAST_UINT_SINT){
+                int fsize = 1<<DECODE_REG_TYPE(r1);
+                int tsize = 1<<DECODE_REG_TYPE(r2);
+                u64 temp = 0;
+                if(fsize==1) {
+                    temp = *(u8*)xp;
+                } else if(fsize==2) {
+                    temp = *(u16*)xp;
+                } else if(fsize==4) {
+                    temp = *(u32*)xp;
+                } else if(fsize==8){
+                    temp = *(u64*)xp;
+                }
+                // TODO: log out
+                if(tsize==1) {
+                    *(i8*)out = temp;
+                } else if(tsize==2) {
+                    *(i16*)out = temp;
+                } else if(tsize==4) {
+                    *(i32*)out = temp;
+                } else if(tsize==8){
+                    *(i64*)out = temp;
+                }
+            } else if(type==CAST_SINT_UINT){
+                int fsize = 1<<DECODE_REG_TYPE(r1);
+                int tsize = 1<<DECODE_REG_TYPE(r2);
+                i64 temp = 0;
+                if(fsize==1) {
+                    temp = *(i8*)xp;
+                } else if(fsize==2) {
+                    temp = *(i16*)xp;
+                } else if(fsize==4) {
+                    temp = *(i32*)xp;
+                } else if(fsize==8){
+                    temp = *(i64*)xp;
+                }
+                // TODO: log out
+                if(tsize==1) {
+                    *(u8*)out = temp;
+                } else if(tsize==2) {
+                    *(u16*)out = temp;
+                } else if(tsize==4) {
+                    *(u32*)out = temp;
+                } else if(tsize==8){
+                    *(u64*)out = temp;
+                }
+            } else if(type==CAST_SINT_SINT){
+                int fsize = 1<<DECODE_REG_TYPE(r1);
+                int tsize = 1<<DECODE_REG_TYPE(r2);
+                i64 temp = 0;
+                if(fsize==1) {
+                    temp = *(i8*)xp;
+                } else if(fsize==2) {
+                    temp = *(i16*)xp;
+                } else if(fsize==4) {
+                    temp = *(i32*)xp;
+                } else if(fsize==8){
+                    temp = *(i64*)xp;
+                }
+                // TODO: log out
+                if(tsize==1) {
+                    *(i8*)out = temp;
+                } else if(tsize==2) {
+                    *(i16*)out = temp;
+                } else if(tsize==4) {
+                    *(i32*)out = temp;
+                } else if(tsize==8){
+                    *(i64*)out = temp;
+                }
+            }
             
-            void* x = getReg(r0);
-            void* out = getReg(r1);
-            
-            *(float*)out = *(i64*)x;
-            _ILOG(log::out <<*(float*)out<<"\n";)
+            _ILOG(log::out <<"\n";)
             break;
         }
-        case BC_CASTI64: {
-            u8 r0 = DECODE_REG0(inst);
-            u8 r1 = DECODE_REG1(inst);
-            
-            void* x = getReg(r0);
-            void* out = getReg(r1);
-            
-            *(i64*)out = *(float*)x;
-            _ILOG(log::out <<*(i64*)out<<"\n";)
+        case BC_MEMCPY: {
+            u8 r0 = DECODE_REG0(inst); // dst
+            u8 r1 = DECODE_REG1(inst); // src
+            u8 r2 = DECODE_REG2(inst); // size
+
+            void* dstp = getReg(r0);
+            void* srcp = getReg(r1);
+            void* sizep = getReg(r2);
+
+            int s0 = 1<<DECODE_REG_TYPE(r2);
+            int s1 = 1<<DECODE_REG_TYPE(r2);
+            int s2 = 1<<DECODE_REG_TYPE(r2);
+            u64 size = 0;
+            if(s2==1) {
+                size = *(u8*)sizep;
+            } else if(s2==2) {
+                size = *(u16*)sizep;
+            } else if(s2==4) {
+                size = *(u32*)sizep;
+            } else if(s2==8){
+                size = *(u64*)sizep;
+            }
+            if(s0!=8||s1!=8){
+                log::out << log::RED << "src and dst must use 8 byte registers";
+                log::out << "\n";
+                break;
+            }
+            void* dst = *(void**)dstp;
+            void* src = *(void**)srcp;
+            memcpy(dst,src,size);
+            log::out << "copied "<<size<<" bytes\n";
             break;
         }
+        // case BC_CASTI64: {
+        //     u8 r0 = DECODE_REG0(inst);
+        //     u8 r1 = DECODE_REG1(inst);
+            
+        //     void* x = getReg(r0);
+        //     void* out = getReg(r1);
+            
+        //     *(i64*)out = *(float*)x;
+        //     _ILOG(log::out <<*(i64*)out<<"\n";)
+        //     break;
+        // }
         } // for switch
     }
     auto time = StopMeasure(tp);

@@ -67,6 +67,8 @@ int ConvertInteger(Token& token){
     return num;
 }
 void TokenRange::print(){
+    if(!tokenStream) return;
+    
     for(int i=startIndex;i<endIndex;i++){
         tokenStream->get(i).print();
     }
@@ -259,7 +261,7 @@ bool TokenStream::add(Token token){
     // if(token.flags&TOKEN_SUFFIX_LINE_FEED)
     //     lines++;
     *((Token*)tokens.data + tokens.used) = token;
-    
+
     tokens.used++;
     return true;
 }

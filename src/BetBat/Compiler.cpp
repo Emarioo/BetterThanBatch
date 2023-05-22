@@ -58,7 +58,7 @@ bool ParseFile(CompileInfo& info, const std::string& name){
     if(yes){
         info.ast->appendToMainBody(body);
     }
-    info.ast->print();
+    // info.ast->print();
     return true;
 }
 

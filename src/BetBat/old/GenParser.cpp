@@ -1,4 +1,4 @@
-#include "BetBat/GenParser.h"
+#include "BetBat/old/GenParser.h"
 
 #undef ERRT
 #undef ERRLINE

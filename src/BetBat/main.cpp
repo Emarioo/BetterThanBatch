@@ -1,6 +1,6 @@
-#include "BetBat/TestGenerator.h"
+// #include "BetBat/TestGenerator.h"
 #include "BetBat/Compiler.h"
-#include "BetBat/TestSuite.h"
+// #include "BetBat/TestSuite.h"
 
 #include "BetBat/Utility.h"
 
@@ -27,6 +27,17 @@ void print_help(){
 
 int main(int argc, const char** argv){
     using namespace engone;
+    // struct T{
+    //     u8 a;
+    //     u32 b;
+    //     u8 c;
+    // };
+
+    // T t={44,55,66};
+    // u8 u=77;
+
+    // auto tp = &t;
+    // auto up = &u;
 
     // uint64 a = 1;
     // int b = 2;
@@ -57,7 +68,7 @@ int main(int argc, const char** argv){
         IfArg("-test") {
             mode = MODE_TEST;
         } else IfArg("-testall") {
-            TestSuite(tests,true);
+            // TestSuite(tests,true);
         } else IfArg("-log") {
             mode = MODE_LOG;
             SetLog(LOG_OVERVIEW,true);
@@ -109,7 +120,7 @@ int main(int argc, const char** argv){
         }
     }
     if(!tests.empty()){
-        TestSuite(tests);
+        // TestSuite(tests);
     }
     for(std::string& file : files){
         CompileScript(file.c_str());

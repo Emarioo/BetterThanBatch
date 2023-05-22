@@ -72,7 +72,7 @@ AST* AST::Create(){
     ast->addTypeInfo("i16" , AST_INT16      ,2);
     ast->addTypeInfo("i32" , AST_INT32      ,4);
     ast->addTypeInfo("i64" , AST_INT64      ,8);
-    ast->addTypeInfo("f32" , AST_FLOAT32        ,4);
+    ast->addTypeInfo("f32" , AST_FLOAT32    ,4);
     ast->addTypeInfo("bool", AST_BOOL       ,1);
     ast->addTypeInfo("char", AST_CHAR       ,1);
     ast->addTypeInfo("null", AST_NULL       ,8);
@@ -362,7 +362,7 @@ void ASTFunction::print(AST* ast, int depth){
     if(!returnTypes.empty())
         log::out << "->";
     for(auto& ret : returnTypes){
-        auto& dtname = ast->getTypeInfo(ret)->name;
+        auto& dtname = ast->getTypeInfo(ret.typeId)->name;
         log::out <<dtname<<", ";
     }
     log::out << "\n";

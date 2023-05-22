@@ -1,7 +1,5 @@
 #pragma once
 #include "BetBat/Tokenizer.h"
-#include "BetBat/Value.h"
-#include "BetBat/ExternalCalls.h"
 
 #define BC_MOV_RR 1
 #define BC_MOV_RM 2
@@ -15,6 +13,7 @@
 #define BC_MULF 15
 #define BC_DIVI 16
 #define BC_DIVF 17
+#define BC_INCR 18
 
 #define BC_JMP 20
 #define BC_CALL 21
@@ -42,8 +41,16 @@
 #define BC_BOR  61
 #define BC_BAND  62
 
-#define BC_CASTF32 90
-#define BC_CASTI64 91
+#define BC_CAST 90
+// flags for first operand
+#define CAST_FLOAT_SINT 0
+#define CAST_SINT_FLOAT 0
+#define CAST_SINT_UINT 2
+#define CAST_UINT_SINT 3
+#define CAST_SINT_SINT 4
+
+#define BC_ZERO_MEM 100
+#define BC_MEMCPY 101
 /*
 f32
 f64

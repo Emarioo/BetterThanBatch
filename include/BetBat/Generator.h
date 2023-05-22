@@ -40,9 +40,17 @@ struct GenInfo {
     
     void removeIdentifier(const std::string& name);
 
+    struct AlignInfo {
+        int diff=0;
+        int size=0;
+    };
+    std::vector<AlignInfo> stackAlignment;
     int relativeStackPointer=0;
     void addPop(int reg);
-    void addPush(int reg);    
+    void addPush(int reg);
+    void addIncrSp(i16 offset);
+    int saveStackMoment();
+    void restoreStackMoment(int moment);
 
     std::vector<int> constStringMapping;
 

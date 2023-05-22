@@ -1,7 +1,7 @@
 #pragma once
 #include "BetBat/Tokenizer.h"
-#include "BetBat/Value.h"
-#include "BetBat/ExternalCalls.h"
+#include "BetBat/old/Value.h"
+#include "BetBat/old/ExternalCalls.h"
 
 // 2 bits to indicate instruction structure
 // 3, 2 or 1 register. 2 registers can also be interpreted as

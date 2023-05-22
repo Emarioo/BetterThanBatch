@@ -1,8 +1,7 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
-#include "BetBat/ExternalCalls.h"
-#include "BetBat/Bytecode.h"
+#include "BetBat/BytecodeX.h"
 #include "BetBat/AST.h"
 
 #include <unordered_map>
@@ -21,7 +20,6 @@
 #define PARSE_SUCCESS 1
 // success but no accumulation
 #define PARSE_NO_VALUE 3
-engone::Logger& operator<<(engone::Logger& logger, Bytecode::DebugLine& debugLine);
 struct ParseInfo {
     ParseInfo(TokenStream* tokens) : tokens(tokens){}
     int index=0;

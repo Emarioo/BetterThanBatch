@@ -2,7 +2,6 @@
 
 #include "BetBat/Tokenizer.h"
 #include "BetBat/Preprocessor.h"
-#include "BetBat/Optimizer.h"
 #include "BetBat/Utility.h"
 
 // with data types
@@ -11,13 +10,13 @@
 #include "BetBat/Interpreter.h"
 
 // no data types
-#include "BetBat/GenParser.h"
-#include "BetBat/Context.h"
+#include "BetBat/old/GenParser.h"
+#include "BetBat/old/Context.h"
+#include "BetBat/old/Optimizer.h"
 
 
 struct CompileInfo {
     void cleanup();
-    
     
     // NOTE: struct since more info may be added to each import name
     struct FileInfo{
@@ -39,3 +38,5 @@ void CompileFile(const char* path);
 void CompileScript(const char* path, int extra = 1);
 void CompileInstructions(const char* path);
 void CompileDisassemble(const char* path);
+
+void CompileScriptOld(const char* path, int extra = 1);

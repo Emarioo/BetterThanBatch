@@ -1,4 +1,4 @@
-#include "BetBat/Value.h"
+#include "BetBat/old/Value.h"
 
 bool String::copy(String* str){
     if(str->memory.max<memory.used){

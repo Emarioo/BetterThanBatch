@@ -1,4 +1,4 @@
-#include "BetBat/Optimizer.h"
+#include "BetBat/old/Optimizer.h"
 
 bool OptimizeBytecode(Bytecode& code){
     using namespace engone;

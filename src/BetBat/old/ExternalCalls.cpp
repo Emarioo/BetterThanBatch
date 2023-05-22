@@ -1,5 +1,5 @@
-#include "BetBat/ExternalCalls.h"
-#include "BetBat/Interpreter.h"
+#include "BetBat/old/ExternalCalls.h"
+#include "BetBat/old/Context.h"
 #include "BetBat/Utility.h"
 
 #include <random>

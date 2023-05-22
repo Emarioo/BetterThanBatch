@@ -1,7 +1,7 @@
 #pragma once
 
-#include "BetBat/Parser.h"
-#include "BetBat/ExternalCalls.h"
+#include "BetBat/old/GenParser.h"
+#include "BetBat/old/ExternalCalls.h"
 
 const char* RefToString(int type);
 // engone::Logger operator<<(engone::Logger logger, Ref& ref);

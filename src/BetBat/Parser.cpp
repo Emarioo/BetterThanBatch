@@ -1,6 +1,7 @@
 #include "BetBat/Parser.h"
 
 #undef ERR
+#undef ERRT
 #undef ERRLINE
 #undef ERRAT
 
@@ -281,6 +282,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     astStruct = info.ast->createStruct(name);
     astStruct->tokenRange.firstToken = structToken;
     astStruct->tokenRange.startIndex = startIndex;
+    astStruct->tokenRange.tokenStream = info.tokens;
     
     Token token = info.get(info.at()+1);
     if(Equal(token,"<")){
@@ -457,6 +459,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     astEnum = info.ast->createEnum(name);
     astEnum->tokenRange.firstToken = enumToken;
     astEnum->tokenRange.startIndex = startIndex;
+    astEnum->tokenRange.tokenStream = info.tokens;
     int error = PARSE_SUCCESS;
     while (true){
         Token name = info.get(info.at()+1);
@@ -529,6 +532,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     // extra info for AST_CAST
     std::vector<TypeId> castTypes;
 
+    bool negativeNumber=false;
+
     bool expectOperator=false;
     while(true){
         Token token = info.get(info.at()+1);
@@ -553,6 +558,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.firstToken = tmp->left->tokenRange.firstToken;
                 tmp->tokenRange.startIndex = tmp->left->tokenRange.startIndex;
                 tmp->tokenRange.endIndex = info.at()+1;
+                tmp->tokenRange.tokenStream = info.tokens;
                 values.pop_back();
                 values.push_back(tmp);
                 continue;
@@ -623,6 +629,12 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 attempt=false;
                 continue;
             }
+            if(Equal(token,"-")){
+                info.next();
+                negativeNumber=true;
+                attempt = false;
+                continue;
+            }
 
             if(IsInteger(token)){
                 token = info.next();
@@ -630,10 +642,13 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 ASTExpression* tmp = 0;
                 // TODO: handle to large numbers
                 // TODO: don't always use tmp->i64Value
-                if(token.str[0]=='-'){
+                if(token.str[0]=='-' || negativeNumber){
                     //-- signed
-                    token.str++;
-                    token.length--;
+                    if(!negativeNumber){
+                        token.str++;
+                        token.length--;
+                    }
+                    negativeNumber=false;
                     
                     u64 num=0;
                     for(int i=0;i<token.length;i++){
@@ -674,14 +689,20 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
+                tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsDecimal(token)){
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(AST_FLOAT32);
                 tmp->f32Value = ConvertDecimal(token);
+                if(negativeNumber)
+                    tmp->f32Value = -tmp->f32Value;
+                negativeNumber=false;
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
+                
+                tmp->tokenRange.tokenStream = info.tokens;
             } else if(token.flags&TOKEN_QUOTED) {
                 info.next();
 
@@ -693,6 +714,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
+                
+                tmp->tokenRange.tokenStream = info.tokens;
             } else if(Equal(token,"[")) {
                 info.next();
 
@@ -735,6 +758,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
+                tmp->tokenRange.tokenStream = info.tokens;
             } else if(Equal(token,"null")){
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(AST_NULL);
@@ -742,6 +766,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
+                tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsName(token)){
                 info.next();
                 int startToken=info.at();
@@ -793,6 +818,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.firstToken = token;
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
+                    tmp->tokenRange.tokenStream = info.tokens;
                 }else if(Equal(tok,"{")){
                     // initializer
                     info.next();
@@ -838,6 +864,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.firstToken = token;
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
+                    tmp->tokenRange.tokenStream = info.tokens;
                 }else if(Equal(tok,"::")){
                     info.next();
                     
@@ -858,6 +885,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.firstToken = token;
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
+                    tmp->tokenRange.tokenStream = info.tokens;
                 } else{
                     ASTExpression* tmp = info.ast->createExpression(AST_VAR);
                     tmp->name = new std::string(token);
@@ -865,6 +893,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.firstToken = token;
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
+                    tmp->tokenRange.tokenStream = info.tokens;
                 }
             } else if(Equal(token,"(")){
                 // parse again
@@ -892,7 +921,11 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }
             }
         }
-
+        if(negativeNumber){
+            ERRT(info.get(info.at()-1)) << "Unused - before "<<token<<"?\n";
+            ERRLINE
+            return PARSE_ERROR;
+        }
         while(directOps.size()>0){
             int op = directOps.back();
             directOps.pop_back();
@@ -935,6 +968,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     val->tokenRange.firstToken = er->tokenRange.firstToken;
                     val->tokenRange.startIndex = er->tokenRange.startIndex;
                     val->tokenRange.endIndex = el->tokenRange.endIndex;
+                    val->tokenRange.tokenStream = info.tokens;
 
                     values.push_back(val);
                 }else{
@@ -957,6 +991,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 val->tokenRange.firstToken = er->tokenRange.firstToken;
                 val->tokenRange.startIndex = er->tokenRange.startIndex;
                 val->tokenRange.endIndex = el->tokenRange.endIndex;
+                val->tokenRange.tokenStream = info.tokens;
 
                 values.push_back(val);
             }else{
@@ -1014,6 +1049,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.startIndex = startIndex;
         statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;
     }else if(Equal(firstToken,"while")){
         info.next();
@@ -1034,6 +1070,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.startIndex = startIndex;
         statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;
     } else if(Equal(firstToken,"return")){
         info.next();
@@ -1077,6 +1114,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.startIndex = startIndex;
         statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;
     } else if(Equal(firstToken,"using")){
         info.next();
@@ -1114,6 +1152,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.startIndex = startIndex;
         statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;        
     }
     if(attempt)
@@ -1149,6 +1188,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
     function = info.ast->createFunction(name);
     function->tokenRange.firstToken = token;
     function->tokenRange.startIndex = startIndex;
+    function->tokenRange.tokenStream = info.tokens;
     
     while(true){
         Token& arg = info.next();
@@ -1271,6 +1311,7 @@ int ParsePropAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt)
         statement->tokenRange.firstToken = info.get(startIndex);
         statement->tokenRange.startIndex = startIndex;
         statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;
     }
     info.next();
@@ -1286,6 +1327,7 @@ int ParsePropAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt)
     statement->tokenRange.firstToken = info.get(startIndex);
     statement->tokenRange.startIndex = startIndex;
     statement->tokenRange.endIndex = info.at()+1;
+    statement->tokenRange.tokenStream = info.tokens;
     
     return PARSE_SUCCESS;
 }
@@ -1404,6 +1446,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement->tokenRange.firstToken = info.get(startIndex);
         statement->tokenRange.startIndex = startIndex;
         statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;
     }else if(!Equal(assign,"=")){
         if(attempt)
@@ -1442,6 +1485,9 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     statement->tokenRange.firstToken = info.get(startIndex);
     statement->tokenRange.startIndex = startIndex;
     statement->tokenRange.endIndex = info.at()+1;
+    statement->tokenRange.tokenStream = info.tokens;
+        
+
     return error;   
 }
 int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool predefinedBody){
@@ -1461,7 +1507,7 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool prede
 
     bodyLoc->tokenRange.firstToken = info.get(info.at()+1);
     bodyLoc->tokenRange.startIndex = info.at()+1;
-    // bodyLoc->tokenRange.tokenStream = info.tok
+    bodyLoc->tokenRange.tokenStream = info.tokens;
     
     bool scoped=false;
     Token token = info.get(info.at()+1);

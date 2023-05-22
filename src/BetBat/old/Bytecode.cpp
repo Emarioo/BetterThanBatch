@@ -1,4 +1,4 @@
-#include "BetBat/Bytecode.h"
+#include "BetBat/old/Bytecode.h"
 
 const char* InstToString(int type){
     #define INSTCASE(x) case x: return #x;
