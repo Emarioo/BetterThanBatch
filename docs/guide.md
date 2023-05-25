@@ -102,10 +102,9 @@ rand = #run random   ->   SUCCESS
 ```
 
 Functions currently only allow one string as argument.
-This will certainly change at some point. Most tokens
-after the function name will be treated as a string (even if not quoted)
-unless it is a variable name. Tokens inside paranthesis
-will be treated as an expression.
+Most tokens after the function name will be treated as	
+a string (even if not quoted) unless it is a variable name.	
+Tokens inside paranthesis will be treated as an expression.
 ```
 print Milkshake: (is) tasty    ->     Error, undefined is
 ```
@@ -195,7 +194,7 @@ the interpreter will switch between the active threads.
 The output of the code above will be mashed up ones and twos.
 
 The interpreter itself runs on one thread and does a round
-robin on which user thread to run so you willnot gain
+robin on which user thread to run so you will not gain
 any performance boost by using asynchronous functions.
 
 However, executables and external functions can be
@@ -244,18 +243,28 @@ content < ("file" + ".txt")
 
 ## Preprocessor directives
 Note that these directives remove, add and rearrange tokens.
-When testing preprocessor I would recommend only using
-the tokenizer and preprocessor. Not the parser. This way the
-parser doesn't bother you with error messages.  
-`parser.exe -steps preprocessor`
+You can use @disable and @enable as shown below to disable certain steps in the compiler.
+This is useful when experimenting with the preprocessor as the parser won't bother you with error messages.
+```
+@disable all
+@enable preprocessor
+```
 
-The best part about the preprocessor is the #define/macro part.
-If there is one thing you should read it would be that.
 
 ```
 #ifdef {name} {tokens} #endif
 ```
-Same as C.
+Simular to C.
+```
+#ifndef A
+print will print
+#else
+print won't print
+#else
+print will print
+#endif
+```
+The difference is that #else "toggles" which section will be ignored.
 
 ### Macros with #define
 ```
@@ -278,23 +287,19 @@ Say(me,Hi you)            ->   [me]: Hi you
 Say(me,01:28,You awake?)    ->    [01:28, me]: You awake?
 
 Say    ->    Error: Macro cannot have 0 arguments
+Say()    ->    equivalent to the above
 ```
-Macros can have arguments. You can define multiple macros with the same
-name but they need to have different amount of arguments. Redefining
-a macro with the same name and argument amount will overwrite the previous one.
-If you use a macro name that does exist while the argument amount doesn't you
-will get an error.
-
-RootMacro refers to the namespace of existing macros with different argument amounts. CertainMacro refers to a specific defined macro with a certain argument
-amount.
+Macros can have arguments.
+You can define multiple macros with the same name but different amount of argument.
+Redefining a macro with the same name and argument amount will overwrite the previous one.
+If you use a macro name with an amount of arguments that doesn't exist you will get an error.
 
 ```
 #define Base(A,...) A = ...
 Base(var,well, cool, ?)     ->  var = wellcool?
 ```
-Each macro namespace can have one macro with an infinite amount of arguments.
-I have not set a limit but there is of course one. Either the program crashes,
-the operating system does something about it or your computer crashes.
+Each macro name can have one macro with an unspecified amount of arguments. (VA_ARGS in C)
+There isn't a set limit. To many arguments may cause an allocation to fail which may crash the compiler.
 
 ```
 #undef {macro}
@@ -304,14 +309,16 @@ the operating system does something about it or your computer crashes.
 #undef Say 1
 #undef Say ...
 ```
-Just undef and macro name will undefine the whole macro namespace. If you have a
-number afterwards then the macro with the specific argument amount will be removed.
-Three dots will remove the infinite argument variant.
+Undef will undefine all macros of that name.
+A number afterwards specifies which macro to remove.
+Three dots will remove the unspecified argument variant.
 
 ```
 #define Nom(a,b,c) a + b + c
 #define Grub 1,2,3
 #define Grub2 1,2
+
+Nom(Args)            -> not enough arguments,   1,2,3 + ? + ?
 
 Nom(#unwrap Args)     -> 1 + 2 + 3
 Nom(9,#unwrap Grub2)  -> 9 + 1 + 2
