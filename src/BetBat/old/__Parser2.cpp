@@ -327,3 +327,42 @@
 
 //     return info.code;
 // }
+// void CompileInstructions(const char *path)
+// {
+//     using namespace engone;
+//     auto text = ReadFile(path);
+//     auto startCompileTime = engone::MeasureSeconds();
+//     Tokens toks = Tokenize(text);
+//     // toks.printTokens(14,TOKEN_PRINT_SUFFIXES|TOKEN_PRINT_QUOTES);
+//     // toks.printTokens(14,TOKEN_PRINT_LN_COL|TOKEN_PRINT_SUFFIXES);
+//     Bytecode bytecode = GenerateInstructions(toks);
+//     OptimizeBytecode(bytecode);
+//     double seconds = engone::StopMeasure(startCompileTime);
+//     log::out << "Compiled in " << FormatTime(seconds) << "\n";
+//     Context::Execute(bytecode);
+
+//     text.resize(0);
+//     toks.cleanup();
+//     bytecode.cleanup();
+// }
+// void CompileDisassemble(const char *path)
+// {
+//     using namespace engone;
+//     log::out << log::RED << __FUNCTION__ << " is broken\n";
+//     // auto text = ReadFile(path);
+//     // auto startCompileTime = engone::MeasureSeconds();
+//     // TokenStream toks = TokenStream::Tokenize(text);
+//     // Bytecode bytecode = GenerateScript(toks);
+//     // OptimizeBytecode(bytecode);
+//     // std::string textcode = Disassemble(bytecode);
+//     // double seconds = engone::StopMeasure(startCompileTime);
+//     // log::out << "Compiled in " << FormatTime(seconds) << "\n";
+//     // Memory tempBuffer{1};
+//     // tempBuffer.data = (char *)textcode.data();
+//     // tempBuffer.max = tempBuffer.used = textcode.length();
+//     // WriteFile("dis.txt", tempBuffer);
+//     // // Context::Execute(bytecode);
+//     // text.resize(0);
+//     // toks.cleanup();
+//     // bytecode.cleanup();
+// }

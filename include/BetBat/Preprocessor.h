@@ -94,4 +94,4 @@ struct PreprocInfo {
     void nextline();
 };
 
-TokenStream* Preprocess(TokenStream* tokens, int* error=0);
+void Preprocess(TokenStream* tokens, int* error=0);

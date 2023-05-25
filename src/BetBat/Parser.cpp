@@ -859,7 +859,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                             continue;   
                         }
                     }
-                    log::out << "Parse initializer "<<count<<"\n";
+                    // log::out << "Parse initializer "<<count<<"\n";
                     values.push_back(tmp);
                     tmp->tokenRange.firstToken = token;
                     tmp->tokenRange.startIndex = startToken;
@@ -1592,7 +1592,7 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool prede
 
 ASTBody* ParseTokens(TokenStream* tokens, AST* ast, int* outErr){
     using namespace engone;
-    _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
+    // _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     
     ParseInfo info{tokens};
     info.tokens = tokens;

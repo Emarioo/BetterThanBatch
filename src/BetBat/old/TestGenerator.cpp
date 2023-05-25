@@ -89,7 +89,7 @@ void TestMathExpression(int length){
 
     const char* path = "tests/mathexpr.txt";
     WriteFile(path,buffer);
-    CompileScript(path);
+    CompileSource(path,"");
 }
 void TestVariableLimit(int length){
     using namespace engone;
@@ -111,7 +111,7 @@ void TestVariableLimit(int length){
 
     const char* path = "tests/varlimit.txt";
     WriteFile(path,buffer);
-    CompileScript(path);
+    CompileSource(path,"");
 
     buffer.resize(0);
 }

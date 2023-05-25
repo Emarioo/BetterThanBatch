@@ -1457,7 +1457,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
 }
 BytecodeX* Generate(AST* ast, int* err){
     using namespace engone;
-    _VLOG(log::out <<log::BLUE<<  "##   Generator   ##\n";)
+    // _VLOG(log::out <<log::BLUE<<  "##   Generator   ##\n";)
     
     GenInfo info{};
     info.code = BytecodeX::Create();
@@ -1540,7 +1540,7 @@ bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
 
             if(!astStruct->typeComplete){
                 TypeInfo* structInfo = ast->getTypeInfo(*astStruct->name);
-                log::out << "Evaluating "<<*astStruct->name<<"\n";
+                // log::out << "Evaluating "<<*astStruct->name<<"\n";
                 astStruct->typeComplete = true;
                 int offset=0;
                 int alignedSize=0; // offset will be aligned to match this at the end
@@ -1560,9 +1560,9 @@ bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
                             // TODO: phrase the error message in a better way
                             // TOOD: print some column and line info.
                             // TODO: message is printed twice
-                            log::out << log::RED <<"Member "<< member.name <<" in struct "<<*astStruct->name<<" cannot be it's own type\n";
+                            // log::out << log::RED <<"Member "<< member.name <<" in struct "<<*astStruct->name<<" cannot be it's own type\n";
                         } else {
-                            log::out << log::RED << *astStruct->name<<"::"<<member.name << " requires "<<typeInfo->name<<"\n";
+                            // log::out << log::RED << *astStruct->name<<"::"<<member.name << " requires "<<typeInfo->name<<"\n";
                         }
                         astStruct->typeComplete = false;
                         break;
@@ -1573,7 +1573,7 @@ bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
                     if(misalign!=0){
                         offset+=typeInfo->size()-misalign;
                     }
-                    log::out << " "<<offset<<": "<<member.name<<" ("<<typeInfo->size()<<" bytes)\n";
+                    // log::out << " "<<offset<<": "<<member.name<<" ("<<typeInfo->size()<<" bytes)\n";
                     member.offset = offset;
                     offset+=typeInfo->size();
                 }
@@ -1589,7 +1589,7 @@ bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
                         offset+=alignedSize-misalign;
                     }
                     astStruct->size = offset;
-                    log::out << *astStruct->name << " was evaluated to "<<offset<<" bytes\n";
+                    // log::out << *astStruct->name << " was evaluated to "<<offset<<" bytes\n";
                     changed=true;
                 }
             }
@@ -1607,7 +1607,7 @@ bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
         ASTFunction* func = nextFunc;
         nextFunc = nextFunc->next;
 
-        log::out << "Eval func "<<*func->name<<"\n";
+        // log::out << "Eval func "<<*func->name<<"\n";
         int offset = 0; // offset starts before call frame (fp, pc)
         int firstSize = 0;
         // for(int i=func->arguments.size()-1;i>=0;i--){
@@ -1624,7 +1624,7 @@ bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
                 offset += asize - offset%asize;
             }
             arg.offset = offset;
-            log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
+            // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
 
             offset += size;
         }
@@ -1632,14 +1632,14 @@ bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
         if(diff!=0)
             offset += 8-diff; // padding to ensure 8-bit alignment
 
-        log::out << "total size "<<offset<<"\n";
+        // log::out << "total size "<<offset<<"\n";
         // reverse
         for(int i=0;i<(int)func->arguments.size();i++){
             auto& arg = func->arguments[i];
             TypeInfo* typeInfo = ast->getTypeInfo(arg.typeId);
             int size = typeInfo->size();
             arg.offset = offset - arg.offset - size;
-            log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
+            // log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
         }
         func->argSize = offset;
 
@@ -1658,7 +1658,7 @@ bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
             }
             offset -= size; // size included in the offset going negative on the stack
             ret.offset = offset;
-            log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
+            // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
         }
         func->returnSize = -offset;
         // size of return types doesn't have to match any alignment

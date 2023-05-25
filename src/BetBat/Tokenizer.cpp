@@ -134,11 +134,17 @@ int TokenStream::at(){
     return readHead-1;
 }
 bool TokenStream::copyInfo(TokenStream& out){
+    out.streamName = streamName;
+    out.importList = std::move(importList);
+    
     out.lines = lines;
+    out.readBytes = readBytes;
     out.enabled = enabled;
     memcpy(out.version,version,VERSION_MAX+1);
     // This is dumb, I have forgotten to copy variables
     // twice and I will keep doing it.
+    // three times now.
+    
     return true;
 }
 Token& TokenStream::get(int index){
@@ -379,7 +385,7 @@ void TokenStream::Destroy(TokenStream* stream){
 }
 TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* optionalIn){
     using namespace engone;
-    _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
+    // _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
     // Todo: handle errors like outTokens.add returning false
     if(optionalIn){
         log::out << log::RED << "tokenize optional in not implemented\n";   
@@ -928,9 +934,11 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
         _TLOG(log::out<<log::LIME<<"Couldn't find #. Disabling preprocessor.\n";)
     }
     
+    #ifdef TLOG_IMPORTS
     for(auto& str : outStream->importList){
-        _TLOG(log::out << log::LIME<<"@import '"<<str<<"'\n";)
+        log::out << log::LIME<<" @import '"<<str<<"'\n";
     }   
+    #endif
 
     outTokens.lines = line;
     outTokens.finalizePointers();

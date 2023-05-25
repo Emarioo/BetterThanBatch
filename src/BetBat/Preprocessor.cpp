@@ -877,9 +877,9 @@ int ParseToken(PreprocInfo& info){
     info.addToken(token);
     return PARSE_SUCCESS;
 }
-TokenStream* Preprocess(TokenStream* inTokens, int* error){
+void Preprocess(TokenStream* inTokens, int* error){
     using namespace engone;
-    _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
+    // _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
     
     PreprocInfo info{};
     
@@ -895,9 +895,18 @@ TokenStream* Preprocess(TokenStream* inTokens, int* error){
     if(info.errors)
         log::out << log::RED << "Preprocessor failed with "<<info.errors<<" errors\n";
     info.outTokens->finalizePointers();
+    
+    inTokens->tokens.resize(0);
+    inTokens->tokenData.resize(0);
+    inTokens->tokens = info.outTokens->tokens;
+    inTokens->tokenData = info.outTokens->tokenData;
+    info.outTokens->tokens = {0};
+    info.outTokens->tokenData = {0};
+    TokenStream::Destroy(info.outTokens);
+    
     // log::out << log::BLUE<<"### # # #  #  #  #    #    #\n";
-    inTokens->copyInfo(*info.outTokens);
+    // inTokens->copyInfo(*info.outTokens);
     if(error)
         *error = info.errors;
-    return info.outTokens;
+    // return info.outTokens;
 }

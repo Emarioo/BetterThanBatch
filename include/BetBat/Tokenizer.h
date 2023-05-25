@@ -114,15 +114,16 @@ struct TokenStream {
 
     std::string streamName; // filename/importname
     std::vector<std::string> importList;
-
-    engone::Memory tokens{sizeof(Token)}; // the tokens themselves
-    engone::Memory tokenData{1}; // the data the tokens refer to
     int lines=0; // counts token suffix.
     int readBytes=0;
     // new line in the middle of a token is not counted, multiline strings doesn't work very well
     int enabled=0;
     static const int VERSION_MAX = 5;
     char version[VERSION_MAX+1]{0};
+
+    engone::Memory tokens{sizeof(Token)}; // the tokens themselves
+    engone::Memory tokenData{1}; // the data the tokens refer to
+    
     int readHead=0;
 };
 double ConvertDecimal(Token& token);

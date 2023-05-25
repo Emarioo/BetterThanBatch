@@ -18,13 +18,17 @@ typedef double Decimal;
 #ifdef DEBUG
 
 #define VLOG
+
 // #define TLOG
+#define TLOG_IMPORTS
+
 // #define MLOG
-#define PLOG
-#define GLOG
+// #define PLOG
+// #define GLOG
 // #define OLOG
 // #define ILOG_THREAD
-#define ILOG
+// #define ILOG
+
 
 // #define USE_DEBUG_INFO
 // #define PRINT_DEBUG_LINES

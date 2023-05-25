@@ -57,6 +57,8 @@ int main(int argc, const char** argv){
     #define MODE_RUN 2
     #define MODE_LOG 3
     int mode = MODE_RUN;
+    
+    std::string compilerPath = argv[0];
 
     std::vector<std::string> tests; // could be const char*
     std::vector<std::string> files;
@@ -123,7 +125,8 @@ int main(int argc, const char** argv){
         // TestSuite(tests);
     }
     for(std::string& file : files){
-        CompileScript(file.c_str());
+        // Should source files be compiled seperatly like this
+        CompileAndRun(file.c_str(), compilerPath);
     }
     if(files.size()==0){
         // print_help();
@@ -131,9 +134,9 @@ int main(int argc, const char** argv){
 
         // PerfTestTokenize("example/build_fast.btb",200);
 
-        CompileScript("example/v2/ast.btb");
-        // CompileScript("tests/benchmark/loop.btb");
-        // CompileScript("tests/benchmark/loop2.btb");
+        CompileAndRun("example/v2/ast.btb", compilerPath);
+        // CompileAndRun("tests/benchmark/loop.btb");
+        // CompileAndRun("tests/benchmark/loop2.btb");
         
         // log::out.enableConsole(false);
         // TestVariableLimit(10000);
@@ -152,35 +155,35 @@ int main(int argc, const char** argv){
 
         // CompileDisassemble("tests/varlimit.btb");
 
-        // CompileScript("tests/script/vars.btb");
-        // CompileScript("tests/script/math.btb");
-        // CompileScript("tests/script/funcexe.btb");
-        // CompileScript("tests/script/if.btb");
-        // CompileScript("tests/script/funcs.btb");
-        // CompileScript("tests/benchmark/loop.btb");
-        // CompileScript("tests/script/prop.btb");
-        // CompileScript("tests/script/addfunc.btb");
-        // CompileScript("example/preproc.btb");
-        // CompileScript("example/each.btb");
-        // CompileScript("example/filter.btb");
-        // CompileScript("example/pipes.btb");
-        // CompileScript("example/lines.btb");
-        // CompileScript("example/typedefify.btb");
-        // CompileScript("example/loggifier.btb");
-        // CompileScript("example/findmax.btb");
-        // CompileScript("example/async.btb");
-        // CompileScript("tests/simple/assignment.btb");
-        // CompileScript("example/func.btb");
-        // CompileScript("example/sumcol.btb");
-        // CompileScript("example/cgen.btb");
-        // CompileScript("example/osthread.btb");
-        // CompileScript("example/recursion.btb");
-        // CompileScript("tests/constoptim.btb");
-        // CompileScript("tests/benchmark/string.btb", 10);
-        // CompileScript("tests/script/eh.btb");
-        // CompileScript("example/build.btb");
-        // CompileScript("example/build_fast.btb");
-        // CompileScript("tests/simple/ops.btb");
+        // CompileAndRun("tests/script/vars.btb");
+        // CompileAndRun("tests/script/math.btb");
+        // CompileAndRun("tests/script/funcexe.btb");
+        // CompileAndRun("tests/script/if.btb");
+        // CompileAndRun("tests/script/funcs.btb");
+        // CompileAndRun("tests/benchmark/loop.btb");
+        // CompileAndRun("tests/script/prop.btb");
+        // CompileAndRun("tests/script/addfunc.btb");
+        // CompileAndRun("example/preproc.btb");
+        // CompileAndRun("example/each.btb");
+        // CompileAndRun("example/filter.btb");
+        // CompileAndRun("example/pipes.btb");
+        // CompileAndRun("example/lines.btb");
+        // CompileAndRun("example/typedefify.btb");
+        // CompileAndRun("example/loggifier.btb");
+        // CompileAndRun("example/findmax.btb");
+        // CompileAndRun("example/async.btb");
+        // CompileAndRun("tests/simple/assignment.btb");
+        // CompileAndRun("example/func.btb");
+        // CompileAndRun("example/sumcol.btb");
+        // CompileAndRun("example/cgen.btb");
+        // CompileAndRun("example/osthread.btb");
+        // CompileAndRun("example/recursion.btb");
+        // CompileAndRun("tests/constoptim.btb");
+        // CompileAndRun("tests/benchmark/string.btb", 10);
+        // CompileAndRun("tests/script/eh.btb");
+        // CompileAndRun("example/build.btb");
+        // CompileAndRun("example/build_fast.btb");
+        // CompileAndRun("tests/simple/ops.btb");
 
         // CompileInstructions("tests/inst/stack.btb");
         // CompileInstructions("tests/inst/func.btb");
