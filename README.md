@@ -1,9 +1,9 @@
 # BetterThanBatch
-A compiler and runtime for a new scripting language which
-doesn't use any libraries.
+A compiler and interpreter for a new scripting language.
 
 ## Disclaimer
-- No automatic tests. Expect old broken features.
+- This version/branch of the language is abandoned because it
+  has some major flaws like no structs or proper stack management. 
 - Limited functions to to interract with the operating system.
 - Windows only.
 
@@ -22,9 +22,7 @@ doesn't use any libraries.
 - Concatenation (.. instead of ## from C)
 - Asynchronous functions and multithreading (no locks)
 
-Structs and arrays will probably be left out unless a good idea on how
-to deal with them comes to mind.
-Language has weak typing at the moment (C is strong while Javascript is weak)
+Language has weak typing (C is strong while Javascript is weak)
 
 See the Guide/Walkthrough [](docs/guide.md)
 
@@ -35,8 +33,8 @@ See the Guide/Walkthrough [](docs/guide.md)
 - Optimizer     (improve speed and size of bytecode)
 - Interpreter   (runs the bytecode)
 
-A normal parser doesn't do bytecode generation but it does here.
-This may change. Parser (tokens -> AST), Generator (AST -> bytecode)
+The parser does parsing and code generation which was easier to implement but
+comes with an issue of everything having to be declared before being used.
 
 ## Performance (rough measures)
 ```
@@ -76,21 +74,22 @@ g++ FILES -o program.exe
 GCC and any other executable found in environment variables
 can be run like a shell script. Just like batch.
 
-## Building (currently only on windows)
-build.bat is used to compile the project.
-More on this in the future.
+## Building (currently only on Windows with Visual Studio installed)
+Running the commands below will allow you to compile the project.
+vcvars64 can usually be found in `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build`.
+```
+.../vcvars64.bat
+build.bat
+```
+If it doesn't work then you are on your own since this is a deprecated version of the compiler.
 
-## What will not change?
-The tokenizer and preprocessor will stay as they are for the most part.
-They work wonderfully well.
-Calling executables in a simple manner like batch (and bash) while
-using pipes is also an amazing feature.
-
-## Might change
+## Decisions
 The syntax of the language, weak typing and intepreter has been
 chosen because they seem easier to implement than their opposites.
 Each side has positive and negatives depending on what the
 language will be used for. The language will be used
 for mundane and repetitive tasks on your own computer which
-is why weak typing and the syntax has been chosen. This may change
-though since you can use implicit types.
+is why weak typing and the syntax has been chosen. You preferably don't
+want to be annoyed by types when you make a script to get all .cpp files
+in a directory and count the number of lines or compile the source files.
+The language makes this very easy. Simular to a shell language.
