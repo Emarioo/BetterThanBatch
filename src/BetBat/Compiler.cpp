@@ -2,30 +2,6 @@
 
 #include <string.h>
 
-void CompilerFile(const char *path)
-{
-    int pathlen = strlen(path);
-    Token extension{};
-    for (int i = pathlen - 1; i >= 0; i++)
-    {
-        char chr = path[i];
-        if (chr == '.')
-        {
-            extension.str = (char *)(path + i); // Note: Extension.str is never modified. Casting away const should therfore be fine.
-            extension.length = pathlen - i;
-            break;
-        }
-    }
-    if (extension == ".btb")
-    {
-        CompileScript(path);
-    }
-    else if (extension == ".btbi")
-    {
-        // CompileInstructions(path);
-    }
-}
-
 void CompileScript(const char *path, int extra)
 {
     using namespace engone;

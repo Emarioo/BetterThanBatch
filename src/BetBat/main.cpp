@@ -103,8 +103,8 @@ int main(int argc, const char** argv){
     for(std::string& file : files){
         CompileScript(file.c_str());
     }
-    if(files.size()==0){
-        // print_help();
+    if(files.size()==0 && tests.empty()){
+        print_help();
         // log::out << "No input files!\n";
 
         // CompileScript("tests/ast.btb");
@@ -129,7 +129,7 @@ int main(int argc, const char** argv){
         // CompileScript("example/pipes.btb");
         // CompileScript("example/lines.btb");
         // CompileScript("example/typedefify.btb");
-        CompileScript("example/loggifier.btb");
+        // CompileScript("example/loggifier.btb");
         // CompileScript("example/findmax.btb");
         // CompileScript("example/async.btb");
         // CompileScript("tests/simple/assignment.btb");
@@ -154,6 +154,6 @@ int main(int argc, const char** argv){
     }
     int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
     if(finalMemory!=0)
-        log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";            
+        log::out << log::RED<< "Final memory: "<<finalMemory<<" (memory leak?)\n";            
     log::out.cleanup();
 }

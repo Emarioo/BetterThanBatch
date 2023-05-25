@@ -1,12 +1,14 @@
 @echo off
 @setlocal enabledelayedexpansion
 
-@REM ########
 @REM  Hello! cl from MSVC is used to compile the project.
-@REM  g++ is used when debugging. You will unfortunately
-@REM  have to try to make this project build by yourself
-@REM  at this moment in time.
-@REM ########
+@REM  g++ is used when debugging. Running these commands
+@REM  if you have visual studio installed should work:
+@REM    vcvars64.bat
+@REM    build.bat
+@REM
+@REM  If it doesn't then you have to figure it out by
+@REM  yourself. This is a deprecated version after all.
 
 SET USE_GCC=1
 SET USE_MSVC=1
