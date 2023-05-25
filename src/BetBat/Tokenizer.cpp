@@ -63,10 +63,40 @@ int ConvertInteger(Token& token){
     return num;
 }
 void TokenRange::print(){
+    // assert?
     if(!tokenStream) return;
     
     for(int i=startIndex;i<endIndex;i++){
         tokenStream->get(i).print();
+    }
+}
+void TokenRange::feed(std::string& outBuffer){
+    using namespace engone;
+    // assert?
+    if(!tokenStream) return;
+    for(int i=startIndex;i<endIndex;i++){
+        Token& tok = tokenStream->get(i);
+        
+        if(!tok.str)
+            continue;
+        
+        if(tok.flags&TOKEN_QUOTED)
+            outBuffer += "\"";
+        
+        for(int j=0;j<tok.length;j++){
+            char chr = *(tok.str+j);
+            if(chr=='\n'){
+                outBuffer += "\\n"; // Is this okay?
+            }else
+                outBuffer += chr;
+        }
+            
+        if(tok.flags&TOKEN_QUOTED)
+            outBuffer += "\"";
+            
+        if(tok.flags&TOKEN_SUFFIX_SPACE){
+            outBuffer += " ";
+        }
     }
 }
 void Token::print(int printFlags){

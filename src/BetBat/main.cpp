@@ -2,7 +2,7 @@
 
 void print_help(){
     using namespace engone;
-    log::out << log::BLUE << "##   HELP   ##\n";
+    log::out << log::BLUE << "##   HELP (out of date)   ##\n";
     log::out << log::GOLD << "compiler.exe [file0 file1 ...]: "<<log::SILVER;
     log::out << "Arguments after the executable specifies script files to compile. "
              << "They will be compiled and run seperately.\n";
@@ -54,6 +54,9 @@ int main(int argc, const char** argv){
     #define MODE_LOG 3
     int mode = MODE_RUN;
     
+    // bool devmode=false;
+    bool devmode=true; // when debugging
+    
     std::string compilerPath = argv[0];
 
     std::vector<std::string> tests; // could be const char*
@@ -70,6 +73,8 @@ int main(int argc, const char** argv){
         } else IfArg("-log") {
             mode = MODE_LOG;
             SetLog(LOG_OVERVIEW,true);
+        } else IfArg("-dev") {
+            devmode = true;
         }else if(mode==MODE_RUN){
             files.push_back(arg);
         } else if(mode==MODE_TEST){
@@ -124,13 +129,14 @@ int main(int argc, const char** argv){
         // Should source files be compiled seperatly like this
         CompileAndRun(file.c_str(), compilerPath);
     }
-    if(files.size()==0){
-        // print_help();
+    if(!devmode && files.size()==0){
+        print_help();
         // log::out << "No input files!\n";
+    }else if(devmode){
 
         // PerfTestTokenize("example/build_fast.btb",200);
 
-        CompileAndRun("example/v2/ast.btb", compilerPath);
+        CompileAndRun("example/ast.btb", compilerPath);
         // CompileAndRun("tests/benchmark/loop.btb");
         // CompileAndRun("tests/benchmark/loop2.btb");
         
@@ -151,42 +157,6 @@ int main(int argc, const char** argv){
 
         // CompileDisassemble("tests/varlimit.btb");
 
-        // CompileAndRun("tests/script/vars.btb");
-        // CompileAndRun("tests/script/math.btb");
-        // CompileAndRun("tests/script/funcexe.btb");
-        // CompileAndRun("tests/script/if.btb");
-        // CompileAndRun("tests/script/funcs.btb");
-        // CompileAndRun("tests/benchmark/loop.btb");
-        // CompileAndRun("tests/script/prop.btb");
-        // CompileAndRun("tests/script/addfunc.btb");
-        // CompileAndRun("example/preproc.btb");
-        // CompileAndRun("example/each.btb");
-        // CompileAndRun("example/filter.btb");
-        // CompileAndRun("example/pipes.btb");
-        // CompileAndRun("example/lines.btb");
-        // CompileAndRun("example/typedefify.btb");
-        // CompileAndRun("example/loggifier.btb");
-        // CompileAndRun("example/findmax.btb");
-        // CompileAndRun("example/async.btb");
-        // CompileAndRun("tests/simple/assignment.btb");
-        // CompileAndRun("example/func.btb");
-        // CompileAndRun("example/sumcol.btb");
-        // CompileAndRun("example/cgen.btb");
-        // CompileAndRun("example/osthread.btb");
-        // CompileAndRun("example/recursion.btb");
-        // CompileAndRun("tests/constoptim.btb");
-        // CompileAndRun("tests/benchmark/string.btb", 10);
-        // CompileAndRun("tests/script/eh.btb");
-        // CompileAndRun("example/build.btb");
-        // CompileAndRun("example/build_fast.btb");
-        // CompileAndRun("tests/simple/ops.btb");
-
-        // CompileInstructions("tests/inst/stack.btb");
-        // CompileInstructions("tests/inst/func.btb");
-        // CompileInstructions("tests/inst/numstr.btb");
-        // CompileInstructions("tests/inst/apicalls.btb");
-    }else{
-        
     }
     int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
     if(finalMemory!=0)

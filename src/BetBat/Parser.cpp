@@ -257,6 +257,7 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
     // };
     return PARSE_SUCCESS;
 }
+int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt);
 int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     using namespace engone;
     _PLOG(FUNC_ENTER)
@@ -380,30 +381,21 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
         
         TypeInfo* typeInfo = info.ast->getTypeInfo(dtToken);
 
-        // dealt with elsewhere
-        // if(!typeInfo->size() && polyIndex==-1){
-        //     ERRT(dtToken) << "Member "<<name<<" in struct has 0 as size\n";
-        //     info.errors--; // it's okay with custom type or struct?
-        //     ERRLINE
-        // }
-
-        // TODO: default value
-        // TODO: what about types which don't have a size yet? Evaluation later
-        // TODO: auto reallignment to optimize the member layout according to alignment?`
-        //   Would this be confusing when debugging?
-        // int size = typeInfo->size;
-        // int size = 8;
-        // int misalign = (offset%size);
-        // if(misalign!=0){
-        //     // type isn't alligned
-        //     offset += size - misalign;
-        //     affectedByAlignment=true;
-        // }
-        
-        astStruct->members.push_back({(std::string)name,typeInfo->id,0,polyIndex});
-        // astStruct->members.push_back({(std::string)name,typeInfo->id,offset,polyIndex});
-        // offset += size;
-        
+        result = PARSE_SUCCESS;
+        ASTExpression* defaultValue=0;
+        token = info.get(info.at()+1);
+        if(Equal(token,"=")){
+            info.next();
+            result = ParseExpression(info,defaultValue,false);
+        }
+        if(result == PARSE_SUCCESS){
+            astStruct->members.push_back({});
+            auto& mem = astStruct->members.back();
+            mem.name = name;
+            mem.typeId = typeInfo->id;
+            mem.defaultValue = defaultValue;
+            mem.polyIndex = polyIndex;
+        }
         token = info.get(info.at()+1);
         if(Equal(token,",")){
             info.next();
@@ -868,24 +860,28 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }else if(Equal(tok,"::")){
                     info.next();
                     
-                    Token tok = info.get(info.at()+1);
-                    if(!IsName(tok)){
-                        ERRT(tok) << tok<<" is not a name\n";
-                        ERRLINE
-                        continue;
-                    }
-                    info.next();
+                    ERRT(tok) << " :: is not implemented\n";
+                    ERRLINE
+                    continue; 
                     
-                    // TODO: detect more ::
+                    // Token tok = info.get(info.at()+1);
+                    // if(!IsName(tok)){
+                    //     ERRT(tok) << tok<<" is not a name\n";
+                    //     ERRLINE
+                    //     continue;
+                    // }
+                    // info.next();
                     
-                    ASTExpression* tmp = info.ast->createExpression(AST_FROM_NAMESPACE);
-                    tmp->name = new std::string(token);
-                    tmp->member = new std::string(tok);
-                    values.push_back(tmp);
-                    tmp->tokenRange.firstToken = token;
-                    tmp->tokenRange.startIndex = startToken;
-                    tmp->tokenRange.endIndex = info.at()+1;
-                    tmp->tokenRange.tokenStream = info.tokens;
+                    // // TODO: detect more ::
+                    
+                    // ASTExpression* tmp = info.ast->createExpression(AST_FROM_NAMESPACE);
+                    // tmp->name = new std::string(token);
+                    // tmp->member = new std::string(tok);
+                    // values.push_back(tmp);
+                    // tmp->tokenRange.firstToken = token;
+                    // tmp->tokenRange.startIndex = startToken;
+                    // tmp->tokenRange.endIndex = info.at()+1;
+                    // tmp->tokenRange.tokenStream = info.tokens;
                 } else{
                     ASTExpression* tmp = info.ast->createExpression(AST_VAR);
                     tmp->name = new std::string(token);
@@ -1490,7 +1486,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
     return error;   
 }
-int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool predefinedBody){
+int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool globalScope, bool predefinedBody){
     using namespace engone;
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
@@ -1510,17 +1506,18 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool prede
     bodyLoc->tokenRange.tokenStream = info.tokens;
     
     bool scoped=false;
-    Token token = info.get(info.at()+1);
-    if(Equal(token,"{")) {
-        forceBrackets = true;
-        scoped=true;
-        token = info.next();
+    if(!globalScope){
+        Token token = info.get(info.at()+1);
+        if(Equal(token,"{")) {
+            scoped=true;
+            token = info.next();
+        }
     }
 
-    ASTStatement* prev=0;
+    // ASTStatement* prev=0;
     while(!info.end()){
         Token& token = info.get(info.at()+1);
-        if(token=="}" && scoped){
+        if(Equal(token,"}") && scoped){
             info.next();
             break;
         }
@@ -1531,6 +1528,16 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool prede
         
         int result=PARSE_BAD_ATTEMPT;
 
+        if(Equal(token,"{")){
+            ASTBody* body=0;
+            result = ParseBody(info,body);
+            if(result!=PARSE_SUCCESS){
+                info.next(); // skip { to avoid infinite loop
+                continue;
+            }
+            tempStatement = info.ast->createStatement(ASTStatement::BODY);
+            tempStatement->body = body;
+        }
         if(result==PARSE_BAD_ATTEMPT)
             result = ParseFunction(info,tempFunction,true);
         if(result==PARSE_BAD_ATTEMPT)
@@ -1561,30 +1568,31 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool forceBrackets, bool prede
         }
         if(result==PARSE_SUCCESS){
             if(tempStatement) {
-                if(prev){
-                    prev->next = tempStatement;
-                    prev = tempStatement;
-                }else{
-                    bodyLoc->statements = tempStatement;
-                    prev = tempStatement;
-                }
+                bodyLoc->add(tempStatement);
+                // if(prev){
+                //     prev->next = tempStatement;
+                //     prev = tempStatement;
+                // }else{
+                //     bodyLoc->statements = tempStatement;
+                //     prev = tempStatement;
+                // }
             }
             if(tempFunction) {
-                tempFunction->next = bodyLoc->functions;
-                bodyLoc->functions = tempFunction;
+                bodyLoc->add(tempFunction);
+                // tempFunction->next = bodyLoc->functions;
+                // bodyLoc->functions = tempFunction;
             }
             if(tempStruct) {
-                tempStruct->next = bodyLoc->structs;
-                bodyLoc->structs = tempStruct;
+                bodyLoc->add(tempStruct);
+                // tempStruct->next = bodyLoc->structs;
+                // bodyLoc->structs = tempStruct;
             }
             if(tempEnum) {
-                tempEnum->next = bodyLoc->enums;
-                bodyLoc->enums = tempEnum;
+                bodyLoc->add(tempEnum);
+                // tempEnum->next = bodyLoc->enums;
+                // bodyLoc->enums = tempEnum;
             }
         }
-        
-        if(!forceBrackets)
-            break;
     }
     bodyLoc->tokenRange.endIndex = info.at()+1;
     return PARSE_SUCCESS;
@@ -1605,8 +1613,6 @@ ASTBody* ParseTokens(TokenStream* tokens, AST* ast, int* outErr){
     // }
     ASTBody* body = 0;
     int result = ParseBody(info, body,true,false);
-
-    // _VLOG(info.ast->print();)
     
     if(outErr){
         *outErr += info.errors;

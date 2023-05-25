@@ -108,7 +108,7 @@ void Interpreter::execute(Bytecode* bytecode){
         _ILOG(
         const char* str = bytecode->getDebugText(pc);
         if(str)
-            log::out << log::GRAY<<  str<<"\n";)
+            log::out << log::GRAY<<  str;)
         
         _ILOG(if(inst)
                 log::out << pc<<": "<<*inst<<", ";)
@@ -139,10 +139,10 @@ void Interpreter::execute(Bytecode* bytecode){
             u8 r1 = DECODE_REG1(inst);
             u8 r2 = DECODE_REG2(inst);
 
-            if (DECODE_REG_TYPE(r0) != DECODE_REG_TYPE(r1) || DECODE_REG_TYPE(r1) != DECODE_REG_TYPE(r2)){
-                log::out << log::RED<<"register bit mismatch\n";
-                continue;   
-            }
+            // if (DECODE_REG_TYPE(r0) != DECODE_REG_TYPE(r1) || DECODE_REG_TYPE(r1) != DECODE_REG_TYPE(r2)){
+            //     log::out << log::RED<<"register bit mismatch\n";
+            //     continue;   
+            // }
             void* xp = getReg(r0);
             void* yp = getReg(r1);
             void* op = getReg(r2);
@@ -310,13 +310,22 @@ void Interpreter::execute(Bytecode* bytecode){
                 log::out << log::RED<<"r1 (pointer) must use 64 bit registers\n";
                 continue;
             }
+            void* toptr = getReg(r1);
+            int size = 1<<DECODE_REG_TYPE(r0);
+            if((*(u64*)toptr)%size!=0){
+                log::out << log::RED<<(*(u64*)toptr)<<" does not align to "<<size<<"\n";
+                continue;
+            }
+            
             void* from = getReg(r0); // NOTE: Program can crash here
-            void* to = (void*)(*(u64*)getReg(r1));
+            void* to = (void*)(*(u64*)toptr);
             // void* to = (void*)(*(u64*)getReg(r1)+offset);
 
             // SET_TO_FROM(r0)
-            yeah(r0,from,to);
             
+            
+            
+            yeah(r0,from,to);
             // *((u64*) to) = 0;
             // if(r1&BC_REG_8 ) *((u8* ) to) = *((u8* ) from);
             // if(r1&BC_REG_16) *((u16*) to) = *((u16*) from);
@@ -468,11 +477,13 @@ void Interpreter::execute(Bytecode* bytecode){
                     _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
                 } else if (addr==BC_EXT_PRINTI){
                     i64 num = *(i64*)(fp+argoffset);
-                    log::out << "PRINTI: "<<num<<"\n";
+                    log::out << log::LIME<<"print: "<<num<<"\n";
+                    // <<"\n";
                     // _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
+                }else {
+                    _ILOG(log::out << log::RED << addr<<" is not a special function\n";)
                 }
                 // bc ret here
-                _ILOG(log::out <<"\n";)
                 goto TINY_GOTO;
             }
             

@@ -52,6 +52,7 @@ struct TokenRange {
     TokenStream* tokenStream=0; // should probably not be here
 
     void print();
+    void feed(std::string& outBuffer);
 };
 struct TokenStream {
     ~TokenStream() {

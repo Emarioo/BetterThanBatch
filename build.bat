@@ -66,5 +66,6 @@ echo Compiled in %finS%.%finS2% seconds
 
 if !errorlevel! == 0 (
     echo f | XCOPY /y /q bin\program.exe prog.exe > nul
+    @REM prog -dev
     prog
 )

@@ -101,7 +101,7 @@ struct ASTExpression {
     };
     std::string* name=0;
     int constStrIndex=0;
-    std::string* member=0;
+    // std::string* member=0;
     ASTExpression* left=0; // FNCALL has arguments in order left to right
     ASTExpression* right=0;
     TypeId castType=0;
@@ -120,6 +120,7 @@ struct ASTStatement {
         RETURN,
         CALL,
         USING,
+        BODY,
     };
     TokenRange tokenRange{};
     int type=0;
@@ -148,6 +149,7 @@ struct ASTStruct {
         TypeId typeId=0;
         int offset=0;
         int polyIndex=-1;
+        ASTExpression* defaultValue=0;
     };
     std::vector<Member> members{};
     int size=0;
@@ -204,6 +206,11 @@ struct ASTBody {
     ASTEnum* enums = 0;
     ASTFunction* functions = 0;
     ASTStatement* statements = 0;
+    
+    ASTStruct* structsTail = 0;
+    ASTEnum* enumsTail = 0;
+    ASTFunction* functionsTail = 0;
+    ASTStatement* statementsTail = 0;
 
     void add(ASTStruct* astStruct);
     void add(ASTStatement* astStatement);

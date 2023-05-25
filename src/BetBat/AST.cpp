@@ -41,47 +41,48 @@ const char* StateToStr(int type){
         CASE(RETURN,return)
         CASE(CALL,call)
         CASE(USING,using)
+        CASE(BODY,body)
     }
     #undef CASE
     return "?";
 }
-const char* TypeIdToStr(int type){
-    #define CASE(A,B) case AST_##A: return #B;
-    switch(type){
-        CASE(FLOAT32,f32)
-        CASE(INT32,i32)
-        CASE(BOOL,bool)
-        CASE(CHAR,char)
+// const char* TypeIdToStr(int type){
+//     #define CASE(A,B) case AST_##A: return #B;
+//     switch(type){
+//         CASE(FLOAT32,f32)
+//         CASE(INT32,i32)
+//         CASE(BOOL,bool)
+//         CASE(CHAR,char)
         
-        CASE(VAR,var)
-    }
-    #undef CASE
-    return "?";
-}
+//         CASE(VAR,var)
+//     }
+//     #undef CASE
+//     return "?";
+// }
 AST* AST::Create(){
     AST* ast = (AST*)engone::Allocate(sizeof(AST));
     new(ast)AST();
     // initialize default data types
-    ast->addTypeInfo("void", AST_VOID       );
-    ast->addTypeInfo("u8"  , AST_UINT8      ,1);
-    ast->addTypeInfo("u16" , AST_UINT16     , 2);
-    ast->addTypeInfo("u32" , AST_UINT32     , 4);
-    ast->addTypeInfo("u64" , AST_UINT64     , 8);
-    ast->addTypeInfo("i8"  , AST_INT8       , 1);
-    ast->addTypeInfo("i16" , AST_INT16      ,2);
-    ast->addTypeInfo("i32" , AST_INT32      ,4);
-    ast->addTypeInfo("i64" , AST_INT64      ,8);
-    ast->addTypeInfo("f32" , AST_FLOAT32    ,4);
-    ast->addTypeInfo("bool", AST_BOOL       ,1);
-    ast->addTypeInfo("char", AST_CHAR       ,1);
-    ast->addTypeInfo("null", AST_NULL       ,8);
-    ast->addTypeInfo("var" , AST_VAR        );
-    ast->addTypeInfo("call", AST_FNCALL     );
+    ast->addTypeInfo("void"     , AST_VOID       );
+    ast->addTypeInfo("u8"       , AST_UINT8      ,1);
+    ast->addTypeInfo("u16"      , AST_UINT16     , 2);
+    ast->addTypeInfo("u32"      , AST_UINT32     , 4);
+    ast->addTypeInfo("u64"      , AST_UINT64     , 8);
+    ast->addTypeInfo("i8"       , AST_INT8       , 1);
+    ast->addTypeInfo("i16"      , AST_INT16      ,2);
+    ast->addTypeInfo("i32"      , AST_INT32      ,4);
+    ast->addTypeInfo("i64"      , AST_INT64      ,8);
+    ast->addTypeInfo("f32"      , AST_FLOAT32    ,4);
+    ast->addTypeInfo("bool"     , AST_BOOL       ,1);
+    ast->addTypeInfo("char"     , AST_CHAR       ,1);
+    ast->addTypeInfo("null"     , AST_NULL       ,8);
+    ast->addTypeInfo("var"      , AST_VAR        );
+    ast->addTypeInfo("member"   , AST_MEMBER     );
+    ast->addTypeInfo("call"     , AST_FNCALL     );
     
     ast->mainBody = ast->createBody();
     {
         // TODO: set size and offset of language structs here instead of letting the compiler do it.
-        // TODO: also, prioritize language structs
         ASTStruct* astStruct = ast->createStruct("Slice");
         auto voidInfo = ast->getTypeInfo("void*");
         astStruct->members.push_back({"ptr",voidInfo->id});
@@ -184,20 +185,24 @@ ASTExpression* AST::createExpression(TypeId type){
 }
 
 void ASTBody::add(ASTStruct* astStruct){
-    astStruct->next = structs;
-    structs = astStruct;
+    if(!structs) structs = astStruct;
+    else structsTail->next = astStruct;
+    structsTail = astStruct;
 }
 void ASTBody::add(ASTStatement* astStatement){
-    astStatement->next = statements;
-    statements = astStatement;
+    if(!statements) statements = astStatement;
+    else statementsTail->next = astStatement;
+    statementsTail = astStatement;
 }
 void ASTBody::add(ASTFunction* astFunction){
-    astFunction->next = functions;
-    functions = astFunction;
+    if(!functions) functions = astFunction;
+    else functionsTail->next = astFunction;
+    functionsTail = astFunction;
 }
 void ASTBody::add(ASTEnum* astEnum){
-    astEnum->next = enums;
-    enums = astEnum;
+    if(!enums) enums = astEnum;
+    else enumsTail->next = astEnum;
+    enumsTail = astEnum;
 }
 void AST::Destroy(AST* ast){
     if(!ast) return;
@@ -322,7 +327,7 @@ bool AST::IsSigned(TypeId id){
 }
 void PrintSpace(int count){
     using namespace engone;
-    for (int i=0;i<count;i++) log::out << " ";
+    for (int i=0;i<count;i++) log::out << "  ";
 }
 void AST::print(int depth){
     using namespace engone;
@@ -393,6 +398,10 @@ void ASTStruct::print(AST* ast, int depth){
         auto typeInfo = ast->getTypeInfo(member.typeId);
         if(typeInfo)
             log::out << member.name << ": "<<typeInfo->name;
+        if(member.defaultValue){
+            log::out << " = ";
+            member.defaultValue->tokenRange.print();
+        }
         if(i+1!=(int)members.size()){
             log::out << ", ";
         }
@@ -468,6 +477,11 @@ void ASTStatement::print(AST* ast, int depth){
         }
     }else if(type==USING) {
         log::out << " "<<*name <<" as "<<*alias<<"\n";
+    }else if(type==BODY){
+        log::out << "\n";
+        if(body){
+            body->print(ast,depth+1);
+        }
     }
     if(next){
         next->print(ast, depth);
@@ -518,7 +532,7 @@ void ASTExpression::print(AST* ast, int depth){
             log::out << "\n";
             left->print(ast,depth+1);
         }else if(typeId==AST_FROM_NAMESPACE){
-            log::out << *name<<" "<<*member;
+            // log::out << *name<<" "<<*member;
             log::out << "\n";
         }else{
             log::out << "\n";

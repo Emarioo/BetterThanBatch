@@ -8,7 +8,6 @@
 // #define DEBUG_RESIZE
 
 // Language config
-#define INST_LIMIT 999999999
 #define PREPROC_REC_LIMIT 100
 #define PREPROC_TERM "#"
 

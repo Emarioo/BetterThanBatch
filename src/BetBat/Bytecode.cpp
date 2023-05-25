@@ -207,7 +207,7 @@ void Bytecode::addDebugText(const char* str, int length, u32 instructionIndex){
         *((u32*)debugSegment.data + instructionIndex) = index + 1;
     }else{
         Assert((int)debugText.size()<=oldIndex)
-        debugText[oldIndex-1] += "\n"; // should line feed be forced?
+        // debugText[oldIndex-1] += "\n"; // should line feed be forced?
         debugText[oldIndex-1] += std::string(str,length);
     }
 }
