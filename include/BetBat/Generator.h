@@ -1,11 +1,10 @@
 #pragma once
 
 #include "BetBat/AST.h"
-#include "BetBat/BytecodeX.h"
-#include "BetBat/Config.h"
+#include "BetBat/Bytecode.h"
 
 struct GenInfo {
-    BytecodeX* code=0;
+    Bytecode* code=0;
     AST* ast=0;
     int errors=0;
     
@@ -71,4 +70,4 @@ struct GenInfo {
 
 bool EvaluateTypes(AST* ast, ASTBody* body, int* err);
 
-BytecodeX* Generate(AST* ast, int* err);
+Bytecode* Generate(AST* ast, int* err);

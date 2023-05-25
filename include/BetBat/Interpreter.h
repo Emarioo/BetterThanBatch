@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BetBat/BytecodeX.h"
+#include "BetBat/Bytecode.h"
 
 struct Interpreter {
     
@@ -25,7 +25,7 @@ struct Interpreter {
     
     engone::Memory stack{1};
 
-    void execute(BytecodeX* bytecode);
+    void execute(Bytecode* bytecode);
     
     void cleanup();
     void printRegisters();

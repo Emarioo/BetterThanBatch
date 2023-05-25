@@ -1,19 +1,9 @@
 #pragma once
 
-#include "BetBat/Tokenizer.h"
 #include "BetBat/Preprocessor.h"
-#include "BetBat/Utility.h"
-
-// with data types
 #include "BetBat/Parser.h"
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
-
-// no data types
-#include "BetBat/old/GenParser.h"
-#include "BetBat/old/Context.h"
-#include "BetBat/old/Optimizer.h"
-
 
 struct CompileInfo {
     void cleanup();
@@ -33,7 +23,7 @@ struct CompileInfo {
     std::string compilerDir="";
 };
 
-BytecodeX* CompileSource(const std::string& path, const std::string& compilerPath);
+Bytecode* CompileSource(const std::string& path, const std::string& compilerPath);
 
 // compilerPath is the executable and that folder is where standard modules are found
 void CompileAndRun(const std::string& path, const std::string& compilerPath);

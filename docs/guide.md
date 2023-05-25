@@ -1,3 +1,8 @@
+# THIS GUIDE IS FOR A DIFFERENT VERSION OF THE LANGUAGE
+I haven't deleted this because the guide for the new
+version will probably have the same sections with
+some differences.
+
 # Guide to the language
 A quick guide which doesn't go much into detail since things might change.
 
@@ -339,4 +344,4 @@ in any order as long as the macro exists at the time of evaluation.
 
 I want to end with the best for last and that is the idea of recursive macros.
 I encourage you to explore it for yourself before continuing reading but if
-you just want to know what it's about check out [](docs/advanced.md)
+you just want to know what it's about check out [](docs/recursive-macros.md)

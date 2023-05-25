@@ -1,8 +1,4 @@
-// #include "BetBat/TestGenerator.h"
 #include "BetBat/Compiler.h"
-// #include "BetBat/TestSuite.h"
-
-#include "BetBat/Utility.h"
 
 void print_help(){
     using namespace engone;

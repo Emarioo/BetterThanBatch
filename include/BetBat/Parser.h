@@ -1,18 +1,6 @@
 #pragma once
 
-#include "BetBat/Tokenizer.h"
-#include "BetBat/BytecodeX.h"
 #include "BetBat/AST.h"
-
-#include <unordered_map>
-
-// 2 bits to indicate instruction structure
-// 3, 2 or 1 register. 2 registers can also be interpreted as
-// 1 register + contant integer
-// #define BC_MASK (0b11<<6)
-// #define BC_R3 (0b00<<6)
-// #define BC_R2 (0b01<<6)
-// #define BC_R1 (0b10<<6)
 
 #define PARSE_ERROR 0
 #define PARSE_BAD_ATTEMPT 2

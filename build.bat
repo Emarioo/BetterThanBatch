@@ -2,10 +2,10 @@
 @setlocal enabledelayedexpansion
 
 @REM ########
-@REM  Hello! cl from MSVC is used to compile the project.
-@REM  g++ is used when debugging. You will unfortunately
-@REM  have to try to make this project build by yourself
-@REM  at this moment in time.
+@REM  Hello!
+@REM  run vcvars64.bat before running this script.
+@REM  
+@REM  g++ is used when debugging.
 @REM ########
 
 SET USE_GCC=1

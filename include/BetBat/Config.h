@@ -1,7 +1,5 @@
 #pragma once
 
-typedef double Decimal;
-
 // Major config
 #define DEBUG
 // #define SILENT
@@ -26,12 +24,10 @@ typedef double Decimal;
 // #define PLOG
 // #define GLOG
 // #define OLOG
-// #define ILOG_THREAD
 // #define ILOG
 
 
 // #define USE_DEBUG_INFO
-// #define PRINT_DEBUG_LINES
 #endif
 
 #ifdef PLOG
@@ -42,7 +38,6 @@ typedef double Decimal;
 #ifndef USE_DEBUG_INFO
 #define USE_DEBUG_INFO
 #endif
-#define PRINT_DEBUG_LINES
 #endif
 
 
@@ -52,7 +47,6 @@ typedef double Decimal;
 #define LOG_GENERATOR 4
 #define LOG_OPTIMIZER 8
 #define LOG_INTERPRETER 16
-#define LOG_THREADS 32
 #define LOG_OVERVIEW 64
 #define LOG_ANY -1
 
@@ -105,14 +99,6 @@ bool GetLog(int type);
 #define _ILOG(x) if(GetLog(LOG_INTERPRETER)){x;}
 #else
 #define _ILOG(x)
-#endif
-
-#ifdef ILOG_THREAD
-#define _ILOG_THREAD(x) x
-#elif defined(DEBUG)
-#define _ILOG_THREAD(x) if(GetLog(LOG_THREADS)){x;}
-#else
-#define _ILOG_THREAD(x)
 #endif
 
 #ifdef VLOG

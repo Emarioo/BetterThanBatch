@@ -1,7 +1,6 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
-#include <unordered_map>
 
 // Todo: also defined in parser. define where both use it?
 #define PARSE_ERROR 0

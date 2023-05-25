@@ -1,6 +1,0 @@
-
-print Starting test
-cmd type nul > out.txt
-for 100 {
-    cmd prog.exe tests/benchmark/string.btb ">>" out.txt
-}

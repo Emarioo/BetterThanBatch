@@ -1455,12 +1455,12 @@ int GenerateBody(GenInfo& info, ASTBody* body){
     
     return GEN_SUCCESS;
 }
-BytecodeX* Generate(AST* ast, int* err){
+Bytecode* Generate(AST* ast, int* err){
     using namespace engone;
     // _VLOG(log::out <<log::BLUE<<  "##   Generator   ##\n";)
     
     GenInfo info{};
-    info.code = BytecodeX::Create();
+    info.code = Bytecode::Create();
     info.ast = ast;
     {
     auto fun = info.addFunction("alloc");

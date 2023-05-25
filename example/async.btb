@@ -1,7 +1,0 @@
-fun = {
-	for i : 6 {
-		print #arg: i
-	}
-}
-#async fun 1
-fun 2

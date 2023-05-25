@@ -1,0 +1,16 @@
+// SYNTAX CHANGED CODE HERE DOESN'T WORK!
+
+files = #run filterfiles *.cpp
+
+// file.txt
+
+each str : files{
+    i = #v.length-1
+    while i>-1 {
+        if (str[i]=="/"){
+            break
+        }
+        i = i-1
+    }
+    print (str[i+1:str.length-1])
+}

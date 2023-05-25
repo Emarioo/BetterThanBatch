@@ -1,7 +1,5 @@
 #include "BetBat/Compiler.h"
 
-#include <string.h>
-
 void CompileInfo::cleanup(){
     for(auto& pair : tokenStreams){
         TokenStream::Destroy(pair.second.stream);
@@ -114,10 +112,10 @@ bool ParseFile(CompileInfo& info, const std::string& path){
     return true;
 }
 
-BytecodeX* CompileSource(const std::string& sourcePath, const std::string& compilerPath) {
+Bytecode* CompileSource(const std::string& sourcePath, const std::string& compilerPath) {
     using namespace engone;
     AST* ast=0;
-    BytecodeX* bytecodeX=0;
+    Bytecode* Bytecode=0;
     double seconds = 0;
     std::string dis;
     int bytes = 0;
@@ -141,36 +139,36 @@ BytecodeX* CompileSource(const std::string& sourcePath, const std::string& compi
     // if (tokens.enabled & LAYER_GENERATOR){
     if(compileInfo.errors==0 && ast){
         _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
-        bytecodeX = Generate(ast, &compileInfo.errors);
+        Bytecode = Generate(ast, &compileInfo.errors);
     }
     // }
 
     // _VLOG(log::out << "\n";)
     seconds = engone::StopMeasure(startCompileTime);
-    if(bytecodeX && compileInfo.errors==0){
-        bytes = bytecodeX->getMemoryUsage();
+    if(Bytecode && compileInfo.errors==0){
+        bytes = Bytecode->getMemoryUsage();
     // _VLOG(
         log::out << "Compiled " << FormatUnit((uint64)compileInfo.lines) << " lines ("<<FormatBytes(compileInfo.readBytes)<<") in " << FormatTime(seconds) << "\n (" << FormatUnit(compileInfo.lines / seconds) << " lines/s)\n";
     // )
     }
     AST::Destroy(ast);
     if(compileInfo.errors!=0){
-        BytecodeX::Destroy(bytecodeX);
-        bytecodeX = 0;   
+        Bytecode::Destroy(Bytecode);
+        Bytecode = 0;   
     }
     compileInfo.cleanup();
-    return bytecodeX;
+    return Bytecode;
 }
 
 void CompileAndRun(const std::string& sourcePath, const std::string& compilerPath) {
     using namespace engone;
-    BytecodeX* bytecodeX = CompileSource(sourcePath,compilerPath);
-    if(bytecodeX){
+    Bytecode* Bytecode = CompileSource(sourcePath,compilerPath);
+    if(Bytecode){
         Interpreter inp{};
         
-        inp.execute(bytecodeX);
+        inp.execute(Bytecode);
         
         inp.cleanup();
-        BytecodeX::Destroy(bytecodeX);
+        Bytecode::Destroy(Bytecode);
     }
 }

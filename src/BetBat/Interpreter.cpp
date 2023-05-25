@@ -1,5 +1,4 @@
 #include "BetBat/Interpreter.h"
-#include "Engone/Logger.h"
 
 #define BITS(P,B,E,S) ((P<<(S-E))>>B)
 
@@ -70,7 +69,7 @@ void yeah(int reg, void* from, void* to){
         
     // _ILOG(log::out << (*(i64*)to)<<"\n";)
 }
-void Interpreter::execute(BytecodeX* bytecode){
+void Interpreter::execute(Bytecode* bytecode){
     using namespace engone;
     if(!bytecode){
         log::out << log::RED << __FUNCTION__<<"Cannot execute null bytecode\n";
@@ -91,7 +90,7 @@ void Interpreter::execute(BytecodeX* bytecode){
     // u64* savedFp = 0;
     
     u64 length = bytecode->codeSegment.used;
-    InstructionX* codePtr = (InstructionX*)bytecode->codeSegment.data;
+    Instruction* codePtr = (Instruction*)bytecode->codeSegment.data;
     while (true) {
         // check used
 
@@ -99,8 +98,8 @@ void Interpreter::execute(BytecodeX* bytecode){
         if(pc>=(u64)length)
             break;
 
-        // InstructionX* inst = bytecode->get(pc);
-        InstructionX* inst = codePtr + pc;
+        // Instruction* inst = bytecode->get(pc);
+        Instruction* inst = codePtr + pc;
         
         // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp;)
         // if(savedFp)

@@ -1,0 +1,33 @@
+// SYNTAX CHANGED CODE HERE DOESN'T WORK!
+
+list = "d ja opa opao aop ao doa wjo nn wao onao a oa ao ao a oa dwi wn a ni ani an a na"
+
+count = 0
+each str : list {
+    if str[0] == "a"
+        count = count + 1
+}
+
+/*
+begin = 0
+end = 0
+i = 0
+while i < list.length {
+    chr = list[i]
+    i = i + 1
+
+    if chr==" " {
+        end = i-2
+    } else if i == list.length {
+        end = i-1
+    } else {
+        continue
+    }
+
+    if end-begin+1>0 {
+        str = list[begin:end]
+        print ("\""+str+"\"")
+    }
+    begin = i
+}
+/**/

@@ -1,8 +1,4 @@
-#include <stdio.h>
-#include <string.h>
-
 #include "BetBat/Tokenizer.h"
-#include "Engone/PlatformLayer.h"
 
 int IsInteger(Token& token){
     for(int i=0;i<token.length;i++){

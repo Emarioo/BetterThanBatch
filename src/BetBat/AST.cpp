@@ -1,5 +1,4 @@
 #include "BetBat/AST.h"
-#include "Engone/PlatformLayer.h"
 
 const char* OpToStr(int optype){
     #define CASE(A,B) case AST_##A: return #B;

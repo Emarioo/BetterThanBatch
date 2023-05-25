@@ -4,10 +4,8 @@
 #include "Engone/Logger.h"
 #include "Engone/Typedefs.h"
 
-#include "BetBat/Utility.h"
+#include "BetBat/Util/Utility.h"
 #include "BetBat/Config.h"
-
-#include <string.h>
 
 #define TOKEN_SUFFIX_LINE_FEED 1
 // SPACE suffic is remove if LINE_FEED is present in mask/flag 
