@@ -159,7 +159,9 @@ int main(int argc, const char** argv){
 
     }
     int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
-    if(finalMemory!=0)
-        log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";            
+    if(finalMemory!=0){
+        log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";
+        PrintRemainingTrackTypes();
+    }
     log::out.cleanup();
 }

@@ -3,6 +3,7 @@
 // Major config
 #define DEBUG
 // #define SILENT
+// #define ALLOC_LOG
 
 // not added bug would be nice
 // #define DEBUG_RESIZE
@@ -18,6 +19,7 @@
 
 // #define TLOG
 #define TLOG_IMPORTS
+
 
 // #define MLOG
 // #define PLOG

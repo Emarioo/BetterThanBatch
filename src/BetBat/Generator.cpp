@@ -953,6 +953,13 @@ int GenerateBody(GenInfo& info, ASTBody* body){
         int lastOffset=info.currentFrameOffset;
         
         auto func = info.addFunction(*function->name);
+        if(!func){
+            ERRT(function->tokenRange.firstToken) << *function->name<<" is already defined\n";
+            if(function->tokenRange.firstToken.str){
+                ERRTOKENS(function->tokenRange)
+            }
+            continue;
+        }
         func->astFunc = function;
         // TODO: What if variable name is the same as function variable?
         
@@ -1074,7 +1081,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             if(!statement->rvalue){
                 auto id = info.getIdentifier(*statement->name);
                 if(id){
-                    ERRT(statement->tokenRange.firstToken) << "identifier "<<*statement->name<<" already declared\n";
+                    ERRT(statement->tokenRange.firstToken) << "Identifier "<<*statement->name<<" already declared\n";
                     continue;
                 }
                 // declare new variable at current stack pointer
@@ -1082,7 +1089,10 @@ int GenerateBody(GenInfo& info, ASTBody* body){
 
                 var->typeId = statement->typeId;
                 TypeInfo* typeInfo = info.ast->getTypeInfo(var->typeId);
-                Assert(typeInfo->size()!=0)
+                if(typeInfo->size()==0){
+                    ERRT(statement->tokenRange.firstToken) << "Size of type "<<typeInfo->name << " was 0\n";
+                    continue; 
+                }
 
                 // data type may be zero if it wasn't specified during initial assignment
                 // a = 9  <-  implicit / explicit  ->  a : i32 = 9
@@ -1281,6 +1291,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 auto varexpr = statement->lvalue->left;
                 while(true){
                     if(varexpr){
+                        // TODO: handle deref and pointers
                         if(varexpr->typeId == AST_VAR) {
                             break;
                         } else if(varexpr->typeId == AST_MEMBER) {
@@ -1542,47 +1553,60 @@ Bytecode* Generate(AST* ast, int* err){
     GenInfo info{};
     info.code = Bytecode::Create();
     info.ast = ast;
+    
+    std::vector<ASTFunction*> predefinedFuncs;
+    
     {
     auto fun = info.addFunction("alloc");
-    fun->astFunc = ast->createFunction("alloc");
-    fun->astFunc->returnTypes.push_back(ast->getTypeInfo("void*")->id);
-    fun->astFunc->arguments.push_back({});
-    fun->astFunc->arguments.back().typeId = ast->getTypeInfo("u64")->id;
-    fun->astFunc->arguments.back().name = "size";
     fun->address = BC_EXT_ALLOC;
+    
+    auto astfun = (fun->astFunc = ast->createFunction("alloc"));
+    // ast->mainBody->add(astfun); don't add to ast because GenerateBody will want to create the functions
+    predefinedFuncs.push_back(astfun);
+    astfun->returnTypes.push_back(ast->getTypeInfo("void*")->id);
+    astfun->arguments.push_back({});
+    astfun->arguments.back().typeId = ast->getTypeInfo("u64")->id;
+    astfun->arguments.back().name = "size";
     }{
     auto fun = info.addFunction("realloc");
-    fun->astFunc = ast->createFunction("realloc");
-    fun->astFunc->returnTypes.push_back(ast->getTypeInfo("void*")->id);
-    fun->astFunc->arguments.push_back({});
-    fun->astFunc->arguments.back().typeId = ast->getTypeInfo("void*")->id;
-    fun->astFunc->arguments.back().name = "ptr";
-    fun->astFunc->arguments.push_back({});
-    fun->astFunc->arguments.back().typeId = ast->getTypeInfo("u64")->id;
-    fun->astFunc->arguments.back().name = "oldsize";
-    fun->astFunc->arguments.push_back({});
-    fun->astFunc->arguments.back().typeId = ast->getTypeInfo("u64")->id;
-    fun->astFunc->arguments.back().name = "size";
     fun->address = BC_EXT_REALLOC;
+    
+    auto astfun = (fun->astFunc = ast->createFunction("realloc"));
+    // ast->mainBody->add(astfun);
+    predefinedFuncs.push_back(astfun);
+    astfun->returnTypes.push_back(ast->getTypeInfo("void*")->id);
+    astfun->arguments.push_back({});
+    astfun->arguments.back().typeId = ast->getTypeInfo("void*")->id;
+    astfun->arguments.back().name = "ptr";
+    astfun->arguments.push_back({});
+    astfun->arguments.back().typeId = ast->getTypeInfo("u64")->id;
+    astfun->arguments.back().name = "oldsize";
+    astfun->arguments.push_back({});
+    astfun->arguments.back().typeId = ast->getTypeInfo("u64")->id;
+    astfun->arguments.back().name = "size";
     }{
     auto fun = info.addFunction("free");
-    fun->astFunc = ast->createFunction("free");
-    fun->astFunc->arguments.push_back({});
-    fun->astFunc->arguments.back().typeId = ast->getTypeInfo("void*")->id;
-    fun->astFunc->arguments.back().name = "ptr";
-    fun->astFunc->arguments.push_back({});
-    fun->astFunc->arguments.back().typeId = ast->getTypeInfo("u64")->id;
-    fun->astFunc->arguments.back().name = "size";
     fun->address = BC_EXT_FREE;
+    auto astfun = (fun->astFunc = ast->createFunction("free"));
+    // ast->mainBody->add(astfun);
+    predefinedFuncs.push_back(astfun);
+    astfun->arguments.push_back({});
+    astfun->arguments.back().typeId = ast->getTypeInfo("void*")->id;
+    astfun->arguments.back().name = "ptr";
+    astfun->arguments.push_back({});
+    astfun->arguments.back().typeId = ast->getTypeInfo("u64")->id;
+    astfun->arguments.back().name = "size";
     }{
     auto fun = info.addFunction("printi");
-    fun->astFunc = ast->createFunction("printi");
-    fun->astFunc->arguments.push_back({});
-    fun->astFunc->arguments.back().typeId = ast->getTypeInfo("i64")->id;
-    fun->astFunc->arguments.back().name = "num";
     fun->address = BC_EXT_PRINTI;
+    
+    auto astfun = (fun->astFunc = ast->createFunction("printi"));
+    // ast->mainBody->add(astfun);
+    predefinedFuncs.push_back(astfun);
+    astfun->arguments.push_back({});
+    astfun->arguments.back().typeId = ast->getTypeInfo("i64")->id;
+    astfun->arguments.back().name = "num";
     }
-
 
     //-- Append static data
     // for(int i=0;i<(int)info.ast->constStrings.size();i++){
@@ -1593,6 +1617,10 @@ Bytecode* Generate(AST* ast, int* err){
 
     int result = GenerateBody(info,info.ast->mainBody);
     // TODO: What to do about result? nothing?
+    
+    for(auto fun : predefinedFuncs){
+        ast->destroy(fun);
+    }
     
     if(info.errors)
         log::out << log::RED<<"Generator failed with "<<info.errors<<" errors\n";

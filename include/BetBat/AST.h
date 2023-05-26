@@ -18,7 +18,7 @@ struct TypeInfo {
     ASTEnum* astEnum=0;
     std::vector<TypeId> polyTypes;
     TypeInfo* polyOrigin=0;
-
+    
     struct MemberOut { TypeId typeId;int index;};
 
     int size();
@@ -228,9 +228,10 @@ struct AST {
     
     std::unordered_map<std::string, TypeInfo*> typeInfos;
     std::unordered_map<int, TypeInfo*> typeInfosMap;
+    static const TypeId NEXT_ID = 0x100;
     static const TypeId POINTER_BIT = 0x04000000;
     static const TypeId SLICE_BIT = 0x08000000;
-    TypeId nextTypeIdId=0x100;
+    TypeId nextTypeIdId=NEXT_ID;
     TypeId nextPointerTypeId=POINTER_BIT;
     TypeId nextSliceTypeId=SLICE_BIT;
     
@@ -259,6 +260,13 @@ struct AST {
     ASTEnum* createEnum(const std::string& name);
     ASTStatement* createStatement(int type);
     ASTExpression* createExpression(TypeId type);
+    
+    void destroy(ASTBody* body);
+    void destroy(ASTFunction* function);
+    void destroy(ASTStruct* astStruct);
+    void destroy(ASTEnum* astEnum);
+    void destroy(ASTStatement* statement);
+    void destroy(ASTExpression* expression);
 
     void print(int depth = 0);
 };

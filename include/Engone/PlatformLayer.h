@@ -29,6 +29,9 @@ namespace engone {
 	};
 	typedef uint64 TimePoint;
 	
+	// For debugging memory leaks
+	void TrackType(uint64 bytes, const std::string& name);
+	
 	void* Allocate(uint64 bytes);
     void* Reallocate(void* ptr, uint64 oldBytes, uint64 newBytes);
 	void Free(void* ptr, uint64 bytes);
@@ -41,6 +44,8 @@ namespace engone {
 	uint64 GetAllocatedBytes();
 	// Current allocations
 	uint64 GetNumberAllocations();
+	
+	void PrintRemainingTrackTypes();
 	
 	TimePoint MeasureSeconds();
 	// returns time in seconds

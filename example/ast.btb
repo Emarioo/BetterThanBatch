@@ -9,19 +9,20 @@
 // arr.ptr = alloc(8);
 // arr.size = 8;
 
+// the list of typeInfos is global
+// not good? add scope levels?
 
-{
+// {
     struct A {
-        num: i32 = k
+        num: i32 = 23
     }
-}
-
-k = 9
+// }
+// {
+//     a: A = A{0}
+// }
+// a = 9
 a: A;
 printi(a.num)
-
-b: A;
-printi(b.num)
 
 // fn max(a, b) -> i32;
 

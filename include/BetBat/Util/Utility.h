@@ -53,4 +53,12 @@ struct DeferStruct {
     DeferStruct(std::function<void()>& func) : _func(func) {}
     ~DeferStruct() { _func(); }
     std::function<void()>& _func;
-};  
+};
+
+
+// not very useful since you want placement new
+#define DISABLE_NEW private:\
+        static void *operator new     (size_t) = delete;\
+        static void *operator new[]   (size_t) = delete;\
+        static void  operator delete  (void*)  = delete;\
+        static void  operator delete[](void*)  = delete;

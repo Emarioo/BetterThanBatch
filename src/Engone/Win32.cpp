@@ -519,7 +519,36 @@ namespace engone {
         
 		ClearErrors();
 	}
-    
+    struct AllocInfo {
+		std::string name;
+		int count;
+	};
+	static std::unordered_map<uint64, AllocInfo> allocTracking;
+	
+	void TrackType(uint64 bytes, const std::string& name){
+		auto pair = allocTracking.find(bytes);
+		if(pair==allocTracking.end()){
+			allocTracking[bytes] = {name,0};	
+		} else {
+			pair->second.name += "|";
+			pair->second.name += name;
+		}
+	}
+	#define ENGONE_TRACK_ALLOC 0
+	#define ENGONE_TRACK_FREE 1
+	void PrintTracking(uint64 bytes, int type){
+		auto pair = allocTracking.find(bytes);
+			
+		if(pair!=allocTracking.end()){
+			if(type==ENGONE_TRACK_ALLOC)
+				pair->second.count++;
+			else if(type==ENGONE_TRACK_FREE)
+				pair->second.count--;
+			printf("%s %s (%d left)\n",type==ENGONE_TRACK_ALLOC?"alloc":"free", pair->second.name.c_str(),pair->second.count);
+		}
+	}
+	
+	
     // static std::mutex s_allocStatsMutex;
 	static uint64 s_totalAllocatedBytes=0;
 	static uint64 s_totalNumberAllocations=0;
@@ -530,6 +559,8 @@ namespace engone {
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
         void* ptr = malloc(bytes);
 		if(!ptr) return nullptr;
+		
+		PrintTracking(bytes,ENGONE_TRACK_ALLOC);
 		
 		// s_allocStatsMutex.lock();
 		s_allocatedBytes+=bytes;
@@ -571,6 +602,7 @@ namespace engone {
 		free(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
 		
+		PrintTracking(bytes,ENGONE_TRACK_FREE);
 		// s_allocStatsMutex.lock();
 		s_allocatedBytes-=bytes;
 		s_numberAllocations--;
@@ -587,6 +619,12 @@ namespace engone {
 	}
 	uint64 GetNumberAllocations(){
 		return s_numberAllocations;
+	}
+	void PrintRemainingTrackTypes(){
+		for(auto& pair : allocTracking){
+			if(pair.second.count!=0)
+				printf(" %s (%llu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
+		}
 	}
 	static HANDLE m_consoleHandle = NULL;
     void SetConsoleColor(uint16 color){

@@ -412,6 +412,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     }
     astStruct->tokenRange.endIndex = info.at()+1;
     // astStruct->size = offset;
+    // make sure data type doesn't exist?
     auto typeInfo = info.ast->getTypeInfo(name);
     typeInfo->astStruct = astStruct;
     // typeInfo->_size = astStruct->size;

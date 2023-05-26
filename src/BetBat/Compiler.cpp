@@ -115,7 +115,7 @@ bool ParseFile(CompileInfo& info, const std::string& path){
 Bytecode* CompileSource(const std::string& sourcePath, const std::string& compilerPath) {
     using namespace engone;
     AST* ast=0;
-    Bytecode* Bytecode=0;
+    Bytecode* bytecode=0;
     double seconds = 0;
     std::string dis;
     int bytes = 0;
@@ -139,25 +139,25 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
     // if (tokens.enabled & LAYER_GENERATOR){
     if(compileInfo.errors==0 && ast){
         _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
-        Bytecode = Generate(ast, &compileInfo.errors);
+        bytecode = Generate(ast, &compileInfo.errors);
     }
     // }
 
     // _VLOG(log::out << "\n";)
     seconds = engone::StopMeasure(startCompileTime);
-    if(Bytecode && compileInfo.errors==0){
-        bytes = Bytecode->getMemoryUsage();
+    if(bytecode && compileInfo.errors==0){
+        bytes = bytecode->getMemoryUsage();
     // _VLOG(
         log::out << "Compiled " << FormatUnit((uint64)compileInfo.lines) << " lines ("<<FormatBytes(compileInfo.readBytes)<<") in " << FormatTime(seconds) << "\n (" << FormatUnit(compileInfo.lines / seconds) << " lines/s)\n";
     // )
     }
     AST::Destroy(ast);
     if(compileInfo.errors!=0){
-        Bytecode::Destroy(Bytecode);
-        Bytecode = 0;   
+        Bytecode::Destroy(bytecode);
+        bytecode = 0;   
     }
     compileInfo.cleanup();
-    return Bytecode;
+    return bytecode;
 }
 
 void CompileAndRun(const std::string& sourcePath, const std::string& compilerPath) {

@@ -60,8 +60,38 @@ const char* StateToStr(int type){
 //     return "?";
 // }
 AST* AST::Create(){
+    using namespace engone;
+    // Useful when debugging memory leaks
+    #ifdef ALLOC_LOG
+    static bool once=false;    
+    if(!once){
+        once = true;
+        #define ADD_TRACKING(X) TrackType(sizeof(X),#X);
+        ADD_TRACKING(TypeInfo)
+        ADD_TRACKING(ASTExpression)
+        ADD_TRACKING(ASTEnum)
+        ADD_TRACKING(ASTStruct)
+        ADD_TRACKING(ASTFunction)
+        ADD_TRACKING(ASTStatement)
+        ADD_TRACKING(ASTBody)
+        ADD_TRACKING(AST)
+        // #define LOG_SIZE(X) << #X " "<<sizeof(X)<<"\n"
+        // log::out
+        // LOG_SIZE(TypeInfo)
+        // LOG_SIZE(ASTExpression)
+        // LOG_SIZE(ASTEnum)
+        // LOG_SIZE(ASTStruct)
+        // LOG_SIZE(ASTFunction)
+        // LOG_SIZE(ASTStatement)
+        // LOG_SIZE(ASTBody)
+        // LOG_SIZE(AST)
+        // ;
+    }
+    #endif
+    
     AST* ast = (AST*)engone::Allocate(sizeof(AST));
     new(ast)AST();
+
     // initialize default data types
     ast->addTypeInfo("void"     , AST_VOID       );
     ast->addTypeInfo("u8"       , AST_UINT8      ,1);
@@ -83,102 +113,67 @@ AST* AST::Create(){
     ast->mainBody = ast->createBody();
     {
         // TODO: set size and offset of language structs here instead of letting the compiler do it.
-        ASTStruct* astStruct = ast->createStruct("Slice");
-        auto voidInfo = ast->getTypeInfo("void*");
-        astStruct->members.push_back({"ptr",voidInfo->id});
-        astStruct->members.push_back({"len",ast->getTypeInfo("u64")->id});
-        auto structType = ast->getTypeInfo("Slice");
-        structType->astStruct = astStruct;
-        ast->mainBody->add(astStruct);
+        // ASTStruct* astStruct = ast->createStruct("Slice");
+        // auto voidInfo = ast->getTypeInfo("void*");
+        // astStruct->members.push_back({"ptr",voidInfo->id});
+        // astStruct->members.push_back({"len",ast->getTypeInfo("u64")->id});
+        // auto structType = ast->getTypeInfo("Slice");
+        // structType->astStruct = astStruct;
+        // ast->mainBody->add(astStruct);
     }
     return ast;
 }
 void AST::appendToMainBody(ASTBody* body){
-    // TODO: Save cpu time by keeping track of tail for enums, functions, statements and structs.
-    //   This way you don't need to go through the list to get the tail.
     if(body->enums){
-        ASTEnum* lastEnum = mainBody->enums;
-        while(lastEnum){
-            if(!lastEnum->next){
-                break;   
-            }
-            lastEnum = lastEnum->next;
-        }
-        if(!lastEnum){
-            mainBody->enums = body->enums;   
-        }else{
-            mainBody->enums->next = body->enums;
-        }
+        mainBody->add(body->enums);
+        body->enums = 0;
     }
     if(body->functions){
-        ASTFunction* last = mainBody->functions;
-        while(last){
-            if(!last->next){
-                break;   
-            }
-            last = last->next;
-        }
-        if(!last){
-            mainBody->functions = body->functions;   
-        }else{
-            mainBody->functions->next = body->functions;
-        }
+        mainBody->add(body->functions);
+        body->functions = 0;
     }
     if(body->structs){
-        ASTStruct* last = mainBody->structs;
-        while(last){
-            if(!last->next){
-                break;   
-            }
-            last = last->next;
-        }
-        if(!last){
-            mainBody->structs = body->structs;   
-        }else{
-            mainBody->structs->next = body->structs;
-        }
+        mainBody->add(body->structs);
+        body->structs = 0;
     }
     if(body->statements){
-        ASTStatement* lastState = mainBody->statements;
-        while(lastState){
-            if(!lastState->next){
-                break;   
-            }
-            lastState = lastState->next;
-        }
-        if(!lastState){
-            mainBody->statements = body->statements;   
-        }else{
-            mainBody->statements->next = body->statements;  
-        }
+        mainBody->add(body->statements);
+        body->statements = 0;
     }
-    delete body;
+    destroy(body);
 }
 ASTBody* AST::createBody(){
-    return new ASTBody();
+    auto ptr = (ASTBody*)engone::Allocate(sizeof(ASTBody));
+    new(ptr)ASTBody();
+    return ptr;
 }
 ASTStatement* AST::createStatement(int type){
-    ASTStatement* ptr = new ASTStatement();
+    auto ptr = (ASTStatement*)engone::Allocate(sizeof(ASTStatement));
+    new(ptr)ASTStatement();
     ptr->type = type;
     return ptr;
 }
 ASTStruct* AST::createStruct(const std::string& name){
-    ASTStruct* ptr = new ASTStruct();
+    auto ptr = (ASTStruct*)engone::Allocate(sizeof(ASTStruct));
+    new(ptr)ASTStruct();
     ptr->name = new std::string(name);
     return ptr;
 }
 ASTEnum* AST::createEnum(const std::string& name){
-    ASTEnum* ptr = new ASTEnum();
+    auto ptr = (ASTEnum*)engone::Allocate(sizeof(ASTEnum));
+    new(ptr)ASTEnum();
     ptr->name = new std::string(name);
     return ptr;
 }
 ASTFunction* AST::createFunction(const std::string& name){
-    ASTFunction* ptr = new ASTFunction();
+    auto ptr = (ASTFunction*)engone::Allocate(sizeof(ASTFunction));
+    new(ptr)ASTFunction();
     ptr->name = new std::string(name);
     return ptr;
 }
 ASTExpression* AST::createExpression(TypeId type){
-    ASTExpression* ptr = new ASTExpression();
+    auto ptr = (ASTExpression*)engone::Allocate(sizeof(ASTExpression));
+    new(ptr)ASTExpression();
     ptr->isValue = (u32)type<AST_PRIMITIVE_COUNT;
     ptr->typeId = type;
     return ptr;
@@ -212,7 +207,93 @@ void AST::Destroy(AST* ast){
 }
 void AST::cleanup(){
     using namespace engone;
-    log::out << log::RED << "AST::cleanup not implemented\n";
+    
+    typeInfos.clear();
+    for(auto& pair : typeInfosMap){
+        pair.second->~TypeInfo();
+        engone::Free(pair.second,sizeof(TypeInfo));
+    }
+    typeInfosMap.clear();
+    
+    nextTypeIdId = NEXT_ID;
+    nextPointerTypeId = POINTER_BIT;
+    nextSliceTypeId = SLICE_BIT;
+    
+    destroy(mainBody);
+    mainBody = 0;
+}
+
+void AST::destroy(ASTBody* body){
+    if(body->structs)
+        destroy(body->structs);
+    if(body->enums)
+        destroy(body->enums);
+    if(body->functions)destroy(body->functions);
+    if(body->statements)
+        destroy(body->statements);
+    
+    body->~ASTBody();
+    engone::Free(body,sizeof(ASTBody));
+}
+void AST::destroy(ASTStruct* astStruct){
+    if(astStruct->next)
+        destroy(astStruct->next);
+    if(astStruct->name)
+        delete astStruct->name;
+    for(auto& mem : astStruct->members){
+        if(mem.defaultValue)
+            destroy(mem.defaultValue);
+    }
+    astStruct->~ASTStruct();
+    engone::Free(astStruct,sizeof(ASTStruct));
+}
+void AST::destroy(ASTFunction* function){
+    if(function->next)
+        destroy(function->next);
+    if(function->name)
+        delete function->name;
+    if(function->body)
+        destroy(function->body);
+    function->~ASTFunction();
+    engone::Free(function,sizeof(ASTFunction));
+}
+void AST::destroy(ASTEnum* astEnum){
+    if(astEnum->next)
+        destroy(astEnum->next);
+    if(astEnum->name)
+        delete astEnum->name;
+    astEnum->~ASTEnum();
+    engone::Free(astEnum,sizeof(ASTEnum));
+}
+void AST::destroy(ASTStatement* statement){
+    if(statement->next)
+        destroy(statement->next);
+    if(statement->name)
+        delete statement->name;
+    if(statement->alias)
+        delete statement->alias;
+    if(statement->lvalue)
+        destroy(statement->lvalue);
+    if(statement->rvalue)
+        destroy(statement->rvalue);
+    if(statement->body)
+        destroy(statement->body);
+    if(statement->elseBody)
+        destroy(statement->elseBody);
+    statement->~ASTStatement();
+    engone::Free(statement,sizeof(ASTStatement));
+}
+void AST::destroy(ASTExpression* expression){
+    if(expression->next)
+        destroy(expression->next);
+    if(expression->name)
+        delete expression->name;
+    if(expression->left)
+        destroy(expression->left);
+    if(expression->right)
+        destroy(expression->right);
+    expression->~ASTExpression();
+    engone::Free(expression,sizeof(ASTExpression));
 }
 int TypeInfo::size(){
     if(astStruct)
@@ -226,12 +307,10 @@ int TypeInfo::alignedSize(){
     return _size > 8 ? 8 : _size;
 }
 void AST::addTypeInfo(const std::string& name, TypeId id, int size){
-    // auto info = getTypeInfo(name);
-    // info->_size = size;
-    auto ptr = new TypeInfo{name,id, size};
+    auto ptr = (TypeInfo*) engone::Allocate(sizeof(TypeInfo));
+    new(ptr)TypeInfo{name,id, size};
     typeInfos[name] = ptr;
     typeInfosMap[ptr->id] = ptr;
-    // return ptr;
 }
 TypeInfo* AST::getTypeInfo(const std::string& name, bool dontCreate){
     auto pair = typeInfos.find(name);
@@ -242,7 +321,8 @@ TypeInfo* AST::getTypeInfo(const std::string& name, bool dontCreate){
         tok.str = (char*)name.c_str();
         tok.length = name.length();
         if(AST::IsPointer(tok)){
-            auto ptr = new TypeInfo{name,nextPointerTypeId++, 8}; // NOTE: fixed pointer size of 8
+            auto ptr = (TypeInfo*) engone::Allocate(sizeof(TypeInfo));
+            new(ptr)TypeInfo{name,nextPointerTypeId++, 8}; // NOTE: fixed pointer size of 8
             typeInfos[name] = ptr;
             typeInfosMap[ptr->id] = ptr;
             return ptr;
@@ -250,7 +330,8 @@ TypeInfo* AST::getTypeInfo(const std::string& name, bool dontCreate){
             return getTypeInfo("Slice");
             // return (typeInfos[name] = new TypeInfo{nextSliceTypeId++, 16}); // NOTE: fixed pointer size of 8
         } else{
-            auto ptr = new TypeInfo{name,nextTypeIdId++};
+            auto ptr = (TypeInfo*) engone::Allocate(sizeof(TypeInfo));
+            new(ptr)TypeInfo{name,nextTypeIdId++};
             typeInfos[name] = ptr;
             typeInfosMap[ptr->id] = ptr;
             return ptr;
