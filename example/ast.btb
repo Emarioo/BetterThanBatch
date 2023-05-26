@@ -13,16 +13,34 @@
 // not good? add scope levels?
 
 // {
-    struct A {
-        num: i32 = 23
-    }
+    // struct A {
+    //     num: i32 = 23
+    // }
 // }
 // {
 //     a: A = A{0}
 // }
 // a = 9
-a: A;
-printi(a.num)
+// fn sort(ptr: i32* = 0, len: i32, reverse: u8) {
+//     printi(ptr)
+//     printi(len)
+//     printi(reverse)
+// }
+
+fn test(a: i32 = 9, b: i32 = 1){
+    printi(a)
+    printi(b)
+}
+
+test(5,6)
+test(b= 5, a = 43)
+test(b = 2)
+test(6)
+
+// sort(32,1)
+
+// a: A;
+// printi(a.num)
 
 // fn max(a, b) -> i32;
 

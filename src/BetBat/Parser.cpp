@@ -775,6 +775,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     ASTExpression* prev=0;
                     // TODO: sudden end, error handling
                     bool expectComma=false;
+                    bool mustBeNamed=false;
+                    Token prevNamed = {};
                     int count=0;
                     while(true){
                         Token& tok = info.get(info.at()+1);
@@ -791,11 +793,28 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                             ERRT(tok)<<"expected comma not "<<tok<<"\n";
                             return PARSE_ERROR;
                         }
+                        bool named=false;
+                        Token eq = info.get(info.at()+2);
+                        if(IsName(tok) && Equal(eq,"=")){
+                            info.next();
+                            info.next();
+                            prevNamed = tok;
+                            named=true;
+                            mustBeNamed = true;
+                        } else if(mustBeNamed){
+                            ERRT(tok) << "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
+                            ERRLINE
+                            // return or continue could desync the parsing so don't do that.
+                        }
+
                         ASTExpression* expr=0;
                         int result = ParseExpression(info,expr,false);
                         if(result!=PARSE_SUCCESS){
                             // TODO: error message, parse other arguments instead of returning?
                             return PARSE_ERROR;                         
+                        }
+                        if(named){
+                            expr->namedValue = new std::string(tok);
                         }
                         if(prev){
                             prev->next = expr;
@@ -1186,13 +1205,14 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
     function->tokenRange.firstToken = token;
     function->tokenRange.startIndex = startIndex;
     function->tokenRange.tokenStream = info.tokens;
-    
+
+    bool mustHaveDefault=false; 
+    TokenRange prevDefault={};
     while(true){
         Token& arg = info.next();
         if(Equal(arg,")")){
             break;
         }
-        // Todo: what if function has no arguments, ) would appear here
         if(!IsName(arg)){
             ERRT(arg) << arg <<" is not a valid argument name\n";
             ERRLINE
@@ -1214,12 +1234,37 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
             delete[] dataType.str;
         };
         auto id = info.ast->getTypeInfo(dataType)->id;
-        function->arguments.push_back({(std::string)arg,id});
 
-        tok = info.next();
+        ASTExpression* defaultValue=0;
+        tok = info.get(info.at()+1);
+        if(Equal(tok,"=")){
+            info.next();
+            
+            int result = ParseExpression(info,defaultValue,false);
+            if(result!=PARSE_SUCCESS){
+                continue;
+            }
+            prevDefault = defaultValue->tokenRange;
+
+            mustHaveDefault=true;
+        } else if(mustHaveDefault){
+            ERRT(tok) << "expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<"\n";
+            ERRLINE
+            continue;
+        }
+
+        function->arguments.push_back({});
+        auto& argv = function->arguments.back();
+        argv.name = arg;
+        argv.typeId = id;
+        argv.defaultValue = defaultValue;
+
+        tok = info.get(info.at()+1);
         if(Equal(tok,",")){
+            info.next();
             continue;
         }else if(Equal(tok,")")){
+            info.next();
             break;
         }else{
             ERRT(tok) << "expected , or ) not "<<tok <<"\n";

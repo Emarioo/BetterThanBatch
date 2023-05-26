@@ -70,6 +70,10 @@ void TokenRange::print(){
         tokenStream->get(i).print();
     }
 }
+engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange){
+    tokenRange.print();
+    return logger;
+}
 void TokenRange::feed(std::string& outBuffer){
     using namespace engone;
     // assert?

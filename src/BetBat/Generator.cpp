@@ -3,9 +3,13 @@
 #undef ERRT
 #undef ERR
 
+// Remember to wrap macros in {} when using if or loops
+// since macros have multiple statements.
 #define ERR() info.errors++;engone::log::out << engone::log::RED <<"GenError, "
-#define ERRT(T) info.errors++;engone::log::out << engone::log::RED <<"GenError "<<(T.line)<<":"<<(T.column)<<", "
-#define ERRTYPE(R,LT,RT) ERRT(R.firstToken) << "Type mismatch "<<info.ast->getTypeInfo(LT)->name<<" - "<<info.ast->getTypeInfo(RT)->name<<" "
+#define ERRT(R) info.errors++;engone::log::out << engone::log::RED <<"GenError "<<(R.firstToken.line)<<":"<<(R.firstToken.column)<<", "
+#define ERRTYPE(R,LT,RT) ERRT(R) << "Type mismatch "<<info.ast->getTypeInfo(LT)->name<<" - "<<info.ast->getTypeInfo(RT)->name<<" "
+
+#define LOGAT(R) R.firstToken.line <<":"<<R.firstToken.column
 
 #define ERRTOKENS(R) log::out <<log::RED<< "LN "<<R.firstToken.line <<": "; R.print();log::out << "\n";
 
@@ -304,7 +308,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             if(expression->name){
                 TypeInfo* typeInfo = info.ast->getTypeInfo(*expression->name);
                 if(typeInfo&&typeInfo->astEnum){
-                    // ERRT(expression->tokenRange.firstToken) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
+                    // ERRT(expression->tokenRange) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
                     // return GEN_ERROR;
                     *outTypeId = typeInfo->id;
                     return GEN_SUCCESS;
@@ -355,7 +359,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 *outTypeId = var->typeId;
                 return GEN_SUCCESS;
             }else{
-                ERRT(expression->tokenRange.firstToken) << expression->tokenRange.firstToken<<" is undefined\n";
+                ERRT(expression->tokenRange) << expression->tokenRange.firstToken<<" is undefined\n";
                 // log::out << log::RED<<"var "<<*expression->varName<<" undefined\n";   
                 *outTypeId = AST_VOID;
                 return GEN_ERROR;
@@ -370,6 +374,8 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 if(argt)
                     _GLOG(log::out<<"push arguments\n");
                 int startSP = info.saveStackMoment();
+
+                //-- align
                 int modu = (func->astFunc->argSize - info.relativeStackPointer )% 8;
                 if(modu!=0){
                     int diff = 8 - modu;
@@ -378,19 +384,54 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                     info.addIncrSp(-diff); // Align
                     // TODO: does something need to be done with stackAlignment list.
                 }
+                std::vector<ASTExpression*> realArgs;
+                realArgs.resize(func->astFunc->arguments.size());
+
                 int index = -1;
                 while (argt){
                     ASTExpression* arg = argt;
                     argt = argt->next;
                     index++;
-                    TypeId dt=0;
 
-                    /*
-                    4
-                    2
-                    (2)
-                    4
-                    */
+                    if(!arg->namedValue){
+                        realArgs[index] = arg;
+                    } else {
+                        int argIndex=-1;
+                        for(int i=0;i<(int)func->astFunc->arguments.size();i++){
+                            if(func->astFunc->arguments[i].name == *arg->namedValue){
+                                argIndex = i;
+                                break;
+                            }
+                        }
+                        if(argIndex==-1){
+                            ERRT(arg->tokenRange) << *arg->namedValue<<" is not an argument in "<<*func->astFunc->name<<"\n";
+                            continue;
+                        } else {
+                            if(realArgs[argIndex]){
+                                ERRT(arg->tokenRange) << "argument for "<<func->astFunc->arguments[argIndex].name <<" is already specified at "<<LOGAT(realArgs[argIndex]->tokenRange)<<"\n";
+                            }else{
+                                realArgs[argIndex] = arg;
+                            }
+                        }
+                    }
+                }
+
+                for(int i=0;i<(int)func->astFunc->arguments.size();i++){
+                    auto& arg = func->astFunc->arguments[i];
+                    if(!realArgs[i])
+                        realArgs[i] = arg.defaultValue;
+                }
+
+                index = -1;
+                for (auto arg : realArgs){
+                    // ASTExpression* arg = argt;
+                    // argt = argt->next;
+                    index++;
+                    TypeId dt=0;
+                    if(!arg){
+                        ERRT(expression->tokenRange) << "missing argument for "<<func->astFunc->arguments[index].name<< " (call to "<<*func->astFunc->name<<")\n";
+                        continue;
+                    }
 
                     int result = GenerateExpression(info,arg,&dt);
                     if(result!=GEN_SUCCESS){
@@ -424,10 +465,10 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 // TODO: FIX ALIGN HERE
                 // log::out << "ALIGNMENT (rel. sp): "<<info.relativeStackPointer<<"\n";
                 // int argBytes = startSP - info.relativeStackPointer; // NOTE: that relative stack pointer is negative and argBytes will be positive
-                index++; // incremented to get argument count
-                if(index!=(int)func->astFunc->arguments.size()){
-                    ERRT(expression->tokenRange.firstToken) << "Found "<<index<<" arguments but "<<*expression->name<<" requires "<<func->astFunc->arguments.size()<<"\n";   
-                }
+                // index++; // incremented to get argument count
+                // if(index!=(int)func->astFunc->arguments.size()){
+                //     ERRT(expression->tokenRange) << "Found "<<index<<" arguments but "<<*expression->name<<" requires "<<func->astFunc->arguments.size()<<"\n";   
+                // }
                 if(func->address==0){
                     ERR() << "func address was invalid\n";
                 }
@@ -498,7 +539,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 }
                 return GEN_SUCCESS;
             } else{
-                ERRT(expression->tokenRange.firstToken) << expression->tokenRange.firstToken<<" is undefined\n";
+                ERRT(expression->tokenRange) << expression->tokenRange.firstToken<<" is undefined\n";
                 // log::out << log::RED<<"var "<<*expression->varName<<" undefined\n";   
                 *outTypeId = AST_VOID;
                 return GEN_ERROR;
@@ -526,7 +567,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             return GEN_SUCCESS;
         } else {
             // info.code->add({BC_PUSH,BC_REG_RAX}); // push something so the stack stays synchronized, or maybe not?
-            ERRT(expression->tokenRange.firstToken) << expression->tokenRange.firstToken<<" is an unknown data type\n";
+            ERRT(expression->tokenRange) << expression->tokenRange.firstToken<<" is an unknown data type\n";
             // log::out <<  log::RED<<"GenExpr: data type not implemented\n";
             *outTypeId = AST_VOID;
             return GEN_ERROR;
@@ -542,7 +583,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
         if(expression->typeId==AST_REFER){
             ASTExpression* expr = expression->left;
             if(expr->typeId!=AST_VAR){
-                ERRT(expr->tokenRange.firstToken) << expr->tokenRange.firstToken<<", can only reference a variable\n";
+                ERRT(expr->tokenRange) << expr->tokenRange.firstToken<<", can only reference a variable\n";
                 *outTypeId = AST_VOID;
                 return GEN_ERROR;
             }
@@ -565,7 +606,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 *outTypeId = id;
             } else {
                 // TODO: identifier may be defined but not a variable, give proper message
-                ERRT(expr->tokenRange.firstToken) << expr->tokenRange.firstToken<<" is undefined\n";
+                ERRT(expr->tokenRange) << expr->tokenRange.firstToken<<" is undefined\n";
                 // log::out << log::RED<<"var "<<*expression->varName<<" undefined\n";   
                 *outTypeId = AST_VOID;
                 return GEN_ERROR;
@@ -575,7 +616,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             if(err==GEN_ERROR) return err;
 
             if(!AST::IsPointer(ltype)){
-                ERRT(expression->left->tokenRange.firstToken) << "cannot dereference "<<info.ast->getTypeInfo(ltype)->name<<" from "<<expression->left->tokenRange.firstToken<<"\n";
+                ERRT(expression->left->tokenRange) << "cannot dereference "<<info.ast->getTypeInfo(ltype)->name<<" from "<<expression->left->tokenRange.firstToken<<"\n";
                 *outTypeId = AST_VOID;
                 return GEN_ERROR;
             }
@@ -593,14 +634,14 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             
             info.code->add({BC_MOV_MR,BC_REG_RBX,reg});
             // else {
-            //     ERRT(expression->tokenRange.firstToken) << "cannot dereference "<<temp << " as it has a size of "<<typeInfo->size()<<" (only 1, 2, 4 and 8 are allowed)\n";
+            //     ERRT(expression->tokenRange) << "cannot dereference "<<temp << " as it has a size of "<<typeInfo->size()<<" (only 1, 2, 4 and 8 are allowed)\n";
             // }
 
             info.addPush(reg);
             
             *outTypeId = typeInfo->id;
             if(typeInfo->id==AST_VOID){
-                ERRT(expression->tokenRange.firstToken) << "cannot dereference *void\n";
+                ERRT(expression->tokenRange) << "cannot dereference *void\n";
             }
         }else if(expression->typeId==AST_NOT){
             int err = GenerateExpression(info,expression->left,&ltype);
@@ -636,7 +677,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 if(yes){
                 
                 } else {
-                    ERRT(expression->tokenRange.firstToken) << "cannot cast "<<info.ast->getTypeInfo(ltype)->name << " to "<<info.ast->getTypeInfo(castType)->name<<"\n";
+                    ERRT(expression->tokenRange) << "cannot cast "<<info.ast->getTypeInfo(ltype)->name << " to "<<info.ast->getTypeInfo(castType)->name<<"\n";
                     *outTypeId = ltype; // ltype since cast failed
                     return GEN_ERROR;
                 }
@@ -651,7 +692,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             //     info.code->add({BC_CASTF32,lreg,creg});
             //     info.addPush(creg);
             // } else {
-            //     ERRT(expression->tokenRange.firstToken) << "cannot cast "<<info.ast->getTypeInfo(ltype)->name << " to "<<info.ast->getTypeInfo(castType)->name<<"\n";
+            //     ERRT(expression->tokenRange) << "cannot cast "<<info.ast->getTypeInfo(ltype)->name << " to "<<info.ast->getTypeInfo(castType)->name<<"\n";
             //     *outTypeId = ltype; // ltype since cast failed
             //     return GEN_ERROR;
             // }
@@ -681,7 +722,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 
                 if(meminfo.index==-1){
                     *outTypeId = AST_VOID;
-                    ERRT(expression->tokenRange.firstToken) << *expression->name<<" is not a member of struct "<<info.ast->getTypeInfo(ltype)->name<<"\n";
+                    ERRT(expression->tokenRange) << *expression->name<<" is not a member of struct "<<info.ast->getTypeInfo(ltype)->name<<"\n";
                     return GEN_ERROR;
                 }
                 
@@ -707,7 +748,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 int enumValue;
                 bool found = typeInfo->astEnum->getMember(*expression->name, &enumValue);
                 if(!found){
-                    ERRT(expression->tokenRange.firstToken) << expression->tokenRange.firstToken<<" is not a member of enum "<<*typeInfo->astEnum->name<<"\n";
+                    ERRT(expression->tokenRange) << expression->tokenRange.firstToken<<" is not a member of enum "<<*typeInfo->astEnum->name<<"\n";
                     return GEN_ERROR;
                 }
 
@@ -718,7 +759,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 *outTypeId = AST_INT32;
             } else {
                 *outTypeId = AST_VOID;
-                ERRT(expression->tokenRange.firstToken) << "member access only works on structs and enums. "<<info.ast->getTypeInfo(exprId)->name<<" isn't one (astStruct/Enum was null at least)\n";
+                ERRT(expression->tokenRange) << "member access only works on structs and enums. "<<info.ast->getTypeInfo(exprId)->name<<" isn't one (astStruct/Enum was null at least)\n";
                 return GEN_ERROR;
             }
 
@@ -726,7 +767,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             
             TypeInfo* structInfo = info.ast->getTypeInfo(*expression->name);
             if(!structInfo||!structInfo->astStruct){
-                ERRT(expression->tokenRange.firstToken) << "cannot do initializer on non-struct "<<log::GOLD<<*expression->name<<"\n";
+                ERRT(expression->tokenRange) << "cannot do initializer on non-struct "<<log::GOLD<<*expression->name<<"\n";
                 return GEN_ERROR;   
             }
             
@@ -761,7 +802,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 }
             }
             if((int)exprs.size()!=(int)structInfo->astStruct->members.size()){
-                ERRT(expression->tokenRange.firstToken) << "Found "<<exprs.size()<<" initializer values but "<<*expression->name<<" requires "<<structInfo->astStruct->members.size()<<"\n";   
+                ERRT(expression->tokenRange) << "Found "<<exprs.size()<<" initializer values but "<<*expression->name<<" requires "<<structInfo->astStruct->members.size()<<"\n";   
                 log::out <<log::RED<< "LN "<<expression->tokenRange.firstToken.line <<": "; expression->tokenRange.print();log::out << "\n";
                 // return GEN_ERROR;
             }
@@ -771,7 +812,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             
             // TypeInfo* typeInfo = info.ast->getTypeInfo(*expression->name);
             // if(!structInfo||!structInfo->astStruct){
-            //     ERRT(expression->tokenRange.firstToken) << "cannot do initializer on non-struct "<<log::GOLD<<*expression->name<<"\n";
+            //     ERRT(expression->tokenRange) << "cannot do initializer on non-struct "<<log::GOLD<<*expression->name<<"\n";
             //     return GEN_ERROR;   
             // }
             
@@ -790,12 +831,12 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             //     }
             //     if(!PerformSafeCast(info,exprId,structInfo->astStruct->members[index].typeId)){ // implicit conversion
             //     // if(func->astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-            //         ERRT(expr->tokenRange.firstToken) << "Type mismatch (initializer): "<<*info.ast->getTypeInfo(exprId)<<" - "<<*info.ast->getTypeInfo(structInfo->astStruct->members[index].typeId)<<"\n";
+            //         ERRT(expr->tokenRange) << "Type mismatch (initializer): "<<*info.ast->getTypeInfo(exprId)<<" - "<<*info.ast->getTypeInfo(structInfo->astStruct->members[index].typeId)<<"\n";
             //         continue;
             //     }
             // }
             // if((int)exprs.size()!=(int)structInfo->astStruct->members.size()){
-            //     ERRT(expression->tokenRange.firstToken) << "Found "<<index<<" arguments but "<<*expression->name<<" requires "<<structInfo->astStruct->members.size()<<"\n";   
+            //     ERRT(expression->tokenRange) << "Found "<<index<<" arguments but "<<*expression->name<<" requires "<<structInfo->astStruct->members.size()<<"\n";   
             //     // return GEN_ERROR;
             // }
             
@@ -804,7 +845,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             // TODO: chould not work on enums? Enum.One is used instead
             // TypeInfo* typeInfo = info.ast->getTypeInfo(*expression->name);
             // if(!typeInfo||!typeInfo->astEnum){
-            //     ERRT(expression->tokenRange.firstToken) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
+            //     ERRT(expression->tokenRange) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
             //     return GEN_ERROR;
             // }
             // Assert(expression->member)
@@ -954,7 +995,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
         
         auto func = info.addFunction(*function->name);
         if(!func){
-            ERRT(function->tokenRange.firstToken) << *function->name<<" is already defined\n";
+            ERRT(function->tokenRange) << *function->name<<" is already defined\n";
             if(function->tokenRange.firstToken.str){
                 ERRTOKENS(function->tokenRange)
             }
@@ -1046,7 +1087,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
 
         info.restoreStackMoment(startSP);
 
-        log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
+        // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
         if(function->returnTypes.size()!=0){
             bool foundReturn = false;
             ASTStatement* nextState = function->body->statements;
@@ -1081,7 +1122,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             if(!statement->rvalue){
                 auto id = info.getIdentifier(*statement->name);
                 if(id){
-                    ERRT(statement->tokenRange.firstToken) << "Identifier "<<*statement->name<<" already declared\n";
+                    ERRT(statement->tokenRange) << "Identifier "<<*statement->name<<" already declared\n";
                     continue;
                 }
                 // declare new variable at current stack pointer
@@ -1090,7 +1131,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 var->typeId = statement->typeId;
                 TypeInfo* typeInfo = info.ast->getTypeInfo(var->typeId);
                 if(typeInfo->size()==0){
-                    ERRT(statement->tokenRange.firstToken) << "Size of type "<<typeInfo->name << " was 0\n";
+                    ERRT(statement->tokenRange) << "Size of type "<<typeInfo->name << " was 0\n";
                     continue; 
                 }
 
@@ -1150,14 +1191,14 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 if(id->type==GenInfo::Identifier::VAR){
                     var = info.getVariable(id->index);
                 }else{
-                    ERRT(statement->tokenRange.firstToken) << "identifier "<<*statement->name<<" was not a variable\n";
+                    ERRT(statement->tokenRange) << "identifier "<<*statement->name<<" was not a variable\n";
                     continue;
                 }
             }
             if(result==GEN_ERROR) {
 
             } else if(etype==AST_VOID){
-                ERRT(statement->tokenRange.firstToken) << "datatype for assignment cannot be void\n";
+                ERRT(statement->tokenRange) << "datatype for assignment cannot be void\n";
             } else if(!id||id->type==GenInfo::Identifier::VAR){
                 if(PerformSafeCast(info,etype,statement->typeId) || statement->typeId==AST_VOID){
                     // if(statement->typeId!=AST_VOID)
@@ -1269,7 +1310,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 if(result!=GEN_SUCCESS) return result;
                 
                 if(!AST::IsPointer(dtype)){
-                    ERRT(statement->lvalue->tokenRange.firstToken) << "expected pointer type for deref assignment not "<<info.ast->getTypeInfo(dtype)->name<<"\n";
+                    ERRT(statement->lvalue->tokenRange) << "expected pointer type for deref assignment not "<<info.ast->getTypeInfo(dtype)->name<<"\n";
                     return GEN_ERROR;
                 }
                 
@@ -1301,20 +1342,20 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                         }
                     }
                     auto varti = info.ast->getTypeInfo(varexpr->typeId);
-                    ERRT(statement->lvalue->tokenRange.firstToken) << "expected variable when doing prop assign not "<<(varti ? varti->name : "")<<"\n";
+                    ERRT(statement->lvalue->tokenRange) << "expected variable when doing prop assign not "<<(varti ? varti->name : "")<<"\n";
                     ERRTOKENS(statement->tokenRange)
                     return GEN_ERROR;
                 }
                     
                 auto id = info.getIdentifier(*varexpr->name);
                 if(!id||id->type!=GenInfo::Identifier::VAR){
-                    ERRT(varexpr->tokenRange.firstToken) << varexpr->name<<" is not a variable\n";
+                    ERRT(varexpr->tokenRange) << varexpr->name<<" is not a variable\n";
                     return GEN_ERROR;
                 }
                 auto var = info.getVariable(id->index);
                 auto typeInfo = info.ast->getTypeInfo(var->typeId);
                 if(!typeInfo->astStruct){
-                    ERRT(varexpr->tokenRange.firstToken) << varexpr->name<<" is not a struct, can't do prop assignment\n";
+                    ERRT(varexpr->tokenRange) << varexpr->name<<" is not a struct, can't do prop assignment\n";
                     return GEN_ERROR;
                 }
                 int memberOffset = 0;
@@ -1323,7 +1364,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     auto expr = members[i];
                     auto meminfo = typeInfo->getMember(*expr->name);
                     if(meminfo.index==-1){
-                        ERRT(expr->tokenRange.firstToken) << *expr->name<<" is not a member of "<<*typeInfo->astStruct->name<<"\n";
+                        ERRT(expr->tokenRange) << *expr->name<<" is not a member of "<<*typeInfo->astStruct->name<<"\n";
                         return GEN_ERROR;   
                     }
                     
@@ -1343,7 +1384,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 const std::string& memtypename = typeInfo->name;
                 _GLOG(log::out << "prop type "<<memtypename<<"\n";)
                 if(!PerformSafeCast(info,typeId,member->typeId)){
-                    ERRT(statement->rvalue->tokenRange.firstToken) << "cannot cast to "<<memtypename<<"\n";
+                    ERRT(statement->rvalue->tokenRange) << "cannot cast to "<<memtypename<<"\n";
                 }
 
                 info.code->addDebugText("prop-assign member push\n");
@@ -1359,7 +1400,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 info.code->add({BC_MOV_RM,reg,BC_REG_RBX});
                 
             } else {
-                ERRT(statement->tokenRange.firstToken) << "expected deref or prop for prop assignment, was "<<OpToStr(statement->lvalue->typeId)<<"\n";
+                ERRT(statement->tokenRange) << "expected deref or prop for prop assignment, was "<<OpToStr(statement->lvalue->typeId)<<"\n";
                 return GEN_ERROR;
             }
         } else if (statement->type == ASTStatement::IF){
@@ -1444,7 +1485,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             _GLOG(SCOPE_LOG("RETURN"))
             
             if(!info.currentFunction){
-                ERRT(statement->tokenRange.firstToken) << "return only allowed in function\n";
+                ERRT(statement->tokenRange) << "return only allowed in function\n";
                 return GEN_ERROR;
             }
             
@@ -1498,7 +1539,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             }
             argi++; // incremented to get argument count
             if(argi!=(int)info.currentFunction->returnTypes.size()){
-                ERRT(statement->tokenRange.firstToken) << "Found "<<argi<<" return values but should have "<<info.currentFunction->returnTypes.size()<<" for '"<<*info.currentFunction->name<<"'\n";   
+                ERRT(statement->tokenRange) << "Found "<<argi<<" return values but should have "<<info.currentFunction->returnTypes.size()<<" for '"<<*info.currentFunction->name<<"'\n";   
             }
             
             // fix stack pointer before returning

@@ -101,7 +101,7 @@ struct ASTExpression {
     };
     std::string* name=0;
     int constStrIndex=0;
-    // std::string* member=0;
+    std::string* namedValue=0; // used for named arguments
     ASTExpression* left=0; // FNCALL has arguments in order left to right
     ASTExpression* right=0;
     TypeId castType=0;
@@ -182,6 +182,7 @@ struct ASTFunction {
         std::string name;
         TypeId typeId;
         int offset=0;
+        ASTExpression* defaultValue=0;
     };
     std::vector<Arg> arguments;
     int argSize=0;

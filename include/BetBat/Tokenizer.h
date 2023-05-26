@@ -54,6 +54,7 @@ struct TokenRange {
     void print();
     void feed(std::string& outBuffer);
 };
+engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange);
 struct TokenStream {
     ~TokenStream() {
         // TODO: cleanup does this too, if new allocations are done it needs

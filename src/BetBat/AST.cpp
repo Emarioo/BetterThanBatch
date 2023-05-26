@@ -254,6 +254,10 @@ void AST::destroy(ASTFunction* function){
         delete function->name;
     if(function->body)
         destroy(function->body);
+    for(auto& arg : function->arguments){
+        if(arg.defaultValue)
+            destroy(arg.defaultValue);
+    }
     function->~ASTFunction();
     engone::Free(function,sizeof(ASTFunction));
 }
@@ -288,6 +292,8 @@ void AST::destroy(ASTExpression* expression){
         destroy(expression->next);
     if(expression->name)
         delete expression->name;
+    if(expression->namedValue)
+        delete expression->namedValue;
     if(expression->left)
         destroy(expression->left);
     if(expression->right)
