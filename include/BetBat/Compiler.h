@@ -12,13 +12,16 @@ struct CompileInfo {
     struct FileInfo{
         TokenStream* stream;  
     };
-    std::unordered_map<std::string, FileInfo> tokenStreams;
+    std::unordered_map<std::string, FileInfo> tokenStreams; // import streams
+
+    std::unordered_map<std::string, TokenStream*> includeStreams;
+
     bool addStream(TokenStream* stream);
     FileInfo* getStream(const std::string& name);
     
     int errors=0;
     int lines=0; // based on token suffix, probably shouldn't be
-    int readBytes=0; // from the files
+    int readBytes=0; // from the files, DOES NOT COUNT includeStreams! yet
     AST* ast=0;
     std::string compilerDir="";
 };

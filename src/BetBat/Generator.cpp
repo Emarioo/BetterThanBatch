@@ -544,17 +544,17 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 *outTypeId = AST_VOID;
                 return GEN_ERROR;
             }
-        } else if(expression->typeId==AST_STRING){
-            // string initializer literal
-            ERR() << "string not implemented\n";
+        // } else if(expression->typeId==AST_STRING){
+        //     // string initializer literal
+        //     ERR() << "string not implemented\n";
             
-            //  a = "adad" + "aaaadadad";
-            // pushing the whole string to the stack will be slow
-            // it needs to be put into data segment and you would receive
-            // a pointer to it
+        //     //  a = "adad" + "aaaadadad";
+        //     // pushing the whole string to the stack will be slow
+        //     // it needs to be put into data segment and you would receive
+        //     // a pointer to it
 
-            return GEN_ERROR;
-            return GEN_SUCCESS;
+        //     return GEN_ERROR;
+        //     return GEN_SUCCESS;
         } else if(expression->typeId==AST_NULL){
             // info.code->addDebugText("  expr push null");
             TOKENINFO(expression->tokenRange)
@@ -1664,7 +1664,7 @@ Bytecode* Generate(AST* ast, int* err){
     }
     
     if(info.errors)
-        log::out << log::RED<<"Generator failed with "<<info.errors<<" errors\n";
+        log::out << log::RED<<"Generator failed with "<<info.errors<<" error(s)\n";
     if(err)
         *err += info.errors;
     return info.code;

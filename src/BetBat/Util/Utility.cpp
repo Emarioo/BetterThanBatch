@@ -107,6 +107,19 @@ const char* FormatTime(double seconds){
     else sprintf(buf,"%.2lf ns",seconds*1e9);
     return buf;
 }
+
+std::string TrimLastFile(const std::string& path){
+    int slashI = path.find_last_of("/");
+    if(slashI==-1)
+        return "/";
+    return path.substr(0,slashI + 1);
+}
+std::string BriefPath(const std::string& path, int max){
+    if((int)path.length()>max){
+        return std::string("...") + path.substr(path.length()-max,max);
+    }   
+    return path;
+}
 /*
 
 Some example code with pipes

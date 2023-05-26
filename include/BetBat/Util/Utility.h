@@ -7,6 +7,7 @@
 #include "Engone/PlatformLayer.h"
 #include <math.h>
 
+// Returns memory with no data if file couldn't be accessed.
 engone::Memory ReadFile(const char* path);
 bool WriteFile(const char* path, engone::Memory buffer);
 bool WriteFile(const char* path, std::string& buffer);
@@ -20,6 +21,13 @@ const char* FormatUnit(uint64 number);
 const char* FormatBytes(uint64 bytes);
 // not thread safe
 const char* FormatTime(double seconds);
+
+
+// src/util/base.btb -> src/util/
+// base.btb -> /
+// src -> /
+std::string TrimLastFile(const std::string& path);
+std::string BriefPath(const std::string& path, int max=40);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
 

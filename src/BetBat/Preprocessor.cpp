@@ -1,5 +1,8 @@
 #include "BetBat/Preprocessor.h"
 
+// preprocessor needs CompileInfo to handle global caching of include streams
+#include "BetBat/Compiler.h"
+
 #define PERR info.errors++; engone::log::out << engone::log::RED << "PreProcError: "
 #define PERRT(token) info.errors++;engone::log::out << engone::log::RED << "PreProcError "<< token.line <<":"<<token.column<<": "
 #define PERRTL(token) info.errors++;engone::log::out << engone::log::RED << "PreProcError "<< token.line <<":"<<(token.column+token.length)<<": "
@@ -384,6 +387,76 @@ int ParseUndef(PreprocInfo& info, bool attempt){
     }
     pair->second.certainMacros.erase(cert);
 
+    return PARSE_SUCCESS;
+}
+int ParseInclude(PreprocInfo& info, bool attempt){
+    using namespace engone;
+    
+    Token hashtag = info.get(info.at()+1);
+    int result = ParseDirective(info, attempt, "include");
+    if(result==PARSE_BAD_ATTEMPT)
+        return PARSE_BAD_ATTEMPT;
+
+    Token token = info.get(info.at()+1);
+    if(!(token.flags&TOKEN_QUOTED)){
+        PERRT(token) << "expected a string not "<<token<<"\n";
+        return PARSE_ERROR;
+    }
+    info.next();
+
+    // TODO: How is file found? just relative path to CWD or
+    //  also based on import directory and current directory of file?
+    std::string filepath = token;
+    std::string fullpath = "";
+
+    std::string dir = TrimLastFile(info.inTokens->streamName);
+    //-- Search directory of current source file
+    if(fullpath.empty() && filepath.find("./")==0){
+        fullpath = dir + filepath.substr(2);
+    }
+    
+    //-- Search cwd or absolute path
+    if(fullpath.empty() && FileExist(filepath)){
+        fullpath = engone::GetWorkingDirectory() + "/" + filepath;
+    }
+    
+    // TODO: Search additional import directories
+    
+    if(fullpath.empty()){
+        PERRT(token) << "Could not find include "<<filepath<<"\n";
+        return PARSE_ERROR;
+    }
+
+    Assert(info.compileInfo)
+    auto pair = info.compileInfo->includeStreams.find(fullpath);
+    TokenStream* includeStream = 0;
+    if(pair==info.compileInfo->includeStreams.end()){
+        includeStream = TokenStream::Tokenize(fullpath);
+        #ifdef LOG_INCLUDES
+        if(includeStream){
+            log::out << log::GRAY <<"Tokenized include: "<< log::LIME<<filepath<<"\n";
+        }
+        #endif
+        info.compileInfo->includeStreams[fullpath] = includeStream;
+    }else{
+        includeStream = pair->second;
+    }
+    
+    if(!includeStream){
+        PERRT(token) << "Error with token stream for "<<filepath<<" (bug in the compiler!)\n";
+        return PARSE_ERROR;
+    }
+    int tokenIndex=0;
+    while(tokenIndex<includeStream->length()){
+        Token tok = includeStream->get(tokenIndex++);
+        tok.column = hashtag.column; // TODO: Is this wanted?
+        tok.line = hashtag.length;
+        info.addToken(tok);
+    }
+    // TokenStream::Destroy(includeStream); destroyed by CompileInfo
+
+    _MLOG(log::out << "Included "<<tokenIndex<<" tokens from "<<filepath<<"\n";)
+    
     return PARSE_SUCCESS;
 }
         
@@ -864,11 +937,13 @@ int ParseToken(PreprocInfo& info){
         result = ParseIfdef(info,true);
     if(result == PARSE_BAD_ATTEMPT)
         result = ParseMacro(info,true);
+    if(result == PARSE_BAD_ATTEMPT)
+        result = ParseInclude(info,true);
     
     if(result==PARSE_SUCCESS)
         return result;
     if(result == PARSE_ERROR){
-        info.nextline();
+        // info.nextline(); // it is up to the parse functions to skip
         return result;
     }
     
@@ -877,12 +952,12 @@ int ParseToken(PreprocInfo& info){
     info.addToken(token);
     return PARSE_SUCCESS;
 }
-void Preprocess(TokenStream* inTokens, int* error){
+void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens, int* error){
     using namespace engone;
     // _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
     
     PreprocInfo info{};
-    
+    info.compileInfo = compileInfo;
     info.outTokens = TokenStream::Create(); 
     info.outTokens->tokenData.resize(inTokens->tokenData.max*10); // hopeful estimation
     info.inTokens = inTokens; // Note: don't modify inTokens
@@ -893,7 +968,7 @@ void Preprocess(TokenStream* inTokens, int* error){
     // info.tokens->lines = info->inTokens.lines;
     // info.inTokens.
     if(info.errors)
-        log::out << log::RED << "Preprocessor failed with "<<info.errors<<" errors\n";
+        log::out << log::RED << "Preprocessor failed with "<<info.errors<<" error(s)\n";
     info.outTokens->finalizePointers();
     
     inTokens->tokens.resize(0);

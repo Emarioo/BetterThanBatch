@@ -54,12 +54,15 @@ struct EvalInfo {
 
     TokenList output{};
 };
+struct CompileInfo;
 struct PreprocInfo {
     // TokenStream inTokens{};
     // TokenStream tokens{};
     TokenStream* inTokens = 0;
     TokenStream* outTokens = 0;
     
+    CompileInfo* compileInfo = 0; // for caching includes
+
     int errors=0;
     
     int index=0;
@@ -92,5 +95,4 @@ struct PreprocInfo {
     Token& get(int index);
     void nextline();
 };
-
-void Preprocess(TokenStream* tokens, int* error=0);
+void Preprocess(CompileInfo* compileInfo, TokenStream* tokens, int* error=0);

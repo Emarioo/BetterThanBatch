@@ -4,6 +4,15 @@
 
 // @import ./module.btb
 
+#include "example/module.btb"
+#include "./module.btb"
+
+// struct Array {
+//     ptr: void*,
+//     size: u64,   
+// }
+arr: Array;
+
 // arr: Array;
 
 // arr.ptr = alloc(8);
@@ -27,15 +36,15 @@
 //     printi(reverse)
 // }
 
-fn test(a: i32 = 9, b: i32 = 1){
-    printi(a)
-    printi(b)
-}
+// fn test(a: i32 = 9, b: i32 = 1){
+//     printi(a)
+//     printi(b)
+// }
 
-test(5,6)
-test(b= 5, a = 43)
-test(b = 2)
-test(6)
+// test(5,6)
+// test(b= 5, a = 43)
+// test(b = 2)
+// test(6)
 
 // sort(32,1)
 

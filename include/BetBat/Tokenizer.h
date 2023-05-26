@@ -64,9 +64,11 @@ struct TokenStream {
     }
     static TokenStream* Create();
     static void Destroy(TokenStream* stream);
-    // allocations in optionalBase will be used if not null
+    // May return nullptr if file could not be accessed.
     static TokenStream* Tokenize(const std::string& filePath);
-    static TokenStream* Tokenize(const engone::Memory& text, std::vector<std::string>* importList=0, TokenStream* optionalBase=0);
+    // nullptr is never returned, data can always be processed into tokens.
+    // There may be errors in the stream though.
+    // Allocations in optionalBase will be used if not null
     static TokenStream* Tokenize(const char* text, int length, TokenStream* optionalBase=0);
     void cleanup(bool leaveAllocations=false);
     
@@ -112,7 +114,7 @@ struct TokenStream {
 
     void finalizePointers();
 
-    std::string streamName; // filename/importname
+    std::string streamName; // filename/importname SHOULD BE FULL PATH
     std::vector<std::string> importList;
     int lines=0; // counts token suffix.
     int readBytes=0;

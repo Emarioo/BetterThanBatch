@@ -964,7 +964,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
         _TLOG(log::out<<log::LIME<<"Couldn't find #. Disabling preprocessor.\n";)
     }
     
-    #ifdef TLOG_IMPORTS
+    #ifdef LOG_IMPORTS
     for(auto& str : outStream->importList){
         log::out << log::LIME<<" @import '"<<str<<"'\n";
     }   

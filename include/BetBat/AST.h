@@ -43,7 +43,7 @@ enum PrimitiveType : int {
     
     AST_FLOAT32,
     
-    AST_STRING, // converted to another type, probably char[]
+    // AST_STRING, // converted to another type, probably char[]
     AST_NULL, // usually converted to cast<void*> 0
     
     // TODO: should probably be moved

@@ -699,7 +699,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             } else if(token.flags&TOKEN_QUOTED) {
                 info.next();
 
-                ASTExpression* tmp = info.ast->createExpression(AST_STRING);
+                ERRT(token) << "string not implemented yet\n";
+                ASTExpression* tmp = info.ast->createExpression(0);
 
                 // tmp->constStrIndex = info.ast->constStrings.size();
                 // info.ast->constStrings.push_back(token);
@@ -1664,7 +1665,7 @@ ASTBody* ParseTokens(TokenStream* tokens, AST* ast, int* outErr){
         *outErr += info.errors;
     }
     if(info.errors)
-        log::out << log::RED<<"Parser failed with "<<info.errors<<" errors\n";
+        log::out << log::RED<<"Parser failed with "<<info.errors<<" error(s)\n";
     
     return body;
 }

@@ -4,6 +4,9 @@ void CompileInfo::cleanup(){
     for(auto& pair : tokenStreams){
         TokenStream::Destroy(pair.second.stream);
     }
+    for(auto& pair : includeStreams){
+        TokenStream::Destroy(pair.second);
+    }
 }
 bool CompileInfo::addStream(TokenStream* stream){
     auto pair = tokenStreams.find(stream->streamName);
@@ -16,21 +19,6 @@ CompileInfo::FileInfo* CompileInfo::getStream(const std::string& name){
     auto pair = tokenStreams.find(name);
     if(pair == tokenStreams.end()) return 0;
     return &pair->second;
-}
-// src/util/base.btb -> src/util/
-// base.btb -> /
-// src -> /
-std::string TrimLastFile(const std::string& path){
-    int slashI = path.find_last_of("/");
-    if(slashI==-1)
-        return "/";
-    return path.substr(0,slashI + 1);
-}
-std::string BriefPath(const std::string& path, int max=40){
-    if((int)path.length()>max){
-        return std::string("...") + path.substr(path.length()-max,max);
-    }   
-    return path;
 }
 // does not handle backslash
 bool ParseFile(CompileInfo& info, const std::string& path){
@@ -45,14 +33,13 @@ bool ParseFile(CompileInfo& info, const std::string& path){
     info.lines += tokenStream->lines;
     info.readBytes += tokenStream->readBytes;
     
-    
-    
     info.addStream(tokenStream);
     std::string dir = TrimLastFile(path);
     for(const std::string& _importName : tokenStream->importList){
         std::string importName = "";
-        int dotindex = importName.find_last_of(".");
-        int slashindex = importName.find_last_of("/");
+        int dotindex = _importName.find_last_of(".");
+        int slashindex = _importName.find_last_of("/");
+        // log::out << "dot "<<dotindex << " slash "<<slashindex<<"\n";
         if(dotindex==-1 || dotindex<slashindex){
             importName = _importName+".btb";
         } else {
@@ -73,12 +60,12 @@ bool ParseFile(CompileInfo& info, const std::string& path){
             fullPath = dir + importName.substr(2);
         }
         
-        //-- Search cwd
+        //-- Search cwd or absolute path
         if(fullPath.empty() && FileExist(importName)){
             fullPath = engone::GetWorkingDirectory() + "/" + importName;
         }
         
-        // TODO: Search additional import directories
+        // TODO: Search additional import directories, DO THIS WITH #INCLUDE TOO!
         
         if(fullPath.empty()){
             log::out << log::RED << "Could not find import '"<<importName<<"' in '"<<BriefPath(path,20)<<"'\n";
@@ -96,9 +83,14 @@ bool ParseFile(CompileInfo& info, const std::string& path){
         TokenStream* old = tokenStream;
         
         _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path)<<"\n";)
-        Preprocess(tokenStream, &info.errors);
+        int errs = 0;
+        Preprocess(&info, tokenStream, &errs);
         if (tokenStream->enabled == LAYER_PREPROCESSOR)
             tokenStream->print();
+        info.errors += errs;
+        if(errs){
+            return false;
+        }
     }
     
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path)<<"\n";)
@@ -135,7 +127,9 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
     ParseFile(compileInfo, absPath);
     ast = compileInfo.ast;
     
-    _VLOG(log::out << "Final "; compileInfo.ast->print();)
+    if(compileInfo.errors==0){
+        _VLOG(log::out << "Final "; compileInfo.ast->print();)
+    }
     // if (tokens.enabled & LAYER_GENERATOR){
     if(compileInfo.errors==0 && ast){
         _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
@@ -155,6 +149,9 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
     if(compileInfo.errors!=0){
         Bytecode::Destroy(bytecode);
         bytecode = 0;   
+    }
+    if(compileInfo.errors){
+        log::out << log::RED<<"Compilation failed with "<<compileInfo.errors<<" error(s)\n";
     }
     compileInfo.cleanup();
     return bytecode;

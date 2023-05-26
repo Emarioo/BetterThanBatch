@@ -18,7 +18,12 @@
 #define VLOG
 
 // #define TLOG
-#define TLOG_IMPORTS
+
+// import list in tokenizer
+// #define LOG_IMPORTS
+
+// newly tokenized includes in preprocessor
+#define LOG_INCLUDES
 
 
 // #define MLOG
