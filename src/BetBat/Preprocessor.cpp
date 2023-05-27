@@ -404,8 +404,6 @@ int ParseInclude(PreprocInfo& info, bool attempt){
     }
     info.next();
 
-    // TODO: How is file found? just relative path to CWD or
-    //  also based on import directory and current directory of file?
     std::string filepath = token;
     std::string fullpath = "";
 

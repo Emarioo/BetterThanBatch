@@ -4,6 +4,7 @@
 #include "Engone/Alloc.h"
 
 typedef int TypeId;
+typedef int ScopeId;
 struct ASTStruct;
 struct ASTEnum;
 struct TypeInfo {
@@ -18,6 +19,8 @@ struct TypeInfo {
     ASTEnum* astEnum=0;
     std::vector<TypeId> polyTypes;
     TypeInfo* polyOrigin=0;
+
+    ScopeId scopeId = 0;
     
     struct MemberOut { TypeId typeId;int index;};
 
@@ -25,6 +28,14 @@ struct TypeInfo {
     // 1,2,4,8
     int alignedSize();
     MemberOut getMember(const std::string& name);
+};
+struct ScopeInfo {
+    ScopeInfo(ScopeId id) : id(id) {}
+    ScopeId id = 0;
+    // std::unordered_map<TypeId, TypeInfo*> typeInfos;
+    std::unordered_map<std::string,TypeInfo*> nameTypeMap;
+
+    ScopeId parent = 0;
 };
 
 enum PrimitiveType : int {
@@ -46,8 +57,8 @@ enum PrimitiveType : int {
     // AST_STRING, // converted to another type, probably char[]
     AST_NULL, // usually converted to cast<void*> 0
     
-    // TODO: should probably be moved
-    AST_VAR,
+    // TODO: should these be moved somewhere else?
+    AST_VAR, // Also used when refering to enums. Change the name?
     AST_FNCALL,
     
     AST_PRIMITIVE_COUNT,
@@ -213,6 +224,8 @@ struct ASTBody {
     ASTFunction* functionsTail = 0;
     ASTStatement* statementsTail = 0;
 
+    ScopeId scopeId=0;
+
     void add(ASTStruct* astStruct);
     void add(ASTStatement* astStatement);
     void add(ASTFunction* astFunction);
@@ -220,6 +233,9 @@ struct ASTBody {
 
     void print(AST* ast, int depth);
 };
+// struct ASTNamespace {
+    
+// };
 struct AST {
     static AST* Create();
     static void Destroy(AST* ast);
@@ -227,18 +243,27 @@ struct AST {
     
     ASTBody* mainBody=0;
     
-    std::unordered_map<std::string, TypeInfo*> typeInfos;
-    std::unordered_map<int, TypeInfo*> typeInfosMap;
+    std::unordered_map<ScopeId,ScopeInfo*> scopeInfos;
+    ScopeId globalScopeId=0;
+    ScopeId nextScopeId=0;
+    ScopeId addScopeInfo();
+    ScopeInfo* getScopeInfo(ScopeId id);
+
+    // std::unordered_map<std::string, TypeInfo*> typeInfos;
+    // std::unordered_map<int, TypeInfo*> typeInfosMap;
     static const TypeId NEXT_ID = 0x100;
     static const TypeId POINTER_BIT = 0x04000000;
     static const TypeId SLICE_BIT = 0x08000000;
     TypeId nextTypeIdId=NEXT_ID;
     TypeId nextPointerTypeId=POINTER_BIT;
     TypeId nextSliceTypeId=SLICE_BIT;
-    
-    void addTypeInfo(const std::string& name, TypeId id, int size=0);
-    // creates a new type if needed
-    TypeInfo* getTypeInfo(const std::string& name, bool dontCreate=false);
+
+    std::unordered_map<TypeId, TypeInfo*> typeInfos;
+    void addTypeInfo(ScopeId scopeId, const std::string& name, TypeId id, int size=0);
+    // Creates a new type if needed
+    // scopeId is the current scope. Parent scopes will also be searched.
+    TypeInfo* getTypeInfo(ScopeId scopeId, const std::string& name, bool dontCreate=false);
+    // scopeId is the current scope. Parent scopes will also be searched.
     TypeInfo* getTypeInfo(TypeId id);
 
     static bool IsPointer(TypeId id);

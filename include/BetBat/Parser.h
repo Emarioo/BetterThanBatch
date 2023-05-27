@@ -16,6 +16,8 @@ struct ParseInfo {
     int funcDepth=0;
     AST* ast=0;
 
+    ScopeId currentScopeId=0;
+
     // Does not handle out of bounds
     Token &prev();
     Token& next();

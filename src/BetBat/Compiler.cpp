@@ -68,7 +68,7 @@ bool ParseFile(CompileInfo& info, const std::string& path){
         // TODO: Search additional import directories, DO THIS WITH #INCLUDE TOO!
         
         if(fullPath.empty()){
-            log::out << log::RED << "Could not find import '"<<importName<<"' in '"<<BriefPath(path,20)<<"'\n";
+            log::out << log::RED << "Could not find import '"<<importName<<"' (import from '"<<BriefPath(path,20)<<"'\n";
         }else{
             auto fileInfo = info.getStream(fullPath);
             if(fileInfo){   
@@ -95,6 +95,9 @@ bool ParseFile(CompileInfo& info, const std::string& path){
     
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path)<<"\n";)
     ASTBody* body = ParseTokens(tokenStream,info.ast,&info.errors);
+    // info.ast->destroy(body);
+    // body = 0;
+
     if(!body)
         return false;
     bool yes = EvaluateTypes(info.ast,body,&info.errors);

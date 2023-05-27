@@ -2,16 +2,47 @@
 // @enable preprocessor
 // @disable interpreter
 
-// @import ./module.btb
+// @import ./circular
 
-#include "example/module.btb"
-#include "./module.btb"
+// @import Math-1.0 as Math
+// {
+//     struct Num{a:i32}
+//     struct HM {
+//         n: Num = Num{2}
+//     }
+//     local = HM{}
+//     printi(local.n.a)
+// }
+
+{
+	enum Size {
+		Tiny,
+		Massive
+	}
+	local = Size.Massive
+    printi(local)
+}
+global = local             //<- local is undefined
+// globalEnum = Size.Massive  //<- Size is undefined
+
+// a = 9
+
+// global = HM{};
+
+// printi(a.n)
+
+// printi(1)
+
+// printi(5)
+
+// #include "example/module.btb"
+// #include "./module.btb"
 
 // struct Array {
 //     ptr: void*,
 //     size: u64,   
 // }
-arr: Array;
+// arr: Array;
 
 // arr: Array;
 
@@ -22,9 +53,9 @@ arr: Array;
 // not good? add scope levels?
 
 // {
-    // struct A {
-    //     num: i32 = 23
-    // }
+//     struct A {
+//         num: i32 = 23
+//     }
 // }
 // {
 //     a: A = A{0}

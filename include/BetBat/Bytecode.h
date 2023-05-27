@@ -72,6 +72,7 @@ u8
 
 #define DECODE_REG_TYPE(X) ((X&BC_REG_MASK)>>6)
 #define ENCODE_REG_TYPE(X) (X<<6)
+#define DECODE_REG_SIZE(X) (X==0?0:(1<<DECODE_REG_TYPE(reg)));
 
 // BC_REG_ALL can't be 0 because it's seen as no register so we do 8.
 #define BC_REG_AL (ENCODE_REG_TYPE(BC_REG_8)|1)

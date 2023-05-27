@@ -54,6 +54,7 @@ struct GenInfo {
     std::vector<int> constStringMapping;
 
     ASTFunction* currentFunction=0;
+    ScopeId currentScopeId = 0;
     
     int funcDepth=0;
     
