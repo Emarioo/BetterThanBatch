@@ -28,18 +28,25 @@ bool Equal(Token& token, const char* str){
 // zero means no operation
 int IsOp(Token& token){
     if(token.flags&TOKEN_QUOTED) return 0;
-    if(token=="+") return AST_ADD;
-    if(token=="-") return AST_SUB;
-    if(token=="*") return AST_MUL;
-    if(token=="/") return AST_DIV;
-    if(token=="==") return AST_EQUAL;
-    if(token=="!=") return AST_NOT_EQUAL;
-    if(token=="<") return AST_LESS;
-    if(token==">") return AST_GREATER;
-    if(token=="<=") return AST_LESS_EQUAL;
-    if(token==">=") return AST_GREATER_EQUAL;
-    if(token=="&&") return AST_AND;
-    if(token=="||") return AST_OR;
+    if(Equal(token,"+")) return AST_ADD;
+    if(Equal(token,"-")) return AST_SUB;
+    if(Equal(token,"*")) return AST_MUL;
+    if(Equal(token,"/")) return AST_DIV;
+    if(Equal(token,"%")) return AST_MODULUS;
+    if(Equal(token,"==")) return AST_EQUAL;
+    if(Equal(token,"!=")) return AST_NOT_EQUAL;
+    if(Equal(token,"<")) return AST_LESS;
+    if(Equal(token,">")) return AST_GREATER;
+    if(Equal(token,"<=")) return AST_LESS_EQUAL;
+    if(Equal(token,">=")) return AST_GREATER_EQUAL;
+    if(Equal(token,"&&")) return AST_AND;
+    if(Equal(token,"||")) return AST_OR;
+    if(Equal(token,"&")) return AST_BAND;
+    if(Equal(token,"|")) return AST_BOR;
+    if(Equal(token,"^")) return AST_BXOR;
+    if(Equal(token,"~")) return AST_BNOT;
+    if(Equal(token,"<<")) return AST_BLSHIFT;
+    if(Equal(token,">>")) return AST_BRSHIFT;
     // NOT operation is special
 
     // if(token=="%") return BC_MOD;
@@ -51,7 +58,9 @@ int OpPrecedence(int op){
     if(op==AST_LESS||op==AST_GREATER||op==AST_LESS_EQUAL||op==AST_GREATER_EQUAL
         ||op==AST_EQUAL||op==AST_NOT_EQUAL) return 5;
     if(op==AST_ADD||op==AST_SUB) return 9;
-    if(op==AST_MUL||op==AST_DIV) return 10;
+    if(op==AST_MUL||op==AST_DIV||op==AST_MODULUS) return 10;
+    if(op==AST_BAND||op==AST_BOR||op==AST_BXOR||op==AST_BNOT||
+        op==AST_BLSHIFT||op==AST_BRSHIFT) return 13;
     log::out << log::RED<<__FILE__<<":"<<__LINE__<<", missing "<<op<<"\n";
     return 0;
 }
@@ -588,6 +597,12 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             if(Equal(token,"!")){
                 info.next();
                 directOps.push_back(AST_NOT);
+                attempt = false;
+                continue;
+            }
+            if(Equal(token,"~")){
+                info.next();
+                directOps.push_back(AST_BNOT);
                 attempt = false;
                 continue;
             }

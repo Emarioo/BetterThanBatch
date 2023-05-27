@@ -14,15 +14,17 @@
 //     printi(local.n.a)
 // }
 
-{
-	enum Size {
-		Tiny,
-		Massive
-	}
-	local = Size.Massive
-    printi(local)
-}
-global = local             //<- local is undefined
+printi(9<<2)
+
+// {
+// 	enum Size {
+// 		Tiny,
+// 		Massive
+// 	}
+// 	local = Size.Massive
+//     printi(local)
+// }
+// global = local             //<- local is undefined
 // globalEnum = Size.Massive  //<- Size is undefined
 
 // a = 9

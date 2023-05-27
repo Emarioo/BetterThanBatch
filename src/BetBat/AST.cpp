@@ -9,6 +9,7 @@ const char *OpToStr(int optype) {
         CASE(SUB, -)
         CASE(MUL, *)
         CASE(DIV, /)
+        CASE(MODULUS, /)
 
         CASE(EQUAL, ==)
         CASE(NOT_EQUAL, !=)
@@ -19,6 +20,13 @@ const char *OpToStr(int optype) {
         CASE(AND, &&)
         CASE(OR, ||)
         CASE(NOT, !)
+
+        CASE(BAND, &)
+        CASE(BOR, |)
+        CASE(BXOR, ^)
+        CASE(BNOT, ~)
+        CASE(BLSHIFT, <<)
+        CASE(BRSHIFT, >>)
 
         CASE(CAST, cast)
         CASE(MEMBER, member)

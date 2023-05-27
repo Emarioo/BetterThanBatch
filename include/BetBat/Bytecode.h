@@ -5,6 +5,8 @@
 #define BC_MOV_RM 2
 #define BC_MOV_MR 3
 
+#define BC_MODI 8
+#define BC_MODF 9
 #define BC_ADDI 10
 #define BC_ADDF 11
 #define BC_SUBI 12
@@ -13,7 +15,9 @@
 #define BC_MULF 15
 #define BC_DIVI 16
 #define BC_DIVF 17
+
 #define BC_INCR 18
+
 
 #define BC_JMP 20
 #define BC_CALL 21
@@ -35,11 +39,14 @@
 #define BC_GTE  55
 #define BC_ANDI  56
 #define BC_ORI   57
-#define BC_NOTB  58
+#define BC_NOT  58
 
 #define BC_BXOR  60
 #define BC_BOR  61
 #define BC_BAND  62
+#define BC_BNOT 63
+#define BC_BLSHIFT 64
+#define BC_BRSHIFT 65
 
 #define BC_CAST 90
 // flags for first operand

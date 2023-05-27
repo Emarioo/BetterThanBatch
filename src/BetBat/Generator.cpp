@@ -661,10 +661,21 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             int err = GenerateExpression(info,expression->left,&ltype);
             if(err==GEN_ERROR) return err;
             TypeInfo* ti = info.ast->getTypeInfo(ltype);
-            u8 reg = RegBySize(1,ltype);
+            u8 reg = RegBySize(1,ti->size());
 
             info.addPop(reg);
-            info.code->add({BC_NOTB,reg,reg});
+            info.code->add({BC_NOT,reg,reg});
+            info.addPush(reg);
+            
+            *outTypeId = ltype;
+        }else if(expression->typeId==AST_BNOT){
+            int err = GenerateExpression(info,expression->left,&ltype);
+            if(err==GEN_ERROR) return err;
+            TypeInfo* ti = info.ast->getTypeInfo(ltype);
+            u8 reg = RegBySize(1,ti->size());
+
+            info.addPop(reg);
+            info.code->add({BC_BNOT,reg,reg});
             info.addPush(reg);
             
             *outTypeId = ltype;
@@ -957,12 +968,13 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             info.addPop(reg2); // note that right expression should be popped first
             info.addPop(reg1);
             
-            #define GEN_OP(X,Y) if(expression->typeId==AST_##X) info.code->add({Y,reg2,reg1,reg2});
+            #define GEN_OP(X,Y) if(expression->typeId==AST_##X) info.code->add({Y,reg1,reg2,reg2});
             if(ltype==AST_FLOAT32){
                 GEN_OP(ADD,BC_ADDF)
                 else GEN_OP(SUB,BC_SUBF)
                 else GEN_OP(MUL,BC_MULF)
                 else GEN_OP(DIV,BC_DIVF)
+                else GEN_OP(MODULUS,BC_MODF)
                 else
                     // TODO: do OpToStr first and then if it fails print the typeId number
                     log::out << log::RED<<"GenExpr: operation "<<expression->typeId<<" not implemented\n";    
@@ -971,6 +983,8 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 else GEN_OP(SUB,BC_SUBI)
                 else GEN_OP(MUL,BC_MULI)
                 else GEN_OP(DIV,BC_DIVI)
+                else GEN_OP(DIV,BC_DIVI)
+                else GEN_OP(MODULUS,BC_MODI)
 
                 else GEN_OP(EQUAL,BC_EQ)
                 else GEN_OP(NOT_EQUAL,BC_NEQ)
@@ -980,6 +994,13 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 else GEN_OP(GREATER_EQUAL,BC_GTE)
                 else GEN_OP(AND,BC_ANDI)
                 else GEN_OP(OR,BC_ORI)
+
+                else GEN_OP(BAND,BC_BAND)
+                else GEN_OP(BOR,BC_BOR)
+                else GEN_OP(BXOR,BC_BXOR)
+                else GEN_OP(BNOT,BC_BNOT)
+                else GEN_OP(BLSHIFT,BC_BLSHIFT)
+                else GEN_OP(BRSHIFT,BC_BRSHIFT)
                 else
                     // TODO: do OpToStr first and then if it fails print the typeId number
                     log::out << log::RED<<"GenExpr: operation "<<expression->typeId<<" not implemented\n";

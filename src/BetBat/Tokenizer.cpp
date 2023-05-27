@@ -440,7 +440,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     
     memset(outTokens.tokenData.data,'_',outTokens.tokenData.max); // Good indicator for issues
     
-    const char* specials = "+-*/%=<>!&|" "$@#{}()[]" ":;.,";
+    const char* specials = "+-*/%=<>!&|~" "$@#{}()[]" ":;.,";
     int specialLength = strlen(specials);
     int line=1;
     int column=1;
@@ -566,7 +566,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
         bool isComment = chr=='/' && (nextChr == '/' || nextChr=='*');
         bool isDelim = chr==' ' || chr=='\t' || chr=='\n';
         bool isSpecial = false;
-        if(!isQuotes&&!isComment&&!isDelim){
+        if(!isQuotes&&!isComment&&!isDelim){ // early check for non-special
             
             // quicker but do we identify a character as special when it shouldn't?
             // isSpecial = !(false
@@ -584,11 +584,12 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             //     ||chr=='@'||chr=='#'||chr=='{'||chr=='}'
             //     ||chr=='('||chr==')'||chr=='['||chr==']'
             //     ||chr==':'||chr==';'||chr=='.'||chr==','
+            //     ||chr=='~'
             // ;
             // "+-*/%=<>!&|" "$@#{}()[]" ":;.,"
             
             // slow
-            for(int i=0;i<specialLength;i++){ // No need to run if delim, comment or quote
+            for(int i=0;i<specialLength;i++){
                 if(chr==specials[i]){
                     isSpecial = true;
                     break;
@@ -931,6 +932,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 (chr=='-'&&nextChr=='-')||
                 (chr=='&'&&nextChr=='&')||
                 (chr=='>'&&nextChr=='>')||
+                (chr=='<'&&nextChr=='<')||
                 (chr==':'&&nextChr==':')||
                 (chr=='.'&&nextChr=='.')||
                 (chr=='|'&&nextChr=='|')

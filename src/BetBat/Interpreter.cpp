@@ -115,6 +115,8 @@ void Interpreter::execute(Bytecode* bytecode){
         pc++;
         u8 opcode = DECODE_OPCODE(inst);
         switch (opcode) {
+        case BC_MODI:
+        case BC_MODF:
         case BC_ADDI:
         case BC_SUBI:
         case BC_MULI:
@@ -131,9 +133,11 @@ void Interpreter::execute(Bytecode* bytecode){
         case BC_GTE:
         case BC_ANDI:
         case BC_ORI:
-        case BC_BXOR:
-        case BC_BOR:
         case BC_BAND:
+        case BC_BOR:
+        case BC_BXOR:
+        case BC_BLSHIFT:
+        case BC_BRSHIFT:
         {
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
@@ -180,7 +184,8 @@ void Interpreter::execute(Bytecode* bytecode){
             
             u64 oldSp = sp;
 
-            if(opcode==BC_ADDF||opcode==BC_SUBF||opcode==BC_MULF||opcode==BC_DIVF){
+            if(opcode==BC_ADDF||opcode==BC_SUBF||opcode==BC_MULF||opcode==BC_DIVF
+                ||opcode==BC_MODF){
                 if(os!=4||xs!=4||ys!=4){
                     log::out << log::RED << "float operation requires 4 byte register";
                     return;
@@ -189,6 +194,8 @@ void Interpreter::execute(Bytecode* bytecode){
             #define GEN_OP(OP) out = x OP y; _ILOG(log::out << out << " = "<<x <<" "<< #OP << " "<<y;) break;
             #define GEN_OPF(OP) *(float*)&out = *(float*)&x OP *(float*)&y; _ILOG(log::out << *(float*)&out << " = "<<*(float*)&x <<" "<< #OP << " "<<*(float*)&y;) break;
             switch(opcode){
+                case BC_MODI: GEN_OP(%)
+                case BC_MODF: *(float*)&out = fmod(*(float*)&x,*(float*)&y); _ILOG(log::out << *(float*)&out << " = "<<*(float*)&x <<" % "<<*(float*)&y;) break;
                 case BC_ADDI: GEN_OP(+)   
                 case BC_SUBI: GEN_OP(-)   
                 case BC_MULI: GEN_OP(*)   
@@ -210,6 +217,8 @@ void Interpreter::execute(Bytecode* bytecode){
                 case BC_BXOR: GEN_OP(^)
                 case BC_BOR: GEN_OP(|)
                 case BC_BAND: GEN_OP(&)
+                case BC_BLSHIFT: GEN_OP(<<)
+                case BC_BRSHIFT: GEN_OP(>>)
             }
             #undef GEN_OP
             
@@ -250,7 +259,8 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out << "\n";)
             break;
         }
-        case BC_NOTB:{
+        case BC_NOT:
+        case BC_BNOT:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
 
@@ -259,18 +269,48 @@ void Interpreter::execute(Bytecode* bytecode){
                 continue;
             }
             void* xp = getReg(r0);
-            void* outp = getReg(r1);
+            void* op = getReg(r1);
             
-            i64 x = *(i64*)xp;
-            i64& out = *(i64*)outp;
-            
+            i64 x = 0;
+            int xs = 1<<DECODE_REG_TYPE(r0);
+            int os = 1<<DECODE_REG_TYPE(r1);
+            if(xs==1){
+                x = *(i8*)xp;
+            }
+            if(xs==2){
+                x = *(i16*)xp;
+            }
+            if(xs==4){
+                x = *(i32*)xp;
+            }
+            if(xs==8){
+                x = *(i64*)xp;
+            }
+            i64 out = 0;
+            u64 oldSp = sp;
+
             #define GEN_OP(OP) out = OP x; _ILOG(log::out << out << " = "<<#OP <<" "<< x;) break;
             switch(opcode){
-                case BC_NOTB: GEN_OP(!)
+                case BC_NOT: GEN_OP(!)
+                case BC_BNOT: GEN_OP(~)
             }
             #undef GEN_OP
             
             _ILOG(log::out << "\n";)
+
+            if(os==1){
+                *(i8*)op = out;
+            }
+            if(os==2){
+                *(i16*)op = out;
+            }
+            if(os==4){
+                *(i32*)op = out;
+            }
+            if(os==8){
+                *(i64*)op = out;
+            }
+
             break;
         }
         case BC_MOV_MR:{

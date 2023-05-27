@@ -7,6 +7,8 @@ const char* InstToStringX(int type){
         CASE(BC_MOV_RM)
         CASE(BC_MOV_MR)
         
+        CASE(BC_MODI)
+        CASE(BC_MODF)
         CASE(BC_ADDI)
         CASE(BC_ADDF)
         CASE(BC_SUBI)
@@ -35,11 +37,14 @@ const char* InstToStringX(int type){
         CASE(BC_GTE)
         CASE(BC_ANDI)
         CASE(BC_ORI) 
-        CASE(BC_NOTB)
+        CASE(BC_NOT)
         
-        CASE(BC_BXOR)
-        CASE(BC_BOR)
         CASE(BC_BAND)
+        CASE(BC_BOR)
+        CASE(BC_BXOR)
+        CASE(BC_BNOT)
+        CASE(BC_BLSHIFT)
+        CASE(BC_BRSHIFT)
         
         CASE(BC_CAST)
 

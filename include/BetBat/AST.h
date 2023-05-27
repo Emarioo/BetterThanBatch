@@ -68,6 +68,7 @@ enum OperationType : int {
     AST_SUB,
     AST_MUL,
     AST_DIV,
+    AST_MODULUS,
     
     AST_EQUAL,
     AST_NOT_EQUAL,
@@ -78,6 +79,13 @@ enum OperationType : int {
     AST_AND,
     AST_OR,
     AST_NOT,
+
+    AST_BAND,
+    AST_BOR,
+    AST_BXOR,
+    AST_BNOT,
+    AST_BLSHIFT,
+    AST_BRSHIFT,
     
     AST_CAST,
     AST_MEMBER,
