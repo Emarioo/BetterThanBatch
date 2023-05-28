@@ -16,10 +16,13 @@ struct GenInfo {
         ASTFunction* astFunc=0;
         u64 address=0;
     };
+    struct Namespace {
+        ASTNamespace* astNamespace=0;
+    };
     struct Identifier{
         Identifier() {}
         enum Type {
-            VAR, FUNC
+            VAR, FUNC, NAMESPACE
         };
         Type type=VAR;
         std::string name{};
@@ -27,15 +30,18 @@ struct GenInfo {
     };
     std::vector<Variable> variables;
     std::vector<Function> functions;
+    std::vector<Namespace> namespaces;
     std::unordered_map<std::string,Identifier> identifiers;
     
     Variable* addVariable(const std::string& name);
     Function* addFunction(const std::string& name);
+    Namespace* addNamespace(const std::string& name);
     
     Identifier* addIdentifier(const std::string& name);
     Identifier* getIdentifier(const std::string& name);
     Variable* getVariable(int index);
     Function* getFunction(int index);
+    Namespace* getNamespace(int index);
     
     void removeIdentifier(const std::string& name);
 

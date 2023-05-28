@@ -220,24 +220,56 @@ struct ASTFunction {
 
     void print(AST* ast, int depth);
 };
-struct ASTBody {
-    TokenRange tokenRange{};
-    ASTStruct* structs = 0;
-    ASTEnum* enums = 0;
-    ASTFunction* functions = 0;
-    ASTStatement* statements = 0;
-    
-    ASTStruct* structsTail = 0;
-    ASTEnum* enumsTail = 0;
-    ASTFunction* functionsTail = 0;
-    ASTStatement* statementsTail = 0;
+struct ASTNamespace;
+struct ASTSharedEnvironment {
+    ASTStruct* structs=0;
+    ASTStruct* structsTail=0;
+    void add(ASTStruct* astStruct);
 
+    ASTEnum* enums=0;
+    ASTEnum* enumsTail=0;
+    void add(ASTEnum* astEnum);
+   
+    ASTNamespace* namespaces=0;
+    ASTNamespace* namespacesTail=0;
+    void add(ASTNamespace* astFunction, AST* ast);
+    
+    ASTFunction* functions = 0;
+    ASTFunction* functionsTail = 0;
+    void add(ASTFunction* astFunction);
+};
+struct ASTNamespace : public ASTSharedEnvironment {
+    TokenRange tokenRange{};
+    std::string* name = 0;
     ScopeId scopeId=0;
 
-    void add(ASTStruct* astStruct);
+    ASTNamespace* next = 0;
+    void print(AST* ast, int depth);
+};
+struct ASTBody : public ASTSharedEnvironment {
+    TokenRange tokenRange{};
+    ScopeId scopeId=0;
+
+    // ASTStruct* structs = 0;
+    // ASTStruct* structsTail = 0;
+    // void add(ASTStruct* astStruct);
+    
+    // ASTEnum* enums = 0;
+    // ASTEnum* enumsTail = 0;
+    // void add(ASTEnum* astEnum);
+
+    // ASTFunction* functionsTail = 0;
+    // ASTFunction* functions = 0;
+    // void add(ASTFunction* astFunction);
+    
+    // ASTNamespace* namespaces = 0;
+    // ASTNamespace* namespacesTail = 0;
+    // void add(ASTNamespace* astNamespace, AST* ast);
+    
+    ASTStatement* statements = 0;
+    ASTStatement* statementsTail = 0;
     void add(ASTStatement* astStatement);
-    void add(ASTFunction* astFunction);
-    void add(ASTEnum* astEnum);
+    
 
     void print(AST* ast, int depth);
 };
@@ -268,9 +300,10 @@ struct AST {
 
     std::unordered_map<TypeId, TypeInfo*> typeInfos;
     void addTypeInfo(ScopeId scopeId, const std::string& name, TypeId id, int size=0);
+    TypeInfo* addTypeInfo(ScopeId scopeId, const std::string& name);
     // Creates a new type if needed
     // scopeId is the current scope. Parent scopes will also be searched.
-    TypeInfo* getTypeInfo(ScopeId scopeId, const std::string& name, bool dontCreate=false);
+    TypeInfo* getTypeInfo(ScopeId scopeId, const std::string& name, bool dontCreate=false, bool forceCreate=false);
     // scopeId is the current scope. Parent scopes will also be searched.
     TypeInfo* getTypeInfo(TypeId id);
 
@@ -294,6 +327,7 @@ struct AST {
     ASTEnum* createEnum(const std::string& name);
     ASTStatement* createStatement(int type);
     ASTExpression* createExpression(TypeId type);
+    ASTNamespace* createNamespace(const std::string& name);
     
     void destroy(ASTBody* body);
     void destroy(ASTFunction* function);
@@ -301,6 +335,7 @@ struct AST {
     void destroy(ASTEnum* astEnum);
     void destroy(ASTStatement* statement);
     void destroy(ASTExpression* expression);
+    void destroy(ASTNamespace* astNamespace);
 
     void print(int depth = 0);
 };

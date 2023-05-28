@@ -1,20 +1,47 @@
-// @disable all
-// @enable preprocessor
-// @disable interpreter
+@import ./module as Mod
+@import ./module
 
-// @import ./circular
-
-// @import Math-1.0 as Math
-// {
-//     struct Num{a:i32}
-//     struct HM {
-//         n: Num = Num{2}
-//     }
-//     local = HM{}
-//     printi(local.n.a)
+// namespace Top {
+    enum Nom {
+        One
+    }
 // }
 
-printi(9<<2)
+
+a: Nom;
+a = Nom2.Two;
+
+// // global: Math::Temp; // not fine
+
+// // Math::log(5)
+
+// namespace Math {
+//     enum Const {}
+    // namespace Chill{
+    //     enum A{}
+    // }
+// }
+
+
+// namespace Math {
+//     enum Const { PI=3, E=2 }
+// }
+// globl = Math::Const.PI
+// printi(globl)
+
+// namespace Math {
+//     fn cool(){}
+// }
+
+// glob: Type;
+// {
+//     enum Type {Yes}
+// }
+// glob = Type.Yes
+
+// glob = Math::Const.one
+
+// printi(9<<2)
 
 // {
 // 	enum Size {
@@ -86,23 +113,23 @@ printi(9<<2)
 
 // fn max(a, b) -> i32;
 
-// fn fun() {
-//     namespace Mini {
-//         struct Okay{
-//             a: i32,
-//             b: i32,   
-//         }
-//         callFunc()   
+fn fun() {
+    namespace Mini {
+        struct Okay{
+            a: i32,
+            b: i32,   
+        }
+        callFunc()   
         
-//         N = 9
-//         E = 2.718
-//         base = Okay{max(PI,5),2}
-//     }
+        N = 9
+        E = 2.718
+        base = Okay{max(PI,5),2}
+    }
     
-//     ok: Mini::Okay;
-//     ok.a = Mini::PI
-//     ok.b = Mini::E
-// }
+    ok: Mini::Okay;
+    ok.a = Mini::PI
+    ok.b = Mini::E
+}
 
 
 // #define TYPE u64

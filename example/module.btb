@@ -1,5 +1,22 @@
+// namespace Top {
+    enum Nom2 {
+        Two
+    }
+// }
 
-struct Array {
-    ptr: void*,
-    size: u64,   
-}
+// k: Top::Nom
+
+// struct Base : Nom {
+
+// }
+// struct NameSpace :: Base {
+
+// }
+// enum NameSpace::Nom {
+
+// }
+
+// struct Array {
+//     ptr: void*,
+//     size: u64,   
+// }

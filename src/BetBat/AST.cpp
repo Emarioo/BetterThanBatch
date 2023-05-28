@@ -139,17 +139,18 @@ AST *AST::Create() {
 }
 void AST::appendToMainBody(ASTBody *body) {
     if (body->enums) {
-        mainBody->add(body->enums);
+        mainBody->ASTSharedEnvironment::add(body->enums);
         body->enums = 0;
         body->enumsTail = 0;
     }
     if (body->functions) {
-        mainBody->add(body->functions);
+        mainBody->ASTSharedEnvironment::add(body->functions);
         body->functions = 0;
         body->functionsTail = 0;
+        // body->add(
     }
     if (body->structs) {
-        mainBody->add(body->structs);
+        mainBody->ASTSharedEnvironment::add(body->structs);
         body->structs = 0;
         body->structsTail = 0;
     }
@@ -157,6 +158,11 @@ void AST::appendToMainBody(ASTBody *body) {
         mainBody->add(body->statements);
         body->statements = 0;
         body->statementsTail = 0;
+    }
+    if (body->namespaces) {
+        mainBody->ASTSharedEnvironment::add(body->namespaces, this);
+        body->namespaces = 0;
+        body->namespacesTail = 0;
     }
     destroy(body);
 }
@@ -196,6 +202,12 @@ ASTExpression *AST::createExpression(TypeId type) {
     ptr->typeId = type;
     return ptr;
 }
+ASTNamespace *AST::createNamespace(const std::string& name) {
+    auto ptr = (ASTNamespace *)engone::Allocate(sizeof(ASTNamespace));
+    new (ptr) ASTNamespace();
+    ptr->name = new std::string(name);
+    return ptr;
+}
 #define TAIL_ADD(M, S)     \
     if (!M)                \
         M##Tail = M = S;   \
@@ -203,23 +215,118 @@ ASTExpression *AST::createExpression(TypeId type) {
         M##Tail->next = S; \
     while (M##Tail->next)  \
         M##Tail = M##Tail->next;
-void ASTBody::add(ASTStruct *astStruct) {
-    TAIL_ADD(structs, astStruct)
-}
+// void ASTNamespace::add(ASTStruct* astStruct){
+//     TAIL_ADD(structs, astStruct);
+// }
+// void ASTNamespace::add(ASTEnum* astStruct){
+//     TAIL_ADD(enums, astStruct);
+// }
+// void ASTNamespace::add(ASTFunction* astStruct){
+//     TAIL_ADD(functions, astStruct);
+// }
+// void ASTNamespace::add(ASTNamespace* astNamespace, AST* ast){
+//     if(!namespaces){
+//         namespacesTail = namespaces = astNamespace;
+//         return;
+//     }
+//     // NOTE: This code can be confusing and mistakes
+//     //  are easy to make. Keep a clear mind when
+//     //  working here and don't change things
+//     //  in the spur of the moment!
+//     // NOTE: This code is a duplicate of ASTBody::add(ASTNamespace*)
+//     ASTNamespace* nextInsert = astNamespace;
+//     while(nextInsert){
+//         ASTNamespace* now = nextInsert;
+//         nextInsert = nextInsert->next;
+
+//         bool appended=false;
+//         ASTNamespace* nextNS = namespaces;
+//         while(nextNS){
+//             ASTNamespace* ns = nextNS;
+//             nextNS = nextNS->next;
+
+//             if(*ns->name == *astNamespace->name){
+//                 appended=true;
+//                 ns->add(now->enums);
+//                 ns->add(now->functions);
+//                 ns->add(now->structs);
+//                 ns->add(now->namespaces, ast);
+//                 now->enums=0;
+//                 now->functions=0;
+//                 now->structs=0;
+//                 now->namespaces=0;
+//                 now->next = 0;
+//                 ast->destroy(now);
+//                 break;
+//             }
+//         }
+//         if(!appended){
+//             namespacesTail->next = now;
+//             now->next = 0;
+//             namespacesTail = now;
+//         }
+//     }
+// }
 void ASTBody::add(ASTStatement *astStatement) {
     TAIL_ADD(statements, astStatement)
-    // if(!statements)
-    //     statementsTail = statements = astStatement;
-    // else
-    //     statementsTail->next = astStatement;
-    // while(statementsTail->next)
-    //     statementsTail = statementsTail->next;
 }
-void ASTBody::add(ASTFunction *astFunction) {
+void ASTSharedEnvironment::add(ASTStruct *astStruct) {
+    TAIL_ADD(structs, astStruct)
+}
+void ASTSharedEnvironment::add(ASTFunction *astFunction) {
     TAIL_ADD(functions, astFunction)
 }
-void ASTBody::add(ASTEnum *astEnum) {
+void ASTSharedEnvironment::add(ASTEnum *astEnum) {
     TAIL_ADD(enums, astEnum)
+}
+void ASTSharedEnvironment::add(ASTNamespace* astNamespace, AST* ast){
+    if(!namespaces){
+        namespacesTail = namespaces = astNamespace;
+        while (namespacesTail->next)
+            namespacesTail = namespacesTail->next;
+        return;
+    }
+    // NOTE: This code can be confusing and mistakes
+    //  are easy to make. Keep a clear mind when
+    //  working here and don't change things
+    //  in the spur of the moment!
+    // NOTE: Change things in ASTNamespace::add WHEN DOING CHANGES HERE!
+    ASTNamespace* nextInsert = astNamespace;
+    while(nextInsert){
+        ASTNamespace* now = nextInsert;
+        nextInsert = nextInsert->next;
+
+        bool appended=false;
+        ASTNamespace* nextNS = namespaces;
+        while(nextNS){
+            ASTNamespace* ns = nextNS;
+            nextNS = nextNS->next;
+
+            if(*ns->name == *astNamespace->name){
+                appended=true;
+                if(now->enums)
+                    ns->add(now->enums);
+                if(now->functions)
+                    ns->add(now->functions);
+                if(now->structs)
+                    ns->add(now->structs);
+                if(now->namespaces)
+                    ns->add(now->namespaces, ast);
+                now->enums=0;
+                now->functions=0;
+                now->structs=0;
+                now->namespaces=0;
+                now->next = 0;
+                ast->destroy(now);
+                break;
+            }
+        }
+        if(!appended){
+            namespacesTail->next = now;
+            now->next = 0;
+            namespacesTail = namespacesTail->next;
+        }
+    }
 }
 void AST::Destroy(AST *ast) {
     if (!ast)
@@ -262,6 +369,8 @@ void AST::destroy(ASTBody *body) {
         destroy(body->functions);
     if (body->statements)
         destroy(body->statements);
+    if(body->namespaces)
+        destroy(body->namespaces);
 
     body->~ASTBody();
     engone::Free(body, sizeof(ASTBody));
@@ -332,6 +441,22 @@ void AST::destroy(ASTExpression *expression) {
     expression->~ASTExpression();
     engone::Free(expression, sizeof(ASTExpression));
 }
+void AST::destroy(ASTNamespace* ns) {
+    if (ns->next)
+        destroy(ns->next);
+    if (ns->name)
+        delete ns->name;
+    if (ns->structs)
+        destroy(ns->structs);
+    if (ns->enums)
+        destroy(ns->enums);
+    if (ns->functions)
+        destroy(ns->functions);
+    if (ns->namespaces)
+        destroy(ns->namespaces);
+    ns->~ASTNamespace();
+    engone::Free(ns, sizeof(ASTNamespace));
+}
 int TypeInfo::size() {
     if (astStruct)
         return astStruct->size;
@@ -356,6 +481,16 @@ ScopeInfo* AST::getScopeInfo(ScopeId id){
     }
     return pair->second;
 }
+// TypeInfo* addTypeInfo(ScopeId scopeId, const std::string& name){
+//     auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
+//     new (ptr) TypeInfo{name, , 0};
+//     ptr->scopeId = scopeId;
+//     auto scope = getScopeInfo(scopeId);
+//     Assert(scope);
+    
+//     typeInfos[ptr->id] = ptr;
+//     scope->nameTypeMap[ptr->name] = ptr;
+// }
 void AST::addTypeInfo(ScopeId scopeId, const std::string &name, TypeId id, int size) {
     auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
     new (ptr) TypeInfo{name, id, size};
@@ -366,16 +501,17 @@ void AST::addTypeInfo(ScopeId scopeId, const std::string &name, TypeId id, int s
     typeInfos[ptr->id] = ptr;
     scope->nameTypeMap[ptr->name] = ptr;
 }
-TypeInfo *AST::getTypeInfo(ScopeId scopeId, const std::string &name, bool dontCreate) {
+TypeInfo *AST::getTypeInfo(ScopeId scopeId, const std::string &name, bool dontCreate, bool forceCreate) {
     auto scope = getScopeInfo(scopeId);
     if(!scope) return 0;
     auto basePair = scope->nameTypeMap.find(name);
     if(basePair != scope->nameTypeMap.end()){
+        if(forceCreate) return 0;
         return basePair->second;
     }
 
     ScopeId nextParent = scope->parent;
-    if(scopeId!=globalScopeId){ // global scope does not have parent
+    if(scopeId!=globalScopeId && !forceCreate){ // global scope does not have parent
         while(true){
             auto parentScope = getScopeInfo(nextParent);
             if(!parentScope)
@@ -404,9 +540,9 @@ TypeInfo *AST::getTypeInfo(ScopeId scopeId, const std::string &name, bool dontCr
         typeInfos[ptr->id] = ptr;
         return ptr;
     } else if (AST::IsSlice(tok)) {
-        // TODO: slice should exist in global scope so use that 
+        // NOTE: slice should exist in global scope so use that 
         //  instead of scopeId to save some time.
-        return getTypeInfo(scopeId,"Slice");
+        return getTypeInfo(globalScopeId,"Slice");
         // return (typeInfos[name] = new TypeInfo{nextSliceTypeId++, 16}); // NOTE: fixed pointer size of 8
     } 
     auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
@@ -534,6 +670,26 @@ void ASTBody::print(AST *ast, int depth) {
         functions->print(ast, depth + 1);
     if (statements)
         statements->print(ast, depth + 1);
+    if (namespaces)
+        namespaces->print(ast, depth + 1);
+}
+void ASTNamespace::print(AST *ast, int depth) {
+    using namespace engone;
+    PrintSpace(depth);
+    log::out << "Namespace";
+    if(name)
+        log::out << " "<<*name;
+    log::out << "\n";
+    if (structs)
+        structs->print(ast, depth + 1);
+    if (enums)
+        enums->print(ast, depth + 1);
+    if (functions)
+        functions->print(ast, depth + 1);
+    if (namespaces)
+        namespaces->print(ast, depth + 1);
+    if(next)
+        next->print(ast,depth);
 }
 void ASTFunction::print(AST *ast, int depth) {
     using namespace engone;
@@ -725,8 +881,10 @@ void ASTExpression::print(AST *ast, int depth) {
             if(left)
                 left->print(ast, depth + 1);
         } else if (typeId == AST_FROM_NAMESPACE) {
-            // log::out << *name<<" "<<*member;
+            log::out << *name;
             log::out << "\n";
+            if(left)
+                left->print(ast, depth + 1);
         } else {
             log::out << "\n";
             if (left) {

@@ -248,8 +248,8 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
         endTok++;
         totalLength+=tok.length;
         info.next();
-        if(tok.flags&TOKEN_SUFFIX_LINE_FEED)
-            break;
+        // if(tok.flags&TOKEN_SUFFIX_LINE_FEED)
+        //     break;
     }
     outTypeId = {};
     outTypeId.str = new char[totalLength];
@@ -422,10 +422,118 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     astStruct->tokenRange.endIndex = info.at()+1;
     // astStruct->size = offset;
     // make sure data type doesn't exist?
-    auto typeInfo = info.ast->getTypeInfo(info.currentScopeId,name);
+    auto typeInfo = info.ast->getTypeInfo(info.currentScopeId,name,false,true);
+    if(!typeInfo){
+        ERRT(name) << name << " is taken\n";
+        info.ast->destroy(astStruct);
+        astStruct = 0;
+        return PARSE_ERROR;
+    }
     typeInfo->astStruct = astStruct;
     // typeInfo->_size = astStruct->size;
     _GLOG(log::out << "Parsed struct "<<name << " with "<<astStruct->members.size()<<" members\n";)
+    return error;
+}
+int ParseFunction(ParseInfo& info, ASTFunction*& tempFunction, bool attempt);
+int ParseStruct(ParseInfo& info, ASTStruct*& tempFunction, bool attempt);
+int ParseEnum(ParseInfo& info, ASTEnum*& tempFunction, bool attempt);
+int ParseNamespace(ParseInfo& info, ASTNamespace*& astNamespace, bool attempt){
+    using namespace engone;
+    _PLOG(FUNC_ENTER)
+    Token token = info.get(info.at()+1);
+    int startIndex = info.at()+1;
+    if(!Equal(token,"namespace")){
+        if(attempt)
+            return PARSE_BAD_ATTEMPT;
+        ERRT(token)<<"expected namespace not "<<token<<"\n";
+        ERRLINE
+        return PARSE_ERROR;
+    }
+    attempt = false;
+    info.next();
+    Token name = info.get(info.at()+1);
+    if(!IsName(name)){
+        ERRT(name)<<"expected a name, "<<name<<" isn't\n";
+        ERRLINE
+        return PARSE_ERROR;
+    }
+    info.next();
+
+    token = info.get(info.at()+1);
+    if(!Equal(token,"{")){
+        ERRT(token)<<"expected { not "<<token<<"\n";
+        ERRLINE
+        return PARSE_ERROR;
+    }
+    info.next();
+    
+    int nextId=0;
+    astNamespace = info.ast->createNamespace(name);
+    astNamespace->tokenRange.firstToken = token;
+    astNamespace->tokenRange.startIndex = startIndex;
+    astNamespace->tokenRange.tokenStream = info.tokens;
+
+    ScopeId prevScope = info.currentScopeId;
+    defer { info.currentScopeId = prevScope; };
+
+    info.currentScopeId = info.ast->addScopeInfo();
+    astNamespace->scopeId = info.currentScopeId;
+    
+
+    int error = PARSE_SUCCESS;
+    while(!info.end()){
+        Token& token = info.get(info.at()+1);
+        if(Equal(token,"}")){
+            info.next();
+            break;
+        }
+        ASTStruct* tempStruct=0;
+        ASTEnum* tempEnum=0;
+        ASTFunction* tempFunction=0;
+        ASTNamespace* tempNamespace=0;
+    
+        int result=PARSE_BAD_ATTEMPT;
+
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseFunction(info,tempFunction,true);
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseStruct(info,tempStruct,true);
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseEnum(info,tempEnum,true);
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseNamespace(info,tempNamespace,true);
+
+        if(result==PARSE_BAD_ATTEMPT){
+            Token& token = info.get(info.at()+1);
+            ERRT(token) << "Unexpected '"<<token<<"'\n";
+            ERRLINEP
+            // log::out << log::RED; info.printPrevLine();log::out << "\n";
+            ERRLINE
+            // test other parse type
+            info.next(); // prevent infinite loop
+        }
+        if(result==PARSE_ERROR){
+            
+        }
+            
+        // We add the AST structures even during error to
+        // avoid leaking memory.
+        if(tempNamespace) {
+            astNamespace->add(tempNamespace, info.ast);
+        }
+        if(tempFunction) {
+            astNamespace->add(tempFunction);
+        }
+        if(tempStruct) {
+            astNamespace->add(tempStruct);
+        }
+        if(tempEnum) {
+            astNamespace->add(tempEnum);
+        }
+    }
+
+    astNamespace->tokenRange.endIndex = info.at()+1;
+    _PLOG(log::out << "Namespace "<<name << "\n";)
     return error;
 }
 int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
@@ -439,16 +547,15 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         ERRLINE
         return PARSE_ERROR;   
     }
-    Token name = info.get(info.at()+2);
+    attempt=false;
+    info.next(); // enum
+    Token name = info.get(info.at()+1);
     if(!IsName(name)){
-        if(attempt) return PARSE_BAD_ATTEMPT;
         ERRT(name)<<"expected a name, "<<name<<" isn't\n";
         ERRLINE
         return PARSE_ERROR;
     }
-    info.next(); // struct
     info.next(); // name
-    attempt=false;
     
     Token token = info.get(info.at()+1);
     if(!Equal(token,"{")){
@@ -472,7 +579,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         }
         
         if(!IsName(name)){
-            info.next(); // ?
+            info.next(); // move forward to prevent infinite loop
             ERRT(name) << "expected a name, "<<name<<" isn't\n";
             ERRLINE
             error = PARSE_ERROR;
@@ -488,7 +595,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
                 nextId = ConvertInteger(token);
                 token = info.get(info.at()+1);
             }else{
-                ERRT(token) << token<<" is not a number\n";
+                ERRT(token) << token<<" is not an integer (i32)\n";
                 ERRLINE
             }
         }
@@ -509,10 +616,16 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         }
     }
     astEnum->tokenRange.endIndex = info.at()+1;
-    auto typeInfo = info.ast->getTypeInfo(info.currentScopeId,name);
+    auto typeInfo = info.ast->getTypeInfo(info.currentScopeId, name, false, true);
+    if(!typeInfo){
+        ERRT(name) << name << " is taken\n";
+        info.ast->destroy(astEnum);
+        astEnum = 0;
+        return PARSE_ERROR;
+    }
     typeInfo->astEnum = astEnum;
     typeInfo->_size = 4; // i32
-    _GLOG(log::out << "Parsed enum "<<name << " with "<<astEnum->members.size()<<" members\n";)
+    _PLOG(log::out << "Parsed enum "<<name << " with "<<astEnum->members.size()<<" members\n";)
     return error;
 }
 // #fex
@@ -531,13 +644,13 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     std::vector<ASTExpression*> values;
     std::vector<int> ops;
     std::vector<int> directOps; // ! & *
-    // extra info for AST_CAST
+    // extra info for directOps
     std::vector<TypeId> castTypes;
-
+    // extra info for directOps
+    std::vector<Token> namespaceNames;
     defer { for(auto e : values) info.ast->destroy(e); };
 
     bool negativeNumber=false;
-
     bool expectOperator=false;
     while(true){
         Token token = info.get(info.at()+1);
@@ -919,19 +1032,23 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }else if(Equal(tok,"::")){
                     info.next();
                     
-                    ERRT(tok) << " :: is not implemented\n";
-                    ERRLINE
-                    continue; 
+                    // ERRT(tok) << " :: is not implemented\n";
+                    // ERRLINE
+                    // continue; 
                     
-                    // Token tok = info.get(info.at()+1);
-                    // if(!IsName(tok)){
-                    //     ERRT(tok) << tok<<" is not a name\n";
-                    //     ERRLINE
-                    //     continue;
-                    // }
-                    // info.next();
+                    Token tok = info.get(info.at()+1);
+                    if(!IsName(tok)){
+                        ERRT(tok) << tok<<" is not a name\n";
+                        ERRLINE
+                        continue;
+                    }
+                    directOps.push_back(AST_FROM_NAMESPACE);
+                    namespaceNames.push_back(token);
+                    // namespaceToken = token;
+                    // namespaceName = new std::string(token);
+                    continue; // do a second round?
                     
-                    // // TODO: detect more ::
+                    // TODO: detect more ::
                     
                     // ASTExpression* tmp = info.ast->createExpression(AST_FROM_NAMESPACE);
                     // tmp->name = new std::string(token);
@@ -994,8 +1111,13 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             auto newVal = info.ast->createExpression(op);
             // TODO: token range doesn't include the operation token. It should.
             newVal->tokenRange = val->tokenRange;
-            
-            if(op==AST_CAST){
+            if(op==AST_FROM_NAMESPACE){
+                Token& tok = namespaceNames.back();
+                newVal->name = new std::string(tok);
+                newVal->tokenRange.firstToken = tok;
+                newVal->tokenRange.startIndex -= 2; // -{namespace name} -{::}
+                namespaceNames.pop_back();
+            } else if(op==AST_CAST){
                 newVal->castType = castTypes.back();
                 castTypes.pop_back();
             }
@@ -1614,8 +1736,6 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool globalScope, bool predefi
     }
     bodyLoc->scopeId = info.currentScopeId;
     
-
-    // ASTStatement* prev=0;
     while(!info.end()){
         Token& token = info.get(info.at()+1);
         if(Equal(token,"}") && scoped){
@@ -1626,6 +1746,7 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool globalScope, bool predefi
         ASTStruct* tempStruct=0;
         ASTEnum* tempEnum=0;
         ASTFunction* tempFunction=0;
+        ASTNamespace* tempNamespace=0;
         
         int result=PARSE_BAD_ATTEMPT;
 
@@ -1645,6 +1766,8 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool globalScope, bool predefi
             result = ParseStruct(info,tempStruct,true);
         if(result==PARSE_BAD_ATTEMPT)
             result = ParseEnum(info,tempEnum,true);
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseNamespace(info,tempNamespace,true);
         if(result==PARSE_BAD_ATTEMPT)
             result = ParseAssignment(info,tempStatement,true);
         if(result==PARSE_BAD_ATTEMPT)
@@ -1667,34 +1790,27 @@ int ParseBody(ParseInfo& info, ASTBody*& bodyLoc, bool globalScope, bool predefi
         if(result==PARSE_ERROR){
             
         }
-        if(result==PARSE_SUCCESS){
-            if(tempStatement) {
-                bodyLoc->add(tempStatement);
-                // if(prev){
-                //     prev->next = tempStatement;
-                //     prev = tempStatement;
-                // }else{
-                //     bodyLoc->statements = tempStatement;
-                //     prev = tempStatement;
-                // }
-            }
-            if(tempFunction) {
-                bodyLoc->add(tempFunction);
-                // tempFunction->next = bodyLoc->functions;
-                // bodyLoc->functions = tempFunction;
-            }
-            if(tempStruct) {
-                bodyLoc->add(tempStruct);
-                // tempStruct->next = bodyLoc->structs;
-                // bodyLoc->structs = tempStruct;
-            }
-            if(tempEnum) {
-                bodyLoc->add(tempEnum);
-                // tempEnum->next = bodyLoc->enums;
-                // bodyLoc->enums = tempEnum;
-            }
+        // NOTE: ANY CHANGES HERE SHOULD PROBABLY BE ADDED
+        //  TO ParseNamespace!
+        // We add the AST structures even during error to
+        // avoid leaking memory.
+        if(tempStatement) {
+            bodyLoc->add(tempStatement);
+        }
+        if(tempFunction) {
+            bodyLoc->ASTSharedEnvironment::add(tempFunction);
+        }
+        if(tempStruct) {
+            bodyLoc->ASTSharedEnvironment::add(tempStruct);
+        }
+        if(tempEnum) {
+            bodyLoc->ASTSharedEnvironment::add(tempEnum);
+        }
+        if(tempNamespace) {
+            bodyLoc->ASTSharedEnvironment::add(tempNamespace, info.ast);
         }
     }
+
     if(!info.end()){
         bodyLoc->tokenRange.endIndex = info.at()+1;
     }
@@ -1721,8 +1837,10 @@ ASTBody* ParseTokens(TokenStream* tokens, AST* ast, int* outErr){
     if(outErr){
         *outErr += info.errors;
     }
-    if(info.errors)
-        log::out << log::RED<<"Parser failed with "<<info.errors<<" error(s)\n";
+    
+    // compiler logs the error count, dont need it here too
+    // if(info.errors)
+    //     log::out << log::RED<<"Parser failed with "<<info.errors<<" error(s)\n";
     
     return body;
 }
