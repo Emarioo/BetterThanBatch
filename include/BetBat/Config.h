@@ -28,9 +28,9 @@
 
 // #define MLOG
 // #define PLOG
-// #define GLOG
+#define GLOG
 // #define OLOG
-// #define ILOG
+#define ILOG
 
 
 // #define USE_DEBUG_INFO

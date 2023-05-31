@@ -1,7 +1,7 @@
 // namespace Top {
-    enum Nom2 {
-        Two
-    }
+    // enum Nom2 {
+    //     Two
+    // }
 // }
 
 // k: Top::Nom

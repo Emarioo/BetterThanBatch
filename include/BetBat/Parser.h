@@ -17,6 +17,7 @@ struct ParseInfo {
     AST* ast=0;
 
     ScopeId currentScopeId=0;
+    std::string currentNamespace = "";
 
     // Does not handle out of bounds
     Token &prev();
@@ -36,4 +37,4 @@ struct ParseInfo {
     void nextLine();
 };
 
-ASTBody* ParseTokens(TokenStream* tokens, AST* ast, int* outErr=0);
+ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr=0);

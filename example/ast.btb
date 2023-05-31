@@ -1,28 +1,77 @@
-@import ./module as Mod
-@import ./module
+// @import ./module as Mod
+// @import ./module
 
-// namespace Top {
-    enum Nom {
-        One
-    }
+// namespace A {
+//     namespace CC {
+//         enum B {
+//             One = 99, 
+//         }
+//     }
+// }
+// namespace OKK{
+//     namespace N2 {
+//         struct OK{
+//             a: A::CC::B,
+//         }
+//     }
+// }
+// namespace A {
+//     namespace CC {
+//         struct SE {
+//             sup: OKK::N2::OK,
+//         }
+//     }
+// }
+// a = A{Hey.Two};
+// namespace NO {
+//     struct A {
+//         a: N::Hey,
+//     }
 // }
 
+a = "A"
+printc(a)
+// b = 9
+printi(a)
 
-a: Nom;
-a = Nom2.Two;
-
-// // global: Math::Temp; // not fine
-
-// // Math::log(5)
-
-// namespace Math {
-//     enum Const {}
-    // namespace Chill{
-    //     enum A{}
-    // }
+// i = 0
+// while i < 10 {
+//     printi(i)
+//     i+=1
 // }
 
+// a: A;
 
+// a: N::Hey;
+// a = N::Hey.Two;
+
+
+
+// a = NO::A{N::Hey.Two};
+// namespace N {
+//     struct CC {
+//         bb: NO::A,
+//     }
+//     enum Hey {
+//         Zero,
+//         One,
+//         Two,   
+//     }
+// }
+
+// a: N2::A
+// namespace N2 {
+//     struct A {
+//         a: N1::A
+//     }   
+// }
+// namespace N1 {
+//     enum A {
+        
+//     }   
+// }
+// a = A::B.One;
+// printi(a)
 // namespace Math {
 //     enum Const { PI=3, E=2 }
 // }
@@ -113,23 +162,23 @@ a = Nom2.Two;
 
 // fn max(a, b) -> i32;
 
-fn fun() {
-    namespace Mini {
-        struct Okay{
-            a: i32,
-            b: i32,   
-        }
-        callFunc()   
+// fn fun() {
+//     namespace Mini {
+//         struct Okay{
+//             a: i32,
+//             b: i32,   
+//         }
+//         callFunc()   
         
-        N = 9
-        E = 2.718
-        base = Okay{max(PI,5),2}
-    }
+//         N = 9
+//         E = 2.718
+//         base = Okay{max(PI,5),2}
+//     }
     
-    ok: Mini::Okay;
-    ok.a = Mini::PI
-    ok.b = Mini::E
-}
+//     ok: Mini::Okay;
+//     ok.a = Mini::PI
+//     ok.b = Mini::E
+// }
 
 
 // #define TYPE u64

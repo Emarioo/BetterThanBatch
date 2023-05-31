@@ -1,10 +1,12 @@
 #pragma once
 
 #include "Engone/Alloc.h"
+#include "Engone/Logger.h"
+#include "Engone/PlatformLayer.h"
+
 #include <functional>
 #include <string.h>
 #include <unordered_map>
-#include "Engone/PlatformLayer.h"
 #include <math.h>
 
 // Returns memory with no data if file couldn't be accessed.
@@ -62,11 +64,3 @@ struct DeferStruct {
     ~DeferStruct() { _func(); }
     std::function<void()>& _func;
 };
-
-
-// not very useful since you want placement new
-#define DISABLE_NEW private:\
-        static void *operator new     (size_t) = delete;\
-        static void *operator new[]   (size_t) = delete;\
-        static void  operator delete  (void*)  = delete;\
-        static void  operator delete[](void*)  = delete;

@@ -17,7 +17,7 @@ struct GenInfo {
         u64 address=0;
     };
     struct Namespace {
-        ASTNamespace* astNamespace=0;
+        ASTScope* astNamespace=0;
     };
     struct Identifier{
         Identifier() {}
@@ -75,6 +75,6 @@ struct GenInfo {
     
 };
 
-bool EvaluateTypes(AST* ast, ASTBody* body, int* err);
+// bool EvaluateTypes(AST* ast, ASTScope* body, int* err);
 
 Bytecode* Generate(AST* ast, int* err);

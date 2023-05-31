@@ -94,16 +94,16 @@ bool ParseFile(CompileInfo& info, const std::string& path){
     }
     
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path)<<"\n";)
-    ASTBody* body = ParseTokens(tokenStream,info.ast,&info.errors);
+    ASTScope* body = ParseTokens(tokenStream,info.ast,&info.errors);
     // info.ast->destroy(body);
     // body = 0;
 
     if(!body)
         return false;
-    bool yes = EvaluateTypes(info.ast,body,&info.errors);
-    if(yes){
-        info.ast->appendToMainBody(body);
-    }
+        
+    // info.errors += TypeCheck(info.ast);
+    // bool yes = EvaluateTypes(info.ast,body,&info.errors);
+    info.ast->appendToMainBody(body);
     return true;
 }
 
@@ -126,13 +126,17 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
     CompileInfo compileInfo{};
     compileInfo.ast = AST::Create();
     compileInfo.compilerDir = TrimLastFile(compilerPath);
-    EvaluateTypes(compileInfo.ast,compileInfo.ast->mainBody,&compileInfo.errors);
+    // compileInfo.errors += TypeCheck(compileInfo.ast, compileInfo.ast->mainBody);
+    // EvaluateTypes(compileInfo.ast,compileInfo.ast->mainBody,&compileInfo.errors);
+    
     ParseFile(compileInfo, absPath);
     ast = compileInfo.ast;
     
-    if(compileInfo.errors==0){
-        _VLOG(log::out << "Final "; compileInfo.ast->print();)
-    }
+    compileInfo.errors += TypeCheck(ast, ast->mainBody);
+    
+    // if(compileInfo.errors==0){
+        _VLOG(log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
+    // }
     // if (tokens.enabled & LAYER_GENERATOR){
     if(compileInfo.errors==0 && ast){
         _VLOG(log::out <<log::BLUE<< "Generating code:\n";)

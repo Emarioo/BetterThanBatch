@@ -121,6 +121,7 @@ int RegBySize(int regName, int size);
 #define BC_EXT_REALLOC -2
 #define BC_EXT_FREE -3
 #define BC_EXT_PRINTI -4
+#define BC_EXT_PRINTC -5
 
 struct Instruction {
     uint8 opcode=0;

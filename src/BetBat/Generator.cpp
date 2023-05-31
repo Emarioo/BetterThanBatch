@@ -2,12 +2,14 @@
 
 #undef ERRT
 #undef ERR
+#undef ERRTYPE
 
 // Remember to wrap macros in {} when using if or loops
 // since macros have multiple statements.
 #define ERR() info.errors++;engone::log::out << engone::log::RED <<"GenError, "
 #define ERRT(R) info.errors++;engone::log::out << engone::log::RED <<"GenError "<<(R.firstToken.line)<<":"<<(R.firstToken.column)<<", "
-#define ERRTYPE(R,LT,RT) ERRT(R) << "Type mismatch "<<info.ast->getTypeInfo(LT)->name<<" - "<<info.ast->getTypeInfo(RT)->name<<" "
+#define ERRL(R) info.errors++;engone::log::out << engone::log::RED <<"GenError "<<(R.firstToken.line)<<":"<<(R.tokenStream->get(R.endIndex-1).column + R.tokenStream->get(R.endIndex-1).length)<<", "
+#define ERRTYPE(R,LT,RT) ERRT(R) << "Type mismatch "<<info.ast->getTypeInfo(LT)->getFullType(info.ast)<<" - "<<info.ast->getTypeInfo(RT)->getFullType(info.ast)<<" "
 
 #define LOGAT(R) R.firstToken.line <<":"<<R.firstToken.column
 
@@ -215,22 +217,26 @@ bool PerformSafeCast(GenInfo& info, TypeId from, TypeId to) {
     auto fti = info.ast->getTypeInfo(from);
     auto tti = info.ast->getTypeInfo(to);
     u8 reg0 = RegBySize(1,fti->size());
-u8 reg1 = RegBySize(1,tti->size());
+    u8 reg1 = RegBySize(1,tti->size());
     if(from==AST_FLOAT32&&AST::IsInteger(to)){
         info.addPop(reg0);
-        // if(AST::IsSigned(to)){
         info.code->add({BC_CAST,CAST_FLOAT_SINT,reg0,reg1});
-        // }
         info.addPush(reg1);
         return true;
     }
     if(AST::IsInteger(from)&&to==AST_FLOAT32){
-        // info.code->add({BC_BXOR,BC_REG_RAX,BC_REG_RAX,BC_REG_RAX});
-        // auto ti1 = info.ast->getTypeInfo(from);
-        // u8 r1 = RegBySize(1, ti1->size());
         info.addPop(reg0);
         info.code->add({BC_CAST,CAST_SINT_FLOAT,reg0,reg1});
         info.addPush(reg1);
+        return true;
+    }
+    if((AST::IsInteger(from) && to == AST_CHAR) ||
+        (from == AST_CHAR && AST::IsInteger(to))){
+        // if(fti->size() != tti->size()){
+            info.addPop(reg0);
+            info.code->add({BC_CAST,CAST_SINT_SINT,reg0,reg1});
+            info.addPush(reg1);
+        // }
         return true;
     }
     if(AST::IsInteger(from)&&AST::IsInteger(to)){
@@ -264,7 +270,11 @@ u8 reg1 = RegBySize(1,tti->size());
     // Assert(("IsSafeCast not handled case",0))
     // return false;
 }
-// Auto cast integers and pointer. Otherwise types has to be the same.
+// pointers are safe to convert
+// you need to pop the values with correct registers
+// popping small register and pushing bigger register can be dangerous
+// since a part of the register contains unexpected data you will use that
+// when pushing bigger registers. You would need to XOR 64 bit register first.
 bool IsSafeCast(TypeId from, TypeId to) {
     // if(AST::IsInteger(from)&&AST::IsInteger(to))
         // return true;
@@ -322,7 +332,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             info.code->addIm(val);
             info.addPush(BC_REG_AL);
         } else if(expression->typeId==AST_CHAR){
-            bool val = expression->charValue;
+            char val = expression->charValue;
             
             
             TOKENINFO(expression->tokenRange)
@@ -432,7 +442,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
 
                     if(!arg->namedValue){
                         if((int)realArgs.size()<=index){
-                            ERRT(arg->tokenRange) << "To many arguments for function "<<*func->astFunc->name<<" ("<<func->astFunc->arguments.size()<<" argument(s) allowed)\n";
+                            ERRT(arg->tokenRange) << "To many arguments for function "<<func->astFunc->name<<" ("<<func->astFunc->arguments.size()<<" argument(s) allowed)\n";
                             continue;
                         }else
                             realArgs[index] = arg;
@@ -445,7 +455,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                             }
                         }
                         if(argIndex==-1){
-                            ERRT(arg->tokenRange) << *arg->namedValue<<" is not an argument in "<<*func->astFunc->name<<"\n";
+                            ERRT(arg->tokenRange) << *arg->namedValue<<" is not an argument in "<<func->astFunc->name<<"\n";
                             continue;
                         } else {
                             if(realArgs[argIndex]){
@@ -470,7 +480,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                     index++;
                     TypeId dt=0;
                     if(!arg){
-                        ERRT(expression->tokenRange) << "missing argument for "<<func->astFunc->arguments[index].name<< " (call to "<<*func->astFunc->name<<")\n";
+                        ERRT(expression->tokenRange) << "missing argument for "<<func->astFunc->arguments[index].name<< " (call to "<<func->astFunc->name<<")\n";
                         continue;
                     }
 
@@ -829,7 +839,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 int enumValue;
                 bool found = typeInfo->astEnum->getMember(*expression->name, &enumValue);
                 if(!found){
-                    ERRT(expression->tokenRange) << expression->tokenRange.firstToken<<" is not a member of enum "<<*typeInfo->astEnum->name<<"\n";
+                    ERRT(expression->tokenRange) << expression->tokenRange.firstToken<<" is not a member of enum "<<typeInfo->astEnum->name<<"\n";
                     return GEN_ERROR;
                 }
 
@@ -837,7 +847,8 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 info.code->addIm(enumValue);
                 info.addPush(BC_REG_EAX);
 
-                *outTypeId = AST_INT32;
+                *outTypeId = exprId;
+                // *outTypeId = AST_INT32;
             } else {
                 *outTypeId = AST_VOID;
                 ERRT(expression->tokenRange) << "member access only works on structs and enums. "<<info.ast->getTypeInfo(exprId)->name<<" isn't one (astStruct/Enum was null at least)\n";
@@ -870,7 +881,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
 
                 if(!expr->namedValue){
                     if((int)exprs.size()<=index){
-                        ERRT(expr->tokenRange) << "To many members for struct "<<*astruct->name<<" ("<<astruct->members.size()<<" member(s) allowed)\n";
+                        ERRT(expr->tokenRange) << "To many members for struct "<<astruct->name<<" ("<<astruct->members.size()<<" member(s) allowed)\n";
                         continue;
                     }else
                         exprs[index] = expr;
@@ -883,7 +894,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                         }
                     }
                     if(memIndex==-1){
-                        ERRT(expr->tokenRange) << *expr->namedValue<<" is not an member in "<<*astruct->name<<"\n";
+                        ERRT(expr->tokenRange) << *expr->namedValue<<" is not an member in "<<astruct->name<<"\n";
                         continue;
                     } else {
                         if(exprs[memIndex]){
@@ -906,7 +917,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 index--;
                 ASTExpression* expr = exprs[index];
                 if(!expr){
-                    ERRT(expression->tokenRange) << "missing argument for "<<astruct->members[index].name<< " (call to "<<*astruct->name<<")\n";
+                    ERRT(expression->tokenRange) << "missing argument for "<<astruct->members[index].name<< " (call to "<<astruct->name<<")\n";
                     continue;
                 }
 
@@ -1111,7 +1122,7 @@ int GenerateDefaultValue(GenInfo& info, TypeInfo* typeInfo){
     }
     return GEN_SUCCESS;
 }
-int GenerateBody(GenInfo& info, ASTBody* body){
+int GenerateBody(GenInfo& info, ASTScope* body){
     using namespace engone;
     _GLOG(FUNC_ENTER)
     Assert(body)
@@ -1131,9 +1142,9 @@ int GenerateBody(GenInfo& info, ASTBody* body){
 
         int lastOffset=info.currentFrameOffset;
         
-        auto func = info.addFunction(*function->name);
+        auto func = info.addFunction(function->name);
         if(!func){
-            ERRT(function->tokenRange) << *function->name<<" is already defined\n";
+            ERRT(function->tokenRange) << function->name<<" is already defined\n";
             if(function->tokenRange.firstToken.str){
                 ERRTOKENS(function->tokenRange)
             }
@@ -1163,6 +1174,9 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             // for(int i = func->astFunc->arguments.size()-1;i>=0;i--){
                 auto& arg = func->astFunc->arguments[i];
                 auto var = info.addVariable(arg.name);
+                if(!var){
+                    ERRT(func->astFunc->tokenRange) << arg.name << " already exists\n";
+                }
                 var->typeId = arg.typeId;
                 TypeInfo* typeInfo = info.ast->getTypeInfo(arg.typeId);
 
@@ -1236,7 +1250,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 nextState = nextState->next;
             }
             if(!foundReturn){
-                ERR()<<"missing return statement in "<<*function->name<<"\n";
+                ERR()<<"missing return statement in "<<function->name<<"\n";
             }
         }
 
@@ -1249,9 +1263,9 @@ int GenerateBody(GenInfo& info, ASTBody* body){
     }
     int lastOffset=info.currentFrameOffset;
     
-    ASTNamespace* nextSpace = body->namespaces;
+    ASTScope* nextSpace = body->namespaces;
     while(nextSpace){
-        ASTNamespace* space = nextSpace;
+        ASTScope* space = nextSpace;
         nextSpace = nextSpace->next;
         // TODO: There are some serious issues with identifiers and namespaces.
         //   If a variable or functions uses the same name things could be overwritten
@@ -1295,8 +1309,11 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                 // typeid comes from current scope since we do "var: Type;"
                 var->typeId = statement->typeId;
                 TypeInfo* typeInfo = info.ast->getTypeInfo(var->typeId);
-                if(typeInfo->size()==0){
-                    ERRT(statement->tokenRange) << "Undefined type "<<typeInfo->name << " (the size was 0 which isn't allowed)\n";
+                if(!typeInfo||typeInfo->size()==0){
+                    ERRT(statement->tokenRange) << "Undefined type ";
+                    if(typeInfo)
+                        log::out << typeInfo->name;
+                    log::out << " (the size was 0 which isn't allowed)\n";
                     continue; 
                 }
 
@@ -1367,8 +1384,19 @@ int GenerateBody(GenInfo& info, ASTBody* body){
 
             } else if(etype==AST_VOID){
                 ERRT(statement->tokenRange) << "datatype for assignment cannot be void\n";
-            } else if(!id||id->type==GenInfo::Identifier::VAR){
-                if(PerformSafeCast(info,etype,statement->typeId) || statement->typeId==AST_VOID){
+            } else if(!id||id->type==GenInfo::Identifier::VAR) {
+                if(!(!var && statement->typeId==AST_VOID) &&
+                    (!var && !PerformSafeCast(info,etype,statement->typeId)) &&
+                    (var && !PerformSafeCast(info,etype,var->typeId))
+                    ) {
+                    if(var){
+                        ERRTYPE(statement->tokenRange,var->typeId,etype) << "(assign)\n";
+                    } else {
+                        ERRTYPE(statement->tokenRange,statement->typeId,etype) << "(assign)\n";
+                    }
+                    ERRTOKENS(statement->tokenRange);
+                    continue;
+                } else {
                     // if(statement->typeId!=AST_VOID)
                     //     etype = statement->typeId;
                 // if(dtype==statement->typeId || statement->typeId==AST_VOID){
@@ -1469,18 +1497,85 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     //     info.code->addIm(8);
                     //     info.code->add({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
                     // }
-                }else{
-                    ERRTYPE(statement->tokenRange,statement->typeId,etype) << "(assign)\n";
-                    ERRTOKENS(statement->tokenRange);
-                    continue;
-                    // TODO: Show were in the code
                 }
+                // else{
+                //     if(var){
+                //         ERRTYPE(statement->tokenRange,var->typeId,etype) << "(assign)\n";
+                //     } else {
+                //         ERRTYPE(statement->tokenRange,statement->typeId,etype) << "(assign)\n";
+                //     }
+                //     ERRTOKENS(statement->tokenRange);
+                //     continue;
+                //     // TODO: Show were in the code
+                // }
             }
             _GLOG(log::out << " "<<*statement->name << " : "<<info.ast->getTypeInfo(var->typeId)->name<<"\n";)
         } else if(statement->type==ASTStatement::PROP_ASSIGN){
             _GLOG(SCOPE_LOG("PROP_ASSIGN"))
             
-            if(statement->lvalue->typeId==AST_DEREF){
+            if((statement->opType == AST_ADD ||statement->opType==AST_SUB||
+                   statement->opType==AST_MUL||statement->opType==AST_DIV)){
+                if(statement->lvalue->typeId != AST_VAR){
+                        ERRL(statement->lvalue->tokenRange) << "+= like operation is limited to variables ";
+                        if(statement->lvalue->typeId == AST_MEMBER)
+                            log::out << "(member is not implemented)";
+                        if(statement->lvalue->typeId == AST_DEREF)
+                            log::out << "(dereference is not implemented)";
+                        log::out << "\n";
+                        ERRTOKENS(statement->tokenRange)
+                        continue;
+                }
+                
+                auto iden = info.getIdentifier(*statement->lvalue->name);
+                if(!iden || iden->type != GenInfo::Identifier::VAR){
+                    ERRT(statement->lvalue->tokenRange) << *statement->lvalue->name << " is not a variable\n";
+                    continue;
+                }
+                auto var = info.getVariable(iden->index);
+                
+                info.code->addDebugText("prop-assign (var)\n");
+                TypeId rtype=0;
+                int result = GenerateExpression(info, statement->rvalue,&rtype);
+                if(result!=GEN_SUCCESS) {
+                    continue;
+                }
+                
+                if(!IsSafeCast(var->typeId, rtype)){
+                    ERRTYPE(statement->tokenRange,var->typeId,rtype) << "\n";
+                    continue;
+                }
+                TypeInfo* linfo = info.ast->getTypeInfo(var->typeId);
+                TypeInfo* rinfo = info.ast->getTypeInfo(rtype);
+                
+                u8 lreg = RegBySize(1,linfo->size()); // reg a
+                u8 rreg = RegBySize(4,rinfo->size()); // reg d
+                
+                info.code->add({BC_LI,BC_REG_RBX});
+                info.code->addIm(var->frameOffset);
+                info.code->add({BC_ADDI,BC_REG_RBX,BC_REG_FP,BC_REG_RBX});
+                
+                info.code->add({BC_MOV_MR, BC_REG_RBX, lreg});
+                info.addPop(rreg);
+                
+                u8 op = 0;
+                if(var->typeId == AST_FLOAT32) {
+                    switch(statement->opType){
+                        case AST_ADD: op = BC_ADDF; break;
+                        case AST_SUB: op = BC_SUBF; break;
+                        case AST_MUL: op = BC_MULF; break;
+                        case AST_DIV: op = BC_DIVF; break;
+                    }
+                } else {
+                    switch(statement->opType){
+                        case AST_ADD: op = BC_ADDI; break;
+                        case AST_SUB: op = BC_SUBI; break;
+                        case AST_MUL: op = BC_MULI; break;
+                        case AST_DIV: op = BC_DIVI; break;
+                    }
+                }
+                info.code->add({op,lreg,rreg,lreg});
+                info.code->add({BC_MOV_RM,lreg,BC_REG_RBX});
+            } else if(statement->lvalue->typeId==AST_DEREF){
                 TypeId dtype=0;
                 int result = GenerateExpression(info, statement->lvalue->left,&dtype);
                 if(result!=GEN_SUCCESS) {
@@ -1533,14 +1628,14 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     
                 auto id = info.getIdentifier(*varexpr->name);
                 if(!id||id->type!=GenInfo::Identifier::VAR){
-                    ERRT(varexpr->tokenRange) << varexpr->name<<" is not a variable\n";
+                    ERRT(varexpr->tokenRange) << *varexpr->name<<" is not a variable\n";
                     continue;
                     // return GEN_ERROR;
                 }
                 auto var = info.getVariable(id->index);
                 auto typeInfo = info.ast->getTypeInfo(var->typeId);
-                if(!typeInfo->astStruct){
-                    ERRT(varexpr->tokenRange) << varexpr->name<<" is not a struct, can't do prop assignment\n";
+                if(!typeInfo || !typeInfo->astStruct){
+                    ERRT(varexpr->tokenRange) << *varexpr->name<<" is not a struct, can't do prop assignment\n";
                     continue;
                     // return GEN_ERROR;
                 }
@@ -1550,7 +1645,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
                     auto expr = members[i];
                     auto meminfo = typeInfo->getMember(*expr->name);
                     if(meminfo.index==-1){
-                        ERRT(expr->tokenRange) << *expr->name<<" is not a member of "<<*typeInfo->astStruct->name<<"\n";
+                        ERRT(expr->tokenRange) << *expr->name<<" is not a member of "<<typeInfo->astStruct->name<<"\n";
                         return GEN_ERROR; // TODO: continue instead
                     }
                     
@@ -1609,6 +1704,11 @@ int GenerateBody(GenInfo& info, ASTBody* body){
 
             // info.code->add({BC_POP,BC_REG_RAX});
             TypeInfo* typeInfo = info.ast->getTypeInfo(dtype);
+            if(!typeInfo){
+                
+                // TODO: Print error? or does generate expression do that since it gives us dtype?
+                continue;   
+            }
             u8 reg = RegBySize(1,typeInfo->size());
             
             info.addPop(reg);
@@ -1730,7 +1830,7 @@ int GenerateBody(GenInfo& info, ASTBody* body){
             }
             argi++; // incremented to get argument count
             if(argi!=(int)info.currentFunction->returnTypes.size()){
-                ERRT(statement->tokenRange) << "Found "<<argi<<" return values but should have "<<info.currentFunction->returnTypes.size()<<" for '"<<*info.currentFunction->name<<"'\n";   
+                ERRT(statement->tokenRange) << "Found "<<argi<<" return values but should have "<<info.currentFunction->returnTypes.size()<<" for '"<<info.currentFunction->name<<"'\n";   
             }
             
             // fix stack pointer before returning
@@ -1841,6 +1941,15 @@ Bytecode* Generate(AST* ast, int* err){
     astfun->arguments.push_back({});
     astfun->arguments.back().typeId = ast->getTypeInfo(ast->globalScopeId,"i64")->id;
     astfun->arguments.back().name = "num";
+    }{
+    auto fun = info.addFunction("printc");
+    fun->address = BC_EXT_PRINTC;
+    
+    auto astfun = (fun->astFunc = ast->createFunction("printc"));
+    predefinedFuncs.push_back(astfun);
+    astfun->arguments.push_back({});
+    astfun->arguments.back().typeId = ast->getTypeInfo(ast->globalScopeId,"char")->id;
+    astfun->arguments.back().name = "chr";
     }
 
     //-- Append static data
@@ -1861,330 +1970,6 @@ Bytecode* Generate(AST* ast, int* err){
     // if(info.errors)
     //     log::out << log::RED<<"Generator failed with "<<info.errors<<" error(s)\n";
     if(err)
-        *err += info.errors;
+        (*err) += info.errors;
     return info.code;
-}
-
-bool EvaluateTypes(AST* ast, ASTNamespace* ns, int* err);
-bool EvaluateTypes(AST* ast, ASTBody* body, int* err){
-    using namespace engone;
-    if(!body){
-        return false;
-    }
-    
-    //-- complete structs
-    bool completedStructs=false;
-    while(!completedStructs){
-        completedStructs = true;
-        bool changed=false;
-        ASTStruct* nextStruct=body->structs;
-        if(!nextStruct) changed=true;
-        while(nextStruct){
-            ASTStruct* astStruct = nextStruct;
-            nextStruct = nextStruct->next;
-            
-            if(!astStruct->typeComplete){
-                TypeInfo* structInfo = ast->getTypeInfo(body->scopeId,*astStruct->name);
-                // log::out << "Evaluating "<<*astStruct->name<<"\n";
-                astStruct->typeComplete = true;
-                int offset=0;
-                int alignedSize=0; // offset will be aligned to match this at the end
-                /* This case is dealt with using biggestType
-                struct A {
-                    a: bool,
-                    a: i64,
-                    b: bool,
-                }
-                sizeof A = 24
-                */
-                for(auto& member : astStruct->members){
-                    TypeInfo* typeInfo = ast->getTypeInfo(member.typeId);
-                    // log::out << " "<<typeInfo->name << " "<<typeInfo->size()<<"\n";
-                    if(!typeInfo || typeInfo->size()==0){
-                        if(member.typeId == structInfo->id){
-                            // TODO: phrase the error message in a better way
-                            // TOOD: print some column and line info.
-                            // TODO: message is printed twice
-                            // log::out << log::RED <<"Member "<< member.name <<" in struct "<<*astStruct->name<<" cannot be it's own type\n";
-                        } else {
-                            // log::out << log::RED << *astStruct->name<<"::"<<member.name << " requires "<<typeInfo->name<<"\n";
-                        }
-                        astStruct->typeComplete = false;
-                        break;
-                    }
-                    if(alignedSize<typeInfo->alignedSize())
-                        alignedSize = typeInfo->alignedSize();
-                    int misalign = offset % typeInfo->size();
-                    if(misalign!=0){
-                        offset+=typeInfo->size()-misalign;
-                    }
-                    // log::out << " "<<offset<<": "<<member.name<<" ("<<typeInfo->size()<<" bytes)\n";
-                    member.offset = offset;
-                    offset+=typeInfo->size();
-                }
-
-                if(!astStruct->typeComplete) {
-                    // log::out << log::RED << "Evaluation failed\n";
-                    completedStructs = false;
-                } else {
-                    // align the end so the struct can be stacked together
-                    astStruct->alignedSize = alignedSize;
-                    int misalign = offset % alignedSize;
-                    if(misalign!=0){
-                        offset+=alignedSize-misalign;
-                    }
-                    astStruct->size = offset;
-                    // log::out << *astStruct->name << " was evaluated to "<<offset<<" bytes\n";
-                    changed=true;
-                }
-            }
-        }
-        if(!changed){
-            err+=1; // TODO: shouldn't be 1. add how many errors actually occurred
-            log::out << log::RED << "Some types could not be evaluated\n";
-            return false;
-        }
-    }
-
-    // arguments
-    ASTFunction* nextFunc = body->functions;
-    while(nextFunc){
-        ASTFunction* func = nextFunc;
-        nextFunc = nextFunc->next;
-
-        // log::out << "Eval func "<<*func->name<<"\n";
-        int offset = 0; // offset starts before call frame (fp, pc)
-        int firstSize = 0;
-        // for(int i=func->arguments.size()-1;i>=0;i--){
-        // Based on 8-bit alignment. The last argument must be aligned by it.
-        for(int i=0;i<(int)func->arguments.size();i++){
-            auto& arg = func->arguments[i];
-            TypeInfo* typeInfo = ast->getTypeInfo(arg.typeId);
-            int size = typeInfo->size();
-            int asize = typeInfo->alignedSize();
-            if(i==0)
-                firstSize = size;
-            
-            if((offset%asize) != 0){
-                offset += asize - offset%asize;
-            }
-            arg.offset = offset;
-            // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
-
-            offset += size;
-        }
-        int diff = offset%8;
-        if(diff!=0)
-            offset += 8-diff; // padding to ensure 8-bit alignment
-
-        // log::out << "total size "<<offset<<"\n";
-        // reverse
-        for(int i=0;i<(int)func->arguments.size();i++){
-            auto& arg = func->arguments[i];
-            TypeInfo* typeInfo = ast->getTypeInfo(arg.typeId);
-            int size = typeInfo->size();
-            arg.offset = offset - arg.offset - size;
-            // log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
-        }
-        func->argSize = offset;
-
-        // return values should also have 8-bit alignment but since the call frame already
-        // is aligned there is no need for any special stuff here.
-        //(note that the special code would exist where functions are generated and not here)
-        offset = 0;
-        for(int i=0;i<(int)func->returnTypes.size();i++){
-            auto& ret = func->returnTypes[i];
-            TypeInfo* typeInfo = ast->getTypeInfo(ret.typeId);
-            int size = typeInfo->size();
-            int asize = typeInfo->alignedSize();
-            
-            if ((-offset)%asize != 0){
-                offset -= asize - (-offset)%asize;
-            }
-            offset -= size; // size included in the offset going negative on the stack
-            ret.offset = offset;
-            // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
-        }
-        func->returnSize = -offset;
-        // size of return types doesn't have to match any alignment
-    }
-    
-    // TODO: Type check default values in structs and functions
-
-    ASTStatement* next = body->statements;
-    while(next){
-        ASTStatement* now = next;
-        next = next->next;
-
-        if(now->type==ASTStatement::BODY){
-            bool ok = EvaluateTypes(ast, now->body, err);
-        }
-    }
-    ASTNamespace* nextNS = body->namespaces;
-    while(nextNS){
-        ASTNamespace* now = nextNS;
-        nextNS = nextNS->next;
-
-        bool ok = EvaluateTypes(ast, now, err);
-    }
-
-    return true;
-}
-
-bool EvaluateTypes(AST* ast, ASTNamespace* ns, int* err){
-    using namespace engone;
-    if(!ns){
-        return false;
-    }
-    
-    //-- complete structs
-    bool completedStructs=false;
-    while(!completedStructs){
-        completedStructs = true;
-        bool changed=false;
-        ASTStruct* nextStruct=ns->structs;
-        if(!nextStruct) changed=true;
-        while(nextStruct){
-            ASTStruct* astStruct = nextStruct;
-            nextStruct = nextStruct->next;
-            
-            if(!astStruct->typeComplete){
-                TypeInfo* structInfo = ast->getTypeInfo(ns->scopeId,*astStruct->name);
-                // log::out << "Evaluating "<<*astStruct->name<<"\n";
-                astStruct->typeComplete = true;
-                int offset=0;
-                int alignedSize=0; // offset will be aligned to match this at the end
-                /* This case is dealt with using biggestType
-                struct A {
-                    a: bool,
-                    a: i64,
-                    b: bool,
-                }
-                sizeof A = 24
-                */
-                for(auto& member : astStruct->members){
-                    TypeInfo* typeInfo = ast->getTypeInfo(member.typeId);
-                    // log::out << " "<<typeInfo->name << " "<<typeInfo->size()<<"\n";
-                    if(!typeInfo || typeInfo->size()==0){
-                        if(member.typeId == structInfo->id){
-                            // TODO: phrase the error message in a better way
-                            // TOOD: print some column and line info.
-                            // TODO: message is printed twice
-                            // log::out << log::RED <<"Member "<< member.name <<" in struct "<<*astStruct->name<<" cannot be it's own type\n";
-                        } else {
-                            // log::out << log::RED << *astStruct->name<<"::"<<member.name << " requires "<<typeInfo->name<<"\n";
-                        }
-                        astStruct->typeComplete = false;
-                        break;
-                    }
-                    if(alignedSize<typeInfo->alignedSize())
-                        alignedSize = typeInfo->alignedSize();
-                    int misalign = offset % typeInfo->size();
-                    if(misalign!=0){
-                        offset+=typeInfo->size()-misalign;
-                    }
-                    // log::out << " "<<offset<<": "<<member.name<<" ("<<typeInfo->size()<<" bytes)\n";
-                    member.offset = offset;
-                    offset+=typeInfo->size();
-                }
-
-                if(!astStruct->typeComplete) {
-                    // log::out << log::RED << "Evaluation failed\n";
-                    completedStructs = false;
-                } else {
-                    // align the end so the struct can be stacked together
-                    astStruct->alignedSize = alignedSize;
-                    int misalign = offset % alignedSize;
-                    if(misalign!=0){
-                        offset+=alignedSize-misalign;
-                    }
-                    astStruct->size = offset;
-                    // log::out << *astStruct->name << " was evaluated to "<<offset<<" bytes\n";
-                    changed=true;
-                }
-            }
-        }
-        if(!changed){
-            err+=1; // TODO: shouldn't be 1. add how many errors actually occurred
-            log::out << log::RED << "Some types could not be evaluated\n";
-            return false;
-        }
-    }
-
-    // arguments
-    ASTFunction* nextFunc = ns->functions;
-    while(nextFunc){
-        ASTFunction* func = nextFunc;
-        nextFunc = nextFunc->next;
-
-        // log::out << "Eval func "<<*func->name<<"\n";
-        int offset = 0; // offset starts before call frame (fp, pc)
-        int firstSize = 0;
-        // for(int i=func->arguments.size()-1;i>=0;i--){
-        // Based on 8-bit alignment. The last argument must be aligned by it.
-        for(int i=0;i<(int)func->arguments.size();i++){
-            auto& arg = func->arguments[i];
-            TypeInfo* typeInfo = ast->getTypeInfo(arg.typeId);
-            int size = typeInfo->size();
-            int asize = typeInfo->alignedSize();
-            if(i==0)
-                firstSize = size;
-            
-            if((offset%asize) != 0){
-                offset += asize - offset%asize;
-            }
-            arg.offset = offset;
-            // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
-
-            offset += size;
-        }
-        int diff = offset%8;
-        if(diff!=0)
-            offset += 8-diff; // padding to ensure 8-bit alignment
-
-        // log::out << "total size "<<offset<<"\n";
-        // reverse
-        for(int i=0;i<(int)func->arguments.size();i++){
-            auto& arg = func->arguments[i];
-            TypeInfo* typeInfo = ast->getTypeInfo(arg.typeId);
-            int size = typeInfo->size();
-            arg.offset = offset - arg.offset - size;
-            // log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
-        }
-        func->argSize = offset;
-
-        // return values should also have 8-bit alignment but since the call frame already
-        // is aligned there is no need for any special stuff here.
-        //(note that the special code would exist where functions are generated and not here)
-        offset = 0;
-        for(int i=0;i<(int)func->returnTypes.size();i++){
-            auto& ret = func->returnTypes[i];
-            TypeInfo* typeInfo = ast->getTypeInfo(ret.typeId);
-            int size = typeInfo->size();
-            int asize = typeInfo->alignedSize();
-            
-            if ((-offset)%asize != 0){
-                offset -= asize - (-offset)%asize;
-            }
-            offset -= size; // size included in the offset going negative on the stack
-            ret.offset = offset;
-            // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
-        }
-        func->returnSize = -offset;
-        // size of return types doesn't have to match any alignment
-
-        bool ok = EvaluateTypes(ast,func->body,err);
-    }
-    
-    // TODO: Type check default values in structs and functions
-
-    ASTNamespace* nextNS = ns->namespaces;
-    while(nextNS){
-        ASTNamespace* now = nextNS;
-        nextNS = nextNS->next;
-
-        bool ok = EvaluateTypes(ast, now, err);
-    }
-
-    return true;
 }

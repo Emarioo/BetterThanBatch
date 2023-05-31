@@ -1,6 +1,7 @@
 #include "BetBat/Tokenizer.h"
 
-int IsInteger(Token& token){
+bool IsInteger(Token& token){
+    if(token.flags & TOKEN_QUOTED) return false;
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
         if(chr<'0'||chr>'9'){
@@ -37,7 +38,7 @@ bool IsName(Token& token){
     return true;
 }
 // Can also be an integer
-int IsDecimal(Token& token){
+bool IsDecimal(Token& token){
     if(token.flags&TOKEN_QUOTED) return false;
     if(token==".") return false;
     int hasDot=false;
@@ -61,6 +62,38 @@ int ConvertInteger(Token& token){
     int num = atoi(token.str);
     *(token.str+token.length) = tmp;
     return num;
+}
+bool IsHexadecimal(Token& token){
+    if(token.flags & TOKEN_QUOTED) return false;
+    if(!token.str||token.length<3 || token.length> 2 + 8) return 0; // 2+8 means 0x + 4 bytes
+    if(token.str[0] != '0') return false;
+    if(token.str[1] != 'x') return false;
+    for(int i=2;i<token.length;i++){
+        char chr = token.str[i];
+        char al = chr&(~32);
+        if((chr<'0' || chr > '9') && (al<'A' || al>'F'))
+            return false;
+    }
+    return true;
+}
+int ConvertHexadecimal(Token& token){
+    if(!token.str||token.length<3 ||token.length > 2+8) return 0;
+    if(token.str[0] != '0') return false;
+    if(token.str[1] != 'x') return false;
+    int hex = 0;
+    for(int i=2;i<token.length;i++){
+        char chr = token.str[i];
+        if(chr>='0' && chr <='9'){
+            hex = 16*hex + chr-'0';
+            continue;
+        }
+        chr = chr&(~32);
+        if(chr>='A' && chr<='F'){
+            hex = 16*hex + chr-'A' + 10;
+            continue;
+        }
+    }
+    return hex;
 }
 void TokenRange::print(){
     // assert?
@@ -629,7 +662,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 else
                     canBeDot=false;
             }
-            if(!(chr>='0'&&chr<='9') && chr!='.')
+            if(!(chr>='0'&&chr<='9') && chr!='.') // TODO: how does it work with hexidecimals?
                 canBeDot=false;
             outTokens.append(chr);
             token.length++;

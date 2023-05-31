@@ -408,6 +408,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             void* out = getReg(r0);
             
+            void* datap = (codePtr + pc);
             i32 data = *(i32*)(codePtr + pc);
             // u32 data = *(u32*)bytecode->get(pc);
             pc++;
@@ -415,14 +416,16 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out << data<<"\n";)
             
             u8 t = DECODE_REG_TYPE(r0);
-            if(t==BC_REG_8){ // higher 8 bit register doesn't align properly.
-                log::out <<__FILE__<< "register bit mismatch\n";
-                continue;   
+            if(t==BC_REG_8){
+                *((i8*)out) = data;
+            } else if(t==BC_REG_16){
+                *((i16*)out) = data;   
+            } else if(t==BC_REG_32){
+                *((i32*)out) = data;   
+            } else if(t==BC_REG_64){
+                *((i64*)out) = data;   
             }
-            
-            *((u64*) out) = data; // NOTE: what if register is 16 bit?
             break;
-            
         }
         case BC_PUSH:{
             u8 r0 = DECODE_REG0(inst);
@@ -518,8 +521,10 @@ void Interpreter::execute(Bytecode* bytecode){
                 } else if (addr==BC_EXT_PRINTI){
                     i64 num = *(i64*)(fp+argoffset);
                     log::out << log::LIME<<"print: "<<num<<"\n";
-                    // <<"\n";
                     // _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
+                }else if (addr==BC_EXT_PRINTC){
+                    char chr = *(char*)(fp+argoffset + 7); // +7 comes from the alignment after char
+                    log::out << log::LIME << "print: "<<chr<<"\n";
                 }else {
                     _ILOG(log::out << log::RED << addr<<" is not a special function\n";)
                 }

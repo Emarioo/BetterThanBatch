@@ -2,6 +2,7 @@
 
 #include "BetBat/Preprocessor.h"
 #include "BetBat/Parser.h"
+#include "BetBat/TypeChecker.h"
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
 

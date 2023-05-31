@@ -7,6 +7,7 @@
 
 
 #include <time.h>
+#include <string.h>
 
 namespace engone {
 	namespace log {

@@ -70,7 +70,7 @@
 		"functions":{
 			"patterns":[{
 				"name":"entity.name.function",
-				"match": "\\b(alloc|free|realloc|printi)\\b"
+				"match": "\\b(alloc|free|realloc|printi|printc)\\b"
 			}]
 		},
 		"strings": {

@@ -129,11 +129,13 @@ struct TokenStream {
     int readHead=0;
 };
 double ConvertDecimal(Token& token);
-int IsInteger(Token& token);
+bool IsInteger(Token& token);
 int ConvertInteger(Token& token);
 bool IsName(Token& token);
 // Can also be an integer
-int IsDecimal(Token& token);
+bool IsDecimal(Token& token);
+bool IsHexadecimal(Token& token);
+int ConvertHexadecimal(Token& token);
 
 // I would recommend testing on a large text for more accurate results.
 void PerfTestTokenize(const engone::Memory& textData, int times=1);
