@@ -63,6 +63,9 @@ int ConvertInteger(Token& token){
     *(token.str+token.length) = tmp;
     return num;
 }
+bool Equal(Token& token, const char* str){
+    return !(token.flags&TOKEN_QUOTED) && token == str;
+}
 bool IsHexadecimal(Token& token){
     if(token.flags & TOKEN_QUOTED) return false;
     if(!token.str||token.length<3 || token.length> 2 + 8) return 0; // 2+8 means 0x + 4 bytes
@@ -106,6 +109,9 @@ void TokenRange::print(){
 engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange){
     tokenRange.print();
     return logger;
+}
+void TokenStream::addImport(const std::string& name, const std::string& as){
+    importList.push_back({name,as});
 }
 void TokenRange::feed(std::string& outBuffer){
     using namespace engone;
@@ -710,7 +716,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 const char* str_enable = "enable";
                 const char* str_disable = "disable";
                 const char* str_version = "version";
-                const char* str_import = "import";
+                // const char* str_import = "import";
                 int type=0;
                 if(length-index>=(int)strlen(str_enable)){
                     if(0==strncmp(text+index,str_enable,strlen(str_enable))){
@@ -737,66 +743,67 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                         }
                     }
                 }
-                if(type==0){
-                    if(length-index>=(int)strlen(str_import)){
-                        if(0==strncmp(text+index,str_import,strlen(str_import))){
-                            type = 4;
-                            index += strlen(str_import);
-                            ln = column += strlen(str_import);
-                        }
-                    }
-                }
-                if(type==4){
-                    // @import anything\n
-                    int startIndex=-1;
-                    // TODO: Code below WILL have some edge cases not accounted for. Check it out.
-                    while(index<length){
-                        char c = text[index];
-                        char nc = 0;
-                        char pc = 0;
+                // if(type==0){
+                //     if(length-index>=(int)strlen(str_import)){
+                //         if(0==strncmp(text+index,str_import,strlen(str_import))){
+                //             type = 4;
+                //             index += strlen(str_import);
+                //             ln = column += strlen(str_import);
+                //         }
+                //     }
+                // }
+                // if(type==4){
+                //     // @import anything\n
+                //     int startIndex=-1;
+                //     // TODO: Code below WILL have some edge cases not accounted for. Check it out.
+                //     while(index<length){
+                //         char c = text[index];
+                //         char nc = 0;
+                //         char pc = 0;
 
-                        if(index>0)
-                            pc = text[index-1];
-                        if(index+1<length)
-                            nc = text[index+1];
-                        index++;
-                        if(c=='\t')
-                            column+=4;
-                        else
-                            column++;
-                        if(c == '\n'){
-                            line++;
-                            column=1;
-                        }
-                        if(startIndex!=-1){
-                            if(c=='\r'||c=='\n'||index==length){
-                                int len = index-startIndex-1;
-                                Token temp{};
-                                temp.length = len;
-                                temp.str = (char*)text + startIndex;
-                                // if(outTokeimportList){
-                                outStream->importList.push_back(temp);
-                                ReplaceChar((char*)outStream->importList.back().data(),outStream->importList.back().length(),'\\','/');
-                                // }else{
-                                //     log::out << log::RED << "Import list was not available. Cannot import '"<<temp<<"'\n";   
-                                // }
-                                break;
-                            }
-                        }
-                        if(c=='\r'&&(nc=='\n'||pc=='\n')){
-                            break;
-                        }
+                //         if(index>0)
+                //             pc = text[index-1];
+                //         if(index+1<length)
+                //             nc = text[index+1];
+                //         index++;
+                //         if(c=='\t')
+                //             column+=4;
+                //         else
+                //             column++;
+                //         if(c == '\n'){
+                //             line++;
+                //             column=1;
+                //         }
+                //         if(startIndex!=-1){
+                //             if(c=='\r'||c=='\n'||index==length){
+                //                 int len = index-startIndex-1;
+                //                 Token temp{};
+                //                 temp.length = len;
+                //                 temp.str = (char*)text + startIndex;
+                //                 // if(outTokeimportList){
+                //                 outStream->addImport(temp,"");
+                //                 ReplaceChar((char*)outStream->importList.back().name.data(),outStream->importList.back().name.length(),'\\','/');
+                //                 // TODO: WHAT ABOUT import ... as  <----
+                //                 // }else{
+                //                 //     log::out << log::RED << "Import list was not available. Cannot import '"<<temp<<"'\n";   
+                //                 // }
+                //                 break;
+                //             }
+                //         }
+                //         if(c=='\r'&&(nc=='\n'||pc=='\n')){
+                //             break;
+                //         }
 
-                        if(c==' '||c=='\t'){
+                //         if(c==' '||c=='\t'){
                             
-                        }else{
-                            if(startIndex==-1){
-                                startIndex = index-1;
-                            }
-                        }
-                    }
-                    continue;
-                }
+                //         }else{
+                //             if(startIndex==-1){
+                //                 startIndex = index-1;
+                //             }
+                //         }
+                //     }
+                //     continue;
+                // }
                 if(type==3){
                     int startIndex=-1;
                     bool bad=false;

@@ -1,6 +1,25 @@
 // @import ./module as Mod
 // @import ./module
+// #import "./Array" as Ok
 
+namespace A {
+    struct HE{
+        a: i32*,
+    }
+}
+
+t: A::HE;
+t.a = 2;
+
+// a: Ok::Array;
+// a.ptr = null;
+// a.size = 5;
+
+// namespace A {
+//     struct B { a: i32, }   
+// }
+
+// a: B;
 // namespace A {
 //     namespace CC {
 //         enum B {
@@ -29,10 +48,10 @@
 //     }
 // }
 
-a = "A"
-printc(a)
-// b = 9
-printi(a)
+// a = "A"
+// printc(a)
+// // b = 9
+// printi(a)
 
 // i = 0
 // while i < 10 {

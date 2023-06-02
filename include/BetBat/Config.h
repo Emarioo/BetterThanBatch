@@ -19,18 +19,18 @@
 
 // #define TLOG
 
-// import list in tokenizer
+// (DEPRECATED) import list in tokenizer
 // #define LOG_IMPORTS
 
 // newly tokenized includes in preprocessor
-#define LOG_INCLUDES
-
+// #define LOG_INCLUDES
 
 // #define MLOG
 // #define PLOG
-#define GLOG
+// #define GLOG
 // #define OLOG
-#define ILOG
+// #define ILOG
+#define TC_LOG
 
 
 // #define USE_DEBUG_INFO

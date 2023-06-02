@@ -1,0 +1,5 @@
+
+struct Array {
+    ptr: void*,
+    size: u64,   
+}

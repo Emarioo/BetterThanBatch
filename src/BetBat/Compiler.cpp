@@ -17,34 +17,51 @@ bool CompileInfo::addStream(TokenStream* stream){
 }
 CompileInfo::FileInfo* CompileInfo::getStream(const std::string& name){
     auto pair = tokenStreams.find(name);
-    if(pair == tokenStreams.end()) return 0;
+    if(pair == tokenStreams.end())
+        return nullptr;
     return &pair->second;
 }
 // does not handle backslash
-bool ParseFile(CompileInfo& info, const std::string& path){
+ASTScope* ParseFile(CompileInfo& info, const std::string& path, std::string as = ""){
     using namespace engone;
     
     _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefPath(path)<<"\n";)
     TokenStream* tokenStream = TokenStream::Tokenize(path);
     if(!tokenStream){
         log::out << log::RED << " Failed tokenization: " << BriefPath(path) <<"\n";
-        return false;
+        return nullptr;
     }
     info.lines += tokenStream->lines;
     info.readBytes += tokenStream->readBytes;
     
     info.addStream(tokenStream);
+    
+    if (tokenStream->enabled & LAYER_PREPROCESSOR) {
+        TokenStream* old = tokenStream;
+        
+        _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path)<<"\n";)
+        int errs = 0;
+        Preprocess(&info, tokenStream, &errs);
+        if (tokenStream->enabled == LAYER_PREPROCESSOR)
+            tokenStream->print();
+        info.errors += errs;
+        if(errs){
+            return nullptr;
+        }
+    }
+    
     std::string dir = TrimLastFile(path);
-    for(const std::string& _importName : tokenStream->importList){
+    for(auto& item : tokenStream->importList){
         std::string importName = "";
-        int dotindex = _importName.find_last_of(".");
-        int slashindex = _importName.find_last_of("/");
+        int dotindex = item.name.find_last_of(".");
+        int slashindex = item.name.find_last_of("/");
         // log::out << "dot "<<dotindex << " slash "<<slashindex<<"\n";
         if(dotindex==-1 || dotindex<slashindex){
-            importName = _importName+".btb";
+            importName = item.name+".btb";
         } else {
-            importName = _importName;
+            importName = item.name;
         }
+        // TODO: import AS
         
         std::string fullPath = "";
         // TODO: Test "/src.btb", "ok./hum" and other unusual paths
@@ -74,37 +91,31 @@ bool ParseFile(CompileInfo& info, const std::string& path){
             if(fileInfo){   
                 log::out << log::LIME << "Already imported "<<BriefPath(fullPath,20)<<"\n";
             }else{
-                bool yes = ParseFile(info, fullPath);
+                ASTScope* body = ParseFile(info, fullPath, item.as);
+                if(body){
+                    if(item.as.empty()){
+                        info.ast->appendToMainBody(body);   
+                    } else {
+                        // body->convertToNamespace(item.as);
+                        info.ast->mainBody->add(body, info.ast);
+                    }
+                }
             }
         }
     }
     
-    if (tokenStream->enabled & LAYER_PREPROCESSOR) {
-        TokenStream* old = tokenStream;
-        
-        _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path)<<"\n";)
-        int errs = 0;
-        Preprocess(&info, tokenStream, &errs);
-        if (tokenStream->enabled == LAYER_PREPROCESSOR)
-            tokenStream->print();
-        info.errors += errs;
-        if(errs){
-            return false;
-        }
-    }
-    
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path)<<"\n";)
-    ASTScope* body = ParseTokens(tokenStream,info.ast,&info.errors);
+    ASTScope* body = ParseTokens(tokenStream,info.ast,&info.errors, as);
     // info.ast->destroy(body);
     // body = 0;
-
-    if(!body)
-        return false;
+    return body;
+    // if(!body)
+    //     return false;
         
     // info.errors += TypeCheck(info.ast);
     // bool yes = EvaluateTypes(info.ast,body,&info.errors);
-    info.ast->appendToMainBody(body);
-    return true;
+    // info.ast->appendToMainBody(body);
+    // return true;
 }
 
 Bytecode* CompileSource(const std::string& sourcePath, const std::string& compilerPath) {
@@ -129,7 +140,8 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
     // compileInfo.errors += TypeCheck(compileInfo.ast, compileInfo.ast->mainBody);
     // EvaluateTypes(compileInfo.ast,compileInfo.ast->mainBody,&compileInfo.errors);
     
-    ParseFile(compileInfo, absPath);
+    ASTScope* body = ParseFile(compileInfo, absPath);
+    compileInfo.ast->appendToMainBody(body);
     ast = compileInfo.ast;
     
     compileInfo.errors += TypeCheck(ast, ast->mainBody);

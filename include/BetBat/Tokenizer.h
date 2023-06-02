@@ -115,7 +115,13 @@ struct TokenStream {
     void finalizePointers();
 
     std::string streamName; // filename/importname SHOULD BE FULL PATH
-    std::vector<std::string> importList;
+    
+    void addImport(const std::string& name, const std::string& as);
+    struct Import {
+        std::string name;
+        std::string as="";
+    };
+    std::vector<Import> importList;
     int lines=0; // counts token suffix.
     int readBytes=0;
     // new line in the middle of a token is not counted, multiline strings doesn't work very well
@@ -136,6 +142,7 @@ bool IsName(Token& token);
 bool IsDecimal(Token& token);
 bool IsHexadecimal(Token& token);
 int ConvertHexadecimal(Token& token);
+bool Equal(Token& token, const char* str);
 
 // I would recommend testing on a large text for more accurate results.
 void PerfTestTokenize(const engone::Memory& textData, int times=1);

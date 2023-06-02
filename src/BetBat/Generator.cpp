@@ -560,7 +560,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                         TypeInfo* typeInfo = info.ast->getTypeInfo(typeId);
                         if(!typeInfo->astStruct){
                             // TODO: can't use index for arguments, structs have different sizes
-                            _GLOG(log::out<<" extract "<< info.ast->getTypeInfo(typeId)->name<<"\n";)
+                            _GLOG(log::out<<" extract "<< info.ast->getTypeInfo(typeId)->getFullType(info.ast)<<"\n";)
                             info.code->add({BC_LI,BC_REG_RBX});
                             info.code->addIm(offset + ret.offset);
                             u8 reg = RegBySize(1,typeInfo->size());
@@ -571,7 +571,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                             // offset -= 8;
                             // don't need to change offset since push will increment stack pointer
                         }else{
-                            _GLOG(log::out<<" extract "<< info.ast->getTypeInfo(typeId)->name<<"\n";)
+                            _GLOG(log::out<<" extract "<< info.ast->getTypeInfo(typeId)->getFullType(info.ast)<<"\n";)
                             BROKEN;
                             // for(int j=typeInfo->astStruct->members.size()-1;j>=0;j--){
                             // // for(int j=0;j<(int)typeInfo->astStruct->members.size();j++){
@@ -650,7 +650,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 info.addPush(BC_REG_RAX);
                 
                 // new pointer data type
-                // auto dtname = info.ast->getTypeInfo(var->typeId)->name;
+                // auto dtname = info.ast->getTypeInfo(var->typeId)->getFullType(info.ast);
                 auto varTypeInfo = info.ast->getTypeInfo(var->typeId);
                 std::string temp = varTypeInfo->name;
                 temp += "*";
@@ -670,7 +670,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             if(err==GEN_ERROR) return err;
 
             if(!AST::IsPointer(ltype)){
-                ERRT(expression->left->tokenRange) << "cannot dereference "<<info.ast->getTypeInfo(ltype)->name<<" from "<<expression->left->tokenRange.firstToken<<"\n";
+                ERRT(expression->left->tokenRange) << "cannot dereference "<<info.ast->getTypeInfo(ltype)->getFullType(info.ast)<<" from "<<expression->left->tokenRange.firstToken<<"\n";
                 *outTypeId = AST_VOID;
                 return GEN_ERROR;
             }
@@ -743,7 +743,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 if(yes){
                 
                 } else {
-                    ERRT(expression->tokenRange) << "cannot cast "<<info.ast->getTypeInfo(ltype)->name << " to "<<info.ast->getTypeInfo(castType)->name<<"\n";
+                    ERRT(expression->tokenRange) << "cannot cast "<<info.ast->getTypeInfo(ltype)->getFullType(info.ast) << " to "<<info.ast->getTypeInfo(castType)->getFullType(info.ast)<<"\n";
                     *outTypeId = ltype; // ltype since cast failed
                     return GEN_ERROR;
                 }
@@ -758,7 +758,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
             //     info.code->add({BC_CASTF32,lreg,creg});
             //     info.addPush(creg);
             // } else {
-            //     ERRT(expression->tokenRange) << "cannot cast "<<info.ast->getTypeInfo(ltype)->name << " to "<<info.ast->getTypeInfo(castType)->name<<"\n";
+            //     ERRT(expression->tokenRange) << "cannot cast "<<info.ast->getTypeInfo(ltype)->getFullType(info.ast) << " to "<<info.ast->getTypeInfo(castType)->getFullType(info.ast)<<"\n";
             //     *outTypeId = ltype; // ltype since cast failed
             //     return GEN_ERROR;
             // }
@@ -813,7 +813,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 
                 if(meminfo.index==-1){
                     *outTypeId = AST_VOID;
-                    ERRT(expression->tokenRange) << *expression->name<<" is not a member of struct "<<info.ast->getTypeInfo(ltype)->name<<"\n";
+                    ERRT(expression->tokenRange) << *expression->name<<" is not a member of struct "<<info.ast->getTypeInfo(ltype)->getFullType(info.ast)<<"\n";
                     return GEN_ERROR;
                 }
                 
@@ -851,7 +851,7 @@ int GenerateExpression(GenInfo& info, ASTExpression* expression, TypeId* outType
                 // *outTypeId = AST_INT32;
             } else {
                 *outTypeId = AST_VOID;
-                ERRT(expression->tokenRange) << "member access only works on structs and enums. "<<info.ast->getTypeInfo(exprId)->name<<" isn't one (astStruct/Enum was null at least)\n";
+                ERRT(expression->tokenRange) << "member access only works on structs and enums. "<<info.ast->getTypeInfo(exprId)->getFullType(info.ast)<<" isn't one (astStruct/Enum was null at least)\n";
                 return GEN_ERROR;
             }
 
@@ -1196,7 +1196,7 @@ int GenerateBody(GenInfo& info, ASTScope* body){
             //     TypeInfo* typeInfo = info.ast->getTypeInfo(typeId);
                 
             //     char buf[100];
-            //     int len = sprintf(buf,"  ret value %s",info.ast->getTypeInfo(typeId)->name.c_str());
+            //     int len = sprintf(buf,"  ret value %s",info.ast->getTypeInfo(typeId)->getFullType(info.ast).c_str());
             //     info.code->addDebugText(buf,len);
 
             //     // space for each return value
@@ -1509,7 +1509,7 @@ int GenerateBody(GenInfo& info, ASTScope* body){
                 //     // TODO: Show were in the code
                 // }
             }
-            _GLOG(log::out << " "<<*statement->name << " : "<<info.ast->getTypeInfo(var->typeId)->name<<"\n";)
+            _GLOG(log::out << " "<<*statement->name << " : "<<info.ast->getTypeInfo(var->typeId)->getFullType(info.ast)<<"\n";)
         } else if(statement->type==ASTStatement::PROP_ASSIGN){
             _GLOG(SCOPE_LOG("PROP_ASSIGN"))
             
@@ -1584,7 +1584,7 @@ int GenerateBody(GenInfo& info, ASTScope* body){
                 }
                 
                 if(!AST::IsPointer(dtype)){
-                    ERRT(statement->lvalue->tokenRange) << "expected pointer type for deref assignment not "<<info.ast->getTypeInfo(dtype)->name<<"\n";
+                    ERRT(statement->lvalue->tokenRange) << "expected pointer type for deref assignment not "<<info.ast->getTypeInfo(dtype)->getFullType(info.ast)<<"\n";
                     continue;
                     // return GEN_ERROR;
                 }
@@ -1665,7 +1665,7 @@ int GenerateBody(GenInfo& info, ASTScope* body){
                 }
                 
                     
-                const std::string& memtypename = typeInfo->name;
+                const std::string& memtypename = typeInfo->getFullType(info.ast);
                 _GLOG(log::out << "prop type "<<memtypename<<"\n";)
                 if(!PerformSafeCast(info,typeId,member->typeId)){
                     ERRT(statement->rvalue->tokenRange) << "cannot cast to "<<memtypename<<"\n";

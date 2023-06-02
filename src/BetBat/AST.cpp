@@ -145,37 +145,42 @@ std::string TypeInfo::getFullType(AST* ast){
     }else {
         return ns + "::" + name;   
     }
-       
 }
 void AST::appendToMainBody(ASTScope *body) {
     if (body->enums) {
-        mainBody->add(body->enums);
+        mainBody->add(body->enums, body->enumsTail);
         body->enums = 0;
         body->enumsTail = 0;
     }
     if (body->functions) {
-        mainBody->add(body->functions);
+        mainBody->add(body->functions, body->functionsTail);
         body->functions = 0;
         body->functionsTail = 0;
-        // body->add(
     }
     if (body->structs) {
-        mainBody->add(body->structs);
+        mainBody->add(body->structs, body->structsTail);
         body->structs = 0;
         body->structsTail = 0;
     }
     if (body->statements) {
-        mainBody->add(body->statements);
+        mainBody->add(body->statements, body->statementsTail);
         body->statements = 0;
         body->statementsTail = 0;
     }
     if (body->namespaces) {
-        mainBody->add(body->namespaces, this);
+        mainBody->add(body->namespaces, this, body->namespacesTail);
         body->namespaces = 0;
         body->namespacesTail = 0;
     }
     destroy(body);
 }
+
+// void ASTScope::convertToNamespace(const std::string& name){
+//     this->name = new std::string(name);
+//     type = NAMESPACE;
+    
+    
+// }
 ASTScope *AST::createBody() {
     auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
     new (ptr) ASTScope();
@@ -228,77 +233,28 @@ ASTScope *AST::createNamespace(const std::string& name) {
         M##Tail = M = S;   \
     else                   \
         M##Tail->next = S; \
-    while (M##Tail->next)  \
+    if (tail) M##Tail = tail; else while (M##Tail->next)  \
         M##Tail = M##Tail->next;
-// void ASTScope::add(ASTStruct* astStruct){
-//     TAIL_ADD(structs, astStruct);
-// }
-// void ASTScope::add(ASTEnum* astStruct){
-//     TAIL_ADD(enums, astStruct);
-// }
-// void ASTScope::add(ASTFunction* astStruct){
-//     TAIL_ADD(functions, astStruct);
-// }
-// void ASTScope::add(ASTScope* astNamespace, AST* ast){
-//     if(!namespaces){
-//         namespacesTail = namespaces = astNamespace;
-//         return;
-//     }
-//     // NOTE: This code can be confusing and mistakes
-//     //  are easy to make. Keep a clear mind when
-//     //  working here and don't change things
-//     //  in the spur of the moment!
-//     // NOTE: This code is a duplicate of ASTScope::add(ASTScope*)
-//     ASTScope* nextInsert = astNamespace;
-//     while(nextInsert){
-//         ASTScope* now = nextInsert;
-//         nextInsert = nextInsert->next;
-
-//         bool appended=false;
-//         ASTScope* nextNS = namespaces;
-//         while(nextNS){
-//             ASTScope* ns = nextNS;
-//             nextNS = nextNS->next;
-
-//             if(*ns->name == *astNamespace->name){
-//                 appended=true;
-//                 ns->add(now->enums);
-//                 ns->add(now->functions);
-//                 ns->add(now->structs);
-//                 ns->add(now->namespaces, ast);
-//                 now->enums=0;
-//                 now->functions=0;
-//                 now->structs=0;
-//                 now->namespaces=0;
-//                 now->next = 0;
-//                 ast->destroy(now);
-//                 break;
-//             }
-//         }
-//         if(!appended){
-//             namespacesTail->next = now;
-//             now->next = 0;
-//             namespacesTail = now;
-//         }
-//     }
-// }
-void ASTScope::add(ASTStatement *astStatement) {
+void ASTScope::add(ASTStatement *astStatement, ASTStatement* tail) {
     TAIL_ADD(statements, astStatement)
 }
-void ASTScope::add(ASTStruct *astStruct) {
+void ASTScope::add(ASTStruct *astStruct, ASTStruct* tail) {
     TAIL_ADD(structs, astStruct)
 }
-void ASTScope::add(ASTFunction *astFunction) {
+void ASTScope::add(ASTFunction *astFunction, ASTFunction* tail) {
     TAIL_ADD(functions, astFunction)
 }
-void ASTScope::add(ASTEnum *astEnum) {
+void ASTScope::add(ASTEnum *astEnum, ASTEnum* tail) {
     TAIL_ADD(enums, astEnum)
 }
-void ASTScope::add(ASTScope* astNamespace, AST* ast){
+void ASTScope::add(ASTScope* astNamespace, AST* ast, ASTScope* tail){
     if(!namespaces){
         namespacesTail = namespaces = astNamespace;
-        while (namespacesTail->next)
-            namespacesTail = namespacesTail->next;
+        if(tail)
+            namespacesTail = tail;
+        else
+            while (namespacesTail->next)
+                namespacesTail = namespacesTail->next;
         return;
     }
     // NOTE: This code can be confusing and mistakes

@@ -37,4 +37,4 @@ struct ParseInfo {
     void nextLine();
 };
 
-ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr=0);
+ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr=0, std::string theNamespace = "");

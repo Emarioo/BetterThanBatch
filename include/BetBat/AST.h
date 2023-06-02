@@ -242,26 +242,28 @@ struct ASTScope {
         NAMESPACE,   
     };
     Type type = BODY;
+    
+    // void convertToNamespace(const std::string& name);
 
     ASTStruct* structs = 0;
     ASTStruct* structsTail = 0;
-    void add(ASTStruct* astStruct);
+    void add(ASTStruct* astStruct, ASTStruct* tail = 0);
     
     ASTEnum* enums = 0;
     ASTEnum* enumsTail = 0;
-    void add(ASTEnum* astEnum);
+    void add(ASTEnum* astEnum, ASTEnum* tail = 0);
 
     ASTFunction* functionsTail = 0;
     ASTFunction* functions = 0;
-    void add(ASTFunction* astFunction);
+    void add(ASTFunction* astFunction, ASTFunction* tail = 0);
     
     ASTScope* namespaces = 0;
     ASTScope* namespacesTail = 0;
-    void add(ASTScope* astNamespace, AST* ast);
+    void add(ASTScope* astNamespace, AST* ast, ASTScope* tail = 0);
     
     ASTStatement* statements = 0;
     ASTStatement* statementsTail = 0;
-    void add(ASTStatement* astStatement);
+    void add(ASTStatement* astStatement, ASTStatement* tail = 0);
 
     void print(AST* ast, int depth);
 };
@@ -311,7 +313,7 @@ struct AST {
     // will return false for non number types
     static bool IsSigned(TypeId id);
     
-    // body is now owned by AST. Do not use it.
+    // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
     void appendToMainBody(ASTScope* body);
 
     // std::vector<std::string> constStrings;
@@ -322,6 +324,8 @@ struct AST {
     ASTEnum* createEnum(const std::string& name);
     ASTStatement* createStatement(int type);
     ASTExpression* createExpression(TypeId type);
+    // You may also want to call some additional functions to properly deal with
+    // named scopes so types are properly evaluated. See ParseNamespace for an example.
     ASTScope* createNamespace(const std::string& name);
     
     void destroy(ASTScope* astScope);

@@ -20,10 +20,6 @@
 #define ERRLINE engone::log::out <<engone::log::RED<<" [Line "<<info.now().line<<"] ";info.printLine();engone::log::out<<"\n";
 #define ERRLINEP engone::log::out <<engone::log::RED<<" [previous line] ";info.printPrevLine();engone::log::out<<"\n";
 
-// non-quoted
-bool Equal(Token& token, const char* str){
-    return !(token.flags&TOKEN_QUOTED) && token == str;
-}
 // returns instruction type
 // zero means no operation
 int IsOp(Token& token){
@@ -457,7 +453,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     return error;
 }
 int ParseFunction(ParseInfo& info, ASTFunction*& tempFunction, bool attempt);
-int ParseStruct(ParseInfo& info, ASTStruct*& tempFunction, bool attempt);
+// int ParseStruct(ParseInfo& info, ASTStruct*& tempFunction, bool attempt);
 int ParseEnum(ParseInfo& info, ASTEnum*& tempFunction, bool attempt);
 int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     using namespace engone;
@@ -1238,7 +1234,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
         }
     }
 }
-int ParseBody(ParseInfo& info, ASTScope*& body, bool forceBrackets=false, bool predefinedBody=false);
+int ParseBody(ParseInfo& info, ASTScope*& body, bool globalScope=false);
 // returns 0 if syntax is wrong for flow parsing
 int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
@@ -1764,7 +1760,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
     return error;   
 }
-int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope, bool predefinedBody){
+int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
     using namespace engone;
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
@@ -1777,7 +1773,7 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope, bool predef
     //     return PARSE_ERROR;
     // }
     
-    if(!predefinedBody)
+    if(!bodyLoc)
         bodyLoc = info.ast->createBody();
     if(!info.end()){
         bodyLoc->tokenRange.firstToken = info.get(info.at()+1);
@@ -1880,7 +1876,7 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope, bool predef
     return PARSE_SUCCESS;
 }
 
-ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr){
+ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr, std::string theNamespace){
     using namespace engone;
     // _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     
@@ -1895,7 +1891,25 @@ ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr){
     //     info.ast = AST::Create();
     // }
     ASTScope* body = 0;
-    int result = ParseBody(info, body,true,false);
+    ScopeId prevScope = info.currentScopeId;
+    if(!theNamespace.empty()){
+        body = info.ast->createNamespace(theNamespace);
+        
+        ScopeId newScopeId = info.ast->addScopeInfo();
+        ScopeInfo* newScope = info.ast->getScopeInfo(newScopeId);
+        
+        newScope->parent = info.currentScopeId;
+        
+        body->scopeId = newScopeId;
+        info.ast->getScopeInfo(newScopeId)->name = theNamespace;
+        info.ast->getScopeInfo(info.currentScopeId)->nameScopeMap[theNamespace] = newScope;
+        
+        info.currentScopeId = newScopeId;
+    }
+    
+    int result = ParseBody(info, body, true);
+    
+    info.currentScopeId = prevScope;
     
     if(outErr){
         *outErr += info.errors;
