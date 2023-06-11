@@ -4,11 +4,11 @@
 
 #include "Engone/Typedefs.h"
 
-// Todo: Thread safety
-// Todo: Optimize string manipulation
+// TODO: Thread safety
+// TODO: Optimize string manipulation
 
-// Todo: Get last modified date of a file
-// Todo: Check if file exists.
+// TODO: Get last modified date of a file
+// TODO: Check if file exists.
 
 #define Assert(expression) if(!(expression)) {fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__);*((char*)0) = 0;}
 
@@ -85,7 +85,7 @@ namespace engone {
 	std::string EnvironmentVariable(const std::string& name);
 	
 	bool FileCopy(const std::string& src, const std::string& dst);
-    // Todo: Remove the simple directory iterator. Skipping directories in the recursive directory iterator
+    // TODO: Remove the simple directory iterator. Skipping directories in the recursive directory iterator
     //      would work the same as the normal directory iterator.
     
 	// path should be a valid directory.

@@ -3,6 +3,10 @@
 #undef ERRT
 #undef ERR
 #undef ERRTYPE
+#undef ERRTOKENS
+#undef TOKENINFO
+#undef LOGAT
+
 // Remember to wrap macros in {} when using if or loops
 // since macros have multiple statements.
 #define ERR() info.errors++;engone::log::out << engone::log::RED <<"Typerror, "
@@ -25,7 +29,7 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
         ASTEnum* aenum = nextEnum;
         nextEnum = nextEnum->next;
         
-        TypeInfo* typeInfo = info.ast->getTypeInfo(scope->scopeId, aenum->name,false,true);
+        TypeInfo* typeInfo = info.ast->addType(scope->scopeId, Token(aenum->name));
         if(typeInfo){
             typeInfo->_size = 4; // i32
             typeInfo->astEnum = aenum;
@@ -98,20 +102,23 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
         //-- Get struct info
         TypeInfo* structInfo = 0;
         if(astStruct->state==ASTStruct::TYPE_EMPTY){
-            astStruct->state = ASTStruct::TYPE_CREATED;
-            structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name,false,true);
+            // structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name,false,true);
+            structInfo = info.ast->addType(scope->scopeId, Token(astStruct->name));
             if(!structInfo){
-                ERRT(astStruct->tokenRange) << astStruct->name<<" is taken\n";
+                astStruct->state = ASTStruct::TYPE_ERROR;
+                ERRT(astStruct->tokenRange) << astStruct->name<<" is already defined\n";
+                // TODO: Provide information (file, line, column) of the first definition.
             } else {
+                astStruct->state = ASTStruct::TYPE_CREATED;
                 structInfo->astStruct = astStruct;   
             }
-        } else {
-            structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name);   
+        } else if(astStruct->state != ASTStruct::TYPE_ERROR){
+            structInfo = info.ast->getTypeInfo(scope->scopeId, Token(astStruct->name));   
         }
         
         if(astStruct->state == ASTStruct::TYPE_CREATED){
-            if(!structInfo)
-                structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name);
+            Assert(structInfo)
+
             // log::out << "Evaluating "<<*astStruct->name<<"\n";
             astStruct->state = ASTStruct::TYPE_COMPLETE;
             int offset=0;
@@ -126,18 +133,33 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
             */
             //-- Check members
             for(auto& member : astStruct->members){
-                TypeInfo* typeInfo = 0;
-                if(member.typeId & AST::STRING_BIT){
-                    typeInfo = info.ast->getTypeInfo(scope->scopeId, info.ast->getTypeString(member.typeId));
-                    member.typeId = typeInfo->id;
+                // TypeInfo* typeInfo = 0;
+                if(member.typeId.isString()){
+                    Token tok = Token(info.ast->getTypeString(member.typeId));
+                    // u32 plevel=0;
+                    // Token raw = AST::TrimPointer(tok, &plevel);
+                    bool success=0;
+                    auto id = info.ast->getTypeId(scope->scopeId, tok, &success);
+                    // TypeInfo* typeInfo = info.ast->getTypeInfo(scope->scopeId, raw);
+                    if(!success){
+                        if(info.showErrors) {
+                            ERRT(astStruct->tokenRange) << "type "<< tok << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
+                        }
+                        astStruct->state = ASTStruct::TYPE_CREATED;
+                        break;
+                    }
+                    member.typeId = id;
                 } else {
-                    typeInfo = info.ast->getTypeInfo(member.typeId);
+                    // typeInfo = info.ast->getTypeInfo(member.typeId);
                 }
-                
+                i32 size = info.ast->getTypeSize(member.typeId);
+                i32 asize = info.ast->getTypeAlignedSize(member.typeId);
                 // log::out << " "<<typeInfo->name << " "<<typeInfo->size()<<"\n";
-                if(!typeInfo || typeInfo->size()==0){
+                if(size==0){
+                    // astStruct->state = ASTStruct::TYPE_ERROR;
                     if(member.typeId == structInfo->id){
                         if(info.showErrors) {
+                            // NOTE: pointers to the same struct are okay.
                             ERRT(astStruct->tokenRange) << "member "<<member.name << "'s type uses the parent struct. (recursive struct does not work)\n";
                         }
                         // TODO: phrase the error message in a better way
@@ -145,22 +167,23 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                         // TODO: message is printed twice
                         // log::out << log::RED <<"Member "<< member.name <<" in struct "<<*astStruct->name<<" cannot be it's own type\n";
                     } else {
+                        // astStruct->state = ASTStruct::TYPE_ERROR;
                         if(info.showErrors) {
-                            ERRT(astStruct->tokenRange) << "type "<<typeInfo->name << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
+                            ERRT(astStruct->tokenRange) << "type "<< info.ast->typeToString(member.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
                         }
                     }
                     astStruct->state = ASTStruct::TYPE_CREATED;
                     break;
                 }
-                if(alignedSize<typeInfo->alignedSize())
-                    alignedSize = typeInfo->alignedSize();
-                int misalign = offset % typeInfo->size();
+                if(alignedSize<asize)
+                    alignedSize = asize;
+                int misalign = offset % size;
                 if(misalign!=0){
-                    offset+=typeInfo->size()-misalign;
+                    offset+=size-misalign;
                 }
                 // log::out << " "<<offset<<": "<<member.name<<" ("<<typeInfo->size()<<" bytes)\n";
                 member.offset = offset;
-                offset+=typeInfo->size();
+                offset+=size;
             }
 
             if(astStruct->state != ASTStruct::TYPE_COMPLETE) {
@@ -168,10 +191,12 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                 info.completedStructs = false;
             } else {
                 // align the end so the struct can be stacked together
-                astStruct->alignedSize = alignedSize;
-                int misalign = offset % alignedSize;
-                if(misalign!=0){
-                    offset+=alignedSize-misalign;
+                if(offset != 0){
+                    astStruct->alignedSize = alignedSize;
+                    int misalign = offset % alignedSize;
+                    if(misalign!=0){
+                        offset+=alignedSize-misalign;
+                    }
                 }
                 astStruct->size = offset;
                 log::out << astStruct->name << " was evaluated to "<<offset<<" bytes\n";
@@ -214,7 +239,6 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
         }
     }
     
-    
     return true;
 }
 int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
@@ -226,25 +250,111 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
     if(expr->right)
         CheckExpression(info,scope, expr->right);
     
-    if(expr->typeId & AST::STRING_BIT){
+    if(expr->typeId.isString()){
         const std::string& str = info.ast->getTypeString(expr->typeId);
-        auto ti = info.ast->getTypeInfo(scope->scopeId,str,true);
-        if(ti){
+        auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
+        if (ti) {
             expr->typeId = ti->id;
-        }else{
+        } else {
             ERRT(expr->tokenRange) << "type "<<str << " does not exist\n";
         }
     }
-    if(expr->castType & AST::STRING_BIT){
+    if(expr->castType.isString()){
         const std::string& str = info.ast->getTypeString(expr->castType);
-        auto ti = info.ast->getTypeInfo(scope->scopeId,str,true);
-        if(ti){
+        auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
+        if (ti) {
             expr->castType = ti->id;
-        }else{
+        } else {
             ERRT(expr->tokenRange) << "type "<<str << " does not exist\n";
         }
     }
         
+    return true;
+}
+
+int CheckRest(CheckInfo& info, ASTScope* scope);
+int CheckFunction(CheckInfo& info, ASTScope* scope, ASTFunction* func, ASTStruct* parentStruct){
+    int offset = 0; // offset starts before call frame (fp, pc)
+    int firstSize = 0;
+    // Based on 8-bit alignment. The last argument must be aligned by it.
+    for(int i=0;i<(int)func->arguments.size();i++){
+        auto& arg = func->arguments[i];
+        // TypeInfo* typeInfo = 0;
+        if(arg.typeId.isString()){
+            const std::string& str = info.ast->getTypeString(arg.typeId);
+            auto id = info.ast->getTypeId(scope->scopeId, Token(str));
+            
+            if(id.getId() != AST_VOID){
+                arg.typeId = id;
+            }else{
+                ERRT(func->tokenRange) << str <<" was void (type doesn't exist or you used void which isn't allowed)\n";
+            }
+        } else {
+            // typeInfo = info.ast->getTypeInfo(arg.typeId);
+        }
+            
+        int size = info.ast->getTypeSize(arg.typeId);
+        int asize = info.ast->getTypeAlignedSize(arg.typeId);
+        if(i==0)
+            firstSize = size;
+        
+        if((offset%asize) != 0){
+            offset += asize - offset%asize;
+        }
+        arg.offset = offset;
+        // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
+
+        offset += size;
+    }
+    int diff = offset%8;
+    if(diff!=0)
+        offset += 8-diff; // padding to ensure 8-bit alignment
+
+    // log::out << "total size "<<offset<<"\n";
+    // reverse
+    for(int i=0;i<(int)func->arguments.size();i++){
+        auto& arg = func->arguments[i];
+        // TypeInfo* typeInfo = info.ast->getTypeInfo(arg.typeId);
+        int size = info.ast->getTypeSize(arg.typeId);
+        arg.offset = offset - arg.offset - size;
+        // log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
+    }
+    func->argSize = offset;
+
+    // return values should also have 8-bit alignment but since the call frame already
+    // is aligned there is no need for any special stuff here.
+    //(note that the special code would exist where functions are generated and not here)
+    offset = 0;
+    for(int i=0;i<(int)func->returnTypes.size();i++){
+        auto& ret = func->returnTypes[i];
+        TypeInfo* typeInfo = 0;
+        if(ret.typeId.isString()){
+            const std::string& str = info.ast->getTypeString(ret.typeId);
+            typeInfo = info.ast->getTypeInfo(scope->scopeId, Token(str));
+            if(typeInfo){
+                ret.typeId = typeInfo->id;
+            }else{
+                // TODO: fix location?
+                ERRT(func->tokenRange) << str<<" is not a type\n";
+            }
+            
+        } else {
+            typeInfo = info.ast->getTypeInfo(ret.typeId);
+        }
+        int size = info.ast->getTypeSize(ret.typeId);
+        int asize = info.ast->getTypeAlignedSize(ret.typeId);
+        
+        if ((-offset)%asize != 0){
+            offset -= asize - (-offset)%asize;
+        }
+        offset -= size; // size included in the offset going negative on the stack
+        ret.offset = offset;
+        // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
+    }
+    func->returnSize = -offset;
+
+    CheckRest(info, func->body);
+    // size of return types doesn't have to match any alignment
     return true;
 }
 int CheckRest(CheckInfo& info, ASTScope* scope){
@@ -253,89 +363,31 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
     while(nextFunc){
         ASTFunction* func = nextFunc;
         nextFunc = nextFunc->next;
+        bool yes = CheckFunction(info, scope, func, nullptr);
 
-        // log::out << "Eval func "<<*func->name<<"\n";
-        int offset = 0; // offset starts before call frame (fp, pc)
-        int firstSize = 0;
-        // for(int i=func->arguments.size()-1;i>=0;i--){
-        // Based on 8-bit alignment. The last argument must be aligned by it.
-        for(int i=0;i<(int)func->arguments.size();i++){
-            auto& arg = func->arguments[i];
-            TypeInfo* typeInfo = 0;
-            if(arg.typeId & AST::STRING_BIT){
-                const std::string& str = info.ast->getTypeString(arg.typeId);
-                typeInfo = info.ast->getTypeInfo(scope->scopeId, str);
-                if(typeInfo){
-                    arg.typeId = typeInfo->id;
-                }else{
-                    ERRT(func->tokenRange) << str <<" is not a type\n";
-                }
-            } else {
-                typeInfo = info.ast->getTypeInfo(arg.typeId);
-            }
-                
-            int size = typeInfo->size();
-            int asize = typeInfo->alignedSize();
-            if(i==0)
-                firstSize = size;
-            
-            if((offset%asize) != 0){
-                offset += asize - offset%asize;
-            }
-            arg.offset = offset;
-            // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
-
-            offset += size;
+        Identifier* id = info.ast->addFunction(scope->scopeId, func);
+        if (!id) {
+            ERRT(func->tokenRange) << func->name << " is already defined\n";
         }
-        int diff = offset%8;
-        if(diff!=0)
-            offset += 8-diff; // padding to ensure 8-bit alignment
-
-        // log::out << "total size "<<offset<<"\n";
-        // reverse
-        for(int i=0;i<(int)func->arguments.size();i++){
-            auto& arg = func->arguments[i];
-            TypeInfo* typeInfo = info.ast->getTypeInfo(arg.typeId);
-            int size = typeInfo->size();
-            arg.offset = offset - arg.offset - size;
-            // log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
-        }
-        func->argSize = offset;
-
-        // return values should also have 8-bit alignment but since the call frame already
-        // is aligned there is no need for any special stuff here.
-        //(note that the special code would exist where functions are generated and not here)
-        offset = 0;
-        for(int i=0;i<(int)func->returnTypes.size();i++){
-            auto& ret = func->returnTypes[i];
-            TypeInfo* typeInfo = 0;
-            if(ret.typeId & AST::STRING_BIT){
-                const std::string& str = info.ast->getTypeString(ret.typeId);
-                typeInfo = info.ast->getTypeInfo(scope->scopeId, str);
-                if(typeInfo){
-                    ret.typeId = typeInfo->id;
-                }else{
-                    // TODO: fix location?
-                    ERRT(func->tokenRange) << str<<" is not a type\n";
-                }
-                
-            } else {
-                typeInfo = info.ast->getTypeInfo(ret.typeId);
-            }
-            int size = typeInfo->size();
-            int asize = typeInfo->alignedSize();
-            
-            if ((-offset)%asize != 0){
-                offset -= asize - (-offset)%asize;
-            }
-            offset -= size; // size included in the offset going negative on the stack
-            ret.offset = offset;
-            // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
-        }
-        func->returnSize = -offset;
-        // size of return types doesn't have to match any alignment
+        // (void)info.ast->addFunction(scope->scopeId,func);
     }
-    
+
+    ASTStruct* nextStruct = scope->structs;
+    while(nextStruct) {
+        ASTStruct * now = nextStruct;
+        nextStruct = nextStruct->next;
+
+        ASTFunction* nextFunc = now->functions;
+        while(nextFunc) {
+            ASTFunction* func = nextFunc;
+            nextFunc = nextFunc->next;
+
+            CheckFunction(info, scope, func, now);
+            // NOTE: Not using addFunction here since the function belongs to the struct
+            //   and not any scope.
+        }
+    }
+
     // TODO: Type check default values in structs and functions
 
     ASTStatement* next = scope->statements;
@@ -348,13 +400,14 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         if(now->rvalue)
             CheckExpression(info, scope, now->rvalue);
             
-        if(now->typeId & AST::STRING_BIT){
+        if(now->typeId.isString()){
             const std::string& str = info.ast->getTypeString(now->typeId);
-            TypeInfo* ti = info.ast->getTypeInfo(scope->scopeId, str, true);
+            // NOTE: We don't care whether it's a pointer just that the type exists.
+            TypeInfo* ti = info.ast->getTypeInfo(scope->scopeId, Token(str));
             if(!ti){
                 ERRT(now->tokenRange) << str<<" is not a type\n";
             }else {
-                now->typeId = ti->id;   
+                now->typeId = ti->id;
             }
         }
 
@@ -398,7 +451,7 @@ int TypeCheck(AST* ast, ASTScope* scope){
                 continue;
             }
             // log::out << log::RED << "Some types could not be evaluated\n";
-            return false;
+            return info.errors;
         }
     }
     result = CheckRest(info, scope);

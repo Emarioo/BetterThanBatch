@@ -8,43 +8,6 @@ struct GenInfo {
     AST* ast=0;
     int errors=0;
     
-    struct Variable {
-        i32 frameOffset=0;
-        TypeId typeId=AST_VOID;
-    };
-    struct Function {
-        ASTFunction* astFunc=0;
-        u64 address=0;
-    };
-    struct Namespace {
-        ASTScope* astNamespace=0;
-    };
-    struct Identifier{
-        Identifier() {}
-        enum Type {
-            VAR, FUNC, NAMESPACE
-        };
-        Type type=VAR;
-        std::string name{};
-        int index=0;
-    };
-    std::vector<Variable> variables;
-    std::vector<Function> functions;
-    std::vector<Namespace> namespaces;
-    std::unordered_map<std::string,Identifier> identifiers;
-    
-    Variable* addVariable(const std::string& name);
-    Function* addFunction(const std::string& name);
-    Namespace* addNamespace(const std::string& name);
-    
-    Identifier* addIdentifier(const std::string& name);
-    Identifier* getIdentifier(const std::string& name);
-    Variable* getVariable(int index);
-    Function* getFunction(int index);
-    Namespace* getNamespace(int index);
-    
-    void removeIdentifier(const std::string& name);
-
     struct AlignInfo {
         int diff=0;
         int size=0;
@@ -61,8 +24,15 @@ struct GenInfo {
 
     ASTFunction* currentFunction=0;
     ScopeId currentScopeId = 0;
+    ScopeId fromScopeId = 0; // AST_FROM_NAMESPACE
     
     int funcDepth=0;
+
+    struct ResolveCall {
+        int bcIndex = 0;
+        ASTFunction* astFunc = 0;
+    };
+    std::vector<ResolveCall> callsToResolve;
     
     // TODO: avoid vector and unordered_map. resizing vector may do unwanted things with the map (like whole a copy).
     // std::vector<FunctionScope*> functionScopes;

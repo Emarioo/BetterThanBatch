@@ -1,6 +1,6 @@
 #include "BetBat/AST.h"
 
-const char *OpToStr(int optype) {
+const char *OpToStr(OperationType optype) {
 #define CASE(A, B) \
     case AST_##A:  \
         return #B;
@@ -36,7 +36,7 @@ const char *OpToStr(int optype) {
         CASE(SIZEOF, sizeof)
 
         CASE(REFER, &)
-        CASE(DEREF, *(deref))
+        CASE(DEREF, * (dereference))
     }
 #undef CASE
     return "?";
@@ -54,6 +54,7 @@ const char *StateToStr(int type) {
         CASE(CALL, call)
         CASE(USING, using)
         CASE(BODY, body)
+        CASE(DEFER, defer)
     }
 #undef CASE
     return "?";
@@ -108,22 +109,22 @@ AST *AST::Create() {
     ScopeId scopeId = ast->addScopeInfo();
     ast->globalScopeId = scopeId;
     // initialize default data types
-    ast->addTypeInfo(scopeId,"void", AST_VOID);
-    ast->addTypeInfo(scopeId,"u8", AST_UINT8, 1);
-    ast->addTypeInfo(scopeId,"u16", AST_UINT16, 2);
-    ast->addTypeInfo(scopeId,"u32", AST_UINT32, 4);
-    ast->addTypeInfo(scopeId,"u64", AST_UINT64, 8);
-    ast->addTypeInfo(scopeId,"i8", AST_INT8, 1);
-    ast->addTypeInfo(scopeId,"i16", AST_INT16, 2);
-    ast->addTypeInfo(scopeId,"i32", AST_INT32, 4);
-    ast->addTypeInfo(scopeId,"i64", AST_INT64, 8);
-    ast->addTypeInfo(scopeId,"f32", AST_FLOAT32, 4);
-    ast->addTypeInfo(scopeId,"bool", AST_BOOL, 1);
-    ast->addTypeInfo(scopeId,"char", AST_CHAR, 1);
-    ast->addTypeInfo(scopeId,"null", AST_NULL, 8);
-    ast->addTypeInfo(scopeId,"var", AST_VAR);
-    ast->addTypeInfo(scopeId,"member", AST_MEMBER);
-    ast->addTypeInfo(scopeId,"call", AST_FNCALL);
+    ast->addTypeInfo(scopeId,Token("void"), AST_VOID);
+    ast->addTypeInfo(scopeId,Token("u8"), AST_UINT8, 1);
+    ast->addTypeInfo(scopeId,Token("u16"), AST_UINT16, 2);
+    ast->addTypeInfo(scopeId,Token("u32"), AST_UINT32, 4);
+    ast->addTypeInfo(scopeId,Token("u64"), AST_UINT64, 8);
+    ast->addTypeInfo(scopeId,Token("i8"), AST_INT8, 1);
+    ast->addTypeInfo(scopeId,Token("i16"), AST_INT16, 2);
+    ast->addTypeInfo(scopeId,Token("i32"), AST_INT32, 4);
+    ast->addTypeInfo(scopeId,Token("i64"), AST_INT64, 8);
+    ast->addTypeInfo(scopeId,Token("f32"), AST_FLOAT32, 4);
+    ast->addTypeInfo(scopeId,Token("bool"), AST_BOOL, 1);
+    ast->addTypeInfo(scopeId,Token("char"), AST_CHAR, 1);
+    ast->addTypeInfo(scopeId,Token("null"), AST_NULL, 8);
+    ast->addTypeInfo(scopeId,Token("var"), AST_VAR);
+    ast->addTypeInfo(scopeId,Token("member"), AST_MEMBER);
+    ast->addTypeInfo(scopeId,Token("call"), AST_FNCALL);
 
     ast->mainBody = ast->createBody(); {
         // TODO: set size and offset of language structs here instead of letting the compiler do it.
@@ -136,6 +137,121 @@ AST *AST::Create() {
         // ast->mainBody->add(astStruct);
     }
     return ast;
+}
+
+VariableInfo *AST::addVariable(ScopeId scopeId, const std::string &name) {
+    using namespace engone;
+    
+    auto id = addIdentifier(scopeId, name);
+    if(!id)
+        return nullptr;
+    
+    id->type = Identifier::VAR;
+    id->varIndex = variables.size();
+    variables.push_back({});
+    return &variables[id->varIndex];
+}
+// FunctionInfo *AST::addFunction(ScopeId scopeId, const std::string &name) {
+//     using namespace engone;
+//     auto id = addIdentifier(scopeId, name);
+//     if(!id)
+//         return nullptr;
+
+//     id->type = Identifier::FUNC;
+//     id->index = functions.size();
+//     functions.push_back({});
+//     return &functions[id->index];
+// }
+Identifier* AST::addFunction(ScopeId scopeId, ASTFunction* func) {
+    using namespace engone;
+    auto id = addIdentifier(scopeId, func->name);
+    if(!id)
+        return nullptr;
+
+    id->type = Identifier::FUNC;
+    id->astFunc = func;
+    return id;
+}
+Identifier *AST::addIdentifier(ScopeId scopeId, const std::string &name) {
+    using namespace engone;
+    ScopeInfo* si = getScopeInfo(scopeId);
+    if(!si)
+        return nullptr;
+
+    auto pair = si->identifierMap.find(name);
+    if (pair != si->identifierMap.end())
+        return nullptr;
+
+    auto ptr = &(si->identifierMap[name] = {});
+    ptr->name = name;
+    return ptr;
+}
+Identifier *AST::getIdentifier(ScopeId scopeId, const std::string &name) {
+    using namespace engone;
+    Token ns={};
+    Token realName = TrimNamespace(Token(name), &ns);
+    ScopeId nextScopeId = scopeId;
+    while(true) {
+        if(ns.str) {
+            ScopeInfo* nscope = getNamespace(nextScopeId, ns);
+            if(nscope) {
+                auto pair = nscope->identifierMap.find(realName);
+                if(pair != nscope->identifierMap.end()){
+                    return &pair->second;
+                }
+            }
+        }
+        ScopeInfo* si = getScopeInfo(nextScopeId);
+        if(!si){
+            log::out << log::RED <<__FUNCTION__<<" Scope was null (compiler bug)\n";
+            break;
+        }
+        if(!ns.str) { auto pair = si->identifierMap.find(realName);
+        if(pair != si->identifierMap.end()){
+            return &pair->second;
+        } }
+        if(nextScopeId == 0 && si->parent == 0){
+            // quit when we checked global
+            break;
+        }
+        nextScopeId = si->parent;
+    }
+    return nullptr;
+}
+VariableInfo *AST::getVariable(Identifier* id) {
+    // TODO: bound check
+    return &variables[id->varIndex];
+}
+ASTFunction *AST::getFunction(Identifier* id) {
+    return id->astFunc;
+    // TODO: bound check
+    // return &functions[index];
+}
+
+ASTFunction* ASTStruct::getFunction(const std::string& name){
+    ASTFunction* next = functions;
+    while(next){
+        ASTFunction* now = next;
+        next = next->next;
+        if(now->name == name){
+            return now;
+        }
+    }
+    return nullptr;
+}
+// Namespace *::getNamespace(int index) {
+//     // TODO: bound check
+//     return &namespaces[index];
+// }
+void AST::removeIdentifier(ScopeId scopeId, const std::string &name) {
+    auto si = getScopeInfo(scopeId);
+    auto pair = si->identifierMap.find(name);
+    if (pair != si->identifierMap.end()) {
+        // TODO: The variable identifier points to cannot be erased since
+        //   the variables array will invalidate other identifier's index.
+        //   This means that the array will keep growing. Fix this.
+        si->identifierMap.erase(pair);
+    }
 }
 std::string TypeInfo::getFullType(AST* ast){
     ScopeInfo* scope = ast->getScopeInfo(scopeId);
@@ -217,7 +333,7 @@ ASTFunction *AST::createFunction(const std::string &name) {
 ASTExpression *AST::createExpression(TypeId type) {
     auto ptr = (ASTExpression *)engone::Allocate(sizeof(ASTExpression));
     new (ptr) ASTExpression();
-    ptr->isValue = (u32)type < AST_PRIMITIVE_COUNT;
+    ptr->isValue = (u32)type.getId() < AST_PRIMITIVE_COUNT;
     ptr->typeId = type;
     return ptr;
 }
@@ -311,6 +427,10 @@ void AST::cleanup() {
 
     for (auto &pair : scopeInfos) {
         pair.second->nameTypeMap.clear();
+        // for(auto& pair : pair.second->nameFuncMap){
+        //     engone::Free(pair.second, sizeof(FunctionInfo));
+        // }
+        // pair.second->nameFuncMap.clear();
         
         pair.second->~ScopeInfo();
         engone::Free(pair.second, sizeof(ScopeInfo));
@@ -321,11 +441,12 @@ void AST::cleanup() {
         engone::Free(pair.second, sizeof(TypeInfo));
     }
     typeInfos.clear();
+    
 
     nextScopeId = 0;
-    nextTypeIdId = NEXT_ID;
-    nextPointerTypeId = POINTER_BIT;
-    nextSliceTypeId = SLICE_BIT;
+    nextTypeId = NEXT_ID;
+    // nextPointerTypeId = POINTER_BIT;
+    // nextSliceTypeId = SLICE_BIT;
 
     destroy(mainBody);
     mainBody = 0;
@@ -353,12 +474,12 @@ void AST::destroy(ASTScope *scope) {
 void AST::destroy(ASTStruct *astStruct) {
     if (astStruct->next)
         destroy(astStruct->next);
-    // if (astStruct->name)
-    //     delete astStruct->name;
     for (auto &mem : astStruct->members) {
         if (mem.defaultValue)
             destroy(mem.defaultValue);
     }
+    if (astStruct->functions)
+        destroy(astStruct->functions);
     astStruct->~ASTStruct();
     engone::Free(astStruct, sizeof(ASTStruct));
 }
@@ -416,12 +537,12 @@ void AST::destroy(ASTExpression *expression) {
     expression->~ASTExpression();
     engone::Free(expression, sizeof(ASTExpression));
 }
-int TypeInfo::size() {
+u32 TypeInfo::getSize() {
     if (astStruct)
         return astStruct->size;
     return _size;
 }
-int TypeInfo::alignedSize() {
+u32 TypeInfo::alignedSize() {
     if (astStruct) {
         return astStruct->alignedSize;
     }
@@ -450,7 +571,7 @@ ScopeInfo* AST::getScopeInfo(ScopeId id){
 //     typeInfos[ptr->id] = ptr;
 //     scope->nameTypeMap[ptr->name] = ptr;
 // }
-void AST::addTypeInfo(ScopeId scopeId, const std::string &name, TypeId id, int size) {
+void AST::addTypeInfo(ScopeId scopeId, Token name, TypeId id, u32 size) {
     auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
     new (ptr) TypeInfo{name, id, size};
     ptr->scopeId = scopeId;
@@ -460,20 +581,38 @@ void AST::addTypeInfo(ScopeId scopeId, const std::string &name, TypeId id, int s
     typeInfos[ptr->id] = ptr;
     scope->nameTypeMap[ptr->name] = ptr;
 }
-std::string ExtractNamespace(const std::string& name, int* offset){
-    int index = name.find_last_of("::");
-    if(index==-1){
-        if(offset)
-            *offset = 0;
-        return "";   
+Token AST::TrimNamespace(Token typeString, Token* outNamespace){
+    if(!typeString.str || typeString.length < 3) {
+        if(outNamespace)           
+           *outNamespace = {};
+        return typeString;
     }
-    if(offset)
-        *offset = index + 1;
-    return name.substr(0,index-1);
+    // TODO: Line and column is ignored but it should also be separated properly.
+    // TODO: ":::" should cause an error but isn't considered at all here.
+    int index = -1; // index of the left colon
+    for(int i=typeString.length-1;i>0;i--){
+        if(typeString.str[i-1] == ':' && typeString.str[i] == ':') {
+            index = i-1;
+            break;
+        }
+    }
+    if(index==-1){
+        if(outNamespace)
+            *outNamespace = {};
+        return typeString;
+    }
+    if(outNamespace){
+        outNamespace->str = typeString.str;
+        outNamespace->length = index;
+    }
+    Token out = typeString;
+    out.str = typeString.str + (index+2);
+    out.length = typeString.length - (index+2);
+    return out;
 }
 ScopeInfo* AST::getNamespace(ScopeId scopeId, const std::string name){
     auto scope = getScopeInfo(scopeId);
-    if(!scope) return 0;
+    if(!scope) return nullptr;
     
     int split = name.find("::");
     std::string view = "";
@@ -485,38 +624,127 @@ ScopeInfo* AST::getNamespace(ScopeId scopeId, const std::string name){
         rest = name.substr(split+2);
     }
     
-    
     auto pair = scope->nameScopeMap.find(view);
     if(pair == scope->nameScopeMap.end()){
-        return 0;   
+        return nullptr;   
     } else {
         if(rest.empty())
             return pair->second;
         return getNamespace(pair->second->id, rest);
     }
 }
-TypeId AST::addTypeString(const std::string& name){
+TypeId AST::addTypeString(Token name){
     for(int i=0;i<(int)typeStrings.size();i++){
-        if(typeStrings[i]==name)
-            return i + STRING_BIT;
+        if(name == typeStrings[i])
+            return TypeId::CreateString(i);
     }
     typeStrings.push_back(name);
-    return typeStrings.size() - 1 + STRING_BIT;
+    return TypeId::CreateString(typeStrings.size()-1);
 }
-static std::string teaesta="";
-const std::string& AST::getTypeString(TypeId typeId){
-    int index = typeId - STRING_BIT;
-    if(index < 0 || index > (int)typeStrings.size())
-     return teaesta;
+
+// FunctionInfo* AST::addFunction(ScopeId scopeId, ASTFunction* func){
+//     auto scopeInfo = getScopeInfo(scopeId);
+//     if(!scopeInfo)
+//         return nullptr;
     
-    return typeStrings[index];
-} 
-TypeInfo *AST::getTypeInfo(ScopeId scopeId, const std::string &name, bool dontCreate, bool forceCreate) {
-    int offset = 0;
-    std::string theNamespace = ExtractNamespace(name,&offset);
-    if(offset!=0){
-        if(forceCreate)
-            return 0;
+//     auto pair = scopeInfo->nameFuncMap.find(func->name);
+//     if(pair != scopeInfo->nameFuncMap.end())
+//         return 0; // already exists
+
+//     auto ptr = (FunctionInfo*)engone::Allocate(sizeof(FunctionInfo));
+//     ptr->func = func;
+//     scopeInfo->nameFuncMap[func->name] = ptr;
+//     return ptr;
+// }
+// FunctionInfo* AST::getFunction(ScopeId scopeId, Token name){
+//     using namespace engone;
+//     Token theNamespace = {};
+//     u32 plevel = 0;
+//     Token tempName = TrimNamespace(name,&theNamespace);
+//     if(theNamespace.str) {
+//         log::out << log::RED << "Cannot get function name with namespace: "<< name << "\n";
+//         return nullptr;
+//     }
+//     // Token typeName = TrimPointer(tempName,&plevel);
+
+//     if(plevel != 0) {
+//         // log::out << log::RED << "Cannot use "<<__FUNCTION__<<" on pointer type!\n";
+//         log::out << log::GOLD << "Warning! Using "<<__FUNCTION__<<" on pointer type!\n";
+//         // return nullptr;
+//     }
+//     auto scope = getScopeInfo(scopeId);
+//     if(!scope)
+//         return nullptr;
+    
+//     // u32 plevel = AST::GetPointerLevel(name);
+//     // if (plevel != 0) {
+//     //     Token typeName = AST::TrimPointer(name);
+        
+//     // }
+
+//     auto basePair = scope->nameFuncMap.find(name);
+//     if(basePair != scope->nameFuncMap.end()){
+//         return basePair->second;
+//     }
+
+//     ScopeId nextParent = scope->parent;
+//     if(scopeId!=globalScopeId){ // global scope does not have parent
+//         while(true){
+//             auto parentScope = getScopeInfo(nextParent);
+//             if(!parentScope)
+//                 break;
+
+//             auto pair = parentScope->nameFuncMap.find(name);
+//             if(pair!=parentScope->nameFuncMap.end())
+//                 return pair->second;
+            
+//             if(nextParent==globalScopeId)
+//                 break;
+//             nextParent = parentScope->parent;
+//         }
+//     }
+//     return nullptr;
+// }
+const std::string& AST::getTypeString(TypeId typeId){
+    // TODO: Use typeToString if typeId isn't string type from parser?
+    //  It might be better to explicitly use typeToString.
+    static const std::string teaesta="";
+    if(typeId.isString()) {
+        int index = typeId.getId();
+        if(index < 0 || index > (int)typeStrings.size())
+            return teaesta;
+        
+        return typeStrings[index];
+    }
+    return teaesta;
+}
+
+u32 AST::getTypeSize(TypeId typeId){
+    if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
+    auto ti = typeInfos.find(typeId);
+    if(ti == typeInfos.end())
+        return 0;
+    return ti->second->getSize();
+}
+u32 AST::getTypeAlignedSize(TypeId typeId) {
+    if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
+    auto ti = typeInfos.find(typeId);
+    if(ti == typeInfos.end())
+        return 0;
+    // return ti->second->size();
+    if (ti->second->astStruct) {
+        return ti->second->astStruct->alignedSize;
+    }
+    return ti->second->_size > 8 ? 8 : ti->second->_size;
+}
+TypeId AST::getTypeId(ScopeId scopeId, Token typeString, bool* success){
+    Token theNamespace = {};
+    u32 plevel = 0;
+    Token tempName = TrimNamespace(typeString,&theNamespace);
+    Token typeName = TrimPointer(tempName,&plevel);
+    if(theNamespace.str){
+        // if(forceCreate)
+        //     return 0;
         ScopeId nextScopeId = scopeId;
         bool quit = false;
         // namespaced
@@ -530,7 +758,164 @@ TypeInfo *AST::getTypeInfo(ScopeId scopeId, const std::string &name, bool dontCr
                 
             ScopeInfo* nscope = getNamespace(scope->id, theNamespace);
             if(nscope){
-                auto pair = nscope->nameTypeMap.find(name.substr(offset));
+                auto pair = nscope->nameTypeMap.find(typeName);
+                if(pair != nscope->nameTypeMap.end()){
+                    TypeId out = pair->second->id;
+                    out.setPointerLevel(plevel);
+                    if(success) *success = true;
+                    return out;
+                } else {
+                    if(success) *success = false;
+                    return {};
+                }   
+            }
+        }
+        if(success) *success = false;
+        return {};
+    }
+    auto scope = getScopeInfo(scopeId);
+    if(!scope) { 
+        if(success) *success = false;
+        return {};
+    }
+    
+    auto basePair = scope->nameTypeMap.find(typeName);
+    if(basePair != scope->nameTypeMap.end()){
+        TypeId out = basePair->second->id;
+        out.setPointerLevel(plevel);
+        if(success) *success = true;
+        return out;
+    }
+
+    ScopeId nextParent = scope->parent;
+    if(scopeId!=globalScopeId){ // global scope does not have parent
+        while(true){
+            auto parentScope = getScopeInfo(nextParent);
+            if(!parentScope)
+                break;
+
+            auto pair = parentScope->nameTypeMap.find(typeName);
+            if(pair!=parentScope->nameTypeMap.end()){
+                TypeId out = pair->second->id;
+                out.setPointerLevel(plevel);
+                if(success) *success = true;
+                return out;
+            }
+            if(nextParent==globalScopeId)
+                break;
+            nextParent = parentScope->parent;
+        }
+    }
+    if(success) *success = false;
+    return {};
+}
+TypeInfo* AST::addType(ScopeId scopeId, Token typeString){
+    using namespace engone;
+    Token theNamespace = {};
+    u32 plevel = 0;
+    Token tempName = TrimNamespace(typeString,&theNamespace);
+    Token typeName = TrimPointer(tempName,&plevel);
+
+    if(plevel != 0) {
+        log::out << log::RED << __FUNCTION__<<": Pointer types should not be added to type list (bug in compiler)\n";
+        return nullptr;
+    }
+
+    if(theNamespace.str){
+        log::out << log::RED << __FUNCTION__ <<": Cannot create types of other namespaces\n";
+        return nullptr;
+    }
+    auto scope = getScopeInfo(scopeId);
+    if(!scope)
+        return nullptr;
+    
+    auto basePair = scope->nameTypeMap.find(typeName);
+    if(basePair != scope->nameTypeMap.end()) {
+        return nullptr;
+    }
+
+    ScopeId nextParent = scope->parent;
+    if(scopeId!=globalScopeId){ // global scope does not have parent
+        while(true){
+            auto parentScope = getScopeInfo(nextParent);
+            if(!parentScope)
+                break;
+
+            auto pair = parentScope->nameTypeMap.find(typeName);
+            if(pair!=parentScope->nameTypeMap.end())
+                return nullptr; // type exists in parent scope
+            
+            if(nextParent==globalScopeId)
+                break;
+            nextParent = parentScope->parent;
+        }
+    }
+    // Token tok;
+    // tok.str = (char *)name.c_str();
+    // tok.length = name.length();
+    auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
+    new (ptr) TypeInfo{typeName, TypeId::Create(nextTypeId++)};
+    ptr->scopeId = scopeId;
+    scope->nameTypeMap[typeName] = ptr;
+    typeInfos[ptr->id] = ptr;
+    return ptr;
+}
+void ASTStruct::add(ASTFunction* func){
+    if(!functions){
+        functions = func;
+        functionsTail = func;
+    } else {
+        functionsTail->next = func;
+    }
+    while(functionsTail->next){
+        functionsTail = functionsTail->next;
+    }
+}
+std::string AST::typeToString(TypeId typeId){
+    const char* cstr = OpToStr((OperationType)typeId.getId());
+    if(strcmp(cstr,"?")) {
+        return cstr;
+    }
+    TypeInfo* ti = getTypeInfo(typeId.baseType());
+    if(!ti)
+        return Token("");
+    std::string str = ti->getFullType(this);
+    for(int i=0;i<(int)typeId.getPointerLevel();i++){
+        str+="*";
+    }
+    return str;
+}
+TypeInfo *AST::getTypeInfo(ScopeId scopeId, Token typeString) {
+    using namespace engone;
+    // TODO: This code can be compressed into fewer lines.
+    //   It has been done with getIdentifier which has similar functionality.
+    Token theNamespace = {};
+    u32 plevel = 0;
+    Token tempName = TrimNamespace(typeString,&theNamespace);
+    Token typeName = TrimPointer(tempName,&plevel);
+    if(plevel != 0) {
+        // log::out << log::RED << "Cannot use "<<__FUNCTION__<<" on pointer type!\n";
+        log::out << log::GOLD << "Warning! Using "<<__FUNCTION__<<" on pointer type!\n";
+        // return nullptr;
+    }
+
+    if(theNamespace.str){
+        // if(forceCreate)
+        //     return 0;
+        ScopeId nextScopeId = scopeId;
+        bool quit = false;
+        // namespaced
+        while(!quit){
+            ScopeInfo* scope = getScopeInfo(nextScopeId);
+            if(nextScopeId==0)
+                quit=true;
+            nextScopeId = scope->parent;
+            if(!scope)
+                break;
+                
+            ScopeInfo* nscope = getNamespace(scope->id, theNamespace);
+            if(nscope){
+                auto pair = nscope->nameTypeMap.find(typeName);
                 if(pair != nscope->nameTypeMap.end()){
                     return pair->second;
                 } else {
@@ -543,20 +928,26 @@ TypeInfo *AST::getTypeInfo(ScopeId scopeId, const std::string &name, bool dontCr
     auto scope = getScopeInfo(scopeId);
     if(!scope) return 0;
     
-    auto basePair = scope->nameTypeMap.find(name);
+    // u32 plevel = AST::GetPointerLevel(name);
+    // if (plevel != 0) {
+    //     Token typeName = AST::TrimPointer(name);
+        
+    // }
+
+    auto basePair = scope->nameTypeMap.find(typeName);
     if(basePair != scope->nameTypeMap.end()){
-        if(forceCreate) return 0;
+        // if(forceCreate) return 0;
         return basePair->second;
     }
 
     ScopeId nextParent = scope->parent;
-    if(scopeId!=globalScopeId && !forceCreate){ // global scope does not have parent
+    if(scopeId!=globalScopeId){ // global scope does not have parent
         while(true){
             auto parentScope = getScopeInfo(nextParent);
             if(!parentScope)
                 break;
 
-            auto pair = parentScope->nameTypeMap.find(name);
+            auto pair = parentScope->nameTypeMap.find(typeName);
             if(pair!=parentScope->nameTypeMap.end())
                 return pair->second;
             
@@ -565,31 +956,46 @@ TypeInfo *AST::getTypeInfo(ScopeId scopeId, const std::string &name, bool dontCr
             nextParent = parentScope->parent;
         }
     }
-
-    if (dontCreate)
-        return 0;
-    Token tok;
-    tok.str = (char *)name.c_str();
-    tok.length = name.length();
-    if (AST::IsPointer(tok)) {
-        auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
-        new (ptr) TypeInfo{name, nextPointerTypeId++, 8}; // NOTE: fixed pointer size of 8
-        ptr->scopeId = scopeId;
-        scope->nameTypeMap[name] = ptr;
-        typeInfos[ptr->id] = ptr;
-        return ptr;
-    } else if (AST::IsSlice(tok)) {
-        // NOTE: slice should exist in global scope so use that 
-        //  instead of scopeId to save some time.
-        return getTypeInfo(globalScopeId,"Slice");
-        // return (typeInfos[name] = new TypeInfo{nextSliceTypeId++, 16}); // NOTE: fixed pointer size of 8
-    } 
-    auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
-    new (ptr) TypeInfo{name, nextTypeIdId++};
-    ptr->scopeId = scopeId;
-    scope->nameTypeMap[name] = ptr;
-    typeInfos[ptr->id] = ptr;
-    return ptr;
+    return nullptr;
+    // if (dontCreate)
+    //     return 0;
+    // Token tok;
+    // tok.str = (char *)name.c_str();
+    // tok.length = name.length();
+    // if (plevel!=0) {
+    //     auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
+    //     new (ptr) TypeInfo{name, nextPointerTypeId++, 8}; // NOTE: fixed pointer size of 8
+    //     ptr->scopeId = scopeId;
+    //     scope->nameTypeMap[name] = ptr;
+    //     typeInfos[ptr->id] = ptr;
+    //     return ptr;
+    // } 
+    // else if (AST::IsSlice(tok)) {
+    //     // NOTE: slice should exist in global scope so use that 
+    //     //  instead of scopeId to save some time.
+    //     return getTypeInfo(globalScopeId,"Slice");
+    //     // return (typeInfos[name] = new TypeInfo{nextSliceTypeId++, 16}); // NOTE: fixed pointer size of 8
+    // } 
+    // auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
+    // new (ptr) TypeInfo{name, nextTypeIdId++};
+    // ptr->scopeId = scopeId;
+    // scope->nameTypeMap[name] = ptr;
+    // typeInfos[ptr->id] = ptr;
+    // return ptr;
+}
+Token AST::TrimPointer(Token& token, u32* outLevel){
+    Token out = token;
+    for(int i=token.length-1;i>=0;i--){
+        if(token.str[i]=='*') {
+            if(outLevel)
+                (*outLevel)++;
+            continue;
+        } else {
+            out.length = i + 1;
+            break;
+        }
+    }
+    return out;
 }
 std::string ScopeInfo::getFullNamespace(AST* ast){
     std::string ns = "";
@@ -606,11 +1012,12 @@ std::string ScopeInfo::getFullNamespace(AST* ast){
     return ns;
 }
 TypeInfo *AST::getTypeInfo(TypeId id) {
+    if(!id.isNormalType()) return nullptr;
     auto pair = typeInfos.find(id);
     if (pair != typeInfos.end()) {
         return pair->second;
     }
-    return 0;
+    return nullptr;
 }
 TypeInfo::MemberOut TypeInfo::getMember(const std::string &name) {
     if (astStruct) {
@@ -623,17 +1030,17 @@ TypeInfo::MemberOut TypeInfo::getMember(const std::string &name) {
             }
         }
         if (index == -1) {
-            return {0, -1};
+            return {{}, -1};
         }
         int pi = members[index].polyIndex;
         if (pi != -1) {
-            int typ = polyTypes[pi];
+            TypeId typ = polyTypes[pi];
             return {typ, index};
         }
 
         return {members[index].typeId, index};
     } else {
-        return {0, -1};
+        return {{}, -1};
     }
 }
 bool ASTEnum::getMember(const std::string &name, int *out) {
@@ -652,27 +1059,38 @@ bool ASTEnum::getMember(const std::string &name, int *out) {
     }
     return true;
 }
-bool AST::IsPointer(Token &token) {
-    if (!token.str || token.length < 2)
-        return false;
-    return token.str[token.length - 1] == '*';
-}
-bool AST::IsPointer(TypeId id) {
-    return id & POINTER_BIT;
-}
-bool AST::IsSlice(TypeId id) {
-    return id & SLICE_BIT;
-}
-bool AST::IsSlice(Token &token) {
-    if (!token.str || token.length < 3)
-        return false;
-    return token.str[token.length - 2] == '[' && token.str[token.length - 1] == ']';
-}
+// bool AST::IsPointer(Token &token) {
+//     if (!token.str || token.length < 2)
+//         return false;
+//     return token.str[token.length - 1] == '*';
+// }
+// bool AST::IsPointer(TypeId id) {
+//     return id & POINTER_BIT;
+// }
+// u32 AST::GetPointerLevel(Token& token){
+//     if (!token.str || token.length < 2)
+//         return 0;
+//     u32 level = 0;
+//     for(int i=token.length-1;i>=0;i--){
+//         if(token.str[i] == '*')
+//             level++;
+//         else break;
+//     }
+//     return level;
+// }
+// bool AST::IsSlice(TypeId id) {
+//     return id & SLICE_BIT;
+// }
+// bool AST::IsSlice(Token &token) {
+//     if (!token.str || token.length < 3)
+//         return false;
+//     return token.str[token.length - 2] == '[' && token.str[token.length - 1] == ']';
+// }
 bool AST::IsInteger(TypeId id) {
-    return AST_UINT8 <= id && id <= AST_INT64;
+    return AST_UINT8 <= id.getId() && id.getId() <= AST_INT64;
 }
 bool AST::IsSigned(TypeId id) {
-    return AST_INT8 <= id && id <= AST_INT64;
+    return AST_INT8 <= id.getId() && id.getId() <= AST_INT64;
 }
 /* #region  */
 void PrintSpace(int count) {
@@ -721,10 +1139,11 @@ void ASTFunction::print(AST *ast, int depth) {
     for (int i = 0; i < (int)arguments.size(); i++) {
         auto &arg = arguments[i];
         log::out << arg.name << ": ";
-        if(arg.typeId & AST::STRING_BIT){
+        if(arg.typeId.isString()){
             log:: out << " "<< ast->getTypeString(arg.typeId);
         } else {
-            log::out <<  ast->getTypeInfo(arg.typeId)->getFullType(ast);
+            log::out << ast->typeToString(arg.typeId);
+            // log::out <<  ast->getTypeInfo(arg.typeId)->getFullType(ast);
         }
         if (i + 1 != (int)arguments.size()) {
             log::out << ", ";
@@ -734,8 +1153,9 @@ void ASTFunction::print(AST *ast, int depth) {
     if (!returnTypes.empty())
         log::out << "->";
     for (auto &ret : returnTypes) {
-        auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
-        log::out << dtname << ", ";
+        // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
+        // log::out << dtname << ", ";
+        log::out << ast->typeToString(ret.typeId) << ", ";
     }
     log::out << "\n";
     if (body) {
@@ -763,9 +1183,11 @@ void ASTStruct::print(AST *ast, int depth) {
     log::out << " { ";
     for (int i = 0; i < (int)members.size(); i++) {
         auto &member = members[i];
-        auto typeInfo = ast->getTypeInfo(member.typeId);
-        if (typeInfo)
-            log::out << member.name << ": " << typeInfo->getFullType(ast);
+        auto str = ast->typeToString(member.typeId);
+        // auto typeInfo = ast->getTypeInfo(member.typeId);
+        // if (typeInfo)
+        log::out << member.name << ": " << str;
+            // log::out << member.name << ": " << typeInfo->getFullType(ast);
         if (member.defaultValue) {
             log::out << " = ";
             member.defaultValue->tokenRange.print();
@@ -773,6 +1195,11 @@ void ASTStruct::print(AST *ast, int depth) {
         if (i + 1 != (int)members.size()) {
             log::out << ", ";
         }
+    }
+    if(functions){
+        log::out << "\n";
+        functions->print(ast,depth);
+        PrintSpace(depth);
     }
     log::out << " }\n";
     if (next)
@@ -799,18 +1226,19 @@ void ASTStatement::print(AST *ast, int depth) {
     log::out << "Statement " << StateToStr(type);
 
     if (type == ASSIGN) {
-        if(typeId & AST::STRING_BIT){
+        if(typeId.isString()){
               log:: out << " "<< ast->getTypeString(typeId);
         } else {
-            auto ti = ast->getTypeInfo(typeId);
-            if(ti){
-                auto dtname = ti->getFullType(ast);
-                if (typeId != 0)
-                    // log::out << " "<<TypeIdToStr(dataType)<<"";
-                    log::out << " " << dtname;
-            } else {
-                log::out << " TYPE?";
-            }
+            log::out << " " << ast->typeToString(typeId);
+            // auto ti = ast->getTypeInfo(typeId);
+            // if(ti){
+            //     auto dtname = ti->getFullType(ast);
+            //     if (typeId.getId() != 0)
+            //         // log::out << " "<<TypeIdToStr(dataType)<<"";
+            //         log::out << " " << dtname;
+            // } else {
+            //     log::out << " TYPE?";
+            // }
         }
         log::out << " " << *name << "\n";
         if (rvalue) {
@@ -854,7 +1282,12 @@ void ASTStatement::print(AST *ast, int depth) {
         }
     } else if (type == USING) {
         log::out << " " << *name << " as " << *alias << "\n";
-    } else if (type == BODY) {
+    } else if (type == DEFER) {
+        log::out << "\n";
+        if (body) {
+            body->print(ast, depth + 1);
+        }
+    }  else if (type == BODY) {
         log::out << "\n";
         if (body) {
             body->print(ast, depth + 1);
@@ -870,15 +1303,16 @@ void ASTExpression::print(AST *ast, int depth) {
 
     if (isValue) {
         log::out << "Expr ";
-        if(typeId & AST::STRING_BIT){
+        if(typeId.isString()){
             log::out << ast->getTypeString(typeId);
         } else {
-            log::out << ast->getTypeInfo(typeId)->getFullType(ast);
+            log::out << ast->typeToString(typeId);
+            // log::out << ast->getTypeInfo(typeId)->getFullType(ast);
         }
         log::out << " ";
         if (typeId == AST_FLOAT32)
             log::out << f32Value;
-        else if (typeId >= AST_UINT8 && typeId <= AST_INT64)
+        else if (AST::IsInteger(typeId))
             log::out << i64Value;
         else if (typeId == AST_BOOL)
             log::out << boolValue;
@@ -903,12 +1337,13 @@ void ASTExpression::print(AST *ast, int depth) {
         } else
             log::out << "\n";
     } else {
-        log::out << "Expr " << OpToStr(typeId) << " ";
+        log::out << "Expr " << OpToStr((OperationType)typeId.getId()) << " ";
         if (typeId == AST_CAST) {
-            if(castType & AST::STRING_BIT){
+            if(castType.isString()){
                 log::out << ast->getTypeString(castType);
             } else {
-                log::out << ast->getTypeInfo(castType)->getFullType(ast);
+                log::out << ast->typeToString(castType);
+                // log::out << ast->getTypeInfo(castType)->getFullType(ast);
             }
             log::out << "\n";
             left->print(ast, depth + 1);
@@ -917,7 +1352,7 @@ void ASTExpression::print(AST *ast, int depth) {
             log::out << "\n";
             left->print(ast, depth + 1);
         } else if (typeId == AST_INITIALIZER) {
-            log::out << *name;
+            log::out << ast->getTypeString(castType);
             log::out << "\n";
             if(left)
                 left->print(ast, depth + 1);

@@ -11,7 +11,7 @@ bool IsInteger(Token& token){
     return true;
 }
 double ConvertDecimal(Token& token){
-    // Todo: string is not null terminated
+    // TODO: string is not null terminated
     //  temporariy changing character after token
     //  is not safe since it could be a memory violation
     char tmp = *(token.str+token.length);
@@ -54,7 +54,7 @@ bool IsDecimal(Token& token){
     return true;
 }
 int ConvertInteger(Token& token){
-    // Todo: string is not null terminated
+    // TODO: string is not null terminated
     //  temporariy changing character after token
     //  is not safe since it could be a memory violation
     char tmp = *(token.str+token.length);
@@ -163,6 +163,15 @@ void Token::print(int printFlags){
     if(flags&TOKEN_SUFFIX_SPACE){
         log::out << " ";
     }
+}
+bool Token::operator==(const std::string& text){
+    if((int)text.length()!=length)
+        return false;
+    for(int i=0;i<(int)text.length();i++){
+        if(str[i]!=text[i])
+            return false;
+    }
+    return true;
 }
 bool Token::operator==(const char* text){
     int len = strlen(text);
@@ -455,7 +464,7 @@ void TokenStream::Destroy(TokenStream* stream){
 TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* optionalIn){
     using namespace engone;
     // _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
-    // Todo: handle errors like outTokens.add returning false
+    // TODO: handle errors like outTokens.add returning false
     if(optionalIn){
         log::out << log::RED << "tokenize optional in not implemented\n";   
     }
@@ -470,7 +479,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     //     outTokens.cleanup(true); // clean except for allocations   
     // }
     outTokens.enabled=-1; // enable all layers by default
-    // Todo: do not assume token data will be same or less than textData. It's just asking for a bug
+    // TODO: do not assume token data will be same or less than textData. It's just asking for a bug
     if((int)outTokens.tokenData.max<length*5){
         if(optionalIn)
             log::out << "Tokenize : token resize even though optionalIn was used\n";
@@ -676,7 +685,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
         
         if(token.length!=0 && (isDelim || isQuotes || isComment || isSpecial || index==length)){
             token.flags = 0;
-            // Todo: is checking line feed necessary? line feed flag of last token is set further up.
+            // TODO: is checking line feed necessary? line feed flag of last token is set further up.
             if(chr=='\n')
                 token.flags |= TOKEN_SUFFIX_LINE_FEED;
             else if(chr==' ')

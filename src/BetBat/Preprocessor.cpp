@@ -169,7 +169,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     }
     token = info.get(info.at()+2);
     
-    // Todo: only allow define on new line?
+    // TODO: only allow define on new line?
     
     bool multiline = false;
     if(token=="define"){
@@ -220,7 +220,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
             if(token=="...") {
                 defTemp.infiniteArg = defTemp.argumentNames.size();
             }
-            // Todo: token must be valid name
+            // TODO: token must be valid name
             defTemp.argumentNames.push_back(token);
             token = info.next();
             if(token==")"){
@@ -314,7 +314,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
 int ParseUndef(PreprocInfo& info, bool attempt){
     using namespace engone;
 
-    // Todo: check of end
+    // TODO: check of end
 
     Token token = info.get(info.at()+1);
     if(token!=PREPROC_TERM || (token.flags&TOKEN_QUOTED)){
@@ -568,7 +568,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
                 }
             }
         }
-        // Todo: what about errors?
+        // TODO: what about errors?
         
         if(active){
             result = ParseToken(info);
@@ -586,7 +586,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
 }
 
 void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bool unwrap=false,Arguments* args=0,int* argIndex=0){
-    // Todo: optimize with some resize and memcpy?
+    // TODO: optimize with some resize and memcpy?
     for(int i=0;i<(int)from.size();i++){
         if(!unwrap){
             auto tmp = from[i];
@@ -787,7 +787,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
         index++;
 
         if(token==PREPROC_TERM&&!(token.flags&TOKEN_SUFFIX_SPACE)){
-            // Todo: bound check
+            // TODO: bound check
             Token token2 = info.get(tokens[index]);
             if(token2=="quoted"){
                 index++;
@@ -900,14 +900,14 @@ int ParseMacro(PreprocInfo& info, int attempt){
     evalInfo.rootMacro = rootMacro;
     evalInfo.macroName = name;
 
-    // Todo: do not add remaining tokens to workingRange
+    // TODO: do not add remaining tokens to workingRange
     for(int i=info.at()+1;i<(int)info.length();i++){
         evalInfo.workingRange.push_back({(uint16)i,(uint16)info.get(i).flags});
     }
     int result = EvalArguments(info, evalInfo);
     for(int i=0;i<evalInfo.workIndex;i++)
         info.next();
-    // Todo: handle result
+    // TODO: handle result
 
     CertainMacro* macro = rootMacro->matchArgCount(evalInfo.arguments.size());
     if(!macro){

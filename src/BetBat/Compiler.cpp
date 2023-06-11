@@ -123,8 +123,6 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
     AST* ast=0;
     Bytecode* bytecode=0;
     double seconds = 0;
-    std::string dis;
-    int bytes = 0;
     
     std::string cwd = engone::GetWorkingDirectory();
     
@@ -150,27 +148,28 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
         _VLOG(log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
     // }
     // if (tokens.enabled & LAYER_GENERATOR){
-    if(compileInfo.errors==0 && ast){
+
+    if(ast
+        // && compileInfo.errors==0 /* commented out so we keep going and catch more errors */
+        ){
         _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
         bytecode = Generate(ast, &compileInfo.errors);
-    }
     // }
+    }
 
     // _VLOG(log::out << "\n";)
     seconds = engone::StopMeasure(startCompileTime);
     if(bytecode && compileInfo.errors==0){
-        bytes = bytecode->getMemoryUsage();
+        int bytes = bytecode->getMemoryUsage();
     // _VLOG(
         log::out << "Compiled " << FormatUnit((uint64)compileInfo.lines) << " lines ("<<FormatBytes(compileInfo.readBytes)<<") in " << FormatTime(seconds) << "\n (" << FormatUnit(compileInfo.lines / seconds) << " lines/s)\n";
     // )
     }
     AST::Destroy(ast);
     if(compileInfo.errors!=0){
-        Bytecode::Destroy(bytecode);
-        bytecode = 0;   
-    }
-    if(compileInfo.errors){
         log::out << log::RED<<"Compilation failed with "<<compileInfo.errors<<" error(s)\n";
+        Bytecode::Destroy(bytecode);
+        bytecode = nullptr;
     }
     compileInfo.cleanup();
     return bytecode;
@@ -178,13 +177,11 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
 
 void CompileAndRun(const std::string& sourcePath, const std::string& compilerPath) {
     using namespace engone;
-    Bytecode* Bytecode = CompileSource(sourcePath,compilerPath);
-    if(Bytecode){
-        Interpreter inp{};
-        
-        inp.execute(Bytecode);
-        
-        inp.cleanup();
-        Bytecode::Destroy(Bytecode);
+    Bytecode* bytecode = CompileSource(sourcePath,compilerPath);
+    if(bytecode){
+        Interpreter interpreter{};
+        interpreter.execute(bytecode);
+        interpreter.cleanup();
+        Bytecode::Destroy(bytecode);
     }
 }

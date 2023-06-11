@@ -54,7 +54,7 @@ namespace engone {
 	}
 	char* Logger::ThreadInfo::ensure(uint32 bytes) {
 		if (lineBuffer.max < lineBuffer.used + bytes + 1) { // +1 for \0
-			// Todo: increase by max*2x instead of used+bytes?
+			// TODO: increase by max*2x instead of used+bytes?
 			bool yes = lineBuffer.resize(lineBuffer.max*2 + bytes + 1);
 			if (!yes)
 				return nullptr;
@@ -147,7 +147,7 @@ namespace engone {
 					if(printExtra)
 						FileWrite(file,extraBuffer,strlen(extraBuffer));
 					uint64 bytes = FileWrite(file,str,len);
-					// Todo: check for failure
+					// TODO: check for failure
 				}
 			}
 			if(!info.logReport.empty()){
@@ -165,7 +165,7 @@ namespace engone {
 					if(printExtra)
 						FileWrite(file,extraBuffer,strlen(extraBuffer));
 					uint64 bytes = FileWrite(file,str,len);
-					// Todo: check for failure
+					// TODO: check for failure
 				}
 			}
 			if(m_useThreadReports){
@@ -184,7 +184,7 @@ namespace engone {
 					if(printExtra)
 						FileWrite(file,extraBuffer,strlen(extraBuffer));
 					uint64 bytes = FileWrite(file,str,len);
-					// Todo: check for failure
+					// TODO: check for failure
 				}
 			}
 		}
@@ -194,7 +194,7 @@ namespace engone {
 		if (m_masterColor == log::NO_COLOR)
 			SetConsoleColor(log::SILVER);
 
-		// Todo: write to report
+		// TODO: write to report
 	}
 	log::Color Logger::getColor() {
 		auto& info = getThreadInfo();

@@ -3,48 +3,12 @@
 #include "BetBat/Tokenizer.h"
 #include "Engone/Alloc.h"
 
-typedef int TypeId;
-typedef int ScopeId;
+typedef u32 ScopeId;
 struct ASTStruct;
 struct ASTEnum;
+struct ASTFunction;
 struct AST;
-struct TypeInfo {
-    TypeInfo(const std::string& name, TypeId id, int size=0) :  name(name), id(id), _size(size) {}
-    TypeInfo(TypeId id, int size=0) : id(id), _size(size) {}
-    std::string name;
-    TypeId id=0;
-    int _size=0;
-    int _alignedSize=0;
-    int arrlen=0;
-    ASTStruct* astStruct=0;
-    ASTEnum* astEnum=0;
-    std::vector<TypeId> polyTypes;
-    TypeInfo* polyOrigin=0;
-
-    std::string getFullType(AST* ast); // namespace too
-    
-    ScopeId scopeId = 0;
-    
-    struct MemberOut { TypeId typeId;int index;};
-
-    int size();
-    // 1,2,4,8
-    int alignedSize();
-    MemberOut getMember(const std::string& name);
-};
-struct ScopeInfo {
-    ScopeInfo(ScopeId id) : id(id) {}
-    std::string name; // namespace
-    ScopeId id = 0;
-    std::unordered_map<std::string,TypeInfo*> nameTypeMap;
-    std::unordered_map<std::string,ScopeInfo*> nameScopeMap;
-
-    std::string getFullNamespace(AST* ast);
-    
-    ScopeId parent = 0;
-};
-
-enum PrimitiveType : int {
+enum PrimitiveType : u32 {
     AST_VOID=0,
     AST_UINT8,
     AST_UINT16,
@@ -69,7 +33,7 @@ enum PrimitiveType : int {
     
     AST_PRIMITIVE_COUNT,
 };
-enum OperationType : int {
+enum OperationType : u32 {
     AST_ADD=AST_PRIMITIVE_COUNT,  
     AST_SUB,
     AST_MUL,
@@ -102,9 +66,136 @@ enum OperationType : int {
 
     AST_REFER, // take reference
     AST_DEREF, // dereference
+    // AST_DEFER, // defer
+};
+struct TypeId {
+    TypeId() = default;
+    TypeId(PrimitiveType type) : _infoIndex0((u32)type), _flags(VALID_MASK | PRIMITIVE) {}
+    TypeId(OperationType type) : _infoIndex0((u32)type), _flags(VALID_MASK | PRIMITIVE) {}
+    static TypeId Create(u32 id) {
+        TypeId out={}; 
+        out._flags = VALID_MASK; // TODO: ENUM or STRUCT?
+        out._infoIndex0 = id&0xFFFF;
+        out._infoIndex1 = id>>16;
+        return out; 
+    }
+    static TypeId CreateString(u32 index) {
+        TypeId out = {};
+        out._flags = VALID_MASK | STRING;
+        out._infoIndex0 = index&0xFFFF;
+        out._infoIndex1 = index>>16;
+        return out;
+    }
+    enum TypeType : u32 {
+        PRIMITIVE = 0x0,
+        STRING = 0x1,
+        STRUCT = 0x2,
+        ENUM = 0x3,
+        TYPE_MASK = 0x1 | 0x2,
+        POINTER_MASK = 0x4 | 0x8,
+        POINTER_BIT = 3,
+        VALID_MASK = 0x80,
+    };
+    u16 _infoIndex0 = 0;
+    u8 _infoIndex1 = 0;
+    u8 _flags = 0;
+
+    bool operator!=(TypeId type) const {
+        return !(*this == type);
+    }
+    bool operator==(TypeId type) const {
+        return _flags == type._flags && _infoIndex0 == type._infoIndex0 && _infoIndex1 == type._infoIndex1;
+    }
+    bool operator==(PrimitiveType primitiveType) const {
+        return *this == TypeId(primitiveType);
+    }
+    bool operator==(OperationType t) const {
+        return *this == TypeId(t);
+    }
+    bool isValid() {
+        return (_flags & VALID_MASK) != 0;
+    }
+    // TODO: Rename to something better
+    bool isNormalType() { return (_flags & TYPE_MASK) != STRING && !isPointer(); }
+    TypeId baseType() {
+        TypeId out = *this;
+        out._flags = out._flags & ~POINTER_MASK;
+        return out; 
+    }
+    bool isPointer() const {
+        return (_flags & POINTER_MASK) != 0;
+    }
+    void setPointerLevel(u32 level) {
+        Assert(level<=(POINTER_MASK>>POINTER_BIT)); 
+        _flags = (_flags & ~POINTER_MASK) | ((level<<POINTER_BIT) & POINTER_MASK);
+    }
+    bool isString() const { return (_flags & TYPE_MASK) == STRING; }
+    u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_BIT; }
+    u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
+};
+struct TypeInfo {
+    TypeInfo(const std::string& name, TypeId id, u32 size=0) :  name(name), id(id), _size(size) {}
+    TypeInfo(TypeId id, u32 size=0) : id(id), _size(size) {}
+    std::string name;
+    TypeId id={};
+    u32 _size=0;
+    u32 _alignedSize=0;
+    u32 arrlen=0;
+    ASTStruct* astStruct=0;
+    ASTEnum* astEnum=0;
+    std::vector<TypeId> polyTypes;
+    TypeInfo* polyOrigin=0;
+
+    std::string getFullType(AST* ast); // namespace too
+    
+    ScopeId scopeId = 0;
+    
+    struct MemberOut { TypeId typeId;int index;};
+
+    u32 getSize();
+    // 1,2,4,8
+    u32 alignedSize();
+    MemberOut getMember(const std::string& name);
+};
+struct Identifier {
+    Identifier() {}
+    enum Type {
+        VAR, FUNC
+    };
+    Type type=VAR;
+    std::string name{};
+    union {
+        int varIndex;
+        ASTFunction* astFunc=0;
+    };
+    static const u64 INVALID_FUNC_ADDRESS = 0;
+};
+struct VariableInfo {
+    i32 frameOffset = 0;
+    i32 memberIndex = -1; // negative = normal variable, positive = variable in struct
+    TypeId typeId=AST_VOID;
+};
+struct ScopeInfo {
+    ScopeInfo(ScopeId id) : id(id) {}
+    std::string name; // namespace
+    ScopeId id = 0;
+    std::unordered_map<std::string, TypeInfo*> nameTypeMap;
+    std::unordered_map<std::string, ScopeInfo*> nameScopeMap;
+
+    std::unordered_map<std::string, Identifier> identifierMap;
+
+    std::string getFullNamespace(AST* ast);
+    
+    ScopeId parent = 0;
+};
+template<>
+struct std::hash<TypeId> {
+    std::size_t operator()(TypeId const& s) const noexcept {
+        return s.getId();
+    }
 };
 struct AST;
-const char* OpToStr(int op);
+const char* OpToStr(OperationType op);
 struct ASTExpression {
     ASTExpression() {
         // printf("hum\n");
@@ -116,7 +207,7 @@ struct ASTExpression {
     TokenRange tokenRange{};
     // Token token{};
     bool isValue=false;
-    TypeId typeId = 0;
+    TypeId typeId = {};
     
     union {
         i64 i64Value=0;
@@ -129,12 +220,13 @@ struct ASTExpression {
     std::string* namedValue=0; // used for named arguments
     ASTExpression* left=0; // FNCALL has arguments in order left to right
     ASTExpression* right=0;
-    TypeId castType=0;
+    TypeId castType={};
     
     ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
 struct ASTScope;
+struct ASTFunction;
 struct ASTStatement {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
     enum Type {
@@ -146,6 +238,7 @@ struct ASTStatement {
         CALL,
         USING,
         BODY,
+        DEFER,
     };
     TokenRange tokenRange{};
     int type = 0;
@@ -153,7 +246,7 @@ struct ASTStatement {
     // assign
     std::string* name=0;
     std::string* alias=0;
-    TypeId typeId=0;
+    TypeId typeId={};
     ASTExpression* lvalue=0;
     ASTExpression* rvalue=0;
     ASTScope* body=0;
@@ -171,13 +264,14 @@ struct ASTStruct {
     enum State {
         TYPE_EMPTY,
         TYPE_COMPLETE,
-        TYPE_CREATED     
+        TYPE_CREATED,
+        TYPE_ERROR, 
     };
     TokenRange tokenRange{};
     std::string name="";
     struct Member {
         std::string name;
-        TypeId typeId=0;
+        TypeId typeId={};
         int offset=0;
         int polyIndex=-1;
         ASTExpression* defaultValue=0;
@@ -187,6 +281,12 @@ struct ASTStruct {
     int alignedSize=0;
     State state=TYPE_EMPTY;
     std::vector<std::string> polyNames;
+
+    ASTFunction* functions = 0;
+    ASTFunction* functionsTail = 0;
+
+    void add(ASTFunction* func);
+    ASTFunction* getFunction(const std::string& name);
 
     ASTStruct* next=0;
 
@@ -225,6 +325,7 @@ struct ASTFunction {
     };
     std::vector<ReturnType> returnTypes;
     int returnSize=0;
+    i64 address = 0; // calculated in Generator
 
     ASTScope* body=0;
 
@@ -280,39 +381,72 @@ struct AST {
     ScopeId addScopeInfo();
     ScopeInfo* getScopeInfo(ScopeId id);
 
-    static const TypeId NEXT_ID = 0x100;
-    static const TypeId POINTER_BIT = 0x04000000;
-    static const TypeId SLICE_BIT = 0x08000000;
-    TypeId nextTypeIdId=NEXT_ID;
-    TypeId nextPointerTypeId=POINTER_BIT;
-    TypeId nextSliceTypeId=SLICE_BIT;
+    static const u32 NEXT_ID = 0x100;
+    // static const TypeId SLICE_BIT = 0x08000000;
+    u32 nextTypeId=NEXT_ID;
+    // TypeId nextSliceTypeId=SLICE_BIT;
     
-    static const TypeId STRING_BIT = 0x02000000;
+    std::vector<VariableInfo> variables;
+    // std::vector<FunctionInfo> functions;
+
+    // Returns nullptr if variable already exists or if scopeId is invalid
+    VariableInfo* addVariable(ScopeId scopeId, const std::string& name);
+    // Returns nullptr if variable already exists or if scopeId is invalid
+    // FunctionInfo* addFunction(ScopeId scopeId, const std::string& name);
+    Identifier* addFunction(ScopeId scopeId, ASTFunction* astFunc);
+    // Returns nullptr if variable already exists or if scopeId is invalid
+    Identifier* addIdentifier(ScopeId scopeId, const std::string& name);
+    
+    // Pointer may become invalid if calling other functions interracting with
+    // the map of identifiers
+    // name argument works with namespacing
+    Identifier* getIdentifier(ScopeId scopeId, const std::string& name);
+    VariableInfo* getVariable(Identifier* id);
+    // Function returns: id->astFunction
+    // The reason it's used is abstract away how it works in case it changes in the future.
+    ASTFunction* getFunction(Identifier* id);
+    
+    void removeIdentifier(ScopeId scopeId, const std::string& name);
 
     std::unordered_map<TypeId, TypeInfo*> typeInfos;
-    void addTypeInfo(ScopeId scopeId, const std::string& name, TypeId id, int size=0);
-    // TypeInfo* addTypeInfo(ScopeId scopeId, const std::string& name);
+    void addTypeInfo(ScopeId scopeId, Token name, TypeId id, u32 size=0);
+    TypeInfo* addType(ScopeId scopeId, Token name);
     // Creates a new type if needed
     // scopeId is the current scope. Parent scopes will also be searched.
-    TypeInfo* getTypeInfo(ScopeId scopeId, const std::string& name, bool dontCreate=false, bool forceCreate=false);
+    TypeInfo* getTypeInfo(ScopeId scopeId, Token name);
     // scopeId is the current scope. Parent scopes will also be searched.
     TypeInfo* getTypeInfo(TypeId id);
 
+    // FunctionInfo* addFunction(ScopeId scopeId, ASTFunction* func);
+    // FunctionInfo* getFunction(ScopeId scopeId, Token name);
+
+    u32 getTypeSize(TypeId typeId);
+    u32 getTypeAlignedSize(TypeId typeId);
+
+    std::string typeToString(TypeId typeId);
+
+    TypeId getTypeId(ScopeId scopeId, Token typeString, bool* success=0);
+
+    // Retrieves namespace of specified scopeId. Parents are not checked.
+    // Example of what name can be: GameLibrary::Math::Vector
     ScopeInfo* getNamespace(ScopeId scopeId, const std::string name);
     
     std::vector<std::string> typeStrings;
-    TypeId addTypeString(const std::string& name);
+    TypeId addTypeString(Token name);
     const std::string& getTypeString(TypeId typeId);
 
-    static bool IsPointer(TypeId id);
-    static bool IsPointer(Token& token);
-    static bool IsSlice(TypeId id);
-    static bool IsSlice(Token& token);
+    // static bool IsPointer(TypeId id);
+    // static bool IsPointer(Token& token);
+    // static u32 GetPointerLevel(Token& token);
+    static Token TrimNamespace(Token token, Token* outNamespace = nullptr);
+    static Token TrimPointer(Token& token, u32* level = nullptr);
+    // static bool IsSlice(TypeId id);
+    // static bool IsSlice(Token& token);
     // true if id is one of u8-64, i8-64
     static bool IsInteger(TypeId id);
     // will return false for non number types
     static bool IsSigned(TypeId id);
-    
+
     // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
     void appendToMainBody(ASTScope* body);
 

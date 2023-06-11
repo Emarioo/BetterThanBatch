@@ -147,7 +147,7 @@ Conclusion:
     - The logged instructions should also show what the registers point to and
       not just which register an instruction uses.
 
-Todo:
+TODO:
     How can the code be made simpler? What functions can the language provide
     to make it easier and faster to code up the solution?
 

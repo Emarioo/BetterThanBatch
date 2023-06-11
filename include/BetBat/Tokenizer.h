@@ -27,6 +27,7 @@ struct Token {
     int line=0;
     int column=0;
 
+    bool operator==(const std::string& str);
     bool operator==(const char* str);
     bool operator!=(const char* str);
     

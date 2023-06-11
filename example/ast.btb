@@ -2,14 +2,102 @@
 // @import ./module
 // #import "./Array" as Ok
 
-namespace A {
-    struct HE{
-        a: i32*,
-    }
-}
+// namespace A {
+//     struct S {
+//         fn p() {printi(99)}}
+//     fn Ok(){printi(24)}
+// }
+// // fn On(){printi(241)}
 
-t: A::HE;
-t.a = 2;
+// namespace A {
+//     fn ok() {
+//         printc("o")
+//         // k = B::H{};
+//         B::ha();
+//     }
+// }
+// namespace B {
+//     fn ha(){
+//         printc("h")
+//         // printi(23);
+//         // A::ok();
+//     }
+//     // struct H {
+//     //     a: i32
+//     // }
+// }
+// A::ok()
+// struct A {
+//     b: B*
+// }
+// struct B {
+//     a: A*
+// }
+
+// B::ha();
+// struct N {
+//     v: i32;
+//     // fn add() {
+//     //     printi((*this).v);
+//     // }
+// }
+// n: N;
+// n.v = 23;
+// // n.add();
+// p = &n;
+
+// (*p).v = 9;
+// p.v = 9;
+
+// printi(p.v);
+// printi(&t);
+// printi(*n.v);
+// printi(t);
+
+
+defer { 
+    defer printi(1)
+    printi(2) 
+}
+printi(3)
+
+//-- Some assignment stuff
+// struct N {
+//     v: i32*;
+// }
+// t: i32;
+// n: N;
+// n.v = &t;
+// p = &n;
+// *n.v = 3;
+// printi(n.v);
+// printi(&t);
+// printi(*n.v);
+// printi(t);
+
+// A::Ok();
+// On();
+// printi(n.v);
+
+// a = 1   
+// a++
+// ++a
+// struct A {}
+// struct A {}
+
+// k: A;
+
+// a = 2
+// p = &a;
+
+// printi(*p)
+
+// t: A::HE;
+// k = 6;
+// t.a = &k;
+
+// // printi(t.a)
+// printi(*t.a)
 
 // a: Ok::Array;
 // a.ptr = null;

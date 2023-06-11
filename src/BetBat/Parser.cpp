@@ -22,8 +22,8 @@
 
 // returns instruction type
 // zero means no operation
-int IsOp(Token& token){
-    if(token.flags&TOKEN_QUOTED) return 0;
+OperationType IsOp(Token& token){
+    if(token.flags&TOKEN_QUOTED) return (OperationType)0;
     if(Equal(token,"+")) return AST_ADD;
     if(Equal(token,"-")) return AST_SUB;
     if(Equal(token,"*")) return AST_MUL;
@@ -46,7 +46,7 @@ int IsOp(Token& token){
     // NOT operation is special
 
     // if(token=="%") return BC_MOD;
-    return 0;
+    return (OperationType)0;
 }
 int OpPrecedence(int op){
     using namespace engone;
@@ -55,8 +55,10 @@ int OpPrecedence(int op){
         ||op==AST_EQUAL||op==AST_NOT_EQUAL) return 5;
     if(op==AST_ADD||op==AST_SUB) return 9;
     if(op==AST_MUL||op==AST_DIV||op==AST_MODULUS) return 10;
-    if(op==AST_BAND||op==AST_BOR||op==AST_BXOR||op==AST_BNOT||
+    if(op==AST_BAND||op==AST_BOR||op==AST_BXOR||
         op==AST_BLSHIFT||op==AST_BRSHIFT) return 13;
+    if(op==AST_BNOT || op==AST_NOT || op==AST_CAST || op==AST_REFER || op==AST_DEREF) return 15;
+    if(op==AST_MEMBER || op == AST_FROM_NAMESPACE) return 20;
     log::out << log::RED<<__FILE__<<":"<<__LINE__<<", missing "<<op<<"\n";
     return 0;
 }
@@ -191,7 +193,7 @@ Token CombineTokens(ParseInfo& info){
     Token outToken{};
     while(!info.end()) {
         Token token = info.get(info.at()+1);
-        // Todo: stop at ( # ) and such
+        // TODO: stop at ( # ) and such
         if(token==";"&& !(token.flags&TOKEN_QUOTED)){
             break;   
         }
@@ -245,7 +247,7 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
         //         testNamespace = false;
         //     }
         // }
-        // Todo: Array<T,A> wouldn't work since comma is detected as end of data type.
+        // TODO: Array<T,A> wouldn't work since comma is detected as end of data type.
         //      tuples won't work with paranthesis.
         if(Equal(tok,",") // (a: i32, b: i32)     struct {a: i32, b: i32}
             ||Equal(tok,"=") // a: i32 = 9;
@@ -279,6 +281,7 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
     // };
     return PARSE_SUCCESS;
 }
+int ParseFunction(ParseInfo& info, ASTFunction*& expression, bool attempt, ASTStruct* parentStruct);
 int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt);
 int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     using namespace engone;
@@ -362,75 +365,85 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     //  inside is probably better.
     while (true){
         Token name = info.get(info.at()+1);
-        
+
         if(Equal(name,"}")){
             info.next();
             break;
         }
-        
-        if(!IsName(name)){
+
+        if (Equal(name,"fn")) {
+            // parse function?
+            ASTFunction* func = 0;
+            int result = ParseFunction(info, func, false, astStruct);
+            if(result!=PARSE_SUCCESS){
+                continue;
+            }
+            astStruct->add(func);
+        } else {
+            if(!IsName(name)){
+                info.next();
+                ERRT(name) << "expected a name, "<<name<<" isn't\n";
+                ERRLINE
+                error = PARSE_ERROR;
+                continue;
+            }
+            info.next();   
+            Token token = info.get(info.at()+1);
+            if(!Equal(token,":")){
+                ERRT(token)<<"expected : not "<<token<<"\n";
+                ERRLINE
+                error = PARSE_ERROR;
+                continue;
+            }    
             info.next();
-            ERRT(name) << "expected a name, "<<name<<" isn't\n";
-            ERRLINE
-            error = PARSE_ERROR;
-            continue;
-        }
-        info.next();   
-        Token token = info.get(info.at()+1);
-        if(!Equal(token,":")){
-            ERRT(token)<<"expected : not "<<token<<"\n";
-            ERRLINE
-            error = PARSE_ERROR;
-            continue;
-        }    
-        info.next();
-        Token dtToken;
-        int result = ParseTypeId(info,dtToken);
-        if(result!=PARSE_SUCCESS) {
-            ERRT(dtToken) << "failed parsing type "<<dtToken<<"\n";
-            ERRLINE;   
-            continue;
-        }
-        std::string temps = dtToken;
-        
-        int polyIndex = -1;
-        for(int i=0;i<(int)astStruct->polyNames.size();i++){
-            if(temps.find(astStruct->polyNames[i])!=std::string::npos){
-                polyIndex = i;
-                break;
+            Token dtToken;
+            int result = ParseTypeId(info,dtToken);
+            if(result!=PARSE_SUCCESS) {
+                ERRT(dtToken) << "failed parsing type "<<dtToken<<"\n";
+                ERRLINE;   
+                continue;
+            }
+            std::string temps = dtToken;
+            
+            int polyIndex = -1;
+            for(int i=0;i<(int)astStruct->polyNames.size();i++){
+                if(temps.find(astStruct->polyNames[i])!=std::string::npos){
+                    polyIndex = i;
+                    break;
+                }
+            }
+            
+            // TypeInfo* typeInfo = info.ast->getTypeInfo(info.currentScopeId,dtToken);
+            TypeId typeId = info.ast->addTypeString(dtToken);
+            
+            result = PARSE_SUCCESS;
+            ASTExpression* defaultValue=0;
+            token = info.get(info.at()+1);
+            if(Equal(token,"=")){
+                info.next();
+                result = ParseExpression(info,defaultValue,false);
+            }
+            if(result == PARSE_SUCCESS){
+                astStruct->members.push_back({});
+                auto& mem = astStruct->members.back();
+                mem.name = name;
+                // if(!typeInfo)
+                //     mem.typeId = 0;
+                // else
+                    mem.typeId = typeId;
+                mem.defaultValue = defaultValue;
+                mem.polyIndex = polyIndex;
             }
         }
-        
-        // TypeInfo* typeInfo = info.ast->getTypeInfo(info.currentScopeId,dtToken);
-        int typeId = info.ast->addTypeString(dtToken);
-        
-        result = PARSE_SUCCESS;
-        ASTExpression* defaultValue=0;
-        token = info.get(info.at()+1);
-        if(Equal(token,"=")){
-            info.next();
-            result = ParseExpression(info,defaultValue,false);
-        }
-        if(result == PARSE_SUCCESS){
-            astStruct->members.push_back({});
-            auto& mem = astStruct->members.back();
-            mem.name = name;
-            // if(!typeInfo)
-            //     mem.typeId = 0;
-            // else
-                mem.typeId = typeId;
-            mem.defaultValue = defaultValue;
-            mem.polyIndex = polyIndex;
-        }
-        token = info.get(info.at()+1);
-        if(Equal(token,",")){
+        Token token = info.get(info.at()+1);
+        if(Equal(token,";")){
             info.next();
             continue;
         }else if(Equal(token,"}")){
             info.next();
             break;
         }else{
-            ERRT(token)<<"expected } or , not "<<token<<"\n";
+            ERRT(token)<<"expected } or ; not "<<token<<"\n";
             ERRLINE
             error = PARSE_ERROR;
             continue;
@@ -452,7 +465,6 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     _GLOG(log::out << "Parsed struct "<<name << " with "<<astStruct->members.size()<<" members\n";)
     return error;
 }
-int ParseFunction(ParseInfo& info, ASTFunction*& tempFunction, bool attempt);
 // int ParseStruct(ParseInfo& info, ASTStruct*& tempFunction, bool attempt);
 int ParseEnum(ParseInfo& info, ASTEnum*& tempFunction, bool attempt);
 int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
@@ -519,7 +531,7 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
         int result=PARSE_BAD_ATTEMPT;
 
         if(result==PARSE_BAD_ATTEMPT)
-            result = ParseFunction(info,tempFunction,true);
+            result = ParseFunction(info,tempFunction,true, nullptr);
         if(result==PARSE_BAD_ATTEMPT)
             result = ParseStruct(info,tempStruct,true);
         if(result==PARSE_BAD_ATTEMPT)
@@ -653,6 +665,66 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     _PLOG(log::out << "Parsed enum "<<name << " with "<<astEnum->members.size()<<" members\n";)
     return error;
 }
+// parses arguments and puts them into fncall->left
+int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
+    ASTExpression* tail=fncall->left;
+    if(tail)
+        while(tail->next) {
+            tail = tail->next;
+        }
+    // TODO: sudden end, error handling
+    bool expectComma=false;
+    bool mustBeNamed=false;
+    Token prevNamed = {};
+    while(true){
+        Token& tok = info.get(info.at()+1);
+        if(Equal(tok,")")){
+            info.next();
+            break;
+        }
+        if(expectComma){
+            if(Equal(tok,",")){
+                info.next();
+                expectComma=false;
+                continue;
+            }
+            ERRT(tok)<<"expected comma not "<<tok<<"\n";
+            return PARSE_ERROR;
+        }
+        bool named=false;
+        Token eq = info.get(info.at()+2);
+        if(IsName(tok) && Equal(eq,"=")){
+            info.next();
+            info.next();
+            prevNamed = tok;
+            named=true;
+            mustBeNamed = true;
+        } else if(mustBeNamed){
+            ERRT(tok) << "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
+            ERRLINE
+            // return or continue could desync the parsing so don't do that.
+        }
+
+        ASTExpression* expr=0;
+        int result = ParseExpression(info,expr,false);
+        if(result!=PARSE_SUCCESS){
+            // TODO: error message, parse other arguments instead of returning?
+            return PARSE_ERROR;                         
+        }
+        if(named){
+            expr->namedValue = new std::string(tok);
+        }
+        if(tail){
+            tail->next = expr;
+        }else{
+            fncall->left = expr;
+        }
+        (*count)++;
+        tail = expr;
+        expectComma = true;
+    }
+    return PARSE_SUCCESS;
+}
 // @fex
 int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     using namespace engone;
@@ -667,8 +739,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     }
 
     std::vector<ASTExpression*> values;
-    std::vector<int> ops;
-    std::vector<int> directOps; // ! & *
+    std::vector<OperationType> ops;
+    // std::vector<OperationType> directOps; // ! & *
     // extra info for directOps
     std::vector<TypeId> castTypes;
     // extra info for directOps
@@ -680,7 +752,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     while(true){
         Token token = info.get(info.at()+1);
         
-        int opType = 0;
+        OperationType opType = (OperationType)0;
         bool ending=false;
         
         if(expectOperator){
@@ -693,15 +765,44 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     continue;
                 }
                 info.next();
+                int startToken=info.at(); // start of fncall
+
+                Token tok = info.get(info.at()+1);
+                if(Equal(tok, "(")){
+                    info.next();
+                    ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
+                    tmp->name = new std::string(token);
+                    
+                    ASTExpression* refer = info.ast->createExpression(TypeId(AST_REFER));
+                    refer->left = values.back();
+                    values.pop_back();
+                    tmp->left = refer;
+                    tmp->boolValue = true; // indicicate fncall to struct method
+
+                    int count = 0;
+                    int result = ParseArguments(info, tmp, &count);
+                    if(result!=PARSE_SUCCESS)
+                        return result;
+
+                    _PLOG(log::out << "Parsed call "<<count <<"\n";)
+                    tmp->tokenRange.firstToken = token;
+                    tmp->tokenRange.startIndex = startToken;
+                    tmp->tokenRange.endIndex = info.at()+1;
+                    tmp->tokenRange.tokenStream = info.tokens;
+
+
+                    values.push_back(tmp);
+                    continue;
+                }
                 
-                ASTExpression* tmp = info.ast->createExpression(AST_MEMBER);
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_MEMBER));
                 tmp->name = new std::string(token);
                 tmp->left = values.back();
+                values.pop_back();
                 tmp->tokenRange.firstToken = tmp->left->tokenRange.firstToken;
                 tmp->tokenRange.startIndex = tmp->left->tokenRange.startIndex;
                 tmp->tokenRange.endIndex = info.at()+1;
                 tmp->tokenRange.tokenStream = info.tokens;
-                values.pop_back();
                 values.push_back(tmp);
                 continue;
             } else if((opType = IsOp(token))){
@@ -722,25 +823,25 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
         }else{
             if(Equal(token,"&")){
                 info.next();
-                directOps.push_back(AST_REFER);
+                ops.push_back(AST_REFER);
                 attempt = false;
                 continue;
             }
             if(Equal(token,"*")){
                 info.next();
-                directOps.push_back(AST_DEREF);
+                ops.push_back(AST_DEREF);
                 attempt = false;
                 continue;
             }
             if(Equal(token,"!")){
                 info.next();
-                directOps.push_back(AST_NOT);
+                ops.push_back(AST_NOT);
                 attempt = false;
                 continue;
             }
             if(Equal(token,"~")){
                 info.next();
-                directOps.push_back(AST_BNOT);
+                ops.push_back(AST_BNOT);
                 attempt = false;
                 continue;
             }
@@ -765,20 +866,20 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     ERRLINE
                 }
                 info.next();
-                directOps.push_back(AST_CAST);
+                ops.push_back(AST_CAST);
                 // TypeId dt = info.ast->getTypeInfo(info.currentScopeId,tokenTypeId)->id;
                 // castTypes.push_back(dt);
-                int strId = info.ast->addTypeString(tokenTypeId);
+                TypeId strId = info.ast->addTypeString(tokenTypeId);
                 castTypes.push_back(strId);
                 attempt=false;
                 continue;
             }
-            if(Equal(token,"sizeof")){
-                info.next();
-                directOps.push_back(AST_SIZEOF);
-                attempt=false;
-                continue;
-            }
+            // if(Equal(token,"sizeof")){
+            //     info.next();
+            //     directOps.push_back(AST_SIZEOF);
+            //     attempt=false;
+            //     continue;
+            // }
             if(Equal(token,"-")){
                 info.next();
                 negativeNumber=true;
@@ -814,7 +915,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     // else
                     //     tmp = info.ast->createExpression(AST_INT64);
                         
-                    tmp = info.ast->createExpression(AST_INT32); // default to this for now
+                    tmp = info.ast->createExpression(TypeId(AST_INT32)); // default to this for now
                     tmp->i64Value = -num;
                 }else{
                     //-- unsigned   
@@ -831,7 +932,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     //     tmp = info.ast->createExpression(AST_UINT32);
                     // else
                     //     tmp = info.ast->createExpression(AST_UINT64);
-                    tmp = info.ast->createExpression(AST_INT32);
+                    tmp = info.ast->createExpression(TypeId(AST_INT32));
                     tmp->i64Value = num;
                 }
                 
@@ -842,7 +943,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsDecimal(token)){
                 token = info.next();
-                ASTExpression* tmp = info.ast->createExpression(AST_FLOAT32);
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FLOAT32));
                 tmp->f32Value = ConvertDecimal(token);
                 if(negativeNumber)
                     tmp->f32Value = -tmp->f32Value;
@@ -855,7 +956,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsHexadecimal(token)){
                 info.next();
-                ASTExpression* tmp = info.ast->createExpression(AST_UINT32);
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_UINT32));
                 tmp->i64Value =  ConvertHexadecimal(token); // TODO: Only works with 32 bit or 16,8 I suppose.
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
@@ -868,11 +969,11 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 
                 ASTExpression* tmp = 0;
                 if(token.length == 1){
-                    tmp = info.ast->createExpression(AST_CHAR);
+                    tmp = info.ast->createExpression(TypeId(AST_CHAR));
                     tmp->charValue = *token.str;
                 }else {
                     ERRT(token) << "string not implemented yet\n";
-                    tmp = info.ast->createExpression(0);
+                    tmp = info.ast->createExpression({});
                 }
                 // tmp->constStrIndex = info.ast->constStrings.size();
                 // info.ast->constStrings.push_back(token);
@@ -885,7 +986,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             } else if(Equal(token,"[")) {
                 info.next();
 
-                ASTExpression* tmp = info.ast->createExpression(AST_SLICE_INITIALIZER);
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_SLICE_INITIALIZER));
 
                 // TODO: what about slice type. u16[] for example.
                 //  you can do just [0,21] and it will auto assign a type in the generator
@@ -927,7 +1028,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.tokenStream = info.tokens;
             } else if(Equal(token,"null")){
                 token = info.next();
-                ASTExpression* tmp = info.ast->createExpression(AST_NULL);
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NULL));
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
@@ -943,61 +1044,30 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 if(Equal(tok,"(")){
                     // function call
                     info.next();
-                    ASTExpression* tmp = info.ast->createExpression(AST_FNCALL);
-                    tmp->name = new std::string(token);
-                    ASTExpression* tail=0;
-                    // TODO: sudden end, error handling
-                    bool expectComma=false;
-                    bool mustBeNamed=false;
-                    Token prevNamed = {};
-                    int count=0;
-                    while(true){
-                        Token& tok = info.get(info.at()+1);
-                        if(Equal(tok,")")){
-                            info.next();
+                    
+                    std::string ns = "";
+                    while(ops.size()>0){
+                        OperationType op = ops.back();
+                        if(op == AST_FROM_NAMESPACE) {
+                            ns += namespaceNames.back();
+                            ns += "::";
+                            namespaceNames.pop_back();
+                            ops.pop_back();
+                        } else {
                             break;
                         }
-                        if(expectComma){
-                            if(Equal(tok,",")){
-                                info.next();
-                                expectComma=false;
-                                continue;
-                            }
-                            ERRT(tok)<<"expected comma not "<<tok<<"\n";
-                            return PARSE_ERROR;
-                        }
-                        bool named=false;
-                        Token eq = info.get(info.at()+2);
-                        if(IsName(tok) && Equal(eq,"=")){
-                            info.next();
-                            info.next();
-                            prevNamed = tok;
-                            named=true;
-                            mustBeNamed = true;
-                        } else if(mustBeNamed){
-                            ERRT(tok) << "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
-                            ERRLINE
-                            // return or continue could desync the parsing so don't do that.
-                        }
-
-                        ASTExpression* expr=0;
-                        int result = ParseExpression(info,expr,false);
-                        if(result!=PARSE_SUCCESS){
-                            // TODO: error message, parse other arguments instead of returning?
-                            return PARSE_ERROR;                         
-                        }
-                        if(named){
-                            expr->namedValue = new std::string(tok);
-                        }
-                        if(tail){
-                            tail->next = expr;
-                        }else{
-                            tmp->left = expr;
-                        }
-                        count++;
-                        tail = expr;
-                        expectComma = true;
                     }
+                    ns += token;
+
+                    ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
+                    tmp->name = new std::string(std::move(ns));
+                    // tmp->name = new std::string(token); // When not doing AST_FROM_NAMESPACE
+                    
+                    int count = 0;
+                    int result = ParseArguments(info, tmp, &count);
+                    if(result!=PARSE_SUCCESS)
+                        return result;
+
                     _PLOG(log::out << "Parsed call "<<count <<"\n";)
                     values.push_back(tmp);
                     tmp->tokenRange.firstToken = token;
@@ -1007,8 +1077,25 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }else if(Equal(tok,"{")){
                     // initializer
                     info.next();
-                    ASTExpression* tmp = info.ast->createExpression(AST_INITIALIZER);
-                    tmp->name = new std::string(token);
+                    ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INITIALIZER));
+                    // NOTE: Type checker works on TypeIds not AST_FROM_NAMESPACE.
+                    //  AST_FROM... is used for functions and variables.
+                    std::string ns = "";
+                    while(ops.size()>0){
+                        OperationType op = ops.back();
+                        if(op == AST_FROM_NAMESPACE) {
+                            ns += namespaceNames.back();
+                            ns += "::";
+                            namespaceNames.pop_back();
+                            ops.pop_back();
+                        } else {
+                            break;
+                        }
+                    }
+                    ns += token;
+                    tmp->castType = info.ast->addTypeString(ns);
+                    // TODO: A little odd to use castType. Renaming castType to something more
+                    //  generic which works for AST_CAST and AST_INITIALIZER would be better.
                     ASTExpression* tail=0;
                     
                     bool mustBeNamed=false;
@@ -1084,7 +1171,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         ERRLINE
                         continue;
                     }
-                    directOps.push_back(AST_FROM_NAMESPACE);
+                    ops.push_back(AST_FROM_NAMESPACE);
                     namespaceNames.push_back(token);
                     // namespaceToken = token;
                     // namespaceName = new std::string(token);
@@ -1101,8 +1188,25 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     // tmp->tokenRange.endIndex = info.at()+1;
                     // tmp->tokenRange.tokenStream = info.tokens;
                 } else{
-                    ASTExpression* tmp = info.ast->createExpression(AST_VAR);
-                    tmp->name = new std::string(token);
+                    ASTExpression* tmp = info.ast->createExpression(TypeId(AST_VAR));
+
+                    std::string ns = "";
+                    while(ops.size()>0){
+                        OperationType op = ops.back();
+                        if(op == AST_FROM_NAMESPACE) {
+                            ns += namespaceNames.back();
+                            ns += "::";
+                            namespaceNames.pop_back();
+                            ops.pop_back();
+                        } else {
+                            break;
+                        }
+                    }
+                    ns += token;
+
+                    tmp->name = new std::string(std::move(ns));
+
+                    // tmp->name = new std::string(token); // When not incorporating AST_FROM_NAMESPACE
                     values.push_back(tmp);
                     tmp->tokenRange.firstToken = token;
                     tmp->tokenRange.startIndex = startToken;
@@ -1143,82 +1247,92 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             // might cause issues but we do have a defer above which
             // deals with memory leak of expressions in values list
         }
-        while(directOps.size()>0){
-            int op = directOps.back();
-            directOps.pop_back();
+        // while(directOps.size()>0){
+        //     OperationType op = directOps.back();
+        //     directOps.pop_back();
 
-            auto val = values.back();
-            values.pop_back();
+        //     auto val = values.back();
+        //     values.pop_back();
             
-            auto newVal = info.ast->createExpression(op);
-            // TODO: token range doesn't include the operation token. It should.
-            newVal->tokenRange = val->tokenRange;
-            if(op==AST_FROM_NAMESPACE){
-                Token& tok = namespaceNames.back();
-                newVal->name = new std::string(tok);
-                newVal->tokenRange.firstToken = tok;
-                newVal->tokenRange.startIndex -= 2; // -{namespace name} -{::}
-                namespaceNames.pop_back();
-            } else if(op==AST_CAST){
-                newVal->castType = castTypes.back();
-                castTypes.pop_back();
-            }
-            newVal->left = val;
+        //     auto newVal = info.ast->createExpression(TypeId(op));
+        //     // TODO: token range doesn't include the operation token. It should.
+        //     newVal->tokenRange = val->tokenRange;
+        //     if(op==AST_FROM_NAMESPACE){
+        //         Token& tok = namespaceNames.back();
+        //         newVal->name = new std::string(tok);
+        //         newVal->tokenRange.firstToken = tok;
+        //         newVal->tokenRange.startIndex -= 2; // -{namespace name} -{::}
+        //         namespaceNames.pop_back();
+        //     } else if(op==AST_CAST){
+        //         newVal->castType = castTypes.back();
+        //         castTypes.pop_back();
+        //     }
+        //     newVal->left = val;
 
-            values.push_back(newVal);
-        }
+        //     values.push_back(newVal);
+        // }
         
         ending = ending || info.end();
 
-        while(values.size()>1){
+        while(values.size()>0){
+
+            OperationType nowOp = (OperationType)0;
             if(ops.size()>=2&&!ending){
-                int op1 = ops[ops.size()-2];
-                int op2 = ops[ops.size()-1];
+                if(values.size()<2)
+                    break;
+                OperationType op1 = ops[ops.size()-2];
+                OperationType op2 = ops[ops.size()-1];
                 if(OpPrecedence(op1)>=OpPrecedence(op2)){
+                    nowOp = op1;
                     ops[ops.size()-2] = op2;
                     ops.pop_back();
-
-                    auto er = values.back();
-                    values.pop_back();
-                    auto el = values.back();
-                    values.pop_back();
-
-                    auto val = info.ast->createExpression(op1);
-                    val->left = el;
-                    val->right = er;
-                    
-                    val->tokenRange.firstToken = er->tokenRange.firstToken;
-                    val->tokenRange.startIndex = er->tokenRange.startIndex;
-                    val->tokenRange.endIndex = el->tokenRange.endIndex;
-                    val->tokenRange.tokenStream = info.tokens;
-
-                    values.push_back(val);
                 }else{
                     // _PLOG(log::out << "break\n";)
                     break;
                 }
             }else if(ending){
-                // there is at least two values and one op
-                auto er = values.back();
-                values.pop_back();
-                auto el = values.back();
-                values.pop_back();
-                int op = ops.back();
+                if(ops.size()<1){
+                    // NOTE: Break on base case when we end with no operators left and with one value. 
+                    break;
+                }
+                nowOp = ops.back();
                 ops.pop_back();
-
-                auto val = info.ast->createExpression(op);
-                val->left = el;
-                val->right = er;
-                
-                val->tokenRange.firstToken = er->tokenRange.firstToken;
-                val->tokenRange.startIndex = er->tokenRange.startIndex;
-                val->tokenRange.endIndex = el->tokenRange.endIndex;
-                val->tokenRange.tokenStream = info.tokens;
-
-                values.push_back(val);
             }else{
                 break;
             }
+            auto er = values.back();
+            values.pop_back();
+
+            auto val = info.ast->createExpression(TypeId(nowOp));
+            val->tokenRange.tokenStream = info.tokens;
+            // FROM_NAMESPACE, CAST, REFER, DEREF, NOT, BNOT
+            if(nowOp == AST_REFER || nowOp == AST_DEREF || nowOp == AST_NOT || nowOp == AST_BNOT||
+                nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST){
+                
+                val->tokenRange = er->tokenRange;
+                if(nowOp == AST_FROM_NAMESPACE){
+                    Token& tok = namespaceNames.back();
+                    val->name = new std::string(tok);
+                    val->tokenRange.firstToken = tok;
+                    val->tokenRange.startIndex -= 2; // -{namespace name} -{::}
+                    namespaceNames.pop_back();
+                } else if(nowOp == AST_CAST){
+                    val->castType = castTypes.back();
+                    castTypes.pop_back();
+                }
+                
+                val->left = er;
+            } else if(values.size()>0){
+                auto el = values.back();
+                values.pop_back();
+                val->tokenRange.firstToken = el->tokenRange.firstToken;
+                val->tokenRange.startIndex = el->tokenRange.startIndex;
+                val->tokenRange.endIndex = er->tokenRange.endIndex;
+                val->left = el;
+                val->right = er;
+            }
+
+            values.push_back(val);
         }
         // Attempt succeeded. Failure is now considered an error.
         attempt = false;
@@ -1381,13 +1495,32 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement->tokenRange.endIndex = info.at()+1;
         statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;        
+    } else if(Equal(firstToken,"defer")){
+        info.next();
+
+        ASTScope* body = nullptr;
+        int result = ParseBody(info, body);
+        if(result != PARSE_SUCCESS) {
+            return result;
+        }
+        // NOTE: I don't think semi-comma needs to be parsed.
+
+        statement = info.ast->createStatement(ASTStatement::DEFER);
+        statement->body = body;
+
+
+        statement->tokenRange.firstToken = firstToken;
+        statement->tokenRange.startIndex = startIndex;
+        statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
+        return PARSE_SUCCESS;  
     }
     if(attempt)
         return PARSE_BAD_ATTEMPT;
     return PARSE_ERROR;
 }
 // out token contains a newly allocated string. use delete[] on it
-int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
+int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct){
     using namespace engone;
     _PLOG(FUNC_ENTER)
     Token& token = info.get(info.at()+1);
@@ -1417,6 +1550,13 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
     function->tokenRange.startIndex = startIndex;
     function->tokenRange.tokenStream = info.tokens;
 
+    if(parentStruct) {
+        function->arguments.push_back({});
+        auto& argv = function->arguments.back();
+        argv.name = "this";
+        argv.typeId = info.ast->addTypeString(parentStruct->name+"*");;
+        argv.defaultValue = nullptr;
+    }
     bool mustHaveDefault=false; 
     TokenRange prevDefault={};
     while(true){
@@ -1445,7 +1585,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
             delete[] dataType.str;
         };
         // auto id = info.ast->getTypeInfo(info.currentScopeId,dataType)->id;
-        int strId = info.ast->addTypeString(dataType);
+        TypeId strId = info.ast->addTypeString(dataType);
 
         ASTExpression* defaultValue=0;
         tok = info.get(info.at()+1);
@@ -1511,7 +1651,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
                     return PARSE_ERROR;
                 }
                 // auto id = info.ast->getTypeInfo(info.currentScopeId,dt)->id;
-                int strId = info.ast->addTypeString(dt);
+                TypeId strId = info.ast->addTypeString(dt);
                 function->returnTypes.push_back(strId);
             }
         }else{
@@ -1534,13 +1674,13 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt){
                     return PARSE_ERROR;
                 }
                 // auto id = info.ast->getTypeInfo(info.currentScopeId,dt)->id;
-                int strId = info.ast->addTypeString(dt);
+                TypeId strId = info.ast->addTypeString(dt);
                 function->returnTypes.push_back(strId);
             }
         }
     }
 
-    ASTScope* body;
+    ASTScope* body = 0;
     int result = ParseBody(info,body);
 
     function->body = body;
@@ -1554,7 +1694,7 @@ int ParsePropAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt)
     
     int startIndex = info.at()+1;
     
-    ASTExpression* lvalue;
+    ASTExpression* lvalue = 0;
     int result = ParseExpression(info,lvalue,attempt);       
     if(result!=PARSE_SUCCESS) return result;
     
@@ -1572,7 +1712,7 @@ int ParsePropAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt)
     }
     info.next();
     
-    ASTExpression* rvalue;
+    ASTExpression* rvalue = 0;
     result = ParseExpression(info,rvalue,attempt);
     if(result!=PARSE_SUCCESS) return result;
     
@@ -1616,7 +1756,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     Token name = info.get(info.at()+1);
     Token assign = info.get(info.at()+2);
     
-    int assignType = 0;
+    TypeId assignType = {};
     if(Equal(assign,":")){
         // we expect a data type which can be comprised of multiple tokens.
         
@@ -1649,7 +1789,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         std::vector<TypeId> polyList;
         std::string typeString = typeToken;
         // TypeInfo* typeInfo = info.ast->getTypeInfo(info.currentScopeId,typeString);
-        int strId = info.ast->addTypeString(typeString);
+        TypeId strId = info.ast->addTypeString(typeString);
         
         // if(Equal(token,"<")){
         //     info.next();
@@ -1709,7 +1849,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement = info.ast->createStatement(ASTStatement::ASSIGN);
 
         statement->name = new std::string(name);
-        if(assignType!=0)
+        if(assignType.isString())
             statement->typeId = assignType;
 
         statement->rvalue = 0;
@@ -1731,7 +1871,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         ERRT(name) << "expected a valid name for assignment ('"<<name<<"' isn't)\n";
         return PARSE_ERROR;
     }
-    if(assignType==0)
+    if(assignType.getId()==0)
         info.next(); // next on name if : part didn't do it
 
     info.next();
@@ -1740,7 +1880,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
     // log::out << reloc<<"\n";
     statement->name = new std::string(name);
-    if(assignType!=0)
+    if(assignType.getId()!=0)
         statement->typeId = assignType;
 
     ASTExpression* rvalue=0;
@@ -1794,10 +1934,12 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
         info.currentScopeId = info.ast->addScopeInfo();
     }
     bodyLoc->scopeId = info.currentScopeId;
+
+    ASTStatement* latestDefer = nullptr; // latest parsed defer
     
     while(!info.end()){
         Token& token = info.get(info.at()+1);
-        if(Equal(token,"}") && scoped){
+        if(scoped && Equal(token,"}")){
             info.next();
             break;
         }
@@ -1820,7 +1962,7 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
             tempStatement->body = body;
         }
         if(result==PARSE_BAD_ATTEMPT)
-            result = ParseFunction(info,tempFunction,true);
+            result = ParseFunction(info,tempFunction,true, nullptr);
         if(result==PARSE_BAD_ATTEMPT)
             result = ParseStruct(info,tempStruct,true);
         if(result==PARSE_BAD_ATTEMPT)
@@ -1854,7 +1996,16 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
         // We add the AST structures even during error to
         // avoid leaking memory.
         if(tempStatement) {
-            bodyLoc->add(tempStatement);
+            if(tempStatement->type == ASTStatement::DEFER) {
+                if(!latestDefer){
+                    latestDefer = tempStatement;
+                } else {
+                    tempStatement->next = latestDefer;
+                    latestDefer = tempStatement;
+                }
+            } else {
+                bodyLoc->add(tempStatement);
+            }
         }
         if(tempFunction) {
             bodyLoc->add(tempFunction);
@@ -1868,7 +2019,11 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
         if(tempNamespace) {
             bodyLoc->add(tempNamespace, info.ast);
         }
+        if(!scoped && !globalScope)
+            break;
     }
+    if(latestDefer)
+        bodyLoc->add(latestDefer);
 
     if(!info.end()){
         bodyLoc->tokenRange.endIndex = info.at()+1;

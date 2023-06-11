@@ -2,7 +2,7 @@
 
 #include "BetBat/Tokenizer.h"
 
-// Todo: also defined in parser. define where both use it?
+// TODO: also defined in parser. define where both use it?
 #define PARSE_ERROR 0
 #define PARSE_BAD_ATTEMPT 2
 #define PARSE_SUCCESS 1

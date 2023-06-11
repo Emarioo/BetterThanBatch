@@ -242,7 +242,7 @@ namespace engone {
 		// if(!success){
 		// 	PL_PRINTF("time failed\n");	
 		// }
-		// Todo: handle err
+		// TODO: handle err
 		return tp;
 	}
 	static bool once = false;
@@ -253,7 +253,7 @@ namespace engone {
 			// if(!success){
 			// 	PL_PRINTF("time failed\n");	
 			// }
-			// Todo: handle err
+			// TODO: handle err
 		}
 		TimePoint endPoint;
 		BOOL success = QueryPerformanceCounter((LARGE_INTEGER*)&endPoint);
@@ -633,7 +633,7 @@ namespace engone {
 			if (m_consoleHandle == NULL)
 				return;
 		}
-		// Todo: don't set color if already set? difficult if you have a variable of last color and a different 
+		// TODO: don't set color if already set? difficult if you have a variable of last color and a different 
 		//		function sets color without changing the variable.
 		SetConsoleTextAttribute((HANDLE)m_consoleHandle, color);
 	}
@@ -710,7 +710,7 @@ namespace engone {
 			}
 			m_ownerThread = newId;
 			if (res == WAIT_FAILED) {
-                // Todo: What happened do the old thread who locked the mutex. Was it okay to ownerThread = newId
+                // TODO: What happened do the old thread who locked the mutex. Was it okay to ownerThread = newId
 				DWORD err = GetLastError();
                 PL_PRINTF("[WinError %lu] WaitForSingleObject\n",err);
 			}
@@ -1113,7 +1113,7 @@ namespace engone {
 					printf("[WinError %lu] StartProgram, could not start %s\n",err,commandLine);
 				else
 					printf("[WinError %lu] StartProgram, could not start %s\n",err,path.c_str());
-				// Todo: does the handles need to be closed? probably not since CreateProcess failed. double check.	
+				// TODO: does the handles need to be closed? probably not since CreateProcess failed. double check.	
 			}
 			return false;
 		}
@@ -1133,7 +1133,7 @@ namespace engone {
 				}
 			}
 		}else{
-			// Todo: what happens with return value when we don't wait for the process?	
+			// TODO: what happens with return value when we don't wait for the process?	
 		}
 		
 		CloseHandle(pi.hProcess);
@@ -1294,7 +1294,7 @@ namespace engone {
 		//log::out << "FileMonitor - finished thread\n";
 		return 0;
 	}
-	// Todo: handle is checked against NULL, it should be checked against INVALID_HANDLE_VALUE
+	// TODO: handle is checked against NULL, it should be checked against INVALID_HANDLE_VALUE
 	bool FileMonitor::check(const std::string& path, void(*callback)(const std::string&, uint32), uint32 flags) {
 	// bool FileMonitor::check(const std::string& path, std::function<void(const std::string&, uint32)> callback, uint32 flags) {
 		
@@ -1323,7 +1323,7 @@ namespace engone {
 		}
 
 		if (!m_running) {
-			if (m_thread.isActive()) // Todo: What if
+			if (m_thread.isActive()) // TODO: What if
 				m_thread.join();
 			//m_threadHandle = NULL;
 

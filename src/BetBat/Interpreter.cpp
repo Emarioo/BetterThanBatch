@@ -112,6 +112,8 @@ void Interpreter::execute(Bytecode* bytecode){
         
         _ILOG(if(inst)
                 log::out << pc<<": "<<*inst<<", ";)
+        log::out.flush(); // flush the instruction in case a crash occurs.
+
         pc++;
         u8 opcode = DECODE_OPCODE(inst);
         switch (opcode) {
@@ -429,29 +431,25 @@ void Interpreter::execute(Bytecode* bytecode){
         }
         case BC_PUSH:{
             u8 r0 = DECODE_REG0(inst);
-            
             int rsize = 1<<DECODE_REG_TYPE(r0);
-
-            if((i64)sp-(i64)stack.data - rsize >= (i64)stack.max){
-                log::out <<log::RED<<__FILE__<< "stack "<<log::GOLD<<"overflow"<<log::RED<<" (sp: "<<
+            
+            if((i64)sp-(i64)stack.data - rsize > (i64)stack.max){
+                log::out <<log::RED<<__FUNCTION__<< ": stack pointer was messed with (sp: "<<
                 ((i64)sp-(i64)stack.data)<<", max: "<<
                 (stack.max)<<")\n";
                 return;
-            }else if((i64)sp-(i64)stack.data - rsize < (i64)0){
-                log::out<<log::RED <<__FILE__<< "stack "<<log::GOLD<<"underflow"<<log::RED<<" (sp: "<<
+            } else if((i64)sp-(i64)stack.data < (i64)0){
+                // NOTE: This is not underflow even though sp is less than base stack pointer because
+                //  stack grows down and not up.
+                log::out<<log::RED <<__FUNCTION__<< ": stack "<<log::GOLD<<"overflow"<<log::RED<<" (sp: "<<
                 ((i64)sp-(i64)stack.data)<<", max: "<<
                 (stack.max)<<")\n";
                 return;
             }
-            
+
             sp-=rsize;
             void* to = (void*)sp;
             void* from = getReg(r0);
-
-            // *((u64*) sp) = *(u64*)ptr;
-
-            
-            // SET_TO_FROM(r0)
             yeah(r0,from,to);
             
             _ILOG(log::out <<"\n";)
@@ -460,16 +458,26 @@ void Interpreter::execute(Bytecode* bytecode){
         }
         case BC_POP: {
             u8 r0 = DECODE_REG0(inst);
-
             int rsize = 1<<DECODE_REG_TYPE(r0);
             
+            if((i64)sp-(i64)stack.data - rsize > (i64)stack.max){
+                // NOTE: stack shrinks upwards and thus we call it underflow
+                log::out <<log::RED<<__FUNCTION__<< ": stack "<<log::GOLD<<"underflow"<<log::RED<<" (sp: "<<
+                ((i64)sp-(i64)stack.data)<<", max: "<<
+                (stack.max)<<")\n";
+                return;
+            } else if((i64)sp-(i64)stack.data < (i64)0){
+                // NOTE: This is not underflow even though sp is less than base stack pointer because
+                //  stack grows down and not up.
+                log::out<<log::RED <<__FUNCTION__<< ": stack pointer was messed with (sp: "<<
+                ((i64)sp-(i64)stack.data)<<", max: "<<
+                (stack.max)<<")\n";
+                return;
+            }
+
             void* to = getReg(r0);
             void* from = (void*)sp;
-            // *(u64*)ptr = *((u64*) sp);
-            
-            // SET_TO_FROM(r0)
             yeah(r0,from,to);
-
             sp+=rsize;
             
             _ILOG(log::out <<"\n";)
@@ -483,6 +491,9 @@ void Interpreter::execute(Bytecode* bytecode){
             i64 addr = *((i64*)ptr);
             
             _ILOG(log::out << "\n";)
+            if(addr>(int)length){
+                log::out << log::GOLD << "Call to instruction beyond all bytecode\n";
+            }
             // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<"\n";)
             
             sp-=8;

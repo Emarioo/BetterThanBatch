@@ -52,7 +52,7 @@ void ReplaceChar(char* str, int length,char from, char to){
 // bool BeginsWith(const std::string& string, const std::string& has){
 //     if(has.length()==0)
 //         return false; // wierd stuff, assert?
-//     // Todo: optimization where string.length-i<has.length then you can quit since
+//     // TODO: optimization where string.length-i<has.length then you can quit since
 //     //   string can't contain has. Not doing it right now because it's unnecessary.
 //     int correct = 0;
 //     for(int i=0;i<string.length();i++){

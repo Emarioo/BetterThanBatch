@@ -5,34 +5,37 @@ A compiler and runtime for a new programming language.
 - Windows only
 
 ## Features
-- Variables, functions, namespaces, structs, enums and namespaces.
-- If, for, while, break, continue and return.
+- Variables, functions, namespaces, structs, enums.
+- If, for, while, break, continue, return, defer, using...
 - #define, #multidefine and #undef (macros/defines are recursive)
 - #ifdef (exactly like C)
 - #unwrap (for macros)
 - Concatenation (.. instead of ## from C)
+- #import which is better than #include when it comes to splitting
+  code into multiple files.
+- #include also exists
 
 ## On the way
 - Usage of C++ functions within a script
 - Calling executables like gcc.exe
 - Polymorphism
 - Operator and function overloading
-- More things are on the way too.
 
 (guide is not up to date)
-See the Guide/Walkthrough [](docs/guide.md)
+See the [Guide/Walkthrough](docs/guide.md)
 
 ## The processs
 - Tokenizer     (text -> tokens)
 - Preprocessor  (tokens -> tokens)
 - Parser        (tokens -> AST)
+- Type checker  (modifies types in AST)
 - Generator     (AST -> bytecode)
 - Optimizer     (bytecode -> faster and smaller bytecode)
 - Interpreter   (runs the bytecode)
 
 ## Examples
 You can find some examples in the example folder.
-[](example/ast.btb)
+[Random code](example/ast.btb)
 
 ## Building with vcvars (Visual Studio)
 Running the commands below will allow you to compile the project.
