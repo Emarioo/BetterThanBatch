@@ -7,14 +7,11 @@
 #include "BetBat/Util/Utility.h"
 #include "BetBat/Config.h"
 
-#define TOKEN_SUFFIX_LINE_FEED 1
+#define TOKEN_SUFFIX_LINE_FEED 0x1
 // SPACE suffic is remove if LINE_FEED is present in mask/flag 
-#define TOKEN_SUFFIX_SPACE 2
-#define TOKEN_QUOTED 4
-
-// #define TOKEN_PRINT_LN_COL 1
-// #define TOKEN_PRINT_SUFFIXES 2
-// #define TOKEN_PRINT_QUOTES 4
+#define TOKEN_SUFFIX_SPACE 0x2
+#define TOKEN_QUOTED 0x4
+#define TOKEN_DOUBLE_QUOTED 0x8
 
 struct Token {
     Token() = default;
@@ -23,7 +20,7 @@ struct Token {
     
     char* str=0; // NOT null terminated
     int length=0;
-    int flags=0; // bit mask, TOKEN_...
+    int flags=0; // bit mask representing line feed, space and quotation
     int line=0;
     int column=0;
 
@@ -80,12 +77,21 @@ struct TokenStream {
     // token count
     int length();
     
-    // modifies tokenData
-    bool append(char chr);
-    // Make sure token has a valid char* pointer
-    bool append(Token& tok);
-    bool add(const char* str);
-    bool add(Token token);
+    // The add functions return false if reallocation fails.
+
+    // Only adds data not tokens
+    bool addData(char chr);
+    bool addData(const char* data);
+    bool addData(Token token);
+    
+    // Only adds tokens not data
+    bool addToken(Token token);
+
+    // Adds both token and data
+    // Side note: You may think the function name is verbose
+    //  but it had ambiguous naming before and I paid the price.
+    bool addTokenAndData(const char* token);
+    // bool addTokenAndData(Token token);
 
     Token& get(int index);
 

@@ -33,33 +33,49 @@
 // struct B {
 //     a: A*
 // }
-
 // B::ha();
+
+struct A {
+    a: i64;
+    b: i32;
+}
 // struct N {
 //     v: i32;
-//     // fn add() {
-//     //     printi((*this).v);
-//     // }
-// }
-// n: N;
-// n.v = 23;
-// // n.add();
+//     b: B;
+//     fn add() {
+//         // k = *this;
+//         printi((*this).v);
+//     }
+// }       
+// n = N{11,B{22,33}};
+// n.add();
 // p = &n;
+a = A{9,23};
+p = &a;
+// &a.b
+// &(5)
+// p.a = 5;
+// a.a = 3;
+// (&p.a + 4).a = 7
+printi(*(&p.a + 4));
+// a.a;
+// printi(a.a);
+// p.a;
 
 // (*p).v = 9;
 // p.v = 9;
 
-// printi(p.v);
+// printi((&p.b + 4).a);
 // printi(&t);
 // printi(*n.v);
 // printi(t);
 
 
-defer { 
-    defer printi(1)
-    printi(2) 
-}
-printi(3)
+// defer { 
+//     defer printi(1)
+//     printi(2) 
+// }
+// printi(3)
 
 //-- Some assignment stuff
 // struct N {

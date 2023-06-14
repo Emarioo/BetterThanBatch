@@ -33,7 +33,6 @@ const char *OpToStr(OperationType optype) {
         CASE(INITIALIZER, initializer)
         CASE(SLICE_INITIALIZER, slice_initializer)
         CASE(FROM_NAMESPACE, namespaced)
-        CASE(SIZEOF, sizeof)
 
         CASE(REFER, &)
         CASE(DEREF, * (dereference))
@@ -51,6 +50,8 @@ const char *StateToStr(int type) {
         CASE(IF, if)
         CASE(WHILE, while)
         CASE(RETURN, return)
+        CASE(BREAK, break)
+        CASE(CONTINUE, continue)
         CASE(CALL, call)
         CASE(USING, using)
         CASE(BODY, body)
@@ -122,19 +123,30 @@ AST *AST::Create() {
     ast->addTypeInfo(scopeId,Token("bool"), AST_BOOL, 1);
     ast->addTypeInfo(scopeId,Token("char"), AST_CHAR, 1);
     ast->addTypeInfo(scopeId,Token("null"), AST_NULL, 8);
+    ast->addTypeInfo(scopeId,Token("ast_string"), AST_STRING, 0);
     ast->addTypeInfo(scopeId,Token("var"), AST_VAR);
     ast->addTypeInfo(scopeId,Token("member"), AST_MEMBER);
+    ast->addTypeInfo(scopeId,Token("sizeof"), AST_SIZEOF);
     ast->addTypeInfo(scopeId,Token("call"), AST_FNCALL);
 
-    ast->mainBody = ast->createBody(); {
+    ast->mainBody = ast->createBody();
+    {
         // TODO: set size and offset of language structs here instead of letting the compiler do it.
-        // ASTStruct* astStruct = ast->createStruct("Slice");
-        // auto voidInfo = ast->getTypeInfo("void*");
-        // astStruct->members.push_back({"ptr",voidInfo->id});
-        // astStruct->members.push_back({"len",ast->getTypeInfo("u64")->id});
-        // auto structType = ast->getTypeInfo("Slice");
-        // structType->astStruct = astStruct;
-        // ast->mainBody->add(astStruct);
+        ASTStruct* astStruct = ast->createStruct("Slice");
+        astStruct->members.push_back({});
+        auto& mem = astStruct->members.back();
+        mem.name = "ptr";
+        mem.typeId = ast->getTypeId(ast->globalScopeId, Token("void*"));
+        mem.defaultValue = 0;
+        mem.polyIndex = -1;
+        astStruct->members.push_back({});
+        auto& mem2 = astStruct->members.back();
+        mem2.name = "len";
+        mem2.typeId = ast->getTypeId(ast->globalScopeId, Token("u32"));
+        mem2.defaultValue = 0;
+        mem2.polyIndex = -1;
+        ast->addTypeString("Slice");
+        ast->mainBody->add(astStruct);
     }
     return ast;
 }
@@ -441,6 +453,7 @@ void AST::cleanup() {
         engone::Free(pair.second, sizeof(TypeInfo));
     }
     typeInfos.clear();
+    constStrings.clear();
     
 
     nextScopeId = 0;
@@ -1225,73 +1238,29 @@ void ASTStatement::print(AST *ast, int depth) {
     PrintSpace(depth);
     log::out << "Statement " << StateToStr(type);
 
-    if (type == ASSIGN) {
-        if(typeId.isString()){
-              log:: out << " "<< ast->getTypeString(typeId);
-        } else {
-            log::out << " " << ast->typeToString(typeId);
-            // auto ti = ast->getTypeInfo(typeId);
-            // if(ti){
-            //     auto dtname = ti->getFullType(ast);
-            //     if (typeId.getId() != 0)
-            //         // log::out << " "<<TypeIdToStr(dataType)<<"";
-            //         log::out << " " << dtname;
-            // } else {
-            //     log::out << " TYPE?";
-            // }
-        }
-        log::out << " " << *name << "\n";
-        if (rvalue) {
-            rvalue->print(ast, depth + 1);
-        }
-    } else if (type == PROP_ASSIGN) {
-        log::out << "\n";
-        if (lvalue) {
-            lvalue->print(ast, depth + 1);
-        }
-        if (rvalue)
-            rvalue->print(ast, depth + 1);
-    } else if (type == IF) {
-        log::out << "\n";
-        if (rvalue) {
-            rvalue->print(ast, depth + 1);
-        }
-        if (body) {
-            body->print(ast, depth + 1);
-        }
-        if (elseBody) {
-            elseBody->print(ast, depth + 1);
-        }
-    } else if (type == WHILE) {
-        log::out << "\n";
-        if (rvalue) {
-            rvalue->print(ast, depth + 1);
-        }
-        if (body) {
-            body->print(ast, depth + 1);
-        }
-    } else if (type == RETURN) {
-        log::out << "\n";
-        if (rvalue) {
-            rvalue->print(ast, depth + 1);
-        }
-    } else if (type == CALL) {
-        log::out << "\n";
-        if (rvalue) {
-            rvalue->print(ast, depth + 1);
-        }
-    } else if (type == USING) {
-        log::out << " " << *name << " as " << *alias << "\n";
-    } else if (type == DEFER) {
-        log::out << "\n";
-        if (body) {
-            body->print(ast, depth + 1);
-        }
-    }  else if (type == BODY) {
-        log::out << "\n";
-        if (body) {
-            body->print(ast, depth + 1);
-        }
+    if(typeId.isString()){
+        log:: out << " "<< ast->getTypeString(typeId);
+    } else if(typeId.isValid()){
+        log::out << " " << ast->typeToString(typeId);
+    }
+    if(name)
+        log::out << " " << *name;
+    if(alias)
+        log::out << " as " << *alias;
+    if(opType!=0)
+        log::out << " "<<OpToStr((OperationType)opType)<<"=";
+    log::out << "\n";
+    if (lvalue) {
+        lvalue->print(ast, depth + 1);
+    }
+    if (rvalue) {
+        rvalue->print(ast, depth + 1);
+    }
+    if (body) {
+        body->print(ast, depth + 1);
+    }
+    if (elseBody) {
+        elseBody->print(ast, depth + 1);
     }
     if (next) {
         next->print(ast, depth);
@@ -1325,6 +1294,10 @@ void ASTExpression::print(AST *ast, int depth) {
             log::out << *name;
         else if (typeId == AST_NULL)
             log::out << "null";
+        else if(typeId == AST_STRING)
+            log::out << *name;
+        else if(typeId == AST_SIZEOF)
+            log::out << *name;
         else
             log::out << "missing print impl.";
         if (typeId == AST_FNCALL) {
@@ -1343,7 +1316,6 @@ void ASTExpression::print(AST *ast, int depth) {
                 log::out << ast->getTypeString(castType);
             } else {
                 log::out << ast->typeToString(castType);
-                // log::out << ast->getTypeInfo(castType)->getFullType(ast);
             }
             log::out << "\n";
             left->print(ast, depth + 1);
@@ -1352,7 +1324,11 @@ void ASTExpression::print(AST *ast, int depth) {
             log::out << "\n";
             left->print(ast, depth + 1);
         } else if (typeId == AST_INITIALIZER) {
-            log::out << ast->getTypeString(castType);
+            if(castType.isString()){
+                log::out << ast->getTypeString(castType);
+            } else {
+                log::out << ast->typeToString(castType);
+            }
             log::out << "\n";
             if(left)
                 left->print(ast, depth + 1);

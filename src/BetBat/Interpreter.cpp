@@ -82,6 +82,7 @@ void Interpreter::execute(Bytecode* bytecode){
     pc = 0;
     sp = (u64)stack.data+stack.max;
     fp = (u64)stack.data+stack.max;
+    dp = (u64)bytecode->dataSegment.data;
     
     auto tp = MeasureSeconds();
     
@@ -535,7 +536,11 @@ void Interpreter::execute(Bytecode* bytecode){
                     // _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
                 }else if (addr==BC_EXT_PRINTC){
                     char chr = *(char*)(fp+argoffset + 7); // +7 comes from the alignment after char
+                    #ifdef ILOG
                     log::out << log::LIME << "print: "<<chr<<"\n";
+                    #else
+                    log::out << chr;
+                    #endif
                 }else {
                     _ILOG(log::out << log::RED << addr<<" is not a special function\n";)
                 }
@@ -581,7 +586,17 @@ void Interpreter::execute(Bytecode* bytecode){
             pc++;
 
             void* ptr = getReg(r0);
-            u64 testValue = *((u64*)ptr);
+            int rsize = 1<<DECODE_REG_TYPE(r0);
+            u64 testValue = 0;
+            if(rsize==1) {
+                testValue = *(u8*)ptr;
+            } else if(rsize==2) {
+                testValue = *(u16*)ptr;
+            } else if(rsize==4) {
+                testValue = *(u32*)ptr;
+            } else if(rsize==8){
+                testValue = *(u64*)ptr;
+            }
 
             _ILOG(log::out << testValue<<"\n";)
             
@@ -752,20 +767,10 @@ void Interpreter::execute(Bytecode* bytecode){
             log::out << "copied "<<size<<" bytes\n";
             break;
         }
-        // case BC_CASTI64: {
-        //     u8 r0 = DECODE_REG0(inst);
-        //     u8 r1 = DECODE_REG1(inst);
-            
-        //     void* x = getReg(r0);
-        //     void* out = getReg(r1);
-            
-        //     *(i64*)out = *(float*)x;
-        //     _ILOG(log::out <<*(i64*)out<<"\n";)
-        //     break;
-        // }
         } // for switch
     }
     auto time = StopMeasure(tp);
+    log::out << "\n";
     log::out << "Executed in "<<FormatTime(time)<<"\n";
     printRegisters();
        

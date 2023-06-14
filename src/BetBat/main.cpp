@@ -21,8 +21,31 @@ void print_help(){
     log::out << "  -log opt,int      "<<log::GRAY<<"(extra info about optimizer and interpreter)\n";
 }
 
+// void stac(int num){
+//     int cool = num - 1;
+//     engone::log::out << num << " " << (u64)&cool << "\n";
+//     if(cool==0)
+//         return;
+//     int cool2 = num - 2;
+//     engone::log::out << (u64)&cool2 << "\n";
+
+//     stac(cool);
+// }
 int main(int argc, const char** argv){
     using namespace engone;
+
+    // stac(3);
+    // char a = 'a';
+    // char a1 = 'b';
+    // char a2 = 'c';
+    // int num = 23;
+    // log::out << (u64)&a  << " "<<(u64)&a2<< " "<<(u64)&num <<"\n";
+    // for(int i=0;i<3;i++){
+    //     log::out << *(&a + i)<<"\n";
+    // }
+    // return 0;
+    
+    
 
     log::out.enableReport(false);
 
@@ -114,7 +137,8 @@ int main(int argc, const char** argv){
 
         // PerfTestTokenize("example/build_fast.btb",200);
 
-        CompileAndRun("example/ast.btb", compilerPath);
+        CompileAndRun("example/strings.btb", compilerPath);
+        // CompileAndRun("example/ast.btb", compilerPath);
         // CompileAndRun("tests/benchmark/loop.btb");
         // CompileAndRun("tests/benchmark/loop2.btb");
         

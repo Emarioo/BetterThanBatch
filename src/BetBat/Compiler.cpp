@@ -80,6 +80,7 @@ ASTScope* ParseFile(CompileInfo& info, const std::string& path, std::string as =
         //-- Search cwd or absolute path
         if(fullPath.empty() && FileExist(importName)){
             fullPath = engone::GetWorkingDirectory() + "/" + importName;
+            ReplaceChar((char*)fullPath.data(),fullPath.length(),'\\','/');
         }
         
         // TODO: Search additional import directories, DO THIS WITH #INCLUDE TOO!
@@ -127,6 +128,7 @@ Bytecode* CompileSource(const std::string& sourcePath, const std::string& compil
     std::string cwd = engone::GetWorkingDirectory();
     
     std::string absPath = cwd +"/"+ sourcePath;
+    ReplaceChar((char*)absPath.data(),absPath.length(),'\\','/');
     
     // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
 

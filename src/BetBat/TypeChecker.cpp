@@ -242,6 +242,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
     return true;
 }
 int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
+    using namespace engone;
     Assert(scope)
     Assert(expr)
     
@@ -249,25 +250,53 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
         CheckExpression(info,scope, expr->left);
     if(expr->right)
         CheckExpression(info,scope, expr->right);
-    
+    if(expr->typeId == AST_STRING){
+        if(!expr->name){
+            ERRT(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
+            ERRTOKENS(expr->tokenRange)
+            return false;
+        }
+
+        auto pair = info.ast->constStrings.find(*expr->name);
+        if(pair == info.ast->constStrings.end()){
+            AST::ConstString tmp={};
+            tmp.length = expr->name->length();
+            info.ast->constStrings[*expr->name] = tmp;
+        }
+    } else if(expr->typeId == AST_SIZEOF) {
+        if(!expr->name){
+            ERRT(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
+            ERRTOKENS(expr->tokenRange)
+            return false;
+        }
+        auto ti = info.ast->getTypeId(scope->scopeId, *expr->name);
+        int size = info.ast->getTypeSize(ti);
+        expr->typeId = AST_UINT32;
+        expr->i64Value = size;
+    }
     if(expr->typeId.isString()){
         const std::string& str = info.ast->getTypeString(expr->typeId);
-        auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
-        if (ti) {
-            expr->typeId = ti->id;
+        auto ti = info.ast->getTypeId(scope->scopeId, Token(str));
+        // auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
+        if (ti.isValid()) {
+            expr->typeId = ti;
         } else {
             ERRT(expr->tokenRange) << "type "<<str << " does not exist\n";
         }
     }
     if(expr->castType.isString()){
         const std::string& str = info.ast->getTypeString(expr->castType);
-        auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
-        if (ti) {
-            expr->castType = ti->id;
+        auto ti = info.ast->getTypeId(scope->scopeId, Token(str));
+        // auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
+        if (ti.isValid()) {
+            expr->castType = ti;
         } else {
             ERRT(expr->tokenRange) << "type "<<str << " does not exist\n";
         }
     }
+    
+    if(expr->next)
+        CheckExpression(info, scope, expr->next);
         
     return true;
 }
@@ -354,7 +383,8 @@ int CheckFunction(CheckInfo& info, ASTScope* scope, ASTFunction* func, ASTStruct
     func->returnSize = -offset;
 
     CheckRest(info, func->body);
-    // size of return types doesn't have to match any alignment
+
+    // func->next is checked in CheckRest
     return true;
 }
 int CheckRest(CheckInfo& info, ASTScope* scope){

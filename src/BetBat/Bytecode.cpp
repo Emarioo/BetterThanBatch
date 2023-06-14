@@ -60,7 +60,7 @@ int RegBySize(int regName, int size){
     else if(size==4) return ENCODE_REG_TYPE(BC_REG_32) | regName;
     else if(size==8) return ENCODE_REG_TYPE(BC_REG_64) | regName;
     else {
-        Assert("Bad size, only 1,2,4,8 are allowed")
+        Assert(("Bad size, only 1,2,4,8 are allowed", false))
         return 0;
     }
 }
@@ -102,6 +102,7 @@ bool Bytecode::addIm(i32 data){
 }
 void Bytecode::cleanup(){
     codeSegment.resize(0);
+    dataSegment.resize(0);
     debugSegment.resize(0);
     debugText.clear();
     debugText.shrink_to_fit();

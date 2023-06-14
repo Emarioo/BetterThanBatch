@@ -155,7 +155,7 @@ struct Bytecode {
     void addDebugText(const std::string& text, u32 instructionIndex=-1);
     void addDebugText(Token& token, u32 instructionIndex=-1);
     const char* getDebugText(u32 instructionIndex);
-    // returns offset to beginning of data
+    // returns an offset relative to the beginning of the data segment where data was placed.
     int appendData(const void* data, int size);
 
     bool add(Instruction inst);

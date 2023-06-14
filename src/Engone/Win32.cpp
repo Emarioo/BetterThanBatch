@@ -9,6 +9,8 @@
 #define PL_PRINTF
 #endif
 
+// #define LOG_ALLOCATIONS
+
 #include <unordered_map>
 #include <vector>
 #include <string>
@@ -568,6 +570,9 @@ namespace engone {
 		s_totalAllocatedBytes+=bytes;
 		s_totalNumberAllocations++;			
 		// s_allocStatsMutex.unlock();
+		#ifdef LOG_ALLOCATIONS
+		printf("* Allocate %lld\n",bytes);
+		#endif
 		
 		return ptr;
 	}
@@ -593,6 +598,9 @@ namespace engone {
                 s_totalAllocatedBytes+=newBytes;
                 s_totalNumberAllocations++;			
                 // s_allocStatsMutex.unlock();
+				#ifdef LOG_ALLOCATIONS
+				printf("* Reallocate %lld -> %lld\n",oldBytes, newBytes);
+				#endif
                 return newPtr;
             }
         }
@@ -607,6 +615,9 @@ namespace engone {
 		s_allocatedBytes-=bytes;
 		s_numberAllocations--;
 		// s_allocStatsMutex.unlock();
+		#ifdef LOG_ALLOCATIONS
+		printf("* Free %lld\n",bytes);
+		#endif
 	}
 	uint64 GetTotalAllocatedBytes(){
 		return s_totalAllocatedBytes;

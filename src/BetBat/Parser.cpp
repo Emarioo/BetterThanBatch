@@ -356,6 +356,9 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     }
     info.next();
     
+    // TODO: Structs need their own scopes for polymorphic types and
+    //  internal namespaces, structs, enums...
+
     int offset=0;
     int error = PARSE_SUCCESS;
     bool affectedByAlignment=false;
@@ -541,7 +544,7 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
 
         if(result==PARSE_BAD_ATTEMPT){
             Token& token = info.get(info.at()+1);
-            ERRT(token) << "Unexpected '"<<token<<"'\n";
+            ERRT(token) << "Unexpected '"<<token<<"' (ParseNamespace)\n";
             ERRLINEP
             // log::out << log::RED; info.printPrevLine();log::out << "\n";
             ERRLINE
@@ -688,7 +691,7 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
                 expectComma=false;
                 continue;
             }
-            ERRT(tok)<<"expected comma not "<<tok<<"\n";
+            ERRT(tok)<<"expected ',' to supply more arguments or ')' to end fncall (found "<<tok<<" instead)\n";
             return PARSE_ERROR;
         }
         bool named=false;
@@ -826,26 +829,22 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 ops.push_back(AST_REFER);
                 attempt = false;
                 continue;
-            }
-            if(Equal(token,"*")){
+            }else if(Equal(token,"*")){
                 info.next();
                 ops.push_back(AST_DEREF);
                 attempt = false;
                 continue;
-            }
-            if(Equal(token,"!")){
+            } else if(Equal(token,"!")){
                 info.next();
                 ops.push_back(AST_NOT);
                 attempt = false;
                 continue;
-            }
-            if(Equal(token,"~")){
+            } else if(Equal(token,"~")){
                 info.next();
                 ops.push_back(AST_BNOT);
                 attempt = false;
                 continue;
-            }
-            if(Equal(token,"cast")){
+            } else if(Equal(token,"cast")){
                 info.next();
                 Token tok = info.get(info.at()+1);
                 if(!Equal(tok,"<")){
@@ -873,14 +872,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 castTypes.push_back(strId);
                 attempt=false;
                 continue;
-            }
-            // if(Equal(token,"sizeof")){
-            //     info.next();
-            //     directOps.push_back(AST_SIZEOF);
-            //     attempt=false;
-            //     continue;
-            // }
-            if(Equal(token,"-")){
+            } else if(Equal(token,"-")){
                 info.next();
                 negativeNumber=true;
                 attempt = false;
@@ -972,11 +964,17 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp = info.ast->createExpression(TypeId(AST_CHAR));
                     tmp->charValue = *token.str;
                 }else {
-                    ERRT(token) << "string not implemented yet\n";
-                    tmp = info.ast->createExpression({});
+                    tmp = info.ast->createExpression(TypeId(AST_STRING));
+                    tmp->name = new std::string(token);
+
+                    // A string of zero size can be useful which is why
+                    // the code below is commented out.
+                    // if(token.length == 0){
+                        // ERRT(token) << "string should not have a length of 0\n";
+                        // This is a semantic error and since the syntax is correct
+                        // we don't need to return PARSE_ERROR. We could but things will be fine.
+                    // }
                 }
-                // tmp->constStrIndex = info.ast->constStrings.size();
-                // info.ast->constStrings.push_back(token);
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
@@ -1034,6 +1032,22 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
                 tmp->tokenRange.tokenStream = info.tokens;
+            } else if(Equal(token,"sizeof")) {
+                info.next();
+                Token token = info.get(info.at()+1);
+                if(!IsName(token)){
+                    ERRT(token) << "sizeof expects a single name token like 'SomeStruct123'. '"<<token<<"' is not valid.\n";
+                    ERRLINE
+                    return PARSE_ERROR;
+                }
+                info.next();
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_SIZEOF));
+                tmp->name = new std::string(token);
+                tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.startIndex = info.at();
+                tmp->tokenRange.endIndex = info.at()+1;
+                tmp->tokenRange.tokenStream = info.tokens;
+                values.push_back(tmp);
             } else if(IsName(token)){
                 info.next();
                 int startToken=info.at();
@@ -1074,7 +1088,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
                     tmp->tokenRange.tokenStream = info.tokens;
-                }else if(Equal(tok,"{")){
+                }else if(Equal(tok,"{") && 0 == (token.flags & TOKEN_SUFFIX_SPACE)){ // Struct {} is ignored
                     // initializer
                     info.next();
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INITIALIZER));
@@ -1126,7 +1140,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         int result = ParseExpression(info,expr,false);
                         if(result!=PARSE_SUCCESS){
                             // TODO: error message, parse other arguments instead of returning?
-                            return PARSE_ERROR;                         
+                            // return PARSE_ERROR; Returning would leak arguments so far
+                            info.next(); // prevent infinite loop
+                            continue;
                         }
                         if(named){
                             expr->namedValue = new std::string(token);
@@ -1236,6 +1252,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     ERR_GENERIC;
                     ERRLINE
                     return PARSE_ERROR;
+                    // Qutting here is okay because we have a defer which
+                    // destroys parsed expressions. No memory leaks!
                 }
             }
         }
@@ -1243,9 +1261,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             ERRT(info.get(info.at()-1)) << "Unexpected - before "<<token<<"\n";
             ERRLINE
             return PARSE_ERROR;
-            // quitting here is quite unexpected.
-            // might cause issues but we do have a defer above which
-            // deals with memory leak of expressions in values list
+            // quitting here is a little unexpected but there is
+            // a defer which destroys parsed expresions so no memory leaks at least.
         }
         // while(directOps.size()>0){
         //     OperationType op = directOps.back();
@@ -1503,11 +1520,29 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         if(result != PARSE_SUCCESS) {
             return result;
         }
-        // NOTE: I don't think semi-comma needs to be parsed.
 
         statement = info.ast->createStatement(ASTStatement::DEFER);
         statement->body = body;
 
+        statement->tokenRange.firstToken = firstToken;
+        statement->tokenRange.startIndex = startIndex;
+        statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
+        return PARSE_SUCCESS;  
+    } else if(Equal(firstToken, "break")) {
+        info.next();
+
+        statement = info.ast->createStatement(ASTStatement::BREAK);
+
+        statement->tokenRange.firstToken = firstToken;
+        statement->tokenRange.startIndex = startIndex;
+        statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
+        return PARSE_SUCCESS;
+    } else if(Equal(firstToken, "continue")) {
+        info.next();
+
+        statement = info.ast->createStatement(ASTStatement::CONTINUE);
 
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.startIndex = startIndex;
@@ -1871,7 +1906,8 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         ERRT(name) << "expected a valid name for assignment ('"<<name<<"' isn't)\n";
         return PARSE_ERROR;
     }
-    if(assignType.getId()==0)
+    // if(assignType.getId()==0)
+    if(!assignType.isValid())
         info.next(); // next on name if : part didn't do it
 
     info.next();
@@ -1880,7 +1916,8 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
     // log::out << reloc<<"\n";
     statement->name = new std::string(name);
-    if(assignType.getId()!=0)
+    // if(assignType.getId()!=0)
+    if(assignType.isValid())
         statement->typeId = assignType;
 
     ASTExpression* rvalue=0;
@@ -1932,6 +1969,9 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
     defer { info.currentScopeId = prevScope; };
     if(scoped){
         info.currentScopeId = info.ast->addScopeInfo();
+        ScopeInfo* si = info.ast->getScopeInfo(info.currentScopeId);
+        si->parent = prevScope;
+
     }
     bodyLoc->scopeId = info.currentScopeId;
 
@@ -1981,12 +2021,12 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
 
         if(result==PARSE_BAD_ATTEMPT){
             Token& token = info.get(info.at()+1);
-            ERRT(token) << "Unexpected '"<<token<<"'\n";
+            ERRT(token) << "Unexpected '"<<token<<"' (ParseBody)\n";
             ERRLINEP
             // log::out << log::RED; info.printPrevLine();log::out << "\n";
             ERRLINE
-            // test other parse type
-            info.next(); // prevent infinite loop
+            // prevent infinite loop. Loop only occurs when scoped
+            info.next();
         }
         if(result==PARSE_ERROR){
             
@@ -2018,6 +2058,10 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
         }
         if(tempNamespace) {
             bodyLoc->add(tempNamespace, info.ast);
+        }
+        if(result==PARSE_BAD_ATTEMPT){
+            if(!scoped) // try again
+                continue;
         }
         if(!scoped && !globalScope)
             break;

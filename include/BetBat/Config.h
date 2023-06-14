@@ -5,7 +5,7 @@
 // #define SILENT
 // #define ALLOC_LOG
 
-// not added bug would be nice
+// Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
 
 // Language config
@@ -27,10 +27,9 @@
 
 // #define MLOG
 // #define PLOG
-#define GLOG
+// #define GLOG
 // #define OLOG
 // #define ILOG
-#define TC_LOG
 
 
 // #define USE_DEBUG_INFO

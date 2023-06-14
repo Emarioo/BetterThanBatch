@@ -1,10 +1,13 @@
 #include "Engone/Alloc.h"
 
 #include "Engone/PlatformLayer.h"
+#include "BetBat/Config.h"
 
 namespace engone {
 	bool Memory::resize(uint64 count){
-		// printf("## Resize %lld -> %lld\n",max*m_typeSize,count*m_typeSize);
+		#ifdef DEBUG_RESIZE
+		printf("## Resize %lld -> %lld\n",max*m_typeSize,count*m_typeSize);
+		#endif
 		if(m_typeSize==0) return false;
 		if (count == 0) {
 			if (data) {

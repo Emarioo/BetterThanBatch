@@ -1,0 +1,21 @@
+str: Slice = "a9291319";
+
+fn prints(ptr: char*, len: i32) {
+    i = 0;
+    while i < len {
+        printc(*(ptr + i));
+        i += 1;
+    }
+}
+prints(cast<char*>str.ptr, str.len);
+
+// struct Arr<T> {
+//     t: T;
+// }
+// enum T {
+//     Ok,
+//     No,
+// }
+// a: Arr<i32>;
+
+// printi(sizeof Arr)

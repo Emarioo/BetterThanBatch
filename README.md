@@ -25,6 +25,15 @@ A compiler and runtime for a new programming language.
 See the [Guide/Walkthrough](docs/guide.md)
 
 ## The processs
+The name of each step may not accurately represent what's
+actually happening. Type checker infers and creates types for
+structs, enums and functions. The generator also does some
+more detailed type checking with expressions and when the
+values are put in registers and pushed to the stack.
+
+Some preprocessing is done after the parser like
+\_FUNCTION\_ which isn't know until after parsing.
+
 - Tokenizer     (text -> tokens)
 - Preprocessor  (tokens -> tokens)
 - Parser        (tokens -> AST)

@@ -24,12 +24,13 @@ enum PrimitiveType : u32 {
     
     AST_FLOAT32,
     
-    // AST_STRING, // converted to another type, probably char[]
-    AST_NULL, // usually converted to cast<void*> 0
+    AST_STRING, // converted to another type, probably char[]
+    AST_NULL, // converted to void*
     
     // TODO: should these be moved somewhere else?
-    AST_VAR, // Also used when refering to enums. Change the name?
+    AST_VAR, // TODO: Also used when refering to enums. Change the name?
     AST_FNCALL,
+    AST_SIZEOF,
     
     AST_PRIMITIVE_COUNT,
 };
@@ -62,11 +63,9 @@ enum OperationType : u32 {
     AST_INITIALIZER,
     AST_SLICE_INITIALIZER,
     AST_FROM_NAMESPACE,
-    AST_SIZEOF,
 
-    AST_REFER, // take reference
+    AST_REFER, // reference
     AST_DEREF, // dereference
-    // AST_DEFER, // defer
 };
 struct TypeId {
     TypeId() = default;
@@ -133,6 +132,18 @@ struct TypeId {
     u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_BIT; }
     u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
 };
+// ASTStruct can have multiple of these per
+// polymorphic instantiation.
+struct StructImpl {
+    std::vector<TypeId> polyTypes;
+    int size=0;
+    int alignedSize=0;
+    struct Member {
+        TypeId typeId={};
+        int offset=0;
+    };
+    std::vector<Member> members{};
+};
 struct TypeInfo {
     TypeInfo(const std::string& name, TypeId id, u32 size=0) :  name(name), id(id), _size(size) {}
     TypeInfo(TypeId id, u32 size=0) : id(id), _size(size) {}
@@ -142,6 +153,7 @@ struct TypeInfo {
     u32 _alignedSize=0;
     u32 arrlen=0;
     ASTStruct* astStruct=0;
+    StructImpl* structImpl=0;
     ASTEnum* astEnum=0;
     std::vector<TypeId> polyTypes;
     TypeInfo* polyOrigin=0;
@@ -235,6 +247,8 @@ struct ASTStatement {
         IF,
         WHILE,
         RETURN,
+        BREAK,
+        CONTINUE,
         CALL,
         USING,
         BODY,
@@ -243,7 +257,7 @@ struct ASTStatement {
     TokenRange tokenRange{};
     int type = 0;
     int opType = 0;
-    // assign
+
     std::string* name=0;
     std::string* alias=0;
     TypeId typeId={};
@@ -251,10 +265,6 @@ struct ASTStatement {
     ASTExpression* rvalue=0;
     ASTScope* body=0;
     ASTScope* elseBody=0;
-    // assignment
-    // function call
-    // return, continue, break
-    // for, each, if
 
     ASTStatement* next=0;
 
@@ -284,7 +294,6 @@ struct ASTStruct {
 
     ASTFunction* functions = 0;
     ASTFunction* functionsTail = 0;
-
     void add(ASTFunction* func);
     ASTFunction* getFunction(const std::string& name);
 
@@ -387,7 +396,6 @@ struct AST {
     // TypeId nextSliceTypeId=SLICE_BIT;
     
     std::vector<VariableInfo> variables;
-    // std::vector<FunctionInfo> functions;
 
     // Returns nullptr if variable already exists or if scopeId is invalid
     VariableInfo* addVariable(ScopeId scopeId, const std::string& name);
@@ -435,6 +443,12 @@ struct AST {
     TypeId addTypeString(Token name);
     const std::string& getTypeString(TypeId typeId);
 
+    struct ConstString {
+        u32 length = 0;
+        u32 address = 0;
+    };
+    std::unordered_map<std::string, ConstString> constStrings;
+
     // static bool IsPointer(TypeId id);
     // static bool IsPointer(Token& token);
     // static u32 GetPointerLevel(Token& token);
@@ -449,9 +463,7 @@ struct AST {
 
     // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
     void appendToMainBody(ASTScope* body);
-
-    // std::vector<std::string> constStrings;
-
+    
     ASTScope* createBody();
     ASTFunction* createFunction(const std::string& name);
     ASTStruct* createStruct(const std::string& name);

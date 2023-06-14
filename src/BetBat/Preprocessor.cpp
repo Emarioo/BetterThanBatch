@@ -117,9 +117,9 @@ bool EvalInfo::matchSuperArg(Token& name, CertainMacro*& superMacro, Arguments*&
 }
 void PreprocInfo::addToken(Token inToken){
     uint64 offset = outTokens->tokenData.used;
-    outTokens->append(inToken);
+    outTokens->addData(inToken);
     inToken.str = (char*)offset;
-    outTokens->add(inToken);
+    outTokens->addToken(inToken);
 }
 int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
     using namespace engone;
@@ -452,6 +452,7 @@ int ParseInclude(PreprocInfo& info, bool attempt){
     //-- Search cwd or absolute path
     if(fullpath.empty() && FileExist(filepath)){
         fullpath = engone::GetWorkingDirectory() + "/" + filepath;
+        ReplaceChar((char*)fullpath.data(),fullpath.length(),'\\','/');
     }
     
     // TODO: Search additional import directories
@@ -584,7 +585,48 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
     //  log::out << "     exit  ifdef loop\n";
     return error;
 }
+int ParsePredefinedMacro(PreprocInfo& info, bool attempt){
+    using namespace engone;
+    Token token = info.get(info.at()+1);
+    // NOTE: One idea is to allow __LINE__ (double underscore) too
+    //   but this would slow down the compiler a tiny bit so I am not going to.
+    //   This mindset will be used elsewhere to and will propably provide more
+    //   performance and less complexity.
+    if(Equal(token,"_LINE_")){
+        info.next();
 
+        std::string temp = std::to_string(token.line);
+
+        token.str = (char*)temp.data();
+        token.length = temp.length();
+        
+        _MLOG(log::out << "Append "<<token<<"\n";)
+        info.addToken(token);
+        return PARSE_SUCCESS;
+    } else if(Equal(token,"_COLUMN_")) {
+        info.next();
+
+        std::string temp = std::to_string(token.column);
+
+        token.str = (char*)temp.data();
+        token.length = temp.length();
+        
+        _MLOG(log::out << "Append "<<token<<"\n";)
+        info.addToken(token);
+        return PARSE_SUCCESS;
+    } else if(Equal(token,"_FILE_")) {
+        info.next();
+
+        token.str = (char*)info.inTokens->streamName.data();
+        token.length = info.inTokens->streamName.length();
+        
+        _MLOG(log::out << "Append "<<token<<"\n";)
+        info.addToken(token);
+        return PARSE_SUCCESS;
+    } else {
+        return PARSE_BAD_ATTEMPT;
+    }
+}
 void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bool unwrap=false,Arguments* args=0,int* argIndex=0){
     // TODO: optimize with some resize and memcpy?
     for(int i=0;i<(int)from.size();i++){
@@ -609,6 +651,8 @@ void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bo
     }
 }
 int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo);
+// Called by EvalMacro
+// Example: MACRO(Hello + 2, Cool(stuf, hey))
 int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
     using namespace engone;
     TokenList& tokens = evalInfo.workingRange;
@@ -923,10 +967,10 @@ int ParseMacro(PreprocInfo& info, int attempt){
         Token baseToken = info.get(evalInfo.output[i]);
         baseToken.flags = evalInfo.output[i].flags;
         uint64 offset = info.outTokens->tokenData.used;
-        info.outTokens->append(baseToken);
+        info.outTokens->addData(baseToken);
         baseToken.str = (char*)offset;
         // baseToken.str = (char*)info.outTokens->tokenData.data + offset;
-        
+
         while(true){
             Token nextToken{};
             if(i+1<(int)evalInfo.output.size()){
@@ -935,14 +979,14 @@ int ParseMacro(PreprocInfo& info, int attempt){
             if(nextToken==".."){
                 if(i+2<(int)evalInfo.output.size()){
                     Token token2 = info.get(evalInfo.output[i+2]);
-                    info.outTokens->append(token2);
+                    info.outTokens->addData(token2);
                     baseToken.length += token2.length;
                     i+=2;
                     continue;
                 }
                 i++;
             }
-            info.outTokens->add(baseToken);
+            info.outTokens->addToken(baseToken);
             break;
         }
 
@@ -966,6 +1010,8 @@ int ParseToken(PreprocInfo& info){
     using namespace engone;
     int result = ParseDefine(info,true);
     if(result == PARSE_BAD_ATTEMPT)
+        result = ParsePredefinedMacro(info,true);
+    if(result == PARSE_BAD_ATTEMPT)
         result = ParseUndef(info,true);
     if(result == PARSE_BAD_ATTEMPT)
         result = ParseIfdef(info,true);
@@ -982,6 +1028,8 @@ int ParseToken(PreprocInfo& info){
         // info.nextline(); // it is up to the parse functions to skip
         return result;
     }
+
+
     
     Token token = info.next();
     _MLOG(log::out << "Append "<<token<<"\n";)
