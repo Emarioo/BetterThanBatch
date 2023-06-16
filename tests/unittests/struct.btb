@@ -1,0 +1,15 @@
+@test test0
+struct A {
+    a: i32;
+    b: i64;
+}
+a: A;
+a = A{1,2}
+a: A = A{1,2};
+
+@test1
+
+
+
+
+@test2

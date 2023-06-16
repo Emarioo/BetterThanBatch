@@ -57,7 +57,8 @@ int OpPrecedence(int op){
     if(op==AST_MUL||op==AST_DIV||op==AST_MODULUS) return 10;
     if(op==AST_BAND||op==AST_BOR||op==AST_BXOR||
         op==AST_BLSHIFT||op==AST_BRSHIFT) return 13;
-    if(op==AST_BNOT || op==AST_NOT || op==AST_CAST || op==AST_REFER || op==AST_DEREF) return 15;
+    if(op==AST_BNOT || op==AST_NOT || op==AST_CAST) return 15;
+    if(op==AST_REFER || op==AST_DEREF) return 16;
     if(op==AST_MEMBER || op == AST_FROM_NAMESPACE) return 20;
     log::out << log::RED<<__FILE__<<":"<<__LINE__<<", missing "<<op<<"\n";
     return 0;
@@ -308,7 +309,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             token = info.get(info.at()+1);
             if(Equal(token,">")){
                 info.next();
-                if(astStruct->polyNames.size()==0){
+                if(astStruct->polyArgs.size()==0){
                     ERRT(token) << "empty polymorph list\n";
                     ERRLINE
                 }
@@ -319,7 +320,9 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 ERRLINE
             }else{
                 info.next();
-                astStruct->polyNames.push_back(token);
+                ASTStruct::PolyArg arg={};
+                arg.name = token;
+                astStruct->polyArgs.push_back(arg);
             }
             
             token = info.get(info.at()+1);
@@ -1020,13 +1023,15 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 tmp->tokenRange.tokenStream = info.tokens;
             } else if(Equal(token,"sizeof")) {
                 info.next();
-                Token token = info.get(info.at()+1);
-                if(!IsName(token)){
-                    ERRT(token) << "sizeof expects a single name token like 'SomeStruct123'. '"<<token<<"' is not valid.\n";
-                    ERRLINE
-                    return PARSE_ERROR;
-                }
-                info.next();
+                Token token = {}; 
+                int result = ParseTypeId(info,token);
+                // Token token = info.get(info.at()+1);
+                // if(!IsName(token)){
+                //     ERRT(token) << "sizeof expects a single name token like 'SomeStruct123'. '"<<token<<"' is not valid.\n";
+                //     ERRLINE
+                //     return PARSE_ERROR;
+                // }
+                // info.next();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_SIZEOF));
                 tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
                 new(tmp->name)std::string(token);
@@ -1041,7 +1046,25 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 
                 // could be a slice if tok[]{}
                 // if something is within [] then it's a array access
-                Token& tok = info.get(info.at()+1);
+                Token tok = info.get(info.at()+1);
+                std::string polyTypes="";
+                if(Equal(tok,"<")){
+                    info.next();
+                    // polymorphic type or function
+                    polyTypes += "<";
+                    int depth = 1;
+                    while(!info.end()){
+                        tok = info.next();
+                        polyTypes+=tok;
+                        if(Equal(tok,">")){
+                            depth--;
+                        }
+                        if(depth==0){
+                            break;
+                        }
+                    }
+                }
+                tok = info.get(info.at()+1);
                 if(Equal(tok,"(")){
                     // function call
                     info.next();
@@ -1059,6 +1082,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         }
                     }
                     ns += token;
+                    ns += polyTypes;
+                    
 
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
                     tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
@@ -1094,7 +1119,10 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         }
                     }
                     ns += token;
-                    tmp->castType = info.ast->getTypeString(ns);
+                    ns += polyTypes;
+                    std::string* nsp = info.ast->createString();
+                    *nsp = ns;
+                    tmp->castType = info.ast->getTypeString(*nsp);
                     // TODO: A little odd to use castType. Renaming castType to something more
                     //  generic which works for AST_CAST and AST_INITIALIZER would be better.
                     ASTExpression* tail=0;
@@ -1559,7 +1587,10 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         function->arguments.push_back({});
         auto& argv = function->arguments.back();
         argv.name = "this";
-        argv.typeId = info.ast->getTypeString(parentStruct->name+"*");;
+        std::string* leak = info.ast->createString();
+        *leak = parentStruct->name + "*"; // TODO: doesn't work with polymorhpism
+        
+        argv.typeId = info.ast->getTypeString(*leak);;
         argv.defaultValue = nullptr;
     }
     bool mustHaveDefault=false; 

@@ -24,6 +24,7 @@ struct Interpreter {
     void* setReg(u8 id);
     
     engone::Memory stack{1};
+    bool silent = false;
 
     void execute(Bytecode* bytecode);
     

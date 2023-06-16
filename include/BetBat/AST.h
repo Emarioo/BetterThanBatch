@@ -94,7 +94,7 @@ struct TypeId {
         ENUM = 0x3,
         TYPE_MASK = 0x1 | 0x2,
         POINTER_MASK = 0x4 | 0x8,
-        POINTER_BIT = 3,
+        POINTER_SHIFT = 2,
         VALID_MASK = 0x80,
     };
     u16 _infoIndex0 = 0;
@@ -126,10 +126,10 @@ struct TypeId {
         return (_flags & POINTER_MASK) != 0;
     }
     void setPointerLevel(u32 level) {
-        Assert(level<=(POINTER_MASK>>POINTER_BIT)); 
-        _flags = (_flags & ~POINTER_MASK) | ((level<<POINTER_BIT) & POINTER_MASK);
+        Assert(level<=(POINTER_MASK>>POINTER_SHIFT)); 
+        _flags = (_flags & ~POINTER_MASK) | ((level<<POINTER_SHIFT) & POINTER_MASK);
     }
-    u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_BIT; }
+    u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_SHIFT; }
     u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
     // TODO: Rename to something better
     bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
@@ -137,7 +137,6 @@ struct TypeId {
 // ASTStruct can have multiple of these per
 // polymorphic instantiation.
 struct StructImpl {
-    std::vector<TypeId> polyTypes;
     int size=0;
     int alignedSize=0;
     struct Member {
@@ -293,7 +292,13 @@ struct ASTStruct {
         ASTExpression* defaultValue=0;
     };
     std::vector<Member> members{};
-    std::vector<std::string> polyNames;
+    struct PolyArg {
+        Token name{};
+        TypeInfo* virtualType = nullptr;
+    };
+    std::vector<PolyArg> polyArgs;
+    
+
     StructImpl baseImpl{};
     State state=TYPE_EMPTY;
 
@@ -408,6 +413,7 @@ struct AST {
     std::vector<Token> _typeTokens;
     TypeId getTypeString(Token name);
     Token getTokenFromTypeString(TypeId typeString);
+    // typeString must be a string type id.
     TypeId convertToTypeId(TypeId typeString, ScopeId scopeId);
 
     std::vector<TypeInfo*> _typeInfos; // TODO: Use a bucket array
@@ -426,10 +432,11 @@ struct AST {
     TypeInfo* getTypeInfo(TypeId id);
     std::string typeToString(TypeId typeId);
 
-    void convertPolyTypes(ScopeId scopeId, std::vector<Token>& polyTypes, std::vector<TypeId>& outIds);
-
     //-- OTHER
     ASTScope* mainBody=0;
+
+    std::vector<std::string*> tempStrings;
+    std::string* createString();
 
     // static const u32 NEXT_ID = 0x100;
     u32 nextTypeId=AST_OPERATION_COUNT;
@@ -455,23 +462,8 @@ struct AST {
     
     void removeIdentifier(ScopeId scopeId, const std::string& name);
 
-    // std::unordered_map<TypeId, TypeInfo*> typeInfos;
-    // void addTypeInfo(ScopeId scopeId, Token name, TypeId id, u32 size=0);
-    // TypeInfo* addType(ScopeId scopeId, Token name);
-    // // Creates a new type if needed
-    // // scopeId is Info(TypeId id);
-
-    // FunctionInfo* addFunction(ScopeId scopeId, ASTFunction* func);
-    // FunctionInfo* getFunction(ScopeId scopeId, Token name);
-
     u32 getTypeSize(TypeId typeId);
     u32 getTypeAlignedSize(TypeId typeId);
-
-    // std::string typeToString(TypeId typeId);
-    
-    // typeString should not be a pointer
-    TypeInfo* addPolyType(ScopeId scopeId, Token typeString);
-    // TypeId getTypeId(ScopeId scopeId, Token typeString, bool* success=0);
 
     struct ConstString {
         u32 length = 0;

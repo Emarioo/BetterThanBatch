@@ -13,7 +13,7 @@ struct GenInfo {
         int size=0;
     };
     std::vector<AlignInfo> stackAlignment;
-    int relativeStackPointer=0;
+    int virtualStackPointer=0;
     void addPop(int reg);
     void addPush(int reg);
     void addIncrSp(i16 offset);

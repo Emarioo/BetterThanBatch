@@ -145,7 +145,7 @@ void TestSuite(std::vector<std::string>& tests, bool testall){
     int successfulCases = totalCases-failedCases;
 
     float rate = (float)successfulCases/totalCases;
-    if(rate<1.f) log::out << log::GOLD;
+    if(rate<1.f) log::out << log::YELLOW;
     else log::out << log::GREEN;
     log::out << (100.f*rate)<<"% Success ("<<successfulCases<<" correct cases)\n";
     if(rate!=1.f){

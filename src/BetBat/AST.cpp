@@ -427,6 +427,12 @@ void AST::cleanup() {
     _typeInfos.clear();
     constStrings.clear();
 
+    for(auto& str : tempStrings){
+        str->~basic_string<char>();
+        engone::Free(str, sizeof(std::string));
+    }
+    tempStrings.clear();
+
     nextTypeId = AST_OPERATION_COUNT;
 
     destroy(mainBody);
@@ -530,6 +536,7 @@ Token AST::getTokenFromTypeString(TypeId typeId){
     return _typeTokens[index];
 }
 TypeId AST::convertToTypeId(TypeId typeString, ScopeId scopeId){
+    Assert(typeString.isString())
     Token tstring = getTokenFromTypeString(typeString);
     return convertToTypeId(tstring, scopeId);
 }
@@ -578,11 +585,13 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId) {
     std::vector<Token> polyTypes;
     Token typeName = {}; // base name + poly names
 
-    Token baseType = TrimBaseType(typeString, &namespacing, &pointerLevel, &polyTypes, &typeName);
-
-    if(polyTypes.size()!=0)
-        log::out << log::RED << "Polymorphic types are not handled ("<<typeString<<")\n";
-    // TODO: Polymorphism!
+    typeName = TrimPointer(typeString, &pointerLevel);
+    typeName = TrimNamespace(typeName, &namespacing);
+    
+    // Token baseType = TrimBaseType(typeString, &namespacing, &pointerLevel, &polyTypes, &typeName);
+    // if(polyTypes.size()!=0)
+    //     log::out << log::RED << "Polymorphic types are not handled ("<<typeString<<")\n";
+    // TODO: Polymorphism!s
 
     ScopeInfo* scope = nullptr;
     TypeInfo* typeInfo = nullptr;
@@ -611,48 +620,15 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId) {
         }
     }
     if(!typeInfo) {
-        if(polyTypes.size() == 0)
-            return {};
-        
-        // polymorphic type doesn't exist so we must create it.
-        
-        TypeInfo* baseInfo = nullptr;
-        if(namespacing.str){
-            scope = getScopeFromParents(namespacing, scopeId);
-            if(!scope) return {};
-            auto firstPair = scope->nameTypeMap.find(baseType);
-            if(firstPair != scope->nameTypeMap.end()){
-                baseInfo = firstPair->second;
-            }
+        return {};
+    }
+    while(true){
+        TypeInfo* virtualInfo = getTypeInfo(typeInfo->id);
+        if(virtualInfo && typeInfo != virtualInfo){
+            typeInfo = virtualInfo;
         } else {
-            // Find base type in parent scopes
-            ScopeId nextScopeId = scopeId;
-            if(scopeId!=globalScopeId){ // global scope does not have parent
-                while(true){
-                    ScopeInfo* scope = getScope(nextScopeId);
-                    if(!scope) return {};
-
-                    auto pair = scope->nameTypeMap.find(baseType);
-                    if(pair!=scope->nameTypeMap.end()){
-                        baseInfo = pair->second;
-                        break;
-                    }
-                    if(nextScopeId==scope->parent) // prevent infinite loop
-                        break;
-                    nextScopeId = scope->parent;
-                }
-            }
+            break;
         }
-        if(!baseInfo) return {};
-        
-        typeInfo = createType(typeName,scope->id);
-        Assert(baseInfo->astStruct);
-        typeInfo->astStruct = baseInfo->astStruct;
-        typeInfo->structImpl = (StructImpl*)engone::Allocate(sizeof(StructImpl));
-        new(typeInfo->structImpl)StructImpl();
-        typeInfo->structImpl->polyTypes;
-        convertPolyTypes(scopeId, polyTypes, typeInfo->structImpl->polyTypes);
-        Assert(typeInfo->structImpl);
     }
 
     TypeId out = typeInfo->id;
@@ -667,7 +643,10 @@ TypeInfo *AST::getBaseTypeInfo(TypeId id) {
     return _typeInfos[id.getId()];
 }
 TypeInfo *AST::getTypeInfo(TypeId id) {
-    if(!id.isNormalType()) return nullptr;
+    if(!id.isNormalType()) {
+        return nullptr;
+    }
+    Assert(id.isNormalType());
     if(id.getId() >= _typeInfos.size()) return nullptr;
     return _typeInfos[id.getId()];
 }
@@ -689,21 +668,29 @@ std::string AST::typeToString(TypeId typeId){
     if(ns.empty()){
         out = ti->name;
     } else {
-        out = ns + "::" + ti->name;   
+        out = ns + "::" + ti->name;
     }
-    // log::out << log::GOLD << __func__ << ": Warning! polymorphism is ignored!\n";
+    if(ti->astStruct && !ti->structImpl && ti->astStruct->polyArgs.size()!=0){
+        out +="<";
+        for(int i=0;i<(int)ti->astStruct->polyArgs.size();i++){
+            if(i!=0)
+                out += ",";
+            out += ti->astStruct->polyArgs[i].name;
+        }
+        out +=">";
+    }
+    // log::out << log::YELLOW << __func__ << ": Warning! polymorphism is ignored!\n";
     for(int i=0;i<(int)typeId.getPointerLevel();i++){
         out+="*";
     }
     return out;
 }
-void AST::convertPolyTypes(ScopeId scopeId, std::vector<Token>& polyTypes, std::vector<TypeId>& outIds){
-    outIds.resize(polyTypes.size());
-    for(int i=0;i<(int)polyTypes.size();i++){
-        outIds[i] = convertToTypeId(polyTypes[i], scopeId);
-    }
+std::string* AST::createString(){
+    std::string* ptr = (std::string*)engone::Allocate(sizeof(std::string));
+    new(ptr)std::string();
+    tempStrings.push_back(ptr);
+    return ptr;
 }
-
 void AST::destroy(ASTScope *scope) {
      if (scope->next)
         destroy(scope->next);
@@ -829,25 +816,61 @@ Token AST::TrimNamespace(Token typeString, Token* outNamespace){
     // TODO: Line and column is ignored but it should also be separated properly.
     // TODO: ":::" should cause an error but isn't considered at all here.
     // TODO: This code doesn't work if poly names have namespaces.
-    int index = -1; // index of the left colon
-    for(int i=typeString.length-1;i>0;i--){
-        if(typeString.str[i-1] == ':' && typeString.str[i] == ':') {
-            index = i-1;
+    // int index = -1; // index of the left colon
+    // for(int i=typeString.length-1;i>0;i--){
+    //     if(typeString.str[i-1] == ':' && typeString.str[i] == ':') {
+    //         index = i-1;
+    //         break;
+    //     }
+    // }
+    // if(index==-1){
+    //     if(outNamespace)
+    //         *outNamespace = {};
+    //     return typeString;
+    // }
+    // if(outNamespace){
+    //     outNamespace->str = typeString.str;
+    //     outNamespace->length = index;
+    // }
+    // out.str = typeString.str + (index+2);
+    // out.length = typeString.length - (index+2);
+
+    int lastColonIndex = -1;
+    int depth = 0;
+    for(int i=typeString.length-1;i>=0;i--){
+        if(typeString.str[i] == '>'){
+            depth++;
+        }
+        if(typeString.str[i] == '<'){
+            depth--;
+        }
+        if(depth==0 && i < typeString.length - 1){
+            if(typeString.str[i] == ':' && typeString.str[i+1] == ':') {
+                lastColonIndex = i;
+                break;
+            }
+        }
+    }
+    if(lastColonIndex!=-1){
+        outNamespace->str = typeString.str;
+        outNamespace->length = lastColonIndex;
+        typeString.str = typeString.str + lastColonIndex + 2;
+        typeString.length = typeString.length - (lastColonIndex + 2);
+    }
+    return typeString;
+}
+Token AST::TrimPointer(Token& token, u32* outLevel){
+    Token out = token;
+    for(int i=token.length-1;i>=0;i--){
+        if(token.str[i]=='*') {
+            if(outLevel)
+                (*outLevel)++;
+            continue;
+        } else {
+            out.length = i + 1;
             break;
         }
     }
-    if(index==-1){
-        if(outNamespace)
-            *outNamespace = {};
-        return typeString;
-    }
-    if(outNamespace){
-        outNamespace->str = typeString.str;
-        outNamespace->length = index;
-    }
-    Token out = typeString;
-    out.str = typeString.str + (index+2);
-    out.length = typeString.length - (index+2);
     return out;
 }
 Token AST::TrimBaseType(Token typeString, Token* outNamespace, 
@@ -862,7 +885,7 @@ Token AST::TrimBaseType(Token typeString, Token* outNamespace,
     //-- Trim pointers
     for(int i=typeString.length-1;i>=0;i--){
         if(typeString.str[i]=='*') {
-                (*level)++;
+            (*level)++;
             continue;
         } else {
             typeString.length = i + 1;
@@ -939,30 +962,27 @@ Token AST::TrimBaseType(Token typeString, Token* outNamespace,
     return typeString;
 }
 Token AST::TrimPolyTypes(Token typeString, std::vector<Token>* outPolyTypes) {
-    if(!typeString.str || typeString.length < 2 || typeString.str[typeString.length-1] != '>') { // <>
+    //-- Trim poly types
+    Assert(typeString.str[typeString.length-1] != '*');
+    if(typeString.length < 2 || typeString.str[typeString.length-1] != '>') {
         return typeString;
     }
-    // TODO: Line and column is ignored but it should also be separated properly.
-    // TODO: ":::" should cause an error but isn't considered at all here.
     int leftArrow = -1;
     int rightArrow = typeString.length-1;
+    // Right arrow must be at the end of typeString because we can't cut out
+    // the polyTypes from typeString and then amend the two ends.
+    // We would need to allocate a new string for typeString to reference
+    // and we should avoid that if possible.
     for(int i=0;i<typeString.length;i++) {
         if(typeString.str[i] == '<'){
             leftArrow = i;
             break;
         }
     }
-    // for(int i=typeString.length-1;i>=0;i--) {
-    //     if(typeString.str[i] == '>'){
-    //         rightArrow = i;
-    //         break;
-    //     }
-    // }
-    if(leftArrow == -1 || rightArrow == -1){
+    if(leftArrow == -1){
         return typeString;
     }
-    Token out = typeString;
-    out.length = leftArrow;
+    typeString.length = leftArrow;
 
     Token acc = {};
     for(int i=leftArrow + 1; i < rightArrow; i++){
@@ -977,15 +997,62 @@ Token AST::TrimPolyTypes(Token typeString, std::vector<Token>* outPolyTypes) {
             // have valid types. If empty types are allowed then
             // we would need to go through the array to find
             // empty tokens.
-            if(!acc.str)
+            if(acc.str)
                 outPolyTypes->push_back(acc);
             acc = {};
         }
     }
-    return out;
+    
+    return typeString;
+
+    // if(!typeString.str || typeString.length < 2 || typeString.str[typeString.length-1] != '>') { // <>
+    //     return typeString;
+    // }
+    // // TODO: Line and column is ignored but it should also be separated properly.
+    // // TODO: ":::" should cause an error but isn't considered at all here.
+    // int leftArrow = -1;
+    // int rightArrow = typeString.length-1;
+    // for(int i=0;i<typeString.length;i++) {
+    //     if(typeString.str[i] == '<'){
+    //         leftArrow = i;
+    //         break;
+    //     }
+    // }
+    // // for(int i=typeString.length-1;i>=0;i--) {
+    // //     if(typeString.str[i] == '>'){
+    // //         rightArrow = i;
+    // //         break;
+    // //     }
+    // // }
+    // if(leftArrow == -1 || rightArrow == -1){
+    //     return typeString;
+    // }
+    // Token out = typeString;
+    // out.length = leftArrow;
+
+    // Token acc = {};
+    // for(int i=leftArrow + 1; i < rightArrow; i++){
+    //     if(typeString.str[i] != ',') {
+    //         if(!acc.str)
+    //             acc.str = typeString.str + i;
+    //         acc.length++;
+    //     }
+    //     if(typeString.str[i] == ',' || i == rightArrow - 1){
+    //         // We don't push acc if it's empty because we can then
+    //         // check the lengh of outPolyTypes to verify if we
+    //         // have valid types. If empty types are allowed then
+    //         // we would need to go through the array to find
+    //         // empty tokens.
+    //         if(!acc.str)
+    //             outPolyTypes->push_back(acc);
+    //         acc = {};
+    //     }
+    // }
+    // return out;
 }
 u32 AST::getTypeSize(TypeId typeId){
     if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
+    if(!typeId.isNormalType()) return 0;
     auto ti = getTypeInfo(typeId);
     if(!ti)
         return 0;
@@ -993,6 +1060,7 @@ u32 AST::getTypeSize(TypeId typeId){
 }
 u32 AST::getTypeAlignedSize(TypeId typeId) {
     if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
+    if(!typeId.isNormalType()) return 0;
     auto ti = getTypeInfo(typeId);
     if(!ti)
         return 0;
@@ -1080,109 +1148,6 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
 //     return {};
 // }
 
-TypeInfo* AST::addPolyType(ScopeId scopeId, Token typeString){
-    using namespace engone;
-    Token theNamespace = {};
-    u32 plevel = 0;
-    Token typeName = TrimNamespace(typeString,&theNamespace);
-    std::vector<Token> polyTypes;
-    typeName = TrimPointer(typeName,&plevel);
-    Token baseName = TrimPolyTypes(typeName, &polyTypes);
-    if(plevel != 0) {
-        // log::out << log::RED << "Cannot use "<<__FUNCTION__<<" on pointer type!\n";
-        log::out << log::GOLD << "Warning! Using "<<__FUNCTION__<<" on pointer type!\n";
-        // return nullptr;
-    }
-
-    if(theNamespace.str){
-        ScopeId nextScopeId = scopeId;
-        bool quit = false;
-        // namespaced
-        while(!quit){
-            ScopeInfo* scope = getScope(nextScopeId);
-                quit=true;
-            if(nextScopeId==0)
-            nextScopeId = scope->parent;
-            if(!scope)
-                break;
-                
-            ScopeInfo* nscope = getScope(theNamespace, scope->id);
-            if(nscope){
-                auto pair = nscope->nameTypeMap.find(typeName);
-                if(pair != nscope->nameTypeMap.end()){
-                    return pair->second;
-                } else {
-                    return 0;
-                }   
-            }
-        }
-        return 0;
-    }
-    auto scope = getScope(scopeId);
-    if(!scope) return 0;
-
-    // make sure the type to add doesn't exist but return it
-    // if it does.
-    auto basePair = scope->nameTypeMap.find(typeName);
-    if(basePair != scope->nameTypeMap.end()){
-        return basePair->second;
-    }
-
-    ScopeId nextParent = scope->parent;
-    if(scopeId!=globalScopeId){ // global scope does not have parent
-        while(true){
-            auto parentScope = getScope(nextParent);
-            if(!parentScope)
-                break;
-
-            auto pair = parentScope->nameTypeMap.find(typeName);
-            if(pair!=parentScope->nameTypeMap.end())
-                return pair->second;
-            
-            if(nextParent==globalScopeId)
-                break;
-            nextParent = parentScope->parent;
-        }
-    }
-    {
-        TypeInfo* baseType = 0;
-        ScopeInfo* baseScope = 0; // where base type exists
-        auto basePair = scope->nameTypeMap.find(baseName);
-        if(basePair != scope->nameTypeMap.end()){
-            baseType = basePair->second;
-            baseScope = scope;
-        }
-        if(!baseType) {
-            ScopeId nextParent = scope->parent;
-            if(scopeId!=globalScopeId){ // global scope does not have parent
-                while(true){
-                    auto parentScope = getScope(nextParent);
-                    if(!parentScope)
-                        break;
-
-                    auto pair = parentScope->nameTypeMap.find(baseName);
-                    if(pair!=parentScope->nameTypeMap.end()) {
-                        baseType = pair->second;
-                        baseScope = parentScope;
-                        break;
-                    }
-                    
-                    if(nextParent==globalScopeId)
-                        break;
-                    nextParent = parentScope->parent;
-                }
-            }
-        }
-        if(!baseType) {
-            log::out << log::RED << "Base type "<<baseName << " did not exist\n";
-            return nullptr;
-        } else {
-            
-        }
-    }
-
-    return nullptr;
-}
 void ASTStruct::add(ASTFunction* func){
     if(!functions){
         functions = func;
@@ -1193,20 +1158,6 @@ void ASTStruct::add(ASTFunction* func){
     while(functionsTail->next){
         functionsTail = functionsTail->next;
     }
-}
-Token AST::TrimPointer(Token& token, u32* outLevel){
-    Token out = token;
-    for(int i=token.length-1;i>=0;i--){
-        if(token.str[i]=='*') {
-            if(outLevel)
-                (*outLevel)++;
-            continue;
-        } else {
-            out.length = i + 1;
-            break;
-        }
-    }
-    return out;
 }
 std::string ScopeInfo::getFullNamespace(AST* ast){
     std::string ns = "";
@@ -1335,16 +1286,16 @@ void ASTStruct::print(AST *ast, int depth) {
     using namespace engone;
     PrintSpace(depth);
     log::out << "Struct " << name;
-    if (polyNames.size() != 0) {
+    if (polyArgs.size() != 0) {
         log::out << "<";
     }
-    for (int i = 0; i < (int)polyNames.size(); i++) {
+    for (int i = 0; i < (int)polyArgs.size(); i++) {
         if (i != 0) {
             log::out << ", ";
         }
-        log::out << polyNames[i];
+        log::out << polyArgs[i].name;
     }
-    if (polyNames.size() != 0) {
+    if (polyArgs.size() != 0) {
         log::out << ">";
     }
     log::out << " { ";

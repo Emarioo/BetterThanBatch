@@ -3,13 +3,13 @@
 void print_help(){
     using namespace engone;
     log::out << log::BLUE << "##   HELP (out of date)   ##\n";
-    log::out << log::GOLD << "compiler.exe [file0 file1 ...]: "<<log::SILVER;
+    log::out << log::YELLOW << "compiler.exe [file0 file1 ...]: "<<log::SILVER;
     log::out << "Arguments after the executable specifies script files to compile. "
              << "They will be compiled and run seperately.\n";
     log::out << log::LIME << " Examples:\n";
     log::out << "  compiler.exe file0.btb script.txt\n";
     log::out << "\n";
-    log::out << log::GOLD << "compiler.exe -log [type0,type1,...]: "<<log::SILVER;
+    log::out << log::YELLOW << "compiler.exe -log [type0,type1,...]: "<<log::SILVER;
     log::out << "Prints debug info. The argument after determines what "
              << "type of info to print. Types are tokenizer, preprocessor, parser, "
              << "optimizer, interpreter and threads. Comma can be used to specify multiple. "

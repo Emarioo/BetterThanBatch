@@ -2,8 +2,11 @@
 
 #include "BetBat/Util/Utility.h"
 
+#ifdef LOG_MEASURES
 #define MEASURE MeasureScope scopeMeasure = {__FUNCTION__};
-
+#else
+#define MEASURE
+#endif
 struct ScopeStat {
     const char* fname=0;
     double time=0;

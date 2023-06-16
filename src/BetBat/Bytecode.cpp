@@ -60,7 +60,9 @@ int RegBySize(int regName, int size){
     else if(size==4) return ENCODE_REG_TYPE(BC_REG_32) | regName;
     else if(size==8) return ENCODE_REG_TYPE(BC_REG_64) | regName;
     else {
-        Assert(("Bad size, only 1,2,4,8 are allowed", false))
+        // TypeChecker may fail and give an invalid type with size 0.
+        // 
+        // Assert(("Bad size, only 1,2,4,8 are allowed", false))
         return 0;
     }
 }

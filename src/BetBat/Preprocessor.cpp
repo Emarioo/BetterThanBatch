@@ -153,6 +153,7 @@ int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
 }
 int ParseDefine(PreprocInfo& info, bool attempt){
     using namespace engone;
+    MEASURE;
     Token token = info.get(info.at()+1);
     if(token!=PREPROC_TERM || (token.flags&TOKEN_QUOTED)){
         if(attempt){
@@ -396,7 +397,7 @@ int ParseUndef(PreprocInfo& info, bool attempt){
 
 int ParseImport(PreprocInfo& info, bool attempt){
     using namespace engone;
-    
+    MEASURE;
     Token token = info.get(info.at()+1);
     int result = ParseDirective(info, attempt, "import");
     if(result==PARSE_BAD_ATTEMPT)
@@ -427,7 +428,7 @@ int ParseImport(PreprocInfo& info, bool attempt){
 }
 int ParseInclude(PreprocInfo& info, bool attempt){
     using namespace engone;
-    
+    MEASURE;
     Token hashtag = info.get(info.at()+1);
     int result = ParseDirective(info, attempt, "include");
     if(result==PARSE_BAD_ATTEMPT)
@@ -587,6 +588,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
 }
 int ParsePredefinedMacro(PreprocInfo& info, bool attempt){
     using namespace engone;
+    MEASURE;
     Token token = info.get(info.at()+1);
     // NOTE: One idea is to allow __LINE__ (double underscore) too
     //   but this would slow down the compiler a tiny bit so I am not going to.
@@ -928,6 +930,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
 }
 int ParseMacro(PreprocInfo& info, int attempt){
     using namespace engone;
+    MEASURE;
     Token name = info.get(info.at()+1);
     RootMacro* rootMacro=0;
     if(!(rootMacro = info.matchMacro(name))){
@@ -1038,6 +1041,7 @@ int ParseToken(PreprocInfo& info){
 }
 void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens, int* error){
     using namespace engone;
+    MEASURE;
     // _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
     
     PreprocInfo info{};

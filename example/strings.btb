@@ -1,12 +1,65 @@
+// #import "Basic"
 
-// struct Fruit<T> {
-//     t: Poly<T>;
-
-//     // fn add<T>(){
-    
-//     // }
+// struct poly<T> {
+//     num: T;
 // }
-// p: Poly<i32>;
-#import "Basic" as basic
 
-a: basic::Slice;
+// struct wa {
+// // struct wa<P> {
+//     a: poly<i32>;
+//     // b: poly<P>;
+//     b: poly<i64>;
+// }
+
+// // w = wa<i64>{ poly<i64>{5} };
+// // w = wa<i64>{ poly<i32>{92}, poly<i64*>{null} };
+// w = wa{ poly<i32>{123}, poly<i64>{32} };
+
+
+struct aa{
+    a: i32;
+    b: i64;
+    c: i32;
+}
+{
+    a: u8;
+    // printi(cast<i64>&a + cast<i64>1);
+}
+{
+    a: aa = aa{5,15,27};
+    // printi(cast<i64> &a);
+    printi(a.a);
+    printi(a.b);
+    printi(a.c);
+}
+    // fn get() -> i32 {
+    //     return this.num;
+    // }
+// struct Num {
+//     n: i32;
+// }
+// {
+//     using Num<T> as Num<R>
+//     using T as Num;
+// fn add<T>(a: T, b: T) -> T {
+
+//     fn clamp(a: T) -> T{
+//         return a + 1
+//     }
+//     return a + b;
+// }
+
+// operator +<T=i32,f32>(){
+
+// }
+
+// }
+// a = poly{ext<i32>{5}};
+// printi(a.a.t);
+// printi(a.add());
+// p = &a;
+// printi(p.num);
+// prints("hello!\n")
+
+// fn printi(n: i32) @native
+// fn printi(n: i32) @dll

@@ -26,16 +26,19 @@ struct Path {
     u32 _type = 0;
 };
 struct CompileOptions {
+    CompileOptions(engone::Memory source) : rawSource(source) {}
     CompileOptions(const std::string& sourceFile) : initialSourceFile(sourceFile) {}
     CompileOptions(const std::string& sourceFile, const std::string& compilerDirectory) 
     : initialSourceFile(sourceFile), compilerDirectory(
         compilerDirectory.empty() ? "" : 
             (compilerDirectory.back() == '/' ? compilerDirectory : 
                 (compilerDirectory + "/"))
-    ) {}
+    ), silent(false) {}
     Path initialSourceFile; // Path
+    const engone::Memory rawSource{0}; // Path
     Path compilerDirectory; // Where resources for the compiler is located. Typically modules.
     std::vector<Path> importDirectories; // Additional directories where imports can be found.
+    bool silent=true;
 };
 struct CompileInfo {
     void cleanup();

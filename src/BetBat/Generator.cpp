@@ -62,8 +62,10 @@ bool GenInfo::popLoop(){
 void GenInfo::addPop(int reg) {
     using namespace engone;
     int size = DECODE_REG_SIZE(reg);
-    if (size == 0 && errors == 0) // we don't print if we had errors since they probably caused size of 0
-        log::out << log::RED << "GenInfo::addPush : Cannot pop register with 0 size\n";
+    if (size == 0 && errors == 0) {// we don't print if we had errors since they probably caused size of 0
+        log::out << log::RED << "GenInfo::addPop : Cannot pop register with 0 size\n";
+        return;
+    }
 
     code->add({BC_POP, (u8)reg});
     Assert(("bug in compiler!", !stackAlignment.empty()))
@@ -74,31 +76,35 @@ void GenInfo::addPop(int reg) {
 
     stackAlignment.pop_back();
     if (align.diff != 0) {
-        relativeStackPointer += align.diff;
+        virtualStackPointer += align.diff;
         code->addDebugText("align sp\n");
         i16 offset = align.diff;
         code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
     }
-    relativeStackPointer += size;
+    virtualStackPointer += size;
+    log::out << "relsp "<<virtualStackPointer<<"\n";
 }
 void GenInfo::addPush(int reg) {
     using namespace engone;
     int size = DECODE_REG_SIZE(reg);
-    if (size == 0 && errors == 0) // we don't print if we had errors since they probably caused size of 0
+    if (size == 0 && errors == 0) { // we don't print if we had errors since they probably caused size of 0
         log::out << log::RED << "GenInfo::addPush : Cannot push register with 0 size\n";
+        return;
+    }
 
-    int diff = (size - (-relativeStackPointer) % size) % size; // how much to increment sp by to align it
+    int diff = (size - (-virtualStackPointer) % size) % size; // how much to increment sp by to align it
     // TODO: Instructions are generated from top-down and the stackAlignment
     //   sees pop and push in this way but how about jumps. It doesn't consider this. Is it an issue?
     if (diff) {
-        relativeStackPointer -= diff;
+        virtualStackPointer -= diff;
         code->addDebugText("align sp\n");
         i16 offset = -diff;
         code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
     }
     code->add({BC_PUSH, (u8)reg});
     stackAlignment.push_back({diff, size});
-    relativeStackPointer -= size;
+    virtualStackPointer -= size;
+    log::out << "relsp "<<virtualStackPointer<<"\n";
 }
 void GenInfo::addIncrSp(i16 offset) {
     using namespace engone;
@@ -112,7 +118,7 @@ void GenInfo::addIncrSp(i16 offset) {
             // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
             stackAlignment.pop_back();
             at -= align.size;
-            Assert(at >= 0);
+            // Assert(at >= 0);
             // Assert doesn't work because diff isn't accounted for in offset.
             // Asserting before at -= diff might not work either.
 
@@ -123,8 +129,9 @@ void GenInfo::addIncrSp(i16 offset) {
     else if (offset < 0) {
         stackAlignment.push_back({0, -offset});
     }
-    relativeStackPointer += offset;
+    virtualStackPointer += offset;
     code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
+    log::out << "relsp "<<virtualStackPointer<<"\n";
 }
 void GenInfo::addStackSpace(i16 size) {
     using namespace engone;
@@ -140,10 +147,10 @@ void GenInfo::addStackSpace(i16 size) {
         asize = 4;
     }
     if(size < 0) {
-        int diff = (-size - (-relativeStackPointer) % asize) % asize; // how much to increment sp by to align it
+        int diff = (-size - (-virtualStackPointer) % asize) % asize; // how much to increment sp by to align it
         // diff = 0;
         if (diff) {
-            relativeStackPointer -= diff;
+            virtualStackPointer -= diff;
             code->addDebugText("align sp\n");
             i16 offset = -diff;
             code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
@@ -151,7 +158,7 @@ void GenInfo::addStackSpace(i16 size) {
         
         code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & size), (u8)(size >> 8)});
         stackAlignment.push_back({diff, -size});
-        relativeStackPointer += size;
+        virtualStackPointer += size;
     } else if(size > 0) {
         code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & size), (u8)(size >> 8)});
 
@@ -164,23 +171,23 @@ void GenInfo::addStackSpace(i16 size) {
 
         stackAlignment.pop_back();
         if (align.diff != 0) {
-            relativeStackPointer += align.diff;
+            virtualStackPointer += align.diff;
             code->addDebugText("align sp\n");
             i16 offset = align.diff;
             code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
         }
-        relativeStackPointer += size;
+        virtualStackPointer += size;
     }
 }
 int GenInfo::saveStackMoment() {
-    return relativeStackPointer;
+    return virtualStackPointer;
 }
 void GenInfo::restoreStackMoment(int moment) {
     using namespace engone;
-    int offset = moment - relativeStackPointer;
+    int offset = moment - virtualStackPointer;
     if (offset == 0)
         return;
-    int at = moment - relativeStackPointer;
+    int at = moment - virtualStackPointer;
     while (at > 0 && stackAlignment.size() > 0) {
         auto align = stackAlignment.back();
         // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
@@ -189,7 +196,7 @@ void GenInfo::restoreStackMoment(int moment) {
         at -= align.diff;
         Assert(at >= 0)
     }
-    relativeStackPointer = moment;
+    virtualStackPointer = moment;
     code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
 }
 /* #endregion */
@@ -377,8 +384,12 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 TypeInfo *typeInfo = 0;
                 if(var->typeId.isNormalType())
                     typeInfo = info.ast->getTypeInfo(var->typeId);
+                if(!typeInfo) {
+                    // log error or is that already done in the type checker?
+                    return GEN_ERROR;
+                }
                 u32 size = info.ast->getTypeSize(var->typeId);
-                if (!typeInfo || !typeInfo->astStruct) {
+                if (!typeInfo->astStruct) {
                     info.code->add({BC_LI, BC_REG_RBX});
                     info.code->addIm(var->frameOffset);
                     info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
@@ -417,8 +428,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             }
         }
         else if (expression->typeId == AST_FNCALL) {
-            if(expression->boolValue) {
-                // struct.method
+            if(expression->boolValue) { // indicates method if true (struct.method)
+
                 ASTExpression* varExpr = expression->left->left;
                 if(varExpr->typeId != AST_VAR) {
                     // What happens if typeId is an operation instead of a type convertable to a string with typeToString?
@@ -451,6 +462,12 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 }
                 
                 ASTFunction* astFunc = ti->astStruct->getFunction(*expression->name);
+                if(!astFunc){
+                    // TODO: POINTER IS ACTUALLY OKAY!
+                    ERRT(expression->tokenRange) << expression->tokenRange.firstToken<< " is not a method of "<<info.ast->typeToString(var->typeId.baseType())<<"\n";
+                    *outTypeId = AST_VOID;
+                    return GEN_ERROR;
+                }
 
                 ASTExpression *argt = expression->left;
                 if (argt)
@@ -458,7 +475,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 int startSP = info.saveStackMoment();
 
                 //-- Align
-                int modu = (astFunc->argSize - info.relativeStackPointer) % 8;
+                int modu = (astFunc->argSize - info.virtualStackPointer) % 8;
                 if (modu != 0) {
                     int diff = 8 - modu;
                     // log::out << "   align\n";
@@ -540,7 +557,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 }
                 {
                     // align to 8 bytes because the call frame requires it.
-                    int modu = (astFunc->argSize - info.relativeStackPointer) % 8;
+                    int modu = (astFunc->argSize - info.virtualStackPointer) % 8;
                     if (modu != 0) {
                         int diff = 8 - modu;
                         // log::out << "   align\n";
@@ -636,7 +653,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             int startSP = info.saveStackMoment();
 
             //-- align
-            int modu = (astFunc->argSize - info.relativeStackPointer) % 8;
+            int modu = (astFunc->argSize - info.virtualStackPointer) % 8;
             if (modu != 0) {
                 int diff = 8 - modu;
                 // log::out << "   align\n";
@@ -718,7 +735,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             }
             {
                 // align to 8 bytes because the call frame requires it.
-                int modu = (astFunc->argSize - info.relativeStackPointer) % 8;
+                int modu = (astFunc->argSize - info.virtualStackPointer) % 8;
                 if (modu != 0) {
                     int diff = 8 - modu;
                     // log::out << "   align\n";
@@ -816,13 +833,17 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 return GEN_ERROR;
             }
 
-            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice"), info.ast->globalScopeId);
+            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId);
+            if(!typeInfo){
+                ERRT(expression->tokenRange) << expression->tokenRange<<" cannot be converted to Slice<char> because the type doesn't exist. Use #import \"Basic\"\n";
+                return GEN_ERROR;
+            }
             Assert(typeInfo->astStruct);
             Assert(typeInfo->astStruct->members.size() == 2);
             // TODO: More assert checks?
 
             // last member in slice is pushed first
-            // info.addIncrSp(-4);
+            // info.addIncrSp(-4);§
 
             info.code->add({BC_LI, BC_REG_EAX});
             info.code->addIm(pair->second.length);
@@ -1162,7 +1183,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             // TypeInfo *structInfo = info.ast->getTypeInfo(info.currentScopeId, Token(*expression->name));
             if (!structInfo || !structInfo->astStruct) {
                 auto str = info.ast->typeToString(expression->castType);
-                ERRT(expression->tokenRange) << "cannot do initializer on non-struct " << log::GOLD << str << "\n";
+                ERRT(expression->tokenRange) << "cannot do initializer on non-struct " << log::YELLOW << str << "\n";
                 return GEN_ERROR;
             }
 
@@ -1258,7 +1279,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
 
             // TypeInfo* typeInfo = info.ast->getTypeInfo(*expression->name);
             // if(!structInfo||!structInfo->astStruct){
-            //     ERRT(expression->tokenRange) << "cannot do initializer on non-struct "<<log::GOLD<<*expression->name<<"\n";
+            //     ERRT(expression->tokenRange) << "cannot do initializer on non-struct "<<log::YELLOW<<*expression->name<<"\n";
             //     return GEN_ERROR;
             // }
 
@@ -1410,8 +1431,8 @@ int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange = 
         for (int i = typeInfo->astStruct->members.size() - 1; i >= 0; i--) {
             auto &member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
-            if(member.defaultValue && typeInfo->astStruct->polyNames.size()){
-                log::out <<  log::GOLD;
+            if(member.defaultValue && typeInfo->astStruct->polyArgs.size()){
+                log::out <<  log::YELLOW;
                 if(tokenRange)
                     log::out << LOGAT((*tokenRange))<<": ";
                 log::out << "Warning! Polymorphism may not work with default values!\n";
@@ -1471,7 +1492,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         int startSP = info.saveStackMoment();
 
         // expecting 8-bit alignment when generating function
-        Assert(info.relativeStackPointer % 8 == 0);
+        Assert(info.virtualStackPointer % 8 == 0);
 
         if (function->arguments.size() != 0) {
             _GLOG(log::out << "set " << function->arguments.size() << " args\n");
@@ -1506,7 +1527,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         }
 
         // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
-        // SHOULD stackAlignment, relativeStackPointer be reset and then restored?
+        // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
         // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
         //
         int result = GenerateBody(info, function->body);
@@ -1542,6 +1563,8 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     auto fid = info.ast->getIdentifier(info.currentScopeId, function->name);
     if (!fid) {
         // NOTE: function may not have been added in the type checker stage for some reason.
+        // THANK YOU, past me for writing this note. I was wondering what I broke and reading the
+        // note made instantly realise that I broke something in the type checker.
         ERRT(function->tokenRange) << function->name << " was null (compiler bug)\n";
         if (function->tokenRange.firstToken.str) {
             ERRTOKENS(function->tokenRange)
@@ -1567,7 +1590,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
 
     
     //-- Align
-    // int modu = (- info.relativeStackPointer) % 8;
+    // int modu = (- info.virtualStackPointer) % 8;
     // int diff = 8 - modu;
     // if (modu != 0) {
     //     // log::out << "   align\n";
@@ -1576,7 +1599,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     //     // TODO: does something need to be done with stackAlignment list.
     // }
     // expecting 8-bit alignment when generating function
-    Assert(info.relativeStackPointer % 8 == 0);
+    Assert(info.virtualStackPointer % 8 == 0);
 
     if (astFunc->arguments.size() != 0) {
         _GLOG(log::out << "set " << astFunc->arguments.size() << " args\n");
@@ -1611,7 +1634,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     }
 
     // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
-    // SHOULD stackAlignment, relativeStackPointer be reset and then restored?
+    // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
     // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
     //
     int result = GenerateBody(info, function->body);
@@ -2221,7 +2244,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             //     log::out << log::RED << "popLoop failed (bug in compiler)\n";
             // }
         } else if(statement->type == ASTStatement::BREAK) {
-            log::out << log::GOLD << "Warning! defer doesn't work with break!\n";
+            log::out << log::YELLOW << "Warning! defer doesn't work with break!\n";
 
             GenInfo::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
@@ -2236,7 +2259,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             loop->resolveBreaks.push_back(info.code->length());
             info.code->addIm(0);
         } else if(statement->type == ASTStatement::CONTINUE) {
-            log::out << log::GOLD << "Warning! defer doesn't work with continue!\n";
+            log::out << log::YELLOW << "Warning! defer doesn't work with continue!\n";
             
             GenInfo::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
@@ -2251,7 +2274,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             info.code->addIm(loop->continueAddress);
         } else if (statement->type == ASTStatement::RETURN) {
             _GLOG(SCOPE_LOG("RETURN"))
-            log::out << log::GOLD << "Warning! defer doesn't work with return!\n";
+            log::out << log::YELLOW << "Warning! defer doesn't work with return!\n";
 
             if (!info.currentFunction) {
                 ERRT(statement->tokenRange) << "return only allowed in function\n";
@@ -2260,15 +2283,15 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             }
 
             //-- Evaluate return values
-            ASTExpression *expr = statement->rvalue;
+            ASTExpression *nextExpr = statement->rvalue;
             int argi = -1;
-            while (expr) {
-                ASTExpression *temp = expr;
-                expr = expr->next;
+            while (nextExpr) {
+                ASTExpression *expr = nextExpr;
+                nextExpr = nextExpr->next;
                 argi++;
 
                 TypeId dtype = {};
-                int result = GenerateExpression(info, temp, &dtype);
+                int result = GenerateExpression(info, expr, &dtype);
                 if (result == GEN_ERROR) {
                     continue;
                 }
@@ -2377,7 +2400,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
 int GenerateData(GenInfo& info, AST* ast) {
     using namespace engone;
 
-    // Also relativeStackPointer should be aligned before generating functions
+    // Also virtualStackPointer should be aligned before generating functions
     // Also there are some asserts going off.
     
     for(auto& pair : ast->constStrings) {

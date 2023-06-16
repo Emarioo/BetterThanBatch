@@ -6,6 +6,7 @@
 #define DEBUG
 // #define SILENT
 // #define ALLOC_LOG
+// #define LOG_MEASURES
 
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
@@ -30,10 +31,11 @@
 // #define MLOG
 // #define PLOG
 // type checker
-// #define TC_LOG
-// #define GLOG
+#define TC_LOG
+#define GLOG
 // #define OLOG
 // #define ILOG
+// #define ILOG_REGS
 
 
 

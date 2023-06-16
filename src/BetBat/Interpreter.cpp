@@ -443,7 +443,7 @@ void Interpreter::execute(Bytecode* bytecode){
             } else if((i64)sp-(i64)stack.data < (i64)0){
                 // NOTE: This is not underflow even though sp is less than base stack pointer because
                 //  stack grows down and not up.
-                log::out<<log::RED <<__FUNCTION__<< ": stack "<<log::GOLD<<"overflow"<<log::RED<<" (sp: "<<
+                log::out<<log::RED <<__FUNCTION__<< ": stack "<<log::YELLOW<<"overflow"<<log::RED<<" (sp: "<<
                 ((i64)sp-(i64)stack.data)<<", max: "<<
                 (stack.max)<<")\n";
                 return;
@@ -464,7 +464,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             if((i64)sp-(i64)stack.data - rsize > (i64)stack.max){
                 // NOTE: stack shrinks upwards and thus we call it underflow
-                log::out <<log::RED<<__FUNCTION__<< ": stack "<<log::GOLD<<"underflow"<<log::RED<<" (sp: "<<
+                log::out <<log::RED<<__FUNCTION__<< ": stack "<<log::YELLOW<<"underflow"<<log::RED<<" (sp: "<<
                 ((i64)sp-(i64)stack.data)<<", max: "<<
                 (stack.max)<<")\n";
                 return;
@@ -494,7 +494,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             _ILOG(log::out << "\n";)
             if(addr>(int)length){
-                log::out << log::GOLD << "Call to instruction beyond all bytecode\n";
+                log::out << log::YELLOW << "Call to instruction beyond all bytecode\n";
             }
             // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<"\n";)
             
@@ -760,8 +760,11 @@ void Interpreter::execute(Bytecode* bytecode){
         } // for switch
     }
     auto time = StopMeasure(tp);
-    log::out << "\n";
-    log::out << "Executed in "<<FormatTime(time)<< " "<<FormatUnit(executedInstructions/time)<< "inst/s\n";
-    printRegisters();
-       
+    if(!silent){
+        log::out << "\n";
+        log::out << "Executed in "<<FormatTime(time)<< " "<<FormatUnit(executedInstructions/time)<< "inst/s\n";
+        #ifdef ILOG_REGS
+        printRegisters();
+        #endif
+    }
 }
