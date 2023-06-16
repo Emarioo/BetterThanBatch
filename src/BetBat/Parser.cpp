@@ -215,76 +215,65 @@ Token CombineTokens(ParseInfo& info){
 // don't forget to free data in outgoing token
 int ParseTypeId(ParseInfo& info, Token& outTypeId){
     using namespace engone;
+    MEASURE;
     int startToken = info.at()+1;
     int endTok = info.at()+1; // exclusive
     int totalLength=0;
     
-    // std::string spacename = "";
-    // bool testNamespace = true;
     // TODO: check end of tokens
+
+    int depth = 0;
+    outTypeId = {};
     while(!info.end()){
         Token& tok = info.get(endTok);
         if(tok.flags&TOKEN_QUOTED){
             ERRT(tok) << "Cannot have quotes in data type "<<tok<<"\n";
             ERRLINE
-            // error = PARSE_ERROR;
             // NOTE: Don't return in order to stay synchronized.
             //   continue parsing like nothing happen.
         }
-        // if(testNamespace){
-        //     Token tok2 = info.get(endTok+1);
-        //     if(IsName(tok) && Equal(tok2,"::")){
-        //         // namespace I be gone?
-        //         info.next();
-        //         info.next();
-                
-        //         spacename += tok;
-        //         spacename += tok2;
-        //         startToken++;
-        //         endTok++;
-        //         continue;
-        //     }else{
-        //         testNamespace = false;
-        //     }
-        // }
+        if(Equal(tok,"<")) {
+            depth++;
+        }else if(Equal(tok,">")) {
+            if(depth == 0){
+                break;
+            }
+            depth--;
+            if(depth == 0){
+                endTok++;
+                outTypeId.length += tok.length;
+                info.next();
+                break;
+            }
+        }
         // TODO: Array<T,A> wouldn't work since comma is detected as end of data type.
         //      tuples won't work with paranthesis.
-        if(Equal(tok,",") // (a: i32, b: i32)     struct {a: i32, b: i32}
-            ||Equal(tok,"=") // a: i32 = 9;
-            ||Equal(tok,")") // (a: i32)
-            ||Equal(tok,"{") // () -> i32 {
-            ||Equal(tok,"}") // struct { x: f32 }
-            ||Equal(tok,"<") // ok: Map<i32>   i32 in poly list is handled afterwards
-            ||Equal(tok,">") // cast<i32>
-            ||Equal(tok,";") // cast<i32>
-        ){
-            break;
+        if(depth == 0) {
+            if(Equal(tok,",") // (a: i32, b: i32)     struct {a: i32, b: i32}
+                ||Equal(tok,"=") // a: i32 = 9;
+                ||Equal(tok,")") // (a: i32)
+                ||Equal(tok,"{") // () -> i32 {
+                ||Equal(tok,"}") // struct { x: f32 }
+                ||Equal(tok,";") // cast<i32>
+            ){
+                break;
+            }
+        }
+        if(endTok == startToken) {
+            outTypeId.str = tok.str;
         }
         endTok++;
-        totalLength+=tok.length;
+        outTypeId.length += tok.length;
         info.next();
-        // if(tok.flags&TOKEN_SUFFIX_LINE_FEED)
-        //     break;
     }
-    outTypeId = {};
-    outTypeId.str = new char[totalLength];
-    outTypeId.length = totalLength;
 
-    int sofar=0;
-    for (int i=startToken;i!=endTok;i++){
-        Token& tok = info.get(i);
-        memcpy(outTypeId.str+sofar,tok.str,tok.length);
-        sofar+=tok.length;
-    }
-    // defer {
-    //     delete[] dataType.str;
-    // };
     return PARSE_SUCCESS;
 }
 int ParseFunction(ParseInfo& info, ASTFunction*& expression, bool attempt, ASTStruct* parentStruct);
 int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt);
 int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     using namespace engone;
+    MEASURE;
     _PLOG(FUNC_ENTER)
     Token structToken = info.get(info.at()+1);
     int startIndex = info.at()+1;
@@ -359,6 +348,11 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     // TODO: Structs need their own scopes for polymorphic types and
     //  internal namespaces, structs, enums...
 
+    astStruct->scopeId = info.ast->createScope()->id;
+    auto prevScope = info.currentScopeId;
+    defer {info.currentScopeId = prevScope; };
+    info.currentScopeId = astStruct->scopeId;
+
     int offset=0;
     int error = PARSE_SUCCESS;
     bool affectedByAlignment=false;
@@ -408,16 +402,15 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             }
             std::string temps = dtToken;
             
-            int polyIndex = -1;
-            for(int i=0;i<(int)astStruct->polyNames.size();i++){
-                if(temps.find(astStruct->polyNames[i])!=std::string::npos){
-                    polyIndex = i;
-                    break;
-                }
-            }
+            // int polyIndex = -1;
+            // for(int i=0;i<(int)astStruct->polyNames.size();i++){
+            //     if(temps.find(astStruct->polyNames[i])!=std::string::npos){
+            //         polyIndex = i;
+            //         break;
+            //     }
+            // }
             
-            // TypeInfo* typeInfo = info.ast->getTypeInfo(info.currentScopeId,dtToken);
-            TypeId typeId = info.ast->addTypeString(dtToken);
+            TypeId typeId = info.ast->getTypeString(dtToken);
             
             result = PARSE_SUCCESS;
             ASTExpression* defaultValue=0;
@@ -430,12 +423,10 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 astStruct->members.push_back({});
                 auto& mem = astStruct->members.back();
                 mem.name = name;
-                // if(!typeInfo)
-                //     mem.typeId = 0;
-                // else
-                    mem.typeId = typeId;
                 mem.defaultValue = defaultValue;
-                mem.polyIndex = polyIndex;
+                astStruct->baseImpl.members.push_back({});
+                auto& mem2 = astStruct->baseImpl.members.back();
+                mem2.typeId = typeId;
             }
         }
         Token token = info.get(info.at()+1);
@@ -453,18 +444,6 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
         }
     }
     astStruct->tokenRange.endIndex = info.at()+1;
-    // astStruct->size = offset;
-    // make sure data type doesn't exist?
-    // auto typeInfo = info.ast->getTypeInfo(info.currentScopeId,name,false,true);
-    // int strId = info.ast->addTypeString(name);
-    // if(!typeInfo){
-    // ERRT(name) << name << " is taken\n";
-    // info.ast->destroy(astStruct);
-    // astStruct = 0;
-    // return PARSE_ERROR;
-    // }
-    // typeInfo->astStruct = astStruct;
-    // typeInfo->_size = astStruct->size;
     _GLOG(log::out << "Parsed struct "<<name << " with "<<astStruct->members.size()<<" members\n";)
     return error;
 }
@@ -472,6 +451,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
 int ParseEnum(ParseInfo& info, ASTEnum*& tempFunction, bool attempt);
 int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     using namespace engone;
+    MEASURE;
     _PLOG(FUNC_ENTER)
     Token token = info.get(info.at()+1);
     int startIndex = info.at()+1;
@@ -506,14 +486,14 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     astNamespace->tokenRange.startIndex = startIndex;
     astNamespace->tokenRange.tokenStream = info.tokens;
 
-    ScopeId newScopeId = info.ast->addScopeInfo();
-    ScopeInfo* newScope = info.ast->getScopeInfo(newScopeId);
+    ScopeInfo* newScope = info.ast->createScope();
+    ScopeId newScopeId = newScope->id;
     newScope->parent = info.currentScopeId;
     
     astNamespace->scopeId = newScopeId;
-    info.ast->getScopeInfo(newScopeId)->name = name;
+    info.ast->getScope(newScopeId)->name = name;
     
-    info.ast->getScopeInfo(info.currentScopeId)->nameScopeMap[name] = newScope;
+    info.ast->getScope(info.currentScopeId)->nameScopeMap[name] = newScope->id;
     
     ScopeId prevScope = info.currentScopeId;
     defer { info.currentScopeId = prevScope; };
@@ -577,6 +557,7 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
 }
 int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     using namespace engone;
+    MEASURE;
     _PLOG(FUNC_ENTER)
     Token enumToken = info.get(info.at()+1);
     int startIndex = info.at()+1;
@@ -656,7 +637,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     }
     astEnum->tokenRange.endIndex = info.at()+1;
     // auto typeInfo = info.ast->getTypeInfo(info.currentScopeId, name, false, true);
-    // int strId = info.ast->addTypeString(name);
+    // int strId = info.ast->getTypeString(name);
     // if(!typeInfo){
         // ERRT(name) << name << " is taken\n";
         // info.ast->destroy(astEnum);
@@ -670,6 +651,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
 }
 // parses arguments and puts them into fncall->left
 int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
+    MEASURE;
     ASTExpression* tail=fncall->left;
     if(tail)
         while(tail->next) {
@@ -715,7 +697,8 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
             return PARSE_ERROR;                         
         }
         if(named){
-            expr->namedValue = new std::string(tok);
+            expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
+            new(expr->namedValue)std::string(tok);
         }
         if(tail){
             tail->next = expr;
@@ -731,7 +714,7 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
 // @fex
 int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     using namespace engone;
-    
+    MEASURE;
     _PLOG(FUNC_ENTER)
     
     if(info.end()){
@@ -774,7 +757,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 if(Equal(tok, "(")){
                     info.next();
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
-                    tmp->name = new std::string(token);
+                    tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
+                    new(tmp->name)std::string(token);
                     
                     ASTExpression* refer = info.ast->createExpression(TypeId(AST_REFER));
                     refer->left = values.back();
@@ -799,7 +783,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }
                 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_MEMBER));
-                tmp->name = new std::string(token);
+                tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
+                new(tmp->name)std::string(token);
                 tmp->left = values.back();
                 values.pop_back();
                 tmp->tokenRange.firstToken = tmp->left->tokenRange.firstToken;
@@ -868,7 +853,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 ops.push_back(AST_CAST);
                 // TypeId dt = info.ast->getTypeInfo(info.currentScopeId,tokenTypeId)->id;
                 // castTypes.push_back(dt);
-                TypeId strId = info.ast->addTypeString(tokenTypeId);
+                TypeId strId = info.ast->getTypeString(tokenTypeId);
                 castTypes.push_back(strId);
                 attempt=false;
                 continue;
@@ -965,7 +950,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->charValue = *token.str;
                 }else {
                     tmp = info.ast->createExpression(TypeId(AST_STRING));
-                    tmp->name = new std::string(token);
+                    tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
+                    new(tmp->name)std::string(token);
 
                     // A string of zero size can be useful which is why
                     // the code below is commented out.
@@ -1042,7 +1028,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 }
                 info.next();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_SIZEOF));
-                tmp->name = new std::string(token);
+                tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
+                new(tmp->name)std::string(token);
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1074,9 +1061,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     ns += token;
 
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
-                    tmp->name = new std::string(std::move(ns));
-                    // tmp->name = new std::string(token); // When not doing AST_FROM_NAMESPACE
-                    
+                    tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
+                    new(tmp->name)std::string(std::move(ns));
+
                     int count = 0;
                     int result = ParseArguments(info, tmp, &count);
                     if(result!=PARSE_SUCCESS)
@@ -1107,7 +1094,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         }
                     }
                     ns += token;
-                    tmp->castType = info.ast->addTypeString(ns);
+                    tmp->castType = info.ast->getTypeString(ns);
                     // TODO: A little odd to use castType. Renaming castType to something more
                     //  generic which works for AST_CAST and AST_INITIALIZER would be better.
                     ASTExpression* tail=0;
@@ -1145,7 +1132,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                             continue;
                         }
                         if(named){
-                            expr->namedValue = new std::string(token);
+                            tmp->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
+                            new(tmp->namedValue)std::string(token);
                         }
                         if(tail){
                             tail->next = expr;
@@ -1190,14 +1178,12 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     ops.push_back(AST_FROM_NAMESPACE);
                     namespaceNames.push_back(token);
                     // namespaceToken = token;
-                    // namespaceName = new std::string(token);
                     continue; // do a second round?
                     
                     // TODO: detect more ::
                     
                     // ASTExpression* tmp = info.ast->createExpression(AST_FROM_NAMESPACE);
-                    // tmp->name = new std::string(token);
-                    // tmp->member = new std::string(tok);
+                    
                     // values.push_back(tmp);
                     // tmp->tokenRange.firstToken = token;
                     // tmp->tokenRange.startIndex = startToken;
@@ -1220,9 +1206,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     }
                     ns += token;
 
-                    tmp->name = new std::string(std::move(ns));
+                    tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
+                    new(tmp->name)std::string(std::move(ns));
 
-                    // tmp->name = new std::string(token); // When not incorporating AST_FROM_NAMESPACE
                     values.push_back(tmp);
                     tmp->tokenRange.firstToken = token;
                     tmp->tokenRange.startIndex = startToken;
@@ -1264,40 +1250,19 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             // quitting here is a little unexpected but there is
             // a defer which destroys parsed expresions so no memory leaks at least.
         }
-        // while(directOps.size()>0){
-        //     OperationType op = directOps.back();
-        //     directOps.pop_back();
-
-        //     auto val = values.back();
-        //     values.pop_back();
-            
-        //     auto newVal = info.ast->createExpression(TypeId(op));
-        //     // TODO: token range doesn't include the operation token. It should.
-        //     newVal->tokenRange = val->tokenRange;
-        //     if(op==AST_FROM_NAMESPACE){
-        //         Token& tok = namespaceNames.back();
-        //         newVal->name = new std::string(tok);
-        //         newVal->tokenRange.firstToken = tok;
-        //         newVal->tokenRange.startIndex -= 2; // -{namespace name} -{::}
-        //         namespaceNames.pop_back();
-        //     } else if(op==AST_CAST){
-        //         newVal->castType = castTypes.back();
-        //         castTypes.pop_back();
-        //     }
-        //     newVal->left = val;
-
-        //     values.push_back(newVal);
-        // }
         
         ending = ending || info.end();
 
         while(values.size()>0){
-
+            auto singleTypeOp = [&](OperationType nowOp){
+                return nowOp == AST_REFER || nowOp == AST_DEREF || nowOp == AST_NOT || nowOp == AST_BNOT||
+                nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST;
+            };
             OperationType nowOp = (OperationType)0;
             if(ops.size()>=2&&!ending){
-                if(values.size()<2)
-                    break;
                 OperationType op1 = ops[ops.size()-2];
+                if(!singleTypeOp(op1) && values.size()<2)
+                    break;
                 OperationType op2 = ops[ops.size()-1];
                 if(OpPrecedence(op1)>=OpPrecedence(op2)){
                     nowOp = op1;
@@ -1323,13 +1288,13 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             auto val = info.ast->createExpression(TypeId(nowOp));
             val->tokenRange.tokenStream = info.tokens;
             // FROM_NAMESPACE, CAST, REFER, DEREF, NOT, BNOT
-            if(nowOp == AST_REFER || nowOp == AST_DEREF || nowOp == AST_NOT || nowOp == AST_BNOT||
-                nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST){
+            if(singleTypeOp(nowOp)){
                 
                 val->tokenRange = er->tokenRange;
                 if(nowOp == AST_FROM_NAMESPACE){
                     Token& tok = namespaceNames.back();
-                    val->name = new std::string(tok);
+                    val->name = (std::string*)engone::Allocate(sizeof(std::string));
+                    new(val->name)std::string(tok);
                     val->tokenRange.firstToken = tok;
                     val->tokenRange.startIndex -= 2; // -{namespace name} -{::}
                     namespaceNames.pop_back();
@@ -1369,6 +1334,7 @@ int ParseBody(ParseInfo& info, ASTScope*& body, bool globalScope=false);
 // returns 0 if syntax is wrong for flow parsing
 int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
+    MEASURE;
     _PLOG(FUNC_ENTER)
     
     if(info.end()){
@@ -1504,8 +1470,11 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         info.next();
         
         statement = info.ast->createStatement(ASTStatement::USING);
-        statement->name = new std::string(name);
-        statement->alias = new std::string(alias);
+        
+        statement->name = (std::string*)engone::Allocate(sizeof(std::string));
+        new(statement->name)std::string(name);
+        statement->alias = (std::string*)engone::Allocate(sizeof(std::string));
+        new(statement->alias)std::string(alias);
 
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.startIndex = startIndex;
@@ -1557,6 +1526,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
 // out token contains a newly allocated string. use delete[] on it
 int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct){
     using namespace engone;
+    MEASURE;
     _PLOG(FUNC_ENTER)
     Token& token = info.get(info.at()+1);
     int startIndex = info.at()+1;
@@ -1589,7 +1559,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         function->arguments.push_back({});
         auto& argv = function->arguments.back();
         argv.name = "this";
-        argv.typeId = info.ast->addTypeString(parentStruct->name+"*");;
+        argv.typeId = info.ast->getTypeString(parentStruct->name+"*");;
         argv.defaultValue = nullptr;
     }
     bool mustHaveDefault=false; 
@@ -1616,11 +1586,9 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
 
         Token dataType{};
         int result = ParseTypeId(info,dataType);
-        defer {
-            delete[] dataType.str;
-        };
+        
         // auto id = info.ast->getTypeInfo(info.currentScopeId,dataType)->id;
-        TypeId strId = info.ast->addTypeString(dataType);
+        TypeId strId = info.ast->getTypeString(dataType);
 
         ASTExpression* defaultValue=0;
         tok = info.get(info.at()+1);
@@ -1686,7 +1654,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                     return PARSE_ERROR;
                 }
                 // auto id = info.ast->getTypeInfo(info.currentScopeId,dt)->id;
-                TypeId strId = info.ast->addTypeString(dt);
+                TypeId strId = info.ast->getTypeString(dt);
                 function->returnTypes.push_back(strId);
             }
         }else{
@@ -1709,7 +1677,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                     return PARSE_ERROR;
                 }
                 // auto id = info.ast->getTypeInfo(info.currentScopeId,dt)->id;
-                TypeId strId = info.ast->addTypeString(dt);
+                TypeId strId = info.ast->getTypeString(dt);
                 function->returnTypes.push_back(strId);
             }
         }
@@ -1725,6 +1693,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
 }
 int ParsePropAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
+    MEASURE;
     _PLOG(FUNC_ENTER)
     
     int startIndex = info.at()+1;
@@ -1774,6 +1743,7 @@ int ParsePropAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt)
 // normal assignment a = 9
 int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
+    MEASURE;
     _PLOG(FUNC_ENTER)
     
     if(info.tokens->length() < info.index+2){
@@ -1817,14 +1787,12 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
         Token typeToken{};
         int result = ParseTypeId(info,typeToken);
-        defer {
-            delete[] typeToken.str;
-        };
+        
         Token token = info.get(info.at()+1);
         std::vector<TypeId> polyList;
-        std::string typeString = typeToken;
+        // std::string typeString = typeToken;
         // TypeInfo* typeInfo = info.ast->getTypeInfo(info.currentScopeId,typeString);
-        TypeId strId = info.ast->addTypeString(typeString);
+        TypeId strId = info.ast->getTypeString(typeToken);
         
         // if(Equal(token,"<")){
         //     info.next();
@@ -1883,7 +1851,8 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         info.next();
         statement = info.ast->createStatement(ASTStatement::ASSIGN);
 
-        statement->name = new std::string(name);
+        statement->name = (std::string*)engone::Allocate(sizeof(std::string));
+        new(statement->name)std::string(name);
         if(assignType.isString())
             statement->typeId = assignType;
 
@@ -1915,7 +1884,9 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     statement = info.ast->createStatement(ASTStatement::ASSIGN);
 
     // log::out << reloc<<"\n";
-    statement->name = new std::string(name);
+    
+    statement->name = (std::string*)engone::Allocate(sizeof(std::string));
+    new(statement->name)std::string(name);
     // if(assignType.getId()!=0)
     if(assignType.isValid())
         statement->typeId = assignType;
@@ -1939,6 +1910,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
 }
 int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
     using namespace engone;
+    MEASURE;
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
     _PLOG(FUNC_ENTER)
@@ -1968,8 +1940,8 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
     ScopeId prevScope = info.currentScopeId;
     defer { info.currentScopeId = prevScope; };
     if(scoped){
-        info.currentScopeId = info.ast->addScopeInfo();
-        ScopeInfo* si = info.ast->getScopeInfo(info.currentScopeId);
+        info.currentScopeId = info.ast->createScope()->id;
+        ScopeInfo* si = info.ast->getScope(info.currentScopeId);
         si->parent = prevScope;
 
     }
@@ -2077,6 +2049,7 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
 
 ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr, std::string theNamespace){
     using namespace engone;
+    MEASURE;
     // _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     
     ParseInfo info{tokens};
@@ -2094,14 +2067,14 @@ ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr, std::string th
     if(!theNamespace.empty()){
         body = info.ast->createNamespace(theNamespace);
         
-        ScopeId newScopeId = info.ast->addScopeInfo();
-        ScopeInfo* newScope = info.ast->getScopeInfo(newScopeId);
+        ScopeInfo* newScope = info.ast->createScope();
+        ScopeId newScopeId = newScope->id;
         
         newScope->parent = info.currentScopeId;
         
         body->scopeId = newScopeId;
-        info.ast->getScopeInfo(newScopeId)->name = theNamespace;
-        info.ast->getScopeInfo(info.currentScopeId)->nameScopeMap[theNamespace] = newScope;
+        info.ast->getScope(newScopeId)->name = theNamespace;
+        info.ast->getScope(info.currentScopeId)->nameScopeMap[theNamespace] = newScope->id;
         
         info.currentScopeId = newScopeId;
     }

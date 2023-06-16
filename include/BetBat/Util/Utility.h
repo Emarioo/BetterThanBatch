@@ -9,7 +9,9 @@
 #include <unordered_map>
 #include <math.h>
 
-// Returns memory with no data if file couldn't be accessed.
+// File not found or innaccesible: Returns memory with NO data.
+// File with zero in size: Returns memory with valid pointer (memory.data = (void*)1) but zero in size.
+// If data could be read: Returns memory with data.
 engone::Memory ReadFile(const char* path);
 bool WriteFile(const char* path, engone::Memory buffer);
 bool WriteFile(const char* path, std::string& buffer);

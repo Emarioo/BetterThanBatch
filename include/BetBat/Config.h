@@ -1,5 +1,7 @@
 #pragma once
 
+#define OS_WINDOWS
+
 // Major config
 #define DEBUG
 // #define SILENT
@@ -27,9 +29,12 @@
 
 // #define MLOG
 // #define PLOG
+// type checker
+// #define TC_LOG
 // #define GLOG
 // #define OLOG
 // #define ILOG
+
 
 
 // #define USE_DEBUG_INFO
@@ -80,6 +85,14 @@ bool GetLog(int type);
 #define _PLOG(x) if(GetLog(LOG_PARSER)){x}
 #else
 #define _PLOG(x)
+#endif
+
+#ifdef TC_LOG
+#define _TC_LOG(x) x
+// #elif defined(DEBUG)
+// #define _TC_LOG(x) if(GetLog(LOG_INTERPRETER)){x;}
+#else
+#define _TC_LOG(x)
 #endif
 
 #ifdef GLOG

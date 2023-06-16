@@ -170,13 +170,16 @@ void Instruction::print(){
 }
 
 Bytecode* Bytecode::Create(){
-    return new Bytecode();
+    Bytecode* ptr = (Bytecode*)engone::Allocate(sizeof(Bytecode));
+    new(ptr)Bytecode();
+    return ptr;
 }
 void Bytecode::Destroy(Bytecode* code){
     if(!code)
         return;
     code->cleanup();
-    delete code;
+    code->~Bytecode();
+    engone::Free(code, sizeof(Bytecode));
 }
 int Bytecode::appendData(const void* data, int size){
     if(dataSegment.max < dataSegment.used + size){

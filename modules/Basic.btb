@@ -1,0 +1,11 @@
+struct Slice {
+    ptr: void*;
+    len: u32;
+}
+fn prints(slice: Slice) {
+    i = 0;
+    while cast<u32>i < slice.len {
+        printc(*(cast<char*>slice.ptr + i));
+        i += 1;
+    }
+}

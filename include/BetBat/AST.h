@@ -66,6 +66,8 @@ enum OperationType : u32 {
 
     AST_REFER, // reference
     AST_DEREF, // dereference
+
+    AST_OPERATION_COUNT,
 };
 struct TypeId {
     TypeId() = default;
@@ -111,11 +113,10 @@ struct TypeId {
     bool operator==(OperationType t) const {
         return *this == TypeId(t);
     }
-    bool isValid() {
+    bool isValid() const {
         return (_flags & VALID_MASK) != 0;
     }
-    // TODO: Rename to something better
-    bool isNormalType() { return (_flags & TYPE_MASK) != STRING && !isPointer(); }
+    bool isString() const { return (_flags & TYPE_MASK) == STRING; }
     TypeId baseType() {
         TypeId out = *this;
         out._flags = out._flags & ~POINTER_MASK;
@@ -128,9 +129,10 @@ struct TypeId {
         Assert(level<=(POINTER_MASK>>POINTER_BIT)); 
         _flags = (_flags & ~POINTER_MASK) | ((level<<POINTER_BIT) & POINTER_MASK);
     }
-    bool isString() const { return (_flags & TYPE_MASK) == STRING; }
     u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_BIT; }
     u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
+    // TODO: Rename to something better
+    bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
 };
 // ASTStruct can have multiple of these per
 // polymorphic instantiation.
@@ -155,19 +157,20 @@ struct TypeInfo {
     ASTStruct* astStruct=0;
     StructImpl* structImpl=0;
     ASTEnum* astEnum=0;
-    std::vector<TypeId> polyTypes;
-    TypeInfo* polyOrigin=0;
 
-    std::string getFullType(AST* ast); // namespace too
-    
     ScopeId scopeId = 0;
     
-    struct MemberOut { TypeId typeId;int index;};
+    struct MemberData {
+        TypeId typeId;
+        int index;
+        int offset;
+    };
 
     u32 getSize();
     // 1,2,4,8
     u32 alignedSize();
-    MemberOut getMember(const std::string& name);
+    MemberData getMember(const std::string& name);
+    MemberData getMember(int index);
 };
 struct Identifier {
     Identifier() {}
@@ -191,11 +194,14 @@ struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}
     std::string name; // namespace
     ScopeId id = 0;
+
+    std::unordered_map<std::string, ScopeId> nameScopeMap;
     std::unordered_map<std::string, TypeInfo*> nameTypeMap;
-    std::unordered_map<std::string, ScopeInfo*> nameScopeMap;
 
     std::unordered_map<std::string, Identifier> identifierMap;
 
+    // Returns the full namespace.
+    // Name of parent scopes are concatenated.
     std::string getFullNamespace(AST* ast);
     
     ScopeId parent = 0;
@@ -268,6 +274,8 @@ struct ASTStatement {
 
     ASTStatement* next=0;
 
+    int _; // offset size to avoid collision with ASTSTatement
+
     void print(AST* ast, int depth);
 };
 struct ASTStruct {
@@ -281,16 +289,15 @@ struct ASTStruct {
     std::string name="";
     struct Member {
         std::string name;
-        TypeId typeId={};
-        int offset=0;
-        int polyIndex=-1;
+
         ASTExpression* defaultValue=0;
     };
     std::vector<Member> members{};
-    int size=0;
-    int alignedSize=0;
-    State state=TYPE_EMPTY;
     std::vector<std::string> polyNames;
+    StructImpl baseImpl{};
+    State state=TYPE_EMPTY;
+
+    ScopeId scopeId=0;
 
     ASTFunction* functions = 0;
     ASTFunction* functionsTail = 0;
@@ -378,22 +385,54 @@ struct ASTScope {
     void print(AST* ast, int depth);
 };
 struct AST {
+    //-- Creation and destruction
     static AST* Create();
     static void Destroy(AST* ast);
     void cleanup();
     
-    ASTScope* mainBody=0;
-    
-    std::unordered_map<ScopeId,ScopeInfo*> scopeInfos;
+    //-- Scope stuff
     ScopeId globalScopeId=0;
-    ScopeId nextScopeId=0;
-    ScopeId addScopeInfo();
-    ScopeInfo* getScopeInfo(ScopeId id);
+    std::vector<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
+    ScopeInfo* createScope();
+    ScopeInfo* getScope(ScopeId id);
+    // Searches specified scope for a scope with a certain name.
+    // Does not check parent scopes.
+    // Argument name can consist of multiple named scopes with :: (GameLib::Math::Vector)
+    // Returns nullptr pointer if named scope wasn't found or if scopeId isn't associated with a scope.
+    ScopeInfo* getScope(Token name, ScopeId scopeId);
+    // Same as getScope but searches curent and parent scopes in order. (scopeId -> scopeId.parent -> scopeId.parent.parent -> globalScope)
+    // Returns nullptr pointer if named scope wasn't found or if any encountered scopeId isn't associated with a scope.
+    ScopeInfo* getScopeFromParents(Token name, ScopeId scopeId);
 
-    static const u32 NEXT_ID = 0x100;
-    // static const TypeId SLICE_BIT = 0x08000000;
-    u32 nextTypeId=NEXT_ID;
-    // TypeId nextSliceTypeId=SLICE_BIT;
+    //-- Types
+    std::vector<Token> _typeTokens;
+    TypeId getTypeString(Token name);
+    Token getTokenFromTypeString(TypeId typeString);
+    TypeId convertToTypeId(TypeId typeString, ScopeId scopeId);
+
+    std::vector<TypeInfo*> _typeInfos; // TODO: Use a bucket array
+    TypeInfo* createType(Token name, ScopeId scopeId);
+    TypeInfo* createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 size=0);
+    // isValid() of the returned TypeId will be false if
+    // type couldn't be converted.
+    TypeId convertToTypeId(Token typeString, ScopeId scopeId);
+    // pointers NOT allowed
+    TypeInfo* convertToTypeInfo(Token typeString, ScopeId scopeId) {
+        return getTypeInfo(convertToTypeId(typeString,scopeId));
+    }
+    // pointers are allowed
+    TypeInfo* getBaseTypeInfo(TypeId id);
+    // pointers are NOT allowed
+    TypeInfo* getTypeInfo(TypeId id);
+    std::string typeToString(TypeId typeId);
+
+    void convertPolyTypes(ScopeId scopeId, std::vector<Token>& polyTypes, std::vector<TypeId>& outIds);
+
+    //-- OTHER
+    ASTScope* mainBody=0;
+
+    // static const u32 NEXT_ID = 0x100;
+    u32 nextTypeId=AST_OPERATION_COUNT;
     
     std::vector<VariableInfo> variables;
 
@@ -416,14 +455,11 @@ struct AST {
     
     void removeIdentifier(ScopeId scopeId, const std::string& name);
 
-    std::unordered_map<TypeId, TypeInfo*> typeInfos;
-    void addTypeInfo(ScopeId scopeId, Token name, TypeId id, u32 size=0);
-    TypeInfo* addType(ScopeId scopeId, Token name);
-    // Creates a new type if needed
-    // scopeId is the current scope. Parent scopes will also be searched.
-    TypeInfo* getTypeInfo(ScopeId scopeId, Token name);
-    // scopeId is the current scope. Parent scopes will also be searched.
-    TypeInfo* getTypeInfo(TypeId id);
+    // std::unordered_map<TypeId, TypeInfo*> typeInfos;
+    // void addTypeInfo(ScopeId scopeId, Token name, TypeId id, u32 size=0);
+    // TypeInfo* addType(ScopeId scopeId, Token name);
+    // // Creates a new type if needed
+    // // scopeId is Info(TypeId id);
 
     // FunctionInfo* addFunction(ScopeId scopeId, ASTFunction* func);
     // FunctionInfo* getFunction(ScopeId scopeId, Token name);
@@ -431,17 +467,11 @@ struct AST {
     u32 getTypeSize(TypeId typeId);
     u32 getTypeAlignedSize(TypeId typeId);
 
-    std::string typeToString(TypeId typeId);
-
-    TypeId getTypeId(ScopeId scopeId, Token typeString, bool* success=0);
-
-    // Retrieves namespace of specified scopeId. Parents are not checked.
-    // Example of what name can be: GameLibrary::Math::Vector
-    ScopeInfo* getNamespace(ScopeId scopeId, const std::string name);
+    // std::string typeToString(TypeId typeId);
     
-    std::vector<std::string> typeStrings;
-    TypeId addTypeString(Token name);
-    const std::string& getTypeString(TypeId typeId);
+    // typeString should not be a pointer
+    TypeInfo* addPolyType(ScopeId scopeId, Token typeString);
+    // TypeId getTypeId(ScopeId scopeId, Token typeString, bool* success=0);
 
     struct ConstString {
         u32 length = 0;
@@ -449,13 +479,11 @@ struct AST {
     };
     std::unordered_map<std::string, ConstString> constStrings;
 
-    // static bool IsPointer(TypeId id);
-    // static bool IsPointer(Token& token);
-    // static u32 GetPointerLevel(Token& token);
+    // Must be used after TrimPointer
+    static Token TrimPolyTypes(Token token, std::vector<Token>* outPolyTypes = nullptr);
     static Token TrimNamespace(Token token, Token* outNamespace = nullptr);
     static Token TrimPointer(Token& token, u32* level = nullptr);
-    // static bool IsSlice(TypeId id);
-    // static bool IsSlice(Token& token);
+    static Token TrimBaseType(Token token, Token* outNamespace, u32* level, std::vector<Token>* outPolyTypes, Token* typeName);
     // true if id is one of u8-64, i8-64
     static bool IsInteger(TypeId id);
     // will return false for non number types

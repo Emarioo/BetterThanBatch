@@ -126,9 +126,19 @@ int main(int argc, const char** argv){
     if(!tests.empty()){
         // TestSuite(tests);
     }
+    Path compilerDir = compilerPath;
+    compilerDir = compilerDir.getAbsolute().getDirectory();
+    // ReplaceChar((char*)compilerPath.data(),compilerPath.length(),'\\','/');
+    // std::string compilerDir = TrimLastFile(compilerPath);
+    // log::out << "CompDir: " <<compilerDir.text <<"\n";
+    if(compilerDir.text.length()>4){
+        if(compilerDir.text.substr(compilerDir.text.length()-5,5) == "/bin/")
+            compilerDir = compilerDir.text.substr(0,compilerDir.text.length() - 4);
+    }
+    // log::out << "CompDir: " <<compilerPath << " "<< compilerDir.text <<"\n";
     for(std::string& file : files){
         // Should source files be compiled seperatly like this
-        CompileAndRun(file.c_str(), compilerPath);
+        CompileAndRun({file.c_str(), compilerDir.text});
     }
     if(!devmode && files.size()==0){
         print_help();
@@ -137,7 +147,7 @@ int main(int argc, const char** argv){
 
         // PerfTestTokenize("example/build_fast.btb",200);
 
-        CompileAndRun("example/strings.btb", compilerPath);
+        CompileAndRun({"example/strings.btb", compilerDir.text});
         // CompileAndRun("example/ast.btb", compilerPath);
         // CompileAndRun("tests/benchmark/loop.btb");
         // CompileAndRun("tests/benchmark/loop2.btb");

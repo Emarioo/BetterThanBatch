@@ -22,6 +22,7 @@
 int CheckEnums(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     Assert(scope);
+    MEASURE;
     
     int error = true;
     ASTEnum* nextEnum = scope->enums;
@@ -29,7 +30,7 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
         ASTEnum* aenum = nextEnum;
         nextEnum = nextEnum->next;
         
-        TypeInfo* typeInfo = info.ast->addType(scope->scopeId, Token(aenum->name));
+        TypeInfo* typeInfo = info.ast->createType(Token(aenum->name), scope->scopeId);
         if(typeInfo){
             typeInfo->_size = 4; // i32
             typeInfo->astEnum = aenum;
@@ -78,9 +79,22 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
     }
     return error;
 }
+// int CheckType(CheckInfo& info, ASTScope* scope, TypeId& inOutType){
+//     using namespace engone;
+//     if(inOutType.isString()){
+//         Token token = info.ast->getTokenFromTypeString(inOutType);
+//         auto ti = info.ast->convertToTypeId(inOutType, scope->scopeId);
+//         // auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
+//         if (ti.isValid()) {
+//             inOutType = ti;
+//         } else {
+//             ERRT(expr->tokenRange) << "type "<< token << " does not exist\n";
+//         }
+//     }
+// }
 int CheckStructs(CheckInfo& info, ASTScope* scope) {
     using namespace engone;
-    
+    MEASURE;
     //-- complete structs
 
     ASTScope* nextNamespace = scope->namespaces;
@@ -103,7 +117,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
         TypeInfo* structInfo = 0;
         if(astStruct->state==ASTStruct::TYPE_EMPTY){
             // structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name,false,true);
-            structInfo = info.ast->addType(scope->scopeId, Token(astStruct->name));
+            structInfo = info.ast->createType(Token(astStruct->name), scope->scopeId);
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
                 ERRT(astStruct->tokenRange) << astStruct->name<<" is already defined\n";
@@ -113,11 +127,11 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                 structInfo->astStruct = astStruct;   
             }
         } else if(astStruct->state != ASTStruct::TYPE_ERROR){
-            structInfo = info.ast->getTypeInfo(scope->scopeId, Token(astStruct->name));   
+            structInfo = info.ast->convertToTypeInfo(Token(astStruct->name), scope->scopeId);   
         }
         
         if(astStruct->state == ASTStruct::TYPE_CREATED){
-            Assert(structInfo)
+            Assert(structInfo);
 
             // log::out << "Evaluating "<<*astStruct->name<<"\n";
             astStruct->state = ASTStruct::TYPE_COMPLETE;
@@ -132,32 +146,42 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
             sizeof A = 24
             */
             //-- Check members
-            for(auto& member : astStruct->members){
+            bool polymorphic = astStruct->polyNames.size()!=0;
+            for (int i = 0;i<(int)astStruct->members.size();i++) {
+                auto& member = astStruct->members[i];
+                auto& implMem = astStruct->baseImpl.members[i];
                 // TypeInfo* typeInfo = 0;
-                if(member.typeId.isString()){
-                    Token tok = Token(info.ast->getTypeString(member.typeId));
+                if(implMem.typeId.isString()){
+                    Token tok = info.ast->getTokenFromTypeString(implMem.typeId);
                     // u32 plevel=0;
                     // Token raw = AST::TrimPointer(tok, &plevel);
-                    bool success=0;
-                    auto id = info.ast->getTypeId(scope->scopeId, tok, &success);
+                    auto id = info.ast->convertToTypeId(tok, scope->scopeId);
                     // TypeInfo* typeInfo = info.ast->getTypeInfo(scope->scopeId, raw);
-                    if(!success){
+                    if(!id.isValid()){
+                        if(polymorphic)
+                            continue;
+                        
                         if(info.showErrors) {
                             ERRT(astStruct->tokenRange) << "type "<< tok << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
                         }
                         astStruct->state = ASTStruct::TYPE_CREATED;
                         break;
                     }
-                    member.typeId = id;
-                } else {
-                    // typeInfo = info.ast->getTypeInfo(member.typeId);
+                    implMem.typeId = id;
                 }
-                i32 size = info.ast->getTypeSize(member.typeId);
-                i32 asize = info.ast->getTypeAlignedSize(member.typeId);
+            }
+            for (int i = 0;i<(int)astStruct->members.size();i++) {
+                auto& member = astStruct->members[i];
+                auto& implMem = astStruct->baseImpl.members[i];
+                if(polymorphic){
+                    continue;
+                }
+                i32 size = info.ast->getTypeSize(implMem.typeId);
+                i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
                 // log::out << " "<<typeInfo->name << " "<<typeInfo->size()<<"\n";
                 if(size==0){
                     // astStruct->state = ASTStruct::TYPE_ERROR;
-                    if(member.typeId == structInfo->id){
+                    if(implMem.typeId == structInfo->id){
                         if(info.showErrors) {
                             // NOTE: pointers to the same struct are okay.
                             ERRT(astStruct->tokenRange) << "member "<<member.name << "'s type uses the parent struct. (recursive struct does not work)\n";
@@ -169,7 +193,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                     } else {
                         // astStruct->state = ASTStruct::TYPE_ERROR;
                         if(info.showErrors) {
-                            ERRT(astStruct->tokenRange) << "type "<< info.ast->typeToString(member.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
+                            ERRT(astStruct->tokenRange) << "type "<< info.ast->typeToString(implMem.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
                         }
                     }
                     astStruct->state = ASTStruct::TYPE_CREATED;
@@ -177,29 +201,63 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                 }
                 if(alignedSize<asize)
                     alignedSize = asize;
-                int misalign = offset % size;
-                if(misalign!=0){
-                    offset+=size-misalign;
-                }
-                // log::out << " "<<offset<<": "<<member.name<<" ("<<typeInfo->size()<<" bytes)\n";
-                member.offset = offset;
+
+                /* OLD WAY TO ALIGN WHICH DOESN'T WORK
+                */
+                // int misalign = offset % size;
+                // if(misalign!=0){
+                //     offset+=size-misalign;
+                // }
+
+                
+                _TC_LOG(log::out << " "<<offset<<": "<<member.name<<" ("<<size<<" bytes)\n";)
+                implMem.offset = offset;
                 offset+=size;
+
+                /*
+                Current push and pop works by aligning and then pushing.
+                To initialize a struct we push the last member first.
+                Then we push the first member. If the first member
+                is bigger we must align it before pushing. The old
+                way does not take this into account. It begins
+                with the first member instead of the last
+                and aligns incorrectly.
+                What I might do is change something so that
+                the offsets become {8, 0} instead of {12, 0}
+
+                    struct { char[8]; char[4] }
+                    offset 12  :  push 4    - push last member
+                                  addi sp 4 - align
+                    offset 0   :  push 8    - push first member
+                    * pointer to struct begins here
+                */
+                if(i+1<(int)astStruct->members.size()){
+                    auto& implMema = astStruct->baseImpl.members[i+1];
+                    i32 nsize = info.ast->getTypeSize(implMema.typeId);
+                    // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
+                    int misalign = (offset + nsize) % size;
+                    if(misalign!=0){
+                        offset+=size-misalign;
+                    }
+                }
             }
 
             if(astStruct->state != ASTStruct::TYPE_COMPLETE) {
                 // log::out << log::RED << "Evaluation failed\n";
                 info.completedStructs = false;
-            } else {
+            } else if (polymorphic){
+                _TC_LOG(log::out << astStruct->name << " was polymorphic and cannot be evaluated yet\n";)
+            }else {
                 // align the end so the struct can be stacked together
                 if(offset != 0){
-                    astStruct->alignedSize = alignedSize;
+                    astStruct->baseImpl.alignedSize = alignedSize;
                     int misalign = offset % alignedSize;
                     if(misalign!=0){
                         offset+=alignedSize-misalign;
                     }
                 }
-                astStruct->size = offset;
-                log::out << astStruct->name << " was evaluated to "<<offset<<" bytes\n";
+                astStruct->baseImpl.size = offset;
+                _TC_LOG(log::out << astStruct->name << " was evaluated to "<<offset<<" bytes\n";)
                 info.anotherTurn=true;
             }
         }
@@ -243,6 +301,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
 }
 int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
     using namespace engone;
+    MEASURE;
     Assert(scope)
     Assert(expr)
     
@@ -269,24 +328,24 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
             ERRTOKENS(expr->tokenRange)
             return false;
         }
-        auto ti = info.ast->getTypeId(scope->scopeId, *expr->name);
+        auto ti = info.ast->convertToTypeId(*expr->name, scope->scopeId);
         int size = info.ast->getTypeSize(ti);
         expr->typeId = AST_UINT32;
         expr->i64Value = size;
     }
     if(expr->typeId.isString()){
-        const std::string& str = info.ast->getTypeString(expr->typeId);
-        auto ti = info.ast->getTypeId(scope->scopeId, Token(str));
+        Token token = info.ast->getTokenFromTypeString(expr->typeId);
+        auto ti = info.ast->convertToTypeId(expr->typeId, scope->scopeId);
         // auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
         if (ti.isValid()) {
             expr->typeId = ti;
         } else {
-            ERRT(expr->tokenRange) << "type "<<str << " does not exist\n";
+            ERRT(expr->tokenRange) << "type "<< token << " does not exist\n";
         }
     }
     if(expr->castType.isString()){
-        const std::string& str = info.ast->getTypeString(expr->castType);
-        auto ti = info.ast->getTypeId(scope->scopeId, Token(str));
+        Token str = info.ast->getTokenFromTypeString(expr->castType);
+        auto ti = info.ast->convertToTypeId(expr->castType, scope->scopeId);
         // auto ti = info.ast->getTypeInfo(scope->scopeId,Token(str));
         if (ti.isValid()) {
             expr->castType = ti;
@@ -303,6 +362,7 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
 
 int CheckRest(CheckInfo& info, ASTScope* scope);
 int CheckFunction(CheckInfo& info, ASTScope* scope, ASTFunction* func, ASTStruct* parentStruct){
+    MEASURE;
     int offset = 0; // offset starts before call frame (fp, pc)
     int firstSize = 0;
     // Based on 8-bit alignment. The last argument must be aligned by it.
@@ -310,10 +370,10 @@ int CheckFunction(CheckInfo& info, ASTScope* scope, ASTFunction* func, ASTStruct
         auto& arg = func->arguments[i];
         // TypeInfo* typeInfo = 0;
         if(arg.typeId.isString()){
-            const std::string& str = info.ast->getTypeString(arg.typeId);
-            auto id = info.ast->getTypeId(scope->scopeId, Token(str));
+            Token str = info.ast->getTokenFromTypeString(arg.typeId);
+            auto id = info.ast->convertToTypeId(arg.typeId, scope->scopeId);
             
-            if(id.getId() != AST_VOID){
+            if(id.isValid()){
                 arg.typeId = id;
             }else{
                 ERRT(func->tokenRange) << str <<" was void (type doesn't exist or you used void which isn't allowed)\n";
@@ -356,19 +416,19 @@ int CheckFunction(CheckInfo& info, ASTScope* scope, ASTFunction* func, ASTStruct
     offset = 0;
     for(int i=0;i<(int)func->returnTypes.size();i++){
         auto& ret = func->returnTypes[i];
-        TypeInfo* typeInfo = 0;
+        // TypeInfo* typeInfo = 0;
         if(ret.typeId.isString()){
-            const std::string& str = info.ast->getTypeString(ret.typeId);
-            typeInfo = info.ast->getTypeInfo(scope->scopeId, Token(str));
-            if(typeInfo){
-                ret.typeId = typeInfo->id;
+            Token str = info.ast->getTokenFromTypeString(ret.typeId);
+            auto ti = info.ast->convertToTypeId(ret.typeId, scope->scopeId);
+            if(ti.isValid()){
+                ret.typeId = ti;
             }else{
                 // TODO: fix location?
-                ERRT(func->tokenRange) << str<<" is not a type\n";
+                ERRT(func->tokenRange) << str<<" is not a type (function)\n";
             }
             
         } else {
-            typeInfo = info.ast->getTypeInfo(ret.typeId);
+            // typeInfo = info.ast->getTypeInfo(ret.typeId);
         }
         int size = info.ast->getTypeSize(ret.typeId);
         int asize = info.ast->getTypeAlignedSize(ret.typeId);
@@ -388,6 +448,7 @@ int CheckFunction(CheckInfo& info, ASTScope* scope, ASTFunction* func, ASTStruct
     return true;
 }
 int CheckRest(CheckInfo& info, ASTScope* scope){
+    MEASURE;
     // arguments
     ASTFunction* nextFunc = scope->functions;
     while(nextFunc){
@@ -431,12 +492,15 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             CheckExpression(info, scope, now->rvalue);
             
         if(now->typeId.isString()){
-            const std::string& str = info.ast->getTypeString(now->typeId);
+            Token str = info.ast->getTokenFromTypeString(now->typeId);
             // NOTE: We don't care whether it's a pointer just that the type exists.
-            TypeInfo* ti = info.ast->getTypeInfo(scope->scopeId, Token(str));
+            TypeInfo* ti = info.ast->convertToTypeInfo(str, scope->scopeId);
             if(!ti){
-                ERRT(now->tokenRange) << str<<" is not a type\n";
+                ERRT(now->tokenRange) << str<<" is not a type (statement)\n";
             }else {
+                if(ti->astStruct && ti->astStruct->polyNames.size()!=0){
+                    ERRT(now->tokenRange) << str<<" is polymorphic. You must specify extra types like this: Struct<i32>\n";
+                }
                 now->typeId = ti->id;
             }
         }
@@ -459,10 +523,11 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
 }
 int TypeCheck(AST* ast, ASTScope* scope){
     using namespace engone;
+    MEASURE;
     CheckInfo info = {};
     info.ast = ast;
 
-    _VLOG(log::out << log::BLUE << "Typechecking:\n";)
+    _VLOG(log::out << log::BLUE << "Type check:\n";)
 
     int result = CheckEnums(info, scope);
     

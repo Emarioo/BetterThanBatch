@@ -17,6 +17,7 @@ SET GCC_DEFINITIONS=-DWIN32
 SET GCC_COMPILE_OPTIONS=-std=c++14 -g
 SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
+@REM /O2
 SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
 SET MSVC_LINK_OPTIONS=/nologo
 SET MSVC_INCLUDE_DIRS=/Iinclude

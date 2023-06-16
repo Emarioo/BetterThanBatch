@@ -471,21 +471,35 @@ void TokenStream::printData(int charsPerLine){
 TokenStream* TokenStream::Tokenize(const std::string& filePath){
     engone::Memory memory = ReadFile(filePath.c_str());
     if(!memory.data)
-        return 0;
-    auto stream = Tokenize((char*)memory.data,memory.used);
+        return nullptr;
+    auto stream = Tokenize((char*)memory.data,memory.max);
     stream->streamName = filePath;
-    memory.resize(0);
+    if(memory.max != 0) {
+        memory.resize(0);
+    }
     return stream;
 }
 TokenStream* TokenStream::Create(){
-    return new TokenStream();
+    #ifdef ALLOC_LOG
+    static bool once = false;
+    if(!once){
+        once = true;
+        engone::TrackType(sizeof(TokenStream),"TokenStream");
+    }
+    #endif
+
+    TokenStream* ptr = (TokenStream*)engone::Allocate(sizeof(TokenStream));
+    new(ptr)TokenStream();
+    return ptr;
 }
 void TokenStream::Destroy(TokenStream* stream){
-    // stream->cleanup() not needed
-    delete stream;   
+    // stream->cleanup();
+    stream->~TokenStream();
+    engone::Free(stream,sizeof(TokenStream));
 }
 TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* optionalIn){
     using namespace engone;
+    MEASURE
     // _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
     // TODO: handle errors like outTokens.add returning false
     if(optionalIn){
@@ -496,6 +510,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     TokenStream* outStream = TokenStream::Create();
     TokenStream& outTokens = *outStream;
     outStream->readBytes += length;
+    outTokens.lines = 0;
     // TokenStream outTokens{};
     // if(optionalIn){
     //     outTokens = *optionalIn;
@@ -508,8 +523,8 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             log::out << "Tokenize : token resize even though optionalIn was used\n";
         outTokens.tokenData.resize(length*5);
     }
-    
-    memset(outTokens.tokenData.data,'_',outTokens.tokenData.max); // Good indicator for issues
+    if(outTokens.tokenData.data && outTokens.tokenData.max!=0)
+        memset(outTokens.tokenData.data,'_',outTokens.tokenData.max); // Good indicator for issues
     
     const char* specials = "+-*/%=<>!&|~" "$@#{}()[]" ":;.,";
     int specialLength = strlen(specials);
@@ -533,6 +548,8 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     // preprocessor stuff
     bool foundHashtag=false;
     bool foundUnderscore=false;
+
+    bool foundNonSpaceOnLine = false;
 
     int index=0;
     while(true){
@@ -562,12 +579,18 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
         }
         
         if(chr=='\r'&&(nextChr=='\n'||prevChr=='\n')){
-            continue;
+            continue;// skip \r and process \n next time
         }
         
         if(inComment){
             if(inEnclosedComment){
                 if(chr=='\n'){
+                    // Questionable decision to use lines counting code here
+                    // AND else where too. A bug is bound to happen.
+                    if(!foundNonSpaceOnLine)
+                        outTokens.blankLines++;
+                    else
+                        outTokens.lines++;
                     if(outTokens.length()!=0)
                         outTokens.get(outTokens.length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;   
                 }
@@ -579,6 +602,10 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 }
             }else{
                 if(chr=='\n'||index==length){
+                    if(!foundNonSpaceOnLine)
+                        outTokens.blankLines++;
+                    else
+                        outTokens.lines++;
                     if(outTokens.length()!=0)
                         outTokens.get(outTokens.length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
                     inComment=false;
@@ -649,6 +676,16 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
         bool isQuotes = chr == '"' ||chr == '\'';
         bool isComment = chr=='/' && (nextChr == '/' || nextChr=='*');
         bool isDelim = chr==' ' || chr=='\t' || chr=='\n';
+        if(!isDelim && !isComment){
+            foundNonSpaceOnLine = true;
+        }
+        if(chr == '\n' || index == length) {
+            if(foundNonSpaceOnLine){
+                outTokens.lines++;
+                foundNonSpaceOnLine = false;
+            } else
+                outTokens.blankLines++;
+        }
         bool isSpecial = false;
         if(!isQuotes&&!isComment&&!isDelim){ // early check for non-special
             
@@ -672,7 +709,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             // ;
             // "+-*/%=<>!&|" "$@#{}()[]" ":;.,"
             
-            // slow
+            // slow, the versions above may not contain all special characters.
             for(int i=0;i<specialLength;i++){
                 if(chr==specials[i]){
                     isSpecial = true;
@@ -743,6 +780,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             if(chr=='/' && nextChr=='*'){
                 inEnclosedComment=true;
             }
+            outTokens.commentCount++;
             index++; // skip the next slash
             _TLOG(log::out << "// : Begin comment\n";)
             continue;
@@ -1000,7 +1038,6 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     }   
     #endif
 
-    outTokens.lines = line;
     outTokens.finalizePointers();
     // Last token should have line feed.
     if(outTokens.length()>0)
@@ -1085,6 +1122,7 @@ void PerfTestTokenize(const char* file, int times){
     auto text = ReadFile(file);
     if (!text.data)
         return;
-    PerfTestTokenize(text,times);    
-    text.resize(0);
+    PerfTestTokenize(text,times);
+    if(text.max != 0)
+        text.resize(0);
 }

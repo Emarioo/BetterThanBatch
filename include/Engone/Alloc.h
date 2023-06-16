@@ -14,9 +14,9 @@ namespace engone {
 	struct Memory {
 		Memory(uint32 typeSize) : m_typeSize(typeSize) {}
 
+		void* data = nullptr;
 		uint64 max = 0;
 		uint64 used = 0; // may be useful to you.
-		void* data = nullptr;
 
 		// count is not in bytes.
 		// Rename to reserve?

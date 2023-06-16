@@ -5,6 +5,7 @@
 #include "Engone/Typedefs.h"
 
 #include "BetBat/Util/Utility.h"
+#include "BetBat/Util/Perf.h"
 #include "BetBat/Config.h"
 
 #define TOKEN_SUFFIX_LINE_FEED 0x1
@@ -129,10 +130,13 @@ struct TokenStream {
         std::string as="";
     };
     std::vector<Import> importList;
-    int lines=0; // counts token suffix.
+    int lines=0; // total number of lines excluding whitespace and comments.
+    int blankLines=0; // lines with only whitespace or comments.
+    int commentCount=0; // multiline slash counts as one comment
     int readBytes=0;
     // new line in the middle of a token is not counted, multiline strings doesn't work very well
     int enabled=0;
+    int64 _2; // offsset tracking
     static const int VERSION_MAX = 5;
     char version[VERSION_MAX+1]{0};
 

@@ -34,7 +34,9 @@ struct GenInfo {
         int continueAddress = 0;
         int stackMoment=0;
         std::vector<int> resolveBreaks;
-        // Identifier counter = {};
+        Identifier counter = {}; // may not be used right now but the size of
+        // loop scope collides with std::string when tracking allocations.
+        int _ = 0; // offset memory for tracking again
     };
     std::vector<LoopScope*> loopScopes;
     

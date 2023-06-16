@@ -89,7 +89,7 @@ void Interpreter::execute(Bytecode* bytecode){
     _ILOG(log::out << "sp = "<<sp<<"\n";)
     
     // u64* savedFp = 0;
-    
+    u64 executedInstructions = 0;
     u64 length = bytecode->codeSegment.used;
     Instruction* codePtr = (Instruction*)bytecode->codeSegment.data;
     while (true) {
@@ -115,6 +115,7 @@ void Interpreter::execute(Bytecode* bytecode){
                 log::out << pc<<": "<<*inst<<", ";)
         log::out.flush(); // flush the instruction in case a crash occurs.
 
+        executedInstructions++;
         pc++;
         u8 opcode = DECODE_OPCODE(inst);
         switch (opcode) {
@@ -610,17 +611,6 @@ void Interpreter::execute(Bytecode* bytecode){
             }
             break;
         }
-        // case BC_CASTF32: {
-        //     u8 r0 = DECODE_REG0(inst);
-        //     u8 r1 = DECODE_REG1(inst);
-            
-        //     void* x = getReg(r0);
-        //     void* out = getReg(r1);
-            
-        //     *(float*)out = *(i64*)x;
-        //     _ILOG(log::out <<*(float*)out<<"\n";)
-        //     break;
-        // }
         case BC_CAST: {
             u8 type = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
@@ -771,7 +761,7 @@ void Interpreter::execute(Bytecode* bytecode){
     }
     auto time = StopMeasure(tp);
     log::out << "\n";
-    log::out << "Executed in "<<FormatTime(time)<<"\n";
+    log::out << "Executed in "<<FormatTime(time)<< " "<<FormatUnit(executedInstructions/time)<< "inst/s\n";
     printRegisters();
        
 }

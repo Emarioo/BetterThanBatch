@@ -51,7 +51,7 @@
 #define BC_CAST 90
 // flags for first operand
 #define CAST_FLOAT_SINT 0
-#define CAST_SINT_FLOAT 0
+#define CAST_SINT_FLOAT 1
 #define CAST_SINT_UINT 2
 #define CAST_UINT_SINT 3
 #define CAST_SINT_SINT 4

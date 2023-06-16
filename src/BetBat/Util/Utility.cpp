@@ -4,23 +4,27 @@ engone::Memory ReadFile(const char* path){
     engone::Memory buffer{1};
     uint64 fileSize;
     
-    if(!engone::FileExist(path))
-        return {1};
+    if(!engone::FileExist(path)) {
+        buffer.data = (void*)1;
+        return buffer;
+    }
     
     auto file = engone::FileOpen(path,&fileSize,engone::FILE_ONLY_READ);
     if(!file)
         goto ReadFileFailed;
     
-    if(!buffer.resize(fileSize))
-        goto ReadFileFailed;
-    
-    if(!engone::FileRead(file,buffer.data,buffer.max))
-        goto ReadFileFailed;
+    if(fileSize == 0) {
+        buffer.data = (void*)1;
+    } else {
+        if(!buffer.resize(fileSize))
+            goto ReadFileFailed;
+        
+        if(!engone::FileRead(file,buffer.data,buffer.max))
+            goto ReadFileFailed;
+    }
     
     engone::FileClose(file);
     
-    buffer.used = fileSize;
-    // printf("ReadFile : Read %lld bytes\n",fileSize);
     return buffer;
     
 ReadFileFailed:

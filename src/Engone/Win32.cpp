@@ -22,6 +22,9 @@
 
 // #include <mutex>
 
+// Cheeky include
+#include "BetBat/Util/Perf.h"
+
 #include "Engone/Win32Includes.h"
 
 // Name collision
@@ -538,6 +541,7 @@ namespace engone {
 	}
 	#define ENGONE_TRACK_ALLOC 0
 	#define ENGONE_TRACK_FREE 1
+	#define ENGONE_TRACK_REALLOC 2
 	void PrintTracking(uint64 bytes, int type){
 		auto pair = allocTracking.find(bytes);
 			
@@ -546,7 +550,9 @@ namespace engone {
 				pair->second.count++;
 			else if(type==ENGONE_TRACK_FREE)
 				pair->second.count--;
-			printf("%s %s (%d left)\n",type==ENGONE_TRACK_ALLOC?"alloc":"free", pair->second.name.c_str(),pair->second.count);
+			// else if(type==ENGONE_TRACK_REALLOC)
+			// 	pair->second.count--;
+			printf("%s %s (%d left)\n",type==ENGONE_TRACK_ALLOC?"alloc":(type==ENGONE_TRACK_FREE?"free" : "realloc"), pair->second.name.c_str(),pair->second.count);
 		}
 	}
 	
@@ -558,6 +564,7 @@ namespace engone {
 	static uint64 s_numberAllocations=0;
 	void* Allocate(uint64 bytes){
 		if(bytes==0) return nullptr;
+		MEASURE;
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
         void* ptr = malloc(bytes);
 		if(!ptr) return nullptr;
@@ -577,6 +584,7 @@ namespace engone {
 		return ptr;
 	}
     void* Reallocate(void* ptr, uint64 oldBytes, uint64 newBytes){
+		MEASURE;
         if(newBytes==0){
             Free(ptr,oldBytes);
             return nullptr;   
@@ -592,6 +600,9 @@ namespace engone {
                 if(!newPtr)
                     return nullptr;
                 
+				if(allocTracking.size()!=0)
+					printf("%s %llu -> %llu\n","realloc", oldBytes, newBytes);
+				// PrintTracking(newBytes,ENGONE_TRACK_REALLOC);
                 // s_allocStatsMutex.lock();
                 s_allocatedBytes+=newBytes-oldBytes;
                 
@@ -607,13 +618,15 @@ namespace engone {
     }
 	void Free(void* ptr, uint64 bytes){
 		if(!ptr) return;
+		MEASURE;
 		free(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
-		
 		PrintTracking(bytes,ENGONE_TRACK_FREE);
 		// s_allocStatsMutex.lock();
 		s_allocatedBytes-=bytes;
 		s_numberAllocations--;
+		Assert(s_allocatedBytes>=0);
+		Assert(s_numberAllocations>=0);
 		// s_allocStatsMutex.unlock();
 		#ifdef LOG_ALLOCATIONS
 		printf("* Free %lld\n",bytes);
