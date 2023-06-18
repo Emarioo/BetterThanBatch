@@ -18,10 +18,14 @@ void Interpreter::cleanup(){
 
 void Interpreter::printRegisters(){
     using namespace engone;
-    log::out << "RAX: "<<(i64)rax<<" "<<*(float*)&rax<<"\n";
-    log::out << "RBX: "<<(i64)rbx<<" "<<*(float*)&rbx<<"\n";
-    log::out << "RCX: "<<(i64)rcx<<" "<<*(float*)&rcx<<"\n";
-    log::out << "RDX: "<<(i64)rdx<<" "<<*(float*)&rdx<<"\n";
+    void* pa = (void*)&rax;
+    void* pb = (void*)&rbx;
+    void* pc = (void*)&rcx;
+    void* pd = (void*)&rdx;
+    log::out << "RAX: "<<(i64)rax<<" "<<*(float*)pa<<"\n";
+    log::out << "RBX: "<<(i64)rbx<<" "<<*(float*)pb<<"\n";
+    log::out << "RCX: "<<(i64)rcx<<" "<<*(float*)pc<<"\n";
+    log::out << "RDX: "<<(i64)rdx<<" "<<*(float*)pd<<"\n";
     log::out << "SP: "<<sp<<"\n";
     log::out << "FP: "<<fp<<"\n";
     log::out << "PC: "<<pc<<"\n";
@@ -52,7 +56,7 @@ void* Interpreter::getReg(u8 id){
 void yeah(int reg, void* from, void* to){
     using namespace engone;
     int size = DECODE_REG_TYPE(reg);
-    if(size==BC_REG_8 ){
+    if(size==BC_REG_8){
         *((u8* ) to) = *((u8* ) from);
         _ILOG(log::out << (*(i8*)to);)
     }else if(size==BC_REG_16) {
@@ -84,7 +88,7 @@ void Interpreter::execute(Bytecode* bytecode){
     fp = (u64)stack.data+stack.max;
     dp = (u64)bytecode->dataSegment.data;
     
-    auto tp = MeasureSeconds();
+    auto tp = MeasureTime();
     
     _ILOG(log::out << "sp = "<<sp<<"\n";)
     
@@ -157,6 +161,8 @@ void Interpreter::execute(Bytecode* bytecode){
             
             i64 x = 0;
             i64 y = 0;
+            float fx = 0;
+            float fy = 0;
             int xs = 1<<DECODE_REG_TYPE(r0);
             int ys = 1<<DECODE_REG_TYPE(r1);
             int os = 1<<DECODE_REG_TYPE(r2);
@@ -168,6 +174,7 @@ void Interpreter::execute(Bytecode* bytecode){
             }
             if(xs==4){
                 x = *(i32*)xp;
+                fx = *(float*)xp;
             }
             if(xs==8){
                 x = *(i64*)xp;
@@ -180,11 +187,13 @@ void Interpreter::execute(Bytecode* bytecode){
             }
             if(ys==4){
                 y = *(i32*)yp;
+                fy = *(float*)yp;
             }
             if(ys==8){
                 y = *(i64*)yp;
             }
             i64 out = 0;
+            float fout = 0;
             
             u64 oldSp = sp;
 
@@ -196,10 +205,10 @@ void Interpreter::execute(Bytecode* bytecode){
                 }
             }
             #define GEN_OP(OP) out = x OP y; _ILOG(log::out << out << " = "<<x <<" "<< #OP << " "<<y;) break;
-            #define GEN_OPF(OP) *(float*)&out = *(float*)&x OP *(float*)&y; _ILOG(log::out << *(float*)&out << " = "<<*(float*)&x <<" "<< #OP << " "<<*(float*)&y;) break;
+            #define GEN_OPF(OP) fout = fx OP fy; _ILOG(log::out << fout << " = "<< fx <<" "<< #OP << " "<< fy;) break;
             switch(opcode){
                 case BC_MODI: GEN_OP(%)
-                case BC_MODF: *(float*)&out = fmod(*(float*)&x,*(float*)&y); _ILOG(log::out << *(float*)&out << " = "<<*(float*)&x <<" % "<<*(float*)&y;) break;
+                case BC_MODF: fout = fmod(fx,fy); _ILOG(log::out << fout << " = "<< fx <<" % "<< fy;) break;
                 case BC_ADDI: GEN_OP(+)   
                 case BC_SUBI: GEN_OP(-)   
                 case BC_MULI: GEN_OP(*)   
@@ -237,7 +246,11 @@ void Interpreter::execute(Bytecode* bytecode){
                 *(i16*)op = out;
             }
             if(os==4){
-                *(i32*)op = out;
+                if(opcode == BC_MODF) {
+                    *(float*)op = fout;
+                } else {
+                    *(i32*)op = out;
+                }
             }
             if(os==8){
                 *(i64*)op = out;
@@ -331,6 +344,11 @@ void Interpreter::execute(Bytecode* bytecode){
             // void* from = (void*)(*(u64*)getReg(r0) + offset); // NOTE: Program can crash here
             void* to = getReg(r1);
             
+            int size = 1<<DECODE_REG_TYPE(r1);
+            if(((uint64)from % size) != 0){
+                log::out << log::RED<<"r0 (pointer: "<<(uint64)from<<") should be "<<size<<"-byte aligned\n";
+                continue;
+            }
             // SET_TO_FROM(r1)
             yeah(r1,from,to);
             
@@ -355,20 +373,17 @@ void Interpreter::execute(Bytecode* bytecode){
                 continue;
             }
             void* toptr = getReg(r1);
-            int size = 1<<DECODE_REG_TYPE(r0);
-            if((*(u64*)toptr)%size!=0){
-                log::out << log::RED<<(*(u64*)toptr)<<" does not align to "<<size<<"\n";
-                continue;
-            }
-            
             void* from = getReg(r0); // NOTE: Program can crash here
             void* to = (void*)(*(u64*)toptr);
             // void* to = (void*)(*(u64*)getReg(r1)+offset);
 
             // SET_TO_FROM(r0)
             
-            
-            
+            int size = 1<<DECODE_REG_TYPE(r0);
+            if(((uint64)to % size) != 0){
+                log::out << log::RED<<"r1 (pointer: "<<(uint64)from<<") should be "<<size<<"-byte aligned\n";
+                continue;
+            }
             yeah(r0,from,to);
             // *((u64*) to) = 0;
             // if(r1&BC_REG_8 ) *((u8* ) to) = *((u8* ) from);
@@ -452,6 +467,11 @@ void Interpreter::execute(Bytecode* bytecode){
             sp-=rsize;
             void* to = (void*)sp;
             void* from = getReg(r0);
+
+            if(((uint64)to % rsize) != 0){
+                log::out << log::RED<<"sp (pointer: "<<(uint64)to<<") should be "<<rsize<<"-byte aligned\n";
+                continue;
+            }
             yeah(r0,from,to);
             
             _ILOG(log::out <<"\n";)
@@ -479,6 +499,10 @@ void Interpreter::execute(Bytecode* bytecode){
 
             void* to = getReg(r0);
             void* from = (void*)sp;
+            if(((uint64)from % rsize) != 0){
+                log::out << log::RED<<"sp (pointer: "<<(uint64)from<<") should be "<<rsize<<"-byte aligned\n";
+                continue;
+            }
             yeah(r0,from,to);
             sp+=rsize;
             

@@ -21,9 +21,16 @@ Path::Path(const std::string& path) : text(path), _type((Type)0) {
             }
         }
     }
-#elif OS_LINUX
+#elif defined(OS_LINUX)
+     size_t lastSlash = text.find_last_of("/");
+
+    if(lastSlash + 1 == text.length()){
+        _type |= (u32)DIR;
+    }
     bool absolute = text[0] == '/' || text[0] == '~';
-    
+    if(absolute) {
+        _type |= (u32)ABSOLUTE;
+    }
 #endif
 }
     
@@ -269,7 +276,7 @@ Bytecode* CompileSource(CompileOptions options) {
     
     // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
 
-    auto startCompileTime = engone::MeasureSeconds();
+    auto startCompileTime = engone::MeasureTime();
     
     CompileInfo compileInfo{};
     compileInfo.ast = AST::Create();
@@ -284,10 +291,14 @@ Bytecode* CompileSource(CompileOptions options) {
     // compileInfo.ast->appendToMainBody(body2);
     if(options.rawSource.data){
         ASTScope* body = ParseFile(compileInfo, options.rawSource);
-        compileInfo.ast->appendToMainBody(body);
+        if(body) {
+            compileInfo.ast->appendToMainBody(body);
+        }
     } else {
         ASTScope* body = ParseFile(compileInfo, options.initialSourceFile.getAbsolute());
-        compileInfo.ast->appendToMainBody(body);
+        if(body) {
+            compileInfo.ast->appendToMainBody(body);
+        }
     }
     
     _VLOG(log::out << log::BLUE<< "Final "; compileInfo.ast->print();)

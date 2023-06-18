@@ -11,14 +11,14 @@
 #define USE_MSVC
 
 #define GCC_INCLUDE_DIRS -Iinclude
-#define GCC_DEFINITIONS -DWIN32
+#define GCC_DEFINITIONS -DOS_WINDOWS
 #define GCC_COMPILE_OPTIONS -std=c++14 -g
 #define GCC_WARN -Wall -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
 #define MSVC_COMPILE_OPTIONS /std:c++14 /nologo /TP /EHsc
 #define MSVC_LINK_OPTIONS /nologo /debug
 #define MSVC_INCLUDE_DIRS /Iinclude
-#define MSVC_DEFINITIONS /DWIN32
+#define MSVC_DEFINITIONS /DOS_WINDOWS
 
 cmd mkdir bin 2> nul
 

@@ -95,7 +95,7 @@ bool Bytecode::add(Instruction instruction){
 bool Bytecode::addIm(i32 data){
     if(codeSegment.max == codeSegment.used){
         if(!codeSegment.resize(codeSegment.max*2 + 100))
-            return false;   
+            return false;
     }
     _GLOG(engone::log::out <<length()<< ": "<<data<<"\n";)
     // NOTE: This function works because sizeof Instruction == sizeof u32

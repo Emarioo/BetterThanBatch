@@ -63,6 +63,9 @@ struct CompileInfo {
     int readBytes=0; // from the files, DOES NOT COUNT includeStreams! yet?
     AST* ast=0;
     // std::string compilerDir="";
+
+    //-- GLOBAL COMPILER STUFF
+    i32 globalUniqueCounter = 0; // for _UNIQUE_
 };
 
 Bytecode* CompileSource(CompileOptions options);

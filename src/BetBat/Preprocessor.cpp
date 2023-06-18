@@ -20,14 +20,17 @@
 #define INT_DECODE(I) (I>>3)
 
 bool PreprocInfo::end(){
-    return index==(int)inTokens->length();
+    return inTokens->end();
+    //  index==(int)inTokens->length();
 }
 Token& PreprocInfo::next(){
-    Token& temp = inTokens->get(index++);
-    return temp;
+    return inTokens->next();
+    // Token& temp = inTokens->get(index++);
+    // return temp;
 }
 int PreprocInfo::at(){
-    return index-1;
+    return inTokens->at();
+    // return index-1;
 }
 int PreprocInfo::length(){
     return inTokens->length();
@@ -36,7 +39,8 @@ Token& PreprocInfo::get(int index){
     return inTokens->get(index);
 }
 Token& PreprocInfo::now(){
-    return inTokens->get(index-1);   
+    return inTokens->now();
+    // return inTokens->get(index-1);   
 }
 RootMacro* PreprocInfo::matchMacro(Token& token){
     if(token.flags&TOKEN_QUOTED)
@@ -86,8 +90,8 @@ CertainMacro* RootMacro::matchArgCount(int count, bool includeInf){
     }
 }
 void PreprocInfo::nextline(){
-    int extra=index==0;
-    if(index==0){
+    int extra=inTokens->readHead==0;
+    if(inTokens->readHead==0){
         next();
     }
     Token nowT = now();
@@ -495,7 +499,7 @@ int ParseInclude(PreprocInfo& info, bool attempt){
     
     return PARSE_SUCCESS;
 }
-        
+
 int ParseToken(PreprocInfo& info);
 // both ifdef and ifndef
 int ParseIfdef(PreprocInfo& info, bool attempt){
@@ -590,6 +594,13 @@ int ParsePredefinedMacro(PreprocInfo& info, bool attempt){
     using namespace engone;
     MEASURE;
     Token token = info.get(info.at()+1);
+    // early exit
+    if(!token.str || token.length==0 || *token.str != '_') {
+        if(attempt)
+            return PARSE_BAD_ATTEMPT;
+        else
+            return PARSE_ERROR;
+    }
     // NOTE: One idea is to allow __LINE__ (double underscore) too
     //   but this would slow down the compiler a tiny bit so I am not going to.
     //   This mindset will be used elsewhere to and will propably provide more
@@ -625,8 +636,45 @@ int ParsePredefinedMacro(PreprocInfo& info, bool attempt){
         _MLOG(log::out << "Append "<<token<<"\n";)
         info.addToken(token);
         return PARSE_SUCCESS;
+    } else if(Equal(token,"_FILENAME_")) {
+        info.next();
+
+        int lastSlash = -1;
+        for(int i=0;i<(int)info.inTokens->streamName.length();i++){
+            if(info.inTokens->streamName[i] == '/') {
+                lastSlash = i;
+                break;
+            }
+        }
+        token.str = (char*)info.inTokens->streamName.data();
+        token.length = info.inTokens->streamName.length();
+        if(lastSlash != -1 && ( info.inTokens->streamName.size() == 0
+             || info.inTokens->streamName.back() != '/'))
+        {
+             token.str += lastSlash + 1;
+             token.length -= lastSlash + 1;
+        }
+        
+        _MLOG(log::out << "Append "<<token<<"\n";)
+        info.addToken(token);
+        return PARSE_SUCCESS;
+    } else if(Equal(token,"_UNIQUE_")) {
+        info.next();
+
+        i32 num = info.compileInfo->globalUniqueCounter++;
+
+        std::string temp = std::to_string(num);
+        token.str = (char*)temp.data();
+        token.length = temp.length();
+        
+        _MLOG(log::out << "Append "<<token<<"\n";)
+        info.addToken(token);
+        return PARSE_SUCCESS;
     } else {
-        return PARSE_BAD_ATTEMPT;
+        if(attempt)
+            return PARSE_BAD_ATTEMPT;
+        else
+            return PARSE_ERROR;
     }
 }
 void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bool unwrap=false,Arguments* args=0,int* argIndex=0){
@@ -966,11 +1014,28 @@ int ParseMacro(PreprocInfo& info, int attempt){
 
     // evaluate the real deal
     EvalMacro(info,evalInfo);
+
+    // Can't process a macro when doing final parsing of the macro.
+    // The recursive macro handling should've happened when using arrays of tokens.
+    Assert(!info.usingTempStream);
+
+    // Create a temporary stream to act as inTokens when
+    // parsing ifdef and predefined tokens.
+    if(!info.tempStream) {
+        info.tempStream = TokenStream::Create();
+    }
+    info.tempStream->tokenData.used = 0;
+    info.tempStream->tokens.used = 0;
+    info.tempStream->streamName = info.inTokens->streamName;
+    info.tempStream->readHead = 0;
+    info.usingTempStream = true;
+
+    // Time to output the stuff
     for(int i=0;i<(int)evalInfo.output.size();i++){
         Token baseToken = info.get(evalInfo.output[i]);
         baseToken.flags = evalInfo.output[i].flags;
-        uint64 offset = info.outTokens->tokenData.used;
-        info.outTokens->addData(baseToken);
+        uint64 offset = info.tempStream->tokenData.used;
+        info.tempStream->addData(baseToken);
         baseToken.str = (char*)offset;
         // baseToken.str = (char*)info.outTokens->tokenData.data + offset;
 
@@ -982,28 +1047,26 @@ int ParseMacro(PreprocInfo& info, int attempt){
             if(nextToken==".."){
                 if(i+2<(int)evalInfo.output.size()){
                     Token token2 = info.get(evalInfo.output[i+2]);
-                    info.outTokens->addData(token2);
+                    info.tempStream->addData(token2);
                     baseToken.length += token2.length;
                     i+=2;
                     continue;
                 }
                 i++;
             }
-            info.outTokens->addToken(baseToken);
+            info.tempStream->addToken(baseToken);
             break;
         }
-
-            // from info.addToken
-            //    int offset = tokens.tokenData.used;
-            //    tokens.append(inToken);
-            //    inToken.str = (char*)tokens.tokenData.data + offset;
-            //    tokens.add(inToken);
-
-        // }else{
-        //     token.flags = evalInfo.output[i].flags;
-        //     info.addToken(token);
-        // }
     }
+    info.tempStream->finalizePointers();
+   
+    TokenStream* originalStream = info.inTokens;
+    info.inTokens = info.tempStream; // Note: don't modify inTokens
+    while(!info.end()){
+        int result = ParseToken(info);
+    }
+    info.inTokens = originalStream;
+    info.usingTempStream = false;
 
     return PARSE_SUCCESS;
 }
@@ -1032,8 +1095,6 @@ int ParseToken(PreprocInfo& info){
         return result;
     }
 
-
-    
     Token token = info.next();
     _MLOG(log::out << "Append "<<token<<"\n";)
     info.addToken(token);
@@ -1067,6 +1128,9 @@ void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens, int* error){
     info.outTokens->tokenData = {0};
     TokenStream::Destroy(info.outTokens);
     
+    if(info.tempStream)
+        TokenStream::Destroy(info.tempStream);
+
     // log::out << log::BLUE<<"### # # #  #  #  #    #    #\n";
     // inTokens->copyInfo(*info.outTokens);
     if(error)

@@ -1,6 +1,11 @@
 #pragma once
 
+#ifdef WIN32
 #define OS_WINDOWS
+#endif
+#ifdef _linux_
+#define OS_LINUX
+#endif
 
 // Major config
 #define DEBUG

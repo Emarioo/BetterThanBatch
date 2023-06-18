@@ -176,6 +176,7 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const std::string &name) {
 
     auto ptr = &(si->identifierMap[name] = {});
     ptr->name = name;
+    ptr->scopeId = scopeId;
     return ptr;
 }
 Identifier *AST::getIdentifier(ScopeId scopeId, const std::string &name) {
@@ -791,9 +792,9 @@ void AST::destroy(ASTExpression *expression) {
 u32 TypeInfo::getSize() {
     if (astStruct) {
         if(structImpl) {
-            return structImpl->alignedSize;
+            return structImpl->size;
         } else {
-            return astStruct->baseImpl.alignedSize;
+            return astStruct->baseImpl.size;
         }
     }
     return _size;
@@ -1163,11 +1164,11 @@ std::string ScopeInfo::getFullNamespace(AST* ast){
     std::string ns = "";
     ScopeInfo* scope = ast->getScope(id);
     while(scope){
-        if(ns.empty())
+        if(ns.empty() && !scope->name.empty())
             ns = scope->name;
-        else
-            ns = ns +"::"+scope->name;
-        if(scope->parent==0) // end
+        else if(!scope->name.empty())
+            ns = scope->name + "::"+ns;
+        if(scope->id == scope->parent)
             return ns;
         scope = ast->getScope(scope->parent);
     }
@@ -1341,7 +1342,8 @@ void ASTStatement::print(AST *ast, int depth) {
     PrintSpace(depth);
     log::out << "Statement " << StateToStr(type);
 
-    log:: out << " "<< ast->typeToString(typeId);
+    if(typeId.isValid())
+        log:: out << " "<< ast->typeToString(typeId);
     if(name)
         log::out << " " << *name;
     if(alias)

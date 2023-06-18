@@ -9,7 +9,8 @@
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "WIN32"
+                "OS_WINDOWS",
+                "OS_LINUX"
             ],
             "windowsSdkVersion": "10.0.20348.0",
             "compilerPath": "cl.exe",

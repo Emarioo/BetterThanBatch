@@ -149,14 +149,16 @@ void TokenRange::feed(std::string& outBuffer){
 }
 void Token::print(int printFlags){
     using namespace engone;
-    if(!str) return;
+    if(!str) {
+        return;
+    }
     // if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_DOUBLE_QUOTED)
             log::out << '"';
         else if(flags&TOKEN_QUOTED)
             log::out << '\'';
     // }
-    for(int i=0;i<length;i++){  
+    for(int i=0;i<length;i++){
         char chr = *(str+i);
         if(chr=='\n'){
             log::out << "\\n"; // Is this okay?
@@ -203,8 +205,10 @@ engone::Logger& operator<<(engone::Logger& logger, Token& token){
 Token::operator std::string(){
     return std::string(str,length);
 }
-
+static Token END_TOKEN{"$END$"};
 Token& TokenStream::next(){
+    if(readHead == length())
+        return END_TOKEN;
     return get(readHead++);
 }
 Token& TokenStream::now(){
@@ -234,7 +238,8 @@ bool TokenStream::copyInfo(TokenStream& out){
     
     return true;
 }
-Token& TokenStream::get(int index){
+Token& TokenStream::get(u32 index){
+    if(index>=(u32)length()) return END_TOKEN;
     return *((Token*)tokens.data + index);
 }
 bool TokenStream::copy(TokenStream& out){
@@ -1026,6 +1031,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             token = {};
         }
     }
+    // outTokens.addTokenAndData("$");
     if(!foundHashtag && !foundUnderscore){
         // preprocessor not necessary, save time by not running it.
         outTokens.enabled &= ~LAYER_PREPROCESSOR;
@@ -1089,10 +1095,10 @@ void PerfTestTokenize(const engone::Memory& textData, int times){
     
     // log::out << "start\n";
     // double* measures = new double[times];
-    // auto startT = engone::MeasureSeconds();
+    // auto startT = engone::MeasureTime();
     // for(int i=0;i<times;i++){
     //     // heap allocation is included.
-    //     auto mini = engone::MeasureSeconds();
+    //     auto mini = engone::MeasureTime();
     //     // base = Tokenize(textData);
     //     base = TokenStream::Tokenize(textData,0,&base);
     //     measures[i] = engone::StopMeasure(mini);

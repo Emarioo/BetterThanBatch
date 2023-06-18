@@ -13,8 +13,8 @@
 // File with zero in size: Returns memory with valid pointer (memory.data = (void*)1) but zero in size.
 // If data could be read: Returns memory with data.
 engone::Memory ReadFile(const char* path);
-bool WriteFile(const char* path, engone::Memory buffer);
-bool WriteFile(const char* path, std::string& buffer);
+// bool WriteFile(const char* path, engone::Memory buffer);
+// bool WriteFile(const char* path, std::string& buffer);
 void ReplaceChar(char* str, int length,char from, char to);
 
 // not thread safe
