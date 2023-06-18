@@ -17,6 +17,12 @@
 #define MegaBytes(x) (x*1024llu*1024llu)
 #define GigaBytes(x) (x*1024llu*1024llu*1024llu)
 
+#ifdef OS_LINUX
+#define FORMAT_64 "%l"
+#else
+#define FORMAT_64 "%ll"
+#endif
+
 namespace engone {
 	typedef void APIFile;
 	typedef void DirectoryIterator;
@@ -47,7 +53,7 @@ namespace engone {
 	
 	void PrintRemainingTrackTypes();
 	
-	TimePoint MeasureSeconds();
+	TimePoint MeasureTime();
 	// returns time in seconds
 	double StopMeasure(TimePoint timePoint);
     
@@ -124,7 +130,7 @@ namespace engone {
 	class Thread {
 	public:
 		Thread() = default;
-		~Thread();
+		~Thread(){cleanup();}
 		// The thread itself should not call this function
 		void cleanup();
 		
@@ -149,7 +155,7 @@ namespace engone {
     class Semaphore {
 	public:
 		Semaphore(int initial=1, int maxLocks=1);
-		~Semaphore();
+		~Semaphore() {cleanup();}
 		void cleanup();
 
 		void wait();
@@ -164,7 +170,7 @@ namespace engone {
 	class Mutex {
 	public:
 		Mutex() = default;
-		~Mutex();
+		~Mutex(){cleanup();}
 		void cleanup();
 
 		void lock();

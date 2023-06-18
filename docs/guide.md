@@ -128,7 +128,7 @@ files = filterfiles *.cpp
 ```
 
 You can find all external functions in
-[](src/BetBat/ExternalCalls.cpp)
+[External Calls](src/BetBat/ExternalCalls.cpp)
 At the bottom you will find a function called GetExternalCall.
 This is what the interpreter uses to map strings to C++ functions.
 
@@ -344,4 +344,4 @@ in any order as long as the macro exists at the time of evaluation.
 
 I want to end with the best for last and that is the idea of recursive macros.
 I encourage you to explore it for yourself before continuing reading but if
-you just want to know what it's about check out [](docs/recursive-macros.md)
+you just want to know what it's about check out [Recursive Macros](docs/recursive-macros.md)

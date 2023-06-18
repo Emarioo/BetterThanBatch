@@ -82,7 +82,7 @@ void GenInfo::addPop(int reg) {
         code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
     }
     virtualStackPointer += size;
-    log::out << "relsp "<<virtualStackPointer<<"\n";
+    _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
 }
 void GenInfo::addPush(int reg) {
     using namespace engone;
@@ -104,7 +104,7 @@ void GenInfo::addPush(int reg) {
     code->add({BC_PUSH, (u8)reg});
     stackAlignment.push_back({diff, size});
     virtualStackPointer -= size;
-    log::out << "relsp "<<virtualStackPointer<<"\n";
+    _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
 }
 void GenInfo::addIncrSp(i16 offset) {
     using namespace engone;
@@ -131,7 +131,7 @@ void GenInfo::addIncrSp(i16 offset) {
     }
     virtualStackPointer += offset;
     code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-    log::out << "relsp "<<virtualStackPointer<<"\n";
+    _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
 }
 void GenInfo::addStackSpace(i16 size) {
     using namespace engone;
@@ -349,7 +349,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             TOKENINFO(expression->tokenRange)
             // info.code->addDebugText("  expr push float");
             info.code->add({BC_LI, BC_REG_EAX});
-            info.code->addIm(*(u32 *)&val);
+            void* p = &val;
+            info.code->addIm(*(u32*)p);
             info.addPush(BC_REG_EAX);
         }
         else if (expression->typeId == AST_VAR) {
@@ -384,12 +385,13 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 TypeInfo *typeInfo = 0;
                 if(var->typeId.isNormalType())
                     typeInfo = info.ast->getTypeInfo(var->typeId);
-                if(!typeInfo) {
-                    // log error or is that already done in the type checker?
-                    return GEN_ERROR;
-                }
+
+                // if(!typeInfo) { This breaks struct_pointer.member
+                //     // log error or is that already done in the type checker?
+                //     return GEN_ERROR;
+                // }
                 u32 size = info.ast->getTypeSize(var->typeId);
-                if (!typeInfo->astStruct) {
+                if (!typeInfo || !typeInfo->astStruct) {
                     info.code->add({BC_LI, BC_REG_RBX});
                     info.code->addIm(var->frameOffset);
                     info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
@@ -890,40 +892,67 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
 
         TypeId ltype = AST_VOID;
         if (expression->typeId == AST_REFER) {
-            ASTExpression *expr = expression->left;
-            if(expr->typeId.getId() == AST_VAR){
-                // TODO: Should idScope be used here? I don't think so since that means
-                //   that FROM_NAMESPACE should happened before REFEr which looks like this: Math::&ok
-                //   which isn't correct syntax.
-                auto id = info.ast->getIdentifier(info.currentScopeId, *expr->name);
-                if (id && id->type == Identifier::VAR) {
-                    auto var = info.ast->getVariable(id);
-                    // TODO: check data type?
-                    TOKENINFO(expression->tokenRange)
-                    info.code->add({BC_LI, BC_REG_RAX});
-                    info.code->addIm(var->frameOffset);
-                    info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RAX, BC_REG_RAX}); // fp + offset
-                    info.addPush(BC_REG_RAX);
+            std::vector<ASTExpression*> memberExprs;
+            ASTExpression* varExpr=nullptr;
 
-                    // new pointer data type
-                    auto varTypeInfo = info.ast->getTypeInfo(var->typeId);
-                    TypeId varType = var->typeId;
-                    varType.setPointerLevel(varType.getPointerLevel()+1);
-                    // pointer type should exist in same scope as the normal type
-                    auto id = varType;
+            ASTExpression *next = expression->left;
+            while(next) {
+                ASTExpression* now = next;
+                next = next->left; // left exists with AST_MEMBER
 
-                    *outTypeId = id;
+                if(now->typeId.getId() == AST_VAR) {
+                    varExpr = now;
+                    break;
+                } else if(now->typeId.getId() == AST_MEMBER) {
+                    memberExprs.push_back(now);
                 } else {
                     // TODO: identifier may be defined but not a variable, give proper message
-                    ERRT(expr->tokenRange) << expr->tokenRange.firstToken << " is undefined\n";
-                    *outTypeId = AST_VOID;
+                    ERRT(now->tokenRange) << now->tokenRange.firstToken << " is not a variable or member\n";
                     return GEN_ERROR;
                 }
-            } else if (expr->typeId.getId() == AST_MEMBER) {
+            }
+            auto id = info.ast->getIdentifier(info.currentScopeId, *varExpr->name);
+            if (id && id->type == Identifier::VAR) {
+                auto var = info.ast->getVariable(id);
                 
+                TypeId typeId = var->typeId;
+                TypeInfo* typeInfo = info.ast->getTypeInfo(var->typeId);
+                ASTExpression* lastExpr = varExpr;
+                int offset = 0;
+                for(int i=0;i<(int)memberExprs.size();i++){
+                    ASTExpression* memExpr = memberExprs[i];
+                    if(!typeInfo || !typeInfo->astStruct){
+                        ERRT(lastExpr->tokenRange) << lastExpr->tokenRange.firstToken << " is not a struct\n";
+                        return GEN_ERROR;
+                    }
+                    lastExpr = memExpr;
+                    auto memData = typeInfo->getMember(*memExpr->name);
+                    if(memData.index == -1){
+                        ERRT(memExpr->tokenRange) << *memExpr->name << " is not a member of struct "<<info.ast->typeToString(typeInfo->id)<<"\n";
+                        return GEN_ERROR;
+                    }
+                    offset += memData.offset;
+                    typeId = memData.typeId;
+                    typeInfo = info.ast->getTypeInfo(memData.typeId);
+                }
+                if(!typeInfo){
+                    ERRT(varExpr->tokenRange) << *varExpr->name << "'s type gave null as TypeInfo\n";
+                    return GEN_ERROR;
+                }
+
+                // TODO: check data type?
+                TOKENINFO(expression->tokenRange)
+                info.code->add({BC_LI, BC_REG_RAX});
+                info.code->addIm(var->frameOffset + offset);
+                info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RAX, BC_REG_RAX}); // fp + offset
+                info.addPush(BC_REG_RAX);
+
+                // new pointer data type
+                typeId.setPointerLevel(typeId.getPointerLevel()+1);
+
+                *outTypeId = typeId;
             } else {
-                ERRT(expr->tokenRange) << expr->tokenRange.firstToken << ", can only reference a variable or member\n";
-                *outTypeId = AST_VOID;
+                ERRT(varExpr->tokenRange) << *varExpr->name << " is not a variable\n";
                 return GEN_ERROR;
             }
         }
@@ -1729,6 +1758,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 var->typeId = statement->typeId;
                 TypeInfo *typeInfo = info.ast->getTypeInfo(var->typeId.baseType());
                 i32 size = info.ast->getTypeSize(var->typeId);
+                i32 asize = info.ast->getTypeAlignedSize(var->typeId);
                 if (!typeInfo) {
                     ERRT(statement->tokenRange) << "Undefined type " << info.ast->typeToString(var->typeId) << "\n";
                     continue;
@@ -1743,8 +1773,8 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
 
                 // int size = info.ast->getTypeSize(var->typeId);
 
-                int diff = size - (-info.currentFrameOffset) % size; // how much to fix alignment
-                if (diff != size) {
+                int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+                if (diff != asize) {
                     info.currentFrameOffset -= diff; // align
                 }
                 info.currentFrameOffset -= size;
@@ -1847,11 +1877,11 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 // variables can be accessed from current or any parent scope.
                 // the type should therefore also exist in one of those scopes.
 
-                u32 rightSize = info.ast->getTypeSize(rightType);
+                i32 rightSize = info.ast->getTypeSize(rightType);
                 // u32 asize = info.ast->getTypeAlignedSize(var->typeId);
 
-                u32 leftSize = info.ast->getTypeSize(var->typeId);
-                u32 asize = info.ast->getTypeAlignedSize(var->typeId);
+                i32 leftSize = info.ast->getTypeSize(var->typeId);
+                i32 asize = info.ast->getTypeAlignedSize(var->typeId);
 
                 int alignment = 0;
                 if (decl) {
@@ -1869,13 +1899,14 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                         continue;
                     }
 
-                    int diff = (leftSize - (-info.currentFrameOffset) % asize) % asize; // how much to fix alignment
-                    if (diff) {
+                    int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+                    if (diff != asize) {
                         info.currentFrameOffset -= diff; // align
                     }
                     info.currentFrameOffset -= leftSize;
                     var->frameOffset = info.currentFrameOffset;
-                    alignment = diff;
+                    if(diff!=asize)
+                        alignment = diff;
 
                     _GLOG(log::out << "declare " << *statement->name << " at " << var->frameOffset << "\n";)
                     // NOTE: inconsistent
@@ -2369,7 +2400,17 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             _GLOG(SCOPE_LOG("USING"))
 
             auto origin = info.ast->getIdentifier(info.currentScopeId, *statement->name);
+            if(!origin){
+                ERRT(statement->tokenRange) << *statement->name << " is not a variable (using)\n";
+                ERRTOKENS(statement->tokenRange);
+                return GEN_ERROR;
+            }
             auto aliasId = info.ast->addIdentifier(info.currentScopeId, *statement->alias);
+            if(!aliasId){
+                ERRT(statement->tokenRange) << *statement->alias << " is already a variable or alias (using)\n";
+                ERRTOKENS(statement->tokenRange);
+                return GEN_ERROR;
+            }
 
             aliasId->type = origin->type;
             aliasId->varIndex = origin->varIndex;

@@ -97,7 +97,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
     sizeof A = 24
     */
     bool success = true;
-    log::out << "Check struct impl "<<info.ast->typeToString(structInfo->id)<<"\n";
+    _TC_LOG(log::out << "Check struct impl "<<info.ast->typeToString(structInfo->id)<<"\n";)
     //-- Check members
     for (int i = 0;i<(int)astStruct->members.size();i++) {
         auto& member = astStruct->members[i];
@@ -112,12 +112,14 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
                     ERRT(astStruct->tokenRange) << "type "<< info.ast->getTokenFromTypeString(implMem.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
                 }
                 success = false;
-                implMem.typeId = tid;
                 break;
             }
             implMem.typeId = tid;
             _TC_LOG(log::out << " checked member["<<i<<"] "<<info.ast->typeToString(tid)<<"\n";)
         }
+    }
+    if(!success){
+        return success;
     }
     for (int i = 0;i<(int)astStruct->members.size();i++) {
         auto& member = astStruct->members[i];
@@ -150,19 +152,16 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
         if(alignedSize<asize)
             alignedSize = asize;
 
-        // int misalign = offset % size;
-        // if(misalign!=0){
-        //     offset+=size-misalign;
-        // }
-        // if(i-1>=0){
-        //     auto& implMema = structImpl->members[i-1];
-        //     i32 nsize = info.ast->getTypeSize(implMema.typeId);
-        //     // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
-        //     int misalign = (offset + nsize) % size;
-        //     if(misalign!=0){
-        //         offset+=size-misalign;
-        //     }
-        // }
+        /* You may see this:
+            offset 4: a
+            offset 8: b
+            evalutate to 16 bytes
+        You may think that a should have offset 0 but it shouldn't.
+        GeneratingExpressions pushes the values to the stack growing downwards.
+        First b is pushed (16-8). Then a is pushed (8-4) right next to b.
+        If a had 0 as offset you would need to pop the pushed a and align it to
+        0 instead of 4.
+        */
         if(i+1<(int)astStruct->members.size()){
             auto& implMema = structImpl->members[i+1];
             i32 nsize = info.ast->getTypeSize(implMema.typeId);
@@ -194,15 +193,15 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
             offset 0   :  push 8    - push first member
             * pointer to struct begins here
         */
-        if(i+1<(int)astStruct->members.size()){
-            auto& implMema = structImpl->members[i+1];
-            i32 nsize = info.ast->getTypeSize(implMema.typeId);
-            // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
-            int misalign = (offset + nsize) % size;
-            if(misalign!=0){
-                offset+=size-misalign;
-            }
-        }
+        // if(i+1<(int)astStruct->members.size()){
+        //     auto& implMema = structImpl->members[i+1];
+        //     i32 nsize = info.ast->getTypeSize(implMema.typeId);
+        //     // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
+        //     int misalign = (offset + nsize) % size;
+        //     if(misalign!=0){
+        //         offset+=size-misalign;
+        //     }
+        // }
     }
 
     // if (polymorphic){
@@ -238,12 +237,12 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
 
     TypeId typeId = {};
 
-    Token ns={};
+    // Token ns={};
     u32 plevel=0;
     std::vector<Token> polyTypes;
-    Token noPointers = AST::TrimPointer(typeString, &plevel);
-    Token baseType = AST::TrimPolyTypes(noPointers, &polyTypes);
-    Token typeName = AST::TrimNamespace(noPointers, &ns);
+    Token typeName = AST::TrimPointer(typeString, &plevel);
+    Token baseType = AST::TrimPolyTypes(typeName, &polyTypes);
+    // Token typeName = AST::TrimNamespace(noPointers, &ns);
     std::vector<TypeId> polyIds;
     std::string* realTypeName = nullptr;
 
@@ -287,9 +286,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
                 *printedError = true;
             return {};
         }
+        typeId.setPointerLevel(plevel);
         return typeId;
     }
-
 
     if(polyTypes.size() == 0) {
         // ERRT(tokenRange) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
@@ -378,7 +377,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                 ERRT(astStruct->tokenRange) << astStruct->name<<" is already defined\n";
                 // TODO: Provide information (file, line, column) of the first definition.
             } else {
-                log::out << "Defined struct "<<info.ast->typeToString(structInfo->id)<<"\n";
+                _TC_LOG(log::out << "Defined struct "<<info.ast->typeToString(structInfo->id)<<"\n";)
                 astStruct->state = ASTStruct::TYPE_CREATED;
                 structInfo->astStruct = astStruct;
                 for(int i=0;i<(int)astStruct->polyArgs.size();i++){
@@ -641,9 +640,12 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
     // TODO: Type check default values in structs and functions
 
     ASTStatement* next = scope->statements;
+    ASTStatement* nextPrev = nullptr;
     while(next){
         ASTStatement* now = next;
+        ASTStatement* prev = nextPrev;
         next = next->next;
+        nextPrev = now;
 
         if(now->lvalue)
             CheckExpression(info, scope ,now->lvalue);
@@ -654,10 +656,12 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             bool printedError = false;
             auto ti = CheckType(info, scope->scopeId, now->typeId, now->tokenRange, &printedError);
             // NOTE: We don't care whether it's a pointer just that the type exists.
-            now->typeId = ti;
             if (!ti.isValid() && !printedError) {
                 ERRT(now->tokenRange) << info.ast->getTokenFromTypeString(now->typeId)<<" is not a type (statement)\n";
             } else {
+                // If typeid is invalid we don't want to replace the invalid one with the type
+                // with the string. The generator won't see the names of the invalid types.
+                now->typeId = ti;
             }
         }
 
@@ -667,6 +671,67 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         if(now->elseBody){
             int result = CheckRest(info, now->elseBody);   
         }
+        // Doing using after body so that continue can be used inside it without
+        // messing things up. Using shouldn't have a body though so it doesn't matter.
+        if(now->type == ASTStatement::USING){
+            // TODO: type check now->name now->alias
+            //  if not type then check namespace
+            //  otherwise it's variables
+
+            if(now->name && now->alias){
+                TypeId originType = CheckType(info, scope->scopeId, *now->name, now->tokenRange, nullptr);
+                TypeId aliasType = info.ast->convertToTypeId(*now->alias, scope->scopeId);
+                if(originType.isValid() && !aliasType.isValid()){
+                    TypeInfo* aliasInfo = info.ast->createType(*now->alias, scope->scopeId);
+                    aliasInfo->id = originType;
+
+                    // using statement isn't necessary anymore
+                    now->next = nullptr;
+                    info.ast->destroy(now);
+                    if(prev){
+                        prev->next = next;
+                    } else {
+                        scope->statements = next;
+                    }
+                    continue;
+                }
+                ScopeInfo* originScope = info.ast->getScopeFromParents(*now->name,scope->scopeId);
+                ScopeInfo* aliasScope = info.ast->getScopeFromParents(*now->alias,scope->scopeId);
+                if(originScope && !aliasScope) {
+                    ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);
+                    // TODO: Alias can't contain multiple namespaces. How to implement
+                    //  that?
+                    scopeInfo->nameScopeMap[*now->alias] = originScope->id;
+
+                    now->next = nullptr;
+                    info.ast->destroy(now);
+                    if(prev){
+                        prev->next = next;
+                    } else {
+                        scope->statements = next;
+                    }
+                    continue;
+                }
+                // using might refer to variables
+
+                // if(!originType.isValid()){
+                //     ERRT(now->tokenRange) << *now->name<<" is not a type (using)\n";
+                // }
+                // if(aliasType.isValid()){
+                //     ERRT(now->tokenRange) << *now->alias<<" is already a type (using)\n";
+                // }
+                // continue;
+                // CheckType may create a new type if polymorphic. We don't want that.
+                // TODO: It is okay to create a new type with a name which already
+                // exists if it's in a different scope.
+                // TODO: How does polymorphism work here?
+                // Will it work if just left as is or should it be disallowed.
+            } else if (now->name) {
+                ERRT(now->tokenRange) << "inheriting namespace with using doesn't work\n";
+                // info.ast->getScopeFromParents(*now->name,scope->scopeId);
+            }
+        }
+
     }
     ASTScope* nextNS = scope->namespaces;
     while(nextNS){

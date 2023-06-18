@@ -1,7 +1,7 @@
 
 #include "Engone/PlatformLayer.h"
 
-#ifdef WIN32
+#ifdef OS_WINDOWS
 
 #ifdef PL_PRINT_ERRORS
 #define PL_PRINTF printf
@@ -241,7 +241,7 @@ namespace engone {
 		s_rdiInfos.erase(iterator);
 	}
     
-	TimePoint MeasureSeconds(){
+	TimePoint MeasureTime(){
 		uint64 tp;
 		BOOL success = QueryPerformanceCounter((LARGE_INTEGER*)&tp);
 		// if(!success){
@@ -333,7 +333,7 @@ namespace engone {
 	}
 	uint64 FileRead(APIFile* file, void* buffer, uint64 readBytes){
 		Assert(readBytes!=(uint64)-1); // -1 indicates no bytes read
-		
+
 		DWORD bytesRead=0;
 		DWORD success = ReadFile(TO_HANDLE(file),buffer,readBytes,&bytesRead,NULL);
 		if(!success){
@@ -665,9 +665,6 @@ namespace engone {
 		m_initial = initial;
 		m_max = max;
 	}
-	Semaphore::~Semaphore() {
-		cleanup();
-	}
 	void Semaphore::cleanup() {
 		if (m_internalHandle != 0){
             BOOL yes = CloseHandle(TO_HANDLE(m_internalHandle));
@@ -703,9 +700,6 @@ namespace engone {
 				PL_PRINTF("[WinError %lu] ReleaseSemaphore\n",err);
 			}
 		}
-	}
-	Mutex::~Mutex() {
-		cleanup();
 	}
 	void Mutex::cleanup() {
         if (m_internalHandle != 0){
@@ -752,9 +746,6 @@ namespace engone {
 	}
 	uint32_t Mutex::getOwner() {
 		return m_ownerThread;
-	}
-    Thread::~Thread() {
-		cleanup();
 	}
 	void Thread::cleanup() {
 		if (m_internalHandle) {

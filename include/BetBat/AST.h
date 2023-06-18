@@ -178,6 +178,7 @@ struct Identifier {
     };
     Type type=VAR;
     std::string name{};
+    ScopeId scopeId;
     union {
         int varIndex;
         ASTFunction* astFunc=0;
@@ -256,6 +257,8 @@ struct ASTStatement {
         CONTINUE,
         CALL,
         USING,
+        // ALIAS,
+        // TYPEALIAS,
         BODY,
         DEFER,
     };
@@ -330,7 +333,7 @@ struct ASTEnum {
 struct ASTFunction {
     TokenRange tokenRange{};
     std::string name="";
-    struct Arg{
+    struct Arg {
         std::string name;
         TypeId typeId;
         int offset=0;

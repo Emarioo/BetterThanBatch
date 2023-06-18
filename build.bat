@@ -13,7 +13,7 @@ SET USE_MSVC=1
 @REM SET USE_DEBUG=1
 
 SET GCC_INCLUDE_DIRS=-Iinclude
-SET GCC_DEFINITIONS=-DWIN32
+SET GCC_DEFINITIONS=-DOS_WINDOWS
 SET GCC_COMPILE_OPTIONS=-std=c++14 -g
 SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
@@ -21,7 +21,7 @@ SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-bu
 SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
 SET MSVC_LINK_OPTIONS=/nologo
 SET MSVC_INCLUDE_DIRS=/Iinclude
-SET MSVC_DEFINITIONS=/DWIN32
+SET MSVC_DEFINITIONS=/DOS_WINDOWS
 
 if !USE_DEBUG!==1 (
     SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! /debug
@@ -31,6 +31,7 @@ if !USE_DEBUG!==1 (
 mkdir bin 2> nul
 SET srcfile=bin\all.cpp
 SET srcfiles=
+SET output=bin\compiler.exe
 
 type nul > !srcfile!
 @REM echo #include ^"pch.h^" >> !srcfile!
@@ -54,14 +55,14 @@ set /a startTime=6000*( 100%time:~3,2% %% 100 ) + 100* ( 100%time:~6,2% %% 100 )
 if !USE_MSVC!==1 (
     if !USE_GCC!==1 (
         @REM Compiling this too when using GDB debugger in vscode
-        start /b g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/program_debug.exe
+        start /b g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/compiler_debug.exe
     )
-    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Z7 /Fobin/all.obj /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:bin/program.exe
+    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Z7 /Fobin/all.obj /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:!output!
     @REM cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! /Ycpch.h src/pch.cpp
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Yupch.h /Fobin/all.obj /link !MSVC_LINK_OPTIONS! pch.obj shell32.lib /OUT:bin/program.exe
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfiles! /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:bin/program.exe
 ) else (
-    g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/program.exe
+    g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o !output!
 )
 
 set /a endTime=6000*(100%time:~3,2% %% 100 )+100*(100%time:~6,2% %% 100 )+(100%time:~9,2% %% 100 )
@@ -71,7 +72,6 @@ set /a finS2=(endTime-startTime)%%100
 echo Compiled in %finS%.%finS2% seconds
 
 if !errorlevel! == 0 (
-    echo f | XCOPY /y /q bin\program.exe prog.exe > nul
-    @REM prog -dev
-    prog
+    echo f | XCOPY /y /q !output! prog.exe > nul
+    prog -dev
 )

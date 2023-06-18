@@ -15,7 +15,7 @@ struct ScopeStat {
 extern std::unordered_map<u64, ScopeStat> scopeStatMap;
 struct MeasureScope {
     MeasureScope(const char* str) : fname(str){
-        tp = engone::MeasureSeconds();
+        tp = engone::MeasureTime();
     }
     ~MeasureScope(){
         double t = engone::StopMeasure(tp);

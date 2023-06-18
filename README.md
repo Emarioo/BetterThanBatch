@@ -1,28 +1,22 @@
 # BetterThanBatch
 A compiler and runtime for a new programming language.
 
-## Disclaimer
-- Windows only
-
 ## Features
 - Variables, functions, namespaces, structs, enums.
 - If, for, while, break, continue, return, defer, using...
 - #define, #multidefine and #undef (macros/defines are recursive)
 - #ifdef (exactly like C)
 - #unwrap (for macros)
-- Concatenation (.. instead of ## from C)
-- #import which is better than #include when it comes to splitting
-  code into multiple files.
-- #include also exists
+- Concatenation with .. in macros.
+- #import to divide your code into multiple files
+- #include to tokenize a file and transfer the tokens into another file.
 
 ## On the way
 - Usage of C++ functions within a script
 - Calling executables like gcc.exe
 - Polymorphism
 - Operator and function overloading
-
-(guide is not up to date)
-See the [Guide/Walkthrough](docs/guide.md)
+- Thorough documentation.
 
 ## The processs
 The name of each step may not accurately represent what's
@@ -44,20 +38,40 @@ Some preprocessing is done after the parser like
 
 ## Examples
 You can find some examples in the example folder.
-[Random code](example/ast.btb)
+[Random code](examples/ast.btb)
 
-## Building with vcvars (Visual Studio)
-Running the commands below will allow you to compile the project.
-vcvars64 can usually be found in `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build`.
-```
-.../vcvars64.bat
-build.bat
-```
+# Usage
+You may want to read [Building](#building) first.
 
-## Building with g++
-If you go into build.bat you can remove SET USE_MSVC=1
-and make sure SET USE_GCC=1 is used.
-Running build.bat will then compile the project with g++.
-Make sure GCC is installed.
+The official usage of the compiler isn't established yet.
+You can at least do `compile yourfile.btb` to compile and run the initial file.
+`compiler --help` may provide more options.
 
-More build options may exist in the future.
+Here is a short and quick [Guide](docs/guide.md) (also not up to date, sorry).
+
+# Building
+## Windows
+### Building with vcvars (with Visual Studio installed)
+First you need Visual Studio installed and then you should
+find vcvars64 in `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build`.
+The exact directory depends on the version and location of your installation.
+
+Run `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat`
+to setup the commands cl and link.
+Then run `build.bat` which will generate an executable in the bin directory.
+
+I would recommend adding the directory of vcvars64 in your user environment variable PATH.
+This allows you to type `vcvars64.bat` instead of the long directory path.
+
+### Building with g++ (MinGW or CYGWIN)
+First you need to install MinGW-64 (or CYGWIN?).
+You can modify `build.bat` to compile with g++ instead of cl (MSVC).
+This is done by removing `SET USE_MSVC=1` and adding (or uncommenting) `SET USE_GCC=1`.
+Then simply build with `build.bat`. The compiler can once again be found in bin.
+
+## Linux
+Tested with Windows Subsystem for Linux. You may therefore experience
+some bugs that haven't been found when using Linux for real.
+
+Build with `build.sh`. The compiler can be found in the bin directory.
+found in bin.

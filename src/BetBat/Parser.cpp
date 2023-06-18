@@ -64,24 +64,25 @@ int OpPrecedence(int op){
     return 0;
 }
 Token& ParseInfo::next(){
+    // return tokens->next();
     Token& temp = tokens->get(index++);
     return temp;
 }
-bool ParseInfo::revert(){
-    if(index==0)
-        return false;
-    index--;
+// bool ParseInfo::revert(){
+//     if(index==0)
+//         return false;
+//     index--;
     
-    // Code is broken. debug line may be printed multiple twice
-    // if(code.debugLines.used>0){
-    //     Token& tok = tokens.get(index);
-    //     Bytecode::DebugLine* lastLine = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used - 1;
-    //     if(tok.line == lastLine->line){
-    //         code.debugLines.used--;   
-    //     }
-    // }
-    return true;
-}
+//     // Code is broken. debug line may be printed multiple twice
+//     // if(code.debugLines.used>0){
+//     //     Token& tok = tokens.get(index);
+//     //     Bytecode::DebugLine* lastLine = (Bytecode::DebugLine*)code.debugLines.data+code.debugLines.used - 1;
+//     //     if(tok.line == lastLine->line){
+//     //         code.debugLines.used--;   
+//     //     }
+//     // }
+//     return true;
+// }
 Token& ParseInfo::prev(){
     return tokens->get(index-2);
 }
@@ -136,12 +137,12 @@ void ParseInfo::printPrevLine(){
     using namespace engone;
     // TODO: bound check
     int nowLine = get(at()).line;
-    
     int endIndex = 0;
     int startIndex = at()-1;
     bool setEnd=false;
     while(startIndex>=0){
         Token tok = get(startIndex);
+        
         if(tok.flags&TOKEN_SUFFIX_LINE_FEED){
             if(!setEnd){
                 endIndex = startIndex;
@@ -152,6 +153,7 @@ void ParseInfo::printPrevLine(){
         }
         startIndex--;
     }
+    
     if(startIndex==-1)
         startIndex = 0;
     // int endToken = startToken;
@@ -166,8 +168,10 @@ void ParseInfo::printPrevLine(){
     //     }
     //     endToken++;
     // }
+    
     for(int i=startIndex;i<=endIndex;i++){
-        log::out << get(i);
+        Token& tok = get(i); 
+        log::out << tok;
     }
 }
 void ParseInfo::nextLine(){
@@ -224,6 +228,7 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
     // TODO: check end of tokens
 
     int depth = 0;
+    bool wasName = false;
     outTypeId = {};
     while(!info.end()){
         Token& tok = info.get(endTok);
@@ -259,6 +264,16 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
             ){
                 break;
             }
+            if(IsName(tok)){
+                if(wasName) {
+                    break;
+                }
+            }
+        }
+        if(!IsName(tok)){
+            wasName = false;
+        } else {
+            wasName = true;
         }
         if(endTok == startToken) {
             outTypeId.str = tok.str;
@@ -613,11 +628,16 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         if(Equal(token,"=")){
             info.next();
             token = info.get(info.at()+1);
+            // TODO: Handle expressions
             if(IsInteger(token)){
                 info.next();
                 nextId = ConvertInteger(token);
                 token = info.get(info.at()+1);
-            }else{
+            } else if(IsHexadecimal(token)){
+                info.next();
+                nextId = ConvertHexadecimal(token);
+                token = info.get(info.at()+1);
+            } else{
                 ERRT(token) << token<<" is not an integer (i32)\n";
                 ERRLINE
             }
@@ -1471,38 +1491,65 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     } else if(Equal(firstToken,"using")){
         info.next();
 
+        // Token token = info.get(info.at()+1);
+
+        // variable name
+        // namespacing
+        // type with polymorphism. not pointers
         // TODO: namespace environemnt, not just using X as Y
 
-        Token name = info.get(info.at()+1);
-        if(!IsName(name)){
-            ERRT(name) << "expected a name, "<<name <<" isn't one\n";
-            ERRLINE;
-            return PARSE_ERROR;
-        }
-        info.next(); 
+        Token originToken={};
+        // Token token = info.get(info.at()+1);
+        // Token maybeNs = info.get(info.at()+2);
+        // if(IsName(token) && Equal(maybeNs,"::")){
+        //     info.next();
+        //     info.next();
+        //     info.next();
+        //     original.length = token.length + maybeNs.length;
+        //     while(!info.end()){
+        //         token = info.get(info.at()+1);
+        //         if(!IsName(token)) {
+        //             // TODO: error
+        //             ERRT(token) << "Expected a valid name ("<<token<<" is not)\n";
+        //             break;
+        //         }
+        //         info.next();
+        //         original.length += token.length;
+        //         token = info.get(info.at()+1);
+        //         if(!Equal(token, "::")) {
+        //             break;
+        //         }
+        //         info.next();
+        //         original.length += token.length;
+        //     }
 
+        // } else {
+        // }
+        int result = ParseTypeId(info, originToken);
+        Token aliasToken = {};
         Token token = info.get(info.at()+1);
-        if(!Equal(token,"as")){
-            ERRT(token) << "expected as not "<<token <<"\n";
-            ERRLINE;
-            return PARSE_ERROR;
+        if(Equal(token,"as")) {
+            info.next();
+
+            
+            int result = ParseTypeId(info, aliasToken);
+            // aliasToken = info.get(info.at()+1);
+            // if(!IsName(aliasToken)){
+            //     ERRT(aliasToken) << "expected a name, "<<aliasToken <<" isn't one\n";
+            //     ERRLINE;
+            //     return PARSE_ERROR;
+            // }
+            // info.next();
         }
-        info.next();
-        
-        Token alias = info.get(info.at()+1);
-        if(!IsName(alias)){
-            ERRT(alias) << "expected a name, "<<alias <<" isn't one\n";
-            ERRLINE;
-            return PARSE_ERROR;
-        }
-        info.next();
         
         statement = info.ast->createStatement(ASTStatement::USING);
         
         statement->name = (std::string*)engone::Allocate(sizeof(std::string));
-        new(statement->name)std::string(name);
-        statement->alias = (std::string*)engone::Allocate(sizeof(std::string));
-        new(statement->alias)std::string(alias);
+        new(statement->name)std::string(originToken);
+        if(aliasToken.str){
+            statement->alias = (std::string*)engone::Allocate(sizeof(std::string));
+            new(statement->alias)std::string(aliasToken);
+        }
 
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.startIndex = startIndex;
@@ -1985,6 +2032,10 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
         if(scoped && Equal(token,"}")){
             info.next();
             break;
+        }
+        if(Equal(token,";")){
+            info.next();
+            continue;
         }
         ASTStatement* tempStatement=0;
         ASTStruct* tempStruct=0;

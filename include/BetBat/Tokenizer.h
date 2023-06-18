@@ -94,7 +94,7 @@ struct TokenStream {
     bool addTokenAndData(const char* token);
     // bool addTokenAndData(Token token);
 
-    Token& get(int index);
+    Token& get(u32 index);
 
     //-- For parsing
 

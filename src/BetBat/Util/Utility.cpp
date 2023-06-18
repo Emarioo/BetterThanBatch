@@ -19,8 +19,9 @@ engone::Memory ReadFile(const char* path){
         if(!buffer.resize(fileSize))
             goto ReadFileFailed;
         
-        if(!engone::FileRead(file,buffer.data,buffer.max))
+        if(engone::FileRead(file,buffer.data,buffer.max) == (u64)-1)
             goto ReadFileFailed;
+        // printf("Read " FORMAT_64 "u\n",buffer.max);
     }
     
     engone::FileClose(file);
@@ -34,20 +35,20 @@ ReadFileFailed:
     printf("ReadFile : Error %s\n",path);
     return {0};
 }
-bool WriteFile(const char* path, engone::Memory buffer){
-    auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);
-    if(!file) return false;
-    if(!engone::FileWrite(file,buffer.data,buffer.used)) return false;
-    engone::FileClose(file);
-    return true;
-}
-bool WriteFile(const char* path, std::string& buffer){
-    auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);
-    if(!file) return false;
-    if(!engone::FileWrite(file,buffer.data(),buffer.length())) return false;
-    engone::FileClose(file);
-    return true;
-}
+// bool WriteFile(const char* path, engone::Memory buffer){
+//     auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);
+//     if(!file) return false;
+//     if(!engone::FileWrite(file,buffer.data,buffer.used)) return false;
+//     engone::FileClose(file);
+//     return true;
+// }
+// bool WriteFile(const char* path, std::string& buffer){
+//     auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);
+//     if(!file) return false;
+//     if(!engone::FileWrite(file,buffer.data(),buffer.length())) return false;
+//     engone::FileClose(file);
+//     return true;
+// }
 void ReplaceChar(char* str, int length,char from, char to){
     for(int i=0;i<length;i++)
         if(str[i]==from)
@@ -87,7 +88,7 @@ const char* FormatUnit(double number){
 const char* FormatUnit(uint64 number){
     char* buf = s_formatBuffers[(s_curFormatBuffer = 
         (s_curFormatBuffer+1)%MAX_FORMAT_BUFFERS)];
-    if(number<1000) sprintf(buf,"%llu",number);
+    if(number<1000) sprintf(buf,FORMAT_64 "u",number);
     else if(number<1e6) sprintf(buf,"%.2lf K",number/1000.f);
     else if(number<1e9) sprintf(buf,"%.2lf M",number/1e6);
     else sprintf(buf,"%.2lf G",number/1e9);
@@ -96,7 +97,7 @@ const char* FormatUnit(uint64 number){
 const char* FormatBytes(uint64 bytes){
     char* buf = s_formatBuffers[(s_curFormatBuffer = 
         (s_curFormatBuffer+1)%MAX_FORMAT_BUFFERS)];
-    if(bytes<pow(2,10)) sprintf(buf,"%llu B",bytes);
+    if(bytes<pow(2,10)) sprintf(buf,FORMAT_64"u B",bytes);
     else if(bytes<pow(2,20)) sprintf(buf,"%.2lf KB",bytes/pow(2,10));
     else if(bytes<pow(2,30)) sprintf(buf,"%.2lf MB",bytes/pow(2,20));
     else sprintf(buf,"%.2lf GB",bytes/pow(2,30));

@@ -18,25 +18,29 @@ namespace engone {
 	static void _GetClock(char* str) {
 		time_t t;
 		time(&t);
-		tm tm;
-		localtime_s(&tm, &t);
-
+		#ifdef OS_LINUX
+		tm* tmp = localtime(&t);
+		#else
+		tm _tm;
+		tm* tmp = &_tm;
+		localtime_s(tmp, &t);
+		#endif
 		str[2] = ':';
 		str[5] = ':';
 
-		int temp = tm.tm_hour / 10;
+		int temp = tmp->tm_hour / 10;
 		str[0] = '0' + temp;
-		temp = tm.tm_hour - 10 * temp;
+		temp = tmp->tm_hour - 10 * temp;
 		str[1] = '0' + temp;
 
-		temp = tm.tm_min / 10;
+		temp = tmp->tm_min / 10;
 		str[3] = '0' + temp;
-		temp = tm.tm_min - 10 * temp;
+		temp = tmp->tm_min - 10 * temp;
 		str[4] = '0' + temp;
 
-		temp = tm.tm_sec / 10;
+		temp = tmp->tm_sec / 10;
 		str[6] = '0' + temp;
-		temp = tm.tm_sec - 10 * temp;
+		temp = tmp->tm_sec - 10 * temp;
 		str[7] = '0' + temp;
 	}
 	void Logger::cleanup() {
@@ -263,9 +267,10 @@ namespace engone {
 		}\
 		return *this;\
 	}
+
 	GEN_LOG_NUM(void*, 18, "%p")
-	GEN_LOG_NUM(int64, 21, "%lld")
-	GEN_LOG_NUM(uint64, 20, "%llu")
+	GEN_LOG_NUM(int64, 21, FORMAT_64"d")
+	GEN_LOG_NUM(uint64, 20, FORMAT_64"u")
 	GEN_LOG_NUM(int32, 11, "%d")
 	GEN_LOG_NUM(uint32, 10, "%u")
 	GEN_LOG_NUM(int16, 6, "%hd")

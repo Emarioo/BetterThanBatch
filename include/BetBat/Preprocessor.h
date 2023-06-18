@@ -60,13 +60,13 @@ struct PreprocInfo {
     // TokenStream tokens{};
     TokenStream* inTokens = 0;
     TokenStream* outTokens = 0;
-    
+    TokenStream* tempStream = 0; // Used when parsing final contents of a macro.
+    bool usingTempStream = false;
+
     CompileInfo* compileInfo = 0; // for caching includes
 
     int errors=0;
     
-    int index=0;
-    int at();
     
     // int ifdefDepth=0;
     // token range
@@ -88,6 +88,8 @@ struct PreprocInfo {
     
     void addToken(Token inToken);
     
+    // int index=0; // using readHead from inTokens instead
+    int at();
     bool end();
     Token& now();
     Token& next();
