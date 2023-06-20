@@ -44,7 +44,7 @@ You can find some examples in the example folder.
 You may want to read [Building](#building) first.
 
 The official usage of the compiler isn't established yet.
-You can at least do `compile yourfile.btb` to compile and run the initial file.
+You can at least do `compiler yourfile.btb` to compile and run the initial file.
 `compiler --help` may provide more options.
 
 Here is a short and quick [Guide](docs/guide.md) (also not up to date, sorry).
@@ -73,5 +73,4 @@ Then simply build with `build.bat`. The compiler can once again be found in bin.
 Tested with Windows Subsystem for Linux. You may therefore experience
 some bugs that haven't been found when using Linux for real.
 
-Build with `build.sh`. The compiler can be found in the bin directory.
-found in bin.
+Build with `build.sh`. The compiler can be found in the bin directory found in bin.

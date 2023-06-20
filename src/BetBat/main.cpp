@@ -35,8 +35,10 @@ void print_help(){
 //     stac(cool);
 // }
 
+
 int main(int argc, const char** argv){
     using namespace engone;
+
 
     // int file = open("eaeea",O_RDWR);
     // printf("file %d\n",err);
@@ -70,7 +72,6 @@ int main(int argc, const char** argv){
     // for(int i=0;i<3;i++){
     //     log::out << *(&a + i)<<"\n";
     // }
-    
     // return 0;
 
     log::out.enableReport(false);

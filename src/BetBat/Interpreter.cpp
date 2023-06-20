@@ -196,9 +196,9 @@ void Interpreter::execute(Bytecode* bytecode){
             float fout = 0;
             
             u64 oldSp = sp;
-
-            if(opcode==BC_ADDF||opcode==BC_SUBF||opcode==BC_MULF||opcode==BC_DIVF
-                ||opcode==BC_MODF){
+            bool isFloat = opcode==BC_ADDF||opcode==BC_SUBF||opcode==BC_MULF||opcode==BC_DIVF
+                ||opcode==BC_MODF;
+            if(isFloat){
                 if(os!=4||xs!=4||ys!=4){
                     log::out << log::RED << "float operation requires 4 byte register";
                     return;
@@ -246,7 +246,7 @@ void Interpreter::execute(Bytecode* bytecode){
                 *(i16*)op = out;
             }
             if(os==4){
-                if(opcode == BC_MODF) {
+                if(isFloat) {
                     *(float*)op = fout;
                 } else {
                     *(i32*)op = out;

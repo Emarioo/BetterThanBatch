@@ -779,16 +779,22 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 Token tok = info.get(info.at()+1);
                 if(Equal(tok, "(")){
                     info.next();
+                    // fncall for strucy methods
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
                     tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
                     new(tmp->name)std::string(token);
                     
+                    // TODO: AST_REFER only works with variables. Pointers won't work.
+                    //  A redesign of how variables, pointers, members are handled will
+                    //  be needed.
+                    // Create "this" argument in methods
                     ASTExpression* refer = info.ast->createExpression(TypeId(AST_REFER));
-                    refer->left = values.back();
+                    refer->left = values.back(); // variable to refer
                     values.pop_back();
                     tmp->left = refer;
                     tmp->boolValue = true; // indicicate fncall to struct method
 
+                    // Parse the other arguments
                     int count = 0;
                     int result = ParseArguments(info, tmp, &count);
                     if(result!=PARSE_SUCCESS)
@@ -799,7 +805,6 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
                     tmp->tokenRange.tokenStream = info.tokens;
-
 
                     values.push_back(tmp);
                     continue;
@@ -1066,6 +1071,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 
                 // could be a slice if tok[]{}
                 // if something is within [] then it's a array access
+                // polytypes exist for struct initializer and function calls
                 Token tok = info.get(info.at()+1);
                 std::string polyTypes="";
                 if(Equal(tok,"<")){
@@ -1103,7 +1109,6 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     }
                     ns += token;
                     ns += polyTypes;
-                    
 
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
                     tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
@@ -1201,7 +1206,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         } else {
                             ERRT(token) << "expected , or } not "<<token<<"\n";
                             ERRLINE
-                            continue;   
+                            continue;
                         }
                     }
                     // log::out << "Parse initializer "<<count<<"\n";
@@ -1210,58 +1215,65 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
                     tmp->tokenRange.tokenStream = info.tokens;
-                }else if(Equal(tok,"::")){
-                    info.next();
-                    
-                    // ERRT(tok) << " :: is not implemented\n";
-                    // ERRLINE
-                    // continue; 
-                    
-                    Token tok = info.get(info.at()+1);
-                    if(!IsName(tok)){
-                        ERRT(tok) << tok<<" is not a name\n";
+                }else {
+                    if(polyTypes.size()!=0){
+                        ERRT(token) << "polymorphic types not expected with namespace or variable\n";
                         ERRLINE
                         continue;
                     }
-                    ops.push_back(AST_FROM_NAMESPACE);
-                    namespaceNames.push_back(token);
-                    // namespaceToken = token;
-                    continue; // do a second round?
-                    
-                    // TODO: detect more ::
-                    
-                    // ASTExpression* tmp = info.ast->createExpression(AST_FROM_NAMESPACE);
-                    
-                    // values.push_back(tmp);
-                    // tmp->tokenRange.firstToken = token;
-                    // tmp->tokenRange.startIndex = startToken;
-                    // tmp->tokenRange.endIndex = info.at()+1;
-                    // tmp->tokenRange.tokenStream = info.tokens;
-                } else{
-                    ASTExpression* tmp = info.ast->createExpression(TypeId(AST_VAR));
-
-                    std::string ns = "";
-                    while(ops.size()>0){
-                        OperationType op = ops.back();
-                        if(op == AST_FROM_NAMESPACE) {
-                            ns += namespaceNames.back();
-                            ns += "::";
-                            namespaceNames.pop_back();
-                            ops.pop_back();
-                        } else {
-                            break;
+                    if(Equal(tok,"::")){
+                        info.next();
+                        
+                        // ERRT(tok) << " :: is not implemented\n";
+                        // ERRLINE
+                        // continue; 
+                        
+                        Token tok = info.get(info.at()+1);
+                        if(!IsName(tok)){
+                            ERRT(tok) << tok<<" is not a name\n";
+                            ERRLINE
+                            continue;
                         }
+                        ops.push_back(AST_FROM_NAMESPACE);
+                        namespaceNames.push_back(token);
+                        // namespaceToken = token;
+                        continue; // do a second round?
+                        
+                        // TODO: detect more ::
+                        
+                        // ASTExpression* tmp = info.ast->createExpression(AST_FROM_NAMESPACE);
+                        
+                        // values.push_back(tmp);
+                        // tmp->tokenRange.firstToken = token;
+                        // tmp->tokenRange.startIndex = startToken;
+                        // tmp->tokenRange.endIndex = info.at()+1;
+                        // tmp->tokenRange.tokenStream = info.tokens;
+                    } else{
+                        ASTExpression* tmp = info.ast->createExpression(TypeId(AST_VAR));
+
+                        std::string ns = "";
+                        while(ops.size()>0){
+                            OperationType op = ops.back();
+                            if(op == AST_FROM_NAMESPACE) {
+                                ns += namespaceNames.back();
+                                ns += "::";
+                                namespaceNames.pop_back();
+                                ops.pop_back();
+                            } else {
+                                break;
+                            }
+                        }
+                        ns += token;
+
+                        tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
+                        new(tmp->name)std::string(std::move(ns));
+
+                        values.push_back(tmp);
+                        tmp->tokenRange.firstToken = token;
+                        tmp->tokenRange.startIndex = startToken;
+                        tmp->tokenRange.endIndex = info.at()+1;
+                        tmp->tokenRange.tokenStream = info.tokens;
                     }
-                    ns += token;
-
-                    tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
-                    new(tmp->name)std::string(std::move(ns));
-
-                    values.push_back(tmp);
-                    tmp->tokenRange.firstToken = token;
-                    tmp->tokenRange.startIndex = startToken;
-                    tmp->tokenRange.endIndex = info.at()+1;
-                    tmp->tokenRange.tokenStream = info.tokens;
                 }
             } else if(Equal(token,"(")){
                 // parse again
@@ -1619,26 +1631,68 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         return PARSE_ERROR;
     }
     
-    Token tok = info.next();
-    if(!Equal(tok,"(")){
-        ERRT(tok) << "expected a (, not "<<tok<<"\n";
-        return PARSE_ERROR;
-    }
-
     function = info.ast->createFunction(name);
     function->tokenRange.firstToken = token;
     function->tokenRange.startIndex = startIndex;
     function->tokenRange.tokenStream = info.tokens;
+    function->baseImpl.name = name;
+
+    ScopeInfo* funcScope = info.ast->createScope();
+    function->scopeId = funcScope->id;
+    funcScope->parent = info.currentScopeId;
+    auto prevScope = info.currentScopeId;
+    defer { info.currentScopeId = prevScope; };
+    info.currentScopeId = function->scopeId;
+    
+
+    Token tok = info.get(info.at()+1);
+    if(Equal(tok,"<")){
+        info.next();
+        while(!info.end()){
+            tok = info.get(info.at()+1);
+            if(Equal(tok,">")){
+                info.next();
+                break;
+            }
+            int result = ParseTypeId(info, tok);
+            if(result == PARSE_SUCCESS) {
+                function->polyArgs.push_back({tok});
+            }
+
+            tok = info.get(info.at()+1);
+            if (Equal(tok,",")) {
+                info.next();
+                continue;
+            } else if(Equal(tok,">")) {
+                info.next();
+                break;
+            } else {
+                ERRT(tok) << "expected , or > for in poly. arguments for function "<<name<<"\n";
+                // parse error or what?
+                break;
+            }
+        }
+    }
+    tok = info.next();
+    if(!Equal(tok,"(")){
+        ERRT(tok) << "expected ( not "<<tok<<"\n";
+        return PARSE_ERROR;
+    }
 
     if(parentStruct) {
+        if(function->polyArgs.size()!=0) {
+            log::out << log::YELLOW << "Warning! polymorphism doesn't work with methods! (yet)\n";
+        }
         function->arguments.push_back({});
         auto& argv = function->arguments.back();
         argv.name = "this";
         std::string* leak = info.ast->createString();
         *leak = parentStruct->name + "*"; // TODO: doesn't work with polymorhpism
-        
-        argv.typeId = info.ast->getTypeString(*leak);;
         argv.defaultValue = nullptr;
+        
+        function->baseImpl.arguments.push_back({});
+        auto& argImpl = function->baseImpl.arguments.back();
+        argImpl.typeId = info.ast->getTypeString(*leak);;
     }
     bool mustHaveDefault=false; 
     TokenRange prevDefault={};
@@ -1689,8 +1743,11 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         function->arguments.push_back({});
         auto& argv = function->arguments.back();
         argv.name = arg;
-        argv.typeId = strId;
         argv.defaultValue = defaultValue;
+        
+        function->baseImpl.arguments.push_back({});
+        auto& argImpl = function->baseImpl.arguments.back();
+        argImpl.typeId = strId;
 
         tok = info.get(info.at()+1);
         if(Equal(tok,",")){
@@ -1714,7 +1771,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         info.next();
         tok = info.get(info.at()+1);
         // TODO: handle (,,,)
-        if(!Equal(tok,"(")){
+        // if(!Equal(tok,"(")){
             // multiple args
             while(true){
                 Token& tok = info.get(info.at()+1);
@@ -1723,7 +1780,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                 }
                 if(Equal(tok,",")){
                     info.next();
-                    continue;   
+                    continue;
                 }
                 
                 Token dt{};
@@ -1733,32 +1790,32 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                 }
                 // auto id = info.ast->getTypeInfo(info.currentScopeId,dt)->id;
                 TypeId strId = info.ast->getTypeString(dt);
-                function->returnTypes.push_back(strId);
+                function->baseImpl.returnTypes.push_back({strId});
             }
-        }else{
-            info.next(); // skip (
-            // multiple args
-            while(true){
-                Token& tok = info.get(info.at()+1);
-                if(Equal(tok,")")){
-                    info.next();
-                    break;   
-                }
-                if(Equal(tok,",")){
-                    info.next();
-                    continue;   
-                }
+        // }else{
+        //     info.next(); // skip (
+        //     // multiple args
+        //     while(true){
+        //         Token& tok = info.get(info.at()+1);
+        //         if(Equal(tok,")")){
+        //             info.next();
+        //             break;   
+        //         }
+        //         if(Equal(tok,",")){
+        //             info.next();
+        //             continue;   
+        //         }
                 
-                Token dt{};
-                int result = ParseTypeId(info,dt);
-                if(result!=PARSE_SUCCESS){
-                    return PARSE_ERROR;
-                }
-                // auto id = info.ast->getTypeInfo(info.currentScopeId,dt)->id;
-                TypeId strId = info.ast->getTypeString(dt);
-                function->returnTypes.push_back(strId);
-            }
-        }
+        //         Token dt{};
+        //         int result = ParseTypeId(info,dt);
+        //         if(result!=PARSE_SUCCESS){
+        //             return PARSE_ERROR;
+        //         }
+        //         // auto id = info.ast->getTypeInfo(info.currentScopeId,dt)->id;
+        //         TypeId strId = info.ast->getTypeString(dt);
+        //         function->baseImpl.returnTypes.push_back({strId});
+        //     }
+        // }
     }
 
     ASTScope* body = 0;

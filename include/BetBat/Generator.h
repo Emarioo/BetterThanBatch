@@ -4,8 +4,8 @@
 #include "BetBat/Bytecode.h"
 
 struct GenInfo {
-    Bytecode* code=0;
-    AST* ast=0;
+    Bytecode* code=nullptr;
+    AST* ast=nullptr;
     int errors=0;
     
     struct AlignInfo {
@@ -24,7 +24,8 @@ struct GenInfo {
     int saveStackMoment();
     void restoreStackMoment(int moment);
 
-    ASTFunction* currentFunction=0;
+    ASTFunction* currentFunction=nullptr;
+    FuncImpl* currentFuncImpl=nullptr;
     ScopeId currentScopeId = 0;
     ScopeId fromScopeId = 0; // AST_FROM_NAMESPACE
     
@@ -46,7 +47,7 @@ struct GenInfo {
 
     struct ResolveCall {
         int bcIndex = 0;
-        ASTFunction* astFunc = 0;
+        FuncImpl* funcImpl = nullptr;
     };
     std::vector<ResolveCall> callsToResolve;
 

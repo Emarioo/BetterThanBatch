@@ -12,14 +12,18 @@ SET USE_GCC=1
 SET USE_MSVC=1
 @REM SET USE_DEBUG=1
 
-SET GCC_INCLUDE_DIRS=-Iinclude
+@REM Advapi is used for winreg which accesses the windows registry
+@REM to get cpu clock frequency which is used with rdtsc.
+@REM I have not found an easier way to get the frequency.
+
+SET GCC_INCLUDE_DIRS=-Iinclude -lAdvapi32
 SET GCC_DEFINITIONS=-DOS_WINDOWS
 SET GCC_COMPILE_OPTIONS=-std=c++14 -g
 SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
 @REM /O2
 SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
-SET MSVC_LINK_OPTIONS=/nologo
+SET MSVC_LINK_OPTIONS=/nologo Advapi32.lib
 SET MSVC_INCLUDE_DIRS=/Iinclude
 SET MSVC_DEFINITIONS=/DOS_WINDOWS
 

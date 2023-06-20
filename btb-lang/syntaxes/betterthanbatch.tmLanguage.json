@@ -12,7 +12,7 @@
 			"include": "#commentline"
 		},
 		{
-			"include":"#commentblock"	
+			"include": "#commentblock"	
 		},
 		{
 			"include": "#operators"
@@ -31,7 +31,7 @@
 		}
 	],
 	"repository": {
-		"commentline":{
+		"commentline": {
 			"name":"comment.line",
 			"begin":"//",
 			"end":"\n"
@@ -44,21 +44,21 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control.betterthanbatch",
-				"match": "\\b(if|else|while|for|break|continue|return|each|_test_|struct|enum|namespace)\\b|(#\\w+)"
+				"match": "\\b(if|else|while|for|break|continue|fn|return|each|_test_|struct|enum|using|as|namespace)\\b|(#\\w+)"
 			}]
 		},
 		"compiler":{
 			"name":"keyword.control",
 			"begin":"(@enable|@disable)\\s+",
 			"end":"(?<=\n)",
-			"patterns":[{
+			"patterns": [{
 				"name":"entity.name.tag",
 				"match":"(?<=\\s+)(preprocessor|parser|generator|optimizer|interpreter|all)\\s+"
 			}]
 		},
 		"importer": {
 			"name": "keyword.control",
-			"begin": "(@import|@version)\\s+",
+			"begin": "(@version)\\s+",
 			"end": "(?<=\n)",
 			"patterns": [
 				{
@@ -68,7 +68,7 @@
 			]
 		},
 		"functions":{
-			"patterns":[{
+			"patterns": [{
 				"name":"entity.name.function",
 				"match": "\\b(alloc|free|realloc|printi|printc)\\b"
 			}]
@@ -86,7 +86,7 @@
 		},
 		"operators":{
 			"name":"keyword.operator",
-			"patterns":[
+			"patterns": [
 				{
 					"name": "keyword.operator",
 					"match":"(\\=\\=)|(\\=)|(\\+)|(\\-)|(\\*)|(\\/)|(\\<)|(\\>)|(\\&\\&)|(\\!\\=)|(\\|\\|)"

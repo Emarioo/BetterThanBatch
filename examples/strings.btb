@@ -1,19 +1,32 @@
+fn add<T>(a: T, b: T) -> T {
+    sum: T = a + b;
+    sum: i32 = 2;
+    return sum;
+}
+
+// fn addi(a: i32, b: i32) -> i32 { return a + b }
+
+// printi(add<i32>(1.4,2.5))
+// printi(addi(1.6,2.5))
+printi(add<f32>(1.6,2.5))
+// printi(add<i32>(8,42))
+
+// printi(1.6 + 2.5)
 
 // a: i16 = 256* 10 + 13;
-
 // printi(*(&a))
 // printi(*(cast<i8*>&a + 1))
 
-struct A {
-    a: i64;
-}
-a = A{9};
-p = &a;
+// struct A {
+//     a: i64;
+// }
+// a = A{9};
+// p = &a;
+// printi(*(&p.a + 0));
 // printi(*(&p));
 // printi((&p).a);
 // printi(p.a);
 // printi(a.a);
-printi(*((&p.a) + 0));
 
 // #import "Basic"
 
@@ -103,14 +116,10 @@ printi(*((&p.a) + 0));
 // {
 //     using Num<T> as Num<R>
 //     using T as Num;
-// fn add<T>(a: T, b: T) -> T {
 
-//     fn clamp(a: T) -> T{
-//         return a + 1
-//     }
-//     return a + b;
-// }
-
+    // fn clamp<T>(a: T) -> T{
+    //     return a + 1
+    // }
 // operator +<T=i32,f32>(){
 
 // }

@@ -4,6 +4,8 @@
 #include "Engone/Logger.h"
 #include "Engone/PlatformLayer.h"
 
+#include "BetBat/Config.h"
+
 #include <functional>
 #include <string.h>
 #include <unordered_map>

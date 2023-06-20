@@ -9,6 +9,10 @@
 #define PL_PRINTF
 #endif
 
+// RDTSC togerher with cpu frequency from the windows register
+// is more accurate than QueryPerformance-Counter/Frequency
+#define USE_RDTSC
+
 // #define LOG_ALLOCATIONS
 
 #include <unordered_map>
@@ -26,6 +30,14 @@
 #include "BetBat/Util/Perf.h"
 
 #include "Engone/Win32Includes.h"
+
+
+#ifdef USE_RDTSC
+// to get cpu clock speed
+#include <winreg.h>
+// #pragma comment(lib,"Advapi32.lib")
+#include <intrin.h>
+#endif
 
 // Name collision
 auto Win32Sleep = Sleep;
@@ -240,8 +252,10 @@ namespace engone {
 		}
 		s_rdiInfos.erase(iterator);
 	}
-    
 	TimePoint MeasureTime(){
+		#ifdef USE_RDTSC
+		return (u64)__rdtsc();
+		#else
 		uint64 tp;
 		BOOL success = QueryPerformanceCounter((LARGE_INTEGER*)&tp);
 		// if(!success){
@@ -249,22 +263,43 @@ namespace engone {
 		// }
 		// TODO: handle err
 		return tp;
+		#endif
 	}
 	static bool once = false;
 	static uint64 frequency;
 	double StopMeasure(TimePoint startPoint){
 		if(!once){
+			once=true;
+			#ifdef USE_RDTSC
+			DWORD mhz = 0;
+			DWORD size = sizeof(DWORD);
+			LONG err = RegGetValueA(
+				HKEY_LOCAL_MACHINE,
+				"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+				"~MHz",
+				RRF_RT_DWORD,
+				NULL,
+				&mhz,
+				&size
+			);
+			frequency = mhz * 1000000;
+			#else
 			BOOL success = QueryPerformanceFrequency((LARGE_INTEGER*)&frequency);
 			// if(!success){
 			// 	PL_PRINTF("time failed\n");	
 			// }
 			// TODO: handle err
+			#endif
 		}
 		TimePoint endPoint;
+		#ifdef USE_RDTSC
+		endPoint = (u64)__rdtsc();
+		#else
 		BOOL success = QueryPerformanceCounter((LARGE_INTEGER*)&endPoint);
 		// if(!success){
 		// 	PL_PRINTF("time failed\n");	
 		// }
+		#endif
 		return (double)(endPoint-startPoint)/(double)frequency;
 	}
 	void Sleep(double seconds){

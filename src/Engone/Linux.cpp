@@ -50,11 +50,14 @@ namespace engone {
             fileFlags = O_RDONLY;
 		}
 		if(flags&FILE_CAN_CREATE) {
-			fileFlags |= O_CREAT;
+			fileFlags = O_CREAT | O_RDWR;
             mode = S_IRUSR | S_IWUSR;
         }
-
-        Assert(("Not implemented for linux",0 == (flags&FILE_WILL_CREATE)));
+		if(flags&FILE_WILL_CREATE){
+			fileFlags = O_CREAT | O_TRUNC | O_RDWR;
+			mode = S_IRUSR | S_IWUSR;
+		}
+        // Assert(("Not implemented for linux",0 == (flags&FILE_WILL_CREATE)));
         
 		// if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){
 		// 	std::string temp;
@@ -263,27 +266,29 @@ namespace engone {
 		return s_numberAllocations;
 	}
     void SetConsoleColor(uint16 color){
-        u16 fore = color&0x0F;
-        u16 back = color&0xF0;
+        u32 fore = color&0x0F;
+		u32 foreExtra = 0;
+        u32 back = color&0xF0;
         switch (fore){
             #undef CASE
             #define CASE(A,B) case 0x##A: fore = B; break;
+            #define CASE2(A,B) case 0x##A: fore = B; foreExtra = 1; break;
             CASE(00,30) /* BLACK    = 0x00, */ 
-                CASE(01,34) /* NAVY     = 0x01, */
+                CASE2(01,34) /* NAVY     = 0x01, */
             CASE(02,32) /* GREEN    = 0x02, */
             CASE(03,36) /* CYAN     = 0x03, */
-                CASE(04,31) /* BLOOD    = 0x04, */
+                CASE2(04,31) /* BLOOD    = 0x04, */
                 CASE(05,35) /* PURPLE   = 0x05, */
-                CASE(06,33) /* GOLD     = 0x06, */
-                CASE(07,0) /* SILVER   = 0x07, */
-                CASE(08,0) /* GRAY     = 0x08, */
+                CASE2(06,33) /* GOLD     = 0x06, */
+                CASE(07,37) /* SILVER   = 0x07, */
+                CASE2(08,30) /* GRAY     = 0x08, */
             CASE(09,34) /* BLUE     = 0x09, */
-                CASE(0A,32) /* LIME     = 0x0A, */
-                CASE(0B,34) /* AQUA     = 0x0B, */
+                CASE2(0A,32) /* LIME     = 0x0A, */
+                CASE2(0B,36) /* AQUA     = 0x0B, */
             CASE(0C,31) /* RED      = 0x0C, */
-            CASE(0D,35) /* MAGENTA  = 0x0D, */
+            CASE2(0D,35) /* MAGENTA  = 0x0D, */
             CASE(0E,33) /* YELLOW   = 0x0E, */
-            CASE(0F,37) /* WHITE    = 0x0F, */
+            CASE2(0F,37) /* WHITE    = 0x0F, */
         /*
             black        30         40
             red          31         41
@@ -294,10 +299,38 @@ namespace engone {
             cyan         36         46
             white        37         47
         */
+	    /*
+			reset             0  (everything back to normal)
+			bold/bright       1  (often a brighter shade of the same colour)
+			underline         4
+			inverse           7  (swap foreground and background colours)
+			bold/bright off  21
+			underline off    24
+			inverse off      27
+	    */
             #undef CASE
         }
+		/*	
+		#define PCOLOR(X) log::out << log::X << #X "\n";
+		PCOLOR(WHITE)
+		PCOLOR(SILVER)
+		PCOLOR(GRAY)
+		PCOLOR(BLACK)
+		PCOLOR(GOLD)
+		PCOLOR(YELLOW)
+		PCOLOR(BLOOD)
+		PCOLOR(RED)
+		PCOLOR(BLUE)
+		PCOLOR(NAVY)
+		PCOLOR(AQUA)
+		PCOLOR(CYAN)
+		PCOLOR(LIME)
+		PCOLOR(GREEN)
+		PCOLOR(MAGENTA)
+		PCOLOR(PURPLE)
+		*/
 
-        printf("\033[%um",fore);
+        printf("\033[%u;%um",foreExtra, fore);
 	}
     void Mutex::cleanup() {
         // if (m_internalHandle != 0){

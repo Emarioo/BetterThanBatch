@@ -92,9 +92,10 @@ struct TypeId {
         STRING = 0x1,
         STRUCT = 0x2,
         ENUM = 0x3,
-        TYPE_MASK = 0x1 | 0x2,
-        POINTER_MASK = 0x4 | 0x8,
-        POINTER_SHIFT = 2,
+        VIRTUAL = 0x4, // polymorphic, may be pointless
+        TYPE_MASK = 0x1 | 0x2 | 0x4,
+        POINTER_MASK = 0x8 | 0x10,
+        POINTER_SHIFT = 3,
         VALID_MASK = 0x80,
     };
     u16 _infoIndex0 = 0;
@@ -105,6 +106,7 @@ struct TypeId {
         return !(*this == type);
     }
     bool operator==(TypeId type) const {
+        // Assert(!isVirtual() && !type.isVirtual());
         return _flags == type._flags && _infoIndex0 == type._infoIndex0 && _infoIndex1 == type._infoIndex1;
     }
     bool operator==(PrimitiveType primitiveType) const {
@@ -117,6 +119,7 @@ struct TypeId {
         return (_flags & VALID_MASK) != 0;
     }
     bool isString() const { return (_flags & TYPE_MASK) == STRING; }
+    bool isVirtual() const { return (_flags & TYPE_MASK) == VIRTUAL; }
     TypeId baseType() {
         TypeId out = *this;
         out._flags = out._flags & ~POINTER_MASK;
@@ -132,7 +135,7 @@ struct TypeId {
     u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_SHIFT; }
     u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
     // TODO: Rename to something better
-    bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
+    bool isNormalType() const { return isValid() && !isString() && !isPointer() && !isVirtual(); }
 };
 // ASTStruct can have multiple of these per
 // polymorphic instantiation.
@@ -161,7 +164,7 @@ struct TypeInfo {
     
     struct MemberData {
         TypeId typeId;
-        int index;
+        int index; 
         int offset;
     };
 
@@ -171,6 +174,24 @@ struct TypeInfo {
     MemberData getMember(const std::string& name);
     MemberData getMember(int index);
 };
+struct FuncImpl {
+    std::string name;
+    struct Arg {
+        TypeId typeId;
+        int offset=0;
+    };
+    std::vector<Arg> arguments;
+    int argSize=0;
+
+    struct ReturnValue{
+        TypeId typeId;
+        int offset=0;
+    };
+    std::vector<ReturnValue> returnTypes;
+    int returnSize=0;
+    i64 address = 0; // Set by generator
+    std::vector<TypeId> polyIds;
+};
 struct Identifier {
     Identifier() {}
     enum Type {
@@ -179,10 +200,9 @@ struct Identifier {
     Type type=VAR;
     std::string name{};
     ScopeId scopeId;
-    union {
-        int varIndex;
-        ASTFunction* astFunc=0;
-    };
+    int varIndex;
+    ASTFunction* astFunc=0;
+    FuncImpl* funcImpl = 0;
     static const u64 INVALID_FUNC_ADDRESS = 0;
 };
 struct VariableInfo {
@@ -194,24 +214,26 @@ struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}
     std::string name; // namespace
     ScopeId id = 0;
+    ScopeId parent = 0;
 
     std::unordered_map<std::string, ScopeId> nameScopeMap;
     std::unordered_map<std::string, TypeInfo*> nameTypeMap;
 
     std::unordered_map<std::string, Identifier> identifierMap;
 
+    std::vector<ScopeInfo*> usingScopes;
+
     // Returns the full namespace.
     // Name of parent scopes are concatenated.
     std::string getFullNamespace(AST* ast);
     
-    ScopeId parent = 0;
 };
-template<>
-struct std::hash<TypeId> {
-    std::size_t operator()(TypeId const& s) const noexcept {
-        return s.getId();
-    }
-};
+// template<>
+// struct std::hash<TypeId> {
+//     std::size_t operator()(TypeId const& s) const noexcept {
+//         return s.getId();
+//     }
+// };
 struct AST;
 const char* OpToStr(OperationType op);
 struct ASTExpression {
@@ -301,7 +323,6 @@ struct ASTStruct {
     };
     std::vector<PolyArg> polyArgs;
     
-
     StructImpl baseImpl{};
     State state=TYPE_EMPTY;
 
@@ -335,22 +356,19 @@ struct ASTFunction {
     std::string name="";
     struct Arg {
         std::string name;
-        TypeId typeId;
-        int offset=0;
         ASTExpression* defaultValue=0;
     };
     std::vector<Arg> arguments;
-    int argSize=0;
 
-    struct ReturnType{
-        ReturnType(TypeId id) : typeId(id) {}
-        TypeId typeId;
-        int offset=0;
+    struct PolyArg {
+        Token name{};
+        TypeInfo* virtualType = nullptr;
     };
-    std::vector<ReturnType> returnTypes;
-    int returnSize=0;
-    i64 address = 0; // calculated in Generator
+    std::vector<PolyArg> polyArgs;
+    FuncImpl baseImpl;
+    std::vector<FuncImpl*> polyImpls;
 
+    ScopeId scopeId=0;
     ASTScope* body=0;
 
     ASTFunction* next=0;
@@ -435,6 +453,8 @@ struct AST {
     TypeInfo* getTypeInfo(TypeId id);
     std::string typeToString(TypeId typeId);
 
+    TypeId ensureNonVirtualId(TypeId id);
+
     //-- OTHER
     ASTScope* mainBody=0;
 
@@ -450,7 +470,7 @@ struct AST {
     VariableInfo* addVariable(ScopeId scopeId, const std::string& name);
     // Returns nullptr if variable already exists or if scopeId is invalid
     // FunctionInfo* addFunction(ScopeId scopeId, const std::string& name);
-    Identifier* addFunction(ScopeId scopeId, ASTFunction* astFunc);
+    Identifier* addFunction(ScopeId scopeId, const std::string& name, ASTFunction* astFunc);
     // Returns nullptr if variable already exists or if scopeId is invalid
     Identifier* addIdentifier(ScopeId scopeId, const std::string& name);
     

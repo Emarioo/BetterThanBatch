@@ -62,8 +62,10 @@ bool GenInfo::popLoop(){
 void GenInfo::addPop(int reg) {
     using namespace engone;
     int size = DECODE_REG_SIZE(reg);
-    if (size == 0 && errors == 0) {// we don't print if we had errors since they probably caused size of 0
-        log::out << log::RED << "GenInfo::addPop : Cannot pop register with 0 size\n";
+    if (size == 0 ) { // we don't print if we had errors since they probably caused size of 0
+        if( errors == 0){
+            log::out << log::RED << "GenInfo::addPop : Cannot pop register with 0 size\n";
+        }
         return;
     }
 
@@ -87,8 +89,10 @@ void GenInfo::addPop(int reg) {
 void GenInfo::addPush(int reg) {
     using namespace engone;
     int size = DECODE_REG_SIZE(reg);
-    if (size == 0 && errors == 0) { // we don't print if we had errors since they probably caused size of 0
-        log::out << log::RED << "GenInfo::addPush : Cannot push register with 0 size\n";
+    if (size == 0 ) { // we don't print if we had errors since they probably caused size of 0
+        if( errors == 0){
+            log::out << log::RED << "GenInfo::addPush : Cannot push register with 0 size\n";
+        }
         return;
     }
 
@@ -307,6 +311,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
     Assert(expression);
 
     *outTypeId = AST_VOID;
+    TypeId castType = info.ast->ensureNonVirtualId(expression->castType);
 
     if (expression->isValue) {
         // data type
@@ -431,9 +436,9 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
         }
         else if (expression->typeId == AST_FNCALL) {
             if(expression->boolValue) { // indicates method if true (struct.method)
-
+                Assert(expression->left)
                 ASTExpression* varExpr = expression->left->left;
-                if(varExpr->typeId != AST_VAR) {
+                if(!varExpr || varExpr->typeId != AST_VAR) {
                     // What happens if typeId is an operation instead of a type convertable to a string with typeToString?
                     ERRT(varExpr->tokenRange) << " expected a variable not "<<varExpr->tokenRange.firstToken <<" ("<< info.ast->typeToString(varExpr->typeId) <<")\n";
                     *outTypeId = AST_VOID;
@@ -467,9 +472,17 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 if(!astFunc){
                     // TODO: POINTER IS ACTUALLY OKAY!
                     ERRT(expression->tokenRange) << expression->tokenRange.firstToken<< " is not a method of "<<info.ast->typeToString(var->typeId.baseType())<<"\n";
-                    *outTypeId = AST_VOID;
                     return GEN_ERROR;
                 }
+                if(astFunc->polyArgs.size()!=0){
+                    ERRT(expression->tokenRange) << " Polymorphic methods are not implemented yet\n";
+                    return GEN_ERROR;
+                }
+                FuncImpl* funcImpl = &astFunc->baseImpl; // how to get FuncImpl from method of struct?
+                // FuncImpl* funcImpl = nullptr; // how to get FuncImpl from method of struct?
+                
+                Assert(funcImpl->arguments.size() == astFunc->baseImpl.arguments.size())
+                Assert(funcImpl->returnTypes.size() == astFunc->baseImpl.returnTypes.size())
 
                 ASTExpression *argt = expression->left;
                 if (argt)
@@ -477,7 +490,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 int startSP = info.saveStackMoment();
 
                 //-- Align
-                int modu = (astFunc->argSize - info.virtualStackPointer) % 8;
+                int modu = (funcImpl->argSize - info.virtualStackPointer) % 8;
                 if (modu != 0) {
                     int diff = 8 - modu;
                     // log::out << "   align\n";
@@ -550,16 +563,16 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
 
                     _GLOG(log::out << " pushed " << astFunc->arguments[index].name << "\n";)
 
-                    if (!PerformSafeCast(info, dt, astFunc->arguments[index].typeId)) {   // implicit conversion
+                    if (!PerformSafeCast(info, dt, funcImpl->arguments[index].typeId)) {   // implicit conversion
                         // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                        ERRTYPE(arg->tokenRange, dt, astFunc->arguments[index].typeId) << "(fncall)\n";
+                        ERRTYPE(arg->tokenRange, dt, funcImpl->arguments[index].typeId) << "(fncall)\n";
                         continue;
                     }
                     // values are already pushed to the stack
                 }
                 {
                     // align to 8 bytes because the call frame requires it.
-                    int modu = (astFunc->argSize - info.virtualStackPointer) % 8;
+                    int modu = (funcImpl->argSize - info.virtualStackPointer) % 8;
                     if (modu != 0) {
                         int diff = 8 - modu;
                         // log::out << "   align\n";
@@ -572,12 +585,12 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 TOKENINFO(expression->tokenRange)
                 info.code->add({BC_LI, BC_REG_RAX});
                 
-                if(astFunc->address == Identifier::INVALID_FUNC_ADDRESS) {
-                    info.callsToResolve.push_back({info.code->length(), astFunc});
+                if(funcImpl->address == Identifier::INVALID_FUNC_ADDRESS) {
+                    info.callsToResolve.push_back({info.code->length(), funcImpl});
                     info.code->addIm(999999999);
                 } else {
                     // no need to resolve if address has been calculated
-                    info.code->addIm(astFunc->address);
+                    info.code->addIm(funcImpl->address);
                 }
                 info.code->add({BC_CALL, BC_REG_RAX});
 
@@ -587,18 +600,18 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                     info.restoreStackMoment(startSP);
                 }
                 // return types?
-                if (astFunc->returnTypes.empty()) {
+                if (funcImpl->returnTypes.empty()) {
                     *outTypeId = AST_VOID;
                 } else {
-                    *outTypeId = astFunc->returnTypes[0].typeId;
-                    if (astFunc->returnTypes.size() != 0) {
+                    *outTypeId = funcImpl->returnTypes[0].typeId;
+                    if (funcImpl->returnTypes.size() != 0) {
                         _GLOG(log::out << "extract return values\n";)
                     }
                     // NOTE: info.currentScopeId MAY NOT WORK FOR THE TYPES IF YOU PASS FUNCTION POINTERS!
                     // move return values
-                    int offset = -astFunc->argSize - GenInfo::ARG_OFFSET;
-                    for (int i = 0; i < (int)astFunc->returnTypes.size(); i++) {
-                        auto &ret = astFunc->returnTypes[i];
+                    int offset = -funcImpl->argSize - GenInfo::ARG_OFFSET;
+                    for (int i = 0; i < (int)funcImpl->returnTypes.size(); i++) {
+                        auto &ret = funcImpl->returnTypes[i];
                         TypeId typeId = ret.typeId;
 
                         TypeInfo *typeInfo = 0;
@@ -644,10 +657,22 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             auto id = info.ast->getIdentifier(idScope, *expression->name);
             if (!id || id->type != Identifier::FUNC) {
                 ERRT(expression->tokenRange) << expression->tokenRange.firstToken << " is undefined\n";
-                *outTypeId = AST_VOID;
                 return GEN_ERROR;
             }
             ASTFunction* astFunc = info.ast->getFunction(id);
+            FuncImpl* funcImpl = id->funcImpl;
+            // Assert(funcImpl)
+            if(astFunc->polyArgs.size() == 0)
+                funcImpl = &astFunc->baseImpl;
+            if(!funcImpl) {
+                // As of writing this funcImpl as null indicates that type checker didn't use baseImpl
+                // when adding function identifier. This means that the function is polymorphic.
+                // Assert(astFunc->polyArgs.size() != 0) // assert in case the assumption is wrong.
+                // - Me 2 minutes later: I forgot about the predefined functions (printi,...)
+                ERRT(expression->tokenRange) << expression->tokenRange.firstToken << " is polymorphic\n";
+                return GEN_ERROR;
+                // funcImpl = &astFunc->baseImpl;
+            }
 
             ASTExpression *argt = expression->left;
             if (argt)
@@ -655,7 +680,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             int startSP = info.saveStackMoment();
 
             //-- align
-            int modu = (astFunc->argSize - info.virtualStackPointer) % 8;
+            int modu = (funcImpl->argSize - info.virtualStackPointer) % 8;
             if (modu != 0) {
                 int diff = 8 - modu;
                 // log::out << "   align\n";
@@ -728,16 +753,16 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
 
                 _GLOG(log::out << " pushed " << astFunc->arguments[index].name << "\n";)
 
-                if (!PerformSafeCast(info, dt, astFunc->arguments[index].typeId)) {   // implicit conversion
+                if (!PerformSafeCast(info, dt, funcImpl->arguments[index].typeId)) {   // implicit conversion
                     // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                    ERRTYPE(arg->tokenRange, dt, astFunc->arguments[index].typeId) << "(fncall)\n";
+                    ERRTYPE(arg->tokenRange, dt, funcImpl->arguments[index].typeId) << "(fncall)\n";
                     continue;
                 }
                 // values are already pushed to the stack
             }
             {
                 // align to 8 bytes because the call frame requires it.
-                int modu = (astFunc->argSize - info.virtualStackPointer) % 8;
+                int modu = (funcImpl->argSize - info.virtualStackPointer) % 8;
                 if (modu != 0) {
                     int diff = 8 - modu;
                     // log::out << "   align\n";
@@ -750,12 +775,12 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             TOKENINFO(expression->tokenRange)
             info.code->add({BC_LI, BC_REG_RAX});
             
-            if(astFunc->address == Identifier::INVALID_FUNC_ADDRESS) {
-                info.callsToResolve.push_back({info.code->length(), astFunc});
+            if(funcImpl->address == Identifier::INVALID_FUNC_ADDRESS) {
+                info.callsToResolve.push_back({info.code->length(), funcImpl});
                 info.code->addIm(999999999);
             } else {
                 // no need to resolve if address has been calculated
-                info.code->addIm(astFunc->address);
+                info.code->addIm(funcImpl->address);
             }
             info.code->add({BC_CALL, BC_REG_RAX});
 
@@ -765,18 +790,18 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 info.restoreStackMoment(startSP);
             }
             // return types?
-            if (astFunc->returnTypes.empty()) {
+            if (funcImpl->returnTypes.empty()) {
                 *outTypeId = AST_VOID;
             } else {
-                *outTypeId = astFunc->returnTypes[0].typeId;
-                if (astFunc->returnTypes.size() != 0) {
+                *outTypeId = funcImpl->returnTypes[0].typeId;
+                if (funcImpl->returnTypes.size() != 0) {
                     _GLOG(log::out << "extract return values\n";)
                 }
                 // NOTE: info.currentScopeId MAY NOT WORK FOR THE TYPES IF YOU PASS FUNCTION POINTERS!
                 // move return values
-                int offset = -astFunc->argSize - GenInfo::ARG_OFFSET;
-                for (int i = 0; i < (int)astFunc->returnTypes.size(); i++) {
-                    auto &ret = astFunc->returnTypes[i];
+                int offset = -funcImpl->argSize - GenInfo::ARG_OFFSET;
+                for (int i = 0; i < (int)funcImpl->returnTypes.size(); i++) {
+                    auto &ret = funcImpl->returnTypes[i];
                     TypeId typeId = ret.typeId;
 
                     TypeInfo *typeInfo = 0;
@@ -837,7 +862,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
 
             TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId);
             if(!typeInfo){
-                ERRT(expression->tokenRange) << expression->tokenRange<<" cannot be converted to Slice<char> because the type doesn't exist. Use #import \"Basic\"\n";
+                ERRT(expression->tokenRange) << expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
                 return GEN_ERROR;
             }
             Assert(typeInfo->astStruct);
@@ -1045,7 +1070,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             if (err == GEN_ERROR)
                 return err;
 
-            TypeId castType = expression->castType;
             // TypeInfo *ti = info.ast->getTypeInfo(ltype);
             // TypeInfo *tic = info.ast->getTypeInfo(castType);
             u32 ti = info.ast->getTypeSize(ltype);
@@ -1208,10 +1232,10 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             }
         }
         else if (expression->typeId == AST_INITIALIZER) {
-            TypeInfo *structInfo = info.ast->getTypeInfo(expression->castType); // TODO: castType should be renamed
+            TypeInfo *structInfo = info.ast->getTypeInfo(castType); // TODO: castType should be renamed
             // TypeInfo *structInfo = info.ast->getTypeInfo(info.currentScopeId, Token(*expression->name));
             if (!structInfo || !structInfo->astStruct) {
-                auto str = info.ast->typeToString(expression->castType);
+                auto str = info.ast->typeToString(castType);
                 ERRT(expression->tokenRange) << "cannot do initializer on non-struct " << log::YELLOW << str << "\n";
                 return GEN_ERROR;
             }
@@ -1446,6 +1470,11 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             // info.code->add({BC_PUSH,BC_REG_RAX});
         }
     }
+    TypeInfo* ti = info.ast->getTypeInfo(*outTypeId);
+    Assert(("Leaking virtual type!",ti->id == *outTypeId))
+    // To avoid ensuring non virtual type everywhere all the entry point where virtual type can enter
+    // the expression system is checked. The rest of the system won't have to check it.
+    // An entry point has been missed if the assert above fire.
     return GEN_SUCCESS;
 }
 int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange = 0) {
@@ -1509,85 +1538,95 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     _GLOG(FUNC_ENTER)
 
     int lastOffset = info.currentFrameOffset;
-    // TODO: This does probably not work with structs in structs. Referencing them could cause collisions.
     if(astStruct){
-        info.code->add({BC_JMP});
-        int skipIndex = info.code->length();
-        info.code->addIm(0);
-
-        info.currentFunction = function;
-        function->address = info.code->length();
-
-        int startSP = info.saveStackMoment();
-
-        // expecting 8-bit alignment when generating function
-        Assert(info.virtualStackPointer % 8 == 0);
-
-        if (function->arguments.size() != 0) {
-            _GLOG(log::out << "set " << function->arguments.size() << " args\n");
-            // int offset = 0;
-            for (int i = 0; i < (int)function->arguments.size(); i++) {
-                // for(int i = astFunc->arguments.size()-1;i>=0;i--){
-                auto &arg = function->arguments[i];
-                auto var = info.ast->addVariable(info.currentScopeId, arg.name);
-                if (!var) {
-                    ERRT(function->tokenRange) << arg.name << " already exists\n";
-                }
-                var->typeId = arg.typeId;
-                TypeInfo *typeInfo = info.ast->getTypeInfo(arg.typeId);
-
-                var->frameOffset = GenInfo::ARG_OFFSET + arg.offset;
-                _GLOG(log::out << " " << arg.name << ": " << var->frameOffset << "\n";)
-            }
-            _GLOG(log::out << "\n";)
-        }
-        // info.currentFrameOffset = 0;
-        if (function->returnTypes.size() != 0) {
-            _GLOG(log::out << "space for " << function->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
-            
-            info.code->addDebugText("ZERO init return values\n");
-            info.code->add({BC_LI, BC_REG_RBX});
-            info.code->addIm(-function->returnSize);
-            info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
-            u16 size = function->returnSize;
-            info.code->add({BC_ZERO_MEM, BC_REG_RBX, (u8)(0xFF & size), (u8)(size << 8)});
-            _GLOG(log::out << "\n";)
-            info.currentFrameOffset -= function->returnSize; // TODO: size can be uneven like 13. FIX IN EVALUATETYPES
-        }
-
-        // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
-        // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
-        // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
-        //
-        int result = GenerateBody(info, function->body);
-        info.currentFrameOffset = lastOffset;
-
-        info.restoreStackMoment(startSP);
-
-        // log::out << function->name<<" " <<function->returnTypes.size()<<"\n";
-        //-- Check for return statement if return values are used
-        if (function->returnTypes.size() != 0) {
-            bool foundReturn = false;
-            ASTStatement *nextState = function->body->statements;
-            while (nextState) {
-                if (nextState->type == ASTStatement::RETURN) {
-                    foundReturn = true;
-                }
-                nextState = nextState->next;
-            }
-            if (!foundReturn) {
-                ERR() << "missing return statement in " << function->name << "\n";
-            }
-        }
-
-        info.code->add({BC_RET});
-        *((u32 *)info.code->get(skipIndex)) = info.code->length();
-
-        for (auto &arg : function->arguments) {
-            info.ast->removeIdentifier(info.currentScopeId, arg.name);
-        }
-        return GEN_SUCCESS;
+        ERRT(function->tokenRange) << "Methods have been disabled for now. They will come back after some changes in the compiler.\n";
+        return GEN_ERROR;
     }
+    // TODO: This does probably not work with structs in structs. Referencing them could cause collisions.
+    // if(astStruct){ // generate method in struct
+    //     info.code->add({BC_JMP});
+    //     int skipIndex = info.code->length();
+    //     info.code->addIm(0);
+
+    //     auto prevFunc = info.currentFunction;
+    //     auto prevFuncImpl = info.currentFuncImpl;
+    //     info.currentFunction = function;
+    //     info.currentFuncImpl = funcImpl;
+    //     defer { info.currentFunction = prevFunc; info.currentFuncImpl = prevFuncImpl; };
+
+    //     function->address = info.code->length();
+
+    //     int startSP = info.saveStackMoment();
+
+    //     // expecting 8-bit alignment when generating function
+    //     Assert(info.virtualStackPointer % 8 == 0);
+
+    //     if (function->arguments.size() != 0) {
+    //         _GLOG(log::out << "set " << function->arguments.size() << " args\n");
+    //         // int offset = 0;
+    //         for (int i = 0; i < (int)function->arguments.size(); i++) {
+    //             // for(int i = astFunc->arguments.size()-1;i>=0;i--){
+    //             auto &arg = function->arguments[i];
+    //             auto &arg = function->arguments[i];
+    //             auto var = info.ast->addVariable(info.currentScopeId, arg.name);
+    //             if (!var) {
+    //                 ERRT(function->tokenRange) << arg.name << " already exists\n";
+    //             }
+    //             var->typeId = arg.typeId;
+    //             TypeInfo *typeInfo = info.ast->getTypeInfo(arg.typeId);
+
+    //             var->frameOffset = GenInfo::ARG_OFFSET + arg.offset;
+    //             _GLOG(log::out << " " << arg.name << ": " << var->frameOffset << "\n";)
+    //         }
+    //         _GLOG(log::out << "\n";)
+    //     }
+    //     // info.currentFrameOffset = 0;
+    //     if (function->returnTypes.size() != 0) {
+    //         _GLOG(log::out << "space for " << function->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
+            
+    //         info.code->addDebugText("ZERO init return values\n");
+    //         info.code->add({BC_LI, BC_REG_RBX});
+    //         info.code->addIm(-function->returnSize);
+    //         info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
+    //         u16 size = function->returnSize;
+    //         info.code->add({BC_ZERO_MEM, BC_REG_RBX, (u8)(0xFF & size), (u8)(size << 8)});
+    //         _GLOG(log::out << "\n";)
+    //         info.currentFrameOffset -= function->returnSize; // TODO: size can be uneven like 13. FIX IN EVALUATETYPES
+    //     }
+
+    //     // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
+    //     // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
+    //     // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
+    //     //
+    //     int result = GenerateBody(info, function->body);
+    //     info.currentFrameOffset = lastOffset;
+
+    //     info.restoreStackMoment(startSP);
+
+    //     // log::out << function->name<<" " <<function->returnTypes.size()<<"\n";
+    //     //-- Check for return statement if return values are used
+    //     if (function->returnTypes.size() != 0) {
+    //         bool foundReturn = false;
+    //         ASTStatement *nextState = function->body->statements;
+    //         while (nextState) {
+    //             if (nextState->type == ASTStatement::RETURN) {
+    //                 foundReturn = true;
+    //             }
+    //             nextState = nextState->next;
+    //         }
+    //         if (!foundReturn) {
+    //             ERR() << "missing return statement in " << function->name << "\n";
+    //         }
+    //     }
+
+    //     info.code->add({BC_RET});
+    //     *((u32 *)info.code->get(skipIndex)) = info.code->length();
+
+    //     for (auto &arg : function->arguments) {
+    //         info.ast->removeIdentifier(info.currentScopeId, arg.name);
+    //     }
+    //     return GEN_SUCCESS;
+    // }
 
     auto fid = info.ast->getIdentifier(info.currentScopeId, function->name);
     if (!fid) {
@@ -1607,91 +1646,122 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     }
     ASTFunction* astFunc = info.ast->getFunction(fid);
     Assert(astFunc);
-
+    _GLOG(log::out << "Function skip\n";)
     info.code->add({BC_JMP});
     int skipIndex = info.code->length();
     info.code->addIm(0);
+    int index = 0;
+    FuncImpl* funcImpl = &astFunc->baseImpl;
+    while((index < (int)astFunc->polyImpls.size()) || (astFunc->polyArgs.size() == 0 && index==0)) {
+        if(astFunc->polyArgs.size()!=0) {
+            funcImpl = astFunc->polyImpls[index];
+        }
+        index++;
+        Assert(("func has already been generated!",funcImpl->address == 0));
+        _GLOG(log::out << "Function " << funcImpl->name << "\n";)
+        // This happens with functions inside of polymorphic function.
+        funcImpl->address = info.code->length();
 
-    info.currentFunction = function;
-    astFunc->address = info.code->length();
+        auto prevFunc = info.currentFunction;
+        auto prevFuncImpl = info.currentFuncImpl;
+        auto prevScopeId = info.currentScopeId;
+        info.currentFunction = function;
+        info.currentFuncImpl = funcImpl;
+        info.currentScopeId = function->scopeId;
+        defer { info.currentFunction = prevFunc;
+            info.currentFuncImpl = prevFuncImpl;
+            info.currentScopeId = prevScopeId; };
 
-    int startSP = info.saveStackMoment();
+        int startSP = info.saveStackMoment();
 
-    
-    //-- Align
-    // int modu = (- info.virtualStackPointer) % 8;
-    // int diff = 8 - modu;
-    // if (modu != 0) {
-    //     // log::out << "   align\n";
-    //     info.code->addDebugText("   align\n");
-    //     info.addIncrSp(-diff); // Align
-    //     // TODO: does something need to be done with stackAlignment list.
-    // }
-    // expecting 8-bit alignment when generating function
-    Assert(info.virtualStackPointer % 8 == 0);
+        //-- Align
+        // int modu = (- info.virtualStackPointer) % 8;
+        // int diff = 8 - modu;
+        // if (modu != 0) {
+        //     // log::out << "   align\n";
+        //     info.code->addDebugText("   align\n");
+        //     info.addIncrSp(-diff); // Align
+        //     // TODO: does something need to be done with stackAlignment list.
+        // }
+        // expecting 8-bit alignment when generating function
+        Assert(info.virtualStackPointer % 8 == 0);
 
-    if (astFunc->arguments.size() != 0) {
-        _GLOG(log::out << "set " << astFunc->arguments.size() << " args\n");
-        // int offset = 0;
-        for (int i = 0; i < (int)astFunc->arguments.size(); i++) {
-            // for(int i = astFunc->arguments.size()-1;i>=0;i--){
-            auto &arg = astFunc->arguments[i];
-            auto var = info.ast->addVariable(info.currentScopeId, arg.name);
-            if (!var) {
-                ERRT(astFunc->tokenRange) << arg.name << " already exists\n";
+        if (astFunc->arguments.size() != 0) {
+            _GLOG(log::out << "set " << astFunc->arguments.size() << " args\n");
+            // int offset = 0;
+            for (int i = 0; i < (int)astFunc->arguments.size(); i++) {
+                // for(int i = astFunc->arguments.size()-1;i>=0;i--){
+                auto &arg = astFunc->arguments[i];
+                auto &argBase = funcImpl->arguments[i];
+                auto var = info.ast->addVariable(info.currentScopeId, arg.name);
+                if (!var) {
+                    ERRT(astFunc->tokenRange) << arg.name << " already exists\n";
+                }
+                var->typeId = argBase.typeId;
+                TypeInfo *typeInfo = info.ast->getTypeInfo(argBase.typeId);
+
+                var->frameOffset = GenInfo::ARG_OFFSET + argBase.offset;
+                _GLOG(log::out << " " << arg.name << ": " << var->frameOffset << "\n";)
             }
-            var->typeId = arg.typeId;
-            TypeInfo *typeInfo = info.ast->getTypeInfo(arg.typeId);
-
-            var->frameOffset = GenInfo::ARG_OFFSET + arg.offset;
-            _GLOG(log::out << " " << arg.name << ": " << var->frameOffset << "\n";)
+            _GLOG(log::out << "\n";)
         }
-        _GLOG(log::out << "\n";)
-    }
-    // info.currentFrameOffset = 0;
-    if (astFunc->returnTypes.size() != 0) {
-        _GLOG(log::out << "space for " << astFunc->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
-        
-        info.code->addDebugText("ZERO init return values\n");
-        info.code->add({BC_LI, BC_REG_RBX});
-        info.code->addIm(-astFunc->returnSize);
-        info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
-        u16 size = astFunc->returnSize;
-        info.code->add({BC_ZERO_MEM, BC_REG_RBX, (u8)(0xFF & size), (u8)(size << 8)});
-        _GLOG(log::out << "\n";)
-        info.currentFrameOffset -= astFunc->returnSize; // TODO: size can be uneven like 13. FIX IN EVALUATETYPES
-    }
+        // info.currentFrameOffset = 0;
+        if (funcImpl->returnTypes.size() != 0) {
+            _GLOG(log::out << "space for " << funcImpl->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
+            
+            info.code->addDebugText("ZERO init return values\n");
+            info.code->add({BC_LI, BC_REG_RBX});
+            info.code->addIm(-funcImpl->returnSize);
+            info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
+            u16 size = funcImpl->returnSize;
+            info.code->add({BC_ZERO_MEM, BC_REG_RBX, (u8)(0xFF & size), (u8)(size << 8)});
+            _GLOG(log::out << "\n";)
+            info.currentFrameOffset -= funcImpl->returnSize; // TODO: size can be uneven like 13. FIX IN EVALUATETYPES
+        }
 
-    // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
-    // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
-    // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
-    //
-    int result = GenerateBody(info, function->body);
-    info.currentFrameOffset = lastOffset;
+        for(int i=0;i<(int)astFunc->polyArgs.size();i++){
+            auto& arg = astFunc->polyArgs[i];
+            arg.virtualType->id = funcImpl->polyIds[i];
+        }
 
-    info.restoreStackMoment(startSP);
+        // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
+        // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
+        // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
+        //
+        // TODO: GenerateBody may be called multiple times for the same body with
+        //  polymorphic functions. This is a problem since GenerateBody generates functions.
+        //  Generating them multiple times for each function is bad.
+        // NOTE: virtualTypes from this function may be accessed from a function within it's body.
+        //  This could be bad.
+        int result = GenerateBody(info, function->body);
+        info.currentFrameOffset = lastOffset;
 
-    // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
-    if (function->returnTypes.size() != 0) {
-        bool foundReturn = false;
-        ASTStatement *nextState = function->body->statements;
-        while (nextState) {
-            if (nextState->type == ASTStatement::RETURN) {
-                foundReturn = true;
+        info.restoreStackMoment(startSP); // TODO: MAJOR BUG! RESTORATION OBIOUSLY DOESN'T WORK HERE SINCE
+        // IF THE BODY RETURNED, THE INSTRCUTION WILL BE SKIPPED
+
+        // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
+        if (funcImpl->returnTypes.size() != 0) {
+            bool foundReturn = (function->body->statementsTail?function->body->statementsTail->type==ASTStatement::RETURN:false); // optimisation, checking last statement first since it usually has a return
+            ASTStatement *nextState = function->body->statements;
+            while (nextState&&!foundReturn) {
+                if (nextState->type == ASTStatement::RETURN) {
+                    foundReturn = true;break;
+                }
+                nextState = nextState->next;
             }
-            nextState = nextState->next;
+            if (!foundReturn) {
+                ERR() << "missing return statement in " << function->name << "\n";
+            }
         }
-        if (!foundReturn) {
-            ERR() << "missing return statement in " << function->name << "\n";
+        if(info.code->length()<1 || info.code->get(info.code->length()-1)->opcode!=BC_RET) {
+            // add return if it doesn't exist
+            info.code->add({BC_RET});
+        }
+        for (auto &arg : astFunc->arguments) {
+            info.ast->removeIdentifier(info.currentScopeId, arg.name);
         }
     }
-
-    info.code->add({BC_RET});
     *((u32 *)info.code->get(skipIndex)) = info.code->length();
-
-    for (auto &arg : astFunc->arguments) {
-        info.ast->removeIdentifier(info.currentScopeId, arg.name);
-    }
     return GEN_SUCCESS;
 }
 int GenerateBody(GenInfo &info, ASTScope *body) {
@@ -1741,7 +1811,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
     while (nextStatement) {
         ASTStatement *statement = nextStatement;
         nextStatement = nextStatement->next;
-
+        TypeId stateTypeId = info.ast->ensureNonVirtualId(statement->typeId);
         if (statement->type == ASTStatement::ASSIGN) {
             _GLOG(SCOPE_LOG("ASSIGN"))
             TypeId rightType = {};
@@ -1755,7 +1825,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 auto var = info.ast->addVariable(info.currentScopeId,*statement->name);
 
                 // typeid comes from current scope since we do "var: Type;"
-                var->typeId = statement->typeId;
+                var->typeId = stateTypeId;
                 TypeInfo *typeInfo = info.ast->getTypeInfo(var->typeId.baseType());
                 i32 size = info.ast->getTypeSize(var->typeId);
                 i32 asize = info.ast->getTypeAlignedSize(var->typeId);
@@ -1837,48 +1907,44 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 ERRT(statement->tokenRange) << "datatype for assignment cannot be void\n";
             }
             else if (!id || id->type == Identifier::VAR) {
-                if(var) {
-                    if(!PerformSafeCast(info, rightType, var->typeId)){
-                        ERRTYPE(statement->tokenRange, var->typeId, rightType) << "(assign)\n";
+                bool decl = false;
+                if (stateTypeId.isValid()){
+                    if(!PerformSafeCast(info, rightType, stateTypeId)) {
+                        ERRTYPE(statement->tokenRange, stateTypeId, rightType) << "(assign)\n";
                         ERRTOKENS(statement->tokenRange);
                         continue;
                     }
-                } else if (statement->typeId.isValid()){
-                    if(!PerformSafeCast(info, rightType, statement->typeId)) {
-                        ERRTYPE(statement->tokenRange, statement->typeId, rightType) << "(assign)\n";
-                        ERRTOKENS(statement->tokenRange);
-                        continue;
+                    // create variable
+                    decl = true;
+                    if(!var) {
+                        var = info.ast->addVariable(info.currentScopeId, *statement->name);
+                    } else {
+                        // clear previous variable
+                        *var = {};
                     }
-                }
-            
-                // TODO: nonetype is only valid for as implicit initial decleration.
-                //    Not allowed afterwards? or maybe it's find we just check variable type
-                //    not looking at the statement data type?
-                // TODO: Something special needs to happen if variable is declared
-                //   and you try to assign using a type (a: i32 = 9 where a is declared isn't handled)
-                bool decl = !var;
-                if (!var) {
-                    var = info.ast->addVariable(info.currentScopeId, *statement->name);
-                    if (statement->typeId.getId() != AST_VOID)
-                        var->typeId = statement->typeId;
-                    else
+                    var->typeId = stateTypeId;
+                } else {
+                    // use existing
+                    // create if not existent
+                    if(var) {
+                        if(!PerformSafeCast(info, rightType, var->typeId)){
+                            ERRTYPE(statement->tokenRange, var->typeId, rightType) << "(assign)\n";
+                            ERRTOKENS(statement->tokenRange);
+                            continue;
+                        }
+                    } else {
+                        decl = true;
+                        var = info.ast->addVariable(info.currentScopeId, *statement->name);
                         var->typeId = rightType;
-                    // data type may be zero if it wasn't specified during initial assignment
-                    // a = 9  <-  implicit / explicit  ->  a : i32 = 9
-
-                    /*
-                    If you are wondering whether frameOffset will collide with other push and pops
-                    it won't. push, pop occurs in expressions which are temporary. The only non temporary push
-                    is when we do an assignment.
-                    */
+                    }
                 }
-                // etype comes from gen expression, does the type exist in our scope?
-                // TypeInfo *eInfo = info.ast->getTypeInfo(etype);
-                // variables can be accessed from current or any parent scope.
-                // the type should therefore also exist in one of those scopes.
+                /*
+                If you are wondering whether frameOffset will collide with other push and pops
+                it won't. push, pop occurs in expressions which are temporary. The only non temporary push
+                is when we do an assignment.
+                */
 
                 i32 rightSize = info.ast->getTypeSize(rightType);
-                // u32 asize = info.ast->getTypeAlignedSize(var->typeId);
 
                 i32 leftSize = info.ast->getTypeSize(var->typeId);
                 i32 asize = info.ast->getTypeAlignedSize(var->typeId);
@@ -2326,14 +2392,14 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 if (result == GEN_ERROR) {
                     continue;
                 }
-                if (argi >= (int)info.currentFunction->returnTypes.size()) {
+                if (argi >= (int)info.currentFuncImpl->returnTypes.size()) {
                     continue;
                 }
-                ASTFunction::ReturnType &retType = info.currentFunction->returnTypes[argi];
-                if (!PerformSafeCast(info, retType.typeId, dtype)) {
+                FuncImpl::ReturnValue &retType = info.currentFuncImpl->returnTypes[argi];
+                if (!PerformSafeCast(info, dtype, retType.typeId)) {
                     // if(info.currentFunction->returnTypes[argi]!=dtype){
 
-                    ERRTYPE(expr->tokenRange, dtype, info.currentFunction->returnTypes[argi].typeId) << "(return values)\n";
+                    ERRTYPE(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId) << "(return values)\n";
                 }
                 TypeInfo *typeInfo = 0;
                 if(dtype.isNormalType())
@@ -2367,8 +2433,8 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 _GLOG(log::out << "\n";)
             }
             argi++; // incremented to get argument count
-            if (argi != (int)info.currentFunction->returnTypes.size()) {
-                ERRT(statement->tokenRange) << "Found " << argi << " return value(s) but should have " << info.currentFunction->returnTypes.size() << " for '" << info.currentFunction->name << "'\n";
+            if (argi != (int)info.currentFuncImpl->returnTypes.size()) {
+                ERRT(statement->tokenRange) << "Found " << argi << " return value(s) but should have " << info.currentFuncImpl->returnTypes.size() << " for '" << info.currentFunction->name << "'\n";
             }
 
             // fix stack pointer before returning
@@ -2473,68 +2539,52 @@ Bytecode *Generate(AST *ast, int *err) {
     info.currentScopeId = ast->globalScopeId;
 
     std::vector<ASTFunction *> predefinedFuncs;
-    #define STR_TO_TYPE(X) ast->convertToTypeId(Token(X), ast->globalScopeId)
-    {
-        auto astfun = ast->createFunction("alloc");
-        auto id = info.ast->addFunction(ast->globalScopeId,astfun);
-        astfun->address = BC_EXT_ALLOC;
+    #define PDEF_RET(T) astfun->baseImpl.returnTypes.push_back({ast->convertToTypeId(Token(#T), ast->globalScopeId)});
+    #define PDEF_ARG(N,T) astfun->arguments.push_back({});\
+        astfun->arguments.back().name = #N;\
+        astfun->baseImpl.arguments.push_back({});\
+        astfun->baseImpl.arguments.back().typeId = {ast->convertToTypeId(Token(#T), ast->globalScopeId)};
 
+    {
         // don't add to ast because GenerateBody will want to create the functions
-        
+        auto astfun = ast->createFunction("alloc");
+        auto id = info.ast->addFunction(ast->globalScopeId, astfun->name, astfun);
+        astfun->baseImpl.address = BC_EXT_ALLOC;
         predefinedFuncs.push_back(astfun);
-        astfun->returnTypes.push_back(STR_TO_TYPE("void*"));
-        astfun->arguments.push_back({});
-        astfun->arguments.back().typeId = STR_TO_TYPE("u64");
-        astfun->arguments.back().name = "size";
+        PDEF_RET(void*)
+        PDEF_ARG(size,u64)
     }
     {
         auto astfun = ast->createFunction("realloc");
-        auto id = info.ast->addFunction(ast->globalScopeId, astfun);
-        astfun->address = BC_EXT_REALLOC;
-
+        auto id = info.ast->addFunction(ast->globalScopeId, astfun->name, astfun);
+        astfun->baseImpl.address = BC_EXT_REALLOC;
         predefinedFuncs.push_back(astfun);
-        astfun->returnTypes.push_back(STR_TO_TYPE("void*"));
-        astfun->arguments.push_back({});
-        astfun->arguments.back().typeId = STR_TO_TYPE("void*");
-        astfun->arguments.back().name = "ptr";
-        astfun->arguments.push_back({});
-        astfun->arguments.back().typeId = STR_TO_TYPE("u64");;
-        astfun->arguments.back().name = "oldsize";
-        astfun->arguments.push_back({});
-        astfun->arguments.back().typeId = STR_TO_TYPE("u64");;
-        astfun->arguments.back().name = "size";
+        PDEF_RET(void*)
+        PDEF_ARG(ptr,void*)
+        PDEF_ARG(oldsize,u64)
+        PDEF_ARG(size,u64)
     }
     {
         auto astfun = ast->createFunction("free");
-        auto id = info.ast->addFunction(ast->globalScopeId,astfun);
-        astfun->address = BC_EXT_FREE;
+        auto id = info.ast->addFunction(ast->globalScopeId, astfun->name,astfun);
+        astfun->baseImpl.address = BC_EXT_FREE;
         predefinedFuncs.push_back(astfun);
-        astfun->arguments.push_back({});
-        astfun->arguments.back().typeId = STR_TO_TYPE("void*");
-        astfun->arguments.back().name = "ptr";
-        astfun->arguments.push_back({});
-        astfun->arguments.back().typeId = STR_TO_TYPE("u64");
-        astfun->arguments.back().name = "size";
+        PDEF_ARG(ptr,void*)
+        PDEF_ARG(size,u64)
     }
     {
         auto astfun = ast->createFunction("printi");
-        auto id = info.ast->addFunction(ast->globalScopeId,astfun);
-        astfun->address = BC_EXT_PRINTI;
-
+        auto id = info.ast->addFunction(ast->globalScopeId, astfun->name,astfun);
+        astfun->baseImpl.address = BC_EXT_PRINTI;
         predefinedFuncs.push_back(astfun);
-        astfun->arguments.push_back({});
-        astfun->arguments.back().typeId = STR_TO_TYPE("i64");;
-        astfun->arguments.back().name = "num";
+        PDEF_ARG(num,i64)
     }
     {
         auto astfun = ast->createFunction("printc");
-        auto id = info.ast->addFunction(ast->globalScopeId, astfun);
-        astfun->address = BC_EXT_PRINTC;
-
+        auto id = info.ast->addFunction(ast->globalScopeId, astfun->name, astfun);
+        astfun->baseImpl.address = BC_EXT_PRINTC;
         predefinedFuncs.push_back(astfun);
-        astfun->arguments.push_back({});
-        astfun->arguments.back().typeId = STR_TO_TYPE("char");;
-        astfun->arguments.back().name = "chr";
+        PDEF_ARG(chr,char)
     }
 
     int result = GenerateData(info,info.ast);
@@ -2542,10 +2592,27 @@ Bytecode *Generate(AST *ast, int *err) {
     result = GenerateBody(info, info.ast->mainBody);
     // TODO: What to do about result? nothing?
 
+    std::unordered_map<FuncImpl*, int> resolveFailures;
     for(auto& e : info.callsToResolve){
         auto inst = info.code->get(e.bcIndex);
-        Assert(e.astFunc->address != Identifier::INVALID_FUNC_ADDRESS);
-        *((i32*)inst) = e.astFunc->address;
+        // Assert(e.funcImpl->address != Identifier::INVALID_FUNC_ADDRESS);
+        if(e.funcImpl->address != Identifier::INVALID_FUNC_ADDRESS){
+            *((i32*)inst) = e.funcImpl->address;
+        } else {
+            // ERR() << "Invalid function address for instruction["<<e.bcIndex << "]\n";
+            auto pair = resolveFailures.find(e.funcImpl);
+            if(pair == resolveFailures.end())
+                resolveFailures[e.funcImpl] = 1;
+            else
+                pair->second++;
+        }
+    }
+    if(resolveFailures.size()!=0){
+        log::out << log::RED << "Invalid function resolutions:\n";
+        for(auto& pair : resolveFailures){
+            info.errors += pair.second;
+            log::out << log::RED << " "<<pair.first->name <<": "<<pair.second<<" bad address(es)\n";
+        }
     }
 
     for (auto fun : predefinedFuncs) {

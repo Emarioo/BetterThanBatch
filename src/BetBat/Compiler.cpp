@@ -330,7 +330,7 @@ Bytecode* CompileSource(CompileOptions options) {
     AST::Destroy(compileInfo.ast);
     compileInfo.ast = nullptr;
     if(compileInfo.errors!=0){
-        log::out << log::RED<<"Compilation failed with "<<compileInfo.errors<<" error(s)\n";
+        log::out << log::RED<<"Compiler failed with "<<compileInfo.errors<<" error(s)\n";
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
     }

@@ -154,9 +154,9 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const std::string &name) {
     return &variables[id->varIndex];
 }
 
-Identifier* AST::addFunction(ScopeId scopeId, ASTFunction* func) {
+Identifier* AST::addFunction(ScopeId scopeId, const std::string& name, ASTFunction* func) {
     using namespace engone;
-    auto id = addIdentifier(scopeId, func->name);
+    auto id = addIdentifier(scopeId, name);
     if(!id)
         return nullptr;
 
@@ -451,70 +451,136 @@ ScopeInfo* AST::getScope(ScopeId id){
     return _scopeInfos[id];
 }
 ScopeInfo* AST::getScope(Token name, ScopeId scopeId){
-    ScopeInfo* scope = getScope(scopeId);
-    if(!scope) return nullptr;
-
-    int splitIndex = -1;
-    for(int i=0;i<name.length-1;i++){
-        if(name.str[i] == ':' && name.str[i+1] == ':'){
-            splitIndex = i;
+    using namespace engone;
+    Token nextName = name;
+    ScopeId nextScopeId = scopeId;
+    int safetyLimit = 100;
+    while(true) {
+        if(!safetyLimit--) {
+            log::out << log::RED << __func__ << ": while safety limit broken\n";
             break;
         }
-    }
-    if(splitIndex == -1){
-        auto pair = scope->nameScopeMap.find(name);
-        if(pair == scope->nameScopeMap.end()){
-            return nullptr;   
+        ScopeInfo* scope = getScope(nextScopeId);
+        if(!scope) return nullptr;
+        int splitIndex = -1;
+        for(int i=0;i<nextName.length-1;i++){
+            if(nextName.str[i] == ':' && nextName.str[i+1] == ':'){
+                splitIndex = i;
+                break;
+            }
         }
-        return getScope(pair->second);
-    } else {
-        Token first = {};
-        first.str = name.str;
-        first.length = splitIndex;
-        Token rest = {};
-        rest.str = name.str += splitIndex+2;
-        rest.length = name.length - (splitIndex + 2);
-        auto pair = scope->nameScopeMap.find(first);
-        if(pair == scope->nameScopeMap.end()){
+        if(splitIndex == -1){
+            auto pair = scope->nameScopeMap.find(nextName);
+            if(pair != scope->nameScopeMap.end()){
+                return getScope(pair->second);
+            }
+            for(int i=0;i<(int)scope->usingScopes.size();i++){
+                ScopeInfo* usingScope = scope->usingScopes[i];
+                auto pair = usingScope->nameScopeMap.find(nextName);
+                if(pair != usingScope->nameScopeMap.end()){
+                    return getScope(pair->second);
+                }
+            }
+            return nullptr;
+        } else {
+            Token first = {};
+            first.str = nextName.str;
+            first.length = splitIndex;
+            Token rest = {};
+            rest.str = nextName.str += splitIndex+2;
+            rest.length = nextName.length - (splitIndex + 2);
+            auto pair = scope->nameScopeMap.find(first);
+            if(pair != scope->nameScopeMap.end()){
+                nextName = rest;
+                nextScopeId = pair->second;
+                continue;
+            }
+            bool cont = false;
+            for(int i=0;i<(int)scope->usingScopes.size();i++){
+                ScopeInfo* usingScope = scope->usingScopes[i];
+                auto pair = usingScope->nameScopeMap.find(first);
+                if(pair != usingScope->nameScopeMap.end()){
+                    nextName = rest;
+                    nextScopeId = pair->second;
+                    cont = true;
+                    break;
+                }
+            }
+            if(cont) continue;
             return nullptr;
         }
-        return getScope(rest, pair->second);
     }
+    return nullptr;
 }
 ScopeInfo* AST::getScopeFromParents(Token name, ScopeId scopeId){
-    ScopeInfo* scope = getScope(scopeId);
-    if(!scope) return nullptr;
+    using namespace engone;
 
-    int splitIndex = -1;
-    for(int i=0;i<name.length-1;i++){
-        if(name.str[i] == ':' && name.str[i+1] == ':'){
-            splitIndex = i;
+    Token nextName = name;
+    ScopeId nextScopeId = scopeId;
+    int safetyLimit = 100;
+    while(true) {
+        if(!safetyLimit--) {
+            log::out << log::RED << __func__ << ": while safety limit broken\n";
             break;
         }
-    }
-    if(splitIndex == -1){
-        auto pair = scope->nameScopeMap.find(name);
-        if(pair == scope->nameScopeMap.end()){
-            if(scopeId != scope->parent) // Prevent infinite loop. Mainly for global scope.
-                return getScope(name, scope->parent);
+        ScopeInfo* scope = getScope(nextScopeId);
+        if(!scope) return nullptr;
+        int splitIndex = -1;
+        for(int i=0;i<nextName.length-1;i++){
+            if(nextName.str[i] == ':' && nextName.str[i+1] == ':'){
+                splitIndex = i;
+                break;
+            }
+        }
+        if(splitIndex == -1){
+            auto pair = scope->nameScopeMap.find(nextName);
+            if(pair != scope->nameScopeMap.end()){
+                return getScope(pair->second);
+            }
+            for(int i=0;i<(int)scope->usingScopes.size();i++){
+                ScopeInfo* usingScope = scope->usingScopes[i];
+                auto pair = usingScope->nameScopeMap.find(nextName);
+                if(pair != usingScope->nameScopeMap.end()){
+                    return getScope(pair->second);
+                }
+            }
+            if(nextScopeId != scope->parent) { // Check infinite loop. Mainly for global scope.
+                nextScopeId = scope->parent;
+                continue;
+            }
+            return nullptr;
+        } else {
+            Token first = {};
+            first.str = nextName.str;
+            first.length = splitIndex;
+            Token rest = {};
+            rest.str = nextName.str += splitIndex+2;
+            rest.length = nextName.length - (splitIndex + 2);
+            auto pair = scope->nameScopeMap.find(first);
+            if(pair != scope->nameScopeMap.end()){
+                nextName = rest;
+                nextScopeId = pair->second;
+                continue;
+            }
+            bool cont = false;
+            for(int i=0;i<(int)scope->usingScopes.size();i++){
+                ScopeInfo* usingScope = scope->usingScopes[i];
+                auto pair = usingScope->nameScopeMap.find(nextName);
+                if(pair != usingScope->nameScopeMap.end()){
+                    nextName = rest;
+                    nextScopeId = pair->second;
+                    break;
+                }
+            }
+            if(cont) continue;
+            if(nextScopeId != scope->parent) {
+                nextScopeId = scope->parent;
+                continue;
+            }
             return nullptr;
         }
-        return getScope(pair->second);
-    } else {
-        Token first = {};
-        first.str = name.str;
-        first.length = splitIndex;
-        Token rest = {};
-        rest.str = name.str += splitIndex+2;
-        rest.length = name.length - (splitIndex + 2);
-        auto pair = scope->nameScopeMap.find(first);
-        if(pair == scope->nameScopeMap.end()){
-            if(scopeId != scope->parent)
-                return getScope(name, scope->parent);
-            return nullptr;
-        }
-        return getScope(rest, pair->second);
     }
+    return nullptr;
 }
 
 TypeId AST::getTypeString(Token name){
@@ -615,6 +681,17 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId) {
                 typeInfo = pair->second;
                 break;
             }
+            bool brea=false;
+            for(int i=0;i<(int)scope->usingScopes.size();i++){
+                ScopeInfo* usingScope = scope->usingScopes[i];
+                auto pair = usingScope->nameTypeMap.find(typeName);
+                if(pair != usingScope->nameTypeMap.end()){
+                    typeInfo = pair->second;
+                    brea = true;
+                    break;
+                }
+            }
+            if(brea) break;
             if(nextScopeId==scope->parent) // prevent infinite loop
                 break;
             nextScopeId = scope->parent;
@@ -686,6 +763,19 @@ std::string AST::typeToString(TypeId typeId){
     }
     return out;
 }
+TypeId AST::ensureNonVirtualId(TypeId id){
+    if(!id.isValid() || id.isString()) return id;
+    u32 level = id.getPointerLevel();
+    id = id.baseType();
+    while(true){
+        TypeInfo* ti = getTypeInfo(id);
+        if(!ti || ti->id == id)
+            break;
+        id = ti->id;
+    }
+    id.setPointerLevel(level);
+    return id;
+}
 std::string* AST::createString(){
     std::string* ptr = (std::string*)engone::Allocate(sizeof(std::string));
     new(ptr)std::string();
@@ -735,6 +825,10 @@ void AST::destroy(ASTFunction *function) {
     for (auto &arg : function->arguments) {
         if (arg.defaultValue)
             destroy(arg.defaultValue);
+    }
+    for(auto ptr : function->polyImpls){
+        ptr->~FuncImpl();
+        engone::Free(ptr,sizeof(FuncImpl));
     }
     function->~ASTFunction();
     engone::Free(function, sizeof(ASTFunction));
@@ -1259,19 +1353,30 @@ void ASTScope::print(AST *ast, int depth) {
 void ASTFunction::print(AST *ast, int depth) {
     using namespace engone;
     PrintSpace(depth);
-    log::out << "Func " << name << " (";
+    log::out << "Func " << name;
+    if(polyArgs.size()!=0){
+        log::out << "<";
+        for(int i=0;i<(int)polyArgs.size();i++){
+            if(i!=0)
+                log::out << ",";
+            log::out << polyArgs[i].name;
+        }
+        log::out << ">";
+    }
+    log::out << "(";
     for (int i = 0; i < (int)arguments.size(); i++) {
         auto &arg = arguments[i];
+        auto &argImpl = baseImpl.arguments[i];
         log::out << arg.name << ": ";
-        log::out << ast->typeToString(arg.typeId);
+        log::out << ast->typeToString(argImpl.typeId);
         if (i + 1 != (int)arguments.size()) {
             log::out << ", ";
         }
     }
     log::out << ")";
-    if (!returnTypes.empty())
+    if (!baseImpl.returnTypes.empty())
         log::out << "->";
-    for (auto &ret : returnTypes) {
+    for (auto &ret : baseImpl.returnTypes) {
         // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
         // log::out << dtname << ", ";
         log::out << ast->typeToString(ret.typeId) << ", ";
