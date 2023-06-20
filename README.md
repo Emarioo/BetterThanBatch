@@ -1,5 +1,10 @@
 # BetterThanBatch
-A compiler and runtime for a new programming language.
+A compiler and interpreter for a new programming language.
+
+It will be better than batch for your average scripting needs.
+It will be useful for making neat programs, exploring data structures
+and visualising data using a straight forward rendering
+library (abstraction of Vulkan or OpenGL).
 
 ## Features
 - Variables, functions, namespaces, structs, enums.
@@ -12,9 +17,9 @@ A compiler and runtime for a new programming language.
 - #include to tokenize a file and transfer the tokens into another file.
 
 ## On the way
+- Polymorphism in structs, functions and methods.
 - Usage of C++ functions within a script
 - Calling executables like gcc.exe
-- Polymorphism
 - Operator and function overloading
 - Thorough documentation.
 
