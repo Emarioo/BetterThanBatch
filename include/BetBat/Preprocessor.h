@@ -65,10 +65,6 @@ struct PreprocInfo {
 
     CompileInfo* compileInfo = 0; // for caching includes
 
-    int errors=0;
-    int warnings=0;
-    
-    
     // int ifdefDepth=0;
     // token range
     // start ... end-1
@@ -98,4 +94,4 @@ struct PreprocInfo {
     Token& get(int index);
     void nextline();
 };
-void Preprocess(CompileInfo* compileInfo, TokenStream* tokens, int* error=0);
+void Preprocess(CompileInfo* compileInfo, TokenStream* tokens);

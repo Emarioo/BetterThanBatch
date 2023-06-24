@@ -90,7 +90,7 @@ void Interpreter::execute(Bytecode* bytecode){
     
     auto tp = MeasureTime();
     
-    _ILOG(log::out << "sp = "<<sp<<"\n";)
+    // _ILOG(log::out << "sp = "<<sp<<"\n";)
     
     // u64* savedFp = 0;
     u64 executedInstructions = 0;
@@ -346,7 +346,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             int size = 1<<DECODE_REG_TYPE(r1);
             if(((uint64)from % size) != 0){
-                log::out << log::RED<<"r0 (pointer: "<<(uint64)from<<") should be "<<size<<"-byte aligned\n";
+                log::out << log::RED<<"r0 (pointer: "<<(uint64)from<<") not aligned by "<<size<<" bytes\n";
                 continue;
             }
             // SET_TO_FROM(r1)
@@ -381,7 +381,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             int size = 1<<DECODE_REG_TYPE(r0);
             if(((uint64)to % size) != 0){
-                log::out << log::RED<<"r1 (pointer: "<<(uint64)from<<") should be "<<size<<"-byte aligned\n";
+                log::out << log::RED<<"r1 (pointer: "<<(uint64)from<<") not aligned by "<<size<<" bytes\n";
                 continue;
             }
             yeah(r0,from,to);
@@ -469,7 +469,7 @@ void Interpreter::execute(Bytecode* bytecode){
             void* from = getReg(r0);
 
             if(((uint64)to % rsize) != 0){
-                log::out << log::RED<<"sp (pointer: "<<(uint64)to<<") should be "<<rsize<<"-byte aligned\n";
+                log::out << log::RED<<"sp (pointer: "<<(uint64)to<<") not aligned by "<<rsize<<" bytes\n";
                 continue;
             }
             yeah(r0,from,to);
@@ -500,7 +500,7 @@ void Interpreter::execute(Bytecode* bytecode){
             void* to = getReg(r0);
             void* from = (void*)sp;
             if(((uint64)from % rsize) != 0){
-                log::out << log::RED<<"sp (pointer: "<<(uint64)from<<") should be "<<rsize<<"-byte aligned\n";
+                log::out << log::RED<<"sp (pointer: "<<(uint64)from<<") not aligned by "<<rsize<<" bytes\n";
                 continue;
             }
             yeah(r0,from,to);

@@ -101,14 +101,11 @@ ASTScope* ParseFile(CompileInfo& info, const engone::Memory& data, std::string a
         TokenStream* old = tokenStream;
         
         _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path.text)<<"\n";)
-        int errs = 0;
-        Preprocess(&info, tokenStream, &errs);
+        Preprocess(&info, tokenStream);
         if (tokenStream->enabled == LAYER_PREPROCESSOR)
             tokenStream->print();
-        info.errors += errs;
-        if(errs){
-            return nullptr;
-        }
+        // TODO: quit if errors? unfortunately we don't have that information
+        //  since errors are added to compileInfo's errors
     }
     
     // Path dir = path.getDirectory();
@@ -173,7 +170,7 @@ ASTScope* ParseFile(CompileInfo& info, const engone::Memory& data, std::string a
     }
     
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path.text)<<"\n";)
-    ASTScope* body = ParseTokens(tokenStream,info.ast,&info.errors, as);
+    ASTScope* body = ParseTokens(tokenStream,info.ast,&info, as);
     return body;
 }
 // does not handle backslash
@@ -194,14 +191,9 @@ ASTScope* ParseFile(CompileInfo& info, const Path& path, std::string as){
         TokenStream* old = tokenStream;
         
         _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path.text)<<"\n";)
-        int errs = 0;
-        Preprocess(&info, tokenStream, &errs);
+        Preprocess(&info, tokenStream);
         if (tokenStream->enabled == LAYER_PREPROCESSOR)
             tokenStream->print();
-        info.errors += errs;
-        if(errs){
-            return nullptr;
-        }
     }
     
     Path dir = path.getDirectory();
@@ -265,7 +257,7 @@ ASTScope* ParseFile(CompileInfo& info, const Path& path, std::string as){
     }
     
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path.text)<<"\n";)
-    ASTScope* body = ParseTokens(tokenStream,info.ast,&info.errors, as);
+    ASTScope* body = ParseTokens(tokenStream,info.ast,&info, as);
     return body;
 }
 
@@ -303,7 +295,7 @@ Bytecode* CompileSource(CompileOptions options) {
     
     _VLOG(log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
 
-    compileInfo.errors += TypeCheck(compileInfo.ast, compileInfo.ast->mainBody);
+    TypeCheck(compileInfo.ast, compileInfo.ast->mainBody, &compileInfo);
     
     // if(compileInfo.errors==0){
     // }
@@ -313,7 +305,7 @@ Bytecode* CompileSource(CompileOptions options) {
         // && compileInfo.errors==0 /* commented out so we keep going and catch more errors */
         ){
         _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
-        bytecode = Generate(compileInfo.ast, &compileInfo.errors);
+        bytecode = Generate(compileInfo.ast, &compileInfo);
     // }
     }
 
@@ -333,6 +325,9 @@ Bytecode* CompileSource(CompileOptions options) {
         log::out << log::RED<<"Compiler failed with "<<compileInfo.errors<<" error(s)\n";
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
+    }
+    if(compileInfo.warnings!=0){
+        log::out << log::YELLOW<<"Compiler had "<<compileInfo.warnings<<" warning(s)\n";
     }
     compileInfo.cleanup();
     return bytecode;

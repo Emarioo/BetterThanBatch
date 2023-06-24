@@ -2,10 +2,11 @@
 
 #include "BetBat/AST.h"
 #include "BetBat/Bytecode.h"
-
+struct CompileInfo;
 struct GenInfo {
     Bytecode* code=nullptr;
     AST* ast=nullptr;
+    CompileInfo* compileInfo=nullptr;
     int errors=0;
     int warnings=0;
     
@@ -59,4 +60,4 @@ struct GenInfo {
     int currentFrameOffset=0;
     static const int ARG_OFFSET=16;
 };
-Bytecode* Generate(AST* ast, int* err);
+Bytecode* Generate(AST* ast, CompileInfo* compileInfo);

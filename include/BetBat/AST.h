@@ -289,7 +289,7 @@ struct ASTStatement {
     std::string* name=0;
     std::string* alias=0;
     TypeId typeId={};
-    ASTExpression* lvalue=0;
+    // ASTExpression* lvalue=0;
     ASTExpression* rvalue=0;
     ASTScope* body=0;
     ASTScope* elseBody=0;
@@ -325,11 +325,17 @@ struct ASTStruct {
     State state=TYPE_EMPTY;
 
     ScopeId scopeId=0;
+    struct Method {
+        ASTFunction* astFunc=nullptr;
+        FuncImpl* funcImpl=nullptr;
+    };
+    std::unordered_map<std::string, Method> methods;
 
     ASTFunction* functions = 0;
     ASTFunction* functionsTail = 0;
-    void add(ASTFunction* func);
-    ASTFunction* getFunction(const std::string& name);
+    void add(ASTFunction* func, FuncImpl* funcImpl);
+    void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
+    Method getMethod(const std::string& name);
 
     ASTStruct* next=0;
 

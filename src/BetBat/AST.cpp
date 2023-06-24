@@ -7,9 +7,9 @@ const char *OpToStr(OperationType optype) {
     switch (optype) {
         CASE(ADD, +)
         CASE(SUB, -)
-        CASE(MUL, *)
+        CASE(MUL, * (multiplication))
         CASE(DIV, /)
-        CASE(MODULUS, /)
+        CASE(MODULUS, %)
 
         CASE(EQUAL, ==)
         CASE(NOT_EQUAL, !=)
@@ -21,21 +21,21 @@ const char *OpToStr(OperationType optype) {
         CASE(OR, ||)
         CASE(NOT, !)
 
-        CASE(BAND, &)
-        CASE(BOR, |)
-        CASE(BXOR, ^)
-        CASE(BNOT, ~)
-        CASE(BLSHIFT, <<)
-        CASE(BRSHIFT, >>)
+        CASE(BAND, & (bitwise and))
+        CASE(BOR, | (bitwise or))
+        CASE(BXOR, ^ (bitwise xor))
+        CASE(BNOT, ~ (bitwise not))
+        CASE(BLSHIFT, << (bit shift))
+        CASE(BRSHIFT, >> (bit shift))
 
         CASE(CAST, cast)
         CASE(MEMBER, member)
         CASE(INITIALIZER, initializer)
         CASE(SLICE_INITIALIZER, slice_initializer)
         CASE(FROM_NAMESPACE, namespaced)
-        CASE(ASSIGN, assign)
+        CASE(ASSIGN, =)
 
-        CASE(REFER, &)
+        CASE(REFER, & (reference))
         CASE(DEREF, * (dereference))
         default: return "?";
     }
@@ -221,16 +221,20 @@ ASTFunction *AST::getFunction(Identifier* id) {
     // return &functions[index];
 }
 
-ASTFunction* ASTStruct::getFunction(const std::string& name){
-    ASTFunction* next = functions;
-    while(next){
-        ASTFunction* now = next;
-        next = next->next;
-        if(now->name == name){
-            return now;
-        }
-    }
-    return nullptr;
+ASTStruct::Method ASTStruct::getMethod(const std::string& name){
+    auto pair = methods.find(name);
+    if(pair == methods.end())
+        return {};
+    return pair->second;
+    // ASTFunction* next = functions;
+    // while(next){
+    //     ASTFunction* now = next;
+    //     next = next->next;
+    //     if(now->name == name){
+    //         return now;
+    //     }
+    // }
+    // return nullptr;
 }
 
 void AST::removeIdentifier(ScopeId scopeId, const std::string &name) {
@@ -852,8 +856,8 @@ void AST::destroy(ASTStatement *statement) {
         engone::Free(statement->alias, sizeof(std::string));
         statement->alias = nullptr;
     }
-    if (statement->lvalue)
-        destroy(statement->lvalue);
+    // if (statement->lvalue)
+    //     destroy(statement->lvalue);
     if (statement->rvalue)
         destroy(statement->rvalue);
     if (statement->body)
@@ -1243,7 +1247,12 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
 //     return {};
 // }
 
-void ASTStruct::add(ASTFunction* func){
+void ASTStruct::add(ASTFunction* func, FuncImpl* funcImpl){
+    auto pair = methods.find(func->name);
+    Assert(pair == methods.end());
+
+    methods[func->name] = {func, funcImpl};
+
     if(!functions){
         functions = func;
         functionsTail = func;
@@ -1253,6 +1262,13 @@ void ASTStruct::add(ASTFunction* func){
     while(functionsTail->next){
         functionsTail = functionsTail->next;
     }
+}
+
+void ASTStruct::addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl){
+    auto pair = methods.find(name);
+    Assert(pair == methods.end());
+
+    methods[name] = {func, funcImpl};
 }
 std::string ScopeInfo::getFullNamespace(AST* ast){
     std::string ns = "";
@@ -1456,9 +1472,9 @@ void ASTStatement::print(AST *ast, int depth) {
     // if(opType!=0)
     //     log::out << " "<<OpToStr((OperationType)opType)<<"=";
     log::out << "\n";
-    if (lvalue) {
-        lvalue->print(ast, depth + 1);
-    }
+    // if (lvalue) {
+    //     lvalue->print(ast, depth + 1);
+    // }
     if (rvalue) {
         rvalue->print(ast, depth + 1);
     }
@@ -1511,7 +1527,13 @@ void ASTExpression::print(AST *ast, int depth) {
         } else
             log::out << "\n";
     } else {
-        log::out << "Expr " << OpToStr((OperationType)typeId.getId()) << " ";
+        log::out << "Expr ";
+        if(typeId == AST_ASSIGN) {
+            if(castType.getId()!=0){
+                log::out << OpToStr((OperationType)castType.getId());
+            }
+        }
+        log::out << OpToStr((OperationType)typeId.getId()) << " ";
         if (typeId == AST_CAST) {
             log::out << ast->typeToString(castType);
             log::out << "\n";
@@ -1531,9 +1553,9 @@ void ASTExpression::print(AST *ast, int depth) {
             if(left)
                 left->print(ast, depth + 1);
         } else if(typeId == AST_ASSIGN) {
-            if(castType.getId()!=0){
-                log::out << OpToStr((OperationType)castType.getId());
-            }
+            // if(castType.getId()!=0){
+            //     log::out << OpToStr((OperationType)castType.getId());
+            // }
             log::out << "\n";
             if (left) {
                 left->print(ast, depth + 1);

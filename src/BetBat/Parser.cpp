@@ -1,4 +1,5 @@
 #include "BetBat/Parser.h"
+#include "BetBat/Compiler.h"
 
 #undef ERR
 #undef ERR_END
@@ -8,15 +9,15 @@
 #undef ERR_LINE
 // #undef ERRAT
 
-#define ERR_HEAD2(T) info.errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000")
-// #define ERR_HEAD(T, M) info.errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000")
-#define WARN_HEAD2(T) engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse error","E0000")
+#define ERR_HEAD2(T) info.compileInfo->errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000")
+#define WARN_HEAD2(T) info.compileInfo->warnings++; engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse error","E0000")
 
-#define WARN_HEAD(T, M) info.warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
-#define ERR_HEAD(T, M) info.errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000") << M
+#define WARN_HEAD(T, M) info.compileInfo->warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
+#define ERR_HEAD(T, M) info.compileInfo->errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000") << M
 #define ERR_LINE(I, M) PrintCode(I, info.tokens, M)
+#define WARN_LINE(I, M) PrintCode(I, info.tokens, M)
 
-#define ERR info.errors++;engone::log::out << engone::log::RED << "(Parse error E0000): "
+#define ERR info.compileInfo->errors++;engone::log::out << engone::log::RED << "(Parse error E0000): "
 #define ERR_END MSG_END
 
 #define INST engone::log::out << (info.code.length()-1)<<": " <<(info.code.get(info.code.length()-1)) << ", "
@@ -394,7 +395,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             if(result!=PARSE_SUCCESS){
                 continue;
             }
-            astStruct->add(func);
+            astStruct->add(func,func->polyArgs.size()==0?&func->baseImpl:nullptr);
         } else {
             if(!IsName(name)){
                 info.next();
@@ -778,15 +779,34 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     continue;
                 }
                 info.next();
-                int startToken=info.at(); // start of fncall
 
                 Token tok = info.get(info.at()+1);
+                std::string polyTypes="";
+                if(Equal(tok,"<")){
+                    info.next();
+                    // polymorphic type or function
+                    polyTypes += "<";
+                    int depth = 1;
+                    while(!info.end()){
+                        tok = info.next();
+                        polyTypes+=tok;
+                        if(Equal(tok,">")){
+                            depth--;
+                        }
+                        if(depth==0){
+                            break;
+                        }
+                    }
+                }
+
+                int startToken=info.at(); // start of fncall
+                tok = info.get(info.at()+1);
                 if(Equal(tok, "(")){
                     info.next();
                     // fncall for strucy methods
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
                     tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
-                    new(tmp->name)std::string(token);
+                    new(tmp->name)std::string(std::string(token)+polyTypes);
                     
                     // TODO: AST_REFER only works with variables. Pointers won't work.
                     //  A redesign of how variables, pointers, members are handled will
@@ -809,9 +829,15 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
                     tmp->tokenRange.tokenStream = info.tokens;
+                    refer->tokenRange = tmp->tokenRange;
 
                     values.push_back(tmp);
                     continue;
+                }
+                if(polyTypes.length()!=0){
+                    ERR_HEAD(info.now(),
+                    "Polymorphic arguments indicates a method call put the parenthesis for it is missing. '"<<info.get(info.at()+1)<<"' is not '('.";
+                    )
                 }
                 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_MEMBER));
@@ -842,6 +868,15 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
             } else if((opType = IsOp(token))){
+
+                // if(Equal(token,"*") && (info.now().flags&TOKEN_SUFFIX_LINE_FEED)){
+                if(info.now().flags&TOKEN_SUFFIX_LINE_FEED){
+                    WARN_HEAD(token, "'"<<token << "' is treated as a multiplication but perhaps you meant to do a dereference since the operation exists on a new line. "
+                        "Separate with a semi-colon for dereference or put the multiplication on the same line to silence this message.\n\n";
+                        WARN_LINE(info.at(), "semi-colon is recommended after statements");
+                        WARN_LINE(info.at()+1, "should this be left and right operation");
+                    )
+                }
                 info.next();
 
                 ops.push_back(opType);
@@ -855,11 +890,10 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 if(Equal(token,";")){
                     info.next();
                 } else {
-                    info.warnings++;
                     Token prev = info.now();
-                    if((prev.flags&TOKEN_SUFFIX_LINE_FEED) == 0){
-                        WARN_HEAD(token, "Did you forget semi-colon, was it intentional or did you mistype a character?\n\n"; 
-                            ERR_LINE(tokenIndex-1, "semi-colon after this");
+                    if((prev.flags&TOKEN_SUFFIX_LINE_FEED) == 0 && !Equal(token,"}") && !Equal(token,",") && !Equal(token,")")){
+                        WARN_HEAD(token, "Did you forget the semi-colon to end the statement or was it intentional? Perhaps you mistyped a character? (put the next statement on a new line to silence this warning)\n\n"; 
+                            ERR_LINE(tokenIndex-1, "semi-colon here?");
                             // ERR_LINE(tokenIndex, "; before this?");
                             )
                         // TODO: ERROR instead of warning if special flag is set
@@ -876,6 +910,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 info.next();
                 ops.push_back(AST_DEREF);
                 attempt = false;
+
                 continue;
             } else if(Equal(token,"!")){
                 info.next();
@@ -1354,7 +1389,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 if(!IsSingleOp(op1) && values.size()<2)
                     break;
                 OperationType op2 = ops[ops.size()-1];
-                if(OpPrecedence(op1)>=OpPrecedence(op2)){
+                // if(OpPrecedence(op1)>=OpPrecedence(op2)){
+                if(OpPrecedence(op1)>OpPrecedence(op2)){
                     nowOp = op1;
                     ops[ops.size()-2] = op2;
                     ops.pop_back();
@@ -1391,8 +1427,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 } else if(nowOp == AST_CAST){
                     val->castType = castTypes.back();
                     castTypes.pop_back();
+                } else {
+                    val->tokenRange.startIndex--;
                 }
-                
                 val->left = er;
             } else if(values.size()>0){
                 auto el = values.back();
@@ -1720,9 +1757,9 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     }
 
     if(parentStruct) {
-        if(function->polyArgs.size()!=0) {
-            WARN_HEAD2(tok) << "Warning! polymorphism doesn't work with methods! (yet)\n";
-        }
+        // if(function->polyArgs.size()!=0) {
+        //     WARN_HEAD2(tok) << "Warning! polymorphism doesn't work with methods! (yet)\n";
+        // }
         function->arguments.push_back({});
         auto& argv = function->arguments.back();
         argv.name = "this";
@@ -1991,9 +2028,9 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     int result = 0;
     result = ParseExpression(info,rvalue,false);
 
-    if(result!=PARSE_SUCCESS){
-        return PARSE_ERROR;
-    }
+    // if(result!=PARSE_SUCCESS){
+    //     return PARSE_ERROR;
+    // }
 
     statement->rvalue = rvalue;
     
@@ -2154,7 +2191,7 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
     return PARSE_SUCCESS;
 }
 
-ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr, std::string theNamespace){
+ASTScope* ParseTokens(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace){
     using namespace engone;
     MEASURE;
     // _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
@@ -2162,6 +2199,7 @@ ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr, std::string th
     ParseInfo info{tokens};
     info.tokens = tokens;
     info.ast = ast;
+    info.compileInfo = compileInfo;
     info.currentScopeId = ast->globalScopeId;
     
     // if(optionalAST)
@@ -2189,13 +2227,5 @@ ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr, std::string th
     int result = ParseBody(info, body, true);
     
     info.currentScopeId = prevScope;
-    
-    if(outErr){
-        *outErr += info.errors;
-    }
-    
-    // compiler logs the error count, dont need it here too
-    // if(info.errors)
-    //     log::out << log::RED<<"Parser failed with "<<info.errors<<" error(s)\n";
     
     return body;}

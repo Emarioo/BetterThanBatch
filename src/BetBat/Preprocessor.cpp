@@ -9,9 +9,9 @@
 #undef WARN_END
 #undef ERR_END
 
-#define ERR_HEAD(T) info.errors++;engone::log::out << ERR_CUSTOM(info.inTokens->streamName, T.line,T.column,"Preproc. error","E0000")
-#define ERR_HEADL(T) info.errors++;engone::log::out << ERR_CUSTOM(info.inTokens->streamName, T.line, T.column, "Preproc. error","E0000")
-#define WARN_HEAD(T) engone::log::out << WARN_CUSTOM(info.inTokens->streamName, T.line, T.column, "Preproc. warning","W0000")
+#define ERR_HEAD(T) info.compileInfo->errors++;engone::log::out << ERR_CUSTOM(info.inTokens->streamName, T.line,T.column,"Preproc. error","E0000")
+#define ERR_HEADL(T) info.compileInfo->errors++;engone::log::out << ERR_CUSTOM(info.inTokens->streamName, T.line, T.column, "Preproc. error","E0000")
+#define WARN_HEAD(T) info.compileInfo->warnings++;engone::log::out << WARN_CUSTOM(info.inTokens->streamName, T.line, T.column, "Preproc. warning","W0000")
 #define ERR_END MSG_END
 #define WARN_END MSG_END
 
@@ -1139,7 +1139,7 @@ int ParseToken(PreprocInfo& info){
     info.addToken(token);
     return PARSE_SUCCESS;
 }
-void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens, int* error){
+void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
     using namespace engone;
     MEASURE;
     // _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
@@ -1155,8 +1155,6 @@ void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens, int* error){
     }
     // info.tokens->lines = info->inTokens.lines;
     // info.inTokens.
-    if(info.errors)
-        log::out << log::RED << "Preprocessor failed with "<<info.errors<<" error(s)\n";
     info.outTokens->finalizePointers();
     
     inTokens->tokens.resize(0);
@@ -1169,10 +1167,4 @@ void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens, int* error){
     
     if(info.tempStream)
         TokenStream::Destroy(info.tempStream);
-
-    // log::out << log::BLUE<<"### # # #  #  #  #    #    #\n";
-    // inTokens->copyInfo(*info.outTokens);
-    if(error)
-        *error = info.errors;
-    // return info.outTokens;
 }

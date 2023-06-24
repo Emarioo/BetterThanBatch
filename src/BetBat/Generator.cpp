@@ -1,4 +1,5 @@
 #include "BetBat/Generator.h"
+#include "BetBat/Compiler.h"
 
 #undef ERR_HEAD2
 #undef ERR_HEAD
@@ -16,7 +17,8 @@
 #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000")
 #define ERR_HEAD(R, M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000") << M
 #define ERR_LINE(R, M) PrintCode(&R, M)
-#define ERRTYPE(R, LT, RT) ERR_HEAD2(R) << "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " "
+#define ERRTYPE(R, LT, RT, M) ERR_HEAD(R, "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M)
+// #define ERRTYPE2(R, LT, RT) ERR_HEAD2(R) << "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " "
 #define ERR_END MSG_END
 
 #define LOGAT(R) R.firstToken.line << ":" << R.firstToken.column
@@ -361,123 +363,147 @@ int GenerateReference(GenInfo& info, ASTExpression* expression, TypeId* outTypeI
         idScope = info.currentScopeId;
     *outTypeId = AST_VOID;
 
-    if(expression->typeId == AST_VAR) {
-        auto id = info.ast->getIdentifier(idScope, *expression->name);
-        if (!id || id->type != Identifier::VAR) {
-            ERR_HEAD2(expression->tokenRange) << expression->tokenRange.firstToken << " is undefined\n";
-            ERR_END
-            // log::out << log::RED<<"var "<<*expression->varName<<" undefined\n";
-            return GEN_ERROR;
-        }
-    
-        auto var = info.ast->getVariable(id);
-        // TODO: check data type?
-        // fp + offset
-        // TODO: what about struct
-        _GLOG(log::out << " expr var push " << *expression->name << "\n";)
+    std::vector<ASTExpression*> exprs;
+    TypeId endType = {};
+    bool pointerType=false;
+    ASTExpression* next=expression;
+    while(next){
+        ASTExpression* now = next;
+        next = next->left;
 
-        TOKENINFO(expression->tokenRange)
-        // char buf[100];
-        // int len = sprintf(buf,"  expr push %s",expression->name->c_str());
-        // info.code->addDebugText(buf,len);
-
-        TypeInfo *typeInfo = 0;
-        if(var->typeId.isNormalType())
-            typeInfo = info.ast->getTypeInfo(var->typeId);
-        TypeId typeId = var->typeId;
-        // typeId.setPointerLevel(var->typeId.getPointerLevel()+1);
-
-        info.code->add({BC_LI, BC_REG_RBX});
-        info.code->addIm(var->frameOffset);
-        info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
-        info.addPush(BC_REG_RBX);
-
-        *outTypeId = typeId;
-        return GEN_SUCCESS;
-    } else if(expression->typeId == AST_MEMBER) {
-        TypeId ltype = {};
-        int result = GenerateReference(info,expression->left, &ltype, idScope);
-        if(result != GEN_SUCCESS){
-            return GEN_ERROR;
-        }
-
-        TypeInfo* typeInfo = nullptr;
-        if(ltype.isNormalType()) {
-            typeInfo = info.ast->getTypeInfo(ltype);
-        }
-        if(!typeInfo || !typeInfo->astStruct){
-            ERR_HEAD2(expression->tokenRange) << info.ast->typeToString(ltype)<<" is not a struct. Cannot access member.\n";
-            ERR_END
-            return GEN_ERROR;
-        }
-
-        auto memberData = typeInfo->getMember(*expression->name);
-        if(memberData.index==-1){
-            ERR_HEAD2(expression->tokenRange) << *expression->name<<" is not a member of "<<info.ast->typeToString(ltype)<<"\n";
-            ERR_END
-            return GEN_ERROR;
-        }
+        if(now->typeId == AST_VAR) {
+            // end point
+            auto id = info.ast->getIdentifier(idScope, *now->name);
+            if (!id || id->type != Identifier::VAR) {
+                ERR_HEAD2(now->tokenRange) << now->tokenRange.firstToken << " is undefined\n";
+                ERR_END
+                return GEN_ERROR;
+            }
         
-        info.addPop(BC_REG_RBX);
-        info.code->add({BC_LI,BC_REG_EAX});
-        info.code->addIm(memberData.offset);
-        info.code->add({BC_ADDI,BC_REG_RBX, BC_REG_EAX, BC_REG_RBX});
-        info.addPush(BC_REG_RBX);
+            auto var = info.ast->getVariable(id);
+            _GLOG(log::out << " expr var push " << *now->name << "\n";)
+            TOKENINFO(now->tokenRange)
+            // char buf[100];
+            // int len = sprintf(buf,"  expr push %s",now->name->c_str());
+            // info.code->addDebugText(buf,len);
 
-        *outTypeId = memberData.typeId;
-        return GEN_SUCCESS;
-    } 
-    // else if(expression->typeId == AST_REFER){
-    //     TypeId ltype = {};
-    //     int result = GenerateReference(info,expression->left, &ltype, idScope);
+            TypeInfo *typeInfo = 0;
+            if(var->typeId.isNormalType())
+                typeInfo = info.ast->getTypeInfo(var->typeId);
+            TypeId typeId = var->typeId;
 
-        
-    //     if(expression->left->typeId == AST_VAR) {
-    //         TypeId ltype = {};
-    //         ltype.setPointerLevel(ltype.getPointerLevel()+1);
-    //         *outTypeId = ltype;
-    //         return GEN_SUCCESS;
-    //     } else if(expression->left->typeId == AST_MEMBER) {
+            info.code->add({BC_LI, BC_REG_RBX});
+            info.code->addIm(var->frameOffset);
+            info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
+            info.addPush(BC_REG_RBX);
 
-    //         return GEN_SUCCESS;
-    //     }
-    // }
-     else if(expression->typeId == AST_DEREF){
-        TypeId ltype = {};
-        int result = GenerateReference(info, expression, &ltype, idScope);
-        if(result!=GEN_SUCCESS){
-            return GEN_ERROR;
+            endType = typeId;
+            break;
+        } else if(now->typeId == AST_MEMBER || now->typeId == AST_DEREF){
+            //  ||now->typeId == AST_REFER) {
+            // TODO: Refer is handled in GenerateExpression since refer will
+            //   be combined with other operations. Refer on it's own isn't
+            //   very useful and therefore not common so there is not
+            //   benefit of handling refer here. Probably.
+            exprs.push_back(now);
+        } else {
+            // end point
+            TypeId ltype = {};
+            int result = GenerateExpression(info, now, &ltype, idScope);
+            if(result!=GEN_SUCCESS){
+                return GEN_ERROR;
+            }
+            if(!ltype.isPointer()){
+                ERR_HEAD(now->tokenRange,
+                    "'"<<now->tokenRange<<
+                    "' must be a reference to some memory. "
+                    "A variable, member or expression resulting in a dereferenced pointer would be.\n\n";
+                    ERR_LINE(now->tokenRange, "must be a reference");
+                    )
+                return GEN_ERROR;
+            }
+            endType = ltype;
+            pointerType=true;
+            break;
         }
-        if(ltype.isPointer()){
-            ERR_HEAD2(expression->tokenRange) << info.ast->typeToString(ltype)<<" is not a pointer\n";
-            ERR_END
-            return GEN_ERROR;
-        }
-        ltype.setPointerLevel(ltype.getPointerLevel()-1);
-        info.addPop(BC_REG_RBX);
-        info.code->add({BC_MOV_MR,BC_REG_RBX, BC_REG_RBX});
-        info.addPush(BC_REG_RBX);
-        *outTypeId = ltype;
-        return GEN_SUCCESS;
-    } else {
-        TypeId ltype = {};
-        int result = GenerateExpression(info, expression, &ltype, idScope);
-        if(result!=GEN_SUCCESS){
-            return GEN_ERROR;
-        }
-        if(!ltype.isPointer()){
-            ERR_HEAD(expression->tokenRange,
-                "'"<<expression->tokenRange<<
-                "' must be a reference to some memory. "
-                "A variable, member or expression resulting in a dereferenced pointer would be.\n\n";
-                ERR_LINE(expression->tokenRange, "must be a reference")
-                );
-            // ERR_END
-            return GEN_ERROR;
-        }
-        *outTypeId = ltype;
-        return GEN_SUCCESS;
     }
+
+    // if(exprs.size()>0&&exprs[0]->typeId == AST_REFER){
+    //     ERR_HEAD(expression->tokenRange,
+    //         "GenerateReference cannot end with AST_REFER.\n\n";
+    //         ERR_LINE(expression->tokenRange, "bad");
+    //     )
+    //     return GEN_ERROR;
+    // }
+    for(int i=exprs.size()-1;i>=0;i--){
+        ASTExpression* now = exprs[i];
+        
+        if(now->typeId == AST_MEMBER){
+            if(pointerType){
+                pointerType=false;
+                endType.setPointerLevel(endType.getPointerLevel()-1);
+            }
+            TypeInfo* typeInfo = nullptr;
+            typeInfo = info.ast->getTypeInfo(endType.baseType());
+            if(!typeInfo || !typeInfo->astStruct || endType.getPointerLevel()>1){ // one level of pointer is okay.
+                ERR_HEAD2(now->tokenRange) << info.ast->typeToString(endType)<<" is not a struct. Cannot access member.\n";
+                ERR_END
+                return GEN_ERROR;
+            }
+
+            auto memberData = typeInfo->getMember(*now->name);
+            if(memberData.index==-1){
+                ERR_HEAD2(now->tokenRange) <<"'"<< *now->name<<"' is not a member of '"<<info.ast->typeToString(endType)<<"'\n";
+                ERR_END
+                return GEN_ERROR;
+            }
+            
+            info.addPop(BC_REG_RBX);
+            if(endType.getPointerLevel()>0){
+                info.code->add({BC_MOV_MR, BC_REG_RBX, BC_REG_RBX});
+            }
+            if(memberData.offset!=0){ // optimisation
+                info.code->add({BC_LI,BC_REG_EAX});
+                info.code->addIm(memberData.offset);
+                info.code->add({BC_ADDI,BC_REG_RBX, BC_REG_EAX, BC_REG_RBX});
+            }
+            info.addPush(BC_REG_RBX);
+
+            endType = memberData.typeId;
+        } else if(now->typeId == AST_DEREF) {
+            if(pointerType){
+                // PROTECTIVE BARRIER took a hit
+                pointerType=false;
+                endType.setPointerLevel(endType.getPointerLevel()-1);
+                continue;
+            }
+            if(endType.getPointerLevel()<1){
+                ERR_HEAD(now->left->tokenRange, "type '"<<info.ast->typeToString(endType)<<"' is not a pointer.\n\n";
+                    ERR_LINE(now->left->tokenRange,"must be a pointer");
+                )
+                return GEN_ERROR;
+            }
+            if(endType.getPointerLevel()>0){
+                info.addPop(BC_REG_RBX);
+                info.code->add({BC_MOV_MR,BC_REG_RBX, BC_REG_RBX});
+                info.addPush(BC_REG_RBX);
+            } else {
+                // do nothing
+            }
+            endType.setPointerLevel(endType.getPointerLevel()-1);
+        }
+    }
+    if(pointerType){
+        ERR_HEAD(expression->tokenRange,
+            "'"<<expression->tokenRange<<
+            "' must be a reference to some memory. "
+            "A variable, member or expression resulting in a dereferenced pointer would work.\n\n";
+            ERR_LINE(expression->tokenRange, "must be a reference");
+        )
+        return GEN_ERROR;
+    }
+    *outTypeId = endType;
+    return GEN_SUCCESS;
 }
 int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outTypeId, ScopeId idScope) {
     using namespace engone;
@@ -606,10 +632,12 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 *outTypeId = var->typeId;
                 return GEN_SUCCESS;
             } else {
-                ERR_HEAD2(expression->tokenRange) << expression->tokenRange.firstToken << " is undefined\n";
-                ERR_END
+                ERR_HEAD(expression->tokenRange, "'"<<expression->tokenRange.firstToken<<"' is not declared.\n\n";
+                    ERR_LINE(expression->tokenRange,"undeclared");
+                    )
+                // ERR_HEAD2(expression->tokenRange) << expression->tokenRange.firstToken << " is undefined\n";
+                // ERR_END
                 // log::out << log::RED<<"var "<<*expression->varName<<" undefined\n";
-                *outTypeId = AST_VOID;
                 return GEN_ERROR;
             }
         }
@@ -621,14 +649,12 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                     // What happens if typeId is an operation instead of a type convertable to a string with typeToString?
                     ERR_HEAD2(varExpr->tokenRange) << " expected a variable not "<<varExpr->tokenRange.firstToken <<" ("<< info.ast->typeToString(varExpr->typeId) <<")\n";
                     ERR_END
-                    *outTypeId = AST_VOID;
                     return GEN_ERROR;
                 }
                 if(!varExpr->name){
                     ERR_HEAD2(varExpr->tokenRange) << " name was null\n";
                     ERRTOKENS(varExpr->tokenRange)
                     ERR_END
-                    *outTypeId = AST_VOID;
                     return GEN_ERROR;
                 }
 
@@ -636,35 +662,38 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 if(!id || id->type != Identifier::VAR) {
                     ERR_HEAD2(varExpr->tokenRange) << varExpr->tokenRange.firstToken<< " is not a variable\n";
                     ERR_END
-                    *outTypeId = AST_VOID;
                     return GEN_ERROR;
                 }
 
                 auto var = info.ast->getVariable(id);
-                // var->typeId
                 auto ti = info.ast->getTypeInfo(var->typeId.baseType());
                 if(!ti || !ti->astStruct){
                     // TODO: POINTER IS ACTUALLY OKAY!
                     ERR_HEAD2(varExpr->tokenRange) << varExpr->tokenRange.firstToken<< " must be a struct (was "<<info.ast->typeToString(var->typeId.baseType())<<")\n";
                     ERR_END
-                    *outTypeId = AST_VOID;
                     return GEN_ERROR;
                 }
                 
-                ASTFunction* astFunc = ti->astStruct->getFunction(*expression->name);
+                ASTStruct::Method method = ti->astStruct->getMethod(*expression->name);
+                ASTFunction* astFunc = method.astFunc;
+                // ti->astStruct->getMethod(*expression->name);
                 if(!astFunc){
                     // TODO: POINTER IS ACTUALLY OKAY!
                     ERR_HEAD2(expression->tokenRange) << expression->tokenRange.firstToken<< " is not a method of "<<info.ast->typeToString(var->typeId.baseType())<<"\n";
                     ERR_END
                     return GEN_ERROR;
                 }
-                if(astFunc->polyArgs.size()!=0){
-                    ERR_HEAD2(expression->tokenRange) << " Polymorphic methods are not implemented yet\n";
+                // if(astFunc->polyArgs.size()!=0){
+                //     ERR_HEAD2(expression->tokenRange) << " Polymorphic methods are not implemented yet\n";
+                //     ERR_END
+                //     return GEN_ERROR;
+                // }
+                FuncImpl* funcImpl = method.funcImpl;
+                if(!funcImpl) { // we got method of the base name, if polymorphic there is no base
+                    ERR_HEAD2(expression->tokenRange) << expression->tokenRange.firstToken << " is polymorphic. You must specify poly arguments\n";
                     ERR_END
                     return GEN_ERROR;
                 }
-                FuncImpl* funcImpl = &astFunc->baseImpl; // how to get FuncImpl from method of struct?
-                // FuncImpl* funcImpl = nullptr; // how to get FuncImpl from method of struct?
                 
                 Assert(funcImpl->arguments.size() == astFunc->baseImpl.arguments.size())
                 Assert(funcImpl->returnTypes.size() == astFunc->baseImpl.returnTypes.size())
@@ -733,6 +762,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 for (auto arg : realArgs) {
                     // ASTExpression* arg = argt;
                     // argt = argt->next;
+
+                    // log::out << "ARG: "<<info.ast->typeToString(arg->typeId)<<"\n";
                     index++;
                     TypeId dt = {};
                     if (!arg) {
@@ -751,10 +782,10 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                     }
 
                     _GLOG(log::out << " pushed " << astFunc->arguments[index].name << "\n";)
-
+                    Assert((int)funcImpl->arguments.size()>index);
                     if (!PerformSafeCast(info, dt, funcImpl->arguments[index].typeId)) {   // implicit conversion
                         // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                        ERRTYPE(arg->tokenRange, dt, funcImpl->arguments[index].typeId) << "(fncall)\n";
+                        ERRTYPE(arg->tokenRange, dt, funcImpl->arguments[index].typeId, "(fncall)\n");
                         ERR_END
                         continue;
                     }
@@ -951,7 +982,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
 
                 if (!PerformSafeCast(info, dt, funcImpl->arguments[index].typeId)) {   // implicit conversion
                     // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                    ERRTYPE(arg->tokenRange, dt, funcImpl->arguments[index].typeId) << "(fncall)\n";
+                    ERRTYPE(arg->tokenRange, dt, funcImpl->arguments[index].typeId, "(fncall)\n");
                     ERR_END
                     continue;
                 }
@@ -1085,8 +1116,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
             // TODO: Implement polymorphic slices so char[] can  be used.
 
             *outTypeId = typeInfo->id;
-
-            // return GEN_ERROR;
             return GEN_SUCCESS;
         } else if (expression->typeId == AST_NULL) {
             // TODO: Move into the type checker?
@@ -1113,74 +1142,86 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
     } else {
         TypeId ltype = AST_VOID;
         if (expression->typeId == AST_REFER) {
-            std::vector<ASTExpression*> memberExprs;
-            ASTExpression* varExpr=nullptr;
 
-            ASTExpression *next = expression->left;
-            while(next) {
-                ASTExpression* now = next;
-                next = next->left; // left exists with AST_MEMBER
-
-                if(now->typeId.getId() == AST_VAR) {
-                    varExpr = now;
-                    break;
-                } else if(now->typeId.getId() == AST_MEMBER) {
-                    memberExprs.push_back(now);
-                } else {
-                    // TODO: identifier may be defined but not a variable, give proper message
-                    ERR_HEAD2(now->tokenRange) << now->tokenRange.firstToken << " is not a variable or member\n";
-                    ERR_END
-                    return GEN_ERROR;
-                }
-            }
-            auto id = info.ast->getIdentifier(info.currentScopeId, *varExpr->name);
-            if (id && id->type == Identifier::VAR) {
-                auto var = info.ast->getVariable(id);
-                
-                TypeId typeId = var->typeId;
-                TypeInfo* typeInfo = info.ast->getTypeInfo(var->typeId);
-                ASTExpression* lastExpr = varExpr;
-                int offset = 0;
-                for(int i=0;i<(int)memberExprs.size();i++){
-                    ASTExpression* memExpr = memberExprs[i];
-                    if(!typeInfo || !typeInfo->astStruct){
-                        ERR_HEAD2(lastExpr->tokenRange) << lastExpr->tokenRange.firstToken << " is not a struct\n";
-                        ERR_END
-                        return GEN_ERROR;
-                    }
-                    lastExpr = memExpr;
-                    auto memData = typeInfo->getMember(*memExpr->name);
-                    if(memData.index == -1){
-                        ERR_HEAD2(memExpr->tokenRange) << *memExpr->name << " is not a member of struct "<<info.ast->typeToString(typeInfo->id)<<"\n";
-                        ERR_END
-                        return GEN_ERROR;
-                    }
-                    offset += memData.offset;
-                    typeId = memData.typeId;
-                    typeInfo = info.ast->getTypeInfo(memData.typeId);
-                }
-                if(!typeInfo){
-                    ERR_HEAD2(varExpr->tokenRange) << *varExpr->name << "'s type gave null as TypeInfo\n";
-                    ERR_END
-                    return GEN_ERROR;
-                }
-
-                // TODO: check data type?
-                TOKENINFO(expression->tokenRange)
-                info.code->add({BC_LI, BC_REG_RAX});
-                info.code->addIm(var->frameOffset + offset);
-                info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RAX, BC_REG_RAX}); // fp + offset
-                info.addPush(BC_REG_RAX);
-
-                // new pointer data type
-                typeId.setPointerLevel(typeId.getPointerLevel()+1);
-
-                *outTypeId = typeId;
-            } else {
-                ERR_HEAD2(varExpr->tokenRange) << *varExpr->name << " is not a variable\n";
-                ERR_END
+            int result = GenerateReference(info,expression->left,&ltype,idScope);
+            if(result!=GEN_SUCCESS)
+                return GEN_ERROR;
+            if(ltype.getPointerLevel()==3){
+                ERR_HEAD(expression->tokenRange,"Cannot take a reference of a triple pointer (compiler has a limit of 0-3 depth of pointing). Cast to u64 if you need triple pointers.";)
                 return GEN_ERROR;
             }
+            ltype.setPointerLevel(ltype.getPointerLevel()+1);
+            *outTypeId = ltype;
+            
+
+            // std::vector<ASTExpression*> memberExprs;
+            // ASTExpression* varExpr=nullptr;
+            // // REFER only works on variables and members which it probably should.
+            // ASTExpression *next = expression->left;
+            // while(next) {
+            //     ASTExpression* now = next;
+            //     next = next->left; // left exists with AST_MEMBER
+
+            //     if(now->typeId.getId() == AST_VAR) {
+            //         varExpr = now;
+            //         break;
+            //     } else if(now->typeId.getId() == AST_MEMBER) {
+            //         memberExprs.push_back(now);
+            //     } else {
+            //         // TODO: identifier may be defined but not a variable, give proper message
+            //         ERR_HEAD2(now->tokenRange) << now->tokenRange.firstToken << " is not a variable or member\n";
+            //         ERR_END
+            //         return GEN_ERROR;
+            //     }
+            // }
+            // auto id = info.ast->getIdentifier(info.currentScopeId, *varExpr->name);
+            // if (id && id->type == Identifier::VAR) {
+            //     auto var = info.ast->getVariable(id);
+                
+            //     TypeId typeId = var->typeId;
+            //     TypeInfo* typeInfo = info.ast->getTypeInfo(var->typeId);
+            //     ASTExpression* lastExpr = varExpr;
+            //     int offset = 0;
+            //     for(int i=0;i<(int)memberExprs.size();i++){
+            //         ASTExpression* memExpr = memberExprs[i];
+            //         if(!typeInfo || !typeInfo->astStruct){
+            //             ERR_HEAD2(lastExpr->tokenRange) << lastExpr->tokenRange.firstToken << " is not a struct\n";
+            //             ERR_END
+            //             return GEN_ERROR;
+            //         }
+            //         lastExpr = memExpr;
+            //         auto memData = typeInfo->getMember(*memExpr->name);
+            //         if(memData.index == -1){
+            //             ERR_HEAD2(memExpr->tokenRange) << *memExpr->name << " is not a member of struct "<<info.ast->typeToString(typeInfo->id)<<"\n";
+            //             ERR_END
+            //             return GEN_ERROR;
+            //         }
+            //         offset += memData.offset;
+            //         typeId = memData.typeId;
+            //         typeInfo = info.ast->getTypeInfo(memData.typeId);
+            //     }
+            //     if(!typeInfo){
+            //         ERR_HEAD2(varExpr->tokenRange) << *varExpr->name << "'s type gave null as TypeInfo\n";
+            //         ERR_END
+            //         return GEN_ERROR;
+            //     }
+
+            //     // TODO: check data type?
+            //     TOKENINFO(expression->tokenRange)
+            //     info.code->add({BC_LI, BC_REG_RAX});
+            //     info.code->addIm(var->frameOffset + offset);
+            //     info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RAX, BC_REG_RAX}); // fp + offset
+            //     info.addPush(BC_REG_RAX);
+
+            //     // new pointer data type
+            //     typeId.setPointerLevel(typeId.getPointerLevel()+1);
+
+            //     *outTypeId = typeId;
+            // } else {
+            //     ERR_HEAD2(varExpr->tokenRange) << *varExpr->name << " is not a variable\n";
+            //     ERR_END
+            //     return GEN_ERROR;
+            // }
         }
         else if (expression->typeId == AST_DEREF) {
             int err = GenerateExpression(info, expression->left, &ltype);
@@ -1237,7 +1278,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                     }
                 }
             }
-
             *outTypeId = newId;
         }
         else if (expression->typeId == AST_NOT) {
@@ -1341,11 +1381,20 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
 
             info.code->addDebugText("ast-member expr\n");
             TypeId exprId;
+
+            // Todo: use generate reference instead? It only deals with pointers
+            //  while expression pops and pushed whole structs on the stack.
+            // int result = GenerateReference(info,expression,&exprId);
+
+
             int result = GenerateExpression(info, expression->left, &exprId);
             if (result != GEN_SUCCESS)
                 return result;
 
+            // if(ex)
             TypeInfo *typeInfo = info.ast->getTypeInfo(exprId);
+            // if(!typeInfo)
+            //     return GEN_ERROR;
             if(exprId.isPointer()) {
                 TypeId structType = exprId;
                 structType.setPointerLevel(structType.getPointerLevel()-1);
@@ -1388,7 +1437,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                     // }
                 } 
                 *outTypeId = ltype;
-            } else if (typeInfo->astStruct) {
+            } else if (typeInfo && typeInfo->astStruct) {
                 auto memdata = typeInfo->getMember(*expression->name);
 
                 if (memdata.index == -1) {
@@ -1418,7 +1467,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 info.addPush(freg);
 
                 *outTypeId = ltype;
-            } else if (typeInfo->astEnum) {
+            } else if (typeInfo && typeInfo->astEnum) {
                 int enumValue;
                 bool found = typeInfo->astEnum->getMember(*expression->name, &enumValue);
                 if (!found) {
@@ -1528,7 +1577,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                 TypeId tid = structInfo->getMember(index).typeId;
                 if (!PerformSafeCast(info, exprId, tid)) {   // implicit conversion
                     // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                    ERRTYPE(expr->tokenRange, exprId, tid) << "(initializer)\n";
+                    ERRTYPE(expr->tokenRange, exprId, tid, "(initializer)\n");
                     ERR_END
                     continue;
                 }
@@ -1641,14 +1690,15 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
                     op = castType;
                     info.addPop(BC_REG_RBX); // note that right expression should be popped first
                 }
-
-                if (ltype != rtype && 
-                    !(
-                        ltype.isPointer() && AST::IsInteger(rtype) &&
-                        (op == AST_ADD ||op == AST_SUB)
-                    )) {
-                    ERRTYPE(expression->tokenRange, ltype, rtype) << "\n";
-                    ERR_END
+                if (!(ltype == rtype ||
+                    (ltype.isPointer() && AST::IsInteger(rtype) &&
+                        (op == AST_ADD || op == AST_SUB)))) {
+                    std::string leftstr = info.ast->typeToString(ltype);
+                    std::string rightstr = info.ast->typeToString(rtype);
+                    ERRTYPE(expression->tokenRange, ltype, rtype, "\n\n";
+                        ERR_LINE(expression->left->tokenRange, leftstr.c_str());
+                        ERR_LINE(expression->right->tokenRange,rightstr.c_str());
+                    )
                     return GEN_ERROR;
                 }
                 TOKENINFO(expression->tokenRange)
@@ -1709,7 +1759,7 @@ int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange = 
                 int result = GenerateExpression(info, member.defaultValue, &typeId);
                 // TODO: do type check in EvaluateTypes
                 if (memdata.typeId != typeId) {
-                    ERRTYPE(member.defaultValue->tokenRange, memdata.typeId, typeId) << "(default member)\n";
+                    ERRTYPE(member.defaultValue->tokenRange, memdata.typeId, typeId, "(default member)\n");
                     ERR_END
                 }
             } else {
@@ -1748,125 +1798,46 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     _GLOG(FUNC_ENTER)
 
     int lastOffset = info.currentFrameOffset;
-    if(astStruct){
-        ERR_HEAD2(function->tokenRange) << "Methods have been disabled for now. They will come back after some changes in the compiler.\n";
-        ERR_END
-        return GEN_ERROR;
-    }
-    // TODO: This does probably not work with structs in structs. Referencing them could cause collisions.
-    // if(astStruct){ // generate method in struct
-    //     info.code->add({BC_JMP});
-    //     int skipIndex = info.code->length();
-    //     info.code->addIm(0);
-
-    //     auto prevFunc = info.currentFunction;
-    //     auto prevFuncImpl = info.currentFuncImpl;
-    //     info.currentFunction = function;
-    //     info.currentFuncImpl = funcImpl;
-    //     defer { info.currentFunction = prevFunc; info.currentFuncImpl = prevFuncImpl; };
-
-    //     function->address = info.code->length();
-
-    //     int startSP = info.saveStackMoment();
-
-    //     // expecting 8-bit alignment when generating function
-    //     Assert(info.virtualStackPointer % 8 == 0);
-
-    //     if (function->arguments.size() != 0) {
-    //         _GLOG(log::out << "set " << function->arguments.size() << " args\n");
-    //         // int offset = 0;
-    //         for (int i = 0; i < (int)function->arguments.size(); i++) {
-    //             // for(int i = astFunc->arguments.size()-1;i>=0;i--){
-    //             auto &arg = function->arguments[i];
-    //             auto &arg = function->arguments[i];
-    //             auto var = info.ast->addVariable(info.currentScopeId, arg.name);
-    //             if (!var) {
-    //                 ERR_HEAD2(function->tokenRange) << arg.name << " already exists\n";
-    //             }
-    //             var->typeId = arg.typeId;
-    //             TypeInfo *typeInfo = info.ast->getTypeInfo(arg.typeId);
-
-    //             var->frameOffset = GenInfo::ARG_OFFSET + arg.offset;
-    //             _GLOG(log::out << " " << arg.name << ": " << var->frameOffset << "\n";)
-    //         }
-    //         _GLOG(log::out << "\n";)
-    //     }
-    //     // info.currentFrameOffset = 0;
-    //     if (function->returnTypes.size() != 0) {
-    //         _GLOG(log::out << "space for " << function->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
-            
-    //         info.code->addDebugText("ZERO init return values\n");
-    //         info.code->add({BC_LI, BC_REG_RBX});
-    //         info.code->addIm(-function->returnSize);
-    //         info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
-    //         u16 size = function->returnSize;
-    //         info.code->add({BC_ZERO_MEM, BC_REG_RBX, (u8)(0xFF & size), (u8)(size << 8)});
-    //         _GLOG(log::out << "\n";)
-    //         info.currentFrameOffset -= function->returnSize; // TODO: size can be uneven like 13. FIX IN EVALUATETYPES
-    //     }
-
-    //     // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
-    //     // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
-    //     // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
-    //     //
-    //     int result = GenerateBody(info, function->body);
-    //     info.currentFrameOffset = lastOffset;
-
-    //     info.restoreStackMoment(startSP);
-
-    //     // log::out << function->name<<" " <<function->returnTypes.size()<<"\n";
-    //     //-- Check for return statement if return values are used
-    //     if (function->returnTypes.size() != 0) {
-    //         bool foundReturn = false;
-    //         ASTStatement *nextState = function->body->statements;
-    //         while (nextState) {
-    //             if (nextState->type == ASTStatement::RETURN) {
-    //                 foundReturn = true;
-    //             }
-    //             nextState = nextState->next;
-    //         }
-    //         if (!foundReturn) {
-    //             ERR() << "missing return statement in " << function->name << "\n";
-    //         }
-    //     }
-
-    //     info.code->add({BC_RET});
-    //     *((u32 *)info.code->get(skipIndex)) = info.code->length();
-
-    //     for (auto &arg : function->arguments) {
-    //         info.ast->removeIdentifier(info.currentScopeId, arg.name);
-    //     }
-    //     return GEN_SUCCESS;
+    // if(astStruct){
+    //     ERR_HEAD2(function->tokenRange) << "Methods have been disabled for now. They will come back after some changes in the compiler.\n";
+    //     ERR_END
+    //     return GEN_ERROR;
     // }
-
-    auto fid = info.ast->getIdentifier(info.currentScopeId, function->name);
-    if (!fid) {
-        // NOTE: function may not have been added in the type checker stage for some reason.
-        // THANK YOU, past me for writing this note. I was wondering what I broke and reading the
-        // note made instantly realise that I broke something in the type checker.
-        ERR_HEAD2(function->tokenRange) << function->name << " was null (compiler bug)\n";
-        if (function->tokenRange.firstToken.str) {
-            ERRTOKENS(function->tokenRange)
+    // TODO: This does probably not work with structs in structs. Referencing them could cause collisions.
+    
+    // NOTE: This is the only difference between how methods and functions
+    //  are generated.
+    if(!astStruct){
+        auto fid = info.ast->getIdentifier(info.currentScopeId, function->name);
+        if (!fid) {
+            // NOTE: function may not have been added in the type checker stage for some reason.
+            // THANK YOU, past me for writing this note. I was wondering what I broke and reading the
+            // note made instantly realise that I broke something in the type checker.
+            ERR_HEAD2(function->tokenRange) << function->name << " was null (compiler bug)\n";
+            if (function->tokenRange.firstToken.str) {
+                ERRTOKENS(function->tokenRange)
+            }
+            ERR_END
+            return GEN_ERROR;
         }
-        ERR_END
-        return GEN_ERROR;
+        if (fid->type != Identifier::FUNC) {
+            // I have a feeling some error has been printed if we end up here.
+            // Double check that though.
+            return GEN_ERROR;
+        }
+        ASTFunction* tempFunc = info.ast->getFunction(fid);
+        Assert(tempFunc==function);
     }
-    if (fid->type != Identifier::FUNC) {
-        // I have a feeling some error has been printed if we end up here.
-        // Double check that though.
-        return GEN_ERROR;
-    }
-    ASTFunction* astFunc = info.ast->getFunction(fid);
-    Assert(astFunc);
+
     _GLOG(log::out << "Function skip\n";)
     info.code->add({BC_JMP});
     int skipIndex = info.code->length();
     info.code->addIm(0);
     int index = 0;
-    FuncImpl* funcImpl = &astFunc->baseImpl;
-    while((index < (int)astFunc->polyImpls.size()) || (astFunc->polyArgs.size() == 0 && index==0)) {
-        if(astFunc->polyArgs.size()!=0) {
-            funcImpl = astFunc->polyImpls[index];
+    FuncImpl* funcImpl = &function->baseImpl;
+    while((index < (int)function->polyImpls.size()) || (function->polyArgs.size() == 0 && index==0)) {
+        if(function->polyArgs.size()!=0) {
+            funcImpl = function->polyImpls[index];
         }
         index++;
         Assert(("func has already been generated!",funcImpl->address == 0));
@@ -1898,16 +1869,16 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         // expecting 8-bit alignment when generating function
         Assert(info.virtualStackPointer % 8 == 0);
 
-        if (astFunc->arguments.size() != 0) {
-            _GLOG(log::out << "set " << astFunc->arguments.size() << " args\n");
+        if (function->arguments.size() != 0) {
+            _GLOG(log::out << "set " << function->arguments.size() << " args\n");
             // int offset = 0;
-            for (int i = 0; i < (int)astFunc->arguments.size(); i++) {
-                // for(int i = astFunc->arguments.size()-1;i>=0;i--){
-                auto &arg = astFunc->arguments[i];
+            for (int i = 0; i < (int)function->arguments.size(); i++) {
+                // for(int i = function->arguments.size()-1;i>=0;i--){
+                auto &arg = function->arguments[i];
                 auto &argBase = funcImpl->arguments[i];
                 auto var = info.ast->addVariable(info.currentScopeId, arg.name);
                 if (!var) {
-                    ERR_HEAD2(astFunc->tokenRange) << arg.name << " already exists\n";
+                    ERR_HEAD2(function->tokenRange) << arg.name << " already exists\n";
                     ERR_END
                 }
                 var->typeId = argBase.typeId;
@@ -1932,8 +1903,8 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
             info.currentFrameOffset -= funcImpl->returnSize; // TODO: size can be uneven like 13. FIX IN EVALUATETYPES
         }
 
-        for(int i=0;i<(int)astFunc->polyArgs.size();i++){
-            auto& arg = astFunc->polyArgs[i];
+        for(int i=0;i<(int)function->polyArgs.size();i++){
+            auto& arg = function->polyArgs[i];
             arg.virtualType->id = funcImpl->polyIds[i];
         }
 
@@ -1949,8 +1920,8 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         int result = GenerateBody(info, function->body);
         info.currentFrameOffset = lastOffset;
 
-        for(int i=0;i<(int)astFunc->polyArgs.size();i++){
-            auto& arg = astFunc->polyArgs[i];
+        for(int i=0;i<(int)function->polyArgs.size();i++){
+            auto& arg = function->polyArgs[i];
             arg.virtualType->id = {}; // disable types
         }
 
@@ -1975,7 +1946,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
             // add return if it doesn't exist
             info.code->add({BC_RET});
         }
-        for (auto &arg : astFunc->arguments) {
+        for (auto &arg : function->arguments) {
             info.ast->removeIdentifier(info.currentScopeId, arg.name);
         }
     }
@@ -2030,9 +2001,9 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
     using namespace engone;
     MEASURE;
     _GLOG(FUNC_ENTER)
-    Assert(body)
+    Assert(body);
 
-        ScopeId savedScope = info.currentScopeId;
+    ScopeId savedScope = info.currentScopeId;
     defer { info.currentScopeId = savedScope; };
 
     info.currentScopeId = body->scopeId;
@@ -2153,6 +2124,10 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             }
             int result = GenerateExpression(info, statement->rvalue, &rightType);
             if (result != GEN_SUCCESS) {
+                // assign fails and variable will not be declared potentially causing
+                // undeclared errors in later code. This is probably better than
+                // declaring the variable and using void type. Then you get type mismatch
+                // errors.
                 continue;
                 // return result;
             }
@@ -2167,17 +2142,16 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                     continue;
                 }
             }
-            if (result == GEN_ERROR) {
-            }
-            else if (rightType == AST_VOID) {
-                ERR_HEAD2(statement->tokenRange) << "datatype for assignment cannot be void\n";
-                ERR_END 
-            }
-            else if (!id || id->type == Identifier::VAR) {
+            // if (rightType == AST_VOID) {
+            //     ERR_HEAD2(statement->tokenRange) << "datatype for assignment cannot be void\n";
+            //     ERR_END 
+            // }
+            // else 
+            if (!id || id->type == Identifier::VAR) {
                 bool decl = false;
                 if (stateTypeId.isValid()){
                     if(!PerformSafeCast(info, rightType, stateTypeId)) {
-                        ERRTYPE(statement->tokenRange, stateTypeId, rightType) << "(assign)\n";
+                        ERRTYPE(statement->tokenRange, stateTypeId, rightType, "(assign)\n");
                         ERRTOKENS(statement->tokenRange);
                         ERR_END
                         continue;
@@ -2196,7 +2170,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                     // create if not existent
                     if(var) {
                         if(!PerformSafeCast(info, rightType, var->typeId)){
-                            ERRTYPE(statement->tokenRange, var->typeId, rightType) << "(assign)\n";
+                            ERRTYPE(statement->tokenRange, var->typeId, rightType, "(assign)\n");
                             ERRTOKENS(statement->tokenRange);
                             ERR_END
                             continue;
@@ -2300,223 +2274,10 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 //     info.code->add({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
                 // }
             }
-            _GLOG(log::out << " " << *statement->name << " : " << info.ast->typeToString(var->typeId) << "\n";)
+            if(var){
+                _GLOG(log::out << " " << *statement->name << " : " << info.ast->typeToString(var->typeId) << "\n";)
+            }
         }
-        // else if (statement->type == ASTStatement::PROP_ASSIGN) {
-        //     _GLOG(SCOPE_LOG("PROP_ASSIGN"))
-
-        //     if ((statement->opType == AST_ADD || statement->opType == AST_SUB ||
-        //          statement->opType == AST_MUL || statement->opType == AST_DIV)) {
-        //         if (statement->lvalue->typeId.getId() != AST_VAR) {
-        //             ERR_HEAD2(statement->lvalue->tokenRange) << "+= like operation is limited to variables ";
-        //             if (statement->lvalue->typeId == AST_MEMBER)
-        //                 log::out << "(member is not implemented)";
-        //             if (statement->lvalue->typeId == AST_DEREF)
-        //                 log::out << "(dereference is not implemented)";
-        //             log::out << "\n";
-        //             ERRTOKENS(statement->tokenRange)
-        //             ERR_END
-        //             continue;
-        //         }
-
-        //         auto iden = info.ast->getIdentifier(info.currentScopeId,*statement->lvalue->name);
-        //         if (!iden || iden->type != Identifier::VAR) {
-        //             ERR_HEAD2(statement->lvalue->tokenRange) << *statement->lvalue->name << " is not a variable\n";
-        //             ERR_END
-        //             continue;
-        //         }
-        //         auto var = info.ast->getVariable(iden);
-
-        //         info.code->addDebugText("prop-assign (var)\n");
-        //         TypeId rtype = {};
-        //         int result = GenerateExpression(info, statement->rvalue, &rtype);
-        //         if (result != GEN_SUCCESS) {
-        //             continue;
-        //         }
-
-        //         if (!IsSafeCast(var->typeId, rtype)) {
-        //             ERRTYPE(statement->tokenRange, var->typeId, rtype) << "\n";
-        //             ERR_END
-        //             continue;
-        //         }
-        //         // TypeInfo *linfo = info.ast->getTypeInfo(var->typeId);
-        //         // TypeInfo *rinfo = info.ast->getTypeInfo(rtype);
-        //         u32 lsize = info.ast->getTypeSize(var->typeId);
-        //         u32 rsize = info.ast->getTypeSize(rtype);
-
-        //         u8 lreg = RegBySize(1, lsize); // reg a
-        //         u8 rreg = RegBySize(4, rsize); // reg d
-
-        //         info.code->add({BC_LI, BC_REG_RBX});
-        //         info.code->addIm(var->frameOffset);
-        //         info.code->add({BC_ADDI, BC_REG_RBX, BC_REG_FP, BC_REG_RBX});
-
-        //         info.code->add({BC_MOV_MR, BC_REG_RBX, lreg});
-        //         info.addPop(rreg);
-
-        //         u8 op = 0;
-        //         if (var->typeId == AST_FLOAT32) {
-        //             switch (statement->opType) {
-        //             case AST_ADD:
-        //                 op = BC_ADDF;
-        //                 break;
-        //             case AST_SUB:
-        //                 op = BC_SUBF;
-        //                 break;
-        //             case AST_MUL:
-        //                 op = BC_MULF;
-        //                 break;
-        //             case AST_DIV:
-        //                 op = BC_DIVF;
-        //                 break;
-        //             }
-        //         } else {
-        //             switch (statement->opType) {
-        //             case AST_ADD:
-        //                 op = BC_ADDI;
-        //                 break;
-        //             case AST_SUB:
-        //                 op = BC_SUBI;
-        //                 break;
-        //             case AST_MUL:
-        //                 op = BC_MULI;
-        //                 break;
-        //             case AST_DIV:
-        //                 op = BC_DIVI;
-        //                 break;
-        //             }
-        //         }
-        //         info.code->add({op, lreg, rreg, lreg});
-        //         info.code->add({BC_MOV_RM, lreg, BC_REG_RBX});
-        //     }
-        //     else if (statement->lvalue->typeId == AST_DEREF) {
-        //         TypeId dtype = {};
-        //         int result = GenerateExpression(info, statement->lvalue->left, &dtype);
-        //         if (result != GEN_SUCCESS) {
-        //             // return result;
-        //             continue;
-        //         }
-
-        //         if (!dtype.isPointer()) {
-        //             ERR_HEAD2(statement->lvalue->tokenRange) << "expected pointer type for deref assignment not " << info.ast->typeToString(dtype) << "\n";
-        //             ERR_END
-        //             continue;
-        //             // return GEN_ERROR;
-        //         }
-
-        //         info.code->addDebugText("prop-assign\n");
-        //         TypeId rtype = {};
-        //         result = GenerateExpression(info, statement->rvalue, &rtype);
-        //         if (result != GEN_SUCCESS) {
-        //             continue;
-        //             // return result;
-        //         }
-
-        //         Assert(("Doesn't work with structs, copy code from expression DEREF",false))
-
-        //         // TypeInfo *typeInfo = info.ast->getTypeInfo(rtype);
-        //         u32 size = info.ast->getTypeSize(rtype);
-        //         // TypeInfo *typeInfo = info.ast->getTypeInfo(rtype);
-        //         u8 reg = RegBySize(1, size);
-        //         info.addPop(reg);
-        //         info.addPop(BC_REG_RBX);
-        //         info.code->add({BC_MOV_RM, reg, BC_REG_RBX});
-        //     }
-        //     else if (statement->lvalue->typeId == AST_MEMBER) {
-        //         //-- Validate left side
-        //         std::vector<ASTExpression *> members;
-        //         members.push_back(statement->lvalue);
-        //         auto varexpr = statement->lvalue->left; // isn't variable expr yet but should be after while loop
-        //         bool failed=false;
-        //         while (true) {
-        //             if (varexpr) {
-        //                 // TODO: Handle deref and pointers
-        //                 if (varexpr->typeId == AST_VAR) {
-        //                     break;
-        //                 }
-        //                 else if (varexpr->typeId == AST_MEMBER) {
-        //                     members.push_back(varexpr);
-        //                     varexpr = varexpr->left;
-        //                     continue;
-        //                 }
-        //             }
-        //             // TODO: Does varexpr->typeid come from current scope?
-        //             ERR_HEAD2(statement->lvalue->tokenRange) << "expected variable when doing prop assign not " << info.ast->typeToString(varexpr->typeId) << "\n";
-        //             ERRTOKENS(statement->tokenRange)
-        //             ERR_END
-        //             failed=true;
-        //             break;
-        //         }
-        //         if(failed)
-        //             continue;
-
-        //         auto id = info.ast->getIdentifier(info.currentScopeId, *varexpr->name);
-        //         if (!id || id->type != Identifier::VAR) {
-        //             ERR_HEAD2(varexpr->tokenRange) << *varexpr->name << " is not a variable\n";
-        //             ERR_END
-        //             continue;
-        //             // return GEN_ERROR;
-        //         }
-        //         auto var = info.ast->getVariable(id);
-        //         auto typeInfo = info.ast->getTypeInfo(var->typeId);
-        //         if (!var->typeId.isNormalType() || !typeInfo || !typeInfo->astStruct) {
-        //             ERR_HEAD2(varexpr->tokenRange) << *varexpr->name << " is not a struct, can't do prop assignment\n";
-        //             ERR_END
-        //             continue;
-        //             // return GEN_ERROR;
-        //         }
-        //         // u32 size = info.ast->getTypeSize(var->typeId);
-        //         int memberOffset = 0;
-        //         ASTStruct::Member *member = 0;
-        //         TypeId memTypeId = {};
-        //         for (int i = members.size() - 1; i >= 0; i--) {
-        //             auto expr = members[i];
-        //             auto memdata = typeInfo->getMember(*expr->name);
-        //             if (memdata.index == -1) {
-        //                 ERR_HEAD2(expr->tokenRange) << *expr->name << " is not a member of " << typeInfo->astStruct->name << "\n";
-        //                 ERR_END
-        //                 continue;
-        //                 // return GEN_ERROR; // TODO: continue instead
-        //             }
-
-        //             memTypeId = memdata.typeId;
-        //             memberOffset += memdata.offset;
-        //             break;
-        //         }
-
-        //         //-- generate right side
-        //         info.code->addDebugText("prog-assign member expr\n");
-        //         TypeId typeId;
-        //         int result = GenerateExpression(info, statement->rvalue, &typeId);
-        //         if (result != GEN_SUCCESS) {
-        //             continue;
-        //             // return result;
-        //         }
-
-        //         if (!PerformSafeCast(info, typeId, memTypeId)) {
-        //             ERR_HEAD2(statement->rvalue->tokenRange) << "cannot cast to ?" /*<< memtypename*/ << "\n";
-        //             ERR_END
-        //         }
-
-        //         info.code->addDebugText("prop-assign member push\n");
-        //         //-- generate left side
-
-        //         // TOOD: WHAT ABOUT STRUCT? doesn't fit in register
-        //         u32 msize = info.ast->getTypeSize(memTypeId);
-        //         u8 reg = RegBySize(1, msize);
-        //         info.addPop(reg);
-
-        //         info.code->add({BC_LI, BC_REG_RBX});
-        //         info.code->addIm(var->frameOffset + memberOffset);
-        //         info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
-        //         info.code->add({BC_MOV_RM, reg, BC_REG_RBX});
-        //     } else {
-        //         ERR_HEAD2(statement->tokenRange) << "expected deref or prop for prop assignment, was " << OpToStr((OperationType)statement->lvalue->typeId.getId()) << "\n";
-        //         ERR_END
-        //         continue;
-        //         // return GEN_ERROR;
-        //     }
-        // }
         else if (statement->type == ASTStatement::IF) {
             _GLOG(SCOPE_LOG("IF"))
 
@@ -2682,7 +2443,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 if (!PerformSafeCast(info, dtype, retType.typeId)) {
                     // if(info.currentFunction->returnTypes[argi]!=dtype){
 
-                    ERRTYPE(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId) << "(return values)\n";
+                    ERRTYPE(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)\n");
                     ERR_END
                 }
                 TypeInfo *typeInfo = 0;
@@ -2807,7 +2568,7 @@ int GenerateData(GenInfo& info, AST* ast) {
     return GEN_SUCCESS;
 }
 
-Bytecode *Generate(AST *ast, int *err) {
+Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     using namespace engone;
     MEASURE;
 #ifdef ALLOC_LOG
@@ -2823,6 +2584,7 @@ Bytecode *Generate(AST *ast, int *err) {
     GenInfo info{};
     info.code = Bytecode::Create();
     info.ast = ast;
+    info.compileInfo = compileInfo;
     info.currentScopeId = ast->globalScopeId;
 
     std::vector<ASTFunction *> predefinedFuncs;
@@ -2910,7 +2672,6 @@ Bytecode *Generate(AST *ast, int *err) {
     // compiler logs the error count, dont need it here too
     // if(info.errors)
     //     log::out << log::RED<<"Generator failed with "<<info.errors<<" error(s)\n";
-    if (err)
-        (*err) += info.errors;
+    info.compileInfo->errors += info.errors;
     return info.code;
 }

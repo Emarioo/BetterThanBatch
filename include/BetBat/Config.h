@@ -39,11 +39,11 @@
 // #define PLOG
 // type checker
 // #define TC_LOG
-#define GLOG
-// #define OLOG
-#define ILOG
+// #define GLOG
+// #define ILOG
 // #define ILOG_REGS
 
+// #define OLOG
 // #define USE_DEBUG_INFO
 #endif
 

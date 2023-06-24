@@ -4,12 +4,69 @@
 // ptr: i32* = &a;
 // ptr *= 7
 
-a = 8
-b = 1 ( a |= 9 )
-printi(a)
-printi(b)
+// a = 8 + 1 = 1 ( a |= b )
+// printi(b)
 
-// b: i32;
+// struct Vec<T>{
+//     x: T;
+//     fn add<T>(a: T) {
+//         this.x += a;
+//     }
+// }
+// v = Vec<i32>{2};
+// v.add<i32>(1)
+
+
+struct Vec {
+    x: i32;
+    fn add<T>(a: T) {
+    // fn add(a: i32) {
+        // printi(this.x)
+        // printi(a)
+        this.x += a;
+    }
+}
+
+v = Vec{3};
+// p = &v;
+v.add<i32>(2)
+
+
+printi(v.x)
+// v.add(2)
+// // v.x += 2;
+// // p.m = 9
+
+// a = 9;
+
+// a = 4;
+
+// printi(a);
+
+// *cast<i32*>&a += 3
+
+
+
+// printi(v.x)
+// printi(v.add<f32>(1.5))
+// printi(v.x)
+
+// struct Vec<N>{
+//     x: N;
+//     // fn add<i32>(a: i32 ) { 
+//     fn add(a: i32) { 
+//     // fn add(a: i32 ) { 
+//         // printi(this.x); 
+//         this.x += cast<f32>a+0.5;
+//     }
+// }
+// // fn V_add(this: V*, a: i32) { this.x += a}
+
+// v = V{5};
+// // printi(v.x);
+// // v.x += 23;
+// v.add<f32>(0.5);
+// printi(v.x);
 
 // *(&var + 4) = 5
 // *(&(*ptr).b + 4) = 5

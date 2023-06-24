@@ -8,14 +8,14 @@
 #define PARSE_SUCCESS 1
 // success but no accumulation
 #define PARSE_NO_VALUE 3
+struct CompileInfo;
 struct ParseInfo {
     ParseInfo(TokenStream* tokens) : tokens(tokens){}
     int index=0;
     TokenStream* tokens;
-    int errors=0;
-    int warnings=0;
     int funcDepth=0;
-    AST* ast=0;
+    AST* ast=nullptr;
+    CompileInfo* compileInfo=nullptr;
 
     ScopeId currentScopeId=0;
     std::string currentNamespace = "";
@@ -38,4 +38,4 @@ struct ParseInfo {
     void nextLine();
 };
 
-ASTScope* ParseTokens(TokenStream* tokens, AST* ast, int* outErr=0, std::string theNamespace = "");
+ASTScope* ParseTokens(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace = "");

@@ -57,6 +57,7 @@ struct CompileInfo {
     FileInfo* getStream(const Path& name);
     
     int errors=0;
+    int warnings=0;
     int lines=0;
     int blankLines=0;
     int commentCount=0;

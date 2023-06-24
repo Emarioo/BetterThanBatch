@@ -4,6 +4,8 @@
 
 void PrintCode(TokenRange* tokenRange, const char* message){
     using namespace engone;
+    if(!tokenRange->tokenStream)
+        return;
     int start = tokenRange->startIndex;
     int end = tokenRange->endIndex;
     while(start>0){
@@ -26,11 +28,14 @@ void PrintCode(TokenRange* tokenRange, const char* message){
     const log::Color markColor = log::CYAN;
 
     int lineDigits = 0;
+    int baseColumn = 999999;
     for(int i=start;i<end;i++){
         Token& tok = tokenRange->tokenStream->get(i);
         int numlen = ((int)log10(tok.line)+1); 
         if(numlen>lineDigits)
             lineDigits = numlen;
+        if(tok.column<baseColumn)
+            baseColumn = tok.column;
     }
 
     int currentLine = -1;
@@ -43,13 +48,15 @@ void PrintCode(TokenRange* tokenRange, const char* message){
             currentLine = tok.line;
             if(i!=start)
                 log::out << "\n";
-            int numlen = ((int)log10(currentLine)+1); 
+            int numlen = ((int)log10(currentLine)+1);
             for(int j=0;j<lineDigits-numlen;j++)
                 log::out << " ";
-            log::out << codeColor << currentLine<<" |> ";
-            static const int somelen = strlen(" |> ");
+            const char* const linestr = " |> ";
+            log::out << codeColor << currentLine<<linestr;
+            static const int somelen = strlen(linestr);
             minColumn = lineDigits + somelen;
             column = minColumn;
+            for(int j=0;j<tok.column-1-baseColumn;j++) log::out << " ";
         }
         if(i >= tokenRange->startIndex && i< tokenRange->endIndex) {
             log::out << markColor;
@@ -71,13 +78,25 @@ void PrintCode(TokenRange* tokenRange, const char* message){
         tok.print(false);
     }
     log::out << "\n";
-    for(int i=0;i<minColumn;i++)
-        log::out << " ";
+    int msglen = strlen(message);
     log::out << markColor;
-    for(int i=0;i<maxColumn-minColumn;i++)
-        log::out << "~";
-    if(message)
-        log::out << " " << message;
+    if(msglen+4<minColumn){ // +4 for some extra space
+        // print message on left side of mark
+        for(int i=0;i<minColumn-msglen - 1;i++)
+            log::out << " ";
+        if(message)
+            log::out << message<<" ";
+        for(int i=0;i<maxColumn-minColumn;i++)
+            log::out << "~";
+    } else {
+        // print msg on right side of mark
+        for(int i=0;i<minColumn;i++)
+            log::out << " ";
+        for(int i=0;i<maxColumn-minColumn;i++)
+            log::out << "~";
+        if(message)
+            log::out << " " << message;
+    }
     log::out << "\n";
 }
 void PrintCode(int index, TokenStream* stream, const char* message){
