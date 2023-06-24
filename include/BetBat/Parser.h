@@ -13,6 +13,7 @@ struct ParseInfo {
     int index=0;
     TokenStream* tokens;
     int errors=0;
+    int warnings=0;
     int funcDepth=0;
     AST* ast=0;
 

@@ -1,21 +1,23 @@
 #include "BetBat/TypeChecker.h"
 
-#undef ERRT
+#undef ERR_HEAD
 #undef ERR
+#undef ERR_END
 // #undef ERRTYPE
 #undef ERRTOKENS
 #undef TOKENINFO
-#undef LOGAT
 
 // Remember to wrap macros in {} when using if or loops
 // since macros have multiple statements.
-#define ERR() info.errors++;engone::log::out << engone::log::RED <<"TypeError, "
-#define ERRT(R) info.errors++;engone::log::out << engone::log::RED <<"TypeError "<<(R.firstToken.line)<<":"<<(R.firstToken.column)<<", "
-// #define ERRTYPE(R,LT,RT) ERRT(R) << "Type mismatch "<<info.ast->getTypeInfo(LT)->name<<" - "<<info.ast->getTypeInfo(RT)->name<<" "
+#define ERR() info.errors++; engone::log::out << engone::log::RED <<"TypeError: "
+// #define ERR_HEAD(R) info.errors++; engone::log::out << ERR_LOCATION_RANGE(R)
+#define ERR_HEAD(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Type error","E0000")
+#define ERR_END MSG_END
+// #define ERR_HEAD(R) info.errors++; engone::log::out << engone::log::RED <<"TypeError "<<ERR_LOCATION_RANGE(R)
+// #define ERR_HEAD(R) info.errors++; engone::log::out << engone::log::RED <<"TypeError "<<(R.firstToken.line)<<":"<<(R.firstToken.column)<<", "
+// #define ERRTYPE(R,LT,RT) ERR_HEAD(R) << "Type mismatch "<<info.ast->getTypeInfo(LT)->name<<" - "<<info.ast->getTypeInfo(RT)->name<<" "
 
-#define LOGAT(R) R.firstToken.line <<":"<<R.firstToken.column
-
-#define ERRTOKENS(R) engone::log::out <<engone::log::RED<< "LN "<<R.firstToken.line <<": "; R.print();engone::log::out << "\n";
+#define ERRTOKENS(R) engone::log::out <<engone::log::GREEN<<R.firstToken.line <<" |> "; R.print();engone::log::out << "\n";
 
 #define TOKENINFO(R) {std::string temp="";R.feed(temp);info.code->addDebugText(std::string("Ln ")+std::to_string(R.firstToken.line)+ ": ");info.code->addDebugText(temp+"\n");}
 
@@ -37,7 +39,8 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
             typeInfo->_size = 4; // i32
             typeInfo->astEnum = aenum;
         } else {
-             ERRT(aenum->tokenRange) << aenum->name << " is taken\n";
+            ERR_HEAD(aenum->tokenRange) << aenum->name << " is taken\n";
+            ERR_END
         }
     }
     
@@ -112,7 +115,8 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
             TypeId tid = CheckType(info, astStruct->scopeId, baseMem.typeId, astStruct->tokenRange, &printedError);
             if(!tid.isValid() && !printedError){
                 if(info.showErrors) {
-                    ERRT(astStruct->tokenRange) << "type "<< info.ast->getTokenFromTypeString(implMem.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
+                    ERR_HEAD(astStruct->tokenRange) << "type "<< info.ast->getTokenFromTypeString(implMem.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
+                    ERR_END
                 }
                 success = false;
                 break;
@@ -139,7 +143,8 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
             if(implMem.typeId == structInfo->id){
                 if(info.showErrors) {
                     // NOTE: pointers to the same struct are okay.
-                    ERRT(astStruct->tokenRange) << "member "<<member.name << "'s type uses the parent struct. (recursive struct does not work)\n";
+                    ERR_HEAD(astStruct->tokenRange) << "member "<<member.name << "'s type uses the parent struct. (recursive struct does not work)\n";
+                    ERR_END
                 }
                 // TODO: phrase the error message in a better way
                 // TOOD: print some column and line info.
@@ -148,7 +153,8 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
             } else {
                 // astStruct->state = ASTStruct::TYPE_ERROR;
                 if(info.showErrors) {
-                    ERRT(astStruct->tokenRange) << "type "<< info.ast->typeToString(implMem.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
+                    ERR_HEAD(astStruct->tokenRange) << "type "<< info.ast->typeToString(implMem.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
+                    ERR_END
                 }
             }
             success = false;
@@ -270,8 +276,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
             if(id.isValid()){
             //     baseInfo->astStruct->polyArgs[i].virtualType->id = id;
             } else if(!printedError) {
-                ERRT(tokenRange) << "Type for polymorphic argument was not valid\n";
+                ERR_HEAD(tokenRange) << "Type for polymorphic argument was not valid\n";
                 ERRTOKENS(tokenRange);
+                ERR_END
             }
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
         }
@@ -288,7 +295,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
             // TODO: log error here if Assert is removed
             return {};
         if(ti && ti->astStruct && ti->astStruct->polyArgs.size() != 0 && !ti->structImpl) {
-            ERRT(tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
+            ERR_HEAD(tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
+            ERRTOKENS(tokenRange)
+            ERR_END
             if(printedError)
                 *printedError = true;
             return {};
@@ -298,12 +307,12 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
     }
 
     if(polyTypes.size() == 0) {
-        // ERRT(tokenRange) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
+        // ERR_HEAD(tokenRange) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // type isn't polymorphic and does just not exist
     }
     TypeInfo* baseInfo = info.ast->convertToTypeInfo(baseType, scopeId);
     if(!baseInfo) {
-        // ERRT(tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
+        // ERR_HEAD(tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // print error? base type for polymorphic type doesn't exist
     }
     if(polyTypes.size() != baseInfo->astStruct->polyArgs.size()) {
@@ -329,12 +338,11 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
             baseInfo->astStruct->polyArgs[i].virtualType->id = id;
         } 
         // else if(!printedError) {
-        //     ERRT(tokenRange) << "Type for polymorphic argument was not valid\n";
+        //     ERR_HEAD(tokenRange) << "Type for polymorphic argument was not valid\n";
         //     ERRTOKENS(tokenRange);
         // }
         // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
     }
-
 
     TypeInfo* typeInfo = info.ast->createType(*realTypeName, baseInfo->scopeId);
     typeInfo->astStruct = baseInfo->astStruct;
@@ -346,6 +354,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
         ERR() << __FUNCTION__ <<": structImpl for type "<<typeString << " failed\n";
     } else {
         _TC_LOG(log::out << typeString << " was evaluated to "<<typeInfo->structImpl->size<<" bytes\n";)
+    }
+    for(int i=0;i<(int)polyIds.size();i++){
+        baseInfo->astStruct->polyArgs[i].virtualType->id = {}; // disable types
     }
     TypeId outId = typeInfo->id;
     outId.setPointerLevel(plevel);
@@ -380,7 +391,8 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
             structInfo = info.ast->createType(Token(astStruct->name), scope->scopeId);
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
-                ERRT(astStruct->tokenRange) << astStruct->name<<" is already defined\n";
+                ERR_HEAD(astStruct->tokenRange) << astStruct->name<<" is already defined\n";
+                ERR_END
                 // TODO: Provide information (file, line, column) of the first definition.
             } else {
                 _TC_LOG(log::out << "Defined struct "<<info.ast->typeToString(structInfo->id)<<"\n";)
@@ -452,12 +464,14 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
     
     return true;
 }
+
 int CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct);
 int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr) {
     using namespace engone;
     if(!expr->name){
-        ERRT(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
+        ERR_HEAD(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
         ERRTOKENS(expr->tokenRange)
+        ERR_END
         return false;
     }
     // TODO: Can expr->name contain namespace or is that handled with AST_FROM_NAMESPACE?
@@ -488,16 +502,19 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr) {
             if(id.isValid()){
             //     baseInfo->astStruct->polyArgs[i].virtualType->id = id;
             } else if(!printedError) {
-                ERRT(expr->tokenRange) << "Type for polymorphic argument was not valid\n";
+                ERR_HEAD(expr->tokenRange) << "Type for polymorphic argument was not valid\n";
                 ERRTOKENS(expr->tokenRange);
+                ERR_END
             }
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
         }
         *realTypeName += ">";
         *expr->name = *realTypeName; // We modify the expression to use the official poly types
     }
-    if(expr->boolValue){
-        ERRT(expr->tokenRange) << "Polymorphic methods not implemented\n";
+    if (expr->boolValue) {
+        
+        ERR_HEAD(expr->tokenRange) << "Polymorphic methods not implemented\n";
+        ERR_END
         
         // The reason is due to the fact that the type of the variable is needed.
         // Variables become available in the generator so the type checker doesn't know.
@@ -512,8 +529,9 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr) {
         // poly function doesn't exist
         id = info.ast->getIdentifier(scope->scopeId, baseName);
         if(id && id->astFunc && id->astFunc->polyArgs.size() != 0){
-            ERRT(expr->tokenRange) << "Function "<<baseName <<" requires polymorphic arguments\n";
+            ERR_HEAD(expr->tokenRange) << "Function "<<baseName <<" requires polymorphic arguments\n";
             ERRTOKENS(expr->tokenRange);
+            ERR_END
         }
         // Non-existant function (or non-function identifier) is handled in generator. Whether it should do that 
         // is arguable.
@@ -523,13 +541,15 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr) {
             // poly function doesn't exist
             id = info.ast->getIdentifier(scope->scopeId, baseName);
             if(!id){
-                ERRT(expr->tokenRange) << "Function "<<baseName <<" doesn't exist\n";
+                ERR_HEAD(expr->tokenRange) << "Function "<<baseName <<" doesn't exist\n";
                 ERRTOKENS(expr->tokenRange);
+                ERR_END
             } else {
                 ASTFunction* astFunc = info.ast->getFunction(id);
                 if(astFunc->polyArgs.size()==0){
-                    ERRT(expr->tokenRange) << "Function "<<baseName<<" isn't polymorphic\n";
+                    ERR_HEAD(expr->tokenRange) << "Function "<<baseName<<" isn't polymorphic\n";
                     ERRTOKENS(expr->tokenRange);
+                    ERR_END
                 } else {
                     // we want base function and then create poly function?
                     // fncall name doesn't have base? we need to trim?
@@ -571,8 +591,9 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
         CheckExpression(info,scope, expr->right);
     if(expr->typeId == AST_STRING){
         if(!expr->name){
-            ERRT(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
+            ERR_HEAD(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
             ERRTOKENS(expr->tokenRange)
+            ERR_END
             return false;
         }
 
@@ -585,8 +606,9 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
         CheckType(info, scope->scopeId, "Slice<char>", expr->tokenRange, nullptr);
     } else if(expr->typeId == AST_SIZEOF) {
         if(!expr->name){
-            ERRT(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
+            ERR_HEAD(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
             ERRTOKENS(expr->tokenRange)
+            ERR_END
             return false;
         }
         auto ti = CheckType(info, scope->scopeId, *expr->name, expr->tokenRange, nullptr);
@@ -604,7 +626,8 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
         auto ti = CheckType(info, scope->scopeId, expr->typeId, expr->tokenRange, &printedError);
         if (ti.isValid()) {
         } else if(!printedError){
-            ERRT(expr->tokenRange) << "type "<< info.ast->getTokenFromTypeString(expr->typeId) << " does not exist\n";
+            ERR_HEAD(expr->tokenRange) << "type "<< info.ast->getTokenFromTypeString(expr->typeId) << " does not exist\n";
+            ERR_END
         }
         expr->typeId = ti;
     }
@@ -613,7 +636,8 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr){
         auto ti = CheckType(info, scope->scopeId, expr->castType, expr->tokenRange, &printedError);
         if (ti.isValid()) {
         } else if(!printedError){
-            ERRT(expr->tokenRange) << "type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist\n";
+            ERR_HEAD(expr->tokenRange) << "type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist\n";
+            ERR_END
         }
         expr->castType = ti;
     }
@@ -651,7 +675,8 @@ int CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, AS
             
             if(ti.isValid()){
             }else if(!printedError) {
-                ERRT(func->tokenRange) << info.ast->getTokenFromTypeString(argBase.typeId) <<" was void (type doesn't exist or you used void which isn't allowed)\n";
+                ERR_HEAD(func->tokenRange) << info.ast->getTokenFromTypeString(argBase.typeId) <<" was void (type doesn't exist or you used void which isn't allowed)\n";
+                ERR_END
             }
             argImpl.typeId = ti;
         } else {
@@ -703,7 +728,8 @@ int CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, AS
             if(ti.isValid()){
             }else if(!printedError) {
                 // TODO: fix location?
-                ERRT(func->tokenRange) << info.ast->getTokenFromTypeString(retBase.typeId)<<" is not a type (function)\n";
+                ERR_HEAD(func->tokenRange) << info.ast->getTokenFromTypeString(retBase.typeId)<<" is not a type (function)\n";
+                ERR_END
             }
             retImpl.typeId = ti;
         } else {
@@ -732,6 +758,8 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
     _TC_LOG(FUNC_ENTER)
+    if(!scope)
+        return false;
 
     ASTScope* nextNamespace = scope->namespaces;
     while(nextNamespace) {
@@ -779,7 +807,8 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
                 id->funcImpl = nullptr;
             }
             if (!id) {
-                ERRT(function->tokenRange) << function->name << " is already defined\n";
+                ERR_HEAD(function->tokenRange) << function->name << " is already defined\n";
+                ERR_END
             }
 
             int result = CheckFunctions(info, function->body);
@@ -850,7 +879,8 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             auto ti = CheckType(info, scope->scopeId, now->typeId, now->tokenRange, &printedError);
             // NOTE: We don't care whether it's a pointer just that the type exists.
             if (!ti.isValid() && !printedError) {
-                ERRT(now->tokenRange) << info.ast->getTokenFromTypeString(now->typeId)<<" is not a type (statement)\n";
+                ERR_HEAD(now->tokenRange) << info.ast->getTokenFromTypeString(now->typeId)<<" is not a type (statement)\n";
+                ERR_END
             } else {
                 // If typeid is invalid we don't want to replace the invalid one with the type
                 // with the string. The generator won't see the names of the invalid types.
@@ -908,10 +938,10 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                 // using might refer to variables
 
                 // if(!originType.isValid()){
-                //     ERRT(now->tokenRange) << *now->name<<" is not a type (using)\n";
+                //     ERR_HEAD(now->tokenRange) << *now->name<<" is not a type (using)\n";
                 // }
                 // if(aliasType.isValid()){
-                //     ERRT(now->tokenRange) << *now->alias<<" is already a type (using)\n";
+                //     ERR_HEAD(now->tokenRange) << *now->alias<<" is already a type (using)\n";
                 // }
                 // continue;
                 // CheckType may create a new type if polymorphic. We don't want that.
@@ -920,7 +950,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                 // TODO: How does polymorphism work here?
                 // Will it work if just left as is or should it be disallowed.
             } else if (now->name) {
-                // ERRT(now->tokenRange) << "inheriting namespace with using doesn't work\n";
+                // ERR_HEAD(now->tokenRange) << "inheriting namespace with using doesn't work\n";
                 ScopeInfo* originInfo = info.ast->getScopeFromParents(*now->name,scope->scopeId);
                 if(originInfo){
                     ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);

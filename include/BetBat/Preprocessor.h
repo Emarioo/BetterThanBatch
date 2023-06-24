@@ -66,6 +66,7 @@ struct PreprocInfo {
     CompileInfo* compileInfo = 0; // for caching includes
 
     int errors=0;
+    int warnings=0;
     
     
     // int ifdefDepth=0;

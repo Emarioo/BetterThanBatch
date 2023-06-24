@@ -99,11 +99,35 @@ int ConvertHexadecimal(Token& token){
     return hex;
 }
 void TokenRange::print(){
+    using namespace engone;
     // assert?
     if(!tokenStream) return;
     
     for(int i=startIndex;i<endIndex;i++){
-        tokenStream->get(i).print();
+        Token& tok = tokenStream->get(i);
+        if(!tok.str)
+            continue;
+        
+        if(tok.flags&TOKEN_DOUBLE_QUOTED)
+            log::out << '"';
+        else if(tok.flags&TOKEN_QUOTED)
+            log::out << '\'';
+        
+        for(int j=0;j<tok.length;j++){
+            char chr = *(tok.str+j);
+            if(chr=='\n'){
+                log::out << "\\n"; // Is this okay?
+            }else
+                log::out << chr;
+        }
+        if(tok.flags&TOKEN_DOUBLE_QUOTED)
+            log::out << '"';
+        else if(tok.flags&TOKEN_QUOTED)
+            log::out << '\'';
+            
+        if(((tok.flags&TOKEN_SUFFIX_SPACE) || (tok.flags&TOKEN_SUFFIX_LINE_FEED)) && i+1!=endIndex){
+            log::out << " ";
+        }
     }
 }
 engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange){
@@ -142,12 +166,12 @@ void TokenRange::feed(std::string& outBuffer){
         else if(tok.flags&TOKEN_QUOTED)
             outBuffer += '\'';
             
-        if(tok.flags&TOKEN_SUFFIX_SPACE){
+        if(tok.flags&TOKEN_SUFFIX_SPACE && i!=endIndex){
             outBuffer += " ";
         }
     }
 }
-void Token::print(int printFlags){
+void Token::print(bool skipSuffix){
     using namespace engone;
     if(!str) {
         return;
@@ -171,7 +195,7 @@ void Token::print(int printFlags){
         else if(flags&TOKEN_QUOTED)
             log::out << '\'';
     // }
-    if(flags&TOKEN_SUFFIX_SPACE){
+    if(flags&TOKEN_SUFFIX_SPACE && !skipSuffix){
         log::out << " ";
     }
 }
@@ -198,8 +222,7 @@ bool Token::operator!=(const char* text){
     return !(*this == text);
 }
 engone::Logger& operator<<(engone::Logger& logger, Token& token){
-    // token.print(TOKEN_PRINT_QUOTES);
-    token.print(0);
+    token.print(true);
     return logger;
 }
 Token::operator std::string(){
@@ -426,7 +449,7 @@ void TokenStream::printTokens(int tokensPerLine, bool showlncol){
         if(showlncol)
             log::out << "["<<token->line << ":"<<token->column<<"] ";
         
-        token->print(0);
+        token->print();
         // if(flags&TOKEN_PRINT_SUFFIXES){
             if(token->flags&TOKEN_SUFFIX_LINE_FEED)
                 log::out << "\\n";
@@ -993,10 +1016,10 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 outTokens.addData(nextChr2);
             }else if((chr=='='&&nextChr=='=')||
                 (chr=='!'&&nextChr=='=')||
-                (chr=='+'&&nextChr=='=')||
-                (chr=='-'&&nextChr=='=')||
-                (chr=='*'&&nextChr=='=')||
-                (chr=='/'&&nextChr=='=')||
+                // (chr=='+'&&nextChr=='=')||
+                // (chr=='-'&&nextChr=='=')||
+                // (chr=='*'&&nextChr=='=')||
+                // (chr=='/'&&nextChr=='=')||
                 (chr=='<'&&nextChr=='=')||
                 (chr=='>'&&nextChr=='=')||
                 (chr=='+'&&nextChr=='+')||

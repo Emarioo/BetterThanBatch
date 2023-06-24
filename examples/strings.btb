@@ -1,14 +1,55 @@
-fn add<T>(a: T, b: T) -> T {
-    sum: T = a + b;
-    sum: i32 = 2;
-    return sum;
-}
+// A = B = 9
+// A = B += 9
+// a: i32;
+// ptr: i32* = &a;
+// ptr *= 7
+
+a = 8
+b = 1 ( a |= 9 )
+printi(a)
+printi(b)
+
+// b: i32;
+
+// *(&var + 4) = 5
+// *(&(*ptr).b + 4) = 5
+
+// *(ptr + 4) = 4
+
+// ad = 32
+
+// p = &((*(ad+4)).eed)
+
+// struct A<T>{
+//     fn add(t: T) {
+//         printi(t)
+//     }
+// }
+
+// fn top<T>(){
+//     fn low(){
+//         a: T;
+//     }
+// }
+
+// fn ee({
+//     return
+// }
+
+// a: A;
+// a.add(33);
+
+// fn add<T>(a: T, b: T) -> T {
+//     sum: T = a + b;
+//     sum: i32 = 2;
+//     return sum;
+// }
 
 // fn addi(a: i32, b: i32) -> i32 { return a + b }
 
 // printi(add<i32>(1.4,2.5))
 // printi(addi(1.6,2.5))
-printi(add<f32>(1.6,2.5))
+// printi(add<f32>(1.6,2.5))
 // printi(add<i32>(8,42))
 
 // printi(1.6 + 2.5)

@@ -13,6 +13,8 @@
 // #define ALLOC_LOG
 // #define LOG_MEASURES
 
+#define LOG_MSG_LOCATION
+
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
 
@@ -54,7 +56,6 @@
 #define USE_DEBUG_INFO
 #endif
 #endif
-
 
 #define LOG_TOKENIZER 1
 #define LOG_PREPROCESSOR 2

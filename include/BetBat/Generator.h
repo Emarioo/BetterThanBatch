@@ -7,6 +7,7 @@ struct GenInfo {
     Bytecode* code=nullptr;
     AST* ast=nullptr;
     int errors=0;
+    int warnings=0;
     
     struct AlignInfo {
         int diff=0;

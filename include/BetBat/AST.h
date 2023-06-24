@@ -63,6 +63,7 @@ enum OperationType : u32 {
     AST_INITIALIZER,
     AST_SLICE_INITIALIZER,
     AST_FROM_NAMESPACE,
+    AST_ASSIGN,
 
     AST_REFER, // reference
     AST_DEREF, // dereference
@@ -271,22 +272,19 @@ struct ASTStatement {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
     enum Type {
         ASSIGN, // a = 9
-        PROP_ASSIGN, // *a = 9   a[1]=2   (*(a+8)[2]) = 92
         IF,
         WHILE,
         RETURN,
         BREAK,
         CONTINUE,
-        CALL,
+        EXPRESSION,
         USING,
-        // ALIAS,
-        // TYPEALIAS,
         BODY,
         DEFER,
     };
     TokenRange tokenRange{};
     int type = 0;
-    int opType = 0;
+    // int opType = 0;
 
     std::string* name=0;
     std::string* alias=0;

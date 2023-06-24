@@ -3,14 +3,17 @@
 // preprocessor needs CompileInfo to handle global caching of include streams
 #include "BetBat/Compiler.h"
 
-#undef ERRT
-#undef ERRTL
-#undef WARNT
+#undef ERR_HEAD
+#undef ERR_HEADL
+#undef WARN_HEAD
+#undef WARN_END
+#undef ERR_END
 
-// #define ERR info.errors++; engone::log::out << engone::log::RED << "PreProcError: "
-#define ERRT(token) info.errors++;engone::log::out << engone::log::RED << "PreProcError "<< token.line <<":"<<token.column<<": "
-#define ERRTL(token) info.errors++;engone::log::out << engone::log::RED << "PreProcError "<< token.line <<":"<<(token.column+token.length)<<": "
-#define WARNT(token) engone::log::out << engone::log::YELLOW << "PreProcWarning "<< token.line <<":"<<token.column<<": "
+#define ERR_HEAD(T) info.errors++;engone::log::out << ERR_CUSTOM(info.inTokens->streamName, T.line,T.column,"Preproc. error","E0000")
+#define ERR_HEADL(T) info.errors++;engone::log::out << ERR_CUSTOM(info.inTokens->streamName, T.line, T.column, "Preproc. error","E0000")
+#define WARN_HEAD(T) engone::log::out << WARN_CUSTOM(info.inTokens->streamName, T.line, T.column, "Preproc. warning","W0000")
+#define ERR_END MSG_END
+#define WARN_END MSG_END
 
 // #define MLOG_MATCH(X) X
 #define MLOG_MATCH(X)
@@ -51,7 +54,7 @@ RootMacro* PreprocInfo::matchMacro(Token& token){
     }
     // if(pair->second.called){
     //     auto& info = *this;
-    //     ERRT(token) << "Infinite recursion not allowed ("<<token<<")\n";
+    //     ERR_HEAD(token) << "Infinite recursion not allowed ("<<token<<")\n";
     //     return 0;
     // }
     _MLOG(MLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<token<<"\n";))
@@ -132,12 +135,14 @@ int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            ERRT(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_HEAD(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_END
             return PARSE_ERROR;
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
-        ERRT(token) << "Cannot have space after preprocessor directive\n";
+        ERR_HEAD(token) << "Cannot have space after preprocessor directive\n";
+        ERR_END
         info.nextline();
         return PARSE_ERROR;
     }
@@ -146,7 +151,8 @@ int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            ERRT(token) << "Expected "<<str<<" found '"<<token<<"'\n";
+            ERR_HEAD(token) << "Expected "<<str<<" found '"<<token<<"'\n";
+            ERR_END
             return PARSE_ERROR;
         }
         return PARSE_ERROR;
@@ -163,12 +169,14 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            ERRT(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_HEAD(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_END
             return PARSE_ERROR;
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
-        ERRT(token) << "Cannot have space after preprocessor directive\n";
+        ERR_HEAD(token) << "Cannot have space after preprocessor directive\n";
+        ERR_END
         info.nextline();
         return PARSE_ERROR;
     }
@@ -185,7 +193,8 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            ERRT(token) << "Expected define found '"<<token<<"'\n";
+            ERR_HEAD(token) << "Expected define found '"<<token<<"'\n";
+            ERR_END
             return PARSE_ERROR;
         }
         return PARSE_ERROR;
@@ -196,12 +205,13 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     Token name = info.next();
     
     if(name.flags&TOKEN_QUOTED){
-        ERRT(name) << "Define name cannot be quoted "<<name<<"\n";
+        ERR_HEAD(name) << "Define name cannot be quoted "<<name<<"\n";
+        ERR_END
         return PARSE_ERROR;
     }
     
     // if(info.matchMacro(name)){
-    //     WARNT(name) << "Intentional redefinition of '"<<name<<"'?\n";   
+    //     WARN_HEAD(name) << "Intentional redefinition of '"<<name<<"'?\n";   
     // }
     
     int suffixFlags = name.flags;
@@ -211,7 +221,8 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     }else{
         Token token = info.next();
         if(token!="("){
-            ERRT(token) << "Unexpected '"<<token<<"' did you forget a space or '(' to indicate arguments?\n";
+            ERR_HEAD(token) << "Unexpected '"<<token<<"' did you forget a space or '(' to indicate arguments?\n";
+            ERR_END
             return PARSE_ERROR;
         }
         
@@ -234,7 +245,8 @@ int ParseDefine(PreprocInfo& info, bool attempt){
             } else if(token==","){
                 // cool
             } else{
-                ERRT(token) << "Expected , or ) found '"<<token<<"'\n";   
+                ERR_HEAD(token) << "Expected , or ) found '"<<token<<"'\n";   
+                ERR_END
             }
         }
         
@@ -254,7 +266,8 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     if(defTemp.infiniteArg==-1){
         defined = rootDefined->matchArgCount(defTemp.argumentNames.size(),false);
         if(defined){
-            WARNT(name) << "Intentional redefinition of '"<<name<<"'?\n";
+            WARN_HEAD(name) << "Intentional redefinition of '"<<name<<"'?\n";
+            WARN_END
             *defined = defTemp;
         }else{
             // move defTemp info appropriate place in rootDefined
@@ -262,7 +275,8 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         }
     }else{
         if(rootDefined->hasInfinite){
-            WARNT(name) << "Intentional redefinition of '"<<name<<"'?\n";   
+            WARN_HEAD(name) << "Intentional redefinition of '"<<name<<"'?\n";   
+            WARN_END
         }
         rootDefined->hasInfinite = true;
         rootDefined->infDefined = defTemp;
@@ -277,7 +291,8 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         Token token = info.next();
         if(token==PREPROC_TERM){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-                ERRT(token) << "SPACE AFTER "<<token<<"!\n";
+                ERR_HEAD(token) << "SPACE AFTER "<<token<<"!\n";
+                ERR_END
                 return PARSE_ERROR;
             }
             Token token = info.get(info.at()+1);
@@ -295,7 +310,8 @@ int ParseDefine(PreprocInfo& info, bool attempt){
             }
         }
         if(info.end()&&multiline){
-            ERRTL(token) << "Missing enddef!\n";
+            ERR_HEADL(token) << "Missing enddef!\n";
+            ERR_END
         }
     }
     while_skip_194:
@@ -326,12 +342,14 @@ int ParseUndef(PreprocInfo& info, bool attempt){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
-            ERRT(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_HEAD(token) << "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_END
             return PARSE_ERROR;
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
-        ERRT(token) << "Cannot have space after preprocessor directive\n";
+        ERR_HEAD(token) << "Cannot have space after preprocessor directive\n";
+        ERR_END
         return PARSE_ERROR;
     }
     token = info.get(info.at()+2);
@@ -339,11 +357,13 @@ int ParseUndef(PreprocInfo& info, bool attempt){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }
-        ERRT(token) << "Expected undef (since this wasn't an attempt)\n";
+        ERR_HEAD(token) << "Expected undef (since this wasn't an attempt)\n";
+        ERR_END
         return PARSE_ERROR;
     }
     if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-        ERRTL(token) << "Unexpected line feed (expected a macro name)\n";
+        ERR_HEADL(token) << "Unexpected line feed (expected a macro name)\n";
+        ERR_END
         return PARSE_ERROR;
     }
 
@@ -354,7 +374,8 @@ int ParseUndef(PreprocInfo& info, bool attempt){
 
     auto pair = info.macros.find(name);
     if(pair==info.macros.end()){
-        WARNT(name) << "Cannot undefine '"<<name<<"' (doesn't exist)\n";
+        WARN_HEAD(name) << "Cannot undefine '"<<name<<"' (doesn't exist)\n";
+        WARN_END
         return PARSE_SUCCESS;
     }
 
@@ -365,17 +386,20 @@ int ParseUndef(PreprocInfo& info, bool attempt){
     token = info.next();
 
     if(token!="..." && !IsInteger(token)){
-        ERRT(token) << "Expected an integer (or ...) to indicate argument count not '"<<token<<"'\n";
+        ERR_HEAD(token) << "Expected an integer (or ...) to indicate argument count not '"<<token<<"'\n";
+        ERR_END 
         return PARSE_ERROR;
     }
     if(!(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-        ERRT(token) << "Expected line feed after '"<<token<<"'\n";
+        ERR_HEAD(token) << "Expected line feed after '"<<token<<"'\n";
+        ERR_END
         return PARSE_ERROR;
     }
 
     if(token=="..."){
         if(!pair->second.hasInfinite){
-            WARNT(name) << "Cannot undefine '"<<name<<"' [inf] (doesn't exist)\n";
+            WARN_HEAD(name) << "Cannot undefine '"<<name<<"' [inf] (doesn't exist)\n";
+            WARN_END
             return PARSE_SUCCESS;
         }
         pair->second.hasInfinite=false;
@@ -385,13 +409,15 @@ int ParseUndef(PreprocInfo& info, bool attempt){
 
     int argCount = ConvertInteger(token);
     if(argCount<0){
-        ERRT(token) << "ArgCount cannot be negative '"<<argCount<<"'\n";
+        ERR_HEAD(token) << "ArgCount cannot be negative '"<<argCount<<"'\n";
+        ERR_END
         return PARSE_ERROR;
     }
 
     auto cert = pair->second.certainMacros.find(argCount);
     if(cert==pair->second.certainMacros.end()){
-        WARNT(name) << "Cannot undefine '"<<name<<"' ["<<argCount<<" args] (doesn't exist)\n";
+        WARN_HEAD(name) << "Cannot undefine '"<<name<<"' ["<<argCount<<" args] (doesn't exist)\n";
+        WARN_END
         return PARSE_SUCCESS;
     }
     pair->second.certainMacros.erase(cert);
@@ -409,7 +435,8 @@ int ParseImport(PreprocInfo& info, bool attempt){
 
     Token name = info.get(info.at()+1);
     if(!(name.flags&TOKEN_QUOTED)){
-        ERRT(name) << "expected a string not "<<name<<"\n";
+        ERR_HEAD(name) << "expected a string not "<<name<<"\n";
+        ERR_END
         return PARSE_ERROR;
     }
     info.next();
@@ -419,7 +446,8 @@ int ParseImport(PreprocInfo& info, bool attempt){
         info.next();
         token = info.get(info.at()+1);
         if(token.flags & TOKEN_QUOTED){
-            ERRT(token) << "don't use quotes with "<<log::YELLOW<<"as\n";
+            ERR_HEAD(token) << "don't use quotes with "<<log::YELLOW<<"as\n";
+            ERR_END
             return PARSE_ERROR;
         }
         info.next();
@@ -440,7 +468,8 @@ int ParseInclude(PreprocInfo& info, bool attempt){
 
     Token token = info.get(info.at()+1);
     if(!(token.flags&TOKEN_QUOTED)){
-        ERRT(token) << "expected a string not "<<token<<"\n";
+        ERR_HEAD(token) << "expected a string not "<<token<<"\n";
+        ERR_END
         return PARSE_ERROR;
     }
     info.next();
@@ -463,7 +492,8 @@ int ParseInclude(PreprocInfo& info, bool attempt){
     // TODO: Search additional import directories
     
     if(fullpath.empty()){
-        ERRT(token) << "Could not find include "<<filepath<<"\n";
+        ERR_HEAD(token) << "Could not find include "<<filepath<<"\n";
+        ERR_END
         return PARSE_ERROR;
     }
 
@@ -483,7 +513,8 @@ int ParseInclude(PreprocInfo& info, bool attempt){
     }
     
     if(!includeStream){
-        ERRT(token) << "Error with token stream for "<<filepath<<" (bug in the compiler!)\n";
+        ERR_HEAD(token) << "Error with token stream for "<<filepath<<" (bug in the compiler!)\n";
+        ERR_END
         return PARSE_ERROR;
     }
     int tokenIndex=0;
@@ -540,7 +571,8 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
         Token token = info.get(info.at()+1);
         if(token==PREPROC_TERM){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-                ERRT(token) << "SPACE AFTER "<<token<<"!\n";
+                ERR_HEAD(token) << "SPACE AFTER "<<token<<"!\n";
+                ERR_END
                 return PARSE_ERROR;
             }
             Token token = info.get(info.at()+2);
@@ -583,7 +615,8 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
             // log::out << log::GRAY<<" skip "<<skip << "\n";
         }
         if(info.end()){
-            ERRTL(info.get(info.length()-1)) << "Missing endif somewhere for ifdef or ifndef\n";
+            ERR_HEADL(info.get(info.length()-1)) << "Missing endif somewhere for ifdef or ifndef\n";
+            ERR_END
             return PARSE_ERROR;   
         }
     }
@@ -803,7 +836,8 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
 
                         CertainMacro* macro = rootMacro->matchArgCount(newEvalInfo.arguments.size());
                         if(!macro){
-                            ERRT(argTok)<<"Macro '"<<argTok<<"' cannot "<<newEvalInfo.arguments.size()<<" arguments\n";
+                            ERR_HEAD(argTok)<<"Macro '"<<argTok<<"' cannot "<<newEvalInfo.arguments.size()<<" arguments\n";
+                            ERR_END
                             // return PARSE_ERROR;
                         }else{
                             newEvalInfo.macro = macro;
@@ -835,7 +869,8 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
             
             CertainMacro* macro = rootMacro->matchArgCount(newEvalInfo.arguments.size());
             if(!macro){
-                ERRT(token)<<"Macro '"<<token<<"' cannot "<<newEvalInfo.arguments.size()<<" arguments\n";
+                ERR_HEAD(token)<<"Macro '"<<token<<"' cannot "<<newEvalInfo.arguments.size()<<" arguments\n";
+                ERR_END
                 // return PARSE_ERROR;
             }else{
                 newEvalInfo.macro = macro;
@@ -865,7 +900,8 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
     using namespace engone;
 
     if(info.evaluationDepth>=PREPROC_REC_LIMIT){
-        ERRT(info.now()) << "Reached recursion limit of "<<PREPROC_REC_LIMIT<<" for macros\n";
+        ERR_HEAD(info.now()) << "Reached recursion limit of "<<PREPROC_REC_LIMIT<<" for macros\n";
+        ERR_END
         return PARSE_ERROR;
     }
     info.evaluationDepth++;
@@ -953,7 +989,8 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
 
             CertainMacro* macro = rootMacro->matchArgCount(newEvalInfo.arguments.size());
             if(!macro){
-                ERRT(token)<<"Macro '"<<token<<"' cannot have "<<newEvalInfo.arguments.size()<<" arguments\n";
+                ERR_HEAD(token)<<"Macro '"<<token<<"' cannot have "<<newEvalInfo.arguments.size()<<" arguments\n";
+                ERR_END
             }else{
                 newEvalInfo.macro = macro;
                 EvalMacro(info,newEvalInfo);
@@ -985,7 +1022,8 @@ int ParseMacro(PreprocInfo& info, int attempt){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }
-        ERRT(name) << "Undefined macro '"<<name<<"'\n";
+        ERR_HEAD(name) << "Undefined macro '"<<name<<"'\n";
+        ERR_END
         return PARSE_ERROR;
     }
 
@@ -1006,7 +1044,8 @@ int ParseMacro(PreprocInfo& info, int attempt){
 
     CertainMacro* macro = rootMacro->matchArgCount(evalInfo.arguments.size());
     if(!macro){
-        ERRT(name)<<"Macro '"<<name<<"' cannot have "<<evalInfo.arguments.size()<<" arguments\n";
+        ERR_HEAD(name)<<"Macro '"<<name<<"' cannot have "<<evalInfo.arguments.size()<<" arguments\n";
+        ERR_END
         return PARSE_ERROR;
     }
 

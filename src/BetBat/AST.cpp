@@ -33,6 +33,7 @@ const char *OpToStr(OperationType optype) {
         CASE(INITIALIZER, initializer)
         CASE(SLICE_INITIALIZER, slice_initializer)
         CASE(FROM_NAMESPACE, namespaced)
+        CASE(ASSIGN, assign)
 
         CASE(REFER, &)
         CASE(DEREF, * (dereference))
@@ -47,13 +48,12 @@ const char *StateToStr(int type) {
         return #B;
     switch (type) {
         CASE(ASSIGN, assign)
-        CASE(PROP_ASSIGN, prop_assign)
         CASE(IF, if)
         CASE(WHILE, while)
         CASE(RETURN, return)
         CASE(BREAK, break)
         CASE(CONTINUE, continue)
-        CASE(CALL, call)
+        CASE(EXPRESSION, expression)
         CASE(USING, using)
         CASE(BODY, body)
         CASE(DEFER, defer)
@@ -1453,8 +1453,8 @@ void ASTStatement::print(AST *ast, int depth) {
         log::out << " " << *name;
     if(alias)
         log::out << " as " << *alias;
-    if(opType!=0)
-        log::out << " "<<OpToStr((OperationType)opType)<<"=";
+    // if(opType!=0)
+    //     log::out << " "<<OpToStr((OperationType)opType)<<"=";
     log::out << "\n";
     if (lvalue) {
         lvalue->print(ast, depth + 1);
@@ -1530,7 +1530,18 @@ void ASTExpression::print(AST *ast, int depth) {
             log::out << "\n";
             if(left)
                 left->print(ast, depth + 1);
-        } else {
+        } else if(typeId == AST_ASSIGN) {
+            if(castType.getId()!=0){
+                log::out << OpToStr((OperationType)castType.getId());
+            }
+            log::out << "\n";
+            if (left) {
+                left->print(ast, depth + 1);
+            }
+            if (right) {
+                right->print(ast, depth + 1);
+            }
+        }  else {
             log::out << "\n";
             if (left) {
                 left->print(ast, depth + 1);

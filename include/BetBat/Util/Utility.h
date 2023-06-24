@@ -33,6 +33,7 @@ const char* FormatTime(double seconds);
 // base.btb -> /
 // src -> /
 std::string TrimLastFile(const std::string& path);
+std::string TrimDir(const std::string& path);
 std::string BriefPath(const std::string& path, int max=40);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
@@ -62,9 +63,12 @@ struct ScopeDebug {
 #define COMBINE1(X,Y) X##Y
 #define COMBINE(X,Y) COMBINE1(X,Y)
 
-#define defer std::function<void()> COMBINE(func,__LINE__){};DeferStruct COMBINE(defer,__LINE__)(COMBINE(func,__LINE__));COMBINE(func,__LINE__)=[&]()
+// #define defer std::function<void()> COMBINE(func,__LINE__){};DeferStruct COMBINE(defer,__LINE__)(COMBINE(func,__LINE__));COMBINE(func,__LINE__)=[&]()
+#define defer DeferStruct COMBINE(defer,__LINE__){};COMBINE(defer,__LINE__)._func=[&]()
 struct DeferStruct {
-    DeferStruct(std::function<void()>& func) : _func(func) {}
+    DeferStruct() = default;
+    // DeferStruct(std::function<void()>& func) : _func(func) {}
     ~DeferStruct() { _func(); }
-    std::function<void()>& _func;
+    // std::function<void()>& _func;
+    std::function<void()> _func;
 };

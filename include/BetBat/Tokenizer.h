@@ -4,9 +4,10 @@
 #include "Engone/Logger.h"
 #include "Engone/Typedefs.h"
 
+#include "BetBat/Config.h"
+#include "BetBat/MessageTool.h"
 #include "BetBat/Util/Utility.h"
 #include "BetBat/Util/Perf.h"
-#include "BetBat/Config.h"
 
 #define TOKEN_SUFFIX_LINE_FEED 0x1
 // SPACE suffic is remove if LINE_FEED is present in mask/flag 
@@ -32,7 +33,7 @@ struct Token {
     operator std::string();
 
     // prints the string, does not print suffix, line or column
-    void print(int printFlags = 0);
+    void print(bool skipSuffix = false);
 };
 
 // #define INT_TO_VERSION(x) ()

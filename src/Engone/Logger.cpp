@@ -86,6 +86,12 @@ namespace engone {
 		auto& info = getThreadInfo();
 		info.logReport = path;
 	}
+	void Logger::setIndent(int indent){
+		m_indent = indent;
+		if(onEmptyLine){
+			m_nextIndent = indent;
+		}
+	}
 	void Logger::useThreadReports(bool yes){
 		m_useThreadReports=yes;
 	}
@@ -121,11 +127,29 @@ namespace engone {
 			SetConsoleColor(m_masterColor);
 
 		if(m_enabledConsole){
-			printf("%s",str);
-			// fwrite(str,1,len,stdout);
+			if(lastPrintedChar=='\n'){
+			// 	preIndent=false;
+				for(int j=0;j<m_nextIndent;j++)
+					fwrite(" ",1, 1, stdout);
+				m_nextIndent = m_indent;
+			}
+			int last = 0;
+			for(int i=0;i<len;i++){
+				if(str[i]=='\n'||i+1==len){
+					fwrite(str+last,1,i+1-last,stdout);
+					last = i+1;
+					if(str[i]=='\n' && i+1!=len){
+						for(int j=0;j<m_indent;j++)
+							fwrite(" ",1, 1, stdout);
+					}
+				}
+			}
+			lastPrintedChar = str[len-1];
+			if(lastPrintedChar=='\n') {
+				onEmptyLine=true;
+			}
 		}
 		if(m_enabledReports){
-
 			const char* te = "[Thread 65536] ";
 			char extraBuffer[11+15+1]{0};
 			bool printExtra=false;
@@ -232,13 +256,12 @@ namespace engone {
 		if (buf) {
 			memcpy(buf, value, len);
 			info.use(len);
+			onEmptyLine=false;
 		} else {
 			printf("[Logger] : Failed insuring %u bytes\n", len); \
 		}
 		if (value[len - 1] == '\n') {
 			flush();
-			// print((char*)info.lineBuffer.data, info.lineBuffer.used);
-			// info.lineBuffer.used = 0; // flush buffer
 		}
 		return *this;
 	}
@@ -253,7 +276,7 @@ namespace engone {
 		return *this << value.c_str();
 	}
 
-	// Am I lazy or smart?
+	// Am I crazy, lazy or smart?
 #define GEN_LOG_NUM(TYPE,ENSURE,FORMAT)\
 	Logger& Logger::operator<<(TYPE value) {\
 		auto& info = getThreadInfo();\
@@ -262,8 +285,9 @@ namespace engone {
 		if (buf) {\
 			int used = sprintf(buf,FORMAT,(TYPE)value);\
 			info.use(used);\
+			onEmptyLine=false;\
 		} else {\
-			printf("[Logger] : Failed insuring %u bytes\n", ensureBytes);\
+			printf("[Logger] : Failed ensuring %u bytes\n", ensureBytes);\
 		}\
 		return *this;\
 	}
@@ -287,8 +311,9 @@ namespace engone {
 		if (buf) {\
 			int used = sprintf PRINT;\
 			info.use(used);\
+			onEmptyLine=false;\
 		} else {\
-			printf("[Logger] : Failed insuring %u bytes\n", ensureBytes);\
+			printf("[Logger] : Failed ensuring %u bytes\n", ensureBytes);\
 		}\
 		return *this;\
 	}

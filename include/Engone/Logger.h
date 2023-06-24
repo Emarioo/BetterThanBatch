@@ -76,6 +76,7 @@ namespace engone {
 		void setMasterReport(const std::string path);
 		// extra report, each thread, set empty path for no report which is default.
 		void setReport(const std::string path);
+		void setIndent(int indent);
 
 		// extra report which is individual for each thread
 		void useThreadReports(bool yes);
@@ -146,6 +147,11 @@ namespace engone {
 		bool m_useThreadReports = false;
 		bool m_enabledConsole = true;
 		bool m_enabledReports = true;
+		int m_indent = 0;
+		int m_nextIndent = 0;
+		bool skipIndent=false;
+		char lastPrintedChar=0;
+		bool onEmptyLine=false;
 
 		std::string m_rootDirectory = "logs";
 

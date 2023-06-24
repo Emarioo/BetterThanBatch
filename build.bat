@@ -54,6 +54,8 @@ for /r %%i in (*.cpp) do (
 @REM echo HOHO
 
 @REM #####   Compiling
+
+echo | set /p="Compiling..."
 set /a startTime=6000*( 100%time:~3,2% %% 100 ) + 100* ( 100%time:~6,2% %% 100 ) + ( 100%time:~9,2% %% 100 )
 
 if !USE_MSVC!==1 (
