@@ -221,7 +221,7 @@ ASTFunction *AST::getFunction(Identifier* id) {
     // return &functions[index];
 }
 
-ASTStruct::Method ASTStruct::getMethod(const std::string& name){
+StructImpl::Method StructImpl::getMethod(const std::string& name){
     auto pair = methods.find(name);
     if(pair == methods.end())
         return {};
@@ -897,6 +897,9 @@ u32 TypeInfo::getSize() {
     }
     return _size;
 }
+StructImpl* TypeInfo::getImpl(){
+    return !astStruct ? nullptr : (astStruct->isPolymorphic() ? structImpl : &astStruct->baseImpl);
+}
 u32 TypeInfo::alignedSize() {
     if (astStruct) {
         if(structImpl)
@@ -1247,11 +1250,11 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
 //     return {};
 // }
 
-void ASTStruct::add(ASTFunction* func, FuncImpl* funcImpl){
-    auto pair = methods.find(func->name);
-    Assert(pair == methods.end());
-
-    methods[func->name] = {func, funcImpl};
+void ASTStruct::add(ASTFunction* func){
+    // NOTE: Is this code necessary? Did something break.
+    auto pair = baseImpl.methods.find(func->name);
+    Assert(pair == baseImpl.methods.end());
+    baseImpl.methods[func->name] = {func, &func->baseImpl};
 
     if(!functions){
         functions = func;
@@ -1264,7 +1267,7 @@ void ASTStruct::add(ASTFunction* func, FuncImpl* funcImpl){
     }
 }
 
-void ASTStruct::addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl){
+void StructImpl::addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl){
     auto pair = methods.find(name);
     Assert(pair == methods.end());
 

@@ -282,9 +282,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
             if(id.isValid()){
             //     baseInfo->astStruct->polyArgs[i].virtualType->id = id;
             } else if(!printedError) {
-                ERR_HEAD2(tokenRange) << "Type for polymorphic argument was not valid\n";
-                ERRTOKENS(tokenRange);
-                ERR_END
+                ERR_HEAD(tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
+                ERR_LINE(tokenRange,"here somewhere");
+                )
             }
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
         }
@@ -328,32 +328,19 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
         return {}; // type isn't polymorphic and does just not exist
     }
 
-
-
-    for(int i=0;i<(int)polyIds.size();i++){
-        // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTypes[i], scopeId);
-        // TypeId id = info.ast->convertToTypeId(polyTypes[i], scopeId);
-        // bool printedError = false;
-        TypeId id = polyIds[i];
-        // CheckType(info, scopeId, polyTypes[i], tokenRange, &printedError);
-        // if(i!=0)
-            // *realTypeName += ",";
-        // *realTypeName += info.ast->typeToString(id);
-        // polyIds.push_back(id);
-        if(id.isValid()){
-            baseInfo->astStruct->polyArgs[i].virtualType->id = id;
-        } 
-        // else if(!printedError) {
-        //     ERR_HEAD2(tokenRange) << "Type for polymorphic argument was not valid\n";
-        //     ERRTOKENS(tokenRange);
-        // }
-        // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
-    }
-
     TypeInfo* typeInfo = info.ast->createType(*realTypeName, baseInfo->scopeId);
     typeInfo->astStruct = baseInfo->astStruct;
     typeInfo->structImpl = (StructImpl*)engone::Allocate(sizeof(StructImpl));
     new(typeInfo->structImpl)StructImpl();
+
+    typeInfo->structImpl->polyIds.resize(polyIds.size());
+    for(int i=0;i<(int)polyIds.size();i++){
+        TypeId id = polyIds[i];
+        if(id.isValid()){
+            baseInfo->astStruct->polyArgs[i].virtualType->id = id;
+        }
+        typeInfo->structImpl->polyIds[i] = id;
+    }
 
     bool hm = CheckStructImpl(info, typeInfo->astStruct, baseInfo, typeInfo->structImpl);
     if(!hm) {
@@ -397,8 +384,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
             structInfo = info.ast->createType(Token(astStruct->name), scope->scopeId);
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
-                ERR_HEAD2(astStruct->tokenRange) << astStruct->name<<" is already defined\n";
-                ERR_END
+                ERR_HEAD(astStruct->tokenRange, "'"<<astStruct->name<<"' is already defined.\n");
                 // TODO: Provide information (file, line, column) of the first definition.
             } else {
                 _TC_LOG(log::out << "Defined struct "<<info.ast->typeToString(structInfo->id)<<"\n";)
@@ -470,7 +456,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
     
     return true;
 }
-
+int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType);
 int CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, TypeId* outType);
 int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType) {
     using namespace engone;
@@ -518,60 +504,121 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
         *expr->name = *realTypeName; // We modify the expression to use the official poly types
     }
     if (expr->boolValue){
-        Assert(expr->left && expr->left->left && expr->left->left->typeId == AST_VAR);
-        ASTExpression* varexpr = expr->left->left;
-        auto iden = info.ast->getIdentifier(scope->scopeId,*varexpr->name);
-        if(!iden || iden->type!=Identifier::VAR) {
-            ERR_HEAD(expr->tokenRange, "'"<<*varexpr->name<<"' is not declared\n";
-                ERR_LINE(expr->left->left->tokenRange,"undeclared");
+        TypeId structType = {};
+        CheckExpression(info,scope, expr->left, &structType);
+        if(structType.getPointerLevel()>1){
+            ERR_HEAD(expr->left->tokenRange, "'"<<info.ast->typeToString(structType)<<"' to much of a pointer.\n";
+                ERR_LINE(expr->left->tokenRange,"must be a reference to a struct");
             )
             return false;
         }
-        auto var = info.ast->getVariable(iden);
-        TypeInfo* ti = info.ast->getTypeInfo(var->typeId.baseType());
-        // TODO: method through pointer struct not suppored yet?
-        //   AST_REFER and AST_VAR in expr->left wouldn't work.
-        //   AST_VAR should be used. Maybe use AST_METHODCALL
-        // if(!ti || !ti->astStruct || var->typeId.getPointerLevel()>1){
+        TypeInfo* ti = info.ast->getTypeInfo(structType.baseType());
+        
         if(!ti || !ti->astStruct){
-            ERR_HEAD(expr->tokenRange, "'"<<info.ast->typeToString(var->typeId)<<"' is not a struct. Methods cannot be called.\n";
-                ERR_LINE(expr->left->left->tokenRange,"not a struct");
+            ERR_HEAD(expr->tokenRange, "'"<<info.ast->typeToString(structType)<<"' is not a struct. Methods cannot be called.\n";
+                ERR_LINE(expr->left->tokenRange,"not a struct");
+            )
+            return false;
+        }
+        if(!ti->getImpl()){
+            ERR_HEAD(expr->tokenRange, "'"<<info.ast->typeToString(structType)<<"' is a polymorphic struct with not poly args specified.\n";
+                ERR_LINE(expr->left->tokenRange,"base polymorphic struct");
             )
             return false;
         }
         if(polyTypes.size()==0) {
-            ASTStruct::Method baseMethod = ti->astStruct->getMethod(baseName);
-            if(!baseMethod.astFunc){
-                ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a method of '"<<info.ast->typeToString(var->typeId.baseType())<<"'.\n\n";
-                    ERR_LINE(expr->tokenRange,"not a method");
-                )
-                return false;
-            }
-            if(baseMethod.astFunc->polyArgs.size()!=0){
-                ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is a polymorphic method of '"<<info.ast->typeToString(var->typeId.baseType())<<"'. Your usage of '"<<*expr->name<<"' does not contain polymorphic arguments.\n\n";
+            *outType = AST_VOID;
+            StructImpl::Method baseMethod = ti->getImpl()->getMethod(baseName);
+            if(baseMethod.astFunc && baseMethod.astFunc->polyArgs.size()!=0){
+                ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is a polymorphic method of '"<<info.ast->typeToString(structType.baseType())<<"'. Your usage of '"<<*expr->name<<"' does not contain polymorphic arguments.\n\n";
                     ERR_LINE(expr->tokenRange,"ex: func<i32>(...)");
                 )
                 return false;
             }
+            if(ti->astStruct->polyArgs.size()!=0){
+                if(baseMethod.astFunc){
+                    if(baseMethod.funcImpl->returnTypes.size()!=0)
+                        *outType = baseMethod.funcImpl->returnTypes[0].typeId;
+                    // ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a method of '"<<info.ast->typeToString(structType.baseType())<<"'.\n\n";
+                    //     ERR_LINE(expr->tokenRange,"not a method");
+                    // )
+                    return true;
+                }
+                // we want base function and then create poly function?
+                // fncall name doesn't have base? we need to trim?
+                StructImpl::Method baseMethod = ti->astStruct->baseImpl.getMethod(baseName);
+                if(baseMethod.astFunc && baseMethod.astFunc->polyArgs.size()!=0){
+                    ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is a polymorphic method of '"<<info.ast->typeToString(structType.baseType())<<"'. Your usage of '"<<*expr->name<<"' does not contain polymorphic arguments.\n\n";
+                        ERR_LINE(expr->tokenRange,"ex: func<i32>(...)");
+                    )
+                    return false;
+                }
 
-            *outType = AST_VOID;
-            if(baseMethod.funcImpl->returnTypes.size()!=0)
-                *outType = baseMethod.funcImpl->returnTypes[0].typeId;
+                ScopeInfo* funcScope = info.ast->getScope(baseMethod.astFunc->scopeId);
+
+                FuncImpl* funcImpl = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
+                new(funcImpl)FuncImpl();
+                funcImpl->name = baseName;
+                funcImpl->structImpl = ti->getImpl();
+
+                // It's not a direct poly method, the poly struct makes the method
+                // poly
+                ti->getImpl()->addPolyMethod(baseName, baseMethod.astFunc, funcImpl);
+                
+                baseMethod.astFunc->polyImpls.push_back(funcImpl);
+                // funcImpl->polyIds.reserve(polyIds.size()); // no polyIds to set
+
+                for(int i=0;i<(int)ti->getImpl()->polyIds.size();i++){
+                    TypeId id = ti->getImpl()->polyIds[i];
+                    if(id.isValid()){
+                        ti->astStruct->polyArgs[i].virtualType->id = id;
+                    } 
+                }
+                
+                // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
+                int result = CheckFunctionImpl(info,baseMethod.astFunc,funcImpl,ti->astStruct, outType);
+                
+                for(int i=0;i<(int)ti->getImpl()->polyIds.size();i++){
+                    // TypeId id = polyIds[i];
+                    // if(id.isValid()){
+                        ti->astStruct->polyArgs[i].virtualType->id = {};
+                    // } 
+                }
+            } else {
+                if(!baseMethod.astFunc){
+                ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a method of '"<<info.ast->typeToString(structType.baseType())<<"'.\n\n";
+                    ERR_LINE(expr->tokenRange,"not a method");
+                )
+                return false;
+                }
+                if(baseMethod.astFunc->polyArgs.size()!=0){
+                    ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is a polymorphic method of '"<<info.ast->typeToString(structType.baseType())<<"'. Your usage of '"<<*expr->name<<"' does not contain polymorphic arguments.\n\n";
+                        ERR_LINE(expr->tokenRange,"ex: func<i32>(...)");
+                    )
+                    return false;
+                }
+                *outType = AST_VOID;
+                if(baseMethod.funcImpl->returnTypes.size()!=0)
+                    *outType = baseMethod.funcImpl->returnTypes[0].typeId;
+            }
         } else {
-            
-            ASTStruct::Method method = ti->astStruct->getMethod(*realTypeName);
-            if(method.astFunc)
+            StructImpl::Method method = ti->getImpl()->getMethod(*realTypeName);
+            // ASTStruct::Method method = ti->astStruct->getMethod(*realTypeName);
+            if(method.astFunc)      
                 return true; // poly method already exists, no worries, everything is fine.
             
-            ASTStruct::Method baseMethod = ti->astStruct->getMethod(baseName);
+            StructImpl::Method baseMethod = ti->astStruct->baseImpl.getMethod(baseName);
+            // ASTStruct::Method baseMethod = ti->astStruct->getMethod(baseName);
             if(!baseMethod.astFunc){
-                ERR_HEAD2(expr->tokenRange) <<baseName<<" is not a method of "<<info.ast->typeToString(var->typeId.baseType())<<"n";
-                ERRTOKENS(expr->tokenRange);
+                ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a method of "<<info.ast->typeToString(structType.baseType())<<".\n\n";
+                ERR_LINE(expr->tokenRange,"bad");
+                )
                 return false;
             }
             if(baseMethod.astFunc->polyArgs.size()==0){
-                ERR_HEAD2(expr->tokenRange) << "Method "<<baseName<<" isn't polymorphic\n";
-                ERRTOKENS(expr->tokenRange);
+                ERR_HEAD(expr->tokenRange, "Method '"<<baseName<<"' isn't polymorphic.\n\n";
+                ERR_LINE(expr->tokenRange,"bad");
+                )
                 return false;
             }
             
@@ -582,12 +629,20 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
             FuncImpl* funcImpl = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
             new(funcImpl)FuncImpl();
             funcImpl->name = *realTypeName;
+            funcImpl->structImpl = ti->getImpl();
 
-            ti->astStruct->addPolyMethod(*realTypeName, baseMethod.astFunc, funcImpl);
+            ti->getImpl()->addPolyMethod(*realTypeName, baseMethod.astFunc, funcImpl);
             
             baseMethod.astFunc->polyImpls.push_back(funcImpl);
             funcImpl->polyIds.reserve(polyIds.size());
 
+            for(int i=0;i<(int)ti->getImpl()->polyIds.size();i++){
+                TypeId id = ti->getImpl()->polyIds[i];
+                if(id.isValid()){
+                    ti->astStruct->polyArgs[i].virtualType->id = id;
+                } 
+            }
+            
             for(int i=0;i<(int)polyIds.size();i++){
                 TypeId id = polyIds[i];
                 if(id.isValid()){
@@ -605,9 +660,17 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
                     baseMethod.astFunc->polyArgs[i].virtualType->id = {};
                 } 
             }
+            for(int i=0;i<(int)ti->getImpl()->polyIds.size();i++){
+                // TypeId id = polyIds[i];
+                // if(id.isValid()){
+                    ti->astStruct->polyArgs[i].virtualType->id = {};
+                // } 
+            }
         }
         return true;
     }
+    TypeId someType={};
+    CheckExpression(info,scope,expr->left,&someType);
 
     // Token fname 
     Identifier* id = nullptr;
@@ -684,19 +747,35 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
     Assert(expr)
     _TC_LOG(FUNC_ENTER)
     
-    if(expr->left) {
+    if(expr->left && expr->typeId != AST_FNCALL) {
         CheckExpression(info,scope, expr->left, outType);
     }
     if(expr->right) {
-        CheckExpression(info,scope, expr->right, outType);
+        TypeId temp={};
+        CheckExpression(info,scope, expr->right, expr->left?&temp: outType);
+        // TODO: PRIORITISING LEFT FOR OUTPUT TYPE WONT ALWAYS WORK
+        //  Some operations like "2 + ptr" will use i32 as out type when
+        //  it should be of pointer type
     }
     if(expr->typeId == AST_REFER){
         outType->setPointerLevel(outType->getPointerLevel()+1);
     } else if(expr->typeId == AST_DEREF){
-        // TODO: error check
-        outType->setPointerLevel(outType->getPointerLevel()-1);
+        if(outType->getPointerLevel()==0){
+            ERR_HEAD(expr->left->tokenRange, "Cannot dereference non-pointer.\n\n";
+            ERR_LINE(expr->left->tokenRange,"not a pointer");
+            )
+        }else{
+            outType->setPointerLevel(outType->getPointerLevel()-1);
+        }
     } else if(expr->typeId == AST_MEMBER){
-        
+        // outType holds the type of expr->left
+        TypeInfo* ti = info.ast->getTypeInfo(outType->baseType());
+        if(ti && ti->astStruct){
+            TypeInfo::MemberData memdata = ti->getMember(*expr->name);
+            if(memdata.index!=-1){
+                *outType = memdata.typeId;
+            }
+        }
     }
     if(expr->typeId == AST_VAR){
         auto iden = info.ast->getIdentifier(scope->scopeId, *expr->name);
@@ -918,7 +997,8 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
             ASTFunction* function = nextFunction;
             nextFunction = nextFunction->next;
             
-            if(function->polyArgs.size()==0){
+            if(function->polyArgs.size()==0 && (!nowStruct || nowStruct->polyArgs.size()==0)){
+                // the struct above may have stuff
                 // check impl for function or method
                 TypeId ttttt={};
                 bool yes = CheckFunctionImpl(info, function, &function->baseImpl, nowStruct, &ttttt);
@@ -928,7 +1008,7 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
                     arg.virtualType = info.ast->createType(arg.name, function->scopeId);
                     _TC_LOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
                 }
-                _TC_LOG(log::out << "Cannot evaluate pure polymorphic function "<<function->name<<"\n";)
+                _TC_LOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
             }
             _TC_LOG(log::out << "Defined "<<(nowStruct?"method ":"function ")<<function->name<<"\n";)
             Identifier* id = info.ast->addFunction(scope->scopeId, function->name, function);
@@ -978,8 +1058,10 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         ASTFunction* function = nextFunction;
         nextFunction = nextFunction->next;
 
-        // TODO: Add arguments as variables
+        if(function->body->nativeCode)
+            continue;
 
+        // TODO: Add arguments as variables
         CheckRest(info,function->body);
         
         // TODO: Remove variables

@@ -123,6 +123,11 @@ int RegBySize(int regName, int size);
 #define BC_EXT_PRINTI -4
 #define BC_EXT_PRINTC -5
 
+#define BC_EXT_FILEOPEN -10
+#define BC_EXT_FILEREAD -11
+#define BC_EXT_FILEWRITE -12
+#define BC_EXT_FILECLOSE -13
+
 struct Instruction {
     uint8 opcode=0;
     union {

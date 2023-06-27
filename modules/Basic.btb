@@ -1,18 +1,19 @@
+// should be internal
 struct Slice<T> {
     ptr: T*;
     len: u32;
 }
-fn prints(slice: Slice<char>) {
-    i = 0;
-    while cast<u32>i < slice.len {
-        printc(*(cast<char*>slice.ptr + i));
-        i += 1;
-    }
-}
-struct Memory<T> {
-    ptr: T*;
-    max: u64;
-    used: u64;
+// fn prints(slice: Slice<char>) {
+//     i = 0;
+//     while cast<u32>i < slice.len; {
+//         printc(*(cast<char*>slice.ptr + i));
+//         i += 1;
+//     }
+// }
+// struct Memory<T> {
+//     ptr: T*;
+//     max: u64;
+//     used: u64;
 
-    // fn resize()
-}
+//     // fn resize()
+// }

@@ -19,6 +19,7 @@ struct Token {
     Token() = default;
     Token(const char* str) : str((char*)str), length(strlen(str)) {};
     Token(const std::string& str) : str((char*)str.c_str()), length(str.length()) {};
+    Token(char* str, int len) : str((char*)str), length(len) {};
     
     char* str=0; // NOT null terminated
     int length=0;
@@ -150,6 +151,7 @@ double ConvertDecimal(Token& token);
 bool IsInteger(Token& token);
 int ConvertInteger(Token& token);
 bool IsName(Token& token);
+bool IsAnnotation(Token& token);
 // Can also be an integer
 bool IsDecimal(Token& token);
 bool IsHexadecimal(Token& token);

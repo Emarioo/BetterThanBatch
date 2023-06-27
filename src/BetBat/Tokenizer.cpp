@@ -20,6 +20,10 @@ double ConvertDecimal(Token& token){
     *(token.str+token.length) = tmp;
     return num;
 }
+bool IsAnnotation(Token& token){
+    if(!token.str || token.length==0) return false;
+    return *token.str == '@';
+}
 bool IsName(Token& token){
     if(token.flags&TOKEN_QUOTED) return false;
     for(int i=0;i<token.length;i++){
@@ -828,176 +832,47 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 foundHashtag=true; // if not found then preprocessor isn't necessary
             }
             if(chr=='@'){
-                const char* str_enable = "enable";
-                const char* str_disable = "disable";
-                const char* str_version = "version";
-                // const char* str_import = "import";
-                int type=0;
-                if(length-index>=(int)strlen(str_enable)){
-                    if(0==strncmp(text+index,str_enable,strlen(str_enable))){
-                        type = 1;
-                        index += strlen(str_enable);
-                        ln = column += strlen(str_enable);
-                    }   
-                }
-                if(type==0){
-                    if(length-index>=(int)strlen(str_disable)){
-                        if(0==strncmp(text+index,str_disable,strlen(str_disable))){
-                            type = 2;
-                            index += strlen(str_disable);
-                            ln = column += strlen(str_disable);
-                        }
-                    }
-                }
-                if(type==0){
-                    if(length-index>=(int)strlen(str_version)){
-                        if(0==strncmp(text+index,str_version,strlen(str_version))){
-                            type = 3;
-                            index += strlen(str_version);
-                            ln = column += strlen(str_version);
-                        }
-                    }
-                }
-                if(type==3){
-                    int startIndex=-1;
-                    bool bad=false;
-                    // TODO: Code below WILL have some edge cases not accounted for. Check it out.
-                    while(index<length){
-                        char c = text[index];
-                        char nc = 0;
-                        char pc = 0;
+                Token anot = {};
+                anot.str = (char*)outTokens.tokenData.used;
+                anot.line = ln;
+                anot.column = col;
+                anot.length = 1;
+                anot.flags = TOKEN_SUFFIX_SPACE;
+                
+                outTokens.addData(chr);
+                bool bad=false;
+                // TODO: Code below WILL have some edge cases not accounted for. Check it out.
+                while(index<length){
+                    char c = text[index];
+                    char nc = 0;
+                    char pc = 0;
 
-                        if(index>0)
-                            pc = text[index-1];
-                        if(index+1<length)
-                            nc = text[index+1];
-                        index++;
-                        if(c=='\t')
-                            column+=4;
-                        else
-                            column++;
-                        if(c == '\n'){
-                            line++;
-                            column=1;
-                        }
-                        if(startIndex!=-1){
-                            if(c==' '||c=='\t'||c=='\r'||c=='\n'||index==length){
-                                int len = index-startIndex-1;
-                                if(len>TokenStream::VERSION_MAX){
-                                    log::out << log::RED << "TokenError "<<ln<<":"<<col<<": version to big for buffer (was "<<len<<",max "<<TokenStream::VERSION_MAX<<")\n"; 
-                                    bad=true;
-                                }else{
-                                    memcpy(outTokens.version,text+startIndex,len);
-                                    outTokens.version[len] = 0;
-                                }
-                                break;
-                            }
-                        }
-                        if(c=='\r'&&(nc=='\n'||pc=='\n')){
-                            break;
-                        }
-
-                        if(c==' '||c=='\t'){
-                            
-                        }else{
-                            if(startIndex==-1){
-                                startIndex = index-1;
-                            }
-                        }
+                    if(index>0)
+                        pc = text[index-1];
+                    if(index+1<length)
+                        nc = text[index+1];
+                    index++;
+                    if(c=='\t')
+                        column+=4;
+                    else
+                        column++;
+                    if(c == '\n'){
+                        line++;
+                        column=1;
                     }
-                    if(!bad){
-                        _TLOG(log::out <<log::GREEN<< "@version '"<<outTokens.version<<"'\n";)
+                    if(c==' '||c=='\t'||c=='\r'||c=='\n'){
+                        if(c=='\n')
+                            anot.flags |= TOKEN_SUFFIX_LINE_FEED;
+                        break;
                     }
-                    continue;
-                }else if(type!=0){
-                    const int WORDMAX = 100;
-                    char word[WORDMAX];
-                    int len = 0;
-                    while(index<length){
-                        char c = text[index];
-                        char nc = 0;
-                        char pc = 0;
-                        if(index>0)
-                            pc = text[index-1];
-                        if(index+1<length)
-                            nc = text[index+1];
-                        index++;
-                        if(c=='\t')
-                            column+=4;
-                        else
-                            column++;
-                        if(c == '\n'){
-                            line++;
-                            column=1;
-                        }
-                        
-                        if(c=='\r'&&(nc=='\n'||pc=='\n')){
-                            continue;
-                        }
-                        
-                        
-                        if(c!=' '&&c!='\n'){
-                            if(len+1<WORDMAX){
-                                word[len++] = c;
-                            }else{
-                                log::out << log::RED << "TokenError "<<ln<<":"<<col<<": word buffer to small for @enable, @disable\n"; 
-                            }
-                        }
-                        if(c==' '||index==length||c=='\n'){
-                            if(len!=0){
-                                word[len] = 0;
-                                bool bad=false;
-                                if(!strcmp(word,"all")){
-                                    if(type==1)
-                                        outTokens.enabled = -1;
-                                    else if(type==2)
-                                        outTokens.enabled = 0;
-                                }else if(!strcmp(word,"preprocessor")){
-                                    if(type==1)
-                                        outTokens.enabled |= LAYER_PREPROCESSOR;
-                                    else if(type==2)
-                                        outTokens.enabled &= ~LAYER_PREPROCESSOR;
-                                }else if(!strcmp(word,"parser")){
-                                    if(type==1)
-                                        outTokens.enabled |= LAYER_PARSER;
-                                    else if(type==2)
-                                        outTokens.enabled &= ~(LAYER_PARSER|LAYER_GENERATOR|LAYER_OPTIMIZER|LAYER_INTERPRETER); // interpreter doesn't work without parser
-                                }else if(!strcmp(word,"generator")){
-                                    if(type==1)
-                                        outTokens.enabled |= LAYER_GENERATOR|LAYER_PARSER;
-                                    else if(type==2)
-                                        outTokens.enabled &= ~(LAYER_GENERATOR|LAYER_OPTIMIZER|LAYER_INTERPRETER); // interpreter doesn't work without parser
-                                }else if(!strcmp(word,"optimizer")){
-                                    if(type==1)
-                                        outTokens.enabled |= LAYER_OPTIMIZER | LAYER_PARSER | LAYER_GENERATOR; // optimizer requires parser
-                                    else if(type==2)
-                                        outTokens.enabled &= ~LAYER_OPTIMIZER;
-                                }else if(!strcmp(word,"interpreter")){
-                                    if(type==1)
-                                        outTokens.enabled |= LAYER_INTERPRETER | LAYER_GENERATOR | LAYER_PARSER; // intepreter requires parser
-                                    else if(type==2)
-                                        outTokens.enabled &= ~LAYER_INTERPRETER;
-                                }else{
-                                    log::out << log::RED << "TokenError "<<ln<<":"<<col<<": unknown layer '"<<word<<"'\n"; 
-                                    bad=true;
-                                }
-                                if(!bad){
-                                    if(type==1)
-                                        log::out <<log::GREEN<< "@enable '"<<word<<"'\n";
-                                    else if(type==2)
-                                        log::out <<log::GREEN<< "@disable '"<<word<<"'\n";
-                                }
-                                
-                                len=0;
-                            }
-                            if(c=='\n')
-                                break;
-                            col = column;
-                            ln = line;
-                        }
+                    outTokens.addData(c);
+                    anot.length++;
+                    if (index==length){
+                        break;
                     }
-                    continue;
                 }
+                outTokens.addToken(anot);
+                continue;
             }
             
             // this scope only adds special token

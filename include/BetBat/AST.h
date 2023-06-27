@@ -138,6 +138,8 @@ struct TypeId {
     // TODO: Rename to something better
     bool isNormalType() const { return isValid() && !isString() && !isPointer() && !isVirtual(); }
 };
+struct ASTFunction;
+struct FuncImpl;
 // ASTStruct can have multiple of these per
 // polymorphic instantiation.
 struct StructImpl {
@@ -148,6 +150,17 @@ struct StructImpl {
         int offset=0;
     };
     std::vector<Member> members{};
+    
+    std::vector<TypeId> polyIds;
+
+    struct Method {
+        ASTFunction* astFunc=nullptr;
+        FuncImpl* funcImpl=nullptr;
+    };
+    std::unordered_map<std::string, Method> methods;
+    
+    Method getMethod(const std::string& name);
+    void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
 };
 struct TypeInfo {
     TypeInfo(const std::string& name, TypeId id, u32 size=0) :  name(name), id(id), _size(size) {}
@@ -158,7 +171,7 @@ struct TypeInfo {
     u32 _alignedSize=0;
     u32 arrlen=0;
     ASTStruct* astStruct=0;
-    StructImpl* structImpl=0;
+    StructImpl* structImpl=0; // nullptr means pure/base poly type 
     ASTEnum* astEnum=0;
 
     ScopeId scopeId = 0;
@@ -174,6 +187,7 @@ struct TypeInfo {
     u32 alignedSize();
     MemberData getMember(const std::string& name);
     MemberData getMember(int index);
+    StructImpl* getImpl();
 };
 struct FuncImpl {
     std::string name;
@@ -192,6 +206,7 @@ struct FuncImpl {
     int returnSize=0;
     i64 address = 0; // Set by generator
     std::vector<TypeId> polyIds;
+    StructImpl* structImpl = nullptr;
 };
 struct Identifier {
     Identifier() {}
@@ -309,6 +324,7 @@ struct ASTStruct {
     };
     TokenRange tokenRange{};
     std::string name="";
+    std::string polyName="";
     struct Member {
         std::string name;
 
@@ -325,17 +341,14 @@ struct ASTStruct {
     State state=TYPE_EMPTY;
 
     ScopeId scopeId=0;
-    struct Method {
-        ASTFunction* astFunc=nullptr;
-        FuncImpl* funcImpl=nullptr;
-    };
-    std::unordered_map<std::string, Method> methods;
 
     ASTFunction* functions = 0;
     ASTFunction* functionsTail = 0;
-    void add(ASTFunction* func, FuncImpl* funcImpl);
-    void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
-    Method getMethod(const std::string& name);
+    void add(ASTFunction* func);
+
+    bool isPolymorphic() {
+        return polyArgs.size()!=0;
+    }
 
     ASTStruct* next=0;
 
@@ -377,6 +390,11 @@ struct ASTFunction {
 
     ASTFunction* next=0;
 
+    // does not consider the method's struct
+    bool isPolymorphic(){
+        return polyArgs.size()!=0;
+    }
+
     void print(AST* ast, int depth);
 };
 struct ASTScope {
@@ -389,6 +407,8 @@ struct ASTScope {
         NAMESPACE,   
     };
     Type type = BODY;
+
+    bool nativeCode = false; // only used for functions (probably)
     
     // void convertToNamespace(const std::string& name);
 

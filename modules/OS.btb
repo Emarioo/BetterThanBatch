@@ -1,0 +1,12 @@
+#import "Basic"
+
+// using u64 as File doesn't since functions are evaluated
+// first and then using. Using won't be applied to functions.
+#define File u64
+
+// returns file handle and file size
+fn FileOpen(path: Slice<char>) -> File, u64 { @native-code }
+
+fn FileRead(file: File, buffer: void*, readBytes: u64) -> u64 { @native-code }
+
+fn FileClose(file: File) { @native-code }

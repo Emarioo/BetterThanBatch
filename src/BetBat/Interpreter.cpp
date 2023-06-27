@@ -566,7 +566,14 @@ void Interpreter::execute(Bytecode* bytecode){
                     #else
                     log::out << chr;
                     #endif
-                }else {
+                }else if (addr==BC_EXT_FILEOPEN){
+                    char* ptr = *(char**)(fp+argoffset + 8);
+                    u64 len = *(u64*)(fp+argoffset);
+
+                    
+
+                    *(u64*)(fp-8) = (u64)ptr;
+                }  else {
                     _ILOG(log::out << log::RED << addr<<" is not a special function\n";)
                 }
                 // bc ret here

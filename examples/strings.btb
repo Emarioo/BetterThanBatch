@@ -1,3 +1,8 @@
+// #import "OS"
+// #import "Basic"
+
+
+
 // A = B = 9
 // A = B += 9
 // a: i32;
@@ -16,40 +21,40 @@
 // v = Vec<i32>{2};
 // v.add<i32>(1)
 
+// struct Vec {
+//     x: i32;
+//     fn add<T>(a: T) {
+//         this.x += a;
+//     }
+// }
+// #define E i32
+// #import "OS"
+// FileOpen();
+// FileRead();
+// FileWrite();
+// FileClose();
 
-struct Vec {
-    x: i32;
-    fn add<T>(a: T) {
-    // fn add(a: i32) {
-        // printi(this.x)
-        // printi(a)
-        this.x += a;
+// v = Vec{3};
+// printi(v.add())
+// v.add<i32>()
+// v.add<i32>(2.2)
+struct Vec<E> {
+// struct Vec {
+    x: E;
+    fn add<T>(a: E) -> T{
+        this.x += a
+        // fn test(dd: E){
+
+        // }
+        return "S"
     }
+    // fn add() -> i32 {
+    //     return "A"
+    // }
 }
-
-v = Vec{3};
-// p = &v;
-v.add<i32>(2)
-
-
+v = Vec<i32>{3};
+printc(v.add<i32>(2.2))
 printi(v.x)
-// v.add(2)
-// // v.x += 2;
-// // p.m = 9
-
-// a = 9;
-
-// a = 4;
-
-// printi(a);
-
-// *cast<i32*>&a += 3
-
-
-
-// printi(v.x)
-// printi(v.add<f32>(1.5))
-// printi(v.x)
 
 // struct Vec<N>{
 //     x: N;

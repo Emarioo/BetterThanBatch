@@ -316,16 +316,18 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     astStruct->tokenRange.firstToken = structToken;
     astStruct->tokenRange.startIndex = startIndex;
     astStruct->tokenRange.tokenStream = info.tokens;
-    
+    astStruct->polyName = name;
     Token token = info.get(info.at()+1);
     if(Equal(token,"<")){
         info.next();
         // polymorphic type
+        astStruct->polyName += "<";
     
         while(true){
             token = info.get(info.at()+1);
             if(Equal(token,">")){
                 info.next();
+                
                 if(astStruct->polyArgs.size()==0){
                     ERR_HEAD2(token) << "empty polymorph list\n";
                     ERRLINE
@@ -340,11 +342,13 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 ASTStruct::PolyArg arg={};
                 arg.name = token;
                 astStruct->polyArgs.push_back(arg);
+                astStruct->polyName += token;
             }
             
             token = info.get(info.at()+1);
             if(Equal(token,",")){
                 info.next();
+                astStruct->polyName += ",";
                 continue;
             }else if(Equal(token,">")){
                 info.next();
@@ -355,6 +359,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 continue;
             }
         }
+        astStruct->polyName += ">";
     }
     
     token = info.get(info.at()+1);
@@ -395,7 +400,8 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             if(result!=PARSE_SUCCESS){
                 continue;
             }
-            astStruct->add(func,func->polyArgs.size()==0?&func->baseImpl:nullptr);
+            astStruct->add(func);
+            // ,func->polyArgs.size()==0?&func->baseImpl:nullptr);
         } else {
             if(!IsName(name)){
                 info.next();
@@ -790,7 +796,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     while(!info.end()){
                         tok = info.next();
                         polyTypes+=tok;
-                        if(Equal(tok,">")){
+                        if(Equal(tok,"<")){
+                            depth++;
+                        }else if(Equal(tok,">")){
                             depth--;
                         }
                         if(depth==0){
@@ -808,14 +816,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
                     new(tmp->name)std::string(std::string(token)+polyTypes);
                     
-                    // TODO: AST_REFER only works with variables. Pointers won't work.
-                    //  A redesign of how variables, pointers, members are handled will
-                    //  be needed.
                     // Create "this" argument in methods
-                    ASTExpression* refer = info.ast->createExpression(TypeId(AST_REFER));
-                    refer->left = values.back(); // variable to refer
+                    tmp->left = values.back();
                     values.pop_back();
-                    tmp->left = refer;
                     tmp->boolValue = true; // indicicate fncall to struct method
 
                     // Parse the other arguments
@@ -829,7 +832,6 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
                     tmp->tokenRange.tokenStream = info.tokens;
-                    refer->tokenRange = tmp->tokenRange;
 
                     values.push_back(tmp);
                     continue;
@@ -1139,7 +1141,15 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 // polytypes exist for struct initializer and function calls
                 Token tok = info.get(info.at()+1);
                 std::string polyTypes="";
-                if(Equal(tok,"<")){
+                // TODO: func<i32>() and i < 5 has ambiguity when
+                //  parsing. Currently using space to differentiate them.
+                //  Checking for <, > and ( for functions could work but
+                //  i < 5 may have something similar in some cases.
+                //  Checking for that could take a long time since
+                //  it could be hard to know when to stop.
+                //  ParseTypeId has some logic for it so things are possible
+                //  it's just hard.
+                if(Equal(tok,"<") && !(tok.flags&TOKEN_SUFFIX_SPACE)){
                     info.next();
                     // polymorphic type or function
                     polyTypes += "<";
@@ -1147,7 +1157,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     while(!info.end()){
                         tok = info.next();
                         polyTypes+=tok;
-                        if(Equal(tok,">")){
+                        if(Equal(tok,"<")){
+                            depth++;
+                        }else if(Equal(tok,">")){
                             depth--;
                         }
                         if(depth==0){
@@ -1699,10 +1711,19 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     info.next();
     attempt = false;
     
-    Token& name = info.next();
-    if(!IsName(name)){
+    Token name = info.next();
+    while(!IsName(name)){
+        if(IsAnnotation(name)){
+            // if(Equal(name,"@export"))
+            
+            WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                WARN_LINE(info.at(),"unknown");
+            )
+            name = info.next();
+            continue;
+        }
         ERR_HEAD2(name) << "expected a valid name, "<<name<<" isn't\n";
-            ERR_END
+        
         return PARSE_ERROR;
     }
     
@@ -1764,7 +1785,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         auto& argv = function->arguments.back();
         argv.name = "this";
         std::string* leak = info.ast->createString();
-        *leak = parentStruct->name + "*"; // TODO: doesn't work with polymorhpism
+        *leak = parentStruct->polyName + "*"; // TODO: doesn't work with polymorhpism
         argv.defaultValue = nullptr;
         
         function->baseImpl.arguments.push_back({});
@@ -1871,7 +1892,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         info.next();
         tok = info.get(info.at()+1);
         while(true){
-            Token& tok = info.get(info.at()+1);
+            Token tok = info.get(info.at()+1);
             if(Equal(tok,"{")){
                 break;   
             }
@@ -1888,6 +1909,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                 function->baseImpl.returnTypes.push_back({strId});
                 printedErrors = true;
             }
+            tok = info.get(info.at()+1);
             if(Equal(tok,"{")){
                 // info.next(); { is parsed in ParseBody
                 break;   
@@ -2136,13 +2158,23 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
         }
 
         if(result==PARSE_BAD_ATTEMPT){
-            Token& token = info.get(info.at()+1);
-            ERR_HEAD2(token) << "Unexpected '"<<token<<"' (ParseBody)\n";
-            ERRLINEP
-            // log::out << log::RED; info.printPrevLine();log::out << "\n";
-            ERRLINE
-            // prevent infinite loop. Loop only occurs when scoped
-            info.next();
+            if(IsAnnotation(token)){
+                if(Equal(token,"@native-code")){
+                    bodyLoc->nativeCode = true;
+                } else {
+                    WARN_HEAD(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for bodies.\n\n";
+                        WARN_LINE(info.at()+1,"unknown");
+                    )
+                }
+                info.next();
+            } else {
+                Token& token = info.get(info.at()+1);
+                ERR_HEAD(token, "Unexpected '"<<token<<"' (ParseBody).\n\n";
+                ERR_LINE(info.at()+1,"what");
+                )
+                // prevent infinite loop. Loop only occurs when scoped
+                info.next();
+            }
         }
         if(result==PARSE_ERROR){
             

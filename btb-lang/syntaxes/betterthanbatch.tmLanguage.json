@@ -24,10 +24,10 @@
 			"include": "#functions"
 		},
 		{
-			"include": "#compiler"
+			"include": "#preproc"
 		},
 		{
-			"include": "#importer"
+			"include": "#annotation"
 		}
 	],
 	"repository": {
@@ -43,27 +43,30 @@
 		},
 		"keywords": {
 			"patterns": [{
-				"name": "keyword.control.betterthanbatch",
-				"match": "\\b(if|else|while|for|break|continue|fn|return|each|_test_|struct|enum|using|as|namespace)\\b|(#\\w+)"
+				"name": "keyword.control",
+				"match": "\\b(if|else|while|for|break|continue|fn|return|each|_test_|using|as)\\b"
+			},{
+				"name": "entity.name.class",
+				"match": "\\b(struct)\\b"
+			},{
+				"name": "entity.name.type.enum",
+				"match": "\\b(enum)\\b"
+			},{
+				"name": "entity.name.namespace",
+				"match": "\\b(namespace)\\b"
 			}]
 		},
-		"compiler":{
-			"name":"keyword.control",
-			"begin":"(@enable|@disable)\\s+",
-			"end":"(?<=\n)",
+		"preproc":{
 			"patterns": [{
-				"name":"entity.name.tag",
-				"match":"(?<=\\s+)(preprocessor|parser|generator|optimizer|interpreter|all)\\s+"
+				"name":"entity.name.selector",
+				"match":"(#\\w+)"
 			}]
 		},
-		"importer": {
-			"name": "keyword.control",
-			"begin": "(@version)\\s+",
-			"end": "(?<=\n)",
+		"annotation": {
 			"patterns": [
 				{
 					"name": "entity.name.tag",
-					"match": "(?<=\\s+)(\\S*)\\s+"
+					"match": "(@\\S+)"
 				}
 			]
 		},

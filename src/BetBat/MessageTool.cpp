@@ -31,7 +31,7 @@ void PrintCode(TokenRange* tokenRange, const char* message){
     int baseColumn = 999999;
     for(int i=start;i<end;i++){
         Token& tok = tokenRange->tokenStream->get(i);
-        int numlen = ((int)log10(tok.line)+1); 
+        int numlen = tok.line>0 ? ((int)log10(tok.line)+1) : 1;
         if(numlen>lineDigits)
             lineDigits = numlen;
         if(tok.column<baseColumn)
@@ -48,7 +48,7 @@ void PrintCode(TokenRange* tokenRange, const char* message){
             currentLine = tok.line;
             if(i!=start)
                 log::out << "\n";
-            int numlen = ((int)log10(currentLine)+1);
+            int numlen = currentLine>0 ? ((int)log10(currentLine)+1) : 1;
             for(int j=0;j<lineDigits-numlen;j++)
                 log::out << " ";
             const char* const linestr = " |> ";
