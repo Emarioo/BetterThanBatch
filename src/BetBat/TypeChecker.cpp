@@ -670,7 +670,8 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
         return true;
     }
     TypeId someType={};
-    CheckExpression(info,scope,expr->left,&someType);
+    if(expr->left)
+        CheckExpression(info,scope,expr->left,&someType);
 
     // Token fname 
     Identifier* id = nullptr;
@@ -954,6 +955,13 @@ int CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, AS
         retImpl.offset = offset;
         // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
     }
+    for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
+        auto& ret = funcImpl->returnTypes[i];
+        // TypeInfo* typeInfo = info.ast->getTypeInfo(arg.typeId);
+        int size = info.ast->getTypeSize(ret.typeId);
+        ret.offset = offset - ret.offset - size;
+        // log::out << " Reverse Arg "<<arg.offset << ": "<<arg.name<<"\n";
+    }
     funcImpl->returnSize = -offset;
 
     if(funcImpl->returnTypes.size()==0){
@@ -1104,18 +1112,21 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         TypeId typeId={};
         if(now->rvalue)
             CheckExpression(info, scope, now->rvalue, &typeId);
-            
-        if(now->typeId.isString()){
-            bool printedError = false;
-            auto ti = CheckType(info, scope->scopeId, now->typeId, now->tokenRange, &printedError);
-            // NOTE: We don't care whether it's a pointer just that the type exists.
-            if (!ti.isValid() && !printedError) {
-                ERR_HEAD2(now->tokenRange) << info.ast->getTokenFromTypeString(now->typeId)<<" is not a type (statement)\n";
-                ERR_END
-            } else {
-                // If typeid is invalid we don't want to replace the invalid one with the type
-                // with the string. The generator won't see the names of the invalid types.
-                now->typeId = ti;
+        
+        for(auto& var : now->varnames){
+            if(var.assignType.isString()){
+                bool printedError = false;
+                auto ti = CheckType(info, scope->scopeId, var.assignType, now->tokenRange, &printedError);
+                // NOTE: We don't care whether it's a pointer just that the type exists.
+                if (!ti.isValid() && !printedError) {
+                    ERR_HEAD2(now->tokenRange) << info.ast->getTokenFromTypeString(var.assignType)<<" is not a type (statement)\n";
+                    ERR_END
+                } else {
+                    // If typeid is invalid we don't want to replace the invalid one with the type
+                    // with the string. The generator won't see the names of the invalid types.
+                    // now->typeId = ti;
+                    var.assignType = ti;
+                }
             }
         }
 
@@ -1126,13 +1137,17 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             int result = CheckRest(info, now->elseBody);
         }
         if(now->type == ASTStatement::ASSIGN){
-            _TC_LOG(log::out << "assign " << *now->name<<": "<< info.ast->typeToString(typeId) <<"\n";)
-            auto var = info.ast->addVariable(scope->scopeId, *now->name);
-            if(var){
-                var->typeId = typeId; // typeId comes from CheckExpression which may or may not evaluate
-                // the same type as the generator.
-                vars.push_back({scope->scopeId,*now->name});
+            _TC_LOG(log::out << "assign ";)
+            for (auto& var : now->varnames) {
+                _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
+                auto varinfo = info.ast->addVariable(scope->scopeId, std::string(var.name));
+                if(varinfo){
+                    varinfo->typeId = typeId; // typeId comes from CheckExpression which may or may not evaluate
+                    // the same type as the generator.
+                    vars.push_back({scope->scopeId,std::string(var.name)});
+                }
             }
+            _TC_LOG(log::out << "\n";)
         } else 
         // Doing using after body so that continue can be used inside it without
         // messing things up. Using shouldn't have a body though so it doesn't matter.
@@ -1140,9 +1155,10 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             // TODO: type check now->name now->alias
             //  if not type then check namespace
             //  otherwise it's variables
-
-            if(now->name && now->alias){
-                TypeId originType = CheckType(info, scope->scopeId, *now->name, now->tokenRange, nullptr);
+            
+            if(now->varnames.size()==1 && now->alias){
+                Token& name = now->varnames[0].name;
+                TypeId originType = CheckType(info, scope->scopeId, name, now->tokenRange, nullptr);
                 TypeId aliasType = info.ast->convertToTypeId(*now->alias, scope->scopeId);
                 if(originType.isValid() && !aliasType.isValid()){
                     TypeInfo* aliasInfo = info.ast->createType(*now->alias, scope->scopeId);
@@ -1158,7 +1174,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                     }
                     continue;
                 }
-                ScopeInfo* originScope = info.ast->getScopeFromParents(*now->name,scope->scopeId);
+                ScopeInfo* originScope = info.ast->getScopeFromParents(name,scope->scopeId);
                 ScopeInfo* aliasScope = info.ast->getScopeFromParents(*now->alias,scope->scopeId);
                 if(originScope && !aliasScope) {
                     ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);
@@ -1189,9 +1205,10 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                 // exists if it's in a different scope.
                 // TODO: How does polymorphism work here?
                 // Will it work if just left as is or should it be disallowed.
-            } else if (now->name) {
+            } else if (now->varnames.size()==1) {
+                Token& name = now->varnames[0].name;
                 // ERR_HEAD2(now->tokenRange) << "inheriting namespace with using doesn't work\n";
-                ScopeInfo* originInfo = info.ast->getScopeFromParents(*now->name,scope->scopeId);
+                ScopeInfo* originInfo = info.ast->getScopeFromParents(name,scope->scopeId);
                 if(originInfo){
                     ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);
                     scopeInfo->usingScopes.push_back(originInfo);

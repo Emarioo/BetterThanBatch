@@ -1,7 +1,52 @@
-// #import "OS"
+#import "OS"
 // #import "Basic"
 
+// fn ok() -> i32, i32 {
+//     return 23, 36
+// }
+// a, b = ok();
+// printi(a)
+// printi(b)
 
+file, size = FileOpen("test.bat",FileFlag.FILE_ONLY_READ);
+
+// printi(file)
+// printi(size)
+
+buffer = cast<char*>malloc(size)
+FileRead(file, buffer, size)
+
+i = 0
+while cast<u64>i < size; {
+    printc(*(buffer+i));
+    // printc(buffer[i]);
+    i+=1;
+}
+printc("\n")
+
+FileClose(file)
+free(buffer,size)
+
+
+// = ok();
+
+// a: i32, b: i32;
+// a, b : i32, c : f32;
+// a, b : i32, c : f32 = ok();
+// a, b, c = ok();
+
+// struct Ret {
+//     a: i32;
+//     b: i32;
+// }
+// fn ok() -> Ret {
+//     return Ret{44, 99}
+// }
+
+// a = ok();
+
+// printi(a.a)
+// printi(a.b)
 
 // A = B = 9
 // A = B += 9
@@ -38,23 +83,23 @@
 // printi(v.add())
 // v.add<i32>()
 // v.add<i32>(2.2)
-struct Vec<E> {
-// struct Vec {
-    x: E;
-    fn add<T>(a: E) -> T{
-        this.x += a
-        // fn test(dd: E){
+// struct Vec<E> {
+// // struct Vec {
+//     x: E;
+//     fn add<T>(a: E) -> T{
+//         this.x += a
+//         // fn test(dd: E){
 
-        // }
-        return "S"
-    }
-    // fn add() -> i32 {
-    //     return "A"
-    // }
-}
-v = Vec<i32>{3};
-printc(v.add<i32>(2.2))
-printi(v.x)
+//         // }
+//         return "S"
+//     }
+//     // fn add() -> i32 {
+//     //     return "A"
+//     // }
+// }
+// v = Vec<i32>{3};
+// printc(v.add<i32>(2.2))
+// printi(v.x)
 
 // struct Vec<N>{
 //     x: N;

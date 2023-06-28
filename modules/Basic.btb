@@ -1,4 +1,4 @@
-// should be internal
+// slice should always exist
 struct Slice<T> {
     ptr: T*;
     len: u32;
@@ -14,6 +14,11 @@ struct Slice<T> {
 //     ptr: T*;
 //     max: u64;
 //     used: u64;
-
 //     // fn resize()
 // }
+
+fn malloc(size: u64) -> void* { @native-code }
+fn realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* { @native-code }
+fn free(ptr: void*, size: u64) { @native-code }
+fn printi(num: i64) { @native-code }
+fn printc(chr: char) { @native-code }

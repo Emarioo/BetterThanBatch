@@ -305,7 +305,7 @@ namespace engone {
 	void Sleep(double seconds){
         Win32Sleep((uint32)(seconds*1000));   
     }
-    APIFile* FileOpen(const std::string& path, uint64* outFileSize, uint32 flags){
+    APIFile FileOpen(const std::string& path, uint64* outFileSize, uint32 flags){
         DWORD access = GENERIC_READ|GENERIC_WRITE;
         DWORD sharing = 0;
         if(flags&FILE_ONLY_READ){
@@ -366,7 +366,7 @@ namespace engone {
 		}
 		return TO_INTERNAL(handle);
 	}
-	uint64 FileRead(APIFile* file, void* buffer, uint64 readBytes){
+	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes){
 		Assert(readBytes!=(uint64)-1); // -1 indicates no bytes read
 
 		DWORD bytesRead=0;
@@ -378,7 +378,7 @@ namespace engone {
 		}
 		return bytesRead;
 	}
-	uint64 FileWrite(APIFile* file, const void* buffer, uint64 writeBytes){
+	uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes){
 		Assert(writeBytes!=(uint64)-1); // -1 indicates no bytes read
 		
 		DWORD bytesWritten=0;
@@ -390,7 +390,7 @@ namespace engone {
 		}
 		return bytesWritten;
 	}
-	bool FileSetHead(APIFile* file, uint64 position){
+	bool FileSetHead(APIFile file, uint64 position){
 		DWORD success = 0;
 		if(position==(uint64)-1){
 			success = SetFilePointerEx(file,{0},NULL,FILE_END);
@@ -403,7 +403,7 @@ namespace engone {
 		PL_PRINTF("[WinError %lu] FileSetHead '%llu'\n",err,(uint64)file);
 		return false;
 	}
-	void FileClose(APIFile* file){
+	void FileClose(APIFile file){
 		if(file)
 			CloseHandle(TO_HANDLE(file));
 	}
@@ -1019,9 +1019,9 @@ namespace engone {
 		HANDLE readH=0;	
 		HANDLE writeH=0;	
 	};
-	std::unordered_map<APIFile*,PipeInfo> pipes;
+	std::unordered_map<APIFile,PipeInfo> pipes;
 	uint64 pipeIndex=0x500000;
-	APIFile* PipeCreate(bool inheritRead,bool inheritWrite){
+	APIFile PipeCreate(bool inheritRead,bool inheritWrite){
 		PipeInfo info{};
 		
 		SECURITY_ATTRIBUTES saAttr; 
@@ -1051,10 +1051,10 @@ namespace engone {
 			}
 		}
 		
-		pipes[(APIFile*)pipeIndex] = info;
-		return (APIFile*)(pipeIndex++);
+		pipes[(APIFile)pipeIndex] = info;
+		return (APIFile)(pipeIndex++);
 	}
-	void PipeDestroy(APIFile* pipe){
+	void PipeDestroy(APIFile pipe){
 		auto& info = pipes[pipe];
 		if(info.readH)
 			CloseHandle(info.readH);
@@ -1062,7 +1062,7 @@ namespace engone {
 			CloseHandle(info.writeH);
 		pipes.erase(pipe);
 	}
-	int PipeRead(APIFile* pipe,void* buffer, int size){
+	int PipeRead(APIFile pipe,void* buffer, int size){
 		auto& info = pipes[pipe];
 		DWORD read=0;
 		DWORD err = ReadFile(info.readH,buffer,size,&read,0);
@@ -1077,7 +1077,7 @@ namespace engone {
 		
 		return read;
 	}
-	int PipeWrite(APIFile* pipe,void* buffer, int size){
+	int PipeWrite(APIFile pipe,void* buffer, int size){
 		auto& info = pipes[pipe];
 		DWORD written=0;
 		DWORD err = WriteFile(info.writeH,buffer,size,&written,0);
@@ -1088,7 +1088,7 @@ namespace engone {
 		}
 		return written;
 	}
-	bool StartProgram(const std::string& path, char* commandLine, int flags, int* exitCode, APIFile* fStdin, APIFile* fStdout) {
+	bool StartProgram(const std::string& path, char* commandLine, int flags, int* exitCode, APIFile fStdin, APIFile fStdout) {
 		// if (!FileExist(path)) {
 		// 	return false;
 		// }

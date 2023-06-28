@@ -163,7 +163,7 @@ namespace engone {
 			if(!m_masterReportPath.empty()){
 				std::string path = m_rootDirectory+"/"+m_masterReportPath;
 				auto find = m_logFiles.find(path);
-				APIFile* file=nullptr;
+				APIFile file=nullptr;
 				if(find==m_logFiles.end()){
 					file = FileOpen(path,0,FILE_WILL_CREATE);
 					if(file)
@@ -181,7 +181,7 @@ namespace engone {
 			if(!info.logReport.empty()){
 				std::string path = m_rootDirectory+"/"+info.logReport;
 				auto find = m_logFiles.find(path);
-				APIFile* file=nullptr;
+				APIFile file=nullptr;
 				if(find==m_logFiles.end()){
 					file = FileOpen(path,0,FILE_CAN_CREATE);
 					if(file)
@@ -200,7 +200,7 @@ namespace engone {
 				std::string path = m_rootDirectory+"/thread";
 				path += std::to_string((uint32)Thread::GetThisThreadId())+".txt";
 				auto find = m_logFiles.find(path);
-				APIFile* file=nullptr;
+				APIFile file=nullptr;
 				if(find==m_logFiles.end()){
 					file = FileOpen(path,0,FILE_CAN_CREATE);
 					if(file)

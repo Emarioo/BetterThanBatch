@@ -846,11 +846,12 @@ void AST::destroy(ASTEnum *astEnum) {
 void AST::destroy(ASTStatement *statement) {
     if (statement->next)
         destroy(statement->next);
-    if (statement->name){
-        statement->name->~basic_string<char>();
-        engone::Free(statement->name, sizeof(std::string));
-        statement->name = nullptr;
-    }
+    // for(var)
+    // if (statement->name){
+    //     statement->name->~basic_string<char>();
+    //     engone::Free(statement->name, sizeof(std::string));
+    //     statement->name = nullptr;
+    // }
     if (statement->alias){
         statement->alias->~basic_string<char>();
         engone::Free(statement->alias, sizeof(std::string));
@@ -1386,19 +1387,22 @@ void ASTFunction::print(AST *ast, int depth) {
     for (int i = 0; i < (int)arguments.size(); i++) {
         auto &arg = arguments[i];
         auto &argImpl = baseImpl.arguments[i];
-        log::out << arg.name << ": ";
-        log::out << ast->typeToString(argImpl.typeId);
-        if (i + 1 != (int)arguments.size()) {
+        if (i == 0) {
             log::out << ", ";
         }
+        log::out << arg.name << ": ";
+        log::out << ast->typeToString(argImpl.typeId);
     }
     log::out << ")";
     if (!baseImpl.returnTypes.empty())
         log::out << "->";
-    for (auto &ret : baseImpl.returnTypes) {
+    for (int i=0;i<(int)baseImpl.returnTypes.size();i++){
+        auto& ret = baseImpl.returnTypes[i];
+        if(i==0)
+            log::out<<", ";
         // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
         // log::out << dtname << ", ";
-        log::out << ast->typeToString(ret.typeId) << ", ";
+        log::out << ast->typeToString(ret.typeId);
     }
     log::out << "\n";
     if (body) {
@@ -1466,10 +1470,15 @@ void ASTStatement::print(AST *ast, int depth) {
     PrintSpace(depth);
     log::out << "Statement " << StateToStr(type);
 
-    if(typeId.isValid())
-        log:: out << " "<< ast->typeToString(typeId);
-    if(name)
-        log::out << " " << *name;
+    int ind=-1;
+    for(auto& vn : varnames){
+        ind++;
+        if(vn.assignType.isValid())
+            log:: out << " "<< ast->typeToString(vn.assignType);
+        if(ind!=0)
+            log::out << ",";
+        log::out << " " << vn.name;
+    }
     if(alias)
         log::out << " as " << *alias;
     // if(opType!=0)

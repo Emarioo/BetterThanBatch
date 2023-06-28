@@ -824,8 +824,10 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     // Parse the other arguments
                     int count = 0;
                     int result = ParseArguments(info, tmp, &count);
-                    if(result!=PARSE_SUCCESS)
+                    if(result!=PARSE_SUCCESS){
+                        info.ast->destroy(tmp);
                         return result;
+                    }
 
                     _PLOG(log::out << "Parsed call "<<count <<"\n";)
                     tmp->tokenRange.firstToken = token;
@@ -1193,8 +1195,10 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
 
                     int count = 0;
                     int result = ParseArguments(info, tmp, &count);
-                    if(result!=PARSE_SUCCESS)
+                    if(result!=PARSE_SUCCESS){
+                        info.ast->destroy(tmp);
                         return result;
+                    }
 
                     _PLOG(log::out << "Parsed call "<<count <<"\n";)
                     values.push_back(tmp);
@@ -1641,8 +1645,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
         statement = info.ast->createStatement(ASTStatement::USING);
         
-        statement->name = (std::string*)engone::Allocate(sizeof(std::string));
-        new(statement->name)std::string(originToken);
+        statement->varnames.push_back({originToken});
         if(aliasToken.str){
             statement->alias = (std::string*)engone::Allocate(sizeof(std::string));
             new(statement->alias)std::string(aliasToken);
@@ -1739,7 +1742,6 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     auto prevScope = info.currentScopeId;
     defer { info.currentScopeId = prevScope; };
     info.currentScopeId = function->scopeId;
-    
 
     Token tok = info.get(info.at()+1);
     if(Equal(tok,"<")){
@@ -1956,97 +1958,77 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     // }
     int error=PARSE_SUCCESS;
 
-    int startIndex = info.at()+1;
-    Token name = info.get(info.at()+1);
-    Token assign = info.get(info.at()+2);
-    
-    TypeId assignType = {};
-    if(Equal(assign,":")){
-        // we expect a data type which can be comprised of multiple tokens.
-        
-        /*
-        {name} : {data type}\n   <-  line feed marks end of data type
-        {name} :     <-  line feed is okay here
-             {data type}\n
-
-        nums : i32[      <-  data type is cut off.
-            ]
-        */
-
-        info.next();
-        info.next();
-        attempt=false;
-
-        // i32 *
-        // i32 []*
-        // Array<i32>
-        // (i32, f32)
-        // TODO: quoted tokens should not be allowed, var : "i32"*  <-  BAD
-        // TODO: is var := ...  allowed. : without data type? I guess it's fine?
-        
-        Token typeToken{};
-        int result = ParseTypeId(info,typeToken);
-        
-        Token token = info.get(info.at()+1);
-        std::vector<TypeId> polyList;
-        // std::string typeString = typeToken;
-        // TypeInfo* typeInfo = info.ast->getTypeInfo(info.currentScopeId,typeString);
-        TypeId strId = info.ast->getTypeString(typeToken);
-        
-
-            TypeId dtId = strId;
-            assignType = dtId;
-        assign = info.get(info.at()+1);
-
-        // if (error==PARSE_SUCCESS)
-        //     log::out << "Created datatype "<<dataType<<" "<<dtId<<"\n";
+    // to make things easier attempt is checked here
+    if(attempt && !(IsName(info.get(info.at()+1)) && (Equal(info.get(info.at()+2),",") || Equal(info.get(info.at()+2),":") || Equal(info.get(info.at()+2),"=") ))){
+        return PARSE_BAD_ATTEMPT;
     }
-    
-    if(Equal(assign,";")){
+    attempt = true;
+
+    std::vector<ASTStatement::VarName> varnames;
+    bool assigned = false;
+    TypeId lastType = {};
+    while(!info.end()){
+        Token name = info.get(info.at()+1);
+        if(!IsName(name)){
+            ERR_HEAD(name, "Expected a valid name for assignment ('"<<name<<"' is not).\n\n";
+                ERR_LINE(info.at()+1,"cannot be a name");
+            )
+            return PARSE_ERROR;
+        }
         info.next();
+
+        varnames.push_back({name});
+        Token token = info.get(info.at()+1);
+        if(Equal(token,":")){
+            assigned = true;
+            info.next(); // :
+            attempt=false;
+            
+            Token typeToken{};
+            int result = ParseTypeId(info,typeToken);
+            
+            TypeId strId = info.ast->getTypeString(typeToken);
+
+            int index = varnames.size()-1;
+            while(index>=0 && !varnames[index].assignType.isValid()){
+                varnames[index].assignType = strId;
+                index--;
+            }
+        }
+        token = info.get(info.at()+1);
+        if(Equal(token, ",")){
+            info.next();
+            continue;
+        }
+        break;
+    }
+
+    int startIndex = info.at()+1;
+    Token token = info.get(info.at()+1);
+    if(Equal(token,";")){
+        info.next(); // ;
         statement = info.ast->createStatement(ASTStatement::ASSIGN);
 
-        statement->name = (std::string*)engone::Allocate(sizeof(std::string));
-        new(statement->name)std::string(name);
-        if(assignType.isString())
-            statement->typeId = assignType;
+        statement->varnames = std::move(varnames);
 
-        statement->rvalue = 0;
+        statement->rvalue = nullptr;
         
         statement->tokenRange.firstToken = info.get(startIndex);
         statement->tokenRange.startIndex = startIndex;
         statement->tokenRange.endIndex = info.at()+1;
         statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;
-    }else if(!Equal(assign,"=")){
-        if(attempt)
-            return PARSE_BAD_ATTEMPT;
-        ERR_HEAD2(assign) << "Expected = not "<<assign<<"\n";
+    }else if(!Equal(token,"=")){
+        ERR_HEAD2(token) << "Expected = not "<<token<<"\n";
         ERRLINE;
         return PARSE_ERROR;
     }
-    if(!IsName(name)){
-        info.next(); // prevent loop
-        ERR_HEAD2(name) << "expected a valid name for assignment ('"<<name<<"' isn't)\n";
-        return PARSE_ERROR;
-    }
-    // if(assignType.getId()==0)
-    if(!assignType.isValid())
-        info.next(); // next on name if : part didn't do it
-
-    info.next();
+    info.next(); // =
 
     statement = info.ast->createStatement(ASTStatement::ASSIGN);
-
-    // log::out << reloc<<"\n";
+    statement->varnames = std::move(varnames);
     
-    statement->name = (std::string*)engone::Allocate(sizeof(std::string));
-    new(statement->name)std::string(name);
-    // if(assignType.getId()!=0)
-    if(assignType.isValid())
-        statement->typeId = assignType;
-
-    ASTExpression* rvalue=0;
+    ASTExpression* rvalue=nullptr;
     int result = 0;
     result = ParseExpression(info,rvalue,false);
 
@@ -2217,9 +2199,7 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
     if(latestDefer)
         bodyLoc->add(latestDefer);
 
-    if(!info.end()){
-        bodyLoc->tokenRange.endIndex = info.at()+1;
-    }
+    bodyLoc->tokenRange.endIndex = info.at()+1;
     return PARSE_SUCCESS;
 }
 

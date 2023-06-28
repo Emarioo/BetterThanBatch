@@ -117,7 +117,7 @@ const char* RegToStr(u8 reg);
 // regName refers to A,B,C,D (1,2,3,4)
 int RegBySize(int regName, int size);
 
-#define BC_EXT_ALLOC -1
+#define BC_EXT_MALLOC -1
 #define BC_EXT_REALLOC -2
 #define BC_EXT_FREE -3
 #define BC_EXT_PRINTI -4

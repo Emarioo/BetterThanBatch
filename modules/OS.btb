@@ -4,9 +4,15 @@
 // first and then using. Using won't be applied to functions.
 #define File u64
 
+enum FileFlag {
+    FILE_NO_FLAG=0,
+    FILE_ONLY_READ=1,
+    FILE_CAN_CREATE=2,
+    FILE_WILL_CREATE=4,
+};
+
 // returns file handle and file size
-fn FileOpen(path: Slice<char>) -> File, u64 { @native-code }
-
+fn FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64 { @native-code }
 fn FileRead(file: File, buffer: void*, readBytes: u64) -> u64 { @native-code }
-
+fn FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 { @native-code }
 fn FileClose(file: File) { @native-code }

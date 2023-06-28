@@ -147,8 +147,8 @@ Some example code with pipes
     // fwrite(file);
     // HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
     // printf("%p\n",h);
-    // FileWrite((APIFile*)((uint64)h+1),hm,strlen(hm));
-    // FileWrite((APIFile*)((uint64)h+1),hm,strlen(hm));
+    // FileWrite((APIFile)((uint64)h+1),hm,strlen(hm));
+    // FileWrite((APIFile)((uint64)h+1),hm,strlen(hm));
     // return 0;
     
     // auto pipe = PipeCreate(false,true);

@@ -23,7 +23,7 @@
 
 namespace engone {
     
-#define TO_INTERNAL(X) (APIFile*)((uint64)X+1)
+#define TO_INTERNAL(X) (APIFile)((uint64)X+1)
 #define TO_HANDLE(X) (int)((uint64)X-1)
 
 #define NS 1000000000
@@ -43,7 +43,7 @@ namespace engone {
 		}
 		return (double)(((uint64)ts.tv_sec * NS + (uint64)ts.tv_nsec) - startPoint)/(double)NS;
 	}
-	APIFile* FileOpen(const std::string& path, uint64* outFileSize, uint32 flags) {
+	APIFile FileOpen(const std::string& path, uint64* outFileSize, uint32 flags) {
         int fileFlags = O_RDWR;
         int mode = 0;
         if(flags&FILE_ONLY_READ){
@@ -98,7 +98,7 @@ namespace engone {
         }
 		return TO_INTERNAL(fd);
 	}
-    uint64 FileWrite(APIFile* file, const void* buffer, uint64 writeBytes){
+    uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes){
 		Assert(writeBytes!=(uint64)-1); // -1 indicates no bytes read
 		
 		int bytesWritten = write(TO_HANDLE(file),buffer,writeBytes);
@@ -110,7 +110,7 @@ namespace engone {
 		}
 		return bytesWritten;
 	}
-	uint64 FileRead(APIFile* file, void* buffer, uint64 readBytes) {
+	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes) {
         // printf("REDAING\n");
         ssize_t size = read(TO_HANDLE(file), buffer, readBytes);
 		// printf("fr size: %lu\n",size);
@@ -120,7 +120,7 @@ namespace engone {
 		}
 		return size;
 	}
-	void FileClose(APIFile* file) {
+	void FileClose(APIFile file) {
 		if (file)
 			close(TO_HANDLE(file));
 	}

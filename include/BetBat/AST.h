@@ -300,10 +300,14 @@ struct ASTStatement {
     TokenRange tokenRange{};
     int type = 0;
     // int opType = 0;
-
-    std::string* name=0;
+    struct VarName {
+        Token name{};
+        TypeId assignType{};
+    };
+    std::vector<VarName> varnames;
+    // std::string* name=0;
     std::string* alias=0;
-    TypeId typeId={};
+    // TypeId typeId={};
     // ASTExpression* lvalue=0;
     ASTExpression* rvalue=0;
     ASTScope* body=0;

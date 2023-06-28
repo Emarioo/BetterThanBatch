@@ -155,7 +155,7 @@ namespace engone {
 
 		std::string m_rootDirectory = "logs";
 
-		std::unordered_map<std::string, APIFile*> m_logFiles;
+		std::unordered_map<std::string, APIFile> m_logFiles;
 		
 		std::unordered_map<ThreadId, ThreadInfo> m_threadInfos;
 	};

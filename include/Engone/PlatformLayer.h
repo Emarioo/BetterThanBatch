@@ -24,7 +24,7 @@
 #endif
 
 namespace engone {
-	typedef void APIFile;
+	typedef void* APIFile;
 	typedef void DirectoryIterator;
 	typedef void RecursiveDirectoryIterator;
 	struct DirectoryIteratorData{
@@ -69,16 +69,16 @@ namespace engone {
 
 	// Returns 0 if function failed
     // canWrite = true -> WRITE and READ. False only READ.
-	APIFile* FileOpen(const std::string& path, uint64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
+	APIFile FileOpen(const std::string& path, uint64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
 	// Returns number of bytes read
 	// -1 means error with read
-	uint64 FileRead(APIFile* file, void* buffer, uint64 readBytes);
+	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes);
 	// @return Number of bytes written. -1 indicates an error
-	uint64 FileWrite(APIFile* file, const void* buffer, uint64 writeBytes);
+	uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes);
 	// @return True if successful, false if not
 	// position as -1 will move the head to end of file.
-	bool FileSetHead(APIFile* file, uint64 position);
-	void FileClose(APIFile* file);
+	bool FileSetHead(APIFile file, uint64 position);
+	void FileClose(APIFile file);
     
     bool FileExist(const std::string& path);
     bool DirectoryExist(const std::string& path);
@@ -186,12 +186,12 @@ namespace engone {
 	#define PROGRAM_WAIT 2
 	// Starts an exe at path. Uses CreateProcess from windows.h
 	// commandLine cannot be constant (CreateProcessA in windows api says so)
-	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0, int* exitCode=0, APIFile* inPipe=0, APIFile* outPipe=0);
+	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0, int* exitCode=0, APIFile inPipe=0, APIFile outPipe=0);
 
-	APIFile* PipeCreate(bool inheritRead, bool inheritWrite);
-	void PipeDestroy(APIFile* pipe);
-	int PipeRead(APIFile* pipe,void* buffer, int size);
-	int PipeWrite(APIFile* pipe,void* buffer, int size);
+	APIFile PipeCreate(bool inheritRead, bool inheritWrite);
+	void PipeDestroy(APIFile pipe);
+	int PipeRead(APIFile pipe,void* buffer, int size);
+	int PipeWrite(APIFile pipe,void* buffer, int size);
 
 	typedef void(*VoidFunction)();
 	// @return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 

@@ -91,6 +91,8 @@ void Interpreter::execute(Bytecode* bytecode){
     auto tp = MeasureTime();
     
     // _ILOG(log::out << "sp = "<<sp<<"\n";)
+
+    i64 userAllocatedBytes=0;
     
     // u64* savedFp = 0;
     u64 executedInstructions = 0;
@@ -538,9 +540,11 @@ void Interpreter::execute(Bytecode* bytecode){
     
             if(addr<0){
                 int argoffset = 16;
-                if(addr==BC_EXT_ALLOC){
+                if(addr==BC_EXT_MALLOC){
                     u64 size = *(u64*)(fp+argoffset);
                     void* ptr = engone::Allocate(size);
+                    if(ptr)
+                        userAllocatedBytes += size;
                     _ILOG(log::out << "alloc "<<size<<" -> "<<ptr<<"\n";)
                     *(u64*)(fp-8) = (u64)ptr;
                 } else if (addr==BC_EXT_REALLOC){
@@ -548,12 +552,15 @@ void Interpreter::execute(Bytecode* bytecode){
                     u64 oldsize = *(u64*)(fp +argoffset + 8);
                     u64 size = *(u64*)(fp+argoffset);
                     ptr = engone::Reallocate(ptr,oldsize,size);
+                    if(ptr)
+                        userAllocatedBytes += size - oldsize;
                     _ILOG(log::out << "realloc "<<size<<" ptr: "<<ptr<<"\n";)
                     *(u64*)(fp-8) = (u64)ptr;
                 } else if (addr==BC_EXT_FREE){
                     void* ptr = *(void**)(fp+argoffset + 8);
                     u64 size = *(u64*)(fp+argoffset);
                     engone::Free(ptr,size);
+                    userAllocatedBytes -= size;
                     _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
                 } else if (addr==BC_EXT_PRINTI){
                     i64 num = *(i64*)(fp+argoffset);
@@ -566,13 +573,60 @@ void Interpreter::execute(Bytecode* bytecode){
                     #else
                     log::out << chr;
                     #endif
-                }else if (addr==BC_EXT_FILEOPEN){
+                } else if (addr==BC_EXT_FILEOPEN){
+                    // The order may seem strange but it's actually correct.
+                    // It is just complicated.
+                    // slice
                     char* ptr = *(char**)(fp+argoffset + 8);
-                    u64 len = *(u64*)(fp+argoffset);
+                    u32 len = *(u64*)(fp+argoffset+20);
 
+                    u32 flags = *(u32*)(fp+argoffset+4);
+
+                    u64 fsize = 0;
+                    APIFile file = FileOpen(std::string(ptr,len), &fsize, flags);
                     
+                    log::out <<log::GRAY<< "FileOpen: "<<std::string(ptr,len) << ", "<<flags<<"\n";
+                    // u64 fsize = 23;
+                    // void* file = (APIFile)99;
 
-                    *(u64*)(fp-8) = (u64)ptr;
+                    *(u64*)(fp-8) = (u64)fsize;
+                    *(u64*)(fp-16) = (u64)file;
+                } else if (addr==BC_EXT_FILEREAD){
+                    // The order may seem strange but it's actually correct.
+                    // It is just complicated.
+                    // slice
+                    u64 file = *(u64*)(fp+argoffset + 16);
+                    void* buffer = *(void**)(fp+argoffset+8);
+                    u64 readBytes = *(u64*)(fp+argoffset);
+
+                    u64 bytes = FileRead((APIFile)file, buffer, readBytes);
+                    log::out <<log::GRAY<< "FileRead: "<<file << ", "<<buffer<<", "<<readBytes<<"\n";
+                    
+                    // u64 fsize = 23;
+                    // void* file = (APIFile)99;
+
+                    *(u64*)(fp-8) = (u64)bytes;
+                    // *(u64*)(fp-16) = (u64)file;
+                }  else if (addr==BC_EXT_FILEWRITE){
+                    // The order may seem strange but it's actually correct.
+                    // It is just complicated.
+                    // slice
+                    u64 file = *(u64*)(fp+argoffset + 16);
+                    void* buffer = *(void**)(fp+argoffset+8);
+                    u64 writeBytes = *(u64*)(fp+argoffset);
+
+                    u64 bytes = FileWrite((APIFile)file, buffer, writeBytes);
+                    log::out << log::GRAY<<"FileWrite: "<<file << ", "<<buffer<<", "<<writeBytes<<"\n";
+                    
+                    // u64 fsize = 23;
+                    // void* file = (APIFile)99;
+
+                    *(u64*)(fp-8) = (u64)bytes;
+                    // *(u64*)(fp-16) = (u64)file;
+                } else if (addr==BC_EXT_FILECLOSE){
+                    u64 file = *(u64*)(fp+argoffset);
+                    FileClose((APIFile)file);
+                    log::out << log::GRAY<<"FileClose: "<<file<<"\n";
                 }  else {
                     _ILOG(log::out << log::RED << addr<<" is not a special function\n";)
                 }
@@ -785,10 +839,19 @@ void Interpreter::execute(Bytecode* bytecode){
             void* dst = *(void**)dstp;
             void* src = *(void**)srcp;
             memcpy(dst,src,size);
-            log::out << "copied "<<size<<" bytes\n";
+            // log::out << "copied "<<size<<" bytes\n";
             break;
         }
         } // for switch
+    }
+    if(userAllocatedBytes!=0){
+        log::out << log::RED << "User program leaks "<<userAllocatedBytes<<" bytes\n";
+    }
+    if(sp != (u64)stack.data+stack.max){
+        log::out << log::YELLOW<<"sp was "<<(sp - (u64)stack.data+stack.max)<<"\n";
+    }
+    if(fp != (u64)stack.data+stack.max){
+        log::out << log::YELLOW<<"fp was "<<(fp - (u64)stack.data+stack.max)<<"\n";
     }
     auto time = StopMeasure(tp);
     if(!silent){

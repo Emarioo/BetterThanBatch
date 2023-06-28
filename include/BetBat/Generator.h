@@ -30,7 +30,7 @@ struct GenInfo {
     FuncImpl* currentFuncImpl=nullptr;
     ScopeId currentScopeId = 0;
     ScopeId fromScopeId = 0; // AST_FROM_NAMESPACE
-    
+
     int funcDepth=0;
     struct LoopScope {
         // Index of instruction where looping starts.h
@@ -59,5 +59,9 @@ struct GenInfo {
     // FunctionScope* getFunctionScope(int index=-1);
     int currentFrameOffset=0;
     static const int ARG_OFFSET=16;
+
+    // Extra details
+    // FuncImpl* recentFuncImpl=nullptr; // used by fncall
+
 };
 Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
