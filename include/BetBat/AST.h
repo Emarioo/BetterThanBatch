@@ -27,6 +27,8 @@ enum PrimitiveType : u32 {
     AST_STRING, // converted to another type, probably char[]
     AST_NULL, // converted to void*
     
+    AST_TRUE_PRIMITIVES,
+
     // TODO: should these be moved somewhere else?
     AST_VAR, // TODO: Also used when refering to enums. Change the name?
     AST_FNCALL,
@@ -35,7 +37,7 @@ enum PrimitiveType : u32 {
     AST_PRIMITIVE_COUNT,
 };
 enum OperationType : u32 {
-    AST_ADD=AST_PRIMITIVE_COUNT,  
+    AST_ADD=AST_SIZEOF,  
     AST_SUB,
     AST_MUL,
     AST_DIV,
@@ -57,7 +59,11 @@ enum OperationType : u32 {
     AST_BNOT,
     AST_BLSHIFT,
     AST_BRSHIFT,
-    
+
+    AST_INDEX, // index operator, arr[3] same as *(arr + 3*sizeof Item) unless overloaded
+    AST_INCREMENT,
+    AST_DECREMENT,
+
     AST_CAST,
     AST_MEMBER,
     AST_INITIALIZER,
@@ -315,7 +321,7 @@ struct ASTStatement {
 
     ASTStatement* next=0;
 
-    int _; // offset size to avoid collision with ASTSTatement
+    bool sharedContents = false; // this node is not the owner of it's nodes.
 
     void print(AST* ast, int depth);
 };

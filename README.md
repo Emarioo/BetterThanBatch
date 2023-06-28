@@ -27,7 +27,7 @@ importantly proper testing.
 - #define, #multidefine and #undef (macros/defines are recursive)
 - #ifdef (exactly like C)
 - #unwrap (for macros)
-- Concatenation with .. in macros.
+- Concatenation with ## in macros.
 - #import to divide your code into multiple files
 - #include to tokenize a file and transfer the tokens into another file.
 

@@ -1120,7 +1120,7 @@ int ParseMacro(PreprocInfo& info, int attempt){
             if(i+1<(int)evalInfo.output.size()){
                 nextToken=info.get(evalInfo.output[i+1]);
             }
-            if(nextToken==".."){
+            if(nextToken=="##"){
                 if(i+2<(int)evalInfo.output.size()){
                     Token token2 = info.get(evalInfo.output[i+2]);
                     info.tempStream->addData(token2);
@@ -1179,7 +1179,6 @@ int ParseToken(PreprocInfo& info){
 void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
     using namespace engone;
     MEASURE;
-    // _VLOG(log::out <<log::BLUE<<  "##   Preprocessor   ##\n";)
     
     PreprocInfo info{};
     info.compileInfo = compileInfo;

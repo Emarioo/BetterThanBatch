@@ -25,8 +25,7 @@
 
 namespace engone {
 	typedef void* APIFile;
-	typedef void DirectoryIterator;
-	typedef void RecursiveDirectoryIterator;
+	typedef void* RecursiveDirectoryIterator;
 	struct DirectoryIteratorData{
 		std::string name;
 		uint64 fileSize;
@@ -91,31 +90,17 @@ namespace engone {
 	std::string EnvironmentVariable(const std::string& name);
 	
 	bool FileCopy(const std::string& src, const std::string& dst);
-    // TODO: Remove the simple directory iterator. Skipping directories in the recursive directory iterator
-    //      would work the same as the normal directory iterator.
     
-	// path should be a valid directory.
-	// Empty string assumes working directory.
-	// Result must be a valid pointer.
-	// Returns 0 if something failed. Maybe invalid path or empty directory.
-	DirectoryIterator* DirectoryIteratorCreate(const std::string& path, DirectoryIteratorData* result);
-	// Iterator must be valid. Cannot be 0.
-	// Returns true when result has valid data of the next file.
-	// Returns false if there are no more files or if something failed. Destroy the iterator in any case. 
-	bool DirectoryIteratorNext(DirectoryIterator* iterator, DirectoryIteratorData* result);
-	// Iterator must be valid. Cannot be 0.
-	void DirectoryIteratorDestroy(DirectoryIterator* iterator);
-	
 	// 0 is returned on failure (invalid path, empty directory)
 	// result must be valid memory.
 	// path should be a valid directory.
 	// empty string as path assumes working directory.
-	RecursiveDirectoryIterator* RecursiveDirectoryIteratorCreate(const std::string& path);
+	RecursiveDirectoryIterator RecursiveDirectoryIteratorCreate(const std::string& path);
 	// false is returned on failure (invalid iterator, no more files/directories)
-	bool RecursiveDirectoryIteratorNext(RecursiveDirectoryIterator* iterator, DirectoryIteratorData* result);
+	bool RecursiveDirectoryIteratorNext(RecursiveDirectoryIterator iterator, DirectoryIteratorData* result);
 	// Skip the latest directory in the internal recursive queue. The latest found directory will be last in the queue.
-	void RecursiveDirectoryIteratorSkip(RecursiveDirectoryIterator* iterator);
-	void RecursiveDirectoryIteratorDestroy(RecursiveDirectoryIterator* iterator);
+	void RecursiveDirectoryIteratorSkip(RecursiveDirectoryIterator iterator);
+	void RecursiveDirectoryIteratorDestroy(RecursiveDirectoryIterator iterator);
     
 	void SetConsoleColor(uint16 color);
 

@@ -44,7 +44,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control",
-				"match": "\\b(if|else|while|for|break|continue|fn|return|each|_test_|using|as)\\b"
+				"match": "\\b(if|else|while|for|break|continue|fn|return|defer|each|cast|_test_|using|as)\\b"
 			},{
 				"name": "entity.name.class",
 				"match": "\\b(struct)\\b"
@@ -59,21 +59,21 @@
 		"preproc":{
 			"patterns": [{
 				"name":"entity.name.selector",
-				"match":"(#\\w+)"
+				"match":"#\\w+"
 			}]
 		},
 		"annotation": {
 			"patterns": [
 				{
 					"name": "entity.name.tag",
-					"match": "(@\\S+)"
+					"match": "@\\S+"
 				}
 			]
 		},
 		"functions":{
 			"patterns": [{
 				"name":"entity.name.function",
-				"match": "\\b(alloc|free|realloc|printi|printc)\\b"
+				"match": "\\w+\\("
 			}]
 		},
 		"strings": {

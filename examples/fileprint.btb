@@ -1,0 +1,15 @@
+#import "OS"
+
+file, size = FileOpen("test.bat",FileFlag.FILE_ONLY_READ);
+defer FileClose(file);
+
+buffer = cast<char*>malloc(size)
+FileRead(file, buffer, size)
+defer free(buffer,size);
+
+i = 0
+while i < size; {
+    printc(buffer[i]);
+    i+=1;
+}
+printc("\n")

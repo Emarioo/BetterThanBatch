@@ -23,6 +23,8 @@
 #define ERR_DEFAULT_R(R,NAME,NUM) ERR_CUSTOM(R.tokenStream?R.tokenStream->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
 #define ERR_DEFAULT_RL(R,NAME,NUM) ERR_CUSTOM(R.tokenStream?R.tokenStream->streamName:"", R.firstToken.line, R.firstToken.column + R.firstToken.length,NAME,NUM)
 
+#define WARN_DEFAULT_R(R,NAME,NUM) WARN_CUSTOM(R.tokenStream?R.tokenStream->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
+
 struct TokenRange;
 void PrintCode(TokenRange* tokenRange, const char* message = nullptr);
 struct TokenStream;

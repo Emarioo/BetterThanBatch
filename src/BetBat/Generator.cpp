@@ -3,6 +3,8 @@
 
 #undef ERR_HEAD2
 #undef ERR_HEAD
+#undef WARN_HEAD
+#undef WARN_LINE
 #undef ERR_END
 #undef ERR
 #undef ERRTYPE
@@ -20,6 +22,10 @@
 #define ERRTYPE(R, LT, RT, M) ERR_HEAD(R, "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M)
 // #define ERRTYPE2(R, LT, RT) ERR_HEAD2(R) << "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " "
 #define ERR_END MSG_END
+
+#define WARN_HEAD(R, M) info.compileInfo->warnings++;engone::log::out << WARN_DEFAULT_R(R,"Gen. warning","W0000") << M
+#define WARN_LINE(R, M) PrintCode(&R, M)
+
 
 #define LOGAT(R) R.firstToken.line << ":" << R.firstToken.column
 
@@ -221,8 +227,8 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
     vp.setPointerLevel(1);
     if(from.isPointer() && to == vp)
         return true;
-    // if(from == AST_VOID && to.isPointer())
-    //     return true;
+    if(from == vp && to.isPointer())
+        return true;
     // TODO: I just threw in currentScopeId. Not sure if it is supposed to be in all cases.
     // auto fti = info.ast->getTypeInfo(from);
     // auto tti = info.ast->getTypeInfo(to);
@@ -380,7 +386,7 @@ int GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
         }
         info.addPush(reg);
     } else {
-        for(int i = 0; i < (int) typeInfo->astStruct->members.size(); i++){
+        for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
             auto& member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
             GeneratePush(info, baseReg, offset + memdata.offset, memdata.typeId);
@@ -953,11 +959,10 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             }
             Assert(typeInfo->astStruct);
             Assert(typeInfo->astStruct->members.size() == 2);
-            // TODO: More assert checks?
+            Assert(typeInfo->structImpl->members[0].offset == 0);
+            Assert(typeInfo->structImpl->members[1].offset == 12);
 
             // last member in slice is pushed first
-            // info.addIncrSp(-4);§
-
             info.code->add({BC_LI, BC_REG_EAX});
             info.code->addIm(pair->second.length);
             info.addPush(BC_REG_EAX);
@@ -1440,6 +1445,80 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             //     outTypeIds->push_back( AST_INT32;
             // }
         }
+        else if(expression->typeId == AST_INDEX){
+            int err = GenerateExpression(info, expression->left, &ltype);
+            if (err != GEN_SUCCESS)
+                return GEN_ERROR;
+
+            TypeId rtype;
+            err = GenerateExpression(info, expression->right, &rtype);
+            if (err != GEN_SUCCESS)
+                return GEN_ERROR;
+
+            if(!ltype.isPointer()){
+                std::string strtype = info.ast->typeToString(ltype);
+                ERR_HEAD(expression->right->tokenRange, "Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.\n\n";
+                    ERR_LINE(expression->right->tokenRange,strtype.c_str());
+                )
+                return GEN_ERROR;
+            }
+            if(!AST::IsInteger(rtype)){
+                std::string strtype = info.ast->typeToString(rtype);
+                ERR_HEAD(expression->right->tokenRange, "Index operator ( array[23] ) requires integer type in the inner expression. '"<<strtype<<"' is not an integer.\n\n";
+                    ERR_LINE(expression->right->tokenRange,strtype.c_str());
+                )
+                return GEN_ERROR;
+            }
+            ltype.setPointerLevel(ltype.getPointerLevel()-1);
+
+            u32 lsize = info.ast->getTypeSize(ltype);
+            u32 rsize = info.ast->getTypeSize(rtype);
+            u8 reg = RegBySize(4,rsize);
+            info.addPop(reg); // integer
+            info.addPop(BC_REG_RBX); // reference
+            info.code->add({BC_LI,BC_REG_EAX});
+            info.code->addIm(lsize);
+            info.code->add({BC_MULI, reg, BC_REG_EAX, reg});
+            info.code->add({BC_ADDI, BC_REG_RBX, reg, BC_REG_RBX});
+
+            int result = GeneratePush(info, BC_REG_RBX, 0, ltype);
+
+            outTypeIds->push_back(ltype);
+        }
+        else if(expression->typeId == AST_INCREMENT || expression->typeId == AST_DECREMENT){
+            int result = GenerateReference(info, expression->left, &ltype, idScope);
+            if(result != GEN_SUCCESS){
+                return GEN_ERROR;
+            }
+            
+            if(!AST::IsInteger(ltype)){
+                std::string strtype = info.ast->typeToString(ltype);
+                ERR_HEAD(expression->left->tokenRange, "Increment/decrement only works on integer types unless overloaded.\n\n";
+                    ERR_LINE(expression->left->tokenRange, strtype.c_str());
+                )
+                return GEN_ERROR;
+            }
+
+            u32 size = info.ast->getTypeSize(ltype);
+            u8 reg = RegBySize(1, size);
+
+            info.addPop(BC_REG_RBX); // reference
+
+            info.code->add({BC_MOV_MR, BC_REG_RBX, reg});
+            // post
+            if(expression->boolValue)
+                info.addPush(reg);
+            if(expression->typeId == AST_INCREMENT)
+                info.code->add({BC_INCR, reg, 1, 0});
+            else
+                info.code->add({BC_INCR, reg, (u8)-1, (u8)-1});
+            info.code->add({BC_MOV_RM, reg, BC_REG_RBX});
+            // pre
+            if(!expression->boolValue)
+                info.addPush(reg);
+                
+            outTypeIds->push_back(ltype);
+        }
         else {
             if(expression->typeId == AST_ASSIGN && castType.getId() == 0){
                 TypeId assignType={};
@@ -1477,19 +1556,34 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                     if(result!=GEN_SUCCESS) return GEN_ERROR;
                     Assert(assignType == ltype);
                     op = castType;
-                    info.addPop(BC_REG_RBX); // note that right expression should be popped first
+                    info.addPop(BC_REG_RBX);
                 }
-                if (!(ltype == rtype ||
-                    (ltype.isPointer() && AST::IsInteger(rtype) &&
-                        (op == AST_ADD || op == AST_SUB)))) {
-                    std::string leftstr = info.ast->typeToString(ltype);
-                    std::string rightstr = info.ast->typeToString(rtype);
-                    ERRTYPE(expression->tokenRange, ltype, rtype, "\n\n";
-                        ERR_LINE(expression->left->tokenRange, leftstr.c_str());
-                        ERR_LINE(expression->right->tokenRange,rightstr.c_str());
-                    )
-                    return GEN_ERROR;
+                if(((ltype.isPointer() && AST::IsInteger(rtype)) || (AST::IsInteger(ltype) && rtype.isPointer()))){
+                    if (op != AST_ADD && op != AST_SUB) {
+                        std::string leftstr = info.ast->typeToString(ltype);
+                        std::string rightstr = info.ast->typeToString(rtype);
+                        ERR_HEAD(expression->tokenRange, OpToStr((OperationType)op.getId()) << " does not work with pointers. Only addition and subtraction works\n\n";
+                            ERR_LINE(expression->left->tokenRange, leftstr.c_str());
+                            ERR_LINE(expression->right->tokenRange,rightstr.c_str());
+                        )
+                        return GEN_ERROR;
+                    }
+                } else {
+                    u8 reg = RegBySize(4, info.ast->getTypeSize(rtype));
+                    info.addPop(reg);
+                    if (!PerformSafeCast(info, ltype, rtype)) {
+                        std::string leftstr = info.ast->typeToString(ltype);
+                        std::string rightstr = info.ast->typeToString(rtype);
+                        ERRTYPE(expression->tokenRange, ltype, rtype, "\n\n";
+                            ERR_LINE(expression->left->tokenRange, leftstr.c_str());
+                            ERR_LINE(expression->right->tokenRange,rightstr.c_str());
+                        )
+                        return GEN_ERROR;
+                    }
+                    ltype = rtype;
+                    info.addPush(reg);
                 }
+
                 TOKENINFO(expression->tokenRange)
                 u32 lsize = info.ast->getTypeSize(ltype);
                 u32 rsize = info.ast->getTypeSize(rtype);
@@ -1547,10 +1641,7 @@ int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange = 
             auto &member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
             if(member.defaultValue && typeInfo->astStruct->polyArgs.size()){
-                log::out <<  log::YELLOW;
-                if(tokenRange)
-                    log::out << LOGAT((*tokenRange))<<": ";
-                log::out << "Warning! Polymorphism may not work with default values!\n";
+                WARN_HEAD((*tokenRange), "Polymorphism may not work with default values!";)
             }
             if (member.defaultValue) {
                 TypeId typeId = {};
@@ -2365,8 +2456,6 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             //     log::out << log::RED << "popLoop failed (bug in compiler)\n";
             // }
         } else if(statement->type == ASTStatement::BREAK) {
-            log::out << log::YELLOW << "Warning! defer doesn't work with break!\n";
-
             GenInfo::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
                 ERR_HEAD2(statement->tokenRange) << "Loop was null\n";
@@ -2381,8 +2470,6 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             loop->resolveBreaks.push_back(info.code->length());
             info.code->addIm(0);
         } else if(statement->type == ASTStatement::CONTINUE) {
-            log::out << log::YELLOW << "Warning! defer doesn't work with continue!\n";
-            
             GenInfo::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
                 ERR_HEAD2(statement->tokenRange) << "Loop was null\n";
@@ -2397,7 +2484,6 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             info.code->addIm(loop->continueAddress);
         } else if (statement->type == ASTStatement::RETURN) {
             _GLOG(SCOPE_LOG("RETURN"))
-            log::out << log::YELLOW << "Warning! defer doesn't work with return!\n";
 
             if (!info.currentFunction) {
                 ERR_HEAD2(statement->tokenRange) << "return only allowed in function\n";
@@ -2575,12 +2661,12 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     info.compileInfo = compileInfo;
     info.currentScopeId = ast->globalScopeId;
 
-    std::vector<ASTFunction *> predefinedFuncs;
-    #define PDEF_RET(T) astfun->baseImpl.returnTypes.push_back({ast->convertToTypeId(Token(#T), ast->globalScopeId)});
-    #define PDEF_ARG(N,T) astfun->arguments.push_back({});\
-        astfun->arguments.back().name = #N;\
-        astfun->baseImpl.arguments.push_back({});\
-        astfun->baseImpl.arguments.back().typeId = {ast->convertToTypeId(Token(#T), ast->globalScopeId)};
+    // std::vector<ASTFunction *> predefinedFuncs;
+    // #define PDEF_RET(T) astfun->baseImpl.returnTypes.push_back({ast->convertToTypeId(Token(#T), ast->globalScopeId)});
+    // #define PDEF_ARG(N,T) astfun->arguments.push_back({});
+    //     astfun->arguments.back().name = #N;
+    //     astfun->baseImpl.arguments.push_back({});
+    //     astfun->baseImpl.arguments.back().typeId = {ast->convertToTypeId(Token(#T), ast->globalScopeId)};
 
     // {
     //     // don't add to ast because GenerateBody will want to create the functions
@@ -2600,28 +2686,6 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     //     PDEF_ARG(ptr,void*)
     //     PDEF_ARG(oldsize,u64)
     //     PDEF_ARG(size,u64)
-    // }
-    // {
-    //     auto astfun = ast->createFunction("free");
-    //     auto id = info.ast->addFunction(ast->globalScopeId, astfun->name,astfun);
-    //     astfun->baseImpl.address = BC_EXT_FREE;
-    //     predefinedFuncs.push_back(astfun);
-    //     PDEF_ARG(ptr,void*)
-    //     PDEF_ARG(size,u64)
-    // }
-    // {
-    //     auto astfun = ast->createFunction("printi");
-    //     auto id = info.ast->addFunction(ast->globalScopeId, astfun->name,astfun);
-    //     astfun->baseImpl.address = BC_EXT_PRINTI;
-    //     predefinedFuncs.push_back(astfun);
-    //     PDEF_ARG(num,i64)
-    // }
-    // {
-    //     auto astfun = ast->createFunction("printc");
-    //     auto id = info.ast->addFunction(ast->globalScopeId, astfun->name, astfun);
-    //     astfun->baseImpl.address = BC_EXT_PRINTC;
-    //     predefinedFuncs.push_back(astfun);
-    //     PDEF_ARG(chr,char)
     // }
 
     int result = GenerateData(info,info.ast);
@@ -2654,9 +2718,9 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     }
     info.callsToResolve.clear();
 
-    for (auto fun : predefinedFuncs) {
-        ast->destroy(fun);
-    }
+    // for (auto fun : predefinedFuncs) {
+    //     ast->destroy(fun);
+    // }
 
     // compiler logs the error count, dont need it here too
     // if(info.errors)

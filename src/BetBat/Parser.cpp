@@ -6,7 +6,9 @@
 #undef ERR_HEAD2
 #undef ERR_HEAD
 #undef WARN_HEAD2
+#undef WARN_HEAD
 #undef ERR_LINE
+#undef WARN_LINE
 // #undef ERRAT
 
 #define ERR_HEAD2(T) info.compileInfo->errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000")
@@ -30,7 +32,7 @@
 // zero means no operation
 bool IsSingleOp(OperationType nowOp){
     return nowOp == AST_REFER || nowOp == AST_DEREF || nowOp == AST_NOT || nowOp == AST_BNOT||
-        nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST;
+        nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST || nowOp == AST_INCREMENT || nowOp == AST_DECREMENT;
 }
 bool IsAssignOp(Token& token){
     if(!token.str || token.length!=1) return false; // early exit since all assign op only use one character
@@ -886,6 +888,65 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 ops.push_back(opType);
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
+            } else if(Equal(token,"[")){
+                int startIndex = info.at()+1;
+                info.next();
+                attempt=false;
+                ASTExpression* indexExpr=nullptr;
+                int result = ParseExpression(info, indexExpr, false);
+                if(result != PARSE_SUCCESS){
+                    
+                }
+                Token tok = info.get(info.at()+1);
+                if(!Equal(tok,"]")){
+                    ERR_HEAD(tok,"bad\n\n";)
+                } else {
+                    info.next();
+                }
+
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INDEX));
+                tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.startIndex = startIndex;
+                tmp->tokenRange.endIndex = info.at()+1;
+                tmp->tokenRange.tokenStream = info.tokens;
+
+                tmp->left = values.back();
+                values.pop_back();
+                tmp->right = indexExpr;
+                values.push_back(tmp);
+                continue;
+            } else if(Equal(token,"++")){
+                info.next();
+                attempt = false;
+
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INCREMENT));
+                tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.startIndex = info.at();
+                tmp->tokenRange.endIndex = info.at()+1;
+                tmp->tokenRange.tokenStream = info.tokens;
+                tmp->boolValue = true;
+
+                tmp->left = values.back();
+                values.pop_back();
+                values.push_back(tmp);
+
+                continue;
+            } else if(Equal(token,"--")){
+                info.next();
+                attempt = false;
+
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_DECREMENT));
+                tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.startIndex = info.at();
+                tmp->tokenRange.endIndex = info.at()+1;
+                tmp->tokenRange.tokenStream = info.tokens;
+                tmp->boolValue = true;
+
+                tmp->left = values.back();
+                values.pop_back();
+                values.push_back(tmp);
+
+                continue;
             } else if(Equal(token,")")){
                 // token = info.next();
                 ending = true;
@@ -895,7 +956,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     info.next();
                 } else {
                     Token prev = info.now();
-                    if((prev.flags&TOKEN_SUFFIX_LINE_FEED) == 0 && !Equal(token,"}") && !Equal(token,",") && !Equal(token,")")){
+                    if((prev.flags&TOKEN_SUFFIX_LINE_FEED) == 0 &&
+                         !Equal(token,"}") && !Equal(token,",") && !Equal(token,"{") && !Equal(token,"]")){
                         WARN_HEAD(token, "Did you forget the semi-colon to end the statement or was it intentional? Perhaps you mistyped a character? (put the next statement on a new line to silence this warning)\n\n"; 
                             ERR_LINE(tokenIndex-1, "semi-colon here?");
                             // ERR_LINE(tokenIndex, "; before this?");
@@ -957,6 +1019,18 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             } else if(Equal(token,"-")){
                 info.next();
                 negativeNumber=true;
+                attempt = false;
+                continue;
+            } else if(Equal(token,"++")){
+                info.next();
+                ops.push_back(AST_INCREMENT);
+
+                attempt = false;
+                continue;
+            } else if(Equal(token,"--")){
+                info.next();
+                ops.push_back(AST_DECREMENT);
+
                 attempt = false;
                 continue;
             }
@@ -1058,6 +1132,16 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         // we don't need to return PARSE_ERROR. We could but things will be fine.
                     // }
                 }
+                values.push_back(tmp);
+                tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.startIndex = info.at();
+                tmp->tokenRange.endIndex = info.at()+1;
+                
+                tmp->tokenRange.tokenStream = info.tokens;
+            } else if(Equal(token,"true") || Equal(token,"false")){
+                info.next();
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_BOOL));
+                tmp->boolValue = Equal(token,"true");
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.startIndex = info.at();
@@ -1558,12 +1642,11 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
                 break;
             }
             int result = ParseExpression(info,expr,true);
-            if(result!=PARSE_SUCCESS){
-                // TODO: should more stuff be done here?
-                return PARSE_ERROR;
-            }
             if(result==PARSE_BAD_ATTEMPT){
                 break;
+            }
+            if(result!=PARSE_SUCCESS){
+                return PARSE_ERROR;
             }
             if(!base){
                 base = expr;
@@ -1780,9 +1863,6 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     }
 
     if(parentStruct) {
-        // if(function->polyArgs.size()!=0) {
-        //     WARN_HEAD2(tok) << "Warning! polymorphism doesn't work with methods! (yet)\n";
-        // }
         function->arguments.push_back({});
         auto& argv = function->arguments.back();
         argv.name = "this";
@@ -1931,9 +2011,12 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
             }
         }
     }
-
+    
+    info.functionScopes.push_back({});
     ASTScope* body = 0;
     int result = ParseBody(info,body);
+    
+    info.functionScopes.pop_back();
 
     function->body = body;
     function->tokenRange.endIndex = info.at()+1;
@@ -2084,7 +2167,8 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
     }
     bodyLoc->scopeId = info.currentScopeId;
 
-    ASTStatement* latestDefer = nullptr; // latest parsed defer
+    // ASTStatement* latestDefer = nullptr; // latest parsed defer
+    std::vector<ASTStatement*> nearDefers;
     
     while(!info.end()){
         Token& token = info.get(info.at()+1);
@@ -2161,19 +2245,26 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
         if(result==PARSE_ERROR){
             
         }
-        // NOTE: ANY CHANGES HERE SHOULD PROBABLY BE ADDED
-        //  TO ParseNamespace!
         // We add the AST structures even during error to
         // avoid leaking memory.
         if(tempStatement) {
             if(tempStatement->type == ASTStatement::DEFER) {
-                if(!latestDefer){
-                    latestDefer = tempStatement;
-                } else {
-                    tempStatement->next = latestDefer;
-                    latestDefer = tempStatement;
-                }
+                nearDefers.push_back(tempStatement);
+                info.functionScopes.back().defers.push_back(tempStatement);
             } else {
+                if(tempStatement->type == ASTStatement::CONTINUE || tempStatement->type == ASTStatement::BREAK
+                    || tempStatement->type == ASTStatement::RETURN)
+                {
+                    for(int j=info.functionScopes.back().defers.size()-1;j>=0;j--){
+                        auto myDefer = info.functionScopes.back().defers[j];  // my defer, not yours, get your own
+                        ASTStatement* deferCopy = info.ast->createStatement(ASTStatement::DEFER);
+                        deferCopy->tokenRange = myDefer->tokenRange;
+                        deferCopy->body = myDefer->body;
+                        deferCopy->sharedContents = true;
+
+                        bodyLoc->add(deferCopy);
+                    }
+                }
                 bodyLoc->add(tempStatement);
             }
         }
@@ -2196,8 +2287,9 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, bool globalScope){
         if(!scoped && !globalScope)
             break;
     }
-    if(latestDefer)
-        bodyLoc->add(latestDefer);
+    
+    for(int i = nearDefers.size()-1;i>=0;i--)
+        bodyLoc->add(nearDefers[i]);
 
     bodyLoc->tokenRange.endIndex = info.at()+1;
     return PARSE_SUCCESS;
@@ -2235,8 +2327,9 @@ ASTScope* ParseTokens(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, s
         
         info.currentScopeId = newScopeId;
     }
-    
+    info.functionScopes.push_back({});
     int result = ParseBody(info, body, true);
+    info.functionScopes.pop_back();
     
     info.currentScopeId = prevScope;
     

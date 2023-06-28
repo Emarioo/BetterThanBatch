@@ -9,12 +9,12 @@
 /* ###############
    Major config
 ############### */
-// #define DEBUG
+#define DEBUG
 // #define SILENT
 // #define ALLOC_LOG
 // #define LOG_MEASURES
 
-// #define LOG_MSG_LOCATION
+#define LOG_MSG_LOCATION
 
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE

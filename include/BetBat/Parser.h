@@ -20,6 +20,12 @@ struct ParseInfo {
     ScopeId currentScopeId=0;
     std::string currentNamespace = "";
 
+    // or global scope
+    struct FunctionScope {
+        std::vector<ASTStatement*> defers; // apply these when continue, break or return is encountered
+    };
+    std::vector<FunctionScope> functionScopes;
+
     // Does not handle out of bounds
     Token &prev();
     Token& next();

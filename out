@@ -1,0 +1,183 @@
+Compiling...all.cpp
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(15): error C2601: 'Interpreter::cleanup': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(19): error C2601: 'Interpreter::printRegisters': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(33): error C2601: 'Interpreter::getReg': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(56): error C2601: 'yeah': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(76): error C2601: 'Interpreter::execute': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/main.cpp(3): error C2601: 'print_help': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/main.cpp(39): error C2601: 'main': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/MessageTool.cpp(5): error C2601: 'PrintCode': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/MessageTool.cpp(102): error C2601: 'PrintCode': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(31): error C2601: 'IsSingleOp': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(35): error C2601: 'IsAssignOp': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(42): error C2601: 'IsOp': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(67): error C2601: 'OpPrecedence': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(83): error C2601: 'ParseInfo::next': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(88): error C2601: 'ParseInfo::prev': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(91): error C2601: 'ParseInfo::now': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(94): error C2601: 'ParseInfo::get': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(97): error C2601: 'ParseInfo::end': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(101): error C2601: 'ParseInfo::finish': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(104): error C2601: 'ParseInfo::at': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(107): error C2601: 'ParseInfo::printLine': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(138): error C2601: 'ParseInfo::printPrevLine': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(179): error C2601: 'ParseInfo::nextLine': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(197): error C2601: 'CombineTokens': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(223): error C2601: 'ParseTypeId': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(292): error C2601: 'ParseStruct': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(478): error C2601: 'ParseNamespace': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(584): error C2601: 'ParseEnum': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(684): error C2601: 'ParseArguments': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(747): error C2601: 'ParseExpression': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(1484): error C2601: 'ParseFlow': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(1702): error C2601: 'ParseFunction': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(1944): error C2601: 'ParseAssignment': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(2048): error C2601: 'ParseBody': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(2206): error C2601: 'ParseTokens': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(31): error C2601: 'PreprocInfo::end': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(35): error C2601: 'PreprocInfo::next': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(40): error C2601: 'PreprocInfo::at': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(44): error C2601: 'PreprocInfo::length': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(47): error C2601: 'PreprocInfo::get': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(50): error C2601: 'PreprocInfo::now': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(54): error C2601: 'PreprocInfo::matchMacro': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(69): error C2601: 'CertainMacro::matchArg': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(81): error C2601: 'RootMacro::matchArgCount': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(101): error C2601: 'PreprocInfo::nextline': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(118): error C2601: 'EvalInfo::matchSuperArg': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(131): error C2601: 'PreprocInfo::addToken': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(137): error C2601: 'ParseDirective': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(170): error C2601: 'ParseDefine': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(341): error C2601: 'ParseUndef': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(434): error C2601: 'ParseImport': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(467): error C2601: 'ParseInclude': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(573): error C2601: 'ParseIfdef': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(663): error C2601: 'ParsePredefinedMacro': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(750): error C2601: 'Transfer': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(776): error C2601: 'EvalArguments': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(936): error C2601: 'EvalMacro': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(1053): error C2601: 'ParseMacro': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(1151): error C2601: 'ParseToken': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Preprocessor.cpp(1179): error C2601: 'Preprocess': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(3): error C2601: 'IsInteger': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(13): error C2601: 'ConvertDecimal': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(23): error C2601: 'IsAnnotation': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(27): error C2601: 'IsName': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(45): error C2601: 'IsDecimal': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(60): error C2601: 'ConvertInteger': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(70): error C2601: 'Equal': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(73): error C2601: 'IsHexadecimal': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(86): error C2601: 'ConvertHexadecimal': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(105): error C2601: 'TokenRange::print': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(137): error C2601: 'operator <<': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(141): error C2601: 'TokenStream::addImport': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(146): error C2601: 'TokenRange::feed': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(178): error C2601: 'Token::print': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(206): error C2601: 'Token::operator ==': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(215): error C2601: 'Token::operator ==': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(225): error C2601: 'Token::operator !=': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(228): error C2601: 'operator <<': local function definitions are illegal
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp(2571): note: this line contains a '{' which has not yet been matched
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(232): error C2352: 'Token::operator std::string': a call of a non-static member function requires an object
+C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch\include\BetBat/Tokenizer.h(34): note: see declaration of 'Token::operator std::string'
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Tokenizer.cpp(233): error C2059: syntax error: 'return'
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(355): error C3861: 'yeah': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(389): error C3861: 'yeah': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(411): error C3861: 'yeah': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(477): error C3861: 'yeah': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Interpreter.cpp(508): error C3861: 'yeah': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/main.cpp(97): error C3861: 'print_help': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/main.cpp(177): error C3861: 'print_help': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(399): error C3861: 'ParseFunction': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(423): error C3861: 'ParseTypeId': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(446): error C3861: 'ParseExpression': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(543): error C3861: 'ParseFunction': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(545): error C3861: 'ParseStruct': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(547): error C3861: 'ParseEnum': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(549): error C3861: 'ParseNamespace': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(727): error C3861: 'ParseExpression': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(826): error C3861: 'ParseArguments': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(865): error C3861: 'IsAssignOp': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(866): error C3861: 'IsOp': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(874): error C3861: 'IsOp': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(939): error C3861: 'ParseTypeId': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(1083): error C3861: 'ParseExpression': identifier not found
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp(1083): fatal error C1003: error count exceeds 100; stopping compilation
+Compiled in 1.37 seconds

@@ -1,31 +1,65 @@
 #import "OS"
-// #import "Basic"
 
-// fn ok() -> i32, i32 {
-//     return 23, 36
+// arr: i32[];
+
+// fn poly<T>(t: T) {
+//     printi(t);
 // }
-// a, b = ok();
-// printi(a)
-// printi(b)
+// struct Po<T> {
+//     a: T;
+//     fn pr(){
+//         poly<T>(a);
+//     }
+// }
 
-file, size = FileOpen("test.bat",FileFlag.FILE_ONLY_READ);
+// a = Slice<char>{null,1};
+// printc(a.ptr[0]);
 
-// printi(file)
-// printi(size)
 
-buffer = cast<char*>malloc(size)
-FileRead(file, buffer, size)
+fn fun(i: i32){
+    defer prints("fun1 defer\n")
+    defer prints("fun2 defer\n")
 
-i = 0
-while cast<u64>i < size; {
-    printc(*(buffer+i));
-    // printc(buffer[i]);
-    i+=1;
+
+    if(i >1){
+        prints("before return\n");
+        return
+    }
+    prints("end of fun\n")
 }
-printc("\n")
+i = -1;
+while i < 10; {
+    i++;
+    printi(i);
+    printc("\n");
+    defer prints("while defer\n")
 
-FileClose(file)
-free(buffer,size)
+    if(i>5){
+        prints("before break\n")
+        if(i==8){
+            continue;
+        }
+        defer prints("if defer\n");
+        continue;
+    }
+    fun(i);
+}
+prints("END\n")
+
+// file, size = FileOpen("test.bat",FileFlag.FILE_ONLY_READ);
+// buffer = cast<char*> malloc(size)
+// FileRead(file, buffer, size)
+// defer {
+//     FileClose(file)
+//     free(buffer,size)
+// }
+
+// i = 0
+// while i < size; {
+//     printc(buffer[i]);
+//     i+=1;
+// }
+// printc("\n")
 
 
 // = ok();

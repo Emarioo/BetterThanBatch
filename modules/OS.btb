@@ -16,3 +16,17 @@ fn FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64 { @native-code }
 fn FileRead(file: File, buffer: void*, readBytes: u64) -> u64 { @native-code }
 fn FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 { @native-code }
 fn FileClose(file: File) { @native-code }
+
+fn malloc(size: u64) -> void* { @native-code }
+fn realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* { @native-code }
+fn free(ptr: void*, size: u64) { @native-code }
+
+fn printi(num: i64) { @native-code }
+fn printc(chr: char) { @native-code }
+fn prints(slice: Slice<char>) {
+    i = 0;
+    while i < slice.len; {
+        printc(slice.ptr[i]);
+        i++;
+    }
+}

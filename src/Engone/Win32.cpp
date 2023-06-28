@@ -48,91 +48,6 @@ namespace engone {
 #define TO_INTERNAL(X) (void*)((uint64)X+1)
 #define TO_HANDLE(X) (HANDLE)((uint64)X-1)
     
-	DirectoryIterator* DirectoryIteratorCreate(const std::string& path, DirectoryIteratorData* result){		
-		WIN32_FIND_DATAA data;
-		std::string _path;
-		if(path.empty())
-			_path = path+"*";
-		else
-			_path = path+"\\*";
-		HANDLE handle = FindFirstFileA(_path.c_str(),&data);
-		if(handle==INVALID_HANDLE_VALUE){
-			DWORD err = GetLastError();
-			if(err == ERROR_FILE_NOT_FOUND){
-				PL_PRINTF("[WinError %lu] Cannot find file '%s'\n",err,path.c_str());
-			}else if(err==ERROR_PATH_NOT_FOUND){
-				PL_PRINTF("[WinError %lu] Cannot find path '%s'\n",err,path.c_str());
-			}else {
-				PL_PRINTF("[WinError %lu] Error opening '%s'\n",err,path.c_str());
-			}
-			return 0;
-		}
-		while(true){
-			if(strcmp(data.cFileName,".")==0||strcmp(data.cFileName,"..")==0){
-				BOOL success = FindNextFileA(handle,&data);
-				if(!success){
-					DWORD err = GetLastError();
-					if(err == ERROR_NO_MORE_FILES){
-						// PL_PRINTF("[WinError %u] No files '%lu'\n",err,(uint64)iterator);
-					}else {
-						PL_PRINTF("[WinError %lu] Error iterating '%llu'\n",err,(uint64)handle);
-					}
-					BOOL success = FindClose(handle);
-					if(!success){
-						DWORD err = GetLastError();
-						PL_PRINTF("[WinError %lu] Error closing '%llu'\n",err,(uint64)handle);
-					}
-					return 0;
-				}
-				continue;
-			}
-			break;
-		}
-		// PL_PRINTF("F1: %s\n",data.cFileName);
-		// PL_PRINTF("F2: %s\n",data.cAlternateFileName);
-		result->name = data.cFileName;
-		result->fileSize = (uint64)data.nFileSizeLow+(uint64)data.nFileSizeHigh*((uint64)MAXDWORD+1);
-		uint64 time = (uint64)data.ftLastWriteTime.dwLowDateTime+(uint64)data.ftLastWriteTime.dwHighDateTime*((uint64)MAXDWORD+1);
-		result->lastWriteSeconds = time/10000000.f; // 100-nanosecond intervals
-		result->isDirectory = data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY;
-		
-		return (DirectoryIterator*)((uint64)handle+1); // +1 in case 0 is a valid handle. Could not find anything about this
-	}
-	bool DirectoryIteratorNext(DirectoryIterator* iterator, DirectoryIteratorData* result){
-		WIN32_FIND_DATAA data;
-		while(true){
-			BOOL success = FindNextFileA((HANDLE)((uint64)iterator-1),&data);
-			if(!success){
-				DWORD err = GetLastError();
-				if(err == ERROR_NO_MORE_FILES){
-					// take one from directory and do shit.
-					// PL_PRINTF("[WinError %u] No files '%lu'\n",err,(uint64)iterator);
-				}else {
-					PL_PRINTF("[WinError %lu] Error iterating '%llu'\n",err,(uint64)iterator);
-				}
-				return false;
-			}
-			if(strcmp(data.cFileName,".")==0||strcmp(data.cFileName,"..")==0){
-				continue;
-			}
-			break;
-		}
-		
-		result->name = data.cFileName;
-		result->fileSize = (uint64)data.nFileSizeLow+(uint64)data.nFileSizeHigh*((uint64)MAXDWORD+1);
-		uint64 time = (uint64)data.ftLastWriteTime.dwLowDateTime+(uint64)data.ftLastWriteTime.dwHighDateTime*((uint64)MAXDWORD+1);
-		result->lastWriteSeconds = time/10000000.f; // 100-nanosecond intervals
-		result->isDirectory = data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY;
-		return true;
-	}
-	void DirectoryIteratorDestroy(DirectoryIterator* iterator){
-		BOOL success = FindClose((HANDLE)((uint64)iterator-1));
-		if(!success){
-			DWORD err = GetLastError();
-			PL_PRINTF("[WinError %lu] Error closing '%llu'\n",err,(uint64)iterator);
-		}
-	}
-    
 	// Recursive directory iterator info
 	struct RDIInfo{
 		std::string root;
@@ -140,11 +55,11 @@ namespace engone {
 		HANDLE handle;
 		std::vector<std::string> directories;
 	};
-	static std::unordered_map<RecursiveDirectoryIterator*,RDIInfo> s_rdiInfos;
+	static std::unordered_map<RecursiveDirectoryIterator,RDIInfo> s_rdiInfos;
 	static uint64 s_uniqueRDI=0;
 	
-	RecursiveDirectoryIterator* RecursiveDirectoryIteratorCreate(const std::string& path){
-		RecursiveDirectoryIterator* iterator = (RecursiveDirectoryIterator*)(++s_uniqueRDI);
+	RecursiveDirectoryIterator RecursiveDirectoryIteratorCreate(const std::string& path){
+		RecursiveDirectoryIterator iterator = (RecursiveDirectoryIterator)(++s_uniqueRDI);
 		auto& info = s_rdiInfos[iterator] = {};
 		info.root = path;
 		info.handle=INVALID_HANDLE_VALUE;
@@ -157,7 +72,7 @@ namespace engone {
 		// }
 		return iterator;
 	}
-	bool RecursiveDirectoryIteratorNext(RecursiveDirectoryIterator* iterator, DirectoryIteratorData* result){
+	bool RecursiveDirectoryIteratorNext(RecursiveDirectoryIterator iterator, DirectoryIteratorData* result){
 		auto info = s_rdiInfos.find(iterator);
 		if(info==s_rdiInfos.end()){
 			return false;
@@ -229,7 +144,7 @@ namespace engone {
         }
 		return true;
 	}
-	void RecursiveDirectoryIteratorSkip(RecursiveDirectoryIterator* iterator){
+	void RecursiveDirectoryIteratorSkip(RecursiveDirectoryIterator iterator){
 		auto info = s_rdiInfos.find(iterator);
 		if(info==s_rdiInfos.end()){
 			return;
@@ -237,7 +152,7 @@ namespace engone {
 		if(!info->second.directories.empty())
 			info->second.directories.pop_back();
 	}
-	void RecursiveDirectoryIteratorDestroy(RecursiveDirectoryIterator* iterator){
+	void RecursiveDirectoryIteratorDestroy(RecursiveDirectoryIterator iterator){
 		auto info = s_rdiInfos.find(iterator);
 		if(info==s_rdiInfos.end()){
 			return;

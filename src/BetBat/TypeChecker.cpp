@@ -230,6 +230,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
         int misalign = offset % alignedSize;
         if(misalign!=0){
             offset+=alignedSize-misalign;
+            structImpl->members.back().offset += misalign;
         }
     }
     structImpl->size = offset;
@@ -763,7 +764,7 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
     } else if(expr->typeId == AST_DEREF){
         if(outType->getPointerLevel()==0){
             ERR_HEAD(expr->left->tokenRange, "Cannot dereference non-pointer.\n\n";
-            ERR_LINE(expr->left->tokenRange,"not a pointer");
+                ERR_LINE(expr->left->tokenRange,"not a pointer");
             )
         }else{
             outType->setPointerLevel(outType->getPointerLevel()-1);
@@ -777,8 +778,16 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
                 *outType = memdata.typeId;
             }
         }
-    }
-    if(expr->typeId == AST_VAR){
+    } else if(expr->typeId == AST_INDEX) {
+        if(outType->getPointerLevel()==0){
+            std::string strtype = info.ast->typeToString(*outType);
+            ERR_HEAD(expr->left->tokenRange, "Cannot index non-pointer.\n\n";
+                ERR_LINE(expr->left->tokenRange,strtype.c_str());
+            )
+        }else{
+            outType->setPointerLevel(outType->getPointerLevel()-1);
+        }
+    } else if(expr->typeId == AST_VAR){
         auto iden = info.ast->getIdentifier(scope->scopeId, *expr->name);
         if(iden){
             auto var = info.ast->getVariable(iden);
@@ -841,6 +850,9 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
         }
         expr->castType = ti;
         *outType = expr->castType;
+    }
+    if(expr->typeId.getId() < AST_TRUE_PRIMITIVES){
+        *outType = expr->typeId;
     }
     
     if(expr->next) {
@@ -1060,38 +1072,71 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
     MEASURE;
     _TC_LOG(FUNC_ENTER)
 
+    // Hello me in the future!
+    // I have disrespectfully left a complex and troublesome problem to you.
+    // CheckRest needs to be run for each function implementation to find new
+    // polymorphic functions to check and also run CheckRest on. This is highly
+    // recursive and very much a spider net. Good luck.
+
     // TODO: Type check default values in structs and functions
-    ASTFunction* nextFunction=scope->functions;
-    while(nextFunction){
-        ASTFunction* function = nextFunction;
-        nextFunction = nextFunction->next;
-
-        if(function->body->nativeCode)
-            continue;
-
-        // TODO: Add arguments as variables
-        CheckRest(info,function->body);
-        
-        // TODO: Remove variables
-    }
+    bool nonStruct = true;
     ASTStruct* nextStruct = scope->structs;
     while(nextStruct) {
         ASTStruct * now = nextStruct;
         nextStruct = nextStruct->next;
 
         // TODO: setup variables
+        ASTFunction* nextFunc = nullptr;
+        if(nonStruct){
+            nextFunc = scope->functions;
+            nonStruct = false;
+        }else{
+            nextFunc = now->functions;
+        }
 
-        ASTFunction* nextFunc = now->functions;
         while(nextFunc) {
             ASTFunction* func = nextFunc;
             nextFunc = nextFunc->next;
+            if(func->body->nativeCode)
+                continue;
 
-            // TODO: Add arguments as variables
+            for(int i=0;i<(int)func->polyImpls.size() || func->polyImpls.size()==0;i++){
+                FuncImpl* funcImpl = nullptr;
+                if(func->polyImpls.size()==0)
+                    funcImpl = &func->baseImpl;
+                else
+                    funcImpl = func->polyImpls[i];
+                
+                struct Var {
+                    ScopeId scopeId;
+                    std::string name;
+                };
+                // TODO: Add arguments as variables
+                std::vector<Var> vars;
+                _TC_LOG(log::out << "arg ";)
+                for (int i=0;i<(int)func->arguments.size();i++) {
+                    auto& arg = func->arguments[i];
+                    auto& argImpl = funcImpl->arguments[i];
+                    _TC_LOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
+                    auto varinfo = info.ast->addVariable(scope->scopeId, std::string(arg.name));
+                    if(varinfo){
+                        varinfo->typeId = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
+                        // the same type as the generator.
+                        vars.push_back({scope->scopeId,std::string(arg.name)});
+                    }
+                }
+                _TC_LOG(log::out << "\n";)
 
-            CheckRest(info, func->body);
-
-            // TODO: Remove variables
-
+                CheckRest(info, func->body);
+                
+                for(auto& e : vars){
+                    info.ast->removeIdentifier(e.scopeId, e.name);
+                }
+                // TODO: Remove variables
+                
+                if(func->polyImpls.size()==0)
+                    break;
+            }
         }
     }
     struct A {

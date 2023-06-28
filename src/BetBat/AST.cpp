@@ -28,6 +28,10 @@ const char *OpToStr(OperationType optype) {
         CASE(BLSHIFT, << (bit shift))
         CASE(BRSHIFT, >> (bit shift))
 
+        CASE(INDEX, [])
+        CASE(INCREMENT, ++)
+        CASE(DECREMENT, --)
+
         CASE(CAST, cast)
         CASE(MEMBER, member)
         CASE(INITIALIZER, initializer)
@@ -761,7 +765,6 @@ std::string AST::typeToString(TypeId typeId){
         }
         out +=">";
     }
-    // log::out << log::YELLOW << __func__ << ": Warning! polymorphism is ignored!\n";
     for(int i=0;i<(int)typeId.getPointerLevel();i++){
         out+="*";
     }
@@ -787,7 +790,7 @@ std::string* AST::createString(){
     return ptr;
 }
 void AST::destroy(ASTScope *scope) {
-     if (scope->next)
+    if (scope->next)
         destroy(scope->next);
     if (scope->name) {
         scope->name->~basic_string<char>();
@@ -846,25 +849,19 @@ void AST::destroy(ASTEnum *astEnum) {
 void AST::destroy(ASTStatement *statement) {
     if (statement->next)
         destroy(statement->next);
-    // for(var)
-    // if (statement->name){
-    //     statement->name->~basic_string<char>();
-    //     engone::Free(statement->name, sizeof(std::string));
-    //     statement->name = nullptr;
-    // }
-    if (statement->alias){
-        statement->alias->~basic_string<char>();
-        engone::Free(statement->alias, sizeof(std::string));
-        statement->alias = nullptr;
+    if(!statement->sharedContents){
+        if (statement->alias){
+            statement->alias->~basic_string<char>();
+            engone::Free(statement->alias, sizeof(std::string));
+            statement->alias = nullptr;
+        }
+        if (statement->rvalue)
+            destroy(statement->rvalue);
+        if (statement->body)
+            destroy(statement->body);
+        if (statement->elseBody)
+            destroy(statement->elseBody);
     }
-    // if (statement->lvalue)
-    //     destroy(statement->lvalue);
-    if (statement->rvalue)
-        destroy(statement->rvalue);
-    if (statement->body)
-        destroy(statement->body);
-    if (statement->elseBody)
-        destroy(statement->elseBody);
     statement->~ASTStatement();
     engone::Free(statement, sizeof(ASTStatement));
 }
@@ -1178,78 +1175,6 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
     }
     return ti->_size > 8 ? 8 : ti->_size;
 }
-// TypeId AST::getTypeId(ScopeId scopeId, Token typeString, bool* success){
-//     Token theNamespace = {};
-//     u32 plevel = 0;
-//     Token typeName = TrimNamespace(typeString,&theNamespace);
-//     std::vector<Token> polyTypes;
-//     typeName = TrimPointer(typeName,&plevel);
-//     typeName = TrimPolyTypes(typeName, &polyTypes);
-//     if(theNamespace.str){
-//         ScopeId nextScopeId = scopeId;
-//         bool quit = false;
-//         // namespaced
-//         while(!quit){
-//             ScopeInfo* scope = getScope(nextScopeId);
-//             if(nextScopeId==0)
-//                 quit=true;
-//             nextScopeId = scope->parent;
-//             if(!scope)
-//                 break;
-                
-//             ScopeInfo* nscope = getNamespace(scope->id, theNamespace);
-//             if(nscope){
-//                 auto pair = nscope->nameTypeMap.find(typeName);
-//                 if(pair != nscope->nameTypeMap.end()){
-//                     TypeId out = pair->second->id;
-//                     out.setPointerLevel(plevel);
-//                     if(success) *success = true;
-//                     return out;
-//                 } else {
-//                     if(success) *success = false;
-//                     return {};
-//                 }   
-//             }
-//         }
-//         if(success) *success = false;
-//         return {};
-//     }
-//     auto scope = getScope(scopeId);
-//     if(!scope) { 
-//         if(success) *success = false;
-//         return {};
-//     }
-    
-//     auto basePair = scope->nameTypeMap.find(typeName);
-//     if(basePair != scope->nameTypeMap.end()){
-//         TypeId out = basePair->second->id;
-//         out.setPointerLevel(plevel);
-//         if(success) *success = true;
-//         return out;
-//     }
-
-//     ScopeId nextParent = scope->parent;
-//     if(scopeId!=globalScopeId){ // global scope does not have parent
-//         while(true){
-//             auto parentScope = getScope(nextParent);
-//             if(!parentScope)
-//                 break;
-
-//             auto pair = parentScope->nameTypeMap.find(typeName);
-//             if(pair!=parentScope->nameTypeMap.end()){
-//                 TypeId out = pair->second->id;
-//                 out.setPointerLevel(plevel);
-//                 if(success) *success = true;
-//                 return out;
-//             }
-//             if(nextParent==globalScopeId)
-//                 break;
-//             nextParent = parentScope->parent;
-//         }
-//     }
-//     if(success) *success = false;
-//     return {};
-// }
 
 void ASTStruct::add(ASTFunction* func){
     // NOTE: Is this code necessary? Did something break.
@@ -1372,41 +1297,43 @@ void ASTScope::print(AST *ast, int depth) {
 }
 void ASTFunction::print(AST *ast, int depth) {
     using namespace engone;
-    PrintSpace(depth);
-    log::out << "Func " << name;
-    if(polyArgs.size()!=0){
-        log::out << "<";
-        for(int i=0;i<(int)polyArgs.size();i++){
-            if(i!=0)
-                log::out << ",";
-            log::out << polyArgs[i].name;
+    if(!body || !body->nativeCode) {
+        PrintSpace(depth);
+        log::out << "Func " << name;
+        if(polyArgs.size()!=0){
+            log::out << "<";
+            for(int i=0;i<(int)polyArgs.size();i++){
+                if(i!=0)
+                    log::out << ",";
+                log::out << polyArgs[i].name;
+            }
+            log::out << ">";
         }
-        log::out << ">";
-    }
-    log::out << "(";
-    for (int i = 0; i < (int)arguments.size(); i++) {
-        auto &arg = arguments[i];
-        auto &argImpl = baseImpl.arguments[i];
-        if (i == 0) {
-            log::out << ", ";
+        log::out << "(";
+        for (int i = 0; i < (int)arguments.size(); i++) {
+            auto &arg = arguments[i];
+            auto &argImpl = baseImpl.arguments[i];
+            if (i == 0) {
+                log::out << ", ";
+            }
+            log::out << arg.name << ": ";
+            log::out << ast->typeToString(argImpl.typeId);
         }
-        log::out << arg.name << ": ";
-        log::out << ast->typeToString(argImpl.typeId);
-    }
-    log::out << ")";
-    if (!baseImpl.returnTypes.empty())
-        log::out << "->";
-    for (int i=0;i<(int)baseImpl.returnTypes.size();i++){
-        auto& ret = baseImpl.returnTypes[i];
-        if(i==0)
-            log::out<<", ";
-        // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
-        // log::out << dtname << ", ";
-        log::out << ast->typeToString(ret.typeId);
-    }
-    log::out << "\n";
-    if (body) {
-        body->print(ast, depth + 1);
+        log::out << ")";
+        if (!baseImpl.returnTypes.empty())
+            log::out << "->";
+        for (int i=0;i<(int)baseImpl.returnTypes.size();i++){
+            auto& ret = baseImpl.returnTypes[i];
+            if(i==0)
+                log::out<<", ";
+            // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
+            // log::out << dtname << ", ";
+            log::out << ast->typeToString(ret.typeId);
+        }
+        log::out << "\n";
+        if (body) {
+            body->print(ast, depth + 1);
+        }
     }
     if (next)
         next->print(ast, depth);
@@ -1561,6 +1488,20 @@ void ASTExpression::print(AST *ast, int depth) {
                 left->print(ast, depth + 1);
         } else if (typeId == AST_FROM_NAMESPACE) {
             log::out << *name;
+            log::out << "\n";
+            if(left)
+                left->print(ast, depth + 1);
+        } else if (typeId == AST_INDEX) {
+            log::out << "\n";
+            if(left)
+                left->print(ast, depth + 1);
+            if(right)
+                right->print(ast, depth + 1);
+        } else if (typeId == AST_INCREMENT) {
+            log::out << "\n";
+            if(left)
+                left->print(ast, depth + 1);
+        } else if (typeId == AST_DECREMENT) {
             log::out << "\n";
             if(left)
                 left->print(ast, depth + 1);

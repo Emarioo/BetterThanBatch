@@ -540,14 +540,17 @@ void Interpreter::execute(Bytecode* bytecode){
     
             if(addr<0){
                 int argoffset = 16;
-                if(addr==BC_EXT_MALLOC){
+                switch (addr) {
+                case BC_EXT_MALLOC:{
                     u64 size = *(u64*)(fp+argoffset);
                     void* ptr = engone::Allocate(size);
                     if(ptr)
                         userAllocatedBytes += size;
                     _ILOG(log::out << "alloc "<<size<<" -> "<<ptr<<"\n";)
                     *(u64*)(fp-8) = (u64)ptr;
-                } else if (addr==BC_EXT_REALLOC){
+                    break;
+                }
+                case BC_EXT_REALLOC:{
                     void* ptr = *(void**)(fp+argoffset+16);
                     u64 oldsize = *(u64*)(fp +argoffset + 8);
                     u64 size = *(u64*)(fp+argoffset);
@@ -556,26 +559,37 @@ void Interpreter::execute(Bytecode* bytecode){
                         userAllocatedBytes += size - oldsize;
                     _ILOG(log::out << "realloc "<<size<<" ptr: "<<ptr<<"\n";)
                     *(u64*)(fp-8) = (u64)ptr;
-                } else if (addr==BC_EXT_FREE){
+                    break;
+                }
+                case BC_EXT_FREE:{
                     void* ptr = *(void**)(fp+argoffset + 8);
                     u64 size = *(u64*)(fp+argoffset);
                     engone::Free(ptr,size);
                     userAllocatedBytes -= size;
                     _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
-                } else if (addr==BC_EXT_PRINTI){
+                    break;
+                }
+                case BC_EXT_PRINTI:{
                     i64 num = *(i64*)(fp+argoffset);
+                    #ifdef ILOG
                     log::out << log::LIME<<"print: "<<num<<"\n";
-                    // _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
-                }else if (addr==BC_EXT_PRINTC){
+                    #else                    
+                    log::out << num;
+                    #endif
+                    break;
+                }
+                case BC_EXT_PRINTC: {
                     char chr = *(char*)(fp+argoffset + 7); // +7 comes from the alignment after char
                     #ifdef ILOG
                     log::out << log::LIME << "print: "<<chr<<"\n";
                     #else
                     log::out << chr;
                     #endif
-                } else if (addr==BC_EXT_FILEOPEN){
+                    break;
+                }
+                case BC_EXT_FILEOPEN:{
                     // The order may seem strange but it's actually correct.
-                    // It is just complicated.
+                    // It's just complicated.
                     // slice
                     char* ptr = *(char**)(fp+argoffset + 8);
                     u32 len = *(u64*)(fp+argoffset+20);
@@ -584,14 +598,15 @@ void Interpreter::execute(Bytecode* bytecode){
 
                     u64 fsize = 0;
                     APIFile file = FileOpen(std::string(ptr,len), &fsize, flags);
-                    
+                    #ifdef VLOG
                     log::out <<log::GRAY<< "FileOpen: "<<std::string(ptr,len) << ", "<<flags<<"\n";
-                    // u64 fsize = 23;
-                    // void* file = (APIFile)99;
+                    #endif
 
                     *(u64*)(fp-8) = (u64)fsize;
                     *(u64*)(fp-16) = (u64)file;
-                } else if (addr==BC_EXT_FILEREAD){
+                    break;
+                }
+                case BC_EXT_FILEREAD:{
                     // The order may seem strange but it's actually correct.
                     // It is just complicated.
                     // slice
@@ -600,14 +615,14 @@ void Interpreter::execute(Bytecode* bytecode){
                     u64 readBytes = *(u64*)(fp+argoffset);
 
                     u64 bytes = FileRead((APIFile)file, buffer, readBytes);
+                    #ifdef VLOG
                     log::out <<log::GRAY<< "FileRead: "<<file << ", "<<buffer<<", "<<readBytes<<"\n";
-                    
-                    // u64 fsize = 23;
-                    // void* file = (APIFile)99;
-
+                    #endif
                     *(u64*)(fp-8) = (u64)bytes;
                     // *(u64*)(fp-16) = (u64)file;
-                }  else if (addr==BC_EXT_FILEWRITE){
+                    break;
+                }
+                case BC_EXT_FILEWRITE:{
                     // The order may seem strange but it's actually correct.
                     // It is just complicated.
                     // slice
@@ -616,19 +631,24 @@ void Interpreter::execute(Bytecode* bytecode){
                     u64 writeBytes = *(u64*)(fp+argoffset);
 
                     u64 bytes = FileWrite((APIFile)file, buffer, writeBytes);
+                    #ifdef VLOG
                     log::out << log::GRAY<<"FileWrite: "<<file << ", "<<buffer<<", "<<writeBytes<<"\n";
-                    
-                    // u64 fsize = 23;
-                    // void* file = (APIFile)99;
-
+                    #endif
                     *(u64*)(fp-8) = (u64)bytes;
                     // *(u64*)(fp-16) = (u64)file;
-                } else if (addr==BC_EXT_FILECLOSE){
+                    break;
+                }
+                case BC_EXT_FILECLOSE:{
                     u64 file = *(u64*)(fp+argoffset);
                     FileClose((APIFile)file);
+                    #ifdef VLOG
                     log::out << log::GRAY<<"FileClose: "<<file<<"\n";
-                }  else {
+                    #endif
+                    break;
+                }
+                default:{
                     _ILOG(log::out << log::RED << addr<<" is not a special function\n";)
+                }
                 }
                 // bc ret here
                 goto TINY_GOTO;
