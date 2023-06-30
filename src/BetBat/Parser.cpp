@@ -267,6 +267,11 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
                 ||Equal(tok,";") // cast<i32>
             ){
                 break;
+            } else if(Equal(tok,"[")) {
+                Token& token = info.get(endTok+1);
+                if(IsInteger(token))
+                    break;
+
             }
             if(IsName(tok)){
                 if(wasName) {
@@ -305,8 +310,24 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     }
     info.next(); // struct
     attempt=false;
-    
+
+    bool hideAnnotation = false;
+
     Token name = info.get(info.at()+1);
+    while (IsAnnotation(name)){
+        info.next();
+        if(Equal(name,"@hide")){
+            hideAnnotation=true;
+        // } else if(Equal(name,"@export")) {
+        } else {
+            WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                WARN_LINE(info.at(),"unknown");
+            )
+        }
+        name = info.get(info.at()+1);
+        continue;
+    }
+    
     if(!IsName(name)){
         ERR_HEAD2(name)<<"expected a name, "<<name<<" isn't\n";
         ERRLINE
@@ -319,6 +340,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     astStruct->tokenRange.startIndex = startIndex;
     astStruct->tokenRange.tokenStream = info.tokens;
     astStruct->polyName = name;
+    astStruct->hidden = hideAnnotation;
     Token token = info.get(info.at()+1);
     if(Equal(token,"<")){
         info.next();
@@ -492,7 +514,22 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     }
     attempt = false;
     info.next();
+    bool hideAnnotation = false;
+
     Token name = info.get(info.at()+1);
+    while (IsAnnotation(name)){
+        info.next();
+        if(Equal(name,"@hide")){
+            hideAnnotation=true;
+        } else {
+            WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                WARN_LINE(info.at(),"unknown");
+            )
+        }
+        name = info.get(info.at()+1);
+        continue;
+    }
+
     if(!IsName(name)){
         ERR_HEAD2(name)<<"expected a name, "<<name<<" isn't\n";
         ERRLINE
@@ -513,6 +550,7 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     astNamespace->tokenRange.firstToken = token;
     astNamespace->tokenRange.startIndex = startIndex;
     astNamespace->tokenRange.tokenStream = info.tokens;
+    astNamespace->hidden = hideAnnotation;
 
     ScopeInfo* newScope = info.ast->createScope();
     ScopeId newScopeId = newScope->id;
@@ -597,7 +635,23 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     }
     attempt=false;
     info.next(); // enum
+
+    bool hideAnnotation = false;
     Token name = info.get(info.at()+1);
+
+    while (IsAnnotation(name)){
+        info.next();
+        if(Equal(name,"@hide")){
+            hideAnnotation=true;
+        } else {
+            WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                WARN_LINE(info.at(),"unknown");
+            )
+        }
+        name = info.get(info.at()+1);
+        continue;
+    }
+
     if(!IsName(name)){
         ERR_HEAD2(name)<<"expected a name, "<<name<<" isn't\n";
         ERRLINE
@@ -617,6 +671,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     astEnum->tokenRange.firstToken = enumToken;
     astEnum->tokenRange.startIndex = startIndex;
     astEnum->tokenRange.tokenStream = info.tokens;
+    astEnum->hidden = hideAnnotation;
     int error = PARSE_SUCCESS;
     while (true){
         Token name = info.get(info.at()+1);
@@ -1116,7 +1171,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 info.next();
                 
                 ASTExpression* tmp = 0;
-                if(token.length == 1){
+                // if(token.length == 1){
+                if(0==(token.flags&TOKEN_DOUBLE_QUOTED)){
                     tmp = info.ast->createExpression(TypeId(AST_CHAR));
                     tmp->charValue = *token.str;
                 }else {
@@ -1629,6 +1685,57 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement->tokenRange.endIndex = info.at()+1;
         statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;
+    } else if(Equal(firstToken,"for")){
+        info.next();
+        
+        Token token = info.get(info.at()+1);
+        bool reverseAnnotation = false;
+        while (IsAnnotation(token)){
+            info.next();
+            if(Equal(token,"@reverse")){
+                reverseAnnotation=true;
+            } else {
+                WARN_HEAD(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for functions.\n\n";
+                    WARN_LINE(info.at(),"unknown");
+                )
+            }
+            token = info.get(info.at()+1);
+            continue;
+        }
+
+        // NOTE: assuming array iteration
+        Token varname = info.get(info.at()+1);
+        Token colon = info.get(info.at()+2);
+        if(Equal(colon,":") && IsName(varname)){
+            info.next();
+            info.next();
+        } else {
+            std::string* str = info.ast->createString();
+            *str = "it";
+            varname = *str;
+        }
+        
+        ASTExpression* expr=0;
+        int result = ParseExpression(info,expr,false);
+        if(result!=PARSE_SUCCESS){
+            // TODO: should more stuff be done here?
+            return PARSE_ERROR;
+        }
+        ASTScope* body=0;
+        result = ParseBody(info,body);
+        if(result!=PARSE_SUCCESS){
+            return PARSE_ERROR;
+        }
+        statement = info.ast->createStatement(ASTStatement::FOR);
+        statement->varnames.push_back({varname});
+        statement->reverse = reverseAnnotation;
+        statement->rvalue = expr;
+        statement->body = body;
+        statement->tokenRange.firstToken = firstToken;
+        statement->tokenRange.startIndex = startIndex;
+        statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.tokenStream = info.tokens;
+        return PARSE_SUCCESS;
     } else if(Equal(firstToken,"return")){
         info.next();
         
@@ -1675,55 +1782,19 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     } else if(Equal(firstToken,"using")){
         info.next();
 
-        // Token token = info.get(info.at()+1);
-
         // variable name
         // namespacing
         // type with polymorphism. not pointers
         // TODO: namespace environemnt, not just using X as Y
 
         Token originToken={};
-        // Token token = info.get(info.at()+1);
-        // Token maybeNs = info.get(info.at()+2);
-        // if(IsName(token) && Equal(maybeNs,"::")){
-        //     info.next();
-        //     info.next();
-        //     info.next();
-        //     original.length = token.length + maybeNs.length;
-        //     while(!info.end()){
-        //         token = info.get(info.at()+1);
-        //         if(!IsName(token)) {
-        //             // TODO: error
-        //             ERR_HEAD2(token) << "Expected a valid name ("<<token<<" is not)\n";
-        //             break;
-        //         }
-        //         info.next();
-        //         original.length += token.length;
-        //         token = info.get(info.at()+1);
-        //         if(!Equal(token, "::")) {
-        //             break;
-        //         }
-        //         info.next();
-        //         original.length += token.length;
-        //     }
-
-        // } else {
-        // }
         int result = ParseTypeId(info, originToken);
         Token aliasToken = {};
         Token token = info.get(info.at()+1);
         if(Equal(token,"as")) {
             info.next();
-
             
             int result = ParseTypeId(info, aliasToken);
-            // aliasToken = info.get(info.at()+1);
-            // if(!IsName(aliasToken)){
-            //     ERR_HEAD2(aliasToken) << "expected a name, "<<aliasToken <<" isn't one\n";
-            //     ERRLINE;
-            //     return PARSE_ERROR;
-            // }
-            // info.next();
         }
         
         statement = info.ast->createStatement(ASTStatement::USING);
@@ -1796,20 +1867,25 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     }
     info.next();
     attempt = false;
-    
+
+    bool hideAnnotation = false;
+
     Token name = info.next();
-    while(!IsName(name)){
-        if(IsAnnotation(name)){
-            // if(Equal(name,"@export"))
-            
+    while (IsAnnotation(name)){
+        if(Equal(name,"@hide")){
+                hideAnnotation=true;
+        // } else if(Equal(name,"@export")) {
+        } else {
             WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
                 WARN_LINE(info.at(),"unknown");
             )
-            name = info.next();
-            continue;
         }
-        ERR_HEAD2(name) << "expected a valid name, "<<name<<" isn't\n";
-        
+        name = info.next();
+        continue;
+    }
+    
+    if(!IsName(name)){
+        ERR_HEAD(name,"expected a valid name, "<<name<<" is not.\n";)
         return PARSE_ERROR;
     }
     
@@ -1818,6 +1894,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     function->tokenRange.startIndex = startIndex;
     function->tokenRange.tokenStream = info.tokens;
     function->baseImpl.name = name;
+    function->hidden = hideAnnotation;
 
     ScopeInfo* funcScope = info.ast->createScope();
     function->scopeId = funcScope->id;
@@ -2047,6 +2124,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     }
     attempt = true;
 
+    int startIndex = info.at()+1;
     std::vector<ASTStatement::VarName> varnames;
     bool assigned = false;
     TypeId lastType = {};
@@ -2069,12 +2147,37 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
             
             Token typeToken{};
             int result = ParseTypeId(info,typeToken);
+
+            int arrayLength = -1;
+            Token token1 = info.get(info.at()+1);
+            Token token2 = info.get(info.at()+2);
+            Token token3 = info.get(info.at()+3);
+            if(Equal(token1,"[") && Equal(token3,"]") && IsInteger(token2)) {
+                info.next();
+                info.next();
+                info.next();
+
+                arrayLength = ConvertInteger(token2);
+                if(arrayLength<0){
+                    ERR_HEAD(token2, "Array cannot have negative size.\n\n";
+                        ERR_LINE(info.at()-2,"< 0");
+                    )
+                    arrayLength = 0;
+                }
+                std::string* str = info.ast->createString();
+                *str = "Slice<";
+                *str += typeToken;
+                *str += ">";
+                typeToken = *str;
+            }
+            
             
             TypeId strId = info.ast->getTypeString(typeToken);
 
             int index = varnames.size()-1;
             while(index>=0 && !varnames[index].assignType.isValid()){
                 varnames[index].assignType = strId;
+                varnames[index].arrayLength = arrayLength;
                 index--;
             }
         }
@@ -2086,7 +2189,6 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         break;
     }
 
-    int startIndex = info.at()+1;
     Token token = info.get(info.at()+1);
     if(Equal(token,";")){
         info.next(); // ;

@@ -17,7 +17,7 @@
 // #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_LOCATION_RANGE(R)
 #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Type error","E0000")
 #define ERR_HEAD(R,M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Type error","E0000") << M
-#define WARN_HEAD(R) info.compileInfo->warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000")
+#define WARN_HEAD(R,M) info.compileInfo->warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
 #define ERR_END MSG_END
 
 #define ERR_LINE(R, M) PrintCode(&R, M)
@@ -749,19 +749,25 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
     Assert(expr)
     _TC_LOG(FUNC_ENTER)
     
-    if(expr->left && expr->typeId != AST_FNCALL) {
-        CheckExpression(info,scope, expr->left, outType);
-    }
-    if(expr->right) {
-        TypeId temp={};
-        CheckExpression(info,scope, expr->right, expr->left?&temp: outType);
-        // TODO: PRIORITISING LEFT FOR OUTPUT TYPE WONT ALWAYS WORK
-        //  Some operations like "2 + ptr" will use i32 as out type when
-        //  it should be of pointer type
-    }
+    // if(expr->left && expr->typeId != AST_FNCALL) {
+    //     CheckExpression(info,scope, expr->left, outType);
+    // }
+    // if(expr->right) {
+    //     TypeId temp={};
+    //     CheckExpression(info,scope, expr->right, expr->left?&temp: outType);
+    //     // TODO: PRIORITISING LEFT FOR OUTPUT TYPE WONT ALWAYS WORK
+    //     //  Some operations like "2 + ptr" will use i32 as out type when
+    //     //  it should be of pointer type
+    // }
     if(expr->typeId == AST_REFER){
+        if(expr->left) {
+            CheckExpression(info,scope, expr->left, outType);
+        }
         outType->setPointerLevel(outType->getPointerLevel()+1);
     } else if(expr->typeId == AST_DEREF){
+        if(expr->left) {
+            CheckExpression(info,scope, expr->left, outType);
+        }
         if(outType->getPointerLevel()==0){
             ERR_HEAD(expr->left->tokenRange, "Cannot dereference non-pointer.\n\n";
                 ERR_LINE(expr->left->tokenRange,"not a pointer");
@@ -770,6 +776,9 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
             outType->setPointerLevel(outType->getPointerLevel()-1);
         }
     } else if(expr->typeId == AST_MEMBER){
+        if(expr->left) {
+            CheckExpression(info,scope, expr->left, outType);
+        }
         // outType holds the type of expr->left
         TypeInfo* ti = info.ast->getTypeInfo(outType->baseType());
         if(ti && ti->astStruct){
@@ -779,6 +788,9 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
             }
         }
     } else if(expr->typeId == AST_INDEX) {
+        if(expr->left) {
+            CheckExpression(info,scope, expr->left, outType);
+        }
         if(outType->getPointerLevel()==0){
             std::string strtype = info.ast->typeToString(*outType);
             ERR_HEAD(expr->left->tokenRange, "Cannot index non-pointer.\n\n";
@@ -795,8 +807,7 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
                 *outType = var->typeId;
             }
         }
-    }
-    if(expr->typeId == AST_STRING){
+    } else if(expr->typeId == AST_STRING){
         if(!expr->name){
             ERR_HEAD2(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
             ERRTOKENS(expr->tokenRange)
@@ -828,31 +839,42 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
         *outType = expr->typeId;
     } else if(expr->typeId == AST_FNCALL){
         CheckFncall(info,scope,expr, outType);
-    }
-    if(expr->typeId.isString()){
-        bool printedError = false;
-        auto ti = CheckType(info, scope->scopeId, expr->typeId, expr->tokenRange, &printedError);
-        if (ti.isValid()) {
-        } else if(!printedError){
-            ERR_HEAD2(expr->tokenRange) << "type "<< info.ast->getTokenFromTypeString(expr->typeId) << " does not exist\n";
-            ERR_END
+    } else {
+        if(expr->left) {
+            CheckExpression(info,scope, expr->left, outType);
         }
-        expr->typeId = ti;
-        *outType = expr->typeId;
-    }
-    if(expr->castType.isString()){
-        bool printedError = false;
-        auto ti = CheckType(info, scope->scopeId, expr->castType, expr->tokenRange, &printedError);
-        if (ti.isValid()) {
-        } else if(!printedError){
-            ERR_HEAD2(expr->tokenRange) << "type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist\n";
-            ERR_END
+        if(expr->right) {
+            TypeId temp={};
+            CheckExpression(info,scope, expr->right, expr->left?&temp: outType);
+            // TODO: PRIORITISING LEFT FOR OUTPUT TYPE WONT ALWAYS WORK
+            //  Some operations like "2 + ptr" will use i32 as out type when
+            //  it should be of pointer type
         }
-        expr->castType = ti;
-        *outType = expr->castType;
-    }
-    if(expr->typeId.getId() < AST_TRUE_PRIMITIVES){
-        *outType = expr->typeId;
+        if(expr->typeId.isString()){
+            bool printedError = false;
+            auto ti = CheckType(info, scope->scopeId, expr->typeId, expr->tokenRange, &printedError);
+            if (ti.isValid()) {
+            } else if(!printedError){
+                ERR_HEAD2(expr->tokenRange) << "type "<< info.ast->getTokenFromTypeString(expr->typeId) << " does not exist\n";
+                ERR_END
+            }
+            expr->typeId = ti;
+            *outType = expr->typeId;
+        }
+        if(expr->castType.isString()){
+            bool printedError = false;
+            auto ti = CheckType(info, scope->scopeId, expr->castType, expr->tokenRange, &printedError);
+            if (ti.isValid()) {
+            } else if(!printedError){
+                ERR_HEAD2(expr->tokenRange) << "type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist\n";
+                ERR_END
+            }
+            expr->castType = ti;
+            *outType = expr->castType;
+        }
+        if(expr->typeId.getId() < AST_TRUE_PRIMITIVES){
+            *outType = expr->typeId;
+        }
     }
     
     if(expr->next) {
@@ -1175,7 +1197,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             }
         }
 
-        if(now->body){
+        if(now->body && now->type != ASTStatement::FOR){
             int result = CheckRest(info, now->body);
         }
         if(now->elseBody){
@@ -1184,14 +1206,64 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         if(now->type == ASTStatement::ASSIGN){
             _TC_LOG(log::out << "assign ";)
             for (auto& var : now->varnames) {
+                if(var.assignType.isString()){
+                    bool printedError=false;
+                    CheckType(info,scope->scopeId, var.assignType, now->tokenRange, &printedError);
+                }else if(!var.assignType.isValid()) {
+                    var.assignType = typeId;
+                }
                 _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
                 auto varinfo = info.ast->addVariable(scope->scopeId, std::string(var.name));
                 if(varinfo){
-                    varinfo->typeId = typeId; // typeId comes from CheckExpression which may or may not evaluate
+                    if(var.assignType.isValid()){
+                        varinfo->typeId = var.assignType; // typeId comes from CheckExpression which may or may not evaluate
+                    }
                     // the same type as the generator.
                     vars.push_back({scope->scopeId,std::string(var.name)});
                 }
             }
+            _TC_LOG(log::out << "\n";)
+        } else if(now->type == ASTStatement::FOR){
+            Assert(now->varnames.size()==1);
+            auto& varname = now->varnames[0];
+
+            ScopeId varScope = now->body->scopeId;
+
+            // TODO: for loop variables
+            auto sliceinfo = info.ast->getTypeInfo(typeId);
+            if(!sliceinfo || !sliceinfo->astStruct || sliceinfo->astStruct->name != "Slice"){
+                std::string strtype = info.ast->typeToString(typeId);
+                ERR_HEAD(now->rvalue->tokenRange, "The expression in for loop must be a Slice.\n\n";
+                    ERR_LINE(now->rvalue->tokenRange,strtype.c_str());
+                )
+                continue;
+            }
+            
+            auto varinfo_index = info.ast->addVariable(varScope, "nr");
+            if(varinfo_index) {
+                varinfo_index->typeId = AST_INT32;
+            } else {
+                WARN_HEAD(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
+            }
+
+            // _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
+            auto varinfo_item = info.ast->addVariable(varScope, std::string(varname.name));
+            if(varinfo_item){
+                auto memdata = sliceinfo->getMember("ptr");
+                auto itemtype = memdata.typeId;
+                itemtype.setPointerLevel(itemtype.getPointerLevel()-1);
+                varinfo_item->typeId = itemtype;
+                varname.assignType = itemtype;
+            } else {
+                WARN_HEAD(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
+            }
+
+            if(now->body){
+                int result = CheckRest(info, now->body);
+            }
+            info.ast->removeIdentifier(varScope, varname.name);
+            info.ast->removeIdentifier(varScope, "nr");
+
             _TC_LOG(log::out << "\n";)
         } else 
         // Doing using after body so that continue can be used inside it without

@@ -4,7 +4,7 @@
 // first and then using. Using won't be applied to functions.
 #define File u64
 
-enum FileFlag {
+enum @hide FileFlag {
     FILE_NO_FLAG=0,
     FILE_ONLY_READ=1,
     FILE_CAN_CREATE=2,
@@ -23,7 +23,7 @@ fn free(ptr: void*, size: u64) { @native-code }
 
 fn printi(num: i64) { @native-code }
 fn printc(chr: char) { @native-code }
-fn prints(slice: Slice<char>) {
+fn @hide prints(slice: Slice<char>) {
     i = 0;
     while i < slice.len; {
         printc(slice.ptr[i]);

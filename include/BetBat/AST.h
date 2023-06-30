@@ -37,7 +37,7 @@ enum PrimitiveType : u32 {
     AST_PRIMITIVE_COUNT,
 };
 enum OperationType : u32 {
-    AST_ADD=AST_SIZEOF,  
+    AST_ADD=AST_PRIMITIVE_COUNT,  
     AST_SUB,
     AST_MUL,
     AST_DIV,
@@ -75,6 +75,14 @@ enum OperationType : u32 {
     AST_DEREF, // dereference
 
     AST_OPERATION_COUNT,
+};
+struct ASTNode {
+    TokenRange tokenRange{};
+    // TODO: Some of these do not need to exist in
+    // every type of node
+    bool nativeCode=false;
+    bool hidden=false;
+    bool reverse=false;
 };
 struct TypeId {
     TypeId() = default;
@@ -258,7 +266,7 @@ struct ScopeInfo {
 // };
 struct AST;
 const char* OpToStr(OperationType op);
-struct ASTExpression {
+struct ASTExpression : ASTNode {
     ASTExpression() {
         // printf("hum\n");
         // engone::log::out << "default init\n";
@@ -266,7 +274,6 @@ struct ASTExpression {
     }
     // ASTExpression() { memset(this,0,sizeof(*this)); }
     // ASTExpression() : left(0), right(0), castType(0) { }
-    TokenRange tokenRange{};
     // Token token{};
     bool isValue=false;
     TypeId typeId = {};
@@ -289,12 +296,13 @@ struct ASTExpression {
 };
 struct ASTScope;
 struct ASTFunction;
-struct ASTStatement {
+struct ASTStatement : ASTNode {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
     enum Type {
         ASSIGN, // a = 9
         IF,
         WHILE,
+        FOR,
         RETURN,
         BREAK,
         CONTINUE,
@@ -303,12 +311,12 @@ struct ASTStatement {
         BODY,
         DEFER,
     };
-    TokenRange tokenRange{};
     int type = 0;
     // int opType = 0;
     struct VarName {
         Token name{};
         TypeId assignType{};
+        int arrayLength=-1;
     };
     std::vector<VarName> varnames;
     // std::string* name=0;
@@ -325,14 +333,13 @@ struct ASTStatement {
 
     void print(AST* ast, int depth);
 };
-struct ASTStruct {
+struct ASTStruct : ASTNode {
     enum State {
         TYPE_EMPTY,
         TYPE_COMPLETE,
         TYPE_CREATED,
         TYPE_ERROR, 
     };
-    TokenRange tokenRange{};
     std::string name="";
     std::string polyName="";
     struct Member {
@@ -364,7 +371,7 @@ struct ASTStruct {
 
     void print(AST* ast, int depth);
 };
-struct ASTEnum {
+struct ASTEnum : ASTNode {
     TokenRange tokenRange{};
     std::string name="";
     struct Member {
@@ -378,8 +385,7 @@ struct ASTEnum {
     ASTEnum* next=0;
     void print(AST* ast, int depth);  
 };
-struct ASTFunction {
-    TokenRange tokenRange{};
+struct ASTFunction : ASTNode {
     std::string name="";
     struct Arg {
         std::string name;
@@ -407,20 +413,18 @@ struct ASTFunction {
 
     void print(AST* ast, int depth);
 };
-struct ASTScope {
-    TokenRange tokenRange{};
+struct ASTScope : ASTNode {
     std::string* name = 0; // namespace
     ScopeId scopeId=0;
-    ASTScope* next = 0;    
+    ASTScope* next = 0;
     enum Type {
         BODY,
-        NAMESPACE,   
+        NAMESPACE,
     };
     Type type = BODY;
 
-    bool nativeCode = false; // only used for functions (probably)
-    
-    // void convertToNamespace(const std::string& name);
+    // bool nativeCode = false; // only used for functions (probably)
+    // bool hidden=false;
 
     ASTStruct* structs = 0;
     ASTStruct* structsTail = 0;

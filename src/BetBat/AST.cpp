@@ -54,6 +54,7 @@ const char *StateToStr(int type) {
         CASE(ASSIGN, assign)
         CASE(IF, if)
         CASE(WHILE, while)
+        CASE(FOR, for)
         CASE(RETURN, return)
         CASE(BREAK, break)
         CASE(CONTINUE, continue)
@@ -249,6 +250,8 @@ void AST::removeIdentifier(ScopeId scopeId, const std::string &name) {
         //   the variables array will invalidate other identifier's index.
         //   This means that the array will keep growing. Fix this.
         si->identifierMap.erase(pair);
+    } else {
+        Assert(("cannot remove non-existent identifier, compiler bug?",false));
     }
 }
 // std::string TypeInfo::getFullType(AST* ast){
@@ -592,6 +595,14 @@ ScopeInfo* AST::getScopeFromParents(Token name, ScopeId scopeId){
 }
 
 TypeId AST::getTypeString(Token name){
+    // converts char[] into Slice<char> (or any type, not just char)
+    if(name.length>2&&!strncmp(name.str+name.length-2,"[]",2)){
+        std::string* str = createString();
+        *str = "Slice<";
+        (*str).append(std::string(name.str,name.length-2));
+        (*str)+=">";
+        name = *str;
+    }
     for(int i=0;i<(int)_typeTokens.size();i++){
         if(name == _typeTokens[i])
             return TypeId::CreateString(i);
@@ -1272,32 +1283,34 @@ void AST::print(int depth) {
 }
 void ASTScope::print(AST *ast, int depth) {
     using namespace engone;
-    PrintSpace(depth);
-    if(type == BODY)
-        log::out << "Body\n";
-    if(type == NAMESPACE){
-        log::out << "Namespace ";
-        if(name)
-            log::out << " "<<*name;
-        log::out<<"\n";
-           
+    if(!hidden){
+        PrintSpace(depth);
+        if(type == BODY)
+            log::out << "Body\n";
+        if(type == NAMESPACE){
+            log::out << "Namespace ";
+            if(name)
+                log::out << " "<<*name;
+            log::out<<"\n";
+            
+        }
+        if (structs)
+            structs->print(ast, depth + 1);
+        if (enums)
+            enums->print(ast, depth + 1);
+        if (functions)
+            functions->print(ast, depth + 1);
+        if (statements)
+            statements->print(ast, depth + 1);
+        if (namespaces)
+            namespaces->print(ast, depth + 1);
     }
-    if (structs)
-        structs->print(ast, depth + 1);
-    if (enums)
-        enums->print(ast, depth + 1);
-    if (functions)
-        functions->print(ast, depth + 1);
-    if (statements)
-        statements->print(ast, depth + 1);
-    if (namespaces)
-        namespaces->print(ast, depth + 1);
     if(next)
         next->print(ast,depth);
 }
 void ASTFunction::print(AST *ast, int depth) {
     using namespace engone;
-    if(!body || !body->nativeCode) {
+    if(!hidden && (!body || !body->nativeCode)) {
         PrintSpace(depth);
         log::out << "Func " << name;
         if(polyArgs.size()!=0){
@@ -1340,55 +1353,59 @@ void ASTFunction::print(AST *ast, int depth) {
 }
 void ASTStruct::print(AST *ast, int depth) {
     using namespace engone;
-    PrintSpace(depth);
-    log::out << "Struct " << name;
-    if (polyArgs.size() != 0) {
-        log::out << "<";
-    }
-    for (int i = 0; i < (int)polyArgs.size(); i++) {
-        if (i != 0) {
-            log::out << ", ";
-        }
-        log::out << polyArgs[i].name;
-    }
-    if (polyArgs.size() != 0) {
-        log::out << ">";
-    }
-    log::out << " { ";
-    for (int i = 0; i < (int)members.size(); i++) {
-        auto &member = members[i];
-        auto &implMem = baseImpl.members[i];
-        auto str = ast->typeToString(implMem.typeId);
-        log::out << member.name << ": " << str;
-        if (member.defaultValue) {
-            log::out << " = ";
-            member.defaultValue->tokenRange.print();
-        }
-        if (i + 1 != (int)members.size()) {
-            log::out << ", ";
-        }
-    }
-    if(functions){
-        log::out << "\n";
-        functions->print(ast,depth);
+    if(!hidden){
         PrintSpace(depth);
+        log::out << "Struct " << name;
+        if (polyArgs.size() != 0) {
+            log::out << "<";
+        }
+        for (int i = 0; i < (int)polyArgs.size(); i++) {
+            if (i != 0) {
+                log::out << ", ";
+            }
+            log::out << polyArgs[i].name;
+        }
+        if (polyArgs.size() != 0) {
+            log::out << ">";
+        }
+        log::out << " { ";
+        for (int i = 0; i < (int)members.size(); i++) {
+            auto &member = members[i];
+            auto &implMem = baseImpl.members[i];
+            auto str = ast->typeToString(implMem.typeId);
+            log::out << member.name << ": " << str;
+            if (member.defaultValue) {
+                log::out << " = ";
+                member.defaultValue->tokenRange.print();
+            }
+            if (i + 1 != (int)members.size()) {
+                log::out << ", ";
+            }
+        }
+        if(functions){
+            log::out << "\n";
+            functions->print(ast,depth);
+            PrintSpace(depth);
+        }
+        log::out << " }\n";
     }
-    log::out << " }\n";
     if (next)
         next->print(ast, depth);
 }
 void ASTEnum::print(AST *ast, int depth) {
     using namespace engone;
-    PrintSpace(depth);
-    log::out << "Enum " << name << " { ";
-    for (int i = 0; i < (int)members.size(); i++) {
-        auto &member = members[i];
-        log::out << member.name << "=" << member.enumValue;
-        if (i + 1 != (int)members.size()) {
-            log::out << ", ";
+    if(!hidden){
+        PrintSpace(depth);
+        log::out << "Enum " << name << " { ";
+        for (int i = 0; i < (int)members.size(); i++) {
+            auto &member = members[i];
+            log::out << member.name << "=" << member.enumValue;
+            if (i + 1 != (int)members.size()) {
+                log::out << ", ";
+            }
         }
+        log::out << "}\n";
     }
-    log::out << "}\n";
     if (next)
         next->print(ast, depth);
 }
@@ -1400,11 +1417,11 @@ void ASTStatement::print(AST *ast, int depth) {
     int ind=-1;
     for(auto& vn : varnames){
         ind++;
-        if(vn.assignType.isValid())
-            log:: out << " "<< ast->typeToString(vn.assignType);
         if(ind!=0)
             log::out << ",";
         log::out << " " << vn.name;
+        if(vn.assignType.isValid())
+            log:: out << ": "<< ast->typeToString(vn.assignType);
     }
     if(alias)
         log::out << " as " << *alias;
@@ -1435,6 +1452,7 @@ void ASTExpression::print(AST *ast, int depth) {
         log::out << "Expr ";
         log::out << ast->typeToString(typeId);
         log::out << " ";
+        log::out.flush();
         if (typeId == AST_FLOAT32)
             log::out << f32Value;
         else if (AST::IsInteger(typeId))

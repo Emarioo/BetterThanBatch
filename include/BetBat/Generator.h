@@ -22,7 +22,7 @@ struct GenInfo {
     // Negative value to make some space for values
     // Positive to remove values
     // like push and pop but with a size
-    void addStackSpace(i16 size);
+    void addStackSpace(i32 size);
     int saveStackMoment();
     void restoreStackMoment(int moment);
 

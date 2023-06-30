@@ -1,7 +1,8 @@
 // slice should always exist
-struct Slice<T> {
+// force it in the compiler
+struct @hide Slice<T> {
     ptr: T*;
-    len: u32;
+    len: u64;
 }
 // struct Memory<T> {
 //     ptr: T*;

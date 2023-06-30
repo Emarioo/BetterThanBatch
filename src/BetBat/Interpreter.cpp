@@ -335,15 +335,14 @@ void Interpreter::execute(Bytecode* bytecode){
         case BC_MOV_MR:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
-            // u8 offset = DECODE_REG2(inst);
+            i8 offset = (i8)DECODE_REG2(inst);
 
             if(DECODE_REG_TYPE(r0) != BC_REG_64){
                 log::out << log::RED<<"r0 (pointer) must use 64 bit registers\n";
                 continue;   
             }
             u64* fromptr = (u64*)getReg(r0);
-            void* from = (void*)(*fromptr); // NOTE: Program can crash here
-            // void* from = (void*)(*(u64*)getReg(r0) + offset); // NOTE: Program can crash here
+            void* from = (void*)(*fromptr + offset); // NOTE: Program can crash here
             void* to = getReg(r1);
             
             int size = 1<<DECODE_REG_TYPE(r1);
@@ -368,16 +367,15 @@ void Interpreter::execute(Bytecode* bytecode){
         case BC_MOV_RM:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
-            // u8 offset = DECODE_REG2(inst);
+            i8 offset = (i8)DECODE_REG2(inst);
 
             if(DECODE_REG_TYPE(r1) != BC_REG_64){
                 log::out << log::RED<<"r1 (pointer) must use 64 bit registers\n";
                 continue;
             }
-            void* toptr = getReg(r1);
-            void* from = getReg(r0); // NOTE: Program can crash here
-            void* to = (void*)(*(u64*)toptr);
-            // void* to = (void*)(*(u64*)getReg(r1)+offset);
+            u64* toptr = (u64*)getReg(r1);
+            void* from = getReg(r0);
+            void* to = (void*)(*toptr + offset); // NOTE: Program can crash here
 
             // SET_TO_FROM(r0)
             
@@ -415,9 +413,27 @@ void Interpreter::execute(Bytecode* bytecode){
         }
         case BC_ZERO_MEM:{
             u8 r0 = DECODE_REG0(inst);
-            u16 size = (u16)DECODE_REG1(inst) | ((u16)DECODE_REG2(inst)<<8);
+            u8 r1 = DECODE_REG1(inst);
+            // u16 size = (u16)DECODE_REG1(inst) | ((u16)DECODE_REG2(inst)<<8);
             
-            void* to = getReg(r0);
+            int rsize = DECODE_REG_SIZE(r0);
+            Assert(rsize == 8);
+
+            void* toptr = getReg(r0);
+            void* to = (void*)*(u64*)toptr;
+
+            int r1size = DECODE_REG_SIZE(r1);
+            void* anysize = getReg(r1);
+            u64 size = 0;
+            if(r1size==1) {
+                size = *(u8*)anysize;
+            } else if(r1size==2) {
+                size = *(u16*)anysize;
+            } else if(r1size==4) {
+                size = *(u32*)anysize;
+            } else if(r1size==8){
+                size = *(u64*)anysize;
+            }
 
             memset(to,0,size);
 
@@ -868,10 +884,10 @@ void Interpreter::execute(Bytecode* bytecode){
         log::out << log::RED << "User program leaks "<<userAllocatedBytes<<" bytes\n";
     }
     if(sp != (u64)stack.data+stack.max){
-        log::out << log::YELLOW<<"sp was "<<(sp - (u64)stack.data+stack.max)<<"\n";
+        log::out << log::YELLOW<<"sp was "<<(sp - ((u64)stack.data+stack.max))<<", should be 0\n";
     }
     if(fp != (u64)stack.data+stack.max){
-        log::out << log::YELLOW<<"fp was "<<(fp - (u64)stack.data+stack.max)<<"\n";
+        log::out << log::YELLOW<<"fp was "<<(fp - ((u64)stack.data+stack.max))<<", should be 0\n";
     }
     auto time = StopMeasure(tp);
     if(!silent){

@@ -1,6 +1,76 @@
-#import "OS"
+// #import "OS"
+#import "Basic"
 
-// arr: i32[];
+fn printi(num: i64) { @native-code }
+fn printc(chr: char) { @native-code }
+
+/*
+Next is ranges and for loops
+for 0..5 {
+    printi(it)
+    printi(nr)
+}
+
+Predefined struct
+struct Range {
+    now: i32;
+    end: i32;
+}
+signed integers are the easiest to work with
+but you may also want to go from -3 to 3 so unsigned
+would just not work.
+
+a: Range = 0..5
+*/
+
+
+arr: i32[3];
+i=0;
+while i < arr.len {
+    arr.ptr[i] = i*2+1;
+    i++;
+}
+
+for @reverse arr {
+    printi(nr);
+    printc(':');
+    printi(it);
+    printc('\n');
+}
+printc('\n');
+
+str = "abcdef"
+for v: str {
+    printi(nr);
+    printc(':');
+    printc(v);
+    printc('\n');
+}
+
+
+// for q
+
+// for @reverse i: arr {
+
+// }
+
+
+// i=0
+// while i < arr.len; {
+//     printi(arr.ptr[i]);
+//     printc("\n");
+//     i++;
+// }
+
+// cast<u64>&arr + 16
+
+// diff = cast<u64>(&start - &arr);
+
+// printi(cast<u64>arr.ptr)
+// prints(" \n");
+// printi(cast<u64>&arr + 16)
+
+// printi(cast<u64>&start - cast<u64>&arr);
 
 // fn poly<T>(t: T) {
 //     printi(t);
@@ -16,35 +86,35 @@
 // printc(a.ptr[0]);
 
 
-fn fun(i: i32){
-    defer prints("fun1 defer\n")
-    defer prints("fun2 defer\n")
+// fn fun(i: i32){
+//     defer prints("fun1 defer\n")
+//     defer prints("fun2 defer\n")
 
 
-    if(i >1){
-        prints("before return\n");
-        return
-    }
-    prints("end of fun\n")
-}
-i = -1;
-while i < 10; {
-    i++;
-    printi(i);
-    printc("\n");
-    defer prints("while defer\n")
+//     if(i >1){
+//         prints("before return\n");
+//         return
+//     }
+//     prints("end of fun\n")
+// }
+// i = -1;
+// while i < 10; {
+//     i++;
+//     printi(i);
+//     printc("\n");
+//     defer prints("while defer\n")
 
-    if(i>5){
-        prints("before break\n")
-        if(i==8){
-            continue;
-        }
-        defer prints("if defer\n");
-        continue;
-    }
-    fun(i);
-}
-prints("END\n")
+//     if(i>5){
+//         prints("before break\n")
+//         if(i==8){
+//             continue;
+//         }
+//         defer prints("if defer\n");
+//         continue;
+//     }
+//     fun(i);
+// }
+// prints("END\n")
 
 // file, size = FileOpen("test.bat",FileFlag.FILE_ONLY_READ);
 // buffer = cast<char*> malloc(size)
