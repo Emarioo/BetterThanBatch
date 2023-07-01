@@ -270,8 +270,8 @@ void Interpreter::execute(Bytecode* bytecode){
         }
         case BC_INCR:{
             u8 r0 = DECODE_REG0(inst);
-            i16 offset = (i16)((u16)DECODE_REG1(inst) | ((u16)DECODE_REG2(inst)<<8));
-            
+            i16 offset = (i16)((i16)DECODE_REG1(inst) | ((i16)DECODE_REG2(inst)<<8));
+            // log::out << "offset: "<<offset<<"\n";
             i64* regValue = (i64*)getReg(r0);
             *regValue += offset;
             

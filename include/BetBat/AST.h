@@ -60,6 +60,7 @@ enum OperationType : u32 {
     AST_BLSHIFT,
     AST_BRSHIFT,
 
+    AST_RANGE,
     AST_INDEX, // index operator, arr[3] same as *(arr + 3*sizeof Item) unless overloaded
     AST_INCREMENT,
     AST_DECREMENT,
@@ -83,6 +84,7 @@ struct ASTNode {
     bool nativeCode=false;
     bool hidden=false;
     bool reverse=false;
+    bool pointer=false;
 };
 struct TypeId {
     TypeId() = default;
@@ -318,6 +320,7 @@ struct ASTStatement : ASTNode {
         TypeId assignType{};
         int arrayLength=-1;
     };
+    bool rangedForLoop=false; // otherwise sliced for loop
     std::vector<VarName> varnames;
     // std::string* name=0;
     std::string* alias=0;
@@ -502,7 +505,7 @@ struct AST {
     // static const u32 NEXT_ID = 0x100;
     u32 nextTypeId=AST_OPERATION_COUNT;
     
-    std::vector<VariableInfo> variables;
+    std::vector<VariableInfo*> variables;
 
     // Returns nullptr if variable already exists or if scopeId is invalid
     VariableInfo* addVariable(ScopeId scopeId, const std::string& name);

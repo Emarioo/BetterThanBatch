@@ -763,7 +763,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             continue;
         
         // Treat decimals with . as one token
-        if(canBeDot && chr=='.'){
+        if(canBeDot && chr=='.' && nextChr != '.'){
             isSpecial = false;
             canBeDot=false;
         }

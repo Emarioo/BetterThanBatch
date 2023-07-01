@@ -224,6 +224,7 @@ void GenInfo::restoreStackMoment(int moment) {
 }
 /* #endregion */
 // Will perform cast on float and integers with pop, cast, push
+// uses A register
 bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
     if (from == to)
         return true;
@@ -371,7 +372,7 @@ u8 ASTOpToBytecode(TypeId astOp, bool floatVersion){
 }
 // push of structs
 int GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
-    // info.addPop(BC_REG_RBX);
+    using namespace engone;
     Assert(baseReg!=BC_REG_RCX);
     TypeInfo *typeInfo = 0;
     if(typeId.isNormalType())
@@ -393,6 +394,9 @@ int GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
             auto& member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
+            
+            _GLOG(log::out << "push " << member.name << "\n";)
+            info.code->addDebugText("push " + member.name+"\n");
             GeneratePush(info, baseReg, offset + memdata.offset, memdata.typeId);
         }
     }
@@ -416,7 +420,7 @@ int GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
             }else{
                 info.code->add({BC_LI, BC_REG_RCX});
                 info.code->addIm(offset);
-                info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RCX, BC_REG_RCX});
+                info.code->add({BC_ADDI, baseReg, BC_REG_RCX, BC_REG_RCX});
                 info.code->add({BC_MOV_RM, reg, BC_REG_RCX});
             }
         }
@@ -430,6 +434,31 @@ int GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
     }    
     return GEN_SUCCESS;
 }
+int GenerateDefaultValue(GenInfo& info, TypeId typeId, TokenRange* tokenRange = 0);
+int FramePush(GenInfo& info, TypeId typeId, i32* outFrameOffset, bool genDefault){
+    // TODO: Automate this code. Pushing and popping variables from the frame is used often and should be functions.
+    i32 size = info.ast->getTypeSize(typeId);
+    i32 asize = info.ast->getTypeAlignedSize(typeId);
+    if(asize==0)
+        return GEN_ERROR;
+    int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+    if (diff != asize) {
+        info.currentFrameOffset -= diff; // align
+    }
+    info.currentFrameOffset -= size;
+    *outFrameOffset = info.currentFrameOffset;
+    
+    if(genDefault){
+        int result = GenerateDefaultValue(info, typeId);
+        if(result!=GEN_SUCCESS)
+            return GEN_ERROR;
+    }
+    return GEN_SUCCESS;
+}
+// int FramePop(){
+//     Assert(("FramePop not implemented",false));
+// }
+
 /*
 ##################################
     Generation functions below
@@ -807,7 +836,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 // char buf[100];
                 // int len = sprintf(buf,"  expr push %s",expression->name->c_str());
                 // info.code->addDebugText(buf,len);
-
+                // log::out << "AST_VAR: "<<id->name<<", "<<id->varIndex<<", "<<var->frameOffset<<"\n";
                 GeneratePush(info, BC_REG_FP, var->frameOffset, var->typeId);
 
                 outTypeIds->push_back(var->typeId);
@@ -994,9 +1023,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             return GEN_SUCCESS;
         
         } else if(expression->typeId==AST_STRING){
-            // TODO: const isn't implented yet but when it is the type should
-            //   be const char[] instead of char[].
-
             if(!expression->name){
                 ERR_HEAD2(expression->tokenRange) << "string "<<expression->tokenRange.firstToken<<" was null (compiler bug)\n";
                 ERRTOKENS(expression->tokenRange)
@@ -1039,8 +1065,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             info.code->addIm(pair->second.address);
             info.code->add({BC_ADDI, BC_REG_DP, BC_REG_RBX, BC_REG_RBX});
             info.addPush(BC_REG_RBX);
-
-            // TODO: Implement polymorphic slices so char[] can  be used.
 
             outTypeIds->push_back(typeInfo->id);
             return GEN_SUCCESS;
@@ -1302,8 +1326,18 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 auto memdata = typeInfo->getMember(*expression->name);
 
                 if (memdata.index == -1) {
-                    ERR_HEAD2(expression->tokenRange) << *expression->name << " is not a member of struct " << info.ast->typeToString(ltype) << "\n";
-                    ERR_END
+                    // TODO: print a list of members?
+                    ERR_HEAD(expression->tokenRange, "'"<<*expression->name << "' is not a member of struct '" << info.ast->typeToString(exprId) << "'. "
+                            "These are the members: ";
+                        for(int i=0;i<(int)typeInfo->astStruct->members.size();i++){
+                            if(i!=0)
+                                log::out << ", ";
+                            log::out << log::LIME << typeInfo->astStruct->members[i].name<<log::SILVER<<": "<<info.ast->typeToString(typeInfo->getMember(i).typeId);
+                        }
+                        log::out <<"\n";
+                        log::out <<"\n";
+                        ERR_LINE(expression->tokenRange, "not a member");
+                    )
                     return GEN_ERROR;
                 }
 
@@ -1512,6 +1546,53 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             //     outTypeIds->push_back( AST_INT32;
             // }
         }
+        else if(expression->typeId==AST_RANGE){
+            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Range"), info.ast->globalScopeId);
+            if(!typeInfo){
+                ERR_HEAD(expression->tokenRange, expression->tokenRange<<" cannot be converted to struct Range since it doesn't exist. Did you forget #import \"Basic\".\n\n";
+                    ERR_LINE(expression->tokenRange,"Where is Range?");
+                )
+                return GEN_ERROR;
+            }
+            Assert(typeInfo->astStruct);
+            Assert(typeInfo->astStruct->members.size() == 2);
+            Assert(typeInfo->astStruct->baseImpl.members[0].typeId == typeInfo->astStruct->baseImpl.members[1].typeId);
+
+            TypeId inttype = typeInfo->astStruct->baseImpl.members[0].typeId;
+
+            TypeId ltype={};
+            int result = GenerateExpression(info, expression->left,&ltype,idScope);
+            if(result!=GEN_SUCCESS)
+                return GEN_ERROR;
+            TypeId rtype={};
+            result = GenerateExpression(info, expression->right,&rtype,idScope);
+            if(result!=GEN_SUCCESS)
+                return GEN_ERROR;
+            
+            int lreg = RegBySize(3, info.ast->getTypeSize(ltype));
+            int rreg = RegBySize(4, info.ast->getTypeSize(rtype));
+            info.addPop(rreg);
+            info.addPop(lreg);
+
+            info.addPush(rreg);
+            if(!PerformSafeCast(info,rtype,inttype)){
+                std::string msg = info.ast->typeToString(rtype);
+                ERR_HEAD(expression->right->tokenRange,"Cannot convert to "<<info.ast->typeToString(inttype)<<".\n\n";
+                    ERR_LINE(expression->right->tokenRange,msg.c_str());
+                )
+            }
+
+            info.addPush(lreg);
+            if(!PerformSafeCast(info,ltype,inttype)){
+                std::string msg = info.ast->typeToString(ltype);
+                ERR_HEAD(expression->right->tokenRange,"Cannot convert to "<<info.ast->typeToString(inttype)<<".\n\n";
+                    ERR_LINE(expression->right->tokenRange,msg.c_str());
+                )
+            }
+
+            outTypeIds->push_back(typeInfo->id);
+            return GEN_SUCCESS;
+        } 
         else if(expression->typeId == AST_INDEX){
             // TOKENINFO(expression->tokenRange);
             int err = GenerateExpression(info, expression->left, &ltype);
@@ -1589,24 +1670,37 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
         }
         else {
             if(expression->typeId == AST_ASSIGN && castType.getId() == 0){
-                TypeId assignType={};
-                int result = GenerateReference(info,expression->left,&assignType,idScope);
-                if(result!=GEN_SUCCESS) return GEN_ERROR;
+                // THIS IS PURELY ASSIGN NOT +=, *=
+                WARN_HEAD(expression->tokenRange,"Expression is generated first and then reference. Right to left instead of left to right. "
+                "This is important if you use assignments/increments/decrements on the same memory/reference/variable.\n\n";
+                    WARN_LINE(expression->right->tokenRange,"generated first");
+                    WARN_LINE(expression->left->tokenRange,"then this");
+                )
                 TypeId rtype;
-                int err = GenerateExpression(info, expression->right, &rtype);
-                if (err == GEN_ERROR)
-                    return err;
+                int result = GenerateExpression(info, expression->right, &rtype, idScope);
+                if(result!=GEN_SUCCESS)
+                    return GEN_ERROR;
+
+                TypeId assignType={};
+                result = GenerateReference(info,expression->left,&assignType,idScope);
+                if(result!=GEN_SUCCESS)
+                    return GEN_ERROR;
+
                 Assert(assignType == rtype);
-                int rsize = info.ast->getTypeSize(rtype);
-                u8 reg = RegBySize(1, rsize);
-                info.addPop(reg);
-                info.addPop(BC_REG_RBX); // note that right expression should be popped first
-                if(expression->typeId==AST_ASSIGN){
-                    info.code->add({BC_MOV_RM, reg, BC_REG_RBX});
-                }
-                info.addPush(reg);
+
+                info.addPop(BC_REG_RBX);
+                 // note that right expression should be popped first
+                result = GeneratePop(info, BC_REG_RBX, 0, rtype);
+                result = GeneratePush(info, BC_REG_RBX, 0, rtype);
+
+                // int rsize = info.ast->getTypeSize(rtype);
+                // u8 reg = RegBySize(1, rsize);
+                // info.addPop(reg);
+                // // info.addPop(BC_REG_RBX);
+                // info.code->add({BC_MOV_RM, reg, BC_REG_RBX});
+                // info.addPush(reg);
                 
-                outTypeIds->push_back( rtype);
+                outTypeIds->push_back(rtype);
             } else {
                 // basic operations
                 TypeId rtype;
@@ -1711,9 +1805,63 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                         }
                         outTypeIds->push_back(rtype);
                     }
-                } else {
+                } else if ((ltype == AST_CHAR && AST::IsInteger(rtype))||
+                    (AST::IsInteger(ltype)&&rtype == AST_CHAR)){
 
-                    u8 reg = RegBySize(4, info.ast->getTypeSize(rtype));
+                    TOKENINFO(expression->tokenRange)
+                    u32 lsize = info.ast->getTypeSize(ltype);
+                    u32 rsize = info.ast->getTypeSize(rtype);
+                    u8 lreg = RegBySize(4, lsize); // get the appropriate registers
+                    u8 rreg = RegBySize(1, rsize);
+                    info.addPop(rreg); // note that right expression should be popped first
+                    info.addPop(lreg);
+
+                    u8 bytecodeOp = ASTOpToBytecode(op,false);
+                    if(bytecodeOp==0){
+                        ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
+                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
+                        ERR_END
+                    }
+
+                    if(ltype == AST_CHAR){
+                        info.code->add({bytecodeOp, lreg, rreg, lreg});
+                        info.addPush(lreg);
+                        if(expression->typeId==AST_ASSIGN){
+                            info.code->add({BC_MOV_RM, lreg, BC_REG_RBX});
+                        }
+                        outTypeIds->push_back(ltype);
+                    }else{
+                        info.code->add({bytecodeOp, lreg, rreg, rreg});
+                        info.addPush(rreg);
+                        if(expression->typeId==AST_ASSIGN){
+                            info.code->add({BC_MOV_RM, rreg, BC_REG_RBX});
+                        }
+                        outTypeIds->push_back(rtype);
+                    }
+                } else {
+                    int bad = false;
+                    if(ltype.getId()>=AST_TRUE_PRIMITIVES){
+                        bad=true;
+                        std::string msg = info.ast->typeToString(ltype);
+                        ERR_HEAD(expression->left->tokenRange, "Cannot do operation on struct. Overloading not implemented.\n\n";
+                            ERR_LINE(expression->left->tokenRange,msg.c_str());
+                        )
+                    }
+                    if(rtype.getId()>=AST_TRUE_PRIMITIVES){
+                        bad=true;
+                        std::string msg = info.ast->typeToString(rtype);
+                        ERR_HEAD(expression->right->tokenRange, "Cannot do operation on struct. Overloading not implemented.\n\n";
+                            ERR_LINE(expression->right->tokenRange,msg.c_str());
+                        )
+                    }
+                    if(bad){
+                        return GEN_ERROR;
+                    }
+
+                    u32 lsize = info.ast->getTypeSize(ltype);
+                    u32 rsize = info.ast->getTypeSize(rtype);
+
+                    u8 reg = RegBySize(4, rsize);
                     info.addPop(reg);
                     if (!PerformSafeCast(info, ltype, rtype)) {
                         std::string leftstr = info.ast->typeToString(ltype);
@@ -1728,8 +1876,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                     info.addPush(reg);
 
                     TOKENINFO(expression->tokenRange)
-                    u32 lsize = info.ast->getTypeSize(ltype);
-                    u32 rsize = info.ast->getTypeSize(rtype);
                     u8 reg1 = RegBySize(4, lsize); // get the appropriate registers
                     u8 reg2 = RegBySize(1, rsize);
                     info.addPop(reg2); // note that right expression should be popped first
@@ -1773,7 +1919,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
     // An entry point has been missed if the assert above fire.
     return GEN_SUCCESS;
 }
-int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange = 0) {
+int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange) {
     using namespace engone;
     MEASURE;
     // Assert(typeInfo)
@@ -2185,6 +2331,8 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                         int arrayOffset = 0;
                         {
                             TypeId innerType = typeInfo->structImpl->polyIds[0];
+                            if(!innerType.isValid())
+                                continue; // error message should have been printed in type checker
                             i32 size2 = info.ast->getTypeSize(innerType);
                             i32 asize2 = info.ast->getTypeAlignedSize(innerType);
                             
@@ -2196,6 +2344,8 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                                 )
                                 continue;
                             }
+
+                            // int result = FramePush(info,var-)
 
                             int diff = asize2 - (-info.currentFrameOffset) % asize2; // how much to fix alignment
                             if (diff != asize2) {
@@ -2213,12 +2363,14 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                         }
                         // data type may be zero if it wasn't specified during initial assignment
                         // a = 9  <-  implicit / explicit  ->  a : i32 = 9
-                        int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-                        if (diff != asize) {
-                            info.currentFrameOffset -= diff; // align
-                        }
-                        info.currentFrameOffset -= size;
-                        var->frameOffset = info.currentFrameOffset;
+                        // int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+                        // if (diff != asize) {
+                        //     info.currentFrameOffset -= diff; // align
+                        // }
+                        // info.currentFrameOffset -= size;
+                        // var->frameOffset = info.currentFrameOffset;
+
+                        int result = FramePush(info,var->typeId,&var->frameOffset,false);
 
                         // TODO: Don't hardcode this slice stuff
                         // push length
@@ -2236,15 +2388,17 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
 
                     // data type may be zero if it wasn't specified during initial assignment
                     // a = 9  <-  implicit / explicit  ->  a : i32 = 9
-                    int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-                    if (diff != asize) {
-                        info.currentFrameOffset -= diff; // align
-                    }
-                    info.currentFrameOffset -= size;
-                    var->frameOffset = info.currentFrameOffset;
+                    // int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+                    // if (diff != asize) {
+                    //     info.currentFrameOffset -= diff; // align
+                    // }
+                    // info.currentFrameOffset -= size;
+                    // var->frameOffset = info.currentFrameOffset;
 
-                    TOKENINFO(statement->tokenRange)
-                    int result = GenerateDefaultValue(info, var->typeId, &statement->tokenRange);
+                    int result = FramePush(info,var->typeId, &var->frameOffset, true);
+
+                    // TOKENINFO(statement->tokenRange)
+                    // int result = GenerateDefaultValue(info, var->typeId, &statement->tokenRange);
                 }
                 continue;
             }
@@ -2361,14 +2515,15 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                             continue;
                         }
 
-                        int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-                        if (diff != asize) {
-                            info.currentFrameOffset -= diff; // align
-                        }
-                        info.currentFrameOffset -= leftSize;
-                        var->frameOffset = info.currentFrameOffset;
-                        if(diff!=asize)
-                            alignment = diff;
+                        int result = FramePush(info, var->typeId, &var->frameOffset, true);
+                        // int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+                        // if (diff != asize) {
+                        //     info.currentFrameOffset -= diff; // align
+                        // }
+                        // info.currentFrameOffset -= leftSize;
+                        // var->frameOffset = info.currentFrameOffset;
+                        // if(diff!=asize)
+                        //     alignment = diff;
 
                         _GLOG(log::out << "declare " << *name << " at " << var->frameOffset << "\n";)
                         // NOTE: inconsistent
@@ -2383,18 +2538,18 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
 
                     // GeneratePop(info, BC_REG_FP, var->frameOffset, var->typeId);
                     
-                    if (decl) {
-                        info.code->addDebugText("incr sp after decl\n");
-                        // This is where we actually move the stack pointer
-                        // to make space for the variable.
-                        // We used BC_MOV_RM before since a structs
-                        // has many values on the stack and we need to pop
-                        // them before we can push new values.
-                        // BC_MOV must therefore be used since we can't pop.
+                    // if (decl) {
+                    //     info.code->addDebugText("incr sp after decl\n");
+                    //     // This is where we actually move the stack pointer
+                    //     // to make space for the variable.
+                    //     // We used BC_MOV_RM before since a structs
+                    //     // has many values on the stack and we need to pop
+                    //     // them before we can push new values.
+                    //     // BC_MOV must therefore be used since we can't pop.
 
-                        // info.addIncrSp(-leftSize - alignment);
-                        info.addStackSpace(-leftSize); // should handle alignment
-                    }
+                    //     // info.addIncrSp(-leftSize - alignment);
+                    //     info.addStackSpace(-leftSize); // should handle alignment
+                    // }
                     if(var){
                         _GLOG(log::out << " " << *name << " : " << info.ast->typeToString(var->typeId) << "\n";)
                     }
@@ -2680,27 +2835,42 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             // not sure how well this works, we shall see.
             ScopeId scopeForVariables = statement->body->scopeId;
 
-            // TODO: index variable
-            auto* varinfo_index = info.ast->addVariable(scopeForVariables,"nr");
-            if(!varinfo_index) {
-                ERR_HEAD(statement->tokenRange, "nr variable already exists\n.";)
-                continue;
-            }
-            varinfo_index->typeId = AST_INT32;
-
-            {
-                i32 size = info.ast->getTypeSize(varinfo_index->typeId);
-                i32 asize = info.ast->getTypeAlignedSize(varinfo_index->typeId);
-                // data type may be zero if it wasn't specified during initial assignment
-                // a = 9  <-  implicit / explicit  ->  a : i32 = 9
-                int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-                if (diff != asize) {
-                    info.currentFrameOffset -= diff; // align
+            if(statement->rangedForLoop){
+                Token& itemvar = statement->varnames[0].name;
+                TypeId itemtype = statement->varnames[0].assignType;
+                if(!itemtype.isValid()){
+                    // error has probably been handled somewhere. no need to print again.
+                    continue;
                 }
-                info.currentFrameOffset -= size;
-                varinfo_index->frameOffset = info.currentFrameOffset;
+                auto* varinfo_index = info.ast->addVariable(scopeForVariables,"nr");
+                if(!varinfo_index) {
+                    ERR_HEAD(statement->tokenRange, "nr variable already exists\n.";)
+                    continue;
+                }
+                // auto iden = info.ast->getIdentifier(scopeForVariables,"nr");
+                // log::out << "IDEN VAR INDEX, "<<iden->varIndex<<"\n";
 
-                if(statement->reverse){
+                auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
+                 if(!varinfo_item) {
+                    ERR_HEAD(statement->tokenRange, "nr variable already exists\n.";)
+                    continue;
+                }
+                varinfo_item->typeId = itemtype;
+                varinfo_index->typeId = itemtype;
+
+                {
+                    i32 size = info.ast->getTypeSize(varinfo_index->typeId);
+                    i32 asize = info.ast->getTypeAlignedSize(varinfo_index->typeId);
+                    // data type may be zero if it wasn't specified during initial assignment
+                    // a = 9  <-  implicit / explicit  ->  a : i32 = 9
+                    int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+                    if (diff != asize) {
+                        info.currentFrameOffset -= diff; // align
+                    }
+                    info.currentFrameOffset -= size;
+                    varinfo_item->frameOffset = info.currentFrameOffset;
+                    varinfo_index->frameOffset = info.currentFrameOffset;
+
                     TypeId dtype = {};
                     // Type should be checked in type checker and further down
                     // when extracting ptr and len. No need to check here.
@@ -2708,126 +2878,236 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                     if (result != GEN_SUCCESS) {
                         continue;
                     }
-                    info.addPop(BC_REG_RAX);
-                    info.addPop(BC_REG_RAX);
-                    info.code->add({BC_CAST,CAST_UINT_SINT, BC_REG_RAX,BC_REG_EAX});
+                    if(statement->reverse){
+                        info.addPop(BC_REG_EDX); // throw range.now
+                        info.addPop(BC_REG_EAX);
+                    }else{
+                        info.addPop(BC_REG_EAX);
+                        info.addPop(BC_REG_EDX); // throw range.end
+                        info.code->add({BC_INCR,BC_REG_EAX,0xFF,0xFF});
+                        // decrement by one since for loop increments
+                        // before going into the loop
+                    }
+                    info.addPush(BC_REG_EAX);
+                }
+                // i32 itemsize = info.ast->getTypeSize(varinfo_item->typeId);
+
+                _GLOG(log::out << "push loop\n");
+                loopScope->stackMoment = info.saveStackMoment();
+                loopScope->continueAddress = info.code->length();
+
+                // log::out << "frame: "<<varinfo_index->frameOffset<<"\n";
+                // TODO: don't generate ptr and length everytime.
+                // put them in a temporary variable or something.
+                TypeId dtype = {};
+                info.code->addDebugText("Generate and push range\n");
+                int result = GenerateExpression(info, statement->rvalue, &dtype);
+                if (result != GEN_SUCCESS) {
+                    continue;
+                }
+                u8 index_reg = BC_REG_ECX;
+                u8 length_reg = BC_REG_EDX;
+
+                if(statement->reverse){
+                    info.addPop(length_reg); // range.now we care about
+                    info.addPop(BC_REG_EAX);
+
+                } else {
+                    info.addPop(BC_REG_EAX); // throw range.now
+                    info.addPop(length_reg); // range.end we care about
+                }
+
+                info.code->add({BC_LI, BC_REG_RAX});
+                info.code->addIm(varinfo_index->frameOffset);
+                info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RAX, BC_REG_RAX});
+
+                info.code->add({BC_MOV_MR, BC_REG_RAX, index_reg});
+                if(statement->reverse){
+                    info.code->add({BC_INCR,index_reg, 0xFF, 0xFF}); // hexidecimal represent -1
                 }else{
-                    info.code->add({BC_LI,BC_REG_EAX});
-                    info.code->addIm(-1);
+                    info.code->add({BC_INCR,index_reg,1});
                 }
-                info.addPush(BC_REG_EAX);
-            }
-            Token& itemvar = statement->varnames[0].name;
-            TypeId itemtype = statement->varnames[0].assignType;
-            if(!itemtype.isValid()){
-                // error has probably been handled somewhere. no need to print again.
-                // if it wasn't and you just found out that things went wrong here
-                // then sorry.
-                continue;
-            }
-            auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
-            varinfo_item->typeId = itemtype;
-            i32 itemsize = info.ast->getTypeSize(varinfo_item->typeId);
-            {
-                i32 asize = info.ast->getTypeAlignedSize(varinfo_item->typeId);
-                int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-                if (diff != asize) {
-                    info.currentFrameOffset -= diff; // align
+                info.code->add({BC_MOV_RM,index_reg, BC_REG_RAX});
+
+                if(statement->reverse){
+                    info.code->addDebugText("For condition (reversed)\n");
+                    info.code->add({BC_GTE,index_reg,length_reg,BC_REG_EAX});
+                } else {
+                    info.code->addDebugText("For condition\n");
+                    info.code->add({BC_LT,index_reg,length_reg,BC_REG_EAX});
                 }
-                info.currentFrameOffset -= itemsize;
-                varinfo_item->frameOffset = info.currentFrameOffset;
+                info.code->add({BC_JNE, BC_REG_EAX});
+                // resolve end, not break, resolveBreaks is bad naming
+                loopScope->resolveBreaks.push_back(info.code->length());
+                info.code->addIm(0);
+
+                result = GenerateBody(info, statement->body);
+                if (result != GEN_SUCCESS)
+                    continue;
+
+                info.code->add({BC_JMP});
+                info.code->addIm(loopScope->continueAddress);
+
+                for (auto ind : loopScope->resolveBreaks) {
+                    *(u32 *)info.code->get(ind) = info.code->length();
+                }
                 
-                int result = GenerateDefaultValue(info, varinfo_item->typeId);
-            }
-
-            _GLOG(log::out << "push loop\n");
-            loopScope->stackMoment = info.saveStackMoment();
-            loopScope->continueAddress = info.code->length();
-
-
-            // TODO: don't generate ptr and length everytime.
-            // put them in a temporary variable or something.
-            TypeId dtype = {};
-            info.code->addDebugText("Generate and push slice\n");
-            int result = GenerateExpression(info, statement->rvalue, &dtype);
-            if (result != GEN_SUCCESS) {
-                continue;
-            }
-            TypeInfo* ti = info.ast->getTypeInfo(dtype);
-            Assert(ti && ti->astStruct && ti->astStruct->name == "Slice");
-            auto memdata_ptr = ti->getMember("ptr");
-            auto memdata_len = ti->getMember("len");
-
-            // NOTE: careful when using registers since you might use 
-            //  one for multiple things. 
-            u8 ptr_reg = RegBySize(2,info.ast->getTypeSize(memdata_ptr.typeId));
-            u8 length_reg = RegBySize(4,info.ast->getTypeSize(memdata_len.typeId));
-            u8 index_reg = BC_REG_ECX;
-
-            info.code->addDebugText("extract ptr and length\n");
-            info.addPop(ptr_reg);
-            info.addPop(length_reg);
-
-            info.code->addDebugText("Index increment/decrement\n");
-            info.code->add({BC_LI, BC_REG_RAX});
-            info.code->addIm(varinfo_index->frameOffset);
-            info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RAX, BC_REG_RAX});
-
-            info.code->add({BC_MOV_MR, BC_REG_RAX, index_reg});
-            if(statement->reverse){
-                info.code->add({BC_INCR,index_reg, 0xFF, 0xFF}); // hexidecimal represent -1
+                info.ast->removeIdentifier(scopeForVariables, "nr");
+                info.ast->removeIdentifier(scopeForVariables, itemvar);
             }else{
-                info.code->add({BC_INCR,index_reg,1});
+                auto* varinfo_index = info.ast->addVariable(scopeForVariables,"nr");
+                if(!varinfo_index) {
+                    ERR_HEAD(statement->tokenRange, "nr variable already exists\n.";)
+                    continue;
+                }
+                varinfo_index->typeId = AST_INT32;
+
+                {
+                    i32 size = info.ast->getTypeSize(varinfo_index->typeId);
+                    i32 asize = info.ast->getTypeAlignedSize(varinfo_index->typeId);
+                    // data type may be zero if it wasn't specified during initial assignment
+                    // a = 9  <-  implicit / explicit  ->  a : i32 = 9
+                    // int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
+                    // if (diff != asize) {
+                    //     info.currentFrameOffset -= diff; // align
+                    // }
+                    // info.currentFrameOffset -= size;
+                    varinfo_index->frameOffset = info.currentFrameOffset;
+
+                    int result = FramePush(info, varinfo_index->typeId, &varinfo_index->frameOffset, false);
+
+                    if(statement->reverse){
+                        TypeId dtype = {};
+                        // Type should be checked in type checker and further down
+                        // when extracting ptr and len. No need to check here.
+                        int result = GenerateExpression(info, statement->rvalue, &dtype);
+                        if (result != GEN_SUCCESS) {
+                            continue;
+                        }
+                        info.addPop(BC_REG_RAX);
+                        info.addPop(BC_REG_RAX);
+                        info.code->add({BC_CAST,CAST_UINT_SINT, BC_REG_RAX,BC_REG_EAX});
+                    }else{
+                        info.code->add({BC_LI,BC_REG_EAX});
+                        info.code->addIm(-1);
+                    }
+                    info.addPush(BC_REG_EAX);
+                }
+                Token& itemvar = statement->varnames[0].name;
+                TypeId itemtype = statement->varnames[0].assignType;
+                if(!itemtype.isValid()){
+                    // error has probably been handled somewhere. no need to print again.
+                    // if it wasn't and you just found out that things went wrong here
+                    // then sorry.
+                    continue;
+                }
+                auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
+                varinfo_item->typeId = itemtype;
+                i32 itemsize = info.ast->getTypeSize(varinfo_item->typeId);
+                {
+                    // TODO: Automate this code. Pushing and popping variables from the frame is used often and should be functions.
+                    i32 asize = info.ast->getTypeAlignedSize(varinfo_item->typeId);
+                    if(asize==0)
+                        continue;
+
+                    int result = FramePush(info, varinfo_item->typeId, &varinfo_item->frameOffset, true);
+                }
+
+                _GLOG(log::out << "push loop\n");
+                loopScope->stackMoment = info.saveStackMoment();
+                loopScope->continueAddress = info.code->length();
+
+                // TODO: don't generate ptr and length everytime.
+                // put them in a temporary variable or something.
+                TypeId dtype = {};
+                info.code->addDebugText("Generate and push slice\n");
+                int result = GenerateExpression(info, statement->rvalue, &dtype);
+                if (result != GEN_SUCCESS) {
+                    continue;
+                }
+                TypeInfo* ti = info.ast->getTypeInfo(dtype);
+                Assert(ti && ti->astStruct && ti->astStruct->name == "Slice");
+                auto memdata_ptr = ti->getMember("ptr");
+                auto memdata_len = ti->getMember("len");
+
+                // NOTE: careful when using registers since you might use 
+                //  one for multiple things. 
+                u8 ptr_reg = RegBySize(2,info.ast->getTypeSize(memdata_ptr.typeId));
+                u8 length_reg = RegBySize(4,info.ast->getTypeSize(memdata_len.typeId));
+                u8 index_reg = BC_REG_ECX;
+
+                info.code->addDebugText("extract ptr and length\n");
+                info.addPop(ptr_reg);
+                info.addPop(length_reg);
+
+                info.code->addDebugText("Index increment/decrement\n");
+                info.code->add({BC_LI, BC_REG_RAX});
+                info.code->addIm(varinfo_index->frameOffset);
+                info.code->add({BC_ADDI, BC_REG_FP, BC_REG_RAX, BC_REG_RAX});
+
+                info.code->add({BC_MOV_MR, BC_REG_RAX, index_reg});
+                if(statement->reverse){
+                    info.code->add({BC_INCR,index_reg, 0xFF, 0xFF}); // hexidecimal represent -1
+                }else{
+                    info.code->add({BC_INCR,index_reg,1});
+                }
+                info.code->add({BC_MOV_RM,index_reg, BC_REG_RAX});
+
+                if(statement->reverse){
+                    info.code->addDebugText("For condition (reversed)\n");
+                    info.code->add({BC_LI,length_reg}); // length reg is not used with reversed
+                    info.code->addIm(-1);
+                    info.code->add({BC_GT,index_reg,length_reg,BC_REG_EAX});
+                } else {
+                    info.code->addDebugText("For condition\n");
+                    info.code->add({BC_LT,index_reg,length_reg,BC_REG_EAX});
+                }
+                info.code->add({BC_JNE, BC_REG_EAX});
+                // resolve end, not break, resolveBreaks is bad naming
+                loopScope->resolveBreaks.push_back(info.code->length());
+                info.code->addIm(0);
+
+                // BE VERY CAREFUL SO YOU DON'T USE BUSY REGISTERS AND OVERWRITE
+                // VALUES. UNEXPECTED VALUES WILL HAPPEN AND IT WILL BE PAINFUL.
+                u8 dst_reg = BC_REG_RCX;
+                u8 src_reg = BC_REG_RBX;
+                u8 size_reg = BC_REG_RDX;
+                info.code->add({BC_LI,size_reg});
+                info.code->addIm(itemsize);
+                
+                info.code->add({BC_MULI, index_reg, size_reg, BC_REG_RAX});
+                info.code->add({BC_ADDI, ptr_reg, BC_REG_RAX, src_reg});
+                if(statement->pointer){
+                    info.code->add({BC_LI,BC_REG_RAX});
+                    info.code->addIm(varinfo_item->frameOffset);
+                    info.code->add({BC_ADDI,BC_REG_FP, BC_REG_RAX, BC_REG_RAX});
+                    
+                    info.code->add({BC_MOV_RM, src_reg, BC_REG_RAX});
+                } else {
+                    info.code->add({BC_LI,BC_REG_RAX});
+                    info.code->addIm(varinfo_item->frameOffset);
+                    info.code->add({BC_ADDI,BC_REG_FP, BC_REG_RAX, dst_reg});
+
+                    info.code->add({BC_MEMCPY,dst_reg, src_reg, size_reg});
+                }
+
+                result = GenerateBody(info, statement->body);
+                if (result != GEN_SUCCESS)
+                    continue;
+
+                info.code->add({BC_JMP});
+                info.code->addIm(loopScope->continueAddress);
+
+                for (auto ind : loopScope->resolveBreaks) {
+                    *(u32 *)info.code->get(ind) = info.code->length();
+                }
+                
+                // delete nr, frameoffset needs to be changed to if so
+                // info.addPop(BC_REG_EAX); 
+
+                info.ast->removeIdentifier(scopeForVariables, "nr");
+                info.ast->removeIdentifier(scopeForVariables, itemvar);
             }
-            info.code->add({BC_MOV_RM,index_reg, BC_REG_RAX});
-
-            if(statement->reverse){
-                info.code->addDebugText("For condition (reversed)\n");
-                info.code->add({BC_LI,length_reg}); // length reg is not used with reversed
-                info.code->addIm(-1);
-                info.code->add({BC_GT,index_reg,length_reg,BC_REG_EAX});
-            } else {
-                info.code->addDebugText("For condition\n");
-                info.code->add({BC_LT,index_reg,length_reg,BC_REG_EAX});
-            }
-            info.code->add({BC_JNE, BC_REG_EAX});
-            // resolve end, not break, resolveBreaks is bad naming
-            loopScope->resolveBreaks.push_back(info.code->length());
-            info.code->addIm(0);
-
-            // BE VERY CAREFUL SO YOU DON'T USE BUSY REGISTERS AND OVERWRITE
-            // VALUES. UNEXPECTED VALUES WILL HAPPEN AND IT WILL BE PAINFUL.
-            u8 dst_reg = BC_REG_RCX;
-            u8 src_reg = BC_REG_RBX;
-            u8 size_reg = BC_REG_RDX;
-            info.code->add({BC_LI,size_reg});
-            info.code->addIm(itemsize);
-            
-            info.code->add({BC_MULI, index_reg, size_reg, BC_REG_RAX});
-            info.code->add({BC_ADDI, ptr_reg, BC_REG_RAX, src_reg});
-            
-            info.code->add({BC_LI,BC_REG_RAX});
-            info.code->addIm(varinfo_item->frameOffset);
-            info.code->add({BC_ADDI,BC_REG_FP, BC_REG_RAX, dst_reg});
-
-            info.code->add({BC_MEMCPY,dst_reg, src_reg, size_reg});
-
-            result = GenerateBody(info, statement->body);
-            if (result != GEN_SUCCESS)
-                continue;
-
-            info.code->add({BC_JMP});
-            info.code->addIm(loopScope->continueAddress);
-
-            for (auto ind : loopScope->resolveBreaks) {
-                *(u32 *)info.code->get(ind) = info.code->length();
-            }
-            
-            // delete nr, frameoffset needs to be changed to if so
-            // info.addPop(BC_REG_EAX); 
-
-            info.ast->removeIdentifier(scopeForVariables, "nr");
-            info.ast->removeIdentifier(scopeForVariables, itemvar);
 
             // pop loop happens in defer
         } else if(statement->type == ASTStatement::BREAK) {
@@ -2948,9 +3228,11 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             if (dtype.getId() != AST_VOID) {
                 // TODO: handle struct
                 // TypeInfo *typeInfo = info.ast->getTypeInfo(dtype);
-                u32 size = info.ast->getTypeSize(dtype);
-                u8 reg = RegBySize(1, size);
-                info.addPop(reg);
+                // u32 size = info.ast->getTypeSize(dtype);
+                // u8 reg = RegBySize(1, size);
+                // info.addPop(reg);
+
+                GeneratePop(info, 0, 0, dtype);
             }
         }
         else if (statement->type == ASTStatement::USING) {

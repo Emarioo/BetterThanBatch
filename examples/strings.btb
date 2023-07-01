@@ -4,64 +4,83 @@
 fn printi(num: i64) { @native-code }
 fn printc(chr: char) { @native-code }
 
-/*
-Next is ranges and for loops
-for 0..5 {
-    printi(it)
-    printi(nr)
+
+// // it = Item{1,'A'};
+// // printc(it.id);
+
+// // items: i32[1];
+// for items {
+// //     // items.ptr[nr] = 3;
+// //     // items.ptr[nr] = Item{1,'K'};
+//     items.ptr[0] = Item{3+nr*11, 'A' + nr*2};
+// //     // items.ptr[nr] = Item{'A' + nr*2};
+// }
+// it: i32;
+// p = &it;
+// // *p = 23;
+// it: Item;
+// *&it = Item{3, 232 };
+// // it.id = 292
+
+// printi(it.id)
+// printc('\n');
+
+struct Item {
+    data: i32;
+    id: char;
 }
-
-Predefined struct
-struct Range {
-    now: i32;
-    end: i32;
-}
-signed integers are the easiest to work with
-but you may also want to go from -3 to 3 so unsigned
-would just not work.
-
-a: Range = 0..5
-*/
-
-
-arr: i32[3];
-i=0;
-while i < arr.len {
-    arr.ptr[i] = i*2+1;
-    i++;
-}
-
-for @reverse arr {
+items: Item[3];
+for @pointer items {
+    *it = Item{3+nr*11, 'A' + nr};
     printi(nr);
-    printc(':');
-    printi(it);
-    printc('\n');
-}
-printc('\n');
+    printc(':')
+    printc(it.id);
+    printc(',')
+    printi(it.data);
+    printc('\n')
+}   
 
-str = "abcdef"
-for v: str {
-    printi(nr);
-    printc(':');
-    printc(v);
-    printc('\n');
-}
+// str = "hello"
+// range = 0..str.len
 
+// printi(range.now)
+// printi(range.end)
 
-// for q
-
-// for @reverse i: arr {
+// for slice {
 
 // }
 
+// for @reverse str {
+//     printi(nr)
+//     printc(':');
+//     // printi(str.ptr[it])
+//     // printc(str.ptr[it])
+//     printc(it)
+//     printc('\n');
+// }
 
-// i=0
-// while i < arr.len; {
-//     printi(arr.ptr[i]);
-//     printc("\n");
+// arr: i32[3];
+// i=0;
+// while i < arr.len {
+//     arr.ptr[i] = i*2+1;
 //     i++;
 // }
 
+// for @reverse arr {
+//     printi(nr);
+//     printc(':');
+//     printi(it);
+//     printc('\n');
+// }
+// printc('\n');
+
+// str = "abcdef"
+// for v: str {
+//     printi(nr);
+//     printc(':');
+//     printc(v);
+//     printc('\n');
+// }
 // cast<u64>&arr + 16
 
 // diff = cast<u64>(&start - &arr);

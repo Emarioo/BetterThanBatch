@@ -28,6 +28,7 @@ const char *OpToStr(OperationType optype) {
         CASE(BLSHIFT, << (bit shift))
         CASE(BRSHIFT, >> (bit shift))
 
+        CASE(RANGE, ..)
         CASE(INDEX, [])
         CASE(INCREMENT, ++)
         CASE(DECREMENT, --)
@@ -155,8 +156,10 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const std::string &name) {
     
     id->type = Identifier::VAR;
     id->varIndex = variables.size();
-    variables.push_back({});
-    return &variables[id->varIndex];
+    auto ptr = (VariableInfo*)engone::Allocate(sizeof(VariableInfo));
+    new(ptr)VariableInfo();
+    variables.push_back(ptr);
+    return ptr;
 }
 
 Identifier* AST::addFunction(ScopeId scopeId, const std::string& name, ASTFunction* func) {
@@ -179,13 +182,15 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const std::string &name) {
     if (pair != si->identifierMap.end())
         return nullptr;
 
-    auto ptr = &(si->identifierMap[name] = {});
+    si->identifierMap[name] = {};
+    auto ptr = &si->identifierMap[name];
     ptr->name = name;
     ptr->scopeId = scopeId;
     return ptr;
 }
 Identifier *AST::getIdentifier(ScopeId scopeId, const std::string &name) {
     using namespace engone;
+    // log::out << __func__<<": "<<name<<"\n";
     Token ns={};
     Token realName = TrimNamespace(Token(name), &ns);
     ScopeId nextScopeId = scopeId;
@@ -217,13 +222,11 @@ Identifier *AST::getIdentifier(ScopeId scopeId, const std::string &name) {
     return nullptr;
 }
 VariableInfo *AST::getVariable(Identifier* id) {
-    // TODO: bound check
-    return &variables[id->varIndex];
+    Assert(id->varIndex>=0&&(int)id->varIndex<(int)variables.size());
+    return variables[id->varIndex];
 }
 ASTFunction *AST::getFunction(Identifier* id) {
     return id->astFunc;
-    // TODO: bound check
-    // return &functions[index];
 }
 
 StructImpl::Method StructImpl::getMethod(const std::string& name){
@@ -444,6 +447,12 @@ void AST::cleanup() {
         engone::Free(str, sizeof(std::string));
     }
     tempStrings.clear();
+
+    for(auto ptr : variables){
+        ptr->~VariableInfo();
+        engone::Free(ptr, sizeof(VariableInfo));
+    }
+    variables.clear();
 
     nextTypeId = AST_OPERATION_COUNT;
 

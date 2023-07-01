@@ -62,23 +62,65 @@ OperationType IsOp(Token& token){
     if(Equal(token,"~")) return AST_BNOT;
     if(Equal(token,"<<")) return AST_BLSHIFT;
     if(Equal(token,">>")) return AST_BRSHIFT;
+    if(Equal(token,"..")) return AST_RANGE;
     // NOT operation is special
 
     return (OperationType)0;
 }
 int OpPrecedence(int op){
     using namespace engone;
-    if(op==AST_ASSIGN) return 2;
-    if(op==AST_AND||op==AST_OR) return 3;
-    if(op==AST_LESS||op==AST_GREATER||op==AST_LESS_EQUAL||op==AST_GREATER_EQUAL
-        ||op==AST_EQUAL||op==AST_NOT_EQUAL) return 5;
-    if(op==AST_ADD||op==AST_SUB) return 9;
-    if(op==AST_MUL||op==AST_DIV||op==AST_MODULUS) return 10;
-    if(op==AST_BAND||op==AST_BOR||op==AST_BXOR||
-        op==AST_BLSHIFT||op==AST_BRSHIFT) return 13;
-    if(op==AST_BNOT || op==AST_NOT || op==AST_CAST) return 15;
-    if(op==AST_REFER || op==AST_DEREF) return 16;
-    if(op==AST_MEMBER || op == AST_FROM_NAMESPACE) return 20;
+    // use a map instead?
+    switch (op){
+        case AST_ASSIGN:
+            return 2;
+        case AST_AND:
+        case AST_OR:
+            return 3;
+        case AST_LESS:
+        case AST_GREATER:
+        case AST_LESS_EQUAL:
+        case AST_GREATER_EQUAL:
+        case AST_EQUAL:
+        case AST_NOT_EQUAL:
+            return 5;
+        case AST_RANGE:
+            return 8;
+        case AST_ADD:
+        case AST_SUB:
+            return 9;
+        case AST_MUL:
+        case AST_DIV:
+        case AST_MODULUS:
+            return 10;
+        case AST_BAND:
+        case AST_BOR:
+        case AST_BXOR:
+        case AST_BLSHIFT:
+        case AST_BRSHIFT:
+            return 13;
+        case AST_BNOT:
+        case AST_NOT:
+        case AST_CAST:
+            return 15;
+        case AST_REFER:
+        case AST_DEREF:
+            return 16;
+        case AST_MEMBER:
+        case AST_FROM_NAMESPACE:
+            return 20;
+    }
+    // if(op==AST_ASSIGN) return 2;
+    // if(op==AST_AND||op==AST_OR) return 3;
+    // if(op==AST_LESS||op==AST_GREATER||op==AST_LESS_EQUAL||op==AST_GREATER_EQUAL
+    //     ||op==AST_EQUAL||op==AST_NOT_EQUAL) return 5;
+    // if(op==AST_RANGE) return 8;
+    // if(op==AST_ADD||op==AST_SUB) return 9;
+    // if(op==AST_MUL||op==AST_DIV||op==AST_MODULUS) return 10;
+    // if(op==AST_BAND||op==AST_BOR||op==AST_BXOR||
+    //     op==AST_BLSHIFT||op==AST_BRSHIFT) return 13;
+    // if(op==AST_BNOT || op==AST_NOT || op==AST_CAST) return 15;
+    // if(op==AST_REFER || op==AST_DEREF) return 16;
+    // if(op==AST_MEMBER || op == AST_FROM_NAMESPACE) return 20;
     log::out << log::RED<<__FILE__<<":"<<__LINE__<<", missing "<<op<<"\n";
     return 0;
 }
@@ -97,8 +139,8 @@ Token& ParseInfo::get(uint _index){
     return tokens->get(_index);
 }
 bool ParseInfo::end(){
-    Assert(index<=tokens->length());
-    return index==tokens->length();
+    // Assert(index<=tokens->length());
+    return index>=tokens->length();
 }
 void ParseInfo::finish(){
     index = tokens->length();
@@ -269,9 +311,8 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId){
                 break;
             } else if(Equal(tok,"[")) {
                 Token& token = info.get(endTok+1);
-                if(IsInteger(token))
+                if(!Equal(token,"]"))
                     break;
-
             }
             if(IsName(tok)){
                 if(wasName) {
@@ -494,7 +535,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
         }
     }
     astStruct->tokenRange.endIndex = info.at()+1;
-    _GLOG(log::out << "Parsed struct "<<name << " with "<<astStruct->members.size()<<" members\n";)
+    _GLOG(log::out << "Parsed struct "<<log::LIME<< name <<log::SILVER << " with "<<astStruct->members.size()<<" members\n";)
     return error;
 }
 // int ParseStruct(ParseInfo& info, ASTStruct*& tempFunction, bool attempt);
@@ -734,7 +775,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     // }
     // typeInfo->astEnum = astEnum;
     // typeInfo->_size = 4; // i32
-    _PLOG(log::out << "Parsed enum "<<name << " with "<<astEnum->members.size()<<" members\n";)
+    _PLOG(log::out << "Parsed enum "<<log::LIME<< name <<log::SILVER <<" with "<<astEnum->members.size()<<" members\n";)
     return error;
 }
 // parses arguments and puts them into fncall->left
@@ -943,6 +984,27 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 ops.push_back(opType);
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
+            // } else if (Equal(token,"..")){
+            //     info.next();
+            //     attempt=false;
+
+            //     ASTExpression* rightExpr=nullptr;
+            //     int result = ParseExpression(info, rightExpr, false);
+            //     if(result != PARSE_SUCCESS){
+                    
+            //     }
+
+            //     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_RANGE));
+            //     tmp->tokenRange.firstToken = token;
+            //     tmp->tokenRange.startIndex = values.back()->tokenRange.startIndex;
+            //     tmp->tokenRange.endIndex = info.at()+1;
+            //     tmp->tokenRange.tokenStream = info.tokens;
+
+            //     tmp->left = values.back();
+            //     values.pop_back();
+            //     tmp->right = rightExpr;
+            //     values.push_back(tmp);
+            //     continue;
             } else if(Equal(token,"[")){
                 int startIndex = info.at()+1;
                 info.next();
@@ -1690,10 +1752,13 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
         Token token = info.get(info.at()+1);
         bool reverseAnnotation = false;
+        bool pointerAnnot = false;
         while (IsAnnotation(token)){
             info.next();
             if(Equal(token,"@reverse")){
                 reverseAnnotation=true;
+            } else if(Equal(token,"@pointer")){
+                pointerAnnot=true;
             } else {
                 WARN_HEAD(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for functions.\n\n";
                     WARN_LINE(info.at(),"unknown");
@@ -1729,6 +1794,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         statement = info.ast->createStatement(ASTStatement::FOR);
         statement->varnames.push_back({varname});
         statement->reverse = reverseAnnotation;
+        statement->pointer = pointerAnnot;
         statement->rvalue = expr;
         statement->body = body;
         statement->tokenRange.firstToken = firstToken;
@@ -2152,17 +2218,23 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
             Token token1 = info.get(info.at()+1);
             Token token2 = info.get(info.at()+2);
             Token token3 = info.get(info.at()+3);
-            if(Equal(token1,"[") && Equal(token3,"]") && IsInteger(token2)) {
+            if(Equal(token1,"[") && Equal(token3,"]")) {
                 info.next();
                 info.next();
                 info.next();
 
-                arrayLength = ConvertInteger(token2);
-                if(arrayLength<0){
-                    ERR_HEAD(token2, "Array cannot have negative size.\n\n";
-                        ERR_LINE(info.at()-2,"< 0");
+                if(IsInteger(token2)) {
+                    arrayLength = ConvertInteger(token2);
+                    if(arrayLength<0){
+                        ERR_HEAD(token2, "Array cannot have negative size.\n\n";
+                            ERR_LINE(info.at()-1,"< 0");
+                        )
+                        arrayLength = 0;
+                    }
+                } else {
+                    ERR_HEAD(token2, "The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.\n\n";
+                        ERR_LINE(info.at()-1, "must be positive integer literal");
                     )
-                    arrayLength = 0;
                 }
                 std::string* str = info.ast->createString();
                 *str = "Slice<";
@@ -2190,7 +2262,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     }
 
     Token token = info.get(info.at()+1);
-    if(Equal(token,";")){
+    if(Equal(token,";") || info.end()){
         info.next(); // ;
         statement = info.ast->createStatement(ASTStatement::ASSIGN);
 

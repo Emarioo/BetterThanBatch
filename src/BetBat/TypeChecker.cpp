@@ -169,27 +169,21 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
         if(alignedSize<asize)
             alignedSize = asize;
 
-        /* You may see this:
-            offset 4: a
-            offset 8: b
-            evalutate to 16 bytes
-        You may think that a should have offset 0 but it shouldn't.
-        GeneratingExpressions pushes the values to the stack growing downwards.
-        First b is pushed (16-8). Then a is pushed (8-4) right next to b.
-        If a had 0 as offset you would need to pop the pushed a and align it to
-        0 instead of 4.
-        */
         if(i+1<(int)astStruct->members.size()){
             auto& implMema = structImpl->members[i+1];
-            i32 nsize = info.ast->getTypeSize(implMema.typeId);
+            i32 nextSize = info.ast->getTypeSize(implMema.typeId);
             // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
-            int misalign = (offset + size) % nsize;
+            int misalign = (offset + size) % nextSize;
             if(misalign!=0){
-                offset+=misalign;
+                offset+=nextSize-misalign;
+            }
+        } else {
+            int misalign = (offset + size) % alignedSize;
+            if(misalign!=0){
+                offset+=alignedSize-misalign;
             }
         }
         
-        _TC_LOG(log::out << " "<<offset<<": "<<member.name<<" ("<<size<<" bytes)\n";)
         implMem.offset = offset;
         offset+=size;
 
@@ -210,30 +204,24 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
             offset 0   :  push 8    - push first member
             * pointer to struct begins here
         */
-        // if(i+1<(int)astStruct->members.size()){
-        //     auto& implMema = structImpl->members[i+1];
-        //     i32 nsize = info.ast->getTypeSize(implMema.typeId);
-        //     // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
-        //     int misalign = (offset + nsize) % size;
-        //     if(misalign!=0){
-        //         offset+=size-misalign;
-        //     }
-        // }
     }
 
-    // if (polymorphic){
-    //     _TC_LOG(log::out << astStruct->name << " was polymorphic and cannot be evaluated yet\n";)
-    // }else {
-        // align the end so the struct can be stacked together
     if(offset != 0){
         structImpl->alignedSize = alignedSize;
         int misalign = offset % alignedSize;
         if(misalign!=0){
             offset+=alignedSize-misalign;
-            structImpl->members.back().offset += misalign;
         }
     }
     structImpl->size = offset;
+    _VLOG(log::out << "Struct "<<log::LIME << astStruct->name<<log::SILVER<<" (size: "<<structImpl->size <<(astStruct->isPolymorphic()?", polymorphic":"")<<")\n";)
+    for(int i=0;i<(int)structImpl->members.size();i++){
+        auto& name = astStruct->members[i].name;
+        auto& mem = structImpl->members[i];
+        
+        i32 size = info.ast->getTypeSize(mem.typeId);
+        _VLOG(log::out << " "<<mem.offset<<": "<<name<<" ("<<size<<" bytes)\n";)
+    }
     // _TC_LOG(log::out << info.ast->typeToString << " was evaluated to "<<offset<<" bytes\n";)
     // }
     return success;
@@ -255,7 +243,6 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, TokenRange&
 
     TypeId typeId = {};
 
-    // Token ns={};
     u32 plevel=0;
     std::vector<Token> polyTypes;
     Token typeName = AST::TrimPointer(typeString, &plevel);
@@ -749,16 +736,9 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
     Assert(expr)
     _TC_LOG(FUNC_ENTER)
     
-    // if(expr->left && expr->typeId != AST_FNCALL) {
-    //     CheckExpression(info,scope, expr->left, outType);
-    // }
-    // if(expr->right) {
-    //     TypeId temp={};
-    //     CheckExpression(info,scope, expr->right, expr->left?&temp: outType);
-    //     // TODO: PRIORITISING LEFT FOR OUTPUT TYPE WONT ALWAYS WORK
-    //     //  Some operations like "2 + ptr" will use i32 as out type when
-    //     //  it should be of pointer type
-    // }
+    // IMPORTANT NOTE: CheckExpression HAS to run for left and right expressions
+    //  since they may require types to be checked. AST_SIZEOF needs to evalute for example
+
     if(expr->typeId == AST_REFER){
         if(expr->left) {
             CheckExpression(info,scope, expr->left, outType);
@@ -791,6 +771,10 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
         if(expr->left) {
             CheckExpression(info,scope, expr->left, outType);
         }
+        TypeId temp={};
+        if(expr->right) {
+            CheckExpression(info,scope, expr->right, &temp);
+        }
         if(outType->getPointerLevel()==0){
             std::string strtype = info.ast->typeToString(*outType);
             ERR_HEAD(expr->left->tokenRange, "Cannot index non-pointer.\n\n";
@@ -807,6 +791,15 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
                 *outType = var->typeId;
             }
         }
+    } else if(expr->typeId == AST_RANGE){
+        TypeId temp={};
+        if(expr->left) {
+            CheckExpression(info,scope, expr->left, &temp);
+        }
+        if(expr->right) {
+            CheckExpression(info,scope, expr->right, &temp);
+        }
+        *outType = CheckType(info, scope->scopeId, "Range", expr->tokenRange, nullptr);
     } else if(expr->typeId == AST_STRING){
         if(!expr->name){
             ERR_HEAD2(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
@@ -822,7 +815,7 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
             info.ast->constStrings[*expr->name] = tmp;
         }
         *outType = CheckType(info, scope->scopeId, "Slice<char>", expr->tokenRange, nullptr);
-    } else if(expr->typeId == AST_SIZEOF) {
+    }  else if(expr->typeId == AST_SIZEOF) {
         if(!expr->name){
             ERR_HEAD2(expr->tokenRange) << "string was null at "<<expr->tokenRange.firstToken<<" (compiler bug)\n";
             ERRTOKENS(expr->tokenRange)
@@ -1204,14 +1197,17 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             int result = CheckRest(info, now->elseBody);
         }
         if(now->type == ASTStatement::ASSIGN){
+            // log::out << "ASSING\n";
             _TC_LOG(log::out << "assign ";)
             for (auto& var : now->varnames) {
-                if(var.assignType.isString()){
-                    bool printedError=false;
-                    CheckType(info,scope->scopeId, var.assignType, now->tokenRange, &printedError);
-                }else if(!var.assignType.isValid()) {
+                if(!var.assignType.isValid()) {
                     var.assignType = typeId;
-                }
+                } 
+                // else {
+                    if(var.assignType.isString())
+                        log::out <<"YOU STRING WHY!?\n";
+                //     log::out << "ASSIGN WHAT? "<<info.ast->typeToString(var.assignType)<<", "<<info.ast->typeToString(typeId)<<" from rvalue\n";
+                // }
                 _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
                 auto varinfo = info.ast->addVariable(scope->scopeId, std::string(var.name));
                 if(varinfo){
@@ -1230,41 +1226,72 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             ScopeId varScope = now->body->scopeId;
 
             // TODO: for loop variables
-            auto sliceinfo = info.ast->getTypeInfo(typeId);
-            if(!sliceinfo || !sliceinfo->astStruct || sliceinfo->astStruct->name != "Slice"){
-                std::string strtype = info.ast->typeToString(typeId);
-                ERR_HEAD(now->rvalue->tokenRange, "The expression in for loop must be a Slice.\n\n";
-                    ERR_LINE(now->rvalue->tokenRange,strtype.c_str());
-                )
-                continue;
-            }
-            
-            auto varinfo_index = info.ast->addVariable(varScope, "nr");
-            if(varinfo_index) {
-                varinfo_index->typeId = AST_INT32;
-            } else {
-                WARN_HEAD(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
-            }
+            auto iterinfo = info.ast->getTypeInfo(typeId);
+            if(iterinfo&&iterinfo->astStruct){
+                if(iterinfo->astStruct->name == "Slice"){
+                    auto varinfo_index = info.ast->addVariable(varScope, "nr");
+                    if(varinfo_index) {
+                        varinfo_index->typeId = AST_INT32;
+                    } else {
+                        WARN_HEAD(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
+                    }
 
-            // _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
-            auto varinfo_item = info.ast->addVariable(varScope, std::string(varname.name));
-            if(varinfo_item){
-                auto memdata = sliceinfo->getMember("ptr");
-                auto itemtype = memdata.typeId;
-                itemtype.setPointerLevel(itemtype.getPointerLevel()-1);
-                varinfo_item->typeId = itemtype;
-                varname.assignType = itemtype;
-            } else {
-                WARN_HEAD(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
-            }
+                    // _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
+                    auto varinfo_item = info.ast->addVariable(varScope, std::string(varname.name));
+                    if(varinfo_item){
+                        auto memdata = iterinfo->getMember("ptr");
+                        auto itemtype = memdata.typeId;
+                        if(!now->pointer){
+                            itemtype.setPointerLevel(itemtype.getPointerLevel()-1);
+                        }
+                        varinfo_item->typeId = itemtype;
+                        varname.assignType = itemtype;
+                    } else {
+                        WARN_HEAD(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
+                    }
 
-            if(now->body){
-                int result = CheckRest(info, now->body);
-            }
-            info.ast->removeIdentifier(varScope, varname.name);
-            info.ast->removeIdentifier(varScope, "nr");
+                    if(now->body){
+                        int result = CheckRest(info, now->body);
+                    }
+                    info.ast->removeIdentifier(varScope, varname.name);
+                    info.ast->removeIdentifier(varScope, "nr");
+                    continue;
+                } else if(iterinfo->astStruct->name == "Range"){
+                    if(now->pointer){
+                        WARN_HEAD(now->tokenRange, "@ppointer annotation does nothing with Range as for loop. It only works with slices.\n";)
+                    }
+                    now->rangedForLoop = true;
+                    auto varinfo_index = info.ast->addVariable(varScope, "nr");
+                    auto memdata = iterinfo->getMember(0); // begin, now or whatever name it has
+                    TypeId inttype = memdata.typeId;
+                    varname.assignType = inttype;
+                    if(varinfo_index) {
+                        varinfo_index->typeId = inttype;
+                    } else {
+                        WARN_HEAD(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
+                    }
 
-            _TC_LOG(log::out << "\n";)
+                    // _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
+                    auto varinfo_item = info.ast->addVariable(varScope, std::string(varname.name));
+                    if(varinfo_item){
+                        varinfo_item->typeId = inttype;
+                    } else {
+                        WARN_HEAD(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
+                    }
+
+                    if(now->body){
+                        int result = CheckRest(info, now->body);
+                    }
+                    info.ast->removeIdentifier(varScope, varname.name);
+                    info.ast->removeIdentifier(varScope, "nr");
+                    continue;
+                }
+            }
+            std::string strtype = info.ast->typeToString(typeId);
+            ERR_HEAD(now->rvalue->tokenRange, "The expression in for loop must be a Slice.\n\n";
+                ERR_LINE(now->rvalue->tokenRange,strtype.c_str());
+            )
+            continue;
         } else 
         // Doing using after body so that continue can be used inside it without
         // messing things up. Using shouldn't have a body though so it doesn't matter.
