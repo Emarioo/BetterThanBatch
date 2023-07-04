@@ -11,11 +11,14 @@
 ############### */
 #define DEBUG
 // #define SILENT
-// #define ALLOC_LOG
 // #define LOG_MEASURES
 
 #define LOG_MSG_LOCATION
 
+// Causes for memory leaks (or negative final memory):
+// - new keyword instead of engone::Allocate
+
+// #define ALLOC_LOG
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
 

@@ -162,14 +162,55 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const std::string &name) {
     return ptr;
 }
 
-Identifier* AST::addFunction(ScopeId scopeId, const std::string& name, ASTFunction* func) {
+Identifier* AST::addFunction(ScopeId scopeId, const std::string& name, ASTFunction* func, FuncImpl* funcImpl) {
     using namespace engone;
-    auto id = addIdentifier(scopeId, name);
-    if(!id)
+    auto id = getIdentifier(scopeId, name);
+    if(!id) {
+        id = addIdentifier(scopeId, name);
+        id->type = Identifier::FUNC;
+    }
+    if(!id || id->type != Identifier::FUNC)
         return nullptr;
 
-    id->type = Identifier::FUNC;
-    id->astFunc = func;
+    bool found=false;
+    // for(int i=0;i<(int)id->funcOverloads.size();i++){
+    //     auto& funcOverload = id->funcOverloads[i];
+
+    //     int nonDefaults0 = 0;
+    //     int nonDefaults1 = 0;
+    //     for(auto& arg : id->funcOverloads[i].astFunc->arguments){
+    //         if(arg.defaultValue)
+    //             break;
+
+    //         nonDefaults0++;
+    //     }
+    //     for(auto& arg : func->arguments){
+    //         if(arg.defaultValue)
+    //             break;
+
+    //         nonDefaults1++;
+    //     }
+    //     if(nonDefaults0 != nonDefaults1)
+    //         continue;
+
+    //     found = true;
+    //     for(int j=0;j<nonDefaults0;j++){
+    //         if(funcOverload.funcImpl->arguments[j].typeId != funcImpl->arguments[j].typeId){
+    //             found = false;
+    //             break;
+    //         }
+    //     }
+    //     if(found)
+    //         break;
+    //     found = false;
+    // }
+    // if(found)
+    //     return nullptr; // func already exists
+
+    // Identifier::FuncOverload overload{};
+    // overload.astFunc = func;
+    // overload.funcImpl = funcImpl;
+    // id->funcOverloads.push_back(overload);
     return id;
 }
 Identifier *AST::addIdentifier(ScopeId scopeId, const std::string &name) {
@@ -225,15 +266,42 @@ VariableInfo *AST::getVariable(Identifier* id) {
     Assert(id->varIndex>=0&&(int)id->varIndex<(int)variables.size());
     return variables[id->varIndex];
 }
-ASTFunction *AST::getFunction(Identifier* id) {
-    return id->astFunc;
+FnOverloads::Overload *AST::getFunction(Identifier* id, std::vector<TypeId>& argTypes) {
+    // , std::vector<AST::NamedArg>& namedArgs) {
+   
+    // for(int i=0;i<(int)id->funcOverloads.size();i++){
+    //     int nonDefaults0 = 0;
+    //     // TODO: Store non defaults in Identifier or ASTStruct to save time.
+    //     //   Recalculating non default arguments here every time you get a function is
+    //     //   unnecessary.
+    //     for(auto& arg : id->funcOverloads[i].astFunc->arguments){
+    //         if(arg.defaultValue)
+    //             break;
+
+    //         nonDefaults0++;
+    //     }
+    //     if(nonDefaults0 > (int)argTypes.size())
+    //         continue;
+    //     bool found = true;
+    //     for (int j=0;j<nonDefaults0;j++){
+    //         if(id->funcOverloads[i].funcImpl->arguments[j].typeId != argTypes[j]){
+    //             found = false;
+    //             break;
+    //         }
+    //     }
+    //     if(found){
+    //         return &id->funcOverloads[i];
+    //     }
+    // }
+    return nullptr;
 }
 
-StructImpl::Method StructImpl::getMethod(const std::string& name){
-    auto pair = methods.find(name);
-    if(pair == methods.end())
-        return {};
-    return pair->second;
+FnOverloads::Overload* StructImpl::getMethod(const std::string& name, std::vector<TypeId>& typeIds){
+    // auto pair = methods.find(name);
+    // if(pair == methods.end())
+    //     return {};
+    // return pair->second;
+    return nullptr;
     // ASTFunction* next = functions;
     // while(next){
     //     ASTFunction* now = next;
@@ -268,31 +336,13 @@ void AST::removeIdentifier(ScopeId scopeId, const std::string &name) {
 // }
 void AST::appendToMainBody(ASTScope *body) {
     Assert(body);
-    if (body->enums) {
-        mainBody->add(body->enums, body->enumsTail);
-        body->enums = 0;
-        body->enumsTail = 0;
-    }
-    if (body->functions) {
-        mainBody->add(body->functions, body->functionsTail);
-        body->functions = 0;
-        body->functionsTail = 0;
-    }
-    if (body->structs) {
-        mainBody->add(body->structs, body->structsTail);
-        body->structs = 0;
-        body->structsTail = 0;
-    }
-    if (body->statements) {
-        mainBody->add(body->statements, body->statementsTail);
-        body->statements = 0;
-        body->statementsTail = 0;
-    }
-    if (body->namespaces) {
-        mainBody->add(body->namespaces, this, body->namespacesTail);
-        body->namespaces = 0;
-        body->namespacesTail = 0;
-    }
+    #define _ADD(X) for(auto it : body->X) { mainBody->add(it); } body->X.cleanup();
+    _ADD(enums)
+    _ADD(functions)
+    _ADD(structs)
+    _ADD(statements)
+    for(auto it : body->namespaces) { mainBody->add(it, this); } body->namespaces.cleanup();
+    #undef ADD
     destroy(body);
 }
 
@@ -341,13 +391,16 @@ ASTScope *AST::createNamespace(const std::string& name) {
     new(ptr->name)std::string(name);
     return ptr;
 }
-#define TAIL_ADD(M, S)     \
-    if (!M)                \
-        M##Tail = M = S;   \
-    else                   \
-        M##Tail->next = S; \
-    if (tail) M##Tail = tail; else while (M##Tail->next)  \
-        M##Tail = M##Tail->next;
+// #define TAIL_ADD(M, S)     
+//     if (!M)                
+//         M##Tail = M = S;   
+//     else                   
+//         M##Tail->next = S; 
+//     if (tail) M##Tail = tail; else while (M##Tail->next)  
+//         M##Tail = M##Tail->next;
+
+#define TAIL_ADD(M, S) Assert(("should not add null", S)); M.add(S);
+
 void ASTScope::add(ASTStatement *astStatement, ASTStatement* tail) {
     TAIL_ADD(statements, astStatement)
 }
@@ -361,56 +414,29 @@ void ASTScope::add(ASTEnum *astEnum, ASTEnum* tail) {
     TAIL_ADD(enums, astEnum)
 }
 void ASTScope::add(ASTScope* astNamespace, AST* ast, ASTScope* tail){
-    if(!namespaces){
-        namespacesTail = namespaces = astNamespace;
-        if(tail)
-            namespacesTail = tail;
-        else
-            while (namespacesTail->next)
-                namespacesTail = namespacesTail->next;
-        return;
-    }
-    // NOTE: This code can be confusing and mistakes
-    //  are easy to make. Keep a clear mind when
-    //  working here and don't change things
-    //  in the spur of the moment!
-    // NOTE: Change things in ASTScope::add WHEN DOING CHANGES HERE!
-    ASTScope* nextInsert = astNamespace;
-    while(nextInsert){
-        ASTScope* now = nextInsert;
-        nextInsert = nextInsert->next;
+    Assert(("should not add null",astNamespace))
+    for(auto ns : namespaces){
+        // ASTScope* ns = namespaces.get(i);
 
-        bool appended=false;
-        ASTScope* nextNS = namespaces;
-        while(nextNS){
-            ASTScope* ns = nextNS;
-            nextNS = nextNS->next;
-
-            if(*ns->name == *astNamespace->name){
-                appended=true;
-                if(now->enums)
-                    ns->add(now->enums);
-                if(now->functions)
-                    ns->add(now->functions);
-                if(now->structs)
-                    ns->add(now->structs);
-                if(now->namespaces)
-                    ns->add(now->namespaces, ast);
-                now->enums=0;
-                now->functions=0;
-                now->structs=0;
-                now->namespaces=0;
-                now->next = 0;
-                ast->destroy(now);
-                break;
-            }
-        }
-        if(!appended){
-            namespacesTail->next = now;
-            now->next = 0;
-            namespacesTail = namespacesTail->next;
+        if(*ns->name == *astNamespace->name){
+            for(auto it : astNamespace->enums)
+                ns->add(it);
+            for(auto it : astNamespace->functions)
+                ns->add(it);
+            for(auto it : astNamespace->structs)
+                ns->add(it);
+            for(auto it : astNamespace->namespaces)
+                ns->add(it, ast);
+            astNamespace->enums.cleanup();
+            astNamespace->functions.cleanup();
+            astNamespace->structs.cleanup();
+            astNamespace->namespaces.cleanup();
+            astNamespace->next = nullptr;
+            ast->destroy(astNamespace);
+            return;
         }
     }
+    namespaces.add(astNamespace);
 }
 void AST::Destroy(AST *ast) {
     if (!ast)
@@ -817,17 +843,13 @@ void AST::destroy(ASTScope *scope) {
         engone::Free(scope->name, sizeof(std::string));
         scope->name = nullptr;
     }
-    if (scope->structs)
-        destroy(scope->structs);
-    if (scope->enums)
-        destroy(scope->enums);
-    if (scope->functions)
-        destroy(scope->functions);
-    if (scope->statements)
-        destroy(scope->statements);
-    if(scope->namespaces)
-        destroy(scope->namespaces);
-
+    #define DEST(X) for(auto it : scope->X) destroy(it);
+    DEST(structs)
+    DEST(enums)
+    DEST(functions)
+    DEST(statements)
+    DEST(namespaces)
+    #undef DEST
     scope->~ASTScope();
     engone::Free(scope, sizeof(ASTScope));
 }
@@ -839,8 +861,9 @@ void AST::destroy(ASTStruct *astStruct) {
             destroy(mem.defaultValue);
     }
     astStruct->members.clear();
-    if (astStruct->functions)
-        destroy(astStruct->functions);
+    for(auto f : astStruct->functions){
+        destroy(f);
+    }
     astStruct->~ASTStruct();
     engone::Free(astStruct, sizeof(ASTStruct));
 }
@@ -881,13 +904,27 @@ void AST::destroy(ASTStatement *statement) {
             destroy(statement->body);
         if (statement->elseBody)
             destroy(statement->elseBody);
+        if (statement->returnValues){
+            for(ASTExpression* expr : *statement->returnValues){
+                destroy(expr);
+            }
+            statement->returnValues->~vector<ASTExpression*>();
+            engone::Free(statement->returnValues,sizeof(std::vector<ASTExpression*>));
+        }
     }
     statement->~ASTStatement();
     engone::Free(statement, sizeof(ASTStatement));
 }
 void AST::destroy(ASTExpression *expression) {
-    if (expression->next)
-        destroy(expression->next);
+    // if (expression->next)
+    //     destroy(expression->next);
+    if(expression->args){
+        for(ASTExpression* expr : *expression->args){
+            destroy(expr);
+        }
+        expression->args->~vector<ASTExpression*>();
+        engone::Free(expression->args,sizeof(std::vector<ASTExpression*>));
+    }
     if (expression->name) {
         expression->name->~basic_string<char>();
         engone::Free(expression->name, sizeof(std::string));
@@ -1198,26 +1235,28 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
 
 void ASTStruct::add(ASTFunction* func){
     // NOTE: Is this code necessary? Did something break.
-    auto pair = baseImpl.methods.find(func->name);
-    Assert(pair == baseImpl.methods.end());
-    baseImpl.methods[func->name] = {func, &func->baseImpl};
+    // auto pair = baseImpl.methods.find(func->name);
+    // Assert(pair == baseImpl.methods.end());
+    // baseImpl.methods[func->name] = {func, &func->baseImpl};
+    
+    functions.add(func);
 
-    if(!functions){
-        functions = func;
-        functionsTail = func;
-    } else {
-        functionsTail->next = func;
-    }
-    while(functionsTail->next){
-        functionsTail = functionsTail->next;
-    }
+    // if(!functions){
+    //     functions = func;
+    //     functionsTail = func;
+    // } else {
+    //     functionsTail->next = func;
+    // }
+    // while(functionsTail->next){
+    //     functionsTail = functionsTail->next;
+    // }
 }
 
 void StructImpl::addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl){
-    auto pair = methods.find(name);
-    Assert(pair == methods.end());
+    // auto pair = methods.find(name);
+    // Assert(pair == methods.end());
 
-    methods[name] = {func, funcImpl};
+    // methods[name] = {func, funcImpl};
 }
 std::string ScopeInfo::getFullNamespace(AST* ast){
     std::string ns = "";
@@ -1303,16 +1342,16 @@ void ASTScope::print(AST *ast, int depth) {
             log::out<<"\n";
             
         }
-        if (structs)
-            structs->print(ast, depth + 1);
-        if (enums)
-            enums->print(ast, depth + 1);
-        if (functions)
-            functions->print(ast, depth + 1);
-        if (statements)
-            statements->print(ast, depth + 1);
-        if (namespaces)
-            namespaces->print(ast, depth + 1);
+        // #define MUL_PRINT(X,...) for(auto it : X) it->print(ast,depth+1); MUL_PRINT(...)
+        // MUL_PRINT(structs, enums, functions, statements, namespaces);
+        
+        #define PR(X) for(auto it : X) it->print(ast,depth+1);
+        PR(structs)
+        PR(enums)
+        PR(functions)
+        PR(statements)
+        PR(namespaces)
+        #undef PR
     }
     if(next)
         next->print(ast,depth);
@@ -1391,9 +1430,9 @@ void ASTStruct::print(AST *ast, int depth) {
                 log::out << ", ";
             }
         }
-        if(functions){
+        for(auto f : functions){
             log::out << "\n";
-            functions->print(ast,depth);
+            f->print(ast,depth);
             PrintSpace(depth);
         }
         log::out << " }\n";
@@ -1452,13 +1491,23 @@ void ASTStatement::print(AST *ast, int depth) {
     if (next) {
         next->print(ast, depth);
     }
+    if(returnValues){
+        for(ASTExpression* expr : *returnValues){
+            if (expr) {
+                expr->print(ast, depth+1);
+            }
+        }
+    }
 }
 void ASTExpression::print(AST *ast, int depth) {
     using namespace engone;
     PrintSpace(depth);
 
+    log::out << "Expr ";
+    if(namedValue){
+        log::out << *namedValue<<"= ";
+    }
     if (isValue) {
-        log::out << "Expr ";
         log::out << ast->typeToString(typeId);
         log::out << " ";
         log::out.flush();
@@ -1493,7 +1542,6 @@ void ASTExpression::print(AST *ast, int depth) {
         } else
             log::out << "\n";
     } else {
-        log::out << "Expr ";
         if(typeId == AST_ASSIGN) {
             if(castType.getId()!=0){
                 log::out << OpToStr((OperationType)castType.getId());
@@ -1553,8 +1601,12 @@ void ASTExpression::print(AST *ast, int depth) {
             }
         }
     }
-    if (next) {
-        next->print(ast, depth);
+    if(args){
+        for(ASTExpression* expr : *args){
+            if (expr) {
+                expr->print(ast, depth+1);
+            }
+        }
     }
 }
 /* #endregion */

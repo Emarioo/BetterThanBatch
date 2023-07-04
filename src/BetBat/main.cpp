@@ -34,11 +34,34 @@ void print_help(){
 
 //     stac(cool);
 // }
-
+// namespace engone {
+//     // template<typename T>
+//     // void fun(T t){
+//     //     log::out << "T\n";
+//     // }
+//     void fun(i32 n){
+//         log::out << "i32\n";
+//     }
+//     void fun(i32 a, i32 b = 8){
+//         log::out << "i32 i32\n";
+//     }
+// }
 
 int main(int argc, const char** argv){
     using namespace engone;
 
+    // DynamicArray<int> arr{};
+    // arr.add(5);
+    // arr.add(32);
+    // for(auto i : arr){
+    //     log::out << i<<"\n";
+    // }
+    // return 1;
+    // fun(5);
+    // fun(5,b : 6);
+    // fun(5);
+
+    // return 1;
 
     // int file = open("eaeea",O_RDWR);
     // printf("file %d\n",err);
@@ -203,6 +226,12 @@ int main(int argc, const char** argv){
         // CompileDisassemble("tests/varlimit.btb");
 
     }
+    // std::string msg = "I am a rainbow, wahoooo!";
+    // for(int i=0;i<(int)msg.size();i++){
+    //     char chr = msg[i];
+    //     log::out << (log::Color)(i%16);
+    //     log::out << chr;
+    // }
     int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
     if(finalMemory!=0){
         log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";

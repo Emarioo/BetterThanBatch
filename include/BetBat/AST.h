@@ -2,6 +2,8 @@
 
 #include "BetBat/Tokenizer.h"
 #include "Engone/Alloc.h"
+#include "BetBat/Util/Array.h"
+
 
 typedef u32 ScopeId;
 struct ASTStruct;
@@ -154,8 +156,32 @@ struct TypeId {
     // TODO: Rename to something better
     bool isNormalType() const { return isValid() && !isString() && !isPointer() && !isVirtual(); }
 };
+// struct TypeIds {
+//     TypeId* typeIds=nullptr;
+//     int len = 0;
+//     void cleanup(){
+//         if(!typeIds) return;
+//         engone::Free(typeIds, len*sizeof(TypeId));
+//         typeIds = nullptr;
+//         len = 0;
+//     }
+//     void init(int len){
+//         Assert(!typeIds);
+//         typeIds = (TypeId*)engone::Allocate(len*sizeof(TypeId));
+//         if(!typeIds)
+//             return;
+//         this->len = len;
+//     }
+// };
 struct ASTFunction;
 struct FuncImpl;
+struct FnOverloads {
+    struct Overload {
+        ASTFunction* astFunc=0;
+        FuncImpl* funcImpl = 0;
+    };
+    std::vector<Overload> overloads;
+};
 // ASTStruct can have multiple of these per
 // polymorphic instantiation.
 struct StructImpl {
@@ -169,13 +195,9 @@ struct StructImpl {
     
     std::vector<TypeId> polyIds;
 
-    struct Method {
-        ASTFunction* astFunc=nullptr;
-        FuncImpl* funcImpl=nullptr;
-    };
-    std::unordered_map<std::string, Method> methods;
+    std::unordered_map<std::string, FnOverloads> methods;
     
-    Method getMethod(const std::string& name);
+    FnOverloads::Overload* getMethod(const std::string& name, std::vector<TypeId>& typeIds);
     void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
 };
 struct TypeInfo {
@@ -231,10 +253,9 @@ struct Identifier {
     };
     Type type=VAR;
     std::string name{};
-    ScopeId scopeId;
-    int varIndex;
-    ASTFunction* astFunc=0;
-    FuncImpl* funcImpl = 0;
+    ScopeId scopeId=0;
+    int varIndex=0;
+    FnOverloads funcOverloads{};
     static const u64 INVALID_FUNC_ADDRESS = 0;
 };
 struct VariableInfo {
@@ -258,7 +279,6 @@ struct ScopeInfo {
     // Returns the full namespace.
     // Name of parent scopes are concatenated.
     std::string getFullNamespace(AST* ast);
-    
 };
 // template<>
 // struct std::hash<TypeId> {
@@ -292,8 +312,12 @@ struct ASTExpression : ASTNode {
     ASTExpression* left=0; // FNCALL has arguments in order left to right
     ASTExpression* right=0;
     TypeId castType={};
+
+    // TypeId finalType={}; // evaluated by type checker
+
+    std::vector<ASTExpression*>* args=nullptr; // fncall or initialiser
     
-    ASTExpression* next=0;
+    // ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
 struct ASTScope;
@@ -323,14 +347,16 @@ struct ASTStatement : ASTNode {
     bool rangedForLoop=false; // otherwise sliced for loop
     std::vector<VarName> varnames;
     // std::string* name=0;
-    std::string* alias=0;
+    std::string* alias = nullptr;
     // TypeId typeId={};
     // ASTExpression* lvalue=0;
-    ASTExpression* rvalue=0;
-    ASTScope* body=0;
-    ASTScope* elseBody=0;
+    ASTExpression* rvalue = nullptr;
+    ASTScope* body = nullptr;
+    ASTScope* elseBody = nullptr;
 
-    ASTStatement* next=0;
+    ASTStatement* next = nullptr;
+
+    std::vector<ASTExpression*>* returnValues = nullptr;
 
     bool sharedContents = false; // this node is not the owner of it's nodes.
 
@@ -362,8 +388,10 @@ struct ASTStruct : ASTNode {
 
     ScopeId scopeId=0;
 
-    ASTFunction* functions = 0;
-    ASTFunction* functionsTail = 0;
+    DynamicArray<ASTFunction*> functions{};
+    // ASTFunction* functions = 0;
+    // ASTFunction* functionsTail = 0;
+    // done in parser stage
     void add(ASTFunction* func);
 
     bool isPolymorphic() {
@@ -401,7 +429,7 @@ struct ASTFunction : ASTNode {
         TypeInfo* virtualType = nullptr;
     };
     std::vector<PolyArg> polyArgs;
-    FuncImpl baseImpl;
+    FuncImpl baseImpl{};
     std::vector<FuncImpl*> polyImpls;
 
     ScopeId scopeId=0;
@@ -426,27 +454,19 @@ struct ASTScope : ASTNode {
     };
     Type type = BODY;
 
-    // bool nativeCode = false; // only used for functions (probably)
-    // bool hidden=false;
-
-    ASTStruct* structs = 0;
-    ASTStruct* structsTail = 0;
+    DynamicArray<ASTStruct*> structs{};
     void add(ASTStruct* astStruct, ASTStruct* tail = 0);
     
-    ASTEnum* enums = 0;
-    ASTEnum* enumsTail = 0;
+    DynamicArray<ASTEnum*> enums{};
     void add(ASTEnum* astEnum, ASTEnum* tail = 0);
 
-    ASTFunction* functionsTail = 0;
-    ASTFunction* functions = 0;
+    DynamicArray<ASTFunction*> functions{};
     void add(ASTFunction* astFunction, ASTFunction* tail = 0);
     
-    ASTScope* namespaces = 0;
-    ASTScope* namespacesTail = 0;
+    DynamicArray<ASTScope*> namespaces{};
     void add(ASTScope* astNamespace, AST* ast, ASTScope* tail = 0);
     
-    ASTStatement* statements = 0;
-    ASTStatement* statementsTail = 0;
+    DynamicArray<ASTStatement*> statements{};    
     void add(ASTStatement* astStatement, ASTStatement* tail = 0);
 
     void print(AST* ast, int depth);
@@ -511,7 +531,7 @@ struct AST {
     VariableInfo* addVariable(ScopeId scopeId, const std::string& name);
     // Returns nullptr if variable already exists or if scopeId is invalid
     // FunctionInfo* addFunction(ScopeId scopeId, const std::string& name);
-    Identifier* addFunction(ScopeId scopeId, const std::string& name, ASTFunction* astFunc);
+    Identifier* addFunction(ScopeId scopeId, const std::string& name, ASTFunction* astFunc, FuncImpl* funcImpl);
     // Returns nullptr if variable already exists or if scopeId is invalid
     Identifier* addIdentifier(ScopeId scopeId, const std::string& name);
     
@@ -520,9 +540,8 @@ struct AST {
     // name argument works with namespacing
     Identifier* getIdentifier(ScopeId scopeId, const std::string& name);
     VariableInfo* getVariable(Identifier* id);
-    // Function returns: id->astFunction
-    // The reason it's used is abstract away how it works in case it changes in the future.
-    ASTFunction* getFunction(Identifier* id);
+
+    FnOverloads::Overload* getFunction(Identifier* id, std::vector<TypeId>& argTypes);
     
     void removeIdentifier(ScopeId scopeId, const std::string& name);
 

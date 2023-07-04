@@ -538,7 +538,7 @@ void Interpreter::execute(Bytecode* bytecode){
             if(addr>(int)length){
                 log::out << log::YELLOW << "Call to instruction beyond all bytecode\n";
             }
-            // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<"\n";)
+            // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
             
             sp-=8;
             *((u64*) sp) = fp;
@@ -552,7 +552,7 @@ void Interpreter::execute(Bytecode* bytecode){
             fp = sp;
             pc = addr;
             
-            // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<"\n";)
+            // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
     
             if(addr<0){
                 int argoffset = 16;
@@ -892,7 +892,7 @@ void Interpreter::execute(Bytecode* bytecode){
     auto time = StopMeasure(tp);
     if(!silent){
         log::out << "\n";
-        log::out << "Executed in "<<FormatTime(time)<< " "<<FormatUnit(executedInstructions/time)<< "inst/s\n";
+        log::out << log::LIME << "Executed in "<<FormatTime(time)<< " "<<FormatUnit(executedInstructions/time)<< "inst/s\n";
         #ifdef ILOG_REGS
         printRegisters();
         #endif

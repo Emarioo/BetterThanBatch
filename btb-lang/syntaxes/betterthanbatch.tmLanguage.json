@@ -31,6 +31,9 @@
 		},
 		{
 			"include": "#annotation"
+		},
+		{
+			"include": "#types"
 		}
 	],
 	"repository": {
@@ -77,6 +80,12 @@
 			"patterns": [{
 				"name":"entity.name.function",
 				"match": "\\w+\\("
+			}]
+		},
+		"types":{
+			"patterns": [{
+				"name":"entity.name.type",
+				"match": "(?<=\\w+\\s*:\\s*)(?<base>(\\w+::)*(\\w+)(\\<(\\g'base')(,\\g'base')*\\>)?)"
 			}]
 		},
 		"strings": {

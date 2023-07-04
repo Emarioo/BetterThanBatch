@@ -34,11 +34,7 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
     _TC_LOG(FUNC_ENTER)
     
     int error = true;
-    ASTEnum* nextEnum = scope->enums;
-    while(nextEnum){
-        ASTEnum* aenum = nextEnum;
-        nextEnum = nextEnum->next;
-        
+    for(auto aenum : scope->enums){
         TypeInfo* typeInfo = info.ast->createType(Token(aenum->name), scope->scopeId);
         if(typeInfo){
             _TC_LOG(log::out << "Defined enum "<<info.ast->typeToString(typeInfo->id)<<"\n";)
@@ -50,21 +46,13 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
         }
     }
     
-    ASTScope* nextScope = scope->namespaces;
-    while(nextScope){
-        ASTScope* ascope = nextScope;
-        nextScope = nextScope->next;
-        
-        int result = CheckEnums(info,ascope);
+    for(auto it : scope->namespaces){
+        int result = CheckEnums(info,it);
         if(!result)
             error = false;
     }
     
-    ASTStatement* nextState = scope->statements;
-    while(nextState) {
-        ASTStatement* astate = nextState;
-        nextState = nextState->next;
-        
+    for(auto astate : scope->statements) {
         if(astate->body){
             int result = CheckEnums(info, astate->body);   
             if(!result)
@@ -77,11 +65,7 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
         }
     }
     
-    ASTFunction* nextFunc = scope->functions;
-    while(nextFunc) {
-        ASTFunction* afunc = nextFunc;
-        nextFunc = nextFunc->next;
-        
+    for(auto afunc : scope->functions) {
         if(afunc->body){
             int result = CheckEnums(info, afunc->body);
             if(!result)
@@ -167,11 +151,12 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
             break;
         }
         if(alignedSize<asize)
-            alignedSize = asize;
+            alignedSize = asize > 8 ? 8 : asize;
 
         if(i+1<(int)astStruct->members.size()){
             auto& implMema = structImpl->members[i+1];
             i32 nextSize = info.ast->getTypeSize(implMema.typeId);
+            nextSize = nextSize>8?8:nextSize;
             // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
             int misalign = (offset + size) % nextSize;
             if(misalign!=0){
@@ -349,21 +334,14 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
     _TC_LOG(FUNC_ENTER)
     //-- complete structs
 
-    ASTScope* nextNamespace = scope->namespaces;
-    while(nextNamespace) {
-        ASTScope* now = nextNamespace;
-        nextNamespace = nextNamespace->next;
-        
-        CheckStructs(info, now);
+    for(auto it : scope->namespaces) {
+        CheckStructs(info, it);
     }
    
     // TODO @Optimize: The code below doesn't need to run if the structs are complete.
     //   We can skip directly to going through the closed scopes further down.
     //   How to keep track of all this is another matter.
-    ASTStruct* nextStruct=scope->structs;
-    while(nextStruct){
-        ASTStruct* astStruct = nextStruct;
-        nextStruct = nextStruct->next;
+    for(auto astStruct : scope->structs){
         
         //-- Get struct info
         TypeInfo* structInfo = 0;
@@ -412,10 +390,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
     // so if the above is false then there isn't a reason to run the
     // below since they might require structs from above.
     if(!info.anotherTurn){
-        ASTStatement* nextState = scope->statements;
-        while(nextState) {
-            ASTStatement* astate = nextState;
-            nextState = nextState->next;
+        for(auto astate : scope->statements) {
             
             if(astate->body){
                 int result = CheckStructs(info, astate->body);   
@@ -429,11 +404,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
             }
         }
         
-        ASTFunction* nextFunc = scope->functions;
-        while(nextFunc) {
-            ASTFunction* afunc = nextFunc;
-            nextFunc = nextFunc->next;
-            
+        for(auto afunc : scope->functions) {
             if(afunc->body){
                 int result = CheckStructs(info, afunc->body);
                 // if(!result)
@@ -444,7 +415,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
     
     return true;
 }
-int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType);
+int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType, bool checkNext=true);
 int CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, TypeId* outType);
 int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType) {
     using namespace engone;
@@ -514,19 +485,21 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
             )
             return false;
         }
+        Assert(("typeids not evaluated yet",false))
+        std::vector<TypeId> chickenDinner;
         if(polyTypes.size()==0) {
             *outType = AST_VOID;
-            StructImpl::Method baseMethod = ti->getImpl()->getMethod(baseName);
-            if(baseMethod.astFunc && baseMethod.astFunc->polyArgs.size()!=0){
+            auto baseMethod = ti->getImpl()->getMethod(baseName, chickenDinner);
+            if(baseMethod->astFunc && baseMethod->astFunc->polyArgs.size()!=0){
                 ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is a polymorphic method of '"<<info.ast->typeToString(structType.baseType())<<"'. Your usage of '"<<*expr->name<<"' does not contain polymorphic arguments.\n\n";
                     ERR_LINE(expr->tokenRange,"ex: func<i32>(...)");
                 )
                 return false;
             }
             if(ti->astStruct->polyArgs.size()!=0){
-                if(baseMethod.astFunc){
-                    if(baseMethod.funcImpl->returnTypes.size()!=0)
-                        *outType = baseMethod.funcImpl->returnTypes[0].typeId;
+                if(baseMethod->astFunc){
+                    if(baseMethod->funcImpl->returnTypes.size()!=0)
+                        *outType = baseMethod->funcImpl->returnTypes[0].typeId;
                     // ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a method of '"<<info.ast->typeToString(structType.baseType())<<"'.\n\n";
                     //     ERR_LINE(expr->tokenRange,"not a method");
                     // )
@@ -534,15 +507,15 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
                 }
                 // we want base function and then create poly function?
                 // fncall name doesn't have base? we need to trim?
-                StructImpl::Method baseMethod = ti->astStruct->baseImpl.getMethod(baseName);
-                if(baseMethod.astFunc && baseMethod.astFunc->polyArgs.size()!=0){
+                auto baseMethod = ti->astStruct->baseImpl.getMethod(baseName, chickenDinner);
+                if(baseMethod->astFunc && baseMethod->astFunc->polyArgs.size()!=0){
                     ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is a polymorphic method of '"<<info.ast->typeToString(structType.baseType())<<"'. Your usage of '"<<*expr->name<<"' does not contain polymorphic arguments.\n\n";
                         ERR_LINE(expr->tokenRange,"ex: func<i32>(...)");
                     )
                     return false;
                 }
 
-                ScopeInfo* funcScope = info.ast->getScope(baseMethod.astFunc->scopeId);
+                ScopeInfo* funcScope = info.ast->getScope(baseMethod->astFunc->scopeId);
 
                 FuncImpl* funcImpl = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
                 new(funcImpl)FuncImpl();
@@ -551,9 +524,9 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
 
                 // It's not a direct poly method, the poly struct makes the method
                 // poly
-                ti->getImpl()->addPolyMethod(baseName, baseMethod.astFunc, funcImpl);
+                ti->getImpl()->addPolyMethod(baseName, baseMethod->astFunc, funcImpl);
                 
-                baseMethod.astFunc->polyImpls.push_back(funcImpl);
+                baseMethod->astFunc->polyImpls.push_back(funcImpl);
                 // funcImpl->polyIds.reserve(polyIds.size()); // no polyIds to set
 
                 for(int i=0;i<(int)ti->getImpl()->polyIds.size();i++){
@@ -564,7 +537,7 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
                 }
                 
                 // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-                int result = CheckFunctionImpl(info,baseMethod.astFunc,funcImpl,ti->astStruct, outType);
+                int result = CheckFunctionImpl(info,baseMethod->astFunc,funcImpl,ti->astStruct, outType);
                 
                 for(int i=0;i<(int)ti->getImpl()->polyIds.size();i++){
                     // TypeId id = polyIds[i];
@@ -573,37 +546,37 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
                     // } 
                 }
             } else {
-                if(!baseMethod.astFunc){
+                if(!baseMethod->astFunc){
                 ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a method of '"<<info.ast->typeToString(structType.baseType())<<"'.\n\n";
                     ERR_LINE(expr->tokenRange,"not a method");
                 )
                 return false;
                 }
-                if(baseMethod.astFunc->polyArgs.size()!=0){
+                if(baseMethod->astFunc->polyArgs.size()!=0){
                     ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is a polymorphic method of '"<<info.ast->typeToString(structType.baseType())<<"'. Your usage of '"<<*expr->name<<"' does not contain polymorphic arguments.\n\n";
                         ERR_LINE(expr->tokenRange,"ex: func<i32>(...)");
                     )
                     return false;
                 }
                 *outType = AST_VOID;
-                if(baseMethod.funcImpl->returnTypes.size()!=0)
-                    *outType = baseMethod.funcImpl->returnTypes[0].typeId;
+                if(baseMethod->funcImpl->returnTypes.size()!=0)
+                    *outType = baseMethod->funcImpl->returnTypes[0].typeId;
             }
         } else {
-            StructImpl::Method method = ti->getImpl()->getMethod(*realTypeName);
+            auto method = ti->getImpl()->getMethod(*realTypeName,chickenDinner);
             // ASTStruct::Method method = ti->astStruct->getMethod(*realTypeName);
-            if(method.astFunc)      
+            if(method->astFunc)      
                 return true; // poly method already exists, no worries, everything is fine.
             
-            StructImpl::Method baseMethod = ti->astStruct->baseImpl.getMethod(baseName);
+            auto baseMethod = ti->astStruct->baseImpl.getMethod(baseName,chickenDinner);
             // ASTStruct::Method baseMethod = ti->astStruct->getMethod(baseName);
-            if(!baseMethod.astFunc){
+            if(!baseMethod->astFunc){
                 ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a method of "<<info.ast->typeToString(structType.baseType())<<".\n\n";
                 ERR_LINE(expr->tokenRange,"bad");
                 )
                 return false;
             }
-            if(baseMethod.astFunc->polyArgs.size()==0){
+            if(baseMethod->astFunc->polyArgs.size()==0){
                 ERR_HEAD(expr->tokenRange, "Method '"<<baseName<<"' isn't polymorphic.\n\n";
                 ERR_LINE(expr->tokenRange,"bad");
                 )
@@ -612,17 +585,17 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
             
             // we want base function and then create poly function?
             // fncall name doesn't have base? we need to trim?
-            ScopeInfo* funcScope = info.ast->getScope(baseMethod.astFunc->scopeId);
+            ScopeInfo* funcScope = info.ast->getScope(baseMethod->astFunc->scopeId);
 
             FuncImpl* funcImpl = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
             new(funcImpl)FuncImpl();
             funcImpl->name = *realTypeName;
             funcImpl->structImpl = ti->getImpl();
 
-            ti->getImpl()->addPolyMethod(*realTypeName, baseMethod.astFunc, funcImpl);
+            ti->getImpl()->addPolyMethod(*realTypeName, baseMethod->astFunc, funcImpl);
             
-            baseMethod.astFunc->polyImpls.push_back(funcImpl);
-            funcImpl->polyIds.reserve(polyIds.size());
+            baseMethod->astFunc->polyImpls.push_back(funcImpl);
+            funcImpl->polyIds.resize(polyIds.size());
 
             for(int i=0;i<(int)ti->getImpl()->polyIds.size();i++){
                 TypeId id = ti->getImpl()->polyIds[i];
@@ -634,18 +607,18 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
             for(int i=0;i<(int)polyIds.size();i++){
                 TypeId id = polyIds[i];
                 if(id.isValid()){
-                    baseMethod.astFunc->polyArgs[i].virtualType->id = id;
+                    baseMethod->astFunc->polyArgs[i].virtualType->id = id;
                     funcImpl->polyIds[i] = id;
                 } 
             }
             
             // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-            int result = CheckFunctionImpl(info,baseMethod.astFunc,funcImpl,ti->astStruct, outType);
+            int result = CheckFunctionImpl(info,baseMethod->astFunc,funcImpl,ti->astStruct, outType);
             
             for(int i=0;i<(int)polyIds.size();i++){
                 TypeId id = polyIds[i];
                 if(id.isValid()){
-                    baseMethod.astFunc->polyArgs[i].virtualType->id = {};
+                    baseMethod->astFunc->polyArgs[i].virtualType->id = {};
                 } 
             }
             for(int i=0;i<(int)ti->getImpl()->polyIds.size();i++){
@@ -657,79 +630,120 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
         }
         return true;
     }
-    TypeId someType={};
-    if(expr->left)
-        CheckExpression(info,scope,expr->left,&someType);
 
-    // Token fname 
-    Identifier* id = nullptr;
-    if(polyTypes.size() == 0) {
-        // poly function doesn't exist
-        id = info.ast->getIdentifier(scope->scopeId, baseName);
-        if(id && id->astFunc && id->astFunc->polyArgs.size() != 0){
-            ERR_HEAD2(expr->tokenRange) << "Function "<<baseName <<" requires polymorphic arguments\n";
-            ERRTOKENS(expr->tokenRange);
-            ERR_END
-        }
-        if(id && id->astFunc) {
-            auto func = info.ast->getFunction(id);
-            *outType = AST_VOID;
-            if(func->baseImpl.returnTypes.size()!=0)
-                *outType = func->baseImpl.returnTypes[0].typeId;
-        }
-        // Non-existant function (or non-function identifier) is handled in generator. Whether it should do that 
-        // is arguable.
-    } else {
-        id = info.ast->getIdentifier(scope->scopeId, *realTypeName);
-        if (!id) {
-            // poly function doesn't exist
-            id = info.ast->getIdentifier(scope->scopeId, baseName);
-            if(!id){
-                ERR_HEAD2(expr->tokenRange) << "Function "<<baseName <<" doesn't exist\n";
-                ERRTOKENS(expr->tokenRange);
-                ERR_END
-            } else {
-                ASTFunction* astFunc = info.ast->getFunction(id);
-                if(astFunc->polyArgs.size()==0){
-                    ERR_HEAD2(expr->tokenRange) << "Function "<<baseName<<" isn't polymorphic\n";
-                    ERRTOKENS(expr->tokenRange);
-                    ERR_END
-                } else {
-                    // we want base function and then create poly function?
-                    // fncall name doesn't have base? we need to trim?
-                    ScopeInfo* funcScope = info.ast->getScope(astFunc->scopeId);
-                    Identifier* polyFuncId = info.ast->addFunction(funcScope->parent, *realTypeName, astFunc);
-                    
-                    polyFuncId->funcImpl = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
-                    new(polyFuncId->funcImpl)FuncImpl();
-                    polyFuncId->funcImpl->name = *realTypeName;
-                    astFunc->polyImpls.push_back(polyFuncId->funcImpl);
-                    polyFuncId->funcImpl->polyIds.reserve(polyIds.size());
+    std::vector<TypeId> argTypes;
+    if(expr->args){
+        for(auto argExpr : *expr->args){
+            Assert(argExpr);
 
-                    for(int i=0;i<(int)polyIds.size();i++){
-                        TypeId id = polyIds[i];
-                        if(id.isValid()){
-                            astFunc->polyArgs[i].virtualType->id = id;
-                            polyFuncId->funcImpl->polyIds[i] = id;
-                        } 
-                    }
-                    
-                    // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-                    int result = CheckFunctionImpl(info,astFunc,polyFuncId->funcImpl,nullptr, outType);
-
-                    for(int i=0;i<(int)polyIds.size();i++){
-                        TypeId id = polyIds[i];
-                        if(id.isValid()){
-                            astFunc->polyArgs[i].virtualType->id = {};
-                        } 
-                    }
-                }
+            TypeId argType={};
+            CheckExpression(info,scope,argExpr,&argType, false);
+            if(argExpr->namedValue){
+                
+            }else{
+                // WARN_HEAD(argExpr->tokenRange, "Named arguments broke because of function overloading.\n");
+                argTypes.push_back(argType);
             }
         }
     }
+
+    // Token fname 
+    Identifier* id = nullptr;
+    bool realFailed = false;
+    if(polyTypes.size() != 0) {
+        id = info.ast->getIdentifier(scope->scopeId, *realTypeName);
+        if(!id)
+            realFailed = true;
+    }
+    if(!id){
+        id = info.ast->getIdentifier(scope->scopeId, baseName);
+    }
+    if(!id){
+        ERR_HEAD2(expr->tokenRange) << "Function "<<baseName <<" doesn't exist\n";
+        ERRTOKENS(expr->tokenRange);
+        ERR_END
+        return false;
+    }
+    if(!realFailed){
+        auto* overload = info.ast->getFunction(id, argTypes);
+        if(!overload){
+            ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' doesn't exist for the specified type(s): ";
+                if(argTypes.size()==0){
+                    log::out << "zero arguments";
+                }
+                for(int i=0;i<(int)argTypes.size();i++){
+                    if(i!=0) log::out << ", ";
+                    log::out <<info.ast->typeToString(argTypes[i]);
+                }
+                log::out << "\n";
+                // TODO: show list of available overloaded function args
+            )
+            ERR_END
+            return false;
+        }
+        if(polyTypes.size()==0 && overload->astFunc->isPolymorphic()){
+            // TODO: implicit poly arguments
+            ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' requires polymorphic arguments.\n\n";
+                ERR_LINE(expr->tokenRange,"specify poly. args.");
+            )
+            return false;
+        } else if(polyTypes.size()!=0 && !overload->astFunc->isPolymorphic()){
+            ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' is not polymorphic.\n\n";
+                ERR_LINE(expr->tokenRange,"remove poly. args.");
+            )
+            return false;
+        } else {
+            *outType = AST_VOID;
+            if(overload->funcImpl->returnTypes.size()>0)
+                *outType = overload->funcImpl->returnTypes[0].typeId;
+            return true;
+        }
+    }
+    // Polymorphic stuff
+    ASTFunction* astFunc = nullptr;
+    {
+        auto* overload = info.ast->getFunction(id, argTypes);
+        astFunc = overload->astFunc;
+    }
+    if(!astFunc->isPolymorphic()){
+        ERR_HEAD(expr->tokenRange, "Function '"<<baseName<<"' is not polymorphic.\n\n";
+            ERR_LINE(expr->tokenRange,"bad");
+        )
+        return false;
+    }
+    // we want base function and then create poly function?
+    // fncall name doesn't have base? we need to trim?
+    ScopeInfo* funcScope = info.ast->getScope(astFunc->scopeId);
+    
+    FuncImpl* funcImpl = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
+    new(funcImpl)FuncImpl();
+    funcImpl->name = *realTypeName;
+    astFunc->polyImpls.push_back(funcImpl);
+    funcImpl->polyIds.reserve(polyIds.size());
+
+    for(int i=0;i<(int)polyIds.size();i++){
+        TypeId id = polyIds[i];
+        if(id.isValid()){
+            astFunc->polyArgs[i].virtualType->id = id;
+            funcImpl->polyIds[i] = id;
+        } 
+    }
+    // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
+    int result = CheckFunctionImpl(info,astFunc,funcImpl,nullptr, outType);
+
+    for(int i=0;i<(int)polyIds.size();i++){
+        TypeId id = polyIds[i];
+        if(id.isValid()){
+            astFunc->polyArgs[i].virtualType->id = {};
+        } 
+    }
+    
+    Identifier* polyFuncId = info.ast->addFunction(funcScope->parent, *realTypeName, astFunc, funcImpl);
+    Assert(polyFuncId);
+    
     return true;
 }
-int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType){
+int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType, bool checkNext){
     using namespace engone;
     MEASURE;
     Assert(scope)
@@ -869,11 +883,14 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
             *outType = expr->typeId;
         }
     }
-    
-    if(expr->next) {
-        TypeId typeId={};
-        CheckExpression(info, scope, expr->next, &typeId);
+    if(expr->args && checkNext){
+        for(auto now : *expr->args){
+            TypeId typeId={};
+            CheckExpression(info, scope, now, &typeId);
+        }
     }
+    // if(expr->next && checkNext) {
+    // }
         
     return true;
 }
@@ -1006,68 +1023,93 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
     if(!scope)
         return false;
 
-    ASTScope* nextNamespace = scope->namespaces;
-    while(nextNamespace) {
-        ASTScope* now = nextNamespace;
-        nextNamespace = nextNamespace->next;
-        
+    for(auto now : scope->namespaces) {
         CheckFunctions(info, now);
     }
 
     // This code goes through the functions and methods of structs in this scope
-    bool checkScopeFunctions = scope->functions;
-    ASTStruct* nextStruct = scope->structs;
-    while(nextStruct || checkScopeFunctions) {
-        ASTFunction* nextFunction=nullptr;
+    bool checkScopeFunctions = scope->functions.size()!=0;
+    int fnIndex = 0;
+    int structIndex = 0;
+    while(true){
+        ASTFunction* function = nullptr;
         ASTStruct* nowStruct = nullptr;
         if(checkScopeFunctions){
-            checkScopeFunctions = false;
-            nextFunction = scope->functions;
+            if(fnIndex == (int)scope->functions.size()) {
+                fnIndex = 0;
+                checkScopeFunctions = false;
+                continue;
+            }
+            function = scope->functions.get(fnIndex++);
         } else {
-            nowStruct = nextStruct;
-            nextFunction = nowStruct->functions;
-            nextStruct = nextStruct->next;
+            if(structIndex == (int)scope->structs.size()) {
+                break;
+            }
+            nowStruct = scope->structs.get(structIndex);
+            if(fnIndex == (int)nowStruct->functions.size()) {
+                fnIndex = 0;
+                structIndex++;
+                continue;
+            }
+            function = nowStruct->functions.get(fnIndex++);
         }
-        while(nextFunction){
-            ASTFunction* function = nextFunction;
-            nextFunction = nextFunction->next;
-            
-            if(function->polyArgs.size()==0 && (!nowStruct || nowStruct->polyArgs.size()==0)){
-                // the struct above may have stuff
-                // check impl for function or method
-                TypeId ttttt={};
-                bool yes = CheckFunctionImpl(info, function, &function->baseImpl, nowStruct, &ttttt);
-            } else {
-                for(int i=0;i<(int)function->polyArgs.size();i++){
-                    auto& arg = function->polyArgs[i];
-                    arg.virtualType = info.ast->createType(arg.name, function->scopeId);
-                    _TC_LOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
+        if(!function->isPolymorphic() && (!nowStruct || !nowStruct->isPolymorphic())) {
+            // func is not poly morphic and parent struct is not polymorphic
+            TypeId ttttt={};
+            bool yes = CheckFunctionImpl(info, function, &function->baseImpl, nowStruct, &ttttt);
+            if(!nowStruct){
+                auto id = info.ast->addFunction(scope->scopeId, function->name, function, &function->baseImpl);
+                if(!id){
+                    // TODO: better error message which shows what and where the already defined variable/function is.
+                    ERR_HEAD(function->tokenRange, "'"<< function->name << "' is already defined. (is it a variable, or does the function overload already exist?)\n";
+                    )
+                } else {
+                    _TC_LOG(log::out << "Defined "<<(nowStruct?"method ":"function ")<<function->name<<"\n";)
                 }
-                _TC_LOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
-            }
-            _TC_LOG(log::out << "Defined "<<(nowStruct?"method ":"function ")<<function->name<<"\n";)
-            Identifier* id = info.ast->addFunction(scope->scopeId, function->name, function);
-            if(function->polyArgs.size()==0){
-                id->funcImpl = &function->baseImpl;
             } else {
-                // will always be nullptr
-                // the polymorphic version will not be (it uses a different identifier)
-                id->funcImpl = nullptr;
-            }
-            if (!id) {
-                ERR_HEAD2(function->tokenRange) << function->name << " is already defined\n";
-                ERR_END
-            }
 
-            int result = CheckFunctions(info, function->body);
+            }
+        } else {
+            for(int i=0;i<(int)function->polyArgs.size();i++){
+                auto& arg = function->polyArgs[i];
+                arg.virtualType = info.ast->createType(arg.name, function->scopeId);
+                _TC_LOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
+            }
+            _TC_LOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
+            if(!nowStruct){
+                Identifier* id = info.ast->getIdentifier(scope->scopeId, function->name);
+                if(!id){
+                    id = info.ast->addIdentifier(scope->scopeId, function->name);
+                    id->type = Identifier::FUNC;
+                }
+            }
         }
+
+        // if(function->polyArgs.size()==0 && (!nowStruct || nowStruct->polyArgs.size()==0)){
+        //     // the struct above may have stuff
+        //     // check impl for function or method
+        // } else {
+        // }
+        // Identifier* id = info.ast->getIdentifier(scope->scopeId, function->name);
+        // if(!id)
+        //     id = info.ast->addIdentifier(scope->scopeId, function->name);
+        // if(id && id->type==Identifier::VAR){
+        //     if(function->polyArgs.size()==0){
+        //         id->funcImpl = &function->baseImpl;
+        //     } else {
+        //         // will always be nullptr
+        //         // the polymorphic version will not be (it uses a different identifier)
+        //         id->funcImpl = nullptr;
+        //     }
+        // } else {
+        //     ERR_HEAD(function->tokenRange, "'"<< function->name << "' is already defined.\n";
+        //     )
+        // }
+
+        int result = CheckFunctions(info, function->body);
     }
     
-    ASTStatement* nextState = scope->statements;
-    while(nextState) {
-        ASTStatement* astate = nextState;
-        nextState = nextState->next;
-        
+    for(auto astate : scope->statements) {
         if(astate->body){
             int result = CheckFunctions(info, astate->body);   
             // if(!result)
@@ -1082,6 +1124,49 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
     
     return true;
 }
+int CheckRest(CheckInfo& info, ASTFunction* func, ASTScope* scope){
+    if(func->body->nativeCode)
+        return 0;
+
+    for(int i=0;i<(int)func->polyImpls.size() || func->polyImpls.size()==0;i++){
+        FuncImpl* funcImpl = nullptr;
+        if(func->polyImpls.size()==0)
+            funcImpl = &func->baseImpl;
+        else
+            funcImpl = func->polyImpls[i];
+        
+        struct Var {
+            ScopeId scopeId;
+            std::string name;
+        };
+        // TODO: Add arguments as variables
+        std::vector<Var> vars;
+        _TC_LOG(log::out << "arg ";)
+        for (int i=0;i<(int)func->arguments.size();i++) {
+            auto& arg = func->arguments[i];
+            auto& argImpl = funcImpl->arguments[i];
+            _TC_LOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
+            auto varinfo = info.ast->addVariable(scope->scopeId, std::string(arg.name));
+            if(varinfo){
+                varinfo->typeId = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
+                // the same type as the generator.
+                vars.push_back({scope->scopeId,std::string(arg.name)});
+            }
+        }
+        _TC_LOG(log::out << "\n";)
+
+        CheckRest(info, func->body);
+        
+        for(auto& e : vars){
+            info.ast->removeIdentifier(e.scopeId, e.name);
+        }
+        // TODO: Remove variables
+        
+        if(func->polyImpls.size()==0)
+            break;
+    }
+    return 0;
+}
 int CheckRest(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
@@ -1095,77 +1180,87 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
 
     // TODO: Type check default values in structs and functions
     bool nonStruct = true;
-    ASTStruct* nextStruct = scope->structs;
-    while(nextStruct) {
-        ASTStruct * now = nextStruct;
-        nextStruct = nextStruct->next;
-
-        // TODO: setup variables
-        ASTFunction* nextFunc = nullptr;
-        if(nonStruct){
-            nextFunc = scope->functions;
-            nonStruct = false;
-        }else{
-            nextFunc = now->functions;
-        }
-
-        while(nextFunc) {
-            ASTFunction* func = nextFunc;
-            nextFunc = nextFunc->next;
-            if(func->body->nativeCode)
-                continue;
-
-            for(int i=0;i<(int)func->polyImpls.size() || func->polyImpls.size()==0;i++){
-                FuncImpl* funcImpl = nullptr;
-                if(func->polyImpls.size()==0)
-                    funcImpl = &func->baseImpl;
-                else
-                    funcImpl = func->polyImpls[i];
-                
-                struct Var {
-                    ScopeId scopeId;
-                    std::string name;
-                };
-                // TODO: Add arguments as variables
-                std::vector<Var> vars;
-                _TC_LOG(log::out << "arg ";)
-                for (int i=0;i<(int)func->arguments.size();i++) {
-                    auto& arg = func->arguments[i];
-                    auto& argImpl = funcImpl->arguments[i];
-                    _TC_LOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
-                    auto varinfo = info.ast->addVariable(scope->scopeId, std::string(arg.name));
-                    if(varinfo){
-                        varinfo->typeId = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
-                        // the same type as the generator.
-                        vars.push_back({scope->scopeId,std::string(arg.name)});
-                    }
-                }
-                _TC_LOG(log::out << "\n";)
-
-                CheckRest(info, func->body);
-                
-                for(auto& e : vars){
-                    info.ast->removeIdentifier(e.scopeId, e.name);
-                }
-                // TODO: Remove variables
-                
-                if(func->polyImpls.size()==0)
-                    break;
-            }
+    // ASTStruct* nextStruct = scope->structs;
+    for(auto it : scope->functions){
+        CheckRest(info, it, scope);
+    }
+    for(auto now : scope->structs) {
+        for(auto it : now->functions){
+            CheckRest(info, it, scope);
         }
     }
+        // ASTStruct * now = nextStruct;
+        // nextStruct = nextStruct->next;
+
+        // TODO: setup variables
+        // ASTFunction* nextFunc = nullptr;
+        // if(nonStruct){
+        //     nextFunc = scope->functions;
+        //     nonStruct = false;
+        // }else{
+        //     nextFunc = now->functions;
+        // }
+
+        // while(nextFunc) {
+        //     ASTFunction* func = nextFunc;
+        //     nextFunc = nextFunc->next;
+
+        //     CheckRest(info, func, scope);
+
+            // if(func->body->nativeCode)
+            //     continue;
+
+            // for(int i=0;i<(int)func->polyImpls.size() || func->polyImpls.size()==0;i++){
+            //     FuncImpl* funcImpl = nullptr;
+            //     if(func->polyImpls.size()==0)
+            //         funcImpl = &func->baseImpl;
+            //     else
+            //         funcImpl = func->polyImpls[i];
+                
+            //     struct Var {
+            //         ScopeId scopeId;
+            //         std::string name;
+            //     };
+            //     // TODO: Add arguments as variables
+            //     std::vector<Var> vars;
+            //     _TC_LOG(log::out << "arg ";)
+            //     for (int i=0;i<(int)func->arguments.size();i++) {
+            //         auto& arg = func->arguments[i];
+            //         auto& argImpl = funcImpl->arguments[i];
+            //         _TC_LOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
+            //         auto varinfo = info.ast->addVariable(scope->scopeId, std::string(arg.name));
+            //         if(varinfo){
+            //             varinfo->typeId = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
+            //             // the same type as the generator.
+            //             vars.push_back({scope->scopeId,std::string(arg.name)});
+            //         }
+            //     }
+            //     _TC_LOG(log::out << "\n";)
+
+            //     CheckRest(info, func->body);
+                
+            //     for(auto& e : vars){
+            //         info.ast->removeIdentifier(e.scopeId, e.name);
+            //     }
+            //     // TODO: Remove variables
+                
+            //     if(func->polyImpls.size()==0)
+            //         break;
+            // }
+    //     }
+    // }
     struct A {
         ScopeId scopeId;
         std::string name;
     };
     std::vector<A> vars;
-    ASTStatement* next = scope->statements;
-    ASTStatement* nextPrev = nullptr;
-    while(next){
-        ASTStatement* now = next;
-        ASTStatement* prev = nextPrev;
-        next = next->next;
-        nextPrev = now;
+    // ASTStatement* next = scope->statements;
+    // ASTStatement* nextPrev = nullptr;
+    for (auto now : scope->statements){
+        // ASTStatement* now = next;
+        // ASTStatement* prev = nextPrev;
+        // next = next->next;
+        // nextPrev = now;
 
         // if(now->lvalue)
         //     CheckExpression(info, scope ,now->lvalue);
@@ -1309,13 +1404,14 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                     aliasInfo->id = originType;
 
                     // using statement isn't necessary anymore
-                    now->next = nullptr;
-                    info.ast->destroy(now);
-                    if(prev){
-                        prev->next = next;
-                    } else {
-                        scope->statements = next;
-                    }
+                    Assert(("Broken code",false))
+                    // now->next = nullptr;
+                    // info.ast->destroy(now);
+                    // if(prev){
+                    //     prev->next = next;
+                    // } else {
+                    //     scope->statements = next;
+                    // }
                     continue;
                 }
                 ScopeInfo* originScope = info.ast->getScopeFromParents(name,scope->scopeId);
@@ -1326,13 +1422,14 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                     //  that?
                     scopeInfo->nameScopeMap[*now->alias] = originScope->id;
 
-                    now->next = nullptr;
-                    info.ast->destroy(now);
-                    if(prev){
-                        prev->next = next;
-                    } else {
-                        scope->statements = next;
-                    }
+                    Assert(("Broken using keyword code",false))
+                    // now->next = nullptr;
+                    // info.ast->destroy(now);
+                    // if(prev){
+                    //     prev->next = next;
+                    // } else {
+                    //     scope->statements = next;
+                    // }
                     continue;
                 }
                 // using might refer to variables
@@ -1361,13 +1458,15 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                 // TODO: Inherit enum values.
 
                 // using variable; Should not work.
-                now->next = nullptr;
-                info.ast->destroy(now);
-                if(prev){
-                    prev->next = next;
-                } else {
-                    scope->statements = next;
-                }
+
+                Assert(("Fix broken code for using keyword",false))
+                // now->next = nullptr;
+                // info.ast->destroy(now);
+                // if(prev){
+                //     prev->next = next;
+                // } else {
+                //     scope->statements = next;
+                // }
                 continue;
             }
         }
@@ -1375,11 +1474,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
     for(auto& e : vars){
         info.ast->removeIdentifier(e.scopeId, e.name);
     }
-    ASTScope* nextNS = scope->namespaces;
-    while(nextNS){
-        ASTScope* now = nextNS;
-        nextNS = nextNS->next;
-
+    for(auto now : scope->namespaces){
         int result = CheckRest(info, now);
     }
     return 0;
