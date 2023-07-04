@@ -26,6 +26,6 @@
 #define WARN_DEFAULT_R(R,NAME,NUM) WARN_CUSTOM(R.tokenStream?R.tokenStream->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
 
 struct TokenRange;
-void PrintCode(TokenRange* tokenRange, const char* message = nullptr);
+void PrintCode(const TokenRange* tokenRange, const char* message = nullptr);
 struct TokenStream;
 void PrintCode(int index, TokenStream* stream, const char* message = nullptr);

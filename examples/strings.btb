@@ -22,6 +22,17 @@ fn log<K>(k: K) {} // bad
 fn log<K>(k: K, n: i32) {} // ok
 fn log<K>(k: K, b: bool) {} // ok
 
+fn log<T,K>(arr: Array<T>*, arr2: List<K>*) {}
+fn log<T>(arr: Array<T>*, arr2: List<i32>*) {}
+
+log(Array<i32>,List<i32>)
+
+fn log<T>(arr: Array<Array<T,K>>*) {}
+fn log(arr: Array<List<i32>>*) {}
+
+fn log<T>(T) {}
+fn log(i32) {}
+
 // log(false, a = 6);
 log<i32>(23)
 // log<bool, i32>(false, 23)

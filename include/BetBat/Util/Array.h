@@ -33,16 +33,19 @@ struct DynamicArray {
         ptr->~T();
         return true;
     }
-    T* getPtr(u32 index){
+    T* getPtr(u32 index) const {
         if(index >= used)
             return nullptr;
         return *(_ptr + index);
     }
-    T& get(u32 index){
+    T& get(u32 index) const {
         Assert(index < used);
         return *(_ptr + index);
     }
-    u32 size() {
+    T& operator[](u32 index) const{
+        return get(index);
+    }
+    u32 size() const {
         return used;
     }
 
@@ -84,10 +87,10 @@ struct DynamicArray {
         }
         return false;
     }
-    T* begin() {
+    T* begin() const {
         return _ptr;
     }
-    T* end() {
+    T* end() const {
         return _ptr + used;
     }
 };

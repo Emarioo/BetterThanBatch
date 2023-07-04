@@ -2,7 +2,7 @@
 #include "BetBat/Tokenizer.h"
 
 
-void PrintCode(TokenRange* tokenRange, const char* message){
+void PrintCode(const TokenRange* tokenRange, const char* message){
     using namespace engone;
     if(!tokenRange->tokenStream)
         return;

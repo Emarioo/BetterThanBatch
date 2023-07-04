@@ -266,6 +266,38 @@ VariableInfo *AST::getVariable(Identifier* id) {
     Assert(id->varIndex>=0&&(int)id->varIndex<(int)variables.size());
     return variables[id->varIndex];
 }
+FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& typeIds){
+    for(int i=0;i<(int)overloads.size();i++){
+        auto& overload = overloads[i];
+        int nonDefaults0 = 0;
+        // TODO: Store non defaults in Identifier or ASTStruct to save time.
+        //   Recalculating non default arguments here every time you get a function is
+        //   unnecessary.
+        for(auto& arg : overload.astFunc->arguments){
+            if(arg.defaultValue)
+                break;
+            nonDefaults0++;
+        }
+        if(nonDefaults0 > (int)typeIds.size())
+            continue;
+        bool found = true;
+        for (int j=0;j<nonDefaults0;j++){
+            if(overload.funcImpl->arguments[j].typeId != typeIds[j]){
+                found = false;
+                break;
+            }
+        }
+        if(found){
+            return &overload;
+        }
+    }
+    return nullptr;
+}
+
+void FnOverloads::addOverload(ASTFunction* astFunc, FuncImpl* funcImpl){
+    overloads.add({astFunc,funcImpl});
+}
+
 FnOverloads::Overload *AST::getFunction(Identifier* id, std::vector<TypeId>& argTypes) {
     // , std::vector<AST::NamedArg>& namedArgs) {
    
@@ -876,7 +908,7 @@ void AST::destroy(ASTFunction *function) {
         if (arg.defaultValue)
             destroy(arg.defaultValue);
     }
-    for(auto ptr : function->polyImpls){
+    for(auto ptr : function->_impls){
         ptr->~FuncImpl();
         engone::Free(ptr,sizeof(FuncImpl));
     }
@@ -1232,7 +1264,13 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
     }
     return ti->_size > 8 ? 8 : ti->_size;
 }
-
+FuncImpl* ASTFunction::createImpl(){
+    FuncImpl* ptr = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
+    new(ptr)FuncImpl();
+    bool nonAllocationFailure = _impls.add(ptr);
+    Assert(nonAllocationFailure);
+    return ptr;
+}
 void ASTStruct::add(ASTFunction* func){
     // NOTE: Is this code necessary? Did something break.
     // auto pair = baseImpl.methods.find(func->name);

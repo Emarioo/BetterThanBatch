@@ -29,6 +29,8 @@ enum PrimitiveType : u32 {
     AST_STRING, // converted to another type, probably char[]
     AST_NULL, // converted to void*
     
+    AST_POLY, // Used in type checker. Should never appear in the generator
+    
     AST_TRUE_PRIMITIVES,
 
     // TODO: should these be moved somewhere else?
@@ -180,7 +182,13 @@ struct FnOverloads {
         ASTFunction* astFunc=0;
         FuncImpl* funcImpl = 0;
     };
-    std::vector<Overload> overloads;
+    DynamicArray<Overload> overloads{};
+    // Do not modify overloads while using the returned pointer
+    // TODO: Use BucketArray to allow modifications
+    Overload* getOverload(DynamicArray<TypeId>& typeIds);
+    // FuncImpl can be null and probably will be most of the time
+    // when you call this.
+    void addOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
 };
 // ASTStruct can have multiple of these per
 // polymorphic instantiation.
@@ -245,6 +253,7 @@ struct FuncImpl {
     i64 address = 0; // Set by generator
     std::vector<TypeId> polyIds;
     StructImpl* structImpl = nullptr;
+    static const u64 INVALID_FUNC_ADDRESS = 0;
 };
 struct Identifier {
     Identifier() {}
@@ -256,7 +265,6 @@ struct Identifier {
     ScopeId scopeId=0;
     int varIndex=0;
     FnOverloads funcOverloads{};
-    static const u64 INVALID_FUNC_ADDRESS = 0;
 };
 struct VariableInfo {
     i32 frameOffset = 0;
@@ -430,7 +438,12 @@ struct ASTFunction : ASTNode {
     };
     std::vector<PolyArg> polyArgs;
     FuncImpl baseImpl{};
-    std::vector<FuncImpl*> polyImpls;
+    DynamicArray<FuncImpl*> _impls{};
+    FuncImpl* createImpl();
+    const DynamicArray<FuncImpl*>& getImpls(){
+        return _impls;
+    }
+    // std::vector<FuncImpl*> impls;
 
     ScopeId scopeId=0;
     ASTScope* body=0;
