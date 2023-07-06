@@ -66,6 +66,7 @@ struct DynamicArray {
         }
         if(!_ptr){
             _ptr = (T*)engone::Allocate(sizeof(T) * newMax);
+            Assert(_ptr);
             // initialization of elements is done when adding them
             if(!_ptr)
                 return false;
@@ -78,6 +79,7 @@ struct DynamicArray {
                 }
             }
             T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
+            Assert(newPtr);
             if(!newPtr)
                 return false;
             _ptr = newPtr;
@@ -96,7 +98,7 @@ struct DynamicArray {
             if(!yes)
                 return false;
         }
-        for(u32 i = used-1; i<newSize;i++){
+        for(u32 i = used; i<newSize;i++){
             Assert(((u64)(_ptr+i) % alignof(T)) == 0) // TODO: alignment for placement new?
             new(_ptr+i)T();
         }

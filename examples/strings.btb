@@ -7,6 +7,7 @@
 // }
 // fn printi(n: i64) { @native-code }
 // fn printc(chr: char) { @native-code }
+// fn printd(chr: f32) { @native-code }
 // fn prints(n: Slice<char>) { @native-code }
 
 // fn log<T>(t: T){
@@ -28,19 +29,23 @@
 // plog<f32>(25.23, false)
 
 
-struct C {
-    a: i32;
-    b: f32;
-}
-struct L {
-    a: bool;
-    b: i64;
-}
-struct K {
-    a: C;
-    b: L;
-}
-l: K;
+// struct C {
+//     a: i32;
+//     b: f32;
+// }
+// struct L {
+//     a: bool;
+//     b: i64;
+// }
+// struct K {
+//     a: C;
+//     b: L;
+// }
+// l: K;
+// l = K{C{6,3.8}, L{false, 992351}};
+// printi(cast<i64>l.a.a)
+// printd(l.a.b)
+// printi(l.b.b)
 
 // struct A<T,K> {
 //     t: T;
@@ -49,13 +54,44 @@ l: K;
 // a: A<A<i32,f32>,A<bool,i64>>;
 
 // printi(cast<i64>sizeof A<A<i32,f32>,A<bool,char>>)
-
-
-// fn a<T>(a: A<T>){
-
+// struct One<T> {
+//     t: T;
+// }
+// struct Two<T,K> {
+//     t: T;
+//     k: K;
 // }
 
-// a<i32>(A<i32>{5});
+fn fun(a: i32, c: bool = 23, d: i32 = 99) {}
+fn fun(a: i32, b: i32) {}
+
+// fn fun(a: i32, b: i32) {}
+
+
+// fn fun(a: i32, c: bool = 23){ printi(cast<i64>a)}
+// fn fun(a: i32, b: i32){ printi(cast<i64>a)}
+
+// fun(a=23)
+// fun(a=23)
+
+// fn fun<T>(a: T, b: i32 = 23){printi(cast<i64>a)}//prints("T")}
+
+// fun(92);
+// fun<bool>(true, a = 23);
+// fn fun(a: Two<bool,char>){}
+// fn fun<T>(a: T){}
+
+// fn f(a: i32){}
+
+
+// f(false)
+
+// a = kea;
+
+// fn fun<S>(a: A<S>){}
+// fun<i32>(B<i32,f32>{5});
+// fun<i32>(Two<i32,f32>{});
+// fun(Two<bool,char>{});
 
 
 

@@ -4,46 +4,49 @@
 
 void PrintCode(const TokenRange& tokenRange, const char* message){
     using namespace engone;
-    if(!tokenRange.tokenStream)
+    if(!tokenRange.tokenStream())
         return;
-    int start = tokenRange.startIndex;
+    int start = tokenRange.startIndex();
     int end = tokenRange.endIndex;
+    // log::out <<"We " <<start << " "<<end<<"\n";
     while(start>0){
-        Token& prev = tokenRange.tokenStream->get(start-1);
+        Token& prev = tokenRange.tokenStream()->get(start-1);
         if(prev.flags&TOKEN_SUFFIX_LINE_FEED){
             break;
         }
         start--;
+        // log::out << "start "<<start<<"\n";
     }
     // NOTE: end is exclusive
-    while(end<tokenRange.tokenStream->length()){
-        Token& next = tokenRange.tokenStream->get(end-1); // -1 since end is exclusive
+    while(end<tokenRange.tokenStream()->length()){
+        Token& next = tokenRange.tokenStream()->get(end-1); // -1 since end is exclusive
         if(next.flags&TOKEN_SUFFIX_LINE_FEED){
             break;
         }
         end++;
+        
+        // log::out << "end "<<end<<"\n";
     }
-
     const log::Color codeColor = log::SILVER;
     const log::Color markColor = log::CYAN;
 
     int lineDigits = 0;
     int baseColumn = 999999;
     for(int i=start;i<end;i++){
-        Token& tok = tokenRange.tokenStream->get(i);
+        Token& tok = tokenRange.tokenStream()->get(i);
         int numlen = tok.line>0 ? ((int)log10(tok.line)+1) : 1;
         if(numlen>lineDigits)
             lineDigits = numlen;
         if(tok.column<baseColumn)
             baseColumn = tok.column;
     }
-
+    // log::out << start << " - " <<end<<"\n";
     int currentLine = -1;
     int minPos = -1;
     int maxPos = -1;
     int pos = -1;
     for(int i=start;i<end;i++){
-        Token& tok = tokenRange.tokenStream->get(i);
+        Token& tok = tokenRange.tokenStream()->get(i);
         if(tok.line != currentLine){
             currentLine = tok.line;
             if(i!=start)
@@ -59,7 +62,7 @@ void PrintCode(const TokenRange& tokenRange, const char* message){
                 minPos = pos;
             for(int j=0;j<tok.column-baseColumn;j++) log::out << " ";
         }
-        if(i<tokenRange.startIndex){
+        if(i<tokenRange.startIndex()){
             pos += tok.calcLength();
             if(tok.flags&TOKEN_SUFFIX_SPACE)
                 pos += 1;
@@ -75,7 +78,7 @@ void PrintCode(const TokenRange& tokenRange, const char* message){
             log::out << codeColor;
         } else {
             log::out << markColor;
-            if(i==tokenRange.startIndex)
+            if(i==tokenRange.startIndex())
                 pos = minPos;
             pos += tok.calcLength();
             if(tok.flags&TOKEN_SUFFIX_SPACE && 0==(tok.flags&TOKEN_SUFFIX_LINE_FEED) && i+1 != tokenRange.endIndex)
@@ -86,7 +89,8 @@ void PrintCode(const TokenRange& tokenRange, const char* message){
         tok.print(false);
     }
     log::out << "\n";
-    int msglen = strlen(message);
+    int msglen = message ? strlen(message) : 0;
+    // log::out << "len "<<msglen<<"\n";
     log::out << markColor;
     if(msglen+4<minPos){ // +4 for some extra space
         // print message on left side of mark

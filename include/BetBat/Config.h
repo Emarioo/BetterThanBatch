@@ -10,26 +10,29 @@
    Major config
 ############### */
 #define DEBUG
-// #define SILENT
 // #define LOG_MEASURES
-
-#define LOG_MSG_LOCATION
+// Silent is not used at the moment.
+// Will it ever be?
+// #define SILENT
 
 // Causes for memory leaks (or negative final memory):
 // - new keyword instead of engone::Allocate
 
-// #define ALLOC_LOG
+// #define LOG_ALLOC
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
 
 // Language config
 #define PREPROC_REC_LIMIT 100
+// You could enforce hashtag (replace macro with hashtag)
+// Hashtag will always be used. @ is taken, $ feels wrong, # makes you feel at home.
 #define PREPROC_TERM "#"
 
 // Debug config
 #ifdef DEBUG
 
 #define VLOG
+#define LOG_MSG_LOCATION
 
 // #define TLOG
 

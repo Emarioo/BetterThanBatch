@@ -19,6 +19,7 @@ struct GenInfo {
     void addPop(int reg);
     void addPush(int reg);
     void addIncrSp(i16 offset);
+    void addAlign(int alignment);
     // Negative value to make some space for values
     // Positive to remove values
     // like push and pop but with a size

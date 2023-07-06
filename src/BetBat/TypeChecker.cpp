@@ -28,11 +28,18 @@
 
 #define TOKENINFO(R) {std::string temp="";R.feed(temp);info.code->addDebugText(std::string("Ln ")+std::to_string(R.firstToken.line)+ ": ");info.code->addDebugText(temp+"\n");}
 
+#ifdef TC_LOG
+// #define _TC_LOG_ENTER(X) X
+#define _TC_LOG_ENTER(X)
+#else
+#define _TC_LOG_ENTER(X)
+#endif
+
 int CheckEnums(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     Assert(scope);
     MEASURE;
-    _TC_LOG(FUNC_ENTER)
+    _TC_LOG_ENTER(FUNC_ENTER)
     
     int error = true;
     for(auto aenum : scope->enums){
@@ -79,15 +86,15 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const Toke
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);
 bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
     using namespace engone;
-    _TC_LOG(FUNC_ENTER)
+    _TC_LOG_ENTER(FUNC_ENTER)
     int offset=0;
     int alignedSize=0; // offset will be aligned to match this at the end
 
-    Assert(astStruct->polyArgs.size() == structImpl->polyIds.size())
+    Assert(astStruct->polyArgs.size() == structImpl->polyArgs.size())
     DynamicArray<TypeId> prevVirtuals{};
     prevVirtuals.resize(astStruct->polyArgs.size());
     for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-        TypeId id = structImpl->polyIds[i];
+        TypeId id = structImpl->polyArgs[i];
         Assert(id.isValid());
         prevVirtuals[i] = astStruct->polyArgs[i].virtualType->id;
         astStruct->polyArgs[i].virtualType->id = id;
@@ -163,7 +170,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
 
         if(i+1<(int)astStruct->members.size()){
             auto& implMema = structImpl->members[i+1];
-            i32 nextSize = info.ast->getTypeSize(implMema.typeId);
+            i32 nextSize = info.ast->getTypeSize(implMema.typeId); // TODO: Use getTypeAlignedSize instead?
             nextSize = nextSize>8?8:nextSize;
             // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
             int misalign = (offset + size) % nextSize;
@@ -208,11 +215,11 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
     }
     structImpl->size = offset;
     std::string polys = "";
-    if(structImpl->polyIds.size()!=0){
+    if(structImpl->polyArgs.size()!=0){
         polys+="<";
-        for(int i=0;i<(int)structImpl->polyIds.size();i++){
+        for(int i=0;i<(int)structImpl->polyArgs.size();i++){
             if(i!=0) polys+=",";
-            polys += info.ast->typeToString(structImpl->polyIds[i]);
+            polys += info.ast->typeToString(structImpl->polyArgs[i]);
         }
         polys+=">";
     }
@@ -241,35 +248,35 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const Toke
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError){
     using namespace engone;
     MEASURE;
-    _TC_LOG(FUNC_ENTER)
+    _TC_LOG_ENTER(FUNC_ENTER)
     _TC_LOG(log::out << "check "<<typeString<<"\n";)
 
     TypeId typeId = {};
 
     u32 plevel=0;
-    std::vector<Token> polyTypes;
+    std::vector<Token> polyTokens;
     Token typeName = AST::TrimPointer(typeString, &plevel);
-    Token baseType = AST::TrimPolyTypes(typeName, &polyTypes);
+    Token baseType = AST::TrimPolyTypes(typeName, &polyTokens);
     // Token typeName = AST::TrimNamespace(noPointers, &ns);
-    std::vector<TypeId> polyIds;
+    std::vector<TypeId> polyArgs;
     std::string* realTypeName = nullptr;
 
-    if(polyTypes.size() != 0) {
+    if(polyTokens.size() != 0) {
         // We trim poly types and then put them back together to get the "official" names for the types
         // Maybe you used some aliasing or namespaces.
         realTypeName = info.ast->createString();
         *realTypeName += baseType;
         *realTypeName += "<";
         // TODO: Virtual poly arguments does not work with multithreading. Or you need mutexes at least.
-        for(int i=0;i<(int)polyTypes.size();i++){
-            // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTypes[i], scopeId);
-            // TypeId id = info.ast->convertToTypeId(polyTypes[i], scopeId);
+        for(int i=0;i<(int)polyTokens.size();i++){
+            // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTokens[i], scopeId);
+            // TypeId id = info.ast->convertToTypeId(polyTokens[i], scopeId);
             bool printedError = false;
-            TypeId id = CheckType(info, scopeId, polyTypes[i], tokenRange, &printedError);
+            TypeId id = CheckType(info, scopeId, polyTokens[i], tokenRange, &printedError);
             if(i!=0)
                 *realTypeName += ",";
             *realTypeName += info.ast->typeToString(id);
-            polyIds.push_back(id);
+            polyArgs.push_back(id);
             if(id.isValid()){
 
             } else if(!printedError) {
@@ -303,7 +310,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
         return typeId;
     }
 
-    if(polyTypes.size() == 0) {
+    if(polyTokens.size() == 0) {
         // ERR_HEAD2(tokenRange) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // type isn't polymorphic and does just not exist
     }
@@ -312,8 +319,8 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
         // ERR_HEAD2(tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // print error? base type for polymorphic type doesn't exist
     }
-    if(polyTypes.size() != baseInfo->astStruct->polyArgs.size()) {
-        ERR() << "Polymorphic type "<<typeString << " has "<< polyTypes.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<baseInfo->astStruct->polyArgs.size()<< "\n";
+    if(polyTokens.size() != baseInfo->astStruct->polyArgs.size()) {
+        ERR() << "Polymorphic type "<<typeString << " has "<< polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<baseInfo->astStruct->polyArgs.size()<< "\n";
         if(printedError)
             *printedError = true;
         return {}; // type isn't polymorphic and does just not exist
@@ -324,10 +331,10 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
     typeInfo->structImpl = (StructImpl*)engone::Allocate(sizeof(StructImpl));
     new(typeInfo->structImpl)StructImpl();
 
-    typeInfo->structImpl->polyIds.resize(polyIds.size());
-    for(int i=0;i<(int)polyIds.size();i++){
-        TypeId id = polyIds[i];
-        typeInfo->structImpl->polyIds[i] = id;
+    typeInfo->structImpl->polyArgs.resize(polyArgs.size());
+    for(int i=0;i<(int)polyArgs.size();i++){
+        TypeId id = polyArgs[i];
+        typeInfo->structImpl->polyArgs[i] = id;
     }
 
     bool hm = CheckStructImpl(info, typeInfo->astStruct, baseInfo, typeInfo->structImpl);
@@ -343,7 +350,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
 int CheckStructs(CheckInfo& info, ASTScope* scope) {
     using namespace engone;
     MEASURE;
-    _TC_LOG(FUNC_ENTER)
+    _TC_LOG_ENTER(FUNC_ENTER)
     //-- complete structs
 
     for(auto it : scope->namespaces) {
@@ -367,7 +374,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                 // We don't care about another turn. We failed but we don't set
                 // completedStructs to false since this will always fail.
             } else {
-                _TC_LOG(log::out << "Defined struct "<<info.ast->typeToString(structInfo->id)<<" in scope "<<scope->scopeId<<"\n";)
+                // _TC_LOG(log::out << "Defined struct "<<info.ast->typeToString(structInfo->id)<<" in scope "<<scope->scopeId<<"\n";)
                 astStruct->state = ASTStruct::TYPE_CREATED;
                 structInfo->astStruct = astStruct;
                 for(int i=0;i<(int)astStruct->polyArgs.size();i++){
@@ -434,42 +441,26 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
 int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, TypeId* outType);
 int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType) {
     using namespace engone;
-    // TODO: Can expr->name contain namespace or is that handled with AST_FROM_NAMESPACE?
-    //  It can later if we set name to *realTypenName or maybe not? should it?
-    //  not if it was accessed? what?
-    TypeId typeId = {};
-    std::vector<Token> polyTypes;
-    Token baseName = AST::TrimPolyTypes(expr->name, &polyTypes);
-    // Token typeName = AST::TrimNamespace(noPointers, &ns);
-    DynamicArray<TypeId> polyIds;
-    // std::string* realTypeName = nullptr; // rename to realFuncName?
-    if(polyTypes.size()!=0){
-        // We trim poly types and then put them back together to get the "official" names for them.
-        // Maybe you used some aliasing or namespaces.
-        // realTypeName = info.ast->createString();
-        // *realTypeName += baseName;
-        // *realTypeName += "<";
-        // TODO: Virtual poly arguments does not work with multithreading. Or you need mutexes at least.
-        for(int i=0;i<(int)polyTypes.size();i++){
-            // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTypes[i], scopeId);
-            // TypeId id = info.ast->convertToTypeId(polyTypes[i], scopeId);
-            bool printedError = false;
-            TypeId id = CheckType(info, scope->scopeId, polyTypes[i], expr->tokenRange, &printedError);
-            // if(i!=0)
-            //     *realTypeName += ",";
-            // *realTypeName += info.ast->typeToString(id);
-            polyIds.add(id);
-            if(id.isValid()){
+    *outType = AST_VOID; // Default to void if zero return values
 
-            } else if(!printedError) {
-                ERR_HEAD2(expr->tokenRange) << "Type for polymorphic argument was not valid\n";
-                ERRTOKENS(expr->tokenRange);
-                ERR_END
-            }
+    //-- Get poly args from the function call
+    DynamicArray<TypeId> fnPolyArgs;
+    std::vector<Token> polyTokens;
+    Token baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
+    for(int i=0;i<(int)polyTokens.size();i++){
+        bool printedError = false;
+        TypeId id = CheckType(info, scope->scopeId, polyTokens[i], expr->tokenRange, &printedError);
+        fnPolyArgs.add(id);
+        // TODO: What about void?
+        if(id.isValid()){
+
+        } else if(!printedError) {
+            ERR_HEAD(expr->tokenRange, "Type for polymorphic argument was not valid.\n\n";
+                ERR_LINE(expr->tokenRange,"bad");
+            )
         }
-        // *realTypeName += ">";
-        // *expr->name = *realTypeName; // We modify the expression to use the official poly types
     }
+
     /*
     if (expr->boolValue){
         TypeId structType = {};
@@ -496,7 +487,7 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
         }
         Assert(("typeids not evaluated yet",false))
         std::vector<TypeId> chickenDinner;
-        if(polyTypes.size()==0) {
+        if(polyTokens.size()==0) {
             *outType = AST_VOID;
             auto baseMethod = ti->getImpl()->getMethod(baseName, chickenDinner);
             if(baseMethod->astFunc && baseMethod->astFunc->polyArgs.size()!=0){
@@ -618,7 +609,7 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
                 if(id.isValid()){
                     // baseMethod->astFunc->polyArgs[i].virtualType->id = id;
                     funcImpl->polyIds[i] = id;
-                } 
+                }
             }
             // TODO: BUG! methods args do not see poly type names of parent struct.
             //   or rather the poly types of the parent struct might not be set when
@@ -642,47 +633,84 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
         return true;
     }
     */
+    //-- Get essential arguments from the function call
     DynamicArray<TypeId> argTypes{};
-    if(expr->args){
-        for(auto argExpr : *expr->args){
-            Assert(argExpr);
+    for(auto argExpr : *expr->args){
+        Assert(argExpr);
 
-            TypeId argType={};
-            CheckExpression(info,scope,argExpr,&argType, false);
-            if(argExpr->namedValue){
-                // don't add argType but keep checking expressions
-            }else{
-                // WARN_HEAD(argExpr->tokenRange, "Named arguments broke because of function overloading.\n");
-                argTypes.add(argType);
-            }
+        TypeId argType={};
+        CheckExpression(info,scope,argExpr,&argType, false);
+        if(argExpr->namedValue){
+            // don't add argType but keep checking expressions
+            // remaining args will be named
+        }else{
+            // WARN_HEAD(argExpr->tokenRange, "Named arguments broke because of function overloading.\n");
+            argTypes.add(argType);
         }
     }
-
+    //-- Get identifier, the namespace of overloads for the function.
     Identifier* iden = info.ast->getIdentifier(scope->scopeId, baseName);
     if(!iden){
         ERR_HEAD(expr->tokenRange, "Function "<<baseName <<" does not exist.\n\n";
-            ERR_LINET(baseName,"not defined");
+            ERR_LINET(baseName,"undefined");
         )
-        return 0;   
+        return false;
     }
-    FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes);
-    auto goodOverload=[&](){
-        *outType = AST_VOID;
+    if(fnPolyArgs.size()==0){
+        // match args with normal impls
+        FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes);
+        if(overload){
+            if(overload->funcImpl->returnTypes.size()>0)
+                *outType = overload->funcImpl->returnTypes[0].typeId;
+            return true;
+        }
+        // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
+        //  Should be done in generator too.
+        ERR_HEAD(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
+            if(argTypes.size()==0){
+                log::out << "zero arguments";
+            }
+            for(int i=0;i<(int)argTypes.size();i++){
+                if(i!=0) log::out << ", ";
+                log::out <<info.ast->typeToString(argTypes[i]);
+            }
+            log::out << "\n";
+            if(iden->funcOverloads.polyOverloads.size()!=0){
+                log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
+            }
+            if(expr->args->size()!=0 && expr->args->get(0)->namedValue){
+                log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
+            }
+            log::out <<"\n";
+            ERR_LINE(expr->tokenRange, "bad");
+            // TODO: show list of available overloaded function args
+        )
+        return false;
+        // if implicit polymorphism then
+        // macth poly impls
+        // generate poly impl if failed
+        // use new impl if succeeded.
+    }
+    // code when we call polymorphic function
+
+    // match args and poly args with poly impls
+    // if match then return that impl
+    // if not then try to generate a implementation
+
+    FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes,fnPolyArgs);
+    if(overload){
         if(overload->funcImpl->returnTypes.size()>0)
             *outType = overload->funcImpl->returnTypes[0].typeId;
-    };
-    if(overload){
-        goodOverload();
         return true;
     }
     ASTFunction* polyFunc = nullptr;
-    // Find possible polymorphic type
+    // // Find possible polymorphic type and later create implementation for it
     for(int i=0;i<(int)iden->funcOverloads.polyOverloads.size();i++){
         FnOverloads::PolyOverload& overload = iden->funcOverloads.polyOverloads[i];
-        if(overload.astFunc->polyArgs.size() != polyTypes.size())
+        if(overload.astFunc->polyArgs.size() != fnPolyArgs.size())
             continue;// unless implicit polymorphic types
         for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-            overload.astFunc->polyArgs[j].virtualType->id = polyIds[j];
+            overload.astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
         }
         defer {
             for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
@@ -690,7 +718,8 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
             }
         };
         u32 nonDefaults = 0;
-        while (nonDefaults<overload.astFunc->arguments.size() && !overload.astFunc->arguments[nonDefaults].defaultValue){
+        while (nonDefaults<overload.astFunc->arguments.size() &&
+          !overload.astFunc->arguments[nonDefaults].defaultValue){
             nonDefaults++;
         }
         // continue if more args than possible
@@ -699,11 +728,11 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
             continue;
         bool found = true;
         for (u32 j=0;j<nonDefaults;j++){
-            log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
-            // log::out << "Arg:"<<info.ast->typeToString(argType)<<"\n";
-            TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
+            // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
+            TypeId argType = CheckType(info, overload.astFunc->scopeId,overload.astFunc->arguments[j].stringType,
+            // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
                 overload.astFunc->arguments[j].name,nullptr);
-            // TypeId argType = ast->ensureNonVirtualId(overload.argTypes[j]);
+            log::out << "Arg: "<<info.ast->typeToString(argType)<<"\n";
             if(argType != argTypes[j]){
                 found = false;
                 break;
@@ -723,10 +752,7 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
             //break;
         }
     }
-    if(!polyFunc 
-        || polyIds.size()==0 // NOTE: Comment to enable implicit polymorphism
-        ){
-        // if(polyIds.size()==0){
+    if(!polyFunc){
         ERR_HEAD(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
             if(argTypes.size()==0){
                 log::out << "zero arguments";
@@ -736,38 +762,36 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
                 log::out <<info.ast->typeToString(argTypes[i]);
             }
             log::out << "\n";
-            if(polyIds.size()!=0){
-                log::out << log::YELLOW<<"(polymorphic functions could not be generated if there are any)\n";
-            }
+            log::out << log::YELLOW<<"(polymorphic functions could not be generated if there are any)\n";
+            log::out <<"\n";
+            ERR_LINE(expr->tokenRange, "bad");
             // TODO: show list of available overloaded function args
         )
-        // }else {
-            
-        // }
         return false;
     }
-    // Code for polymorphism. Reuse it?
     ScopeInfo* funcScope = info.ast->getScope(polyFunc->scopeId);
     FuncImpl* funcImpl = polyFunc->createImpl();
     funcImpl->name = expr->name;
 
-    funcImpl->polyIds.resize(polyIds.size());
+    funcImpl->polyArgs.resize(fnPolyArgs.size());
 
-    for(int i=0;i<(int)polyIds.size();i++){
-        TypeId id = polyIds[i];
-        funcImpl->polyIds[i] = id;
+    for(int i=0;i<(int)fnPolyArgs.size();i++){
+        TypeId id = fnPolyArgs[i];
+        funcImpl->polyArgs[i] = id;
     }
     // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
     int result = CheckFunctionImpl(info,polyFunc,funcImpl,nullptr, outType);
 
-    iden->funcOverloads.addPolyImplOverload(polyFunc, funcImpl);
+    FnOverloads::Overload* newOverload = iden->funcOverloads.addPolyImplOverload(polyFunc, funcImpl);
     CheckInfo::CheckImpl checkImpl{};
     checkImpl.astFunc = polyFunc;
     checkImpl.funcImpl = funcImpl;
-    checkImpl.scope = scope;
+    // checkImpl.scope = scope;
     info.checkImpls.add(checkImpl);
 
-    overload = iden->funcOverloads.getOverload(argTypes);
+    // Can overload be null since we generate a new func impl?
+    overload = iden->funcOverloads.getOverload(argTypes, fnPolyArgs);
+    Assert(overload == newOverload);
     if(!overload){
         ERR_HEAD(expr->tokenRange, "Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
             log::out << log::CYAN<<"Generates args: "<<log::SILVER;
@@ -792,7 +816,8 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
         )
         return false;
     } 
-    goodOverload();
+    if(overload->funcImpl->returnTypes.size()>0)
+        *outType = overload->funcImpl->returnTypes[0].typeId;
     return true;
 }
 int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* outType, bool checkNext){
@@ -800,7 +825,7 @@ int CheckExpression(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeI
     MEASURE;
     Assert(scope)
     Assert(expr)
-    _TC_LOG(FUNC_ENTER)
+    _TC_LOG_ENTER(FUNC_ENTER)
     
     // IMPORTANT NOTE: CheckExpression HAS to run for left and right expressions
     //  since they may require types to be checked. AST_SIZEOF needs to evalute for example
@@ -960,21 +985,21 @@ int CheckRest(CheckInfo& info, ASTScope* scope);
 int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, TypeId* outType){
     using namespace engone;
     MEASURE;
-    _TC_LOG(FUNC_ENTER)
+    _TC_LOG_ENTER(FUNC_ENTER)
     int offset = 0; // offset starts before call frame (fp, pc)
     int firstSize = 0;
 
-    Assert(funcImpl->polyIds.size() == func->polyArgs.size());
-    for(int i=0;i<(int)funcImpl->polyIds.size();i++){
-        TypeId id = funcImpl->polyIds[i];
+    Assert(funcImpl->polyArgs.size() == func->polyArgs.size());
+    for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
+        TypeId id = funcImpl->polyArgs[i];
         Assert(id.isValid())
         func->polyArgs[i].virtualType->id = id;
     }
     if(funcImpl->structImpl){
         Assert(parentStruct);
         // Assert funcImpl->structImpl must come from parentStruct
-        for(int i=0;i<(int)funcImpl->structImpl->polyIds.size();i++){
-            TypeId id = funcImpl->structImpl->polyIds[i];
+        for(int i=0;i<(int)funcImpl->structImpl->polyArgs.size();i++){
+            TypeId id = funcImpl->structImpl->polyArgs[i];
             Assert(id.isValid());
             parentStruct->polyArgs[i].virtualType->id = id;
         }
@@ -993,16 +1018,23 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
     for(int i=0;i<(int)func->arguments.size();i++){
         auto& arg = func->arguments[i];
         auto& argImpl = funcImpl->argumentTypes[i];
-        // TypeInfo* typeInfo = 0;
         if(arg.stringType.isString()){
             bool printedError = false;
             // Token token = info.ast->getTokenFromTypeString(arg.typeId);
             auto ti = CheckType(info, func->scopeId, arg.stringType, func->tokenRange, &printedError);
             
-            if(ti.isValid()){
-            }else if(!printedError) {
-                ERR_HEAD2(func->tokenRange) << info.ast->getTokenFromTypeString(arg.stringType) <<" was void (type doesn't exist or you used void which isn't allowed)\n";
-                ERR_END
+            if(ti == AST_VOID){
+                std::string msg = info.ast->typeToString(arg.stringType);
+                ERR_HEAD(func->tokenRange, "Type '"<<msg<<"' is unknown. Did you misspell or forget to declare the type?\n";
+                    ERR_LINE(func->arguments[i].name,msg.c_str());
+                )
+            } else if(ti.isValid()){
+
+            } else if(!printedError) {
+                std::string msg = info.ast->typeToString(arg.stringType);
+                ERR_HEAD(func->tokenRange, "Type '"<<msg<<"' is unknown. Did you misspell it or is the compiler messing with you?\n";
+                    ERR_LINE(func->arguments[i].name,msg.c_str());
+                )
             }
             argImpl.typeId = ti;
         } else {
@@ -1012,13 +1044,15 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
         int size = info.ast->getTypeSize(argImpl.typeId);
         int asize = info.ast->getTypeAlignedSize(argImpl.typeId);
         // Assert(size != 0 && asize != 0);
-        if(size ==0 || asize == 0) // Probably due to an error which was logged. We don't want to assert and crash the compiler.
-            continue;
+        // Actually, don't continue here. argImpl.offset shouldn't be uninitialized.
+        // if(size ==0 || asize == 0) // Probably due to an error which was logged. We don't want to assert and crash the compiler.
+        //     continue;
         if(i==0)
             firstSize = size;
-        
-        if((offset%asize) != 0){
-            offset += asize - offset%asize;
+        if(asize!=0){
+            if((offset%asize) != 0){
+                offset += asize - offset%asize;
+            }
         }
         argImpl.offset = offset;
         // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
@@ -1091,34 +1125,53 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
         *outType = funcImpl->returnTypes[0].typeId;
     }
 
-    for(int i=0;i<(int)funcImpl->polyIds.size();i++){
+    for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
         func->polyArgs[i].virtualType->id = {};
     }
     if(funcImpl->structImpl){
         Assert(parentStruct);
-        for(int i=0;i<(int)funcImpl->structImpl->polyIds.size();i++){
-            TypeId id = funcImpl->structImpl->polyIds[i];
+        for(int i=0;i<(int)funcImpl->structImpl->polyArgs.size();i++){
+            TypeId id = funcImpl->structImpl->polyArgs[i];
             parentStruct->polyArgs[i].virtualType->id = {};
         }
     }
 
     return true;
 }
+// Ensures that the function identifier exists.
+// Adds the overload for the function.
+// Checks if an existing overload would collide with the new overload.
 int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* nowStruct, ASTScope* scope){
     using namespace engone;
+    _TC_LOG_ENTER(FUNC_ENTER)
+    
     // Create virtual types
     for(int i=0;i<(int)function->polyArgs.size();i++){
         auto& arg = function->polyArgs[i];
         arg.virtualType = info.ast->createType(arg.name, function->scopeId);
-        _TC_LOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
+        // _TC_LOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
+        arg.virtualType->id = AST_POLY;
     }
+    defer {
+        for(int i=0;i<(int)function->polyArgs.size();i++){
+            auto& arg = function->polyArgs[i];
+            arg.virtualType->id = {};
+        }
+    };
+    // The code below is used to 
     // Acquire identifiable arguments
     DynamicArray<TypeId> argTypes{};
     for(int i=0;i<(int)function->arguments.size();i++){
-        if(function->arguments[i].defaultValue)
-            break;
+        // if(function->arguments[i].defaultValue)
+        //     break;
         TypeId typeId = CheckType(info, function->scopeId, function->arguments[i].stringType, function->tokenRange, nullptr);
-        Assert(typeId.isValid());
+        // Assert(typeId.isValid());
+        if(!typeId.isValid()){
+            std::string msg = info.ast->typeToString(function->arguments[i].stringType);
+            ERR_HEAD(function->arguments[i].name.range(),"Unknown type '"<<msg<<"'.\n\n";
+                ERR_LINE(function->arguments[i].name.range(),msg.c_str());
+            )
+        }
         argTypes.add(typeId);
     }
     // _TC_LOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
@@ -1126,51 +1179,86 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* nowStruct, 
         Assert(("Methods don't work",false))
         // nowStruct->isPolymorphic() || function->isPolymorphic();
     }
-    Identifier* id = info.ast->getIdentifier(scope->scopeId, function->name);
-    if(!id){
-        id = info.ast->addIdentifier(scope->scopeId, function->name);
-        id->type = Identifier::FUNC;
+    Identifier* iden = info.ast->getIdentifier(scope->scopeId, function->name);
+    if(!iden){
+        iden = info.ast->addIdentifier(scope->scopeId, function->name);
+        iden->type = Identifier::FUNC;
     }
-    if(id->type != Identifier::FUNC){
+    if(iden->type != Identifier::FUNC){
         ERR_HEAD(function->tokenRange, "'"<< function->name << "' is already defined as a non-function.\n";
         )
         return false;
     }
-    auto overload = id->funcOverloads.getOverload(argTypes);
-    if(overload){
-        //  TODO: better error message which shows what and where the already defined variable/function is.
-        ERR_HEAD(function->tokenRange, "Argument types are ambiguous with another overload of function '"<< function->name << "'.\n\n";
-            ERR_LINE(overload->astFunc->tokenRange,"initial overload");
-            ERR_LINE(function->tokenRange,"ambiguous overload");
-        )
-        // print list of overloads?
-    } else {
-        if(function->polyArgs.size()==0){
+    if(function->polyArgs.size()==0){
+        FnOverloads::Overload* outOverload = nullptr;
+        for(int i=0;i<(int)iden->funcOverloads.overloads.size();i++){
+            auto& overload = iden->funcOverloads.overloads[i];
+            // u32 nonDefaults0 = 0;
+            // TODO: Store non defaults in Identifier or ASTStruct to save time.
+            //   Recalculating non default arguments here every time you get a function is
+            //   unnecessary.
+            // for(auto& arg : overload.astFunc->arguments){
+            //     if(arg.defaultValue)
+            //         break;
+            //     nonDefaults0++;
+            // }
+            // if(argTypes.size() > overload.astFunc->arguments.size() || argTypes.size() < nonDefaults0)
+            //     continue;
+            bool found = true;
+            for (u32 j=0;j<overload.funcImpl->argumentTypes.size() && j < argTypes.size();j++){
+                if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]){
+                    found = false;
+                    break;
+                }
+            }
+            if(found){
+                // return &overload;
+                // NOTE: You can return here because there should only be one matching overload.
+                // But we keep going in case we find more matches which would indicate
+                // a bug in the compiler. An optimised build would not do this.
+                if(outOverload) {
+                    // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+                    Assert(("More than one match!",false));
+                    // return &overload;
+                    break;
+                }
+                outOverload = &overload;
+            }
+        }
+        // return outOverload;
+        // FnOverloads::Overload* overload = id->funcOverloads.getOverload(argTypes);
+        if(outOverload){
+            //  TODO: better error message which shows what and where the already defined variable/function is.
+            ERR_HEAD(function->tokenRange, "Argument types are ambiguous with another overload of function '"<< function->name << "'.\n\n";
+                ERR_LINE(outOverload->astFunc->tokenRange,"initial overload");
+                ERR_LINE(function->tokenRange,"ambiguous overload");
+            )
+            // print list of overloads?
+        } else {
             FuncImpl* funcImpl = function->createImpl();
             funcImpl->name = function->name;
             // function->_impls.add(funcImpl);
-            id->funcOverloads.addOverload(function, funcImpl);
+            iden->funcOverloads.addOverload(function, funcImpl);
             TypeId retType={};
             bool yes = CheckFunctionImpl(info, function, funcImpl, nowStruct, &retType);
             CheckInfo::CheckImpl checkImpl{};
             checkImpl.astFunc = function;
             checkImpl.funcImpl = funcImpl;
-            checkImpl.scope = scope;
+            // checkImpl.scope = scope;
             info.checkImpls.add(checkImpl);
-        } else {
-            id->funcOverloads.addPolyOverload(function);
         }
-    }
-    for(int i=0;i<(int)function->polyArgs.size();i++){
-        auto& arg = function->polyArgs[i];
-        arg.virtualType->id = {};
+    }else{
+        WARN_HEAD(function->tokenRange,"Polymorphic functions have not been implemented properly\n\n";)
+        // Base poly overload is added without regard for ambiguity.
+        // Checking for ambiguity is very difficult which is why we do this.
+        iden->funcOverloads.addPolyOverload(function);
     }
     return true;
 }
 int CheckFunctions(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
-    _TC_LOG(FUNC_ENTER)
+    _TC_LOG_ENTER(FUNC_ENTER)
     Assert(scope)
 
     for(auto now : scope->namespaces) {
@@ -1214,7 +1302,7 @@ int CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
 
     for(int i=0;i<(int)func->polyArgs.size();i++){
         auto& arg = func->polyArgs[i];
-        arg.virtualType->id = funcImpl->polyIds[i];
+        arg.virtualType->id = funcImpl->polyArgs[i];
     }
     struct Var {
         ScopeId scopeId;
@@ -1251,7 +1339,7 @@ int CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
 int CheckRest(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
-    _TC_LOG(FUNC_ENTER)
+    _TC_LOG_ENTER(FUNC_ENTER)
 
     // Hello me in the future!
     //  I have disrespectfully left a complex and troublesome problem to you.

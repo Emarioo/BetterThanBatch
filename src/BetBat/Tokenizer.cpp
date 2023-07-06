@@ -105,10 +105,10 @@ int ConvertHexadecimal(Token& token){
 void TokenRange::print(){
     using namespace engone;
     // assert?
-    if(!tokenStream) return;
+    if(!tokenStream()) return;
     
-    for(int i=startIndex;i<endIndex;i++){
-        Token& tok = tokenStream->get(i);
+    for(int i=startIndex();i<endIndex;i++){
+        Token& tok = tokenStream()->get(i);
         if(!tok.str)
             continue;
         
@@ -146,9 +146,9 @@ void TokenStream::addImport(const std::string& name, const std::string& as){
 void TokenRange::feed(std::string& outBuffer){
     using namespace engone;
     // assert?
-    if(!tokenStream) return;
-    for(int i=startIndex;i<endIndex;i++){
-        Token& tok = tokenStream->get(i);
+    if(!tokenStream()) return;
+    for(int i=startIndex();i<endIndex;i++){
+        Token& tok = tokenStream()->get(i);
         
         if(!tok.str)
             continue;
@@ -269,7 +269,13 @@ Token::operator TokenRange() const{
     return r;
 }
 TokenRange Token::range() const {
-    return (TokenRange)*this;
+    TokenRange r{};
+    r.firstToken = *this;
+    // r.startIndex = tokenIndex;
+    r.endIndex = tokenIndex+1;
+    // r.tokenStream = tokenStream;
+    return r;
+    // return (TokenRange)*this;
 }
 static Token END_TOKEN{"$END$"};
 Token& TokenStream::next(){
@@ -557,7 +563,7 @@ TokenStream* TokenStream::Tokenize(const std::string& filePath){
     return stream;
 }
 TokenStream* TokenStream::Create(){
-    #ifdef ALLOC_LOG
+    #ifdef LOG_ALLOC
     static bool once = false;
     if(!once){
         once = true;

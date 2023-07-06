@@ -322,7 +322,7 @@ Bytecode* CompileSource(CompileOptions options) {
     AST::Destroy(compileInfo.ast);
     compileInfo.ast = nullptr;
     if(compileInfo.errors!=0){
-        log::out << log::RED<<"Compiler failed with "<<compileInfo.errors<<" error(s) (" << FormatUnit(compileInfo.lines / seconds) << " loc/s)\n";
+        log::out << log::RED<<"Compiler failed with "<<compileInfo.errors<<" error(s) ("<<FormatTime(seconds)<<", "<<FormatUnit((u64)compileInfo.lines)<<" line(s), " << FormatUnit(compileInfo.lines / seconds) << " loc/s)\n";
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
     }

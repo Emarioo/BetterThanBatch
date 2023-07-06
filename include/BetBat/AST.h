@@ -28,6 +28,8 @@ enum PrimitiveType : u32 {
     
     AST_STRING, // converted to another type, probably char[]
     AST_NULL, // converted to void*
+
+    AST_POLY,
     
     AST_TRUE_PRIMITIVES,
 
@@ -189,7 +191,8 @@ struct FnOverloads {
     DynamicArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(DynamicArray<TypeId>& typeIds);
+    Overload* getOverload(DynamicArray<TypeId>& argTypes);
+    Overload* getOverload(DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs);
     // Get base polymorphic overload which can match with the typeIds.
     // You want to generate the real overload afterwards.
     // ASTFunction* getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes);
@@ -215,7 +218,7 @@ struct StructImpl {
     };
     std::vector<Member> members{};
     
-    std::vector<TypeId> polyIds;
+    std::vector<TypeId> polyArgs;
 
     std::unordered_map<std::string, FnOverloads> methods;
     
@@ -252,7 +255,7 @@ struct TypeInfo {
 struct FuncImpl {
     std::string name;
     struct Spot {
-        TypeId typeId;
+        TypeId typeId{};
         int offset=0;
     };
     DynamicArray<Spot> argumentTypes;
@@ -260,7 +263,7 @@ struct FuncImpl {
     int argSize=0;
     int returnSize=0;
     i64 address = 0; // Set by generator
-    DynamicArray<TypeId> polyIds;
+    DynamicArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
     static const u64 INVALID_FUNC_ADDRESS = 0;
 };
@@ -441,7 +444,7 @@ struct ASTFunction : ASTNode {
         TypeId stringType={};
     };
     DynamicArray<PolyArg> polyArgs;
-    DynamicArray<Arg> arguments; // string type
+    DynamicArray<Arg> arguments; // you could rename to parameters
     DynamicArray<TypeId> returnTypes; // string type
 
     DynamicArray<FuncImpl*> _impls{};

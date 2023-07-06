@@ -10,7 +10,7 @@ struct CheckInfo {
     struct CheckImpl {
         ASTFunction* astFunc=nullptr;
         FuncImpl* funcImpl=nullptr;
-        ASTScope* scope = nullptr; // scope where function came from
+        // ASTScope* scope = nullptr; // scope where function came from
     };
     DynamicArray<CheckImpl> checkImpls{};
 

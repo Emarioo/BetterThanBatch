@@ -64,10 +64,11 @@ struct TokenRange {
         range.endIndex = r.endIndex;
         return range;
     }
-
-    const int& startIndex = firstToken.tokenIndex;
     int endIndex=0; // exclusive
-    TokenStream* const& tokenStream = firstToken.tokenStream;
+    const int& startIndex() const { return firstToken.tokenIndex; }
+    TokenStream* const& tokenStream() const { return firstToken.tokenStream; }
+    // const int& startIndex = firstToken.tokenIndex;
+    // TokenStream* const& tokenStream = firstToken.tokenStream;
 
     // TokenStream* stream() const {
     //     return firstToken.tokenStream;

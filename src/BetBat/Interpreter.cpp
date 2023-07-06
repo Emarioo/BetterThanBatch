@@ -918,7 +918,7 @@ void Interpreter::execute(Bytecode* bytecode){
     auto time = StopMeasure(tp);
     if(!silent){
         log::out << "\n";
-        log::out << log::LIME << "Executed in "<<FormatTime(time)<< " "<<FormatUnit(executedInstructions/time)<< "inst/s\n";
+        log::out << log::LIME << "Executed in "<<FormatTime(time)<< " "<<FormatUnit(executedInstructions/time)<< " inst/s\n";
         #ifdef ILOG_REGS
         printRegisters();
         #endif

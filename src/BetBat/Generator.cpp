@@ -81,24 +81,30 @@ void GenInfo::addPop(int reg) {
     // is probably messed up because of the errors. OR you try
     // to manage the stack even with errors. Unnecessary work though so don't!? 
     //
-    if(errors==0){
-        Assert(("bug in compiler!", !stackAlignment.empty()))
-    }
-    auto align = stackAlignment.back();
-    if(errors==0){
-        Assert(("bug in compiler!", align.size == size));
-    }
-    // You pushed some size and tried to pop a different size.
-    // Did you copy paste some code involving addPop/addPush recently?
+    while (true) {
+        if(errors==0){
+            Assert(("bug in compiler!", !stackAlignment.empty()))
+        }
+        auto align = stackAlignment.back();
+        if(errors==0 && align.size!=0){
+            // size of 0 could mean extra alignment for between structs
+            Assert(("bug in compiler!", align.size == size));
+        }
+        // You pushed some size and tried to pop a different size.
+        // Did you copy paste some code involving addPop/addPush recently?
 
-    stackAlignment.pop_back();
-    if (align.diff != 0) {
-        virtualStackPointer += align.diff;
-        code->addDebugText("align sp\n");
-        i16 offset = align.diff;
-        code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
+        stackAlignment.pop_back();
+        if (align.diff != 0) {
+            virtualStackPointer += align.diff;
+            code->addDebugText("align sp\n");
+            i16 offset = align.diff;
+            code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
+        }
+        if(align.size == 0)
+            continue;
+        virtualStackPointer += size;
+        break;
     }
-    virtualStackPointer += size;
     _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
 }
 void GenInfo::addPush(int reg) {
@@ -151,6 +157,18 @@ void GenInfo::addIncrSp(i16 offset) {
     virtualStackPointer += offset;
     code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
     _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
+}
+void GenInfo::addAlign(int alignment){
+    int diff = (alignment - (-virtualStackPointer) % alignment) % alignment; // how much to increment sp by to align it
+    // TODO: Instructions are generated from top-down and the stackAlignment
+    //   sees pop and push in this way but how about jumps. It doesn't consider this. Is it an issue?
+    if (diff) {
+        addIncrSp(-diff);
+        // virtualStackPointer -= diff;
+        // code->addDebugText("align sp\n");
+        // i16 offset = -diff;
+        // code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
+    }
 }
 void GenInfo::addStackSpace(i32 _size) {
     using namespace engone;
@@ -403,6 +421,19 @@ int GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
             auto& member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
+
+            // TODO: This code doesn't seem to be necessary. It should be though.
+            //  Figure out why it isn't. Something with BC_MOV bypassing the need
+            //  for this?
+            if(i+1<(int)typeInfo->astStruct->members.size()){
+                // structs in structs will be aligned by their individual members
+                // instead of the alignment of the structs as a whole.
+                // This will make sure the structs are aligned.
+                auto prevMem = typeInfo->getMember(i+1);
+                u32 alignSize = info.ast->getTypeAlignedSize(prevMem.typeId);
+                // log::out << "Try align "<<alignSize<<"\n";
+                info.addAlign(alignSize);
+            }
             
             _GLOG(log::out << "push " << member.name << "\n";)
             info.code->addDebugText("push " + std::string(member.name)+"\n");
@@ -888,16 +919,9 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             }
         }
         else if (expression->typeId == AST_FNCALL) {
-            // ASTFunction* astFunc = nullptr;
-            // FuncImpl* funcImpl = nullptr;
-
             // int result = GenCheckFuncImpl(info, expression, astFunc, funcImpl, idScope);
             // if(result!=GEN_SUCCESS)
             //     return GEN_ERROR;
-
-            // ASTExpression *argt = expression->left;
-            // if (argt)
-            //     _GLOG(log::out << "push arguments\n");
             int startSP = info.saveStackMoment();
 
             //-- align
@@ -909,52 +933,26 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 info.addIncrSp(-diff); // Align
                 // TODO: does something need to be done with stackAlignment list.
             }
+            // NOTE: A lot of the code here comes from the type checker.
 
-            // std::vector<ASTExpression *> realArgs;
-            // realArgs.resize(astFunc->arguments.size());
+            DynamicArray<TypeId> fnPolyArgs;
+            std::vector<Token> polyTokens;
+            Token baseName = AST::TrimPolyTypes(expression->name, &polyTokens);
+            for(int i=0;i<(int)polyTokens.size();i++){
+                bool printedError = false;
+                TypeId id = info.ast->convertToTypeId(polyTokens[i], idScope);
+                // TypeId id = CheckType(info, scope->scopeId, polyTokens[i], expression->tokenRange, &printedError);
+                fnPolyArgs.add(id);
+                // TODO: What about void?
+                if(id.isValid()){
 
-            // int index = -1;
-            // for (int index = 0; index < expression->args->size(); index++) {
-            //     ASTExpression *arg = expression->args->at(index);
-            //     // argt = argt->next;
-            //     // index++;
+                } else {
+                    ERR_HEAD(expression->tokenRange, "Type for polymorphic argument was not valid.\n\n";
+                        ERR_LINE(expression->tokenRange,"bad");
+                    )
+                }
+            }
 
-            //     // if (!arg->namedValue) {
-            //         if ((int)realArgs.size() <= index) {
-            //             ERR_HEAD2(arg->tokenRange) << "To many arguments for function " << astFunc->name << " (" << astFunc->arguments.size() << " argument(s) allowed)\n";
-            //             ERR_END
-            //             continue;
-            //         }
-            //         else
-            //             realArgs[index] = arg;
-            //     // } else {
-            //     //     int argIndex = -1;
-            //     //     for (int i = 0; i < (int)astFunc->arguments.size(); i++) {
-            //     //         if (astFunc->arguments[i].name == *arg->namedValue) {
-            //     //             argIndex = i;
-            //     //             break;
-            //     //         }
-            //     //     }
-            //     //     if (argIndex == -1) {
-            //     //         ERR_HEAD2(arg->tokenRange) << *arg->namedValue << " is not an argument in " << astFunc->name << "\n";
-            //     //         ERR_END
-            //     //         continue;
-            //     //     } else {
-            //     //         if (realArgs[argIndex]) {
-            //     //             ERR_HEAD2(arg->tokenRange) << "argument for " << astFunc->arguments[argIndex].name << " is already specified at " << LOGAT(realArgs[argIndex]->tokenRange) << "\n";
-            //     //             ERR_END
-            //     //         } else {
-            //     //             realArgs[argIndex] = arg;
-            //     //         }
-            //     //     }
-            //     // }
-            // }
-
-            // for (int i = 0; i < (int)astFunc->arguments.size(); i++) {
-            //     auto &arg = astFunc->arguments[i];
-            //     if (!realArgs[i])
-            //         realArgs[i] = arg.defaultValue;
-            // }
             DynamicArray<TypeId> argTypes{};
             int index = 0;
             for (index = 0; index < (int)expression->args->size();index++) {
@@ -963,45 +961,26 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                     break;
                 }
 
-                TypeId dt = {};
+                TypeId argType = {};
                 int result = 0;
                 if(expression->boolValue && index == 0) {
                     // method call and first argument which is 'this'
-                    result = GenerateReference(info, arg, &dt);
+                    result = GenerateReference(info, arg, &argType);
                     if(result==GEN_SUCCESS){
-                        if(!dt.isPointer()){
-                            dt.setPointerLevel(1);
+                        if(!argType.isPointer()){
+                            argType.setPointerLevel(1);
                         } else {
+                            Assert(argType.getPointerLevel()==1)
                             info.addPop(BC_REG_RBX);
                             info.code->add({BC_MOV_MR, BC_REG_RBX, BC_REG_RBX});
                             info.addPush(BC_REG_RBX);
                         }
                     }
                 } else {
-                    result = GenerateExpression(info, arg, &dt);
+                    result = GenerateExpression(info, arg, &argType);
                 }
-                argTypes.add(dt);
-                // if (result != GEN_SUCCESS) {
-                //     continue;
-                // }
-                // if (index >= (int)astFunc->arguments.size()) {
-                //     // ERR() << "To many arguments! func:"<<*expression->funcName<<" max: "<<astFunc->arguments.size()<<"\n";
-                //     continue;
-                // }
-
-                // _GLOG(log::out << " pushed " << astFunc->arguments[index].name << "\n";)
-                // Assert((int)funcImpl->arguments.size()>index);
-                // if (!PerformSafeCast(info, dt, funcImpl->arguments[index].typeId)) {   // implicit conversion
-                //     // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                //     ERRTYPE(arg->tokenRange, dt, funcImpl->arguments[index].typeId, "(fncall).\n\n";
-                //         ERR_LINE(arg->tokenRange, "aa");
-                //     )
-                //     continue;
-                // }
-                // values are already pushed to the stack
+                argTypes.add(argType);
             }
-            std::vector<Token> polyTypes; // not used?
-            Token baseName = AST::TrimPolyTypes(expression->name, &polyTypes);
 
             auto iden = info.ast->getIdentifier(idScope, baseName);
             if(!iden){
@@ -1010,10 +989,14 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 )
                 return GEN_ERROR;
             }
+
             ASTFunction* astFunc = nullptr;
             FuncImpl* funcImpl = nullptr;
-            {
-                auto overload = iden->funcOverloads.getOverload(argTypes);
+            if(fnPolyArgs.size()==0) {
+                // match args with normal impls
+                FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes);
+                // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
+                //   Should be done in type checker too.
                 if(!overload){
                     if(info.compileInfo->typeErrors==0){
                         ERR_HEAD(expression->tokenRange, "Overload for function '"<<baseName <<"' does not exist for the argument(s): ";
@@ -1034,6 +1017,26 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 }
                 astFunc = overload->astFunc;
                 funcImpl = overload->funcImpl;
+            } else {
+                FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes,fnPolyArgs);
+                if(!overload){
+                     if(info.compileInfo->typeErrors==0){
+                        ERR_HEAD(expression->tokenRange, "Overload for function '"<<baseName <<"' does not exist for the argument(s): ";
+                            if(argTypes.size()==0){
+                                log::out << "zero arguments";
+                            }
+                            for(int i=0;i<(int)argTypes.size();i++){
+                                if(i!=0) log::out << ", ";
+                                log::out <<info.ast->typeToString(argTypes[i]);
+                            }
+                            log::out << "\n";
+                            // TODO: show list of available overloaded function args
+                        )
+                    }
+                    return GEN_ERROR;
+                }
+                astFunc = overload->astFunc;
+                funcImpl = overload->funcImpl;
             }
 
             std::vector<ASTExpression*> restArgs;
@@ -1048,6 +1051,11 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 if (!restArgs[i])
                     restArgs[i] = arg.defaultValue;
             }
+            
+            // TODO: Double check that the default and named arguments
+            //  match the function you are calling. We just match the
+            //  essential types to get the overload. Whether the arguments
+            //  is a full match should be checked here somewhere.
 
             for(int i=index;i<(int)astFunc->arguments.size();i++){
                 auto &arg = astFunc->arguments[i];
@@ -2078,9 +2086,21 @@ int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange) {
         for (int i = typeInfo->astStruct->members.size() - 1; i >= 0; i--) {
             auto &member = typeInfo->astStruct->members[i];
             auto memdata = typeInfo->getMember(i);
+            // log::out << "GEN "<<typeInfo->astStruct->name<<"."<<member.name<<"\n";
+            // log::out << " alignedSize "<<info.ast->getTypeAlignedSize(memdata.typeId)<<"\n";
             if(member.defaultValue && typeInfo->astStruct->polyArgs.size()){
                 WARN_HEAD((*tokenRange), "Polymorphism may not work with default values!";)
             }
+            if(i+1<(int)typeInfo->astStruct->members.size()){
+                // structs in structs will be aligned by their individual members
+                // instead of the alignment of the structs as a whole.
+                // This will make sure the structs are aligned.
+                auto prevMem = typeInfo->getMember(i+1);
+                u32 alignSize = info.ast->getTypeAlignedSize(prevMem.typeId);
+                // log::out << "Try align "<<alignSize<<"\n";
+                info.addAlign(alignSize);
+            }
+
             if (member.defaultValue) {
                 TypeId typeId = {};
                 int result = GenerateExpression(info, member.defaultValue, &typeId);
@@ -2293,12 +2313,12 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         if(astStruct){
             for(int i=0;i<(int)astStruct->polyArgs.size();i++){
                 auto& arg = astStruct->polyArgs[i];
-                arg.virtualType->id = funcImpl->structImpl->polyIds[i];
+                arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
             }
         }
         for(int i=0;i<(int)function->polyArgs.size();i++){
             auto& arg = function->polyArgs[i];
-            arg.virtualType->id = funcImpl->polyIds[i];
+            arg.virtualType->id = funcImpl->polyArgs[i];
         }
 
         // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES, 16 could work to.
@@ -2470,7 +2490,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                         // when slice is used but this may not be true in the future.
                         int arrayOffset = 0;
                         {
-                            TypeId innerType = typeInfo->structImpl->polyIds[0];
+                            TypeId innerType = typeInfo->structImpl->polyArgs[0];
                             if(!innerType.isValid())
                                 continue; // error message should have been printed in type checker
                             i32 size2 = info.ast->getTypeSize(innerType);
@@ -3423,7 +3443,7 @@ int GenerateData(GenInfo& info, AST* ast) {
 Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     using namespace engone;
     MEASURE;
-#ifdef ALLOC_LOG
+#ifdef LOG_ALLOC
     static bool sneaky=false;
     if(!sneaky){
         sneaky=true;

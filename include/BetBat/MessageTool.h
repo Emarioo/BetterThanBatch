@@ -20,10 +20,10 @@
 #define MSG_END ; engone::log::out.setIndent(0);
 
 #define ERR_DEFAULT_T(TSTREAM,T,NAME,NUM) ERR_CUSTOM(TSTREAM?TSTREAM->streamName:"", T.line, T.column,NAME,NUM)
-#define ERR_DEFAULT_R(R,NAME,NUM) ERR_CUSTOM(R.tokenStream?R.tokenStream->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
-#define ERR_DEFAULT_RL(R,NAME,NUM) ERR_CUSTOM(R.tokenStream?R.tokenStream->streamName:"", R.firstToken.line, R.firstToken.column + R.firstToken.length,NAME,NUM)
+#define ERR_DEFAULT_R(R,NAME,NUM) ERR_CUSTOM(R.tokenStream()?R.tokenStream()->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
+#define ERR_DEFAULT_RL(R,NAME,NUM) ERR_CUSTOM(R.tokenStream()?R.tokenStream()->streamName:"", R.firstToken.line, R.firstToken.column + R.firstToken.length,NAME,NUM)
 
-#define WARN_DEFAULT_R(R,NAME,NUM) WARN_CUSTOM(R.tokenStream?R.tokenStream->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
+#define WARN_DEFAULT_R(R,NAME,NUM) WARN_CUSTOM(R.tokenStream()?R.tokenStream()->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
 
 struct TokenRange;
 void PrintCode(const TokenRange& tokenRange, const char* message = nullptr);

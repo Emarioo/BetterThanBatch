@@ -71,7 +71,7 @@ const char *StateToStr(int type) {
 AST *AST::Create() {
     using namespace engone;
 // Useful when debugging memory leaks
-#ifdef ALLOC_LOG
+#ifdef LOG_ALLOC
     static bool once = false;
     if (!once) {
         once = true;
@@ -126,6 +126,7 @@ AST *AST::Create() {
     ast->createPredefinedType(Token("ast-member"),scopeId, AST_MEMBER);
     ast->createPredefinedType(Token("ast-sizeof"),scopeId, AST_SIZEOF);
     ast->createPredefinedType(Token("ast-call"),scopeId, AST_FNCALL);
+    ast->createPredefinedType(Token("ast-poly"),scopeId, AST_POLY);
 
     ast->mainBody = ast->createBody();
     // {
@@ -268,8 +269,17 @@ VariableInfo *AST::getVariable(Identifier* id) {
     Assert(id->varIndex>=0&&(int)id->varIndex<(int)variables.size());
     return variables[id->varIndex];
 }
-FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& typeIds){
+FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& argTypes){
     using namespace engone;
+    // Assume the only overload. The generator may do implicit casting if needed.
+    //   Or not because the generator pushes arguments to get types in order to
+    //   get overload. It's first when we have the overload that the casting can happen.
+    //   But at that point the arguments to cast have already been pushed. BC_MOV, BC_POP, BC_PUSH to
+    //   deal with that is bad for runtime so you would need to use different code
+    //   specifically for implicit casting. I don't want more code right now.
+    // if(overloads.size()==1)
+    //     return &overloads[0];
+
     FnOverloads::Overload* outOverload = nullptr;
     for(int i=0;i<(int)overloads.size();i++){
         auto& overload = overloads[i];
@@ -282,11 +292,11 @@ FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& typeIds){
                 break;
             nonDefaults0++;
         }
-        if(typeIds.size() > overload.astFunc->arguments.size() || typeIds.size() < nonDefaults0)
+        if(argTypes.size() > overload.astFunc->arguments.size() || argTypes.size() < nonDefaults0)
             continue;
         bool found = true;
         for (u32 j=0;j<nonDefaults0;j++){
-            if(overload.funcImpl->argumentTypes[j].typeId != typeIds[j]){
+            if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]){
                 found = false;
                 break;
             }
@@ -299,18 +309,37 @@ FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& typeIds){
             if(outOverload) {
                 // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
                 Assert(("More than one match!",false));
-                return &overload;
+                return outOverload;
             }
             outOverload = &overload;
         }
     }
-    if(outOverload)
-        return outOverload;
+    return outOverload;
+}
+
+FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs){
+    using namespace engone;
+    FnOverloads::Overload* outOverload = nullptr;
     // TODO: Check all overloads in case there are more than one match.
     //  Good way of finding a bug in the compiler.
     //  An optimised build would not do this.
     for(int i=0;i<(int)polyImplOverloads.size();i++){
         auto& overload = polyImplOverloads[i];
+        // The number of poly args must match. Using 1 poly arg when referring to a function with 2
+        // does not make sense.
+        if(overload.funcImpl->polyArgs.size() != polyArgs.size())
+            continue;
+        // The args must match exactly. Otherwise, a new implementation should be generated.
+        bool doesPolyArgsMatch = true;
+        for(int j=0;j<(int)polyArgs.size();j++){
+            if(polyArgs[j] != overload.funcImpl->polyArgs[j]){
+                doesPolyArgsMatch = false;
+                break;
+            }
+        }
+        if(!doesPolyArgsMatch)
+            continue;
+
         u32 nonDefaults0 = 0;
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
@@ -320,17 +349,17 @@ FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& typeIds){
                 break;
             nonDefaults0++;
         }
-        if(typeIds.size() > overload.astFunc->arguments.size() || typeIds.size() < nonDefaults0)
+        // The essential (or identifying) arguments must match.
+        if(argTypes.size() > overload.astFunc->arguments.size() || argTypes.size() < nonDefaults0)
             continue;
         bool found = true;
         for (u32 j=0;j<nonDefaults0;j++){
-            if(overload.funcImpl->argumentTypes[j].typeId != typeIds[j]){
+            if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]){
                 found = false;
                 break;
             }
         }
         if(found){
-            // return &overload;
             // NOTE: You can return here because there should only be one matching overload.
             // But we keep going in case we find more matches which would indicate
             // a bug in the compiler. An optimised build would not do this.
@@ -930,7 +959,7 @@ std::string AST::typeToString(TypeId typeId){
     std::string out="";
     TypeInfo* ti = getBaseTypeInfo(typeId);
     if(!ti)
-        return Token("");
+        return "";
 
     ScopeInfo* scope = getScope(ti->scopeId);
     std::string ns = scope->getFullNamespace(this);
