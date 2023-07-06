@@ -1,9 +1,69 @@
-#import "OS"
+// #import "OS"
+// #import "Logger"
 // #import "Basic"
 
-// fn printi(num: i64) { @native-code }
+// struct Range{
+//     a: i32;
+// }
+// fn printi(n: i64) { @native-code }
 // fn printc(chr: char) { @native-code }
-// fn @hide print(num: i64) { printi(num); printc('\n'); }
+// fn prints(n: Slice<char>) { @native-code }
+
+// fn log<T>(t: T){
+    // print(t)
+    // print("\n")
+// }
+// fn log<T>(s: Slice<T>) {
+//     prints(s)
+// }
+// log<bool>(Slice<bool>{null,8})
+
+
+
+// fn plog<T>(t: T, k: i32){
+//     printc('I');
+//     printi(cast<i64>(sizeof T))
+//     // log(t);
+// }
+// plog<f32>(25.23, false)
+
+
+struct C {
+    a: i32;
+    b: f32;
+}
+struct L {
+    a: bool;
+    b: i64;
+}
+struct K {
+    a: C;
+    b: L;
+}
+l: K;
+
+// struct A<T,K> {
+//     t: T;
+//     k: K;
+// }
+// a: A<A<i32,f32>,A<bool,i64>>;
+
+// printi(cast<i64>sizeof A<A<i32,f32>,A<bool,char>>)
+
+
+// fn a<T>(a: A<T>){
+
+// }
+
+// a<i32>(A<i32>{5});
+
+
+
+// printd(0.82)
+
+// fn log(n: i32){
+//     prints("i32");
+// }
 
 // fn log<T>(t: T, b: i32, a: i32 = 5){
 //     prints("t i32 i32?\n")
@@ -17,24 +77,26 @@
 // fn log(t: bool, a: i32) {
 //     prints("bool i32\n")
 // }
-fn log<T>(t: T) {} // ok
-fn log<K>(k: K) {} // bad
-fn log<K>(k: K, n: i32) {} // ok
-fn log<K>(k: K, b: bool) {} // ok
+// fn log<T>(t: T) {} // ok
+// fn log<K>(k: K) {} // bad
+// fn log<K>(k: K, n: i32) {} // ok
+// fn log<K>(k: K, b: bool) {} // ok
 
-fn log<T,K>(arr: Array<T>*, arr2: List<K>*) {}
-fn log<T>(arr: Array<T>*, arr2: List<i32>*) {}
+// fn log<T,K>(arr: Array<T>*, arr2: List<K>*) {}
+// fn log<T>(arr: Array<T>*, arr2: List<i32>*) {}
 
-log(Array<i32>,List<i32>)
+// log(Array<i32>,List<i32>)
 
-fn log<T>(arr: Array<Array<T,K>>*) {}
-fn log(arr: Array<List<i32>>*) {}
+// fn log<T>(arr: Array<Array<T,K>>*) {}
+// fn log(arr: Array<List<i32>>*) {}
 
-fn log<T>(T) {}
-fn log(i32) {}
+// fn log<T>(T) {}
+// fn log<T>(T, T) {}
+// fn log(i32) {}
 
-// log(false, a = 6);
-log<i32>(23)
+// // log(false, a = 6);
+// log<bool>(false)
+// log(true)
 // log<bool, i32>(false, 23)
 // log(23);
 

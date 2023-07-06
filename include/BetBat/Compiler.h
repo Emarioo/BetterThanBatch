@@ -56,6 +56,7 @@ struct CompileInfo {
     bool addStream(TokenStream* stream);
     FileInfo* getStream(const Path& name);
     
+    int typeErrors=0; // used in generator to avoid printing the same errors
     int errors=0;
     int warnings=0;
     int lines=0;

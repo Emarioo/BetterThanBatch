@@ -29,8 +29,6 @@ enum PrimitiveType : u32 {
     AST_STRING, // converted to another type, probably char[]
     AST_NULL, // converted to void*
     
-    AST_POLY, // Used in type checker. Should never appear in the generator
-    
     AST_TRUE_PRIMITIVES,
 
     // TODO: should these be moved somewhere else?
@@ -38,7 +36,7 @@ enum PrimitiveType : u32 {
     AST_FNCALL,
     AST_SIZEOF,
     
-    AST_PRIMITIVE_COUNT,
+    AST_PRIMITIVE_COUNT, // above types are true with isValue
 };
 enum OperationType : u32 {
     AST_ADD=AST_PRIMITIVE_COUNT,  
@@ -182,13 +180,29 @@ struct FnOverloads {
         ASTFunction* astFunc=0;
         FuncImpl* funcImpl = 0;
     };
+    struct PolyOverload {
+        ASTFunction* astFunc=0;
+        // DynamicArray<TypeId> argTypes{};
+    };
     DynamicArray<Overload> overloads{};
+    DynamicArray<Overload> polyImplOverloads{};
+    DynamicArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
     Overload* getOverload(DynamicArray<TypeId>& typeIds);
+    // Get base polymorphic overload which can match with the typeIds.
+    // You want to generate the real overload afterwards.
+    // ASTFunction* getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes);
+    
     // FuncImpl can be null and probably will be most of the time
     // when you call this.
     void addOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
+    Overload* addPolyImplOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
+    // The array passed in will be "stolen" and the owner of the allocation
+    // will be this struct.
+    void addPolyOverload(ASTFunction* astFunc);
+
+    // FuncImpl* createImpl();
 };
 // ASTStruct can have multiple of these per
 // polymorphic instantiation.
@@ -237,21 +251,16 @@ struct TypeInfo {
 };
 struct FuncImpl {
     std::string name;
-    struct Arg {
+    struct Spot {
         TypeId typeId;
         int offset=0;
     };
-    std::vector<Arg> arguments;
+    DynamicArray<Spot> argumentTypes;
+    DynamicArray<Spot> returnTypes;
     int argSize=0;
-
-    struct ReturnValue{
-        TypeId typeId;
-        int offset=0;
-    };
-    std::vector<ReturnValue> returnTypes;
     int returnSize=0;
     i64 address = 0; // Set by generator
-    std::vector<TypeId> polyIds;
+    DynamicArray<TypeId> polyIds;
     StructImpl* structImpl = nullptr;
     static const u64 INVALID_FUNC_ADDRESS = 0;
 };
@@ -314,7 +323,7 @@ struct ASTExpression : ASTNode {
         bool boolValue;
         char charValue;
     };
-    std::string* name=0;
+    Token name{};
     int constStrIndex=0;
     std::string* namedValue=0; // used for named arguments
     ASTExpression* left=0; // FNCALL has arguments in order left to right
@@ -323,7 +332,7 @@ struct ASTExpression : ASTNode {
 
     // TypeId finalType={}; // evaluated by type checker
 
-    std::vector<ASTExpression*>* args=nullptr; // fncall or initialiser
+    DynamicArray<ASTExpression*>* args=nullptr; // fncall or initialiser
     
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
@@ -362,8 +371,6 @@ struct ASTStatement : ASTNode {
     ASTScope* body = nullptr;
     ASTScope* elseBody = nullptr;
 
-    ASTStatement* next = nullptr;
-
     std::vector<ASTExpression*>* returnValues = nullptr;
 
     bool sharedContents = false; // this node is not the owner of it's nodes.
@@ -377,10 +384,10 @@ struct ASTStruct : ASTNode {
         TYPE_CREATED,
         TYPE_ERROR, 
     };
-    std::string name="";
+    Token name{};
     std::string polyName="";
     struct Member {
-        std::string name;
+        Token name;
 
         ASTExpression* defaultValue=0;
     };
@@ -406,49 +413,45 @@ struct ASTStruct : ASTNode {
         return polyArgs.size()!=0;
     }
 
-    ASTStruct* next=0;
-
     void print(AST* ast, int depth);
 };
 struct ASTEnum : ASTNode {
     TokenRange tokenRange{};
-    std::string name="";
+    Token name{};
     struct Member {
-        std::string name;
+        Token name{};
         int enumValue=0;
     };
     std::vector<Member> members{};
     
-    bool getMember(const std::string& name, int* out);
+    bool getMember(const Token& name, int* out);
 
-    ASTEnum* next=0;
     void print(AST* ast, int depth);  
 };
 struct ASTFunction : ASTNode {
     std::string name="";
-    struct Arg {
-        std::string name;
-        ASTExpression* defaultValue=0;
-    };
-    std::vector<Arg> arguments;
-
+    
     struct PolyArg {
         Token name{};
         TypeInfo* virtualType = nullptr;
     };
-    std::vector<PolyArg> polyArgs;
-    FuncImpl baseImpl{};
+    struct Arg {
+        Token name{};
+        ASTExpression* defaultValue=0;
+        TypeId stringType={};
+    };
+    DynamicArray<PolyArg> polyArgs;
+    DynamicArray<Arg> arguments; // string type
+    DynamicArray<TypeId> returnTypes; // string type
+
     DynamicArray<FuncImpl*> _impls{};
     FuncImpl* createImpl();
     const DynamicArray<FuncImpl*>& getImpls(){
         return _impls;
     }
-    // std::vector<FuncImpl*> impls;
 
     ScopeId scopeId=0;
     ASTScope* body=0;
-
-    ASTFunction* next=0;
 
     // does not consider the method's struct
     bool isPolymorphic(){
@@ -460,7 +463,7 @@ struct ASTFunction : ASTNode {
 struct ASTScope : ASTNode {
     std::string* name = 0; // namespace
     ScopeId scopeId=0;
-    ASTScope* next = 0;
+    // ASTScope* next = 0;
     enum Type {
         BODY,
         NAMESPACE,
@@ -541,22 +544,22 @@ struct AST {
     std::vector<VariableInfo*> variables;
 
     // Returns nullptr if variable already exists or if scopeId is invalid
-    VariableInfo* addVariable(ScopeId scopeId, const std::string& name);
+    VariableInfo* addVariable(ScopeId scopeId, const Token& name);
     // Returns nullptr if variable already exists or if scopeId is invalid
     // FunctionInfo* addFunction(ScopeId scopeId, const std::string& name);
-    Identifier* addFunction(ScopeId scopeId, const std::string& name, ASTFunction* astFunc, FuncImpl* funcImpl);
+    Identifier* addFunction(ScopeId scopeId, const Token& name, ASTFunction* astFunc, FuncImpl* funcImpl);
     // Returns nullptr if variable already exists or if scopeId is invalid
-    Identifier* addIdentifier(ScopeId scopeId, const std::string& name);
+    Identifier* addIdentifier(ScopeId scopeId, const Token& name);
     
     // Pointer may become invalid if calling other functions interracting with
     // the map of identifiers
     // name argument works with namespacing
-    Identifier* getIdentifier(ScopeId scopeId, const std::string& name);
+    Identifier* getIdentifier(ScopeId scopeId, const Token& name);
     VariableInfo* getVariable(Identifier* id);
 
-    FnOverloads::Overload* getFunction(Identifier* id, std::vector<TypeId>& argTypes);
+    // FnOverloads::Overload* getFunction(Identifier* id, std::vector<TypeId>& argTypes);
     
-    void removeIdentifier(ScopeId scopeId, const std::string& name);
+    void removeIdentifier(ScopeId scopeId, const Token& name);
 
     u32 getTypeSize(TypeId typeId);
     u32 getTypeAlignedSize(TypeId typeId);
@@ -581,14 +584,14 @@ struct AST {
     void appendToMainBody(ASTScope* body);
     
     ASTScope* createBody();
-    ASTFunction* createFunction(const std::string& name);
-    ASTStruct* createStruct(const std::string& name);
-    ASTEnum* createEnum(const std::string& name);
+    ASTFunction* createFunction(const Token& name);
+    ASTStruct* createStruct(const Token& name);
+    ASTEnum* createEnum(const Token& name);
     ASTStatement* createStatement(int type);
     ASTExpression* createExpression(TypeId type);
     // You may also want to call some additional functions to properly deal with
     // named scopes so types are properly evaluated. See ParseNamespace for an example.
-    ASTScope* createNamespace(const std::string& name);
+    ASTScope* createNamespace(const Token& name);
     
     void destroy(ASTScope* astScope);
     void destroy(ASTFunction* function);

@@ -190,6 +190,10 @@ void Token::print(bool skipSuffix){
         char chr = *(str+i);
         if(chr=='\n'){
             log::out << "\\n"; // Is this okay?
+        }else if(chr=='\t'){
+            log::out << "\\t"; 
+        }else if(chr=='\\'){
+            log::out << "\\\\"; 
         }else
             log::out << chr;
     }
@@ -212,6 +216,15 @@ bool Token::operator==(const std::string& text){
     }
     return true;
 }
+bool Token::operator==(const Token& text){
+    if((int)text.length!=length)
+        return false;
+    for(int i=0;i<(int)text.length;i++){
+        if(str[i]!=text.str[i])
+            return false;
+    }
+    return true;
+}
 bool Token::operator==(const char* text){
     int len = strlen(text);
     if(len!=length)
@@ -225,12 +238,38 @@ bool Token::operator==(const char* text){
 bool Token::operator!=(const char* text){
     return !(*this == text);
 }
+int Token::calcLength(){
+    int len = length;
+    if(flags & TOKEN_QUOTED)
+        len += 2;
+    // TODO: Take care of all special characters but to it in a
+    //   scalable way. Not loads of if statements because you will
+    //   need this code else where. Like token.print
+    for(int i=0;i<length;i++){
+        char chr = str[i];
+        if(chr=='\n'||chr=='\t'||chr=='\\'){
+            len+=1; // one extra
+        }
+    }
+    return len;
+}
 engone::Logger& operator<<(engone::Logger& logger, Token& token){
     token.print(true);
     return logger;
 }
-Token::operator std::string(){
+Token::operator std::string() const{
     return std::string(str,length);
+}
+Token::operator TokenRange() const{
+    TokenRange r{};
+    r.firstToken = *this;
+    // r.startIndex = tokenIndex;
+    r.endIndex = tokenIndex+1;
+    // r.tokenStream = tokenStream;
+    return r;
+}
+TokenRange Token::range() const {
+    return (TokenRange)*this;
 }
 static Token END_TOKEN{"$END$"};
 Token& TokenStream::next(){
@@ -265,7 +304,7 @@ bool TokenStream::copyInfo(TokenStream& out){
     
     return true;
 }
-Token& TokenStream::get(u32 index){
+Token& TokenStream::get(u32 index) const {
     if(index>=(u32)length()) return END_TOKEN;
     return *((Token*)tokens.data + index);
 }
@@ -319,39 +358,41 @@ void TokenStream::finalizePointers(){
     for(int i=0;i<(int)tokens.used;i++){
         Token* tok = (Token*)tokens.data+i;
         tok->str = (char*)tokenData.data + (uint64)tok->str;
+        tok->tokenIndex = i;
+        tok->tokenStream = this;
     }
 }
-TokenRange TokenStream::getLine(int index){
-    if(index<0 || index>= length())
-        return {}; // bad
-    TokenRange range{};
-    range.tokenStream = this;
-    range.startIndex = index - 1;
-    range.endIndex = index;
+// TokenRange TokenStream::getLine(int index){
+//     if(index<0 || index>= length())
+//         return {}; // bad
+//     TokenRange range{};
+//     range.tokenStream = this;
+//     range.startIndex = index - 1;
+//     range.endIndex = index;
 
-    while(range.startIndex>=0){
-        Token& token = get(range.startIndex);
-        if(token.flags&TOKEN_QUOTED){
-            range.startIndex++;
-            break;
-        }
-        range.startIndex--;
-    }
-    if(range.startIndex<0)
-        range.startIndex = 0;
-    while(range.endIndex<length()){
-        Token& token = get(range.endIndex);
-        if(token.flags&TOKEN_QUOTED){
-            range.endIndex++; // exclusive
-            break;
-        }
-        range.endIndex++;
-    }
-    if(range.endIndex>=length())
-        range.endIndex = length(); // not -1 because it should be exclusive
+//     while(range.startIndex>=0){
+//         Token& token = get(range.startIndex);
+//         if(token.flags&TOKEN_QUOTED){
+//             range.startIndex++;
+//             break;
+//         }
+//         range.startIndex--;
+//     }
+//     if(range.startIndex<0)
+//         range.startIndex = 0;
+//     while(range.endIndex<length()){
+//         Token& token = get(range.endIndex);
+//         if(token.flags&TOKEN_QUOTED){
+//             range.endIndex++; // exclusive
+//             break;
+//         }
+//         range.endIndex++;
+//     }
+//     if(range.endIndex>=length())
+//         range.endIndex = length(); // not -1 because it should be exclusive
 
-    return range;
-}
+//     return range;
+// }
 
 bool TokenStream::addTokenAndData(const char* str){
     if(tokens.max == tokens.used){
@@ -372,6 +413,8 @@ bool TokenStream::addTokenAndData(const char* str){
     token.length = length;
     token.line = -1;
     token.column = -1;
+    token.tokenIndex = tokens.used;
+    token.tokenStream = this;
     
     *((Token*)tokens.data + tokens.used) = token;
     
@@ -386,6 +429,8 @@ bool TokenStream::addToken(Token token){
     }
     // if(token.flags&TOKEN_SUFFIX_LINE_FEED)
     //     lines++;
+    token.tokenIndex = tokens.used;
+    token.tokenStream = this;
     *((Token*)tokens.data + tokens.used) = token;
 
     tokens.used++;
@@ -426,7 +471,7 @@ bool TokenStream::addData(const char* data){
     tokenData.used += len;
     return true;
 }
-int TokenStream::length(){
+int TokenStream::length() const {
     return tokens.used;
 }
 void TokenStream::cleanup(bool leaveAllocations){
@@ -676,10 +721,10 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                     index++;
                     if(nextChr=='n'){
                         tmp = '\n';
-                        _TLOG(log::out << "\n";)
+                        _TLOG(log::out << "\\n";)
                     } else if(nextChr=='\\'){
                         tmp = '\\';
-                        _TLOG(log::out << "\\";)
+                        _TLOG(log::out << "\\\\";)
                     } else if(!isSingleQuotes && nextChr=='"'){
                         tmp = '"';
                         _TLOG(log::out << "\"";)
@@ -689,7 +734,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                     } else if(nextChr=='t'){
                         tmp = '\t';
                         _TLOG(log::out << "\\t";)
-                    }else if(nextChr=='0'){
+                    } else if(nextChr=='0'){
                         tmp = '\0';
                         _TLOG(log::out << "\\0";)
                     } else{
@@ -900,8 +945,8 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 (chr=='+'&&nextChr=='+')||
                 (chr=='-'&&nextChr=='-')||
                 (chr=='&'&&nextChr=='&')||
-                (chr=='>'&&nextChr=='>')||
-                (chr=='<'&&nextChr=='<')||
+                // (chr=='>'&&nextChr=='>')|| // Arrows can be combined because they are used with polymorphism.
+                // (chr=='<'&&nextChr=='<')|| // It would mess up the parsing.
                 (chr==':'&&nextChr==':')||
                 (chr=='.'&&nextChr=='.')||
                 (chr=='|'&&nextChr=='|')

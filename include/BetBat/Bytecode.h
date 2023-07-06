@@ -122,6 +122,8 @@ int RegBySize(int regName, int size);
 #define BC_EXT_FREE -3
 #define BC_EXT_PRINTI -4
 #define BC_EXT_PRINTC -5
+#define BC_EXT_PRINTS -6
+#define BC_EXT_PRINTD -7
 
 #define BC_EXT_FILEOPEN -10
 #define BC_EXT_FILEREAD -11
@@ -155,6 +157,7 @@ struct Bytecode {
     
     engone::Memory debugSegment{sizeof(u32)};
     std::vector<std::string> debugText;
+    
     // -1 as index will add text to next instruction
     void addDebugText(const char* str, int length, u32 instructionIndex=-1);
     void addDebugText(const std::string& text, u32 instructionIndex=-1);

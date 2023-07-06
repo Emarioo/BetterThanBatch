@@ -18,13 +18,13 @@
     engone::log::out << engone::log::RED << "GenError, "
 #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000")
 #define ERR_HEAD(R, M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000") << M
-#define ERR_LINE(R, M) PrintCode(&R, M)
+#define ERR_LINE(R, M) PrintCode(R, M)
 #define ERRTYPE(R, LT, RT, M) ERR_HEAD(R, "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M)
 // #define ERRTYPE2(R, LT, RT) ERR_HEAD2(R) << "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " "
 #define ERR_END MSG_END
 
 #define WARN_HEAD(R, M) info.compileInfo->warnings++;engone::log::out << WARN_DEFAULT_R(R,"Gen. warning","W0000") << M
-#define WARN_LINE(R, M) PrintCode(&R, M)
+#define WARN_LINE(R, M) PrintCode(R, M)
 
 
 #define LOGAT(R) R.firstToken.line << ":" << R.firstToken.column
@@ -405,7 +405,7 @@ int GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
             auto memdata = typeInfo->getMember(i);
             
             _GLOG(log::out << "push " << member.name << "\n";)
-            info.code->addDebugText("push " + member.name+"\n");
+            info.code->addDebugText("push " + std::string(member.name)+"\n");
             GeneratePush(info, baseReg, offset + memdata.offset, memdata.typeId);
         }
     }
@@ -504,7 +504,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
 
         if(now->typeId == AST_VAR) {
             // end point
-            auto id = info.ast->getIdentifier(idScope, *now->name);
+            auto id = info.ast->getIdentifier(idScope, now->name);
             if (!id || id->type != Identifier::VAR) {
                 ERR_HEAD2(now->tokenRange) << now->tokenRange.firstToken << " is undefined\n";
                 ERR_END
@@ -512,7 +512,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
             }
         
             auto var = info.ast->getVariable(id);
-            _GLOG(log::out << " expr var push " << *now->name << "\n";)
+            _GLOG(log::out << " expr var push " << now->name << "\n";)
             TOKENINFO(now->tokenRange)
             // char buf[100];
             // int len = sprintf(buf,"  expr push %s",now->name->c_str());
@@ -582,9 +582,9 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
                 return GEN_ERROR;
             }
 
-            auto memberData = typeInfo->getMember(*now->name);
+            auto memberData = typeInfo->getMember(now->name);
             if(memberData.index==-1){
-                ERR_HEAD(now->tokenRange, "'"<<*now->name << "' is not a member of struct '" << info.ast->typeToString(endType) << "'. "
+                ERR_HEAD(now->tokenRange, "'"<<now->name << "' is not a member of struct '" << info.ast->typeToString(endType) << "'. "
                         "These are the members: ";
                     for(int i=0;i<(int)typeInfo->astStruct->members.size();i++){
                         if(i!=0)
@@ -705,11 +705,12 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
 int GenCheckFuncImpl(GenInfo& info, ASTExpression* expression, ASTFunction*& astFunc, FuncImpl*& funcImpl, ScopeId idScope){
     // ASTFunction* astFunc = nullptr;
     // FuncImpl* funcImpl = nullptr;
-    
+    Assert(("GenCheckFuncImpl is broken",false));
     if(idScope==(ScopeId)-1)
         idScope = info.currentScopeId;
 
     if(expression->boolValue) { // indicates method if true (struct.method)
+        Assert(("Methods are broken",false))
         Assert(expression->left)
 
         TypeId refid={};
@@ -736,7 +737,7 @@ int GenCheckFuncImpl(GenInfo& info, ASTExpression* expression, ASTFunction*& ast
         Assert(("typeids code not done!",false));
         std::vector<TypeId> dinner;
         
-        auto method = ti->getImpl()->getMethod(*expression->name, dinner);
+        auto method = ti->getImpl()->getMethod(expression->name, dinner);
         // ASTStruct::Method method = ti->astStruct->getMethod(*expression->name);
         astFunc = method->astFunc;
         // ti->astStruct->getMethod(*expression->name);
@@ -754,17 +755,17 @@ int GenCheckFuncImpl(GenInfo& info, ASTExpression* expression, ASTFunction*& ast
         }
     } else {
         // check data type and get it
-        auto id = info.ast->getIdentifier(idScope, *expression->name);
+        auto id = info.ast->getIdentifier(idScope, expression->name);
         if (!id || id->type != Identifier::FUNC) {
-            ERR_HEAD2(expression->tokenRange) << expression->tokenRange.firstToken << " is undefined\n";
-            ERR_END
+            ERR_HEAD(expression->tokenRange, expression->tokenRange.firstToken << " is undefined\n";
+            )
             return GEN_ERROR;
         }
         // astFunc = info.ast->getFunction(id, );
         // funcImpl = id->funcImpl;
         // Assert(funcImpl)
-        if(astFunc->polyArgs.size() == 0)
-            funcImpl = &astFunc->baseImpl;
+        // if(astFunc->polyArgs.size() == 0)
+        //     funcImpl = &astFunc->baseImpl;
         if(!funcImpl) {
             // As of writing this funcImpl as null indicates that type checker didn't use baseImpl
             // when adding function identifier. This means that the function is polymorphic.
@@ -776,8 +777,8 @@ int GenCheckFuncImpl(GenInfo& info, ASTExpression* expression, ASTFunction*& ast
         }
     }
     Assert(funcImpl && astFunc)
-    Assert(funcImpl->arguments.size() == astFunc->baseImpl.arguments.size())
-    Assert(funcImpl->returnTypes.size() == astFunc->baseImpl.returnTypes.size())
+    Assert(funcImpl->argumentTypes.size() == astFunc->arguments.size())
+    Assert(funcImpl->returnTypes.size() == astFunc->returnTypes.size())
     return GEN_SUCCESS;
 }
 int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<TypeId> *outTypeIds, ScopeId idScope) {
@@ -788,7 +789,14 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
     _GLOG(FUNC_ENTER)
     Assert(expression);
 
-    TypeId castType = info.ast->ensureNonVirtualId(expression->castType);
+    TypeId castType = expression->castType;
+    if(castType.isString()){
+        castType = info.ast->convertToTypeId(castType,idScope);
+        if(!castType.isValid()){
+            ERR_HEAD(expression->tokenRange,"Type "<<info.ast->getTokenFromTypeString(expression->castType) << " does not exist.\n";)
+        }
+    }
+    castType = info.ast->ensureNonVirtualId(castType);
 
     if (expression->isValue) {
         // data type
@@ -839,26 +847,26 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             // NOTE: HELLO! i commented out the code below because i thought it was strange and out of place.
             //   It might be important but I just don't know why. Yes it was important past me.
             //   AST_VAR and variables have simular syntax.
-            if (expression->name) {
-                TypeInfo *typeInfo = info.ast->convertToTypeInfo(Token(*expression->name), idScope);
-                // A simple check to see if the identifier in the expr node is an enum type.
-                // no need to check for pointers or so.
-                if (typeInfo && typeInfo->astEnum) {
-                    // ERR_HEAD2(expression->tokenRange) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
-                    // ERR_END
-                    // return GEN_ERROR;
-                    outTypeIds->push_back(typeInfo->id);
-                    return GEN_SUCCESS;
-                }
+            // if (expression->name) {
+            TypeInfo *typeInfo = info.ast->convertToTypeInfo(expression->name, idScope);
+            // A simple check to see if the identifier in the expr node is an enum type.
+            // no need to check for pointers or so.
+            if (typeInfo && typeInfo->astEnum) {
+                // ERR_HEAD2(expression->tokenRange) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
+                // ERR_END
+                // return GEN_ERROR;
+                outTypeIds->push_back(typeInfo->id);
+                return GEN_SUCCESS;
             }
+            // }
             // check data type and get it
-            auto id = info.ast->getIdentifier(idScope, *expression->name);
+            auto id = info.ast->getIdentifier(idScope, expression->name);
             if (id && id->type == Identifier::VAR) {
                 auto var = info.ast->getVariable(id);
                 // TODO: check data type?
                 // fp + offset
                 // TODO: what about struct
-                _GLOG(log::out << " expr var push " << *expression->name << "\n";)
+                _GLOG(log::out << " expr var push " << expression->name << "\n";)
 
                 TOKENINFO(expression->tokenRange)
                 // char buf[100];
@@ -947,12 +955,13 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             //     if (!realArgs[i])
             //         realArgs[i] = arg.defaultValue;
             // }
-            std::vector<TypeId> argTypes;
+            DynamicArray<TypeId> argTypes{};
             int index = 0;
             for (index = 0; index < (int)expression->args->size();index++) {
-                ASTExpression* arg = expression->args->at(index);
-                if(arg->namedValue)
+                ASTExpression* arg = expression->args->get(index);
+                if(arg->namedValue){
                     break;
+                }
 
                 TypeId dt = {};
                 int result = 0;
@@ -971,10 +980,10 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 } else {
                     result = GenerateExpression(info, arg, &dt);
                 }
-                argTypes.push_back(dt);
-                if (result != GEN_SUCCESS) {
-                    continue;
-                }
+                argTypes.add(dt);
+                // if (result != GEN_SUCCESS) {
+                //     continue;
+                // }
                 // if (index >= (int)astFunc->arguments.size()) {
                 //     // ERR() << "To many arguments! func:"<<*expression->funcName<<" max: "<<astFunc->arguments.size()<<"\n";
                 //     continue;
@@ -991,14 +1000,37 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 // }
                 // values are already pushed to the stack
             }
+            std::vector<Token> polyTypes; // not used?
+            Token baseName = AST::TrimPolyTypes(expression->name, &polyTypes);
 
-            auto iden = info.ast->getIdentifier(idScope, *expression->name);
+            auto iden = info.ast->getIdentifier(idScope, baseName);
+            if(!iden){
+                ERR_HEAD(expression->tokenRange, "Function '"<<baseName<<"' does not exist.\n";
+                    ERR_LINE(expression->name,"undefined");
+                )
+                return GEN_ERROR;
+            }
             ASTFunction* astFunc = nullptr;
             FuncImpl* funcImpl = nullptr;
             {
-                auto overload = info.ast->getFunction(iden, argTypes);
+                auto overload = iden->funcOverloads.getOverload(argTypes);
                 if(!overload){
-                    return GEN_ERROR; // error has been printed somewhere
+                    if(info.compileInfo->typeErrors==0){
+                        ERR_HEAD(expression->tokenRange, "Overload for function '"<<baseName <<"' does not exist for the argument(s): ";
+                            if(argTypes.size()==0){
+                                log::out << "zero arguments";
+                            }
+                            for(int i=0;i<(int)argTypes.size();i++){
+                                if(i!=0) log::out << ", ";
+                                log::out <<info.ast->typeToString(argTypes[i]);
+                            }
+                            log::out << "\n";
+                            // TODO: show list of available overloaded function args
+                        )
+                    }
+                    return GEN_ERROR;
+                    // If you think an error related to this has been
+                    // printed already then you are wrong.
                 }
                 astFunc = overload->astFunc;
                 funcImpl = overload->funcImpl;
@@ -1007,7 +1039,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             std::vector<ASTExpression*> restArgs;
             restArgs.resize(astFunc->arguments.size(),nullptr);
             for (int i = index; i < (int)expression->args->size();i++) {
-                ASTExpression* arg = expression->args->at(i);
+                ASTExpression* arg = expression->args->get(i);
                 Assert(arg->namedValue);
                 restArgs[i] = arg;
             }
@@ -1066,7 +1098,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 info.restoreStackMoment(startSP);
             // }
             // return types?
-            if (funcImpl->returnTypes.empty()) {
+            if (funcImpl->returnTypes.size()==0) {
                 outTypeIds->push_back(AST_VOID);
             } else {
                 _GLOG(log::out << "extract return values\n";)
@@ -1087,14 +1119,14 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             }
             return GEN_SUCCESS;
         } else if(expression->typeId==AST_STRING){
-            if(!expression->name){
-                ERR_HEAD2(expression->tokenRange) << "string "<<expression->tokenRange.firstToken<<" was null (compiler bug)\n";
-                ERRTOKENS(expression->tokenRange)
-                ERR_END
-                return GEN_ERROR;
-            }
+            // if(!expression->name){
+            //     ERR_HEAD2(expression->tokenRange) << "string "<<expression->tokenRange.firstToken<<" was null (compiler bug)\n";
+            //     ERRTOKENS(expression->tokenRange)
+            //     ERR_END
+            //     return GEN_ERROR;
+            // }
 
-            auto pair = info.ast->constStrings.find(*expression->name);
+            auto pair = info.ast->constStrings.find(expression->name);
             if(pair == info.ast->constStrings.end()){
                 ERR_HEAD2(expression->tokenRange) << "string "<<expression->tokenRange.firstToken<<" does not exist in the static segment (compiler bug)\n";
                 ERR_END
@@ -1132,6 +1164,21 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
 
             outTypeIds->push_back(typeInfo->id);
             return GEN_SUCCESS;
+        } else if(expression->typeId == AST_SIZEOF){
+            // TODO: Move into the type checker?
+            // info.code->addDebugText("  expr push null");
+            TOKENINFO(expression->tokenRange)
+            TypeId typeId = info.ast->convertToTypeId(expression->name, idScope);
+            Assert(typeId.isValid()); // Did type checker fix this? Maybe not on errors?
+
+            u32 size = info.ast->getTypeSize(typeId);
+
+            info.code->add({BC_LI, BC_REG_EAX});
+            info.code->addIm(size);
+            info.addPush(BC_REG_EAX);
+
+            outTypeIds->push_back(AST_UINT32);
+            return GEN_SUCCESS;
         } else if (expression->typeId == AST_NULL) {
             // TODO: Move into the type checker?
             // info.code->addDebugText("  expr push null");
@@ -1146,9 +1193,11 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             outTypeIds->push_back( newId);
             return GEN_SUCCESS;
         } else {
+            std::string typeName = info.ast->typeToString(expression->typeId);
             // info.code->add({BC_PUSH,BC_REG_RAX}); // push something so the stack stays synchronized, or maybe not?
-            ERR_HEAD2(expression->tokenRange) << expression->tokenRange.firstToken << " is an unknown data type\n";
-            ERR_END
+            ERR_HEAD(expression->tokenRange, "'" <<typeName << "' is an unknown data type.\n\n";
+                ERR_LINE(expression->tokenRange,typeName.c_str());
+            )
             // log::out <<  log::RED<<"GenExpr: data type not implemented\n";
             outTypeIds->push_back( AST_VOID);
             return GEN_ERROR;
@@ -1314,7 +1363,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
         else if (expression->typeId == AST_FROM_NAMESPACE) {
             info.code->addDebugText("ast-namespaced expr\n");
 
-            auto si = info.ast->getScope(*expression->name, info.currentScopeId);
+            auto si = info.ast->getScope(expression->name, info.currentScopeId);
             TypeId exprId;
             int result = GenerateExpression(info, expression->left, &exprId, si->id);
             if (result != GEN_SUCCESS)
@@ -1331,29 +1380,29 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             TypeId exprId;
 
             if(expression->left->typeId == AST_VAR){
-                if (expression->left->name) {
-                    TypeInfo *typeInfo = info.ast->convertToTypeInfo(Token(*expression->left->name), idScope);
-                    // A simple check to see if the identifier in the expr node is an enum type.
-                    // no need to check for pointers or so.
-                    if (typeInfo && typeInfo->astEnum) {
-                        i32 enumValue;
-                        bool found = typeInfo->astEnum->getMember(*expression->name, &enumValue);
-                        if (!found) {
-                            ERR_HEAD(expression->tokenRange, expression->tokenRange.firstToken << " is not a member of enum " << typeInfo->astEnum->name << "\n";
-                            )
-                            return GEN_ERROR;
-                        }
-
-                        info.code->add({BC_LI, BC_REG_EAX}); // NOTE: fixed size of 4 bytes for enums?
-                        info.code->addIm(enumValue);
-                        info.addPush(BC_REG_EAX);
-
-                        // outTypeIds->push_back(exprId);
-
-                        outTypeIds->push_back(typeInfo->id);
-                        return GEN_SUCCESS;
+                // if (expression->left->name) {
+                TypeInfo *typeInfo = info.ast->convertToTypeInfo(expression->left->name, idScope);
+                // A simple check to see if the identifier in the expr node is an enum type.
+                // no need to check for pointers or so.
+                if (typeInfo && typeInfo->astEnum) {
+                    i32 enumValue;
+                    bool found = typeInfo->astEnum->getMember(expression->name, &enumValue);
+                    if (!found) {
+                        ERR_HEAD(expression->tokenRange, expression->tokenRange.firstToken << " is not a member of enum " << typeInfo->astEnum->name << "\n";
+                        )
+                        return GEN_ERROR;
                     }
+
+                    info.code->add({BC_LI, BC_REG_EAX}); // NOTE: fixed size of 4 bytes for enums?
+                    info.code->addIm(enumValue);
+                    info.addPush(BC_REG_EAX);
+
+                    // outTypeIds->push_back(exprId);
+
+                    outTypeIds->push_back(typeInfo->id);
+                    return GEN_SUCCESS;
                 }
+                // }
             }
 
             // Todo: use generate reference instead? It only deals with pointers
@@ -1502,13 +1551,9 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             std::vector<ASTExpression *> exprs;
             exprs.resize(astruct->members.size(), nullptr);
 
-            // ASTExpression *nextExpr = expression->left;
-            // int index = -1;
             Assert(expression->args)
             for (int index = 0; index < (int)expression->args->size(); index++) {
-                ASTExpression *expr = expression->args->at(index);
-                // nextExpr = nextExpr->next;
-                // index++;
+                ASTExpression *expr = expression->args->get(index);
 
                 if (!expr->namedValue) {
                     if ((int)exprs.size() <= index) {
@@ -2069,6 +2114,7 @@ int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange) {
 
             Assert(reg);
             info.addPush(reg);
+            Assert(sizeLeft==0); // should only run once
         }
     }
     return GEN_SUCCESS;
@@ -2122,7 +2168,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
             return GEN_ERROR;
         }
         // Should not be hardcoded like this
-        #define CASE(X,Y) else if (function->name == #X) function->baseImpl.address = Y;
+        #define CASE(X,Y) else if (function->name == #X) function->_impls[0]->address = Y;
         if(false) ;
         CASE(FileOpen,BC_EXT_FILEOPEN)
         CASE(FileRead,BC_EXT_FILEREAD)
@@ -2133,6 +2179,8 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         CASE(free,BC_EXT_FREE)
         CASE(printi,BC_EXT_PRINTI)
         CASE(printc,BC_EXT_PRINTC)
+        CASE(prints,BC_EXT_PRINTS)
+        CASE(printd,BC_EXT_PRINTD)
         else {
             ERR_HEAD(function->tokenRange, "'"<<function->name<<"' is not a native function.\n\n";
                 ERR_LINE(function->body->tokenRange, "bad");
@@ -2151,32 +2199,32 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     int skipIndex = info.code->length();
     info.code->addIm(0);
     int index = 0;
-    std::vector<FuncImpl*> funcImpls;
-    // optimize by not pushing to an array by iterating right away
-    if(astStruct && astStruct->polyArgs.size()==0){
-        if(function->polyArgs.size()==0){
-            funcImpls.push_back(&function->baseImpl);
-        }else{
-            for(auto& impl : function->polyImpls){
-                funcImpls.push_back(impl);
-            }
-        }
-    } else {
-        if(function->polyArgs.size()==0){
-            funcImpls.push_back(&function->baseImpl);
-        } else {
-            for(auto& impl : function->polyImpls){
-                funcImpls.push_back(impl);
-            }
-        }
-    }
+    // std::vector<FuncImpl*> funcImpls;
+    // // optimize by not pushing to an array by iterating right away
+    // if(astStruct && astStruct->polyArgs.size()==0){
+    //     if(function->polyArgs.size()==0){
+    //         funcImpls.push_back(&function->baseImpl);
+    //     }else{
+    //         for(auto& impl : function->polyImpls){
+    //             funcImpls.push_back(impl);
+    //         }
+    //     }
+    // } else {
+    //     if(function->polyArgs.size()==0){
+    //         funcImpls.push_back(&function->baseImpl);
+    //     } else {
+    //         for(auto& impl : function->polyImpls){
+    //             funcImpls.push_back(impl);
+    //         }
+    //     }
+    // }
     // FuncImpl* funcImpl = &function->baseImpl;
     // while((index < (int)function->polyImpls.size()) || (function->polyArgs.size() == 0 && index==0)) {
     //     if(function->polyArgs.size()!=0) {
     //         funcImpl = function->polyImpls[index];
     //     }
     //     index++;
-    for(auto& funcImpl : funcImpls) {
+    for(auto& funcImpl : function->getImpls()) {
         Assert(("func has already been generated!",funcImpl->address == 0));
         _GLOG(log::out << "Function " << funcImpl->name << "\n";)
         // This happens with functions inside of polymorphic function.
@@ -2214,11 +2262,12 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
             for (int i = 0; i < (int)function->arguments.size(); i++) {
                 // for(int i = function->arguments.size()-1;i>=0;i--){
                 auto &arg = function->arguments[i];
-                auto &argImpl = funcImpl->arguments[i];
+                auto &argImpl = funcImpl->argumentTypes[i];
                 auto var = info.ast->addVariable(info.currentScopeId, arg.name);
                 if (!var) {
-                    ERR_HEAD2(function->tokenRange) << arg.name << " already exists.\n";
-                    ERR_END
+                    ERR_HEAD(arg.name.range(), arg.name << " is already defined.\n";
+                        ERR_LINE(arg.name.range(),"cannot use again");
+                    )
                 }
                 var->typeId = argImpl.typeId;
                 TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId);
@@ -2401,9 +2450,11 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                     i32 size = info.ast->getTypeSize(var->typeId);
                     i32 asize = info.ast->getTypeAlignedSize(var->typeId);
                     if (!typeInfo) {
-                        ERR_HEAD(statement->tokenRange, "Undefined type '" << info.ast->typeToString(var->typeId) << "'.\n\n";
-                            ERR_LINE(statement->tokenRange,"bad");
-                        )
+                        if(info.compileInfo->typeErrors==0){
+                            ERR_HEAD(statement->tokenRange, "Undefined type '" << info.ast->typeToString(var->typeId) << "'.\n\n";
+                                ERR_LINE(statement->tokenRange,"bad");
+                            )
+                        }
                         continue;
                     }
                     if (size == 0) {
@@ -2495,6 +2546,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             if(statement->rvalue->typeId == AST_FNCALL){
                 ASTFunction* astFunc = nullptr;
                 FuncImpl* funcImpl = nullptr;
+                Assert(("GenCheckFuncImpl is broken due to overloading feature",false))
                 // TODO: This is also done in GenerateExpression which isn't necessary.
                 // But we need to know astFunc and funcImpl here.
                 // astFunc and funcImpl need to be passed to Gen.Expr. somehow to avoid
@@ -3239,7 +3291,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 }
                 // auto a = info.ast->typeToString(dtype);
                 // auto b = info.ast->typeToString(info.currentFuncImpl->returnTypes[argi].typeId);
-                FuncImpl::ReturnValue &retType = info.currentFuncImpl->returnTypes[argi];
+                auto& retType = info.currentFuncImpl->returnTypes[argi];
                 if (!PerformSafeCast(info, dtype, retType.typeId)) {
                     // if(info.currentFunction->returnTypes[argi]!=dtype){
 
@@ -3387,33 +3439,6 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     info.compileInfo = compileInfo;
     info.currentScopeId = ast->globalScopeId;
 
-    // std::vector<ASTFunction *> predefinedFuncs;
-    // #define PDEF_RET(T) astfun->baseImpl.returnTypes.push_back({ast->convertToTypeId(Token(#T), ast->globalScopeId)});
-    // #define PDEF_ARG(N,T) astfun->arguments.push_back({});
-    //     astfun->arguments.back().name = #N;
-    //     astfun->baseImpl.arguments.push_back({});
-    //     astfun->baseImpl.arguments.back().typeId = {ast->convertToTypeId(Token(#T), ast->globalScopeId)};
-
-    // {
-    //     // don't add to ast because GenerateBody will want to create the functions
-    //     auto astfun = ast->createFunction("malloc");
-    //     auto id = info.ast->addFunction(ast->globalScopeId, astfun->name, astfun);
-    //     astfun->baseImpl.address = BC_EXT_ALLOC;
-    //     predefinedFuncs.push_back(astfun);
-    //     PDEF_RET(void*)
-    //     PDEF_ARG(size,u64)
-    // }
-    // {
-    //     auto astfun = ast->createFunction("realloc");
-    //     auto id = info.ast->addFunction(ast->globalScopeId, astfun->name, astfun);
-    //     astfun->baseImpl.address = BC_EXT_REALLOC;
-    //     predefinedFuncs.push_back(astfun);
-    //     PDEF_RET(void*)
-    //     PDEF_ARG(ptr,void*)
-    //     PDEF_ARG(oldsize,u64)
-    //     PDEF_ARG(size,u64)
-    // }
-
     int result = GenerateData(info,info.ast);
 
     result = GenerateFunctions(info, info.ast->mainBody);
@@ -3424,7 +3449,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     for(auto& e : info.callsToResolve){
         auto inst = info.code->get(e.bcIndex);
         // Assert(e.funcImpl->address != Identifier::INVALID_FUNC_ADDRESS);
-        if(e.funcImpl->address != Identifier::INVALID_FUNC_ADDRESS){
+        if(e.funcImpl->address != FuncImpl::INVALID_FUNC_ADDRESS){
             *((i32*)inst) = e.funcImpl->address;
         } else {
             // ERR() << "Invalid function address for instruction["<<e.bcIndex << "]\n";

@@ -6,7 +6,7 @@ struct DynamicArray {
     DynamicArray() = default;
     ~DynamicArray() { cleanup(); }
     void cleanup(){
-        _resize(0);
+        _reserve(0);
     }
 
     T* _ptr = nullptr;
@@ -15,11 +15,12 @@ struct DynamicArray {
 
     bool add(const T& t){
         if(used + 1 > max){
-            if(!_resize(5 + max * 1.5)){
+            if(!_reserve(5 + max * 1.5)){
                 return false;
             }
         }
         T* ptr = _ptr + used++;
+        Assert(((u64)ptr % alignof(T)) == 0) // TODO: alignment for placement new?
         new(ptr)T(t);
 
         return true;
@@ -43,13 +44,14 @@ struct DynamicArray {
         return *(_ptr + index);
     }
     T& operator[](u32 index) const{
-        return get(index);
+        Assert(index < used);
+        return *(_ptr + index);
     }
     u32 size() const {
         return used;
     }
 
-    bool _resize(u32 newMax){
+    bool _reserve(u32 newMax){
         if(newMax==0){
             if(max!=0){
                 for(u32 i = 0; i < used; i++){
@@ -62,7 +64,7 @@ struct DynamicArray {
             used = 0;
             return true;
         }
-        if(_ptr){
+        if(!_ptr){
             _ptr = (T*)engone::Allocate(sizeof(T) * newMax);
             // initialization of elements is done when adding them
             if(!_ptr)
@@ -87,10 +89,33 @@ struct DynamicArray {
         }
         return false;
     }
+    // Will not shrink alloction to fit the new size
+    bool resize(u32 newSize){
+        if(newSize>max){
+            bool yes = _reserve(newSize);
+            if(!yes)
+                return false;
+        }
+        for(u32 i = used-1; i<newSize;i++){
+            Assert(((u64)(_ptr+i) % alignof(T)) == 0) // TODO: alignment for placement new?
+            new(_ptr+i)T();
+        }
+        used = newSize;
+        return true;
+    }
     T* begin() const {
         return _ptr;
     }
     T* end() const {
         return _ptr + used;
+    }
+    void stealFrom(DynamicArray<T>& arr){
+        cleanup();
+        _ptr = arr._ptr;
+        used = arr.used;
+        max = arr.max;
+        arr._ptr = nullptr;
+        arr.used = 0;
+        arr.max = 0;
     }
 };

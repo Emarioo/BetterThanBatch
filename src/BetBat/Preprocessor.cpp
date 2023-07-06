@@ -1191,12 +1191,12 @@ void Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
     }
     // info.tokens->lines = info->inTokens.lines;
     // info.inTokens.
-    info.outTokens->finalizePointers();
     
     inTokens->tokens.resize(0);
     inTokens->tokenData.resize(0);
     inTokens->tokens = info.outTokens->tokens;
     inTokens->tokenData = info.outTokens->tokenData;
+    info.inTokens->finalizePointers();
     info.outTokens->tokens = {0};
     info.outTokens->tokenData = {0};
     TokenStream::Destroy(info.outTokens);

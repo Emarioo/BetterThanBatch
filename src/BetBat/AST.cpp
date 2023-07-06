@@ -85,6 +85,8 @@ AST *AST::Create() {
         ADD_TRACKING(ASTStatement)
         ADD_TRACKING(ASTScope)
         ADD_TRACKING(AST)
+        ADD_TRACKING(FuncImpl)
+        ADD_TRACKING(StructImpl)
         ADD_TRACKING(std::string)
         // #define LOG_SIZE(X) << #X " "<<sizeof(X)<<"\n"
         // log::out
@@ -119,11 +121,11 @@ AST *AST::Create() {
     ast->createPredefinedType(Token("bool"),scopeId, AST_BOOL, 1);
     ast->createPredefinedType(Token("char"),scopeId, AST_CHAR, 1);
     ast->createPredefinedType(Token("null"),scopeId, AST_NULL, 8);
-    ast->createPredefinedType(Token("ast_string"),scopeId, AST_STRING, 0);
-    ast->createPredefinedType(Token("var"),scopeId, AST_VAR);
-    ast->createPredefinedType(Token("member"),scopeId, AST_MEMBER);
-    ast->createPredefinedType(Token("sizeof"),scopeId, AST_SIZEOF);
-    ast->createPredefinedType(Token("call"),scopeId, AST_FNCALL);
+    ast->createPredefinedType(Token("ast-string"),scopeId, AST_STRING, 0);
+    ast->createPredefinedType(Token("ast-var"),scopeId, AST_VAR);
+    ast->createPredefinedType(Token("ast-member"),scopeId, AST_MEMBER);
+    ast->createPredefinedType(Token("ast-sizeof"),scopeId, AST_SIZEOF);
+    ast->createPredefinedType(Token("ast-call"),scopeId, AST_FNCALL);
 
     ast->mainBody = ast->createBody();
     // {
@@ -147,7 +149,7 @@ AST *AST::Create() {
     return ast;
 }
 
-VariableInfo *AST::addVariable(ScopeId scopeId, const std::string &name) {
+VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name) {
     using namespace engone;
     
     auto id = addIdentifier(scopeId, name);
@@ -162,7 +164,7 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const std::string &name) {
     return ptr;
 }
 
-Identifier* AST::addFunction(ScopeId scopeId, const std::string& name, ASTFunction* func, FuncImpl* funcImpl) {
+Identifier* AST::addFunction(ScopeId scopeId, const Token& name, ASTFunction* func, FuncImpl* funcImpl) {
     using namespace engone;
     auto id = getIdentifier(scopeId, name);
     if(!id) {
@@ -213,23 +215,23 @@ Identifier* AST::addFunction(ScopeId scopeId, const std::string& name, ASTFuncti
     // id->funcOverloads.push_back(overload);
     return id;
 }
-Identifier *AST::addIdentifier(ScopeId scopeId, const std::string &name) {
+Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name) {
     using namespace engone;
     ScopeInfo* si = getScope(scopeId);
     if(!si)
         return nullptr;
-
-    auto pair = si->identifierMap.find(name);
+    std::string sName = std::string(name); // string view?
+    auto pair = si->identifierMap.find(sName);
     if (pair != si->identifierMap.end())
         return nullptr;
 
-    si->identifierMap[name] = {};
-    auto ptr = &si->identifierMap[name];
+    si->identifierMap[sName] = {};
+    auto ptr = &si->identifierMap[sName];
     ptr->name = name;
     ptr->scopeId = scopeId;
     return ptr;
 }
-Identifier *AST::getIdentifier(ScopeId scopeId, const std::string &name) {
+Identifier *AST::getIdentifier(ScopeId scopeId, const Token &name) {
     using namespace engone;
     // log::out << __func__<<": "<<name<<"\n";
     Token ns={};
@@ -267,9 +269,11 @@ VariableInfo *AST::getVariable(Identifier* id) {
     return variables[id->varIndex];
 }
 FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& typeIds){
+    using namespace engone;
+    FnOverloads::Overload* outOverload = nullptr;
     for(int i=0;i<(int)overloads.size();i++){
         auto& overload = overloads[i];
-        int nonDefaults0 = 0;
+        u32 nonDefaults0 = 0;
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
         //   unnecessary.
@@ -278,27 +282,128 @@ FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& typeIds){
                 break;
             nonDefaults0++;
         }
-        if(nonDefaults0 > (int)typeIds.size())
+        if(typeIds.size() > overload.astFunc->arguments.size() || typeIds.size() < nonDefaults0)
             continue;
         bool found = true;
-        for (int j=0;j<nonDefaults0;j++){
-            if(overload.funcImpl->arguments[j].typeId != typeIds[j]){
+        for (u32 j=0;j<nonDefaults0;j++){
+            if(overload.funcImpl->argumentTypes[j].typeId != typeIds[j]){
                 found = false;
                 break;
             }
         }
         if(found){
-            return &overload;
+            // return &overload;
+            // NOTE: You can return here because there should only be one matching overload.
+            // But we keep going in case we find more matches which would indicate
+            // a bug in the compiler. An optimised build would not do this.
+            if(outOverload) {
+                // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+                Assert(("More than one match!",false));
+                return &overload;
+            }
+            outOverload = &overload;
         }
     }
-    return nullptr;
+    if(outOverload)
+        return outOverload;
+    // TODO: Check all overloads in case there are more than one match.
+    //  Good way of finding a bug in the compiler.
+    //  An optimised build would not do this.
+    for(int i=0;i<(int)polyImplOverloads.size();i++){
+        auto& overload = polyImplOverloads[i];
+        u32 nonDefaults0 = 0;
+        // TODO: Store non defaults in Identifier or ASTStruct to save time.
+        //   Recalculating non default arguments here every time you get a function is
+        //   unnecessary.
+        for(auto& arg : overload.astFunc->arguments){
+            if(arg.defaultValue)
+                break;
+            nonDefaults0++;
+        }
+        if(typeIds.size() > overload.astFunc->arguments.size() || typeIds.size() < nonDefaults0)
+            continue;
+        bool found = true;
+        for (u32 j=0;j<nonDefaults0;j++){
+            if(overload.funcImpl->argumentTypes[j].typeId != typeIds[j]){
+                found = false;
+                break;
+            }
+        }
+        if(found){
+            // return &overload;
+            // NOTE: You can return here because there should only be one matching overload.
+            // But we keep going in case we find more matches which would indicate
+            // a bug in the compiler. An optimised build would not do this.
+            if(outOverload) {
+                // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+                Assert(("More than one match!",false));
+                return outOverload;
+            }
+            outOverload = &overload;
+        }
+    }
+    return outOverload;
 }
+// ASTFunction* FnOverloads::getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes){
+//     using namespace engone;
+//     ASTFunction* outFunc = nullptr;
+//     for(int i=0;i<(int)polyOverloads.size();i++){
+//         PolyOverload& overload = polyOverloads[i];
+//         if(overload.astFunc->polyArgs.size() != polyTypes.size())
+//             continue;// unless implicit polymorphic types
+//         for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
+//             overload.astFunc->polyArgs[j].virtualType->id = polyTypes[j];
+//         }
+//         defer {
+//             for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
+//                 overload.astFunc->polyArgs[j].virtualType->id = {};
+//             }
+//         };
+//         // continue if more args than possible
+//         // continue if less args than minimally required
+//         if(typeIds.size() > overload.astFunc->arguments.size() || typeIds.size() < overload.argTypes.size())
+//             continue;
+//         bool found = true;
+//         for (int j=0;j<(int)overload.argTypes.size();j++){
+            
+//             TypeId argType = ast->ensureNonVirtualId(overload.argTypes[j]);
+//             if(argType != typeIds[j]
+//             //  && overload.argTypes[j] != AST_POLY
+//              ){
+//                 found = false;
+//                 break;
+//             }
+//         }
+//         if(found){
+//             // return &overload;
+//             // NOTE: You can return here because there should only be one matching overload.
+//             // But we keep going in case we find more matches which would indicate
+//             // a bug in the compiler. An optimised build would not do this.
+//             if(outFunc) {
+//                 // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+//                 Assert(("More than one match!",false));
+//                 return outFunc;
+//             }
+//             outFunc = overload.astFunc;
+//         }
+//     }
+//     return outFunc;
+// }
 
 void FnOverloads::addOverload(ASTFunction* astFunc, FuncImpl* funcImpl){
     overloads.add({astFunc,funcImpl});
 }
+FnOverloads::Overload* FnOverloads::addPolyImplOverload(ASTFunction* astFunc, FuncImpl* funcImpl){
+    polyImplOverloads.add({astFunc,funcImpl});
+    return &polyImplOverloads[polyImplOverloads.size()-1];
+}
+void FnOverloads::addPolyOverload(ASTFunction* astFunc){
+    polyOverloads.add({astFunc});
+    // auto& po = polyOverloads[polyOverloads.size()-1];
+    // po.argTypes.stealFrom(typeIds);
+}
 
-FnOverloads::Overload *AST::getFunction(Identifier* id, std::vector<TypeId>& argTypes) {
+// FnOverloads::Overload *AST::getFunction(Identifier* id, std::vector<TypeId>& argTypes) {
     // , std::vector<AST::NamedArg>& namedArgs) {
    
     // for(int i=0;i<(int)id->funcOverloads.size();i++){
@@ -325,8 +430,8 @@ FnOverloads::Overload *AST::getFunction(Identifier* id, std::vector<TypeId>& arg
     //         return &id->funcOverloads[i];
     //     }
     // }
-    return nullptr;
-}
+//     return nullptr;
+// }
 
 FnOverloads::Overload* StructImpl::getMethod(const std::string& name, std::vector<TypeId>& typeIds){
     // auto pair = methods.find(name);
@@ -345,7 +450,7 @@ FnOverloads::Overload* StructImpl::getMethod(const std::string& name, std::vecto
     // return nullptr;
 }
 
-void AST::removeIdentifier(ScopeId scopeId, const std::string &name) {
+void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
     auto si = getScope(scopeId);
     auto pair = si->identifierMap.find(name);
     if (pair != si->identifierMap.end()) {
@@ -390,19 +495,19 @@ ASTStatement *AST::createStatement(int type) {
     ptr->type = type;
     return ptr;
 }
-ASTStruct *AST::createStruct(const std::string &name) {
+ASTStruct *AST::createStruct(const Token &name) {
     auto ptr = (ASTStruct *)engone::Allocate(sizeof(ASTStruct));
     new(ptr) ASTStruct();
     ptr->name = name;
     return ptr;
 }
-ASTEnum *AST::createEnum(const std::string &name) {
+ASTEnum *AST::createEnum(const Token &name) {
     auto ptr = (ASTEnum *)engone::Allocate(sizeof(ASTEnum));
     new(ptr) ASTEnum();
     ptr->name = name;
     return ptr;
 }
-ASTFunction *AST::createFunction(const std::string &name) {
+ASTFunction *AST::createFunction(const Token &name) {
     auto ptr = (ASTFunction *)engone::Allocate(sizeof(ASTFunction));
     new(ptr) ASTFunction();
     ptr->name = name;
@@ -415,7 +520,7 @@ ASTExpression *AST::createExpression(TypeId type) {
     ptr->typeId = type;
     return ptr;
 }
-ASTScope *AST::createNamespace(const std::string& name) {
+ASTScope *AST::createNamespace(const Token& name) {
     auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
     ptr->type = ASTScope::NAMESPACE;
@@ -463,7 +568,7 @@ void ASTScope::add(ASTScope* astNamespace, AST* ast, ASTScope* tail){
             astNamespace->functions.cleanup();
             astNamespace->structs.cleanup();
             astNamespace->namespaces.cleanup();
-            astNamespace->next = nullptr;
+            // astNamespace->next = nullptr;
             ast->destroy(astNamespace);
             return;
         }
@@ -868,8 +973,8 @@ std::string* AST::createString(){
     return ptr;
 }
 void AST::destroy(ASTScope *scope) {
-    if (scope->next)
-        destroy(scope->next);
+    // if (scope->next)
+    //     destroy(scope->next);
     if (scope->name) {
         scope->name->~basic_string<char>();
         engone::Free(scope->name, sizeof(std::string));
@@ -886,8 +991,8 @@ void AST::destroy(ASTScope *scope) {
     engone::Free(scope, sizeof(ASTScope));
 }
 void AST::destroy(ASTStruct *astStruct) {
-    if (astStruct->next)
-        destroy(astStruct->next);
+    // if (astStruct->next)
+    //     destroy(astStruct->next);
     for (auto &mem : astStruct->members) {
         if (mem.defaultValue)
             destroy(mem.defaultValue);
@@ -900,8 +1005,8 @@ void AST::destroy(ASTStruct *astStruct) {
     engone::Free(astStruct, sizeof(ASTStruct));
 }
 void AST::destroy(ASTFunction *function) {
-    if (function->next)
-        destroy(function->next);
+    // if (function->next)
+    //     destroy(function->next);
     if (function->body)
         destroy(function->body);
     for (auto &arg : function->arguments) {
@@ -916,14 +1021,14 @@ void AST::destroy(ASTFunction *function) {
     engone::Free(function, sizeof(ASTFunction));
 }
 void AST::destroy(ASTEnum *astEnum) {
-    if (astEnum->next)
-        destroy(astEnum->next);
+    // if (astEnum->next)
+    //     destroy(astEnum->next);
     astEnum->~ASTEnum();
     engone::Free(astEnum, sizeof(ASTEnum));
 }
 void AST::destroy(ASTStatement *statement) {
-    if (statement->next)
-        destroy(statement->next);
+    // if (statement->next)
+    //     destroy(statement->next);
     if(!statement->sharedContents){
         if (statement->alias){
             statement->alias->~basic_string<char>();
@@ -954,14 +1059,14 @@ void AST::destroy(ASTExpression *expression) {
         for(ASTExpression* expr : *expression->args){
             destroy(expr);
         }
-        expression->args->~vector<ASTExpression*>();
-        engone::Free(expression->args,sizeof(std::vector<ASTExpression*>));
+        expression->args->~DynamicArray<ASTExpression*>();
+        engone::Free(expression->args,sizeof(DynamicArray<ASTExpression*>));
     }
-    if (expression->name) {
-        expression->name->~basic_string<char>();
-        engone::Free(expression->name, sizeof(std::string));
-        expression->name = nullptr;
-    }
+    // if (expression->name) {
+    //     expression->name->~basic_string<char>();
+    //     engone::Free(expression->name, sizeof(std::string));
+    //     expression->name = nullptr;
+    // }
     if (expression->namedValue){
         expression->namedValue->~basic_string<char>();
         engone::Free(expression->namedValue, sizeof(std::string));
@@ -1174,13 +1279,21 @@ Token AST::TrimPolyTypes(Token typeString, std::vector<Token>* outPolyTypes) {
     typeString.length = leftArrow;
 
     Token acc = {};
+    int depth = 0;
     for(int i=leftArrow + 1; i < rightArrow; i++){
-        if(typeString.str[i] != ',') {
+        char chr = typeString.str[i];
+        if(depth!=0 || chr != ',') {
             if(!acc.str)
                 acc.str = typeString.str + i;
             acc.length++;
         }
-        if(typeString.str[i] == ',' || i == rightArrow - 1){
+        if(chr=='<'){
+            depth++;
+        }
+        if(chr=='>'){
+            depth--;
+        }
+        if((depth==0 && chr == ',') || i == rightArrow - 1){
             // We don't push acc if it's empty because we can then
             // check the lengh of outPolyTypes to verify if we
             // have valid types. If empty types are allowed then
@@ -1329,7 +1442,7 @@ TypeInfo::MemberData TypeInfo::getMember(int index) {
         return {{}, -1};
     }
 }
-bool ASTEnum::getMember(const std::string &name, int *out) {
+bool ASTEnum::getMember(const Token&name, int *out) {
     int index = -1;
     for (int i = 0; i < (int)members.size(); i++) {
         if (members[i].name == name) {
@@ -1369,34 +1482,37 @@ void AST::print(int depth) {
 }
 void ASTScope::print(AST *ast, int depth) {
     using namespace engone;
-    if(!hidden){
-        PrintSpace(depth);
-        if(type == BODY)
-            log::out << "Body\n";
-        if(type == NAMESPACE){
-            log::out << "Namespace ";
-            if(name)
-                log::out << " "<<*name;
-            log::out<<"\n";
-            
-        }
-        // #define MUL_PRINT(X,...) for(auto it : X) it->print(ast,depth+1); MUL_PRINT(...)
-        // MUL_PRINT(structs, enums, functions, statements, namespaces);
-        
-        #define PR(X) for(auto it : X) it->print(ast,depth+1);
-        PR(structs)
-        PR(enums)
-        PR(functions)
-        PR(statements)
-        PR(namespaces)
-        #undef PR
+    if(hidden) return;
+
+    PrintSpace(depth);
+    if(nativeCode){
+        log::out << "Native code\n";
+        return;
     }
-    if(next)
-        next->print(ast,depth);
+    if(type == BODY)
+        log::out << "Body\n";
+    if(type == NAMESPACE){
+        log::out << "Namespace ";
+        if(name)
+            log::out << " "<<*name;
+        log::out<<"\n";
+        
+    }
+    // #define MUL_PRINT(X,...) for(auto it : X) it->print(ast,depth+1); MUL_PRINT(...)
+    // MUL_PRINT(structs, enums, functions, statements, namespaces);
+    
+    #define PR(X) for(auto it : X) it->print(ast,depth+1);
+    PR(structs)
+    PR(enums)
+    PR(functions)
+    PR(statements)
+    PR(namespaces)
+    #undef PR
 }
 void ASTFunction::print(AST *ast, int depth) {
     using namespace engone;
-    if(!hidden && (!body || !body->nativeCode)) {
+    // if(!hidden && (!body || !body->nativeCode)) {
+    if(!hidden) {
         PrintSpace(depth);
         log::out << "Func " << name;
         if(polyArgs.size()!=0){
@@ -1411,31 +1527,29 @@ void ASTFunction::print(AST *ast, int depth) {
         log::out << "(";
         for (int i = 0; i < (int)arguments.size(); i++) {
             auto &arg = arguments[i];
-            auto &argImpl = baseImpl.arguments[i];
-            if (i == 0) {
+            // auto &argImpl = baseImpl.arguments[i];
+            if (i != 0) {
                 log::out << ", ";
             }
             log::out << arg.name << ": ";
-            log::out << ast->typeToString(argImpl.typeId);
+            log::out << ast->typeToString(arg.stringType);
         }
         log::out << ")";
-        if (!baseImpl.returnTypes.empty())
+        if (returnTypes.size()!=0)
             log::out << "->";
-        for (int i=0;i<(int)baseImpl.returnTypes.size();i++){
-            auto& ret = baseImpl.returnTypes[i];
+        for (int i=0;i<(int)returnTypes.size();i++){
+            auto& retType = returnTypes[i];
             if(i==0)
                 log::out<<", ";
             // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
             // log::out << dtname << ", ";
-            log::out << ast->typeToString(ret.typeId);
+            log::out << ast->typeToString(retType);
         }
         log::out << "\n";
-        if (body) {
+        if(body){
             body->print(ast, depth + 1);
         }
     }
-    if (next)
-        next->print(ast, depth);
 }
 void ASTStruct::print(AST *ast, int depth) {
     using namespace engone;
@@ -1475,8 +1589,6 @@ void ASTStruct::print(AST *ast, int depth) {
         }
         log::out << " }\n";
     }
-    if (next)
-        next->print(ast, depth);
 }
 void ASTEnum::print(AST *ast, int depth) {
     using namespace engone;
@@ -1492,8 +1604,6 @@ void ASTEnum::print(AST *ast, int depth) {
         }
         log::out << "}\n";
     }
-    if (next)
-        next->print(ast, depth);
 }
 void ASTStatement::print(AST *ast, int depth) {
     using namespace engone;
@@ -1526,9 +1636,6 @@ void ASTStatement::print(AST *ast, int depth) {
     if (elseBody) {
         elseBody->print(ast, depth + 1);
     }
-    if (next) {
-        next->print(ast, depth);
-    }
     if(returnValues){
         for(ASTExpression* expr : *returnValues){
             if (expr) {
@@ -1558,22 +1665,24 @@ void ASTExpression::print(AST *ast, int depth) {
         else if (typeId == AST_CHAR)
             log::out << charValue;
         else if (typeId == AST_VAR)
-            log::out << *name;
+            log::out << name;
         // else if(typeId==AST_STRING) log::out << ast->constStrings[constStrIndex];
         else if (typeId == AST_FNCALL)
-            log::out << *name;
+            log::out << name;
         else if (typeId == AST_NULL)
             log::out << "null";
         else if(typeId == AST_STRING)
-            log::out << *name;
+            log::out <<name;
         else if(typeId == AST_SIZEOF)
-            log::out << *name;
+            log::out << name;
         else
             log::out << "missing print impl.";
         if (typeId == AST_FNCALL) {
-            if (left) {
+            if (args && args->size()!=0) {
                 log::out << " args:\n";
-                left->print(ast, depth + 1);
+                // for(auto arg : *args){
+                //     arg->print(ast, depth + 1);
+                // }
             } else {
                 log::out << " no args\n";
             }
@@ -1591,7 +1700,7 @@ void ASTExpression::print(AST *ast, int depth) {
             log::out << "\n";
             left->print(ast, depth + 1);
         } else if (typeId == AST_MEMBER) {
-            log::out << *name;
+            log::out << name;
             log::out << "\n";
             left->print(ast, depth + 1);
         } else if (typeId == AST_INITIALIZER) {
@@ -1600,7 +1709,7 @@ void ASTExpression::print(AST *ast, int depth) {
             if(left)
                 left->print(ast, depth + 1);
         } else if (typeId == AST_FROM_NAMESPACE) {
-            log::out << *name;
+            log::out << name;
             log::out << "\n";
             if(left)
                 left->print(ast, depth + 1);

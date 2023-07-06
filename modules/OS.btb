@@ -1,7 +1,8 @@
 #import "Basic"
 
-// using u64 as File doesn't since functions are evaluated
+// using u64 as File does not work since functions are evaluated
 // first and then using. Using won't be applied to functions.
+// A macro is used instead,or now.
 #define File u64
 
 enum @hide FileFlag {
@@ -12,21 +13,23 @@ enum @hide FileFlag {
 };
 
 // returns file handle and file size
-fn FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64 { @native-code }
-fn FileRead(file: File, buffer: void*, readBytes: u64) -> u64 { @native-code }
-fn FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 { @native-code }
-fn FileClose(file: File) { @native-code }
+fn @hide FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64 { @native-code }
+fn @hide FileRead(file: File, buffer: void*, readBytes: u64) -> u64 { @native-code }
+fn @hide FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 { @native-code }
+fn @hide FileClose(file: File) { @native-code }
 
-fn malloc(size: u64) -> void* { @native-code }
-fn realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* { @native-code }
-fn free(ptr: void*, size: u64) { @native-code }
+fn @hide malloc(size: u64) -> void* { @native-code }
+fn @hide realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* { @native-code }
+fn @hide free(ptr: void*, size: u64) { @native-code }
 
-fn printi(num: i64) { @native-code }
-fn printc(chr: char) { @native-code }
-fn @hide prints(slice: Slice<char>) {
-    i = 0;
-    while i < slice.len; {
-        printc(slice.ptr[i]);
-        i++;
-    }
-}
+fn @hide printi(num: i64) { @native-code }
+fn @hide printd(num: f32) { @native-code }
+fn @hide printc(chr: char) { @native-code }
+fn @hide prints(slice: Slice<char>) { @native-code }
+// fn @hide prints(slice: Slice<char>) {
+//     i = 0;
+//     while i < slice.len; {
+//         printc(slice.ptr[i]);
+//         i++;
+//     }
+// }

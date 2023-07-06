@@ -15,6 +15,8 @@
 #define TOKEN_QUOTED 0x4
 #define TOKEN_DOUBLE_QUOTED 0x8
 
+struct TokenRange;
+struct TokenStream;
 struct Token {
     Token() = default;
     Token(const char* str) : str((char*)str), length(strlen(str)) {};
@@ -22,16 +24,24 @@ struct Token {
     Token(char* str, int len) : str((char*)str), length(len) {};
     
     char* str=0; // NOT null terminated
-    int length=0;
-    int flags=0; // bit mask representing line feed, space and quotation
+    int length=0; // lengt of text data. Not including quotes or other things.
     int line=0;
-    int column=0;
+    i16 flags=0; // bit mask representing line feed, space and quotation
+    i16 column=0;
+    int tokenIndex=0;
+    TokenStream* tokenStream = nullptr; // don't keep this here
+
+    int calcLength();
 
     bool operator==(const std::string& str);
+    bool operator==(const Token& str);
     bool operator==(const char* str);
     bool operator!=(const char* str);
+
+    operator TokenRange() const;
+    TokenRange range() const;
     
-    operator std::string();
+    operator std::string() const;
 
     // prints the string, does not print suffix, line or column
     void print(bool skipSuffix = false);
@@ -45,12 +55,29 @@ struct Token {
 #define LAYER_OPTIMIZER 8
 #define LAYER_INTERPRETER 16
 engone::Logger& operator<<(engone::Logger& logger, Token& token);
-struct TokenStream;
 struct TokenRange {
     Token firstToken{};
-    int startIndex=0;
+
+    TokenRange operator=(const TokenRange& r){
+        TokenRange range{};
+        range.firstToken = r.firstToken;
+        range.endIndex = r.endIndex;
+        return range;
+    }
+
+    const int& startIndex = firstToken.tokenIndex;
     int endIndex=0; // exclusive
-    TokenStream* tokenStream=0; // should probably not be here
+    TokenStream* const& tokenStream = firstToken.tokenStream;
+
+    // TokenStream* stream() const {
+    //     return firstToken.tokenStream;
+    // }
+    // const int& start() const {
+    //     return firstToken.tokenIndex;
+    // }
+    // const int& end() const {
+    //     return endIndex;
+    // }
 
     void print();
     void feed(std::string& outBuffer);
@@ -78,7 +105,7 @@ struct TokenStream {
     bool isVersion(const char* ver){return !strcmp(version,ver);}
     
     // token count
-    int length();
+    int length() const;
     
     // The add functions return false if reallocation fails.
 
@@ -96,7 +123,7 @@ struct TokenStream {
     bool addTokenAndData(const char* token);
     // bool addTokenAndData(Token token);
 
-    Token& get(u32 index);
+    Token& get(u32 index) const;
 
     //-- For parsing
 
@@ -106,7 +133,7 @@ struct TokenStream {
     bool end();
     void finish();
 
-    TokenRange getLine(int index);
+    // TokenRange getLine(int index);
     
     //-- Extra
 

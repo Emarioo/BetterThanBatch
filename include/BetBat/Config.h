@@ -42,9 +42,9 @@
 // #define MLOG
 // #define PLOG
 // type checker
-// #define TC_LOG
-// #define GLOG
-// #define ILOG
+#define TC_LOG
+#define GLOG
+#define ILOG
 // #define ILOG_REGS
 
 // #define OLOG

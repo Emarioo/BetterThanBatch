@@ -594,6 +594,15 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
+                case BC_EXT_PRINTD:{
+                    float num = *(float*)(fp+argoffset+4);
+                    #ifdef ILOG
+                    log::out << log::LIME<<"print: "<<num<<"\n";
+                    #else                    
+                    log::out << num;
+                    #endif
+                    break;
+                }
                 case BC_EXT_PRINTC: {
                     char chr = *(char*)(fp+argoffset + 7); // +7 comes from the alignment after char
                     #ifdef ILOG
@@ -603,12 +612,29 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
+                case BC_EXT_PRINTS: {
+                    char* ptr = *(char**)(fp+argoffset);
+                    u64 len = *(u64*)(fp+argoffset+8);
+                    
+                    #ifdef ILOG
+                    log::out << log::LIME << "print: ";
+                    for(u32 i=0;i<len;i++){
+                        log::out << ptr[i];
+                    }
+                    log::out << "\n";
+                    #else
+                    for(u32 i=0;i<len;i++){
+                        log::out << ptr[i];
+                    }
+                    #endif
+                    break;
+                }
                 case BC_EXT_FILEOPEN:{
                     // The order may seem strange but it's actually correct.
                     // It's just complicated.
                     // slice
                     char* ptr = *(char**)(fp+argoffset + 8);
-                    u32 len = *(u64*)(fp+argoffset+20);
+                    u32 len = *(u64*)(fp+argoffset+16);
 
                     u32 flags = *(u32*)(fp+argoffset+4);
 
