@@ -361,6 +361,10 @@ TokenStream* TokenStream::copy(){
     return 0;
 }
 void TokenStream::finalizePointers(){
+    // TODO: Used buckets for tokenData so that this step isn't necessary
+    //   for the string pointers. tokenIndex and tokenStream is till
+    //   required but you might be abke to do that elsewhere.
+
     for(int i=0;i<(int)tokens.used;i++){
         Token* tok = (Token*)tokens.data+i;
         tok->str = (char*)tokenData.data + (uint64)tok->str;

@@ -83,107 +83,24 @@ CompileInfo::FileInfo* CompileInfo::getStream(const Path& name){
         return nullptr;
     return &pair->second;
 }
-
-ASTScope* ParseFile(CompileInfo& info, const Path& path, std::string as = "");
-ASTScope* ParseFile(CompileInfo& info, const engone::Memory& data, std::string as = ""){
-    using namespace engone;
-    // Assert(path.isAbsolute()); // A bug at the call site if not absolute
-    Path path = Path("<engone::Memory>");
-    _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefPath(path.text)<<"\n";)
-    TokenStream* tokenStream = TokenStream::Tokenize((char*)data.data, data.max);
-    if(!tokenStream){
-        log::out << log::RED << " Failed tokenization: " << BriefPath(path.text) <<"\n";
-        return nullptr;
-    }
-    info.addStream(tokenStream);
-    
-    if (tokenStream->enabled & LAYER_PREPROCESSOR) {
-        TokenStream* old = tokenStream;
-        
-        _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path.text)<<"\n";)
-        Preprocess(&info, tokenStream);
-        if (tokenStream->enabled == LAYER_PREPROCESSOR)
-            tokenStream->print();
-        // TODO: quit if errors? unfortunately we don't have that information
-        //  since errors are added to compileInfo's errors
-    }
-    
-    // Path dir = path.getDirectory();
-    for(auto& item : tokenStream->importList){
-        std::string importName = "";
-        int dotindex = item.name.find_last_of(".");
-        int slashindex = item.name.find_last_of("/");
-        // log::out << "dot "<<dotindex << " slash "<<slashindex<<"\n";
-        if(dotindex==-1 || dotindex<slashindex){
-            importName = item.name+".btb";
-        } else {
-            importName = item.name;
-        }
-        // TODO: import AS
-        
-        Path fullPath = {};
-        // TODO: Test "/src.btb", "ok./hum" and other unusual paths
-        
-        //-- Search directory of current source file
-        // if(importName.find("./")==0) {
-        //     fullPath = dir.text + importName.substr(2);
-        // } 
-        //-- Search cwd or absolute path
-        // else
-         if(FileExist(importName)){
-            fullPath = importName;
-            if(!fullPath.isAbsolute())
-                fullPath = fullPath.getAbsolute();
-        }
-        //-- Search additional import directories.
-        // TODO: DO THIS WITH #INCLUDE TOO!
-        else {
-            for(int i=0;i<(int)info.importDirectories.size();i++){
-                const Path& dir = info.importDirectories[i];
-                Assert(dir.isDir() && dir.isAbsolute());
-                Path path = dir.text + importName;
-                bool yes = FileExist(path.text);
-                if(yes) {
-                    fullPath = path;
-                    break;
-                }
-            }
-        }
-        
-        if(fullPath.text.empty()){
-            log::out << log::RED << "Could not find import '"<<importName<<"' (import from '"<<BriefPath(path.text,20)<<"'\n";
-        }else{
-            auto fileInfo = info.getStream(fullPath);
-            if(fileInfo){   
-                log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";
-            }else{
-                ASTScope* body = ParseFile(info, fullPath, item.as);
-                if(body){
-                    if(item.as.empty()){
-                        info.ast->appendToMainBody(body);
-                    } else {
-                        info.ast->mainBody->add(body, info.ast);
-                    }
-                }
-            }
-        }
-    }
-    
-    _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path.text)<<"\n";)
-    ASTScope* body = ParseTokens(tokenStream,info.ast,&info, as);
-    return body;
-}
 // does not handle backslash
-ASTScope* ParseFile(CompileInfo& info, const Path& path, std::string as){
+bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const char* textData = nullptr, u64 textLength = 0){
     using namespace engone;
 
     Assert(path.isAbsolute()); // A bug at the call site if not absolute
     
     _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefPath(path.text)<<"\n";)
-    TokenStream* tokenStream = TokenStream::Tokenize(path.text);
+    TokenStream* tokenStream = nullptr;
+    if(textData) {
+        tokenStream = TokenStream::Tokenize(textData,textLength);
+        tokenStream->streamName = path.text;
+    } else {
+        tokenStream = TokenStream::Tokenize(path.text);
+    }
     if(!tokenStream){
-        log::out << log::RED << " Failed tokenization: " << BriefPath(path.text) <<"\n";
-        return nullptr;
+        log::out << log::RED << "Failed tokenization: " << BriefPath(path.text) <<"\n";
+        info.errors++;
+        return false;
     }
     info.addStream(tokenStream);
     
@@ -244,21 +161,30 @@ ASTScope* ParseFile(CompileInfo& info, const Path& path, std::string as){
             if(fileInfo){   
                 log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";
             }else{
-                ASTScope* body = ParseFile(info, fullPath, item.as);
-                if(body){
-                    if(item.as.empty()){
-                        info.ast->appendToMainBody(body);
-                    } else {
-                        info.ast->mainBody->add(body, info.ast);
-                    }
-                }
+                bool yes = ParseFile(info, fullPath, item.as);
+                // ASTScope* body = ParseFile(info, fullPath, item.as);
+                // if(body){
+                //     if(item.as.empty()){
+                //         info.ast->appendToMainBody(body);
+                //     } else {
+                //         info.ast->mainBody->add(body, info.ast);
+                //     }
+                // }
             }
         }
     }
     
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path.text)<<"\n";)
     ASTScope* body = ParseTokens(tokenStream,info.ast,&info, as);
-    return body;
+    if(body){
+        if(as.empty()){
+            info.ast->appendToMainBody(body);
+        } else {
+            info.ast->mainBody->add(body, info.ast);
+        }
+    }
+    return true;
+    // return body;
 }
 
 Bytecode* CompileSource(CompileOptions options) {
@@ -282,15 +208,17 @@ Bytecode* CompileSource(CompileOptions options) {
     // ASTScope* body2 = ParseFile(compileInfo, "src/BetBat/StandardLibrary/Basic.btb");
     // compileInfo.ast->appendToMainBody(body2);
     if(options.rawSource.data){
-        ASTScope* body = ParseFile(compileInfo, options.rawSource);
-        if(body) {
-            compileInfo.ast->appendToMainBody(body);
-        }
+        ParseFile(compileInfo, std::string("<raw-data>"),"",(char*)options.rawSource.data, options.rawSource.used);
+        // ASTScope* body = ParseFile(compileInfo, std::string("<raw-data>"),"",(char*)options.rawSource.data, options.rawSource.used);
+        // if(body) {
+        //     compileInfo.ast->appendToMainBody(body);
+        // }
     } else {
-        ASTScope* body = ParseFile(compileInfo, options.initialSourceFile.getAbsolute());
-        if(body) {
-            compileInfo.ast->appendToMainBody(body);
-        }
+        ParseFile(compileInfo, options.initialSourceFile.getAbsolute());
+        // ASTScope* body = ParseFile(compileInfo, options.initialSourceFile.getAbsolute());
+        // if(body) {
+        //     compileInfo.ast->appendToMainBody(body);
+        // }
     }
     
     _VLOG(log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
@@ -337,14 +265,85 @@ void CompileAndRun(CompileOptions options) {
     using namespace engone;
     Bytecode* bytecode = CompileSource(options);
     if(bytecode){
-        Interpreter interpreter{};
-        // interpreter.silent = true;
-        interpreter.execute(bytecode);
-        interpreter.cleanup();
+        RunBytecode(bytecode);
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
     }
     #ifdef LOG_MEASURES
     PrintMeasures();
     #endif
+}
+void RunBytecode(Bytecode* bytecode){
+    Assert(bytecode);
+    Interpreter interpreter{};
+    // interpreter.silent = true;
+    interpreter.execute(bytecode);
+    interpreter.cleanup();
+}
+
+struct BTBCHeader{
+    u32 magicNumber = 0x13579BDF;
+    char humanChars[4] = {'B','T','B','C'};
+    // TODO: Version number for interpreter?
+    // TODO: Version number for bytecode format?
+    u32 codeSize = 0;
+    u32 dataSize = 0;
+};
+bool ExportBytecode(Path filePath, const Bytecode* bytecode){
+    using namespace engone;
+    Assert(bytecode);
+    auto file = FileOpen(filePath.text, 0, engone::FILE_WILL_CREATE);
+    if(!file)
+        return false;
+    BTBCHeader header{};
+
+    Assert(bytecode->codeSegment.used*bytecode->codeSegment.m_typeSize < ((u64)1<<32))
+    header.codeSize = bytecode->codeSegment.used*bytecode->codeSegment.m_typeSize;
+    Assert(bytecode->dataSegment.used*bytecode->dataSegment.m_typeSize < ((u64)1<<32))
+    header.dataSize = bytecode->dataSegment.used*bytecode->dataSegment.m_typeSize;
+
+    // TOOD: Check error when writing files
+    int err = FileWrite(file, &header, sizeof(header));
+    if(err!=-1)
+        err = FileWrite(file, bytecode->codeSegment.data, header.codeSize);
+    if(err!=-1)
+        err = FileWrite(file, bytecode->dataSegment.data, header.dataSize);
+
+    // debugSegment is ignored
+
+    FileClose(file);
+    return true;
+}
+Bytecode* ImportBytecode(Path filePath){
+    using namespace engone;
+    u64 fileSize = 0;
+    auto file = FileOpen(filePath.text, &fileSize, engone::FILE_ONLY_READ);
+
+    if(fileSize < sizeof(BTBCHeader))
+        return nullptr; // File is to small for a bytecode file
+
+    BTBCHeader baseHeader{};
+    BTBCHeader header{};
+
+    // TOOD: Check error when writing files
+    FileRead(file, &header, sizeof(header));
+    
+    if(strncmp((char*)&baseHeader,(char*)&header,8)) // TODO: Don't use hardcoded 8?
+        return nullptr; // Magic number and human characters is incorrect. Meaning not a bytecode file.
+
+    if(fileSize != sizeof(BTBCHeader) + header.codeSize + header.dataSize)
+        return nullptr; // Corrupt file. Sizes does not match.
+    
+    Bytecode* bc = Bytecode::Create();
+    bc->codeSegment.resize(header.codeSize/bc->codeSegment.m_typeSize);
+    bc->codeSegment.used = header.codeSize/bc->codeSegment.m_typeSize;
+    bc->dataSegment.resize(header.dataSize/bc->dataSegment.m_typeSize);
+    bc->dataSegment.used = header.dataSize/bc->dataSegment.m_typeSize;
+    FileRead(file, bc->codeSegment.data, header.codeSize);
+    FileRead(file, bc->dataSegment.data, header.dataSize);
+
+    // debugSegment is ignored
+
+    FileClose(file);
+    return bc;
 }

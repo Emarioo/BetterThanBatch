@@ -5,8 +5,8 @@ engone::Memory ReadFile(const char* path){
     uint64 fileSize;
     
     if(!engone::FileExist(path)) {
-        buffer.data = (void*)1;
-        return buffer;
+        // buffer.data = (void*)1;
+        return {1};
     }
     
     auto file = engone::FileOpen(path,&fileSize,engone::FILE_ONLY_READ);

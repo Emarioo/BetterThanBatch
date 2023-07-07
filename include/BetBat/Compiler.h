@@ -72,8 +72,6 @@ struct CompileInfo {
 
 Bytecode* CompileSource(CompileOptions options);
 void CompileAndRun(CompileOptions options);
-
-void CompileInstructions(const char* path);
-void CompileDisassemble(const char* path);
-
-void CompileScriptOld(const char* path, int extra = 1);
+void RunBytecode(Bytecode* bytecode);
+bool ExportBytecode(Path filePath, const Bytecode* bytecode);
+Bytecode* ImportBytecode(Path filePath);

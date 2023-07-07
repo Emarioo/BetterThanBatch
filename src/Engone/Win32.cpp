@@ -283,7 +283,7 @@ namespace engone {
 	}
 	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes){
 		Assert(readBytes!=(uint64)-1); // -1 indicates no bytes read
-
+		Assert(buffer);
 		DWORD bytesRead=0;
 		DWORD success = ReadFile(TO_HANDLE(file),buffer,readBytes,&bytesRead,NULL);
 		if(!success){
@@ -295,7 +295,7 @@ namespace engone {
 	}
 	uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes){
 		Assert(writeBytes!=(uint64)-1); // -1 indicates no bytes read
-		
+		Assert(buffer);
 		DWORD bytesWritten=0;
 		DWORD success = WriteFile(TO_HANDLE(file),buffer,writeBytes,&bytesWritten,NULL);
 		if(!success){

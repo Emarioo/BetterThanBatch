@@ -97,6 +97,8 @@ void Interpreter::execute(Bytecode* bytecode){
     // u64* savedFp = 0;
     u64 executedInstructions = 0;
     u64 length = bytecode->codeSegment.used;
+    if(length==0)
+        log::out << log::YELLOW << "Interpreter ran bytecode with zero instructions. Bug?\n";
     Instruction* codePtr = (Instruction*)bytecode->codeSegment.data;
     while (true) {
         // check used
@@ -721,7 +723,7 @@ void Interpreter::execute(Bytecode* bytecode){
             pc++;
             // TODO: relative immediate instead?
             //   can't see any benefit right now.
-            _ILOG(log::out << "\n";)
+            _ILOG(log::out << data<<"\n";)
             pc = data;
             break;
         }
@@ -746,7 +748,7 @@ void Interpreter::execute(Bytecode* bytecode){
                 testValue = *(u64*)ptr;
             }
 
-            _ILOG(log::out << testValue<<"\n";)
+            _ILOG(log::out << "testval: "<<testValue<<", jumpto: "<<data<<"\n";)
             
             bool yes=false;
             switch (opcode){

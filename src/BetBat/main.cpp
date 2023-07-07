@@ -5,13 +5,34 @@ void print_help(){
     log::out << log::BLUE << "##   Help   ##\n";
     log::out << log::GRAY << "More information can be found here:\n"
         "https://github.com/Emarioo/BetterThanBatch/tree/master/docs\n";
-    log::out << log::YELLOW << "compiler.exe [file0 file1 ...]: "<<log::SILVER;
-    log::out << "Arguments after the executable specifies source files to compile. "
+    #define PRINT_USAGE(X) log::out << log::YELLOW << X ": "<<log::SILVER;
+    #define PRINT_DESC(X) log::out << X;
+    #define PRINT_EXAMPLES log::out << log::LIME << " Examples:\n";
+    #define PRINT_EXAMPLE(X) log::out << X;
+    PRINT_USAGE("compiler.exe [file0 file1 ...]")
+    PRINT_DESC("Arguments after the executable specifies source files to compile. "
              "They will compile and run seperately. Use #import for more files in your "
-             "projects.\n";
-    log::out << log::LIME << " Examples:\n";
-    log::out << "  compiler.exe file0.btb script.txt\n";
+             "projects.\n")
+    PRINT_EXAMPLES
+    PRINT_EXAMPLE("  compiler.exe file0.btb script.txt\n")
     log::out << "\n";
+    PRINT_USAGE("compiler.exe [file0 ...] -out [file0 ...]")
+    PRINT_DESC("With the "<<log::WHITE<<"out"<<log::WHITE<<" flag, files to the left will be compiled into "
+             "bytecode and written to the files on the right of the out flag. "
+             "The amount of files on the left and right must match.\n")
+    PRINT_EXAMPLES
+    PRINT_EXAMPLE("  compiler.exe main.btb -out program.btbc\n")
+    log::out << "\n";
+    PRINT_USAGE("compiler.exe -run [file0 ...]")
+    PRINT_DESC("Runs bytecode files generated with the out flag.\n")
+    PRINT_EXAMPLES
+    PRINT_EXAMPLE("  compiler.exe -run program.btbc\n")
+    log::out << "\n";
+
+    #undef PRINT_USAGE
+    #undef PRINT_DESC
+    #undef PRINT_EXAMPLES
+    #undef PRINT_EXAMPLE
     // log::out << log::YELLOW << "compiler.exe -log [type0,type1,...]: "<<log::SILVER;
     // log::out << "Prints debug info. The argument after determines what "
     //          << "type of info to print. Types are tokenizer, preprocessor, parser, "
@@ -22,88 +43,27 @@ void print_help(){
     // log::out << "  -log tok          "<<log::GRAY<<"(extra info about tokenizer)\n";
     // log::out << "  -log pre,par,thr  "<<log::GRAY<<"(extra info about preprocessor, parser and threads)\n";
     // log::out << "  -log opt,int      "<<log::GRAY<<"(extra info about optimizer and interpreter)\n";
+
+    /*
+        compiler main.btb -out main.btbc
+        compiler -run main.btbc
+
+
+    */
 }
-
-// void stac(int num){
-//     int cool = num - 1;
-//     engone::log::out << num << " " << (u64)&cool << "\n";
-//     if(cool==0)
-//         return;
-//     int cool2 = num - 2;
-//     engone::log::out << (u64)&cool2 << "\n";
-
-//     stac(cool);
-// }
-// namespace engone {
-//     // template<typename T>
-//     // void fun(T t){
-//     //     log::out << "T\n";
-//     // }
-//     void fun(i32 n){
-//         log::out << "i32\n";
-//     }
-//     void fun(i32 a, i32 b = 8){
-//         log::out << "i32 i32\n";
-//     }
-// }
 
 int main(int argc, const char** argv){
     using namespace engone;
 
-    // DynamicArray<int> arr{};
-    // arr.add(5);
-    // arr.add(32);
-    // for(auto i : arr){
-    //     log::out << i<<"\n";
-    // }
-    // return 1;
-    // fun(5);
-    // fun(5,b : 6);
-    // fun(5);
-
-    // return 1;
-
-    // int file = open("eaeea",O_RDWR);
-    // printf("file %d\n",err);
-
-    // char buffer[1000];
-    // auto fr = read("out",&size, FILE_ONLY_READ);
-    // u64 readBytes = read(fr,buffer,size);
-    // FileClose(fr);
-    // printf("%d\n", (int)readBytes);
-    // read("");
-    
-
-    // u64 size=0;
-    // const char* text = "????";
-    // auto fw = FileOpen("out",&size, FILE_CAN_CREATE);
-    // FileWrite(fw,text,strlen(text));
-    // FileClose(fw);
-
-
-    // printf("Data: ");
-    // for(int i=0;i<(int)readBytes;i++){
-    //     printf("%c",buffer[i]);
-    // }
-    // printf("\n");
-    // stac(3);
-    // char a = 'a';
-    // char a1 = 'b';
-    // char a2 = 'c';
-    // int num = 23;
-    // log::out << (u64)&a  << " "<<(u64)&a2<< " "<<(u64)&num <<"\n";
-    // for(int i=0;i<3;i++){
-    //     log::out << *(&a + i)<<"\n";
-    // }
-    // return 0;
-
     log::out.enableReport(false);
 
     #define IfArg(X) if(!strcmp(arg,X))
-    #define MODE_TEST 1
-    #define MODE_RUN 2
-    #define MODE_LOG 3
-    int mode = MODE_RUN;
+    #define MODE_COMPILE 1
+    #define MODE_OUT 2
+    #define MODE_RUN 4
+    // #define MODE_TEST 29
+    // #define MODE_LOG 120
+    int mode = MODE_COMPILE;
     
     bool devmode=false;
     
@@ -111,6 +71,8 @@ int main(int argc, const char** argv){
 
     std::vector<std::string> tests; // could be const char*
     std::vector<std::string> files;
+    std::vector<std::string> outFiles;
+    std::vector<std::string> filesToRun;
 
     for(int i=1;i<argc;i++){
         const char* arg = argv[i];
@@ -119,91 +81,133 @@ int main(int argc, const char** argv){
         IfArg("--help") {
             print_help();
             return 0;
-        } 
-        // IfArg("-test") {
-        //     mode = MODE_TEST;
-        // } 
-        // else IfArg("-testall") {
-            // TestSuite(tests,true);
-        // } else IfArg("-log") {
-        //     mode = MODE_LOG;
-        //     SetLog(LOG_OVERVIEW,true);
-        // } 
-        else IfArg("-dev") {
+        } else IfArg("-run") {
+            mode = MODE_RUN;
+        } else IfArg("-out") {
+            mode = MODE_OUT;
+        } else IfArg("-dev") {
             devmode = true;
-        } else if(mode==MODE_RUN){
+        } else if(mode==MODE_COMPILE){
             files.push_back(arg);
+        } else if(mode==MODE_RUN){
+            filesToRun.push_back(arg);
+        } else if(mode==MODE_OUT){
+            outFiles.push_back(arg);
         } 
-        // else if(mode==MODE_TEST){
-        //     mode = MODE_RUN;
-        //     tests.push_back(arg);
-        // } else if(mode==MODE_LOG) {
-            // mode = MODE_RUN;
-            
-            // int corrects[6]{0};
-            // const char* strs[]{"tokenizer","preprocessor","parser","optimizer","interpreter","threads"};
-            
-            // for (int j=0;j<len;j++){
-            //     char chr = arg[j];
-            //     if(chr!=','){
-            //         for (int k=0;k<6;k++){
-            //             // log::out << "T "<<k<<" "<<chr<<"\n";
-            //             if(strs[k][corrects[k]] == chr){
-            //                 // log::out << "R "<<k<<" "<<chr<<"\n";
-            //                 corrects[k]++;
-            //                 if(corrects[k] == (int)strlen(strs[k])){
-            //                     corrects[k] = 0;
-            //                     SetLog(1<<k,true);
-            //                 }
-            //             }else{
-            //                 corrects[k]=0;
-            //             }
-            //         }
-            //     }
-            //     if(chr == ',' || j+1 == len){
-            //         int max = 0;
-            //         int index = -1;
-            //         for (int k=0;k<6;k++){
-            //             if(corrects[k] >= max){
-            //                 index = k;
-            //                 max = corrects[k];
-            //             }
-            //             corrects[k] = 0;
-            //         }
-            //         // log::out << "on "<<index<<"\n";
-            //         if(index!=-1){
-            //             SetLog(1<<index,true);
-            //         }
-            //         continue;
-            //     }
-            // }
-        // }
+        /*
+        else if(mode==MODE_TEST){
+            mode = MODE_RUN;
+            tests.push_back(arg);
+        } else if(mode==MODE_LOG) {
+            mode = MODE_RUN;
+            int corrects[6]{0};
+            const char* strs[]{"tokenizer","preprocessor","parser","optimizer","interpreter","threads"};
+            for (int j=0;j<len;j++){
+                char chr = arg[j];
+                if(chr!=','){
+                    for (int k=0;k<6;k++){
+                        // log::out << "T "<<k<<" "<<chr<<"\n";
+                        if(strs[k][corrects[k]] == chr){
+                            // log::out << "R "<<k<<" "<<chr<<"\n";
+                            corrects[k]++;
+                            if(corrects[k] == (int)strlen(strs[k])){
+                                corrects[k] = 0;
+                                SetLog(1<<k,true);
+                            }
+                        }else{
+                            corrects[k]=0;
+                        }
+                    }
+                }
+                if(chr == ',' || j+1 == len){
+                    int max = 0;
+                    int index = -1;
+                    for (int k=0;k<6;k++){
+                        if(corrects[k] >= max){
+                            index = k;
+                            max = corrects[k];
+                        }
+                        corrects[k] = 0;
+                    }
+                    // log::out << "on "<<index<<"\n";
+                    if(index!=-1){
+                        SetLog(1<<index,true);
+                    }
+                    continue;
+                }
+            }
+        }
+        */
     }
-    if(!tests.empty()){
-        // TestSuite(tests);
+    if(files.size() != outFiles.size() && outFiles.size()!=0){
+        log::out << log::RED <<"The amount of input and output files must match!\n";
+        int index = 0;
+        // TODO: Prettier formatting. What about really long file names.
+        while(true){
+            if(index<(int)files.size()){
+                log::out << files[index];
+            } else {
+                log::out << "?";
+            }
+            log::out << " - ";
+            if(index<(int)outFiles.size()){
+                log::out << outFiles[index];
+            } else {
+                log::out << "?";
+            }
+            log::out << "\n";
+        }
+        return 0;
     }
+    // if(!tests.empty()){
+    //     // TestSuite(tests);
+    // }
     Path compilerDir = compilerPath;
     compilerDir = compilerDir.getAbsolute().getDirectory();
-    // ReplaceChar((char*)compilerPath.data(),compilerPath.length(),'\\','/');
-    // std::string compilerDir = TrimLastFile(compilerPath);
-    // log::out << "CompDir: " <<compilerDir.text <<"\n";
     if(compilerDir.text.length()>4){
         if(compilerDir.text.substr(compilerDir.text.length()-5,5) == "/bin/")
             compilerDir = compilerDir.text.substr(0,compilerDir.text.length() - 4);
     }
-    // log::out << "CompDir: " <<compilerPath << " "<< compilerDir.text <<"\n";
-    for(std::string& file : files){
-        // Should source files be compiled seperatly like this
-        CompileAndRun({file.c_str(), compilerDir.text});
+    for(int i = 0; i < (int)files.size();i++){
+        if(outFiles.size()==0){
+            log::out << log::GRAY << "Compile and run: "<<files[i] << "\n";
+            CompileAndRun({files[i].c_str(), compilerDir.text});
+        } else {
+            Bytecode* bc = CompileSource({files[i].c_str(), compilerDir.text});
+            if(bc){
+                bool yes = ExportBytecode(outFiles[i], bc);
+                Bytecode::Destroy(bc);
+                if(yes)
+                    log::out << log::GRAY<<"Exported "<<files[i] << " into bytecode in "<<outFiles[i]<<"\n";
+                else
+                    log::out <<log::RED <<"Failed exporting "<<files[i] << " into bytecode in "<<outFiles[i]<<"\n";
+            }
+        }
     }
-    if(!devmode && files.size()==0){
+    for(std::string& file : filesToRun){
+        Bytecode* bc = ImportBytecode(file);
+        if(bc){
+            log::out << log::GRAY<<"Running "<<file << "\n";
+            RunBytecode(bc);
+            Bytecode::Destroy(bc);
+        } else {
+            log::out <<log::RED <<"Failed importing "<<file <<"\n";
+        }
+    }
+    if(!devmode && files.empty()
+        && filesToRun.empty()){
         print_help();
         // log::out << "No input files!\n";
     } else if(devmode){
-
+        log::out << log::BLACK<<"[DEVMODE]\n";
         // PerfTestTokenize("example/build_fast.btb",200);
 
         CompileAndRun({"examples/strings.btb", compilerDir.text});
+        // RunBytecode({"a.btbc", compilerDir.text});
+        // Bytecode* bc = ImportBytecode(std::string("a.btbc"));
+        // RunBytecode(bc);
+        // Bytecode::Destroy(bc);
+        // CompileAndRun({"strings.btb", compilerDir.text});
         // CompileAndRun("example/ast.btb", compilerPath);
         // CompileAndRun("tests/benchmark/loop.btb");
         // CompileAndRun("tests/benchmark/loop2.btb");

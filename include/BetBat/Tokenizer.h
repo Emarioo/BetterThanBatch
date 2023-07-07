@@ -93,7 +93,6 @@ struct TokenStream {
     }
     static TokenStream* Create();
     static void Destroy(TokenStream* stream);
-    // May return nullptr if file could not be accessed.
     static TokenStream* Tokenize(const std::string& filePath);
     // nullptr is never returned, data can always be processed into tokens.
     // There may be errors in the stream though.

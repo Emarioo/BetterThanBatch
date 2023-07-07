@@ -984,9 +984,11 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
 
             auto iden = info.ast->getIdentifier(idScope, baseName);
             if(!iden){
-                ERR_HEAD(expression->tokenRange, "Function '"<<baseName<<"' does not exist.\n";
-                    ERR_LINE(expression->name,"undefined");
-                )
+                if(info.compileInfo->typeErrors == 0){
+                    ERR_HEAD(expression->tokenRange, "Function '"<<baseName<<"' does not exist.\n";
+                        ERR_LINE(expression->name,"undefined");
+                    )
+                }
                 return GEN_ERROR;
             }
 
@@ -2214,10 +2216,10 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     }
 
 
-    _GLOG(log::out << "Function skip\n";)
-    info.code->add({BC_JMP});
-    int skipIndex = info.code->length();
-    info.code->addIm(0);
+    // _GLOG(log::out << "Function skip\n";)
+    // info.code->add({BC_JMP});
+    // int skipIndex = info.code->length();
+    // info.code->addIm(0);
     int index = 0;
     // std::vector<FuncImpl*> funcImpls;
     // // optimize by not pushing to an array by iterating right away
@@ -2375,7 +2377,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
             info.ast->removeIdentifier(info.currentScopeId, arg.name);
         }
     }
-    *((u32 *)info.code->get(skipIndex)) = info.code->length();
+    // *((u32 *)info.code->get(skipIndex)) = info.code->length();
     return GEN_SUCCESS;
 }
 int GenerateFunctions(GenInfo& info, ASTScope* body){
@@ -2416,28 +2418,6 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
     defer { info.currentScopeId = savedScope; };
 
     info.currentScopeId = body->scopeId;
-
-    //-- Begin by generating functions
-    // ASTFunction *nextFunction = body->functions;
-    // while (nextFunction) {
-    //     ASTFunction *function = nextFunction;
-    //     nextFunction = nextFunction->next;
-
-    //     int result = GenerateFunction(info, function);
-    // }
-    // ASTStruct* nextStruct = body->structs;
-    // while(nextStruct) {
-    //     ASTStruct* nowStruct = nextStruct;
-    //     nextStruct = nextStruct->next;
-
-    //     ASTFunction *nextFunction = nowStruct->functions;
-    //     while (nextFunction) {
-    //         ASTFunction *function = nextFunction;
-    //         nextFunction = nextFunction->next;
-
-    //         int result = GenerateFunction(info, function, nowStruct);
-    //     }   
-    // }
 
     int lastOffset = info.currentFrameOffset;
 
@@ -3461,7 +3441,19 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
 
     int result = GenerateData(info,info.ast);
 
+    // TODO: Skip function generation if there are no functions.
+    //   We would need to go through every scope to know that though.
+    //   Maybe the type checker can inform the generator?
+    info.code->addDebugText("FUNCTION SEGMENT\n");
+    _GLOG(log::out << "Jump to skip functions\n";)
+    info.code->add({BC_JMP});
+    int skipIndex = info.code->length();
+    info.code->addIm(0);
     result = GenerateFunctions(info, info.ast->mainBody);
+    *((u32 *)info.code->get(skipIndex)) = info.code->length();
+
+    info.code->addDebugText("GLOBAL CODE SEGMENT\n");
+
     result = GenerateBody(info, info.ast->mainBody);
     // TODO: What to do about result? nothing?
 
@@ -3488,10 +3480,6 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         }
     }
     info.callsToResolve.clear();
-
-    // for (auto fun : predefinedFuncs) {
-    //     ast->destroy(fun);
-    // }
 
     // compiler logs the error count, dont need it here too
     // if(info.errors)
