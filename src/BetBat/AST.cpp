@@ -269,7 +269,7 @@ VariableInfo *AST::getVariable(Identifier* id) {
     Assert(id->varIndex>=0&&(int)id->varIndex<(int)variables.size());
     return variables[id->varIndex];
 }
-FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& argTypes){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes){
     using namespace engone;
     // Assume the only overload. The generator may do implicit casting if needed.
     //   Or not because the generator pushes arguments to get types in order to
@@ -283,23 +283,24 @@ FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& argTypes){
     FnOverloads::Overload* outOverload = nullptr;
     for(int i=0;i<(int)overloads.size();i++){
         auto& overload = overloads[i];
-        u32 nonDefaults0 = 0;
+        u32 nonDefaults = 0;
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
         //   unnecessary.
         for(auto& arg : overload.astFunc->arguments){
             if(arg.defaultValue)
                 break;
-            nonDefaults0++;
+            nonDefaults++;
         }
-        if(argTypes.size() > overload.astFunc->arguments.size() || argTypes.size() < nonDefaults0)
+        if(argTypes.size() > overload.astFunc->arguments.size() || argTypes.size() < nonDefaults)
             continue;
         bool found = true;
-        for (u32 j=0;j<nonDefaults0;j++){
+        for (u32 j=0;j<argTypes.size();j++){
             if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]){
                 found = false;
                 break;
             }
+            // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
         }
         if(found){
             // return &overload;
@@ -317,7 +318,7 @@ FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& argTypes){
     return outOverload;
 }
 
-FnOverloads::Overload* FnOverloads::getOverload(DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs){
     using namespace engone;
     FnOverloads::Overload* outOverload = nullptr;
     // TODO: Check all overloads in case there are more than one match.
@@ -1096,11 +1097,11 @@ void AST::destroy(ASTExpression *expression) {
     //     engone::Free(expression->name, sizeof(std::string));
     //     expression->name = nullptr;
     // }
-    if (expression->namedValue){
-        expression->namedValue->~basic_string<char>();
-        engone::Free(expression->namedValue, sizeof(std::string));
-        expression->namedValue = nullptr;
-    }
+    // if (expression->namedValue){
+    //     expression->namedValue->~basic_string<char>();
+    //     engone::Free(expression->namedValue, sizeof(std::string));
+    //     expression->namedValue = nullptr;
+    // }
     if (expression->left)
         destroy(expression->left);
     if (expression->right)
@@ -1406,6 +1407,15 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
     }
     return ti->_size > 8 ? 8 : ti->_size;
 }
+void FuncImpl::print(AST* ast){
+    using namespace engone;
+    log::out << name <<"(";
+    for(int i=0;i<(int)argumentTypes.size();i++){
+        if(i!=0) log::out << ", ";
+        log::out << ast->typeToString(argumentTypes[i].typeId);
+    }
+    log::out << ")";
+}
 FuncImpl* ASTFunction::createImpl(){
     FuncImpl* ptr = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
     new(ptr)FuncImpl();
@@ -1678,8 +1688,8 @@ void ASTExpression::print(AST *ast, int depth) {
     PrintSpace(depth);
 
     log::out << "Expr ";
-    if(namedValue){
-        log::out << *namedValue<<"= ";
+    if(namedValue.str){
+        log::out << namedValue<<"= ";
     }
     if (isValue) {
         log::out << ast->typeToString(typeId);

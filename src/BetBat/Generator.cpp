@@ -957,7 +957,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             int index = 0;
             for (index = 0; index < (int)expression->args->size();index++) {
                 ASTExpression* arg = expression->args->get(index);
-                if(arg->namedValue){
+                if(arg->namedValue.str){
                     break;
                 }
 
@@ -996,7 +996,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             FuncImpl* funcImpl = nullptr;
             if(fnPolyArgs.size()==0) {
                 // match args with normal impls
-                FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes);
+                FnOverloads::Overload* overload = iden->funcOverloads.getOverload(info.ast, argTypes);
                 // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
                 //   Should be done in type checker too.
                 if(!overload){
@@ -1020,7 +1020,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 astFunc = overload->astFunc;
                 funcImpl = overload->funcImpl;
             } else {
-                FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes,fnPolyArgs);
+                FnOverloads::Overload* overload = iden->funcOverloads.getOverload(info.ast, argTypes,fnPolyArgs);
                 if(!overload){
                      if(info.compileInfo->typeErrors==0){
                         ERR_HEAD(expression->tokenRange, "Overload for function '"<<baseName <<"' does not exist for the argument(s): ";
@@ -1041,12 +1041,45 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 funcImpl = overload->funcImpl;
             }
 
+            _GLOG(log::out << "Overload match: ";funcImpl->print(info.ast);log::out << "\n";)
+
             std::vector<ASTExpression*> restArgs;
             restArgs.resize(astFunc->arguments.size(),nullptr);
             for (int i = index; i < (int)expression->args->size();i++) {
                 ASTExpression* arg = expression->args->get(i);
-                Assert(arg->namedValue);
-                restArgs[i] = arg;
+                Assert(arg->namedValue.str);
+
+                int argIndex = -1;
+                for(int j=0;j<(int)astFunc->arguments.size();j++){
+                    if(astFunc->arguments[j].name==arg->namedValue){
+                        argIndex=j;
+                        break;
+                    }
+                }
+                if(argIndex!=-1)
+                    if(argIndex < index){
+                        // TODO: Show which argument in the fncall that used the named argument
+                        std::string msg = "uses "+std::string(arg->namedValue);
+                        ERR_HEAD(arg->namedValue.range(), "Argument '"<<arg->namedValue << "' is already \"in use\" by previous arguments and cannot be replaced by a named argument.\n\n";
+                            ERR_LINE(astFunc->tokenRange,"this overload");
+                            ERR_LINE(expression->args->get(argIndex)->tokenRange,msg.c_str());
+                            ERR_LINE(arg->namedValue,"unavailable");
+                            // expression->args->get(argIndex);
+                        )
+                    } else if (restArgs[argIndex] != nullptr) {
+                        ERR_HEAD(arg->namedValue.range(), "This named argument specifies the same parameter as a previous named argument.\n\n";
+                            ERR_LINE(restArgs[argIndex]->namedValue,"previous");
+                            ERR_LINE(arg->namedValue,"bad");
+                        )
+                    } else {
+                        restArgs[argIndex] = arg;
+                    }
+                else{
+                    ERR_HEAD(arg->tokenRange, "Named argument is not a name of a parameter to '";funcImpl->print(info.ast);log::out<<"'\n\n";
+                        ERR_LINE(arg->tokenRange,"bad name");
+                    )
+                    // continue like nothing happened
+                }
             }
             for (int i = index; i < (int)astFunc->arguments.size(); i++) {
                 auto &arg = astFunc->arguments[i];
@@ -1565,7 +1598,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             for (int index = 0; index < (int)expression->args->size(); index++) {
                 ASTExpression *expr = expression->args->get(index);
 
-                if (!expr->namedValue) {
+                if (!expr->namedValue.str) {
                     if ((int)exprs.size() <= index) {
                         ERR_HEAD2(expr->tokenRange) << "To many members for struct " << astruct->name << " (" << astruct->members.size() << " member(s) allowed)\n";
                         ERR_END
@@ -1576,13 +1609,13 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 } else {
                     int memIndex = -1;
                     for (int i = 0; i < (int)astruct->members.size(); i++) {
-                        if (astruct->members[i].name == *expr->namedValue) {
+                        if (astruct->members[i].name == expr->namedValue) {
                             memIndex = i;
                             break;
                         }
                     }
                     if (memIndex == -1) {
-                        ERR_HEAD2(expr->tokenRange) << *expr->namedValue << " is not an member in " << astruct->name << "\n";
+                        ERR_HEAD2(expr->tokenRange) << expr->namedValue << " is not an member in " << astruct->name << "\n";
                         ERR_END
                         continue;
                     } else {

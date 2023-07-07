@@ -1,4 +1,12 @@
 #import "OS"
+
+
+fn fun(a: bool = 1, b: i32 = 1, c: i32 = 2) {}
+fn fun(a: i32) {}
+
+fun(1,b=2,b=3)
+
+
 // #import "Logger"
 // #import "Basic"
 
@@ -61,9 +69,15 @@
 //     t: T;
 //     k: K;
 // }
-prints("Hello sir!")
-// fn fun(a: i32, c: bool = 23, d: i32 = 99) {}
+// str = "Hello sir!"
+// prints(str)
 // fn fun(a: i32, b: i32) {}
+// fn fun(a: i32, b: i32, c: i32 = 3) {}
+
+// fun(1,2,a=3)
+
+
+// fun(23, b = 9);
 
 // fn fun(a: i32, b: i32) {}
 

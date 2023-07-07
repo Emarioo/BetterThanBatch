@@ -191,8 +191,8 @@ struct FnOverloads {
     DynamicArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(DynamicArray<TypeId>& argTypes);
-    Overload* getOverload(DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs);
+    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes);
+    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs);
     // Get base polymorphic overload which can match with the typeIds.
     // You want to generate the real overload afterwards.
     // ASTFunction* getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes);
@@ -265,6 +265,7 @@ struct FuncImpl {
     i64 address = 0; // Set by generator
     DynamicArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
+    void print(AST* ast);
     static const u64 INVALID_FUNC_ADDRESS = 0;
 };
 struct Identifier {
@@ -328,7 +329,7 @@ struct ASTExpression : ASTNode {
     };
     Token name{};
     int constStrIndex=0;
-    std::string* namedValue=0; // used for named arguments
+    Token namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
     ASTExpression* left=0; // FNCALL has arguments in order left to right
     ASTExpression* right=0;
     TypeId castType={};

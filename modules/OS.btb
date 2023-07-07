@@ -1,5 +1,3 @@
-#import "Basic"
-
 // using u64 as File does not work since functions are evaluated
 // first and then using. Using won't be applied to functions.
 // A macro is used instead,or now.

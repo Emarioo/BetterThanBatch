@@ -45,7 +45,7 @@
 // #define MLOG
 // #define PLOG
 // type checker
-#define TC_LOG
+// #define TC_LOG
 #define GLOG
 #define ILOG
 // #define ILOG_REGS

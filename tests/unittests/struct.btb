@@ -1,4 +1,4 @@
-@test test0
+@test-0
 struct A {
     a: i32;
     b: i64;
@@ -7,7 +7,7 @@ a: A;
 a = A{1,2}
 a: A = A{1,2};
 
-@test1
+@test-1
 
 
-@test2
+@test-2

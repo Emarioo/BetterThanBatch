@@ -1,0 +1,69 @@
+/*
+    How it looks like when I try to figure out things.
+    A new system for polymorphism in this case.
+*/
+
+scope { // no polymorphism
+    // one version
+}
+scope<T> { // polymorphic
+    // infinite versions
+
+    // all versions of this scope can have a unique id (only unique to this scope which allows for a simple index counter)
+    // A type in AST becomes a list of versions
+    
+    // what about polymorphic scopes in polymorphic scopes
+
+    scope<K> { // another dimension of polymorphism
+        // another set of unique ids?
+        // double lists?
+
+        // PolyVersions<PolyVersions<TypeId>> 
+        // PolyVersions<PolyVersions<PolyVersions<TypeId>>> 
+        // this isn't scalable. where does it stop? How can you stop it?
+        // optionals, unions? nah.
+    }
+
+    scope<T,K> { // Just another set of polymorphic types
+        // same as with one dimension of polymorphism
+        // unique ids for each version
+        // versions are added "beside" each other instead of "inside"
+
+        // how do these scopes interract?
+    }
+}
+scope<i32> // we define the versions somewhere
+
+fn fun(){
+    scope<T> {
+        t: T;
+        // ASTStatement has assignType
+        // this would be PolyVersions<TypeId> assignType.
+        
+        // do this to get the type
+        // assignType[currentPolyVersion]
+    }
+}
+
+fun<i32>()
+fun<f32>()
+
+
+struct List {
+    scope<T> { // polymorphic scope covering the members?
+        a: T; // still use virtual types
+        ptr: *T = Allocate<T>(); // still use virtual types
+
+    }
+}
+ok: List<i32>;
+
+/* additional thoughts
+inefficient to have a lot of lists of types in each node if
+the nodes aren't polymorphic.
+do we use a allocate a seperate object which contains
+the information about the polymorphic verions?
+In any case we can worry about this problem later.
+One thing at a time.
+
+*/

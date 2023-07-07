@@ -1,5 +1,5 @@
-// slice should always exist
-// force it in the compiler
+/* Forced by the compiler
+
 struct @hide Slice<T> {
     ptr: T*;
     len: u64;
@@ -8,6 +8,8 @@ struct @hide Range {
     beg: i32;
     end: i32;
 }
+*/
+
 // struct Memory<T> {
 //     ptr: T*;
 //     max: u64;

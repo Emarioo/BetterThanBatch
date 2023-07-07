@@ -640,12 +640,13 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
 
         TypeId argType={};
         CheckExpression(info,scope,argExpr,&argType, false);
-        if(argExpr->namedValue){
+        if(argExpr->namedValue.str){
             // don't add argType but keep checking expressions
             // remaining args will be named
         }else{
             // WARN_HEAD(argExpr->tokenRange, "Named arguments broke because of function overloading.\n");
             argTypes.add(argType);
+            // log::out << "overload arg: "<<info.ast->typeToString(argType)<<"\n";
         }
     }
     //-- Get identifier, the namespace of overloads for the function.
@@ -658,7 +659,7 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
     }
     if(fnPolyArgs.size()==0){
         // match args with normal impls
-        FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes);
+        FnOverloads::Overload* overload = iden->funcOverloads.getOverload(info.ast, argTypes);
         if(overload){
             if(overload->funcImpl->returnTypes.size()>0)
                 *outType = overload->funcImpl->returnTypes[0].typeId;
@@ -678,7 +679,7 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
             if(iden->funcOverloads.polyOverloads.size()!=0){
                 log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
             }
-            if(expr->args->size()!=0 && expr->args->get(0)->namedValue){
+            if(expr->args->size()!=0 && expr->args->get(0)->namedValue.str){
                 log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
             }
             log::out <<"\n";
@@ -697,7 +698,7 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
     // if match then return that impl
     // if not then try to generate a implementation
 
-    FnOverloads::Overload* overload = iden->funcOverloads.getOverload(argTypes,fnPolyArgs);
+    FnOverloads::Overload* overload = iden->funcOverloads.getOverload(info.ast, argTypes,fnPolyArgs);
     if(overload){
         if(overload->funcImpl->returnTypes.size()>0)
             *outType = overload->funcImpl->returnTypes[0].typeId;
@@ -790,7 +791,7 @@ int CheckFncall(CheckInfo& info, ASTScope* scope, ASTExpression* expr, TypeId* o
     info.checkImpls.add(checkImpl);
 
     // Can overload be null since we generate a new func impl?
-    overload = iden->funcOverloads.getOverload(argTypes, fnPolyArgs);
+    overload = iden->funcOverloads.getOverload(info.ast, argTypes, fnPolyArgs);
     Assert(overload == newOverload);
     if(!overload){
         ERR_HEAD(expr->tokenRange, "Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
@@ -1161,9 +1162,11 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* nowStruct, 
     // The code below is used to 
     // Acquire identifiable arguments
     DynamicArray<TypeId> argTypes{};
+    u32 defaultArgs = 0;
     for(int i=0;i<(int)function->arguments.size();i++){
-        // if(function->arguments[i].defaultValue)
-        //     break;
+        if(function->arguments[i].defaultValue)
+            defaultArgs++;
+        Assert(function->arguments[i].defaultValue || !defaultArgs)
         TypeId typeId = CheckType(info, function->scopeId, function->arguments[i].stringType, function->tokenRange, nullptr);
         // Assert(typeId.isValid());
         if(!typeId.isValid()){
@@ -1174,6 +1177,7 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* nowStruct, 
         }
         argTypes.add(typeId);
     }
+    u32 nonDefaults = function->arguments.size()-defaultArgs;
     // _TC_LOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
     if(nowStruct){
         Assert(("Methods don't work",false))
@@ -1193,19 +1197,20 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* nowStruct, 
         FnOverloads::Overload* outOverload = nullptr;
         for(int i=0;i<(int)iden->funcOverloads.overloads.size();i++){
             auto& overload = iden->funcOverloads.overloads[i];
-            // u32 nonDefaults0 = 0;
+            u32 nonDefaultArgs = 0;
             // TODO: Store non defaults in Identifier or ASTStruct to save time.
             //   Recalculating non default arguments here every time you get a function is
             //   unnecessary.
-            // for(auto& arg : overload.astFunc->arguments){
-            //     if(arg.defaultValue)
-            //         break;
-            //     nonDefaults0++;
-            // }
-            // if(argTypes.size() > overload.astFunc->arguments.size() || argTypes.size() < nonDefaults0)
-            //     continue;
+            for(auto& arg : overload.astFunc->arguments){
+                if(arg.defaultValue)
+                    break;
+                nonDefaultArgs++;
+            }
+            if(nonDefaultArgs > function->arguments.size() ||
+                nonDefaults > overload.astFunc->arguments.size())
+                continue;
             bool found = true;
-            for (u32 j=0;j<overload.funcImpl->argumentTypes.size() && j < argTypes.size();j++){
+            for (u32 j=0;j<nonDefaults || j<nonDefaultArgs;j++){
                 if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]){
                     found = false;
                     break;
@@ -1246,6 +1251,8 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* nowStruct, 
             checkImpl.funcImpl = funcImpl;
             // checkImpl.scope = scope;
             info.checkImpls.add(checkImpl);
+
+            _TC_LOG(log::out << "ADD OVERLOAD ";funcImpl->print(info.ast);log::out<<"\n";)
         }
     }else{
         WARN_HEAD(function->tokenRange,"Polymorphic functions have not been implemented properly\n\n";)
@@ -1297,7 +1304,7 @@ int CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
     if(func->body->nativeCode)
         return true;
 
-    log::out << log::YELLOW << __FILE__<<":"<<__LINE__ << ": Fix methods\n";
+    // log::out << log::YELLOW << __FILE__<<":"<<__LINE__ << ": Fix methods\n";
     // Where does ASTStruct come from. Arguments? in FuncImpl?
 
     for(int i=0;i<(int)func->polyArgs.size();i++){

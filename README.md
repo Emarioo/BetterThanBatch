@@ -12,6 +12,9 @@ Inspiration from:
 - C
 - and a bit of Rust
 
+Example of errors with named arguments
+![](docs/img/err-named-arg.png)
+
 ## Disclaimer
 The documentation is old, minimal and outright lacking.
 This is due to me prioritising the features and stability
@@ -30,12 +33,13 @@ importantly proper testing.
 - Concatenation with ## in macros.
 - #import to divide your code into multiple files
 - #include to tokenize a file and transfer the tokens into another file.
+- Polymorphism in structs, functions and methods (there are some bugs in advances scenarios)
+- Function overloading (works less well with polymorphism)
 
 ## On the way
-- Polymorphism in structs, functions and methods.
 - Usage of C++ functions within a script
 - Calling executables like gcc.exe
-- Operator and function overloading
+- Operator overloading
 - Thorough documentation.
 
 ## The processs

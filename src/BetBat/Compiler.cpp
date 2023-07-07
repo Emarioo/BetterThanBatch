@@ -87,8 +87,9 @@ CompileInfo::FileInfo* CompileInfo::getStream(const Path& name){
 bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const char* textData = nullptr, u64 textLength = 0){
     using namespace engone;
 
-    Assert(path.isAbsolute()); // A bug at the call site if not absolute
-    
+    if(!textData){ // path can be anything if textData is present.
+        Assert(path.isAbsolute()); // A bug at the call site if not absolute
+    }
     _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefPath(path.text)<<"\n";)
     TokenStream* tokenStream = nullptr;
     if(textData) {
@@ -204,7 +205,16 @@ Bytecode* CompileSource(CompileOptions options) {
     for(auto& path : options.importDirectories){
         compileInfo.importDirectories.push_back(path);
     }
-    
+
+    const char* essentialStructs = "struct @hide Slice<T> {"
+        "ptr: T*;"
+        "len: u64;"
+    "}\n"
+    "struct @hide Range {"
+        "beg: i32;"
+        "end: i32;"
+    "}\n";
+    ParseFile(compileInfo, std::string("<base-structs>"),"",(char*)essentialStructs, strlen(essentialStructs));
     // ASTScope* body2 = ParseFile(compileInfo, "src/BetBat/StandardLibrary/Basic.btb");
     // compileInfo.ast->appendToMainBody(body2);
     if(options.rawSource.data){

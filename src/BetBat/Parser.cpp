@@ -869,8 +869,9 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
             return PARSE_ERROR;                         
         }
         if(named){
-            expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
-            new(expr->namedValue)std::string(tok);
+            expr->namedValue = tok;
+            // expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
+            // new(expr->namedValue)std::string(tok);
         }
         fncall->args->add(expr);
         // if(tail){
@@ -1538,8 +1539,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                             continue;
                         }
                         if(named){
-                            expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
-                            new(expr->namedValue)std::string(token);
+                            expr->namedValue = token;
+                            // expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
+                            // new(expr->namedValue)std::string(token);
                         }
                         initExpr->args->add(expr);
                         // if(tail){
@@ -2028,12 +2030,14 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
-    Token& token = info.get(info.at()+1);
-    int startIndex = info.at()+1;
-    if(!Equal(token,"fn")){
+    Token fnToken = info.get(info.at()+1);
+    // int startIndex = info.at()+1;
+    if(!Equal(fnToken,"fn")){
         if(attempt) return PARSE_BAD_ATTEMPT;
-        ERR_HEAD2(token) << "expected fn for function not "<<token<<"\n";
-            ERR_END
+        ERR_HEAD(fnToken, "Expected fn for function not '"<<fnToken<<"'.\n";
+
+        )
+            
         return PARSE_ERROR;
     }
     info.next();
@@ -2061,7 +2065,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     }
     
     function = info.ast->createFunction(name);
-    function->tokenRange.firstToken = token;
+    function->tokenRange.firstToken = fnToken;
     // function->tokenRange.startIndex = startIndex;
     // function->tokenRange.tokenStream = info.tokens;
     // function->baseImpl.name = name;
@@ -2255,6 +2259,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
             }
         }
     }
+    function->tokenRange.endIndex = info.at()+1; // don't include body in function's token range
+    // the body's tokenRange can be accessed with function->body->tokenRange
     
     info.functionScopes.push_back({});
     ASTScope* body = 0;
@@ -2263,7 +2269,6 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     info.functionScopes.pop_back();
 
     function->body = body;
-    function->tokenRange.endIndex = info.at()+1;
 
     return PARSE_SUCCESS;
 }
