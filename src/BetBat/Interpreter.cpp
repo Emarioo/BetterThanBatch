@@ -418,8 +418,8 @@ void Interpreter::execute(Bytecode* bytecode){
             u8 r1 = DECODE_REG1(inst);
             // u16 size = (u16)DECODE_REG1(inst) | ((u16)DECODE_REG2(inst)<<8);
             
-            int rsize = DECODE_REG_SIZE(r0);
-            Assert(rsize == 8);
+            int r0size = DECODE_REG_SIZE(r0);
+            Assert(r0size == 8);
 
             void* toptr = getReg(r0);
             void* to = (void*)*(u64*)toptr;

@@ -206,17 +206,17 @@ Bytecode* CompileSource(CompileOptions options) {
         compileInfo.importDirectories.push_back(path);
     }
 
-    const char* essentialStructs = "struct @hide Slice<T> {"
+    const char* essentialStructs = 
+    "struct @hide Slice<T> {"
         "ptr: T*;"
         "len: u64;"
     "}\n"
-    "struct @hide Range {"
+    "struct @hide Range {" 
         "beg: i32;"
         "end: i32;"
     "}\n";
     ParseFile(compileInfo, std::string("<base-structs>"),"",(char*)essentialStructs, strlen(essentialStructs));
-    // ASTScope* body2 = ParseFile(compileInfo, "src/BetBat/StandardLibrary/Basic.btb");
-    // compileInfo.ast->appendToMainBody(body2);
+
     if(options.rawSource.data){
         ParseFile(compileInfo, std::string("<raw-data>"),"",(char*)options.rawSource.data, options.rawSource.used);
         // ASTScope* body = ParseFile(compileInfo, std::string("<raw-data>"),"",(char*)options.rawSource.data, options.rawSource.used);

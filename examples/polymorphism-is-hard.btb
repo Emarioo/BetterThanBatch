@@ -67,3 +67,11 @@ In any case we can worry about this problem later.
 One thing at a time.
 
 */
+
+// Auto cast arguments?
+// only happens when there is one overload?
+// How do you know if a type can be casted to another?
+// A table?
+// cast table?
+// I guess?
+// does TypeInfo contain this information?

@@ -47,6 +47,10 @@ struct DynamicArray {
         Assert(index < used);
         return *(_ptr + index);
     }
+    T& last() const {
+        Assert(used>0);
+        return *(_ptr + used - 1);
+    }
     u32 size() const {
         return used;
     }

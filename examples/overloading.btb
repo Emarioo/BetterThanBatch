@@ -2,7 +2,7 @@
 // OS also imports Basic which contains Slice<T>
 #import "OS"
 
-// Basic overloading
+//-- Basic overloading
 fn log(t: i32){
     printi(cast<i64>t)
 }
@@ -22,18 +22,56 @@ fn log(t: Slice<char>){
 #define LOG(X,...) log(X); LOG(...);
 #define LOG()
 
-LOG("Hello ", 007, " are you ",false && true);
+LOG("Hello ", 007, " are you ",false && true,'\n');
 
-// Polymorphic overloading
+//-- Polymorphic overloading
 fn plog<T>(t: T, k: bool){
-    prints("bool, sizeof(T):");
-    printi(cast<i64>(sizeof T))
+    prints("bool, sizeof T: ");
+    printi(sizeof T)
     printc('\n')
 }
 fn plog<T>(t: T, k: i32){
-    prints("i32, sizeof(T):");
-    printi(cast<i64>(sizeof T))
+    prints("i32, sizeof T: ");
+    printi(sizeof T)
     printc('\n')
 }
 plog<bool>(false, 92)
 plog<f32>(25.23, false)
+
+//-- Methods with default and named arguments
+struct Base<T> {
+    hi: i32;
+    fn hey(a: T, caps: bool = false) {
+        if(caps){
+            log("HEY ")
+        } else {
+            log("hey ")
+        }
+        log(a)
+        log('\n')
+    }
+    fn hey(a: Slice<i32>, caps: bool = false) {
+        if(caps){
+            log("HEY ")
+        } else {
+            log("hey ")
+        }
+        for a { // ranged (or sliced?) for loop by the way
+            if nr != 0
+                log(',')
+            log(it)
+        }
+        log('\n')
+    }
+}
+
+base: Base<i32>;
+base.hey(82);
+
+arr: i32[5]; for @pointer arr { *it = 1+nr*2 }
+base.hey(arr, caps = true);
+
+// Not allowed
+// struct Ok<T>{
+//     fn bad<T>() {}
+// }

@@ -16,3 +16,7 @@ struct @hide Range {
 //     used: u64;
 //     // fn resize()
 // }
+
+#define print(STR,...)
+// print("Hello % there %", 61, "ok")
+

@@ -20,6 +20,8 @@ struct CheckInfo {
     bool completedStructs = false;
     bool showErrors = false;
     bool anotherTurn = false;
+
+    u32 currentPolyVersion=0;
 };
 
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);

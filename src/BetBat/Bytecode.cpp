@@ -136,8 +136,8 @@ void Instruction::print(){
 
     if(opcode==BC_INCR)
         log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (i8)op1 << log::SILVER;
-    else if(opcode==BC_ZERO_MEM)
-        log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::SILVER;
+    // else if(opcode==BC_ZERO_MEM)
+    //     log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::SILVER;
     else if(opcode==BC_CAST)
         log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<op0<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::SILVER;
     else

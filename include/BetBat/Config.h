@@ -9,7 +9,7 @@
 /* ###############
    Major config
 ############### */
-#define DEBUG
+// #define DEBUG
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 // Will it ever be?
@@ -17,6 +17,14 @@
 
 // Causes for memory leaks (or negative final memory):
 // - new keyword instead of engone::Allocate
+
+// How to find memory leaks
+// turn on LOG_ALLOCATIONS. This will log all calls to Allocate, Reallocate and Free.
+// Then match allocated sizes with the frees and you should see that one or more allocations
+// of x size did not get freed. Then set a breakpoint in Allocate on the condition "bytes==x"
+// go up the call stack and see where it came from. Now you need to figure out things yourself.
+
+// #define LOG_ALLOCATIONS
 
 // #define LOG_ALLOC
 // Config.h is included in Alloc.cpp for alloc to see the macro.

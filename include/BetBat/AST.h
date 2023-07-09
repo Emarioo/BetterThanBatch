@@ -26,7 +26,7 @@ enum PrimitiveType : u32 {
     
     AST_FLOAT32,
     
-    AST_STRING, // converted to another type, probably char[]
+    AST_STRING, // converted to char[]
     AST_NULL, // converted to void*
 
     AST_POLY,
@@ -34,9 +34,10 @@ enum PrimitiveType : u32 {
     AST_TRUE_PRIMITIVES,
 
     // TODO: should these be moved somewhere else?
-    AST_VAR, // TODO: Also used when refering to enums. Change the name?
+    AST_ID, // variable, enum, type
     AST_FNCALL,
     AST_SIZEOF,
+    AST_NAMEOF,
     
     AST_PRIMITIVE_COUNT, // above types are true with isValue
 };
@@ -89,6 +90,29 @@ struct ASTNode {
     bool hidden=false;
     bool reverse=false;
     bool pointer=false;
+};
+typedef u32 PolyId;
+template<class T>
+struct PolyVersions {
+    PolyVersions() = default;
+    ~PolyVersions(){ _array.cleanup(); }
+    // TODO: Allocations are should be controlled by AST.
+    // Using heap for now to make things simple.
+
+    DynamicArray<T> _array{};
+
+    // automatically allocates
+    T& get(u32 index) {
+        if(index >= _array.used) {
+            Assert(("Probably a bug",index < 1000));
+            Assert(_array.resize(index + 1));
+        }
+        return _array.get(index);
+    }
+    // automatically allocates
+    T& operator[](u32 index) {
+        return get(index);
+    }
 };
 struct TypeId {
     TypeId() = default;
@@ -177,6 +201,7 @@ struct TypeId {
 // };
 struct ASTFunction;
 struct FuncImpl;
+struct ASTExpression;
 struct FnOverloads {
     struct Overload {
         ASTFunction* astFunc=0;
@@ -191,8 +216,8 @@ struct FnOverloads {
     DynamicArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes);
-    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs);
+    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
+    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall);
     // Get base polymorphic overload which can match with the typeIds.
     // You want to generate the real overload afterwards.
     // ASTFunction* getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes);
@@ -201,8 +226,6 @@ struct FnOverloads {
     // when you call this.
     void addOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
     Overload* addPolyImplOverload(ASTFunction* astFunc, FuncImpl* funcImpl);
-    // The array passed in will be "stolen" and the owner of the allocation
-    // will be this struct.
     void addPolyOverload(ASTFunction* astFunc);
 
     // FuncImpl* createImpl();
@@ -216,14 +239,14 @@ struct StructImpl {
         TypeId typeId={};
         int offset=0;
     };
-    std::vector<Member> members{};
+    DynamicArray<Member> members{};
     
-    std::vector<TypeId> polyArgs;
+    DynamicArray<TypeId> polyArgs;
 
-    std::unordered_map<std::string, FnOverloads> methods;
+    // std::unordered_map<std::string, FnOverloads> methods;
     
-    FnOverloads::Overload* getMethod(const std::string& name, std::vector<TypeId>& typeIds);
-    void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
+    // FnOverloads::Overload* getMethod(const std::string& name, std::vector<TypeId>& typeIds);
+    // void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
 };
 struct TypeInfo {
     TypeInfo(const std::string& name, TypeId id, u32 size=0) :  name(name), id(id), _size(size) {}
@@ -252,6 +275,7 @@ struct TypeInfo {
     MemberData getMember(int index);
     StructImpl* getImpl();
 };
+struct ASTFunction;
 struct FuncImpl {
     std::string name;
     struct Spot {
@@ -263,9 +287,10 @@ struct FuncImpl {
     int argSize=0;
     int returnSize=0;
     i64 address = 0; // Set by generator
+    u32 polyVersion=-1;
     DynamicArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
-    void print(AST* ast);
+    void print(AST* ast, ASTFunction* astFunc);
     static const u64 INVALID_FUNC_ADDRESS = 0;
 };
 struct Identifier {
@@ -319,7 +344,7 @@ struct ASTExpression : ASTNode {
     // ASTExpression() : left(0), right(0), castType(0) { }
     // Token token{};
     bool isValue=false;
-    TypeId typeId = {};
+    TypeId typeId = {}; // not polymorphic, primitive or operation
     
     union {
         i64 i64Value=0;
@@ -328,7 +353,6 @@ struct ASTExpression : ASTNode {
         char charValue;
     };
     Token name{};
-    int constStrIndex=0;
     Token namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
     ASTExpression* left=0; // FNCALL has arguments in order left to right
     ASTExpression* right=0;
@@ -337,7 +361,20 @@ struct ASTExpression : ASTNode {
     // TypeId finalType={}; // evaluated by type checker
 
     DynamicArray<ASTExpression*>* args=nullptr; // fncall or initialiser
-    
+    u32 nonNamedArgs = 0;
+
+    // PolyVersions<DynamicArray<TypeId>> versions_argTypes{};
+
+    // The contents of overload is stored here. This is not a pointer since
+    // the array containing the overload may be resized.
+    PolyVersions<FnOverloads::Overload> versions_overload{};
+
+    PolyVersions<int> versions_constStrIndex{};
+
+    PolyVersions<TypeId> versions_outTypeSizeof{};
+
+    void printArgTypes(AST* ast, DynamicArray<TypeId>& argTypes);
+
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
@@ -362,11 +399,15 @@ struct ASTStatement : ASTNode {
     // int opType = 0;
     struct VarName {
         Token name{};
-        TypeId assignType{};
+        TypeId assignString{};
         int arrayLength=-1;
+        PolyVersions<TypeId> versions_assignType{};
+        bool declaration(){
+            return assignString.isValid();
+        }
     };
     bool rangedForLoop=false; // otherwise sliced for loop
-    std::vector<VarName> varnames;
+    DynamicArray<VarName> varnames;
     // std::string* name=0;
     std::string* alias = nullptr;
     // TypeId typeId={};
@@ -392,20 +433,29 @@ struct ASTStruct : ASTNode {
     std::string polyName="";
     struct Member {
         Token name;
-
         ASTExpression* defaultValue=0;
+        TypeId stringType{};
     };
-    std::vector<Member> members{};
+    DynamicArray<Member> members{};
     struct PolyArg {
         Token name{};
         TypeInfo* virtualType = nullptr;
     };
-    std::vector<PolyArg> polyArgs;
+    DynamicArray<PolyArg> polyArgs;
+
+    StructImpl* createImpl();
     
-    StructImpl baseImpl{};
     State state=TYPE_EMPTY;
 
+    StructImpl* nonPolyStruct = nullptr;
+
     ScopeId scopeId=0;
+
+    std::unordered_map<std::string, FnOverloads> _methods;
+    
+    // FnOverloads* addMethod(const std::string& name);
+    FnOverloads& getMethod(const std::string& name);
+    // void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
 
     DynamicArray<ASTFunction*> functions{};
     // ASTFunction* functions = 0;
@@ -447,12 +497,16 @@ struct ASTFunction : ASTNode {
     DynamicArray<PolyArg> polyArgs;
     DynamicArray<Arg> arguments; // you could rename to parameters
     DynamicArray<TypeId> returnTypes; // string type
+    u32 nonDefaults=0; // used when matching overload, having it here avoids recalculations of it
 
     DynamicArray<FuncImpl*> _impls{};
     FuncImpl* createImpl();
     const DynamicArray<FuncImpl*>& getImpls(){
         return _impls;
     }
+
+    u32 polyVersionCount=0;
+    ASTStruct* parentStruct = nullptr;
 
     ScopeId scopeId=0;
     ASTScope* body=0;
@@ -568,11 +622,18 @@ struct AST {
     u32 getTypeSize(TypeId typeId);
     u32 getTypeAlignedSize(TypeId typeId);
 
+    bool castable(TypeId from, TypeId to);
+
     struct ConstString {
         u32 length = 0;
         u32 address = 0;
     };
-    std::unordered_map<std::string, ConstString> constStrings;
+    std::unordered_map<std::string, u32> _constStringMap;
+    DynamicArray<ConstString> _constStrings;
+
+    // outIndex is used with getConstString(u32)
+    ConstString& getConstString(const std::string& str, u32* outIndex);
+    ConstString& getConstString(u32 index);
 
     // Must be used after TrimPointer
     static Token TrimPolyTypes(Token token, std::vector<Token>* outPolyTypes = nullptr);

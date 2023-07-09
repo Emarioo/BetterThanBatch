@@ -11,20 +11,26 @@ namespace engone {
 		if(m_typeSize==0) return false;
 		if (count == 0) {
 			if (data) {
+				engone::SetTracker(false);
 				engone::Free(data, max * m_typeSize);
+				engone::SetTracker(true);
 			}
 			data = nullptr;
 			max = 0;
 			used = 0;
 		}else if (!data) {
+			engone::SetTracker(false);
 			data = engone::Allocate(count * m_typeSize);
+			engone::SetTracker(true);
 			if (data) {
 				max = count;
 				used = 0;
 			}
 		} else {
 			void* newData = 0;
+			engone::SetTracker(false);
 			newData = engone::Reallocate(data, max * m_typeSize, count * m_typeSize);
+			engone::SetTracker(true);
 			if (newData) {
 				data = newData;
 				max = count;

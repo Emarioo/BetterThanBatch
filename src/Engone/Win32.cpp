@@ -492,7 +492,10 @@ namespace engone {
 	#define ENGONE_TRACK_ALLOC 0
 	#define ENGONE_TRACK_FREE 1
 	#define ENGONE_TRACK_REALLOC 2
+	static bool s_trackerEnabled=true;
 	void PrintTracking(uint64 bytes, int type){
+		if(!s_trackerEnabled)
+			return;
 		auto pair = allocTracking.find(bytes);
 			
 		if(pair!=allocTracking.end()){
@@ -512,6 +515,9 @@ namespace engone {
 	static uint64 s_totalNumberAllocations=0;
 	static uint64 s_allocatedBytes=0;
 	static uint64 s_numberAllocations=0;
+	void SetTracker(bool on){
+		s_trackerEnabled = on;
+	}
 	void* Allocate(uint64 bytes){
 		if(bytes==0) return nullptr;
 		MEASURE;

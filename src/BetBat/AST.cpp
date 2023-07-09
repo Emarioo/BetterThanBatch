@@ -88,7 +88,7 @@ AST *AST::Create() {
         ADD_TRACKING(FuncImpl)
         ADD_TRACKING(StructImpl)
         ADD_TRACKING(std::string)
-        // #define LOG_SIZE(X) << #X " "<<sizeof(X)<<"\n"
+        #define LOG_SIZE(X) << #X " "<<sizeof(X)<<"\n"
         // log::out
         // LOG_SIZE(TypeInfo)
         // LOG_SIZE(ASTExpression)
@@ -122,7 +122,7 @@ AST *AST::Create() {
     ast->createPredefinedType(Token("char"),scopeId, AST_CHAR, 1);
     ast->createPredefinedType(Token("null"),scopeId, AST_NULL, 8);
     ast->createPredefinedType(Token("ast-string"),scopeId, AST_STRING, 0);
-    ast->createPredefinedType(Token("ast-var"),scopeId, AST_VAR);
+    ast->createPredefinedType(Token("ast-id"),scopeId, AST_ID);
     ast->createPredefinedType(Token("ast-member"),scopeId, AST_MEMBER);
     ast->createPredefinedType(Token("ast-sizeof"),scopeId, AST_SIZEOF);
     ast->createPredefinedType(Token("ast-call"),scopeId, AST_FNCALL);
@@ -265,11 +265,41 @@ Identifier *AST::getIdentifier(ScopeId scopeId, const Token &name) {
     }
     return nullptr;
 }
+bool AST::castable(TypeId from, TypeId to){
+    if (from == to)
+        return true;
+    TypeId vp = AST_VOID;
+    vp.setPointerLevel(1);
+    if(from.isPointer() && to == vp)
+        return true;
+    if(from == vp && to.isPointer())
+        return true;
+    if (from == AST_FLOAT32 && AST::IsInteger(to)) {
+        return true;
+    }
+    if (AST::IsInteger(from) && to == AST_FLOAT32) {
+        return true;
+    }
+    if ((AST::IsInteger(from) && to == AST_CHAR) ||
+        (from == AST_CHAR && AST::IsInteger(to))) {
+        return true;
+    }
+    if ((AST::IsInteger(from) && to == AST_BOOL) ||
+        (from == AST_BOOL && AST::IsInteger(to))) {
+        return true;
+    }
+    if (AST::IsInteger(from) && AST::IsInteger(to)) {
+        return true;
+    }
+
+    return false;
+
+}
 VariableInfo *AST::getVariable(Identifier* id) {
     Assert(id->varIndex>=0&&(int)id->varIndex<(int)variables.size());
     return variables[id->varIndex];
 }
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
     using namespace engone;
     // Assume the only overload. The generator may do implicit casting if needed.
     //   Or not because the generator pushes arguments to get types in order to
@@ -283,42 +313,55 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& 
     FnOverloads::Overload* outOverload = nullptr;
     for(int i=0;i<(int)overloads.size();i++){
         auto& overload = overloads[i];
-        u32 nonDefaults = 0;
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
         //   unnecessary.
-        for(auto& arg : overload.astFunc->arguments){
-            if(arg.defaultValue)
-                break;
-            nonDefaults++;
-        }
-        if(argTypes.size() > overload.astFunc->arguments.size() || argTypes.size() < nonDefaults)
+
+        if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
+            || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
+            || argTypes.size() > overload.astFunc->arguments.size()
+            )
             continue;
+
         bool found = true;
-        for (u32 j=0;j<argTypes.size();j++){
-            if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]){
-                found = false;
-                break;
+        if(canCast){
+            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                if(!ast->castable(argTypes[j],overload.funcImpl->argumentTypes[j].typeId)) {
+                    found = false;
+                    break;
+                }
+                // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
-            // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
-        }
-        if(found){
-            // return &overload;
-            // NOTE: You can return here because there should only be one matching overload.
-            // But we keep going in case we find more matches which would indicate
-            // a bug in the compiler. An optimised build would not do this.
-            if(outOverload) {
-                // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
-                Assert(("More than one match!",false));
-                return outOverload;
+        } else {
+            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
+                    found = false;
+                    break;
+                }
+                // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
-            outOverload = &overload;
         }
+        if(!found)
+            continue;
+
+        if(canCast){
+            return &overload;
+        }
+        // NOTE: @Optimise You can return here because there should only be one matching overload.
+        // But we keep going in case we find more matches which would indicate
+        // a bug in the compiler. An optimised build would not do this.
+        if(outOverload) {
+            // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+            Assert(("More than one match!",false));
+            return outOverload;
+        }
+        outOverload = &overload;
     }
     return outOverload;
 }
 
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall){
+    // Assert(!fncallArgs); // not implemented yet, see other getOverload
     using namespace engone;
     FnOverloads::Overload* outOverload = nullptr;
     // TODO: Check all overloads in case there are more than one match.
@@ -341,36 +384,32 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& 
         if(!doesPolyArgsMatch)
             continue;
 
-        u32 nonDefaults0 = 0;
-        // TODO: Store non defaults in Identifier or ASTStruct to save time.
-        //   Recalculating non default arguments here every time you get a function is
-        //   unnecessary.
-        for(auto& arg : overload.astFunc->arguments){
-            if(arg.defaultValue)
-                break;
-            nonDefaults0++;
-        }
-        // The essential (or identifying) arguments must match.
-        if(argTypes.size() > overload.astFunc->arguments.size() || argTypes.size() < nonDefaults0)
+         if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
+            || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
+            || argTypes.size() > overload.astFunc->arguments.size()
+            )
             continue;
+
         bool found = true;
-        for (u32 j=0;j<nonDefaults0;j++){
-            if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]){
+        for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+            if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
                 found = false;
                 break;
             }
+            // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
         }
-        if(found){
-            // NOTE: You can return here because there should only be one matching overload.
-            // But we keep going in case we find more matches which would indicate
-            // a bug in the compiler. An optimised build would not do this.
-            if(outOverload) {
-                // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
-                Assert(("More than one match!",false));
-                return outOverload;
-            }
-            outOverload = &overload;
+        if(!found)
+            continue;
+           
+        // NOTE: You can return here because there should only be one matching overload.
+        // But we keep going in case we find more matches which would indicate
+        // a bug in the compiler. An optimised build would not do this.
+        if(outOverload) {
+            // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+            Assert(("More than one match!",false));
+            return outOverload;
         }
+        outOverload = &overload;
     }
     return outOverload;
 }
@@ -463,22 +502,29 @@ void FnOverloads::addPolyOverload(ASTFunction* astFunc){
 //     return nullptr;
 // }
 
-FnOverloads::Overload* StructImpl::getMethod(const std::string& name, std::vector<TypeId>& typeIds){
-    // auto pair = methods.find(name);
-    // if(pair == methods.end())
-    //     return {};
-    // return pair->second;
-    return nullptr;
-    // ASTFunction* next = functions;
-    // while(next){
-    //     ASTFunction* now = next;
-    //     next = next->next;
-    //     if(now->name == name){
-    //         return now;
-    //     }
-    // }
-    // return nullptr;
+FnOverloads& ASTStruct::getMethod(const std::string& name){
+    auto pair = _methods.find(name);
+    if(pair == _methods.end()){
+        return (_methods[name] = {});
+    }
+    return pair->second;
 }
+// FnOverloads::Overload* StructImpl::getMethod(const std::string& name, std::vector<TypeId>& typeIds){
+//     // auto pair = methods.find(name);
+//     // if(pair == methods.end())
+//     //     return {};
+//     // return pair->second;
+//     return nullptr;
+//     // ASTFunction* next = functions;
+//     // while(next){
+//     //     ASTFunction* now = next;
+//     //     next = next->next;
+//     //     if(now->name == name){
+//     //         return now;
+//     //     }
+//     // }
+//     // return nullptr;
+// }
 
 void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
     auto si = getScope(scopeId);
@@ -612,6 +658,25 @@ void AST::Destroy(AST *ast) {
     ast->~AST();
     engone::Free(ast, sizeof(AST));
 }
+
+AST::ConstString& AST::getConstString(const std::string& str, u32* outIndex){
+    Assert(outIndex);
+    auto pair = _constStringMap.find(str);
+    if(pair != _constStringMap.end()){
+        *outIndex = pair->second;
+        return _constStrings[pair->second];
+    }
+    AST::ConstString tmp={};
+    tmp.length = str.length();
+    _constStrings.add(tmp);
+    *outIndex = _constStrings.size()-1;
+    _constStringMap[str] = _constStrings.size()-1;
+    return _constStrings[_constStrings.size()-1];
+}
+AST::ConstString& AST::getConstString(u32 index){
+    Assert(index < _constStrings.size());
+    return _constStrings[index];
+}
 void AST::cleanup() {
     using namespace engone;
 
@@ -627,13 +692,16 @@ void AST::cleanup() {
         // when types are created
         if(!pair) continue;
 
-        if(pair->structImpl)
+        if(pair->structImpl){
+            pair->structImpl->~StructImpl();
             engone::Free(pair->structImpl, sizeof(StructImpl));
+        }
         pair->~TypeInfo();
         engone::Free(pair, sizeof(TypeInfo));
     }
     _typeInfos.clear();
-    constStrings.clear();
+    _constStringMap.clear();
+    _constStrings._reserve(0);
 
     for(auto& str : tempStrings){
         str->~basic_string<char>();
@@ -1021,13 +1089,14 @@ void AST::destroy(ASTScope *scope) {
     engone::Free(scope, sizeof(ASTScope));
 }
 void AST::destroy(ASTStruct *astStruct) {
-    // if (astStruct->next)
-    //     destroy(astStruct->next);
     for (auto &mem : astStruct->members) {
         if (mem.defaultValue)
             destroy(mem.defaultValue);
+        mem.defaultValue = nullptr;
     }
-    astStruct->members.clear();
+
+    // if(astStruct->nonPolyStruct) // destroyed with typeInfo
+    //     engone::Free(astStruct->nonPolyStruct, sizeof(StructImpl));
     for(auto f : astStruct->functions){
         destroy(f);
     }
@@ -1114,20 +1183,20 @@ u32 TypeInfo::getSize() {
         if(structImpl) {
             return structImpl->size;
         } else {
-            return astStruct->baseImpl.size;
+            return 0;
         }
     }
     return _size;
 }
 StructImpl* TypeInfo::getImpl(){
-    return !astStruct ? nullptr : (astStruct->isPolymorphic() ? structImpl : &astStruct->baseImpl);
+    return structImpl;
 }
 u32 TypeInfo::alignedSize() {
     if (astStruct) {
         if(structImpl)
             return structImpl->alignedSize;
         else
-            return astStruct->baseImpl.alignedSize;
+            return 0;
     }
     return _size > 8 ? 8 : _size;
 }
@@ -1403,15 +1472,33 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
         if(ti->structImpl)
             return ti->structImpl->alignedSize;
         else
-            return ti->astStruct->baseImpl.alignedSize;
+            return 0;
     }
     return ti->_size > 8 ? 8 : ti->_size;
 }
-void FuncImpl::print(AST* ast){
+void ASTExpression::printArgTypes(AST* ast, DynamicArray<TypeId>& argTypes){
+    using namespace engone;
+    Assert(args);
+    Assert(args->size() == argTypes.size())
+    for(int i=0;i<(int)args->size();i++){
+        if(i!=0) log::out << ", ";
+        if(args->get(i)->namedValue.str)
+            log::out << args->get(i)->namedValue <<"=";
+        log::out << ast->typeToString(argTypes[i]);
+    }
+}
+StructImpl* ASTStruct::createImpl(){
+    auto ptr = (StructImpl*)engone::Allocate(sizeof(StructImpl));
+    new(ptr)StructImpl();
+    return ptr;
+}
+void FuncImpl::print(AST* ast, ASTFunction* astFunc){
     using namespace engone;
     log::out << name <<"(";
     for(int i=0;i<(int)argumentTypes.size();i++){
         if(i!=0) log::out << ", ";
+        if(astFunc)
+            log::out << astFunc->arguments[i].name <<": ";
         log::out << ast->typeToString(argumentTypes[i].typeId);
     }
     log::out << ")";
@@ -1442,12 +1529,12 @@ void ASTStruct::add(ASTFunction* func){
     // }
 }
 
-void StructImpl::addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl){
-    // auto pair = methods.find(name);
-    // Assert(pair == methods.end());
+// void StructImpl::addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl){
+//     // auto pair = methods.find(name);
+//     // Assert(pair == methods.end());
 
-    // methods[name] = {func, funcImpl};
-}
+//     // methods[name] = {func, funcImpl};
+// }
 std::string ScopeInfo::getFullNamespace(AST* ast){
     std::string ns = "";
     ScopeInfo* scope = ast->getScope(id);
@@ -1475,7 +1562,7 @@ TypeInfo::MemberData TypeInfo::getMember(const std::string &name) {
 }
 TypeInfo::MemberData TypeInfo::getMember(int index) {
     if (astStruct) {
-        StructImpl* impl = structImpl ? structImpl : &astStruct->baseImpl;
+        StructImpl* impl = structImpl;
         return {impl->members[index].typeId, index, impl->members[index].offset};
     } else {
         return {{}, -1};
@@ -1578,7 +1665,7 @@ void ASTFunction::print(AST *ast, int depth) {
             log::out << "->";
         for (int i=0;i<(int)returnTypes.size();i++){
             auto& retType = returnTypes[i];
-            if(i==0)
+            if(i!=0)
                 log::out<<", ";
             // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
             // log::out << dtname << ", ";
@@ -1610,8 +1697,8 @@ void ASTStruct::print(AST *ast, int depth) {
         log::out << " { ";
         for (int i = 0; i < (int)members.size(); i++) {
             auto &member = members[i];
-            auto &implMem = baseImpl.members[i];
-            auto str = ast->typeToString(implMem.typeId);
+            // auto &implMem = baseImpl.members[i];
+            auto str = ast->typeToString(member.stringType);
             log::out << member.name << ": " << str;
             if (member.defaultValue) {
                 log::out << " = ";
@@ -1649,14 +1736,13 @@ void ASTStatement::print(AST *ast, int depth) {
     PrintSpace(depth);
     log::out << "Statement " << StateToStr(type);
 
-    int ind=-1;
-    for(auto& vn : varnames){
-        ind++;
-        if(ind!=0)
+    for(int i=0;i<(int)varnames.size();i++){
+        auto& vn = varnames[i];
+        if(i!=0)
             log::out << ",";
         log::out << " " << vn.name;
-        if(vn.assignType.isValid())
-            log:: out << ": "<< ast->typeToString(vn.assignType);
+        if(vn.assignString.isValid())
+            log:: out << ": "<< ast->typeToString(vn.assignString);
     }
     if(alias)
         log::out << " as " << *alias;
@@ -1703,7 +1789,7 @@ void ASTExpression::print(AST *ast, int depth) {
             log::out << boolValue;
         else if (typeId == AST_CHAR)
             log::out << charValue;
-        else if (typeId == AST_VAR)
+        else if (typeId == AST_ID)
             log::out << name;
         // else if(typeId==AST_STRING) log::out << ast->constStrings[constStrIndex];
         else if (typeId == AST_FNCALL)

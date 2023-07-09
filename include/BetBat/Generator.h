@@ -32,6 +32,8 @@ struct GenInfo {
     ScopeId currentScopeId = 0;
     ScopeId fromScopeId = 0; // AST_FROM_NAMESPACE
 
+    u32 currentPolyVersion=0;
+
     int funcDepth=0;
     struct LoopScope {
         // Index of instruction where looping starts.h

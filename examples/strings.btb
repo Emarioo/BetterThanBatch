@@ -1,11 +1,73 @@
-#import "OS"
+// #import "OS"
+#import "./overloading"
+// #import "./ranged-for"
+// fn printi(a: i64) { @native-code }
+
+// printi(23);
+
+// fn add() -> char, i32 {
+//     return 'A', 92
+// }
+
+// a, b = add();
+
+// printi(a)
+// printi(b)
+
+// struct Base {
+//     f: i32;
+//     fn hey {
+
+//     }
+// }
+
+// struct Poly<T> {
+//     f: i32;
+//     fn add<T>(){
+//     // fn add(){
+//         // prints("hey");
+//         printi(cast<i64>sizeof T)
+//         printi(cast<i64>sizeof K)
+//     }
+// }
+// a: A;
+// a: A<u8>;
+
+// a.add<u16>();
+// a.add();
+
+// fn add<T>(){
+//     t: T;
+//     printi(cast<i64>sizeof t);
+//     printi(cast<i64>sizeof T);
+// }
+// add<i32>();
+// add<i64>();
+// add<i8>();
+// add<char>();
+// add<bool>();
+// add<Slice<char>>();
 
 
-fn fun(a: bool = 1, b: i32 = 1, c: i32 = 2) {}
-fn fun(a: i32) {}
+// k = "wee";
 
-fun(1,b=2,b=3)
+// printi(cast<i64>sizeof k);
 
+// fn fun<T>(){
+//     printi(sizeof T)
+// }
+
+// struct A<T>{
+//     a: T;
+// }
+
+// fn fun<T>(){
+//     // a: A<T>;
+//     // printi(sizeof A<T>)
+//     // a: Slice<
+//     prints(nameof Slice<T>);
+// }
+// fun<i32>();
 
 // #import "Logger"
 // #import "Basic"

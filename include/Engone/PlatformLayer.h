@@ -36,7 +36,8 @@ namespace engone {
 	
 	// For debugging memory leaks
 	void TrackType(uint64 bytes, const std::string& name);
-	
+	void SetTracker(bool on);
+
 	void* Allocate(uint64 bytes);
     void* Reallocate(void* ptr, uint64 oldBytes, uint64 newBytes);
 	void Free(void* ptr, uint64 bytes);

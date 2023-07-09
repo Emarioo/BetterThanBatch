@@ -426,7 +426,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 info.next();
                 ASTStruct::PolyArg arg={};
                 arg.name = token;
-                astStruct->polyArgs.push_back(arg);
+                astStruct->polyArgs.add(arg);
                 astStruct->polyName += token;
             }
             
@@ -485,6 +485,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             if(result!=PARSE_SUCCESS){
                 continue;
             }
+            func->parentStruct = astStruct;
             astStruct->add(func);
             // ,func->polyArgs.size()==0?&func->baseImpl:nullptr);
         } else {
@@ -552,25 +553,27 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 result = ParseExpression(info,defaultValue,false);
             }
             if(result == PARSE_SUCCESS){
-                astStruct->members.push_back({});
-                auto& mem = astStruct->members.back();
+                astStruct->members.add({});
+                auto& mem = astStruct->members.last();
                 mem.name = name;
                 mem.defaultValue = defaultValue;
-                astStruct->baseImpl.members.push_back({});
-                auto& mem2 = astStruct->baseImpl.members.back();
-                mem2.typeId = typeId;
+                mem.stringType = typeId;
             }
         }
         Token token = info.get(info.at()+1);
-        if(Equal(token,";")){
+        if(Equal(token,"fn")){
+            // semi-colon not needed for functions
+            continue;
+        }else if(Equal(token,";")){
             info.next();
             continue;
         }else if(Equal(token,"}")){
             info.next();
             break;
         }else{
-            ERR_HEAD2(token)<<"expected } or ; not "<<token<<"\n";
-            ERRLINE
+            ERR_HEAD(token,"Expected } or ; not "<<token<<".\n\n";
+                ERR_LINE(token.tokenIndex,"bad");
+            )
             error = PARSE_ERROR;
             continue;
         }
@@ -872,6 +875,8 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
             expr->namedValue = tok;
             // expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
             // new(expr->namedValue)std::string(tok);
+        } else {
+            fncall->nonNamedArgs++;
         }
         fncall->args->add(expr);
         // if(tail){
@@ -968,7 +973,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
 
                     // Create "this" argument in methods
                     tmp->args->add(values.back());
+                    tmp->nonNamedArgs++;
                     values.pop_back();
+                    
 
                     tmp->boolValue = true; // indicicate fncall to struct method
 
@@ -1380,30 +1387,34 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(Equal(token,"sizeof")) {
                 info.next();
-                Token token = {}; 
-                int result = ParseTypeId(info,token);
-                // Token token = info.get(info.at()+1);
-                // if(!IsName(token)){
-                //     ERR_HEAD2(token) << "sizeof expects a single name token like 'SomeStruct123'. '"<<token<<"' is not valid.\n";
-                //     ERRLINE
-                //     return PARSE_ERROR;
-                // }
-                // info.next();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_SIZEOF));
-                // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
-                // new(tmp->name)std::string(token);
+
+                // Token token = {}; 
+                // int result = ParseTypeId(info,token);
+                // tmp->name = token;
+
+                ASTExpression* left=nullptr;
+                int result = ParseExpression(info, left, false);
+                tmp->left = left;
+                
+                tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.endIndex = info.at()+1;
+                values.push_back(tmp);
+            } else if(Equal(token,"nameof")) {
+                info.next();
+                Token token = {};
+                int result = ParseTypeId(info,token);
+
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NAMEOF));
                 tmp->name = token;
                 tmp->tokenRange.firstToken = token;
-                // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
-                // tmp->tokenRange.tokenStream = info.tokens;
                 values.push_back(tmp);
             } else if(IsName(token)){
                 info.next();
                 int startToken=info.at();
                 
-                Token polyName{};
-                polyName = token;
+                Token polyName = token;
                 // could be a slice if tok[]{}
                 // if something is within [] then it's a array access
                 // polytypes exist for struct initializer and function calls
@@ -1437,7 +1448,11 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         }
                     }
                 }
+
                 tok = info.get(info.at()+1);
+                Token tok2 = info.get(info.at()+2);
+                Assert(!(Equal(tok,"[") && Equal(tok2,"]"))); // HANDLE SLICE TYPES!
+
                 if(Equal(tok,"(")){
                     // function call
                     info.next();
@@ -1477,7 +1492,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     // tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
                     // tmp->tokenRange.tokenStream = info.tokens;
-                }else if(Equal(tok,"{") && 0 == (token.flags & TOKEN_SUFFIX_SPACE)){ // Struct {} is ignored
+                } else if(Equal(tok,"{") && 0 == (token.flags & TOKEN_SUFFIX_SPACE)){ // Struct {} is ignored
                     // initializer
                     info.next();
                     ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
@@ -1571,52 +1586,37 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     // initExpr->tokenRange.startIndex = startToken;
                     initExpr->tokenRange.endIndex = info.at()+1;
                     // initExpr->tokenRange.tokenStream = info.tokens;
-                }else {
-                    if(polyTypes.size()!=0){
-                        ERR_HEAD(token, "Polymorphic types not expected with namespace or variable.\n\n";
-                            ERR_LINE(token.tokenIndex,"bad");
-                        )
-                        continue;
-                    }
+                } else {
+                    // if(polyTypes.size()!=0){
+                    //     This is possible since types are can be parsed in an expression.
+                    //     ERR_HEAD(token, "Polymorphic types not expected with namespace or variable.\n\n";
+                    //         ERR_LINE(token.tokenIndex,"bad");
+                    //     )
+                    //     continue;
+                    // }
                     if(Equal(tok,"::")){
                         info.next();
                         
-                        // ERR_HEAD2(tok) << " :: is not implemented\n";
-                        // ERRLINE
-                        // continue; 
-                        
-                        Token tok = info.get(info.at()+1);
-                        if(!IsName(tok)){
-                            ERR_HEAD2(tok) << tok<<" is not a name\n";
-                            ERRLINE
-                            continue;
-                        }
+                        // Token tok = info.get(info.at()+1);
+                        // if(!IsName(tok)){
+                        //     ERR_HEAD(tok, "'"<<tok<<"' is not a name.\n\n";
+                        //         ERR_LINE(tok.tokenIndex,"bad");
+                        //     )
+                        //     continue;
+                        // }
                         ops.push_back(AST_FROM_NAMESPACE);
                         namespaceNames.push_back(token);
-                        // namespaceToken = token;
-                        continue; // do a second round?
-                        
+                        continue; // do a second round here?
                         // TODO: detect more ::
-                        
-                        // ASTExpression* tmp = info.ast->createExpression(AST_FROM_NAMESPACE);
-                        
-                        // values.push_back(tmp);
-                        // tmp->tokenRange.firstToken = token;
-                        // tmp->tokenRange.startIndex = startToken;
-                        // tmp->tokenRange.endIndex = info.at()+1;
-                        // tmp->tokenRange.tokenStream = info.tokens;
-                    } else{
-                        ASTExpression* tmp = info.ast->createExpression(TypeId(AST_VAR));
+                    } else {
+                        ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ID));
 
-                        Token nsToken = token;
+                        Token nsToken = polyName;
                         int nsOps = 0;
                         while(ops.size()>0){
                             OperationType op = ops.back();
                             if(op == AST_FROM_NAMESPACE) {
                                 nsOps++;
-                                // ns += namespaceNames.back();
-                                // ns += "::";
-                                // namespaceNames.pop_back();
                                 ops.pop_back();
                             } else {
                                 break;
@@ -1633,32 +1633,14 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                             namespaceNames.pop_back();
                         }
                         if(nsOps!=0){
-                            nsToken.length += token.length;
+                            nsToken.length += polyName.length;
                         }
-                        // std::string ns = "";
-                        // while(ops.size()>0){
-                        //     OperationType op = ops.back();
-                        //     if(op == AST_FROM_NAMESPACE) {
-                        //         ns += namespaceNames.back();
-                        //         ns += "::";
-                        //         namespaceNames.pop_back();
-                        //         ops.pop_back();
-                        //     } else {
-                        //         break;
-                        //     }
-                        // }
-                        // ns += token;
 
                         tmp->name = nsToken;
 
-                        // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
-                        // new(tmp->name)std::string(std::move(ns));
-
                         values.push_back(tmp);
                         tmp->tokenRange.firstToken = token;
-                        // tmp->tokenRange.startIndex = startToken;
                         tmp->tokenRange.endIndex = info.at()+1;
-                        // tmp->tokenRange.tokenStream = info.tokens;
                     }
                 }
             } else if(Equal(token,"(")){
@@ -1897,7 +1879,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
             return PARSE_ERROR;
         }
         statement = info.ast->createStatement(ASTStatement::FOR);
-        statement->varnames.push_back({varname});
+        statement->varnames.add({varname});
         statement->reverse = reverseAnnotation;
         statement->pointer = pointerAnnot;
         statement->rvalue = expr;
@@ -1910,7 +1892,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     } else if(Equal(firstToken,"return")){
         info.next();
         
-        ASTStatement* statement = info.ast->createStatement(ASTStatement::RETURN);
+        statement = info.ast->createStatement(ASTStatement::RETURN);
         statement->returnValues = (std::vector<ASTExpression*>*)engone::Allocate(sizeof(std::vector<ASTExpression*>));
         new(statement->returnValues)std::vector<ASTExpression*>();
 
@@ -1972,7 +1954,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
         statement = info.ast->createStatement(ASTStatement::USING);
         
-        statement->varnames.push_back({originToken});
+        statement->varnames.add({originToken});
         if(aliasToken.str){
             statement->alias = (std::string*)engone::Allocate(sizeof(std::string));
             new(statement->alias)std::string(aliasToken);
@@ -2137,9 +2119,9 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
             info.next();
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD2(arg) << arg <<" is not a valid argument name\n";
-                ERRLINE
-                ERR_END
+                ERR_HEAD(arg, "'"<<arg <<"' is not a valid argument name.\n\n";
+                    ERR_LINE(arg.tokenIndex,"bad");
+                )
             }
             continue;
             // return PARSE_ERROR;
@@ -2149,9 +2131,9 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         if(!Equal(tok,":")){
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD2(tok) << "expected : not "<<tok <<"\n";
-                ERRLINE
-                ERR_END
+                ERR_HEAD(tok, "Expected : not "<<tok <<".\n\n";
+                    ERR_LINE(tok.tokenIndex,"bad");
+                )
             }
             continue;
             // return PARSE_ERROR;
@@ -2185,11 +2167,13 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
             // printedErrors doesn't matter here.
             // If we end up here than our parsing is probably correct so far and we might as
             // well log this error since it's probably a "real" error not caused by a cascade.
-            ERR_HEAD2(tok) << "expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<"\n";
-            ERRLINE
-            ERR_END
+            ERR_HEAD(tok, "Expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<".\n\n";
+                ERR_LINE(tok.tokenIndex,"bad");
+            )
             // continue; we don't continue since we want to parse comma if it exists
         }
+        if(!defaultValue)
+            function->nonDefaults++;
 
         argv.defaultValue = defaultValue;
         printedErrors = false; // we succesfully parsed this so we good?
@@ -2204,9 +2188,9 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         }else{
             printedErrors = true; // we bad and might keep being bad.
             // don't do printed errors?
-            ERR_HEAD2(tok) << "expected , or ) not "<<tok <<"\n";
-            ERRLINE
-            ERR_END
+            ERR_HEAD(tok, "Expected , or ) not "<<tok <<".\n\n";
+                ERR_LINE(tok.tokenIndex,"bad");
+            )
             continue;
             // Continuing since we saw ( and are inside of arguments.
             // we must find ) to leave.
@@ -2297,7 +2281,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     attempt = true;
 
     int startIndex = info.at()+1;
-    std::vector<ASTStatement::VarName> varnames;
+    DynamicArray<ASTStatement::VarName> varnames{};
     bool assigned = false;
     TypeId lastType = {};
     while(!info.end()){
@@ -2310,7 +2294,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         }
         info.next();
 
-        varnames.push_back({name});
+        varnames.add({name});
         Token token = info.get(info.at()+1);
         if(Equal(token,":")){
             assigned = true;
@@ -2354,8 +2338,8 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
             TypeId strId = info.ast->getTypeString(typeToken);
 
             int index = varnames.size()-1;
-            while(index>=0 && !varnames[index].assignType.isValid()){
-                varnames[index].assignType = strId;
+            while(index>=0 && !varnames[index].assignString.isValid()){
+                varnames[index].assignString = strId;
                 varnames[index].arrayLength = arrayLength;
                 index--;
             }
@@ -2373,7 +2357,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         info.next(); // ;
         statement = info.ast->createStatement(ASTStatement::ASSIGN);
 
-        statement->varnames = std::move(varnames);
+        statement->varnames.stealFrom(varnames);
 
         statement->rvalue = nullptr;
         
@@ -2383,14 +2367,15 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
         // statement->tokenRange.tokenStream = info.tokens;
         return PARSE_SUCCESS;
     }else if(!Equal(token,"=")){
-        ERR_HEAD2(token) << "Expected = not "<<token<<"\n";
-        ERRLINE;
+        ERR_HEAD(token, "Expected = not '"<<token<<"'.\n";
+        )
         return PARSE_ERROR;
     }
     info.next(); // =
 
     statement = info.ast->createStatement(ASTStatement::ASSIGN);
-    statement->varnames = std::move(varnames);
+    
+    statement->varnames.stealFrom(varnames);
     
     ASTExpression* rvalue=nullptr;
     int result = 0;
