@@ -828,12 +828,11 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                 outTypeIds->push_back(var->typeId);
                 return GEN_SUCCESS;
             } else {
-                ERR_HEAD(expression->tokenRange, "'"<<expression->tokenRange.firstToken<<"' is not declared.\n\n";
-                    ERR_LINE(expression->tokenRange,"undeclared");
+                if(info.compileInfo->typeErrors==0){
+                    ERR_HEAD(expression->tokenRange, "'"<<expression->tokenRange.firstToken<<"' is not declared.\n\n";
+                        ERR_LINE(expression->tokenRange,"undeclared");
                     )
-                // ERR_HEAD2(expression->tokenRange) << expression->tokenRange.firstToken << " is undefined\n";
-                // ERR_END
-                // log::out << log::RED<<"var "<<*expression->varName<<" undefined\n";
+                }
                 return GEN_ERROR;
             }
         }

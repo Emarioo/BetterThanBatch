@@ -8,9 +8,9 @@
 @REM  g++ is used when debugging.
 @REM ########
 
-SET USE_GCC=1
+@REM SET USE_GCC=1
 SET USE_MSVC=1
-@REM SET USE_DEBUG=1
+SET USE_DEBUG=1
 
 @REM Advapi is used for winreg which accesses the windows registry
 @REM to get cpu clock frequency which is used with rdtsc.
@@ -18,7 +18,7 @@ SET USE_MSVC=1
 
 SET GCC_INCLUDE_DIRS=-Iinclude -lAdvapi32
 SET GCC_DEFINITIONS=-DOS_WINDOWS
-SET GCC_COMPILE_OPTIONS=-std=c++14 -g
+SET GCC_COMPILE_OPTIONS=-std=c++14
 SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
 @REM /O2
@@ -28,7 +28,10 @@ SET MSVC_INCLUDE_DIRS=/Iinclude
 SET MSVC_DEFINITIONS=/DOS_WINDOWS
 
 if !USE_DEBUG!==1 (
-    SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! /debug
+    SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /Zi
+    SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! /DEBUG /PROFILE
+    
+    SET GCC_COMPILE_OPTIONS=!GCC_COMPILE_OPTIONS! -g
 )
 
 @REM #############  Unity build
@@ -59,15 +62,12 @@ echo | set /p="Compiling..."
 set /a startTime=6000*( 100%time:~3,2% %% 100 ) + 100* ( 100%time:~6,2% %% 100 ) + ( 100%time:~9,2% %% 100 )
 
 if !USE_MSVC!==1 (
-    if !USE_GCC!==1 (
-        @REM Compiling this too when using GDB debugger in vscode
-        start /b g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o bin/compiler_debug.exe
-    )
-    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Z7 /Fobin/all.obj /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:!output!
+    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:!output!
     @REM cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! /Ycpch.h src/pch.cpp
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Yupch.h /Fobin/all.obj /link !MSVC_LINK_OPTIONS! pch.obj shell32.lib /OUT:bin/program.exe
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfiles! /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:bin/program.exe
-) else (
+)
+if !USE_GCC!==1 (
     g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o !output!
 )
 

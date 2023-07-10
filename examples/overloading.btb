@@ -19,10 +19,10 @@ fn log(t: Slice<char>){
     prints(t);
 }
 
-#define LOG(X,...) log(X); LOG(...);
-#define LOG()
+// #define LOG(X,...) log(X); LOG(...);
+// #define LOG()
 
-LOG("Hello ", 007, " are you ",false && true,'\n');
+// LOG("Hello ", 007, " are you ",false && true,'\n');
 
 //-- Polymorphic overloading
 fn plog<T>(t: T, k: bool){

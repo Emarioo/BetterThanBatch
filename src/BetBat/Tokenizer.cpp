@@ -1,6 +1,6 @@
 #include "BetBat/Tokenizer.h"
 
-bool IsInteger(Token& token){
+bool IsInteger(const Token& token){
     if(token.flags & TOKEN_QUOTED) return false;
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
@@ -10,7 +10,7 @@ bool IsInteger(Token& token){
     }
     return true;
 }
-double ConvertDecimal(Token& token){
+double ConvertDecimal(const Token& token){
     // TODO: string is not null terminated
     //  temporariy changing character after token
     //  is not safe since it could be a memory violation
@@ -20,11 +20,11 @@ double ConvertDecimal(Token& token){
     *(token.str+token.length) = tmp;
     return num;
 }
-bool IsAnnotation(Token& token){
+bool IsAnnotation(const Token& token){
     if(!token.str || token.length==0) return false;
     return *token.str == '@';
 }
-bool IsName(Token& token){
+bool IsName(const Token& token){
     if(token.flags&TOKEN_QUOTED) return false;
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
@@ -42,7 +42,7 @@ bool IsName(Token& token){
     return true;
 }
 // Can also be an integer
-bool IsDecimal(Token& token){
+bool IsDecimal(const Token& token){
     if(token.flags&TOKEN_QUOTED) return false;
     if(token==".") return false;
     int hasDot=false;
@@ -57,7 +57,7 @@ bool IsDecimal(Token& token){
     }
     return true;
 }
-int ConvertInteger(Token& token){
+int ConvertInteger(const Token& token){
     // TODO: string is not null terminated
     //  temporariy changing character after token
     //  is not safe since it could be a memory violation
@@ -67,10 +67,10 @@ int ConvertInteger(Token& token){
     *(token.str+token.length) = tmp;
     return num;
 }
-bool Equal(Token& token, const char* str){
+bool Equal(const Token& token, const char* str){
     return !(token.flags&TOKEN_QUOTED) && token == str;
 }
-bool IsHexadecimal(Token& token){
+bool IsHexadecimal(const Token& token){
     if(token.flags & TOKEN_QUOTED) return false;
     if(!token.str||token.length<3 || token.length> 2 + 8) return 0; // 2+8 means 0x + 4 bytes
     if(token.str[0] != '0') return false;
@@ -83,7 +83,7 @@ bool IsHexadecimal(Token& token){
     }
     return true;
 }
-int ConvertHexadecimal(Token& token){
+int ConvertHexadecimal(const Token& token){
     if(!token.str||token.length<3 ||token.length > 2+8) return 0;
     if(token.str[0] != '0') return false;
     if(token.str[1] != 'x') return false;
@@ -175,7 +175,7 @@ void TokenRange::feed(std::string& outBuffer){
         }
     }
 }
-void Token::print(bool skipSuffix){
+void Token::print(bool skipSuffix) const{
     using namespace engone;
     if(!str) {
         return;
@@ -207,7 +207,7 @@ void Token::print(bool skipSuffix){
         log::out << " ";
     }
 }
-bool Token::operator==(const std::string& text){
+bool Token::operator==(const std::string& text) const {
     if((int)text.length()!=length)
         return false;
     for(int i=0;i<(int)text.length();i++){
@@ -216,7 +216,7 @@ bool Token::operator==(const std::string& text){
     }
     return true;
 }
-bool Token::operator==(const Token& text){
+bool Token::operator==(const Token& text) const {
     if((int)text.length!=length)
         return false;
     for(int i=0;i<(int)text.length;i++){
@@ -225,7 +225,7 @@ bool Token::operator==(const Token& text){
     }
     return true;
 }
-bool Token::operator==(const char* text){
+bool Token::operator==(const char* text) const{
     int len = strlen(text);
     if(len!=length)
         return false;
@@ -235,10 +235,10 @@ bool Token::operator==(const char* text){
     }
     return true;
 }
-bool Token::operator!=(const char* text){
+bool Token::operator!=(const char* text) const {
     return !(*this == text);
 }
-int Token::calcLength(){
+int Token::calcLength() const {
     int len = length;
     if(flags & TOKEN_QUOTED)
         len += 2;
@@ -311,6 +311,7 @@ bool TokenStream::copyInfo(TokenStream& out){
     return true;
 }
 Token& TokenStream::get(u32 index) const {
+    Assert(this);
     if(index>=(u32)length()) return END_TOKEN;
     return *((Token*)tokens.data + index);
 }
@@ -361,6 +362,7 @@ TokenStream* TokenStream::copy(){
     return 0;
 }
 void TokenStream::finalizePointers(){
+    Assert(!isFinialized());
     // TODO: Used buckets for tokenData so that this step isn't necessary
     //   for the string pointers. tokenIndex and tokenStream is till
     //   required but you might be abke to do that elsewhere.
@@ -501,6 +503,7 @@ void TokenStream::cleanup(bool leaveAllocations){
 }
 void TokenStream::printTokens(int tokensPerLine, bool showlncol){
     using namespace engone;
+    Assert(isFinialized());
     log::out << "\n####   "<<tokens.used<<" Tokens   ####\n";
     uint i=0;
     for(;i<tokens.used;i++){
@@ -524,6 +527,8 @@ void TokenStream::printTokens(int tokensPerLine, bool showlncol){
 }
 void TokenStream::print(){
     using namespace engone;
+    Assert(isFinialized());
+
     for(int j=0;j<(int)tokens.used;j++){
         Token& token = *((Token*)tokens.data + j);
         

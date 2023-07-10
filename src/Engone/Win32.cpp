@@ -717,10 +717,42 @@ namespace engone {
 			m_internalHandle=0;
 		}
 	}
+	struct DataForThread {
+		uint32(*func)(void*) = nullptr;
+		void* userData = nullptr;
+		static DataForThread* Create(){
+			// Heap allocated at the moment but you could create a bucket array
+			// instead. Or store 40 of these as global data and then use heap
+			// allocation if it fills up.
+			auto ptr = (DataForThread*)Allocate(sizeof(DataForThread));
+			new(ptr)DataForThread();
+			return ptr;
+		}
+		static void Destroy(DataForThread* ptr){
+			ptr->~DataForThread();
+			Free(ptr,sizeof(DataForThread));
+		}
+	};
+	DWORD WINAPI SomeThreadProc(void* ptr){
+		DataForThread* data = (DataForThread*)ptr;
+		uint32 ret = data->func(data->userData);
+		DataForThread::Destroy(data);
+		return ret;
+	}
+	
 	void Thread::init(uint32(*func)(void*), void* arg) {
 		if (!m_internalHandle) {
 			// const uint32 stackSize = 1024*1024;
-			HANDLE handle = CreateThread(NULL, 0, (DWORD(*)(void*))func, arg, 0,(DWORD*)&m_threadId);
+			// Casting func to LPTHREAD_START_ROUTINE like this is questionable.
+			// func doesn't use a specific call convention while LPTHREAD uses __stdcall.
+			// HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)func, arg, 0,(DWORD*)&m_threadId);
+
+			// SomeThreadProc is correct, we create a little struct to keep the func ptr and arg in.
+			auto ptr = DataForThread::Create();
+			ptr->func = func;
+			ptr->userData = arg;
+
+			HANDLE handle = CreateThread(NULL, 0, SomeThreadProc, ptr, 0,(DWORD*)&m_threadId);
 			if (handle==INVALID_HANDLE_VALUE) {
 				DWORD err = GetLastError();
                 PL_PRINTF("[WinError %lu] CreateThread\n",err);

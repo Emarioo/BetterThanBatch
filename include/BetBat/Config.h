@@ -31,6 +31,9 @@
 // #define DEBUG_RESIZE
 
 // Language config
+// Only here to compare speeds
+#define SLOW_PREPROCESSOR
+
 #define PREPROC_REC_LIMIT 100
 // You could enforce hashtag (replace macro with hashtag)
 // Hashtag will always be used. @ is taken, $ feels wrong, # makes you feel at home.
@@ -54,8 +57,8 @@
 // #define PLOG
 // type checker
 // #define TC_LOG
-#define GLOG
-#define ILOG
+// #define GLOG
+// #define ILOG
 // #define ILOG_REGS
 
 // #define OLOG

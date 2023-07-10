@@ -1,6 +1,19 @@
 {
     "version": "0.2.0",
     "configurations": [
+        {
+            "name": "(Windows) Launch",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/compiler.exe",
+            "args": ["-dev"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+
+    
         
         {
             "name": "(gdb) Launch",

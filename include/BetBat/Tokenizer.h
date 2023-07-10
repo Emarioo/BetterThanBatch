@@ -31,12 +31,12 @@ struct Token {
     int tokenIndex=0;
     TokenStream* tokenStream = nullptr; // don't keep this here
 
-    int calcLength();
+    int calcLength() const;
 
-    bool operator==(const std::string& str);
-    bool operator==(const Token& str);
-    bool operator==(const char* str);
-    bool operator!=(const char* str);
+    bool operator==(const std::string& str) const;
+    bool operator==(const Token& str) const;
+    bool operator==(const char* str) const;
+    bool operator!=(const char* str) const;
 
     operator TokenRange() const;
     TokenRange range() const;
@@ -44,7 +44,7 @@ struct Token {
     operator std::string() const;
 
     // prints the string, does not print suffix, line or column
-    void print(bool skipSuffix = false);
+    void print(bool skipSuffix = false) const;
 };
 
 // #define INT_TO_VERSION(x) ()
@@ -58,12 +58,14 @@ engone::Logger& operator<<(engone::Logger& logger, Token& token);
 struct TokenRange {
     Token firstToken{};
 
-    TokenRange operator=(const TokenRange& r){
-        TokenRange range{};
-        range.firstToken = r.firstToken;
-        range.endIndex = r.endIndex;
-        return range;
-    }
+    // TokenRange& operator=(const TokenRange& r){
+    //     r.firstToken = firstToken;
+    //     r.endIndex = endIndex;
+    //     // TokenRange range{};
+    //     // range.firstToken = r.firstToken;
+    //     // range.endIndex = r.endIndex;
+    //     return r;
+    // }
     int endIndex=0; // exclusive
     const int& startIndex() const { return firstToken.tokenIndex; }
     TokenStream* const& tokenStream() const { return firstToken.tokenStream; }
@@ -150,6 +152,10 @@ struct TokenStream {
     TokenStream* copy();
 
     void finalizePointers();
+    bool isFinialized(){
+        if(tokens.used==0) return false;
+        return (u64)((Token*)tokens.data)->str >= (u64)tokenData.data;
+    }
 
     std::string streamName; // filename/importname SHOULD BE FULL PATH
     
@@ -174,16 +180,16 @@ struct TokenStream {
     
     int readHead=0;
 };
-double ConvertDecimal(Token& token);
-bool IsInteger(Token& token);
-int ConvertInteger(Token& token);
-bool IsName(Token& token);
-bool IsAnnotation(Token& token);
+double ConvertDecimal(const Token& token);
+bool IsInteger(const Token& token);
+int ConvertInteger(const Token& token);
+bool IsName(const Token& token);
+bool IsAnnotation(const Token& token);
 // Can also be an integer
-bool IsDecimal(Token& token);
-bool IsHexadecimal(Token& token);
-int ConvertHexadecimal(Token& token);
-bool Equal(Token& token, const char* str);
+bool IsDecimal(const Token& token);
+bool IsHexadecimal(const Token& token);
+int ConvertHexadecimal(const Token& token);
+bool Equal(const Token& token, const char* str);
 
 // I would recommend testing on a large text for more accurate results.
 void PerfTestTokenize(const engone::Memory& textData, int times=1);

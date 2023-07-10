@@ -846,8 +846,8 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
                 expectComma=false;
                 continue;
             }
-            ERR_HEAD2(tok)<<"expected ',' to supply more arguments or ')' to end fncall (found "<<tok<<" instead)\n";
-            ERR_END
+            ERR_HEAD(tok,"Expected ',' to supply more arguments or ')' to end fncall (found "<<tok<<" instead)\n";
+            )
             return PARSE_ERROR;
         }
         bool named=false;
@@ -1428,7 +1428,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 //  it could be hard to know when to stop.
                 //  ParseTypeId has some logic for it so things are possible
                 //  it's just hard.
-                if(Equal(tok,"<") && !(tok.flags&TOKEN_SUFFIX_SPACE)){
+                if(Equal(tok,"<") && !(token.flags&TOKEN_SUFFIX_SPACE)){
                     info.next();
                     // polymorphic type or function
                     polyTypes += "<";
@@ -1639,7 +1639,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         tmp->name = nsToken;
 
                         values.push_back(tmp);
-                        tmp->tokenRange.firstToken = token;
+                        tmp->tokenRange.firstToken = nsToken;
                         tmp->tokenRange.endIndex = info.at()+1;
                     }
                 }

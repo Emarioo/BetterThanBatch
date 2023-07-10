@@ -68,6 +68,9 @@ struct CompileInfo {
 
     //-- GLOBAL COMPILER STUFF
     i32 globalUniqueCounter = 0; // for _UNIQUE_
+    std::unordered_map<std::string,RootMacro> _macros;
+
+    DynamicArray<TokenStream*> streamsToClean{}; // streams which tokens are used somewhere.
 };
 
 Bytecode* CompileSource(CompileOptions options);

@@ -63,6 +63,10 @@ void CompileInfo::cleanup(){
         TokenStream::Destroy(pair.second);
     }
     includeStreams.clear();
+    for(auto& stream : streamsToClean){
+        TokenStream::Destroy(stream);
+    }
+    streamsToClean.resize(0);
 }
 bool CompileInfo::addStream(TokenStream* stream){
     auto pair = tokenStreams.find(stream->streamName);
@@ -106,12 +110,9 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
     info.addStream(tokenStream);
     
     if (tokenStream->enabled & LAYER_PREPROCESSOR) {
-        TokenStream* old = tokenStream;
         
-        _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path.text)<<"\n";)
-        Preprocess(&info, tokenStream);
-        if (tokenStream->enabled == LAYER_PREPROCESSOR)
-            tokenStream->print();
+        _VLOG(log::out <<log::BLUE<< "Preprocess (imports): "<<BriefPath(path.text)<<"\n";)
+        PreprocessImports(&info, tokenStream);
     }
     
     Path dir = path.getDirectory();
@@ -174,9 +175,28 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
             }
         }
     }
+
+    bool macroBenchmark = tokenStream->length() && Equal(tokenStream->get(0),"@macro-benchmark");
+
+    // second preprocess in case imports defined macros which
+    // are used in this source file
+    TokenStream* finalStream = tokenStream;
+    if (tokenStream->enabled & LAYER_PREPROCESSOR) {
+        _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path.text)<<"\n";)
+        finalStream = Preprocess(&info, tokenStream);
+        if(macroBenchmark){
+            log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
+            // finalStream->print();
+            // log::out<<"\n";
+        }
+        info.streamsToClean.add(finalStream);
+        // tokenStream->print();
+    }
+    if(macroBenchmark)
+        return true;
     
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path.text)<<"\n";)
-    ASTScope* body = ParseTokens(tokenStream,info.ast,&info, as);
+    ASTScope* body = ParseTokens(finalStream,info.ast,&info, as);
     if(body){
         if(as.empty()){
             info.ast->appendToMainBody(body);
@@ -185,7 +205,6 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
         }
     }
     return true;
-    // return body;
 }
 
 Bytecode* CompileSource(CompileOptions options) {

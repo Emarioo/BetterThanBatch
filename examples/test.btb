@@ -1,0 +1,82 @@
+@macro-benchmark
+// #import "./macros"
+// #import "OS"
+#import "./macro-bench"
+// #import "./overloading"
+
+
+// #define OK AB, CD, EF
+// #define ADDS(X,...) X + ADDS(...)
+// #define ADDS(X) X
+// ADDS(#unwrap OK)
+
+// #define rec(X,...) X + rec(...)
+// #define rec(X) X
+// rec(1,2,3)
+
+// #define inf(A,...) ...
+
+// inf(a,j,w)
+
+
+// #define for(x,y,z) x; while y { defer z;
+// // A flaw in the parser
+// for(i=0,i< 5,i++)
+//     printi(i);
+// }
+
+// #define Cool(X,Y) (X) (Y)
+// #define Cool(X) (X------X)
+// #define HELLO(X,Y) A Cool(X) B Cool(Y,91) C
+// HELLO(HA0 Ha1,OA)
+// #define cool(X) X -- X
+// #define HELLO(X) cool(X)
+// #define cool AD  AD 
+// #define HELLO cool
+
+// HELLO
+
+// // I like pizza A M
+
+// LOG(1,2,3,4,5,6,7)
+
+
+// #define MACRO(PARAM) MACRO(MACRO(PARAM + PARAM,2), PARAM) PARAM
+
+// <macro-define> = <name> <parameters> <content>
+// <macro-usage> = <name> <arguments>
+// <arguments> = <content> (arguments)*
+// <content> = ( <token> | <macro-usage> | <parameter> ) *
+
+
+// initialStream
+// outputStream // temp stream
+
+// MACRO(1,3)
+
+
+// macroName = ...
+// arguments: Array<TokenRange>;
+// FetchRangedArguments(initialStream,&arguments)
+// certainMacro = Fetch_macro_by_arg_count(macroName, arguments.size())
+// content: TokenRange = certainMacro.content;
+// while token: content {
+
+//     argRange: TokenRange;
+//     if IsMacro(token) {
+//         arguments: Array<TokenRange>;
+//         FetchRangedArguments(content.iterator?,&arguments)
+//         certainMacro = Fetch_macro_by_arg_count(macroName, arguments.size())
+//         content: TokenRange = certainMacro.content;
+
+//         go through new contents
+//     } else if argRange = IsParameter(token) {
+        
+//         go through argument content matching stuff
+//     } else {
+//         outputStream.add(token);
+//     }
+// }
+
+
+// preprocess outputStream into final stream (outTokens)

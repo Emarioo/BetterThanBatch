@@ -1,4 +1,5 @@
 #include "Engone/PlatformLayer.h"
+// #include "Engone/Logger.h"
 
 // Do not pop or add elements while iterating
 template<typename T>
@@ -7,6 +8,31 @@ struct DynamicArray {
     ~DynamicArray() { cleanup(); }
     void cleanup(){
         _reserve(0);
+    }
+
+    DynamicArray(DynamicArray<T>& arr) = delete;
+    DynamicArray<T>& operator=(const DynamicArray<T>& arr) {
+        // if(arr.used>0){
+            // engone::log::out << "copy "<<arr.used<<"\n";
+        // }
+        Assert(_reserve(arr.max));
+        Assert(resize(arr.used));
+        for(int i=0;i<used;i++){
+            _ptr[i] = arr._ptr[i];
+        }
+        return *this;
+    }
+
+    // DynamicArray(const DynamicArray<T>& arr) = delete;
+    DynamicArray(const DynamicArray<T>& arr){
+        // if(arr.used>0){
+            // engone::log::out << "copy "<<arr.used<<"\n";
+        // }
+        Assert(_reserve(arr.max));
+        Assert(resize(arr.used));
+        for(int i=0;i<used;i++){
+            _ptr[i] = arr._ptr[i];
+        }
     }
 
     T* _ptr = nullptr;
@@ -30,7 +56,7 @@ struct DynamicArray {
     // }
     bool pop(){
         if(!used) return false;
-        T* ptr = _ptr + used--;
+        T* ptr = _ptr + --used;
         ptr->~T();
         return true;
     }
@@ -54,6 +80,10 @@ struct DynamicArray {
     u32 size() const {
         return used;
     }
+    // Use resize(0)
+    // void clear() {
+    //     used = 0;
+    // }
 
     bool _reserve(u32 newMax){
         if(newMax==0){

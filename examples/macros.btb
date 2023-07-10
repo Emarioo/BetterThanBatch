@@ -1,0 +1,4 @@
+#define HI prints("hello\n")
+
+// #define LOG(X,...) HI LOG(...)
+// #define LOG()

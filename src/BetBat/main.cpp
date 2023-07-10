@@ -202,7 +202,9 @@ int main(int argc, const char** argv){
         log::out << log::BLACK<<"[DEVMODE]\n";
         // PerfTestTokenize("example/build_fast.btb",200);
 
-        CompileAndRun({"examples/strings.btb", compilerDir.text});
+        // CompileAndRun({"examples/strings.btb", compilerDir.text});
+        CompileAndRun({"examples/test.btb", compilerDir.text});
+        // CompileAndRun({"examples/macro-bench.btb", compilerDir.text});
         // RunBytecode({"a.btbc", compilerDir.text});
         // Bytecode* bc = ImportBytecode(std::string("a.btbc"));
         // RunBytecode(bc);
@@ -242,4 +244,5 @@ int main(int argc, const char** argv){
         PrintRemainingTrackTypes();
     }
     log::out.cleanup();
+    // system("pause");
 }
