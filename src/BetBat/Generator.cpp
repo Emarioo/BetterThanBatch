@@ -80,9 +80,9 @@ void GenInfo::addPop(int reg) {
     // if errors != 0 then don't assert and just return since the stack
     // is probably messed up because of the errors. OR you try
     // to manage the stack even with errors. Unnecessary work though so don't!? 
-    while (true) {
+    WHILE_TRUE {
         if(errors==0){
-            Assert(("bug in compiler!", !stackAlignment.empty()))
+            Assert(("bug in compiler!", !stackAlignment.empty()));
         }
         auto align = stackAlignment.back();
         if(errors==0 && align.size!=0){
@@ -134,7 +134,7 @@ void GenInfo::addIncrSp(i16 offset) {
     using namespace engone;
     if (offset == 0)
         return;
-    // Assert(offset>0) // TOOD: doesn't handle decrement of sp
+    // Assert(offset>0); // TOOD: doesn't handle decrement of sp
     if (offset > 0) {
         int at = offset;
         while (at > 0 && stackAlignment.size() > 0) {
@@ -202,7 +202,7 @@ void GenInfo::addStackSpace(i32 _size) {
         code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & size), (u8)(size >> 8)});
 
         // code->add({BC_POP, (u8)reg});
-        Assert(("bug in compiler!", !stackAlignment.empty()))
+        Assert(("bug in compiler!", !stackAlignment.empty()));
         auto align = stackAlignment.back();
         Assert(("bug in compiler!", align.size == size));
         // You pushed some size and tried to pop a different size.
@@ -233,7 +233,7 @@ void GenInfo::restoreStackMoment(int moment) {
         stackAlignment.pop_back();
         at -= align.size;
         at -= align.diff;
-        Assert(at >= 0)
+        Assert(at >= 0);
     }
     virtualStackPointer = moment;
     code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
@@ -345,7 +345,7 @@ bool IsSafeCast(TypeId from, TypeId to) {
     // if(!fromSigned&&toSigned){
     //     return from-AST_UINT8 < to-AST_INT8;
     // }
-    // Assert(("IsSafeCast not handled case",0))
+    // Assert(("IsSafeCast not handled case",0));
     // return false;
 }
 u8 ASTOpToBytecode(TypeId astOp, bool floatVersion){
@@ -917,7 +917,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
                         if(!argType.isPointer()){
                             argType.setPointerLevel(1);
                         } else {
-                            Assert(argType.getPointerLevel()==1)
+                            Assert(argType.getPointerLevel()==1);
                             info.addPop(BC_REG_RBX);
                             info.code->add({BC_MOV_MR, BC_REG_RBX, BC_REG_RBX});
                             info.addPush(BC_REG_RBX);
@@ -1449,7 +1449,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             std::vector<ASTExpression *> exprs;
             exprs.resize(astruct->members.size(), nullptr);
 
-            Assert(expression->args)
+            Assert(expression->args);
             for (int index = 0; index < (int)expression->args->size(); index++) {
                 ASTExpression *expr = expression->args->get(index);
 
@@ -1575,7 +1575,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
             //     ERR_HEAD2(expression->tokenRange) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
             //     return GEN_ERROR;
             // }
-            // Assert(expression->member)
+            // Assert(expression->member);
             // int index=-1;
             // for(int i=0;i<(int)typeInfo->astEnum->members.size();i++){
             //     if(typeInfo->astEnum->members[i].name == *expression->member) {
@@ -1959,7 +1959,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, std::vector<Typ
     for(auto& typ : *outTypeIds){
         TypeInfo* ti = info.ast->getTypeInfo(typ);
         if(ti){
-            Assert(("Leaking virtual type!",ti->id == typ))
+            Assert(("Leaking virtual type!",ti->id == typ));
         }
     }
     // To avoid ensuring non virtual type everywhere all the entry point where virtual type can enter
@@ -2036,7 +2036,10 @@ int GenerateBody(GenInfo &info, ASTScope *body);
 int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct = nullptr){
     using namespace engone;
     MEASURE;
-    _GLOG(FUNC_ENTER_IF(!function->body->nativeCode))
+    _GLOG(FUNC_ENTER_IF(!function->nativeCode))
+
+    Assert(function->body || function->nativeCode ||info.compileInfo->errors!=0);
+    if(!function->body && !function->nativeCode) return PARSE_ERROR;
 
     int lastOffset = info.currentFrameOffset;
     
@@ -2067,7 +2070,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         //     return GEN_ERROR;
         // }
     }
-    if(function->body->nativeCode){
+    if(function->nativeCode){
         if(function->polyArgs.size()!=0 || (astStruct && astStruct->polyArgs.size()!=0)){
             ERR_HEAD(function->tokenRange, "Function with native code cannot be polymorphic.\n\n";
                 ERR_LINE(function->body->tokenRange, "native code");
@@ -2076,6 +2079,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         }
         // Should not be hardcoded like this
         #define CASE(X,Y) else if (function->name == #X) function->_impls[0]->address = Y;
+        int caseCountStart = __LINE__;
         if(false) ;
         CASE(FileOpen,BC_EXT_FILEOPEN)
         CASE(FileRead,BC_EXT_FILEREAD)
@@ -2089,8 +2093,9 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         CASE(prints,BC_EXT_PRINTS)
         CASE(printd,BC_EXT_PRINTD)
         else {
-            ERR_HEAD(function->tokenRange, "'"<<function->name<<"' is not a native function.\n\n";
-                ERR_LINE(function->body->tokenRange, "bad");
+            int caseCount = __LINE__ - caseCountStart - 3;
+            ERR_HEAD(function->tokenRange, "'"<<function->name<<"' is not a native function. None of the "<<caseCount<<" if-statements matched.\n\n";
+                ERR_LINE(function->name, "bad");
             )
             return GEN_ERROR;
         }
@@ -2239,7 +2244,8 @@ int GenerateFunctions(GenInfo& info, ASTScope* body){
     using namespace engone;
     MEASURE;
     _GLOG(FUNC_ENTER)
-    Assert(body)
+    Assert(body || info.compileInfo->errors!=0);
+    if(!body) return PARSE_ERROR;
 
     ScopeId savedScope = info.currentScopeId;
     defer { info.currentScopeId = savedScope; };
@@ -2250,8 +2256,9 @@ int GenerateFunctions(GenInfo& info, ASTScope* body){
         GenerateFunctions(info, it);
     }
     for(auto it : body->functions) {
-        if(!it->body->nativeCode) // skipping if native to reduce log messages
+        if(!it->nativeCode) {// skipping if native to reduce log messages
             GenerateFunctions(info, it->body);
+        }
         GenerateFunction(info, it);
     }
     for(auto it : body->structs) {
@@ -2266,7 +2273,8 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
     using namespace engone;
     MEASURE;
     _GLOG(FUNC_ENTER)
-    Assert(body);
+    Assert(body||info.compileInfo->errors!=0);
+    if(!body) return PARSE_ERROR;
 
     ScopeId savedScope = info.currentScopeId;
     defer { info.currentScopeId = savedScope; };
@@ -3336,7 +3344,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
                 pair->second++;
         }
     }
-    if(resolveFailures.size()!=0){
+    if(resolveFailures.size()!=0 && info.compileInfo->errors==0 && info.errors==0){
         log::out << log::RED << "Invalid function resolutions:\n";
         for(auto& pair : resolveFailures){
             info.errors += pair.second;

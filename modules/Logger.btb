@@ -5,25 +5,24 @@
     is because you might want your own log function.
 */
 
-fn @hide print(t: i32){
+fn @hide _print(t: i32){
     printi(cast<i64>t)
 }
-fn @hide print(t: f32){
+fn @hide _print(t: f32){
     printd(t)
 }
-fn @hide print(t: char){
+fn @hide _print(t: char){
     printc(t)
 }
-fn @hide print(t: bool){
+fn @hide _print(t: bool){
     if(t) prints("true");
     else prints("false");
 }
-fn @hide print(t: Slice<char>){
+fn @hide _print(t: Slice<char>){
     prints(t);
 }
 
 // macros does not travel across imports yet ):
-// #define LOG(X,...) log(X); LOG(...);
-// #define LOG()
-
-// LOG("Hello ", 007, " are you ",false && true);
+// Now they do haha!
+#define print(X,...) _print(X); print(...);
+#define print()

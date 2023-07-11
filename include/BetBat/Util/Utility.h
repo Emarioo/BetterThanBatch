@@ -38,6 +38,7 @@ std::string BriefPath(const std::string& path, int max=40);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
 
+
 #define FUNC_ENTER ScopeDebug scopeDebug{__FUNCTION__,info.funcDepth};
 #define FUNC_ENTER_IF(COND) ScopeDebug scopeDebug{(COND)?__FUNCTION__:nullptr,info.funcDepth};
 #define SCOPE_LOG(X) ScopeDebug scopeDebug{X,info.funcDepth};
@@ -65,6 +66,8 @@ struct ScopeDebug {
 
 #define COMBINE1(X,Y) X##Y
 #define COMBINE(X,Y) COMBINE1(X,Y)
+
+#define WHILE_TRUE int COMBINE(limit,__LINE__)=1000; while(Assert(COMBINE(limit,__LINE__)--))
 
 // #define defer std::function<void()> COMBINE(func,__LINE__){};DeferStruct COMBINE(defer,__LINE__)(COMBINE(func,__LINE__));COMBINE(func,__LINE__)=[&]()
 #define defer DeferStruct COMBINE(defer,__LINE__){};COMBINE(defer,__LINE__)._func=[&]()

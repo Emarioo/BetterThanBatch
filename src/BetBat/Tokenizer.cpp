@@ -644,9 +644,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     bool foundNonSpaceOnLine = false;
 
     int index=0;
-    while(true){
-        if(index==length)
-            break;
+    for(int index=0;index<length;/* increment happens below*/) {
         char prevChr = 0;
         char nextChr = 0;
         char nextChr2 = 0;

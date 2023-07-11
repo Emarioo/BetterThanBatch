@@ -92,7 +92,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
     int offset=0;
     int alignedSize=0; // offset will be aligned to match this at the end
 
-    Assert(astStruct->polyArgs.size() == structImpl->polyArgs.size())
+    Assert(astStruct->polyArgs.size() == structImpl->polyArgs.size());
     DynamicArray<TypeId> prevVirtuals{};
     prevVirtuals.resize(astStruct->polyArgs.size());
     for(int i=0;i<(int)astStruct->polyArgs.size();i++){
@@ -117,7 +117,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
         // auto& baseMem = astStruct->baseImpl.members[i];
         auto& implMem = structImpl->members[i];
 
-        Assert(member.stringType.isString())
+        Assert(member.stringType.isString());
         bool printedError = false;
         TypeId tid = CheckType(info, astStruct->scopeId, member.stringType, astStruct->tokenRange, &printedError);
         if(!tid.isValid() && !printedError){
@@ -239,7 +239,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
         }
         polys+=">";
     }
-    _VLOG(log::out << "Struct "<<log::LIME << astStruct->name<<polys<<log::SILVER<<" (size: "<<structImpl->size <<(astStruct->isPolymorphic()?", poly. impl.":"")<<")\n";)
+    _VLOG(log::out << "Struct "<<log::LIME << astStruct->name<<polys<<log::SILVER<<" (size: "<<structImpl->size <<(astStruct->isPolymorphic()?", poly. impl.":"")<<", scope: "<<info.ast->getScope(astStruct->scopeId)->parent<<")\n";)
     for(int i=0;i<(int)structImpl->members.size();i++){
         auto& name = astStruct->members[i].name;
         auto& mem = structImpl->members[i];
@@ -253,7 +253,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
 }
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError){
     using namespace engone;
-    Assert(typeString.isString())
+    Assert(typeString.isString());
     if(!typeString.isString()) {
         _TC_LOG(log::out << "check type typeid wasn't string type\n";)
         return typeString;
@@ -389,7 +389,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                 // We don't care about another turn. We failed but we don't set
                 // completedStructs to false since this will always fail.
             } else {
-                // _TC_LOG(log::out << "Defined struct "<<info.ast->typeToString(structInfo->id)<<" in scope "<<scope->scopeId<<"\n";)
+                _TC_LOG(log::out << "Created struct type "<<info.ast->typeToString(structInfo->id)<<" in scope "<<scope->scopeId<<"\n";)
                 astStruct->state = ASTStruct::TYPE_CREATED;
                 structInfo->astStruct = astStruct;
                 for(int i=0;i<(int)astStruct->polyArgs.size();i++){
@@ -736,7 +736,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
 int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes){
     using namespace engone;
     MEASURE;
-    Assert(expr)
+    Assert(expr);
     _TC_LOG_ENTER(FUNC_ENTER)
     
     // IMPORTANT NOTE: CheckExpression HAS to run for left and right expressions
@@ -880,7 +880,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             //  Some operations like "2 + ptr" will use i32 as out type when
             //  it should be of pointer type
         }
-        Assert(!expr->typeId.isString())
+        Assert(!expr->typeId.isString());
         // I don't think typeId can be a type string but assert to be sure.
         // if it's not then no need to worry about checking type which is done below
         // this would need to be done in generator too if isString is true
@@ -926,7 +926,7 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
     Assert(funcImpl->polyArgs.size() == func->polyArgs.size());
     for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
         TypeId id = funcImpl->polyArgs[i];
-        Assert(id.isValid())
+        Assert(id.isValid());
         func->polyArgs[i].virtualType->id = id;
     }
     if(funcImpl->structImpl){
@@ -957,7 +957,7 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
     //  offsets of arguments and return values.
 
     funcImpl->argumentTypes.resize(func->arguments.size());
-    funcImpl->returnTypes.resize(func->returnTypes.size());
+    funcImpl->returnTypes.resize(func->returnValues.size());
 
     // Based on 8-bit alignment. The last argument must be aligned by it.
     for(int i=0;i<(int)func->arguments.size();i++){
@@ -1042,16 +1042,25 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
     offset = 0;
     for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
         auto& retImpl = funcImpl->returnTypes[i];
-        auto& retStringType = func->returnTypes[i];
+        auto& retStringType = func->returnValues[i].stringType;
         // TypeInfo* typeInfo = 0;
         if(retStringType.isString()){
             bool printedError = false;
             auto ti = CheckType(info, func->scopeId, retStringType, func->tokenRange, &printedError);
             if(ti.isValid()){
             }else if(!printedError) {
-                // TODO: fix location?
-                ERR_HEAD2(func->tokenRange) << info.ast->getTokenFromTypeString(retStringType)<<" is not a type (function)\n";
-                ERR_END
+                #ifdef DEBUG
+                #define EXTRA_MSG log::out << " ("<<__func__<<")"; 
+                #else
+                #define EXTRA_MSG
+                #endif
+                ERR_HEAD(func->returnValues[i].valueToken, "'"<<info.ast->getTokenFromTypeString(retStringType)<<"' is not a type.";
+                    EXTRA_MSG
+                    log::out << "\n\n";
+
+                    ERR_LINE(func->returnValues[i].valueToken,"bad");
+                )
+                #undef EXTRA_MSG
             }
             retImpl.typeId = ti;
         } else {
@@ -1144,11 +1153,18 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
         // Acquire identifiable arguments
         DynamicArray<TypeId> argTypes{};
         for(int i=0;i<(int)function->arguments.size();i++){
+            // info.ast->printTypesFromScope(function->scopeId);
+
             TypeId typeId = CheckType(info, function->scopeId, function->arguments[i].stringType, function->tokenRange, nullptr);
             // Assert(typeId.isValid());
             if(!typeId.isValid()){
                 std::string msg = info.ast->typeToString(function->arguments[i].stringType);
-                ERR_HEAD(function->arguments[i].name.range(),"Unknown type '"<<msg<<"'.\n\n";
+                ERR_HEAD(function->arguments[i].name.range(),
+                    "Unknown type '"<<msg<<"' for parameter '"<<function->arguments[i].name<<"'";
+                    if(function->parentStruct && i==0){
+                        log::out << " (this parameter is auto-generated for methods)";
+                    }
+                    log::out << ".\n\n";
                     ERR_LINE(function->arguments[i].name.range(),msg.c_str());
                 )
             }
@@ -1217,20 +1233,28 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
     _TC_LOG_ENTER(FUNC_ENTER)
-    Assert(scope)
+    Assert(scope||info.compileInfo->errors!=0);
+    if(!scope) return PARSE_ERROR;
 
     for(auto now : scope->namespaces) {
         CheckFunctions(info, now);
     }
     
-    for(auto it : scope->functions){
-        CheckFunction(info, it, nullptr, scope);
-        int result = CheckFunctions(info, it->body);
+    for(auto fn : scope->functions){
+        CheckFunction(info, fn, nullptr, scope);
+        if(!fn->nativeCode){
+            // Assert(fn->body || info.compileInfo->errors!=0);
+            // if(fn->body){
+                int result = CheckFunctions(info, fn->body);
+            // }
+        }
     }
     for(auto it : scope->structs){
         for(auto fn : it->functions){
             CheckFunction(info, fn , it, scope);
-            int result = CheckFunctions(info, fn->body);
+            if(!fn->nativeCode){
+                int result = CheckFunctions(info, fn->body);
+            }
         }
     }
     
@@ -1328,16 +1352,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
     // bool nonStruct = true;
     // Function bodies/impl to check are added to a list
     // in CheckFunction and CheckFnCall if polymorphic
-    // for(auto it : scope->functions){
-    //     for
-    //     info.checkImpls.add({it, });
-    //     CheckRest(info, it, scope);
-    // }
-    // for(auto now : scope->structs) {
-    //     for(auto it : now->functions){
-    //         CheckRest(info, it, scope);
-    //     }
-    // }
+ 
 
     DynamicArray<std::string> vars;
     for (auto now : scope->statements){
@@ -1492,7 +1507,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                     // with polymorphism since it will check scopes
                     // multiple times with different types. With modififying I mostly
                     // mean removing or adding nodes. Changing names, types is bad too.
-                    Assert(("Broken code",false))
+                    Assert(("Broken code",false));
                     // now->next = nullptr;
                     // info.ast->destroy(now);
                     // if(prev){
@@ -1510,7 +1525,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                     //  that?
                     scopeInfo->nameScopeMap[*now->alias] = originScope->id;
 
-                    Assert(("Broken using keyword code",false))
+                    Assert(("Broken using keyword code",false));
                     // CANNOT MODIFY TREE. SEE @NO-MODIFY-AST
                     // now->next = nullptr;
                     // info.ast->destroy(now);
@@ -1548,7 +1563,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
 
                 // using variable; Should not work.
 
-                Assert(("Fix broken code for using keyword",false))
+                Assert(("Fix broken code for using keyword",false));
                 
                 // CANNOT MODIFY TREE. SEE @NO-MODIFY-AST
                 // now->next = nullptr;
@@ -1600,20 +1615,19 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     }
     result = CheckFunctions(info, scope);
 
-    // while(info.checkImpls.size()!=0){
-    //     auto checkImpl = info.checkImpls[info.checkImpls.size()-1];
-    //     info.checkImpls.pop();
-
-    //     CheckRest(info, checkImpl.astFunc, checkImpl.funcImpl);
-    // }
-
     result = CheckRest(info, scope);
 
     while(info.checkImpls.size()!=0){
         auto checkImpl = info.checkImpls[info.checkImpls.size()-1];
         info.checkImpls.pop();
 
-        CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl);
+        // Assert(!checkImpl.astFunc->nativeCode);
+        if(!checkImpl.astFunc->nativeCode){
+            Assert(checkImpl.astFunc->body || info.compileInfo!=0);
+            if(checkImpl.astFunc->body){
+                CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl);
+            }
+        }
     }
     
     info.compileInfo->errors += info.errors;

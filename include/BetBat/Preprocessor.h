@@ -18,8 +18,15 @@ struct TokenRef{
 // Tokens in argument
 typedef std::vector<TokenRef> TokenList;
 typedef std::vector<TokenList> Arguments;
+struct TokenSpan {
+    int start=0;
+    int end=0;
+    TokenStream* stream=nullptr;
+};
+engone::Logger& operator<<(engone::Logger& logger, const TokenSpan& span);
 struct CertainMacro {
-    TokenRange contentRange{};
+    Token name{};
+    TokenSpan contentRange{};
     int start=-1;
     int end=-1;
 
@@ -41,6 +48,7 @@ struct CertainMacro {
     // int matchArg(Token token);
 };
 struct RootMacro {
+    Token name;
     std::unordered_map<int, CertainMacro> certainMacros;
     bool hasInfinite=false;
     CertainMacro infDefined{};
@@ -105,7 +113,7 @@ struct PreprocInfo {
     Token& next();
     int length();
     Token& get(int index);
-    void nextline();
+    // void nextline();
 };
 TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* tokens);
 void PreprocessImports(CompileInfo* compileInfo, TokenStream* tokens);

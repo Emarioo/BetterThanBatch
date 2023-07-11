@@ -105,7 +105,7 @@ AST *AST::Create() {
     AST *ast = (AST *)engone::Allocate(sizeof(AST));
     new(ast) AST();
 
-    ScopeId scopeId = ast->createScope()->id;
+    ScopeId scopeId = ast->createScope(0)->id;
     ast->globalScopeId = scopeId;
     // initialize default data types
     ast->createPredefinedType(Token("void"),scopeId, AST_VOID);
@@ -238,7 +238,7 @@ Identifier *AST::getIdentifier(ScopeId scopeId, const Token &name) {
     Token ns={};
     Token realName = TrimNamespace(Token(name), &ns);
     ScopeId nextScopeId = scopeId;
-    while(true) {
+    WHILE_TRUE {
         if(ns.str) {
             ScopeInfo* nscope = getScope(ns, nextScopeId);
             if(nscope) {
@@ -472,36 +472,6 @@ void FnOverloads::addPolyOverload(ASTFunction* astFunc){
     // po.argTypes.stealFrom(typeIds);
 }
 
-// FnOverloads::Overload *AST::getFunction(Identifier* id, std::vector<TypeId>& argTypes) {
-    // , std::vector<AST::NamedArg>& namedArgs) {
-   
-    // for(int i=0;i<(int)id->funcOverloads.size();i++){
-    //     int nonDefaults0 = 0;
-    //     // TODO: Store non defaults in Identifier or ASTStruct to save time.
-    //     //   Recalculating non default arguments here every time you get a function is
-    //     //   unnecessary.
-    //     for(auto& arg : id->funcOverloads[i].astFunc->arguments){
-    //         if(arg.defaultValue)
-    //             break;
-
-    //         nonDefaults0++;
-    //     }
-    //     if(nonDefaults0 > (int)argTypes.size())
-    //         continue;
-    //     bool found = true;
-    //     for (int j=0;j<nonDefaults0;j++){
-    //         if(id->funcOverloads[i].funcImpl->arguments[j].typeId != argTypes[j]){
-    //             found = false;
-    //             break;
-    //         }
-    //     }
-    //     if(found){
-    //         return &id->funcOverloads[i];
-    //     }
-    // }
-//     return nullptr;
-// }
-
 FnOverloads& ASTStruct::getMethod(const std::string& name){
     auto pair = _methods.find(name);
     if(pair == _methods.end()){
@@ -509,22 +479,6 @@ FnOverloads& ASTStruct::getMethod(const std::string& name){
     }
     return pair->second;
 }
-// FnOverloads::Overload* StructImpl::getMethod(const std::string& name, std::vector<TypeId>& typeIds){
-//     // auto pair = methods.find(name);
-//     // if(pair == methods.end())
-//     //     return {};
-//     // return pair->second;
-//     return nullptr;
-//     // ASTFunction* next = functions;
-//     // while(next){
-//     //     ASTFunction* now = next;
-//     //     next = next->next;
-//     //     if(now->name == name){
-//     //         return now;
-//     //     }
-//     // }
-//     // return nullptr;
-// }
 
 void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
     auto si = getScope(scopeId);
@@ -627,7 +581,7 @@ void ASTScope::add(ASTEnum *astEnum, ASTEnum* tail) {
     TAIL_ADD(enums, astEnum)
 }
 void ASTScope::add(ASTScope* astNamespace, AST* ast, ASTScope* tail){
-    Assert(("should not add null",astNamespace))
+    Assert(("should not add null",astNamespace));
     for(auto ns : namespaces){
         // ASTScope* ns = namespaces.get(i);
 
@@ -720,9 +674,10 @@ void AST::cleanup() {
     destroy(mainBody);
     mainBody = nullptr;
 }
-ScopeInfo* AST::createScope() {
+ScopeInfo* AST::createScope(ScopeId parentScope) {
     auto ptr = (ScopeInfo *)engone::Allocate(sizeof(ScopeInfo));
     new(ptr) ScopeInfo{(u32)_scopeInfos.size()};
+    ptr->parent = parentScope;
     _scopeInfos.push_back(ptr);
     return ptr;
 }
@@ -735,12 +690,12 @@ ScopeInfo* AST::getScope(Token name, ScopeId scopeId){
     using namespace engone;
     Token nextName = name;
     ScopeId nextScopeId = scopeId;
-    int safetyLimit = 100;
-    while(true) {
-        if(!safetyLimit--) {
-            log::out << log::RED << __func__ << ": while safety limit broken\n";
-            break;
-        }
+    // int safetyLimit = 100;
+    WHILE_TRUE {
+        // if(!safetyLimit--) {
+        //     log::out << log::RED << __func__ << ": while safety limit broken\n";
+        //     break;
+        // }
         ScopeInfo* scope = getScope(nextScopeId);
         if(!scope) return nullptr;
         int splitIndex = -1;
@@ -798,12 +753,12 @@ ScopeInfo* AST::getScopeFromParents(Token name, ScopeId scopeId){
 
     Token nextName = name;
     ScopeId nextScopeId = scopeId;
-    int safetyLimit = 100;
-    while(true) {
-        if(!safetyLimit--) {
-            log::out << log::RED << __func__ << ": while safety limit broken\n";
-            break;
-        }
+    // int safetyLimit = 100;
+    WHILE_TRUE {
+        // if(!safetyLimit--) {
+        //     log::out << log::RED << __func__ << ": while safety limit broken\n";
+        //     break;
+        // }
         ScopeInfo* scope = getScope(nextScopeId);
         if(!scope) return nullptr;
         int splitIndex = -1;
@@ -892,7 +847,7 @@ Token AST::getTokenFromTypeString(TypeId typeId){
     return _typeTokens[index];
 }
 TypeId AST::convertToTypeId(TypeId typeString, ScopeId scopeId){
-    Assert(typeString.isString())
+    Assert(typeString.isString());
     Token tstring = getTokenFromTypeString(typeString);
     return convertToTypeId(tstring, scopeId);
 }
@@ -934,6 +889,38 @@ TypeInfo* AST::createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 
     scope->nameTypeMap[ptr->name] = ptr;
     return ptr;
 }
+void AST::printTypesFromScope(ScopeId scopeId, int scopeLimit){
+    using namespace engone;
+    log::out << __func__<<":\n";
+    int parentLevel = 0;
+    Assert(scopeLimit==-1);
+    ScopeId nextScopeId = scopeId;
+    WHILE_TRUE {
+        ScopeInfo* scope = getScope(nextScopeId);
+        if(!scope) return;
+
+        // if(scope->nameTypeMap.size)
+        log::out << " Scope "<<nextScopeId<<":\n";
+        for(auto& pair : scope->nameTypeMap){
+            log::out << "  "<<pair.first << ", \n";
+        }
+        // bool brea=false;
+        Assert(scope->usingScopes.size()==0);
+        // for(int i=0;i<(int)scope->usingScopes.size();i++){
+        //     ScopeInfo* usingScope = scope->usingScopes[i];
+        //     auto pair = usingScope->nameTypeMap.find(typeName);
+        //     if(pair != usingScope->nameTypeMap.end()){
+        //         typeInfo = pair->second;
+        //         brea = true;
+        //         break;
+        //     }
+        // }
+        // if(brea) break;
+        if(nextScopeId==scope->parent) // prevent infinite loop
+            break;
+        nextScopeId = scope->parent;
+    }
+}
 TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId) {
     using namespace engone;
     Token namespacing = {};
@@ -961,7 +948,7 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId) {
     } else {
         // Find base type in parent scopes
         ScopeId nextScopeId = scopeId;
-        while(true){
+        WHILE_TRUE {
             ScopeInfo* scope = getScope(nextScopeId);
             if(!scope) return {};
 
@@ -989,7 +976,7 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId) {
     if(!typeInfo) {
         return {};
     }
-    while(true){
+    WHILE_TRUE {
         TypeInfo* virtualInfo = getTypeInfo(typeInfo->id);
         if(virtualInfo && typeInfo != virtualInfo){
             typeInfo = virtualInfo;
@@ -1055,7 +1042,7 @@ TypeId AST::ensureNonVirtualId(TypeId id){
     if(!id.isValid() || id.isString()) return id;
     u32 level = id.getPointerLevel();
     id = id.baseType();
-    while(true){
+    WHILE_TRUE {
         TypeInfo* ti = getTypeInfo(id);
         if(!ti || ti->id == id)
             break;
@@ -1479,7 +1466,7 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
 void ASTExpression::printArgTypes(AST* ast, DynamicArray<TypeId>& argTypes){
     using namespace engone;
     Assert(args);
-    Assert(args->size() == argTypes.size())
+    Assert(args->size() == argTypes.size());
     for(int i=0;i<(int)args->size();i++){
         if(i!=0) log::out << ", ";
         if(args->get(i)->namedValue.str)
@@ -1517,16 +1504,6 @@ void ASTStruct::add(ASTFunction* func){
     // baseImpl.methods[func->name] = {func, &func->baseImpl};
     
     functions.add(func);
-
-    // if(!functions){
-    //     functions = func;
-    //     functionsTail = func;
-    // } else {
-    //     functionsTail->next = func;
-    // }
-    // while(functionsTail->next){
-    //     functionsTail = functionsTail->next;
-    // }
 }
 
 // void StructImpl::addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl){
@@ -1611,19 +1588,15 @@ void ASTScope::print(AST *ast, int depth) {
     if(hidden) return;
 
     PrintSpace(depth);
-    if(nativeCode){
-        log::out << "Native code\n";
-        return;
-    }
     if(type == BODY)
-        log::out << "Body\n";
+        log::out << "Body ";
     if(type == NAMESPACE){
         log::out << "Namespace ";
         if(name)
             log::out << " "<<*name;
-        log::out<<"\n";
-        
     }
+    log::out << "(scope: "<<scopeId<<")";
+    log::out<<"\n";
     // #define MUL_PRINT(X,...) for(auto it : X) it->print(ast,depth+1); MUL_PRINT(...)
     // MUL_PRINT(structs, enums, functions, statements, namespaces);
     
@@ -1650,30 +1623,39 @@ void ASTFunction::print(AST *ast, int depth) {
             }
             log::out << ">";
         }
-        log::out << "(";
+        log::out << " (scope: "<<scopeId<<") ";
+        log::out << "\n";
         for (int i = 0; i < (int)arguments.size(); i++) {
             auto &arg = arguments[i];
+            PrintSpace(depth+1);
             // auto &argImpl = baseImpl.arguments[i];
-            if (i != 0) {
-                log::out << ", ";
-            }
+            // if (i != 0) {
+            //     log::out << ", ";
+            // }
             log::out << arg.name << ": ";
             log::out << ast->typeToString(arg.stringType);
+            log::out << "\n";
         }
-        log::out << ")";
-        if (returnTypes.size()!=0)
+        // log::out << ")";
+        if (returnValues.size()!=0)
             log::out << "->";
-        for (int i=0;i<(int)returnTypes.size();i++){
-            auto& retType = returnTypes[i];
+        for (int i=0;i<(int)returnValues.size();i++){
+            auto& retType = returnValues[i].stringType;
             if(i!=0)
                 log::out<<", ";
             // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
             // log::out << dtname << ", ";
             log::out << ast->typeToString(retType);
         }
-        log::out << "\n";
-        if(body){
-            body->print(ast, depth + 1);
+        if (returnValues.size()!=0)
+            log::out << "\n";
+        if(nativeCode){
+            PrintSpace(depth+1);
+            log::out << "Native\n";
+        }else{
+            if(body){
+                body->print(ast, depth + 1);
+            }
         }
     }
 }
@@ -1694,26 +1676,30 @@ void ASTStruct::print(AST *ast, int depth) {
         if (polyArgs.size() != 0) {
             log::out << ">";
         }
-        log::out << " { ";
+        log::out << " (scope: "<<scopeId<<")";
+        log::out << "\n";
+        // log::out << " { ";
         for (int i = 0; i < (int)members.size(); i++) {
             auto &member = members[i];
             // auto &implMem = baseImpl.members[i];
+            PrintSpace(depth + 1);
             auto str = ast->typeToString(member.stringType);
             log::out << member.name << ": " << str;
             if (member.defaultValue) {
                 log::out << " = ";
                 member.defaultValue->tokenRange.print();
             }
-            if (i + 1 != (int)members.size()) {
-                log::out << ", ";
-            }
-        }
-        for(auto f : functions){
             log::out << "\n";
-            f->print(ast,depth);
-            PrintSpace(depth);
+            // if (i + 1 != (int)members.size()) {
+            //     log::out << ", ";
+            // }
         }
-        log::out << " }\n";
+        // log::out << " }\n";
+        for(auto f : functions){
+            // log::out << "\n";
+            f->print(ast,depth+1);
+            // PrintSpace(depth);
+        }
     }
 }
 void ASTEnum::print(AST *ast, int depth) {

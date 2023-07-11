@@ -50,7 +50,7 @@ void* Interpreter::getReg(u8 id){
     }
     #undef CASER
     engone::log::out <<"(RegID: "<<id<<")\n";
-    Assert("tried to access bad register")
+    Assert("tried to access bad register");
     return 0;
 }
 void yeah(int reg, void* from, void* to){
@@ -100,7 +100,7 @@ void Interpreter::execute(Bytecode* bytecode){
     if(length==0)
         log::out << log::YELLOW << "Interpreter ran bytecode with zero instructions. Bug?\n";
     Instruction* codePtr = (Instruction*)bytecode->codeSegment.data;
-    while (true) {
+    WHILE_TRUE {
         // check used
 
         // if(pc>=(u64)bytecode->length())

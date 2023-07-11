@@ -157,7 +157,7 @@ Some example code with pipes
     // StartProgram("",(char*)cmd.data(),0,0,0,pipe);
     
     // char buffer[1024];
-    // while(1){
+    // WHILE_TRUE {
     //     int bytes = PipeRead(pipe,buffer,sizeof(buffer));
     //     printf("Read %d\n",bytes);
     //     if(!bytes)

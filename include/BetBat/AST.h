@@ -10,6 +10,10 @@ struct ASTStruct;
 struct ASTEnum;
 struct ASTFunction;
 struct AST;
+struct FuncImpl;
+struct ASTExpression;
+struct ASTScope;
+
 enum PrimitiveType : u32 {
     AST_VOID=0,
     AST_UINT8,
@@ -199,9 +203,6 @@ struct TypeId {
 //         this->len = len;
 //     }
 // };
-struct ASTFunction;
-struct FuncImpl;
-struct ASTExpression;
 struct FnOverloads {
     struct Overload {
         ASTFunction* astFunc=0;
@@ -378,8 +379,6 @@ struct ASTExpression : ASTNode {
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
-struct ASTScope;
-struct ASTFunction;
 struct ASTStatement : ASTNode {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
     enum Type {
@@ -398,7 +397,7 @@ struct ASTStatement : ASTNode {
     int type = 0;
     // int opType = 0;
     struct VarName {
-        Token name{};
+        Token name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
         int arrayLength=-1;
         PolyVersions<TypeId> versions_assignType{};
@@ -483,7 +482,7 @@ struct ASTEnum : ASTNode {
     void print(AST* ast, int depth);  
 };
 struct ASTFunction : ASTNode {
-    std::string name="";
+    Token name{};
     
     struct PolyArg {
         Token name{};
@@ -494,9 +493,13 @@ struct ASTFunction : ASTNode {
         ASTExpression* defaultValue=0;
         TypeId stringType={};
     };
+    struct Ret {
+        TokenRange valueToken{}; // for error messages
+        TypeId stringType;
+    };
     DynamicArray<PolyArg> polyArgs;
     DynamicArray<Arg> arguments; // you could rename to parameters
-    DynamicArray<TypeId> returnTypes; // string type
+    DynamicArray<Ret> returnValues; // string type
     u32 nonDefaults=0; // used when matching overload, having it here avoids recalculations of it
 
     DynamicArray<FuncImpl*> _impls{};
@@ -554,7 +557,7 @@ struct AST {
     //-- Scope stuff
     ScopeId globalScopeId=0;
     std::vector<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
-    ScopeInfo* createScope();
+    ScopeInfo* createScope(ScopeId parentScope);
     ScopeInfo* getScope(ScopeId id);
     // Searches specified scope for a scope with a certain name.
     // Does not check parent scopes.
@@ -666,5 +669,6 @@ struct AST {
     void destroy(ASTExpression* expression);
 
     void print(int depth = 0);
+    void printTypesFromScope(ScopeId scopeId, int scopeLimit=-1);
 };
 const char* TypeIdToStr(int type);

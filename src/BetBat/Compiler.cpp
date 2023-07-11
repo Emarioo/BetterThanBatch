@@ -186,8 +186,12 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
         finalStream = Preprocess(&info, tokenStream);
         if(macroBenchmark){
             log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
-            // finalStream->print();
-            // log::out<<"\n";
+            #ifndef LOG_MEASURES
+            if(finalStream->length()<50){
+                finalStream->print();
+                log::out<<"\n";
+            }
+            #endif
         }
         info.streamsToClean.add(finalStream);
         // tokenStream->print();
@@ -196,7 +200,7 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
         return true;
     
     _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path.text)<<"\n";)
-    ASTScope* body = ParseTokens(finalStream,info.ast,&info, as);
+    ASTScope* body = ParseTokenStream(finalStream,info.ast,&info, as);
     if(body){
         if(as.empty()){
             info.ast->appendToMainBody(body);
@@ -226,14 +230,17 @@ Bytecode* CompileSource(CompileOptions options) {
     }
 
     const char* essentialStructs = 
-    "struct @hide Slice<T> {"
+    "struct Slice<T> {"
+    // "struct @hide Slice<T> {"
         "ptr: T*;"
         "len: u64;"
     "}\n"
-    "struct @hide Range {" 
+    "struct Range {" 
+    // "struct @hide Range {" 
         "beg: i32;"
         "end: i32;"
-    "}\n";
+    "}\n"
+    ;
     ParseFile(compileInfo, std::string("<base-structs>"),"",(char*)essentialStructs, strlen(essentialStructs));
 
     if(options.rawSource.data){
@@ -326,9 +333,9 @@ bool ExportBytecode(Path filePath, const Bytecode* bytecode){
         return false;
     BTBCHeader header{};
 
-    Assert(bytecode->codeSegment.used*bytecode->codeSegment.m_typeSize < ((u64)1<<32))
+    Assert(bytecode->codeSegment.used*bytecode->codeSegment.m_typeSize < ((u64)1<<32));
     header.codeSize = bytecode->codeSegment.used*bytecode->codeSegment.m_typeSize;
-    Assert(bytecode->dataSegment.used*bytecode->dataSegment.m_typeSize < ((u64)1<<32))
+    Assert(bytecode->dataSegment.used*bytecode->dataSegment.m_typeSize < ((u64)1<<32));
     header.dataSize = bytecode->dataSegment.used*bytecode->dataSegment.m_typeSize;
 
     // TOOD: Check error when writing files

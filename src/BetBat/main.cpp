@@ -143,7 +143,7 @@ int main(int argc, const char** argv){
         log::out << log::RED <<"The amount of input and output files must match!\n";
         int index = 0;
         // TODO: Prettier formatting. What about really long file names.
-        while(true){
+        WHILE_TRUE {
             if(index<(int)files.size()){
                 log::out << files[index];
             } else {

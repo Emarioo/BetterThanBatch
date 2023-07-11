@@ -20,11 +20,15 @@ struct ParseInfo {
     ScopeId currentScopeId=0;
     std::string currentNamespace = "";
 
-    // or global scope
-    struct FunctionScope {
-        std::vector<ASTStatement*> defers; // apply these when continue, break or return is encountered
+    struct LoopScope {
+        DynamicArray<ASTStatement*> defers; // apply these when continue, break or return is encountered
     };
-    std::vector<FunctionScope> functionScopes;
+    // function or global scope
+    struct FunctionScope {
+        DynamicArray<ASTStatement*> defers; // apply these when return is encountered
+        DynamicArray<LoopScope> loopScopes;
+    };
+    DynamicArray<FunctionScope> functionScopes;
 
     // Does not handle out of bounds
     Token &prev();
@@ -38,10 +42,10 @@ struct ParseInfo {
 
     // print line of where current token exists
     // not including \n
-    void printLine();
-    void printPrevLine();
+    // void printLine();
+    // void printPrevLine();
 
-    void nextLine();
+    // void nextLine();
 };
 
-ASTScope* ParseTokens(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace = "");
+ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace = "");

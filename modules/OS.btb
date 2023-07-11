@@ -1,6 +1,8 @@
 // using u64 as File does not work since functions are evaluated
 // first and then using. Using won't be applied to functions.
 // A macro is used instead,or now.
+
+// File handle
 #define File u64
 
 enum @hide FileFlag {
@@ -8,19 +10,44 @@ enum @hide FileFlag {
     FILE_ONLY_READ=1,
     FILE_CAN_CREATE=2,
     FILE_WILL_CREATE=4,
-};
+}
 
-// returns file handle and file size
-fn @hide FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64 { @native-code }
-fn @hide FileRead(file: File, buffer: void*, readBytes: u64) -> u64 { @native-code }
-fn @hide FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 { @native-code }
-fn @hide FileClose(file: File) { @native-code }
+#define fn_native fn @hide @native
 
-fn @hide malloc(size: u64) -> void* { @native-code }
-fn @hide realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* { @native-code }
-fn @hide free(ptr: void*, size: u64) { @native-code }
+// // returns file handle and file size
+fn_native FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64;
+// returns read bytes
+fn_native FileRead(file: File, buffer: void*, readBytes: u64) -> u64 ;
+// returns written bytes
+fn_native FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 ;
+fn_native FileClose(file: File) ;
 
-fn @hide printi(num: i64) { @native-code }
-fn @hide printd(num: f32) { @native-code }
-fn @hide printc(chr: char) { @native-code }
-fn @hide prints(slice: Slice<char>) { @native-code }
+fn_native malloc(size: u64) -> void* ;
+fn_native realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
+fn_native free(ptr: void*, size: u64) ;
+
+fn_native printi(num: i64) ;
+fn_native printd(num: f32) ;
+fn_native printc(chr: char) ;
+fn_native prints(str: char[]) ;
+
+fn_native CreateDirectoryIterator(rootPath: char[]) -> DirectoryIterator*;
+
+struct DirectoryIteratorData {
+    name: char[];
+    fileSize: u64;
+    lastWriteSeconds: f32;
+    isDirectory: bool;
+}
+
+struct DirectoryIterator {
+    rootPath: char[];
+    result: DirectoryIteratorData;
+
+    fn next() -> DirectoryIteratorData* {
+        return null
+    }
+    fn skip() {
+
+    }
+}

@@ -79,7 +79,7 @@ namespace engone {
 		}
 		
 		WIN32_FIND_DATAA data;
-		while(true){
+		WHILE_TRUE {
 			if(info->second.handle==INVALID_HANDLE_VALUE){
 				if(info->second.directories.empty()){
 					return false;
@@ -276,7 +276,7 @@ namespace engone {
 				DWORD err = GetLastError();
 				printf("[WinError %lu] Error aquiring file size from '%s'",err,path.c_str());
 				*outFileSize = 0;
-				Assert(outFileSize)
+				Assert(outFileSize);
 			}
 		}
 		return TO_INTERNAL(handle);
@@ -1238,7 +1238,8 @@ namespace engone {
 					break;
 				} else {
 					int offset = 0;
-					while (true) {
+					int limit = 1000;
+					while (limit--) {
 						FILE_NOTIFY_INFORMATION& info = *(FILE_NOTIFY_INFORMATION*)((char*)self->m_buffer + offset);
 						int length = info.FileNameLength / sizeof(WCHAR);
 						if (length < MAX_PATH + 1) {

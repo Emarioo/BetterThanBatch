@@ -46,7 +46,7 @@ struct DynamicArray {
             }
         }
         T* ptr = _ptr + used++;
-        Assert(((u64)ptr % alignof(T)) == 0) // TODO: alignment for placement new?
+        Assert(((u64)ptr % alignof(T)) == 0); // TODO: alignment for placement new?
         new(ptr)T(t);
 
         return true;
@@ -58,6 +58,16 @@ struct DynamicArray {
         if(!used) return false;
         T* ptr = _ptr + --used;
         ptr->~T();
+        return true;
+    }
+    bool remove(u32 index){
+        Assert(index < used);
+        T* ptr = _ptr + index;
+        ptr->~T();
+        --used;
+        if(index != used){
+            memcpy(_ptr + index, _ptr + index + 1, (used-index) * sizeof(T));
+        }
         return true;
     }
     T* getPtr(u32 index) const {
@@ -133,7 +143,7 @@ struct DynamicArray {
                 return false;
         }
         for(u32 i = used; i<newSize;i++){
-            Assert(((u64)(_ptr+i) % alignof(T)) == 0) // TODO: alignment for placement new?
+            Assert(((u64)(_ptr+i) % alignof(T)) == 0); // TODO: alignment for placement new?
             new(_ptr+i)T();
         }
         used = newSize;

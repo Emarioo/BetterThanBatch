@@ -9,7 +9,7 @@
 /* ###############
    Major config
 ############### */
-// #define DEBUG
+#define DEBUG
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 // Will it ever be?
@@ -32,7 +32,7 @@
 
 // Language config
 // Only here to compare speeds
-#define SLOW_PREPROCESSOR
+// #define SLOW_PREPROCESSOR
 
 #define PREPROC_REC_LIMIT 100
 // You could enforce hashtag (replace macro with hashtag)
@@ -40,7 +40,7 @@
 #define PREPROC_TERM "#"
 
 // Debug config
-#ifdef DEBUG
+// #ifdef DEBUG
 
 #define VLOG
 #define LOG_MSG_LOCATION

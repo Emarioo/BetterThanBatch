@@ -1,0 +1,11 @@
+#import "OS"
+
+path = "src"
+
+// prints("Ok")
+
+iter: DirectoryIterator* = CreateDirectoryIterator(path)
+while true {
+    
+    // NextDirectoryIterator(path)
+}
