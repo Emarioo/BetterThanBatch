@@ -57,6 +57,12 @@ void NativeRegistry::initNativeContent(){
     ADD(DirectoryIteratorNext)
     ADD(DirectoryIteratorSkip)
 
+    ADD(CurrentWorkingDirectory)
+    ADD(StartTimePoint)
+    ADD(EndTimePoint)
+
+    ADD(CmdLineArgs)
+
     #undef ADD
 }
 void NativeRegistry::_addFunction(const std::string& name, const NativeFunction& func){

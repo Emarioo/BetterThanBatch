@@ -77,8 +77,8 @@ engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
     return logger;
 }
 uint32 Bytecode::getMemoryUsage(){
-    uint32 sum = codeSegment.max*codeSegment.m_typeSize
-        +debugSegment.max*debugSegment.m_typeSize
+    uint32 sum = codeSegment.max*codeSegment.getTypeSize()
+        +debugSegment.max*debugSegment.getTypeSize()
         // debugtext?        
         ;
     return sum;
@@ -210,7 +210,7 @@ int Bytecode::appendData(const void* data, int size){
 //         int oldmax = debugSegment.max;
 //         if(!debugSegment.resize(newSize))
 //             return;
-//         memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
+//         memset((char*)debugSegment.data + oldmax*debugSegment.getTypeSize(),0,(debugSegment.max-oldmax)*debugSegment.getTypeSize());
 //     }
 //     int oldIndex = *((u32*)debugSegment.data + instructionIndex);
 //     if(oldIndex==0){
@@ -246,7 +246,7 @@ Bytecode::Location* Bytecode::setLocationInfo(u32 locationIndex, u32 instruction
         newSize += (instructionIndex-debugSegment.max)*2;
         int oldmax = debugSegment.max;
         Assert(debugSegment.resize(newSize));
-        memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0xFF,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
+        memset((char*)debugSegment.data + oldmax*debugSegment.getTypeSize(),0xFF,(debugSegment.max-oldmax)*debugSegment.getTypeSize());
     }
     u32& index = *((u32*)debugSegment.data + instructionIndex);
     if(debugSegment.used <= instructionIndex) {
@@ -276,7 +276,7 @@ Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 
         newSize += (instructionIndex-debugSegment.max)*2;
         int oldmax = debugSegment.max;
         Assert(debugSegment.resize(newSize));
-        memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0xFF,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
+        memset((char*)debugSegment.data + oldmax*debugSegment.getTypeSize(),0xFF,(debugSegment.max-oldmax)*debugSegment.getTypeSize());
     }
     u32& index = *((u32*)debugSegment.data + instructionIndex);
     if(debugSegment.used <= instructionIndex) {

@@ -2189,7 +2189,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
                 }
             }
         }
-        if(info.code->length()<1 || info.code->get(info.code->length()-1)->opcode!=BC_RET) {
+        if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
             // add return if it doesn't exist
             info.addInstruction({BC_RET});
         }
@@ -2757,14 +2757,14 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             }
 
             // fix address for jump instruction
-            *(u32 *)info.code->get(skipIfBodyIndex) = info.code->length();
+            info.code->getIm(skipIfBodyIndex) = info.code->length();
 
             if (statement->secondBody) {
                 result = GenerateBody(info, statement->secondBody);
                 if (result == GEN_ERROR)
                     continue;
 
-                *(u32 *)info.code->get(skipElseBodyIndex) = info.code->length();
+                info.code->getIm(skipElseBodyIndex) = info.code->length();
             }
         } else if (statement->type == ASTStatement::WHILE) {
             _GLOG(SCOPE_LOG("WHILE"))
@@ -2810,7 +2810,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             info.code->addIm(loopScope->continueAddress);
 
             for (auto ind : loopScope->resolveBreaks) {
-                *(u32 *)info.code->get(ind) = info.code->length();
+                info.code->getIm(ind) = info.code->length();
             }
 
             // pop loop happens in defer
@@ -2952,7 +2952,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 info.code->addIm(loopScope->continueAddress);
 
                 for (auto ind : loopScope->resolveBreaks) {
-                    *(u32 *)info.code->get(ind) = info.code->length();
+                    info.code->getIm(ind) = info.code->length();
                 }
                 
                 info.ast->removeIdentifier(scopeForVariables, "nr");
@@ -3105,7 +3105,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 info.code->addIm(loopScope->continueAddress);
 
                 for (auto ind : loopScope->resolveBreaks) {
-                    *(u32 *)info.code->get(ind) = info.code->length();
+                    info.code->getIm(ind) = info.code->length();
                 }
                 
                 // delete nr, frameoffset needs to be changed to if so
@@ -3343,7 +3343,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     int skipIndex = info.code->length();
     info.code->addIm(0);
     result = GenerateFunctions(info, info.ast->mainBody);
-    *((u32 *)info.code->get(skipIndex)) = info.code->length();
+    info.code->getIm(skipIndex) = info.code->length();
 
     info.code->setLocationInfo("GLOBAL CODE SEGMENT");
     // info.code->addDebugText("GLOBAL CODE SEGMENT\n");
@@ -3354,10 +3354,10 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
 
     std::unordered_map<FuncImpl*, int> resolveFailures;
     for(auto& e : info.callsToResolve){
-        auto inst = info.code->get(e.bcIndex);
+        auto& inst = info.code->get(e.bcIndex);
         // Assert(e.funcImpl->address != Identifier::INVALID_FUNC_ADDRESS);
         if(e.funcImpl->address != FuncImpl::INVALID_FUNC_ADDRESS){
-            *((i32*)inst) = e.funcImpl->address;
+            *((i32*)&inst) = e.funcImpl->address;
         } else {
             // ERR() << "Invalid function address for instruction["<<e.bcIndex << "]\n";
             auto pair = resolveFailures.find(e.funcImpl);

@@ -3,6 +3,14 @@
 #include "BetBat/Tokenizer.h"
 #include "BetBat/Util/Array.h"
 
+// TODO: Use enum instead? If there is a benefit.
+/*
+enum NativeFunctionType {
+    NATIVE_printi = -100,
+    NATIVE_printc,
+    ...
+}
+*/
 #define NATIVE_printi -1
 #define NATIVE_printc -2
 #define NATIVE_prints -3
@@ -22,12 +30,23 @@
 #define NATIVE_DirectoryIteratorNext -22
 #define NATIVE_DirectoryIteratorSkip -23
 
+#define NATIVE_CurrentWorkingDirectory -24
+#define NATIVE_StartTimePoint -25
+#define NATIVE_EndTimePoint -26
+
+#define NATIVE_CmdLineArgs -27
+
 namespace Language {
     template <typename T>
     struct Slice {
         T* ptr=nullptr;
         u64 len=0;
     };
+    // template <typename T>
+    // struct Array {
+    //     T* ptr=nullptr;
+    //     u64 len=0;
+    // };
 
     struct DirectoryIteratorData {
         Slice<char> name;

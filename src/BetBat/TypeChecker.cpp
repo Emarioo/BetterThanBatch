@@ -560,7 +560,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
     } else {
         Identifier* iden = info.ast->findIdentifier(scopeId, baseName);
         if(!iden || iden->type != Identifier::FUNC){
-            ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' does not exist.\n\n";
+            ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' does not exist. Did you forget an import?\n\n";
                 ERR_LINET(baseName,"undefined");
             )
             FNCALL_FAIL

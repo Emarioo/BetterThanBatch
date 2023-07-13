@@ -55,6 +55,15 @@ void print_help(){
 int main(int argc, const char** argv){
     using namespace engone;
 
+    // for(int i=0;i<23;i++){
+    //     int c = i + 9;
+    //     int d = 12;
+    //     int a = c + d - (i + 2) - i*d*9;
+    // }
+    // // ReadObjectFile();
+
+    // return 0;
+
     log::out.enableReport(false);
 
     // PerfTestTokenize("src/BetBat/Generator.cpp", 1);
@@ -80,10 +89,12 @@ int main(int argc, const char** argv){
     std::vector<std::string> outFiles;
     std::vector<std::string> filesToRun;
 
+    std::vector<std::string> userArgs;
+
     for(int i=1;i<argc;i++){
         const char* arg = argv[i];
         int len = strlen(argv[i]);
-        // log::out << "arg["<<i<<"] "<<arg<<"\n";
+        log::out << "arg["<<i<<"] "<<arg<<"\n";
         if(!strcmp(arg,"--help")||!strcmp(arg,"-help")) {
             print_help();
             return 1;
@@ -101,6 +112,8 @@ int main(int argc, const char** argv){
             filesToRun.push_back(arg);
         } else if(mode==MODE_OUT){
             outFiles.push_back(arg);
+        } else if(mode==MODE_USER_ARGS){
+            userArgs.push_back(arg);
         } 
         /*
         else if(mode==MODE_TEST){
@@ -176,12 +189,17 @@ int main(int argc, const char** argv){
         if(compilerDir.text.substr(compilerDir.text.length()-5,5) == "/bin/")
             compilerDir = compilerDir.text.substr(0,compilerDir.text.length() - 4);
     }
+    CompileOptions compileOptions{};
+    compileOptions.compilerDirectory = compilerDir.text;
+    compileOptions.userArgs = userArgs;
     for(int i = 0; i < (int)files.size();i++){
+        compileOptions.initialSourceFile = files[i].c_str();
         if(outFiles.size()==0){
             log::out << log::GRAY << "Compile and run: "<<files[i] << "\n";
-            CompileAndRun({files[i].c_str(), compilerDir.text});
+            CompileAndRun(compileOptions);
         } else {
-            Bytecode* bc = CompileSource({files[i].c_str(), compilerDir.text});
+            
+            Bytecode* bc = CompileSource(compileOptions);
             if(bc){
                 bool yes = ExportBytecode(outFiles[i], bc);
                 Bytecode::Destroy(bc);
@@ -196,7 +214,7 @@ int main(int argc, const char** argv){
         Bytecode* bc = ImportBytecode(file);
         if(bc){
             log::out << log::GRAY<<"Running "<<file << "\n";
-            RunBytecode(bc);
+            RunBytecode(bc, userArgs);
             Bytecode::Destroy(bc);
         } else {
             log::out <<log::RED <<"Failed importing "<<file <<"\n";
@@ -208,7 +226,19 @@ int main(int argc, const char** argv){
         // log::out << "No input files!\n";
     } else if(devmode){
         log::out << log::BLACK<<"[DEVMODE]\n";
-        CompileAndRun({"examples/dev.btb", compilerDir.text});
+        // compileOptions.initialSourceFile = "examples/dev.btb";
+        // CompileAndRun(compileOptions);
+
+        auto objFile = ObjectFile::DeconstructFile("obj_test.obj");
+
+        objFile->writeFile("objtest.obj");
+
+        ObjectFile::Destroy(objFile);
+
+        // Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
+        // ConvertTox64(bytecode);
+
+        // Bytecode::Destroy(bytecode);
         
         // PerfTestTokenize("example/build_fast.btb",200);
 

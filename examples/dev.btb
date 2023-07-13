@@ -1,13 +1,20 @@
 // @macro-benchmark
 // #import "./macros"
-// #import "OS"
-// #import "Logger"
+#import "OS"
+#import "Logger"
 // #import "./macro-bench"
 // #import "./overloading"
 
 // #import "./defer"
-#import "./dir-iterator"
+// #import "./dir-iterator"
 // #import "Basic"
+
+args = CmdLineArgs();
+
+for @pointer args {
+    // println(cast<u64>it.ptr,": ",it.len);
+    println(*it);
+}
 
 // fn @native prints(str: char[]);
 
@@ -15,6 +22,9 @@
 
 // prints(log("Hello"))
 // #define mac temp## #line
+
+
+// prints(CurrentWorkingDirectory())
 
 // mac
 // a = #line

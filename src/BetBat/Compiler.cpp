@@ -335,7 +335,7 @@ void CompileAndRun(CompileOptions options) {
     using namespace engone;
     Bytecode* bytecode = CompileSource(options);
     if(bytecode){
-        RunBytecode(bytecode);
+        RunBytecode(bytecode, options.userArgs);
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
     }
@@ -343,10 +343,11 @@ void CompileAndRun(CompileOptions options) {
     PrintMeasures();
     #endif
 }
-void RunBytecode(Bytecode* bytecode){
+void RunBytecode(Bytecode* bytecode, const std::vector<std::string>& userArgs){
     Assert(bytecode);
         
     Interpreter interpreter{};
+    interpreter.setCmdArgs(userArgs);
     // interpreter.silent = true;
     interpreter.execute(bytecode);
     interpreter.cleanup();
@@ -368,10 +369,10 @@ bool ExportBytecode(Path filePath, const Bytecode* bytecode){
         return false;
     BTBCHeader header{};
 
-    Assert(bytecode->codeSegment.used*bytecode->codeSegment.m_typeSize < ((u64)1<<32));
-    header.codeSize = bytecode->codeSegment.used*bytecode->codeSegment.m_typeSize;
-    Assert(bytecode->dataSegment.used*bytecode->dataSegment.m_typeSize < ((u64)1<<32));
-    header.dataSize = bytecode->dataSegment.used*bytecode->dataSegment.m_typeSize;
+    Assert(bytecode->codeSegment.used*bytecode->codeSegment.getTypeSize() < ((u64)1<<32));
+    header.codeSize = bytecode->codeSegment.used*bytecode->codeSegment.getTypeSize();
+    Assert(bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize() < ((u64)1<<32));
+    header.dataSize = bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize();
 
     // TOOD: Check error when writing files
     int err = FileWrite(file, &header, sizeof(header));
@@ -406,10 +407,10 @@ Bytecode* ImportBytecode(Path filePath){
         return nullptr; // Corrupt file. Sizes does not match.
     
     Bytecode* bc = Bytecode::Create();
-    bc->codeSegment.resize(header.codeSize/bc->codeSegment.m_typeSize);
-    bc->codeSegment.used = header.codeSize/bc->codeSegment.m_typeSize;
-    bc->dataSegment.resize(header.dataSize/bc->dataSegment.m_typeSize);
-    bc->dataSegment.used = header.dataSize/bc->dataSegment.m_typeSize;
+    bc->codeSegment.resize(header.codeSize/bc->codeSegment.getTypeSize());
+    bc->codeSegment.used = header.codeSize/bc->codeSegment.getTypeSize();
+    bc->dataSegment.resize(header.dataSize/bc->dataSegment.getTypeSize());
+    bc->dataSegment.used = header.dataSize/bc->dataSegment.getTypeSize();
     FileRead(file, bc->codeSegment.data, header.codeSize);
     FileRead(file, bc->dataSegment.data, header.dataSize);
 

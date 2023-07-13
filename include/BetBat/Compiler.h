@@ -6,6 +6,8 @@
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
 #include "BetBat/NativeRegistry.h"
+#include "BetBat/ObjectWriter.h"
+#include "BetBat/x64_Converter.h"
 
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
@@ -28,7 +30,8 @@ struct Path {
     u32 _type = 0;
 };
 struct CompileOptions {
-    CompileOptions(engone::Memory source) : rawSource(source) {}
+    CompileOptions() = default;
+    // CompileOptions(engone::Memory<char> source) : rawSource(source) {}
     CompileOptions(const std::string& sourceFile) : initialSourceFile(sourceFile) {}
     CompileOptions(const std::string& sourceFile, const std::string& compilerDirectory) 
     : initialSourceFile(sourceFile), compilerDirectory(
@@ -37,10 +40,11 @@ struct CompileOptions {
                 (compilerDirectory + "/"))
     ), silent(false) {}
     Path initialSourceFile; // Path
-    const engone::Memory rawSource{0}; // Path
+    engone::Memory<char> rawSource{}; // Path
     Path compilerDirectory; // Where resources for the compiler is located. Typically modules.
     std::vector<Path> importDirectories; // Additional directories where imports can be found.
-    bool silent=true;
+    bool silent=false;
+    std::vector<std::string> userArgs;
 };
 struct CompileInfo {
     void cleanup();
@@ -79,6 +83,7 @@ struct CompileInfo {
 
 Bytecode* CompileSource(CompileOptions options);
 void CompileAndRun(CompileOptions options);
-void RunBytecode(Bytecode* bytecode);
+// Content of userArgs is copied
+void RunBytecode(Bytecode* bytecode, const std::vector<std::string>& userArgs);
 bool ExportBytecode(Path filePath, const Bytecode* bytecode);
 Bytecode* ImportBytecode(Path filePath);

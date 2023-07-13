@@ -248,9 +248,9 @@ bool AST::castable(TypeId from, TypeId to){
         return true;
     TypeId vp = AST_VOID;
     vp.setPointerLevel(1);
-    if(from.isPointer() && to == vp)
+    if(from.isPointer() && (to == vp || to==AST_UINT64))
         return true;
-    if(from == vp && to.isPointer())
+    if((from == vp||from==AST_UINT64) && to.isPointer())
         return true;
     if (from == AST_FLOAT32 && AST::IsInteger(to)) {
         return true;

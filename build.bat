@@ -79,5 +79,17 @@ echo Compiled in %finS%.%finS2% seconds
 
 if !errorlevel! == 0 (
     echo f | XCOPY /y /q !output! prog.exe > nul
+
+    cl /c /std:c11 /Tc src/BetBat/obj_test.c /nologo
+    dumpbin obj_test.obj /ALL > out
+
     prog -dev
+    dumpbin objtest.obj /ALL > out2
+
+    link objtest.obj
+
+    @REM gcc -c src/BetBat/obj_test.c
+    @REM prog
+    @REM link obj_test.o
+
 )

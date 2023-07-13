@@ -13,9 +13,33 @@
 // #define DECODE_TYPE(ptr) (*((u8*)ptr+1))
 
 void Interpreter::cleanup(){
-    stack.resize(0);   
+    stack.resize(0);
+    cmdArgsBuffer.resize(0);
+    engone::Free(cmdArgs.ptr, sizeof(Language::Slice<char>)*cmdArgs.len);
+    cmdArgs.ptr = nullptr;
+    cmdArgs.len = 0;
 }
-
+void Interpreter::setCmdArgs(const std::vector<std::string>& inCmdArgs){
+    using namespace engone;
+    // cmdArgs.resize(inCmdArgs.size());
+    cmdArgs.ptr = (Language::Slice<char>*)engone::Allocate(sizeof(Language::Slice<char>)*inCmdArgs.size());
+    cmdArgs.len = inCmdArgs.size();
+    u64 totalText = 0;
+    for(int i=0;i<inCmdArgs.size();i++){
+        totalText += inCmdArgs[i].length()+1;
+    }
+    cmdArgsBuffer.resize(totalText);
+    for(int i=0;i<inCmdArgs.size();i++){
+        char* ptr = cmdArgsBuffer.data + cmdArgsBuffer.used;
+        memcpy(ptr, inCmdArgs[i].data(),inCmdArgs[i].length());
+        *(ptr + inCmdArgs[i].length()) = 0;
+        cmdArgs.ptr[i].ptr = ptr;
+        cmdArgs.ptr[i].len = inCmdArgs[i].length();
+        // log::out << cmdArgs.ptr[i].ptr<<" "<<inCmdArgs[i].length()<<"\n";
+        // log::out << cmdArgs.ptr[i];
+        cmdArgsBuffer.used = inCmdArgs[i].length() + 1;
+    }
+}
 void Interpreter::printRegisters(){
     using namespace engone;
     void* pa = (void*)&rax;
@@ -722,7 +746,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     auto iterHandle = RecursiveDirectoryIteratorCreate(rootPath);
 
                     #ifdef VLOG
-                    log::out << log::GRAY<<"Create dir iterator: "<<rootPath<<"\n";
+                    // log::out << log::GRAY<<"Create dir iterator: "<<rootPath<<"\n";
                     #endif
 
                     auto iterator = (Language::DirectoryIterator*)engone::Allocate(sizeof(Language::DirectoryIterator));
@@ -736,13 +760,12 @@ void Interpreter::execute(Bytecode* bytecode){
                     break;
                 }
                 case NATIVE_DirectoryIteratorDestroy:{
-                    // slice
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
                     
                     RecursiveDirectoryIteratorDestroy((RecursiveDirectoryIterator)iterator->_handle);
 
                     #ifdef VLOG
-                    log::out << log::GRAY<<"Destroy dir iterator: "<<iterator->rootPath<<"\n";
+                    // log::out << log::GRAY<<"Destroy dir iterator: "<<iterator->rootPath<<"\n";
                     #endif
                     if(iterator->result.name.ptr) {
                         Free(iterator->result.name.ptr, iterator->result.name.len);
@@ -755,7 +778,6 @@ void Interpreter::execute(Bytecode* bytecode){
                     break;
                 }
                 case NATIVE_DirectoryIteratorNext:{
-                    // slice
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
                     
                     DirectoryIteratorData result{};
@@ -787,13 +809,55 @@ void Interpreter::execute(Bytecode* bytecode){
                     break;
                 }
                 case NATIVE_DirectoryIteratorSkip:{
-                    // slice
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
                     
                     RecursiveDirectoryIteratorSkip((RecursiveDirectoryIterator)iterator->_handle);
 
                     #ifdef VLOG
-                    log::out << log::GRAY<<"Skip dir iterator: "<<iterator->result.name<<"\n";
+                    // log::out << log::GRAY<<"Skip dir iterator: "<<iterator->result.name<<"\n";
+                    #endif
+                    break;
+                }
+                case NATIVE_CurrentWorkingDirectory:{
+                    
+                    std::string temp = GetWorkingDirectory();
+                    Assert(temp.length()<CWD_LIMIT);
+                    memcpy(cwdBuffer,temp.data(),temp.length());
+                    usedCwd = temp.length();
+
+                    *(char**)(fp-16) = cwdBuffer;
+                    *(u64*)(fp-8) = temp.length();
+                    #ifdef VLOG
+                    log::out << log::GRAY<<"CWD: "<<temp<<"\n";
+                    #endif
+                    break;
+                }
+                case NATIVE_StartTimePoint:{
+                    auto timePoint = MeasureTime();
+                    
+                    *(u64*)(fp-8) = (u64)timePoint;
+
+                    #ifdef VLOG
+                    log::out << log::GRAY<<"Start time point: "<<(u64)timePoint<<"\n";
+                    #endif
+                    break;
+                }
+                case NATIVE_EndTimePoint:{
+                    u64 timePoint = *(u64*)(fp+argoffset + 0);
+
+                    double time = StopMeasure(timePoint);
+
+                    *(float*)(fp - 4) = (float)time;
+                    #ifdef VLOG
+                    log::out << log::GRAY<<"End time point: "<<(u64)timePoint << ", "<<time<<"\n";
+                    #endif
+                    break;
+                }
+                case NATIVE_CmdLineArgs:{
+                    *(Language::Slice<char>**)(fp - 16) = cmdArgs.ptr;
+                    *(u64*)(fp - 8) = cmdArgs.len;
+                    #ifdef VLOG
+                    log::out << log::GRAY<<"Cmd line args: len: "<<cmdArgs.len<<"\n";
                     #endif
                     break;
                 }

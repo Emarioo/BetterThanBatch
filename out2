@@ -2,15 +2,15 @@ Microsoft (R) COFF/PE Dumper Version 14.36.32535.0
 Copyright (C) Microsoft Corporation.  All rights reserved.
 
 
-Dump of file obj_test.obj
+Dump of file objtest.obj
 
 File Type: COFF OBJECT
 
 FILE HEADER VALUES
             8664 machine (x64)
-               6 number of sections
+               4 number of sections
         64B08159 time date stamp Fri Jul 14 00:57:29 2023
-             258 file pointer to symbol table
+             140 file pointer to symbol table
               13 number of symbols
                0 size of optional header
                0 characteristics
@@ -20,7 +20,7 @@ SECTION HEADER #1
        0 physical address
        0 virtual address
       2F size of raw data
-     104 file pointer to raw data (00000104 to 00000132)
+      B4 file pointer to raw data (000000B4 to 000000E2)
        0 file pointer to relocation table
        0 file pointer to line numbers
        0 number of relocations
@@ -41,39 +41,11 @@ RAW DATA #1
    /DEFAULTLIB:OLDNAMES
 
 SECTION HEADER #2
-.debug$S name
-       0 physical address
-       0 virtual address
-      98 size of raw data
-     133 file pointer to raw data (00000133 to 000001CA)
-       0 file pointer to relocation table
-       0 file pointer to line numbers
-       0 number of relocations
-       0 number of line numbers
-42100040 flags
-         Initialized Data
-         Discardable
-         1 byte align
-         Read Only
-
-RAW DATA #2
-  00000000: 04 00 00 00 F1 00 00 00 8C 00 00 00 4E 00 01 11  ....ñ.......N...
-  00000010: 00 00 00 00 43 3A 5C 55 73 65 72 73 5C 64 61 74  ....C:\Users\dat
-  00000020: 61 6F 5C 44 65 73 6B 74 6F 70 5C 42 61 63 6B 75  ao\Desktop\Backu
-  00000030: 70 5C 43 6F 64 65 50 72 6F 6A 65 63 74 73 5C 42  p\CodeProjects\B
-  00000040: 65 74 74 65 72 54 68 61 6E 42 61 74 63 68 5C 6F  etterThanBatch\o
-  00000050: 62 6A 5F 74 65 73 74 2E 6F 62 6A 00 3A 00 3C 11  bj_test.obj.:.<.
-  00000060: 00 62 00 00 D0 00 13 00 24 00 17 7F 00 00 13 00  .b..Ð...$.......
-  00000070: 24 00 17 7F 00 00 4D 69 63 72 6F 73 6F 66 74 20  $.....Microsoft 
-  00000080: 28 52 29 20 4F 70 74 69 6D 69 7A 69 6E 67 20 43  (R) Optimizing C
-  00000090: 6F 6D 70 69 6C 65 72 00                          ompiler.
-
-SECTION HEADER #3
 .text$mn name
        0 physical address
        0 virtual address
       2B size of raw data
-     1CB file pointer to raw data (000001CB to 000001F5)
+      E3 file pointer to raw data (000000E3 to 0000010D)
        0 file pointer to relocation table
        0 file pointer to line numbers
        0 number of relocations
@@ -83,17 +55,17 @@ SECTION HEADER #3
          16 byte align
          Execute Read
 
-RAW DATA #3
+RAW DATA #2
   00000000: 48 83 EC 18 C7 44 24 04 05 00 00 00 C7 04 24 03  H.ì.ÇD$.....Ç.$.
   00000010: 00 00 00 8B 04 24 8B 4C 24 04 03 C8 8B C1 89 44  .....$.L$..È.Á.D
   00000020: 24 08 8B 44 24 08 48 83 C4 18 C3                 $..D$.H.Ä.Ã
 
-SECTION HEADER #4
+SECTION HEADER #3
   .xdata name
        0 physical address
        0 virtual address
        8 size of raw data
-     1F6 file pointer to raw data (000001F6 to 000001FD)
+     10E file pointer to raw data (0000010E to 00000115)
        0 file pointer to relocation table
        0 file pointer to line numbers
        0 number of relocations
@@ -103,16 +75,16 @@ SECTION HEADER #4
          4 byte align
          Read Only
 
-RAW DATA #4
+RAW DATA #3
   00000000: 01 04 01 00 04 22 00 00                          ....."..
 
-SECTION HEADER #5
+SECTION HEADER #4
   .pdata name
        0 physical address
        0 virtual address
        C size of raw data
-     1FE file pointer to raw data (000001FE to 00000209)
-     20A file pointer to relocation table
+     116 file pointer to raw data (00000116 to 00000121)
+     122 file pointer to relocation table
        0 file pointer to line numbers
        3 number of relocations
        0 number of line numbers
@@ -121,42 +93,22 @@ SECTION HEADER #5
          4 byte align
          Read Only
 
-RAW DATA #5
+RAW DATA #4
   00000000: 00 00 00 00 2B 00 00 00 00 00 00 00              ....+.......
 
-Function Table #5 (1)
+Function Table #4 (1)
 
            Begin     End       Info
 
   00000000 00000000  0000002B  00000000
 
-RELOCATIONS #5
+RELOCATIONS #4
                                                 Symbol    Symbol
  Offset    Type              Applied To         Index     Name
  --------  ----------------  -----------------  --------  ------
  00000000  ADDR32NB                   00000000         A  $LN3
  00000004  ADDR32NB                   0000002B         A  $LN3
  00000008  ADDR32NB                   00000000         D  $unwind$main
-
-SECTION HEADER #6
- .chks64 name
-       0 physical address
-       0 virtual address
-      30 size of raw data
-     228 file pointer to raw data (00000228 to 00000257)
-       0 file pointer to relocation table
-       0 file pointer to line numbers
-       0 number of relocations
-       0 number of line numbers
-     A00 flags
-         Info
-         Remove
-         (no align specified)
-
-RAW DATA #6
-  00000000: 23 07 66 15 27 1A BF 1A 15 1B 8B 73 E8 34 01 78  #.f.'.¿....sè4.x
-  00000010: 11 ED EC EB 6A 64 F1 A2 9A F2 01 C0 9C 99 EA 8A  .íìëjdñ¢.ò.À..ê.
-  00000020: B6 EE 10 09 68 51 DB 29 00 00 00 00 00 00 00 00  ¶î..hQÛ)........
 
 COFF SYMBOL TABLE
 000 01047F17 ABS    notype       Static       | @comp.id
@@ -166,25 +118,23 @@ COFF SYMBOL TABLE
     Section length   2F, #relocs    0, #linenums    0, checksum        0
 005 00000000 SECT2  notype       Static       | .debug$S
     Section length   98, #relocs    0, #linenums    0, checksum        0
-007 00000000 SECT3  notype       Static       | .text$mn
+007 00000000 SECT2  notype       Static       | .text$mn
     Section length   2B, #relocs    0, #linenums    0, checksum 1104F013
-009 00000000 SECT3  notype ()    External     | main
-00A 00000000 SECT3  notype       Label        | $LN3
-00B 00000000 SECT4  notype       Static       | .xdata
+009 00000000 SECT2  notype ()    External     | main
+00A 00000000 SECT2  notype       Label        | $LN3
+00B 00000000 SECT3  notype       Static       | .xdata
     Section length    8, #relocs    0, #linenums    0, checksum 4712F2F1
-00D 00000000 SECT4  notype       Static       | $unwind$main
-00E 00000000 SECT5  notype       Static       | .pdata
+00D 00000000 SECT3  notype       Static       | $unwind$main
+00E 00000000 SECT4  notype       Static       | .pdata
     Section length    C, #relocs    3, #linenums    0, checksum A41C7E00
-010 00000000 SECT5  notype       Static       | $pdata$main
-011 00000000 SECT6  notype       Static       | .chks64
-    Section length   30, #relocs    0, #linenums    0, checksum        0
+010 00000000 SECT4  notype       Static       | $pdata$main
+011 00000000 SECT5  notype       Static       | .chks64
+    Section length   30, #relocs    0, #linenums    0, checksum        0, selection    0 (pick unknown)
 
 String Table Size = 0x1D bytes
 
   Summary
 
-          30 .chks64
-          98 .debug$S
           2F .drectve
            C .pdata
           2B .text$mn

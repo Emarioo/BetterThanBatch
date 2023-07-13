@@ -81,7 +81,7 @@ bool hasTokens(TokenStream& tokens, int min, int max=-1){
 #define TEST_FAILED 0
 #define TEST_SUCCESS 1
 struct TestData {
-    engone::Memory text{0};
+    engone::Memory<char> text{};
     TokenStream* tokens=0;
     Bytecode* bytecode = 0;
     Interpreter interpreter{};

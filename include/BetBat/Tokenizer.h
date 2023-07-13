@@ -178,8 +178,8 @@ struct TokenStream {
     static const int VERSION_MAX = 5;
     char version[VERSION_MAX+1]{0};
 
-    engone::Memory tokens{sizeof(Token)}; // the tokens themselves
-    engone::Memory tokenData{1}; // the data the tokens refer to
+    engone::Memory<Token> tokens{}; // the tokens themselves
+    engone::Memory<char> tokenData{}; // the data the tokens refer to
     
     int readHead=0;
 };
@@ -195,5 +195,5 @@ int ConvertHexadecimal(const Token& token);
 bool Equal(const Token& token, const char* str);
 
 // I would recommend testing on a large text for more accurate results.
-void PerfTestTokenize(const engone::Memory& textData, int times=1);
+void PerfTestTokenize(const engone::Memory<char>& textData, int times=1);
 void PerfTestTokenize(const char* file, int times=1);

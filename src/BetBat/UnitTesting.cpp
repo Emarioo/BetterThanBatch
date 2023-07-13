@@ -5,7 +5,7 @@ struct Test {
     void* start=0;
     u32 length=0;
 };
-void SplitTests(std::string path, engone::Memory& baseMemory, std::vector<Test>& outSources){
+void SplitTests(std::string path, engone::Memory<char>& baseMemory, std::vector<Test>& outSources){
     baseMemory = ReadFile(path.c_str());
     if(!baseMemory.data) return;
     outSources.clear();
@@ -59,7 +59,7 @@ void RunUnitTests(std::string testsString){
         }
     }
 
-    engone::Memory baseMemory = {1};
+    engone::Memory<char> baseMemory = {};
     std::vector<Test> tests;
     SplitTests(unitpath,baseMemory,tests);
     defer { baseMemory.resize(0); };
@@ -72,10 +72,12 @@ void RunUnitTests(std::string testsString){
             }
         }
         if(!found) continue;
-        engone::Memory mem{1};
-        mem.data = (void*)tests[i].start;
+        engone::Memory<char> mem{};
+        mem.data = (char*)tests[i].start;
         mem.max = tests[i].length;
-        auto bc = CompileSource({mem});
+        CompileOptions opts{};
+        opts.rawSource = mem;
+        auto bc = CompileSource(opts);
         
         // Interpreter inter{};
         // inter.silent = true;

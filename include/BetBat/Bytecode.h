@@ -140,10 +140,10 @@ struct Bytecode {
     
     uint32 getMemoryUsage();
     
-    engone::Memory codeSegment{sizeof(Instruction)};
-    engone::Memory dataSegment{1};
+    engone::Memory<Instruction> codeSegment{};
+    engone::Memory<u8> dataSegment{};
     
-    engone::Memory debugSegment{sizeof(u32)}; // indices to debugLocations
+    engone::Memory<u32> debugSegment{}; // indices to debugLocations
     struct Location {
         u32 line=0;
         u32 column=0;
@@ -171,9 +171,13 @@ struct Bytecode {
 
     bool add(Instruction inst);
     bool addIm(i32 data);
-    inline Instruction* get(uint index){
-        return ((Instruction*)codeSegment.data + index);
+    inline Instruction& get(uint index){
+        return *((Instruction*)codeSegment.data + index);
     }
+    inline i32& getIm(u32 index){
+        return *((i32*)codeSegment.data + index);
+    }
+
     inline int length(){
         return codeSegment.used;
     }

@@ -133,7 +133,7 @@ namespace engone {
 
 			std::string logReport;
 
-			Memory lineBuffer{1};
+			Memory<char> lineBuffer{};
 
 			// ensure free space
 			char* ensure(uint32 bytes);

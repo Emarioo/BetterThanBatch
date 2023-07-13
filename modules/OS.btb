@@ -34,18 +34,26 @@ fn @hide @native DirectoryIteratorDestroy(iterator: DirectoryIterator*);
 fn @hide @native DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
 fn @hide @native DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
-// fn @hide @native CurrentWorkingDirectory() -> char[];
-// fn @hide @native StartTimePoint() -> u64[];
-// fn @hide @native EndTimePoint(timepoint: u64) -> f32; // TODO: Use f64 (double) when implemented
+// The returned string is heap allocated in the interpreter.
+// This allocation is freed when the interpreter finishes.
+// TODO: You may want to change this so that you give the function a
+//   StringBuffer or StringBuilder and it puts the CWD in there while
+//   still returning a slice. Perhaps the StringBuilder defaults to null
+//   and if not provided it is heap allocated, otherwise allocated in StringBuilder.
+fn @hide @native CurrentWorkingDirectory() -> char[]; // should it be const?
+fn @hide @native StartTimePoint() -> u64;
+fn @hide @native EndTimePoint(timepoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 
-struct DirectoryIteratorData {
+fn @hide @native CmdLineArgs() -> Slice<Slice<char>>; // const?
+
+struct @hide DirectoryIteratorData {
     name: char[]; // allocated by interpreter, the ptr should be const (char* const NOT const char*)
     fileSize: u64;
     lastWriteSeconds: f32;
     isDirectory: bool;
 }
 
-struct DirectoryIterator {
+struct @hide DirectoryIterator {
     _handle: u64;
     rootPath: char[]; // allocated by interpreter, should be char* const
     result: DirectoryIteratorData;

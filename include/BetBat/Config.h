@@ -9,7 +9,7 @@
 /* ###############
    Major config
 ############### */
-// #define DEBUG
+#define DEBUG
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 // Will it ever be?

@@ -1,12 +1,12 @@
 #include "BetBat/Util/Utility.h"
 
-engone::Memory ReadFile(const char* path){
-    engone::Memory buffer{1};
+engone::Memory<char> ReadFile(const char* path){
+    engone::Memory<char> buffer{};
     uint64 fileSize;
     
     if(!engone::FileExist(path)) {
         // buffer.data = (void*)1;
-        return {1};
+        return {};
     }
     
     auto file = engone::FileOpen(path,&fileSize,engone::FILE_ONLY_READ);
@@ -14,7 +14,7 @@ engone::Memory ReadFile(const char* path){
         goto ReadFileFailed;
     
     if(fileSize == 0) {
-        buffer.data = (void*)1;
+        buffer.data = (char*)1;
     } else {
         if(!buffer.resize(fileSize))
             goto ReadFileFailed;
@@ -33,7 +33,7 @@ ReadFileFailed:
     if(file)
         engone::FileClose(file);
     printf("ReadFile : Error %s\n",path);
-    return {0};
+    return {};
 }
 // bool WriteFile(const char* path, engone::Memory buffer){
 //     auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);

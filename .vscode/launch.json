@@ -6,7 +6,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/compiler.exe",
-            "args": ["-dev"],
+            "args": ["-dev","-user-args","Hi","Bro!"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

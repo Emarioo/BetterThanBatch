@@ -602,7 +602,7 @@ void TokenStream::printData(int charsPerLine){
         log::out << "\n";
 }
 TokenStream* TokenStream::Tokenize(const std::string& filePath){
-    engone::Memory memory = ReadFile(filePath.c_str());
+    engone::Memory<char> memory = ReadFile(filePath.c_str());
     if(!memory.data)
         return nullptr;
     auto stream = Tokenize((char*)memory.data,memory.max);
@@ -1170,7 +1170,7 @@ struct Round {
     u32 tokens;
 };
 int cmp_round(const void* a, const void* b){ return (int)(1000000000*((Round*)a)->time - ((Round*)b)->time);}
-void PerfTestTokenize(const engone::Memory& textData, int times){
+void PerfTestTokenize(const engone::Memory<char>& textData, int times){
     using namespace engone;
     log::out << "Data "<<textData.used<<" "<<textData.max<<"\n";
     // log::out <<log::RED<< __FUNCTION__ <<" is broken\n";
