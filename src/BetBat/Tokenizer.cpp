@@ -1,7 +1,7 @@
 #include "BetBat/Tokenizer.h"
 
 bool IsInteger(const Token& token){
-    if(token.flags & TOKEN_QUOTED) return false;
+    if(token.flags & TOKEN_MASK_QUOTED) return false;
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
         if(chr<'0'||chr>'9'){
@@ -25,7 +25,7 @@ bool IsAnnotation(const Token& token){
     return *token.str == '@';
 }
 bool IsName(const Token& token){
-    if(token.flags&TOKEN_QUOTED) return false;
+    if(token.flags&TOKEN_MASK_QUOTED) return false;
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
         if(i==0){
@@ -43,7 +43,7 @@ bool IsName(const Token& token){
 }
 // Can also be an integer
 bool IsDecimal(const Token& token){
-    if(token.flags&TOKEN_QUOTED) return false;
+    if(token.flags&TOKEN_MASK_QUOTED) return false;
     if(token==".") return false;
     int hasDot=false;
     for(int i=0;i<token.length;i++){
@@ -68,10 +68,10 @@ int ConvertInteger(const Token& token){
     return num;
 }
 bool Equal(const Token& token, const char* str){
-    return !(token.flags&TOKEN_QUOTED) && token == str;
+    return !(token.flags&TOKEN_MASK_QUOTED) && token == str;
 }
 bool IsHexadecimal(const Token& token){
-    if(token.flags & TOKEN_QUOTED) return false;
+    if(token.flags & TOKEN_MASK_QUOTED) return false;
     if(!token.str||token.length<3 || token.length> 2 + 8) return 0; // 2+8 means 0x + 4 bytes
     if(token.str[0] != '0') return false;
     if(token.str[1] != 'x') return false;
@@ -114,11 +114,12 @@ void TokenRange::print(){
         
         if(tok.flags&TOKEN_DOUBLE_QUOTED)
             log::out << '"';
-        else if(tok.flags&TOKEN_QUOTED)
+        else if(tok.flags&TOKEN_SINGLE_QUOTED)
             log::out << '\'';
         
         for(int j=0;j<tok.length;j++){
             char chr = *(tok.str+j);
+            Assert(chr!=0);
             if(chr=='\n'){
                 log::out << "\\n"; // Is this okay?
             }else
@@ -126,7 +127,7 @@ void TokenRange::print(){
         }
         if(tok.flags&TOKEN_DOUBLE_QUOTED)
             log::out << '"';
-        else if(tok.flags&TOKEN_QUOTED)
+        else if(tok.flags&TOKEN_SINGLE_QUOTED)
             log::out << '\'';
             
         if(((tok.flags&TOKEN_SUFFIX_SPACE) || (tok.flags&TOKEN_SUFFIX_LINE_FEED)) && i+1!=endIndex){
@@ -143,6 +144,40 @@ void TokenStream::addImport(const std::string& name, const std::string& as){
     auto& p = importList.back().name;
     ReplaceChar((char*)p.data(),p.length(),'\\','/');
 }
+
+std::string Token::getLine(){
+    int start = tokenIndex;
+    int end = tokenIndex+1;
+    // log::out <<"We " <<start << " "<<end<<"\n";
+    while(start>0){
+        Token& prev = tokenStream->get(start-1);
+        if(prev.flags&TOKEN_SUFFIX_LINE_FEED){
+            break;
+        }
+        start--;
+        // log::out << "start "<<start<<"\n";
+    }
+    // NOTE: end is exclusive
+    while(end<tokenStream->length()){
+        Token& next = tokenStream->get(end-1); // -1 since end is exclusive
+        if(next.flags&TOKEN_SUFFIX_LINE_FEED){
+            break;
+        }
+        end++;
+        // log::out << "end "<<end<<"\n";
+    }
+    TokenRange range{};
+    range.firstToken.tokenIndex = start;
+    range.endIndex = end;
+    range.firstToken.tokenStream = tokenStream;
+    std::string out = "";
+    range.feed(out);
+    
+    // for(int i=start;i<end;i++){
+    //     out += std::string(tokenStream->get(i));
+    // }
+    return out;
+}
 void TokenRange::feed(std::string& outBuffer){
     using namespace engone;
     // assert?
@@ -155,7 +190,7 @@ void TokenRange::feed(std::string& outBuffer){
         
         if(tok.flags&TOKEN_DOUBLE_QUOTED)
             outBuffer += '"';
-        else if(tok.flags&TOKEN_QUOTED)
+        else if(tok.flags&TOKEN_SINGLE_QUOTED)
             outBuffer += '\'';
         
         for(int j=0;j<tok.length;j++){
@@ -167,7 +202,7 @@ void TokenRange::feed(std::string& outBuffer){
         }
         if(tok.flags&TOKEN_DOUBLE_QUOTED)
             outBuffer += '"';
-        else if(tok.flags&TOKEN_QUOTED)
+        else if(tok.flags&TOKEN_SINGLE_QUOTED)
             outBuffer += '\'';
             
         if(tok.flags&TOKEN_SUFFIX_SPACE && i!=endIndex){
@@ -183,11 +218,12 @@ void Token::print(bool skipSuffix) const{
     // if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_DOUBLE_QUOTED)
             log::out << '"';
-        else if(flags&TOKEN_QUOTED)
+        else if(flags&TOKEN_SINGLE_QUOTED)
             log::out << '\'';
     // }
     for(int i=0;i<length;i++){
         char chr = *(str+i);
+        Assert(chr!=0);
         if(chr=='\n'){
             log::out << "\\n"; // Is this okay?
         }else if(chr=='\t'){
@@ -200,7 +236,7 @@ void Token::print(bool skipSuffix) const{
     // if(printFlags&TOKEN_PRINT_QUOTES){
         if(flags&TOKEN_DOUBLE_QUOTED)
             log::out << '"';
-        else if(flags&TOKEN_QUOTED)
+        else if(flags&TOKEN_SINGLE_QUOTED)
             log::out << '\'';
     // }
     if(flags&TOKEN_SUFFIX_SPACE && !skipSuffix){
@@ -240,7 +276,7 @@ bool Token::operator!=(const char* text) const {
 }
 int Token::calcLength() const {
     int len = length;
-    if(flags & TOKEN_QUOTED)
+    if(flags & TOKEN_MASK_QUOTED)
         len += 2;
     // TODO: Take care of all special characters but to it in a
     //   scalable way. Not loads of if statements because you will
@@ -384,7 +420,7 @@ void TokenStream::finalizePointers(){
 
 //     while(range.startIndex>=0){
 //         Token& token = get(range.startIndex);
-//         if(token.flags&TOKEN_QUOTED){
+//         if(token.flags&TOKEN_MASK_QUOTED){
 //             range.startIndex++;
 //             break;
 //         }
@@ -394,7 +430,7 @@ void TokenStream::finalizePointers(){
 //         range.startIndex = 0;
 //     while(range.endIndex<length()){
 //         Token& token = get(range.endIndex);
-//         if(token.flags&TOKEN_QUOTED){
+//         if(token.flags&TOKEN_MASK_QUOTED){
 //             range.endIndex++; // exclusive
 //             break;
 //         }
@@ -532,15 +568,20 @@ void TokenStream::print(){
     for(int j=0;j<(int)tokens.used;j++){
         Token& token = *((Token*)tokens.data + j);
         
-        if(token.flags&TOKEN_QUOTED)
+        if(token.flags&TOKEN_DOUBLE_QUOTED)
             log::out << "\"";
+            
+        if(token.flags&TOKEN_SINGLE_QUOTED)
+            log::out << "'";
     
         for(int i=0;i<token.length;i++){
             char chr = *(token.str+i);
             log::out << chr;
         }
-        if(token.flags&TOKEN_QUOTED)
+        if(token.flags&TOKEN_DOUBLE_QUOTED)
             log::out << "\"";
+        if(token.flags&TOKEN_SINGLE_QUOTED)
+            log::out << "'";
         if(token.flags&TOKEN_SUFFIX_LINE_FEED)
             log::out << "\n";
         if(token.flags&TOKEN_SUFFIX_SPACE)
@@ -589,34 +630,42 @@ void TokenStream::Destroy(TokenStream* stream){
     stream->~TokenStream();
     engone::Free(stream,sizeof(TokenStream));
 }
-TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* optionalIn){
+TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* optionalIn){
     using namespace engone;
     MEASURE
     // _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
-    // TODO: handle errors like outTokens.add returning false
-    if(optionalIn){
-        log::out << log::RED << "tokenize optional in not implemented\n";   
-    }
+    // TODO: handle errors like outStream->add returning false
+    // if(optionalIn){
+    //     log::out << log::RED << "tokenize optional in not implemented\n";   
+    // }
     // char* text = (char*)textData.data;
     // int length = textData.used;
-    TokenStream* outStream = TokenStream::Create();
-    TokenStream& outTokens = *outStream;
-    outStream->readBytes += length;
-    outTokens.lines = 0;
-    // TokenStream outTokens{};
-    // if(optionalIn){
-    //     outTokens = *optionalIn;
-    //     outTokens.cleanup(true); // clean except for allocations   
-    // }
-    outTokens.enabled=-1; // enable all layers by default
-    // TODO: do not assume token data will be same or less than textData. It's just asking for a bug
-    if((int)outTokens.tokenData.max<length*5){
-        if(optionalIn)
-            log::out << "Tokenize : token resize even though optionalIn was used\n";
-        outTokens.tokenData.resize(length*5);
+    TokenStream* outStream = nullptr;
+    if(optionalIn){
+        outStream = optionalIn;
+        outStream->cleanup(true);  // clean except for allocations   
+    } else {
+        outStream = TokenStream::Create();
     }
-    if(outTokens.tokenData.data && outTokens.tokenData.max!=0)
-        memset(outTokens.tokenData.data,'_',outTokens.tokenData.max); // Good indicator for issues
+    // outStream->readBytes = length;
+    outStream->readBytes += length;
+    outStream->lines = 0;
+    outStream->enabled=-1; // enable all layers by default
+    // TODO: do not assume token data will be same or less than textData. It's just asking for a bug
+    if((int)outStream->tokenData.max<length*5){
+        // if(optionalIn)
+        //     log::out << "Tokenize : token resize even though optionalIn was used\n";
+        outStream->tokenData.resize(length*5);
+    }
+    if((int)outStream->tokens.max<length/5){
+        // if(optionalIn)
+        //     log::out << "Tokenize : token resize even though optionalIn was used\n";
+        outStream->tokens.resize(length/5+100);
+    }
+
+    // NOTE: Turn memset off for speed
+    // if(outStream->tokenData.data && outStream->tokenData.max!=0)
+    //     memset(outStream->tokenData.data,'_',outStream->tokenData.max); // Good indicator for issues
     
     const char* specials = "+-*/%=<>!&|~" "$@#{}()[]" ":;.,";
     int specialLength = strlen(specials);
@@ -632,6 +681,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     bool isSingleQuotes = false;
     bool inComment = false;
     bool inEnclosedComment = false;
+    bool isNumber = false;
 
     // int commentNestDepth = 0; // C doesn't have this and it's not very good. /*/**/*/
     
@@ -639,7 +689,6 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     
     // preprocessor stuff
     bool foundHashtag=false;
-    bool foundUnderscore=false;
 
     bool foundNonSpaceOnLine = false;
 
@@ -676,14 +725,24 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             if(inEnclosedComment){
                 if(chr=='\n'){
                     // Questionable decision to use lines counting code here
-                    // AND else where too. A bug is bound to happen.
-                    if(!foundNonSpaceOnLine)
-                        outTokens.blankLines++;
-                    else
-                        outTokens.lines++;
-                    if(outTokens.length()!=0)
-                        outTokens.get(outTokens.length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;   
+                    // AND else where too. A bug is bound to happen by how spread out it is.
+                    // Bug counter: 1
+                    if(!foundNonSpaceOnLine) {
+                        outStream->blankLines++;
+                        foundNonSpaceOnLine = false;
+                    } else
+                        outStream->lines++;
+                    if(outStream->length()!=0)
+                        outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;   
                 }
+                // @optimize TODO: move forward to characters at a time
+                //   since */ has two characters. By jumping two characters
+                //   we are faster and still guarrranteed to hit either * or /.
+                //   Then do some checks to sync back to normal. This won't work.
+                //   When counting lines since each character has to be checked.
+                //   But you can also consider using a loop here which runs very litte and
+                //   predictable code.
+
                 if(chr=='*'&&nextChr=='/'){
                     index++;
                     inComment=false;
@@ -691,16 +750,75 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                     _TLOG(log::out << "// : End comment\n";)
                 }
             }else{
+                // MEASURE;
+
+                // #define OPTIMIZE_COMMENT
+                // Thought this code would be an optimization but it
+                // doesn't seem like it. Not very noticeable at least.
+                #ifdef OPTIMIZE_COMMENT
                 if(chr=='\n'||index==length){
                     if(!foundNonSpaceOnLine)
-                        outTokens.blankLines++;
+                        outStream->blankLines++;
                     else
-                        outTokens.lines++;
-                    if(outTokens.length()!=0)
-                        outTokens.get(outTokens.length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
+                        outStream->lines++;
+                    if(outStream->length()!=0)
+                        outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
+                    inComment=false;
+                    _TLOG(log::out << "// : End comment\n";)
+                } else {
+                    index++;
+                    while(true){
+                        char chr = text[index];
+                        // do it in batches?
+                        // not worth because comments have
+                        // to few characters?
+                        // char ch1 = text[index];
+                        // char ch2 = text[index];
+                        // char ch3 = text[index];
+                        if(chr=='\t')
+                            column+=4;
+                        else
+                            column++;
+                        index++;
+                        if(chr=='\n'||index==length){
+                            line++;
+                            column=1;
+                            if(!foundNonSpaceOnLine)
+                                outStream->blankLines++;
+                            else
+                                outStream->lines++;
+                            foundNonSpaceOnLine=false;
+                            if(outStream->length()!=0)
+                                outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
+
+                            if(index + 1 < length){
+                                char chr = text[index];
+                                char chr2 = text[index+1];
+                                if(chr == '/' && chr2 == '/'){
+                                    // log::out << "ha\n";
+                                    index+=2;
+                                    continue;
+                                }
+                            }
+                            inComment=false;
+                            _TLOG(log::out << "// : End comment\n";)
+                            break;
+                        }
+                    }
+                }
+                #else
+                if(chr=='\n'||index==length){
+                    if(!foundNonSpaceOnLine)
+                        outStream->blankLines++;
+                    else
+                        outStream->lines++;
+                    foundNonSpaceOnLine=false;
+                    if(outStream->length()!=0)
+                        outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
                     inComment=false;
                     _TLOG(log::out << "// : End comment\n";)
                 }
+                #endif
             }
             continue;
         } else if(inQuotes) {
@@ -715,14 +833,14 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 else if(nextChr==' ')
                     token.flags |= TOKEN_SUFFIX_SPACE;
                 if(isSingleQuotes)
-                    token.flags |= TOKEN_QUOTED;
+                    token.flags |= TOKEN_SINGLE_QUOTED;
                 else
-                    token.flags |= TOKEN_QUOTED | TOKEN_DOUBLE_QUOTED;
+                    token.flags |= TOKEN_DOUBLE_QUOTED;
                 
                 // _TLOG(log::out << " : Add " << token << "\n";)
                 _TLOG(if(token.length!=0) log::out << "\n"; log::out << (isSingleQuotes ? '\'' : '"') <<" : End quote\n";)
                 
-                outTokens.addToken(token);
+                outStream->addToken(token);
                 token = {};
             } else {
                 if(token.length!=0){
@@ -758,7 +876,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                     _TLOG(log::out << chr;)
                 }
                 
-                outTokens.addData(tmp);
+                outStream->addData(tmp);
                 token.length++;
             }
             continue;
@@ -771,21 +889,23 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
         }
         if(chr == '\n' || index == length) {
             if(foundNonSpaceOnLine){
-                outTokens.lines++;
+                outStream->lines++;
                 foundNonSpaceOnLine = false;
             } else
-                outTokens.blankLines++;
+                outStream->blankLines++;
         }
         bool isSpecial = false;
         if(!isQuotes&&!isComment&&!isDelim){ // early check for non-special
             
             // quicker but do we identify a character as special when it shouldn't?
-            // isSpecial = !(false
-            //     || (chr>='a'&&chr<='z')
-            //     || (chr>='A'&&chr<='Z')
-            //     || (chr>='0'&&chr<='9')
-            //     || (chr!='_')
-            // );
+            // the if above checks ensures that we only do this if we char isn't
+            // quote, comment or delim but are there other cases?
+            isSpecial = !(
+                   (chr>='a'&&chr<='z')
+                || (chr>='A'&&chr<='Z')
+                || (chr>='0'&&chr<='9')
+                || (chr=='_')
+            );
             
             // faster than for loop slower than a-z, 0-9
             // isSpecial = false
@@ -800,19 +920,19 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             // "+-*/%=<>!&|" "$@#{}()[]" ":;.,"
             
             // slow, the versions above may not contain all special characters.
-            for(int i=0;i<specialLength;i++){
-                if(chr==specials[i]){
-                    isSpecial = true;
-                    break;
-                }
-            }
+            // for(int i=0;i<specialLength;i++){
+            //     if(chr==specials[i]){
+            //         isSpecial = true;
+            //         break;
+            //     }
+            // }
         }
         
         if(chr=='\n'){
             if(token.str){
                token.flags = (token.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
-            }else if(outTokens.length()>0){
-                Token& last = outTokens.get(outTokens.length()-1);
+            }else if(outStream->length()>0){
+                Token& last = outStream->get(outStream->length()-1);
                 last.flags = (last.flags&(~TOKEN_SUFFIX_SPACE)) | TOKEN_SUFFIX_LINE_FEED;
                 // _TLOG(log::out << ", line feed";)
             }
@@ -831,22 +951,22 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             }
             _TLOG(log::out << chr;)
             if(token.length==0){
-                token.str = (char*)outTokens.tokenData.used;
+                token.str = (char*)outStream->tokenData.used;
                 token.line = ln;
                 token.column = col;
                 
-                if(chr == '_')
-                    foundUnderscore = true;
-
-                if(chr>='0'&&chr<='9')
+                if(chr>='0'&&chr<='9') {
                     canBeDot=true;
-                else
+                    isNumber=true;
+                } else
                     canBeDot=false;
             }
             if(!(chr>='0'&&chr<='9') && chr!='.') // TODO: how does it work with hexidecimals?
                 canBeDot=false;
-            outTokens.addData(chr);
-            token.length++;
+            if(!isNumber || chr!='_') {
+                outStream->addData(chr);
+                token.length++;
+            }
         }
         
         if(token.length!=0 && (isDelim || isQuotes || isComment || isSpecial || index==length)){
@@ -860,7 +980,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             // _TLOG(log::out << " : Add " << token << "\n";)
             
             canBeDot=false;
-            outTokens.addToken(token);
+            outStream->addToken(token);
             token = {};
             _TLOG(log::out << "\n";)
         }
@@ -870,14 +990,14 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             if(chr=='/' && nextChr=='*'){
                 inEnclosedComment=true;
             }
-            outTokens.commentCount++;
+            outStream->commentCount++;
             index++; // skip the next slash
             _TLOG(log::out << "// : Begin comment\n";)
             continue;
         } else if(isQuotes){
             inQuotes = true;
             isSingleQuotes = chr == '\'';
-            token.str = (char*)outTokens.tokenData.used;
+            token.str = (char*)outStream->tokenData.used;
             token.length = 0;
             token.line = ln;
             token.column = col;
@@ -891,13 +1011,13 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
             }
             if(chr=='@'){
                 Token anot = {};
-                anot.str = (char*)outTokens.tokenData.used;
+                anot.str = (char*)outStream->tokenData.used;
                 anot.line = ln;
                 anot.column = col;
                 anot.length = 1;
                 anot.flags = TOKEN_SUFFIX_SPACE;
                 
-                outTokens.addData(chr);
+                outStream->addData(chr);
                 bool bad=false;
                 // TODO: Code below WILL have some edge cases not accounted for. Check it out.
                 while(index<length){
@@ -923,30 +1043,30 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                             anot.flags |= TOKEN_SUFFIX_LINE_FEED;
                         break;
                     }
-                    outTokens.addData(c);
+                    outStream->addData(c);
                     anot.length++;
                     if (index==length){
                         break;
                     }
                 }
-                outTokens.addToken(anot);
+                outStream->addToken(anot);
                 continue;
             }
             
             // this scope only adds special token
             _TLOG(log::out << chr;)
             token = {};
-            token.str = (char*)outTokens.tokenData.used;
+            token.str = (char*)outStream->tokenData.used;
             token.length = 1;
-            outTokens.addData(chr);
+            outStream->addData(chr);
             if(chr=='.'&&nextChr=='.'&&nextChr2=='.'){
                 index+=2;
                 column+=2;
                 token.length+=2;
                 _TLOG(log::out << nextChr;)
                 _TLOG(log::out << nextChr2;)
-                outTokens.addData(nextChr);
-                outTokens.addData(nextChr2);
+                outStream->addData(nextChr);
+                outStream->addData(nextChr2);
             }else if((chr=='='&&nextChr=='=')||
                 (chr=='!'&&nextChr=='=')||
                 // (chr=='+'&&nextChr=='=')||
@@ -968,7 +1088,7 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 column++;
                 token.length++;
                 _TLOG(log::out << nextChr;)
-                outTokens.addData(nextChr);
+                outStream->addData(nextChr);
             }
             if(index<length)
                 nextChr = text[index]; // code below needs the updated nextChr
@@ -983,14 +1103,14 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
                 token.flags = TOKEN_SUFFIX_SPACE;
             // _TLOG(log::out << " : Add " << token <<"\n";)
             _TLOG(log::out << " : special\n";)
-            outTokens.addToken(token);
+            outStream->addToken(token);
             token = {};
         }
     }
-    // outTokens.addTokenAndData("$");
-    if(!foundHashtag && !foundUnderscore){
+    // outStream->addTokenAndData("$");
+    if(!foundHashtag){
         // preprocessor not necessary, save time by not running it.
-        outTokens.enabled &= ~LAYER_PREPROCESSOR;
+        outStream->enabled &= ~LAYER_PREPROCESSOR;
         _TLOG(log::out<<log::LIME<<"Couldn't find #. Disabling preprocessor.\n";)
     }
     
@@ -1000,10 +1120,10 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
     }   
     #endif
 
-    outTokens.finalizePointers();
+    outStream->finalizePointers();
     // Last token should have line feed.
-    if(outTokens.length()>0)
-        outTokens.get(outTokens.length()-1).flags |=TOKEN_SUFFIX_LINE_FEED;
+    if(outStream->length()>0)
+        outStream->get(outStream->length()-1).flags |=TOKEN_SUFFIX_LINE_FEED;
     
     if(token.length!=0){
         // error happened in a way where we need to add a line feed
@@ -1022,16 +1142,16 @@ TokenStream* TokenStream::Tokenize(const char* text, int length, TokenStream* op
         log::out << log::RED<<"TokenError: Token '" << token << "' was left incomplete\n";
         goto Tokenize_END;
     }
-    if(outTokens.tokens.used!=0){
-        Token* lastToken = ((Token*)outTokens.tokens.data+outTokens.tokens.used-1);
-        int64 extraSpace = (int64)outTokens.tokenData.data + outTokens.tokenData.max - (int64)lastToken->str - lastToken->length;
-        int64 extraSpace2 = outTokens.tokenData.max-outTokens.tokenData.used;
+    if(outStream->tokens.used!=0){
+        Token* lastToken = ((Token*)outStream->tokens.data+outStream->tokens.used-1);
+        int64 extraSpace = (int64)outStream->tokenData.data + outStream->tokenData.max - (int64)lastToken->str - lastToken->length;
+        int64 extraSpace2 = outStream->tokenData.max-outStream->tokenData.used;
         
         if(extraSpace!=extraSpace2)
-            log::out << log::RED<<"TokenError: Used memory in tokenData does not match last token's used memory ("<<outTokens.tokenData.used<<" != "<<((int64)lastToken->str - (int64)outTokens.tokenData.data + lastToken->length)<<")\n";
+            log::out << log::RED<<"TokenError: Used memory in tokenData does not match last token's used memory ("<<outStream->tokenData.used<<" != "<<((int64)lastToken->str - (int64)outStream->tokenData.data + lastToken->length)<<")\n";
             
         if(extraSpace<0||extraSpace2<0)
-            log::out << log::RED<<"TokenError: Buffer of tokenData was to small (estimated "<<outTokens.tokenData.max<<" but needed "<<outTokens.tokenData.used<<" bytes)\n'";
+            log::out << log::RED<<"TokenError: Buffer of tokenData was to small (estimated "<<outStream->tokenData.max<<" but needed "<<outStream->tokenData.used<<" bytes)\n'";
         
         if(extraSpace!=extraSpace2 || extraSpace<0 || extraSpace2<0)
             goto Tokenize_END;
@@ -1043,42 +1163,60 @@ Tokenize_END:
     return outStream;
 }
 
-int cmpd(const void* a, const void* b){ return (int)(1000000000*(*(double*)a - *(double*)b));}
+// int cmpd(const void* a, const void* b){ return (int)(1000000000*(*(double*)a - *(double*)b));}
+struct Round {
+    double time;
+    u32 lines;
+    u32 tokens;
+};
+int cmp_round(const void* a, const void* b){ return (int)(1000000000*((Round*)a)->time - ((Round*)b)->time);}
 void PerfTestTokenize(const engone::Memory& textData, int times){
     using namespace engone;
-    log::out <<log::RED<< __FUNCTION__ <<" is broken\n";
-    // TokenStream base = TokenStream::Tokenize(textData); // initial tokenize to get sufficient allocations
-    
+    log::out << "Data "<<textData.used<<" "<<textData.max<<"\n";
+    // log::out <<log::RED<< __FUNCTION__ <<" is broken\n";
+    TokenStream* baseStream = TokenStream::Tokenize((char*)textData.data,textData.max); // initial tokenize to get sufficient allocations
+    // TokenStream* baseStream = nullptr;
     // log::out << "start\n";
-    // double* measures = new double[times];
-    // auto startT = engone::MeasureTime();
-    // for(int i=0;i<times;i++){
-    //     // heap allocation is included.
-    //     auto mini = engone::MeasureTime();
-    //     // base = Tokenize(textData);
-    //     base = TokenStream::Tokenize(textData,0,&base);
-    //     measures[i] = engone::StopMeasure(mini);
-    // }
-    // double total = engone::StopMeasure(startT);
+    auto rounds = new Round[times];
+    auto startT = engone::MeasureTime();
+    for(int i=0;i<times;i++){
+        // log::out << "running "<<i<<"\n";
+        // heap allocation is included.
+        auto mini = engone::MeasureTime();
+        // base = Tokenize(textData);
+        baseStream = TokenStream::Tokenize((char*)textData.data, textData.max,baseStream);
+        rounds[i].lines = baseStream->lines;
+        rounds[i].tokens = baseStream->tokens.used;
+        // rounds[i].lines = baseStream->lines + baseStream->blankLines;
+        rounds[i].time = engone::StopMeasure(mini);
+        // log::out << baseStream->blankLines<<"\n";
+    }
+    double total = engone::StopMeasure(startT);
     // log::out << "end\n";
     
-    // qsort(measures,times,sizeof(double),cmpd);
+    qsort(rounds,times,sizeof(*rounds),cmp_round);
     
-    // log::out << __FUNCTION__<<" total: "<<FormatTime(total)<<"\n";
-    // double sum=0;
-    // double minT=9999999;
-    // double maxT=0;
-    // double median = measures[(times+1)/2];
-    // for(int i=0;i<times;i++){
-    //     sum+=measures[i];
-    //     if(minT>measures[i]) minT = measures[i];
-    //     if(maxT<measures[i]) maxT = measures[i];
-    //     // log::out << " "<<FormatTime(measures[i])<<"\n";
-    // }
-    // log::out << "   average on individuals: "<<FormatTime(sum/times)<<"\n";
-    // log::out << "   min/max: "<<FormatTime(minT)<<" / "<<FormatTime(maxT)<<"\n";
-    // log::out << "   median: "<<FormatTime(median)<<"\n";
-    // base.cleanup();
+    log::out << __FUNCTION__<<" total: "<<FormatTime(total)<<"\n";
+    double sum=0;
+    double minT=9999999;
+    double maxT=0;
+    double median = times==1 ? rounds[0].time : rounds[(times+1)/2].time;
+    u32 totalLines = 0;
+    u32 totalTokens = 0;
+    for(int i=0;i<times;i++){
+        sum+=rounds[i].time;
+        if(minT>rounds[i].time) minT = rounds[i].time;
+        if(maxT<rounds[i].time) maxT = rounds[i].time;
+        totalLines += rounds[i].lines;
+        totalTokens += rounds[i].tokens;
+        // log::out << " "<<FormatTime(measures[i])<<"\n";
+    }
+    log::out << "   average: "<<FormatTime(sum/times)<<"\n";
+    log::out << "   min/max: "<<FormatTime(minT)<<" / "<<FormatTime(maxT)<<"\n";
+    log::out << "   median: "<<FormatTime(median)<<"\n";
+    log::out << "   total lines: "<<totalLines<<", loc/s "<<(totalLines/total)<<"\n";
+    log::out << "   tokens (per file): "<<(totalTokens/times)<<", "<<FormatBytes(textData.max/median)<<"/s\n";
+    baseStream->cleanup();
 }
 void PerfTestTokenize(const char* file, int times){
     auto text = ReadFile(file);
@@ -1087,4 +1225,8 @@ void PerfTestTokenize(const char* file, int times){
     PerfTestTokenize(text,times);
     if(text.max != 0)
         text.resize(0);
+
+    #ifdef LOG_MEASURES
+    PrintMeasures();
+    #endif
 }

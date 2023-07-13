@@ -1,5 +1,6 @@
-/* Forced by the compiler
+#import "Logger"
 
+/* Forced by the compiler
 struct @hide Slice<T> {
     ptr: T*;
     len: u64;
@@ -17,6 +18,40 @@ struct @hide Range {
 //     // fn resize()
 // }
 
-#define print(STR,...)
-// print("Hello % there %", 61, "ok")
 
+// Use native functions instead
+fn memset(ptr: void*, len: u64, value: u8 = 0) {
+    for 0..len {
+        *(cast<u8*>ptr + nr) = value;
+    }
+}
+fn memcmp(ptrA: void*, ptrB: void*, len: u64) -> i32 {
+    for 0..len {
+        if *(cast<u8*>ptrA + nr) != *(cast<u8*>ptrB + nr) {
+            return *(cast<u8*>ptrA + nr) - *(cast<u8*>ptrB + nr);
+        }
+    }
+    return 0;
+}
+fn equal(a: char[], b: char[]) -> i32 {
+    if a.len != b.len
+        return false
+    return !memcmp(a.ptr, b.ptr, a.len);
+}
+fn memcpy(dst: void*, src: void*, len: u64) {
+    for 0..len {
+        *(cast<u8*>dst + nr) = *(cast<u8*>src + nr);
+    }
+}
+
+// Test: matchEnd("__add.cpp__","++.cpp++");
+fn matchEnd(str: char[], match: char[]) -> bool {
+    if str.len < match.len
+        return false
+    for @reverse match {
+        chr = str.ptr[nr + str.len - match.len];
+        if it != chr
+            return false
+    }
+    return true
+}

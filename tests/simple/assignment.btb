@@ -1,8 +1,30 @@
-// a = 1
-// b = 2
-// c = 1 + 2
-// d = a + b + c
 
-a = "abc"
-a[1] = "_"
-print a
+// TODO: Test other types than i32 including structs and enums.
+// TODO: Add tests based on triggering certain errors
+// TODO: Test assignment in expressions (not just statements)
+
+
+// standard
+a = 1
+b: i32 = 1
+c: i32;
+c = 1
+d: i64 = cast<i32>1
+
+// multiple
+fn many() -> i32, i32, i32 {
+    return 1, 2, 3
+}
+
+a = many()
+a, b = many()
+a, b, c = many();
+// a, b, c, d = many(); // should fail
+
+a: i32 = many()
+a, b: i32 = many()
+a, b: i32, c = many()
+a, b, c: i32 = many();
+
+
+a: i64, b: i32 = many() // does this fail or does it cast?

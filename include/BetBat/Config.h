@@ -9,7 +9,7 @@
 /* ###############
    Major config
 ############### */
-#define DEBUG
+// #define DEBUG
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 // Will it ever be?
@@ -39,11 +39,12 @@
 // Hashtag will always be used. @ is taken, $ feels wrong, # makes you feel at home.
 #define PREPROC_TERM "#"
 
+#define LOG_MSG_LOCATION
+
 // Debug config
-// #ifdef DEBUG
+#ifdef DEBUG
 
 #define VLOG
-#define LOG_MSG_LOCATION
 
 // #define TLOG
 

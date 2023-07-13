@@ -3,6 +3,7 @@
 #include "BetBat/AST.h"
 #include "BetBat/Bytecode.h"
 struct CompileInfo;
+struct GenInfo;
 struct GenInfo {
     Bytecode* code=nullptr;
     AST* ast=nullptr;
@@ -26,6 +27,16 @@ struct GenInfo {
     void addStackSpace(i32 size);
     int saveStackMoment();
     void restoreStackMoment(int moment);
+
+    DynamicArray<ASTNode*> nodeStack; // kind of like a stack trace
+    // ASTNode* prevNode=nullptr;
+    TokenStream* lastStream=nullptr;
+    u32 lastLine = 0;
+    u32 lastLocationIndex = (u32)-1;
+    void pushNode(ASTNode* node);
+    void popNode();
+    void addInstruction(Instruction inst);
+    void addLoadIm(u8 reg, i32 value);
 
     ASTFunction* currentFunction=nullptr;
     FuncImpl* currentFuncImpl=nullptr;
@@ -61,10 +72,17 @@ struct GenInfo {
     // int currentFunctionScope=0;
     // FunctionScope* getFunctionScope(int index=-1);
     int currentFrameOffset=0;
-    static const int ARG_OFFSET=16;
+    static const int FRAME_SIZE=16; // pc, fp
 
     // Extra details
     // FuncImpl* recentFuncImpl=nullptr; // used by fncall
 
+};
+struct NodeScope {
+    NodeScope(GenInfo* info) : info(info) {}
+    ~NodeScope() {
+        info->popNode();
+    }
+    GenInfo* info = nullptr;
 };
 Bytecode* Generate(AST* ast, CompileInfo* compileInfo);

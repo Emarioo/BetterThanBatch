@@ -130,7 +130,7 @@ namespace engone {
 		}
 		result->name.clear();
 		if(!info->second.dir.empty())
-			result->name += info->second.dir+"\\";
+			result->name += info->second.dir+"/";
 		result->name += data.cFileName;
 		
         // printf("f: %s\n",result->name.c_str());
@@ -142,6 +142,12 @@ namespace engone {
 		if(result->isDirectory){
             info->second.directories.push_back(result->name);
         }
+
+		for(int i=0;i<result->name.size();i++){
+			if(result->name[i]=='\\')
+				((char*)result->name.data())[i] = '/';
+		}
+
 		return true;
 	}
 	void RecursiveDirectoryIteratorSkip(RecursiveDirectoryIterator iterator){
@@ -515,6 +521,13 @@ namespace engone {
 	static uint64 s_totalNumberAllocations=0;
 	static uint64 s_allocatedBytes=0;
 	static uint64 s_numberAllocations=0;
+
+	struct Allocation {
+		void* ptr=nullptr;
+		u64 size=0;
+	};
+	static Allocation allocationsSlots[5000]; // nullptr indicates empty slot
+	
 	void SetTracker(bool on){
 		s_trackerEnabled = on;
 	}
@@ -533,6 +546,15 @@ namespace engone {
 		s_totalAllocatedBytes+=bytes;
 		s_totalNumberAllocations++;			
 		// s_allocStatsMutex.unlock();
+
+		// for(auto& slot : allocationsSlots){
+		// 	if(slot.ptr)
+		// 		continue;
+		// 	slot.ptr = ptr;
+		// 	slot.size = bytes;
+		// 	break;
+		// }
+
 		#ifdef LOG_ALLOCATIONS
 		printf("* Allocate %lld\n",bytes);
 		#endif
@@ -564,6 +586,14 @@ namespace engone {
                 
                 s_totalAllocatedBytes+=newBytes;
                 s_totalNumberAllocations++;			
+
+				// for(auto& slot : allocationsSlots){
+				// 	if(slot.ptr != ptr)
+				// 		continue;
+				// 	slot.ptr = newPtr;
+				// 	slot.size = newBytes;
+				// }
+
                 // s_allocStatsMutex.unlock();
 				#ifdef LOG_ALLOCATIONS
 				printf("* Reallocate %lld -> %lld\n",oldBytes, newBytes);
@@ -583,6 +613,15 @@ namespace engone {
 		s_numberAllocations--;
 		Assert(s_allocatedBytes>=0);
 		Assert(s_numberAllocations>=0);
+
+		// for(auto& slot : allocationsSlots){
+		// 	if(slot.ptr != ptr)
+		// 		continue;
+		// 	slot.ptr = nullptr;
+		// 	slot.size = 0;
+		// 	break;
+		// }
+
 		// s_allocStatsMutex.unlock();
 		#ifdef LOG_ALLOCATIONS
 		printf("* Free %lld\n",bytes);
@@ -604,6 +643,11 @@ namespace engone {
 		for(auto& pair : allocTracking){
 			if(pair.second.count!=0)
 				printf(" %s (%llu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
+		}
+		for(auto& slot : allocationsSlots){
+			if(slot.ptr){
+				printf(" %p: %llu bytes\n",slot.ptr, slot.size);
+			}
 		}
 	}
 	static HANDLE m_consoleHandle = NULL;

@@ -26,3 +26,4 @@ fn @hide _print(t: Slice<char>){
 // Now they do haha!
 #define print(X,...) _print(X); print(...);
 #define print()
+#define println(...) print(...); _print("\n");

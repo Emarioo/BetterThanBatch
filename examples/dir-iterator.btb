@@ -1,11 +1,29 @@
 #import "OS"
+#import "Logger"
+#import "Basic"
 
-path = "src"
+iter: DirectoryIterator*;
+root = ".";
+// root = "docs";
+iter = DirectoryIteratorCreate(root);
+defer { DirectoryIteratorDestroy(iter); }
 
-// prints("Ok")
-
-iter: DirectoryIterator* = CreateDirectoryIterator(path)
-while true {
-    
-    // NextDirectoryIterator(path)
+result: DirectoryIteratorData*;
+loop = 0;
+while result = iter.next() {
+    loop++;
+    // if result.isDirectory && !equal(result.name,root) {
+    //     iter.skip();
+    //     // continue
+    // }
+    if !matchEnd(result.name,".cpp")
+        continue;
+    prints(result.name); prints("\n");
+    // prints(": ");
+    // printi(result.fileSize);
+    // prints(" bytes, ");
+    // printd(result.lastWriteSeconds);
 }
+
+
+// #ScopeLog()

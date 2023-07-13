@@ -29,8 +29,8 @@
 #define TOKENINFO(R) {std::string temp="";R.feed(temp);info.code->addDebugText(std::string("Ln ")+std::to_string(R.firstToken.line)+ ": ");info.code->addDebugText(temp+"\n");}
 
 #ifdef TC_LOG
-// #define _TC_LOG_ENTER(X) X
-#define _TC_LOG_ENTER(X)
+#define _TC_LOG_ENTER(X) X
+// #define _TC_LOG_ENTER(X)
 #else
 #define _TC_LOG_ENTER(X)
 #endif
@@ -63,13 +63,13 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
     }
     
     for(auto astate : scope->statements) {
-        if(astate->body){
-            int result = CheckEnums(info, astate->body);   
+        if(astate->firstBody){
+            int result = CheckEnums(info, astate->firstBody);   
             if(!result)
                 error = false;
         }
-        if(astate->elseBody){
-            int result = CheckEnums(info, astate->elseBody);
+        if(astate->secondBody){
+            int result = CheckEnums(info, astate->secondBody);
             if(!result)
                 error = false;
         }
@@ -97,7 +97,9 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
     prevVirtuals.resize(astStruct->polyArgs.size());
     for(int i=0;i<(int)astStruct->polyArgs.size();i++){
         TypeId id = structImpl->polyArgs[i];
-        Assert(id.isValid());
+        if(info.errors == 0){
+            // Assert(id.isValid()); // poly arg type could have failed, an error would have been logged
+        }
         prevVirtuals[i] = astStruct->polyArgs[i].virtualType->id;
         astStruct->polyArgs[i].virtualType->id = id;
     }
@@ -122,7 +124,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
         TypeId tid = CheckType(info, astStruct->scopeId, member.stringType, astStruct->tokenRange, &printedError);
         if(!tid.isValid() && !printedError){
             if(info.showErrors) {
-                ERR_HEAD(astStruct->tokenRange, "Type '"<< info.ast->getTokenFromTypeString(implMem.typeId) << "' in "<< astStruct->name<<"."<<member.name << " is not a type.\n\n";
+                ERR_HEAD(astStruct->tokenRange, "Type '"<< info.ast->getTokenFromTypeString(member.stringType) << "' in "<< astStruct->name<<"."<<member.name << " is not a type.\n\n";
                     ERR_LINE(member.name,"bad type");
                 )
             }
@@ -254,10 +256,10 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError){
     using namespace engone;
     Assert(typeString.isString());
-    if(!typeString.isString()) {
-        _TC_LOG(log::out << "check type typeid wasn't string type\n";)
-        return typeString;
-    }
+    // if(!typeString.isString()) {
+    //     _TC_LOG(log::out << "check type typeid wasn't string type\n";)
+    //     return typeString;
+    // }
     Token token = info.ast->getTokenFromTypeString(typeString);
     return CheckType(info, scopeId, token, tokenRange, printedError);
 }
@@ -297,8 +299,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             if(id.isValid()){
 
             } else if(!printedError) {
-                ERR_HEAD(tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
-                ERR_LINE(tokenRange,"here somewhere");
+                // ERR_HEAD(tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
+                ERR_HEAD(tokenRange, "Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.\n\n";
+                    ERR_LINE(tokenRange,"here somewhere");
                 )
             }
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
@@ -406,8 +409,11 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
             // log::out << "Evaluating "<<*astStruct->name<<"\n";
             bool yes = true;
             if(astStruct->polyArgs.size()==0){
-                structInfo->structImpl = astStruct->createImpl();
-                astStruct->nonPolyStruct = structInfo->structImpl;
+                // Assert(!structInfo->structImpl);
+                if(!structInfo->structImpl){
+                    structInfo->structImpl = astStruct->createImpl();
+                    astStruct->nonPolyStruct = structInfo->structImpl;
+                }
                 yes = CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl);
                 if(!yes){
                     astStruct->state = ASTStruct::TYPE_CREATED;
@@ -432,13 +438,13 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
     // if(!info.anotherTurn){
         for(auto astate : scope->statements) {
             
-            if(astate->body){
-                int result = CheckStructs(info, astate->body);   
+            if(astate->firstBody){
+                int result = CheckStructs(info, astate->firstBody);   
                 // if(!result)
                 //     error = false;
             }
-            if(astate->elseBody){
-                int result = CheckStructs(info, astate->elseBody);
+            if(astate->secondBody){
+                int result = CheckStructs(info, astate->secondBody);
                 // if(!result)
                 //     error = false;
             }
@@ -552,7 +558,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
         parentAstStruct = ti->astStruct;
         fnOverloads = &ti->astStruct->getMethod(baseName);
     } else {
-        Identifier* iden = info.ast->getIdentifier(scopeId, baseName);
+        Identifier* iden = info.ast->findIdentifier(scopeId, baseName);
         if(!iden || iden->type != Identifier::FUNC){
             ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' does not exist.\n\n";
                 ERR_LINET(baseName,"undefined");
@@ -572,25 +578,31 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
             FNCALL_SUCCESS
             return true;
         }
-        // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
-        //  Should be done in generator too.
-        ERR_HEAD(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
-            if(argTypes.size()==0){
-                log::out << "zero arguments";
-            } else {
-                expr->printArgTypes(info.ast, argTypes);
-            }
-            log::out << "\n";
-            if(fnOverloads->polyOverloads.size()!=0){
-                log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
-            }
-            if(expr->args->size()!=0 && expr->args->get(0)->namedValue.str){
-                log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
-            }
-            log::out <<"\n";
-            ERR_LINE(expr->tokenRange, "bad");
-            // TODO: show list of available overloaded function args
-        ) 
+        if(fnOverloads->overloads.size()==0){
+            ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a function/method.\n\n";
+                ERR_LINE(expr->tokenRange, "bad");
+            )
+        } else {
+            // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
+            //  Should be done in generator too.
+            ERR_HEAD(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
+                if(argTypes.size()==0){
+                    log::out << "zero arguments";
+                } else {
+                    expr->printArgTypes(info.ast, argTypes);
+                }
+                log::out << "\n";
+                if(fnOverloads->polyOverloads.size()!=0){
+                    log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
+                }
+                if(expr->args->size()!=0 && expr->args->get(0)->namedValue.str){
+                    log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
+                }
+                log::out <<"\n";
+                ERR_LINE(expr->tokenRange, "bad");
+                // TODO: show list of available overloaded function args
+            ) 
+        }
         FNCALL_FAIL
         return false;
         // if implicit polymorphism then
@@ -739,6 +751,12 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
     Assert(expr);
     _TC_LOG_ENTER(FUNC_ENTER)
     
+    defer {
+        if(outTypes->size()==0){
+            outTypes->add(AST_VOID);
+        }
+    };
+
     // IMPORTANT NOTE: CheckExpression HAS to run for left and right expressions
     //  since they may require types to be checked. AST_SIZEOF needs to evalute for example
 
@@ -759,42 +777,91 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
         }
     } else if(expr->typeId == AST_MEMBER){
-        if(expr->left) {
-            CheckExpression(info,scopeId, expr->left, outTypes);
+        Assert(expr->left);
+        if(expr->left->typeId == AST_ID){
+            // TODO: Generator passes idScope. What is it and is it required in type checker?
+            // A simple check to see if the identifier in the expr node is an enum type.
+            // no need to check for pointers or so.
+            TypeInfo *typeInfo = info.ast->convertToTypeInfo(expr->left->name, scopeId);
+            if (typeInfo && typeInfo->astEnum) {
+                i32 enumValue;
+                bool found = typeInfo->astEnum->getMember(expr->name, &enumValue);
+                if (!found) {
+                    ERR_HEAD(expr->tokenRange, expr->name << " is not a member of enum " << typeInfo->astEnum->name << "\n";
+                    )
+                    return false;
+                }
+
+                outTypes->add(typeInfo->id);
+                return true;
+            }
         }
+        DynamicArray<TypeId> typeArray{};
+        // if(expr->left) {
+            CheckExpression(info,scopeId, expr->left, &typeArray);
+        // }
+        outTypes->add(AST_VOID);
         // outType holds the type of expr->left
-        TypeInfo* ti = info.ast->getTypeInfo(outTypes->last().baseType());
+        TypeInfo* ti = info.ast->getTypeInfo(typeArray.last().baseType());
+        Assert(typeArray.last().getPointerLevel()<2);
         if(ti && ti->astStruct){
             TypeInfo::MemberData memdata = ti->getMember(expr->name);
             if(memdata.index!=-1){
                 outTypes->last() = memdata.typeId;
+            } else {
+                std::string msgtype = "not member of "+info.ast->typeToString(typeArray.last());
+                ERR_HEAD(expr->tokenRange, "'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(typeArray.last())<<"'.";
+                    log::out << "These are the members: ";
+                    for(int i=0;i<(int)ti->astStruct->members.size();i++){
+                        if(i!=0)
+                            log::out << ", ";
+                        log::out << log::LIME << ti->astStruct->members[i].name<<log::SILVER<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
+                    }
+                    log::out <<"\n";
+                    log::out <<"\n";
+                    ERR_LINE(expr->name,msgtype.c_str());
+                )
+                return false;
             }
+        } else {
+            std::string msgtype = info.ast->typeToString(typeArray.last());
+            ERR_HEAD(expr->tokenRange, "Member access only works on structs, pointers to structs, and enums. '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).\n\n";
+                ERR_LINE(expr->tokenRange,msgtype.c_str());
+            )
+            return false;
         }
     } else if(expr->typeId == AST_INDEX) {
+        DynamicArray<TypeId> typeArray{};
         if(expr->left) {
-            CheckExpression(info,scopeId, expr->left, outTypes);
+            CheckExpression(info,scopeId, expr->left, &typeArray);
+            // if(typeArray.size()==0){
+            //     typeArray.add(AST_VOID);
+            // }
         }
+        
+        outTypes->add(AST_VOID);
         DynamicArray<TypeId> temp{};
         if(expr->right) {
             CheckExpression(info,scopeId, expr->right, &temp);
         }
-        if(outTypes->last().getPointerLevel()==0){
+        if(typeArray.last().getPointerLevel()==0){
             std::string strtype = info.ast->typeToString(outTypes->last());
             ERR_HEAD(expr->left->tokenRange, "Cannot index non-pointer.\n\n";
                 ERR_LINE(expr->left->tokenRange,strtype.c_str());
             )
         }else{
+            outTypes->last() = typeArray.last();
             outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
         }
     } else if(expr->typeId == AST_ID){
         // NOTE: When changing this code, don't forget to do the same with AST_SIZEOF. It also has code for AST_ID.
         if(IsName(expr->name)){
             // TODO: What about enum?
-            auto iden = info.ast->getIdentifier(scopeId, expr->name);
+            auto iden = info.ast->findIdentifier(scopeId, expr->name);
             if(iden){
-                auto var = info.ast->getVariable(iden);
-                if(var){
-                    outTypes->add(var->typeId);
+                auto varinfo = info.ast->identifierToVariable(iden);
+                if(varinfo){
+                    outTypes->add(varinfo->typeId);
                 }
             } else {
                 ERR_HEAD(expr->tokenRange, "'"<<expr->name<<"' is not declared.\n\n";
@@ -814,8 +881,8 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             Token& name = expr->left->name;
             // TODO: Handle function pointer type
             // This code may need to update when code for AST_ID does
-            if(IsName(name) && (iden = info.ast->getIdentifier(scopeId, name)) && iden->type==Identifier::VAR){
-                auto var = info.ast->getVariable(iden);
+            if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, name)) && iden->type==Identifier::VAR){
+                auto var = info.ast->identifierToVariable(iden);
                 Assert(var);
                 if(var){
                     finalType = var->typeId;
@@ -848,10 +915,67 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
 
         TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
         outTypes->add(theType);
-    } else if(expr->typeId == AST_NAMEOF) {
-        auto ti = CheckType(info, scopeId, expr->name, expr->tokenRange, nullptr);
-        std::string name = info.ast->typeToString(ti);
+    } else if(expr->typeId == AST_NULL){
+        // u32 index=0;
+        // auto constString = info.ast->getConstString(expr->name,&index);
+        // // Assert(constString);
+        // expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
+        // TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+        TypeId theType = AST_VOID;
+        theType.setPointerLevel(1);
+        outTypes->add(theType);
+    }  else if(expr->typeId == AST_NAMEOF) {
+        // Assert(expr->left);
+        // TypeId finalType = {};
+        // if(expr->left->typeId == AST_ID){
+        //     // AST_ID could result in a type or a variable
+        //     Identifier* iden = nullptr;
+        //     Token& name = expr->left->name;
+        //     // TODO: Handle function pointer type
+        //     // This code may need to update when code for AST_ID does
+        //     if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, name)) && iden->type==Identifier::VAR){
+        //         auto var = info.ast->identifierToVariable(iden);
+        //         Assert(var);
+        //         if(var){
+        //             finalType = var->typeId;
+        //         }
+        //     } else {
+        //         finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
+        //     }
+        // } else {
+        //     DynamicArray<TypeId> temps{};
+        //     int result = CheckExpression(info, scopeId, expr->left, &temps);
+        //     finalType = temps.size()==0?AST_VOID:temps.last();
+        // }
+        // expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
+        // outTypes->add(AST_UINT32);
+        
+        // TODO: nameof doesn't use an expression, it uses expr->name, so you cannot
+        //   evaluate expressions like sizeof. You may want to change it so nameof works
+        //   like sizeof.
+        std::string name = "";
+        auto ti = CheckType(info, scopeId, expr->name, expr->tokenRange, nullptr);
+        if(ti.isValid()){
+            name = info.ast->typeToString(ti);
+        }else{
+            // AST_ID could result in a type or a variable
+            Identifier* iden = nullptr;
+            // Token& name = expr->name;
+            // TODO: Handle function pointer type
+            // This code may need to update when code for AST_ID does
+            if(IsName(expr->name) && (iden = info.ast->findIdentifier(scopeId, expr->name)) && iden->type==Identifier::VAR){
+                auto var = info.ast->identifierToVariable(iden);
+                Assert(var);
+                if(var){
+                    name = info.ast->typeToString(var->typeId);
+                    // finalType = var->typeId;
+                }
+            } else {
+                name = expr->name;
+                // finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
+            }
+        }
         u32 index=0;
         auto constString = info.ast->getConstString(name,&index);
         // Assert(constString);
@@ -868,7 +992,35 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             DynamicArray<TypeId> temp={};
             CheckExpression(info, scopeId, now, &temp);
         }
+        auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, nullptr);
+        outTypes->add(ti);
+    } else if(expr->typeId == AST_CAST){
+        DynamicArray<TypeId> temp{};
+        Assert(expr->left);
+        CheckExpression(info,scopeId, expr->left, &temp);
+        Assert(temp.size()==1);
+
+        Assert(expr->castType.isString());
+        bool printedError = false;
+        auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
+        if (ti.isValid()) {
+        } else if(!printedError){
+            ERR_HEAD(expr->tokenRange, "Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.\n";
+            )
+        }
+        outTypes->add(ti);
+        
+        if(!info.ast->castable(temp.last(),ti)){
+            std::string strleft = info.ast->typeToString(temp.last());
+            std::string strright = info.ast->typeToString(ti);
+            ERR_HEAD(expr->tokenRange, "'"<<strleft << "' cannot be casted to '"<<strright<<".\n\n";
+                ERR_LINE(expr->tokenRange,strleft.c_str());
+                ERR_LINE(expr->left->tokenRange,strright.c_str());
+            )
+        }
     } else {
+        // TODO: This code is buggy and doesn't behave as it should for all types.
+        //   Not sure what to do about it.
         if(expr->left) {
             CheckExpression(info,scopeId, expr->left, outTypes);
         }
@@ -992,7 +1144,8 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
             CheckExpression(info,func->scopeId, arg.defaultValue,&temp);
             if(temp.size()==0)
                 temp.add(AST_VOID);
-            if(temp.last() != argImpl.typeId){
+            if(!info.ast->castable(temp.last(),argImpl.typeId)){
+            // if(temp.last() != argImpl.typeId){
                 std::string deftype = info.ast->typeToString(temp.last());
                 std::string argtype = info.ast->typeToString(argImpl.typeId);
                 ERR_HEAD(arg.defaultValue->tokenRange, "Type of default value does not match type of argument.\n\n";
@@ -1136,7 +1289,7 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
     if(parentStruct){
         fnOverloads = &parentStruct->getMethod(function->name);
     } else {
-        Identifier* iden = info.ast->getIdentifier(scope->scopeId, function->name);
+        Identifier* iden = info.ast->findIdentifier(scope->scopeId, function->name);
         if(!iden){
             iden = info.ast->addIdentifier(scope->scopeId, function->name);
             iden->type = Identifier::FUNC;
@@ -1259,15 +1412,17 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
     }
     
     for(auto astate : scope->statements) {
-        if(astate->body){
-            int result = CheckFunctions(info, astate->body);   
-            // if(!result)
-            //     error = false;
-        }
-        if(astate->elseBody){
-            int result = CheckFunctions(info, astate->elseBody);
-            // if(!result)
-            //     error = false;
+        if(astate->hasNodes()){
+            if(astate->firstBody){
+                int result = CheckFunctions(info, astate->firstBody);   
+                // if(!result)
+                //     error = false;
+            }
+            if(astate->secondBody){
+                int result = CheckFunctions(info, astate->secondBody);
+                // if(!result)
+                //     error = false;
+            }
         }
     }
     
@@ -1276,8 +1431,8 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
 
 int CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
     using namespace engone;
-    if(func->body->nativeCode)
-        return true;
+    _TC_LOG(FUNC_ENTER) // if(func->body->nativeCode)
+    //     return true;
 
     funcImpl->polyVersion = func->polyVersionCount++; // New poly version
     info.currentPolyVersion = funcImpl->polyVersion;
@@ -1356,15 +1511,11 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
 
     DynamicArray<std::string> vars;
     for (auto now : scope->statements){
-        DynamicArray<TypeId> rightTypes{};
-
-        if(now->rvalue) {
-            CheckExpression(info, scope->scopeId, now->rvalue, &rightTypes);
-            if(rightTypes.size()==0)
-                rightTypes.add(AST_VOID);
-        }
+        DynamicArray<TypeId> typeArray{};
         
-        for(auto& var : now->varnames){
+        //-- Check assign types in all varnames. The result is put in version_assignType for
+        //   the generator and rest of the code to use.
+        for(auto& var : now->varnames) {
             if(var.assignString.isString()){
                 bool printedError = false;
                 auto ti = CheckType(info, scope->scopeId, var.assignString, now->tokenRange, &printedError);
@@ -1382,38 +1533,104 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             }
         }
 
-        if(now->body && now->type != ASTStatement::FOR){
-            int result = CheckRest(info, now->body);
-        }
-        if(now->elseBody){
-            int result = CheckRest(info, now->elseBody);
-        }
-        if(now->type == ASTStatement::ASSIGN){
+        if(now->type == ASTStatement::CONTINUE || now->type == ASTStatement::BREAK){
+            // nothing
+        } else if(now->type == ASTStatement::BODY || now->type == ASTStatement::DEFER){
+            int result = CheckRest(info, now->firstBody);
+        } else if(now->type == ASTStatement::EXPRESSION){
+            CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray);
+            // if(typeArray.size()==0)
+            //     typeArray.add(AST_VOID);
+        } else if(now->type == ASTStatement::RETURN){
+            for(auto ret : now->returnValues){
+                typeArray.resize(0);
+                int result = CheckExpression(info, scope->scopeId, ret, &typeArray);
+            }
+        } else if(now->type == ASTStatement::IF){
+            int result = CheckExpression(info, scope->scopeId,now->firstExpression,&typeArray);
+            result = CheckRest(info, now->firstBody);
+            if(now->secondBody){
+                result = CheckRest(info, now->secondBody);
+            }
+        } else if(now->type == ASTStatement::ASSIGN){
+            auto& typeArray = now->versions_expresssionTypes[info.currentPolyVersion];
+            if(now->firstExpression){
+                // may not exist, meaning just a declaration, no assignment
+                int result = CheckExpression(info, scope->scopeId,now->firstExpression, &typeArray);
+                if(now->versions_expresssionTypes[info.currentPolyVersion].size()==0)
+                    typeArray.add(AST_VOID);
+            }
+            if(now->firstExpression && typeArray.size() < now->varnames.size()){
+                char msg[100];
+                ERR_HEAD(now->tokenRange, "Too many variables were declared.\n\n";
+                    sprintf(msg,"%d variables",(int)now->varnames.size());
+                    ERR_LINE(now->tokenRange, msg);
+                    sprintf(msg,"%d return values",(int)typeArray.size());
+                    ERR_LINE(now->firstExpression->tokenRange, msg);
+                )
+                // don't return here, we can still evaluate some things
+            }
             _TC_LOG(log::out << "assign ";)
             for (int vi=0;vi<(int)now->varnames.size();vi++) {
-                auto& var = now->varnames[vi];
-                if(!var.assignString.isValid()) {
-                    var.versions_assignType[info.currentPolyVersion] = rightTypes[vi];
-                }
-                _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.versions_assignType[info.currentPolyVersion]) <<"\n";)
-                auto varinfo = info.ast->addVariable(scope->scopeId, std::string(var.name));
-                if(varinfo){
-                    if(var.versions_assignType[info.currentPolyVersion].isValid()){
-                        varinfo->typeId = var.versions_assignType[info.currentPolyVersion]; // typeId comes from CheckExpression which may or may not evaluate
+                auto& varname = now->varnames[vi];
+                // possible implicit type
+                if(!varname.assignString.isValid()) { // if assigned type didn't exist then 
+                    if(vi < typeArray.size()){ // out of bounds, error is printed above
+                        varname.versions_assignType[info.currentPolyVersion] = typeArray[vi];
                     }
-                    // the same type as the generator.
-                    vars.add(std::string(var.name));
+                }
+                _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) <<"\n";)
+                Identifier* varIdentifier = info.ast->findIdentifier(scope->scopeId, varname.name);
+                if(!varIdentifier){
+                    auto varinfo = info.ast->addVariable(scope->scopeId, varname.name);
+                    Assert(varinfo);
+                    varinfo->typeId = varname.versions_assignType[info.currentPolyVersion];
+                    vars.add(varname.name);
+                } else if(varIdentifier->type==Identifier::VAR) {
+                    // variable is already defined
+                    auto varinfo = info.ast->identifierToVariable(varIdentifier);
+                    Assert(varinfo);
+                    if(varname.declaration()){
+                        if(varIdentifier->scopeId == scope->scopeId) {
+                            // info.ast->removeIdentifier(varIdentifier->scopeId, varname.name); // add variable already does this
+                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, true);
+                        } else {
+                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, true);
+                        }
+                        Assert(varinfo);
+                        varinfo->typeId = varname.versions_assignType[info.currentPolyVersion];
+                        vars.add(varname.name);
+                    } else {
+                        if(!info.ast->castable(varname.versions_assignType[info.currentPolyVersion], varinfo->typeId)){
+                            std::string leftstr = info.ast->typeToString(varinfo->typeId);
+                            std::string rightstr = info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]);
+                            ERR_HEAD(now->tokenRange, "Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.\n\n";
+                                ERR_LINE(varname.name, leftstr.c_str());
+                                ERR_LINE(now->firstExpression->tokenRange,rightstr.c_str());
+                            )
+                        }
+                    }
+                } else {
+                    ERR_HEAD(varname.name.range(), "'"<<varname.name<<"' is defined as a non-variable and cannot be used.\n\n";
+                        ERR_LINE(varname.name, "bad");
+                    )
                 }
             }
             _TC_LOG(log::out << "\n";)
+        } else if(now->type == ASTStatement::WHILE){
+            int result = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray);
+            result = CheckRest(info, now->firstBody);
         } else if(now->type == ASTStatement::FOR){
+            DynamicArray<TypeId> temp{}; // For has varnames which use typeArray. Therfore, we need another array.
+            int result = CheckExpression(info, scope->scopeId, now->firstExpression, &temp);
+
             Assert(now->varnames.size()==1);
             auto& varname = now->varnames[0];
 
-            ScopeId varScope = now->body->scopeId;
+            ScopeId varScope = now->firstBody->scopeId;
 
             // TODO: for loop variables
-            auto iterinfo = info.ast->getTypeInfo(rightTypes.last());
+            auto iterinfo = info.ast->getTypeInfo(temp.last());
             if(iterinfo&&iterinfo->astStruct){
                 if(iterinfo->astStruct->name == "Slice"){
                     auto varinfo_index = info.ast->addVariable(varScope, "nr");
@@ -1423,8 +1640,8 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                         WARN_HEAD(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
                     }
 
-                    // _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
-                    auto varinfo_item = info.ast->addVariable(varScope, std::string(varname.name));
+                    // _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
+                    auto varinfo_item = info.ast->addVariable(varScope, varname.name);
                     if(varinfo_item){
                         auto memdata = iterinfo->getMember("ptr");
                         auto itemtype = memdata.typeId;
@@ -1440,9 +1657,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                         WARN_HEAD(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
                     }
 
-                    if(now->body){
-                        int result = CheckRest(info, now->body);
-                    }
+                    int result = CheckRest(info, now->firstBody);
                     info.ast->removeIdentifier(varScope, varname.name);
                     info.ast->removeIdentifier(varScope, "nr");
                     continue;
@@ -1464,26 +1679,24 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                             WARN_HEAD(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
                         }
 
-                        // _TC_LOG(log::out << " " << var.name<<": "<< info.ast->typeToString(var.assignType) <<"\n";)
-                        auto varinfo_item = info.ast->addVariable(varScope, std::string(varname.name));
+                        // _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
+                        auto varinfo_item = info.ast->addVariable(varScope, varname.name);
                         if(varinfo_item){
                             varinfo_item->typeId = inttype;
                         } else {
                             WARN_HEAD(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
                         }
 
-                        if(now->body){
-                            int result = CheckRest(info, now->body);
-                        }
+                        int result = CheckRest(info, now->firstBody);
                         info.ast->removeIdentifier(varScope, varname.name);
                         info.ast->removeIdentifier(varScope, "nr");
                         continue;
                     }
                 }
             }
-            std::string strtype = info.ast->typeToString(rightTypes.last());
-            ERR_HEAD(now->rvalue->tokenRange, "The expression in for loop must be a Slice or Range.\n\n";
-                ERR_LINE(now->rvalue->tokenRange,strtype.c_str());
+            std::string strtype = info.ast->typeToString(typeArray.last());
+            ERR_HEAD(now->firstExpression->tokenRange, "The expression in for loop must be a Slice or Range.\n\n";
+                ERR_LINE(now->firstExpression->tokenRange,strtype.c_str());
             )
             continue;
         } else 
@@ -1493,7 +1706,8 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             // TODO: type check now->name now->alias
             //  if not type then check namespace
             //  otherwise it's variables
-            
+            Assert(("Broken code",false));
+
             if(now->varnames.size()==1 && now->alias){
                 Token& name = now->varnames[0].name;
                 TypeId originType = CheckType(info, scope->scopeId, name, now->tokenRange, nullptr);
@@ -1507,7 +1721,6 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                     // with polymorphism since it will check scopes
                     // multiple times with different types. With modififying I mostly
                     // mean removing or adding nodes. Changing names, types is bad too.
-                    Assert(("Broken code",false));
                     // now->next = nullptr;
                     // info.ast->destroy(now);
                     // if(prev){
@@ -1575,6 +1788,8 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                 // }
                 continue;
             }
+        } else {
+            Assert(("Statement type not handled!",false));
         }
     }
     for(auto& name : vars){
@@ -1610,7 +1825,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
                 continue;
             }
             // log::out << log::RED << "Some types could not be evaluated\n";
-            return info.errors;
+            break;
         }
     }
     result = CheckFunctions(info, scope);

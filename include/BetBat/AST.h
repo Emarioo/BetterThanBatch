@@ -33,9 +33,9 @@ enum PrimitiveType : u32 {
     AST_STRING, // converted to char[]
     AST_NULL, // converted to void*
 
-    AST_POLY,
-    
     AST_TRUE_PRIMITIVES,
+
+    AST_POLY,
 
     // TODO: should these be moved somewhere else?
     AST_ID, // variable, enum, type
@@ -109,7 +109,7 @@ struct PolyVersions {
     T& get(u32 index) {
         if(index >= _array.used) {
             Assert(("Probably a bug",index < 1000));
-            Assert(_array.resize(index + 1));
+            Assert(_array.resize(index + 4));
         }
         return _array.get(index);
     }
@@ -302,13 +302,15 @@ struct Identifier {
     Type type=VAR;
     std::string name{};
     ScopeId scopeId=0;
-    int varIndex=0;
+    u32 varIndex=0;
     FnOverloads funcOverloads{};
 };
 struct VariableInfo {
     i32 frameOffset = 0;
     i32 memberIndex = -1; // negative = normal variable, positive = variable in struct
     TypeId typeId=AST_VOID;
+    // ScopeId scopeId = 0; // do you really need this variable? can you get the identifier instead?
+
 };
 struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}
@@ -382,40 +384,61 @@ struct ASTExpression : ASTNode {
 struct ASTStatement : ASTNode {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
     enum Type {
-        ASSIGN, // a = 9
+        EXPRESSION=0,
+        ASSIGN,
         IF,
         WHILE,
         FOR,
         RETURN,
         BREAK,
         CONTINUE,
-        EXPRESSION,
         USING,
         BODY,
         DEFER,
+
+        STATEMENT_TYPE_COUNT,
     };
-    int type = 0;
+    ~ASTStatement(){
+        returnValues.~DynamicArray<ASTExpression*>();
+    }
+    Type type = EXPRESSION;
     // int opType = 0;
     struct VarName {
         Token name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
         int arrayLength=-1;
         PolyVersions<TypeId> versions_assignType{};
+        // true if variable declares a new variable (it does if it has a type)
+        // false if variable implicitly declares a new type OR assigns to an existing variable
         bool declaration(){
             return assignString.isValid();
         }
     };
     bool rangedForLoop=false; // otherwise sliced for loop
     DynamicArray<VarName> varnames;
-    // std::string* name=0;
     std::string* alias = nullptr;
     // TypeId typeId={};
-    // ASTExpression* lvalue=0;
-    ASTExpression* rvalue = nullptr;
-    ASTScope* body = nullptr;
-    ASTScope* elseBody = nullptr;
 
-    std::vector<ASTExpression*>* returnValues = nullptr;
+    // true if bodies and expressions can be used.
+    // false if returnValues should be used.
+    bool hasNodes(){
+        // Return is the only one that uses return values
+        return type != ASTStatement::RETURN;
+    }
+    // with a union you have to use hasNodes before using the expressions.
+    // this is annoying so I am not using a union but you might want to
+    // to save 24 bytes.
+    union {
+        struct {
+            ASTExpression* firstExpression;
+            ASTScope* firstBody;
+            ASTScope* secondBody;
+        };
+        // DynamicArray<ASTExpression*> returnValues{};
+    };
+    DynamicArray<ASTExpression*> returnValues{};
+
+    PolyVersions<DynamicArray<TypeId>> versions_expresssionTypes; // types from firstExpression
 
     bool sharedContents = false; // this node is not the owner of it's nodes.
 
@@ -475,7 +498,7 @@ struct ASTEnum : ASTNode {
         Token name{};
         int enumValue=0;
     };
-    std::vector<Member> members{};
+    DynamicArray<Member> members{};
     
     bool getMember(const Token& name, int* out);
 
@@ -583,7 +606,7 @@ struct AST {
     TypeId convertToTypeId(Token typeString, ScopeId scopeId);
     // pointers NOT allowed
     TypeInfo* convertToTypeInfo(Token typeString, ScopeId scopeId) {
-        return getTypeInfo(convertToTypeId(typeString,scopeId));
+        return getTypeInfo(convertToTypeId(typeString,scopeId).baseType());
     }
     // pointers are allowed
     TypeInfo* getBaseTypeInfo(TypeId id);
@@ -604,24 +627,19 @@ struct AST {
     
     std::vector<VariableInfo*> variables;
 
-    // Returns nullptr if variable already exists or if scopeId is invalid
-    VariableInfo* addVariable(ScopeId scopeId, const Token& name);
-    // Returns nullptr if variable already exists or if scopeId is invalid
-    // FunctionInfo* addFunction(ScopeId scopeId, const std::string& name);
-    Identifier* addFunction(ScopeId scopeId, const Token& name, ASTFunction* astFunc, FuncImpl* funcImpl);
-    // Returns nullptr if variable already exists or if scopeId is invalid
-    Identifier* addIdentifier(ScopeId scopeId, const Token& name);
-    
-    // Pointer may become invalid if calling other functions interracting with
-    // the map of identifiers
-    // name argument works with namespacing
-    Identifier* getIdentifier(ScopeId scopeId, const Token& name);
-    VariableInfo* getVariable(Identifier* id);
+    //-- Identifiers and variables
+    // Searches for identifier with some name. It does so recursively
+    Identifier* findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes = true);
+    VariableInfo* identifierToVariable(Identifier* identifier);
 
-    // FnOverloads::Overload* getFunction(Identifier* id, std::vector<TypeId>& argTypes);
-    
+    // Returns nullptr if variable already exists or if scopeId is invalid
+    VariableInfo* addVariable(ScopeId scopeId, const Token& name, bool shadowPreviousVariables=false);
+    // Returns nullptr if variable already exists or if scopeId is invalid
+    Identifier* addIdentifier(ScopeId scopeId, const Token& name, bool shadowPreviousIdentifier=false);
+
     void removeIdentifier(ScopeId scopeId, const Token& name);
-
+    void removeIdentifier(Identifier* identifier);
+        
     u32 getTypeSize(TypeId typeId);
     u32 getTypeAlignedSize(TypeId typeId);
 
@@ -655,7 +673,7 @@ struct AST {
     ASTFunction* createFunction(const Token& name);
     ASTStruct* createStruct(const Token& name);
     ASTEnum* createEnum(const Token& name);
-    ASTStatement* createStatement(int type);
+    ASTStatement* createStatement(ASTStatement::Type type);
     ASTExpression* createExpression(TypeId type);
     // You may also want to call some additional functions to properly deal with
     // named scopes so types are properly evaluated. See ParseNamespace for an example.

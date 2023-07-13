@@ -5,12 +5,14 @@
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
+#include "BetBat/NativeRegistry.h"
 
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
 struct Path {
     Path() = default;
     Path(const std::string& path);
+    Path(const char* path);
     enum Type : u32 {
         DIR = 0x1,
         ABSOLUTE = 0x2,
@@ -71,6 +73,8 @@ struct CompileInfo {
     std::unordered_map<std::string,RootMacro> _macros;
 
     DynamicArray<TokenStream*> streamsToClean{}; // streams which tokens are used somewhere.
+
+    NativeRegistry nativeRegistry{};
 };
 
 Bytecode* CompileSource(CompileOptions options);

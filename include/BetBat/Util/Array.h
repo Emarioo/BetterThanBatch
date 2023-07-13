@@ -1,3 +1,5 @@
+#pragma once
+
 #include "Engone/PlatformLayer.h"
 // #include "Engone/Logger.h"
 
@@ -73,7 +75,7 @@ struct DynamicArray {
     T* getPtr(u32 index) const {
         if(index >= used)
             return nullptr;
-        return *(_ptr + index);
+        return (_ptr + index);
     }
     T& get(u32 index) const {
         Assert(index < used);

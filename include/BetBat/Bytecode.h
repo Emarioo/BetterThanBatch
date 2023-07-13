@@ -1,5 +1,6 @@
 #pragma once
 #include "BetBat/Tokenizer.h"
+#include "BetBat/NativeRegistry.h"
 
 #define BC_MOV_RR 1
 #define BC_MOV_RM 2
@@ -117,19 +118,6 @@ const char* RegToStr(u8 reg);
 // regName refers to A,B,C,D (1,2,3,4)
 int RegBySize(int regName, int size);
 
-#define BC_EXT_MALLOC -1
-#define BC_EXT_REALLOC -2
-#define BC_EXT_FREE -3
-#define BC_EXT_PRINTI -4
-#define BC_EXT_PRINTC -5
-#define BC_EXT_PRINTS -6
-#define BC_EXT_PRINTD -7
-
-#define BC_EXT_FILEOPEN -10
-#define BC_EXT_FILEREAD -11
-#define BC_EXT_FILEWRITE -12
-#define BC_EXT_FILECLOSE -13
-
 struct Instruction {
     uint8 opcode=0;
     union {
@@ -155,14 +143,29 @@ struct Bytecode {
     engone::Memory codeSegment{sizeof(Instruction)};
     engone::Memory dataSegment{1};
     
-    engone::Memory debugSegment{sizeof(u32)};
-    std::vector<std::string> debugText;
+    engone::Memory debugSegment{sizeof(u32)}; // indices to debugLocations
+    struct Location {
+        u32 line=0;
+        u32 column=0;
+        std::string file{};
+        std::string desc{};
+        std::string preDesc{};
+    };
+    DynamicArray<Location> debugLocations;
+
+    NativeRegistry* nativeRegistry = nullptr;
+
+    Location* getLocation(u32 instructionIndex);
+    Location* setLocationInfo(const TokenRange& token, u32 InstructionIndex=-1, u32* locationIndex = nullptr);
+    Location* setLocationInfo(const char* preText, u32 InstructionIndex=-1);
+    // use same location as said register
+    Location* setLocationInfo(u32 locationIndex, u32 instructionIndex=-1);
     
     // -1 as index will add text to next instruction
-    void addDebugText(const char* str, int length, u32 instructionIndex=-1);
-    void addDebugText(const std::string& text, u32 instructionIndex=-1);
-    void addDebugText(Token& token, u32 instructionIndex=-1);
-    const char* getDebugText(u32 instructionIndex);
+    // void addDebugText(const char* str, int length, u32 instructionIndex=-1);
+    // void addDebugText(const std::string& text, u32 instructionIndex=-1);
+    // void addDebugText(Token& token, u32 instructionIndex=-1);
+    // const char* getDebugText(u32 instructionIndex);
     // returns an offset relative to the beginning of the data segment where data was placed.
     int appendData(const void* data, int size);
 

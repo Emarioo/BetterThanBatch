@@ -1,9 +1,0 @@
-// @macro-benchmark
-// #import "./macros"
-// #import "OS"
-// #import "Logger"
-// #import "./macro-bench"
-// #import "./overloading"
-
-// #import "./defer"
-#import "./dir-iterator"

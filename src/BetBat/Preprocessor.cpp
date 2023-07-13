@@ -50,7 +50,7 @@ Token& PreprocInfo::now(){
 RootMacro* PreprocInfo::matchMacro(const Token& token){
     // MEASURE;
 // RootMacro* PreprocInfo::matchMacro(Token token){
-    if(token.flags&TOKEN_QUOTED)
+    if(token.flags&TOKEN_MASK_QUOTED)
         return nullptr;
     auto pair = _macros.find(token);
     if(pair==_macros.end()){
@@ -104,7 +104,7 @@ void CertainMacro::addParam(const Token& name){
 }
 int CertainMacro::matchArg(const Token& token){
     // MEASURE;
-    if(token.flags&TOKEN_QUOTED)
+    if(token.flags&TOKEN_MASK_QUOTED)
         return -1;
     #ifdef SLOW_PREPROCESSOR
     for(int i=0;i<(int)parameters.size();i++){
@@ -164,6 +164,8 @@ bool EvalInfo::matchSuperArg(const Token& name, CertainMacro*& superMacro, Argum
     return false;
 }
 void PreprocInfo::addToken(Token inToken){
+    // IMPORTANT Changes here may need to apply in ParseToken.
+    //  Some special stuff with ## happens there.
     u64 offset = outTokens->tokenData.used; // get offset before adding data
     outTokens->addData(inToken);
     inToken.str = (char*)offset;
@@ -172,7 +174,7 @@ void PreprocInfo::addToken(Token inToken){
 int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
     using namespace engone;
     Token token = info.get(info.at()+1);
-    if(token!=PREPROC_TERM || (token.flags&TOKEN_QUOTED)){
+    if(!Equal(token,PREPROC_TERM)){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
@@ -182,9 +184,13 @@ int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
-        ERR_HEAD(token, "Cannot have space after preprocessor directive\n";
-        )
-        return PARSE_ERROR;
+        if(attempt) {
+            return PARSE_BAD_ATTEMPT;
+        } else {
+            ERR_HEAD(token, "Cannot have space after preprocessor directive\n";
+            )
+            return PARSE_ERROR;
+        }
     }
     token = info.get(info.at()+2);
     if(token != str){
@@ -205,7 +211,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     using namespace engone;
     MEASURE;
     Token token = info.get(info.at()+1);
-    if(token!=PREPROC_TERM || (token.flags&TOKEN_QUOTED)){
+    if(!Equal(token,PREPROC_TERM)){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
@@ -245,7 +251,7 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     
     Token name = info.next();
     
-    if(name.flags&TOKEN_QUOTED){
+    if(name.flags&TOKEN_MASK_QUOTED){
         ERR_HEAD(name, "Define name cannot be quoted "<<name<<"\n";
         )
         return PARSE_ERROR;
@@ -333,9 +339,10 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         Token token = info.next();
         if(token==PREPROC_TERM){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-                ERR_HEAD(token, "SPACE AFTER "<<token<<"!\n";
-                )
-                return PARSE_ERROR;
+                continue;
+                // ERR_HEAD(token, "SPACE AFTER "<<token<<"!\n";
+                // )
+                // return PARSE_ERROR;
             }
             Token token = info.get(info.at()+1);
             if(token=="enddef"){
@@ -394,7 +401,7 @@ int ParseUndef(PreprocInfo& info, bool attempt){
     // TODO: check of end
 
     Token token = info.get(info.at()+1);
-    if(token!=PREPROC_TERM || (token.flags&TOKEN_QUOTED)){
+    if(!Equal(token,PREPROC_TERM)){
         if(attempt){
             return PARSE_BAD_ATTEMPT;
         }else{
@@ -492,7 +499,7 @@ int ParseImport(PreprocInfo& info, bool attempt){
         return PARSE_BAD_ATTEMPT;
 
     Token name = info.get(info.at()+1);
-    if(!(name.flags&TOKEN_QUOTED)){
+    if(!(name.flags&TOKEN_MASK_QUOTED)){
         ERR_HEAD(name, "expected a string not "<<name<<"\n";
         )
         return PARSE_ERROR;
@@ -503,7 +510,7 @@ int ParseImport(PreprocInfo& info, bool attempt){
     if(Equal(token,"as")){
         info.next();
         token = info.get(info.at()+1);
-        if(token.flags & TOKEN_QUOTED){
+        if(token.flags & TOKEN_MASK_QUOTED){
             ERR_HEAD(token, "don't use quotes with "<<log::YELLOW<<"as\n";
             )
             return PARSE_ERROR;
@@ -529,7 +536,7 @@ int ParseInclude(PreprocInfo& info, bool attempt){
     // needed for an error, saving it here in case the code changes
     // and info.at changes it output
     Token token = info.get(tokIndex);
-    if(!(token.flags&TOKEN_QUOTED)){
+    if(!(token.flags&TOKEN_MASK_QUOTED)){
         ERR_HEAD(token, "expected a string not "<<token<<"\n";
         )
         return PARSE_ERROR;
@@ -713,91 +720,135 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
     //  log::out << "     exit  ifdef loop\n";
     return error;
 }
-int ParsePredefinedMacro(PreprocInfo& info, bool attempt){
+// does not support multiple tokens
+// this function is different because macro need this interface when
+// doing concatenation. interacting with inTokens and outTokens is not an option.
+// YOU MUST PARSE HASHTAG BEFORE CALLING THIS
+int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outToken, char buffer[256]){
     using namespace engone;
     MEASURE;
-    Token token = info.get(info.at()+1);
+    // Token token = info.get(info.at()+1);
+    // Token token = parseToken;
     // early exit
-    if(!token.str || token.length==0 || *token.str != '_') {
-        if(attempt)
+    if(!parseToken.str || parseToken.length==0) {
+        // if(attempt)
             return PARSE_BAD_ATTEMPT;
-        else
-            return PARSE_ERROR;
+        // else
+        //     return PARSE_ERROR;
     }
+
+    defer {
+        Assert(outToken.length < 255);
+    };
+
+    // Previous token must be hashtag, should work with macros too.
+    // MACRO line where MACRO is replaced with # will assert and should
+    // #line which will never trigger assert
+    Assert(parseToken.tokenStream);
+    Assert(Equal(parseToken.tokenStream->get(parseToken.tokenIndex-1),"#"));
+
     // NOTE: One idea is to allow __LINE__ (double underscore) too
     //   but this would slow down the compiler a tiny bit so I am not going to.
     //   This mindset will be used elsewhere to and will propably provide more
     //   performance and less complexity.
-    if(Equal(token,"_LINE_")){
-        info.next();
+    //   I will warn about double underscore though. (done below)
+    if(Equal(parseToken,"line")){
+        // info.next();
 
-        std::string temp = std::to_string(token.line);
-
-        token.str = (char*)temp.data();
-        token.length = temp.length();
+        std::string temp = std::to_string(parseToken.line);
+        strcpy(buffer, temp.data());
+        outToken = parseToken;
+        outToken.str = (char*)buffer;
+        outToken.length = temp.length();
         
-        _MLOG(log::out << "Append "<<token<<"\n";)
-        info.addToken(token);
+        // _MLOG(log::out << "Append "<<outToken<<"\n";)
+        // info.addToken(token);
         return PARSE_SUCCESS;
-    } else if(Equal(token,"_COLUMN_")) {
-        info.next();
+    } else if(Equal(parseToken,"column")) {
+        // info.next();
 
-        std::string temp = std::to_string(token.column);
+        std::string temp = std::to_string(parseToken.column);
 
-        token.str = (char*)temp.data();
-        token.length = temp.length();
+        strcpy(buffer, temp.data());
+        outToken = parseToken;
+        outToken.str = (char*)buffer;
+        outToken.length = temp.length();
         
-        _MLOG(log::out << "Append "<<token<<"\n";)
-        info.addToken(token);
+        // _MLOG(log::out << "Append "<<outToken<<"\n";)
+        // info.addToken(token);
         return PARSE_SUCCESS;
-    } else if(Equal(token,"_FILE_")) {
-        info.next();
+    } else if(Equal(parseToken,"file")) {
+        // info.next();
 
-        token.str = (char*)info.inTokens->streamName.data();
-        token.length = info.inTokens->streamName.length();
-        
-        _MLOG(log::out << "Append "<<token<<"\n";)
-        info.addToken(token);
-        return PARSE_SUCCESS;
-    } else if(Equal(token,"_FILENAME_")) {
-        info.next();
+        // token.str = (char*)info.inTokens->streamName.data();
+        // token.length = info.inTokens->streamName.length();
+        auto& temp = info.inTokens->streamName;
 
-        int lastSlash = -1;
-        for(int i=0;i<(int)info.inTokens->streamName.length();i++){
-            if(info.inTokens->streamName[i] == '/') {
-                lastSlash = i;
-                break;
-            }
-        }
-        token.str = (char*)info.inTokens->streamName.data();
-        token.length = info.inTokens->streamName.length();
-        if(lastSlash != -1 && ( info.inTokens->streamName.size() == 0
-             || info.inTokens->streamName.back() != '/'))
-        {
-             token.str += lastSlash + 1;
-             token.length -= lastSlash + 1;
-        }
+        strcpy(buffer, temp.data());
+        outToken = parseToken;
+        outToken.str = (char*)buffer;
+        outToken.length = temp.length();
+        outToken.flags = TOKEN_DOUBLE_QUOTED;
         
-        _MLOG(log::out << "Append "<<token<<"\n";)
-        info.addToken(token);
+        // _MLOG(log::out << "Append "<<outToken<<"\n";)
+        // info.addToken(token);
         return PARSE_SUCCESS;
-    } else if(Equal(token,"_UNIQUE_")) {
-        info.next();
+    } else if(Equal(parseToken,"filename")) {
+        // info.next();
+
+        // int lastSlash = -1;
+        // for(int i=0;i<(int)info.inTokens->streamName.length();i--){
+        //     if(info.inTokens->streamName[i] == '/') {
+        //         lastSlash = i;
+        //         break;
+        //     }
+        // }
+        
+        auto temp = TrimDir(info.inTokens->streamName);
+
+        strcpy(buffer, temp.data());
+        outToken = parseToken;
+        outToken.str = (char*)buffer;
+        outToken.length = temp.length();
+        outToken.flags = TOKEN_DOUBLE_QUOTED;
+        
+        // if(lastSlash != -1 && ( info.inTokens->streamName.size() == 0
+        //      || info.inTokens->streamName.back() != '/'))
+        // {
+        //      outToken.str += lastSlash + 1;
+        //      outToken.length -= lastSlash + 1;
+        // }
+        
+        // _MLOG(log::out << "Append "<<outToken<<"\n";)
+        // info.addToken(token);
+        return PARSE_SUCCESS;
+    } else if(Equal(parseToken,"unique")) { // rename to counter? unique makes you think aboout UUID
+        // info.next();
 
         i32 num = info.compileInfo->globalUniqueCounter++;
 
         std::string temp = std::to_string(num);
-        token.str = (char*)temp.data();
-        token.length = temp.length();
+
+        strcpy(buffer, temp.data());
+        outToken = parseToken;
+        outToken.str = (char*)buffer;
+        outToken.length = temp.length();
         
-        _MLOG(log::out << "Append "<<token<<"\n";)
-        info.addToken(token);
+        // _MLOG(log::out << "Append "<<outToken<<"\n";)
+        // info.addToken(token);
         return PARSE_SUCCESS;
     } else {
-        if(attempt)
-            return PARSE_BAD_ATTEMPT;
-        else
-            return PARSE_ERROR;
+        #define BAD_DOUBLE_UNDERSCORE(X) if(Equal(parseToken,"__" #X "__")) { WARN_HEAD(parseToken,"Did you mean '_" #X "_' with two underscores?\n\n";WARN_LINE(parseToken.tokenIndex,"_" #X "_ instead?");)}
+        BAD_DOUBLE_UNDERSCORE(LINE)
+        else BAD_DOUBLE_UNDERSCORE(COLUMN)
+        else BAD_DOUBLE_UNDERSCORE(FILE)
+        else BAD_DOUBLE_UNDERSCORE(FILENAME)
+        else BAD_DOUBLE_UNDERSCORE(UNIQUE)
+        #undef BAD_DOUBLE_UNDERSCORE
+        // if(attempt)
+        return PARSE_BAD_ATTEMPT;
+        // else
+        //     return PARSE_ERROR;
     }
 }
 void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bool unwrap=false,Arguments* args=0,int* argIndex=0){
@@ -806,7 +857,7 @@ void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bo
         if(!unwrap){
             auto tmp = from[i];
             if(quoted)
-                tmp.flags |= TOKEN_QUOTED;
+                tmp.flags |= TOKEN_DOUBLE_QUOTED;
             to.push_back(tmp);
         }else{
             Token tok = info.get(from[i]);
@@ -818,7 +869,7 @@ void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bo
                 args->push_back({});
             auto tmp = from[i];
             if(quoted)
-                tmp.flags |= TOKEN_QUOTED;
+                tmp.flags |= TOKEN_DOUBLE_QUOTED;
             args->back().push_back(tmp);
         }
     }
@@ -937,7 +988,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
                     }else{
                         auto tmp = argTokens[indexArg-1];
                         if(wasQuoted)
-                            tmp.flags|=TOKEN_QUOTED;
+                            tmp.flags|=TOKEN_DOUBLE_QUOTED;
                         evalInfo.arguments.back().push_back(tmp);
                         _MLOG(log::out <<log::GRAY << " argv["<<(evalInfo.arguments.size()-1)<<"] += "<<argTok<<"\n";)
                     }
@@ -977,7 +1028,7 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
             if((int)evalInfo.arguments.size()==evalInfo.argIndex)
                 evalInfo.arguments.push_back({});
             if(wasQuoted)
-                tokenRef.flags|=TOKEN_QUOTED;
+                tokenRef.flags|=TOKEN_DOUBLE_QUOTED;
             evalInfo.arguments.back().push_back(tokenRef);
             _MLOG(log::out <<log::GRAY << " argv["<<(evalInfo.arguments.size()-1)<<"] += "<<token<<"\n";)
         }
@@ -1047,7 +1098,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
                     if(index==(int)tokens.size()&&i+1==argEnd&&indexArg==(int)args.size())
                         ref.flags = evalInfo.finalFlags;
                     if(wasQuoted){
-                        ref.flags |= TOKEN_QUOTED;
+                        ref.flags |= TOKEN_DOUBLE_QUOTED;
                     }
                     evalInfo.output.push_back(ref);
                     _MLOG(log::out << log::GRAY <<"  eval.out << "<<argTok<<"\n";);
@@ -1092,7 +1143,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
                 tokens[index-1].flags = evalInfo.finalFlags;
             
             if(wasQuoted){
-                tokens[index-1].flags |= TOKEN_QUOTED;
+                tokens[index-1].flags |= TOKEN_DOUBLE_QUOTED;
                 wasQuoted=false;
             }
 
@@ -1595,7 +1646,7 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
             _MLOG(log::out << " output " << token<<"\n";)
             outputTokens.add(&token);
             if(env.range.start == env.range.end){
-                outputTokensFlags.add(env.finalFlags);
+                outputTokensFlags.add(env.finalFlags|(token.flags&(TOKEN_MASK_QUOTED)));
             } else
                 outputTokensFlags.add(token.flags);
         } else {
@@ -1640,22 +1691,46 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
 
     // TODO: This can be done in the main loop instead.
     // No need for outputTokens. Concatenation can be done there too.
+    char buffer[256];
     for(int i=0;i<(int)outputTokens.size();i++){
         Token baseToken = *outputTokens[i];
-        baseToken.flags = outputTokensFlags[i];
+        int result = PARSE_BAD_ATTEMPT;
+        if(Equal(baseToken,"#") && outputTokens.size()>i+1){
+            result = ParsePredefinedMacro(info,*outputTokens[i+1], baseToken,buffer);
+            if(result == PARSE_SUCCESS){
+                i++;
+                baseToken.flags &= (outputTokensFlags[i]&(~TOKEN_MASK_QUOTED))|(TOKEN_MASK_QUOTED);
+            }
+        }
+        if(result == PARSE_BAD_ATTEMPT){
+            baseToken.flags &= (outputTokensFlags[i]&(~TOKEN_MASK_QUOTED))|(TOKEN_MASK_QUOTED);
+        }
         // baseToken.flags = evalInfo.output[i].flags; // TODO: WHAT ABOUT EXTRA FLAGS? NEW LINES DISAPPEAR WHEN REPLACING MACRO NAME!
         uint64 offset = info.tempStream->tokenData.used;
         info.tempStream->addData(baseToken);
         // info.outTokens->addData(baseToken);
         baseToken.str = (char*)offset;
         WHILE_TRUE {
-            if(i+2<(int)outputTokens.size() && Equal(*outputTokens[i+1],"##")){
-                Token token2 = *outputTokens[i+2];
-                info.tempStream->addData(token2);
-                // info.outTokens->addData(token2);
-                baseToken.length += token2.length;
-                i+=2;
-                continue;
+            
+            if(!Equal(*outputTokens[i],"#") && 0==(baseToken.flags&TOKEN_MASK_QUOTED) && i+3<(int)outputTokens.size() && Equal(*outputTokens[i+1],"#") && Equal(*outputTokens[i+2],"#")){
+                // Assert(false);
+                Token token2 = *outputTokens[i+3];
+                if(Equal(token2,"#")){
+                    int result = ParsePredefinedMacro(info,*outputTokens[i+4], token2,buffer);
+                    if(result==PARSE_SUCCESS){
+                        i++;
+                    }
+                } 
+                if(0==(outputTokens[i+3]->flags&TOKEN_MASK_QUOTED)) {
+                    if(result == PARSE_BAD_ATTEMPT){
+                        token2.flags = outputTokensFlags[i];
+                    }
+                    info.tempStream->addData(token2);
+                    // info.outTokens->addData(token2);
+                    baseToken.length += token2.length;
+                    i+=3;
+                    continue;
+                }
             }
             info.tempStream->addToken(baseToken);
             // info.outTokens->addToken(baseToken);
@@ -1675,30 +1750,31 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
     // TODO: If you define a new macro and then evaluate it you might be able to achieve infinite recursion.
     // There is an assert above which "locks" tempStream so it will be fine right now.
     while(!info.end()){
-        #ifndef SLOW_PREPROCESSOR
-        // Quick check, doesn't matter if it's quoted.
-        // ParseToken will not need to parse macros which is why we can do these
-        // checks
-        Token& token = info.get(info.at()+1);
-        if(*token.str != '#' && *token.str != '_'){
-            info.next();
-            info.addToken(token);
-            continue;
-        }
-        if(*token.str == '#' && !(token.flags & TOKEN_QUOTED) &&
-            !(token.flags & TOKEN_SUFFIX_SPACE) && !(token.flags & TOKEN_SUFFIX_LINE_FEED)){
-            // ParseDefine also makes sure that #define doesn't occur but we have to 
-            // do it here to in case tokens were merged resulting in #define.
-            if(Equal(info.get(info.at()+2),"define") || Equal(info.get(info.at()+2),"multidefine")) {
-                ERR_HEAD(info.get(info.at()+2), "Macro definitions inside macros are not allowed.\n\n";
-                    ERR_LINE(info.at()+2,"not allowed");
-                )
-                info.next();
-                info.addToken(token);
-                continue;
-            }
-        }
-        #endif
+        // #ifndef SLOW_PREPROCESSOR
+        // // Quick check, doesn't matter if it's quoted.
+        // // ParseToken will not need to parse macros which is why we can do these
+        // // checks
+        // // This broke because of concatenation with ##, revisit this code
+        // Token& token = info.get(info.at()+1);
+        // if(*token.str != '#' && *token.str != '_'){
+        //     info.next();
+        //     info.addToken(token);
+        //     continue;
+        // }
+        // if(*token.str == '#' && !(token.flags & TOKEN_MASK_QUOTED) &&
+        //     !(token.flags & TOKEN_SUFFIX_SPACE) && !(token.flags & TOKEN_SUFFIX_LINE_FEED)){
+        //     // ParseDefine also makes sure that #define doesn't occur but we have to 
+        //     // do it here to in case tokens were merged resulting in #define.
+        //     if(Equal(info.get(info.at()+2),"define") || Equal(info.get(info.at()+2),"multidefine")) {
+        //         ERR_HEAD(info.get(info.at()+2), "Macro definitions inside macros are not allowed.\n\n";
+        //             ERR_LINE(info.at()+2,"not allowed");
+        //         )
+        //         info.next();
+        //         info.addToken(token);
+        //         continue;
+        //     }
+        // }
+        // #endif
         int result = ParseToken(info);
     }
     info.inTokens = originalStream;
@@ -1716,9 +1792,45 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
 int ParseToken(PreprocInfo& info){
     using namespace engone;
     // MEASURE;
+    // if(info.usingTempStream /*<- true when doing macros*/ && (info.get(info.at()+1).flags&TOKEN_MASK_QUOTED)==0 && 
+    //     Equal(info.get(info.at()+2),"#")&&Equal(info.get(info.at()+3),"#") && 
+    //     (info.get(info.at()+3).flags&TOKEN_MASK_QUOTED)==0)
+    // {
+    //     int result = ParseToken(info);
+    //     Assert(result);
+    //     info.next(); info.next(); // skip ##
+    //     result = ParseToken(info);
+    //     Assert(result);
+
+    //     Token token = info.next();
+    //     Token second = info.next();
+
+    //     u64 offset = info.outTokens->tokenData.used; // get offset before adding data
+    //     info.outTokens->addData(token);
+    //     info.outTokens->addData(second);
+    //     token.str = (char*)offset;
+    //     token.length = token.length + second.length;
+    //     info.outTokens->addToken(token);
+
+    //     _MLOG(log::out << "Append "<<token<<second<<"\n";)
+    //     return PARSE_SUCCESS;
+    // }
     int result = ParseDefine(info,true);
-    if(result == PARSE_BAD_ATTEMPT)
-        result = ParsePredefinedMacro(info,true);
+    if(result == PARSE_BAD_ATTEMPT) {
+        if(Equal(info.get(info.at()+1),"#")){
+            Token token = info.get(info.at()+2);
+            Token outToken{};
+            char buffer[256];
+            result = ParsePredefinedMacro(info,token,outToken,buffer);
+            if(result==PARSE_SUCCESS){
+                info.next();
+                info.next();
+                info.addToken(outToken);
+                _MLOG(log::out << "Append "<<outToken<<"\n";)
+                return PARSE_SUCCESS;
+            }
+        }
+    }
     if(result == PARSE_BAD_ATTEMPT)
         result = ParseUndef(info,true);
     if(result == PARSE_BAD_ATTEMPT)
@@ -1802,7 +1914,7 @@ void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
         }
 
         Token name = info.get(info.at()+1);
-        if(!(name.flags&TOKEN_QUOTED)){
+        if(!(name.flags&TOKEN_MASK_QUOTED)){
             ERR_HEAD(name, "expected a string not "<<name<<"\n";
             )
             continue;
@@ -1813,7 +1925,7 @@ void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
         if(Equal(token,"as")){
             info.next();
             token = info.get(info.at()+1);
-            if(token.flags & TOKEN_QUOTED){
+            if(token.flags & TOKEN_MASK_QUOTED){
                 ERR_HEAD(token, "don't use quotes with "<<log::YELLOW<<"as\n";
                 )
                 continue;

@@ -11,7 +11,7 @@ void print_help(){
     #define PRINT_EXAMPLE(X) log::out << X;
     PRINT_USAGE("compiler.exe [file0 file1 ...]")
     PRINT_DESC("Arguments after the executable specifies source files to compile. "
-             "They will compile and run seperately. Use #import for more files in your "
+             "They will compile and run seperately. Use #import inside the source files for more files in your "
              "projects.\n")
     PRINT_EXAMPLES
     PRINT_EXAMPLE("  compiler.exe file0.btb script.txt\n")
@@ -57,13 +57,19 @@ int main(int argc, const char** argv){
 
     log::out.enableReport(false);
 
+    // PerfTestTokenize("src/BetBat/Generator.cpp", 1);
+    // PerfTestTokenize("src/BetBat/Generator.cpp", 15);
+    // PerfTestTokenize("src/BetBat/Parser.cpp", 15);
+    // return false;
+
     #define IfArg(X) if(!strcmp(arg,X))
     #define MODE_COMPILE 1
     #define MODE_OUT 2
     #define MODE_RUN 4
+    #define MODE_USER_ARGS 5
     // #define MODE_TEST 29
     // #define MODE_LOG 120
-    int mode = MODE_COMPILE;
+    int mode = MODE_COMPILE; // and run
     
     bool devmode=false;
     
@@ -78,16 +84,18 @@ int main(int argc, const char** argv){
         const char* arg = argv[i];
         int len = strlen(argv[i]);
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
-        IfArg("--help") {
+        if(!strcmp(arg,"--help")||!strcmp(arg,"-help")) {
             print_help();
-            return 0;
+            return 1;
         } else IfArg("-run") {
             mode = MODE_RUN;
         } else IfArg("-out") {
             mode = MODE_OUT;
         } else IfArg("-dev") {
             devmode = true;
-        } else if(mode==MODE_COMPILE){
+        } else IfArg("-user-args") {
+            mode = MODE_USER_ARGS;
+        } else if(mode==MODE_COMPILE){ 
             files.push_back(arg);
         } else if(mode==MODE_RUN){
             filesToRun.push_back(arg);
@@ -200,10 +208,11 @@ int main(int argc, const char** argv){
         // log::out << "No input files!\n";
     } else if(devmode){
         log::out << log::BLACK<<"[DEVMODE]\n";
+        CompileAndRun({"examples/dev.btb", compilerDir.text});
+        
         // PerfTestTokenize("example/build_fast.btb",200);
 
         // CompileAndRun({"examples/strings.btb", compilerDir.text});
-        CompileAndRun({"examples/test.btb", compilerDir.text});
         // CompileAndRun({"examples/macro-bench.btb", compilerDir.text});
         // RunBytecode({"a.btbc", compilerDir.text});
         // Bytecode* bc = ImportBytecode(std::string("a.btbc"));

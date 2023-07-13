@@ -12,42 +12,48 @@ enum @hide FileFlag {
     FILE_WILL_CREATE=4,
 }
 
-#define fn_native fn @hide @native
+fn @hide @native printi(num: i64) ;
+fn @hide @native printd(num: f32) ;
+fn @hide @native printc(chr: char) ;
+fn @hide @native prints(str: char[]) ;
+
+fn @hide @native malloc(size: u64) -> void* ;
+fn @hide @native realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
+fn @hide @native free(ptr: void*, size: u64) ;
 
 // // returns file handle and file size
-fn_native FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64;
+fn @hide @native FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64;
 // returns read bytes
-fn_native FileRead(file: File, buffer: void*, readBytes: u64) -> u64 ;
+fn @hide @native FileRead(file: File, buffer: void*, readBytes: u64) -> u64 ;
 // returns written bytes
-fn_native FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 ;
-fn_native FileClose(file: File) ;
+fn @hide @native FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 ;
+fn @hide @native FileClose(file: File) ;
 
-fn_native malloc(size: u64) -> void* ;
-fn_native realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
-fn_native free(ptr: void*, size: u64) ;
+fn @hide @native DirectoryIteratorCreate(rootPath: char[]) -> DirectoryIterator*;
+fn @hide @native DirectoryIteratorDestroy(iterator: DirectoryIterator*);
+fn @hide @native DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+fn @hide @native DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
-fn_native printi(num: i64) ;
-fn_native printd(num: f32) ;
-fn_native printc(chr: char) ;
-fn_native prints(str: char[]) ;
-
-fn_native CreateDirectoryIterator(rootPath: char[]) -> DirectoryIterator*;
+// fn @hide @native CurrentWorkingDirectory() -> char[];
+// fn @hide @native StartTimePoint() -> u64[];
+// fn @hide @native EndTimePoint(timepoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 
 struct DirectoryIteratorData {
-    name: char[];
+    name: char[]; // allocated by interpreter, the ptr should be const (char* const NOT const char*)
     fileSize: u64;
     lastWriteSeconds: f32;
     isDirectory: bool;
 }
 
 struct DirectoryIterator {
-    rootPath: char[];
+    _handle: u64;
+    rootPath: char[]; // allocated by interpreter, should be char* const
     result: DirectoryIteratorData;
 
     fn next() -> DirectoryIteratorData* {
-        return null
+        return DirectoryIteratorNext(this);
     }
     fn skip() {
-
+        DirectoryIteratorSkip(this);
     }
 }

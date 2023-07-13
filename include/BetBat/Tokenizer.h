@@ -12,8 +12,9 @@
 #define TOKEN_SUFFIX_LINE_FEED 0x1
 // SPACE suffic is remove if LINE_FEED is present in mask/flag 
 #define TOKEN_SUFFIX_SPACE 0x2
-#define TOKEN_QUOTED 0x4
-#define TOKEN_DOUBLE_QUOTED 0x8
+#define TOKEN_DOUBLE_QUOTED 0x4
+#define TOKEN_SINGLE_QUOTED 0x8
+#define TOKEN_MASK_QUOTED 0x0C
 
 struct TokenRange;
 struct TokenStream;
@@ -45,6 +46,8 @@ struct Token {
 
     // prints the string, does not print suffix, line or column
     void print(bool skipSuffix = false) const;
+
+    std::string getLine();
 };
 
 // #define INT_TO_VERSION(x) ()
@@ -99,7 +102,7 @@ struct TokenStream {
     // nullptr is never returned, data can always be processed into tokens.
     // There may be errors in the stream though.
     // Allocations in optionalBase will be used if not null
-    static TokenStream* Tokenize(const char* text, int length, TokenStream* optionalBase=0);
+    static TokenStream* Tokenize(const char* text, u64 length, TokenStream* optionalBase=0);
     void cleanup(bool leaveAllocations=false);
     
     //-- extra info like @disable/enable and @version

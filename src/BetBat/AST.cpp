@@ -150,13 +150,13 @@ AST *AST::Create() {
     return ast;
 }
 
-VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name) {
+VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, bool shadowPreviousVariables) {
     using namespace engone;
     
-    auto id = addIdentifier(scopeId, name);
-    if(!id)
+    auto id = addIdentifier(scopeId, name, shadowPreviousVariables);
+    if(!id) {
         return nullptr;
-    
+    }
     id->type = Identifier::VAR;
     id->varIndex = variables.size();
     auto ptr = (VariableInfo*)engone::Allocate(sizeof(VariableInfo));
@@ -165,106 +165,84 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name) {
     return ptr;
 }
 
-Identifier* AST::addFunction(ScopeId scopeId, const Token& name, ASTFunction* func, FuncImpl* funcImpl) {
-    using namespace engone;
-    auto id = getIdentifier(scopeId, name);
-    if(!id) {
-        id = addIdentifier(scopeId, name);
-        id->type = Identifier::FUNC;
-    }
-    if(!id || id->type != Identifier::FUNC)
-        return nullptr;
-
-    bool found=false;
-    // for(int i=0;i<(int)id->funcOverloads.size();i++){
-    //     auto& funcOverload = id->funcOverloads[i];
-
-    //     int nonDefaults0 = 0;
-    //     int nonDefaults1 = 0;
-    //     for(auto& arg : id->funcOverloads[i].astFunc->arguments){
-    //         if(arg.defaultValue)
-    //             break;
-
-    //         nonDefaults0++;
-    //     }
-    //     for(auto& arg : func->arguments){
-    //         if(arg.defaultValue)
-    //             break;
-
-    //         nonDefaults1++;
-    //     }
-    //     if(nonDefaults0 != nonDefaults1)
-    //         continue;
-
-    //     found = true;
-    //     for(int j=0;j<nonDefaults0;j++){
-    //         if(funcOverload.funcImpl->arguments[j].typeId != funcImpl->arguments[j].typeId){
-    //             found = false;
-    //             break;
-    //         }
-    //     }
-    //     if(found)
-    //         break;
-    //     found = false;
-    // }
-    // if(found)
-    //     return nullptr; // func already exists
-
-    // Identifier::FuncOverload overload{};
-    // overload.astFunc = func;
-    // overload.funcImpl = funcImpl;
-    // id->funcOverloads.push_back(overload);
-    return id;
-}
-Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name) {
+Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
     using namespace engone;
     ScopeInfo* si = getScope(scopeId);
     if(!si)
         return nullptr;
     std::string sName = std::string(name); // string view?
     auto pair = si->identifierMap.find(sName);
-    if (pair != si->identifierMap.end())
+    if (pair != si->identifierMap.end() && !shadowPreviousIdentifiers){
         return nullptr;
+    }
 
+    // TODO: Delete variable info of previous identifier when shadowing
     si->identifierMap[sName] = {};
     auto ptr = &si->identifierMap[sName];
     ptr->name = name;
     ptr->scopeId = scopeId;
     return ptr;
 }
-Identifier *AST::getIdentifier(ScopeId scopeId, const Token &name) {
+Identifier* AST::findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes){
     using namespace engone;
-    // log::out << __func__<<": "<<name<<"\n";
-    Token ns={};
-    Token realName = TrimNamespace(Token(name), &ns);
-    ScopeId nextScopeId = scopeId;
-    WHILE_TRUE {
-        if(ns.str) {
-            ScopeInfo* nscope = getScope(ns, nextScopeId);
-            if(nscope) {
+    if(searchParentScopes){
+        // log::out << __func__<<": "<<name<<"\n";
+        Token ns={};
+        Token realName = TrimNamespace(Token(name), &ns);
+        ScopeId nextScopeId = startScopeId;
+        WHILE_TRUE {
+            if(ns.str) {
+                ScopeInfo* nscope = getScope(ns, nextScopeId);
+                Assert(nscope);
                 auto pair = nscope->identifierMap.find(realName);
                 if(pair != nscope->identifierMap.end()){
                     return &pair->second;
                 }
             }
+            ScopeInfo* si = getScope(nextScopeId);
+            Assert(si);
+            if(!ns.str) {
+                auto pair = si->identifierMap.find(realName);
+                if(pair != si->identifierMap.end()){
+                    return &pair->second;
+                }
+            }
+            if(nextScopeId == 0 && si->parent == 0){
+                // quit when we checked global
+                break;
+            }
+            nextScopeId = si->parent;
         }
-        ScopeInfo* si = getScope(nextScopeId);
-        if(!si){
-            log::out << log::RED <<__FUNCTION__<<" Scope was null (compiler bug)\n";
-            break;
-        }
-        if(!ns.str) { auto pair = si->identifierMap.find(realName);
+    } else {
+        ScopeInfo* si = getScope(startScopeId);
+        Assert(si);
+        auto pair = si->identifierMap.find(name);
         if(pair != si->identifierMap.end()){
             return &pair->second;
-        } }
-        if(nextScopeId == 0 && si->parent == 0){
-            // quit when we checked global
-            break;
         }
-        nextScopeId = si->parent;
     }
     return nullptr;
 }
+VariableInfo* AST::identifierToVariable(Identifier* identifier){
+    Assert(identifier->varIndex < variables.size());
+    return variables[identifier->varIndex];
+}
+void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
+    auto si = getScope(scopeId);
+    auto pair = si->identifierMap.find(name);
+    if (pair != si->identifierMap.end()) {
+        // TODO: The variable the identifier points to cannot be erased since
+        //   the variables array will invalidate other identifier's index.
+        //   A slot approach with a stack of empty slots for the variables would work.
+        si->identifierMap.erase(pair);
+    } else {
+        // TODO: This can happen if variable was shadowed. If it wasn't then it is a bug
+        //   and it would be good to catch that but we would need information about shadowing
+        //   which we don't have at the moment.
+        // Assert(("cannot remove non-existent identifier, compiler bug?",false));
+    }
+}
+
 bool AST::castable(TypeId from, TypeId to){
     if (from == to)
         return true;
@@ -294,10 +272,6 @@ bool AST::castable(TypeId from, TypeId to){
 
     return false;
 
-}
-VariableInfo *AST::getVariable(Identifier* id) {
-    Assert(id->varIndex>=0&&(int)id->varIndex<(int)variables.size());
-    return variables[id->varIndex];
 }
 FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
     using namespace engone;
@@ -434,7 +408,6 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& 
 //             continue;
 //         bool found = true;
 //         for (int j=0;j<(int)overload.argTypes.size();j++){
-            
 //             TypeId argType = ast->ensureNonVirtualId(overload.argTypes[j]);
 //             if(argType != typeIds[j]
 //             //  && overload.argTypes[j] != AST_POLY
@@ -480,27 +453,6 @@ FnOverloads& ASTStruct::getMethod(const std::string& name){
     return pair->second;
 }
 
-void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
-    auto si = getScope(scopeId);
-    auto pair = si->identifierMap.find(name);
-    if (pair != si->identifierMap.end()) {
-        // TODO: The variable identifier points to cannot be erased since
-        //   the variables array will invalidate other identifier's index.
-        //   This means that the array will keep growing. Fix this.
-        si->identifierMap.erase(pair);
-    } else {
-        Assert(("cannot remove non-existent identifier, compiler bug?",false));
-    }
-}
-// std::string TypeInfo::getFullType(AST* ast){
-//     ScopeInfo* scope = ast->getScope(scopeId);
-//     std::string ns = scope->getFullNamespace(ast);
-//     if(ns.empty()){
-//         return name;
-//     }else {
-//         return ns + "::" + name;   
-//     }
-// }
 void AST::appendToMainBody(ASTScope *body) {
     Assert(body);
     #define _ADD(X) for(auto it : body->X) { mainBody->add(it); } body->X.cleanup();
@@ -519,7 +471,7 @@ ASTScope *AST::createBody() {
     ptr->type = ASTScope::BODY;
     return ptr;
 }
-ASTStatement *AST::createStatement(int type) {
+ASTStatement *AST::createStatement(ASTStatement::Type type) {
     auto ptr = (ASTStatement *)engone::Allocate(sizeof(ASTStatement));
     new(ptr) ASTStatement();
     ptr->type = type;
@@ -647,6 +599,7 @@ void AST::cleanup() {
         if(!pair) continue;
 
         if(pair->structImpl){
+            // log::out << pair->astStruct->name << " CLEANED\n";
             pair->structImpl->~StructImpl();
             engone::Free(pair->structImpl, sizeof(StructImpl));
         }
@@ -824,7 +777,7 @@ TypeId AST::getTypeString(Token name){
     if(name.length>2&&!strncmp(name.str+name.length-2,"[]",2)){
         std::string* str = createString();
         *str = "Slice<";
-        (*str).append(std::string(name.str,name.length-2));
+        str->append(std::string(name.str,name.length-2));
         (*str)+=">";
         name = *str;
     }
@@ -997,10 +950,12 @@ TypeInfo *AST::getBaseTypeInfo(TypeId id) {
     return _typeInfos[id.getId()];
 }
 TypeInfo *AST::getTypeInfo(TypeId id) {
+    if(!id.isValid())
+        return nullptr;
     if(!id.isNormalType()) {
         return nullptr;
     }
-    Assert(id.isNormalType());
+    // Assert(id.isNormalType());
     if(id.getId() >= _typeInfos.size()) return nullptr;
     return _typeInfos[id.getId()];
 }
@@ -1121,18 +1076,17 @@ void AST::destroy(ASTStatement *statement) {
             engone::Free(statement->alias, sizeof(std::string));
             statement->alias = nullptr;
         }
-        if (statement->rvalue)
-            destroy(statement->rvalue);
-        if (statement->body)
-            destroy(statement->body);
-        if (statement->elseBody)
-            destroy(statement->elseBody);
-        if (statement->returnValues){
-            for(ASTExpression* expr : *statement->returnValues){
+        if(statement->hasNodes()){
+            if (statement->firstExpression)
+                destroy(statement->firstExpression);
+            if (statement->firstBody)
+                destroy(statement->firstBody);
+            if (statement->secondBody)
+                destroy(statement->secondBody);
+        } else {
+            for(ASTExpression* expr : statement->returnValues){
                 destroy(expr);
             }
-            statement->returnValues->~vector<ASTExpression*>();
-            engone::Free(statement->returnValues,sizeof(std::vector<ASTExpression*>));
         }
     }
     statement->~ASTStatement();
@@ -1738,17 +1692,19 @@ void ASTStatement::print(AST *ast, int depth) {
     // if (lvalue) {
     //     lvalue->print(ast, depth + 1);
     // }
-    if (rvalue) {
-        rvalue->print(ast, depth + 1);
-    }
-    if (body) {
-        body->print(ast, depth + 1);
-    }
-    if (elseBody) {
-        elseBody->print(ast, depth + 1);
-    }
-    if(returnValues){
-        for(ASTExpression* expr : *returnValues){
+    
+    if(hasNodes()){
+        if (firstExpression) {
+            firstExpression->print(ast, depth + 1);
+        }
+        if (firstBody) {
+            firstBody->print(ast, depth + 1);
+        }
+        if (secondBody) {
+            secondBody->print(ast, depth + 1);
+        }
+    } else {
+        for(ASTExpression* expr : returnValues){
             if (expr) {
                 expr->print(ast, depth+1);
             }

@@ -85,7 +85,7 @@ uint32 Bytecode::getMemoryUsage(){
 }
 bool Bytecode::add(Instruction instruction){
     if(codeSegment.max == codeSegment.used){
-        if(!codeSegment.resize(codeSegment.max*2 + 100))
+        if(!codeSegment.resize(codeSegment.max*2 + 25*sizeof(Instruction)))
             return false;   
     }
     _GLOG(engone::log::out <<length()<< ": "<<instruction<<"\n";)
@@ -94,7 +94,7 @@ bool Bytecode::add(Instruction instruction){
 }
 bool Bytecode::addIm(i32 data){
     if(codeSegment.max == codeSegment.used){
-        if(!codeSegment.resize(codeSegment.max*2 + 100))
+        if(!codeSegment.resize(codeSegment.max*2 + 25*sizeof(Instruction)))
             return false;
     }
     _GLOG(engone::log::out <<length()<< ": "<<data<<"\n";)
@@ -106,8 +106,9 @@ void Bytecode::cleanup(){
     codeSegment.resize(0);
     dataSegment.resize(0);
     debugSegment.resize(0);
-    debugText.clear();
-    debugText.shrink_to_fit();
+    debugLocations.cleanup();
+    // debugText.clear();
+    // debugText.shrink_to_fit();
 }
 const char* RegToStr(u8 reg){
     #define CASE(K,V) case BC_REG_##K: return "$"#V;
@@ -185,57 +186,133 @@ void Bytecode::Destroy(Bytecode* code){
 }
 int Bytecode::appendData(const void* data, int size){
     if(dataSegment.max < dataSegment.used + size){
-        dataSegment.resize(dataSegment.max*2 + 50);
+        dataSegment.resize(dataSegment.max*2 + 2*size);
     }
     int index = dataSegment.used;
     memcpy((char*)dataSegment.data + index,data,size);
     dataSegment.used+=size;
     return index;
 }
-void Bytecode::addDebugText(Token& token, u32 instructionIndex){
-    addDebugText(token.str,token.length,instructionIndex);
-}
-void Bytecode::addDebugText(const std::string& text, u32 instructionIndex){
-    addDebugText(text.data(),text.length(),instructionIndex);
-}
-void Bytecode::addDebugText(const char* str, int length, u32 instructionIndex){
+// void Bytecode::addDebugText(Token& token, u32 instructionIndex){
+//     addDebugText(token.str,token.length,instructionIndex);
+// }
+// void Bytecode::addDebugText(const std::string& text, u32 instructionIndex){
+//     addDebugText(text.data(),text.length(),instructionIndex);
+// }
+// void Bytecode::addDebugText(const char* str, int length, u32 instructionIndex){
+//     using namespace engone;
+//     if(instructionIndex==(u32)-1){
+//         instructionIndex = codeSegment.used;
+//     }
+//     if(instructionIndex>=debugSegment.max){
+//         int newSize = codeSegment.max*1.5+20;
+//         newSize += (instructionIndex-debugSegment.max)*2;
+//         int oldmax = debugSegment.max;
+//         if(!debugSegment.resize(newSize))
+//             return;
+//         memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
+//     }
+//     int oldIndex = *((u32*)debugSegment.data + instructionIndex);
+//     if(oldIndex==0){
+//         int index = debugText.size();
+//         debugText.push_back(std::string(str,length));
+//         // debugText.push_back({});
+//         // debugText.resize(length);
+//         // strncpy((char*)debugText.data(),str,length);
+//         *((u32*)debugSegment.data + instructionIndex) = index + 1;
+//     }else{
+//         Assert((int)debugText.size()<=oldIndex);
+//         // debugText[oldIndex-1] += "\n"; // should line feed be forced?
+//         debugText[oldIndex-1] += std::string(str,length);
+//     }
+// }
+Bytecode::Location* Bytecode::getLocation(u32 instructionIndex){
     using namespace engone;
-    if(instructionIndex==(u32)-1){
+    if(instructionIndex>=debugSegment.used)
+        return nullptr;
+    u32 index = *((u32*)debugSegment.data + instructionIndex);
+    return debugLocations.getPtr(index); // may return nullptr;
+}
+Bytecode::Location* Bytecode::setLocationInfo(const char* str, u32 instructionIndex){
+    return setLocationInfo((Token)str);
+}
+Bytecode::Location* Bytecode::setLocationInfo(u32 locationIndex, u32 instructionIndex){
+    using namespace engone;
+    if(instructionIndex == (u32)-1){
         instructionIndex = codeSegment.used;
     }
-    if(instructionIndex>=debugSegment.max){
+    if(instructionIndex>=debugSegment.max) {
         int newSize = codeSegment.max*1.5+20;
         newSize += (instructionIndex-debugSegment.max)*2;
         int oldmax = debugSegment.max;
-        if(!debugSegment.resize(newSize))
-            return;
-        memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
+        Assert(debugSegment.resize(newSize));
+        memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0xFF,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
     }
-    int oldIndex = *((u32*)debugSegment.data + instructionIndex);
-    if(oldIndex==0){
-        int index = debugText.size();
-        debugText.push_back(std::string(str,length));
-        *((u32*)debugSegment.data + instructionIndex) = index + 1;
-    }else{
-        Assert((int)debugText.size()<=oldIndex);
-        // debugText[oldIndex-1] += "\n"; // should line feed be forced?
-        debugText[oldIndex-1] += std::string(str,length);
+    u32& index = *((u32*)debugSegment.data + instructionIndex);
+    if(debugSegment.used <= instructionIndex) {
+        debugSegment.used = instructionIndex + 1;
     }
+    
+    index = locationIndex;
+    auto ptr = debugLocations.getPtr(index); // may return nullptr;
+    // if(ptr){
+    //     *locationIndex = index;
+    //     if(tokenRange.tokenStream())
+    //         ptr->file = TrimDir(tokenRange.tokenStream()->streamName);
+    //     else
+    //         ptr->desc = tokenRange.firstToken; // TODO: Don't just use the first token.
+    //     ptr->line = tokenRange.firstToken.line;
+    //     ptr->column = tokenRange.firstToken.column;
+    // }
+    return ptr;
 }
-const char* Bytecode::getDebugText(u32 instructionIndex){
+Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 instructionIndex, u32* locationIndex){
     using namespace engone;
-    if(instructionIndex>=debugSegment.max){
-        // log::out<<log::RED << "out of bounds on debug text\n";
-        return 0;
+    if(instructionIndex == (u32)-1){
+        instructionIndex = codeSegment.used;
     }
-    u32 index = *((u32*)debugSegment.data + instructionIndex);
-    if(!index)
-        return 0;
-    index = index - 1; // little offset
-    if(index>=debugText.size()){
-        // This would be bad. The debugSegment shouldn't contain invalid values
-        log::out<<log::RED << __FILE__ << ":"<<__LINE__<<", instruction index out of bounds\n";
-        return 0;   
+    if(instructionIndex>=debugSegment.max) {
+        int newSize = codeSegment.max*1.5+20;
+        newSize += (instructionIndex-debugSegment.max)*2;
+        int oldmax = debugSegment.max;
+        Assert(debugSegment.resize(newSize));
+        memset((char*)debugSegment.data + oldmax*debugSegment.m_typeSize,0xFF,(debugSegment.max-oldmax)*debugSegment.m_typeSize);
     }
-    return debugText[index].c_str();
+    u32& index = *((u32*)debugSegment.data + instructionIndex);
+    if(debugSegment.used <= instructionIndex) {
+        debugSegment.used = instructionIndex + 1;
+    }
+    if(index == -1){
+        Assert(debugLocations.add({}));
+        index = debugLocations.size()-1;
+    }
+    auto ptr = debugLocations.getPtr(index); // may return nullptr;
+    if(ptr){
+        if(locationIndex)
+            *locationIndex = index;
+        if(tokenRange.tokenStream()) {
+            ptr->file = TrimDir(tokenRange.tokenStream()->streamName);
+            ptr->line = tokenRange.firstToken.line;
+            ptr->column = tokenRange.firstToken.column;
+        } else
+            ptr->preDesc = tokenRange.firstToken; // TODO: Don't just use the first token.
+    }
+    return ptr;
 }
+// const char* Bytecode::getDebugText(u32 instructionIndex){
+//     using namespace engone;
+//     if(instructionIndex>=debugSegment.max){
+//         // log::out<<log::RED << "out of bounds on debug text\n";
+//         return 0;
+//     }
+//     u32 index = *((u32*)debugSegment.data + instructionIndex);
+//     if(!index)
+//         return 0;
+//     index = index - 1; // little offset
+//     if(index>=debugText.size()){
+//         // This would be bad. The debugSegment shouldn't contain invalid values
+//         log::out<<log::RED << __FILE__ << ":"<<__LINE__<<", instruction index out of bounds\n";
+//         return 0;   
+//     }
+//     return debugText[index].c_str();
+// }

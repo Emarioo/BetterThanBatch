@@ -1,0 +1,33 @@
+// @macro-benchmark
+// #import "./macros"
+// #import "OS"
+// #import "Logger"
+// #import "./macro-bench"
+// #import "./overloading"
+
+// #import "./defer"
+#import "./dir-iterator"
+// #import "Basic"
+
+// fn @native prints(str: char[]);
+
+// #define log(X) X
+
+// prints(log("Hello"))
+// #define mac temp## #line
+
+// mac
+// a = #line
+
+// b = #unique + #unique + #unique
+
+// // prints(#file)
+// // str = #filename;
+// // str2 = #file;
+// // prints(str)
+// // prints("\n")
+// // prints(str2)
+
+// println(a," ",b, " ",#column);
+// println(#file);
+// println(#filename);

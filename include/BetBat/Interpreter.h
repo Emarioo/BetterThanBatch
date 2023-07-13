@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BetBat/Bytecode.h"
+#include "BetBat/NativeRegistry.h"
 
 struct Interpreter {
     

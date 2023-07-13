@@ -1,5 +1,38 @@
 #include "BetBat/Compiler.h"
 
+Path::Path(const char* path) : text(path), _type((Type)0) {
+    ReplaceChar((char*)text.data(), text.length(), '\\', '/');
+#ifdef OS_WINDOWS
+    size_t colon = text.find(":/");
+    size_t lastSlash = text.find_last_of("/");
+
+    if(lastSlash + 1 == text.length()){
+        _type |= (u32)DIR;
+    }
+    
+    if(colon != std::string::npos) {
+        _type |= (u32)ABSOLUTE;
+    } else {
+        // trim slashes at beginning of path
+        for(int i=0;i<(int)text.length();i++){
+            if(text[i] != '/') {
+                text = text.substr(i,text.length()-i);
+                break;
+            }
+        }
+    }
+#elif defined(OS_LINUX)
+     size_t lastSlash = text.find_last_of("/");
+
+    if(lastSlash + 1 == text.length()){
+        _type |= (u32)DIR;
+    }
+    bool absolute = text[0] == '/' || text[0] == '~';
+    if(absolute) {
+        _type |= (u32)ABSOLUTE;
+    }
+#endif
+}
 Path::Path(const std::string& path) : text(path), _type((Type)0) {
     ReplaceChar((char*)text.data(), text.length(), '\\', '/');
 #ifdef OS_WINDOWS
@@ -221,6 +254,7 @@ Bytecode* CompileSource(CompileOptions options) {
     auto startCompileTime = engone::MeasureTime();
     
     CompileInfo compileInfo{};
+    compileInfo.nativeRegistry.initNativeContent();
     compileInfo.ast = AST::Create();
     defer { AST::Destroy(compileInfo.ast); };
     // compileInfo.compilerDir = TrimLastFile(compilerPath);
@@ -241,10 +275,10 @@ Bytecode* CompileSource(CompileOptions options) {
         "end: i32;"
     "}\n"
     ;
-    ParseFile(compileInfo, std::string("<base-structs>"),"",(char*)essentialStructs, strlen(essentialStructs));
+    ParseFile(compileInfo, "<base-structs>","",(char*)essentialStructs, strlen(essentialStructs));
 
     if(options.rawSource.data){
-        ParseFile(compileInfo, std::string("<raw-data>"),"",(char*)options.rawSource.data, options.rawSource.used);
+        ParseFile(compileInfo, "<raw-data>","",(char*)options.rawSource.data, options.rawSource.used);
         // ASTScope* body = ParseFile(compileInfo, std::string("<raw-data>"),"",(char*)options.rawSource.data, options.rawSource.used);
         // if(body) {
         //     compileInfo.ast->appendToMainBody(body);
@@ -311,6 +345,7 @@ void CompileAndRun(CompileOptions options) {
 }
 void RunBytecode(Bytecode* bytecode){
     Assert(bytecode);
+        
     Interpreter interpreter{};
     // interpreter.silent = true;
     interpreter.execute(bytecode);
