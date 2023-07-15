@@ -287,10 +287,10 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
     // auto tti = info.ast->getTypeInfo(to);
     auto fti = info.ast->getTypeSize(from);
     auto tti = info.ast->getTypeSize(to);
-    // u8 reg0 = RegBySize(1, fti->size());
-    // u8 reg1 = RegBySize(1, tti->size());
-    u8 reg0 = RegBySize(1, fti);
-    u8 reg1 = RegBySize(1, tti);
+    // u8 reg0 = RegBySize(BC_AX, fti->size());
+    // u8 reg1 = RegBySize(BC_AX, tti->size());
+    u8 reg0 = RegBySize(BC_AX, fti);
+    u8 reg1 = RegBySize(BC_AX, tti);
     if (from == AST_FLOAT32 && AST::IsInteger(to)) {
         info.addPop(reg0);
         info.addInstruction({BC_CAST, CAST_FLOAT_SINT, reg0, reg1});
@@ -438,7 +438,7 @@ int GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
     u32 size = info.ast->getTypeSize(typeId);
     if(!typeInfo || !typeInfo->astStruct) {
         // enum works here too
-        u8 reg = RegBySize(1, size);
+        u8 reg = RegBySize(BC_AX, size);
         if(offset == 0){
             info.addInstruction({BC_MOV_MR, baseReg, reg});
         }else{
@@ -483,7 +483,7 @@ int GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
     u32 size = info.ast->getTypeSize(typeId);
     if (!typeInfo || !typeInfo->astStruct) {
         _GLOG(log::out << "move return value\n";)
-        u8 reg = RegBySize(1, size);
+        u8 reg = RegBySize(BC_AX, size);
         info.addPop(reg);
         if(baseReg!=0){ // baseReg == 0 says: "dont' care about value, just pop it"
             if(offset == 0){
@@ -721,7 +721,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
                 
                 u32 typesize = info.ast->getTypeSize(endType);
                 u32 rsize = info.ast->getTypeSize(rtype);
-                u8 reg = RegBySize(4,rsize);
+                u8 reg = RegBySize(BC_DX,rsize);
                 info.addPop(reg); // integer
                 info.addPop(BC_REG_RBX); // reference
 
@@ -746,7 +746,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
 
             u32 typesize = info.ast->getTypeSize(endType);
             u32 rsize = info.ast->getTypeSize(rtype);
-            u8 reg = RegBySize(4,rsize);
+            u8 reg = RegBySize(BC_DX,rsize);
             info.addPop(reg); // integer
             info.addPop(BC_REG_RBX); // reference
             // dereference pointer to pointer
@@ -803,7 +803,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             // TODO: Int types should come from global scope. Is it a correct assumption?
             // TypeInfo *typeInfo = info.ast->getTypeInfo(expression->typeId);
             u32 size = info.ast->getTypeSize(expression->typeId);
-            u8 reg = RegBySize(1, size);
+            u8 reg = RegBySize(BC_AX, size);
             info.addInstruction({BC_LI, reg});
             info.code->addIm(val);
             info.addPush(reg);
@@ -1208,7 +1208,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             if(outId.isPointer()){
                 int size = info.ast->getTypeSize(outId);
 
-                u8 reg = RegBySize(1, size);
+                u8 reg = RegBySize(BC_AX, size);
 
                 info.addInstruction({BC_MOV_MR, BC_REG_RBX, reg});
                 info.addPush(reg);
@@ -1217,7 +1217,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 // TypeInfo* typeInfo = info.ast->getTypeInfo(outId);
                 // u32 size = info.ast->getTypeSize(outId);
                 // if (!typeInfo || !typeInfo->astStruct) {
-                //     u8 reg = RegBySize(1, size); // get the appropriate register
+                //     u8 reg = RegBySize(BC_AX, size); // get the appropriate register
 
                 //     info.addInstruction({BC_MOV_MR, BC_REG_RBX, reg});
                 //     info.addPush(reg);
@@ -1228,7 +1228,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 //         auto memdata = typeInfo->getMember(i);
                 //         _GLOG(log::out << "  member " << member.name << "\n";)
 
-                //         u8 reg = RegBySize(1, info.ast->getTypeSize(memdata.typeId));
+                //         u8 reg = RegBySize(BC_AX, info.ast->getTypeSize(memdata.typeId));
 
                 //         info.addInstruction({BC_LI, BC_REG_RCX});
                 //         info.code->addIm(memdata.offset);
@@ -1246,7 +1246,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 return err;
             // TypeInfo *ti = info.ast->getTypeInfo(ltype);
             u32 size = info.ast->getTypeSize(ltype);
-            u8 reg = RegBySize(1, size);
+            u8 reg = RegBySize(BC_AX, size);
 
             info.addPop(reg);
             info.addInstruction({BC_NOT, reg, reg});
@@ -1260,7 +1260,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 return err;
             // TypeInfo *ti = info.ast->getTypeInfo(ltype);
             u32 size = info.ast->getTypeSize(ltype);
-            u8 reg = RegBySize(1, size);
+            u8 reg = RegBySize(BC_AX, size);
 
             info.addPop(reg);
             info.addInstruction({BC_BNOT, reg, reg});
@@ -1277,8 +1277,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             // TypeInfo *tic = info.ast->getTypeInfo(castType);
             u32 ti = info.ast->getTypeSize(ltype);
             u32 tic = info.ast->getTypeSize(castType);
-            u8 lreg = RegBySize(1, ti);
-            u8 creg = RegBySize(1, tic);
+            u8 lreg = RegBySize(BC_AX, ti);
+            u8 creg = RegBySize(BC_AX, tic);
             if (
                 // (AST::IsInteger(castType) && AST::IsInteger(ltype))
                 (castType.isPointer() && ltype.isPointer()) || (castType.isPointer() && (ltype == (TypeId)AST_INT64 ||
@@ -1559,8 +1559,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             if(result!=GEN_SUCCESS)
                 return GEN_ERROR;
             
-            int lreg = RegBySize(3, info.ast->getTypeSize(ltype));
-            int rreg = RegBySize(4, info.ast->getTypeSize(rtype));
+            int lreg = RegBySize(BC_CX, info.ast->getTypeSize(ltype));
+            int rreg = RegBySize(BC_DX, info.ast->getTypeSize(rtype));
             info.addPop(rreg);
             info.addPop(lreg);
 
@@ -1612,7 +1612,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
 
             u32 lsize = info.ast->getTypeSize(ltype);
             u32 rsize = info.ast->getTypeSize(rtype);
-            u8 reg = RegBySize(4,rsize);
+            u8 reg = RegBySize(BC_DX,rsize);
             info.addPop(reg); // integer
             info.addPop(BC_REG_RBX); // reference
             info.addInstruction({BC_LI,BC_REG_EAX});
@@ -1639,7 +1639,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             }
 
             u32 size = info.ast->getTypeSize(ltype);
-            u8 reg = RegBySize(1, size);
+            u8 reg = RegBySize(BC_AX, size);
 
             info.addPop(BC_REG_RBX); // reference
 
@@ -1687,7 +1687,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 result = GeneratePush(info, BC_REG_RBX, 0, rtype);
 
                 // int rsize = info.ast->getTypeSize(rtype);
-                // u8 reg = RegBySize(1, rsize);
+                // u8 reg = RegBySize(BC_AX, rsize);
                 // info.addPop(reg);
                 // // info.addPop(BC_REG_RBX);
                 // info.addInstruction({BC_MOV_RM, reg, BC_REG_RBX});
@@ -1726,8 +1726,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
 
                     u32 lsize = info.ast->getTypeSize(ltype);
                     u32 rsize = info.ast->getTypeSize(rtype);
-                    u8 reg1 = RegBySize(4, lsize); // get the appropriate registers
-                    u8 reg2 = RegBySize(1, rsize);
+                    u8 reg1 = RegBySize(BC_DX, lsize); // get the appropriate registers
+                    u8 reg2 = RegBySize(BC_AX, rsize);
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
 
@@ -1754,7 +1754,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                         outTypeIds->add(rtype);
                     }
                 } else if (AST::IsInteger(ltype) && AST::IsInteger(rtype)){
-                    // u8 reg = RegBySize(4, info.ast->getTypeSize(rtype));
+                    // u8 reg = RegBySize(BC_DX, info.ast->getTypeSize(rtype));
                     // info.addPop(reg);
                     // if (!PerformSafeCast(info, ltype, rtype)) {
                     //     std::string leftstr = info.ast->typeToString(ltype);
@@ -1771,8 +1771,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     TOKENINFO(expression->tokenRange)
                     u32 lsize = info.ast->getTypeSize(ltype);
                     u32 rsize = info.ast->getTypeSize(rtype);
-                    u8 reg1 = RegBySize(4, lsize); // get the appropriate registers
-                    u8 reg2 = RegBySize(1, rsize);
+                    u8 reg1 = RegBySize(BC_DX, lsize); // get the appropriate registers
+                    u8 reg2 = RegBySize(BC_AX, rsize);
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
 
@@ -1804,8 +1804,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     TOKENINFO(expression->tokenRange)
                     u32 lsize = info.ast->getTypeSize(ltype);
                     u32 rsize = info.ast->getTypeSize(rtype);
-                    u8 lreg = RegBySize(4, lsize); // get the appropriate registers
-                    u8 rreg = RegBySize(1, rsize);
+                    u8 lreg = RegBySize(BC_DX, lsize); // get the appropriate registers
+                    u8 rreg = RegBySize(BC_AX, rsize);
                     info.addPop(rreg); // note that right expression should be popped first
                     info.addPop(lreg);
 
@@ -1853,7 +1853,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
 
                     // u32 rsize = info.ast->getTypeSize(rtype);
 
-                    // u8 reg = RegBySize(4, rsize);
+                    // u8 reg = RegBySize(BC_DX, rsize);
                     // info.addPop(reg);
                     if (!PerformSafeCast(info, rtype, ltype)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
                         std::string leftstr = info.ast->typeToString(ltype);
@@ -1871,8 +1871,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     // info.addPush(reg);
 
                     TOKENINFO(expression->tokenRange)
-                    u8 reg1 = RegBySize(4, lsize); // get the appropriate registers
-                    u8 reg2 = RegBySize(1, rsize);
+                    u8 reg1 = RegBySize(BC_DX, lsize); // get the appropriate registers
+                    u8 reg2 = RegBySize(BC_AX, rsize);
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
 
@@ -1961,16 +1961,16 @@ int GenerateDefaultValue(GenInfo &info, TypeId typeId, TokenRange* tokenRange) {
         while (sizeLeft > 0) {
             int reg = 0;
             if (sizeLeft >= 8) {
-                reg = RegBySize(1, 8);
+                reg = RegBySize(BC_AX, 8);
                 sizeLeft -= 8;
             } else if (sizeLeft >= 4) {
-                reg = RegBySize(1, 4);
+                reg = RegBySize(BC_AX, 4);
                 sizeLeft -= 4;
             } else if (sizeLeft >= 2) {
-                reg = RegBySize(1, 2);
+                reg = RegBySize(BC_AX, 2);
                 sizeLeft -= 2;
             } else if (sizeLeft >= 1) {
-                reg = RegBySize(1, 1);
+                reg = RegBySize(BC_AX, 1);
                 sizeLeft -= 1;
             }
 
@@ -2738,7 +2738,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 // TODO: Print error? or does generate expression do that since it gives us dtype?
                 continue;
             }
-            u8 reg = RegBySize(1, size);
+            u8 reg = RegBySize(BC_AX, size);
 
             info.addPop(reg);
             info.addInstruction({BC_JNE, reg});
@@ -2795,7 +2795,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             // info.addInstruction({BC_POP,BC_REG_RAX});
             // TypeInfo *typeInfo = info.ast->getTypeInfo(dtype);
             u32 size = info.ast->getTypeSize(dtype);
-            u8 reg = RegBySize(1, size);
+            u8 reg = RegBySize(BC_AX, size);
 
             info.addPop(reg);
             info.addInstruction({BC_JNE, reg});
@@ -3038,8 +3038,8 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
 
                 // NOTE: careful when using registers since you might use 
                 //  one for multiple things. 
-                u8 ptr_reg = RegBySize(2,info.ast->getTypeSize(memdata_ptr.typeId));
-                u8 length_reg = RegBySize(4,info.ast->getTypeSize(memdata_len.typeId));
+                u8 ptr_reg = RegBySize(BC_BX,info.ast->getTypeSize(memdata_ptr.typeId));
+                u8 length_reg = RegBySize(BC_DX,info.ast->getTypeSize(memdata_len.typeId));
                 u8 index_reg = BC_REG_ECX;
 
                 // info.code->addDebugText("extract ptr and length\n");
@@ -3193,7 +3193,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 // u32 size = info.ast->getTypeSize(retType.typeId);
                 // if (!typeInfo || !typeInfo->astStruct) {
                 //     _GLOG(log::out << "move return value\n";)
-                //     u8 reg = RegBySize(1, size);
+                //     u8 reg = RegBySize(BC_AX, size);
                 //     info.addPop(reg);
                 //     info.addInstruction({BC_LI, BC_REG_RBX});
                 //     info.code->addIm(retType.offset);
@@ -3205,7 +3205,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 //         auto memdata = typeInfo->getMember(i);
                 //         u32 msize = info.ast->getTypeSize(memdata.typeId);
                 //         _GLOG(log::out << "move return value member " << member.name << "\n";)
-                //         u8 reg = RegBySize(1, msize);
+                //         u8 reg = RegBySize(BC_AX, msize);
                 //         info.addPop(reg);
                 //         info.addInstruction({BC_LI, BC_REG_RBX});
                 //         // retType.offset is negative and member.offset is positive which is correct
@@ -3238,7 +3238,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 // TODO: handle struct
                 // TypeInfo *typeInfo = info.ast->getTypeInfo(dtype);
                 // u32 size = info.ast->getTypeSize(dtype);
-                // u8 reg = RegBySize(1, size);
+                // u8 reg = RegBySize(BC_AX, size);
                 // info.addPop(reg);
 
                 GeneratePop(info, 0, 0, dtype);

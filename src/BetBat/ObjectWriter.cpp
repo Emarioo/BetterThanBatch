@@ -2,6 +2,8 @@
 #include "Engone/Logger.h"
 #include "BetBat/Util/Utility.h"
 
+#include <time.h>
+
 namespace COFF_Format {
     #define SWITCH_START(TYPE) const char* ToString(TYPE flags);\
         engone::Logger& operator<<(engone::Logger& logger, TYPE flags){return logger << ToString(flags);}\
@@ -324,45 +326,118 @@ void ObjectFile::writeFile(const std::string& path) {
     int finalSize = COFF_File_Header::SIZE;
 
     DynamicArray<u32> sectionIndices;
+    DynamicArray<int> sectionSwaps;
 
-    struct SectionIndexSwap {
-        int oldIndex=0;
-        int newIndex=0;
-    };
-    DynamicArray<SectionIndexSwap> sectionSwaps;
-
-    int decr=0;
     // Filter sections
     for(int i=0;i<sections.size();i++){
         auto section = sections[i];
         std::string name = getSectionName(i);
         // if(name == ".text$mn"){
-        sectionSwaps.add({i,i-decr});
+        // .drectve isn't necessary if you give the linker this flag /DEFAULTLIB:LIBCMT
+        // That is what .drective section contains. and /DEFAULTLIB:OLDNAMES but the linker can run without it?
         if(
-            // name == ".drectve" 
-            // || 
+            // false
+            name == ".drectve" 
+            || 
             name == ".chks64" 
             || 
             name == ".debug$S"
+            || 
+            name == ".xdata"
+            ||
+            name == ".pdata"
         ){
-            decr++;
-        } else {
+            sectionSwaps.add(-1);
+        } else { 
+            sectionSwaps.add(sectionIndices.size());
             sectionIndices.add(i);
+
+            finalSize += Section_Header::SIZE + section->SizeOfRawData + 
+                section->NumberOfRelocations * COFF_Relocation::SIZE;
         }
     }
     
-    for(int i=0;i<sectionIndices.size();i++){
-        auto section = sections[sectionIndices[i]];
-        std::string name = getSectionName(sectionIndices[i]);
+    // for(int i=0;i<sectionIndices.size();i++){
+    //     auto section = sections[sectionIndices[i]];
+    //     std::string name = getSectionName(sectionIndices[i]);
         
-        finalSize += Section_Header::SIZE + section->SizeOfRawData + 
-            section->NumberOfRelocations * COFF_Relocation::SIZE;
         // if(name.length()>8){
         //     finalSize += name.length(); // stringTableSize is added later which includes this
         // }
-    }
+    // }
 
-    finalSize += symbols.size() * Symbol_Record::SIZE;
+    #define STR_EQUAL(strA,lenA,strB) (lenA==strlen(strB) && !strncmp(strA,strB,lenA))
+
+    DynamicArray<u32> symbolIndices;
+    DynamicArray<int> symbolSwaps;
+  
+    for(int i=0;i<header->NumberOfSymbols;i++){
+        // u32 symbolOffset = header->PointerToSymbolTable + i * Symbol_Record::SIZE;
+        // Assert(fileSize>=symbolOffset+Symbol_Record::SIZE);
+        Symbol_Record* symbolRecord = (Symbol_Record*)(_rawFileData + header->PointerToSymbolTable + i * Symbol_Record::SIZE);
+
+        char* str = nullptr;
+        int len = 0;
+        if(symbolRecord->Name.zero==0){
+            str = (char*)stringTableData + symbolRecord->Name.offset;
+            len = strlen(str);
+        } else {
+            str = symbolRecord->Name.ShortName;
+            for(int i=0;i<8;i++) {
+                if(0==symbolRecord->Name.ShortName[i])
+                    break;
+                len++;
+            }
+        }
+        
+        bool remove = false;
+        int sectionIndex = symbolRecord->SectionNumber-1;
+        if(sectionIndex>=0){
+            if(sectionIndex<sectionSwaps.size()){
+                int newIndex = sectionSwaps[sectionIndex];
+                if(newIndex<0){
+                    remove=true;
+                } else {
+                }
+            } else {
+                remove=true;
+            }
+        }
+        if(STR_EQUAL(str,len,"@vol.md")) remove = true;
+        if(STR_EQUAL(str,len,"@feat.00")) remove = true;
+        if(STR_EQUAL(str,len,"@comp.id")) remove = true;
+        if(STR_EQUAL(str,len,".text$mn")) remove = true;
+        if(STR_EQUAL(str,len,"$LN3")) remove = true;
+        if(STR_EQUAL(str,len,".xdata")) remove = true;
+        if(STR_EQUAL(str,len,".pdata")) remove = true;
+        if(STR_EQUAL(str,len,".data")) remove = true;
+        if(STR_EQUAL(str,len,"$pdata$main")) remove = true;
+
+        // if(STR_EQUAL(str,len,"main")) remove = true;
+        // if(STR_EQUAL(str,len,"ok")) remove = true;
+
+        if(remove){
+            symbolSwaps.add(-1);
+            if(symbolRecord->StorageClass == IMAGE_SYM_CLASS_STATIC){
+                for(int j=0;j<symbolRecord->NumberOfAuxSymbols;j++){
+                    i++;
+                    symbolSwaps.add(-1);
+                }
+            }
+        } else {
+            symbolSwaps.add(symbolIndices.size());
+            symbolIndices.add(i);
+            finalSize += Symbol_Record::SIZE;
+            if(symbolRecord->StorageClass == IMAGE_SYM_CLASS_STATIC){
+                for(int j=0;j<symbolRecord->NumberOfAuxSymbols;j++){
+                    finalSize += Symbol_Record::SIZE;
+                    i++;
+                    symbolSwaps.add(symbolIndices.size());
+                    symbolIndices.add(i);
+                }
+            }
+        }
+    }
 
     finalSize += stringTableSize;
 
@@ -384,9 +459,8 @@ void ObjectFile::writeFile(const std::string& path) {
     memcpy(newHeader, header, COFF_File_Header::SIZE);
 
     newHeader->NumberOfSections = sectionIndices.size();
-    // newHeader->NumberOfSymbols =  // same
+    newHeader->NumberOfSymbols = symbolIndices.size();
     newHeader->SizeOfOptionalHeader = 0;
-    // newHeader->PointerToSymbolTable = 0;
 
     DynamicArray<Section_Header*> newSections;
     for(int i=0;i<sectionIndices.size();i++){
@@ -397,73 +471,78 @@ void ObjectFile::writeFile(const std::string& path) {
         fileOffset += Section_Header::SIZE;
         memcpy(newSection, section, Section_Header::SIZE);
 
+        std::string name = getSectionName(sectionIndices[i]);
+        if(name == ".text$mn"){
+            strcpy(newSection->Name,".text");
+        }
+
         newSections.add(newSection);
     }
 
     for(int i=0;i<newSections.size();i++){
-        auto* section = newSections[i];
+        auto* section = sections[sectionIndices[i]];
+        auto* newSection = newSections[i];
         
-        if(section->SizeOfRawData!=0){
-            fileOffset = AlignOffset(fileOffset, 16);
+        if(newSection->SizeOfRawData!=0){
+            // fileOffset = AlignOffset(fileOffset, 16);
             memcpy(outData + fileOffset, _rawFileData + section->PointerToRawData, section->SizeOfRawData);
-            section->PointerToRawData = fileOffset;
-            fileOffset += section->SizeOfRawData;
+            newSection->PointerToRawData = fileOffset;
+            fileOffset += newSection->SizeOfRawData;
         }
-        if(section->NumberOfRelocations!=0){
-            fileOffset = AlignOffset(fileOffset, 16);
-            memcpy(outData + fileOffset, _rawFileData + section->PointerToRelocations, section->NumberOfRelocations * COFF_Relocation::SIZE);
-            section->PointerToRelocations = fileOffset;
-            fileOffset += section->NumberOfRelocations * COFF_Relocation::SIZE;
+        if(newSection->NumberOfRelocations!=0){
+            // fileOffset = AlignOffset(fileOffset, 16);
+            newSection->PointerToRelocations = fileOffset;
+            for (int j=0;j<newSection->NumberOfRelocations;j++) {
+                COFF_Relocation* relocation = (COFF_Relocation*)(_rawFileData + section->PointerToRelocations + j * COFF_Relocation::SIZE);
+                COFF_Relocation* newRelocation = (COFF_Relocation*)(outData + fileOffset);
+                fileOffset += COFF_Relocation::SIZE;
+                memcpy(newRelocation, relocation, COFF_Relocation::SIZE);
+                newRelocation->SymbolTableIndex = symbolSwaps[newRelocation->SymbolTableIndex];
+
+            }
         }
     }
 
     // not aligned? if it needs don't forget to add extra bytes to final size
     // fileOffset = AlignOffset(fileOffset, 16);
-    memcpy(outData + fileOffset, _rawFileData + header->PointerToSymbolTable, header->NumberOfSymbols * Symbol_Record::SIZE);
+    // memcpy(outData + fileOffset, _rawFileData + header->PointerToSymbolTable, header->NumberOfSymbols * Symbol_Record::SIZE);
     newHeader->PointerToSymbolTable = fileOffset;
-    fileOffset += header->NumberOfSymbols * Symbol_Record::SIZE;
+    // fileOffset += sec * Symbol_Record::SIZE;
 
-    int skipAux = 0;
-    Storage_Class previousStorageClass = (Storage_Class)0;
-    for(int i=0;i<newHeader->NumberOfSymbols;i++){
-        u32 symbolOffset = newHeader->PointerToSymbolTable + i * Symbol_Record::SIZE;
-        // Assert(fileSize>=symbolOffset+Symbol_Record::SIZE);
-        Symbol_Record* symbolRecord = (Symbol_Record*)(outData + symbolOffset);
+    for(int i=0;i<symbolIndices.size();i++){
+        Symbol_Record* symbol  = symbols[symbolIndices[i]];
 
-        if(skipAux==0){
-            int sectionIndex = symbolRecord->SectionNumber-1;
-            if(sectionIndex>=0){
-                // MAGE_SYM_UNDEFINED = 0 // The symbol record is not yet assigned a section. A value of zero indicates that a reference to an external symbol is defined elsewhere. A value of non-zero is a common symbol with a size that is specified by the value.
-                // IMAGE_SYM_ABSOLUTE = -1 // The symbol has an absolute (non-relocatable) value and is not an address.
-                // IMAGE_SYM_DEBUG = -2 // ?
-                symbolRecord->SectionNumber = sectionSwaps[sectionIndex].newIndex + 1;
-            }
-            // log::out << log::LIME << "Symbol "<<i<<"\n";
-            // auto baselog = symbolRecord;
-            // if(baselog->Name.zero==0){
-            //     // log::out << " Name (offset): "<<baselog->Name.offset<<"\n";
-            //     log::out << " Name (long): "<<((char*)stringTablePointer + baselog->Name.offset)<<"\n";
+        Symbol_Record* newSymbol  = (Symbol_Record*)(outData + fileOffset);
+        fileOffset += Symbol_Record::SIZE;
+        memcpy(newSymbol, symbol, Section_Header::SIZE);
+
+        int sectionIndex = newSymbol->SectionNumber-1;
+        if(sectionIndex>=0){
+            // MAGE_SYM_UNDEFINED = 0 // The symbol record is not yet assigned a section. A value of zero indicates that a reference to an external symbol is defined elsewhere. A value of non-zero is a common symbol with a size that is specified by the value.
+            // IMAGE_SYM_ABSOLUTE = -1 // The symbol has an absolute (non-relocatable) value and is not an address.
+            // IMAGE_SYM_DEBUG = -2 // ?
+            // if(sectionIndex<sectionSwaps.size()){
+            int newNumber = sectionSwaps[sectionIndex] + 1;
+            Assert(newNumber>=1);
+            newSymbol->SectionNumber = newNumber;
             // } else {
-            //     log::out << " Name: ";
-            //     for(int i=0;i<8;i++) {
-            //         if(0==baselog->Name.ShortName[i])
-            //             break;
-            //         log::out << baselog->Name.ShortName[i];
-            //     }
-            //     log::out << "\n";
+            //     // section was deleted
             // }
-
-            previousStorageClass = symbolRecord->StorageClass;
-            skipAux+=symbolRecord->NumberOfAuxSymbols; // skip them for now
-        } else {
-            if (previousStorageClass==IMAGE_SYM_CLASS_STATIC){
-                auto baselog = (Aux_Format_5*)symbolRecord;
+        }
+        if(newSymbol->StorageClass == IMAGE_SYM_CLASS_STATIC){
+            for(int j=0;j<newSymbol->NumberOfAuxSymbols;j++){
+                i++;
+                Aux_Format_5* auxSymbol = (Aux_Format_5*)symbols[symbolIndices[i]];
+                Aux_Format_5* newAuxSymbol  = (Aux_Format_5*)(outData + fileOffset);
+                fileOffset += Symbol_Record::SIZE;
+                memcpy(newAuxSymbol, auxSymbol, Symbol_Record::SIZE);
+                // symbolSwaps.add(i-decr);
+                // symbolIndices.add(i);
             }
-            skipAux--;
         }
     }
 
-    u64 stringTableOffset = header->PointerToSymbolTable+header->NumberOfSymbols*Symbol_Record::SIZE;
+    // u64 stringTableOffset = header->PointerToSymbolTable+header->NumberOfSymbols*Symbol_Record::SIZE;
     // char* stringTablePointer = (char*)_rawFileData + stringTableOffset;
     // u32 newstringTableSize = *(u32*)(stringTablePointer);
 
@@ -479,5 +558,73 @@ void ObjectFile::writeFile(const std::string& path) {
     }
     FileWrite(file, outData, fileOffset);
     // FileWrite(file, _rawFileData, fileSize);
+    FileClose(file);
+}
+
+void WriteObjectFile(const std::string& path, Program_x64* program){
+    using namespace engone;
+    using namespace COFF_Format;
+    Assert(program);
+
+    u64 outSize = 2000 + program->size;
+    u8* outData = (u8*)Allocate(outSize); // TODO: Don't use hardcoded size
+    defer { Free(outData, outSize); };
+    u64 outOffset = 0;
+
+    COFF_File_Header* header = (COFF_File_Header*)(outData + outOffset);
+    outOffset+=COFF_File_Header::SIZE;
+
+    header->Machine = IMAGE_FILE_MACHINE_AMD64;
+    header->Characteristics = (COFF_Header_Flags)0;
+    header->NumberOfSections = 1;
+    header->NumberOfSymbols = 1;
+    header->SizeOfOptionalHeader = 0;
+    header->TimeDateStamp = time(nullptr); //(u32)MeasureTime();
+
+
+    Section_Header* section = (Section_Header*)(outData+outOffset);
+    outOffset+=Section_Header::SIZE;
+
+    strcpy(section->Name,".text");
+    section->NumberOfLineNumbers = 0;
+    section->NumberOfRelocations = 0;
+    section->PointerToLineNumbers = 0;
+    section->PointerToRelocations = 0;
+
+    section->VirtualAddress = 0;
+    section->VirtualSize = 0;
+    section->Characteristics = (Section_Flags)(
+        IMAGE_SCN_CNT_CODE |
+        IMAGE_SCN_ALIGN_16BYTES |
+        IMAGE_SCN_MEM_EXECUTE |
+        IMAGE_SCN_MEM_READ);
+
+
+    section->SizeOfRawData = program->size;
+    section->PointerToRawData = outOffset;
+    if(program->size !=0){
+        Assert(program->text);
+        memcpy(outData + outOffset, program->text, program->size);
+        outOffset += program->size;
+    }
+
+    header->PointerToSymbolTable = outOffset;
+    Symbol_Record* symbol = (Symbol_Record*)(outData+outOffset);
+    outOffset+=Symbol_Record::SIZE;
+    strcpy(symbol->Name.ShortName, "main");
+    symbol->NumberOfAuxSymbols = 0;
+    symbol->SectionNumber = 1; // does not start from zero
+    symbol->NumberOfAuxSymbols = 0;
+    symbol->Value = 0; // address of main function?
+    symbol->StorageClass = IMAGE_SYM_CLASS_EXTERNAL;
+    symbol->Type = IMAGE_SYM_DTYPE_FUNCTION;
+
+    u32 stringTableSize = 4; // 4 means 0 text, 4 byte is used for holding the table size
+    *(u32*)(outData + outOffset) = stringTableSize;
+    outOffset += stringTableSize;
+
+    auto file = FileOpen(path, 0, FILE_WILL_CREATE);
+    Assert(file);
+    FileWrite(file,outData,outOffset);
     FileClose(file);
 }

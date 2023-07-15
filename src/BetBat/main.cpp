@@ -94,7 +94,7 @@ int main(int argc, const char** argv){
     for(int i=1;i<argc;i++){
         const char* arg = argv[i];
         int len = strlen(argv[i]);
-        log::out << "arg["<<i<<"] "<<arg<<"\n";
+        // log::out << "arg["<<i<<"] "<<arg<<"\n";
         if(!strcmp(arg,"--help")||!strcmp(arg,"-help")) {
             print_help();
             return 1;
@@ -228,15 +228,36 @@ int main(int argc, const char** argv){
         log::out << log::BLACK<<"[DEVMODE]\n";
         // compileOptions.initialSourceFile = "examples/dev.btb";
         // CompileAndRun(compileOptions);
+        // {
+        //     auto objFile = ObjectFile::DeconstructFile("obj_test.obj");
+        //     defer { ObjectFile::Destroy(objFile); };
+        //     objFile->writeFile("objtest.obj");
+        // }
+        {
+            Program_x64* program = nullptr;
+            Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
+            program = ConvertTox64(bytecode);
+            defer { Bytecode::Destroy(bytecode); Program_x64::Destroy(program); };
 
-        auto objFile = ObjectFile::DeconstructFile("obj_test.obj");
+            // Program_x64 staticProgram;
+            // u8 code[]{ 0x48, 0x83, 0xEC, 0x18, 0xC7, 0x04, 0x24, 0x01, 0x00, 0x00, 0x00, 0x8B, 0x04, 0x24, 0x83, 0xC0, 0x02, 0x48, 0x83, 0xC4, 0x18, 0xC3 };
+            // staticProgram.text = code;
+            // staticProgram.size = sizeof(code);
+            // program = &staticProgram;
 
-        objFile->writeFile("objtest.obj");
+            WriteObjectFile("objtest.obj",program);
 
-        ObjectFile::Destroy(objFile);
+            i32 errorLevel = 0;
+            engone::StartProgram("","link objtest.obj /nologo /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
+            engone::StartProgram("","objtest",PROGRAM_WAIT,&errorLevel);
+            log::out << "Error level: "<<errorLevel<<"\n";
+        }
+        // {
+        //     auto objFile = ObjectFile::DeconstructFile("objtest.obj");
+        //     defer { ObjectFile::Destroy(objFile); };
+        //     objFile->writeFile("objtest2.obj");
+        // }
 
-        // Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
-        // ConvertTox64(bytecode);
 
         // Bytecode::Destroy(bytecode);
         

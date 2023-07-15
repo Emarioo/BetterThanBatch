@@ -59,8 +59,8 @@ void* Interpreter::getReg(u8 id){
     #define CASER(K,V) case BC_REG_R##K##X: return &r##V##x;\
     case BC_REG_E##K##X: return &r##V##x;\
     case BC_REG_##K##X: return &r##V##x;\
-    case BC_REG_##K##L: return &r##V##x;\
-    case BC_REG_##K##H: return (void*)((u8*)&r##V##x+1);
+    case BC_REG_##K##L: return &r##V##x;
+    // case BC_REG_##K##H: return (void*)((u8*)&r##V##x+1);
     switch(id){
         CASER(A,a)
         CASER(B,b)

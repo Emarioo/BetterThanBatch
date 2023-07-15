@@ -9,8 +9,8 @@ File Type: COFF OBJECT
 FILE HEADER VALUES
             8664 machine (x64)
                6 number of sections
-        64B08159 time date stamp Fri Jul 14 00:57:29 2023
-             258 file pointer to symbol table
+        64B1E351 time date stamp Sat Jul 15 02:07:45 2023
+             243 file pointer to symbol table
               13 number of symbols
                0 size of optional header
                0 characteristics
@@ -72,8 +72,8 @@ SECTION HEADER #3
 .text$mn name
        0 physical address
        0 virtual address
-      2B size of raw data
-     1CB file pointer to raw data (000001CB to 000001F5)
+      16 size of raw data
+     1CB file pointer to raw data (000001CB to 000001E0)
        0 file pointer to relocation table
        0 file pointer to line numbers
        0 number of relocations
@@ -84,16 +84,15 @@ SECTION HEADER #3
          Execute Read
 
 RAW DATA #3
-  00000000: 48 83 EC 18 C7 44 24 04 05 00 00 00 C7 04 24 03  H.ì.ÇD$.....Ç.$.
-  00000010: 00 00 00 8B 04 24 8B 4C 24 04 03 C8 8B C1 89 44  .....$.L$..È.Á.D
-  00000020: 24 08 8B 44 24 08 48 83 C4 18 C3                 $..D$.H.Ä.Ã
+  00000000: 48 83 EC 18 C7 04 24 01 00 00 00 8B 04 24 83 C0  H.ì.Ç.$......$.À
+  00000010: 02 48 83 C4 18 C3                                .H.Ä.Ã
 
 SECTION HEADER #4
   .xdata name
        0 physical address
        0 virtual address
        8 size of raw data
-     1F6 file pointer to raw data (000001F6 to 000001FD)
+     1E1 file pointer to raw data (000001E1 to 000001E8)
        0 file pointer to relocation table
        0 file pointer to line numbers
        0 number of relocations
@@ -111,8 +110,8 @@ SECTION HEADER #5
        0 physical address
        0 virtual address
        C size of raw data
-     1FE file pointer to raw data (000001FE to 00000209)
-     20A file pointer to relocation table
+     1E9 file pointer to raw data (000001E9 to 000001F4)
+     1F5 file pointer to relocation table
        0 file pointer to line numbers
        3 number of relocations
        0 number of line numbers
@@ -122,20 +121,20 @@ SECTION HEADER #5
          Read Only
 
 RAW DATA #5
-  00000000: 00 00 00 00 2B 00 00 00 00 00 00 00              ....+.......
+  00000000: 00 00 00 00 16 00 00 00 00 00 00 00              ............
 
 Function Table #5 (1)
 
            Begin     End       Info
 
-  00000000 00000000  0000002B  00000000
+  00000000 00000000  00000016  00000000
 
 RELOCATIONS #5
                                                 Symbol    Symbol
  Offset    Type              Applied To         Index     Name
  --------  ----------------  -----------------  --------  ------
  00000000  ADDR32NB                   00000000         A  $LN3
- 00000004  ADDR32NB                   0000002B         A  $LN3
+ 00000004  ADDR32NB                   00000016         A  $LN3
  00000008  ADDR32NB                   00000000         D  $unwind$main
 
 SECTION HEADER #6
@@ -143,7 +142,7 @@ SECTION HEADER #6
        0 physical address
        0 virtual address
       30 size of raw data
-     228 file pointer to raw data (00000228 to 00000257)
+     213 file pointer to raw data (00000213 to 00000242)
        0 file pointer to relocation table
        0 file pointer to line numbers
        0 number of relocations
@@ -155,8 +154,8 @@ SECTION HEADER #6
 
 RAW DATA #6
   00000000: 23 07 66 15 27 1A BF 1A 15 1B 8B 73 E8 34 01 78  #.f.'.¿....sè4.x
-  00000010: 11 ED EC EB 6A 64 F1 A2 9A F2 01 C0 9C 99 EA 8A  .íìëjdñ¢.ò.À..ê.
-  00000020: B6 EE 10 09 68 51 DB 29 00 00 00 00 00 00 00 00  ¶î..hQÛ)........
+  00000010: 6A 27 C3 2C 6D 0B AE CF 9A F2 01 C0 9C 99 EA 8A  j'Ã,m.®Ï.ò.À..ê.
+  00000020: 17 30 5D 5A C6 39 A9 24 00 00 00 00 00 00 00 00  .0]ZÆ9©$........
 
 COFF SYMBOL TABLE
 000 01047F17 ABS    notype       Static       | @comp.id
@@ -167,14 +166,14 @@ COFF SYMBOL TABLE
 005 00000000 SECT2  notype       Static       | .debug$S
     Section length   98, #relocs    0, #linenums    0, checksum        0
 007 00000000 SECT3  notype       Static       | .text$mn
-    Section length   2B, #relocs    0, #linenums    0, checksum 1104F013
+    Section length   16, #relocs    0, #linenums    0, checksum 145DA4AF
 009 00000000 SECT3  notype ()    External     | main
 00A 00000000 SECT3  notype       Label        | $LN3
 00B 00000000 SECT4  notype       Static       | .xdata
     Section length    8, #relocs    0, #linenums    0, checksum 4712F2F1
 00D 00000000 SECT4  notype       Static       | $unwind$main
 00E 00000000 SECT5  notype       Static       | .pdata
-    Section length    C, #relocs    3, #linenums    0, checksum A41C7E00
+    Section length    C, #relocs    3, #linenums    0, checksum BAD438AC
 010 00000000 SECT5  notype       Static       | $pdata$main
 011 00000000 SECT6  notype       Static       | .chks64
     Section length   30, #relocs    0, #linenums    0, checksum        0
@@ -187,5 +186,5 @@ String Table Size = 0x1D bytes
           98 .debug$S
           2F .drectve
            C .pdata
-          2B .text$mn
+          16 .text$mn
            8 .xdata

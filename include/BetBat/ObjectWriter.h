@@ -3,6 +3,7 @@
 #include "Engone/PlatformLayer.h"
 #include "BetBat/Util/Array.h"
 
+#include "BetBat/x64_Converter.h"
 
 /*
     IF SOMETHING ISN'T WORKING, CHECK "TODO:" IN THIS FILE.
@@ -53,7 +54,6 @@ namespace COFF_Format {
     };
     enum Section_Flags : u32 {
         SECTION_FLAG_ZERO = 0,
-        // TODO: Add the flags you need
 
         IMAGE_SCN_TYPE_NO_PAD = 0x00000008, // The section should not be padded to the next boundary. This flag is obsolete and is replaced by IMAGE_SCN_ALIGN_1BYTES. This is valid only for object files.
         IMAGE_SCN_CNT_CODE = 0x00000020, // The section contains executable code.
@@ -161,6 +161,17 @@ namespace COFF_Format {
         IMAGE_SYM_CLASS_WEAK_EXTERNAL = 105, // A weak external. For more information, see Auxiliary Format 3: Weak Externals.
         IMAGE_SYM_CLASS_CLR_TOKEN = 107, // A CLR token symbol. The name is an ASCII string that consists of the hexadecimal value of the token. For more information, see CLR Token Definition (Object Only).
     };
+    enum Type_Representation_LSB : u8 { /* TODO: Add types */ };
+    enum Type_Representation_MSB : u8 { 
+        // These may be wrong but the object file has 32 as value for main symbol
+        // main is supposed to be a function. That would be MSB. MSB is the second byte.
+        // 256*2 which is 512. Is that not the value it should and not 32?
+        // I am missing something. I guess I don't understand Little endian, MSB and LSB
+        IMAGE_SYM_DTYPE_NULL = 0, // No derived type; the symbol is a simple scalar variable.
+        IMAGE_SYM_DTYPE_POINTER = 0x10, // The symbol is a pointer to base type.
+        IMAGE_SYM_DTYPE_FUNCTION = 0x20, // The symbol is a function that returns a base type.
+        IMAGE_SYM_DTYPE_ARRAY = 0x30, // The symbol is an array of base type.
+    };
     struct Symbol_Record {
         static const u32 SIZE = 18;
         union {
@@ -172,11 +183,16 @@ namespace COFF_Format {
         } Name;
         u32 Value;
         i16 SectionNumber;
-        u16 Type; // TODO: Type Representation enums?
+        // struct {
+        //     Type_Representation_MSB complex;
+        //     Type_Representation_LSB base;
+        // }
+        u16 Type;
         Storage_Class StorageClass;
         u8 NumberOfAuxSymbols;
     };
     struct Aux_Format_5 {
+        static const u32 SIZE = Symbol_Record::SIZE;
         u32 Length=0;
         u16 NumberOfRelocations;
         u16 NumberOfLineNumbers;
@@ -209,5 +225,8 @@ struct ObjectFile {
     void writeFile(const std::string& path);
 
     static ObjectFile* DeconstructFile(const std::string& path);
+
     static void Destroy(ObjectFile* objectFile);
 };
+
+void WriteObjectFile(const std::string& name, Program_x64* program);

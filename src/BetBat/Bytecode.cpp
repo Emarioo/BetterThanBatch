@@ -115,8 +115,8 @@ const char* RegToStr(u8 reg){
     #define CASER(K,V) case BC_REG_R##K##X: return "$r"#V"x";\
     case BC_REG_E##K##X: return "$e"#V "x";\
     case BC_REG_##K##X: return "$"#V "x";\
-    case BC_REG_##K##L: return "$"#V "l";\
-    case BC_REG_##K##H: return "$"#V "h";
+    case BC_REG_##K##L: return "$"#V "l";
+    // case BC_REG_##K##H: return "$"#V "h";
     switch(reg){
         CASER(A,a)
         CASER(B,b)

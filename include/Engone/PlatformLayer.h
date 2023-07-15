@@ -171,6 +171,8 @@ namespace engone {
 	
 	#define PROGRAM_NEW_CONSOLE 1
 	#define PROGRAM_WAIT 2
+	// PROGRAM_ASYNC or something instead? you usually want to wait? or not?
+
 	// Starts an exe at path. Uses CreateProcess from windows.h
 	// commandLine cannot be constant (CreateProcessA in windows api says so)
 	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0, int* exitCode=0, APIFile inPipe=0, APIFile outPipe=0);

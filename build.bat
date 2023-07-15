@@ -86,7 +86,12 @@ if !errorlevel! == 0 (
     prog -dev
     dumpbin objtest.obj /ALL > out2
 
-    link objtest.obj
+    @REM link objtest.obj /DEFAULTLIB:LIBCMT
+
+    @REM objtest
+    @REM echo !errorlevel!
+
+    @REM link objtest2.obj /DEFAULTLIB:LIBCMT
 
     @REM gcc -c src/BetBat/obj_test.c
     @REM prog
