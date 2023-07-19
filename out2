@@ -9,8 +9,8 @@ File Type: COFF OBJECT
 FILE HEADER VALUES
             8664 machine (x64)
                1 number of sections
-        64B1E351 time date stamp Sat Jul 15 02:07:45 2023
-              67 file pointer to symbol table
+        64B30C92 time date stamp Sat Jul 15 23:16:02 2023
+              7F file pointer to symbol table
                1 number of symbols
                0 size of optional header
                0 characteristics
@@ -19,8 +19,8 @@ SECTION HEADER #1
    .text name
        0 physical address
        0 virtual address
-      2B size of raw data
-      3C file pointer to raw data (0000003C to 00000066)
+      43 size of raw data
+      3C file pointer to raw data (0000003C to 0000007E)
        0 file pointer to relocation table
        0 file pointer to line numbers
        0 number of relocations
@@ -31,9 +31,11 @@ SECTION HEADER #1
          Execute Read
 
 RAW DATA #1
-  00000000: C7 C0 FF FF FF FF FF F0 C7 C0 09 00 00 00 FF F0  ÇÀÿÿÿÿÿðÇÀ....ÿð
-  00000010: C7 C0 03 00 00 00 FF F0 8F C0 8F C2 01 D0 FF F0  ÇÀ....ÿð.À.Â.Ðÿð
-  00000020: 8F C0 8F C2 01 D0 FF F0 8F C0 C3                 .À.Â.Ðÿð.ÀÃ
+  00000000: E9 00 00 00 00 C7 C0 03 00 00 00 FF F0 C7 C0 03  é....ÇÀ....ÿðÇÀ.
+  00000010: 00 00 00 FF F0 8F C3 8F C0 2B C3 FF F0 8F C0 83  ...ÿð.Ã.À+Ãÿð.À.
+  00000020: F8 00 0F 84 1A 00 00 00 C7 C0 05 00 00 00 FF F0  ø.......ÇÀ....ÿð
+  00000030: C7 C0 06 00 00 00 FF F0 8F C3 8F C0 03 C3 FF F0  ÇÀ....ÿð.Ã.À.Ãÿð
+  00000040: 8F C0 C3                                         .ÀÃ
 
 COFF SYMBOL TABLE
 000 00000000 SECT1  notype ()    External     | main
@@ -42,4 +44,4 @@ String Table Size = 0x0 bytes
 
   Summary
 
-          2B .text
+          43 .text

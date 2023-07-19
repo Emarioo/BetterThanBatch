@@ -93,14 +93,17 @@ int OpPrecedence(int op){
         case AST_NOT_EQUAL:
             return 5;
         case AST_RANGE:
-            return 8;
+            return 6;
         case AST_ADD:
+            return 8;
         case AST_SUB:
             return 9;
-        case AST_MUL:
-        case AST_DIV:
         case AST_MODULUS:
             return 10;
+        case AST_MUL:
+            return 11;
+        case AST_DIV:
+            return 12;
         case AST_BAND:
         case AST_BOR:
         case AST_BXOR:
@@ -1149,7 +1152,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 continue;
             } else if(Equal(token,"-")){
                 info.next();
-                negativeNumber=true;
+                negativeNumber=!negativeNumber;
                 attempt = false;
                 continue;
             } else if(Equal(token,"++")){
@@ -1169,51 +1172,39 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             if(IsInteger(token)){
                 token = info.next();
                 
-                ASTExpression* tmp = 0;
                 // TODO: handle to large numbers
-                // TODO: don't always use tmp->i64Value
-                if(token.str[0]=='-' || negativeNumber){
-                    //-- signed
-                    if(!negativeNumber){
-                        token.str++;
-                        token.length--;
+                Assert(token.str[0]!='-');
+                u64 num=0;
+                for(int i=0;i<token.length;i++){
+                    char c = token.str[i];
+                    if(num * 10 < num) {
+                        ERR_HEAD(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                            ERR_LINE(token.tokenIndex,"to large!");
+                        )
                     }
-                    negativeNumber=false;
-                    
-                    u64 num=0;
-                    for(int i=0;i<token.length;i++){
-                        char c = token.str[i];
-                        num = num*10 + (c-'0');
-                    }
-                    // if (num<=pow(2,7))
-                    //     tmp = info.ast->createExpression(AST_INT8);
-                    // else if (num<=pow(2,15))
-                    //     tmp = info.ast->createExpression(AST_INT16);
-                    // else if (num<=pow(2,31))
-                    //     tmp = info.ast->createExpression(AST_INT32);
-                    // else
-                    //     tmp = info.ast->createExpression(AST_INT64);
-                        
-                    tmp = info.ast->createExpression(TypeId(AST_INT32)); // default to this for now
-                    tmp->i64Value = -num;
-                }else{
-                    //-- unsigned   
-                    u64 num=0;
-                    for(int i=0;i<token.length;i++){
-                        char c = token.str[i];
-                        num = num*10 + (c-'0');
-                    }
-                    // if (num<=pow(2,7)-1)
-                    //     tmp = info.ast->createExpression(AST_UINT8);
-                    // else if (num<=pow(2,15)-1)
-                    //     tmp = info.ast->createExpression(AST_UINT16);
-                    // else if (num<=pow(2,31)-1)
-                    //     tmp = info.ast->createExpression(AST_UINT32);
-                    // else
-                    //     tmp = info.ast->createExpression(AST_UINT64);
-                    tmp = info.ast->createExpression(TypeId(AST_INT32));
-                    tmp->i64Value = num;
+                    num = num*10 + (c-'0');
                 }
+
+                ASTExpression* tmp = 0;
+                if(negativeNumber) {
+                    if ((num&0xFFFFFFFF80000000) == 0) {
+                        tmp = info.ast->createExpression(TypeId(AST_INT32));
+                    } else if((num&0x8000000000000000) == 0) {
+                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                    } else {
+                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                        ERR_HEAD(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                            ERR_LINE(token.tokenIndex,"to large!");
+                        )
+                    }
+                }else{
+                    if ((num&0xFFFFFFFF00000000) == 0) {
+                        tmp = info.ast->createExpression(TypeId(AST_INT32));
+                    } else {
+                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                    }
+                }
+                tmp->i64Value = negativeNumber ? -num : num;
                 
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
@@ -1235,7 +1226,26 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsHexadecimal(token)){
                 info.next();
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_UINT32));
+                if(negativeNumber){
+                    ERR_HEAD(token,"Negative hexidecimals is not okay.\n\n";
+                        ERR_LINE(token.tokenIndex,"bad");
+                    )
+                    negativeNumber=false;
+                }
+                // 0x000000001 will be treated as 64 bit value and
+                // it probably should because you wouldn't use so many 
+                // zero for no reason.
+                ASTExpression* tmp = nullptr;
+                if(token.length-2<=8) {
+                    tmp = info.ast->createExpression(TypeId(AST_UINT32));
+                } else if(token.length-2<=16) {
+                    tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                } else {
+                    tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                    ERR_HEAD(token,"Hexidecimal overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                        ERR_LINE(token.tokenIndex,"to large!");
+                    )
+                }
                 tmp->i64Value =  ConvertHexadecimal(token); // TODO: Only works with 32 bit or 16,8 I suppose.
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;

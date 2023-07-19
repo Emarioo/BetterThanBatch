@@ -83,18 +83,18 @@ bool IsHexadecimal(const Token& token){
     }
     return true;
 }
-int ConvertHexadecimal(const Token& token){
-    if(!token.str||token.length<3 ||token.length > 2+8) return 0;
-    if(token.str[0] != '0') return false;
-    if(token.str[1] != 'x') return false;
-    int hex = 0;
+u64 ConvertHexadecimal(const Token& token){
+    if(!token.str||token.length<3) return 0;
+    if(token.str[0] != '0') return 0;
+    if(token.str[1] != 'x') return 0;
+    u64 hex = 0;
     for(int i=2;i<token.length;i++){
         char chr = token.str[i];
         if(chr>='0' && chr <='9'){
             hex = 16*hex + chr-'0';
             continue;
         }
-        chr = chr&(~32);
+        chr = chr&(~32); // what is this for? chr = chr&0x20 ?
         if(chr>='A' && chr<='F'){
             hex = 16*hex + chr-'A' + 10;
             continue;
@@ -963,7 +963,7 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
             }
             if(!(chr>='0'&&chr<='9') && chr!='.') // TODO: how does it work with hexidecimals?
                 canBeDot=false;
-            if(!isNumber || chr!='_') {
+            if(!(isNumber && chr=='_')) {
                 outStream->addData(chr);
                 token.length++;
             }

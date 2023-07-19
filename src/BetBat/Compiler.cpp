@@ -258,6 +258,7 @@ Bytecode* CompileSource(CompileOptions options) {
     compileInfo.ast = AST::Create();
     defer { AST::Destroy(compileInfo.ast); };
     // compileInfo.compilerDir = TrimLastFile(compilerPath);
+    options.compilerDirectory = options.compilerDirectory.getAbsolute();
     compileInfo.importDirectories.push_back(options.compilerDirectory.text + "modules/");
     for(auto& path : options.importDirectories){
         compileInfo.importDirectories.push_back(path);

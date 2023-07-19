@@ -79,7 +79,7 @@ void* Interpreter::getReg(u8 id){
 }
 void yeah(int reg, void* from, void* to){
     using namespace engone;
-    int size = DECODE_REG_TYPE(reg);
+    int size = DECODE_REG_SIZE_TYPE(reg);
     if(size==BC_REG_8){
         *((u8* ) to) = *((u8* ) from);
         _ILOG(log::out << (*(i8*)to);)
@@ -193,7 +193,7 @@ void Interpreter::execute(Bytecode* bytecode){
             u8 r1 = DECODE_REG1(inst);
             u8 r2 = DECODE_REG2(inst);
 
-            // if (DECODE_REG_TYPE(r0) != DECODE_REG_TYPE(r1) || DECODE_REG_TYPE(r1) != DECODE_REG_TYPE(r2)){
+            // if (DECODE_REG_SIZE_TYPE(r0) != DECODE_REG_SIZE_TYPE(r1) || DECODE_REG_SIZE_TYPE(r1) != DECODE_REG_SIZE_TYPE(r2)){
             //     log::out << log::RED<<"register bit mismatch\n";
             //     continue;   
             // }
@@ -205,9 +205,9 @@ void Interpreter::execute(Bytecode* bytecode){
             i64 y = 0;
             float fx = 0;
             float fy = 0;
-            int xs = 1<<DECODE_REG_TYPE(r0);
-            int ys = 1<<DECODE_REG_TYPE(r1);
-            int os = 1<<DECODE_REG_TYPE(r2);
+            int xs = 1<<DECODE_REG_SIZE_TYPE(r0);
+            int ys = 1<<DECODE_REG_SIZE_TYPE(r1);
+            int os = 1<<DECODE_REG_SIZE_TYPE(r2);
             if(xs==1){
                 x = *(i8*)xp;
             }
@@ -298,7 +298,7 @@ void Interpreter::execute(Bytecode* bytecode){
                 *(i64*)op = out;
             }
             
-            // #define GEN_BIT(B, OP) if(DECODE_REG_TYPE(r0)==BC_REG_##B ) *((u##B* ) out) = *((u##B* ) x) OP *((u##B* ) y);
+            // #define GEN_BIT(B, OP) if(DECODE_REG_SIZE_TYPE(r0)==BC_REG_##B ) *((u##B* ) out) = *((u##B* ) x) OP *((u##B* ) y);
             // GEN_BIT(8,+)
             // else GEN_BIT(16,+)
             // else GEN_BIT(32,+)
@@ -323,7 +323,7 @@ void Interpreter::execute(Bytecode* bytecode){
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
 
-            if (DECODE_REG_TYPE(r0) != DECODE_REG_TYPE(r1)){
+            if (DECODE_REG_SIZE_TYPE(r0) != DECODE_REG_SIZE_TYPE(r1)){
                 log::out << log::RED<<"register bit mismatch\n";
                 continue;
             }
@@ -331,8 +331,8 @@ void Interpreter::execute(Bytecode* bytecode){
             void* op = getReg(r1);
             
             i64 x = 0;
-            int xs = 1<<DECODE_REG_TYPE(r0);
-            int os = 1<<DECODE_REG_TYPE(r1);
+            int xs = 1<<DECODE_REG_SIZE_TYPE(r0);
+            int os = 1<<DECODE_REG_SIZE_TYPE(r1);
             if(xs==1){
                 x = *(i8*)xp;
             }
@@ -375,29 +375,45 @@ void Interpreter::execute(Bytecode* bytecode){
         case BC_MOV_MR:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
-            i8 offset = (i8)DECODE_REG2(inst);
+            i8 operandSize = (i8)DECODE_REG2(inst);
+            Assert(operandSize==1 || operandSize==2||operandSize==4||operandSize==8);
 
-            if(DECODE_REG_TYPE(r0) != BC_REG_64){
+            if(DECODE_REG_SIZE_TYPE(r0) != BC_REG_64){
                 log::out << log::RED<<"r0 (pointer) must use 64 bit registers\n";
                 continue;   
             }
             u64* fromptr = (u64*)getReg(r0);
-            void* from = (void*)(*fromptr + offset); // NOTE: Program can crash here
+            void* from = (void*)(*fromptr); // NOTE: Program can crash here
             void* to = getReg(r1);
             
-            int size = 1<<DECODE_REG_TYPE(r1);
-            if(((uint64)from % size) != 0){
-                log::out << log::RED<<"r0 (pointer: "<<(uint64)from<<") not aligned by "<<size<<" bytes\n";
+            if(((uint64)from % operandSize) != 0){
+                log::out << log::RED<<"r0 (pointer: "<<(uint64)from<<") not aligned by "<<operandSize<<" bytes\n";
                 continue;
             }
             // SET_TO_FROM(r1)
-            yeah(r1,from,to);
+            // yeah(r1,from,to);
+            // int size = DECODE_REG_SIZE_TYPE(reg);
+            if(operandSize==1){
+                *((u8* ) to) = *((u8* ) from);
+                _ILOG(log::out << (*(i8*)to);)
+            }else if(operandSize==2) {
+                *((u16*) to) = *((u16*) from);
+                _ILOG(log::out << (*(i16*)to);)
+            }else if(operandSize==4)   { 
+                *((u32*) to) = *((u32*) from);
+                _ILOG(log::out << (*(i32*)to);)
+            }else if(operandSize==8){
+                *((u64*) to) = *((u64*) from);
+                _ILOG(log::out << (*(i64*)to);)
+            }else 
+                log::out <<log::RED <<"bad set to from\n";
+        
             
             // *((u64*) to) = 0;
-            // if(DECODE_REG_TYPE(r1)==BC_REG_8) *((u8* ) to) = *((u8* ) from);
-            // if(DECODE_REG_TYPE(r1)==BC_REG_16) *((u16*) to) = *((u16*) from);
-            // if(DECODE_REG_TYPE(r1)==BC_REG_32) *((u32*) to) = *((u32*) from);
-            // if(DECODE_REG_TYPE(r1)==BC_REG_64) *((u64*) to) = *((u64*) from);
+            // if(DECODE_REG_SIZE_TYPE(r1)==BC_REG_8) *((u8* ) to) = *((u8* ) from);
+            // if(DECODE_REG_SIZE_TYPE(r1)==BC_REG_16) *((u16*) to) = *((u16*) from);
+            // if(DECODE_REG_SIZE_TYPE(r1)==BC_REG_32) *((u32*) to) = *((u32*) from);
+            // if(DECODE_REG_SIZE_TYPE(r1)==BC_REG_64) *((u64*) to) = *((u64*) from);
 
             // _ILOG(log::out << " = "<<(*(u64*)to)<<"\n";)
             _ILOG(log::out <<"\n";)
@@ -407,24 +423,42 @@ void Interpreter::execute(Bytecode* bytecode){
         case BC_MOV_RM:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
-            i8 offset = (i8)DECODE_REG2(inst);
+            i8 operandSize = (i8)DECODE_REG2(inst);
+            Assert(operandSize==1 || operandSize==2||operandSize==4||operandSize==8);
 
-            if(DECODE_REG_TYPE(r1) != BC_REG_64){
+            // i8 offset = (i8)DECODE_REG2(inst);
+            // Assert(offset == 0);
+
+            if(DECODE_REG_SIZE_TYPE(r1) != BC_REG_64){
                 log::out << log::RED<<"r1 (pointer) must use 64 bit registers\n";
                 continue;
             }
             u64* toptr = (u64*)getReg(r1);
             void* from = getReg(r0);
-            void* to = (void*)(*toptr + offset); // NOTE: Program can crash here
+            void* to = (void*)(*toptr); // NOTE: Program can crash here
 
             // SET_TO_FROM(r0)
             
-            int size = 1<<DECODE_REG_TYPE(r0);
-            if(((uint64)to % size) != 0){
-                log::out << log::RED<<"r1 (pointer: "<<(uint64)from<<") not aligned by "<<size<<" bytes\n";
+            if(((uint64)to % operandSize) != 0){
+                log::out << log::RED<<"r1 (pointer: "<<(uint64)from<<") not aligned by "<<operandSize<<" bytes\n";
                 continue;
             }
-            yeah(r0,from,to);
+            if(operandSize==1){
+                *((u8* ) to) = *((u8* ) from);
+                _ILOG(log::out << (*(i8*)to);)
+            }else if(operandSize==2) {
+                *((u16*) to) = *((u16*) from);
+                _ILOG(log::out << (*(i16*)to);)
+            }else if(operandSize==4)   { 
+                *((u32*) to) = *((u32*) from);
+                _ILOG(log::out << (*(i32*)to);)
+            }else if(operandSize==8){
+                *((u64*) to) = *((u64*) from);
+                _ILOG(log::out << (*(i64*)to);)
+            }else 
+                log::out <<log::RED <<"bad set to from\n";
+        
+            // yeah(r0,from,to);
             // *((u64*) to) = 0;
             // if(r1&BC_REG_8 ) *((u8* ) to) = *((u8* ) from);
             // if(r1&BC_REG_16) *((u16*) to) = *((u16*) from);
@@ -438,7 +472,7 @@ void Interpreter::execute(Bytecode* bytecode){
         case BC_MOV_RR:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
-            if (DECODE_REG_TYPE(r0) != DECODE_REG_TYPE(r1)){
+            if (DECODE_REG_SIZE_TYPE(r0) != DECODE_REG_SIZE_TYPE(r1)){
                 log::out << __FILE__<<"register bit mismatch\n";
                 continue;
             }
@@ -492,7 +526,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             _ILOG(log::out << data<<"\n";)
             
-            u8 t = DECODE_REG_TYPE(r0);
+            u8 t = DECODE_REG_SIZE_TYPE(r0);
             if(t==BC_REG_8){
                 *((i8*)out) = data;
             } else if(t==BC_REG_16){
@@ -506,7 +540,8 @@ void Interpreter::execute(Bytecode* bytecode){
         }
         case BC_PUSH:{
             u8 r0 = DECODE_REG0(inst);
-            int rsize = 1<<DECODE_REG_TYPE(r0);
+            int rsize = 1<<DECODE_REG_SIZE_TYPE(r0);
+            rsize = 8;
             
             if((i64)sp-(i64)stack.data - rsize > (i64)stack.max){
                 log::out <<log::RED<<__FUNCTION__<< ": stack pointer was messed with (sp: "<<
@@ -538,7 +573,8 @@ void Interpreter::execute(Bytecode* bytecode){
         }
         case BC_POP: {
             u8 r0 = DECODE_REG0(inst);
-            int rsize = 1<<DECODE_REG_TYPE(r0);
+            int rsize = 1<<DECODE_REG_SIZE_TYPE(r0);
+            rsize = 8;
             
             if((i64)sp-(i64)stack.data - rsize > (i64)stack.max){
                 // NOTE: stack shrinks upwards and thus we call it underflow
@@ -912,7 +948,7 @@ void Interpreter::execute(Bytecode* bytecode){
             pc++;
 
             void* ptr = getReg(r0);
-            int rsize = 1<<DECODE_REG_TYPE(r0);
+            int rsize = 1<<DECODE_REG_SIZE_TYPE(r0);
             u64 testValue = 0;
             if(rsize==1) {
                 testValue = *(u8*)ptr;
@@ -944,11 +980,11 @@ void Interpreter::execute(Bytecode* bytecode){
             void* xp = getReg(r1);
             void* out = getReg(r2);
             if(type==CAST_FLOAT_SINT){
-                int size = 1<<DECODE_REG_TYPE(r1);
+                int size = 1<<DECODE_REG_SIZE_TYPE(r1);
                 if(size!=4){
                     log::out << log::RED << "float needs 4 byte register\n";
                 }
-                int size2 = 1<<DECODE_REG_TYPE(r2);
+                int size2 = 1<<DECODE_REG_SIZE_TYPE(r2);
                 // TODO: log out
                 if(size2==1) {
                     *(i8*)out = *(float*)xp;
@@ -960,8 +996,8 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(i64*)out = *(float*)xp;
                 }
             } else if(type==CAST_SINT_FLOAT){
-                int fsize = 1<<DECODE_REG_TYPE(r1);
-                int tsize = 1<<DECODE_REG_TYPE(r2);
+                int fsize = 1<<DECODE_REG_SIZE_TYPE(r1);
+                int tsize = 1<<DECODE_REG_SIZE_TYPE(r2);
                 if(tsize!=4){
                     log::out << log::RED << "float needs 4 byte register\n";
                 }
@@ -976,8 +1012,8 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(float*)out = *(i64*)xp;
                 }
             } else if(type==CAST_UINT_SINT){
-                int fsize = 1<<DECODE_REG_TYPE(r1);
-                int tsize = 1<<DECODE_REG_TYPE(r2);
+                int fsize = 1<<DECODE_REG_SIZE_TYPE(r1);
+                int tsize = 1<<DECODE_REG_SIZE_TYPE(r2);
                 u64 temp = 0;
                 if(fsize==1) {
                     temp = *(u8*)xp;
@@ -999,8 +1035,8 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(i64*)out = temp;
                 }
             } else if(type==CAST_SINT_UINT){
-                int fsize = 1<<DECODE_REG_TYPE(r1);
-                int tsize = 1<<DECODE_REG_TYPE(r2);
+                int fsize = 1<<DECODE_REG_SIZE_TYPE(r1);
+                int tsize = 1<<DECODE_REG_SIZE_TYPE(r2);
                 i64 temp = 0;
                 if(fsize==1) {
                     temp = *(i8*)xp;
@@ -1022,8 +1058,8 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(u64*)out = temp;
                 }
             } else if(type==CAST_SINT_SINT){
-                int fsize = 1<<DECODE_REG_TYPE(r1);
-                int tsize = 1<<DECODE_REG_TYPE(r2);
+                int fsize = 1<<DECODE_REG_SIZE_TYPE(r1);
+                int tsize = 1<<DECODE_REG_SIZE_TYPE(r2);
                 i64 temp = 0;
                 if(fsize==1) {
                     temp = *(i8*)xp;
@@ -1058,9 +1094,9 @@ void Interpreter::execute(Bytecode* bytecode){
             void* srcp = getReg(r1);
             void* sizep = getReg(r2);
 
-            int s0 = 1<<DECODE_REG_TYPE(r2);
-            int s1 = 1<<DECODE_REG_TYPE(r2);
-            int s2 = 1<<DECODE_REG_TYPE(r2);
+            int s0 = 1<<DECODE_REG_SIZE_TYPE(r2);
+            int s1 = 1<<DECODE_REG_SIZE_TYPE(r2);
+            int s2 = 1<<DECODE_REG_SIZE_TYPE(r2);
             u64 size = 0;
             if(s2==1) {
                 size = *(u8*)sizep;
@@ -1088,10 +1124,10 @@ void Interpreter::execute(Bytecode* bytecode){
         log::out << log::RED << "User program leaks "<<userAllocatedBytes<<" bytes\n";
     }
     if(sp != (u64)stack.data+stack.max){
-        log::out << log::YELLOW<<"sp was "<<(sp - ((u64)stack.data+stack.max))<<", should be 0\n";
+        log::out << log::YELLOW<<"sp was "<<(i64)(sp - ((u64)stack.data+stack.max))<<", should be 0\n";
     }
     if(fp != (u64)stack.data+stack.max){
-        log::out << log::YELLOW<<"fp was "<<(fp - ((u64)stack.data+stack.max))<<", should be 0\n";
+        log::out << log::YELLOW<<"fp was "<<(i64)(fp - ((u64)stack.data+stack.max))<<", should be 0\n";
     }
     auto time = StopMeasure(tp);
     if(!silent){

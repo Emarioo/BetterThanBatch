@@ -1175,7 +1175,7 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
     }
     int diff = offset%8;
     if(diff!=0)
-        offset += 8-diff; // padding to ensure 8-bit alignment
+        offset += 8-diff; // padding to ensure 8-byte alignment
 
     // log::out << "total size "<<offset<<"\n";
     // reverse

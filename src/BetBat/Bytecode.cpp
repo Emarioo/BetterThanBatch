@@ -1,6 +1,6 @@
 #include "BetBat/Bytecode.h"
 
-const char* InstToStringX(int type){
+const char* InstToString(int type){
     #define CASE(x) case x: return #x;
     switch(type){
         CASE(BC_MOV_RR)
@@ -55,10 +55,10 @@ const char* InstToStringX(int type){
     return "BC_?";
 }
 int RegBySize(int regName, int size){
-    if(size==1) return ENCODE_REG_TYPE(BC_REG_8) | regName;
-    else if(size==2) return ENCODE_REG_TYPE(BC_REG_16) | regName;
-    else if(size==4) return ENCODE_REG_TYPE(BC_REG_32) | regName;
-    else if(size==8) return ENCODE_REG_TYPE(BC_REG_64) | regName;
+    if(size==1) return ENCODE_REG_SIZE_TYPE(BC_REG_8) | regName;
+    else if(size==2) return ENCODE_REG_SIZE_TYPE(BC_REG_16) | regName;
+    else if(size==4) return ENCODE_REG_SIZE_TYPE(BC_REG_32) | regName;
+    else if(size==8) return ENCODE_REG_SIZE_TYPE(BC_REG_64) | regName;
     else {
         // TypeChecker may fail and give an invalid type with size 0.
         // 
@@ -111,12 +111,12 @@ void Bytecode::cleanup(){
     // debugText.shrink_to_fit();
 }
 const char* RegToStr(u8 reg){
-    #define CASE(K,V) case BC_REG_##K: return "$"#V;
-    #define CASER(K,V) case BC_REG_R##K##X: return "$r"#V"x";\
-    case BC_REG_E##K##X: return "$e"#V "x";\
-    case BC_REG_##K##X: return "$"#V "x";\
-    case BC_REG_##K##L: return "$"#V "l";
-    // case BC_REG_##K##H: return "$"#V "h";
+    #define CASE(K,V) case BC_REG_##K: return ""#V;
+    #define CASER(K,V) case BC_REG_R##K##X: return "r"#V"x";\
+    case BC_REG_E##K##X: return "e"#V "x";\
+    case BC_REG_##K##X: return ""#V "x";\
+    case BC_REG_##K##L: return ""#V "l";
+    // case BC_REG_##K##H: return ""#V "h";
     switch(reg){
         CASER(A,a)
         CASER(B,b)
@@ -136,13 +136,13 @@ void Instruction::print(){
     using namespace engone;
 
     if(opcode==BC_INCR)
-        log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (i8)op1 << log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (i8)op1 << log::SILVER;
     // else if(opcode==BC_ZERO_MEM)
     //     log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::SILVER;
     else if(opcode==BC_CAST)
-        log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<op0<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<op0<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::SILVER;
     else
-        log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::SILVER;
     
     // auto color = log::out.getColor();
     // if(type==BC_NUM||type==BC_STR||type==BC_SUBSTR||type==BC_COPY)

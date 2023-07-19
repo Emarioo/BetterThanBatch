@@ -41,7 +41,7 @@ struct CompileOptions {
     ), silent(false) {}
     Path initialSourceFile; // Path
     engone::Memory<char> rawSource{}; // Path
-    Path compilerDirectory; // Where resources for the compiler is located. Typically modules.
+    Path compilerDirectory{"/"}; // Where resources for the compiler is located. Typically modules.
     std::vector<Path> importDirectories; // Additional directories where imports can be found.
     bool silent=false;
     std::vector<std::string> userArgs;

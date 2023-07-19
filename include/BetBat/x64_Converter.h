@@ -16,9 +16,17 @@ struct Program_x64 {
     u64 size=0;
 
     void add(u8 byte);
+    void add2(u16 word);
     void add4(u32 dword);
-
     void addModRM(u8 mod, u8 reg, u8 rm);
+
+    // These are here to prevent implicit casting
+    // of arguments which causes mistakes.
+    void add(i64 byte);
+    void add2(i64 word);
+    void add4(i64 dword);
+
+    void printHex();
 
     // TODO: Relocations, global data, symbols
     static void Destroy(Program_x64* program);

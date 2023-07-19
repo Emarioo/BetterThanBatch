@@ -191,7 +191,7 @@ bool IsAnnotation(const Token& token);
 // Can also be an integer
 bool IsDecimal(const Token& token);
 bool IsHexadecimal(const Token& token);
-int ConvertHexadecimal(const Token& token);
+u64 ConvertHexadecimal(const Token& token);
 bool Equal(const Token& token, const char* str);
 
 // I would recommend testing on a large text for more accurate results.

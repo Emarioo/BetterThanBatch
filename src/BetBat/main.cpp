@@ -61,8 +61,15 @@ int main(int argc, const char** argv){
     //     int a = c + d - (i + 2) - i*d*9;
     // }
     // // ReadObjectFile();
-
+    // int a = 23;
+    // int b = 2;
+    // int c = a && b;
     // return 0;
+
+    u16 a = 923;
+    u64 b = a * (192 + a * 9 - 23 / a * 23);
+    u16 c = b;
+
 
     log::out.enableReport(false);
 
@@ -226,38 +233,42 @@ int main(int argc, const char** argv){
         // log::out << "No input files!\n";
     } else if(devmode){
         log::out << log::BLACK<<"[DEVMODE]\n";
-        // compileOptions.initialSourceFile = "examples/dev.btb";
+        compileOptions.initialSourceFile = "examples/dev.btb";
+        CompileAndRun(compileOptions);
+
+        // #define INTERP
+
+        // #ifdef INTERP
+        // compileOptions.initialSourceFile = "examples/x64_test.btb";
         // CompileAndRun(compileOptions);
+        // #else
+        // {
+        //     Program_x64* program = nullptr;
+        //     Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
+        //     program = ConvertTox64(bytecode);
+        //     defer { Bytecode::Destroy(bytecode); Program_x64::Destroy(program); };
+        //     if(program){
+
+        //         WriteObjectFile("objtest.obj",program);
+
+        //         i32 errorLevel = 0;
+        //         engone::StartProgram("","link objtest.obj /nologo /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
+        //         engone::StartProgram("","objtest",PROGRAM_WAIT,&errorLevel);
+        //         log::out << "Error level: "<<errorLevel<<"\n";
+        //     }
+        // }
+        // #endif
+
         // {
         //     auto objFile = ObjectFile::DeconstructFile("obj_test.obj");
         //     defer { ObjectFile::Destroy(objFile); };
         //     objFile->writeFile("objtest.obj");
         // }
-        {
-            Program_x64* program = nullptr;
-            Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
-            program = ConvertTox64(bytecode);
-            defer { Bytecode::Destroy(bytecode); Program_x64::Destroy(program); };
-
-            // Program_x64 staticProgram;
-            // u8 code[]{ 0x48, 0x83, 0xEC, 0x18, 0xC7, 0x04, 0x24, 0x01, 0x00, 0x00, 0x00, 0x8B, 0x04, 0x24, 0x83, 0xC0, 0x02, 0x48, 0x83, 0xC4, 0x18, 0xC3 };
-            // staticProgram.text = code;
-            // staticProgram.size = sizeof(code);
-            // program = &staticProgram;
-
-            WriteObjectFile("objtest.obj",program);
-
-            i32 errorLevel = 0;
-            engone::StartProgram("","link objtest.obj /nologo /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
-            engone::StartProgram("","objtest",PROGRAM_WAIT,&errorLevel);
-            log::out << "Error level: "<<errorLevel<<"\n";
-        }
         // {
         //     auto objFile = ObjectFile::DeconstructFile("objtest.obj");
         //     defer { ObjectFile::Destroy(objFile); };
         //     objFile->writeFile("objtest2.obj");
         // }
-
 
         // Bytecode::Destroy(bytecode);
         

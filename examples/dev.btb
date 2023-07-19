@@ -1,7 +1,7 @@
 // @macro-benchmark
 // #import "./macros"
 #import "OS"
-#import "Logger"
+// #import "Logger"
 // #import "./macro-bench"
 // #import "./overloading"
 
@@ -9,14 +9,27 @@
 // #import "./dir-iterator"
 // #import "Basic"
 
-args = CmdLineArgs();
+// fn @native printi(str: i64);
+// // printi(23)
 
-for @pointer args {
-    // println(cast<u64>it.ptr,": ",it.len);
-    println(*it);
-}
+// fn fun() -> i32 { return 9 }
 
-// fn @native prints(str: char[]);
+a = 9
+b = 3;
+// a + 9
+// printi(a)
+
+// a = fun() +  3;
+
+// printi(a)
+
+// args = CmdLineArgs();
+
+// for @pointer args {
+//     // println(cast<u64>it.ptr,": ",it.len);
+//     println(*it);
+// }
+
 
 // #define log(X) X
 

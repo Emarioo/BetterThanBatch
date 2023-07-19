@@ -80,11 +80,11 @@ echo Compiled in %finS%.%finS2% seconds
 if !errorlevel! == 0 (
     echo f | XCOPY /y /q !output! prog.exe > nul
 
-    cl /c /std:c11 /Tc src/BetBat/obj_test.c /nologo
-    dumpbin obj_test.obj /ALL > out
+    @REM cl /c /std:c11 /Tc src/BetBat/obj_test.c /nologo
+    @REM dumpbin obj_test.obj /ALL > out
 
     prog -dev
-    dumpbin objtest.obj /ALL > out2
+    @REM dumpbin objtest.obj /ALL > out2
 
     @REM link objtest.obj /DEFAULTLIB:LIBCMT
 
