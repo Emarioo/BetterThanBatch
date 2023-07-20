@@ -26,7 +26,7 @@ struct GenInfo {
     // like push and pop but with a size
     void addStackSpace(i32 size);
     int saveStackMoment();
-    void restoreStackMoment(int moment);
+    void restoreStackMoment(int moment, bool withoutModification = false);
 
     DynamicArray<ASTNode*> nodeStack; // kind of like a stack trace
     // ASTNode* prevNode=nullptr;
@@ -71,8 +71,16 @@ struct GenInfo {
     // std::vector<FunctionScope*> functionScopes;
     // int currentFunctionScope=0;
     // FunctionScope* getFunctionScope(int index=-1);
-    int currentFrameOffset=0;
+    int currentFrameOffset = 0;
+    int functionStackMoment = 0;    
+
+    #ifndef SAVE_FP_IN_CALL_FRAME
+    static const int FRAME_SIZE=8;
+    // x64 just saves the instruction pointer (pc)
+    // interpreter may occasionally have this one too
+    #else
     static const int FRAME_SIZE=16; // pc, fp
+    #endif
 
     // Extra details
     // FuncImpl* recentFuncImpl=nullptr; // used by fncall

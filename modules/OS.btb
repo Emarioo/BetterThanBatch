@@ -21,6 +21,10 @@ fn @hide @native malloc(size: u64) -> void* ;
 fn @hide @native realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
 fn @hide @native free(ptr: void*, size: u64) ;
 
+// intrinsics?
+fn @hide @native memcpy(dst: void*, src: void*, len: u64);
+fn @hide @native memzero(dst: void*, len: u64);
+
 // // returns file handle and file size
 fn @hide @native FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64;
 // returns read bytes

@@ -35,7 +35,7 @@ void NativeRegistry::initNativeContent(){
     Assert(!initialized);
     initialized=true;
     if(initializations){
-        engone::log::out << engone::log::YELLOW<< "Initializing native registry again ("<<(initializations + 1)<<" time(s) so far).\n";
+        engone::log::out << engone::log::YELLOW<< "Initializing native registry again (only necessary once, "<<(initializations + 1)<<" time(s) so far).\n";
     }
     initializations++;
     #define ADD(X) _addFunction(#X,{NATIVE_##X});
@@ -47,6 +47,8 @@ void NativeRegistry::initNativeContent(){
     ADD(malloc)
     ADD(realloc)
     ADD(free)
+    ADD(memcpy)
+    ADD(memzero)
     ADD(FileOpen)
     ADD(FileRead)
     ADD(FileWrite)

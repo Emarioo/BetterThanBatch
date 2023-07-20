@@ -1013,7 +1013,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         if(!info.ast->castable(temp.last(),ti)){
             std::string strleft = info.ast->typeToString(temp.last());
             std::string strright = info.ast->typeToString(ti);
-            ERR_HEAD(expr->tokenRange, "'"<<strleft << "' cannot be casted to '"<<strright<<".\n\n";
+            ERR_HEAD(expr->tokenRange, "'"<<strleft << "' cannot be casted to '"<<strright<<"'.\n\n";
                 ERR_LINE(expr->tokenRange,strleft.c_str());
                 ERR_LINE(expr->left->tokenRange,strright.c_str());
             )
@@ -1234,6 +1234,10 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
         retImpl.offset = offset;
         // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
     }
+    diff = (-offset)%8;
+    if(diff!=0)
+        offset -= 8-diff; // padding to ensure 8-byte alignment
+
     for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
         auto& ret = funcImpl->returnTypes[i];
         // TypeInfo* typeInfo = info.ast->getTypeInfo(arg.typeId);
@@ -1515,20 +1519,24 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         
         //-- Check assign types in all varnames. The result is put in version_assignType for
         //   the generator and rest of the code to use.
-        for(auto& var : now->varnames) {
-            if(var.assignString.isString()){
+        for(auto& varname : now->varnames) {
+            if(varname.assignString.isString()){
                 bool printedError = false;
-                auto ti = CheckType(info, scope->scopeId, var.assignString, now->tokenRange, &printedError);
+                auto ti = CheckType(info, scope->scopeId, varname.assignString, now->tokenRange, &printedError);
                 // NOTE: We don't care whether it's a pointer just that the type exists.
                 if (!ti.isValid() && !printedError) {
-                    ERR_HEAD(now->tokenRange, "'"<<info.ast->getTokenFromTypeString(var.assignString)<<"' is not a type (statement).\n\n";
+                    ERR_HEAD(now->tokenRange, "'"<<info.ast->getTokenFromTypeString(varname.assignString)<<"' is not a type (statement).\n\n";
                         ERR_LINE(now->tokenRange,"bad");
                     )
                 } else {
-                    // If typeid is invalid we don't want to replace the invalid one with the type
-                    // with the string. The generator won't see the names of the invalid types.
-                    // now->typeId = ti;
-                    var.versions_assignType[info.currentPolyVersion] = ti;
+                    // if(varname.arrayLength != 0){
+                    //     auto ti = CheckType(info, scope->scopeId, varname.assignString, now->tokenRange, &printedError);
+                    // } else {
+                        // If typeid is invalid we don't want to replace the invalid one with the type
+                        // with the string. The generator won't see the names of the invalid types.
+                        // now->typeId = ti;
+                        varname.versions_assignType[info.currentPolyVersion] = ti;
+                    // }
                 }
             }
         }
@@ -1574,6 +1582,11 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             for (int vi=0;vi<(int)now->varnames.size();vi++) {
                 auto& varname = now->varnames[vi];
                 // possible implicit type
+                // if(varname.arrayLength!=0){
+                //     if(varname.assignString.isValid()) { // if assigned type didn't exist the
+
+                //     }
+                // } else 
                 if(!varname.assignString.isValid()) { // if assigned type didn't exist then 
                     if(vi < typeArray.size()){ // out of bounds, error is printed above
                         varname.versions_assignType[info.currentPolyVersion] = typeArray[vi];

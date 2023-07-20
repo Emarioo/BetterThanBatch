@@ -48,13 +48,13 @@ const char* InstToString(int type){
         
         CASE(BC_CAST)
 
-        CASE(BC_ZERO_MEM)
+        CASE(BC_MEMZERO)
         CASE(BC_MEMCPY)
     }
     #undef CASE
     return "BC_?";
 }
-int RegBySize(int regName, int size){
+int RegBySize(u8 regName, int size){
     if(size==1) return ENCODE_REG_SIZE_TYPE(BC_REG_8) | regName;
     else if(size==2) return ENCODE_REG_SIZE_TYPE(BC_REG_16) | regName;
     else if(size==4) return ENCODE_REG_SIZE_TYPE(BC_REG_32) | regName;
@@ -126,6 +126,8 @@ const char* RegToStr(u8 reg){
         CASE(SP,sp)
         CASE(FP,fp)
         CASE(DP,dp)
+        CASE(RDI,rdi)
+        CASE(RSI,rsi)
         case 0: return "";
     }
     #undef CASE
@@ -135,12 +137,15 @@ const char* RegToStr(u8 reg){
 void Instruction::print(){
     using namespace engone;
 
-    if(opcode==BC_INCR)
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (i8)op1 << log::SILVER;
-    // else if(opcode==BC_ZERO_MEM)
+    if(opcode==BC_INCR){
+        i16 offset = (i16)((i16)op1 | ((i16)op2<<8));
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< offset  << log::SILVER;
+    // else if(opcode==BC_MEMZERO)
     //     log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::SILVER;
-    else if(opcode==BC_CAST)
+    } else if(opcode==BC_CAST)
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<op0<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::SILVER;
+    else if(opcode==BC_MOV_MR||opcode==BC_MOV_RM)
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<op2<<log::SILVER;
     else
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::SILVER;
     

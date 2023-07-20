@@ -51,7 +51,7 @@ void print_help(){
 
     */
 }
-
+int global=23;
 int main(int argc, const char** argv){
     using namespace engone;
 
@@ -66,12 +66,17 @@ int main(int argc, const char** argv){
     // int c = a && b;
     // return 0;
 
-    u16 a = 923;
-    u64 b = a * (192 + a * 9 - 23 / a * 23);
-    u16 c = b;
+    u8 a = global + 2;
+
+    // auto p = &a;
+
+    // *p = 9;
+
+    // u64 b = a * (192 + a * 9 - 23 / a * 23);
+    // u16 c = b;
 
 
-    log::out.enableReport(false);
+    // log::out.enableReport(false);
 
     // PerfTestTokenize("src/BetBat/Generator.cpp", 1);
     // PerfTestTokenize("src/BetBat/Generator.cpp", 15);
@@ -233,31 +238,72 @@ int main(int argc, const char** argv){
         // log::out << "No input files!\n";
     } else if(devmode){
         log::out << log::BLACK<<"[DEVMODE]\n";
+        #ifndef DEV_FILE
         compileOptions.initialSourceFile = "examples/dev.btb";
+        #else
+        compileOptions.initialSourceFile = DEV_FILE;
+        #endif
+
+        #ifndef COMPILE_x64
+        // interpreter
         CompileAndRun(compileOptions);
+        #else
+        Program_x64* program = nullptr;
+        Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
+        // bytecode->codeSegment.used=0;
+        // bytecode->add({BC_INCR, BC_REG_SP, 0xF0,0xFF});
+        // bytecode->add({BC_LI, BC_REG_RBX});
+        // bytecode->addIm(16);
+        // bytecode->add({BC_MEMZERO,BC_REG_SP,BC_REG_RBX});
+        // bytecode->add({BC_INCR, BC_REG_SP, 16});
+        
+        // bytecode->add({BC_MOV_RR, BC_REG_SP, BC_REG_RAX, BC_REG_RAX});
+        // bytecode->add({BC_LI, BC_REG_CX});
+        // bytecode->addIm(31);
+        // bytecode->add({BC_BRSHIFT,BC_REG_RAX, BC_REG_CX, BC_REG_RAX});
+        // bytecode->add({BC_SUBI, BC_REG_RAX, BC_REG_SP, BC_REG_RAX});
+        // bytecode->add({BC_MOV_RM, BC_REG_EAX, BC_REG_RCX, 4});
+        // bytecode->add({BC_LI, BC_REG_RAX});
+        // bytecode->addIm(5);
+        // bytecode->add({BC_INCR,BC_REG_SP, (u8)-4, (u8)-1});
+        
+        if(bytecode)
+            program = ConvertTox64(bytecode);
+        /*
+call fun
+xor rax, rax
+mov eax, dword ptr [rsp - 12]
+ret
 
-        // #define INTERP
+fun:
+//sub rsp, 4
+mov dword ptr [rsp - 4], 99
+//add rsp, 4
+ret
+        */
+        // program = Program_x64::Create();
+        // u8 arr[] = 
+        //     { 0xE8, 0x08, 0x00, 0x00, 0x00, 0x48, 0x31, 0xC0, 0x8B, 0x44, 0x24, 0xF4, 0xC3, 0xC7, 0x44, 0x24, 0xFC, 0x63, 0x00, 0x00, 0x00, 0xC3 }
+        // ;
+        // program->addRaw(arr, sizeof arr);
+        
+        // program->printHex();
 
-        // #ifdef INTERP
-        // compileOptions.initialSourceFile = "examples/x64_test.btb";
-        // CompileAndRun(compileOptions);
-        // #else
-        // {
-        //     Program_x64* program = nullptr;
-        //     Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
-        //     program = ConvertTox64(bytecode);
-        //     defer { Bytecode::Destroy(bytecode); Program_x64::Destroy(program); };
-        //     if(program){
+        defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
+        if(program){
 
-        //         WriteObjectFile("objtest.obj",program);
+            WriteObjectFile("objtest.obj",program);
 
-        //         i32 errorLevel = 0;
-        //         engone::StartProgram("","link objtest.obj /nologo /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
-        //         engone::StartProgram("","objtest",PROGRAM_WAIT,&errorLevel);
-        //         log::out << "Error level: "<<errorLevel<<"\n";
-        //     }
-        // }
-        // #endif
+            // link the object file and run the resulting executable
+            // error level is printed because it's the only way to get
+            // an output from the executable at the moment.
+            // Printing and writing to files require linking to stdio.h or windows.
+            i32 errorLevel = 0;
+            engone::StartProgram("","link objtest.obj /nologo /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
+            engone::StartProgram("","objtest",PROGRAM_WAIT,&errorLevel);
+            log::out << "Error level: "<<errorLevel<<"\n";
+        }
+        #endif
 
         // {
         //     auto objFile = ObjectFile::DeconstructFile("obj_test.obj");
@@ -273,35 +319,6 @@ int main(int argc, const char** argv){
         // Bytecode::Destroy(bytecode);
         
         // PerfTestTokenize("example/build_fast.btb",200);
-
-        // CompileAndRun({"examples/strings.btb", compilerDir.text});
-        // CompileAndRun({"examples/macro-bench.btb", compilerDir.text});
-        // RunBytecode({"a.btbc", compilerDir.text});
-        // Bytecode* bc = ImportBytecode(std::string("a.btbc"));
-        // RunBytecode(bc);
-        // Bytecode::Destroy(bc);
-        // CompileAndRun({"strings.btb", compilerDir.text});
-        // CompileAndRun("example/ast.btb", compilerPath);
-        // CompileAndRun("tests/benchmark/loop.btb");
-        // CompileAndRun("tests/benchmark/loop2.btb");
-        
-        // log::out.enableConsole(false);
-        // TestVariableLimit(10000);
-        // TestMathExpression(100);
-
-        // auto tp = MeasureTime();
-        // int sum = 0;
-        // // int sum1 = 0;
-        // // int sum2 = 0;
-        // for (int i=0;i<1000000;i++) {
-        //     sum = sum + i;
-        //     // sum2 = sum1 + i*2;
-        //     // sum2 = sum2 + i*3;
-        // }
-        // log::out << (StopMeasure(tp)*1e3)<<"\n";
-
-        // CompileDisassemble("tests/varlimit.btb");
-
     }
     // std::string msg = "I am a rainbow, wahoooo!";
     // for(int i=0;i<(int)msg.size();i++){

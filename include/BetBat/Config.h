@@ -9,6 +9,15 @@
 /* ###############
    Major config
 ############### */
+
+// DEV_FILE defaults to dev.btb if none is specified
+#define DEV_FILE "examples/x64_test.btb"
+// #define COMPILE_x64
+
+#ifndef COMPILE_x64
+// #define SAVE_FP_IN_CALL_FRAME
+#endif
+
 #define DEBUG
 // #define LOG_MEASURES
 // Silent is not used at the moment.
@@ -54,7 +63,7 @@
 // newly tokenized includes in preprocessor
 // #define LOG_INCLUDES
 
-// #define MLOG
+// #define MLOGf
 // #define PLOG
 // type checker
 // #define TC_LOG

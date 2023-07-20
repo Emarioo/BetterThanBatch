@@ -566,7 +566,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
     using namespace COFF_Format;
     Assert(program);
 
-    u64 outSize = 2000 + program->size;
+    u64 outSize = 2000 + program->size();
     u8* outData = (u8*)Allocate(outSize); // TODO: Don't use hardcoded size
     defer { Free(outData, outSize); };
     u64 outOffset = 0;
@@ -600,12 +600,12 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         IMAGE_SCN_MEM_READ);
 
 
-    section->SizeOfRawData = program->size;
+    section->SizeOfRawData = program->size();
     section->PointerToRawData = outOffset;
-    if(program->size !=0){
+    if(program->size() !=0){
         Assert(program->text);
-        memcpy(outData + outOffset, program->text, program->size);
-        outOffset += program->size;
+        memcpy(outData + outOffset, program->text, program->size());
+        outOffset += program->size();
     }
 
     header->PointerToSymbolTable = outOffset;

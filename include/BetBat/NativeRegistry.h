@@ -20,6 +20,9 @@ enum NativeFunctionType {
 #define NATIVE_realloc -6
 #define NATIVE_free -7
 
+#define NATIVE_memcpy -8
+#define NATIVE_memzero -9
+
 #define NATIVE_FileOpen -10
 #define NATIVE_FileRead -11
 #define NATIVE_FileWrite -12

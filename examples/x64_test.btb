@@ -1,18 +1,92 @@
 // #import "OS"
 // fn @native printi(n: i64);
+// fn @native printc(n: char);
+// fn @native prints(n: char[]);
+fn @native memzero(dst: void*, len: u64);
+fn @native memcpy(dst: void*, src: void*, len: u64);
 
-cast<i64> 32
+#define T i32
+fn memcpy2(dst: T*, src: T*, count: u64) {
+    memcpy(dst, src, count * 4);
+}
 
-// 0 <= 0
+// #import "./factorial"
 
 
-// if 3 - 3 {
-//     // printi(
-//         5 + 6
-//         // )
+// fn factorial(n: u64) -> u64 {
+//     if !n // n == 0
+//         return 1
+//     // return 2;
+//     return n * factorial(n - 1);
 // }
+// factorial(9)
 
-// printi(
-// 5 - 12 / 3 * 3
-// -1 * 1
-// )
+a: i32[3];
+
+a.ptr[2] = 9;
+// memzero(a.ptr, a.len);
+
+b: i32[3];
+
+// memcpy(b.ptr, a.ptr, a.len * sizeof i32);
+// memcpy2<i32>(b.ptr, a.ptr, a.len);
+memcpy2(b.ptr, a.ptr, a.len);
+
+b.ptr[2]
+// a.ptr[2]
+
+// for @pointer a {
+//     *it = 1 + nr * 3
+// }
+// // memzero(a.ptr + 5, 8);
+// sum: u64 = 0
+// for a {
+//     // printi(nr)
+//     // printi(nr);
+//     // prints("\n");
+//     sum += it
+// }
+// sum
+// printi(sum); printc('\n');
+
+// a: u64 = 3;
+// a + 2
+
+// a = 0
+// for 0..5 {
+//     a += nr;
+// }
+// a
+
+// if 3 == 3 {
+//     9
+// } else 
+//     2
+
+//-- deep functions
+// fn b() -> i32 {
+//     return 2
+// }
+// b() * 3
+// fn a(n: i32) -> i32 {
+//     return b() * n
+// }
+// fn c(n: i32) -> i32 {
+//     a(2)
+//     // 3 * n
+//     return a(2) * n
+// }
+// c(9)
+
+// b()
+
+// b()
+
+//-- function test
+// fn fun(a: i32) -> i32 { return a + 5; }
+// fun(92)
+
+//-- local variable test
+// a = 9
+// b = 23
+// a + b

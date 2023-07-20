@@ -3,10 +3,12 @@
 /*
     The reason functions are named "print" and not "log"
     is because you might want your own log function.
+    log is a smaller name than print so it would be unfortunate
+    if the language took that name from you.
 */
 
-fn @hide _print(t: i32){
-    printi(cast<i64>t)
+fn @hide _print(t: i64){
+    printi(t)
 }
 fn @hide _print(t: f32){
     printd(t)

@@ -1205,6 +1205,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     }
                 }
                 tmp->i64Value = negativeNumber ? -num : num;
+                negativeNumber = false;
                 
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;

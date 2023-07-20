@@ -1,23 +1,91 @@
 // @macro-benchmark
-// #import "./macros"
 #import "OS"
 // #import "Logger"
+// #import "Basic"
+// #import "./macros"
 // #import "./macro-bench"
 // #import "./overloading"
 
 // #import "./defer"
-// #import "./dir-iterator"
-// #import "Basic"
+#import "./dir-iterator"
+// #import "./factorial"
 
+// tp = StartTimePoint()
+
+// for 0..1000 {
+//     printi(nr); prints("\n");
+// }
+
+
+// fn dob() -> f32 { return 0.92 }
+// printd(dob())
+
+// printi(EndTimePoint(tp)*1000000);
+// 
 // fn @native printi(str: i64);
+// fn @native printi(str: i64);
+// fn @native printi(str: i32);
+// fn @native prints(str: char[]);
+
+// str = "a"
+// printi(str.len)
+// printi(cast<u64>str.ptr)
+// prints(str)
+// printi(matchEnd(str,"b"))
+
+// for 0..1 {
+//     printi(nr)
+//     printi(it)
+// }
+
+// fn matchEnd(str: char[], match: char[]) -> bool {
+//     if str.len < match.len
+//         return false
+//     for match {
+//         chr = str.ptr[nr + str.len - match.len];
+//         if it != chr
+//             return false
+//     }
+//     return true
+// }
+
 // // printi(23)
 
-// fn fun() -> i32 { return 9 }
+// fn fun(a: i8, b: i8) -> i32 { return 2*(a+b) }
 
-a = 9
-b = 3;
+// str = "a.pp"
+
+// matchEnd(str,".cpp")
+// if !matchEnd(str,".cpp") {
+
+// }
+// println(cast<u64>str.ptr)
+// temp(str)
+
+// fn temp(str: char[], ){
+//     println(cast<u64>str.ptr);
+//     println(str.len);
+// }
+
+
+// fn matchEnd(str: char[], match: char[]) -> bool {
+//     if str.len < match.len
+//         return false
+//     // println(cast<u64>str.ptr," ",str.len," ",cast<u64>match.ptr," ",match.len);
+//     for @reverse match {
+//         chr = str.ptr[nr + str.len - match.len];
+//         if it != chr
+//             return false
+//     }
+//     return true
+// }
+
+
+// a = 9
+// b = 3;
+
 // a + 9
-// printi(a)
+// printi(fun(257,257))
 
 // a = fun() +  3;
 

@@ -26,6 +26,8 @@ struct Interpreter {
     u64 fp=0;
     u64 pc=0;
     u64 dp=0;
+    u64 rsi=0;
+    u64 rdi=0;
     
     void* getReg(u8 id);
     void* setReg(u8 id);

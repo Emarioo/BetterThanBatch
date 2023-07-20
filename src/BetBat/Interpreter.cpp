@@ -1,5 +1,8 @@
 #include "BetBat/Interpreter.h"
 
+// needed for FRAME_SIZE
+#include "BetBat/Generator.h"
+
 #define BITS(P,B,E,S) ((P<<(S-E))>>B)
 
 #define DECODE_OPCODE(I) I->opcode
@@ -71,6 +74,8 @@ void* Interpreter::getReg(u8 id){
         case BC_REG_FP: return &fp;
         case BC_REG_PC: return &pc;
         case BC_REG_DP: return &dp;
+        case BC_REG_RDI: return &rdi;
+        case BC_REG_RSI: return &rsi;
     }
     #undef CASER
     engone::log::out <<"(RegID: "<<id<<")\n";
@@ -121,7 +126,6 @@ void Interpreter::execute(Bytecode* bytecode){
 
     i64 userAllocatedBytes=0;
     
-    // u64* savedFp = 0;
     u64 executedInstructions = 0;
     u64 length = bytecode->codeSegment.used;
     if(length==0)
@@ -136,10 +140,8 @@ void Interpreter::execute(Bytecode* bytecode){
         // Instruction* inst = bytecode->get(pc);
         Instruction* inst = codePtr + pc;
         
-        // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp;)
-        // if(savedFp)
-        //     _ILOG(log::out <<" sfp: "<< *savedFp;)
-        // _ILOG(log::out <<"\n";)
+        // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
+        
         #ifdef ILOG
             auto location = bytecode->getLocation(pc);
             if(location && prevLocation != location){
@@ -485,7 +487,7 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
             break;
         }
-        case BC_ZERO_MEM:{
+        case BC_MEMZERO:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             // u16 size = (u16)DECODE_REG1(inst) | ((u16)DECODE_REG2(inst)<<8);
@@ -521,7 +523,6 @@ void Interpreter::execute(Bytecode* bytecode){
             
             void* datap = (codePtr + pc);
             i32 data = *(i32*)(codePtr + pc);
-            // u32 data = *(u32*)bytecode->get(pc);
             pc++;
             
             _ILOG(log::out << data<<"\n";)
@@ -605,34 +606,39 @@ void Interpreter::execute(Bytecode* bytecode){
             break;
         }
         case BC_CALL: {
-            u8 r0 = DECODE_REG0(inst);
+            void* addrp = (codePtr + pc);
+            i32 addr = *(i32*)(codePtr + pc);
+            pc++;
             
-            void* ptr = getReg(r0);
-            i64 addr = *((i64*)ptr);
+            // u8 r0 = DECODE_REG0(inst);
+            // void* ptr = getReg(r0);
+            // i64 addr = *((i64*)ptr);
             
             _ILOG(log::out << "\n";)
             if(addr>(int)length){
                 log::out << log::YELLOW << "Call to instruction beyond all bytecode\n";
             }
             // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
-            
+            #ifdef SAVE_FP_IN_CALL_FRAME
             sp-=8;
             *((u64*) sp) = fp;
+            #endif
             // _ILOG(log::out<<"save fp at "<<sp<<"\n";)
             // savedFp = (u64*)sp;
             // SP_CHANGE(-8)
             sp-=8;
             *((u64*) sp) = pc; // pc points to the next instruction, +1 not needed 
             // SP_CHANGE(-8)
-            
+            #ifdef SAVE_FP_IN_CALL_FRAME
             fp = sp;
+            #endif
             pc = addr;
             
             // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
     
             // if((i64)addr<0){
             if(addr & ((const i64)1<<63)){
-                int argoffset = 16;
+                int argoffset = GenInfo::FRAME_SIZE;
                 
                 // auto* nativeFunction = nativeRegistry->findFunction(addr);
                 // if(nativeFunction){
@@ -640,6 +646,7 @@ void Interpreter::execute(Bytecode* bytecode){
                 // } else {
                 //     _ILOG(log::out << log::RED << addr<<" is not a native function\n";)
                 // }
+                u64 fp = sp; // fp isn't saved if SAVE_FP_... isn't defined.
 
                 switch (addr) {
                 case NATIVE_malloc:{
@@ -883,7 +890,7 @@ void Interpreter::execute(Bytecode* bytecode){
 
                     double time = StopMeasure(timePoint);
 
-                    *(float*)(fp - 4) = (float)time;
+                    *(float*)(fp - 8) = (float)time;
                     #ifdef VLOG
                     log::out << log::GRAY<<"End time point: "<<(u64)timePoint << ", "<<time<<"\n";
                     #endif
@@ -916,15 +923,21 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out <<"\n";)
             
             TINY_GOTO:
-            // _ILOG(log::out <<"pc: "<< pc<<" fp: "<< fp<<"\n";)
-            sp=fp+16; // will now point to arguments
-            pc = *((u64*)(fp));
+            // _ILOG(log::out <<"pc: "<< pc<<" fp: "<< fp<<" sp: "<< sp<<"\n";)
+            
+            // sp=fp+16; // will now point to arguments
+            pc = *((u64*)(sp));
+            sp+=8;
+
             // sp+=8;
             // _ILOG(log::out<<"loaded fp from "<<(fp+8)<<"\n";)
-            fp = *((u64*)(fp+8));
+            #ifdef SAVE_FP_IN_CALL_FRAME
+            fp = *((u64*)(sp));
+            sp+=8;
+            #endif
             // sp+=8;
             // SP_CHANGE(sp-fp)
-            // _ILOG(log::out <<"pc: "<< pc<<" fp: "<< fp<<"\n";)
+            // _ILOG(log::out <<"pc: "<< pc<<" fp: "<< fp<<" sp: "<< sp<<"\n";)
             
             break;
         }
@@ -1120,6 +1133,7 @@ void Interpreter::execute(Bytecode* bytecode){
         }
         } // for switch
     }
+    log::out << "rax: "<<rax<<"\n";
     if(userAllocatedBytes!=0){
         log::out << log::RED << "User program leaks "<<userAllocatedBytes<<" bytes\n";
     }

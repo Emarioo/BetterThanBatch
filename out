@@ -1,190 +1,806 @@
-Microsoft (R) COFF/PE Dumper Version 14.36.32535.0
-Copyright (C) Microsoft Corporation.  All rights reserved.
+[DEVMODE]
+Tokenize: <base-structs>
+Parse: <base-structs>
+Parsed struct Slice with 2 members
+Parsed struct Range with 2 members
+Tokenize: ...rojects/BetterThanBatch/examples/dev.btb
+Preprocess (imports): ...rojects/BetterThanBatch/examples/dev.btb
+Tokenize: ...jects/BetterThanBatch/modules/Logger.btb
+Preprocess (imports): ...jects/BetterThanBatch/modules/Logger.btb
+Tokenize: ...eProjects/BetterThanBatch/modules/OS.btb
+Preprocess (imports): ...eProjects/BetterThanBatch/modules/OS.btb
+Preprocess: ...eProjects/BetterThanBatch/modules/OS.btb
+Parse: ...eProjects/BetterThanBatch/modules/OS.btb
+Parsed struct DirectoryIteratorData with 4 members
+Parsed struct DirectoryIterator with 3 members
+Preprocess: ...jects/BetterThanBatch/modules/Logger.btb
+Parse: ...jects/BetterThanBatch/modules/Logger.btb
+Preprocess: ...rojects/BetterThanBatch/examples/dev.btb
+Parse: ...rojects/BetterThanBatch/examples/dev.btb
+Type check:
+Struct Range (size: 8, scope: 0)
+ 0: beg (4 bytes)
+ 4: end (4 bytes)
+Struct Slice<char> (size: 16, poly. impl., scope: 0)
+ 0: ptr (8 bytes)
+ 8: len (8 bytes)
+Struct DirectoryIteratorData (size: 32, scope: 0)
+ 0: name (16 bytes)
+ 16: fileSize (8 bytes)
+ 24: lastWriteSeconds (4 bytes)
+ 31: isDirectory (1 bytes)
+Struct DirectoryIterator (size: 56, scope: 0)
+ 0: handle (8 bytes)
+ 8: rootPath (16 bytes)
+ 24: result (32 bytes)
+Struct Slice<Slice<char>> (size: 16, poly. impl., scope: 0)
+ 0: ptr (8 bytes)
+ 8: len (8 bytes)
+Generating code:
+Jump to skip functions
+0: BC_JMP   
+1: 0
+enter GenerateFunctions
+Native function printi
+Native function printd
+Native function printc
+Native function prints
+Native function malloc
+Native function realloc
+Native function free
+Native function FileOpen
+Native function FileRead
+Native function FileWrite
+Native function FileClose
+Native function DirectoryIteratorCreate
+Native function DirectoryIteratorDestroy
+Native function DirectoryIteratorNext
+Native function DirectoryIteratorSkip
+Native function CurrentWorkingDirectory
+Native function StartTimePoint
+Native function EndTimePoint
+Native function CmdLineArgs
+  enter GenerateFunctions
+  exit  GenerateFunctions
+  enter GenerateFunction
+Function _print
+set 1 args
+ [16] t: i64
 
+    enter GenerateBody
+      enter EXPRESSION
+        enter GenerateExpression
+Overload: printi(i64)
+2: BC_INCR sp -8
+relsp -8
+          enter GenerateExpression
+ expr var push t
+3: BC_LI rcx  
+4: 16
+5: BC_ADDI fp rcx rcx
+6: BC_MOV_MR rcx rax 8
+7: BC_PUSH rax  
+relsp -16
+          exit  GenerateExpression
+8: BC_LI rbx  
+9: 8
+10: BC_ADDI rbx sp rbx
+move return value
+11: BC_POP rax  
+relsp -8
+12: BC_MOV_RM rax rbx 8
+13: BC_LI rax  
+14: 999999999
+15: BC_CALL rax  
+pop arguments
+16: BC_INCR sp 8
+        exit  GenerateExpression
+      exit  EXPRESSION
+    exit  GenerateBody
+17: BC_RET   
+  exit  GenerateFunction
+  enter GenerateFunctions
+  exit  GenerateFunctions
+  enter GenerateFunction
+Function _print
+set 1 args
+ [20] t: f32
 
-Dump of file obj_test.obj
+    enter GenerateBody
+      enter EXPRESSION
+        enter GenerateExpression
+Overload: printd(f32)
+18: BC_INCR sp -8
+relsp -8
+          enter GenerateExpression
+ expr var push t
+19: BC_LI rcx  
+20: 20
+21: BC_ADDI fp rcx rcx
+22: BC_MOV_MR rcx eax 4
+23: BC_PUSH eax  
+relsp -16
+          exit  GenerateExpression
+24: BC_LI rbx  
+25: 8
+26: BC_ADDI rbx sp rbx
+move return value
+27: BC_POP eax  
+relsp -8
+28: BC_LI rcx  
+29: 4
+30: BC_ADDI rbx rcx rcx
+31: BC_MOV_RM eax rcx 4
+32: BC_LI rax  
+33: 999999999
+34: BC_CALL rax  
+pop arguments
+35: BC_INCR sp 8
+        exit  GenerateExpression
+      exit  EXPRESSION
+    exit  GenerateBody
+36: BC_RET   
+  exit  GenerateFunction
+  enter GenerateFunctions
+  exit  GenerateFunctions
+  enter GenerateFunction
+Function _print
+set 1 args
+ [23] t: char
 
-File Type: COFF OBJECT
+    enter GenerateBody
+      enter EXPRESSION
+        enter GenerateExpression
+Overload: printc(char)
+37: BC_INCR sp -8
+relsp -8
+          enter GenerateExpression
+ expr var push t
+38: BC_LI rcx  
+39: 23
+40: BC_ADDI fp rcx rcx
+41: BC_MOV_MR rcx al 1
+42: BC_PUSH al  
+relsp -16
+          exit  GenerateExpression
+43: BC_LI rbx  
+44: 8
+45: BC_ADDI rbx sp rbx
+move return value
+46: BC_POP al  
+relsp -8
+47: BC_LI rcx  
+48: 7
+49: BC_ADDI rbx rcx rcx
+50: BC_MOV_RM al rcx 1
+51: BC_LI rax  
+52: 999999999
+53: BC_CALL rax  
+pop arguments
+54: BC_INCR sp 8
+        exit  GenerateExpression
+      exit  EXPRESSION
+    exit  GenerateBody
+55: BC_RET   
+  exit  GenerateFunction
+  enter GenerateFunctions
+  exit  GenerateFunctions
+  enter GenerateFunction
+Function _print
+set 1 args
+ [23] t: bool
 
-FILE HEADER VALUES
-            8664 machine (x64)
-               6 number of sections
-        64B30C92 time date stamp Sat Jul 15 23:16:02 2023
-             243 file pointer to symbol table
-              13 number of symbols
-               0 size of optional header
-               0 characteristics
+    enter GenerateBody
+      enter IF
+        enter GenerateExpression
+ expr var push t
+56: BC_LI rcx  
+57: 23
+58: BC_ADDI fp rcx rcx
+59: BC_MOV_MR rcx al 1
+60: BC_PUSH al  
+relsp -8
+        exit  GenerateExpression
+61: BC_POP al  
+relsp 0
+62: BC_JNE al  
+63: 0
+        enter GenerateBody
+          enter EXPRESSION
+            enter GenerateExpression
+Overload: prints(Slice<char>)
+64: BC_INCR sp -16
+relsp -16
+              enter GenerateExpression
+65: BC_LI rax  
+66: 4
+67: BC_PUSH rax  
+relsp -24
+68: BC_LI rbx  
+69: 8
+70: BC_ADDI dp rbx rbx
+71: BC_PUSH rbx  
+relsp -32
+              exit  GenerateExpression
+72: BC_LI rbx  
+73: 16
+74: BC_ADDI rbx sp rbx
+move return value member ptr
+move return value
+75: BC_POP rax  
+relsp -24
+76: BC_MOV_RM rax rbx 8
+move return value member len
+move return value
+77: BC_POP rax  
+relsp -16
+78: BC_LI rcx  
+79: 8
+80: BC_ADDI rbx rcx rcx
+81: BC_MOV_RM rax rcx 8
+82: BC_LI rax  
+83: 999999999
+84: BC_CALL rax  
+pop arguments
+85: BC_INCR sp 16
+            exit  GenerateExpression
+          exit  EXPRESSION
+        exit  GenerateBody
+86: BC_JMP   
+87: 0
+        enter GenerateBody
+          enter EXPRESSION
+            enter GenerateExpression
+Overload: prints(Slice<char>)
+88: BC_INCR sp -16
+relsp -16
+              enter GenerateExpression
+89: BC_LI rax  
+90: 5
+91: BC_PUSH rax  
+relsp -24
+92: BC_LI rbx  
+93: 12
+94: BC_ADDI dp rbx rbx
+95: BC_PUSH rbx  
+relsp -32
+              exit  GenerateExpression
+96: BC_LI rbx  
+97: 16
+98: BC_ADDI rbx sp rbx
+move return value member ptr
+move return value
+99: BC_POP rax  
+relsp -24
+100: BC_MOV_RM rax rbx 8
+move return value member len
+move return value
+101: BC_POP rax  
+relsp -16
+102: BC_LI rcx  
+103: 8
+104: BC_ADDI rbx rcx rcx
+105: BC_MOV_RM rax rcx 8
+106: BC_LI rax  
+107: 999999999
+108: BC_CALL rax  
+pop arguments
+109: BC_INCR sp 16
+            exit  GenerateExpression
+          exit  EXPRESSION
+        exit  GenerateBody
+      exit  IF
+    exit  GenerateBody
+110: BC_RET   
+  exit  GenerateFunction
+  enter GenerateFunctions
+  exit  GenerateFunctions
+  enter GenerateFunction
+Function _print
+set 1 args
+ [16] t: Slice<char>
 
-SECTION HEADER #1
-.drectve name
-       0 physical address
-       0 virtual address
-      2F size of raw data
-     104 file pointer to raw data (00000104 to 00000132)
-       0 file pointer to relocation table
-       0 file pointer to line numbers
-       0 number of relocations
-       0 number of line numbers
-  100A00 flags
-         Info
-         Remove
-         1 byte align
+    enter GenerateBody
+      enter EXPRESSION
+        enter GenerateExpression
+Overload: prints(Slice<char>)
+111: BC_INCR sp -16
+relsp -16
+          enter GenerateExpression
+ expr var push t
+push len
+112: BC_LI rcx  
+113: 24
+114: BC_ADDI fp rcx rcx
+115: BC_MOV_MR rcx rax 8
+116: BC_PUSH rax  
+relsp -24
+push ptr
+117: BC_LI rcx  
+118: 16
+119: BC_ADDI fp rcx rcx
+120: BC_MOV_MR rcx rax 8
+121: BC_PUSH rax  
+relsp -32
+          exit  GenerateExpression
+122: BC_LI rbx  
+123: 16
+124: BC_ADDI rbx sp rbx
+move return value member ptr
+move return value
+125: BC_POP rax  
+relsp -24
+126: BC_MOV_RM rax rbx 8
+move return value member len
+move return value
+127: BC_POP rax  
+relsp -16
+128: BC_LI rcx  
+129: 8
+130: BC_ADDI rbx rcx rcx
+131: BC_MOV_RM rax rcx 8
+132: BC_LI rax  
+133: 999999999
+134: BC_CALL rax  
+pop arguments
+135: BC_INCR sp 16
+        exit  GenerateExpression
+      exit  EXPRESSION
+    exit  GenerateBody
+136: BC_RET   
+  exit  GenerateFunction
+  enter GenerateFunctions
+  exit  GenerateFunctions
+  enter GenerateFunction
+Function matchEnd
+set 2 args
+ [32] str: Slice<char>
+ [16] match: Slice<char>
 
-RAW DATA #1
-  00000000: 20 20 20 2F 44 45 46 41 55 4C 54 4C 49 42 3A 22     /DEFAULTLIB:"
-  00000010: 4C 49 42 43 4D 54 22 20 2F 44 45 46 41 55 4C 54  LIBCMT" /DEFAULT
-  00000020: 4C 49 42 3A 22 4F 4C 44 4E 41 4D 45 53 22 20     LIB:"OLDNAMES" 
+space for 1 return value(s) (struct may cause multiple push)
+137: BC_LI rcx  
+138: 1
+139: BC_SUBI fp rcx rbx
+140: BC_MEMZERO rbx rcx 
+141: BC_INCR sp -1
 
-   Linker Directives
-   -----------------
-   /DEFAULTLIB:LIBCMT
-   /DEFAULTLIB:OLDNAMES
+    enter GenerateBody
+      enter IF
+        enter GenerateExpression
+          enter GenerateExpression
+            enter GenerateReference
+ expr var push str
+142: BC_LI rbx  
+143: 32
+144: BC_ADDI fp rbx rbx
+145: BC_INCR sp -7
+146: BC_PUSH rbx  
+relsp -16
+147: BC_POP rbx  
+148: BC_INCR sp 7
+relsp -1
+149: BC_LI eax  
+150: 8
+151: BC_ADDI rbx eax rbx
+152: BC_INCR sp -7
+153: BC_PUSH rbx  
+relsp -16
+            exit  GenerateReference
+154: BC_POP rbx  
+155: BC_INCR sp 7
+relsp -1
+156: BC_MOV_MR rbx rax 8
+157: BC_INCR sp -7
+158: BC_PUSH rax  
+relsp -16
+          exit  GenerateExpression
+          enter GenerateExpression
+            enter GenerateReference
+ expr var push match
+159: BC_LI rbx  
+160: 16
+161: BC_ADDI fp rbx rbx
+162: BC_PUSH rbx  
+relsp -24
+163: BC_POP rbx  
+relsp -16
+164: BC_LI eax  
+165: 8
+166: BC_ADDI rbx eax rbx
+167: BC_PUSH rbx  
+relsp -24
+            exit  GenerateReference
+168: BC_POP rbx  
+relsp -16
+169: BC_MOV_MR rbx rax 8
+170: BC_PUSH rax  
+relsp -24
+          exit  GenerateExpression
+171: BC_POP rcx  
+relsp -16
+172: BC_POP rax  
+173: BC_INCR sp 7
+relsp -1
+174: BC_LT rax rcx rax
+175: BC_INCR sp -7
+176: BC_PUSH rax  
+relsp -16
+        exit  GenerateExpression
+177: BC_POP rax  
+178: BC_INCR sp 7
+relsp -1
+179: BC_JNE rax  
+180: 0
+        enter GenerateBody
+          enter RETURN
+            enter GenerateExpression
+181: BC_LI al  
+182: 0
+183: BC_INCR sp -7
+184: BC_PUSH al  
+relsp -16
+            exit  GenerateExpression
+move return value
+185: BC_POP al  
+186: BC_INCR sp 7
+relsp -1
+187: BC_LI rcx  
+188: -1
+189: BC_ADDI fp rcx rcx
+190: BC_MOV_RM al rcx 1
+191: BC_RET   
+          exit  RETURN
+        exit  GenerateBody
+      exit  IF
+      enter FOR
+192: BC_INCR sp -4
+relsp -5
+        enter GenerateExpression
+ expr var push match
+push len
+193: BC_LI rcx  
+194: 24
+195: BC_ADDI fp rcx rcx
+196: BC_MOV_MR rcx rax 8
+197: BC_INCR sp -3
+198: BC_PUSH rax  
+relsp -16
+push ptr
+199: BC_LI rcx  
+200: 16
+201: BC_ADDI fp rcx rcx
+202: BC_MOV_MR rcx rax 8
+203: BC_PUSH rax  
+relsp -24
+        exit  GenerateExpression
+204: BC_POP rax  
+relsp -16
+205: BC_POP rax  
+206: BC_INCR sp 3
+relsp -5
+207: BC_CAST 3 rax eax
+208: BC_INCR sp -3
+209: BC_PUSH eax  
+relsp -16
+210: BC_INCR sp -1
+relsp -17
+211: BC_LI rcx  
+212: -9
+213: BC_ADDI rcx fp rcx
+214: BC_BXOR rax rax rax
+215: BC_MOV_RM rax fp 1
+push loop
+        enter GenerateExpression
+ expr var push match
+push len
+216: BC_LI rcx  
+217: 24
+218: BC_ADDI fp rcx rcx
+219: BC_MOV_MR rcx rax 8
+220: BC_INCR sp -7
+221: BC_PUSH rax  
+relsp -32
+push ptr
+222: BC_LI rcx  
+223: 16
+224: BC_ADDI fp rcx rcx
+225: BC_MOV_MR rcx rax 8
+226: BC_PUSH rax  
+relsp -40
+        exit  GenerateExpression
+227: BC_POP rbx  
+relsp -32
+228: BC_POP rdx  
+229: BC_INCR sp 7
+relsp -17
+230: BC_LI rax  
+231: -8
+232: BC_ADDI fp rax rax
+233: BC_MOV_MR rax ecx 4
+234: BC_INCR ecx -1
+235: BC_MOV_RM ecx rax 4
+236: BC_LI rdx  
+237: -1
+238: BC_GT ecx rdx eax
+239: BC_JNE eax  
+240: 0
+241: BC_LI rdx  
+242: 1
+243: BC_MULI ecx rdx rax
+244: BC_ADDI rbx rax rbx
+245: BC_LI rax  
+246: -9
+247: BC_ADDI fp rax rcx
+248: BC_MEMCPY rcx rbx rdx
+        enter GenerateBody
+          enter ASSIGN
+249: BC_INCR sp -1
+relsp -18
+250: BC_LI rcx  
+251: -10
+252: BC_ADDI rcx fp rcx
+253: BC_BXOR rax rax rax
+254: BC_MOV_RM rax fp 1
+declare chr at -10
+ chr : char
+            enter GenerateExpression
+              enter GenerateExpression
+                enter GenerateReference
+ expr var push str
+255: BC_LI rbx  
+256: 32
+257: BC_ADDI fp rbx rbx
+258: BC_INCR sp -6
+259: BC_PUSH rbx  
+relsp -32
+260: BC_POP rbx  
+261: BC_INCR sp 6
+relsp -18
+262: BC_INCR sp -6
+263: BC_PUSH rbx  
+relsp -32
+                exit  GenerateReference
+264: BC_POP rbx  
+265: BC_INCR sp 6
+relsp -18
+266: BC_MOV_MR rbx rax 8
+267: BC_INCR sp -6
+268: BC_PUSH rax  
+relsp -32
+              exit  GenerateExpression
+              enter GenerateExpression
+                enter GenerateExpression
+ expr var push nr
+269: BC_LI rcx  
+270: -8
+271: BC_ADDI fp rcx rcx
+272: BC_MOV_MR rcx eax 4
+273: BC_PUSH eax  
+relsp -40
+                exit  GenerateExpression
+                enter GenerateExpression
+                  enter GenerateExpression
+                    enter GenerateReference
+ expr var push str
+274: BC_LI rbx  
+275: 32
+276: BC_ADDI fp rbx rbx
+277: BC_PUSH rbx  
+relsp -48
+278: BC_POP rbx  
+relsp -40
+279: BC_LI eax  
+280: 8
+281: BC_ADDI rbx eax rbx
+282: BC_PUSH rbx  
+relsp -48
+                    exit  GenerateReference
+283: BC_POP rbx  
+relsp -40
+284: BC_MOV_MR rbx rax 8
+285: BC_PUSH rax  
+relsp -48
+                  exit  GenerateExpression
+                  enter GenerateExpression
+                    enter GenerateReference
+ expr var push match
+286: BC_LI rbx  
+287: 16
+288: BC_ADDI fp rbx rbx
+289: BC_PUSH rbx  
+relsp -56
+290: BC_POP rbx  
+relsp -48
+291: BC_LI eax  
+292: 8
+293: BC_ADDI rbx eax rbx
+294: BC_PUSH rbx  
+relsp -56
+                    exit  GenerateReference
+295: BC_POP rbx  
+relsp -48
+296: BC_MOV_MR rbx rax 8
+297: BC_PUSH rax  
+relsp -56
+                  exit  GenerateExpression
+298: BC_POP rcx  
+relsp -48
+299: BC_POP rax  
+relsp -40
+300: BC_SUBI rax rcx rax
+301: BC_PUSH rax  
+relsp -48
+                exit  GenerateExpression
+302: BC_POP rcx  
+relsp -40
+303: BC_POP eax  
+relsp -32
+304: BC_ADDI eax rcx eax
+305: BC_PUSH eax  
+relsp -40
+              exit  GenerateExpression
+306: BC_POP edx  
+relsp -32
+307: BC_POP rbx  
+308: BC_INCR sp 6
+relsp -18
+309: BC_LI eax  
+310: 1
+311: BC_MULI edx eax edx
+312: BC_ADDI rbx edx rbx
+313: BC_MOV_MR rbx al 1
+314: BC_INCR sp -6
+315: BC_PUSH al  
+relsp -32
+            exit  GenerateExpression
+assign pop char
+move return value
+316: BC_POP al  
+317: BC_INCR sp 6
+relsp -18
+318: BC_LI rcx  
+319: -10
+320: BC_ADDI fp rcx rcx
+321: BC_MOV_RM al rcx 1
+          exit  ASSIGN
+          enter IF
+            enter GenerateExpression
+              enter GenerateExpression
+ expr var push it
+322: BC_LI rcx  
+323: -9
+324: BC_ADDI fp rcx rcx
+325: BC_MOV_MR rcx al 1
+326: BC_INCR sp -6
+327: BC_PUSH al  
+relsp -32
+              exit  GenerateExpression
+              enter GenerateExpression
+ expr var push chr
+328: BC_LI rcx  
+329: -10
+330: BC_ADDI fp rcx rcx
+331: BC_MOV_MR rcx al 1
+332: BC_PUSH al  
+relsp -40
+              exit  GenerateExpression
+333: BC_POP cl  
+relsp -32
+334: BC_POP al  
+335: BC_INCR sp 6
+relsp -18
+336: BC_NEQ al cl cl
+337: BC_INCR sp -6
+338: BC_PUSH cl  
+relsp -32
+            exit  GenerateExpression
+339: BC_POP al  
+340: BC_INCR sp 6
+relsp -18
+341: BC_JNE al  
+342: 0
+            enter GenerateBody
+              enter RETURN
+                enter GenerateExpression
+343: BC_LI al  
+344: 0
+345: BC_INCR sp -6
+346: BC_PUSH al  
+relsp -32
+                exit  GenerateExpression
+move return value
+347: BC_POP al  
+348: BC_INCR sp 6
+relsp -18
+349: BC_LI rcx  
+350: -1
+351: BC_ADDI fp rcx rcx
+352: BC_MOV_RM al rcx 1
+353: BC_RET   
+              exit  RETURN
+            exit  GenerateBody
+          exit  IF
+fix sp when exiting body
+354: BC_INCR sp 1
+relsp -17
+        exit  GenerateBody
+355: BC_JMP   
+356: 216
+pop loop
+      exit  FOR
+      enter RETURN
+        enter GenerateExpression
+357: BC_LI al  
+358: 1
+359: BC_INCR sp -7
+360: BC_PUSH al  
+relsp -32
+        exit  GenerateExpression
+move return value
+361: BC_POP al  
+362: BC_INCR sp 7
+relsp -17
+363: BC_LI rcx  
+364: -1
+365: BC_ADDI fp rcx rcx
+366: BC_MOV_RM al rcx 1
+367: BC_INCR sp -8
+relsp -25
+368: BC_RET   
+      exit  RETURN
+    exit  GenerateBody
+369: BC_INCR sp 25
+370: BC_RET   
+  exit  GenerateFunction
+  enter GenerateFunctions
+  exit  GenerateFunctions
+  enter GenerateFunction
+Function next
+set 1 args
+ [16] this: DirectoryIterator*
 
-SECTION HEADER #2
-.debug$S name
-       0 physical address
-       0 virtual address
-      98 size of raw data
-     133 file pointer to raw data (00000133 to 000001CA)
-       0 file pointer to relocation table
-       0 file pointer to line numbers
-       0 number of relocations
-       0 number of line numbers
-42100040 flags
-         Initialized Data
-         Discardable
-         1 byte align
-         Read Only
+space for 1 return value(s) (struct may cause multiple push)
+371: BC_LI rcx  
+372: 8
+373: BC_SUBI fp rcx rbx
+374: BC_MEMZERO rbx rcx 
+375: BC_INCR sp -8
 
-RAW DATA #2
-  00000000: 04 00 00 00 F1 00 00 00 8C 00 00 00 4E 00 01 11  ....ñ.......N...
-  00000010: 00 00 00 00 43 3A 5C 55 73 65 72 73 5C 64 61 74  ....C:\Users\dat
-  00000020: 61 6F 5C 44 65 73 6B 74 6F 70 5C 42 61 63 6B 75  ao\Desktop\Backu
-  00000030: 70 5C 43 6F 64 65 50 72 6F 6A 65 63 74 73 5C 42  p\CodeProjects\B
-  00000040: 65 74 74 65 72 54 68 61 6E 42 61 74 63 68 5C 6F  etterThanBatch\o
-  00000050: 62 6A 5F 74 65 73 74 2E 6F 62 6A 00 3A 00 3C 11  bj_test.obj.:.<.
-  00000060: 00 62 00 00 D0 00 13 00 24 00 17 7F 00 00 13 00  .b..Ð...$.......
-  00000070: 24 00 17 7F 00 00 4D 69 63 72 6F 73 6F 66 74 20  $.....Microsoft 
-  00000080: 28 52 29 20 4F 70 74 69 6D 69 7A 69 6E 67 20 43  (R) Optimizing C
-  00000090: 6F 6D 70 69 6C 65 72 00                          ompiler.
-
-SECTION HEADER #3
-.text$mn name
-       0 physical address
-       0 virtual address
-      16 size of raw data
-     1CB file pointer to raw data (000001CB to 000001E0)
-       0 file pointer to relocation table
-       0 file pointer to line numbers
-       0 number of relocations
-       0 number of line numbers
-60500020 flags
-         Code
-         16 byte align
-         Execute Read
-
-RAW DATA #3
-  00000000: 48 83 EC 18 C7 04 24 01 00 00 00 8B 04 24 83 C0  H.ì.Ç.$......$.À
-  00000010: 02 48 83 C4 18 C3                                .H.Ä.Ã
-
-SECTION HEADER #4
-  .xdata name
-       0 physical address
-       0 virtual address
-       8 size of raw data
-     1E1 file pointer to raw data (000001E1 to 000001E8)
-       0 file pointer to relocation table
-       0 file pointer to line numbers
-       0 number of relocations
-       0 number of line numbers
-40300040 flags
-         Initialized Data
-         4 byte align
-         Read Only
-
-RAW DATA #4
-  00000000: 01 04 01 00 04 22 00 00                          ....."..
-
-SECTION HEADER #5
-  .pdata name
-       0 physical address
-       0 virtual address
-       C size of raw data
-     1E9 file pointer to raw data (000001E9 to 000001F4)
-     1F5 file pointer to relocation table
-       0 file pointer to line numbers
-       3 number of relocations
-       0 number of line numbers
-40300040 flags
-         Initialized Data
-         4 byte align
-         Read Only
-
-RAW DATA #5
-  00000000: 00 00 00 00 16 00 00 00 00 00 00 00              ............
-
-Function Table #5 (1)
-
-           Begin     End       Info
-
-  00000000 00000000  00000016  00000000
-
-RELOCATIONS #5
-                                                Symbol    Symbol
- Offset    Type              Applied To         Index     Name
- --------  ----------------  -----------------  --------  ------
- 00000000  ADDR32NB                   00000000         A  $LN3
- 00000004  ADDR32NB                   00000016         A  $LN3
- 00000008  ADDR32NB                   00000000         D  $unwind$main
-
-SECTION HEADER #6
- .chks64 name
-       0 physical address
-       0 virtual address
-      30 size of raw data
-     213 file pointer to raw data (00000213 to 00000242)
-       0 file pointer to relocation table
-       0 file pointer to line numbers
-       0 number of relocations
-       0 number of line numbers
-     A00 flags
-         Info
-         Remove
-         (no align specified)
-
-RAW DATA #6
-  00000000: 23 07 66 15 27 1A BF 1A 15 1B 8B 73 E8 34 01 78  #.f.'.¿....sè4.x
-  00000010: 6A 27 C3 2C 6D 0B AE CF 9A F2 01 C0 9C 99 EA 8A  j'Ã,m.®Ï.ò.À..ê.
-  00000020: 17 30 5D 5A C6 39 A9 24 00 00 00 00 00 00 00 00  .0]ZÆ9©$........
-
-COFF SYMBOL TABLE
-000 01047F17 ABS    notype       Static       | @comp.id
-001 80010190 ABS    notype       Static       | @feat.00
-002 00000002 ABS    notype       Static       | @vol.md
-003 00000000 SECT1  notype       Static       | .drectve
-    Section length   2F, #relocs    0, #linenums    0, checksum        0
-005 00000000 SECT2  notype       Static       | .debug$S
-    Section length   98, #relocs    0, #linenums    0, checksum        0
-007 00000000 SECT3  notype       Static       | .text$mn
-    Section length   16, #relocs    0, #linenums    0, checksum 145DA4AF
-009 00000000 SECT3  notype ()    External     | main
-00A 00000000 SECT3  notype       Label        | $LN3
-00B 00000000 SECT4  notype       Static       | .xdata
-    Section length    8, #relocs    0, #linenums    0, checksum 4712F2F1
-00D 00000000 SECT4  notype       Static       | $unwind$main
-00E 00000000 SECT5  notype       Static       | .pdata
-    Section length    C, #relocs    3, #linenums    0, checksum BAD438AC
-010 00000000 SECT5  notype       Static       | $pdata$main
-011 00000000 SECT6  notype       Static       | .chks64
-    Section length   30, #relocs    0, #linenums    0, checksum        0
-
-String Table Size = 0x1D bytes
-
-  Summary
-
-          30 .chks64
-          98 .debug$S
-          2F .drectve
-           C .pdata
-          16 .text$mn
-           8 .xdata
+    enter GenerateBody
+      enter RETURN
+        enter GenerateExpression
+Overload: DirectoryIteratorNext(DirectoryIterator*)
+376: BC_INCR sp -8
+relsp -16
+          enter GenerateExpression
+ expr var push this
+377: BC_LI rcx  
+378: 16
+379: BC_ADDI fp rcx rcx
+380: BC_MOV_MR rcx rax 8
+381: BC_PUSH rax  
+relsp -24
+          exit  GenerateExpression
+382: BC_LI rbx  
+383: 8
+384: BC_ADDI rbx sp rbx
+move return value
+385: BC_POP rax  
+relsp -16
+386: BC_MOV_RM rax rbx 8
+387: BC_LI rax  
+388: 999999999
+389: BC_CALL rax  
+extract return values
+390: BC_MOV_RR sp rbx 
+391: BC_INCR sp 8
+392: BC_LI rcx  
+393: -24
+394: BC_ADDI rbx rcx rcx
+395: BC_MOV_MR rcx rax 8
+396: BC_PUSH rax  
+relsp -16
+        exit  GenerateExpression
+move return value
+397: BC_POP rax  
+relsp 

@@ -57,7 +57,7 @@
 #define CAST_UINT_SINT 3
 #define CAST_SINT_SINT 4
 
-#define BC_ZERO_MEM 100
+#define BC_MEMZERO 100
 #define BC_MEMCPY 101
 /*
 f32
@@ -82,7 +82,7 @@ u8
 
 #define DECODE_REG_SIZE_TYPE(X) (((X)&BC_REG_MASK)>>6)
 #define ENCODE_REG_SIZE_TYPE(X) ((X)<<6)
-#define DECODE_REG_SIZE(X) (X==0?0:(1<<DECODE_REG_SIZE_TYPE(X)));
+#define DECODE_REG_SIZE(X) (X==0?0:(1<<DECODE_REG_SIZE_TYPE(X)))
 
 // The ordering is strange to make it easier to convert it
 // to x86 representation.
@@ -95,6 +95,10 @@ u8
 #define BC_BX 4
 #define BC_CX 2
 #define BC_DX 3
+#define BC_SP 5
+#define BC_FP 6
+#define BC_SI 7
+#define BC_DI 8
 
 // BC_REG_ALL can't be 0 because it's seen as no register so we do 8.
 #define BC_REG_AL (ENCODE_REG_SIZE_TYPE(BC_REG_8)|BC_AX)
@@ -122,10 +126,13 @@ u8
 #define BC_REG_RCX (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_CX)
 #define BC_REG_RDX (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_DX)
 
-#define BC_REG_SP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|5)
-#define BC_REG_FP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|6)
-#define BC_REG_PC (ENCODE_REG_SIZE_TYPE(BC_REG_64)|7)
-#define BC_REG_DP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|8)
+#define BC_REG_SP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_SP)
+#define BC_REG_FP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_FP)
+#define BC_REG_RSI (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_SI)
+#define BC_REG_RDI (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_DI)
+
+#define BC_REG_PC (ENCODE_REG_SIZE_TYPE(BC_REG_64)|10)
+#define BC_REG_DP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|11)
 
 
 // #define REG_AX 0b000
@@ -140,8 +147,8 @@ u8
 const char* InstToString(int type);
 const char* RegToStr(u8 reg);
 
-// regName refers to A,B,C,D (1,2,3,4)
-int RegBySize(int regName, int size);
+// regName refers to BC_AX/BX/CX/DX
+int RegBySize(u8 regName, int size);
 
 struct Instruction {
     uint8 opcode=0;
