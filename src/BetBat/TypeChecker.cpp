@@ -845,7 +845,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             CheckExpression(info,scopeId, expr->right, &temp);
         }
         if(typeArray.last().getPointerLevel()==0){
-            std::string strtype = info.ast->typeToString(outTypes->last());
+            std::string strtype = info.ast->typeToString(typeArray.last());
             ERR_HEAD(expr->left->tokenRange, "Cannot index non-pointer.\n\n";
                 ERR_LINE(expr->left->tokenRange,strtype.c_str());
             )

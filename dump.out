@@ -1,0 +1,6 @@
+Microsoft (R) COFF/PE Dumper Version 14.36.32535.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file obj_min.obj
+LINK : fatal error LNK1181: cannot open input file 'obj_min.obj'

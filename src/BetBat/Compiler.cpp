@@ -100,6 +100,10 @@ void CompileInfo::cleanup(){
         TokenStream::Destroy(stream);
     }
     streamsToClean.resize(0);
+    if(nativeRegistry){
+        NativeRegistry::Destroy(nativeRegistry);
+        nativeRegistry = nullptr;
+    }
 }
 bool CompileInfo::addStream(TokenStream* stream){
     auto pair = tokenStreams.find(stream->streamName);
@@ -254,7 +258,9 @@ Bytecode* CompileSource(CompileOptions options) {
     auto startCompileTime = engone::MeasureTime();
     
     CompileInfo compileInfo{};
-    compileInfo.nativeRegistry.initNativeContent();
+    compileInfo.nativeRegistry = NativeRegistry::Create();
+    compileInfo.nativeRegistry->initNativeContent();
+    
     compileInfo.ast = AST::Create();
     defer { AST::Destroy(compileInfo.ast); };
     // compileInfo.compilerDir = TrimLastFile(compilerPath);
@@ -275,6 +281,9 @@ Bytecode* CompileSource(CompileOptions options) {
         "beg: i32;"
         "end: i32;"
     "}\n"
+    #ifdef COMPILE_x64
+    "#define X64\n"
+    #endif
     ;
     ParseFile(compileInfo, "<base-structs>","",(char*)essentialStructs, strlen(essentialStructs));
 
@@ -327,6 +336,10 @@ Bytecode* CompileSource(CompileOptions options) {
     }
     if(compileInfo.warnings!=0){
         log::out << log::YELLOW<<"Compiler had "<<compileInfo.warnings<<" warning(s)\n";
+    }
+    if(bytecode) {
+        bytecode->nativeRegistry = compileInfo.nativeRegistry;
+        compileInfo.nativeRegistry = nullptr;
     }
     compileInfo.cleanup();
     return bytecode;

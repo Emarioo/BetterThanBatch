@@ -251,70 +251,43 @@ int main(int argc, const char** argv){
         Program_x64* program = nullptr;
         Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
         // bytecode->codeSegment.used=0;
-        // bytecode->add({BC_INCR, BC_REG_SP, 0xF0,0xFF});
-        // bytecode->add({BC_LI, BC_REG_RBX});
-        // bytecode->addIm(16);
-        // bytecode->add({BC_MEMZERO,BC_REG_SP,BC_REG_RBX});
-        // bytecode->add({BC_INCR, BC_REG_SP, 16});
-        
-        // bytecode->add({BC_MOV_RR, BC_REG_SP, BC_REG_RAX, BC_REG_RAX});
-        // bytecode->add({BC_LI, BC_REG_CX});
-        // bytecode->addIm(31);
-        // bytecode->add({BC_BRSHIFT,BC_REG_RAX, BC_REG_CX, BC_REG_RAX});
-        // bytecode->add({BC_SUBI, BC_REG_RAX, BC_REG_SP, BC_REG_RAX});
-        // bytecode->add({BC_MOV_RM, BC_REG_EAX, BC_REG_RCX, 4});
-        // bytecode->add({BC_LI, BC_REG_RAX});
-        // bytecode->addIm(5);
-        // bytecode->add({BC_INCR,BC_REG_SP, (u8)-4, (u8)-1});
+        // bytecode->add({BC_DATAPTR, BC_REG_RBX});
+        // bytecode->addIm(0);
+        // bytecode->add({BC_MOV_MR, BC_REG_RBX, BC_REG_AL, 1});
         
         if(bytecode)
             program = ConvertTox64(bytecode);
-        /*
-call fun
-xor rax, rax
-mov eax, dword ptr [rsp - 12]
-ret
-
-fun:
-//sub rsp, 4
-mov dword ptr [rsp - 4], 99
-//add rsp, 4
-ret
-        */
-        // program = Program_x64::Create();
-        // u8 arr[] = 
-        //     { 0xE8, 0x08, 0x00, 0x00, 0x00, 0x48, 0x31, 0xC0, 0x8B, 0x44, 0x24, 0xF4, 0xC3, 0xC7, 0x44, 0x24, 0xFC, 0x63, 0x00, 0x00, 0x00, 0xC3 }
-        // ;
-        // program->addRaw(arr, sizeof arr);
-        
-        // program->printHex();
 
         defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
         if(program){
+            #define OBJ_FILE "bin/dev.obj"
+            #define EXE_FILE "dev.exe"
+            WriteObjectFile(OBJ_FILE,program);
 
-            WriteObjectFile("objtest.obj",program);
+            // auto objFile = ObjectFile::DeconstructFile(OBJ_FILE, false);
+            // defer { ObjectFile::Destroy(objFile); };
 
             // link the object file and run the resulting executable
             // error level is printed because it's the only way to get
             // an output from the executable at the moment.
             // Printing and writing to files require linking to stdio.h or windows.
             i32 errorLevel = 0;
-            engone::StartProgram("","link objtest.obj /nologo /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
-            engone::StartProgram("","objtest",PROGRAM_WAIT,&errorLevel);
+            engone::StartProgram("","link " OBJ_FILE " /nologo /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
+            engone::StartProgram("",EXE_FILE,PROGRAM_WAIT,&errorLevel);
             log::out << "Error level: "<<errorLevel<<"\n";
         }
         #endif
 
-        // {
-        //     auto objFile = ObjectFile::DeconstructFile("obj_test.obj");
-        //     defer { ObjectFile::Destroy(objFile); };
-        //     objFile->writeFile("objtest.obj");
-        // }
-        // {
-        //     auto objFile = ObjectFile::DeconstructFile("objtest.obj");
-        //     defer { ObjectFile::Destroy(objFile); };
-        //     objFile->writeFile("objtest2.obj");
-        // }
+        {
+            // auto objFile = ObjectFile::DeconstructFile("obj_test.obj");
+            // defer { ObjectFile::Destroy(objFile); };
+            // objFile->writeFile("obj_min.obj");
+        }
+        {
+            // auto objFile = ObjectFile::DeconstructFile("obj_min.obj", false);
+            // defer { ObjectFile::Destroy(objFile); };
+            // objFile->writeFile("obj_min.obj");
+        }
 
         // Bytecode::Destroy(bytecode);
         

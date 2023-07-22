@@ -31,6 +31,8 @@
 #define BC_POP 31
 #define BC_LI 32
 
+#define BC_DATAPTR 40
+
 // TODO: You forgot about floating point comparisons!
 #define BC_EQ 50
 #define BC_NEQ  51
@@ -132,7 +134,8 @@ u8
 #define BC_REG_RDI (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_DI)
 
 #define BC_REG_PC (ENCODE_REG_SIZE_TYPE(BC_REG_64)|10)
-#define BC_REG_DP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|11)
+// data pointer shouldn't be messed with directly
+// #define BC_REG_DP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|11)
 
 
 // #define REG_AX 0b000

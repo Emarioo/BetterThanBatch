@@ -2,9 +2,12 @@
 
 #ifdef WIN32
 #define OS_WINDOWS
-#endif
-#ifdef _linux_
+#define OS_NAME "Windows"
+#elif defined(_linux_)
 #define OS_LINUX
+#define OS_NAME "Linux"
+#else
+#define OS_NAME "<os-none>"
 #endif
 /* ###############
    Major config
@@ -12,7 +15,7 @@
 
 // DEV_FILE defaults to dev.btb if none is specified
 #define DEV_FILE "examples/x64_test.btb"
-// #define COMPILE_x64
+#define COMPILE_x64
 
 #ifndef COMPILE_x64
 // #define SAVE_FP_IN_CALL_FRAME
@@ -68,8 +71,10 @@
 // type checker
 // #define TC_LOG
 #define GLOG
-#define ILOG
+// #define ILOG
 // #define ILOG_REGS
+// x64 converter
+#define CLOG
 
 // #define OLOG
 // #define USE_DEBUG_INFO
@@ -124,7 +129,7 @@ bool GetLog(int type);
 #ifdef TC_LOG
 #define _TC_LOG(x) x
 // #elif defined(DEBUG)
-// #define _TC_LOG(x) if(GetLog(LOG_INTERPRETER)){x;}
+// #define _TC_LOG(x) if(GetLog()){x;}
 #else
 #define _TC_LOG(x)
 #endif
@@ -143,6 +148,14 @@ bool GetLog(int type);
 #define _OLOG(x) if(GetLog(LOG_OPTIMIZER)){x;}
 #else
 #define _OLOG(x)
+#endif
+
+#ifdef CLOG
+#define _CLOG(x) x
+// #elif defined(DEBUG)
+// #define _CLOG(x) if(GetLog()){x;}
+#else
+#define _CLOG(x)
 #endif
 
 #ifdef ILOG

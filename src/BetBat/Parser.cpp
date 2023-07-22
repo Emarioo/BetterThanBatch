@@ -81,9 +81,10 @@ int OpPrecedence(int op){
     // use a map instead?
     switch (op){
         case AST_ASSIGN:
+            return 1;
+        case AST_OR:
             return 2;
         case AST_AND:
-        case AST_OR:
             return 3;
         case AST_LESS:
         case AST_GREATER:

@@ -248,9 +248,9 @@ bool AST::castable(TypeId from, TypeId to){
         return true;
     TypeId vp = AST_VOID;
     vp.setPointerLevel(1);
-    if(from.isPointer() && (to == vp || to==AST_UINT64))
+    if(from.isPointer() && (to == vp || to==AST_UINT64 || to==AST_INT64))
         return true;
-    if((from == vp||from==AST_UINT64) && to.isPointer())
+    if((from == vp||from==AST_UINT64||from==AST_INT64) && to.isPointer())
         return true;
     if (from == AST_FLOAT32 && AST::IsInteger(to)) {
         return true;
@@ -1517,9 +1517,11 @@ bool ASTEnum::getMember(const Token&name, int *out) {
 }
 
 bool AST::IsInteger(TypeId id) {
+    if(!id.isNormalType()) return false;
     return AST_UINT8 <= id.getId() && id.getId() <= AST_INT64;
 }
 bool AST::IsSigned(TypeId id) {
+    if(!id.isNormalType()) return false;
     return AST_INT8 <= id.getId() && id.getId() <= AST_INT64;
 }
 /* #region  */

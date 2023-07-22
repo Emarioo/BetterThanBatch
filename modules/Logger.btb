@@ -8,19 +8,48 @@
 */
 
 fn @hide _print(t: i64){
-    printi(t)
+    // If you are worried that this language will be filled with ifdefs like C/C++
+    // then you can calm down. This is just temporary.
+    // #ifndef X64
+    // printi(t)
+    // #else
+    
+    // optimise by using a log10 function to know how many characters you need.
+    // then allocate some memory for that space
+    // run a while looop filling up that memory
+    // then print all characters at once
+    // free memory
+    // One last thing, the memory should be allocated using a linear allocator
+    // or some other temporary allocator. Perhaps you can allocate it on the
+    // stack or something?
+
+    str: char[20];
+    used = 19;
+    while t > 0 && used > 0 {
+        num = t % 10;
+        str.ptr[used] = num + '0';
+        used--;
+        
+        t = t / 10;
+    }
+    str.ptr += used;
+    str.len -= used;
+    prints(str);
+    // #endif
 }
+#ifndef X64
 fn @hide _print(t: f32){
     printd(t)
 }
+#endif
 fn @hide _print(t: char){
-    printc(t)
+    prints(Slice<char>{&t, 1})
 }
 fn @hide _print(t: bool){
     if(t) prints("true");
     else prints("false");
 }
-fn @hide _print(t: Slice<char>){
+fn @hide _print(t: char[]){
     prints(t);
 }
 

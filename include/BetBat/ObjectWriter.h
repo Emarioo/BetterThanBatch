@@ -182,7 +182,7 @@ namespace COFF_Format {
             };
         } Name;
         u32 Value;
-        i16 SectionNumber;
+        i16 SectionNumber; // Starts from 1. A number less than that has special meaning like unknown/undefined
         // struct {
         //     Type_Representation_MSB complex;
         //     Type_Representation_LSB base;
@@ -224,7 +224,7 @@ struct ObjectFile {
 
     void writeFile(const std::string& path);
 
-    static ObjectFile* DeconstructFile(const std::string& path);
+    static ObjectFile* DeconstructFile(const std::string& path, bool silent = true);
 
     static void Destroy(ObjectFile* objectFile);
 };

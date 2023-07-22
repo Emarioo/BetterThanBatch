@@ -78,7 +78,7 @@ struct CompileInfo {
 
     DynamicArray<TokenStream*> streamsToClean{}; // streams which tokens are used somewhere.
 
-    NativeRegistry nativeRegistry{};
+    NativeRegistry* nativeRegistry = nullptr;
 };
 
 Bytecode* CompileSource(CompileOptions options);

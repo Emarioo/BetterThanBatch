@@ -29,7 +29,11 @@ NativeRegistry::NativeFunction* NativeRegistry::findFunction(const Token& name){
 }
 NativeRegistry::NativeFunction* NativeRegistry::findFunction(i64 jumpAddress){
     Assert(initialized);
-    return nativeFunctions.getPtr(-jumpAddress - 1);
+    auto pair = nativeFunctionMap2.find(jumpAddress);
+    if(pair == nativeFunctionMap2.end()){
+        return nullptr;
+    }
+    return nativeFunctions.getPtr(pair->second);
 }
 void NativeRegistry::initNativeContent(){
     Assert(!initialized);
@@ -72,4 +76,5 @@ void NativeRegistry::_addFunction(const std::string& name, const NativeFunction&
     nativeFunctions.last().name = name;
     // nativeFunctions.last().jumpAddress; // func contains this 
     nativeFunctionMap[name] = nativeFunctions.size()-1;
+    nativeFunctionMap2[func.jumpAddress] = nativeFunctions.size()-1;
 }

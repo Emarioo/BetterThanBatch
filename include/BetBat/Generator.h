@@ -35,7 +35,7 @@ struct GenInfo {
     u32 lastLocationIndex = (u32)-1;
     void pushNode(ASTNode* node);
     void popNode();
-    void addInstruction(Instruction inst);
+    void addInstruction(Instruction inst, bool bypassPushAndPop = false);
     void addLoadIm(u8 reg, i32 value);
 
     ASTFunction* currentFunction=nullptr;
@@ -74,13 +74,14 @@ struct GenInfo {
     int currentFrameOffset = 0;
     int functionStackMoment = 0;    
 
-    #ifndef SAVE_FP_IN_CALL_FRAME
-    static const int FRAME_SIZE=8;
-    // x64 just saves the instruction pointer (pc)
-    // interpreter may occasionally have this one too
-    #else
+    // #ifndef SAVE_FP_IN_CALL_FRAME
+    // static const int FRAME_SIZE=8;
+    // // x64 just saves the instruction pointer (pc)
+    // // interpreter may occasionally have this one too
+    // #else
+    // ITS ALWAYS 16 BECAUSE FP IS ACTUALLY SAVED, ALTOUGH MANUALLY INSTEAD OF INTERPRETER
     static const int FRAME_SIZE=16; // pc, fp
-    #endif
+    // #endif
 
     // Extra details
     // FuncImpl* recentFuncImpl=nullptr; // used by fncall

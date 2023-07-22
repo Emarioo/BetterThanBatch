@@ -78,6 +78,7 @@ struct NativeRegistry {
     static int initializations;
 
     std::unordered_map<std::string,u32> nativeFunctionMap;
+    std::unordered_map<i64,u32> nativeFunctionMap2;
 
     static NativeRegistry* Create();
     static void Destroy(NativeRegistry*);

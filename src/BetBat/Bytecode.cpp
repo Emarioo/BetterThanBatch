@@ -28,6 +28,7 @@ const char* InstToString(int type){
         CASE(BC_PUSH)
         CASE(BC_POP)
         CASE(BC_LI)
+        CASE(BC_DATAPTR)
 
         CASE(BC_EQ)
         CASE(BC_NEQ)
@@ -107,6 +108,10 @@ void Bytecode::cleanup(){
     dataSegment.resize(0);
     debugSegment.resize(0);
     debugLocations.cleanup();
+    if(nativeRegistry){
+        NativeRegistry::Destroy(nativeRegistry);
+        nativeRegistry = nullptr;
+    }
     // debugText.clear();
     // debugText.shrink_to_fit();
 }
@@ -125,7 +130,7 @@ const char* RegToStr(u8 reg){
 
         CASE(SP,sp)
         CASE(FP,fp)
-        CASE(DP,dp)
+        // CASE(DP,dp)
         CASE(RDI,rdi)
         CASE(RSI,rsi)
         case 0: return "";

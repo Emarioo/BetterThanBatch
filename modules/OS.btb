@@ -1,30 +1,38 @@
+/*
+    This is a file/module which contains functions that allows
+    you to interact with the operating system. Programs are 
+    useless without these functions.
+
+*/
+fn @hide @native prints(str: char[]) ;
+
+
+// intrinsics?
+// len is in bytes
+fn @hide @native memcpy(dst: void*, src: void*, len: u64);
+fn @hide @native memzero(dst: void*, len: u64);
+
+// Functions below are not supported in x64 converter
+#ifndef X64
+fn @hide @native printi(num: i64) ;
+fn @hide @native printd(num: f32) ;
+fn @hide @native printc(chr: char) ;
+
+fn @hide @native malloc(size: u64) -> void* ;
+fn @hide @native realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
+fn @hide @native free(ptr: void*, size: u64) ;
+
 // using u64 as File does not work since functions are evaluated
 // first and then using. Using won't be applied to functions.
 // A macro is used instead,or now.
-
 // File handle
 #define File u64
-
 enum @hide FileFlag {
     FILE_NO_FLAG=0,
     FILE_ONLY_READ=1,
     FILE_CAN_CREATE=2,
     FILE_WILL_CREATE=4,
 }
-
-fn @hide @native printi(num: i64) ;
-fn @hide @native printd(num: f32) ;
-fn @hide @native printc(chr: char) ;
-fn @hide @native prints(str: char[]) ;
-
-fn @hide @native malloc(size: u64) -> void* ;
-fn @hide @native realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
-fn @hide @native free(ptr: void*, size: u64) ;
-
-// intrinsics?
-fn @hide @native memcpy(dst: void*, src: void*, len: u64);
-fn @hide @native memzero(dst: void*, len: u64);
-
 // // returns file handle and file size
 fn @hide @native FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64;
 // returns read bytes
@@ -33,10 +41,6 @@ fn @hide @native FileRead(file: File, buffer: void*, readBytes: u64) -> u64 ;
 fn @hide @native FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 ;
 fn @hide @native FileClose(file: File) ;
 
-fn @hide @native DirectoryIteratorCreate(rootPath: char[]) -> DirectoryIterator*;
-fn @hide @native DirectoryIteratorDestroy(iterator: DirectoryIterator*);
-fn @hide @native DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
-fn @hide @native DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
 // The returned string is heap allocated in the interpreter.
 // This allocation is freed when the interpreter finishes.
@@ -49,6 +53,11 @@ fn @hide @native StartTimePoint() -> u64;
 fn @hide @native EndTimePoint(timepoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 
 fn @hide @native CmdLineArgs() -> Slice<Slice<char>>; // const?
+
+fn @hide @native DirectoryIteratorCreate(rootPath: char[]) -> DirectoryIterator*;
+fn @hide @native DirectoryIteratorDestroy(iterator: DirectoryIterator*);
+fn @hide @native DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+fn @hide @native DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
 struct @hide DirectoryIteratorData {
     name: char[]; // allocated by interpreter, the ptr should be const (char* const NOT const char*)
@@ -69,3 +78,4 @@ struct @hide DirectoryIterator {
         DirectoryIteratorSkip(this);
     }
 }
+#endif

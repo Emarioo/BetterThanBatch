@@ -73,7 +73,7 @@ void* Interpreter::getReg(u8 id){
         case BC_REG_SP: return &sp;
         case BC_REG_FP: return &fp;
         case BC_REG_PC: return &pc;
-        case BC_REG_DP: return &dp;
+        // case BC_REG_DP: return &dp;
         case BC_REG_RDI: return &rdi;
         case BC_REG_RSI: return &rsi;
     }
@@ -105,11 +105,9 @@ void yeah(int reg, void* from, void* to){
 void Interpreter::execute(Bytecode* bytecode){
     using namespace engone;
     Assert(bytecode);
-    NativeRegistry* nativeRegistry = bytecode->nativeRegistry;
-    NativeRegistry temp{};
-    if(!nativeRegistry){
-        temp.initNativeContent();
-        nativeRegistry = &temp;
+    if(!bytecode->nativeRegistry) {
+        bytecode->nativeRegistry = NativeRegistry::Create();
+        bytecode->nativeRegistry->initNativeContent();
     }
     
     _VLOG(log::out <<log::BLUE<< "##   Interpreter   ##\n";)
@@ -310,7 +308,7 @@ void Interpreter::execute(Bytecode* bytecode){
             // #undef GEN_BIT
             break;
         }
-        case BC_INCR:{
+        break; case BC_INCR:{
             u8 r0 = DECODE_REG0(inst);
             i16 offset = (i16)((i16)DECODE_REG1(inst) | ((i16)DECODE_REG2(inst)<<8));
             // log::out << "offset: "<<offset<<"\n";
@@ -320,8 +318,8 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out << "\n";)
             break;
         }
-        case BC_NOT:
-        case BC_BNOT:{
+        break; case BC_NOT:
+        break; case BC_BNOT:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
 
@@ -374,7 +372,7 @@ void Interpreter::execute(Bytecode* bytecode){
 
             break;
         }
-        case BC_MOV_MR:{
+        break; case BC_MOV_MR:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             i8 operandSize = (i8)DECODE_REG2(inst);
@@ -422,7 +420,7 @@ void Interpreter::execute(Bytecode* bytecode){
 
             break;
         }
-        case BC_MOV_RM:{
+        break; case BC_MOV_RM:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             i8 operandSize = (i8)DECODE_REG2(inst);
@@ -471,7 +469,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             break;
         }
-        case BC_MOV_RR:{
+        break; case BC_MOV_RR:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             if (DECODE_REG_SIZE_TYPE(r0) != DECODE_REG_SIZE_TYPE(r1)){
@@ -487,7 +485,7 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
             break;
         }
-        case BC_MEMZERO:{
+        break; case BC_MEMZERO:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             // u16 size = (u16)DECODE_REG1(inst) | ((u16)DECODE_REG2(inst)<<8);
@@ -516,12 +514,11 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out << " [0-"<<size<<"]\n";)
             break;
         }
-        case BC_LI:{
+        break; case BC_LI:{
             u8 r0 = DECODE_REG0(inst);
             
             void* out = getReg(r0);
             
-            void* datap = (codePtr + pc);
             i32 data = *(i32*)(codePtr + pc);
             pc++;
             
@@ -539,7 +536,20 @@ void Interpreter::execute(Bytecode* bytecode){
             }
             break;
         }
-        case BC_PUSH:{
+        break; case BC_DATAPTR: {
+            u8 r0 = DECODE_REG0(inst);
+            Assert(DECODE_REG_SIZE(r0) == 8);
+
+            u64* out = (u64*)getReg(r0);
+            u32 dataOffset = *(u32*)(codePtr + pc);
+            pc++;
+            
+            *out = dp + dataOffset;
+            
+            _ILOG(log::out << *out<<" = "<< dataOffset<<" + "<< dp <<"\n";)
+            break;
+        }
+        break; case BC_PUSH:{
             u8 r0 = DECODE_REG0(inst);
             int rsize = 1<<DECODE_REG_SIZE_TYPE(r0);
             rsize = 8;
@@ -572,7 +582,7 @@ void Interpreter::execute(Bytecode* bytecode){
             SP_CHANGE(-rsize)
             break;
         }
-        case BC_POP: {
+        break; case BC_POP: {
             u8 r0 = DECODE_REG0(inst);
             int rsize = 1<<DECODE_REG_SIZE_TYPE(r0);
             rsize = 8;
@@ -605,8 +615,7 @@ void Interpreter::execute(Bytecode* bytecode){
             SP_CHANGE(+rsize)
             break;
         }
-        case BC_CALL: {
-            void* addrp = (codePtr + pc);
+        break; case BC_CALL: {
             i32 addr = *(i32*)(codePtr + pc);
             pc++;
             
@@ -614,11 +623,11 @@ void Interpreter::execute(Bytecode* bytecode){
             // void* ptr = getReg(r0);
             // i64 addr = *((i64*)ptr);
             
-            _ILOG(log::out << "\n";)
+            _ILOG(log::out << addr<<"\n";)
             if(addr>(int)length){
                 log::out << log::YELLOW << "Call to instruction beyond all bytecode\n";
             }
-            // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
+            _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
             #ifdef SAVE_FP_IN_CALL_FRAME
             sp-=8;
             *((u64*) sp) = fp;
@@ -634,11 +643,12 @@ void Interpreter::execute(Bytecode* bytecode){
             #endif
             pc = addr;
             
-            // _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
+            _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
     
             // if((i64)addr<0){
             if(addr & ((const i64)1<<63)){
-                int argoffset = GenInfo::FRAME_SIZE;
+                int argoffset = GenInfo::FRAME_SIZE - 8; // native functions doesn't save
+                // the frame pointer. FRAME_SIZE is based on that you do so -8 to get just pc being saved
                 
                 // auto* nativeFunction = nativeRegistry->findFunction(addr);
                 // if(nativeFunction){
@@ -658,7 +668,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(u64*)(fp-8) = (u64)ptr;
                     break;
                 }
-                case NATIVE_realloc:{
+                break; case NATIVE_realloc:{
                     void* ptr = *(void**)(fp+argoffset+16);
                     u64 oldsize = *(u64*)(fp +argoffset + 8);
                     u64 size = *(u64*)(fp+argoffset);
@@ -669,7 +679,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(u64*)(fp-8) = (u64)ptr;
                     break;
                 }
-                case NATIVE_free:{
+                break; case NATIVE_free:{
                     void* ptr = *(void**)(fp+argoffset + 8);
                     u64 size = *(u64*)(fp+argoffset);
                     engone::Free(ptr,size);
@@ -677,7 +687,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
                     break;
                 }
-                case NATIVE_printi:{
+                break; case NATIVE_printi:{
                     i64 num = *(i64*)(fp+argoffset);
                     #ifdef ILOG
                     log::out << log::LIME<<"print: "<<num<<"\n";
@@ -686,7 +696,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_printd:{
+                break; case NATIVE_printd:{
                     float num = *(float*)(fp+argoffset+4);
                     #ifdef ILOG
                     log::out << log::LIME<<"print: "<<num<<"\n";
@@ -695,7 +705,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_printc: {
+                break; case NATIVE_printc: {
                     char chr = *(char*)(fp+argoffset + 7); // +7 comes from the alignment after char
                     #ifdef ILOG
                     log::out << log::LIME << "print: "<<chr<<"\n";
@@ -704,7 +714,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_prints: {
+                break; case NATIVE_prints: {
                     char* ptr = *(char**)(fp+argoffset);
                     u64 len = *(u64*)(fp+argoffset+8);
                     
@@ -721,7 +731,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_FileOpen:{
+                break; case NATIVE_FileOpen:{
                     // The order may seem strange but it's actually correct.
                     // It's just complicated.
                     // slice
@@ -740,7 +750,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(u64*)(fp-16) = (u64)file;
                     break;
                 }
-                case NATIVE_FileRead:{
+                break; case NATIVE_FileRead:{
                     // The order may seem strange but it's actually correct.
                     // It is just complicated.
                     // slice
@@ -756,7 +766,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     // *(u64*)(fp-16) = (u64)file;
                     break;
                 }
-                case NATIVE_FileWrite:{
+                break; case NATIVE_FileWrite:{
                     // The order may seem strange but it's actually correct.
                     // It is just complicated.
                     // slice
@@ -772,7 +782,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     // *(u64*)(fp-16) = (u64)file;
                     break;
                 }
-                case NATIVE_FileClose:{
+                break; case NATIVE_FileClose:{
                     u64 file = *(u64*)(fp+argoffset);
                     FileClose((APIFile)file);
                     #ifdef VLOG
@@ -780,7 +790,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_DirectoryIteratorCreate:{
+                break; case NATIVE_DirectoryIteratorCreate:{
                     // slice
                     char* strptr = *(char**)(fp+argoffset + 0);
                     u64 len = *(u64*)(fp+argoffset+8);
@@ -802,7 +812,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(Language::DirectoryIterator**)(fp-8) = iterator;
                     break;
                 }
-                case NATIVE_DirectoryIteratorDestroy:{
+                break; case NATIVE_DirectoryIteratorDestroy:{
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
                     
                     RecursiveDirectoryIteratorDestroy((RecursiveDirectoryIterator)iterator->_handle);
@@ -820,7 +830,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     engone::Free(iterator,sizeof(Language::DirectoryIterator));
                     break;
                 }
-                case NATIVE_DirectoryIteratorNext:{
+                break; case NATIVE_DirectoryIteratorNext:{
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
                     
                     DirectoryIteratorData result{};
@@ -851,7 +861,7 @@ void Interpreter::execute(Bytecode* bytecode){
                         *(Language::DirectoryIteratorData**)(fp-8) = nullptr;
                     break;
                 }
-                case NATIVE_DirectoryIteratorSkip:{
+                break; case NATIVE_DirectoryIteratorSkip:{
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
                     
                     RecursiveDirectoryIteratorSkip((RecursiveDirectoryIterator)iterator->_handle);
@@ -861,7 +871,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_CurrentWorkingDirectory:{
+                break; case NATIVE_CurrentWorkingDirectory:{
                     
                     std::string temp = GetWorkingDirectory();
                     Assert(temp.length()<CWD_LIMIT);
@@ -875,7 +885,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_StartTimePoint:{
+                break; case NATIVE_StartTimePoint:{
                     auto timePoint = MeasureTime();
                     
                     *(u64*)(fp-8) = (u64)timePoint;
@@ -885,7 +895,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_EndTimePoint:{
+                break; case NATIVE_EndTimePoint:{
                     u64 timePoint = *(u64*)(fp+argoffset + 0);
 
                     double time = StopMeasure(timePoint);
@@ -896,7 +906,7 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                case NATIVE_CmdLineArgs:{
+                break; case NATIVE_CmdLineArgs:{
                     *(Language::Slice<char>**)(fp - 16) = cmdArgs.ptr;
                     *(u64*)(fp - 8) = cmdArgs.len;
                     #ifdef VLOG
@@ -904,13 +914,19 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
-                default:{
-                    auto* nativeFunction = nativeRegistry->findFunction(addr);
+                break; default:{
+                    auto* nativeFunction = bytecode->nativeRegistry->findFunction(addr);
                     if(nativeFunction){
-                        _ILOG(log::out << log::RED << "Native '"<<nativeFunction->name<<"' ("<<addr<<") has no impl. in interpreter\n";)
+                        // _ILOG(
+                        log::out << log::RED << "Native '"<<nativeFunction->name<<"' ("<<addr<<") has no impl. in interpreter\n";
+                        // )
                     } else {
-                        _ILOG(log::out << log::RED << addr<<" is not a native function\n";)
+                        // _ILOG(
+                        log::out << log::RED << addr<<" is not a native function\n";
+                        // )
                     }
+                    // break from loop after a few times?
+                    // break won't work in switch statement.
                 }
                 } // switch
                 // jump to BC_RET case
@@ -919,7 +935,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             break;
         }
-        case BC_RET: {
+        break; case BC_RET: {
             _ILOG(log::out <<"\n";)
             
             TINY_GOTO:
@@ -941,7 +957,7 @@ void Interpreter::execute(Bytecode* bytecode){
             
             break;
         }
-        case BC_JMP: {
+        break; case BC_JMP: {
             // load immediate
             // u32 data = *(u32*)bytecode->get(pc);
             u32 data = *(u32*)(codePtr + pc);
@@ -952,8 +968,8 @@ void Interpreter::execute(Bytecode* bytecode){
             pc = data;
             break;
         }
-        case BC_JE:
-        case BC_JNE: {
+        break; case BC_JE:
+        break; case BC_JNE: {
             u8 r0 = DECODE_REG0(inst);
 
             // u32 data = *(u32*)bytecode->get(pc);
@@ -978,14 +994,14 @@ void Interpreter::execute(Bytecode* bytecode){
             bool yes=false;
             switch (opcode){
                 case BC_JE: yes = testValue!=0; break;
-                case BC_JNE: yes = testValue==0; break;
+                break; case BC_JNE: yes = testValue==0; break;
             }
             if(yes){
                 pc = data;
             }
             break;
         }
-        case BC_CAST: {
+        break; case BC_CAST: {
             u8 type = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             u8 r2 = DECODE_REG2(inst);
@@ -1098,7 +1114,7 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out <<"\n";)
             break;
         }
-        case BC_MEMCPY: {
+        break; case BC_MEMCPY: {
             u8 r0 = DECODE_REG0(inst); // dst
             u8 r1 = DECODE_REG1(inst); // src
             u8 r2 = DECODE_REG2(inst); // size
@@ -1128,6 +1144,7 @@ void Interpreter::execute(Bytecode* bytecode){
             void* dst = *(void**)dstp;
             void* src = *(void**)srcp;
             memcpy(dst,src,size);
+            _ILOG(log::out << "\n";)
             // log::out << "copied "<<size<<" bytes\n";
             break;
         }
