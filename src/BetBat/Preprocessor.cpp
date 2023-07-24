@@ -524,6 +524,26 @@ int ParseImport(PreprocInfo& info, bool attempt){
     
     return PARSE_SUCCESS;
 }
+int ParseLink(PreprocInfo& info, bool attempt){
+    using namespace engone;
+    MEASURE;
+    Token token = info.get(info.at()+1);
+    int result = ParseDirective(info, attempt, "link");
+    if(result==PARSE_BAD_ATTEMPT)
+        return PARSE_BAD_ATTEMPT;
+
+    Token name = info.get(info.at()+1);
+    if(!(name.flags&TOKEN_MASK_QUOTED)){
+        ERR_HEAD(name, "expected a string not "<<name<<"\n";
+        )
+        return PARSE_ERROR;
+    }
+    info.next();
+    
+    info.compileInfo->addLinkDirective(name);
+    
+    return PARSE_SUCCESS;
+}
 int ParseInclude(PreprocInfo& info, bool attempt){
     using namespace engone;
     MEASURE;
@@ -1845,6 +1865,8 @@ int ParseToken(PreprocInfo& info){
         result = ParseInclude(info,true);
     if(result == PARSE_BAD_ATTEMPT)
         result = ParseImport(info,true);
+    if(result == PARSE_BAD_ATTEMPT)
+        result = ParseLink(info,true);
     
     if(result==PARSE_SUCCESS)
         return result;

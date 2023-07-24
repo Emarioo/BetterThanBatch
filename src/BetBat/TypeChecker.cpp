@@ -994,6 +994,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         }
         auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, nullptr);
         outTypes->add(ti);
+        expr->versions_castType[info.currentPolyVersion] = ti;
     } else if(expr->typeId == AST_CAST){
         DynamicArray<TypeId> temp{};
         Assert(expr->left);
@@ -1009,6 +1010,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             )
         }
         outTypes->add(ti);
+        expr->versions_castType[info.currentPolyVersion] = ti;
         
         if(!info.ast->castable(temp.last(),ti)){
             std::string strleft = info.ast->typeToString(temp.last());
@@ -1047,17 +1049,20 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         //     // expr->typeId = ti;
         //     *outType = ti;
         // }
-        if(expr->castType.isString()){
-            bool printedError = false;
-            auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
-            if (ti.isValid()) {
-            } else if(!printedError){
-                ERR_HEAD(expr->tokenRange, "Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.\n";
-                )
-            }
-            // expr->castType = ti; // don't if polymorphic scope
-            outTypes->add(ti);
-        }
+        Assert(!expr->castType.isValid());
+        // castType should be used with AST_CAST or AST_INITIALIZER, which is handled above
+        // we don't deal with it here. I don't even think this works with the poly version system
+        // if(expr->castType.isString()){
+        //     bool printedError = false;
+        //     auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
+        //     if (ti.isValid()) {
+        //     } else if(!printedError){
+        //         ERR_HEAD(expr->tokenRange, "Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.\n";
+        //         )
+        //     }
+        //     // expr->castType = ti; // don't if polymorphic scope
+        //     outTypes->add(ti);
+        // }
         if(expr->typeId.getId() < AST_TRUE_PRIMITIVES){
             outTypes->add(expr->typeId);
         }
@@ -1369,11 +1374,14 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
                 funcImpl->structImpl = parentStruct->nonPolyStruct;
             DynamicArray<TypeId> retTypes{}; // @unused
             bool yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, &retTypes);
-            CheckInfo::CheckImpl checkImpl{};
-            checkImpl.astFunc = function;
-            checkImpl.funcImpl = funcImpl;
-            // checkImpl.scope = scope;
-            info.checkImpls.add(checkImpl);
+            
+            if(function->body){
+                CheckInfo::CheckImpl checkImpl{};
+                checkImpl.astFunc = function;
+                checkImpl.funcImpl = funcImpl;
+                // checkImpl.scope = scope;
+                info.checkImpls.add(checkImpl);
+            }
 
             _TC_LOG(log::out << "ADD OVERLOAD ";funcImpl->print(info.ast, function);log::out<<"\n";)
         }
@@ -1399,7 +1407,7 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
     
     for(auto fn : scope->functions){
         CheckFunction(info, fn, nullptr, scope);
-        if(!fn->nativeCode){
+        if(fn->body){ // external/native function do not have bodies
             // Assert(fn->body || info.compileInfo->errors!=0);
             // if(fn->body){
                 int result = CheckFunctions(info, fn->body);
@@ -1409,7 +1417,7 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
     for(auto it : scope->structs){
         for(auto fn : it->functions){
             CheckFunction(info, fn , it, scope);
-            if(!fn->nativeCode){
+            if(fn->body){ // external/native function do not have bodies
                 int result = CheckFunctions(info, fn->body);
             }
         }
@@ -1848,14 +1856,8 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     while(info.checkImpls.size()!=0){
         auto checkImpl = info.checkImpls[info.checkImpls.size()-1];
         info.checkImpls.pop();
-
-        // Assert(!checkImpl.astFunc->nativeCode);
-        if(!checkImpl.astFunc->nativeCode){
-            Assert(checkImpl.astFunc->body || info.compileInfo!=0);
-            if(checkImpl.astFunc->body){
-                CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl);
-            }
-        }
+        Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
+        CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl);
     }
     
     info.compileInfo->errors += info.errors;

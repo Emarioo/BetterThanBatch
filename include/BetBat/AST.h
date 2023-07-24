@@ -4,6 +4,7 @@
 #include "Engone/Alloc.h"
 #include "BetBat/Util/Array.h"
 
+#include "BetBat/x64_Converter.h"
 
 typedef u32 ScopeId;
 struct ASTStruct;
@@ -90,10 +91,17 @@ struct ASTNode {
     TokenRange tokenRange{};
     // TODO: Some of these do not need to exist in
     // every type of node
-    bool nativeCode=false;
     bool hidden=false;
     bool reverse=false;
     bool pointer=false;
+    LinkConventions linkConvention = LinkConventions::NONE;
+    CallConventions callConvention = BETCALL;
+
+    // A lot of places need to know whether a function has a body.
+    // When function should have a body or not has changed a lot recently
+    // and I have needed to rewrite a lot. Having the requirement abstracted in
+    // a function will prevent some of the changes you would need to make.
+    bool needsBody() { return linkConvention == LinkConventions::NONE;}
 };
 typedef u32 PolyId;
 template<class T>
@@ -292,7 +300,8 @@ struct FuncImpl {
     DynamicArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
     void print(AST* ast, ASTFunction* astFunc);
-    static const u64 INVALID_FUNC_ADDRESS = 0;
+    static const u64 ADDRESS_INVALID = 0; // undefined or not address that hasn't been set
+    static const u64 ADDRESS_EXTERNAL = 1;
 };
 struct Identifier {
     Identifier() {}
@@ -360,6 +369,7 @@ struct ASTExpression : ASTNode {
     ASTExpression* left=0; // FNCALL has arguments in order left to right
     ASTExpression* right=0;
     TypeId castType={};
+    OperationType assignOpType = (OperationType)0;
 
     // TypeId finalType={}; // evaluated by type checker
 
@@ -372,9 +382,11 @@ struct ASTExpression : ASTNode {
     // the array containing the overload may be resized.
     PolyVersions<FnOverloads::Overload> versions_overload{};
 
+    // you could use a union with some of these to save memory
+    // outTypeSizeof and castType could perhaps be combined?
     PolyVersions<int> versions_constStrIndex{};
-
     PolyVersions<TypeId> versions_outTypeSizeof{};
+    PolyVersions<TypeId> versions_castType{};
 
     void printArgTypes(AST* ast, DynamicArray<TypeId>& argTypes);
 
@@ -670,7 +682,7 @@ struct AST {
     void appendToMainBody(ASTScope* body);
     
     ASTScope* createBody();
-    ASTFunction* createFunction(const Token& name);
+    ASTFunction* createFunction();
     ASTStruct* createStruct(const Token& name);
     ASTEnum* createEnum(const Token& name);
     ASTStatement* createStatement(ASTStatement::Type type);

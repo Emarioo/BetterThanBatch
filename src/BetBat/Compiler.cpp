@@ -66,7 +66,21 @@ Path::Path(const std::string& path) : text(path), _type((Type)0) {
     }
 #endif
 }
-    
+std::string Path::getFormat() const {
+    int index = text.find(".");
+    if(index == std::string::npos || index + 1 == text.length()) {
+        return "";
+    }
+    return text.substr(index+1);
+}
+Path Path::getFileName(bool withoutFormat) const {
+    std::string name = TrimDir(text);
+    int index = name.find(".");
+    if(index == std::string::npos || index + 1 == text.length()) {
+        return name;
+    }
+    return name.substr(0,index);
+}
 Path Path::getAbsolute() const {
     if(isAbsolute()) return *this;
 
@@ -86,6 +100,35 @@ Path Path::getDirectory() const {
         return Path("/");
     }
     return text.substr(0,lastSlash+1);
+}
+
+const char* ToString(TargetPlatform target){
+    #define CASE(X,N) case X: return N;
+    switch(target){
+        CASE(WINDOWS_x64,"win-x64")
+        CASE(LINUX_x64,"linux-x64")
+        CASE(BYTECODE,"bytecode")
+    }
+    return "unknown";
+    #undef CASE
+}
+engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
+    return logger << ToString(target);
+}
+TargetPlatform ToTarget(const std::string& str){
+    #define CASE(N,X) if (str==X) return N;
+    CASE(WINDOWS_x64,"win-x64")
+    CASE(LINUX_x64,"linux-x64")
+    CASE(BYTECODE,"bytecode")
+    return UNKNOWN_TARGET;
+    #undef CASE
+}
+void CompileInfo::addLinkDirective(const std::string& name){
+    for(int i=0;i<linkDirectives.size();i++){
+        if(name == linkDirectives[i])
+            return;
+    }
+    linkDirectives.add(name);
 }
 void CompileInfo::cleanup(){
     for(auto& pair : tokenStreams){
@@ -145,6 +188,8 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
         return false;
     }
     info.addStream(tokenStream);
+
+    // tokenStream->printData();
     
     if (tokenStream->enabled & LAYER_PREPROCESSOR) {
         
@@ -271,21 +316,26 @@ Bytecode* CompileSource(CompileOptions options) {
     }
 
     const char* essentialStructs = 
-    "struct Slice<T> {"
-    // "struct @hide Slice<T> {"
+    // "struct Slice<T> {"
+    "struct @hide Slice<T> {"
         "ptr: T*;"
         "len: u64;"
     "}\n"
-    "struct Range {" 
-    // "struct @hide Range {" 
+    // "struct Range {" 
+    "struct @hide Range {" 
         "beg: i32;"
         "end: i32;"
     "}\n"
     #ifdef COMPILE_x64
     "#define X64\n"
     #endif
+    #ifdef OS_WINDOWS
+    "#define OS_WINDOWS\n"
+    #elif defined(OS_LINUX)
+    "#define OS_LINUX\n"
+    #endif
     ;
-    ParseFile(compileInfo, "<base-structs>","",(char*)essentialStructs, strlen(essentialStructs));
+    ParseFile(compileInfo, "<base>","",(char*)essentialStructs, strlen(essentialStructs));
 
     if(options.rawSource.data){
         ParseFile(compileInfo, "<raw-data>","",(char*)options.rawSource.data, options.rawSource.used);
@@ -340,6 +390,7 @@ Bytecode* CompileSource(CompileOptions options) {
     if(bytecode) {
         bytecode->nativeRegistry = compileInfo.nativeRegistry;
         compileInfo.nativeRegistry = nullptr;
+        bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
     }
     compileInfo.cleanup();
     return bytecode;
@@ -366,7 +417,70 @@ void RunBytecode(Bytecode* bytecode, const std::vector<std::string>& userArgs){
     interpreter.execute(bytecode);
     interpreter.cleanup();
 }
+void CompileAndExport(CompileOptions options, Path outPath){
+    using namespace engone;
+    Bytecode* bytecode = nullptr;
+    // doing switch statement directly to see if the target is implemented
+    switch(options.target){
+        case BYTECODE: {
+            bytecode = CompileSource(options);
+            bool yes = ExportBytecode(outPath, bytecode);
+            Bytecode::Destroy(bytecode);
+            if(yes)
+                log::out << log::LIME<<"Exported "<<options.initialSourceFile.text << " into bytecode in "<<outPath.text<<"\n";
+            else
+                log::out <<log::RED <<"Failed exporting "<<options.initialSourceFile.text << " into bytecode in "<<outPath.text<<"\n";
+        }
+        break; case WINDOWS_x64: {
+            // TODO: The user may not want the temporary object files to end up in bin
 
+            bytecode = CompileSource(options);
+            Program_x64* program = nullptr;
+            
+            if(bytecode)
+                program = ConvertTox64(bytecode);
+
+            if(program){
+                auto format = outPath.getFormat();
+                bool outputIsObject = format == "o" || format == "obj";
+
+                if(outputIsObject){
+                    WriteObjectFile(outPath.text,program);
+                    log::out << log::LIME<<"Exported "<<options.initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
+                } else {
+                    std::string objPath = "bin/" + outPath.getFileName(true).text + ".obj";
+                    WriteObjectFile(objPath,program);
+
+                    std::string cmd = "link /nologo ";
+                    cmd += objPath + " ";
+                    // cmd += "bin/NativeLayer.lib ";
+                    // cmd += "uuid.lib ";
+                    for (int i = 0;i<bytecode->linkDirectives.size();i++) {
+                        auto& dir = bytecode->linkDirectives[i];
+                        cmd += dir + " ";
+                    }
+                    cmd += "/DEFAULTLIB:LIBCMT ";
+                    cmd += "/OUT:" + outPath.text+" ";
+
+                    int exitCode = 0;
+                    engone::StartProgram("",(char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                    // msvc linker returns a fatal error as exit code
+                    if(exitCode == 0)
+                        log::out << log::LIME<<"Exported "<<options.initialSourceFile.text << " into an executable: "<<outPath.text<<".\n";
+                }
+            } else {
+                log::out <<log::RED <<"Failed converting "<<options.initialSourceFile.text << " to x64 program.\n";
+            }
+            if(bytecode)
+                Bytecode::Destroy(bytecode);
+            if(program)
+                Program_x64::Destroy(program); 
+        }
+        break; default: {
+            log::out << log::RED << "Target " << options.target << " is missing some implementations.\n";
+        }
+    }
+}
 struct BTBCHeader{
     u32 magicNumber = 0x13579BDF;
     char humanChars[4] = {'B','T','B','C'};
@@ -375,6 +489,7 @@ struct BTBCHeader{
     u32 codeSize = 0;
     u32 dataSize = 0;
 };
+
 bool ExportBytecode(Path filePath, const Bytecode* bytecode){
     using namespace engone;
     Assert(bytecode);
@@ -390,11 +505,12 @@ bool ExportBytecode(Path filePath, const Bytecode* bytecode){
 
     // TOOD: Check error when writing files
     int err = FileWrite(file, &header, sizeof(header));
-    if(err!=-1)
+    if(err!=-1 && bytecode->codeSegment.data){
         err = FileWrite(file, bytecode->codeSegment.data, header.codeSize);
-    if(err!=-1)
+    }
+    if(err!=-1 && bytecode->dataSegment.data) {
         err = FileWrite(file, bytecode->dataSegment.data, header.dataSize);
-
+    }
     // debugSegment is ignored
 
     FileClose(file);

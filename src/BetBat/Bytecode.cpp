@@ -1,11 +1,16 @@
 #include "BetBat/Bytecode.h"
 
+// included to get CallConventions
+#include "BetBat/x64_Converter.h"
+
 const char* InstToString(int type){
     #define CASE(x) case x: return #x;
     switch(type){
         CASE(BC_MOV_RR)
         CASE(BC_MOV_RM)
+        CASE(BC_MOV_RM_DISP32)
         CASE(BC_MOV_MR)
+        CASE(BC_MOV_MR_DISP32)
         
         CASE(BC_MODI)
         CASE(BC_MODF)
@@ -84,6 +89,12 @@ uint32 Bytecode::getMemoryUsage(){
         ;
     return sum;
 }
+void Bytecode::addExternalRelocation(const std::string& name, u32 location){
+    ExternalRelocation tmp{};
+    tmp.name = name;
+    tmp.location = location;
+    externalRelocations.add(tmp);
+}
 bool Bytecode::add(Instruction instruction){
     if(codeSegment.max == codeSegment.used){
         if(!codeSegment.resize(codeSegment.max*2 + 25*sizeof(Instruction)))
@@ -133,6 +144,10 @@ const char* RegToStr(u8 reg){
         // CASE(DP,dp)
         CASE(RDI,rdi)
         CASE(RSI,rsi)
+
+        CASE(R8,r8)
+        CASE(R9,r9)
+
         case 0: return "";
     }
     #undef CASE
@@ -149,8 +164,10 @@ void Instruction::print(){
     //     log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::SILVER;
     } else if(opcode==BC_CAST)
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<op0<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::SILVER;
-    else if(opcode==BC_MOV_MR||opcode==BC_MOV_RM)
+    else if(opcode==BC_MOV_MR||opcode==BC_MOV_RM||opcode==BC_MOV_MR_DISP32||opcode==BC_MOV_RM_DISP32)
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<op2<<log::SILVER;
+    else if(opcode==BC_CALL)
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY <<" "<< (LinkConventions)op0 << " "<< (CallConventions)op1 <<log::SILVER;
     else
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::SILVER;
     
@@ -236,11 +253,13 @@ int Bytecode::appendData(const void* data, int size){
 //         debugText[oldIndex-1] += std::string(str,length);
 //     }
 // }
-Bytecode::Location* Bytecode::getLocation(u32 instructionIndex){
+Bytecode::Location* Bytecode::getLocation(u32 instructionIndex, u32* locationIndex){
     using namespace engone;
     if(instructionIndex>=debugSegment.used)
         return nullptr;
     u32 index = *((u32*)debugSegment.data + instructionIndex);
+    if(locationIndex)
+        *locationIndex = index;
     return debugLocations.getPtr(index); // may return nullptr;
 }
 Bytecode::Location* Bytecode::setLocationInfo(const char* str, u32 instructionIndex){

@@ -35,8 +35,9 @@ struct GenInfo {
     u32 lastLocationIndex = (u32)-1;
     void pushNode(ASTNode* node);
     void popNode();
-    void addInstruction(Instruction inst, bool bypassPushAndPop = false);
+    void addInstruction(Instruction inst, bool bypassAsserts = false);
     void addLoadIm(u8 reg, i32 value);
+    void addCall(LinkConventions linkConvention, CallConventions callConvention);
 
     ASTFunction* currentFunction=nullptr;
     FuncImpl* currentFuncImpl=nullptr;
@@ -65,7 +66,8 @@ struct GenInfo {
         int bcIndex = 0;
         FuncImpl* funcImpl = nullptr;
     };
-    std::vector<ResolveCall> callsToResolve;
+    DynamicArray<ResolveCall> callsToResolve;
+    void addCallToResolve(int bcIndex, FuncImpl* funcImpl);
 
     // TODO: avoid vector and unordered_map. resizing vector may do unwanted things with the map (like whole a copy).
     // std::vector<FunctionScope*> functionScopes;

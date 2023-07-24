@@ -489,10 +489,9 @@ ASTEnum *AST::createEnum(const Token &name) {
     ptr->name = name;
     return ptr;
 }
-ASTFunction *AST::createFunction(const Token &name) {
+ASTFunction *AST::createFunction() {
     auto ptr = (ASTFunction *)engone::Allocate(sizeof(ASTFunction));
     new(ptr) ASTFunction();
-    ptr->name = name;
     return ptr;
 }
 ASTExpression *AST::createExpression(TypeId type) {
@@ -1605,9 +1604,9 @@ void ASTFunction::print(AST *ast, int depth) {
         }
         if (returnValues.size()!=0)
             log::out << "\n";
-        if(nativeCode){
+        if(linkConvention != LinkConventions::NONE){
             PrintSpace(depth+1);
-            log::out << "Native\n";
+            log::out << "Native/External\n";
         }else{
             if(body){
                 body->print(ast, depth + 1);

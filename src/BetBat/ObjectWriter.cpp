@@ -461,7 +461,7 @@ void ObjectFile::writeFile(const std::string& path) {
     // TODO: remove unnecessary strings
     finalSize += stringTableSize;
 
-    log::out << "Final Size: "<<finalSize<<"\n";
+    // log::out << "Final Size: "<<finalSize<<"\n";
     
     // finalSize += 16 * (2 * sectionIndices.size()); // potential alignment for raw data and relocations in eaach section
 
@@ -597,7 +597,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
     COFF_File_Header* header = (COFF_File_Header*)(outData + outOffset);
     outOffset+=COFF_File_Header::SIZE;
 
-    header->Machine = IMAGE_FILE_MACHINE_AMD64;
+    header->Machine = (Machine_Flags)IMAGE_FILE_MACHINE_AMD64;
     header->Characteristics = (COFF_Header_Flags)0;
     header->NumberOfSections = 0; // incremented later
     header->NumberOfSymbols = 0; // incremented later
@@ -669,7 +669,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
             COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
             outOffset += COFF_Relocation::SIZE;
             
-            coffReloc->Type = IMAGE_REL_AMD64_REL32;
+            coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
             coffReloc->VirtualAddress = dataRelocation.textOffset;
 
             auto pair = dataSymbolMap.find(dataRelocation.dataOffset);
@@ -691,7 +691,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
             COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
             outOffset += COFF_Relocation::SIZE;
             
-            coffReloc->Type = IMAGE_REL_AMD64_REL32;
+            coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
             coffReloc->VirtualAddress = namedRelocation.textOffset;
 
             auto pair = namedSymbolMap.find(namedRelocation.name);
@@ -724,8 +724,8 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         sprintf(symbol->Name.ShortName,"$d%u",i);
         symbol->SectionNumber = dataSectionNumber;
         symbol->Value = dataSymbols[i];
-        symbol->StorageClass = IMAGE_SYM_CLASS_EXTERNAL;
-        // symbol->StorageClass = IMAGE_SYM_CLASS_STATIC;
+        symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
+        // symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_STATIC;
         symbol->Type = 0;
         symbol->NumberOfAuxSymbols = 0;
     }
@@ -744,8 +744,8 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         }
         symbol->SectionNumber = 0; // doesn't belong to a known section
         symbol->Value = 0; // unknown for named symbols
-        symbol->StorageClass = IMAGE_SYM_CLASS_EXTERNAL;
-        symbol->Type = 0; // should perhaps be a function?
+        symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
+        symbol->Type = 32; // should perhaps be a function?
         // symbol->Type = IMAGE_SYM_DTYPE_FUNCTION;
         symbol->NumberOfAuxSymbols = 0;
     }
@@ -760,8 +760,8 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         strcpy(symbol->Name.ShortName, "main");
         symbol->SectionNumber = textSectionNumber;
         symbol->Value = 0; // address of main function?
-        symbol->StorageClass = IMAGE_SYM_CLASS_EXTERNAL;
-        symbol->Type = IMAGE_SYM_DTYPE_FUNCTION;
+        symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
+        symbol->Type = 32; // IMAGE_SYM_DTYPE_FUNCTION is a macro which evaluates to 2
         symbol->NumberOfAuxSymbols = 0;
     }
 

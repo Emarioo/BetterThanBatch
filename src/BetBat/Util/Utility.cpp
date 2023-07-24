@@ -115,14 +115,14 @@ const char* FormatTime(double seconds){
 
 std::string TrimLastFile(const std::string& path){
     int slashI = path.find_last_of("/");
-    if(slashI==-1)
+    if(slashI==std::string::npos)
         return "/";
     return path.substr(0,slashI + 1);
 }
 std::string TrimDir(const std::string& path){
     int slashI = path.find_last_of("/");
-    if(slashI==-1)
-        return "/";
+    if(slashI==std::string::npos)
+        return path;
     return path.substr(slashI+1);
 }
 std::string BriefPath(const std::string& path, int max){

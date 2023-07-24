@@ -8,6 +8,7 @@
 #include "BetBat/NativeRegistry.h"
 #include "BetBat/ObjectWriter.h"
 #include "BetBat/x64_Converter.h"
+#include "BetBat/UserProfile.h"
 
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
@@ -25,10 +26,21 @@ struct Path {
     // Nothing happens if it already is in absolute form
     Path getAbsolute() const;
     Path getDirectory() const;
+    Path getFileName(bool withoutFormat = false) const;
+    std::string getFormat() const;
 
     std::string text{};
     u32 _type = 0;
 };
+enum TargetPlatform : u32 {
+    UNKNOWN_TARGET,
+    BYTECODE,
+    WINDOWS_x64,
+    LINUX_x64,
+};
+const char* ToString(TargetPlatform target);
+engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target);
+TargetPlatform ToTarget(const std::string& str);
 struct CompileOptions {
     CompileOptions() = default;
     // CompileOptions(engone::Memory<char> source) : rawSource(source) {}
@@ -45,6 +57,7 @@ struct CompileOptions {
     std::vector<Path> importDirectories; // Additional directories where imports can be found.
     bool silent=false;
     std::vector<std::string> userArgs;
+    TargetPlatform target = BYTECODE;
 };
 struct CompileInfo {
     void cleanup();
@@ -58,9 +71,25 @@ struct CompileInfo {
     std::unordered_map<std::string, TokenStream*> includeStreams;
 
     std::vector<Path> importDirectories;
+    DynamicArray<std::string> linkDirectives; // passed to the linker, not with interpreter
+    // duplicates will be ignored
+    void addLinkDirective(const std::string& name);
 
     bool addStream(TokenStream* stream);
     FileInfo* getStream(const Path& name);
+
+    // TODO: Don't use macros when deciding target platform
+    TargetPlatform targetPlatform = 
+    #ifdef COMPILE_x64
+    #ifdef OS_WINDOWS
+    TargetPlatform::WINDOWS_x64
+    #elif defined(OS_LINUX)
+    TargetPlatform::LINUX_x64
+    #endif
+    #else
+    TargetPlatform::BYTECODE
+    #endif
+    ;
     
     int typeErrors=0; // used in generator to avoid printing the same errors
     int errors=0;
@@ -83,6 +112,8 @@ struct CompileInfo {
 
 Bytecode* CompileSource(CompileOptions options);
 void CompileAndRun(CompileOptions options);
+void CompileAndExport(CompileOptions options, Path outPath);
+
 // Content of userArgs is copied
 void RunBytecode(Bytecode* bytecode, const std::vector<std::string>& userArgs);
 bool ExportBytecode(Path filePath, const Bytecode* bytecode);

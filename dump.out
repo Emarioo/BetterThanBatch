@@ -2,5 +2,196 @@ Microsoft (R) COFF/PE Dumper Version 14.36.32535.0
 Copyright (C) Microsoft Corporation.  All rights reserved.
 
 
-Dump of file obj_min.obj
-LINK : fatal error LNK1181: cannot open input file 'obj_min.obj'
+Dump of file bin\obj_test.obj
+
+File Type: COFF OBJECT
+
+FILE HEADER VALUES
+            8664 machine (x64)
+               6 number of sections
+        64BD9D39 time date stamp Sun Jul 23 23:35:53 2023
+             24F file pointer to symbol table
+              14 number of symbols
+               0 size of optional header
+               0 characteristics
+
+SECTION HEADER #1
+.drectve name
+       0 physical address
+       0 virtual address
+      2F size of raw data
+     104 file pointer to raw data (00000104 to 00000132)
+       0 file pointer to relocation table
+       0 file pointer to line numbers
+       0 number of relocations
+       0 number of line numbers
+  100A00 flags
+         Info
+         Remove
+         1 byte align
+
+RAW DATA #1
+  00000000: 20 20 20 2F 44 45 46 41 55 4C 54 4C 49 42 3A 22     /DEFAULTLIB:"
+  00000010: 4C 49 42 43 4D 54 22 20 2F 44 45 46 41 55 4C 54  LIBCMT" /DEFAULT
+  00000020: 4C 49 42 3A 22 4F 4C 44 4E 41 4D 45 53 22 20     LIB:"OLDNAMES" 
+
+   Linker Directives
+   -----------------
+   /DEFAULTLIB:LIBCMT
+   /DEFAULTLIB:OLDNAMES
+
+SECTION HEADER #2
+.debug$S name
+       0 physical address
+       0 virtual address
+      9C size of raw data
+     133 file pointer to raw data (00000133 to 000001CE)
+       0 file pointer to relocation table
+       0 file pointer to line numbers
+       0 number of relocations
+       0 number of line numbers
+42100040 flags
+         Initialized Data
+         Discardable
+         1 byte align
+         Read Only
+
+RAW DATA #2
+  00000000: 04 00 00 00 F1 00 00 00 90 00 00 00 52 00 01 11  ....ñ.......R...
+  00000010: 00 00 00 00 43 3A 5C 55 73 65 72 73 5C 64 61 74  ....C:\Users\dat
+  00000020: 61 6F 5C 44 65 73 6B 74 6F 70 5C 42 61 63 6B 75  ao\Desktop\Backu
+  00000030: 70 5C 43 6F 64 65 50 72 6F 6A 65 63 74 73 5C 42  p\CodeProjects\B
+  00000040: 65 74 74 65 72 54 68 61 6E 42 61 74 63 68 5C 62  etterThanBatch\b
+  00000050: 69 6E 5C 6F 62 6A 5F 74 65 73 74 2E 6F 62 6A 00  in\obj_test.obj.
+  00000060: 3A 00 3C 11 00 62 00 00 D0 00 13 00 24 00 17 7F  :.<..b..Ð...$...
+  00000070: 00 00 13 00 24 00 17 7F 00 00 4D 69 63 72 6F 73  ....$.....Micros
+  00000080: 6F 66 74 20 28 52 29 20 4F 70 74 69 6D 69 7A 69  oft (R) Optimizi
+  00000090: 6E 67 20 43 6F 6D 70 69 6C 65 72 00              ng Compiler.
+
+SECTION HEADER #3
+.text$mn name
+       0 physical address
+       0 virtual address
+      14 size of raw data
+     1CF file pointer to raw data (000001CF to 000001E2)
+     1E3 file pointer to relocation table
+       0 file pointer to line numbers
+       1 number of relocations
+       0 number of line numbers
+60500020 flags
+         Code
+         16 byte align
+         Execute Read
+
+RAW DATA #3
+  00000000: 48 83 EC 28 FF 15 00 00 00 00 B8 DF 03 00 00 48  H.ì(ÿ.....¸ß...H
+  00000010: 83 C4 28 C3                                      .Ä(Ã
+
+RELOCATIONS #3
+                                                Symbol    Symbol
+ Offset    Type              Applied To         Index     Name
+ --------  ----------------  -----------------  --------  ------
+ 00000006  REL32                      00000000         9  __imp_printme
+
+SECTION HEADER #4
+  .xdata name
+       0 physical address
+       0 virtual address
+       8 size of raw data
+     1ED file pointer to raw data (000001ED to 000001F4)
+       0 file pointer to relocation table
+       0 file pointer to line numbers
+       0 number of relocations
+       0 number of line numbers
+40300040 flags
+         Initialized Data
+         4 byte align
+         Read Only
+
+RAW DATA #4
+  00000000: 01 04 01 00 04 42 00 00                          .....B..
+
+SECTION HEADER #5
+  .pdata name
+       0 physical address
+       0 virtual address
+       C size of raw data
+     1F5 file pointer to raw data (000001F5 to 00000200)
+     201 file pointer to relocation table
+       0 file pointer to line numbers
+       3 number of relocations
+       0 number of line numbers
+40300040 flags
+         Initialized Data
+         4 byte align
+         Read Only
+
+RAW DATA #5
+  00000000: 00 00 00 00 14 00 00 00 00 00 00 00              ............
+
+Function Table #5 (1)
+
+           Begin     End       Info
+
+  00000000 00000000  00000014  00000000
+
+RELOCATIONS #5
+                                                Symbol    Symbol
+ Offset    Type              Applied To         Index     Name
+ --------  ----------------  -----------------  --------  ------
+ 00000000  ADDR32NB                   00000000         B  $LN3
+ 00000004  ADDR32NB                   00000014         B  $LN3
+ 00000008  ADDR32NB                   00000000         E  $unwind$main
+
+SECTION HEADER #6
+ .chks64 name
+       0 physical address
+       0 virtual address
+      30 size of raw data
+     21F file pointer to raw data (0000021F to 0000024E)
+       0 file pointer to relocation table
+       0 file pointer to line numbers
+       0 number of relocations
+       0 number of line numbers
+     A00 flags
+         Info
+         Remove
+         (no align specified)
+
+RAW DATA #6
+  00000000: 23 07 66 15 27 1A BF 1A 9E 8C 41 16 32 CA 95 7C  #.f.'.¿...A.2Ê.|
+  00000010: 73 F1 8A E4 45 03 CE 4F 2D 88 67 F0 28 F3 9E F5  sñ.äE.ÎO-.gð(ó.õ
+  00000020: 8A E7 24 84 B4 23 3F F0 00 00 00 00 00 00 00 00  .ç$.´#?ð........
+
+COFF SYMBOL TABLE
+000 01047F17 ABS    notype       Static       | @comp.id
+001 80010190 ABS    notype       Static       | @feat.00
+002 00000002 ABS    notype       Static       | @vol.md
+003 00000000 SECT1  notype       Static       | .drectve
+    Section length   2F, #relocs    0, #linenums    0, checksum        0
+005 00000000 SECT2  notype       Static       | .debug$S
+    Section length   9C, #relocs    0, #linenums    0, checksum        0
+007 00000000 SECT3  notype       Static       | .text$mn
+    Section length   14, #relocs    1, #linenums    0, checksum F0F35156
+009 00000000 UNDEF  notype       External     | __imp_printme
+00A 00000000 SECT3  notype ()    External     | main
+00B 00000000 SECT3  notype       Label        | $LN3
+00C 00000000 SECT4  notype       Static       | .xdata
+    Section length    8, #relocs    0, #linenums    0, checksum  FC539D1
+00E 00000000 SECT4  notype       Static       | $unwind$main
+00F 00000000 SECT5  notype       Static       | .pdata
+    Section length    C, #relocs    3, #linenums    0, checksum F8F13FD1
+011 00000000 SECT5  notype       Static       | $pdata$main
+012 00000000 SECT6  notype       Static       | .chks64
+    Section length   30, #relocs    0, #linenums    0, checksum        0
+
+String Table Size = 0x2B bytes
+
+  Summary
+
+          30 .chks64
+          9C .debug$S
+          2F .drectve
+           C .pdata
+          14 .text$mn
+           8 .xdata

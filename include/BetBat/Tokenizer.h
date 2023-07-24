@@ -151,6 +151,8 @@ struct TokenStream {
     // copies everything except tokens
     bool copyInfo(TokenStream& out);
     bool copy(TokenStream& out);
+
+    void writeToFile(const std::string& path);
     
     TokenStream* copy();
 
@@ -193,6 +195,7 @@ bool IsDecimal(const Token& token);
 bool IsHexadecimal(const Token& token);
 u64 ConvertHexadecimal(const Token& token);
 bool Equal(const Token& token, const char* str);
+bool StartsWith(const Token& token, const char* str);
 
 // I would recommend testing on a large text for more accurate results.
 void PerfTestTokenize(const engone::Memory<char>& textData, int times=1);

@@ -4,7 +4,9 @@
 
 #define BC_MOV_RR 1
 #define BC_MOV_RM 2
-#define BC_MOV_MR 3
+#define BC_MOV_RM_DISP32 3
+#define BC_MOV_MR 4
+#define BC_MOV_MR_DISP32 5
 
 #define BC_MODI 8
 #define BC_MODF 9
@@ -102,6 +104,10 @@ u8
 #define BC_SI 7
 #define BC_DI 8
 
+// These are used with calling conventions
+#define BC_R8 9
+#define BC_R9 10
+
 // BC_REG_ALL can't be 0 because it's seen as no register so we do 8.
 #define BC_REG_AL (ENCODE_REG_SIZE_TYPE(BC_REG_8)|BC_AX)
 #define BC_REG_BL (ENCODE_REG_SIZE_TYPE(BC_REG_8)|BC_BX)
@@ -133,10 +139,15 @@ u8
 #define BC_REG_RSI (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_SI)
 #define BC_REG_RDI (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_DI)
 
+
+#define BC_REG_R8 (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_R8)
+#define BC_REG_R9 (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_R9)
+
 #define BC_REG_PC (ENCODE_REG_SIZE_TYPE(BC_REG_64)|10)
 // data pointer shouldn't be messed with directly
 // #define BC_REG_DP (ENCODE_REG_SIZE_TYPE(BC_REG_64)|11)
 
+#define MISALIGNMENT(X,ALIGNMENT) ((ALIGNMENT - (X) % ALIGNMENT) % ALIGNMENT)
 
 // #define REG_AX 0b000
 // #define REG_CX 0b001
@@ -185,12 +196,25 @@ struct Bytecode {
         std::string file{};
         std::string desc{};
         std::string preDesc{};
+        void* stream = nullptr;
+        // You are not supposed to access any content in the stream. It is just here to compare against other stream pointers.
+        // GenInfo::addInstruction needs the stream pointer.
     };
     DynamicArray<Location> debugLocations;
 
+    DynamicArray<std::string> linkDirectives;
+
     NativeRegistry* nativeRegistry = nullptr;
 
-    Location* getLocation(u32 instructionIndex);
+    struct ExternalRelocation {
+        std::string name;
+        u32 location=0;
+    };
+    // Relocation for external functions
+    DynamicArray<ExternalRelocation> externalRelocations;
+    void addExternalRelocation(const std::string& name,  u32 location);
+
+    Location* getLocation(u32 instructionIndex, u32* locationIndex = nullptr);
     Location* setLocationInfo(const TokenRange& token, u32 InstructionIndex=-1, u32* locationIndex = nullptr);
     Location* setLocationInfo(const char* preText, u32 InstructionIndex=-1);
     // use same location as said register

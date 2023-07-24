@@ -61,14 +61,18 @@ for /r %%i in (*.cpp) do (
 echo | set /p="Compiling..."
 set /a startTime=6000*( 100%time:~3,2% %% 100 ) + 100* ( 100%time:~6,2% %% 100 ) + ( 100%time:~9,2% %% 100 )
 
+SET compileSuccess=0
+
 if !USE_MSVC!==1 (
     cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:!output!
+    SET compileSuccess=!errorlevel!
     @REM cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! /Ycpch.h src/pch.cpp
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Yupch.h /Fobin/all.obj /link !MSVC_LINK_OPTIONS! pch.obj shell32.lib /OUT:bin/program.exe
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfiles! /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:bin/program.exe
 )
 if !USE_GCC!==1 (
     g++ !GCC_WARN! !GCC_COMPILE_OPTIONS! !GCC_INCLUDE_DIRS! !GCC_DEFINITIONS! !srcfile! -o !output!
+    SET compileSuccess=!errorlevel!
 )
 
 set /a endTime=6000*(100%time:~3,2% %% 100 )+100*(100%time:~6,2% %% 100 )+(100%time:~9,2% %% 100 )
@@ -77,19 +81,25 @@ set /a finS2=(endTime-startTime)%%100
 
 echo Compiled in %finS%.%finS2% seconds
 
-if !errorlevel! == 0 (
+@REM Not using MSVC_COMPILE_OPTIONS because debug information may be added
+cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS src\BetBat\External\NativeLayer.cpp /Fo:bin/NativeLayer.obj
+lib bin/NativeLayer.obj /OUT:bin/NativeLayer.lib
+@REM dumpbin /ALL bin/External/NativeLayer.obj > nat.out
+
+if !compileSuccess! == 0 (
     echo f | XCOPY /y /q !output! prog.exe > nul
 
-    cl /c /std:c11 /Tc src/BetBat/obj_test.c /Fo: bin/obj_test.obj /nologo
-    @REM dumpbin obj_test.obj /ALL > dump.out
+    @REM cl /c /std:c11 /Tc src/BetBat/obj_test.c /Fo: bin/obj_test.obj /nologo
+    @REM dumpbin bin/obj_test.obj /ALL > dump.out
 
-    @REM link obj_test.obj
+    @REM link bin/obj_test.obj bin/NativeLayer.obj
 
     @REM obj_test
 
-    prog -dev
-    dumpbin bin/dev.obj /ALL > dev.out
-    dumpbin obj_min.obj /ALL > dump.out
+    @REM prog -dev
+    prog examples/x64_test.btb -target win-x64 -out test.exe
+    @REM dumpbin bin/dev.obj /ALL > dev.out
+    @REM dumpbin bin/obj_min.obj /ALL > min.out
 
     @REM link objtest.obj /DEFAULTLIB:LIBCMT
 

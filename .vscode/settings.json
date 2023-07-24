@@ -68,7 +68,9 @@
         "xloctime": "cpp",
         "xtree": "cpp",
         "*.rh": "cpp",
-        "windows.h": "c"
+        "windows.h": "c",
+        "winbase.h": "c",
+        "errhandlingapi.h": "c"
     },
     "cmake.configureOnOpen": false
 }

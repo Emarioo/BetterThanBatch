@@ -1117,6 +1117,7 @@ namespace engone {
 			si.dwFlags |= STARTF_USESTDHANDLES;
 			inheritHandles = true;
 		}
+		inheritHandles = true;
 		 
 		int slashIndex = path.find_last_of("\\");
     

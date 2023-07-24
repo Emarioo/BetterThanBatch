@@ -1,4 +1,6 @@
-#import "OS"
+// #import "OS"
+
+fn @native prints(str: char[]);
 
 /*
     The reason functions are named "print" and not "log"
@@ -7,6 +9,8 @@
     if the language took that name from you.
 */
 
+// IMPORTANT: SAFE_CONVERSIONS in x64_Converter must be defined for this function to work properly.
+//  There will be some unexpected bits otherwise.
 fn @hide _print(t: i64){
     // If you are worried that this language will be filled with ifdefs like C/C++
     // then you can calm down. This is just temporary.
@@ -32,29 +36,29 @@ fn @hide _print(t: i64){
         
         t = t / 10;
     }
-    str.ptr += used;
-    str.len -= used;
+    str.ptr += used + 1;
+    str.len -= used - 1;
     prints(str);
     // #endif
 }
-#ifndef X64
-fn @hide _print(t: f32){
-    printd(t)
-}
-#endif
-fn @hide _print(t: char){
-    prints(Slice<char>{&t, 1})
-}
-fn @hide _print(t: bool){
-    if(t) prints("true");
-    else prints("false");
-}
-fn @hide _print(t: char[]){
-    prints(t);
-}
+// #ifndef X64
+// fn @hide _print(t: f32){
+//     printd(t)
+// }
+// #endif
+// fn @hide _print(t: char){
+//     prints(Slice<char>{&t, 1})
+// }
+// fn @hide _print(t: bool){
+//     if(t) prints("true");
+//     else prints("false");
+// }
+// fn @hide _print(t: char[]){
+//     prints(t);
+// }
 
-// macros does not travel across imports yet ):
-// Now they do haha!
-#define print(X,...) _print(X); print(...);
-#define print()
-#define println(...) print(...); _print("\n");
+// // macros does not travel across imports yet ):
+// // Now they do haha!
+// #define print(X,...) _print(X); print(...);
+// #define print()
+// #define println(...) print(...); _print("\n");

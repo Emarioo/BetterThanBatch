@@ -1714,7 +1714,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
 
                 if(nowOp==AST_ASSIGN){
                     Assert(assignOps.size()>0);
-                    val->castType = assignOps.back();
+                    val->assignOpType = assignOps.back();
                     assignOps.pop_back();
                 }
             }
@@ -1996,34 +1996,83 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     info.next();
     attempt = false;
 
-    bool hideAnnotation = false;
-    bool nativeAnnotation = false;
+    function = info.ast->createFunction();
+    function->tokenRange.firstToken = fnToken;
+    function->tokenRange.endIndex = info.at()+1;;
+
+    bool needsExplicitCallConvention = false;
+    bool specifiedConvention = false;
+    Token linkToken{};
 
     Token name = info.next();
     while (IsAnnotation(name)){
+        // NOTE: The reason that @extern-stdcall is used instead of @extern @stdcall is to prevent
+        //   the programmer from making mistakes. With two annotations, they may forget to specify the calling convention.
+        //   Calling convention is very important. If extern and call convention is combined then they won't forget.
         if(Equal(name,"@hide")){
-                hideAnnotation=true;
+            function->hidden=true;
+        } else if (Equal(name,"@dllimport")){
+            function->callConvention = CallConventions::STDCALL;
+            specifiedConvention = true;
+            function->linkConvention = LinkConventions::DLLIMPORT;
+            needsExplicitCallConvention = true;
+            linkToken = name;
+        } else if (Equal(name,"@extern")){
+            function->callConvention = CallConventions::STDCALL;
+            specifiedConvention = true;
+            function->linkConvention = LinkConventions::EXTERNAL;
+            needsExplicitCallConvention = true;
+            linkToken = name;
+        } else if (Equal(name,"@stdcall")){
+            function->callConvention = CallConventions::STDCALL;
+            specifiedConvention = true;
+        // cdecl has not been implemented. It doesn't seem important.
+        // default x64 calling convention is used.
+        // } else if (Equal(name,"@cdecl")){
+        //     Assert(false); // not implemented in type checker and generator. type checker might work as is.
+        //     function->callConvention = CallConventions::CDECL_CONVENTION;
+        //     specifiedConvention = true;
+        } else if (Equal(name,"@betcall")){
+            function->callConvention = CallConventions::BETCALL;
+            function->linkConvention = LinkConventions::NONE;
+            specifiedConvention = true;
+        // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
         } else if (Equal(name,"@native")){
-                nativeAnnotation=true;
-        // } else if(Equal(name,"@export")) {
+            function->linkConvention = NATIVE;
+        } else if (Equal(name,"@intrinsic")){
+            function->callConvention = CallConventions::INTRINSIC;
+            function->linkConvention = NATIVE;
         } else {
-            WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                WARN_LINE(info.at(),"unknown");
+            // It should not warn you because it is quite important that you use the right annotations with functions
+            // Mispelling external or the calling convention would be very bad.
+            ERR_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                ERR_LINE(info.at(),"unknown");
+
+                // if(StartsWith(name, "@extern")) {
+                //     log::out << log::YELLOW << "Did you mean @extern-stdcall or @extern-cdecl\n";
+                // }
             )
         }
         name = info.next();
         continue;
     }
+    if(function->linkConvention != LinkConventions::NONE){
+        function->hidden = true;
+        // native doesn't use a calling convention
+        if(needsExplicitCallConvention && !specifiedConvention){
+            ERR_HEAD(name, "You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @cdecl instead.\n\n";
+                ERR_LINE(name.tokenIndex, "missing call convention");
+            )
+        }
+    }
     
     if(!IsName(name)){
+        info.ast->destroy(function);
+        function = nullptr;
         ERR_HEAD(name,"expected a valid name, "<<name<<" is not.\n";)
         return PARSE_ERROR;
     }
-    
-    function = info.ast->createFunction(name);
-    function->tokenRange.firstToken = fnToken;
-    function->hidden = hideAnnotation;
-    function->nativeCode = nativeAnnotation;
+    function->name = name;
 
     ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId);
     function->scopeId = funcScope->id;
@@ -2216,7 +2265,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                 info.next();
                 continue;
             } else {
-                if(nativeAnnotation)
+                if(function->linkConvention != LinkConventions::NONE)
                     break;
                 if(!printedErrors){
                     printedErrors=true;
@@ -2237,14 +2286,14 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     
     if(Equal(bodyTok,";")){
         info.next();
-        if(!function->nativeCode){
+        if(function->needsBody()){
             ERR_HEAD(bodyTok,"Functions must have a body. You have forgotten the body when defining '"<<function->name<<"'. Declarations and definitions happen at the same time in this language. This is possible because of out of order compilation.\n\n";
                 ERR_LINE(bodyTok.tokenIndex,"replace with {}");
             )
         }
     } else if(Equal(bodyTok,"{")){
-        if(nativeAnnotation) {
-            ERR_HEAD(bodyTok,"Native function cannot have a function body. It is provided by the language.\n\n";
+        if(!function->needsBody()) {
+            ERR_HEAD(bodyTok,"Native/external functions cannot have a body. Native functions are handled by the language. External functions link to functions outside your source code.\n\n";
                 ERR_LINE(bodyTok.tokenIndex,"use ; instead");
             )
         }
@@ -2254,15 +2303,10 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         int result = ParseBody(info,body, function->scopeId);
         info.functionScopes.pop();
         function->body = body;
-    } else if(!nativeAnnotation){ // body isn't required with native function
+    } else if(function->needsBody()) {
         ERR_HEAD(bodyTok,"Function has no body! Did the return types parse incorrectly? Use curly braces to define the body.\n\n";
             ERR_LINE(bodyTok.tokenIndex,"expected {");
         )
-    }
-
-    if(!function->body && !function->nativeCode){
-        info.ast->destroy(function);
-        function = nullptr;
     }
 
     return PARSE_SUCCESS;

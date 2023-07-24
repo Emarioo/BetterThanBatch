@@ -1,5 +1,7 @@
 #include "BetBat/Tokenizer.h"
 
+#include "Engone/PlatformLayer.h"
+
 bool IsInteger(const Token& token){
     if(token.flags & TOKEN_MASK_QUOTED) return false;
     for(int i=0;i<token.length;i++){
@@ -69,6 +71,12 @@ int ConvertInteger(const Token& token){
 }
 bool Equal(const Token& token, const char* str){
     return !(token.flags&TOKEN_MASK_QUOTED) && token == str;
+}
+bool StartsWith(const Token& token, const char* str){
+    if(token.flags&TOKEN_MASK_QUOTED)
+        return false;
+    int len = strlen(str);
+    return len <= token.length && !strncmp(token.str, str, len);
 }
 bool IsHexadecimal(const Token& token){
     if(token.flags & TOKEN_MASK_QUOTED) return false;
@@ -561,6 +569,34 @@ void TokenStream::printTokens(int tokensPerLine, bool showlncol){
         log::out << "\n";
     // log::out << "$END$";
 }
+void TokenStream::writeToFile(const std::string& path){
+    using namespace engone;
+    auto file = FileOpen(path, nullptr, FILE_WILL_CREATE);
+    Assert(file);
+    #define WRITE(X, L) FileWrite(file, X, L);
+    for(int j=0;j<(int)tokens.used;j++){
+        Token& token = *((Token*)tokens.data + j);
+        
+        if(token.flags&TOKEN_DOUBLE_QUOTED)
+            WRITE("\"",1);
+            
+        if(token.flags&TOKEN_SINGLE_QUOTED)
+            WRITE("'",1);
+    
+        WRITE(token.str, token.length);
+
+        if(token.flags&TOKEN_DOUBLE_QUOTED)
+            WRITE("\"",1);
+        if(token.flags&TOKEN_SINGLE_QUOTED)
+            WRITE("'",1);
+        if(token.flags&TOKEN_SUFFIX_LINE_FEED)
+            WRITE("\n",1);
+        if(token.flags&TOKEN_SUFFIX_SPACE)
+            WRITE(" ",1);
+    }
+    #undef WRITE
+    FileClose(file);
+}
 void TokenStream::print(){
     using namespace engone;
     Assert(isFinialized());
@@ -980,6 +1016,8 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
             // _TLOG(log::out << " : Add " << token << "\n";)
             
             canBeDot=false;
+            isNumber=false;
+            
             outStream->addToken(token);
             token = {};
             _TLOG(log::out << "\n";)

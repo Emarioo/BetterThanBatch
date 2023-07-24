@@ -102,12 +102,30 @@ void yeah(int reg, void* from, void* to){
         
     // _ILOG(log::out << (*(i64*)to)<<"\n";)
 }
+void PrintPointer(void* ptr){
+    u64 v = (u64)ptr;
+    engone::log::out << "0x";
+    bool zeros = true;
+    for(int i=60;i>=0;i-=4){
+        u64 n = (v >> i) & 0xF;
+        if(n == 0 && zeros)
+            continue;
+        zeros = false;
+        char chr = n < 10 ? n + '0' : n - 10 + 'A';
+        engone::log::out << chr; 
+    }
+}
 void Interpreter::execute(Bytecode* bytecode){
-    using namespace engone;
+    using namespace engone; 
     Assert(bytecode);
     if(!bytecode->nativeRegistry) {
         bytecode->nativeRegistry = NativeRegistry::Create();
         bytecode->nativeRegistry->initNativeContent();
+    }
+
+    if(bytecode->externalRelocations.size()>0){
+        log::out << log::RED << "Interpreter does not support external relocations! Remove @extern annotations.\n";
+        return;
     }
     
     _VLOG(log::out <<log::BLUE<< "##   Interpreter   ##\n";)
@@ -372,7 +390,8 @@ void Interpreter::execute(Bytecode* bytecode){
 
             break;
         }
-        break; case BC_MOV_MR:{
+        break; case BC_MOV_MR:
+        case BC_MOV_MR_DISP32:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             i8 operandSize = (i8)DECODE_REG2(inst);
@@ -385,49 +404,50 @@ void Interpreter::execute(Bytecode* bytecode){
             u64* fromptr = (u64*)getReg(r0);
             void* from = (void*)(*fromptr); // NOTE: Program can crash here
             void* to = getReg(r1);
+
+            i32 disp = 0;
+            if(opcode==BC_MOV_MR_DISP32){
+                disp = *(i32*)(codePtr + pc);
+                pc++;
+                from = (void*)((u64)from + disp);
+            }
             
             if(((uint64)from % operandSize) != 0){
                 log::out << log::RED<<"r0 (pointer: "<<(uint64)from<<") not aligned by "<<operandSize<<" bytes\n";
                 continue;
             }
-            // SET_TO_FROM(r1)
-            // yeah(r1,from,to);
-            // int size = DECODE_REG_SIZE_TYPE(reg);
+            u64 value = 0;
             if(operandSize==1){
-                *((u8* ) to) = *((u8* ) from);
-                _ILOG(log::out << (*(i8*)to);)
+                value = *((u8* ) to) = *((u8* ) from);
+                // _ILOG(log::out << (*(i8*)to);)
             }else if(operandSize==2) {
-                *((u16*) to) = *((u16*) from);
-                _ILOG(log::out << (*(i16*)to);)
+                value = *((u16*) to) = *((u16*) from);
+                // _ILOG(log::out << (*(i16*)to);)
             }else if(operandSize==4)   { 
-                *((u32*) to) = *((u32*) from);
-                _ILOG(log::out << (*(i32*)to);)
+                value = *((u32*) to) = *((u32*) from);
+                // _ILOG(log::out << (*(i32*)to);)
             }else if(operandSize==8){
-                *((u64*) to) = *((u64*) from);
-                _ILOG(log::out << (*(i64*)to);)
+                value = *((u64*) to) = *((u64*) from);
+                // _ILOG(log::out << (*(i64*)to);)
             }else 
                 log::out <<log::RED <<"bad set to from\n";
-        
-            
-            // *((u64*) to) = 0;
-            // if(DECODE_REG_SIZE_TYPE(r1)==BC_REG_8) *((u8* ) to) = *((u8* ) from);
-            // if(DECODE_REG_SIZE_TYPE(r1)==BC_REG_16) *((u16*) to) = *((u16*) from);
-            // if(DECODE_REG_SIZE_TYPE(r1)==BC_REG_32) *((u32*) to) = *((u32*) from);
-            // if(DECODE_REG_SIZE_TYPE(r1)==BC_REG_64) *((u64*) to) = *((u64*) from);
 
-            // _ILOG(log::out << " = "<<(*(u64*)to)<<"\n";)
+            
+            _ILOG(log::out << value << " = [";PrintPointer(from);
+            if(disp!=0)
+                log::out << " + "<<disp;
+            log::out <<"]";)
+
             _ILOG(log::out <<"\n";)
 
             break;
         }
-        break; case BC_MOV_RM:{
+        break; case BC_MOV_RM:
+        case BC_MOV_RM_DISP32:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
             i8 operandSize = (i8)DECODE_REG2(inst);
             Assert(operandSize==1 || operandSize==2||operandSize==4||operandSize==8);
-
-            // i8 offset = (i8)DECODE_REG2(inst);
-            // Assert(offset == 0);
 
             if(DECODE_REG_SIZE_TYPE(r1) != BC_REG_64){
                 log::out << log::RED<<"r1 (pointer) must use 64 bit registers\n";
@@ -437,34 +457,38 @@ void Interpreter::execute(Bytecode* bytecode){
             void* from = getReg(r0);
             void* to = (void*)(*toptr); // NOTE: Program can crash here
 
-            // SET_TO_FROM(r0)
-            
+            i32 disp = 0;
+            if(opcode==BC_MOV_RM_DISP32){
+                disp = *(i32*)(codePtr + pc);
+                pc++;
+                to = (void*)((u64)to + disp);
+            }
+
             if(((uint64)to % operandSize) != 0){
                 log::out << log::RED<<"r1 (pointer: "<<(uint64)from<<") not aligned by "<<operandSize<<" bytes\n";
                 continue;
             }
+            u64 value = 0;
             if(operandSize==1){
-                *((u8* ) to) = *((u8* ) from);
-                _ILOG(log::out << (*(i8*)to);)
+                value = *((u8* ) to) = *((u8* ) from);
+                // _ILOG(log::out << (*(i8*)to);)
             }else if(operandSize==2) {
-                *((u16*) to) = *((u16*) from);
-                _ILOG(log::out << (*(i16*)to);)
+                value = *((u16*) to) = *((u16*) from);
+                // _ILOG(log::out << (*(i16*)to);)
             }else if(operandSize==4)   { 
-                *((u32*) to) = *((u32*) from);
-                _ILOG(log::out << (*(i32*)to);)
+                value = *((u32*) to) = *((u32*) from);
+                // _ILOG(log::out << (*(i32*)to);)
             }else if(operandSize==8){
-                *((u64*) to) = *((u64*) from);
-                _ILOG(log::out << (*(i64*)to);)
+                value = *((u64*) to) = *((u64*) from);
+                // _ILOG(log::out << (*(i64*)to);)
             }else 
                 log::out <<log::RED <<"bad set to from\n";
-        
-            // yeah(r0,from,to);
-            // *((u64*) to) = 0;
-            // if(r1&BC_REG_8 ) *((u8* ) to) = *((u8* ) from);
-            // if(r1&BC_REG_16) *((u16*) to) = *((u16*) from);
-            // if(r1&BC_REG_32) *((u32*) to) = *((u32*) from);
-            // if(r1&BC_REG_64) *((u64*) to) = *((u64*) from);
-
+            
+            _ILOG(log::out << "[";PrintPointer(to);
+            if(disp!=0)
+                log::out << " + "<<disp;
+            log::out <<"]" << " = " << value;)
+            
             _ILOG(log::out <<"\n";)
             
             break;
@@ -619,7 +643,9 @@ void Interpreter::execute(Bytecode* bytecode){
             i32 addr = *(i32*)(codePtr + pc);
             pc++;
             
-            // u8 r0 = DECODE_REG0(inst);
+            LinkConventions linkConvention = (LinkConventions)DECODE_REG0(inst);
+            CallConventions callConvention = (CallConventions)DECODE_REG1(inst);
+            Assert(linkConvention == LinkConventions::NONE || linkConvention==LinkConventions::NATIVE);
             // void* ptr = getReg(r0);
             // i64 addr = *((i64*)ptr);
             
@@ -646,7 +672,7 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
     
             // if((i64)addr<0){
-            if(addr & ((const i64)1<<63)){
+            if(linkConvention == LinkConventions::NATIVE){
                 int argoffset = GenInfo::FRAME_SIZE - 8; // native functions doesn't save
                 // the frame pointer. FRAME_SIZE is based on that you do so -8 to get just pc being saved
                 

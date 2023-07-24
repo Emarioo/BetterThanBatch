@@ -1,0 +1,15 @@
+struct Options {
+name: char[];
+arg: u32;
+time: u32;
+target: char[];
+}
+options: Options;
+options.name = "Okay";
+options.arg = 23;
+options.time = -233;
+options.target = "Chicken";
+options.name = "Woaw";
+options.time = 92;
+options.target = "superb";
+;

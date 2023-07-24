@@ -1,0 +1,8 @@
+hello = shit
+// okat
+default-target = "win-x64"
+/*
+waiting
+*/
+" for you!" = "sour thumb "
+neat = "sour thumb"

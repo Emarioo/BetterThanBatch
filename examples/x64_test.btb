@@ -1,59 +1,36 @@
 // #import "OS"
 // #import "./factorial"
-// #import "Logger"
-// #ifndef X64
-// fn @native printi(n: i64);
-// fn @native printc(n: char);
-fn @native prints(n: char[]);
-// #endif
 
-// fn @native memzero(dst: void*, len: u64);
-// fn @native memcpy(dst: void*, src: void*, len: u64);
+#import "Logger"
 
+// #link "uuid.lib" // not necessary for some reason
+#link "bin/NativeLayer.lib"
 
-// _print(13352)
+fn @dllimport GetStdHandle(num: u32) -> void*;
+fn @dllimport WriteFile(file: void*, buffer: void*, bytes: u32, 
+    writtenBytes: u32*, overlapped: void*) -> bool;
+fn @dllimport GetLastError() -> u32;
 
-// t: u64 = 1395
+fn @extern printme() -> u32;
 
-// str: char[20];
-// used: u64 = 19;
-// while t > 0 && used > 0 {
-//     num = t % 10;
-//     str.ptr[used] = num + '0';
-//     used--;
-    
-//     t = t / 10;
-// }
-// str.ptr += used;
-// str.len -= used;
-// prints(str);
-prints("I CAN PRINT!\n");
+_print(printme())
 
-// str: char[20];
-// used = 19;
-// while t > 0 && used > 0 {
-//     num = t % 10;
-//     str.ptr[used] = cast<char>(num + '0');
-//     used--;
-    
-//     t = t / 10;
-// }
-// str.ptr += used;
-// str.len -= used;
-// prints(str);
+str = " from NativeLayer.cpp!\n";
+WriteFile(GetStdHandle(-11), str.ptr, str.len, null, null)
 
-
-//-- Native/external functions
+//-- external/native functions
 // fn @native prints(n: char[]);
 // prints("HELL YES!\n")
+// fn @dllimport GetStdHandle(id: u32);
+// GetStdHandle(-11);
 
 //-- global data
 // a = "K";
 // *a.ptr
 
 //-- intrinsics?
-// fn @native memzero(dst: void*, len: u64);
-// fn @native memcpy(dst: void*, src: void*, len: u64);
+// fn @intrinsic memzero(dst: void*, len: u64);
+// fn @intrinsic memcpy(dst: void*, src: void*, len: u64);
 
 // a: i32[3];
 // b: i32[3];

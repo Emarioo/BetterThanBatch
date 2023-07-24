@@ -28,7 +28,20 @@ void print_help(){
     PRINT_EXAMPLES
     PRINT_EXAMPLE("  compiler.exe -run program.btbc\n")
     log::out << "\n";
-
+    PRINT_USAGE("compiler.exe -target <target-platform>")
+    PRINT_DESC("Compiles source code to the specified target whether that is bytecode, Windows, Linux, x64, object file, or an executable. "
+            "All of those in different combinations may not be supported yet.\n")
+    PRINT_EXAMPLES
+    PRINT_EXAMPLE("  compiler.exe main.btb -out main.exe -target win-x64\n")
+    PRINT_EXAMPLE("  compiler.exe main.btb -out main -target linux-x64\n")
+    PRINT_EXAMPLE("  compiler.exe main.btb -out main.btbc -target bytecode\n")
+    log::out << "\n";
+    PRINT_USAGE("compiler.exe -user-args [arg0 ...]")
+    PRINT_DESC("Only works if you run a program. Any arguments after this flag will be passed to the program that is specified to execute\n")
+    PRINT_EXAMPLES
+    PRINT_EXAMPLE("  compiler.exe main.btb -user-args hello there\n")
+    PRINT_EXAMPLE("  compiler.exe -run main.btbc -user-args -some-flag \"TO PASS\"\n")
+    log::out << "\n";
     #undef PRINT_USAGE
     #undef PRINT_DESC
     #undef PRINT_EXAMPLES
@@ -51,9 +64,14 @@ void print_help(){
 
     */
 }
-int global=23;
 int main(int argc, const char** argv){
     using namespace engone;
+
+    // UserProfile profile{};
+    // profile.deserialize("myprofile.txt");
+    // profile.serialize("myprofile2.txt");
+
+    // return 0;
 
     // for(int i=0;i<23;i++){
     //     int c = i + 9;
@@ -66,7 +84,7 @@ int main(int argc, const char** argv){
     // int c = a && b;
     // return 0;
 
-    u8 a = global + 2;
+    // u8 a = global + 2;
 
     // auto p = &a;
 
@@ -101,21 +119,45 @@ int main(int argc, const char** argv){
     std::vector<std::string> outFiles;
     std::vector<std::string> filesToRun;
 
+    TargetPlatform target = BYTECODE;
+    #ifdef COMPILE_x64
+    target = WINDOWS_x64;
+    #endif
+
+    bool onlyPreprocess = false;
+
     std::vector<std::string> userArgs;
 
     for(int i=1;i<argc;i++){
         const char* arg = argv[i];
         int len = strlen(argv[i]);
+        if(mode==MODE_USER_ARGS){
+            userArgs.push_back(arg);
+            continue;
+        }
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
         if(!strcmp(arg,"--help")||!strcmp(arg,"-help")) {
             print_help();
             return 1;
         } else IfArg("-run") {
             mode = MODE_RUN;
+        } else IfArg("-preproc") {
+            onlyPreprocess = true;
         } else IfArg("-out") {
             mode = MODE_OUT;
         } else IfArg("-dev") {
             devmode = true;
+        } else IfArg("-target"){
+            i++;
+            // TODO: Print error message if target argument is missing
+            if(i<argc){
+                arg = argv[i];
+                target = ToTarget(arg);
+                Assert(target != UNKNOWN_TARGET);
+                // TODO: Error message if target is unknown
+            } else {
+                Assert(false);
+            }
         } else IfArg("-user-args") {
             mode = MODE_USER_ARGS;
         } else if(mode==MODE_COMPILE){ 
@@ -124,9 +166,7 @@ int main(int argc, const char** argv){
             filesToRun.push_back(arg);
         } else if(mode==MODE_OUT){
             outFiles.push_back(arg);
-        } else if(mode==MODE_USER_ARGS){
-            userArgs.push_back(arg);
-        } 
+        }
         /*
         else if(mode==MODE_TEST){
             mode = MODE_RUN;
@@ -172,6 +212,7 @@ int main(int argc, const char** argv){
         }
         */
     }
+
     if(files.size() != outFiles.size() && outFiles.size()!=0){
         log::out << log::RED <<"The amount of input and output files must match!\n";
         int index = 0;
@@ -204,22 +245,27 @@ int main(int argc, const char** argv){
     CompileOptions compileOptions{};
     compileOptions.compilerDirectory = compilerDir.text;
     compileOptions.userArgs = userArgs;
+    compileOptions.target = target;
     for(int i = 0; i < (int)files.size();i++){
+        if(onlyPreprocess){
+            if(outFiles.size()==0) // TODO: Error message
+                continue;
+            auto stream = TokenStream::Tokenize(files[i]);
+            CompileInfo compileInfo{};
+            auto stream2 = Preprocess(&compileInfo, stream);
+            stream2->writeToFile(outFiles[i]);
+            TokenStream::Destroy(stream);
+            TokenStream::Destroy(stream2);
+            continue;
+        }
         compileOptions.initialSourceFile = files[i].c_str();
+
         if(outFiles.size()==0){
             log::out << log::GRAY << "Compile and run: "<<files[i] << "\n";
+            Assert(target == BYTECODE); // TODO: error message
             CompileAndRun(compileOptions);
         } else {
-            
-            Bytecode* bc = CompileSource(compileOptions);
-            if(bc){
-                bool yes = ExportBytecode(outFiles[i], bc);
-                Bytecode::Destroy(bc);
-                if(yes)
-                    log::out << log::GRAY<<"Exported "<<files[i] << " into bytecode in "<<outFiles[i]<<"\n";
-                else
-                    log::out <<log::RED <<"Failed exporting "<<files[i] << " into bytecode in "<<outFiles[i]<<"\n";
-            }
+            CompileAndExport(compileOptions, outFiles[i]);
         }
     }
     for(std::string& file : filesToRun){
@@ -248,6 +294,13 @@ int main(int argc, const char** argv){
         // interpreter
         CompileAndRun(compileOptions);
         #else
+        #define OBJ_FILE "bin/dev.obj"
+        #define EXE_FILE "dev.exe"
+
+        // CompileOptions options{};
+        // CompileAndExport({"examples/x64_test.btb"}, EXE_FILE);
+
+
         Program_x64* program = nullptr;
         Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
         // bytecode->codeSegment.used=0;
@@ -260,8 +313,14 @@ int main(int argc, const char** argv){
 
         defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
         if(program){
-            #define OBJ_FILE "bin/dev.obj"
-            #define EXE_FILE "dev.exe"
+            // program = Program_x64::Create();
+            // u8 arr[]={ 0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 };
+            // program->addRaw(arr,sizeof(arr));
+            // NamedRelocation nr{};
+            // nr.name = "printme";
+            // nr.textOffset = 0x5;
+            // program->namedRelocations.add(nr);
+
             WriteObjectFile(OBJ_FILE,program);
 
             // auto objFile = ObjectFile::DeconstructFile(OBJ_FILE, false);
@@ -270,23 +329,23 @@ int main(int argc, const char** argv){
             // link the object file and run the resulting executable
             // error level is printed because it's the only way to get
             // an output from the executable at the moment.
-            // Printing and writing to files require linking to stdio.h or windows.
+            // Printing and writing to files require linkConvention to stdio.h or windows.
             i32 errorLevel = 0;
-            engone::StartProgram("","link " OBJ_FILE " /nologo /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
+            engone::StartProgram("","link /nologo " OBJ_FILE 
+            " bin/NativeLayer.lib"
+            " uuid.lib"
+            " /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
             engone::StartProgram("",EXE_FILE,PROGRAM_WAIT,&errorLevel);
             log::out << "Error level: "<<errorLevel<<"\n";
         }
         #endif
 
         {
-            // auto objFile = ObjectFile::DeconstructFile("obj_test.obj");
-            // defer { ObjectFile::Destroy(objFile); };
-            // objFile->writeFile("obj_min.obj");
-        }
-        {
-            // auto objFile = ObjectFile::DeconstructFile("obj_min.obj", false);
-            // defer { ObjectFile::Destroy(objFile); };
-            // objFile->writeFile("obj_min.obj");
+            auto objFile = ObjectFile::DeconstructFile("bin/obj_test.obj", true);
+            defer { ObjectFile::Destroy(objFile); };
+            objFile->writeFile("bin/obj_min.obj");
+            // auto objFile2 = ObjectFile::DeconstructFile("bin/obj_min.obj", false);
+            // defer { ObjectFile::Destroy(objFile2); };
         }
 
         // Bytecode::Destroy(bytecode);

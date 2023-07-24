@@ -15,10 +15,27 @@ using a macro or some other function when converting bytecode operands to
 x64 operands
 
 */
+enum CallConventions : u8 {
+    BETCALL,
+    CDECL_CONVENTION, // The naming is different because CDECL seems to be a macro.
+    STDCALL, // Currently default x64 calling convention
+    INTRINSIC,
+};
+enum LinkConventions : u8 {
+    NONE, // no linkConvention export/import
+    // DLLEXPORT, // .drectve section is needed to pass /EXPORT: to the linker. The exported function must use stdcall convention
+    DLLIMPORT, // linkConvention with dll, function are renamed to __impl_
+    EXTERNAL, // external from the source code, linkConvention with static library or object files
+    NATIVE, // for interpreter or other inplementation in x64 converter
+};
+const char* ToString(CallConventions stuff);
+const char* ToString(LinkConventions stuff);
+engone::Logger& operator<<(engone::Logger& logger, CallConventions convention);
+engone::Logger& operator<<(engone::Logger& logger, LinkConventions convention);
 
 struct DataRelocation {
     u32 dataOffset; // offset in data segment
-    u32 textOffset; // where to modify        
+    u32 textOffset; // wHere to modify        
 };
 struct NamedRelocation {
     std::string name;
@@ -49,7 +66,9 @@ struct Program_x64 {
     void add2(u16 word);
     void add4(u32 dword);
     void addModRM(u8 mod, u8 reg, u8 rm);
-    void addModRM_disp32(u8 reg, u32 disp32);
+    // RIP-relative addressing
+    void addModRM_rip(u8 reg, u32 disp32);
+    void addModRM_rip(u8 reg, i64 disp32);
     void addModRM_SIB(u8 mod, u8 reg, u8 scale, u8 index, u8 base);
 
     void addRaw(u8* arr, u64 len);
@@ -59,7 +78,6 @@ struct Program_x64 {
     void add(i64 byte);
     void add2(i64 word);
     void add4(i64 dword);
-    void addModRM_disp32(u8 reg, i64 disp32);
 
     void printHex();
 
