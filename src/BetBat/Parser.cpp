@@ -39,14 +39,14 @@ OperationType IsOp(Token& token, int& extraNext){
     if(Equal(token,"==")) return AST_EQUAL;
     if(Equal(token,"!=")) return AST_NOT_EQUAL;
     if(Equal(token,"<")) {
-        if(Equal(token.tokenStream->get(token.tokenIndex+1),"<")) {
+        if((token.flags&TOKEN_SUFFIX_SPACE)==0&& Equal(token.tokenStream->get(token.tokenIndex+1),"<")) {
             extraNext=1;
             return AST_BLSHIFT;
         }
          return AST_LESS;
     }
     if(Equal(token,">")) {
-        if(Equal(token.tokenStream->get(token.tokenIndex+1),">")) {
+        if((token.flags&TOKEN_SUFFIX_SPACE)==0&&Equal(token.tokenStream->get(token.tokenIndex+1),">")) {
             extraNext=1;
             return AST_BRSHIFT;
         }
@@ -1175,13 +1175,15 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 
                 // TODO: handle to large numbers
                 Assert(token.str[0]!='-');
+                bool printedError = false;
                 u64 num=0;
                 for(int i=0;i<token.length;i++){
                     char c = token.str[i];
-                    if(num * 10 < num) {
+                    if(num * 10 < num && !printedError) {
                         ERR_HEAD(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
                             ERR_LINE(token.tokenIndex,"to large!");
                         )
+                        printedError = true;
                     }
                     num = num*10 + (c-'0');
                 }
@@ -1194,9 +1196,11 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         tmp = info.ast->createExpression(TypeId(AST_INT64));
                     } else {
                         tmp = info.ast->createExpression(TypeId(AST_INT64));
-                        ERR_HEAD(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                            ERR_LINE(token.tokenIndex,"to large!");
-                        )
+                        if(!printedError){
+                            ERR_HEAD(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                                ERR_LINE(token.tokenIndex,"to large!");
+                            )
+                        }
                     }
                 }else{
                     if ((num&0xFFFFFFFF00000000) == 0) {
@@ -1737,7 +1741,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     // shouldn't happen
     return PARSE_ERROR;
 }
-int ParseBody(ParseInfo& info, ASTScope*& body, ScopeId parentScope);
+int ParseBody(ParseInfo& info, ASTScope*& body, ScopeId parentScope, bool trulyGlobal = false);
 // returns 0 if syntax is wrong for flow parsing
 int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
@@ -1978,6 +1982,260 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         return PARSE_BAD_ATTEMPT;
     return PARSE_ERROR;
 }
+int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
+    using namespace engone;
+    MEASURE;
+    _PLOG(FUNC_ENTER)
+    Token beginToken = info.get(info.at()+1);
+    // int startIndex = info.at()+1;
+    if(!Equal(beginToken,"operator")){
+        if(attempt) return PARSE_BAD_ATTEMPT;
+        ERR_HEAD(beginToken, "Expected 'operator' for operator overloading not '"<<beginToken<<"'.\n";
+
+        )
+            
+        return PARSE_ERROR;
+    }
+    info.next();
+    attempt = false;
+
+    function = info.ast->createFunction();
+    function->tokenRange.firstToken = beginToken;
+    function->tokenRange.endIndex = info.at()+1;;
+
+    Token name = info.next();
+    while (IsAnnotation(name)){
+        if(Equal(name,"@hide")){
+            function->hidden=true;
+        } else {
+            // It should not warn you because it is quite important that you use the right annotations with functions
+            // Mispelling external or the calling convention would be very bad.
+            ERR_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for operators.\n\n";
+                ERR_LINE(info.at(),"unknown");
+            )
+        }
+        name = info.next();
+        continue;
+    }
+
+    OperationType op = (OperationType)0;
+    int extraNext = 0;
+    
+    // TODO: Improve parsing here. If the token is an operator but not allowed
+    //  then you can continue parsing, it's just that the function won't be
+    //  added to the tree and be usable. Parse and then throw away.
+    //  Stuff following the operator overload´syntax will then parse fine.
+    
+    // What about +=, -=?
+    if(!(op = IsOp(name, extraNext))){
+        info.ast->destroy(function);
+        function = nullptr;
+        ERR_HEAD(name,"Expected a valid operator, "<<name<<" is not.\n";)
+        return PARSE_ERROR;
+    }
+    // info.next(); // next is done above
+    while(extraNext--){
+        Token t = info.next();
+        name.length += t.length;
+        // used for doing next on the extra arrows for bit shifts
+    }
+    Assert(info.get(info.at()+1) != "=");
+
+    function->name = name;
+
+    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId);
+    function->scopeId = funcScope->id;
+
+    // ensure we leave this parse function with the same scope we entered with
+    auto prevScope = info.currentScopeId;
+    defer { info.currentScopeId = prevScope; };
+
+    info.currentScopeId = function->scopeId;
+
+    Token tok = info.get(info.at()+1);
+    if(Equal(tok,"<")){
+        info.next();
+        while(!info.end()){
+            tok = info.get(info.at()+1);
+            if(Equal(tok,">")){
+                info.next();
+                break;
+            }
+            int result = ParseTypeId(info, tok, nullptr);
+            if(result == PARSE_SUCCESS) {
+                function->polyArgs.add({tok});
+            }
+
+            tok = info.get(info.at()+1);
+            if (Equal(tok,",")) {
+                info.next();
+                continue;
+            } else if(Equal(tok,">")) {
+                info.next();
+                break;
+            } else {
+                ERR_HEAD(tok, "expected , or > for in poly. arguments for operator "<<name<<"\n";
+            )
+                // parse error or what?
+                break;
+            }
+        }
+    }
+    tok = info.get(info.at()+1);
+    if(!Equal(tok,"(")){
+        ERR_HEAD(tok, "expected ( not "<<tok<<"\n";
+        )
+        return PARSE_ERROR;
+    }
+    info.next();
+
+    bool printedErrors=false;
+    TokenRange prevDefault={};
+    WHILE_TRUE {
+        Token& arg = info.get(info.at()+1);
+        if(Equal(arg,")")){
+            info.next();
+            break;
+        }
+        if(!IsName(arg)){
+            info.next();
+            if(!printedErrors) {
+                printedErrors=true;
+                ERR_HEAD(arg, "'"<<arg <<"' is not a valid argument name.\n\n";
+                    ERR_LINE(arg.tokenIndex,"bad");
+                )
+            }
+            continue;
+            // return PARSE_ERROR;
+        }
+        info.next();
+        tok = info.get(info.at()+1);
+        if(!Equal(tok,":")){
+            if(!printedErrors) {
+                printedErrors=true;
+                ERR_HEAD(tok, "Expected : not "<<tok <<".\n\n";
+                    ERR_LINE(tok.tokenIndex,"bad");
+                )
+            }
+            continue;
+            // return PARSE_ERROR;
+        }
+        info.next();
+
+        Token dataType{};
+        int result = ParseTypeId(info,dataType, nullptr);
+        
+        // auto id = info.ast->getTypeInfo(info.currentScopeId,dataType)->id;
+        TypeId strId = info.ast->getTypeString(dataType);
+
+        function->arguments.add({});
+        auto& argv = function->arguments[function->arguments.size()-1];
+        argv.name = arg; // add the argument even if default argument fails
+        argv.stringType = strId;
+
+        function->nonDefaults++; // We don't have defaults at all
+        // this is important for function overloading
+
+        printedErrors = false; // we succesfully parsed this so we good?
+
+        tok = info.get(info.at()+1);
+        if(Equal(tok,",")){
+            info.next();
+            continue;
+        }else if(Equal(tok,")")){
+            info.next();
+            break;
+        }else{
+            printedErrors = true; // we bad and might keep being bad.
+            // don't do printed errors?
+            ERR_HEAD(tok, "Expected , or ) not "<<tok <<".\n\n";
+                ERR_LINE(tok.tokenIndex,"bad");
+            )
+            continue;
+            // Continuing since we saw ( and are inside of arguments.
+            // we must find ) to leave.
+            // return PARSE_ERROR;
+        }
+    }
+    // TODO: check token out of bounds
+    printedErrors=false;
+    tok = info.get(info.at()+1);
+    Token tok2 = info.get(info.at()+2);
+    if(Equal(tok,"-") && !(tok.flags&TOKEN_SUFFIX_SPACE) && Equal(tok2,">")){
+        info.next();
+        info.next();
+        tok = info.get(info.at()+1);
+        
+        WHILE_TRUE {
+            
+            Token tok = info.get(info.at()+1);
+            if(Equal(tok,"{") || Equal(tok,";")){
+                break;   
+            }
+            
+            Token dt{};
+            int result = ParseTypeId(info,dt, nullptr);
+            if(result!=PARSE_SUCCESS){
+                break; // prevent infinite loop
+                // info.next();
+                // continue as we have
+                // continue;
+                // return PARSE_ERROR;
+                // printedErrors = false;
+            } else {
+                TypeId strId = info.ast->getTypeString(dt);
+                function->returnValues.add({});
+                function->returnValues.last().stringType = strId;
+                function->returnValues.last().valueToken = dt;
+                function->returnValues.last().valueToken.endIndex = info.at()+1;
+                printedErrors = false;
+            }
+            tok = info.get(info.at()+1);
+            if(Equal(tok,"{") || Equal(tok,";")){
+                // info.next(); { is parsed in ParseBody
+                break;   
+            } else if(Equal(tok,",")){
+                info.next();
+                continue;
+            } else {
+                if(function->linkConvention != LinkConventions::NONE)
+                    break;
+                if(!printedErrors){
+                    printedErrors=true;
+                    ERR_HEAD(tok, "Expected a comma or curly brace. '"<<tok <<"' is not okay.\n";
+                        ERR_LINE(tok.tokenIndex,"bad coder");
+                    )
+                }
+                continue;
+                // Continuing since we are inside of return values and expect
+                // something to end it
+            }
+        }
+    }
+    function->tokenRange.endIndex = info.at()+1; // don't include body in function's token range
+    // the body's tokenRange can be accessed with function->body->tokenRange
+    
+    Token& bodyTok = info.get(info.at()+1);
+    
+    if(Equal(bodyTok,";")){
+        info.next();
+        ERR_HEAD(bodyTok,"Operator overloading must have a body. You have forgotten the body when defining '"<<function->name<<"'.\n\n";
+            ERR_LINE(bodyTok.tokenIndex,"replace with {}");
+        )
+    } else if(Equal(bodyTok,"{")){
+        info.functionScopes.add({});
+        ASTScope* body = 0;
+        int result = ParseBody(info,body, function->scopeId);
+        info.functionScopes.pop();
+        function->body = body;
+    } else {
+        ERR_HEAD(bodyTok,"Operator has no body! Did the return types parse incorrectly? Use curly braces to define the body.\n\n";
+            ERR_LINE(bodyTok.tokenIndex,"expected {");
+        )
+    }
+
+    return PARSE_SUCCESS;
+}
 // out token contains a newly allocated string. use delete[] on it
 int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct){
     using namespace engone;
@@ -2017,10 +2275,10 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
             function->linkConvention = LinkConventions::DLLIMPORT;
             needsExplicitCallConvention = true;
             linkToken = name;
-        } else if (Equal(name,"@extern")){
+        } else if (Equal(name,"@import")){
             function->callConvention = CallConventions::STDCALL;
             specifiedConvention = true;
-            function->linkConvention = LinkConventions::EXTERNAL;
+            function->linkConvention = LinkConventions::IMPORT;
             needsExplicitCallConvention = true;
             linkToken = name;
         } else if (Equal(name,"@stdcall")){
@@ -2423,7 +2681,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     statement->tokenRange.endIndex = info.at()+1;
     return PARSE_SUCCESS;  
 }
-int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope){
+int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal){
     using namespace engone;
     MEASURE;
     // Note: two infos in case ParseAssignment modifies it and then fails.
@@ -2500,6 +2758,8 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope){
         }
         if(result==PARSE_BAD_ATTEMPT)
             result = ParseFunction(info,tempFunction,true, nullptr);
+        if(result==PARSE_BAD_ATTEMPT)
+            result = ParseOperator(info,tempFunction,true);
         if(result==PARSE_BAD_ATTEMPT)
             result = ParseStruct(info,tempStruct,true);
         if(result==PARSE_BAD_ATTEMPT)
@@ -2609,7 +2869,8 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope){
             // We want to give it another go.
             continue;
         }
-        if(!scoped && bodyLoc->scopeId!=info.ast->globalScopeId){
+        // current body may have the same "parentScope == bodyLoc->scopeId" will make sure break 
+        if(!scoped && !trulyGlobal){
             break;
         }
     }
@@ -2668,7 +2929,7 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
     info.currentScopeId = body->scopeId;
 
     info.functionScopes.add({});
-    int result = ParseBody(info, body, ast->globalScopeId);
+    int result = ParseBody(info, body, ast->globalScopeId, true);
     info.functionScopes.pop();
     
     return body;

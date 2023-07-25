@@ -1,6 +1,6 @@
 #include "BetBat/AST.h"
 
-const char *OpToStr(OperationType optype) {
+const char *OpToStr(OperationType optype, bool null) {
 #define CASE(A, B) \
     case AST_##A:  \
         return #B;
@@ -21,12 +21,21 @@ const char *OpToStr(OperationType optype) {
         CASE(OR, ||)
         CASE(NOT, !)
 
-        CASE(BAND, & (bitwise and))
-        CASE(BOR, | (bitwise or))
-        CASE(BXOR, ^ (bitwise xor))
-        CASE(BNOT, ~ (bitwise not))
-        CASE(BLSHIFT, << (bit shift))
-        CASE(BRSHIFT, >> (bit shift))
+        CASE(BAND, &)
+        CASE(BOR, |)
+        CASE(BXOR, ^)
+        CASE(BNOT, ~)
+        CASE(BLSHIFT, <<)
+        CASE(BRSHIFT, >>)
+
+        // parenthesis don't work, operator overloading converts
+        // enum to string and it becomes << (bit shift) which is bad
+        // CASE(BAND, & (bitwise and))
+        // CASE(BOR, | (bitwise or))
+        // CASE(BXOR, ^ (bitwise xor))
+        // CASE(BNOT, ~ (bitwise not))
+        // CASE(BLSHIFT, << (bit shift))
+        // CASE(BRSHIFT, >> (bit shift))
 
         CASE(RANGE, ..)
         CASE(INDEX, [])
@@ -42,9 +51,11 @@ const char *OpToStr(OperationType optype) {
 
         CASE(REFER, & (reference))
         CASE(DEREF, * (dereference))
-        default: return "?";
+        // default: return "?";
     }
 #undef CASE
+    if(null)
+        return nullptr;
     return "?";
 }
 const char *StateToStr(int type) {
@@ -963,6 +974,8 @@ std::string AST::typeToString(TypeId typeId){
     if(typeId.isString())
         return std::string((Token)getTokenFromTypeString(typeId));
     const char* cstr = OpToStr((OperationType)typeId.getId());
+    // if(!cstr) {
+    //     return "";
     if(strcmp(cstr,"?") != 0) {
         return cstr;
     }
@@ -1592,18 +1605,19 @@ void ASTFunction::print(AST *ast, int depth) {
             log::out << "\n";
         }
         // log::out << ")";
-        if (returnValues.size()!=0)
-            log::out << "->";
-        for (int i=0;i<(int)returnValues.size();i++){
-            auto& retType = returnValues[i].stringType;
-            if(i!=0)
-                log::out<<", ";
-            // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
-            // log::out << dtname << ", ";
-            log::out << ast->typeToString(retType);
-        }
-        if (returnValues.size()!=0)
+        if (returnValues.size()!=0){
+            PrintSpace(depth+1);
+            log::out << "-> ";
+            for (int i=0;i<(int)returnValues.size();i++){
+                auto& retType = returnValues[i].stringType;
+                if(i!=0)
+                    log::out<<", ";
+                // auto dtname = ast->getTypeInfo(ret.typeId)->getFullType(ast);
+                // log::out << dtname << ", ";
+                log::out << ast->typeToString(retType);
+            }
             log::out << "\n";
+        }
         if(linkConvention != LinkConventions::NONE){
             PrintSpace(depth+1);
             log::out << "Native/External\n";
@@ -1759,7 +1773,7 @@ void ASTExpression::print(AST *ast, int depth) {
     } else {
         if(typeId == AST_ASSIGN) {
             if(castType.getId()!=0){
-                log::out << OpToStr((OperationType)castType.getId());
+                log::out << OpToStr((OperationType)castType.getId(), true);
             }
         }
         log::out << OpToStr((OperationType)typeId.getId()) << " ";

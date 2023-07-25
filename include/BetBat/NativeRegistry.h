@@ -39,6 +39,10 @@ enum NativeFunctionType {
 
 #define NATIVE_CmdLineArgs -27
 
+#define NATIVE_sin -40
+#define NATIVE_cos -41
+#define NATIVE_tan -42
+
 namespace Language {
     template <typename T>
     struct Slice {

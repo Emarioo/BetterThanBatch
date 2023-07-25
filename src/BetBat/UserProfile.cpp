@@ -120,6 +120,8 @@ bool UserProfile::serialize(const std::string& path){
             Comment& com = comments[spot.index];
             if(com.enclosed)
                 FileWrite(file, "/*",2);
+            else if (com.hashtag)
+                FileWrite(file, "#",1);
             else
                 FileWrite(file, "//",2);
 
@@ -219,6 +221,7 @@ bool UserProfile::deserialize(const std::string& path){
     std::string comment{};
 
     bool enclosedComment = false;
+    bool hashtagComment = false;
     bool inComment = false;
     bool inQuote = false;
     bool inKey = true;
@@ -252,6 +255,7 @@ bool UserProfile::deserialize(const std::string& path){
                 Comment com{};
                 com.str = comment;
                 com.enclosed = enclosedComment;
+                com.hashtag = hashtagComment;
                 u8 newLines = chr == '\n';
                 while(index < fileSize) {
                     char chr = buffer[index];
@@ -273,6 +277,7 @@ bool UserProfile::deserialize(const std::string& path){
                 comment.clear();
                 inComment = false;
                 enclosedComment = false;
+                hashtagComment = false;
             }
             continue;
         } else if(inQuote) {
@@ -291,13 +296,13 @@ bool UserProfile::deserialize(const std::string& path){
                 continue;
             }
         }
-        // if(chr == '#') {
-        //     inComment = true;
-        // } else 
-        if (chr=='/' && nextChr == '/') {
+        if(chr == '#') {
+            inComment = true;
+            hashtagComment = true;
+            continue;
+        } else if (chr=='/' && nextChr == '/') {
             _UP_LOG(log::out << "<comment>";)
             inComment = true;
-            enclosedComment = false;
             index++;
             continue;
         } else if (chr=='/' && nextChr == '*') {
@@ -407,7 +412,6 @@ void UserProfile::print(bool printComments){
     for(int i = 0; i< knownSettings.size();i++){
         if(knownSettings[i].invalid()) continue;
         log::out << ToString((SettingType)i) << " : " <<knownSettings[i].value<<"\n";
-
     }
     
     log::out << log::LIME << "Custom settings:\n";
@@ -419,4 +423,13 @@ void UserProfile::print(bool printComments){
     for(int i = 0; i < comments.size();i++){
         log::out << "["<<i<<"]: "<<comments[i].str << "\n";
     }
+}
+UserProfile* UserProfile::CreateDefault(){
+    UserProfile* ptr = (UserProfile*)engone::Allocate(sizeof(UserProfile));
+    new(ptr)UserProfile();
+    return ptr;
+}
+void UserProfile::Destroy(UserProfile* ptr){
+    ptr->~UserProfile();
+    engone::Free(ptr,sizeof(UserProfile));
 }

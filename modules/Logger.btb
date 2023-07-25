@@ -1,6 +1,9 @@
 // #import "OS"
 
 fn @native prints(str: char[]);
+fn @native printi(str: i64);
+fn @native printc(str: char);
+fn @native printd(str: f32);
 
 /*
     The reason functions are named "print" and not "log"
@@ -14,9 +17,9 @@ fn @native prints(str: char[]);
 fn @hide _print(t: i64){
     // If you are worried that this language will be filled with ifdefs like C/C++
     // then you can calm down. This is just temporary.
-    // #ifndef X64
-    // printi(t)
-    // #else
+    #ifndef X64
+    printi(t)
+    #else
     
     // optimise by using a log10 function to know how many characters you need.
     // then allocate some memory for that space
@@ -26,6 +29,10 @@ fn @hide _print(t: i64){
     // One last thing, the memory should be allocated using a linear allocator
     // or some other temporary allocator. Perhaps you can allocate it on the
     // stack or something?
+    if t == 0 {
+        printc('0')
+        return;
+    }
 
     str: char[20];
     used = 19;
@@ -39,26 +46,89 @@ fn @hide _print(t: i64){
     str.ptr += used + 1;
     str.len -= used - 1;
     prints(str);
+    #endif
+}
+// IMPORTANT: This function does not print accurate
+//  floats. It has some precision issues.
+fn @hide _print(t: f32){
+    // #ifndef X64
+    // printd(t)
+    // #else
+    bits: u32 = *cast<u32*>cast<void*>&t;
+
+    sign = (bits >> 31) & 1;
+    exp = (bits >> 23) & 0xFF
+    mantissa = bits & 0x7FFFFF
+
+    mul: u64 = 1;
+    acc: u64 = 1;
+    precision = 17;
+    for i: 0..precision {
+        mul *= 5;
+        acc *= 10;
+        if mantissa & (1 << (22 - i)) {
+            acc += mul;
+        }
+    }
+
+    if exp < 128
+        acc = acc >> (127 - exp);
+    else
+        acc = acc << ((exp+1) & 0x7F);
+
+    arr: char[30];
+    index = 30;
+    rounds = precision
+    while acc != 0 || rounds > 0 {
+        rounds--;
+        digit = 0;
+        if acc != 0 {
+            digit = acc % 10;
+            acc = acc / 10;
+        }
+        if(index == arr.len && digit == 0) {
+            precision--;
+            continue
+        }
+        arr.ptr[--index] = '0' + digit;
+        if index == 30 - precision {
+            arr.ptr[--index] = '.';
+        }
+    }
+    if arr.ptr[index] == '.'
+        arr.ptr[--index] = '0';
+    if sign 
+        arr.ptr[--index] = '-';
+
+    arr.ptr += index;
+    arr.len -= index;
+
+    prints(arr)
+
+    // fn printBits(bits: u64) {
+    //     for @reverse 0..32 {
+    //         if bits & (cast<u64>1 << nr) {
+    //             print('1')
+    //         } else 
+    //             print('0')
+    //     }
+    //     print('\n')
+    // }
     // #endif
 }
-// #ifndef X64
-// fn @hide _print(t: f32){
-//     printd(t)
-// }
-// #endif
-// fn @hide _print(t: char){
-//     prints(Slice<char>{&t, 1})
-// }
-// fn @hide _print(t: bool){
-//     if(t) prints("true");
-//     else prints("false");
-// }
-// fn @hide _print(t: char[]){
-//     prints(t);
-// }
+fn @hide _print(t: char){
+    prints(Slice<char>{&t, 1})
+}
+fn @hide _print(t: bool){
+    if(t) prints("true");
+    else prints("false");
+}
+fn @hide _print(t: char[]){
+    prints(t);
+}
 
-// // macros does not travel across imports yet ):
-// // Now they do haha!
-// #define print(X,...) _print(X); print(...);
-// #define print()
-// #define println(...) print(...); _print("\n");
+// macros does not travel across imports yet ):
+// Now they do haha!
+#define print(X,...) _print(X); print(...);
+#define print()
+#define println(...) print(...); _print("\n");

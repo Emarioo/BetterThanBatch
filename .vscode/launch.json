@@ -6,7 +6,7 @@
             "type": "cppvsdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/compiler.exe",
-            "args": ["examples/x64_test.btb", "-target", "win-x64","-out", "test.exe"],
+            "args": ["-dev"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

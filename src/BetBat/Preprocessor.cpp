@@ -583,15 +583,11 @@ int ParseInclude(PreprocInfo& info, bool attempt){
         // fullpath = engone::GetWorkingDirectory() + "/" + filepath;
         // ReplaceChar((char*)fullpath.data(),fullpath.length(),'\\','/');
     }
-     
-        //-- Search cwd or absolute path
-        // else if(FileExist(importName)){
-        //     fullPath = importName;
-        //     if(!fullPath.isAbsolute())
-        //         fullPath = fullPath.getAbsolute();
-        // }
-        //-- Search additional import directories.
-        // TODO: DO THIS WITH #INCLUDE TOO!
+     else if(fullpath = dir.text + filepath, FileExist(fullpath.text)){
+        // fullpath =  dir.text + filePath;
+    }
+    //-- Search additional import directories.
+    // TODO: DO THIS WITH #INCLUDE TOO!
     else {
         for(int i=0;i<(int)info.compileInfo->importDirectories.size();i++){
             const Path& dir = info.compileInfo->importDirectories[i];

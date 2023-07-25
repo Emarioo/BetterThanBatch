@@ -19,8 +19,9 @@
 ############### */
 
 // DEV_FILE defaults to dev.btb if none is specified
-#define DEV_FILE "examples/x64_test.btb"
-// #define COMPILE_x64
+// #define DEV_FILE "examples/x64_test.btb"
+#define DEV_FILE "examples/floats.btb"
+#define COMPILE_x64
 
 #ifndef COMPILE_x64
 // #define SAVE_FP_IN_CALL_FRAME
@@ -71,7 +72,7 @@
 // newly tokenized includes in preprocessor
 // #define LOG_INCLUDES
 
-// #define MLOGf
+// #define MLOG
 // #define PLOG
 // type checker
 // #define TC_LOG
@@ -79,7 +80,7 @@
 // #define ILOG
 // #define ILOG_REGS
 // x64 converter
-// #define CLOG
+#define CLOG
 
 // #define OLOG
 // #define USE_DEBUG_INFO

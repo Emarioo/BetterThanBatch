@@ -1,5 +1,7 @@
 #include "BetBat/Compiler.h"
 
+#include <math.h>
+
 void print_help(){
     using namespace engone;
     log::out << log::BLUE << "##   Help   ##\n";
@@ -64,8 +66,57 @@ void print_help(){
 
     */
 }
+// 0.025915
+// float sine(float x) {
+//     const float RAD = 1.57079632679f;
+//     int inv = (x<0)<<1;
+//     if(inv)
+//         x = -x;
+//     int t = x/RAD;
+//     if (t&1)
+//         x = RAD * (1+t) - x;
+//     else
+//         x = x - RAD * t;
+
+//     // not faster by the way
+//     // x = x - RAD * (t+(t&1));
+//     // u32 temp0 = (*(u32*)&x ^ ((t&1)<<31)); // flip sign bit
+//     // x = *(float*)&temp0;
+
+//     // float taylor = (x - x*x*x/(2*3) + x*x*x*x*x/(2*3*4*5) - x*x*x*x*x*x*x/(2*3*4*5*6*7) + x*x*x*x*x*x*x*x*x/(2*3*4*5*6*7*8*9));
+//     float taylor = x - x*x*x/(2*3) * ( 1 - x*x/(4*5) * ( 1 - x*x/(6*7) * (1 - x*x/(8*9))));
+//     if ((t&2) ^ inv)
+//         taylor = -taylor;
+//     return taylor;
+//     // not faster by the way
+//     // u32 temp = (*(u32*)&out ^ ((t&2)<<30)); // flip sign bit
+//     // return *(float*)&temp;
+// }
 int main(int argc, const char** argv){
     using namespace engone;
+    // float yeh = 5.23f;
+    // i64 num = 9;
+    // float ok = 0.52f + num;
+    // auto tp = MeasureTime();
+    // float value = 3;
+    // float sum = 0;
+    // // for(int t=0;t<1000000;t++){
+    // for(int t=0;t<100;t++){
+    //     value -= 0.1f;
+    //     // value += 0.1f;
+    //     // 1.57079632679f/8.f;
+    //     float f = sine(value);
+    //     // float f = sinf(value);
+    //     sum += f;
+    //     printf("%f: %f\n", value, sine(value) - sinf(value));
+    //     // printf("%f: %f = %f ~ %f\n", value, sine(value) - sinf(value), sine(value), sinf(value));
+    // }
+    // printf("Time %f\n",(float)StopMeasure(tp)*1000.f);
+    // printf("sum: %f\n", sum);
+
+    // double out = log10(92.3);
+
+    // return 0;
 
     // UserProfile profile{};
     // profile.deserialize("myprofile.txt");
@@ -108,7 +159,7 @@ int main(int argc, const char** argv){
     #define MODE_USER_ARGS 5
     // #define MODE_TEST 29
     // #define MODE_LOG 120
-    int mode = MODE_COMPILE; // and run
+    int mode = MODE_COMPILE; // and run unless out files
     
     bool devmode=false;
     
@@ -166,6 +217,8 @@ int main(int argc, const char** argv){
             filesToRun.push_back(arg);
         } else if(mode==MODE_OUT){
             outFiles.push_back(arg);
+        } else {
+            log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
         }
         /*
         else if(mode==MODE_TEST){
@@ -300,9 +353,8 @@ int main(int argc, const char** argv){
         // CompileOptions options{};
         // CompileAndExport({"examples/x64_test.btb"}, EXE_FILE);
 
-
         Program_x64* program = nullptr;
-        Bytecode* bytecode = CompileSource({"examples/x64_test.btb"});
+        Bytecode* bytecode = CompileSource({DEV_FILE});
         // bytecode->codeSegment.used=0;
         // bytecode->add({BC_DATAPTR, BC_REG_RBX});
         // bytecode->addIm(0);
@@ -313,6 +365,7 @@ int main(int argc, const char** argv){
 
         defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
         if(program){
+            program->printHex("temp.hex");
             // program = Program_x64::Create();
             // u8 arr[]={ 0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 };
             // program->addRaw(arr,sizeof(arr));
@@ -340,13 +393,13 @@ int main(int argc, const char** argv){
         }
         #endif
 
-        {
-            auto objFile = ObjectFile::DeconstructFile("bin/obj_test.obj", true);
-            defer { ObjectFile::Destroy(objFile); };
-            objFile->writeFile("bin/obj_min.obj");
+        // {
+        //     auto objFile = ObjectFile::DeconstructFile("bin/obj_test.obj", true);
+        //     defer { ObjectFile::Destroy(objFile); };
+        //     objFile->writeFile("bin/obj_min.obj");
             // auto objFile2 = ObjectFile::DeconstructFile("bin/obj_min.obj", false);
             // defer { ObjectFile::Destroy(objFile2); };
-        }
+        // }
 
         // Bytecode::Destroy(bytecode);
         
@@ -363,6 +416,7 @@ int main(int argc, const char** argv){
         log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";
         PrintRemainingTrackTypes();
     }
+    // log::out << "Total allocated bytes: "<<GetTotalAllocatedBytes() << "\n";
     log::out.cleanup();
     // system("pause");
 }

@@ -85,6 +85,9 @@ void* Interpreter::getReg(u8 id){
 void yeah(int reg, void* from, void* to){
     using namespace engone;
     int size = DECODE_REG_SIZE_TYPE(reg);
+    if(from != to) {
+        *((u64*) to) = 0;
+    }
     if(size==BC_REG_8){
         *((u8* ) to) = *((u8* ) from);
         _ILOG(log::out << (*(i8*)to);)
@@ -124,7 +127,7 @@ void Interpreter::execute(Bytecode* bytecode){
     }
 
     if(bytecode->externalRelocations.size()>0){
-        log::out << log::RED << "Interpreter does not support external relocations! Remove @extern annotations.\n";
+        log::out << log::RED << "Interpreter does not support symbol relocations! Don't use function with @import annotation.\n";
         return;
     }
     
@@ -337,7 +340,7 @@ void Interpreter::execute(Bytecode* bytecode){
             break;
         }
         break; case BC_NOT:
-        break; case BC_BNOT:{
+        case BC_BNOT:{
             u8 r0 = DECODE_REG0(inst);
             u8 r1 = DECODE_REG1(inst);
 
@@ -364,7 +367,6 @@ void Interpreter::execute(Bytecode* bytecode){
                 x = *(i64*)xp;
             }
             i64 out = 0;
-            u64 oldSp = sp;
 
             #define GEN_OP(OP) out = OP x; _ILOG(log::out << out << " = "<<#OP <<" "<< x;) break;
             switch(opcode){
@@ -549,6 +551,7 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out << data<<"\n";)
             
             u8 t = DECODE_REG_SIZE_TYPE(r0);
+            *((i64*)out) = 0;
             if(t==BC_REG_8){
                 *((i8*)out) = data;
             } else if(t==BC_REG_16){
@@ -995,7 +998,7 @@ void Interpreter::execute(Bytecode* bytecode){
             break;
         }
         break; case BC_JE:
-        break; case BC_JNE: {
+        case BC_JNE: {
             u8 r0 = DECODE_REG0(inst);
 
             // u32 data = *(u32*)bytecode->get(pc);

@@ -313,10 +313,15 @@ void GenInfo::restoreStackMoment(int moment, bool withoutModification) {
             Assert(at >= 0);
         }
         virtualStackPointer = moment;
-        _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
-    }
+    } 
+    // else {
+    //     _GLOG(log::out << "relsp "<<moment<<"\n";)
+    // }
     addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-    _GLOG(log::out << "relsp "<<moment<<"\n";)
+    if(withoutModification)
+        _GLOG(log::out << "relsp (temp) "<<moment<<"\n";)
+    else
+        _GLOG(log::out << "relsp "<<moment<<"\n";)
 }
 /* #endregion */
 // Will perform cast on float and integers with pop, cast, push
@@ -1116,7 +1121,24 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                         info.addPop(BC_REG_RBX);
                         info.addPop(BC_REG_RDI);
                         info.addInstruction({BC_MEMZERO, BC_REG_RDI, BC_REG_RBX});
-                    } else {
+                    } 
+                    // else if(funcImpl->name == "sin"){
+                    //     info.addPop(BC_REG_EAX);
+                    //     info.addInstruction({BC_SIN, BC_REG_EAX});
+                    //     info.addPush(BC_REG_EAX);
+                    //     outTypeIds->add(AST_FLOAT32);
+                    // } else if(funcImpl->name == "cos"){
+                    //     info.addPop(BC_REG_EAX);
+                    //     info.addInstruction({BC_COS, BC_REG_EAX});
+                    //     info.addPush(BC_REG_EAX);
+                    //     outTypeIds->add(AST_FLOAT32);
+                    // } else if(funcImpl->name == "tan"){
+                    //     info.addPop(BC_REG_EAX);
+                    //     info.addInstruction({BC_TAN, BC_REG_EAX});
+                    //     info.addPush(BC_REG_EAX);
+                    //     outTypeIds->add(AST_FLOAT32);
+                    // }
+                     else {
                         ERR_HEAD(expression->tokenRange, "'"<<funcImpl->name<<"' is not an intrinsic function\n";
                             ERR_LINE(expression->tokenRange,"not an intrinsic");
                         )
@@ -1191,21 +1213,34 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                             GeneratePop(info,BC_REG_RBX, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
                         }
                     }
+                    auto& argTypes = funcImpl->argumentTypes;
                     if(fullArgs.size() > 3){
-                        info.addPop(BC_REG_R9);
+                        if(argTypes[3].typeId == AST_FLOAT32)
+                            info.addPop(BC_REG_XMM3);
+                        else
+                            info.addPop(BC_REG_R9);
                     }
                     if(fullArgs.size() > 2){
-                        info.addPop(BC_REG_R8);
+                        if(argTypes[2].typeId == AST_FLOAT32)
+                            info.addPop(BC_REG_XMM2);
+                        else
+                            info.addPop(BC_REG_R8);
                     }
                     if(fullArgs.size() > 1){
-                        info.addPop(BC_REG_RDX);
+                        if(argTypes[1].typeId == AST_FLOAT32)
+                            info.addPop(BC_REG_XMM1);
+                        else
+                            info.addPop(BC_REG_RDX);
                     }
                     if(fullArgs.size() > 0){
-                        info.addPop(BC_REG_RCX);
+                        if(argTypes[0].typeId == AST_FLOAT32)
+                            info.addPop(BC_REG_XMM0);
+                        else
+                            info.addPop(BC_REG_RCX);
                     }
                     // native function can be handled normally
                     info.addCall(astFunc->linkConvention, astFunc->callConvention);
-                    if(astFunc->linkConvention == LinkConventions::EXTERNAL || astFunc->linkConvention == LinkConventions::DLLIMPORT){
+                    if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT){
                         if(astFunc->linkConvention == DLLIMPORT){
                             info.code->addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
                         } else
@@ -1229,7 +1264,11 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                         info.restoreStackMoment(startSP);
                         
                         auto &ret = funcImpl->returnTypes[0];
-                        info.addPush(BC_REG_RAX);
+                        if(ret.typeId == AST_FLOAT32) {
+                            info.addPush(BC_REG_XMM0);
+                        } else {
+                            info.addPush(BC_REG_RAX);
+                        }
                         outTypeIds->add(ret.typeId);
                     }
                 }
@@ -1342,10 +1381,190 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             outTypeIds->add( AST_VOID);
             return GEN_ERROR;
         }
-        outTypeIds->add( expression->typeId);
+        outTypeIds->add(expression->typeId);
     } else {
+        FuncImpl* operatorImpl = nullptr;
+        if(expression->versions_overload._array.size()>0)
+            operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
         TypeId ltype = AST_VOID;
-        if (expression->typeId == AST_REFER) {
+        if(operatorImpl){
+            ASTFunction* astFunc = nullptr;
+            FuncImpl* funcImpl = nullptr;
+            {
+                FnOverloads::Overload overload = expression->versions_overload[info.currentPolyVersion];
+                astFunc = overload.astFunc;
+                funcImpl = overload.funcImpl;
+            }
+            Assert(astFunc && funcImpl);
+
+            // overload comes from type checker
+            _GLOG(log::out << "Operator overload: ";funcImpl->print(info.ast,nullptr);log::out << "\n";)
+
+            std::vector<ASTExpression*> fullArgs;
+            fullArgs.push_back(expression->left);
+            fullArgs.push_back(expression->right);
+
+            // I don't think there is anything to fix in there because conventions
+            // are really about assembly instructions which type checker has nothing to do with.
+            // log::out << log::YELLOW << "Fix call conventions in type checker\n";
+            int startSP = info.saveStackMoment();
+            switch(astFunc->callConvention){
+                case BETCALL: {
+                    Assert(0 == (-info.virtualStackPointer) % 8); // should be aligned
+
+                    info.addIncrSp(-funcImpl->argSize);
+                }
+                break; case STDCALL: {
+                    for(int i=0;i<astFunc->arguments.size();i++){
+                        int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
+                        if(size>8){
+                            // TODO: This should be moved to the type checker.
+                            ERR_HEAD(expression->tokenRange, "Argument types cannot be larger than 8 bytes.";
+                                ERR_LINE(expression->tokenRange, "bad");
+                            )
+                            return GEN_ERROR;
+                        }
+                    }
+
+                    int alignment = 16;
+                    int stackSpace = astFunc->arguments.size() * 8;
+                    if(stackSpace<32)
+                        stackSpace = 32;
+                    stackSpace += MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
+                    info.addIncrSp(-stackSpace);
+                    // int misalign = MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
+                    // info.addIncrSp(-misalign);
+                }
+                break; case CDECL_CONVENTION: {
+                    Assert(false); // @Incomplete
+                }
+            }
+
+            int virtualSP = info.virtualStackPointer;
+            for(int i=0;i<(int)fullArgs.size();i++){
+                auto arg = fullArgs[i];
+                
+                TypeId argType = {};
+                int result = 0;
+                result = GenerateExpression(info, arg, &argType);
+                // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
+                bool wasSafelyCasted = PerformSafeCast(info,argType, funcImpl->argumentTypes[i].typeId);
+                Assert(wasSafelyCasted);
+            }
+
+            switch (astFunc->callConvention) {
+                break; case BETCALL: {
+                    // I have not implemented linkConvention because it's rare
+                    // that you need it for BETCALL.
+                    if(fullArgs.size() != 0){
+                        int baseOffset = virtualSP - info.virtualStackPointer;
+                        // info.addLoadIm(BC_REG_RBX, virtualSP - info.virtualStackPointer);
+                        info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
+                        for(int i=fullArgs.size()-1;i>=0;i--){
+                            auto arg = fullArgs[i];
+                            
+                            // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
+                            GeneratePop(info,BC_REG_RBX, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+                        }
+                    }
+
+                    info.addCall(astFunc->linkConvention, astFunc->callConvention);
+                    info.addCallToResolve(info.code->length(),funcImpl);
+                    info.code->addIm(999999999);
+
+                    if (funcImpl->returnTypes.size()==0) {
+                        _GLOG(log::out << "pop arguments\n");
+                        info.restoreStackMoment(startSP);
+                        outTypeIds->add(AST_VOID);
+                    } else {
+                        _GLOG(log::out << "extract return values\n";)
+                        // NOTE: info.currentScopeId MAY NOT WORK FOR THE TYPES IF YOU PASS FUNCTION POINTERS!
+                        
+                        // Hello! This stuff is very complicated and you can make many mistakes!
+                        // I removed the BC_MOV_RR because I thought "Huh, this doesn't need to be here. I guess it was left behind when I changed some stuff."
+                        // Don't do that you dummy!
+
+                        // These two lines combined tell us where to find the return values on the stack.
+                        // sp at this moment in time is at the end of current call frame
+                        // sp + frame size would be the start of the call frame we had 
+                        // this is were the return values can be found
+                        int offset = -GenInfo::FRAME_SIZE;
+                        info.addInstruction({BC_MOV_RR,BC_REG_SP,BC_REG_RBX});
+                        // sp is our correct value right here. DO NOT rearrange this instruction because
+                        // sp is very sensitive. You should rarely use stack pointer because of this but here we have to.
+                        
+                        // we restore AFTER we got the stack pointer because it resets alignments and arg offset
+                        // which we don't want to include when adding our offsets. Once again, it's complicated.
+                        info.restoreStackMoment(startSP); // PLEASE FOR GOODNESS SAKE DO NOT REFACTOR THIS RESTORE ELSE WHERE!
+                        
+                        for (int i = 0;i<(int)funcImpl->returnTypes.size(); i++) {
+                            auto &ret = funcImpl->returnTypes[i];
+                            TypeId typeId = ret.typeId;
+
+                            GeneratePush(info, BC_REG_RBX, offset + ret.offset, typeId);
+                            outTypeIds->add(ret.typeId);
+                        }
+                    }
+                }
+                // break; case STDCALL: {
+                //     if(fullArgs.size() > 4) {
+                //         Assert(virtualSP - info.virtualStackPointer == fullArgs.size()*8);
+                //         int argOffset = fullArgs.size()*8;
+                //         info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
+                //         for(int i=fullArgs.size()-1;i>=4;i--){
+                //             auto arg = fullArgs[i];
+                            
+                //             // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
+                //             // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
+                //             u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
+                //             GeneratePop(info,BC_REG_RBX, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
+                //         }
+                //     }
+                //     if(fullArgs.size() > 3){
+                //         info.addPop(BC_REG_R9);
+                //     }
+                //     if(fullArgs.size() > 2){
+                //         info.addPop(BC_REG_R8);
+                //     }
+                //     if(fullArgs.size() > 1){
+                //         info.addPop(BC_REG_RDX);
+                //     }
+                //     if(fullArgs.size() > 0){
+                //         info.addPop(BC_REG_RCX);
+                //     }
+                //     // native function can be handled normally
+                //     info.addCall(astFunc->linkConvention, astFunc->callConvention);
+                //     if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT){
+                //         if(astFunc->linkConvention == DLLIMPORT){
+                //             info.code->addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
+                //         } else
+                //             info.code->addExternalRelocation(funcImpl->name, info.code->length());
+                //         info.code->addIm(info.code->externalRelocations.size()-1);
+                //     } else {
+                //         // linkin == native, none or export should be fine
+                //         info.addCallToResolve(info.code->length(), funcImpl);
+                //         info.code->addIm(999999);
+                //     }
+
+                //     Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
+
+                //     if (funcImpl->returnTypes.size()==0) {
+                //         info.restoreStackMoment(startSP);
+                //         outTypeIds->add(AST_VOID);
+                //     } else {
+                //         // return type must fit in RAX
+                //         Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
+                        
+                //         info.restoreStackMoment(startSP);
+                        
+                //         auto &ret = funcImpl->returnTypes[0];
+                //         info.addPush(BC_REG_RAX);
+                //         outTypeIds->add(ret.typeId);
+                //     }
+                // }
+            }
+            return GEN_SUCCESS;
+        } else if (expression->typeId == AST_REFER) {
 
             int result = GenerateReference(info,expression->left,&ltype,idScope);
             if(result!=GEN_SUCCESS)
@@ -1356,8 +1575,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             }
             ltype.setPointerLevel(ltype.getPointerLevel()+1);
             outTypeIds->add( ltype); 
-        }
-        else if (expression->typeId == AST_DEREF) {
+        } else if (expression->typeId == AST_DEREF) {
             int err = GenerateExpression(info, expression->left, &ltype);
             if (err == GEN_ERROR)
                 return err;
@@ -1819,6 +2037,13 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             outTypeIds->add(ltype);
         }
         else {
+            // const char* str = OpToStr((OperationType)expr->typeId.getId(), true);
+            // if(str) {
+            //     int yes = CheckFncall(info,scopeId,expr, outTypes, true);
+                
+            //     if(yes)
+            //         return true;
+            // }
             if(expression->typeId == AST_ASSIGN && expression->assignOpType == (OperationType)0){
                 // THIS IS PURELY ASSIGN NOT +=, *=
                 // WARN_HEAD(expression->tokenRange,"Expression is generated first and then reference. Right to left instead of left to right. "
@@ -1965,6 +2190,10 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                         FIRST_REG = BC_AX;
                         SECOND_REG = BC_CX;
                         OUT_REG = BC_DX;
+                    } else if(bytecodeOp == BC_BLSHIFT || bytecodeOp == BC_BRSHIFT) {
+                        FIRST_REG = BC_AX;
+                        SECOND_REG = BC_CX;
+                        OUT_REG = BC_AX;
                     }
                     u8 reg1 = RegBySize(FIRST_REG, lsize); // get the appropriate registers
                     u8 reg2 = RegBySize(SECOND_REG, rsize);
@@ -2033,14 +2262,14 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     if(ltype.getId()>=AST_TRUE_PRIMITIVES){
                         bad=true;
                         std::string msg = info.ast->typeToString(ltype);
-                        ERR_HEAD(expression->left->tokenRange, "Cannot do operation on struct. Overloading not implemented.\n\n";
+                        ERR_HEAD(expression->left->tokenRange, "Cannot do operation on struct.\n\n";
                             ERR_LINE(expression->left->tokenRange,msg.c_str());
                         )
                     }
                     if(rtype.getId()>=AST_TRUE_PRIMITIVES){
                         bad=true;
                         std::string msg = info.ast->typeToString(rtype);
-                        ERR_HEAD(expression->right->tokenRange, "Cannot do operation on struct. Overloading not implemented.\n\n";
+                        ERR_HEAD(expression->right->tokenRange, "Cannot do operation on struct.\n\n";
                             ERR_LINE(expression->right->tokenRange,msg.c_str());
                         )
                     }
@@ -2251,7 +2480,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
             _GLOG(log::out << "Native function "<<function->name<<"\n";)
         } else {
             // exports not handled
-            Assert(function->linkConvention == EXTERNAL || function->linkConvention == DLLIMPORT);
+            Assert(function->linkConvention == IMPORT || function->linkConvention == DLLIMPORT);
             if(function->_impls.size()>0){
                 function->_impls.last()->address = FuncImpl::ADDRESS_EXTERNAL;
             }
@@ -2856,7 +3085,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
 
                 auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
                  if(!varinfo_item) {
-                    ERR_HEAD(statement->tokenRange, "nr variable already exists\n.";)
+                    ERR_HEAD(statement->tokenRange, itemvar << " variable already exists\n.";)
                     continue;
                 }
                 varinfo_item->typeId = itemtype;
@@ -2935,7 +3164,9 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 }else{
                     info.addInstruction({BC_INCR,index_reg,1});
                 }
-                info.addInstruction({BC_MOV_RM,index_reg, BC_REG_RAX, 4});
+                
+                info.addInstruction({BC_MOV_RM_DISP32, index_reg, BC_REG_FP, 4});
+                info.code->addIm(varinfo_index->frameOffset);
 
                 if(statement->reverse){
                     // info.code->addDebugText("For condition (reversed)\n");
@@ -3063,7 +3294,8 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 }else{
                     info.addInstruction({BC_INCR,index_reg,1});
                 }
-                info.addInstruction({BC_MOV_RM,index_reg, BC_REG_RAX, 4});
+                info.addInstruction({BC_MOV_RM_DISP32, index_reg, BC_REG_FP, 4});
+                info.code->addIm(varinfo_index->frameOffset);
 
                 if(statement->reverse){
                     // info.code->addDebugText("For condition (reversed)\n");
@@ -3130,10 +3362,8 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 )
                 continue;
             }
-            info.restoreStackMoment(loop->stackMoment);
+            info.restoreStackMoment(loop->stackMoment, true);
             
-            // TODO: Generate defers
-
             info.addInstruction({BC_JMP});
             loop->resolveBreaks.push_back(info.code->length());
             info.code->addIm(0);
@@ -3145,9 +3375,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 )
                 continue;
             }
-            info.restoreStackMoment(loop->stackMoment);
-            
-            // TODO: Generate defers
+            info.restoreStackMoment(loop->stackMoment, true);
 
             info.addInstruction({BC_JMP});
             info.code->addIm(loop->continueAddress);
@@ -3200,10 +3428,9 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             // fix stack pointer before returning
             // info.addIncrSp(-info.currentFrameOffset);
             info.currentFrameOffset = lastOffset;
-            info.restoreStackMoment(info.functionStackMoment, true);
-            info.addPop(BC_REG_FP);
+            info.restoreStackMoment(info.functionStackMoment - 8, true); // -8 to not include BC_REG_FP
+            info.addInstruction({BC_POP, BC_REG_FP},true);
             info.addInstruction({BC_RET});
-            return GEN_SUCCESS;
         }
         else if (statement->type == ASTStatement::EXPRESSION) {
             _GLOG(SCOPE_LOG("EXPRESSION"))
@@ -3343,7 +3570,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         if(e.funcImpl->address != FuncImpl::ADDRESS_INVALID){
             *((i32*)&inst) = e.funcImpl->address;
         } else {
-            // ERR() << "Invalid function address for instruction["<<e.bcIndex << "]\n";
+            ERR() << "Invalid function address for instruction["<<e.bcIndex << "]\n";
             auto pair = resolveFailures.find(e.funcImpl);
             if(pair == resolveFailures.end())
                 resolveFailures[e.funcImpl] = 1;

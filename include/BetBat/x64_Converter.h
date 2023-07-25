@@ -25,7 +25,7 @@ enum LinkConventions : u8 {
     NONE, // no linkConvention export/import
     // DLLEXPORT, // .drectve section is needed to pass /EXPORT: to the linker. The exported function must use stdcall convention
     DLLIMPORT, // linkConvention with dll, function are renamed to __impl_
-    EXTERNAL, // external from the source code, linkConvention with static library or object files
+    IMPORT, // external from the source code, linkConvention with static library or object files
     NATIVE, // for interpreter or other inplementation in x64 converter
 };
 const char* ToString(CallConventions stuff);
@@ -64,6 +64,7 @@ struct Program_x64 {
  
     void add(u8 byte);
     void add2(u16 word);
+    void add3(u32 word);
     void add4(u32 dword);
     void addModRM(u8 mod, u8 reg, u8 rm);
     // RIP-relative addressing
@@ -79,7 +80,7 @@ struct Program_x64 {
     void add2(i64 word);
     void add4(i64 dword);
 
-    void printHex();
+    void printHex(const char* path = nullptr);
 
     // TODO: Relocations, global data, symbols
     static void Destroy(Program_x64* program);

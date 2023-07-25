@@ -1,0 +1,9 @@
+#import "Logger"
+#import "Math"
+
+f = 0.99;
+
+println(sine(f));
+println(sinf(f)," ", cosf(f));
+println(tanf(f));
+println(sinf(f)/cosf(f));

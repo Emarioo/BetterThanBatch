@@ -56,6 +56,10 @@ const char* InstToString(int type){
 
         CASE(BC_MEMZERO)
         CASE(BC_MEMCPY)
+
+        // CASE(BC_SIN)
+        // CASE(BC_COS)
+        // CASE(BC_TAN)
     }
     #undef CASE
     return "BC_?";
@@ -147,6 +151,11 @@ const char* RegToStr(u8 reg){
 
         CASE(R8,r8)
         CASE(R9,r9)
+
+        CASE(XMM0,xmm0)
+        CASE(XMM1,xmm1)
+        CASE(XMM2,xmm2)
+        CASE(XMM3,xmm3)
 
         case 0: return "";
     }

@@ -121,7 +121,7 @@
 			"patterns": [
 				{
 					"name": "constant.numeric",
-					"match": "(\\b\\d+(\\.)\\d+\\b)|(\\b\\d+\\b)"
+					"match": "(\\b\\d+(\\.)\\d+\\b)|(\\b\\d+\\b)|(false)|(true)"
 				}
 			]
 		}

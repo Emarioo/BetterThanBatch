@@ -63,6 +63,10 @@
 
 #define BC_MEMZERO 100
 #define BC_MEMCPY 101
+
+// #define BC_SIN 110
+// #define BC_COS 111
+// #define BC_TAN 112
 /*
 f32
 f64
@@ -74,7 +78,6 @@ i64
 u16
 u8
 */
-// NOTE: Some instructions have odd names to avoid collision with Bytecode.h.
 
 #define BC_REG_MASK 0xC0
 #define BC_REG_8 0
@@ -108,6 +111,13 @@ u8
 #define BC_R8 9
 #define BC_R9 10
 
+#define BC_XMM0 20
+#define BC_XMM1 21
+#define BC_XMM2 22
+#define BC_XMM3 23
+
+#define IS_REG_XMM(reg) (BC_XMM0 <= DECODE_REG_TYPE(reg) && DECODE_REG_TYPE(reg) <= BC_XMM3)
+
 // BC_REG_ALL can't be 0 because it's seen as no register so we do 8.
 #define BC_REG_AL (ENCODE_REG_SIZE_TYPE(BC_REG_8)|BC_AX)
 #define BC_REG_BL (ENCODE_REG_SIZE_TYPE(BC_REG_8)|BC_BX)
@@ -139,9 +149,13 @@ u8
 #define BC_REG_RSI (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_SI)
 #define BC_REG_RDI (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_DI)
 
-
 #define BC_REG_R8 (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_R8)
 #define BC_REG_R9 (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_R9)
+
+#define BC_REG_XMM0 (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_XMM0)
+#define BC_REG_XMM1 (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_XMM1)
+#define BC_REG_XMM2 (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_XMM2)
+#define BC_REG_XMM3 (ENCODE_REG_SIZE_TYPE(BC_REG_64)|BC_XMM3)
 
 #define BC_REG_PC (ENCODE_REG_SIZE_TYPE(BC_REG_64)|10)
 // data pointer shouldn't be messed with directly

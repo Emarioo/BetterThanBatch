@@ -461,7 +461,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
     return true;
 }
 int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, DynamicArray<TypeId>* outTypes);
-int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes) {
+int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes, bool operatorOverload) {
     using namespace engone;
 
     #define FNCALL_SUCCESS \
@@ -477,18 +477,24 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
     //-- Get poly args from the function call
     DynamicArray<TypeId> fnPolyArgs;
     std::vector<Token> polyTokens;
-    Token baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
-    for(int i=0;i<(int)polyTokens.size();i++){
-        bool printedError = false;
-        TypeId id = CheckType(info, scopeId, polyTokens[i], expr->tokenRange, &printedError);
-        fnPolyArgs.add(id);
-        // TODO: What about void?
-        if(id.isValid()){
+    Token baseName{};
+    
+    if(operatorOverload) {
+        baseName = OpToStr((OperationType)expr->typeId.getId());
+    } else {
+        baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
+        for(int i=0;i<(int)polyTokens.size();i++){
+            bool printedError = false;
+            TypeId id = CheckType(info, scopeId, polyTokens[i], expr->tokenRange, &printedError);
+            fnPolyArgs.add(id);
+            // TODO: What about void?
+            if(id.isValid()){
 
-        } else if(!printedError) {
-            ERR_HEAD(expr->tokenRange, "Type for polymorphic argument was not valid.\n\n";
-                ERR_LINE(expr->tokenRange,"bad");
-            )
+            } else if(!printedError) {
+                ERR_HEAD(expr->tokenRange, "Type for polymorphic argument was not valid.\n\n";
+                    ERR_LINE(expr->tokenRange,"bad");
+                )
+            }
         }
     }
 
@@ -496,30 +502,47 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
 
     // DynamicArray<TypeId>& argTypes = expr->versions_argTypes[info.currentPolyVersion];
     DynamicArray<TypeId> argTypes{};
-    bool thisFailed=false;
-    for(int i = 0; i<(int)expr->args->size();i++){
-        auto argExpr = expr->args->get(i);
-        Assert(argExpr);
-
+    if(operatorOverload){
         DynamicArray<TypeId> tempTypes{};
-        CheckExpression(info,scopeId,argExpr,&tempTypes);
+        CheckExpression(info,scopeId,expr->left,&tempTypes);
         if(tempTypes.size()==0){
             argTypes.add(AST_VOID);
         } else {
-            if(expr->boolValue && i==0){
-                if(tempTypes.last().getPointerLevel()>1){
-                    thisFailed=true;
-                } else {
-                    tempTypes.last().setPointerLevel(1);
-                }
-            }
             argTypes.add(tempTypes.last());
         }
-    }
-    // cannot continue if we don't know which struct the method comes from
-    if(thisFailed) {
-        FNCALL_FAIL
-        return false;
+        tempTypes.resize(0);
+        CheckExpression(info,scopeId,expr->right,&tempTypes);
+        if(tempTypes.size()==0){
+            argTypes.add(AST_VOID);
+        } else {
+            argTypes.add(tempTypes.last());
+        }
+    } else {
+        bool thisFailed=false;
+        for(int i = 0; i<(int)expr->args->size();i++){
+            auto argExpr = expr->args->get(i);
+            Assert(argExpr);
+
+            DynamicArray<TypeId> tempTypes{};
+            CheckExpression(info,scopeId,argExpr,&tempTypes);
+            if(tempTypes.size()==0){
+                argTypes.add(AST_VOID);
+            } else {
+                if(expr->boolValue && i==0){
+                    if(tempTypes.last().getPointerLevel()>1){
+                        thisFailed=true;
+                    } else {
+                        tempTypes.last().setPointerLevel(1);
+                    }
+                }
+                argTypes.add(tempTypes.last());
+            }
+        }
+        // cannot continue if we don't know which struct the method comes from
+        if(thisFailed) {
+            FNCALL_FAIL
+            return false;
+        }
     }
 
     //-- Get identifier, the namespace of overloads for the function/method.
@@ -560,10 +583,12 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
     } else {
         Identifier* iden = info.ast->findIdentifier(scopeId, baseName);
         if(!iden || iden->type != Identifier::FUNC){
-            ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' does not exist. Did you forget an import?\n\n";
-                ERR_LINET(baseName,"undefined");
-            )
-            FNCALL_FAIL
+            if(!operatorOverload) {
+                ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' does not exist. Did you forget an import?\n\n";
+                    ERR_LINET(baseName,"undefined");
+                )
+                FNCALL_FAIL
+            }
             return false;
         }
         fnOverloads = &iden->funcOverloads;
@@ -571,39 +596,41 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
     
     if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
         // match args with normal impls
-        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, expr, fnOverloads->overloads.size()==1);
-        if(!overload)
+        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, expr, fnOverloads->overloads.size()==1 && !operatorOverload);
+        if(!overload && !operatorOverload)
             overload = fnOverloads->getOverload(info.ast, argTypes, expr, true);
         if(overload){
             FNCALL_SUCCESS
             return true;
         }
-        if(fnOverloads->overloads.size()==0){
-            ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a function/method.\n\n";
-                ERR_LINE(expr->tokenRange, "bad");
-            )
-        } else {
-            // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
-            //  Should be done in generator too.
-            ERR_HEAD(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
-                if(argTypes.size()==0){
-                    log::out << "zero arguments";
-                } else {
-                    expr->printArgTypes(info.ast, argTypes);
-                }
-                log::out << "\n";
-                if(fnOverloads->polyOverloads.size()!=0){
-                    log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
-                }
-                if(expr->args->size()!=0 && expr->args->get(0)->namedValue.str){
-                    log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
-                }
-                log::out <<"\n";
-                ERR_LINE(expr->tokenRange, "bad");
-                // TODO: show list of available overloaded function args
-            ) 
+        if(!operatorOverload){
+            if(fnOverloads->overloads.size()==0){
+                ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a function/method.\n\n";
+                    ERR_LINE(expr->tokenRange, "bad");
+                )
+            } else {
+                // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
+                //  Should be done in generator too.
+                ERR_HEAD(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
+                    if(argTypes.size()==0){
+                        log::out << "zero arguments";
+                    } else {
+                        expr->printArgTypes(info.ast, argTypes);
+                    }
+                    log::out << "\n";
+                    if(fnOverloads->polyOverloads.size()!=0){
+                        log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
+                    }
+                    if(expr->args->size()!=0 && expr->args->get(0)->namedValue.str){
+                        log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
+                    }
+                    log::out <<"\n";
+                    ERR_LINE(expr->tokenRange, "bad");
+                    // TODO: show list of available overloaded function args
+                ) 
+            }
+            FNCALL_FAIL
         }
-        FNCALL_FAIL
         return false;
         // if implicit polymorphism then
         // macth poly impls
@@ -985,7 +1012,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         TypeId theType =CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);;
         outTypes->add(theType);
     } else if(expr->typeId == AST_FNCALL){
-        CheckFncall(info,scopeId,expr, outTypes);
+        CheckFncall(info,scopeId,expr, outTypes, false);
     } else if(expr->typeId == AST_INITIALIZER) {
         Assert(expr->args);
         for(auto now : *expr->args){
@@ -1021,6 +1048,18 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             )
         }
     } else {
+        // TODO: You should not be allowed to overload all operators.
+        //  Fix some sort of way to limit which ones you can.
+        const char* str = OpToStr((OperationType)expr->typeId.getId(), true);
+        if(str && expr->left && expr->right) {
+            expr->nonNamedArgs = 2; // unless operator overloading
+            int yes = CheckFncall(info,scopeId,expr, outTypes, true);
+            // TODO: Error if
+            
+            if(yes)
+                return true;
+        }
+
         // TODO: This code is buggy and doesn't behave as it should for all types.
         //   Not sure what to do about it.
         if(expr->left) {
@@ -1832,6 +1871,20 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
 
     int result = CheckEnums(info, scope);
     
+    // Jonathan Blow has a video about dependenies when
+    // checking types (https://www.youtube.com/watch?v=4q0cgjXhhTo)
+    // The video is 8 years old so perhaps the system has changed to
+    // something better. In any case, he uses an array of pointers to nodes
+    // that will be checked. If the node couldn't be checked, then you move on to the next
+    // node until all nodes have been checked. If you went a full round without changing anything
+    // then you have a circular dependency and should print an error.
+    // It might be a good idea to use a iterative approach with an array instead of
+    // going deep into each struct like it is now. An array is easier to manage and
+    // may improve cache hits. Before this is to be done, there must be a significant amount
+    // of types and structs to test this on. See the performance difference.
+    // This might not be a good idea, it might be fine as it is. I mean, it does work.
+    // If turns out to be slow when you are dealing with many structs then it's time to
+    // fix this.
     info.completedStructs=false;
     info.showErrors = false;
     while(!info.completedStructs){

@@ -12,7 +12,8 @@ enum SettingType : u32 {
     DEFAULT_TARGET = 0,
     DEFAULT_LINKER,
     EXTRA_FLAGS, // these flags will be passed to the compiler
-
+    QUIT_ON_ERROR,
+    SETTING_COUNT,
 };
 const char* ToString(SettingType type);
 engone::Logger& operator<<(engone::Logger& logger, SettingType type);
@@ -21,6 +22,9 @@ SettingType ToSetting(const char* str);
 struct UserProfile {
 
     void cleanup();
+
+    UserProfile* CreateDefault();
+    void Destroy(UserProfile* ptr);
 
     // key value pairs
     struct Value {
@@ -40,6 +44,7 @@ struct UserProfile {
 
     struct Comment {
         bool enclosed = false;
+        bool hashtag = false;
         std::string str;
     };
     DynamicArray<Comment> comments;

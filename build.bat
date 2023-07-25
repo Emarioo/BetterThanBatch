@@ -84,7 +84,7 @@ echo Compiled in %finS%.%finS2% seconds
 @REM Not using MSVC_COMPILE_OPTIONS because debug information may be added
 cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS src\BetBat\External\NativeLayer.cpp /Fo:bin/NativeLayer.obj
 lib bin/NativeLayer.obj /OUT:bin/NativeLayer.lib
-@REM dumpbin /ALL bin/External/NativeLayer.obj > nat.out
+dumpbin /ALL bin/NativeLayer.obj > nat.out
 
 if !compileSuccess! == 0 (
     echo f | XCOPY /y /q !output! prog.exe > nul
@@ -96,9 +96,10 @@ if !compileSuccess! == 0 (
 
     @REM obj_test
 
-    @REM prog -dev
-    prog examples/x64_test.btb -target win-x64 -out test.exe
-    @REM dumpbin bin/dev.obj /ALL > dev.out
+    prog -dev
+    @REM  > temp
+    @REM prog examples/x64_test.btb -target win-x64 -out test.exe
+    dumpbin bin/dev.obj /ALL > dev.out
     @REM dumpbin bin/obj_min.obj /ALL > min.out
 
     @REM link objtest.obj /DEFAULTLIB:LIBCMT

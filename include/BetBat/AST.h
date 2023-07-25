@@ -345,7 +345,7 @@ struct ScopeInfo {
 //     }
 // };
 struct AST;
-const char* OpToStr(OperationType op);
+const char* OpToStr(OperationType op, bool null = false);
 struct ASTExpression : ASTNode {
     ASTExpression() {
         // printf("hum\n");

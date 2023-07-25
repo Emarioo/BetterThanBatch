@@ -199,7 +199,7 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
     
     Path dir = path.getDirectory();
     for(auto& item : tokenStream->importList){
-        std::string importName = "";
+        Path importName = "";
         int dotindex = item.name.find_last_of(".");
         int slashindex = item.name.find_last_of("/");
         // log::out << "dot "<<dotindex << " slash "<<slashindex<<"\n";
@@ -214,14 +214,17 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
         // TODO: Test "/src.btb", "ok./hum" and other unusual paths
         
         //-- Search directory of current source file
-        if(importName.find("./")==0) {
-            fullPath = dir.text + importName.substr(2);
+        if(importName.text.find("./")==0) {
+            fullPath = dir.text + importName.text.substr(2);
         } 
         //-- Search cwd or absolute path
-        else if(FileExist(importName)){
+        else if(FileExist(importName.text)){
             fullPath = importName;
             if(!fullPath.isAbsolute())
                 fullPath = fullPath.getAbsolute();
+        }
+        else if(fullPath = dir.text + importName.text, FileExist(fullPath.text)){
+            // fullpath =  dir.text + importName.text;
         }
         //-- Search additional import directories.
         // TODO: DO THIS WITH #INCLUDE TOO!
@@ -229,7 +232,7 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
             for(int i=0;i<(int)info.importDirectories.size();i++){
                 const Path& dir = info.importDirectories[i];
                 Assert(dir.isDir() && dir.isAbsolute());
-                Path path = dir.text + importName;
+                Path path = dir.text + importName.text;
                 bool yes = FileExist(path.text);
                 if(yes) {
                     fullPath = path;
@@ -239,7 +242,7 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
         }
         
         if(fullPath.text.empty()){
-            log::out << log::RED << "Could not find import '"<<importName<<"' (import from '"<<BriefPath(path.text,20)<<"'\n";
+            log::out << log::RED << "Could not find import '"<<importName.text<<"' (import from '"<<BriefPath(path.text,20)<<"'\n";
         }else{
             auto fileInfo = info.getStream(fullPath);
             if(fileInfo){   
