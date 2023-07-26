@@ -3,24 +3,23 @@
 // preprocessor needs CompileInfo to handle global caching of include streams
 #include "BetBat/Compiler.h"
 
-#undef ERR_HEAD
-#undef ERR_LINE
-#undef WARN_HEAD
-#undef WARN_LINE
 
-#define WARN_HEAD(T, M) info.compileInfo->warnings++;engone::log::out << WARN_CUSTOM(info.inTokens->streamName, T.line, T.column, "Preproc. warning","W0000") << M
-#define WARN_LINE(I, M) PrintCode(I, info.inTokens, M)
+#undef WARN_HEAD3
+#define WARN_HEAD3(T, M) info.compileInfo->warnings++;engone::log::out << WARN_CUSTOM(info.inTokens->streamName, T.line, T.column, "Preproc. warning","W0000") << M
+#undef WARN_LINE2
+#define WARN_LINE2(I, M) PrintCode(I, info.inTokens, M)
 
-// #define WARN_HEAD(T, M) info.compileInfo->warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
-#define ERR_HEAD(T, M) info.compileInfo->errors++;engone::log::out << ERR_DEFAULT_T(info.inTokens,T,"Preproc. error","E0000") << M
-#define ERR_LINE(I, M) PrintCode(I, info.inTokens, M)
+#undef ERR_HEAD3
+#define ERR_HEAD3(T, M) info.compileInfo->errors++;engone::log::out << ERR_DEFAULT_T(info.inTokens,T,"Preproc. error","E0000") << M
+#undef ERR_LINE2
+#define ERR_LINE2(I, M) PrintCode(I, info.inTokens, M)
 
 // #define MLOG_MATCH(X) X
 #define MLOG_MATCH(X)
 
-// used for std::vector<int> tokens
-#define INT_ENCODE(I) (I<<3)
-#define INT_DECODE(I) (I>>3)
+#undef ERR_SECTION
+#define ERR_SECTION(CONTENT) { BASE_SECTION("Preproc. error, E0000"); CONTENT; }
+
 
 #define _macros compileInfo->_macros
 
@@ -58,7 +57,7 @@ RootMacro* PreprocInfo::matchMacro(const Token& token){
     }
     // if(pair->second.called){
     //     auto& info = *this;
-    //     ERR_HEAD(token, "Infinite recursion not allowed ("<<token<<")\n";
+    //     ERR_HEAD3(token, "Infinite recursion not allowed ("<<token<<")\n";
     //     return 0;
     // }
     _MLOG(MLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<token<<"\n";))
@@ -133,16 +132,16 @@ CertainMacro* RootMacro::matchArgCount(int count, bool includeInf){
     auto pair = certainMacros.find(count);
     if(pair==certainMacros.end()){
         if(!includeInf)
-            return 0;
+            return nullptr;
         if(hasInfinite){
             if((int)infDefined.parameters.size()-1<=count){
                 _MLOG(MLOG_MATCH(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< infDefined.parameters.size()<<" (inf)\n";))
                 return &infDefined;
             }else{
-                return 0;
+                return nullptr;
             }
         }else{
-            return 0;   
+            return nullptr;
         }
     }else{
         _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< pair->second.parameters.size()<<"\n";))
@@ -171,60 +170,61 @@ void PreprocInfo::addToken(Token inToken){
     inToken.str = (char*)offset;
     outTokens->addToken(inToken);
 }
-int ParseDirective(PreprocInfo& info, bool attempt, const char* str){
+
+SignalAttempt ParseDirective(PreprocInfo& info, bool attempt, const char* str){
     using namespace engone;
     Token token = info.get(info.at()+1);
     if(!Equal(token,PREPROC_TERM)){
         if(attempt){
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_HEAD3(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
         if(attempt) {
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         } else {
-            ERR_HEAD(token, "Cannot have space after preprocessor directive\n";
+            ERR_HEAD3(token, "Cannot have space after preprocessor directive\n";
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
     }
     token = info.get(info.at()+2);
     if(token != str){
         if(attempt){
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD(token, "Expected "<<str<<" found '"<<token<<"'\n";
+            ERR_HEAD3(token, "Expected "<<str<<" found '"<<token<<"'\n";
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
     info.next();
-    return PARSE_SUCCESS;  
+    return SignalAttempt::SUCCESS;  
 }
-int ParseDefine(PreprocInfo& info, bool attempt){
+SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     using namespace engone;
     MEASURE;
     Token token = info.get(info.at()+1);
     if(!Equal(token,PREPROC_TERM)){
         if(attempt){
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_HEAD3(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
-        ERR_HEAD(token, "Cannot have space after preprocessor directive\n";
+        ERR_HEAD3(token, "Cannot have space after preprocessor directive\n";
         )
         // info.next();
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     token = info.get(info.at()+2);
     
@@ -237,42 +237,49 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         multiline=true;
     }else{
         if(attempt){
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD(token, "Expected define found '"<<token<<"'\n";
+            ERR_HEAD3(token, "Expected define found '"<<token<<"'\n";
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
-    token = info.next();
-    token = info.next();
+    info.next(); // #
+    info.next(); // define
     attempt = false;
     
-    Token name = info.next();
+    Token name = info.get(info.at()+1);
     
     if(name.flags&TOKEN_MASK_QUOTED){
-        ERR_HEAD(name, "Define name cannot be quoted "<<name<<"\n";
+        ERR_HEAD3(name, "Macro names cannot be quoted ("<<name<<").\n\n";
+            ERR_LINE2(name.tokenIndex,"");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
+    if(!IsName(name)){
+        ERR_HEAD3(name, "'"<<name<<"' is not a valid name for macros. If the name is valid for variables then it is valid for macros.\n\n";
+            ERR_LINE2(name.tokenIndex, "bad");
+        )
+        return SignalAttempt::FAILURE;
+    }
+    info.next();
     
     // if(info.matchMacro(name)){
-    //     WARN_HEAD(name, "Intentional redefinition of '"<<name<<"'?\n";   
+    //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n";   
     // }
     
     int suffixFlags = name.flags;
     CertainMacro defTemp{};
-    if((name.flags&TOKEN_SUFFIX_SPACE) || (name.flags&TOKEN_SUFFIX_LINE_FEED)){
-    
-    }else{
+    if(!((name.flags&TOKEN_SUFFIX_SPACE) || (name.flags&TOKEN_SUFFIX_LINE_FEED))){
         Token token = info.next();
         if(token!="("){
-            ERR_HEAD(token, "Unexpected '"<<token<<"' did you forget a space or '(' to indicate arguments?\n";
+            ERR_HEAD3(token, "'"<<token<<"' is not allowed directly after a macro's name. Either use a '(' to indicate arguments or a space for none.\n\n";
+                ERR_LINE2(token.tokenIndex,"bad");
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
-        
+        int hadError = false;
         while(!info.end()){
             Token token = info.next();
             if(token==")"){
@@ -281,11 +288,19 @@ int ParseDefine(PreprocInfo& info, bool attempt){
             }
             
             if(token=="...") {
-                defTemp.infiniteArg = defTemp.parameters.size();
+                defTemp.indexOfVariadic = defTemp.parameters.size();
             }
             // TODO: token must be valid name
-            // defTemp.parameters.push_back(token);
-            defTemp.addParam(token);
+            if(!IsName(token)){
+                if(!hadError){
+                    ERR_HEAD3(token, "'"<<token<<"' is not a valid name for arguments.\n\n";
+                        ERR_LINE2(token.tokenIndex, "bad");
+                    )
+                }
+                hadError=true;
+            } else {
+                defTemp.addParam(token);
+            }
             token = info.next();
             if(token==")"){
                 suffixFlags = token.flags;
@@ -293,29 +308,50 @@ int ParseDefine(PreprocInfo& info, bool attempt){
             } else if(token==","){
                 // cool
             } else{
-                ERR_HEAD(token, "Expected , or ) found '"<<token<<"'\n";   
-                )
+                if(!hadError){
+                    ERR_HEAD3(token, "'"<<token<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.\n\n";   
+                        ERR_LINE2(token.tokenIndex, "bad");
+                    )
+                }
+                hadError = true;
             }
         }
         
         _MLOG(log::out << "loaded "<<defTemp.parameters.size()<<" arg names";
-        if(defTemp.infiniteArg==-1)
+        if(!defTemp.isVariadic())
             log::out << "\n";
         else
-            log::out << " (infinite)\n";)
+            log::out << " (variadic)\n";)
     
     }
     RootMacro* rootDefined = info.matchMacro(name);
     if(!rootDefined){
         rootDefined = info.createRootMacro(name);
     }
+    if(defTemp.isVariadic() && 
+    defTemp.nonVariadicArguments() != 0) {
+        // READ BEFORE CHANGING! 
+        //You usually want a base case for variadic arguments when
+        // using it recursively. Instead of having to specify the blank
+        // base macro yourself, the compiler does it for you.
+        // IMPORTANT: It should NOT happen for macro(...)
+        // because the blank macro with zero arguments would be
+        // used instead of the variadic one making it impossible to
+        // use macro(...).
+        
+        (rootDefined->certainMacros[0] = {}).blank = true;
+    }
     
     CertainMacro* defined = 0;
-    if(defTemp.infiniteArg==-1){
+    if(!defTemp.isVariadic()){
         defined = rootDefined->matchArgCount(defTemp.parameters.size(),false);
         if(defined){
-            WARN_HEAD(name, "Intentional redefinition of '"<<name<<"'?\n";
-            )
+            if(!defined->isVariadic() && !defined->isBlank()){
+                WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
+                    ERR_LINE(defined->name, "previous");
+                    ERR_LINE2(name.tokenIndex, "replacement");
+                )
+            }
             *defined = defTemp;
         }else{
             // move defTemp info appropriate place in rootDefined
@@ -323,7 +359,9 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         }
     }else{
         if(rootDefined->hasInfinite){
-            WARN_HEAD(name, "Intentional redefinition of '"<<name<<"'?\n";   
+            WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
+                ERR_LINE(defined->name, "previous");
+                ERR_LINE2(name.tokenIndex, "replacement");
             )
         }
         rootDefined->hasInfinite = true;
@@ -340,9 +378,9 @@ int ParseDefine(PreprocInfo& info, bool attempt){
         if(token==PREPROC_TERM){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
                 continue;
-                // ERR_HEAD(token, "SPACE AFTER "<<token<<"!\n";
+                // ERR_HEAD3(token, "SPACE AFTER "<<token<<"!\n";
                 // )
-                // return PARSE_ERROR;
+                // return SignalAttempt::FAILURE;
             }
             Token token = info.get(info.at()+1);
             if(token=="enddef"){
@@ -351,8 +389,8 @@ int ParseDefine(PreprocInfo& info, bool attempt){
                 break;
             }
             if(token=="define" || token=="multidefine"){
-                ERR_HEAD(token, "Macro definitions inside macros are not allowed.\n\n";
-                    ERR_LINE(info.at()+1,"not allowed");
+                ERR_HEAD3(token, "Macro definitions inside macros are not allowed.\n\n";
+                    ERR_LINE2(info.at()+1,"not allowed");
                 )
                 invalidContent = true;
             }
@@ -365,7 +403,9 @@ int ParseDefine(PreprocInfo& info, bool attempt){
             }
         }
         if(info.end()&&multiline){
-            ERR_HEAD(token, "Missing enddef!\n";
+            ERR_HEAD3(token, "Missing enddef for macro '"<<name<<"' ("<<(defined->isVariadic() ? "variadic" : std::to_string(defined->parameters.size()))<<" arguments)\n\n";
+                ERR_LINE2(name.tokenIndex,"this needs #enddef somewhere");
+                ERR_LINE2(info.length()-1,"macro content ends here!");
             )
         }
     }
@@ -393,9 +433,9 @@ int ParseDefine(PreprocInfo& info, bool attempt){
     // Are you proud of me?
     if(count==1) log::out << " token\n";
     else log::out << " tokens\n";)
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
-int ParseUndef(PreprocInfo& info, bool attempt){
+SignalAttempt ParseUndef(PreprocInfo& info, bool attempt){
     using namespace engone;
 
     // TODO: check of end
@@ -403,32 +443,32 @@ int ParseUndef(PreprocInfo& info, bool attempt){
     Token token = info.get(info.at()+1);
     if(!Equal(token,PREPROC_TERM)){
         if(attempt){
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'.\n";
+            ERR_HEAD3(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'.\n";
             )
             
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
-        ERR_HEAD(token, "Cannot have space after preprocessor directive\n";
+        ERR_HEAD3(token, "Cannot have space after preprocessor directive\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     token = info.get(info.at()+2);
     if(token!="undef"){
         if(attempt){
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         }
-        ERR_HEAD(token, "Expected undef (since this wasn't an attempt)\n";
+        ERR_HEAD3(token, "Expected undef (since this wasn't an attempt)\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-        ERR_HEAD(token, "Unexpected line feed (expected a macro name)\n";
+        ERR_HEAD3(token, "Unexpected line feed (expected a macro name)\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
 
     info.next();
@@ -439,70 +479,70 @@ int ParseUndef(PreprocInfo& info, bool attempt){
     // auto pair = info.macros.find(name);
     RootMacro* rootMacro = info.matchMacro(name);
     if(!rootMacro){
-        WARN_HEAD(name, "Cannot undefine '"<<name<<"' (doesn't exist)\n";
+        WARN_HEAD3(name, "Cannot undefine '"<<name<<"' (doesn't exist)\n";
         )
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     }
 
     if(name.flags&TOKEN_SUFFIX_LINE_FEED){
         info.removeRootMacro(name);
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     }
     token = info.next();
 
     if(token!="..." && !IsInteger(token)){
-        ERR_HEAD(token, "Expected an integer (or ...) to indicate argument count not '"<<token<<"'.\n";
+        ERR_HEAD3(token, "Expected an integer (or ...) to indicate argument count not '"<<token<<"'.\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     if(!(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-        ERR_HEAD(token, "Expected line feed after '"<<token<<"'\n";
+        ERR_HEAD3(token, "Expected line feed after '"<<token<<"'\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
 
     if(token=="..."){
         if(!rootMacro->hasInfinite){
-            WARN_HEAD(name, "Cannot undefine '"<<name<<"' [inf] (doesn't exist)\n";
+            WARN_HEAD3(name, "Cannot undefine '"<<name<<"' [inf] (doesn't exist)\n";
             )
-            return PARSE_SUCCESS;
+            return SignalAttempt::SUCCESS;
         }
         rootMacro->hasInfinite=false;
         rootMacro->infDefined = {};
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     }
 
     int argCount = ConvertInteger(token);
     if(argCount<0){
-        ERR_HEAD(token, "ArgCount cannot be negative '"<<argCount<<"'\n";
+        ERR_HEAD3(token, "ArgCount cannot be negative '"<<argCount<<"'\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
 
     auto cert = rootMacro->certainMacros.find(argCount);
     if(cert==rootMacro->certainMacros.end()){
-        WARN_HEAD(name, "Cannot undefine '"<<name<<"' ["<<argCount<<" args] (doesn't exist)\n";
+        WARN_HEAD3(name, "Cannot undefine '"<<name<<"' ["<<argCount<<" args] (doesn't exist)\n";
         )
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     }
     rootMacro->certainMacros.erase(cert);
 
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
 
-int ParseImport(PreprocInfo& info, bool attempt){
+SignalAttempt ParseImport(PreprocInfo& info, bool attempt){
     using namespace engone;
     MEASURE;
     Token token = info.get(info.at()+1);
-    int result = ParseDirective(info, attempt, "import");
-    if(result==PARSE_BAD_ATTEMPT)
-        return PARSE_BAD_ATTEMPT;
+    SignalAttempt result = ParseDirective(info, attempt, "import");
+    if(result==SignalAttempt::BAD_ATTEMPT)
+        return SignalAttempt::BAD_ATTEMPT;
 
     Token name = info.get(info.at()+1);
     if(!(name.flags&TOKEN_MASK_QUOTED)){
-        ERR_HEAD(name, "expected a string not "<<name<<"\n";
+        ERR_HEAD3(name, "expected a string not "<<name<<"\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
     
@@ -511,9 +551,9 @@ int ParseImport(PreprocInfo& info, bool attempt){
         info.next();
         token = info.get(info.at()+1);
         if(token.flags & TOKEN_MASK_QUOTED){
-            ERR_HEAD(token, "don't use quotes with "<<log::YELLOW<<"as\n";
+            ERR_HEAD3(token, "don't use quotes with "<<log::YELLOW<<"as\n";
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
         info.next();
         // handled by PreprocessImports
@@ -522,44 +562,44 @@ int ParseImport(PreprocInfo& info, bool attempt){
         // info.inTokens->addImport(name,"");
     }
     
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
-int ParseLink(PreprocInfo& info, bool attempt){
+SignalAttempt ParseLink(PreprocInfo& info, bool attempt){
     using namespace engone;
     MEASURE;
     Token token = info.get(info.at()+1);
-    int result = ParseDirective(info, attempt, "link");
-    if(result==PARSE_BAD_ATTEMPT)
-        return PARSE_BAD_ATTEMPT;
+    SignalAttempt result = ParseDirective(info, attempt, "link");
+    if(result==SignalAttempt::BAD_ATTEMPT)
+        return SignalAttempt::BAD_ATTEMPT;
 
     Token name = info.get(info.at()+1);
     if(!(name.flags&TOKEN_MASK_QUOTED)){
-        ERR_HEAD(name, "expected a string not "<<name<<"\n";
+        ERR_HEAD3(name, "expected a string not "<<name<<"\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
     
     info.compileInfo->addLinkDirective(name);
     
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
-int ParseInclude(PreprocInfo& info, bool attempt){
+SignalAttempt ParseInclude(PreprocInfo& info, bool attempt){
     using namespace engone;
     MEASURE;
     Token hashtag = info.get(info.at()+1);
-    int result = ParseDirective(info, attempt, "include");
-    if(result==PARSE_BAD_ATTEMPT)
-        return PARSE_BAD_ATTEMPT;
+    SignalAttempt result = ParseDirective(info, attempt, "include");
+    if(result==SignalAttempt::BAD_ATTEMPT)
+        return SignalAttempt::BAD_ATTEMPT;
 
     int tokIndex = info.at()+1;
     // needed for an error, saving it here in case the code changes
     // and info.at changes it output
     Token token = info.get(tokIndex);
     if(!(token.flags&TOKEN_MASK_QUOTED)){
-        ERR_HEAD(token, "expected a string not "<<token<<"\n";
+        ERR_HEAD3(token, "expected a string not "<<token<<"\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
 
@@ -575,7 +615,7 @@ int ParseInclude(PreprocInfo& info, bool attempt){
         fullpath = dir.text + filepath.substr(2);
     }
     
-    //-- Search cwd or absolute path
+    //-- Search cwd or absolute pathP
     else if(FileExist(filepath)){
         fullpath = filepath;
         if(!fullpath.isAbsolute())
@@ -604,10 +644,10 @@ int ParseInclude(PreprocInfo& info, bool attempt){
     // TODO: Search additional import directories
     
     if(fullpath.text.empty()){
-        ERR_HEAD(token, "Could not include '"<<filepath<<"' (not found). Format is not appended automatically (while import does append .btb).\n\n";
-            ERR_LINE(tokIndex,"not found");
+        ERR_HEAD3(token, "Could not include '"<<filepath<<"' (not found). Format is not appended automatically (while import does append .btb).\n\n";
+            ERR_LINE2(tokIndex,"not found");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
 
     Assert(info.compileInfo);
@@ -626,9 +666,9 @@ int ParseInclude(PreprocInfo& info, bool attempt){
     }
     
     if(!includeStream){
-        ERR_HEAD(token, "Error with token stream for "<<filepath<<" (bug in the compiler!)\n";
+        ERR_HEAD3(token, "Error with token stream for "<<filepath<<" (bug in the compiler!)\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     int tokenIndex=0;
     while(tokenIndex<includeStream->length()){
@@ -641,12 +681,12 @@ int ParseInclude(PreprocInfo& info, bool attempt){
 
     _MLOG(log::out << "Included "<<tokenIndex<<" tokens from "<<filepath<<"\n";)
     
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
 
-int ParseToken(PreprocInfo& info);
+SignalDefault ParseToken(PreprocInfo& info);
 // both ifdef and ifndef
-int ParseIfdef(PreprocInfo& info, bool attempt){
+SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
     using namespace engone;
     bool notDefined=false;
 
@@ -657,15 +697,15 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
 
     // }
 
-    int result = ParseDirective(info,attempt,"ifdef");
-    if(result==PARSE_BAD_ATTEMPT){
-        result = ParseDirective(info,attempt,"ifndef");
+    SignalAttempt resultDirective = ParseDirective(info,attempt,"ifdef");
+    if(resultDirective==SignalAttempt::BAD_ATTEMPT){
+        resultDirective = ParseDirective(info,attempt,"ifndef");
         notDefined=true;
     }
-    if(result==PARSE_ERROR)
-        return PARSE_ERROR;
-    if(result==PARSE_BAD_ATTEMPT)
-        return PARSE_BAD_ATTEMPT;
+    if(resultDirective==SignalAttempt::BAD_ATTEMPT)
+        return SignalAttempt::BAD_ATTEMPT;
+    if(resultDirective!=SignalAttempt::SUCCESS)
+        return resultDirective;
     // otherwise success!
     
     attempt = false;
@@ -677,16 +717,16 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
         active = !active;
     
     int depth = 0;
-    int error = PARSE_SUCCESS;
+    SignalAttempt error = SignalAttempt::SUCCESS;
     // bool hadElse=false;
     _MLOG(log::out << log::GRAY<< "   ifdef - "<<name<<"\n";)
     while(!info.end()){
         Token token = info.get(info.at()+1);
         if(token==PREPROC_TERM){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-                ERR_HEAD(token, "SPACE AFTER "<<token<<"!\n";
+                ERR_HEAD3(token, "SPACE AFTER "<<token<<"!\n";
                 )
-                return PARSE_ERROR;
+                return SignalAttempt::FAILURE;
             }
             Token token = info.get(info.at()+2);
             // If !yes we can skip these tokens, otherwise we will have
@@ -722,15 +762,15 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
         // TODO: what about errors?
         
         if(active){
-            result = ParseToken(info);
+            SignalDefault result = ParseToken(info);
         }else{
             Token skip = info.next();
             // log::out << log::GRAY<<" skip "<<skip << "\n";
         }
         if(info.end()){
-            ERR_HEAD(info.get(info.length()-1), "Missing endif somewhere for ifdef or ifndef\n";
+            ERR_HEAD3(info.get(info.length()-1), "Missing endif somewhere for ifdef or ifndef\n";
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
     }
     //  log::out << "     exit  ifdef loop\n";
@@ -740,7 +780,7 @@ int ParseIfdef(PreprocInfo& info, bool attempt){
 // this function is different because macro need this interface when
 // doing concatenation. interacting with inTokens and outTokens is not an option.
 // YOU MUST PARSE HASHTAG BEFORE CALLING THIS
-int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outToken, char buffer[256]){
+SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outToken, char buffer[256]){
     using namespace engone;
     MEASURE;
     // Token token = info.get(info.at()+1);
@@ -748,9 +788,9 @@ int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outT
     // early exit
     if(!parseToken.str || parseToken.length==0) {
         // if(attempt)
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         // else
-        //     return PARSE_ERROR;
+        //     return SignalAttempt::FAILURE;
     }
 
     defer {
@@ -779,7 +819,7 @@ int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outT
         
         // _MLOG(log::out << "Append "<<outToken<<"\n";)
         // info.addToken(token);
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else if(Equal(parseToken,"column")) {
         // info.next();
 
@@ -792,7 +832,7 @@ int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outT
         
         // _MLOG(log::out << "Append "<<outToken<<"\n";)
         // info.addToken(token);
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else if(Equal(parseToken,"file")) {
         // info.next();
 
@@ -808,7 +848,7 @@ int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outT
         
         // _MLOG(log::out << "Append "<<outToken<<"\n";)
         // info.addToken(token);
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else if(Equal(parseToken,"filename")) {
         // info.next();
 
@@ -837,7 +877,7 @@ int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outT
         
         // _MLOG(log::out << "Append "<<outToken<<"\n";)
         // info.addToken(token);
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else if(Equal(parseToken,"unique")) { // rename to counter? unique makes you think aboout UUID
         // info.next();
 
@@ -852,9 +892,9 @@ int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outT
         
         // _MLOG(log::out << "Append "<<outToken<<"\n";)
         // info.addToken(token);
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else {
-        #define BAD_DOUBLE_UNDERSCORE(X) if(Equal(parseToken,"__" #X "__")) { WARN_HEAD(parseToken,"Did you mean '_" #X "_' with two underscores?\n\n";WARN_LINE(parseToken.tokenIndex,"_" #X "_ instead?");)}
+        #define BAD_DOUBLE_UNDERSCORE(X) if(Equal(parseToken,"__" #X "__")) { WARN_HEAD3(parseToken,"Did you mean '_" #X "_' with two underscores?\n\n";WARN_LINE2(parseToken.tokenIndex,"_" #X "_ instead?");)}
         BAD_DOUBLE_UNDERSCORE(LINE)
         else BAD_DOUBLE_UNDERSCORE(COLUMN)
         else BAD_DOUBLE_UNDERSCORE(FILE)
@@ -862,9 +902,9 @@ int ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outT
         else BAD_DOUBLE_UNDERSCORE(UNIQUE)
         #undef BAD_DOUBLE_UNDERSCORE
         // if(attempt)
-        return PARSE_BAD_ATTEMPT;
+        return SignalAttempt::BAD_ATTEMPT;
         // else
-        //     return PARSE_ERROR;
+        //     return SignalAttempt::FAILURE;
     }
 }
 void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bool unwrap=false,Arguments* args=0,int* argIndex=0){
@@ -890,29 +930,29 @@ void Transfer(PreprocInfo& info, TokenList& from, TokenList& to, bool quoted, bo
         }
     }
 }
-int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo);
+SignalDefault EvalMacro(PreprocInfo& info, EvalInfo& evalInfo);
 // Called by EvalMacro
 // Example: MACRO(Hello + 2, Cool(stuf, hey))
-int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
+SignalDefault EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
     using namespace engone;
     TokenList& tokens = evalInfo.workingRange;
     if(evalInfo.macroName.flags&(TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE)){
         evalInfo.finalFlags = evalInfo.macroName.flags&(TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE);
-        return PARSE_SUCCESS;
+        return SignalDefault::SUCCESS;
     }
 
     int& index=evalInfo.workIndex;
     Token token = info.get(tokens[index]);
     if(token != "("){
         evalInfo.finalFlags = evalInfo.macroName.flags&(TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE);
-        return PARSE_SUCCESS;
+        return SignalDefault::SUCCESS;
     }
     index++;
     Token token2 = info.get(tokens[index]);
     if(token2 == ")"){
         index++;
         evalInfo.finalFlags = token2.flags&(TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE);
-        return PARSE_SUCCESS; // no arguments
+        return SignalDefault::SUCCESS; // no arguments
     }
     bool wasQuoted=false;
     int parDepth = 0;
@@ -956,14 +996,14 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
             int argStart = argIndex;
             int argEnd = argIndex+1;
             
-            if(superMacro->infiniteArg!=-1){
+            if(superMacro->isVariadic()){
                 // one from argValues is guarranteed. Therfore -1.
                 // parameters has ... therefore another -1
                 int extraArgs = superArgs->size() - 1 - (superMacro->parameters.size() - 1);
-                if(argIndex>superMacro->infiniteArg){
+                if(argIndex>superMacro->indexOfVariadic){
                     argStart += extraArgs;
                     argEnd += extraArgs;
-                } else if(argIndex==superMacro->infiniteArg){
+                } else if(argIndex==superMacro->indexOfVariadic){
                     argEnd += extraArgs;
                 }
             }
@@ -988,14 +1028,14 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
                         for(int i=indexArg;i<(int)argTokens.size();i++){
                             newEvalInfo.workingRange.push_back(argTokens[i]);
                         }
-                        int result = EvalArguments(info, newEvalInfo);
+                        SignalDefault result = EvalArguments(info, newEvalInfo);
                         indexArg += newEvalInfo.workIndex;
 
                         CertainMacro* macro = rootMacro->matchArgCount(newEvalInfo.arguments.size());
                         if(!macro){
-                            ERR_HEAD(argTok, "Macro '"<<argTok<<"' cannot "<<newEvalInfo.arguments.size()<<" arguments\n";
+                            ERR_HEAD3(argTok, "Macro '"<<argTok<<"' cannot "<<newEvalInfo.arguments.size()<<" arguments\n";
                             )
-                            // return PARSE_ERROR;
+                            // return SignalAttempt::FAILURE;
                         }else{
                             newEvalInfo.macro = macro;
                             EvalMacro(info,newEvalInfo);
@@ -1021,14 +1061,14 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
             for(int i=index;i<(int)tokens.size();i++){
                 newEvalInfo.workingRange.push_back(tokens[i]);
             }
-            int result = EvalArguments(info, newEvalInfo);
+            SignalDefault result = EvalArguments(info, newEvalInfo);
             index += newEvalInfo.workIndex;
             
             CertainMacro* macro = rootMacro->matchArgCount(newEvalInfo.arguments.size());
             if(!macro){
-                ERR_HEAD(token,"Macro '"<<token<<"' cannot "<<newEvalInfo.arguments.size()<<" arguments\n";
+                ERR_HEAD3(token,"Macro '"<<token<<"' cannot "<<newEvalInfo.arguments.size()<<" arguments\n";
                 )
-                // return PARSE_ERROR;
+                // return SignalAttempt::FAILURE;
             }else{
                 newEvalInfo.macro = macro;
                 EvalMacro(info,newEvalInfo);
@@ -1051,15 +1091,15 @@ int EvalArguments(PreprocInfo& info, EvalInfo& evalInfo){
         unwrapNext=false;
     }
     _MLOG(log::out << "Eval "<<evalInfo.arguments.size()<<" arguments\n";)
-    return PARSE_SUCCESS;
+    return SignalDefault::SUCCESS;
 }
-int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
+SignalDefault EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
     using namespace engone;
 
     if(info.macroRecursionDepth>=PREPROC_REC_LIMIT){
-        ERR_HEAD(info.now(), "Reached recursion limit of "<<PREPROC_REC_LIMIT<<" for macros\n";
+        ERR_HEAD3(info.now(), "Reached recursion limit of "<<PREPROC_REC_LIMIT<<" for macros\n";
         )
-        return PARSE_ERROR;
+        return SignalDefault::FAILURE;
     }
     info.macroRecursionDepth++;
     TokenList tokens{};
@@ -1090,14 +1130,14 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
             int argStart = argIndex;
             int argEnd = argIndex+1;
             
-            if(evalInfo.macro->infiniteArg!=-1){
+            if(evalInfo.macro->isVariadic()){
                 // one from argValues is guarranteed. Therfore -1.
                 // parameters has ... therefore another -1
                 int extraArgs = evalInfo.arguments.size() - 1 - (evalInfo.macro->parameters.size() - 1);
-                if(argIndex>evalInfo.macro->infiniteArg){
+                if(argIndex>evalInfo.macro->indexOfVariadic){
                     argStart += extraArgs;
                     argEnd += extraArgs;
-                } else if(argIndex==evalInfo.macro->infiniteArg){
+                } else if(argIndex==evalInfo.macro->indexOfVariadic){
                     argEnd += extraArgs;
                 }
             }
@@ -1133,7 +1173,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
             for(int i=index;i<(int)tokens.size();i++){
                 newEvalInfo.workingRange.push_back(tokens[i]);
             }
-            int result = EvalArguments(info, newEvalInfo);
+            SignalDefault result = EvalArguments(info, newEvalInfo);
             index += newEvalInfo.workIndex;
 
             newEvalInfo.superMacros.pop_back();
@@ -1146,7 +1186,7 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
 
             CertainMacro* macro = rootMacro->matchArgCount(newEvalInfo.arguments.size());
             if(!macro){
-                ERR_HEAD(token, "Macro '"<<token<<"' cannot have "<<newEvalInfo.arguments.size()<<" arguments\n";
+                ERR_HEAD3(token, "Macro '"<<token<<"' cannot have "<<newEvalInfo.arguments.size()<<" arguments\n";
                 )
             }else{
                 newEvalInfo.macro = macro;
@@ -1168,20 +1208,20 @@ int EvalMacro(PreprocInfo& info, EvalInfo& evalInfo){
         }
     }
     info.macroRecursionDepth--;
-    return PARSE_SUCCESS;
+    return SignalDefault::SUCCESS;
 }
-int ParseMacro(PreprocInfo& info, int attempt){
+SignalAttempt ParseMacro(PreprocInfo& info, int attempt){
     using namespace engone;
     MEASURE;
     Token name = info.get(info.at()+1);
     RootMacro* rootMacro=0;
     if(!(rootMacro = info.matchMacro(name))){
         if(attempt){
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         }
-        ERR_HEAD(name, "Undefined macro '"<<name<<"'\n";
+        ERR_HEAD3(name, "Undefined macro '"<<name<<"'\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
 
     info.next();
@@ -1194,17 +1234,17 @@ int ParseMacro(PreprocInfo& info, int attempt){
     for(int i=info.at()+1;i<(int)info.length();i++){
         evalInfo.workingRange.push_back({(uint16)i,(uint16)info.get(i).flags});
     }
-    int result = EvalArguments(info, evalInfo);
+    SignalDefault result = EvalArguments(info, evalInfo);
     for(int i=0;i<evalInfo.workIndex;i++)
         info.next();
     // TODO: handle result
 
     CertainMacro* macro = rootMacro->matchArgCount(evalInfo.arguments.size());
     if(!macro){
-        ERR_HEAD(name, "Macro '"<<name<<"' cannot have "<<evalInfo.arguments.size()<<" arguments.\n\n";
-            ERR_LINE(name.tokenIndex,"bad");
+        ERR_HEAD3(name, "Macro '"<<name<<"' cannot have "<<evalInfo.arguments.size()<<" arguments.\n\n";
+            ERR_LINE2(name.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
 
     evalInfo.macro = macro;
@@ -1269,12 +1309,12 @@ int ParseMacro(PreprocInfo& info, int attempt){
         //     continue;
         // }
         // #endif
-        int result = ParseToken(info);
+        SignalDefault result = ParseToken(info);
     }
     info.inTokens = originalStream;
     info.usingTempStream = false;
 
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
 // TODO: Move the struct elsewhere? Like a header?
 struct MacroCall {
@@ -1290,7 +1330,7 @@ engone::Logger& operator<<(engone::Logger& logger, const TokenSpan& span){
     tokRange.endIndex = span.end;
     return logger << tokRange;
 }
-int FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall* call, MacroCall* newCall, DynamicArray<bool>& unwrappedArgs){
+SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall* call, MacroCall* newCall, DynamicArray<bool>& unwrappedArgs){
     using namespace engone;
     int& index = tokenRange.start;
     MEASURE;
@@ -1301,7 +1341,7 @@ int FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall* call, Ma
     if(token != "("){
         // TODO: DON'T IGNORE FLAGS!
         // evalInfo.finalFlags = evalInfo.macroName.flags&(TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE);
-        return PARSE_SUCCESS;
+        return SignalDefault::SUCCESS;
     }
     index++;
     Token token2 = tokenRange.stream->get(index);
@@ -1309,7 +1349,7 @@ int FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall* call, Ma
         index++;
         // TODO: DON'T IGNORE FLAGS!
         // evalInfo.finalFlags = token2.flags&(TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE);
-        return PARSE_SUCCESS; // no arguments
+        return SignalDefault::SUCCESS; // no arguments
     }
 
     bool wasQuoted=false; // TODO: Fix wasQuoted and unwrap
@@ -1362,28 +1402,28 @@ int FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall* call, Ma
 
         if(call && Equal(token,"...")){
             if(argRange.start != index-1){
-                ERR_HEAD(token,"Infinite argument should be it's own argument. You cannot combine it with other tokens.\n\n";
-                    ERR_LINE(token.tokenIndex,"bad");
+                ERR_HEAD3(token,"Infinite argument should be it's own argument. You cannot combine it with other tokens.\n\n";
+                    ERR_LINE2(token.tokenIndex,"bad");
                 )
             }
             add_arg();
             int argCount = call->useDetailedArgs ? call->detailedArguments.size() : call->argumentRanges.size();
             int infArgs = argCount - (call->certainMacro->parameters.size() - 1);
             if(call->useDetailedArgs){
-                for(int i=call->certainMacro->infiniteArg;i<call->certainMacro->infiniteArg+infArgs;i++){
+                for(int i=call->certainMacro->indexOfVariadic;i<call->certainMacro->indexOfVariadic+infArgs;i++){
                     newCall->detailedArguments.add({});
                     for(int j=0;j<call->detailedArguments[i].size();j++){
                         newCall->detailedArguments.last().add(call->detailedArguments[i][j]);
                     }
                 }
             } else {
-                for(int i=call->certainMacro->infiniteArg;i<call->certainMacro->infiniteArg+infArgs;i++){
+                for(int i=call->certainMacro->indexOfVariadic;i<call->certainMacro->indexOfVariadic+infArgs;i++){
                     newCall->argumentRanges.add(call->argumentRanges[i]);
                 }
             }
             if(!Equal(tokenRange.stream->get(index),",")&&!Equal(tokenRange.stream->get(index),")")){
-                ERR_HEAD(tokenRange.stream->get(index),"Infinite argument should be it's own argument. You cannot combine it with other tokens.\n\n";
-                    ERR_LINE(index,"bad");
+                ERR_HEAD3(tokenRange.stream->get(index),"Infinite argument should be it's own argument. You cannot combine it with other tokens.\n\n";
+                    ERR_LINE2(index,"bad");
                 )
             }
         } else if(Equal(token,PREPROC_TERM)){ // annotation instead of directive?
@@ -1403,9 +1443,9 @@ int FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall* call, Ma
             }
         }
     }
-    return PARSE_SUCCESS;
+    return SignalDefault::SUCCESS;
 }
-int ParseMacro_fast(PreprocInfo& info, int attempt){
+SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     using namespace engone;
     MEASURE;
 
@@ -1413,10 +1453,10 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
     RootMacro* rootMacro=0;
     if(!(rootMacro = info.matchMacro(name))){
         if(attempt){
-            return PARSE_BAD_ATTEMPT;
+            return SignalAttempt::BAD_ATTEMPT;
         }
-        ERR_HEAD(name, "Undefined macro '"<<name<<"'\n";)
-        return PARSE_ERROR;
+        ERR_HEAD3(name, "Undefined macro '"<<name<<"'\n";)
+        return SignalAttempt::FAILURE;
     }
     info.next();
     attempt=false;
@@ -1473,10 +1513,10 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
             Assert(!initialCall.unwrapped); // how does unwrap work here?
             initialCall.certainMacro = rootMacro->matchArgCount(argCount);
             if(!initialCall.certainMacro){
-                ERR_HEAD(name, "Macro '"<<name<<"' cannot have "<<(argCount)<<" arguments.\n\n";
-                    ERR_LINE(name.tokenIndex,"bad");
+                ERR_HEAD3(name, "Macro '"<<name<<"' cannot have "<<(argCount)<<" arguments.\n\n";
+                    ERR_LINE2(name.tokenIndex,"bad");
                 )
-                return PARSE_ERROR;
+                return SignalAttempt::FAILURE;
             }
             _MLOG(log::out << "CertainMacro "<<argCount<<"\n";)
             initialEnv.range = initialCall.certainMacro->contentRange;
@@ -1513,8 +1553,8 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
                     // call->certainMacro = call->rootMacro->matchArgCount(call->argumentRanges.size());
                 // }
                 if(!call->certainMacro){
-                    ERR_HEAD(call->rootMacro->name, "Macro '"<<"?"<<"' cannot have "<<(argCount)<<" arguments.\n\n";
-                        ERR_LINE(call->rootMacro->name.tokenIndex,"bad");
+                    ERR_HEAD3(call->rootMacro->name, "Macro '"<<"?"<<"' cannot have "<<(argCount)<<" arguments.\n\n";
+                        ERR_LINE2(call->rootMacro->name.tokenIndex,"bad");
                     )
                     continue;
                 }
@@ -1555,12 +1595,12 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
                 int infArgs = argCount - (call->certainMacro->parameters.size() - 1);
                 int paramStart = parameterIndex;
                 int paramCount = 1;
-                if(call->certainMacro->infiniteArg!=-1){
-                    if(call->certainMacro->infiniteArg < parameterIndex) {
+                if(call->certainMacro->isVariadic()){
+                    if(call->certainMacro->indexOfVariadic < parameterIndex) {
                         paramStart += infArgs-1;
                     }
                 }
-                if(parameterIndex==call->certainMacro->infiniteArg)
+                if(parameterIndex==call->certainMacro->indexOfVariadic)
                     paramCount = infArgs;
 
                 _MLOG(log::out << "Param "<<token<<" Inf["<<paramStart<<"-"<<(paramStart+paramCount)<<"]\n";)
@@ -1636,8 +1676,8 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
                 Assert(!innerCall.unwrapped); // how does unwrap work here?
                 innerCall.certainMacro = deeperMacro->matchArgCount(argCount);
                 if(!innerCall.certainMacro){
-                    ERR_HEAD(token, "Macro '"<<token<<"' cannot have "<<(argCount)<<" arguments.\n\n";
-                        ERR_LINE(token.tokenIndex,"bad");
+                    ERR_HEAD3(token, "Macro '"<<token<<"' cannot have "<<(argCount)<<" arguments.\n\n";
+                        ERR_LINE2(token.tokenIndex,"bad");
                     )
                     continue;
                 }
@@ -1684,10 +1724,10 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
         Env& env = environments.last();
         MacroCall* call = env.callIndex!=-1 ? &calls[env.callIndex] : nullptr;
         Token& tok = call ? call->certainMacro->name : info.now();
-        ERR_HEAD(tok, "Reached recursion limit of "<<PREPROC_REC_LIMIT<<" for macros\n";
-            ERR_LINE(tok.tokenIndex,"bad");
+        ERR_HEAD3(tok, "Reached recursion limit of "<<PREPROC_REC_LIMIT<<" for macros\n";
+            ERR_LINE2(tok.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     // log::out << "output tokens: "<<outputTokens.size()<<"\n";
 
@@ -1710,15 +1750,15 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
     char buffer[256];
     for(int i=0;i<(int)outputTokens.size();i++){
         Token baseToken = *outputTokens[i];
-        int result = PARSE_BAD_ATTEMPT;
+        SignalAttempt result = SignalAttempt::BAD_ATTEMPT;
         if(Equal(baseToken,"#") && outputTokens.size()>i+1){
             result = ParsePredefinedMacro(info,*outputTokens[i+1], baseToken,buffer);
-            if(result == PARSE_SUCCESS){
+            if(result == SignalAttempt::SUCCESS){
                 i++;
                 baseToken.flags &= (outputTokensFlags[i]&(~TOKEN_MASK_QUOTED))|(TOKEN_MASK_QUOTED);
             }
         }
-        if(result == PARSE_BAD_ATTEMPT){
+        if(result == SignalAttempt::BAD_ATTEMPT){
             baseToken.flags &= (outputTokensFlags[i]&(~TOKEN_MASK_QUOTED))|(TOKEN_MASK_QUOTED);
         }
         // baseToken.flags = evalInfo.output[i].flags; // TODO: WHAT ABOUT EXTRA FLAGS? NEW LINES DISAPPEAR WHEN REPLACING MACRO NAME!
@@ -1732,13 +1772,13 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
                 // Assert(false);
                 Token token2 = *outputTokens[i+3];
                 if(Equal(token2,"#")){
-                    int result = ParsePredefinedMacro(info,*outputTokens[i+4], token2,buffer);
-                    if(result==PARSE_SUCCESS){
+                    SignalAttempt result = ParsePredefinedMacro(info,*outputTokens[i+4], token2,buffer);
+                    if(result==SignalAttempt::SUCCESS){
                         i++;
                     }
                 } 
                 if(0==(outputTokens[i+3]->flags&TOKEN_MASK_QUOTED)) {
-                    if(result == PARSE_BAD_ATTEMPT){
+                    if(result == SignalAttempt::BAD_ATTEMPT){
                         token2.flags = outputTokensFlags[i];
                     }
                     info.tempStream->addData(token2);
@@ -1782,8 +1822,8 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
         //     // ParseDefine also makes sure that #define doesn't occur but we have to 
         //     // do it here to in case tokens were merged resulting in #define.
         //     if(Equal(info.get(info.at()+2),"define") || Equal(info.get(info.at()+2),"multidefine")) {
-        //         ERR_HEAD(info.get(info.at()+2), "Macro definitions inside macros are not allowed.\n\n";
-        //             ERR_LINE(info.at()+2,"not allowed");
+        //         ERR_HEAD3(info.get(info.at()+2), "Macro definitions inside macros are not allowed.\n\n";
+        //             ERR_LINE2(info.at()+2,"not allowed");
         //         )
         //         info.next();
         //         info.addToken(token);
@@ -1791,7 +1831,7 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
         //     }
         // }
         // #endif
-        int result = ParseToken(info);
+        SignalDefault result = ParseToken(info);
     }
     info.inTokens = originalStream;
     info.usingTempStream = false;
@@ -1800,12 +1840,12 @@ int ParseMacro_fast(PreprocInfo& info, int attempt){
     // info.outTokens->finalizePointers();
     // info.outTokens->print();
 
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
 
 
 // Default parse function.
-int ParseToken(PreprocInfo& info){
+SignalDefault ParseToken(PreprocInfo& info){
     using namespace engone;
     // MEASURE;
     // if(info.usingTempStream /*<- true when doing macros*/ && (info.get(info.at()+1).flags&TOKEN_MASK_QUOTED)==0 && 
@@ -1829,51 +1869,51 @@ int ParseToken(PreprocInfo& info){
     //     info.outTokens->addToken(token);
 
     //     _MLOG(log::out << "Append "<<token<<second<<"\n";)
-    //     return PARSE_SUCCESS;
+    //     return SignalAttempt::SUCCESS;
     // }
-    int result = ParseDefine(info,true);
-    if(result == PARSE_BAD_ATTEMPT) {
+    SignalAttempt result = ParseDefine(info,true);
+    if(result == SignalAttempt::BAD_ATTEMPT) {
         if(Equal(info.get(info.at()+1),"#")){
             Token token = info.get(info.at()+2);
             Token outToken{};
             char buffer[256];
             result = ParsePredefinedMacro(info,token,outToken,buffer);
-            if(result==PARSE_SUCCESS){
+            if(result==SignalAttempt::SUCCESS){
                 info.next();
                 info.next();
                 info.addToken(outToken);
                 _MLOG(log::out << "Append "<<outToken<<"\n";)
-                return PARSE_SUCCESS;
+                return SignalDefault::SUCCESS;
             }
         }
     }
-    if(result == PARSE_BAD_ATTEMPT)
+    if(result == SignalAttempt::BAD_ATTEMPT)
         result = ParseUndef(info,true);
-    if(result == PARSE_BAD_ATTEMPT)
+    if(result == SignalAttempt::BAD_ATTEMPT)
         result = ParseIfdef(info,true);
-    if(result == PARSE_BAD_ATTEMPT)
+    if(result == SignalAttempt::BAD_ATTEMPT)
         #ifdef SLOW_PREPROCESSOR
             result = ParseMacro(info,true);
         #else
             result = ParseMacro_fast(info,true);
         #endif
-    if(result == PARSE_BAD_ATTEMPT)
+    if(result == SignalAttempt::BAD_ATTEMPT)
         result = ParseInclude(info,true);
-    if(result == PARSE_BAD_ATTEMPT)
+    if(result == SignalAttempt::BAD_ATTEMPT)
         result = ParseImport(info,true);
-    if(result == PARSE_BAD_ATTEMPT)
+    if(result == SignalAttempt::BAD_ATTEMPT)
         result = ParseLink(info,true);
     
-    if(result==PARSE_SUCCESS)
-        return result;
-    if(result == PARSE_ERROR){
-        return result;
+    if(result==SignalAttempt::SUCCESS)
+        return SignalDefault::SUCCESS;
+    if(result != SignalAttempt::BAD_ATTEMPT){
+        return CastSignal(result);
     }
 
     Token token = info.next();
     _MLOG(log::out << "Append "<<token<<"\n";)
     info.addToken(token);
-    return PARSE_SUCCESS;
+    return SignalDefault::SUCCESS;
 }
 TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
     using namespace engone;
@@ -1895,7 +1935,7 @@ TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
         //     info.addToken(token);
         //     continue;
         // }
-        int result = ParseToken(info);
+        SignalDefault result = ParseToken(info);
     }
     
     // inTokens->tokens.resize(0);
@@ -1925,15 +1965,15 @@ void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
 
     while(!info.end()){
         Token token = info.get(info.at()+1);
-        int result = ParseDirective(info, true, "import");
-        if(result!=PARSE_SUCCESS){
+        SignalAttempt result = ParseDirective(info, true, "import");
+        if(result!=SignalAttempt::SUCCESS){
             info.next();
             continue;
         }
 
         Token name = info.get(info.at()+1);
         if(!(name.flags&TOKEN_MASK_QUOTED)){
-            ERR_HEAD(name, "expected a string not "<<name<<"\n";
+            ERR_HEAD3(name, "expected a string not "<<name<<"\n";
             )
             continue;
         }
@@ -1944,7 +1984,7 @@ void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
             info.next();
             token = info.get(info.at()+1);
             if(token.flags & TOKEN_MASK_QUOTED){
-                ERR_HEAD(token, "don't use quotes with "<<log::YELLOW<<"as\n";
+                ERR_HEAD3(token, "don't use quotes with "<<log::YELLOW<<"as\n";
                 )
                 continue;
             }

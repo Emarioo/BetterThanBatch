@@ -63,6 +63,7 @@
 
 #define BC_MEMZERO 100
 #define BC_MEMCPY 101
+#define BC_RDTSCP 102
 
 // #define BC_SIN 110
 // #define BC_COS 111

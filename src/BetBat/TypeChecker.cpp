@@ -1,32 +1,28 @@
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Compiler.h"
 
-#undef WARN_HEAD
-#undef ERR_HEAD
+/*
+    Old logging
+    Should be deprecated but it's a lot of work
+*/
+// Remember to wrap macros in {} when using if or loops since macros may have multiple statements.
+// #define ERR() info.errors++; engone::log::out << engone::log::RED <<"TypeError: "
+
 #undef ERR_HEAD2
-#undef ERR_LINE
-#undef ERR
-#undef ERR_END
-// #undef ERRTYPE
-#undef ERRTOKENS
-#undef TOKENINFO
-
-// Remember to wrap macros in {} when using if or loops
-// since macros have multiple statements.
-#define ERR() info.errors++; engone::log::out << engone::log::RED <<"TypeError: "
-// #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_LOCATION_RANGE(R)
 #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Type error","E0000")
-#define ERR_HEAD(R,M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Type error","E0000") << M
-#define WARN_HEAD(R,M) info.compileInfo->warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
-#define ERR_END MSG_END
 
-#define ERR_LINE(R, M) PrintCode(R, M)
-#define ERR_LINET(T, M) PrintCode(T.tokenIndex, T.tokenStream, M)
-// #define ERRTYPE(R,LT,RT) ERR_HEAD2(R) << "Type mismatch "<<info.ast->getTypeInfo(LT)->name<<" - "<<info.ast->getTypeInfo(RT)->name<<" "
+#undef ERR_HEAD3
+#define ERR_HEAD3(R,M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Type error","E0000") << M
+#undef WARN_HEAD3
+#define WARN_HEAD3(R,M) info.compileInfo->warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
 
-#define ERRTOKENS(R) engone::log::out <<engone::log::GREEN<<R.firstToken.line <<" |> "; R.print();engone::log::out << "\n";
+/*
+    Latest logging
+*/
 
-#define TOKENINFO(R) {std::string temp="";R.feed(temp);info.code->addDebugText(std::string("Ln ")+std::to_string(R.firstToken.line)+ ": ");info.code->addDebugText(temp+"\n");}
+#undef ERR_SECTION
+#define ERR_SECTION(CONTENT) { BASE_SECTION("Type. error, E0000"); CONTENT; }
+
 
 #ifdef TC_LOG
 #define _TC_LOG_ENTER(X) X
@@ -35,15 +31,15 @@
 #define _TC_LOG_ENTER(X)
 #endif
 
-int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes);
+SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes);
 
-int CheckEnums(CheckInfo& info, ASTScope* scope){
+SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     Assert(scope);
     MEASURE;
     _TC_LOG_ENTER(FUNC_ENTER)
-    
-    int error = true;
+
+    SignalDefault error = SignalDefault::SUCCESS;
     for(auto aenum : scope->enums){
         TypeInfo* typeInfo = info.ast->createType(aenum->name, scope->scopeId);
         if(typeInfo){
@@ -51,42 +47,42 @@ int CheckEnums(CheckInfo& info, ASTScope* scope){
             typeInfo->_size = 4; // i32
             typeInfo->astEnum = aenum;
         } else {
-            ERR_HEAD(((TokenRange)aenum->name), aenum->name << " is taken.\n";
+            ERR_HEAD3(((TokenRange)aenum->name), aenum->name << " is taken.\n";
             )
         }
     }
     
     for(auto it : scope->namespaces){
-        int result = CheckEnums(info,it);
-        if(!result)
-            error = false;
+        SignalDefault result = CheckEnums(info,it);
+        if(result != SignalDefault::SUCCESS)
+            error = SignalDefault::FAILURE;
     }
     
     for(auto astate : scope->statements) {
         if(astate->firstBody){
-            int result = CheckEnums(info, astate->firstBody);   
-            if(!result)
-                error = false;
+            SignalDefault result = CheckEnums(info, astate->firstBody);   
+            if(result != SignalDefault::SUCCESS)
+                error = SignalDefault::FAILURE;
         }
         if(astate->secondBody){
-            int result = CheckEnums(info, astate->secondBody);
-            if(!result)
-                error = false;
+            SignalDefault result = CheckEnums(info, astate->secondBody);
+            if(result != SignalDefault::SUCCESS)
+                error = SignalDefault::FAILURE;
         }
     }
     
     for(auto afunc : scope->functions) {
         if(afunc->body){
-            int result = CheckEnums(info, afunc->body);
-            if(!result)
-                error = false;
+            SignalDefault result = CheckEnums(info, afunc->body);
+            if(result != SignalDefault::SUCCESS)
+                error = SignalDefault::FAILURE;
         }
     }
     return error;
 }
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError);
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);
-bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
+SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
     using namespace engone;
     _TC_LOG_ENTER(FUNC_ENTER)
     int offset=0;
@@ -124,7 +120,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
         TypeId tid = CheckType(info, astStruct->scopeId, member.stringType, astStruct->tokenRange, &printedError);
         if(!tid.isValid() && !printedError){
             if(info.showErrors) {
-                ERR_HEAD(astStruct->tokenRange, "Type '"<< info.ast->getTokenFromTypeString(member.stringType) << "' in "<< astStruct->name<<"."<<member.name << " is not a type.\n\n";
+                ERR_HEAD3(astStruct->tokenRange, "Type '"<< info.ast->getTokenFromTypeString(member.stringType) << "' in "<< astStruct->name<<"."<<member.name << " is not a type.\n\n";
                     ERR_LINE(member.name,"bad type");
                 )
             }
@@ -140,7 +136,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
             if(temp.last() != implMem.typeId){
                 std::string deftype = info.ast->typeToString(temp.last());
                 std::string memtype = info.ast->typeToString(implMem.typeId);
-                ERR_HEAD(member.defaultValue->tokenRange, "Type of default value does not match member.\n\n";
+                ERR_HEAD3(member.defaultValue->tokenRange, "Type of default value does not match member.\n\n";
                     ERR_LINE(member.defaultValue->tokenRange,deftype.c_str());
                     ERR_LINE(member.name,memtype.c_str());
                 )
@@ -151,7 +147,7 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
         _TC_LOG(log::out << " checked member["<<i<<"] "<<info.ast->typeToString(tid)<<"\n";)
     }
     if(!success){
-        return success;
+        return SignalDefault::FAILURE;
     }
     for (int i = 0;i<(int)astStruct->members.size();i++) {
         auto& member = astStruct->members[i];
@@ -167,7 +163,6 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
                 if(info.showErrors) {
                     // NOTE: pointers to the same struct are okay.
                     ERR_HEAD2(astStruct->tokenRange) << "member "<<member.name << "'s type uses the parent struct. (recursive struct does not work)\n";
-                    ERR_END
                 }
                 // TODO: phrase the error message in a better way
                 // TOOD: print some column and line info.
@@ -177,7 +172,6 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
                 // astStruct->state = ASTStruct::TYPE_ERROR;
                 if(info.showErrors) {
                     ERR_HEAD2(astStruct->tokenRange) << "type "<< info.ast->typeToString(implMem.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type\n";
-                    ERR_END
                 }
             }
             success = false;
@@ -251,7 +245,9 @@ bool CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo
     }
     // _TC_LOG(log::out << info.ast->typeToString << " was evaluated to "<<offset<<" bytes\n";)
     // }
-    return success;
+    if(success)
+        return SignalDefault::SUCCESS;
+    return SignalDefault::FAILURE;
 }
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError){
     using namespace engone;
@@ -299,8 +295,8 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             if(id.isValid()){
 
             } else if(!printedError) {
-                // ERR_HEAD(tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
-                ERR_HEAD(tokenRange, "Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.\n\n";
+                // ERR_HEAD3(tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
+                ERR_HEAD3(tokenRange, "Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.\n\n";
                     ERR_LINE(tokenRange,"here somewhere");
                 )
             }
@@ -319,7 +315,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             // TODO: log error here if Assert is removed
             return {};
         if(ti && ti->astStruct && ti->astStruct->polyArgs.size() != 0 && !ti->structImpl) {
-            ERR_HEAD(tokenRange, info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>. (if in a function: compiler does not have knowledge of where)\n\n";
+            ERR_HEAD3(tokenRange, info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>. (if in a function: compiler does not have knowledge of where)\n\n";
             ERR_LINE(tokenRange,"");
             )
             if(printedError)
@@ -340,7 +336,11 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
         return {}; // print error? base type for polymorphic type doesn't exist
     }
     if(polyTokens.size() != baseInfo->astStruct->polyArgs.size()) {
-        ERR() << "Polymorphic type "<<typeString << " has "<< polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<baseInfo->astStruct->polyArgs.size()<< "\n";
+        ERR_SECTION(
+            ERR_HEAD(tokenRange)
+            ERR_MSG("Polymorphic type "<<typeString << " has "<< (u32)polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<(u32)baseInfo->astStruct->polyArgs.size()<< "\n")
+        )
+        // ERR() << "Polymorphic type "<<typeString << " has "<< polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<baseInfo->astStruct->polyArgs.size()<< "\n";
         if(printedError)
             *printedError = true;
         return {}; // type isn't polymorphic and does just not exist
@@ -356,9 +356,12 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
         typeInfo->structImpl->polyArgs[i] = id;
     }
 
-    bool hm = CheckStructImpl(info, typeInfo->astStruct, baseInfo, typeInfo->structImpl);
-    if(!hm) {
-        ERR() << __FUNCTION__ <<": structImpl for type "<<typeString << " failed\n";
+    SignalDefault hm = CheckStructImpl(info, typeInfo->astStruct, baseInfo, typeInfo->structImpl);
+    if(hm != SignalDefault::SUCCESS) {
+        ERR_SECTION(
+            ERR_HEAD(tokenRange)
+            ERR_MSG(__FUNCTION__ <<": structImpl for type "<<typeString << " failed\n")
+        )
     } else {
         _TC_LOG(log::out << typeString << " was evaluated to "<<typeInfo->structImpl->size<<" bytes\n";)
     }
@@ -366,7 +369,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
     outId.setPointerLevel(plevel);
     return outId;
 }
-int CheckStructs(CheckInfo& info, ASTScope* scope) {
+SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
     using namespace engone;
     MEASURE;
     _TC_LOG_ENTER(FUNC_ENTER)
@@ -387,7 +390,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
             structInfo = info.ast->createType(astStruct->name, scope->scopeId);
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
-                ERR_HEAD(astStruct->tokenRange, "'"<<astStruct->name<<"' is already defined.\n");
+                ERR_HEAD3(astStruct->tokenRange, "'"<<astStruct->name<<"' is already defined.\n");
                 // TODO: Provide information (file, line, column) of the first definition.
                 // We don't care about another turn. We failed but we don't set
                 // completedStructs to false since this will always fail.
@@ -414,7 +417,7 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
                     structInfo->structImpl = astStruct->createImpl();
                     astStruct->nonPolyStruct = structInfo->structImpl;
                 }
-                yes = CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl);
+                yes = SignalDefault::SUCCESS == CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl);
                 if(!yes){
                     astStruct->state = ASTStruct::TYPE_CREATED;
                     info.completedStructs = false;
@@ -439,12 +442,12 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
         for(auto astate : scope->statements) {
             
             if(astate->firstBody){
-                int result = CheckStructs(info, astate->firstBody);   
+                SignalDefault result = CheckStructs(info, astate->firstBody);   
                 // if(!result)
                 //     error = false;
             }
             if(astate->secondBody){
-                int result = CheckStructs(info, astate->secondBody);
+                SignalDefault result = CheckStructs(info, astate->secondBody);
                 // if(!result)
                 //     error = false;
             }
@@ -452,16 +455,16 @@ int CheckStructs(CheckInfo& info, ASTScope* scope) {
         
         for(auto afunc : scope->functions) {
             if(afunc->body){
-                int result = CheckStructs(info, afunc->body);
+                SignalDefault result = CheckStructs(info, afunc->body);
                 // if(!result)
                 //     error = false;
             }
         }
     // }
-    return true;
+    return SignalDefault::SUCCESS;
 }
-int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, DynamicArray<TypeId>* outTypes);
-int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes, bool operatorOverload) {
+SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, DynamicArray<TypeId>* outTypes);
+SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes, bool operatorOverloadAttempt) {
     using namespace engone;
 
     #define FNCALL_SUCCESS \
@@ -479,7 +482,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
     std::vector<Token> polyTokens;
     Token baseName{};
     
-    if(operatorOverload) {
+    if(operatorOverloadAttempt) {
         baseName = OpToStr((OperationType)expr->typeId.getId());
     } else {
         baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
@@ -491,7 +494,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
             if(id.isValid()){
 
             } else if(!printedError) {
-                ERR_HEAD(expr->tokenRange, "Type for polymorphic argument was not valid.\n\n";
+                ERR_HEAD3(expr->tokenRange, "Type for polymorphic argument was not valid.\n\n";
                     ERR_LINE(expr->tokenRange,"bad");
                 )
             }
@@ -502,21 +505,24 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
 
     // DynamicArray<TypeId>& argTypes = expr->versions_argTypes[info.currentPolyVersion];
     DynamicArray<TypeId> argTypes{};
-    if(operatorOverload){
+    if(operatorOverloadAttempt){
         DynamicArray<TypeId> tempTypes{};
-        CheckExpression(info,scopeId,expr->left,&tempTypes);
+        SignalDefault resultLeft = CheckExpression(info,scopeId,expr->left,&tempTypes);
         if(tempTypes.size()==0){
             argTypes.add(AST_VOID);
         } else {
             argTypes.add(tempTypes.last());
         }
         tempTypes.resize(0);
-        CheckExpression(info,scopeId,expr->right,&tempTypes);
+        SignalDefault resultRight = CheckExpression(info,scopeId,expr->right,&tempTypes);
         if(tempTypes.size()==0){
             argTypes.add(AST_VOID);
         } else {
             argTypes.add(tempTypes.last());
         }
+        if(resultLeft != SignalDefault::SUCCESS || resultRight != SignalDefault::SUCCESS)
+            return SignalAttempt::FAILURE;
+            // return SignalAttempt::BAD_ATTEMPT;
     } else {
         bool thisFailed=false;
         for(int i = 0; i<(int)expr->args->size();i++){
@@ -541,7 +547,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
         // cannot continue if we don't know which struct the method comes from
         if(thisFailed) {
             FNCALL_FAIL
-            return false;
+            return SignalAttempt::FAILURE;
         }
     }
 
@@ -555,27 +561,27 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
         TypeId structType = argTypes[0];
         // CheckExpression(info,scope, thisArg, &structType);
         if(structType.getPointerLevel()>1){
-            ERR_HEAD(thisArg->tokenRange, "'"<<info.ast->typeToString(structType)<<"' to much of a pointer.\n";
+            ERR_HEAD3(thisArg->tokenRange, "'"<<info.ast->typeToString(structType)<<"' to much of a pointer.\n";
                 ERR_LINE(thisArg->tokenRange,"must be a reference to a struct");
             )
             FNCALL_FAIL
-            return false;
+            return SignalAttempt::FAILURE;
         }
         TypeInfo* ti = info.ast->getTypeInfo(structType.baseType());
         
         if(!ti || !ti->astStruct){
-            ERR_HEAD(expr->tokenRange, "'"<<info.ast->typeToString(structType)<<"' is not a struct. Method cannot be called.\n";
+            ERR_HEAD3(expr->tokenRange, "'"<<info.ast->typeToString(structType)<<"' is not a struct. Method cannot be called.\n";
                 ERR_LINE(thisArg->tokenRange,"not a struct");
             )
             FNCALL_FAIL
-            return false;
+            return SignalAttempt::FAILURE;
         }
         if(!ti->getImpl()){
-            ERR_HEAD(expr->tokenRange, "'"<<info.ast->typeToString(structType)<<"' is a polymorphic struct with not poly args specified.\n";
+            ERR_HEAD3(expr->tokenRange, "'"<<info.ast->typeToString(structType)<<"' is a polymorphic struct with not poly args specified.\n";
                 ERR_LINE(thisArg->tokenRange,"base polymorphic struct");
             )
             FNCALL_FAIL
-            return false;
+            return SignalAttempt::FAILURE;
         }
         parentStructImpl = ti->structImpl;
         parentAstStruct = ti->astStruct;
@@ -583,35 +589,36 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
     } else {
         Identifier* iden = info.ast->findIdentifier(scopeId, baseName);
         if(!iden || iden->type != Identifier::FUNC){
-            if(!operatorOverload) {
-                ERR_HEAD(expr->tokenRange, "Function '"<<baseName <<"' does not exist. Did you forget an import?\n\n";
-                    ERR_LINET(baseName,"undefined");
-                )
-                FNCALL_FAIL
-            }
-            return false;
+            if(operatorOverloadAttempt)
+                return SignalAttempt::BAD_ATTEMPT;
+
+            ERR_HEAD3(expr->tokenRange, "Function '"<<baseName <<"' does not exist. Did you forget an import?\n\n";
+                ERR_LINE(baseName,"undefined");
+            )
+            FNCALL_FAIL
+            return SignalAttempt::FAILURE;
         }
         fnOverloads = &iden->funcOverloads;
     }
     
     if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
         // match args with normal impls
-        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, expr, fnOverloads->overloads.size()==1 && !operatorOverload);
-        if(!overload && !operatorOverload)
+        FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, expr, fnOverloads->overloads.size()==1 && !operatorOverloadAttempt);
+        if(!overload && !operatorOverloadAttempt)
             overload = fnOverloads->getOverload(info.ast, argTypes, expr, true);
         if(overload){
             FNCALL_SUCCESS
-            return true;
+            return SignalAttempt::SUCCESS;
         }
-        if(!operatorOverload){
+        if(!operatorOverloadAttempt){
             if(fnOverloads->overloads.size()==0){
-                ERR_HEAD(expr->tokenRange, "'"<<baseName<<"' is not a function/method.\n\n";
+                ERR_HEAD3(expr->tokenRange, "'"<<baseName<<"' is not a function/method.\n\n";
                     ERR_LINE(expr->tokenRange, "bad");
                 )
             } else {
                 // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
                 //  Should be done in generator too.
-                ERR_HEAD(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
+                ERR_HEAD3(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
                     if(argTypes.size()==0){
                         log::out << "zero arguments";
                     } else {
@@ -631,7 +638,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
             }
             FNCALL_FAIL
         }
-        return false;
+        return SignalAttempt::FAILURE;
         // if implicit polymorphism then
         // macth poly impls
         // generate poly impl if failed
@@ -646,7 +653,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
     FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes,fnPolyArgs, expr);
     if(overload){
         FNCALL_SUCCESS
-        return true;
+        return SignalAttempt::SUCCESS;
     }
     ASTFunction* polyFunc = nullptr;
     // // Find possible polymorphic type and later create implementation for it
@@ -706,7 +713,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
         }
     }
     if(!polyFunc){
-        ERR_HEAD(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
+        ERR_HEAD3(expr->tokenRange, "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
             if(argTypes.size()==0){
                 log::out << "zero arguments";
             } else {
@@ -720,7 +727,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
             // TODO: show list of available overloaded function args
         )
         FNCALL_FAIL
-        return false;
+        return SignalAttempt::FAILURE;
     }
     ScopeInfo* funcScope = info.ast->getScope(polyFunc->scopeId);
     FuncImpl* funcImpl = polyFunc->createImpl();
@@ -734,7 +741,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
         funcImpl->polyArgs[i] = id;
     }
     // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-    int result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, outTypes);
+    SignalDefault result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, outTypes);
 
     FnOverloads::Overload* newOverload = fnOverloads->addPolyImplOverload(polyFunc, funcImpl);
     CheckInfo::CheckImpl checkImpl{};
@@ -747,7 +754,7 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
     overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr);
     Assert(overload == newOverload);
     if(!overload){
-        ERR_HEAD(expr->tokenRange, "Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
+        ERR_HEAD3(expr->tokenRange, "Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
             log::out << log::CYAN<<"Generates args: "<<log::SILVER;
             if(argTypes.size()==0){
                 log::out << "zero arguments";
@@ -767,12 +774,12 @@ int CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicAr
             // TODO: show list of available overloaded function args
         )
         FNCALL_FAIL
-        return false;
+        return SignalAttempt::FAILURE;
     } 
     FNCALL_SUCCESS
-    return true;
+    return SignalAttempt::SUCCESS;
 }
-int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes){
+SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, DynamicArray<TypeId>* outTypes){
     using namespace engone;
     MEASURE;
     Assert(expr);
@@ -797,7 +804,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             CheckExpression(info,scopeId, expr->left, outTypes);
         }
         if(outTypes->last().getPointerLevel()==0){
-            ERR_HEAD(expr->left->tokenRange, "Cannot dereference non-pointer.\n\n";
+            ERR_HEAD3(expr->left->tokenRange, "Cannot dereference non-pointer.\n\n";
                 ERR_LINE(expr->left->tokenRange,"not a pointer");
             )
         }else{
@@ -814,13 +821,13 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
                 i32 enumValue;
                 bool found = typeInfo->astEnum->getMember(expr->name, &enumValue);
                 if (!found) {
-                    ERR_HEAD(expr->tokenRange, expr->name << " is not a member of enum " << typeInfo->astEnum->name << "\n";
+                    ERR_HEAD3(expr->tokenRange, expr->name << " is not a member of enum " << typeInfo->astEnum->name << "\n";
                     )
-                    return false;
+                    return SignalDefault::FAILURE;
                 }
 
                 outTypes->add(typeInfo->id);
-                return true;
+                return SignalDefault::SUCCESS;
             }
         }
         DynamicArray<TypeId> typeArray{};
@@ -837,7 +844,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
                 outTypes->last() = memdata.typeId;
             } else {
                 std::string msgtype = "not member of "+info.ast->typeToString(typeArray.last());
-                ERR_HEAD(expr->tokenRange, "'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(typeArray.last())<<"'.";
+                ERR_HEAD3(expr->tokenRange, "'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(typeArray.last())<<"'.";
                     log::out << "These are the members: ";
                     for(int i=0;i<(int)ti->astStruct->members.size();i++){
                         if(i!=0)
@@ -848,14 +855,14 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
                     log::out <<"\n";
                     ERR_LINE(expr->name,msgtype.c_str());
                 )
-                return false;
+                return SignalDefault::FAILURE;
             }
         } else {
             std::string msgtype = info.ast->typeToString(typeArray.last());
-            ERR_HEAD(expr->tokenRange, "Member access only works on structs, pointers to structs, and enums. '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).\n\n";
+            ERR_HEAD3(expr->tokenRange, "Member access only works on structs, pointers to structs, and enums. '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).\n\n";
                 ERR_LINE(expr->tokenRange,msgtype.c_str());
             )
-            return false;
+            return SignalDefault::FAILURE;
         }
     } else if(expr->typeId == AST_INDEX) {
         DynamicArray<TypeId> typeArray{};
@@ -873,7 +880,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         }
         if(typeArray.last().getPointerLevel()==0){
             std::string strtype = info.ast->typeToString(typeArray.last());
-            ERR_HEAD(expr->left->tokenRange, "Cannot index non-pointer.\n\n";
+            ERR_HEAD3(expr->left->tokenRange, "Cannot index non-pointer.\n\n";
                 ERR_LINE(expr->left->tokenRange,strtype.c_str());
             )
         }else{
@@ -891,10 +898,10 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
                     outTypes->add(varinfo->typeId);
                 }
             } else {
-                ERR_HEAD(expr->tokenRange, "'"<<expr->name<<"' is not declared.\n\n";
+                ERR_HEAD3(expr->tokenRange, "'"<<expr->name<<"' is not declared.\n\n";
                     ERR_LINE(expr->tokenRange,"undeclared");
                 )
-                return false;
+                return SignalDefault::FAILURE;
             }
         } else {
             // TODO: What to do with type? Return some type object?
@@ -919,7 +926,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             }
         } else {
             DynamicArray<TypeId> temps{};
-            int result = CheckExpression(info, scopeId, expr->left, &temps);
+            SignalDefault result = CheckExpression(info, scopeId, expr->left, &temps);
             finalType = temps.size()==0?AST_VOID:temps.last();
         }
         expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
@@ -1033,7 +1040,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
         if (ti.isValid()) {
         } else if(!printedError){
-            ERR_HEAD(expr->tokenRange, "Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.\n";
+            ERR_HEAD3(expr->tokenRange, "Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.\n";
             )
         }
         outTypes->add(ti);
@@ -1042,7 +1049,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         if(!info.ast->castable(temp.last(),ti)){
             std::string strleft = info.ast->typeToString(temp.last());
             std::string strright = info.ast->typeToString(ti);
-            ERR_HEAD(expr->tokenRange, "'"<<strleft << "' cannot be casted to '"<<strright<<"'.\n\n";
+            ERR_HEAD3(expr->tokenRange, "'"<<strleft << "' cannot be casted to '"<<strright<<"'.\n\n";
                 ERR_LINE(expr->tokenRange,strleft.c_str());
                 ERR_LINE(expr->left->tokenRange,strright.c_str());
             )
@@ -1053,11 +1060,13 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         const char* str = OpToStr((OperationType)expr->typeId.getId(), true);
         if(str && expr->left && expr->right) {
             expr->nonNamedArgs = 2; // unless operator overloading
-            int yes = CheckFncall(info,scopeId,expr, outTypes, true);
-            // TODO: Error if
+            SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, true);
             
-            if(yes)
-                return true;
+            if(result == SignalAttempt::SUCCESS)
+                return SignalDefault::SUCCESS;
+
+            if(result == SignalAttempt::FAILURE)
+                return SignalDefault::FAILURE;
         }
 
         // TODO: This code is buggy and doesn't behave as it should for all types.
@@ -1082,7 +1091,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         //     auto ti = CheckType(info, scopeId, expr->typeId, expr->tokenRange, &printedError);
         //     if (ti.isValid()) {
         //     } else if(!printedError){
-        //         ERR_HEAD(expr->tokenRange, "Type "<< info.ast->getTokenFromTypeString(expr->typeId) << " does not exist.\n";
+        //         ERR_HEAD3(expr->tokenRange, "Type "<< info.ast->getTokenFromTypeString(expr->typeId) << " does not exist.\n";
         //         )
         //     }
         //     // expr->typeId = ti;
@@ -1096,7 +1105,7 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
         //     auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
         //     if (ti.isValid()) {
         //     } else if(!printedError){
-        //         ERR_HEAD(expr->tokenRange, "Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.\n";
+        //         ERR_HEAD3(expr->tokenRange, "Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.\n";
         //         )
         //     }
         //     // expr->castType = ti; // don't if polymorphic scope
@@ -1106,13 +1115,13 @@ int CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Dynam
             outTypes->add(expr->typeId);
         }
     }
-    return true;
+    return SignalDefault::SUCCESS;
 }
 
-int CheckRest(CheckInfo& info, ASTScope* scope);
+SignalDefault CheckRest(CheckInfo& info, ASTScope* scope);
 // Evaluates types and offset for the given function implementation
 // It does not modify ast func
-int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, DynamicArray<TypeId>* outTypes){
+SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, DynamicArray<TypeId>* outTypes){
     using namespace engone;
     MEASURE;
     _TC_LOG_ENTER(FUNC_ENTER)
@@ -1166,14 +1175,14 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
             
             if(ti == AST_VOID){
                 std::string msg = info.ast->typeToString(arg.stringType);
-                ERR_HEAD(func->tokenRange, "Type '"<<msg<<"' is unknown. Did you misspell or forget to declare the type?\n";
+                ERR_HEAD3(func->tokenRange, "Type '"<<msg<<"' is unknown. Did you misspell or forget to declare the type?\n";
                     ERR_LINE(func->arguments[i].name,msg.c_str());
                 )
             } else if(ti.isValid()){
 
             } else if(!printedError) {
                 std::string msg = info.ast->typeToString(arg.stringType);
-                ERR_HEAD(func->tokenRange, "Type '"<<msg<<"' is unknown. Did you misspell it or is the compiler messing with you?\n";
+                ERR_HEAD3(func->tokenRange, "Type '"<<msg<<"' is unknown. Did you misspell it or is the compiler messing with you?\n";
                     ERR_LINE(func->arguments[i].name,msg.c_str());
                 )
             }
@@ -1192,7 +1201,7 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
             // if(temp.last() != argImpl.typeId){
                 std::string deftype = info.ast->typeToString(temp.last());
                 std::string argtype = info.ast->typeToString(argImpl.typeId);
-                ERR_HEAD(arg.defaultValue->tokenRange, "Type of default value does not match type of argument.\n\n";
+                ERR_HEAD3(arg.defaultValue->tokenRange, "Type of default value does not match type of argument.\n\n";
                     ERR_LINE(arg.defaultValue->tokenRange,deftype.c_str());
                     ERR_LINE(arg.name,argtype.c_str());
                 )
@@ -1251,7 +1260,7 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
                 #else
                 #define EXTRA_MSG
                 #endif
-                ERR_HEAD(func->returnValues[i].valueToken, "'"<<info.ast->getTokenFromTypeString(retStringType)<<"' is not a type.";
+                ERR_HEAD3(func->returnValues[i].valueToken, "'"<<info.ast->getTokenFromTypeString(retStringType)<<"' is not a type.";
                     EXTRA_MSG
                     log::out << "\n\n";
 
@@ -1296,12 +1305,12 @@ int CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcIm
     } else {
         outTypes->add(funcImpl->returnTypes[0].typeId);
     }
-    return true;
+    return SignalDefault::SUCCESS;
 }
 // Ensures that the function identifier exists.
 // Adds the overload for the function.
 // Checks if an existing overload would collide with the new overload.
-int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope){
+SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope){
     using namespace engone;
     _TC_LOG_ENTER(FUNC_ENTER)
     
@@ -1310,7 +1319,7 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
         for(int i=0;i<(int)parentStruct->polyArgs.size();i++){
             for(int j=0;j<(int)function->polyArgs.size();j++){
                 if(parentStruct->polyArgs[i].name == function->polyArgs[j].name){
-                    ERR_HEAD(function->polyArgs[j].name.range(), "Name for polymorphic argument is already taken by the parent struct.\n\n";
+                    ERR_HEAD3(function->polyArgs[j].name.range(), "Name for polymorphic argument is already taken by the parent struct.\n\n";
                         ERR_LINE(parentStruct->polyArgs[i].name,"taken");
                         ERR_LINE(function->polyArgs[j].name,"unavailable");
                     )
@@ -1343,9 +1352,9 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
             iden->type = Identifier::FUNC;
         }
         if(iden->type != Identifier::FUNC){
-            ERR_HEAD(function->tokenRange, "'"<< function->name << "' is already defined as a non-function.\n";
+            ERR_HEAD3(function->tokenRange, "'"<< function->name << "' is already defined as a non-function.\n";
             )
-            return false;
+            return SignalDefault::FAILURE;
         }
         fnOverloads = &iden->funcOverloads;
     }
@@ -1360,7 +1369,7 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
             // Assert(typeId.isValid());
             if(!typeId.isValid()){
                 std::string msg = info.ast->typeToString(function->arguments[i].stringType);
-                ERR_HEAD(function->arguments[i].name.range(),
+                ERR_HEAD3(function->arguments[i].name.range(),
                     "Unknown type '"<<msg<<"' for parameter '"<<function->arguments[i].name<<"'";
                     if(function->parentStruct && i==0){
                         log::out << " (this parameter is auto-generated for methods)";
@@ -1400,7 +1409,7 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
         }
         if(outOverload){
             //  TODO: better error message which shows what and where the already defined variable/function is.
-            ERR_HEAD(function->tokenRange, "Argument types are ambiguous with another overload of function '"<< function->name << "'.\n\n";
+            ERR_HEAD3(function->tokenRange, "Argument types are ambiguous with another overload of function '"<< function->name << "'.\n\n";
                 ERR_LINE(outOverload->astFunc->tokenRange,"initial overload");
                 ERR_LINE(function->tokenRange,"ambiguous overload");
             )
@@ -1412,7 +1421,7 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
             if(parentStruct)
                 funcImpl->structImpl = parentStruct->nonPolyStruct;
             DynamicArray<TypeId> retTypes{}; // @unused
-            bool yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, &retTypes);
+            SignalDefault yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, &retTypes);
             
             if(function->body){
                 CheckInfo::CheckImpl checkImpl{};
@@ -1426,19 +1435,19 @@ int CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruc
         }
     } else {
         if(fnOverloads->polyOverloads.size()!=0){
-            WARN_HEAD(function->tokenRange,"Ambiguity for polymorphic overloads is not checked!\n\n";)
+            WARN_HEAD3(function->tokenRange,"Ambiguity for polymorphic overloads is not checked!\n\n";)
         }
         // Base poly overload is added without regard for ambiguity. It's hard to check ambiguity so to it later.
         fnOverloads->addPolyOverload(function);
     }
-    return true;
+    return SignalDefault::SUCCESS;
 }
-int CheckFunctions(CheckInfo& info, ASTScope* scope){
+SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
     _TC_LOG_ENTER(FUNC_ENTER)
     Assert(scope||info.compileInfo->errors!=0);
-    if(!scope) return PARSE_ERROR;
+    if(!scope) return SignalDefault::FAILURE;
 
     for(auto now : scope->namespaces) {
         CheckFunctions(info, now);
@@ -1449,7 +1458,7 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
         if(fn->body){ // external/native function do not have bodies
             // Assert(fn->body || info.compileInfo->errors!=0);
             // if(fn->body){
-                int result = CheckFunctions(info, fn->body);
+                SignalDefault result = CheckFunctions(info, fn->body);
             // }
         }
     }
@@ -1457,7 +1466,7 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
         for(auto fn : it->functions){
             CheckFunction(info, fn , it, scope);
             if(fn->body){ // external/native function do not have bodies
-                int result = CheckFunctions(info, fn->body);
+                SignalDefault result = CheckFunctions(info, fn->body);
             }
         }
     }
@@ -1465,22 +1474,22 @@ int CheckFunctions(CheckInfo& info, ASTScope* scope){
     for(auto astate : scope->statements) {
         if(astate->hasNodes()){
             if(astate->firstBody){
-                int result = CheckFunctions(info, astate->firstBody);   
+                SignalDefault result = CheckFunctions(info, astate->firstBody);   
                 // if(!result)
                 //     error = false;
             }
             if(astate->secondBody){
-                int result = CheckFunctions(info, astate->secondBody);
+                SignalDefault result = CheckFunctions(info, astate->secondBody);
                 // if(!result)
                 //     error = false;
             }
         }
     }
     
-    return true;
+    return SignalDefault::SUCCESS;
 }
 
-int CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
+SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
     using namespace engone;
     _TC_LOG(FUNC_ENTER) // if(func->body->nativeCode)
     //     return true;
@@ -1534,10 +1543,10 @@ int CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
     for(auto& name : vars){
         info.ast->removeIdentifier(func->scopeId, name);
     }
-    return true;
+    return SignalDefault::SUCCESS;
 }
 
-int CheckRest(CheckInfo& info, ASTScope* scope){
+SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
     _TC_LOG_ENTER(FUNC_ENTER)
@@ -1572,7 +1581,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                 auto ti = CheckType(info, scope->scopeId, varname.assignString, now->tokenRange, &printedError);
                 // NOTE: We don't care whether it's a pointer just that the type exists.
                 if (!ti.isValid() && !printedError) {
-                    ERR_HEAD(now->tokenRange, "'"<<info.ast->getTokenFromTypeString(varname.assignString)<<"' is not a type (statement).\n\n";
+                    ERR_HEAD3(now->tokenRange, "'"<<info.ast->getTokenFromTypeString(varname.assignString)<<"' is not a type (statement).\n\n";
                         ERR_LINE(now->tokenRange,"bad");
                     )
                 } else {
@@ -1591,7 +1600,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         if(now->type == ASTStatement::CONTINUE || now->type == ASTStatement::BREAK){
             // nothing
         } else if(now->type == ASTStatement::BODY || now->type == ASTStatement::DEFER){
-            int result = CheckRest(info, now->firstBody);
+            SignalDefault result = CheckRest(info, now->firstBody);
         } else if(now->type == ASTStatement::EXPRESSION){
             CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray);
             // if(typeArray.size()==0)
@@ -1599,10 +1608,10 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         } else if(now->type == ASTStatement::RETURN){
             for(auto ret : now->returnValues){
                 typeArray.resize(0);
-                int result = CheckExpression(info, scope->scopeId, ret, &typeArray);
+                SignalDefault result = CheckExpression(info, scope->scopeId, ret, &typeArray);
             }
         } else if(now->type == ASTStatement::IF){
-            int result = CheckExpression(info, scope->scopeId,now->firstExpression,&typeArray);
+            SignalDefault result = CheckExpression(info, scope->scopeId,now->firstExpression,&typeArray);
             result = CheckRest(info, now->firstBody);
             if(now->secondBody){
                 result = CheckRest(info, now->secondBody);
@@ -1611,18 +1620,21 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
             auto& typeArray = now->versions_expresssionTypes[info.currentPolyVersion];
             if(now->firstExpression){
                 // may not exist, meaning just a declaration, no assignment
-                int result = CheckExpression(info, scope->scopeId,now->firstExpression, &typeArray);
+                SignalDefault result = CheckExpression(info, scope->scopeId,now->firstExpression, &typeArray);
                 if(now->versions_expresssionTypes[info.currentPolyVersion].size()==0)
                     typeArray.add(AST_VOID);
             }
+            bool hadError = false;
             if(now->firstExpression && typeArray.size() < now->varnames.size()){
-                char msg[100];
-                ERR_HEAD(now->tokenRange, "Too many variables were declared.\n\n";
-                    sprintf(msg,"%d variables",(int)now->varnames.size());
-                    ERR_LINE(now->tokenRange, msg);
-                    sprintf(msg,"%d return values",(int)typeArray.size());
-                    ERR_LINE(now->firstExpression->tokenRange, msg);
-                )
+                if(info.compileInfo->typeErrors==0) {
+                    ERR_SECTION(
+                        ERR_HEAD(now->tokenRange)
+                        ERR_MSG("Too many variables were declared.\n\n")
+                        ERR_LINE(now->tokenRange, now->varnames.size() + " variables")
+                        ERR_LINE(now->tokenRange, typeArray.size() + " return values")
+                    )
+                    hadError = true;
+                }
                 // don't return here, we can still evaluate some things
             }
             _TC_LOG(log::out << "assign ";)
@@ -1637,6 +1649,12 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                 if(!varname.assignString.isValid()) { // if assigned type didn't exist then 
                     if(vi < typeArray.size()){ // out of bounds, error is printed above
                         varname.versions_assignType[info.currentPolyVersion] = typeArray[vi];
+                    } else {
+                        if(!hadError){
+                            ERR_HEAD3(varname.name.operator TokenRange(), "Variable '"<<log::LIME<<varname.name<<log::SILVER<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n\n";
+                                ERR_LINE(varname.name, "type-less");
+                            )
+                        }
                     }
                 }
                 _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) <<"\n";)
@@ -1664,25 +1682,25 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                         if(!info.ast->castable(varname.versions_assignType[info.currentPolyVersion], varinfo->typeId)){
                             std::string leftstr = info.ast->typeToString(varinfo->typeId);
                             std::string rightstr = info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]);
-                            ERR_HEAD(now->tokenRange, "Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.\n\n";
+                            ERR_HEAD3(now->tokenRange, "Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.\n\n";
                                 ERR_LINE(varname.name, leftstr.c_str());
                                 ERR_LINE(now->firstExpression->tokenRange,rightstr.c_str());
                             )
                         }
                     }
                 } else {
-                    ERR_HEAD(varname.name.range(), "'"<<varname.name<<"' is defined as a non-variable and cannot be used.\n\n";
+                    ERR_HEAD3(varname.name.range(), "'"<<varname.name<<"' is defined as a non-variable and cannot be used.\n\n";
                         ERR_LINE(varname.name, "bad");
                     )
                 }
             }
             _TC_LOG(log::out << "\n";)
         } else if(now->type == ASTStatement::WHILE){
-            int result = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray);
+            SignalDefault result = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray);
             result = CheckRest(info, now->firstBody);
         } else if(now->type == ASTStatement::FOR){
             DynamicArray<TypeId> temp{}; // For has varnames which use typeArray. Therfore, we need another array.
-            int result = CheckExpression(info, scope->scopeId, now->firstExpression, &temp);
+            SignalDefault result = CheckExpression(info, scope->scopeId, now->firstExpression, &temp);
 
             Assert(now->varnames.size()==1);
             auto& varname = now->varnames[0];
@@ -1697,7 +1715,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                     if(varinfo_index) {
                         varinfo_index->typeId = AST_INT32;
                     } else {
-                        WARN_HEAD(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
+                        WARN_HEAD3(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
                     }
 
                     // _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
@@ -1714,10 +1732,10 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                         }
                         varinfo_item->typeId = vartype;
                     } else {
-                        WARN_HEAD(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
+                        WARN_HEAD3(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
                     }
 
-                    int result = CheckRest(info, now->firstBody);
+                    SignalDefault result = CheckRest(info, now->firstBody);
                     info.ast->removeIdentifier(varScope, varname.name);
                     info.ast->removeIdentifier(varScope, "nr");
                     continue;
@@ -1726,7 +1744,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                     auto mem1 = iterinfo->getMember(1);
                     if(mem0.typeId == mem1.typeId && AST::IsInteger(mem0.typeId)){
                         if(now->pointer){
-                            WARN_HEAD(now->tokenRange, "@pointer annotation does nothing with Range as for loop. It only works with slices.\n";)
+                            WARN_HEAD3(now->tokenRange, "@pointer annotation does nothing with Range as for loop. It only works with slices.\n";)
                         }
                         now->rangedForLoop = true;
                         auto varinfo_index = info.ast->addVariable(varScope, "nr");
@@ -1736,7 +1754,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                         if(varinfo_index) {
                             varinfo_index->typeId = inttype;
                         } else {
-                            WARN_HEAD(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
+                            WARN_HEAD3(now->tokenRange, "Cannot add 'nr' variable to use in for loop. Is it already defined?\n";)
                         }
 
                         // _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
@@ -1744,10 +1762,10 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                         if(varinfo_item){
                             varinfo_item->typeId = inttype;
                         } else {
-                            WARN_HEAD(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
+                            WARN_HEAD3(now->tokenRange, "Cannot add "<<varname.name<<" variable to use in for loop. Is it already defined?\n";)
                         }
 
-                        int result = CheckRest(info, now->firstBody);
+                        SignalDefault result = CheckRest(info, now->firstBody);
                         info.ast->removeIdentifier(varScope, varname.name);
                         info.ast->removeIdentifier(varScope, "nr");
                         continue;
@@ -1755,7 +1773,7 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
                 }
             }
             std::string strtype = info.ast->typeToString(typeArray.last());
-            ERR_HEAD(now->firstExpression->tokenRange, "The expression in for loop must be a Slice or Range.\n\n";
+            ERR_HEAD3(now->firstExpression->tokenRange, "The expression in for loop must be a Slice or Range.\n\n";
                 ERR_LINE(now->firstExpression->tokenRange,strtype.c_str());
             )
             continue;
@@ -1856,9 +1874,9 @@ int CheckRest(CheckInfo& info, ASTScope* scope){
         info.ast->removeIdentifier(scope->scopeId, name);
     }
     for(auto now : scope->namespaces){
-        int result = CheckRest(info, now);
+        SignalDefault result = CheckRest(info, now);
     }
-    return 0;
+    return SignalDefault::SUCCESS;
 }
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     using namespace engone;
@@ -1869,7 +1887,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
 
     _VLOG(log::out << log::BLUE << "Type check:\n";)
 
-    int result = CheckEnums(info, scope);
+    SignalDefault result = CheckEnums(info, scope);
     
     // Jonathan Blow has a video about dependenies when
     // checking types (https://www.youtube.com/watch?v=4q0cgjXhhTo)

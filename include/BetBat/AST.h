@@ -1,8 +1,7 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
-#include "Engone/Alloc.h"
-#include "BetBat/Util/Array.h"
+#include "BetBat/Signals.h"
 
 #include "BetBat/x64_Converter.h"
 
@@ -578,6 +577,23 @@ struct ASTScope : ASTNode {
     DynamicArray<ASTScope*> namespaces{};
     void add(ASTScope* astNamespace, AST* ast, ASTScope* tail = 0);
     
+    // Using doesn't affect functions or structs because
+    // functions and structs doesn't have an order while
+    // using statements do. The code below should
+    // maintain the order necessary to make using
+    // work with functions and structs.
+    // enum SpoType : u8 {
+    //     STRUCT,
+    //     ENUM,
+    //     FUNCTION,
+    //     NAMESPACE,
+    // };
+    // struct Spot {
+    //     SpoType spotType;
+    //     u32 index;
+    // };
+    // DynamicArray<Spot> contentOrder{};
+
     DynamicArray<ASTStatement*> statements{};    
     void add(ASTStatement* astStatement, ASTStatement* tail = 0);
 

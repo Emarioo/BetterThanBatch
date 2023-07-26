@@ -3,13 +3,15 @@
     you to interact with the operating system. Programs are 
     useless without these functions.
 */
-fn @native prints(str: char[]) ;
+// fn @native prints(str: char[]) ;
 
 
 // intrinsics?
 // len is in bytes
 fn @intrinsic memcpy(dst: void*, src: void*, len: u64);
 fn @intrinsic memzero(dst: void*, len: u64);
+// returns time stamp counter and IA32_TSC_AUX 
+fn @intrinsic rdtscp() -> u64, u32;
 
 // Functions below are not supported in x64 converter
 #ifndef X64

@@ -80,7 +80,7 @@
 // #define ILOG
 // #define ILOG_REGS
 // x64 converter
-#define CLOG
+// #define CLOG
 
 // #define OLOG
 // #define USE_DEBUG_INFO

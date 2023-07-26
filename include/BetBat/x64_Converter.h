@@ -16,10 +16,10 @@ x64 operands
 
 */
 enum CallConventions : u8 {
-    BETCALL,
-    CDECL_CONVENTION, // The naming is different because CDECL seems to be a macro.
-    STDCALL, // Currently default x64 calling convention
-    INTRINSIC,
+    BETCALL, // The default. Native functions use this.
+    STDCALL, // Currently default x64 calling convention.
+    INTRINSIC, // Special implementation. Usually a function directly coupled to an instruction.
+    CDECL_CONVENTION, // Not implemented yet. CDECL is a macro, hence the name CONVENTION.
 };
 enum LinkConventions : u8 {
     NONE, // no linkConvention export/import
@@ -78,6 +78,7 @@ struct Program_x64 {
     // of arguments which causes mistakes.
     void add(i64 byte);
     void add2(i64 word);
+    void add3(i64 word);
     void add4(i64 dword);
 
     void printHex(const char* path = nullptr);

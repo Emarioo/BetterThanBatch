@@ -56,6 +56,7 @@ const char* InstToString(int type){
 
         CASE(BC_MEMZERO)
         CASE(BC_MEMCPY)
+        CASE(BC_RDTSCP)
 
         // CASE(BC_SIN)
         // CASE(BC_COS)

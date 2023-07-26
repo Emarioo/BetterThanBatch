@@ -11,6 +11,7 @@ const char* ToString(CallConventions stuff){
     switch(stuff){
         CASE(BETCALL,"betcall")
         CASE(STDCALL,"stdcall")
+        CASE(INTRINSIC,"intrinsic")
         CASE(CDECL_CONVENTION,"cdecl")
     }
     return "<unknown-call>";
@@ -246,6 +247,7 @@ void Program_x64::printHex(const char* path){
 
 #define OPCODE_SHL_RM_CL_SLASH_4 (u8)0xD3
 #define OPCODE_SHR_RM_CL_SLASH_5 (u8)0xD3
+#define OPCODE_SHL_RM_IMM8_SLASH_4 (u8)0xC1
 
 // logical and with flags being set, registers are not modified
 #define OPCODE_TEST_RM_REG (u8)0x85
@@ -312,10 +314,13 @@ void Program_x64::printHex(const char* path){
 // convert float to i32 (or i64 with rexw)
 #define OPCODE_3_CVTSS2SI_REG_RM (u32)0x2D0FF3
 
-#define OPCODE_2_FSIN (u16)0xFED9
-#define OPCODE_2_FCOS (u16)0xFFD9
-// useful when calculating tan = sin/cos
-#define OPCODE_2_FSINCOS (u16)0xFBD9
+// #define OPCODE_2_FSIN (u16)0xFED9
+// #define OPCODE_2_FCOS (u16)0xFFD9
+// // useful when calculating tan = sin/cos
+// #define OPCODE_2_FSINCOS (u16)0xFBD9
+
+#define OPCODE_3_RDTSCP (u32)0xF9010F
+#define OPCODE_2_RDTSC (u16)0x310F
 
 // the three other modes deal with memory
 #define MODE_REG 0b11
@@ -1007,17 +1012,16 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 if(size == 8)
                     prog->add(PREFIX_REXW);
                 prog->add(OPCODE_SHL_RM_CL_SLASH_4);
-                prog->addModRM(MODE_REG, 4, BCToProgramReg(op2,4|8));
+                prog->addModRM(MODE_REG, 4, BCToProgramReg(op2,0xF));
                 break;
             }
             break; case BC_BRSHIFT: {
                 Assert(op0 == op2 && DECODE_REG_TYPE(op1)==BC_CX);
-                // maximum shift of 31?
                 u8 size = DECODE_REG_SIZE(op2);
                 if(size == 8)
                     prog->add(PREFIX_REXW);
                 prog->add(OPCODE_SHR_RM_CL_SLASH_5);
-                prog->addModRM(MODE_REG, 5, BCToProgramReg(op2,4|8));
+                prog->addModRM(MODE_REG, 5, BCToProgramReg(op2,0xF));
                 break;
             }
             break; case BC_LI: {
@@ -1527,6 +1531,28 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 */
                 u8 arr[] = { 0x48, 0x01, 0xF3, 0x48, 0x39, 0xDE, 0x74, 0x0C, 0x8A, 0x06, 0x88, 0x07, 0x48, 0xFF, 0xC6, 0x48, 0xFF, 0xC7, 0xEB, 0xEF };
                 prog->addRaw(arr, sizeof(arr));
+                break;
+            }
+            break; case BC_RDTSCP: {
+                // This instruction uses edx:eax and ecx.
+                // That is why the operands should specify these registers to indicate
+                // that they are used. This isn't a must, you could edx, eax and ecx before
+                // executing the instruction and then mov values into the operands
+                Assert(op0 == BC_REG_RAX && op1 == BC_REG_ECX && op2 == BC_REG_RDX);
+                
+                prog->add3(OPCODE_3_RDTSCP);
+                // prog->add2(OPCODE_2_RDTSC);
+                
+                prog->add(PREFIX_REXW);
+                prog->add(OPCODE_SHL_RM_IMM8_SLASH_4);
+                prog->addModRM(MODE_REG, 4, REG_D);
+                prog->add((u8)32);
+
+                // rdtscp will zero extern 8 byte registers
+                prog->add(PREFIX_REXW);
+                prog->add(OPCODE_OR_RM_REG);
+                prog->addModRM(MODE_REG, REG_D, REG_A);
+                
                 break;
             }
             // break; case BC_SIN: {

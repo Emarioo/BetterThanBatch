@@ -39,9 +39,13 @@ enum NativeFunctionType {
 
 #define NATIVE_CmdLineArgs -27
 
+#define NATIVE_rdtscp -35
+
 #define NATIVE_sin -40
 #define NATIVE_cos -41
 #define NATIVE_tan -42
+
+#define NATIVE_Sleep -50
 
 namespace Language {
     template <typename T>

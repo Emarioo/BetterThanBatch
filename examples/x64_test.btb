@@ -124,8 +124,8 @@
 // *a.ptr
 
 //-- intrinsics?
-// fn @intrinsic memzero(dst: void*, len: u64);
-// fn @intrinsic memcpy(dst: void*, src: void*, len: u64);
+// fn @native memzero(dst: void*, len: u64);
+// fn @native memcpy(dst: void*, src: void*, len: u64);
 
 // a: i32[3];
 // b: i32[3];

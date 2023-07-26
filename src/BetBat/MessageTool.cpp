@@ -2,7 +2,22 @@
 #include "BetBat/Tokenizer.h"
 
 
-void PrintCode(const TokenRange& tokenRange, const char* message){
+void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode) {
+    // , const StringBuilder& stringBuilder) {
+    using namespace engone;
+    log::out << color;
+    log::out << TrimDir(tokenRange.tokenStream()->streamName)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+    log::out << " ("<<errorCode<<")";
+    log::out << ": " <<  MESSAGE_COLOR;
+    //  << stringBuilder;
+}
+void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode) {
+    // , const StringBuilder& stringBuilder) {
+    PrintHead(color, token.operator TokenRange(), errorCode);
+    // , stringBuilder);
+}
+
+void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder){
     using namespace engone;
     if(!tokenRange.tokenStream())
         return;
@@ -89,15 +104,15 @@ void PrintCode(const TokenRange& tokenRange, const char* message){
         tok.print(false);
     }
     log::out << "\n";
-    int msglen = message ? strlen(message) : 0;
+    int msglen = stringBuilder.size();
     // log::out << "len "<<msglen<<"\n";
     log::out << markColor;
     if(msglen+4<minPos){ // +4 for some extra space
         // print message on left side of mark
         for(int i=0;i<minPos-msglen - 1;i++)
             log::out << " ";
-        if(message)
-            log::out << message<<" ";
+        if(stringBuilder.size()!=0)
+            log::out << stringBuilder<<" ";
         if(maxPos-minPos>0){
             log::out << "^";
         }   
@@ -112,10 +127,19 @@ void PrintCode(const TokenRange& tokenRange, const char* message){
         }   
         for(int i=0;i<maxPos-minPos - 1;i++)
             log::out << "~";
-        if(message)
-            log::out << " " << message;
+        if(stringBuilder.size()!=0)
+            log::out << " " << stringBuilder;
     }
     log::out << "\n";
+}
+void PrintCode(const Token& token, const StringBuilder& stringBuilder){
+     PrintCode(token.operator TokenRange(), stringBuilder);
+}
+
+void PrintCode(const TokenRange& tokenRange, const char* message){
+    StringBuilder temp{};
+    temp.borrow(message);   
+    PrintCode(tokenRange, temp);
 }
 void PrintCode(int index, TokenStream* stream, const char* message){
     if(!stream) return;

@@ -25,5 +25,3 @@ struct CheckInfo {
 };
 
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);
-// TypeId CheckType(AST* ast, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError);
-// TypeId CheckType(AST* ast, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);

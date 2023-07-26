@@ -7,6 +7,7 @@
 #include "BetBat/Config.h"
 #include "BetBat/MessageTool.h"
 #include "BetBat/Util/Utility.h"
+#include "BetBat/Util/Array.h"
 #include "BetBat/Util/Perf.h"
 
 #define TOKEN_SUFFIX_LINE_FEED 0x1
@@ -86,7 +87,10 @@ struct TokenRange {
     // }
 
     void print();
-    void feed(std::string& outBuffer);
+    void feed(std::string& outBuffer) const;
+    // does not null terminate
+    u32 feed(char* outBuffer, u32 bufferSize) const ;
+    u32 queryFeedSize() const;
 };
 engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange);
 struct TokenStream {

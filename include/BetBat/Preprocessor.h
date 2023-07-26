@@ -3,13 +3,6 @@
 
 #include "BetBat/Tokenizer.h"
 
-// TODO: also defined in parser. define where both use it?
-#define PARSE_ERROR 0
-#define PARSE_BAD_ATTEMPT 2
-#define PARSE_SUCCESS 1
-// success but no accumulation
-#define PARSE_NO_VALUE 3
-
 struct TokenRef{
     uint16 index=0;
     uint16 flags=0;
@@ -41,9 +34,12 @@ struct CertainMacro {
     // I tested how fast an unordered_map would be and it was slower than a normal array.
     std::vector<std::string> parameters;
     void addParam(const Token& name);
-    bool called=false;
-    int infiniteArg=-1; // tells you which argument is the infinite one, -1 for none
+    int indexOfVariadic=-1; // tells you which argument is the infinite one, -1 for none
     // returns index to argumentNames
+    bool isVariadic() { return indexOfVariadic != -1; }
+    u32 nonVariadicArguments() { return isVariadic() ? parameters.size() - 1 : parameters.size(); }
+    bool isBlank() { return blank; }
+    bool blank = false;
     // -1 if not found
     int matchArg(const Token& token);
     // int matchArg(Token token);

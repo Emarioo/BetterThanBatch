@@ -25,22 +25,23 @@ I shall spend time on examples, documentation and most
 importantly proper testing.
 
 ## Features
-- Variables, functions, namespaces, structs, enums.
-- If, for, while, break, continue, return, defer, using...
+- #import to divide your code into multiple files
+- #include to tokenize a file and transfer the tokens into another file.
+- Polymorphism in structs, functions and methods (there are some bugs in advances scenarios)
+- Function and operator overloading
+- x64 code generator (object files)
+- Linking with C/C++ functions from libraries and object files (symbols and relocations)
 - #define, #multidefine and #undef (macros/defines are recursive)
 - #ifdef (exactly like C)
 - #unwrap (for macros)
 - Concatenation with ## in macros.
-- #import to divide your code into multiple files
-- #include to tokenize a file and transfer the tokens into another file.
-- Polymorphism in structs, functions and methods (there are some bugs in advances scenarios)
-- Function overloading (works less well with polymorphism)
+- Variables, functions, namespaces, structs, enums.
+- If, for, while, break, continue, return, defer, using.
 
 ## On the way
-- Usage of C++ functions within a script
-- Calling executables like gcc.exe
-- Operator overloading
+- Shell-like way of calling executables.
 - Thorough documentation.
+- Constant evaluation and compile time execution
 
 ## The processs
 The name of each step may not accurately represent what's
@@ -58,7 +59,8 @@ Some preprocessing is done after the parser like
 - Type checker  (modifies types in AST)
 - Generator     (AST -> bytecode)
 - Optimizer     (bytecode -> faster and smaller bytecode)
-- Interpreter   (runs the bytecode)
+- Interpreter   (runs the bytecode, compile time execution)
+- x64 Generator (bytecode -> object file)
 
 ## Examples
 You can find some examples in the example folder.

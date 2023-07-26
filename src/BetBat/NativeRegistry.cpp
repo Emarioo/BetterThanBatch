@@ -68,10 +68,14 @@ void NativeRegistry::initNativeContent(){
     ADD(EndTimePoint)
 
     ADD(CmdLineArgs)
+
+    ADD(rdtscp)
     
     ADD(sin)
     ADD(cos)
     ADD(tan)
+
+    ADD(Sleep)
 
     #undef ADD
 }

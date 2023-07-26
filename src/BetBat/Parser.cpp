@@ -1,26 +1,47 @@
 #include "BetBat/Parser.h"
 #include "BetBat/Compiler.h"
 
-#undef ERR
-#undef ERR_HEAD
-#undef WARN_HEAD
-#undef ERR_LINE
-#undef WARN_LINE
+
+
 // #undef ERRAT
 
-#define WARN_HEAD(T, M) info.compileInfo->warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
-#define ERR_HEAD(T, M) info.compileInfo->errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000") << M
-#define ERR_LINE(I, M) PrintCode(I, info.tokens, M)
-#define WARN_LINE(I, M) PrintCode(I, info.tokens, M)
+#undef WARN_HEAD3
+#define WARN_HEAD3(T, M) info.compileInfo->warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
+#undef ERR_HEAD3
+#define ERR_HEAD3(T, M) info.compileInfo->errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000") << M
+#undef ERR_LINE2
+#define ERR_LINE2(I, M) PrintCode(I, info.tokens, M)
+#undef WARN_LINE2
+#define WARN_LINE2(I, M) PrintCode(I, info.tokens, M)
 
-#define ERR info.compileInfo->errors++;engone::log::out << engone::log::RED << "(Parse error E0000): "
 
-#define INST engone::log::out << (info.code.length()-1)<<": " <<(info.code.get(info.code.length()-1)) << ", "
-// #define INST engone::log::out << (info.code.get(info.code.length()-2).type==BC_LOADC ? info.code.get(info.code.length()-2) : info.code.get(info.code.length()-1)) << ", "
+#undef ERR_SECTION
+#define ERR_SECTION(CONTENT) { info.errors++; StringBuilder err_type = "Parse error, E0000"; CONTENT }
 
-// #define ERR_LINE engone::log::out <<engone::log::RED<<info.now().line<<"|> ";info.printLine();engone::log::out<<"\n";
-// #define ERR_LINEP engone::log::out <<engone::log::RED<<info.get(info.at()-1).line<<"|> ";info.printPrevLine();engone::log::out<<"\n";
+/*
+    Declaration of functions
+*/
+ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace);
+// out token contains a newly allocated string. use delete[] on it
+SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal = false);
+// normal assignment a = 9
+SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt);
+SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct);
+SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt);
+// returns 0 if syntax is wrong for flow parsing
+SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt);
+SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt);
+// parses arguments and puts them into fncall->left
+SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count);
+SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt);
+SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt);
+SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt);
+// don't forget to free data in outgoing token
+SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed);
 
+/*
+    Code for the functions
+*/
 // returns instruction type
 // zero means no operation
 bool IsSingleOp(OperationType nowOp){
@@ -188,8 +209,7 @@ Token CombineTokens(ParseInfo& info){
     }
     return outToken;
 }
-// don't forget to free data in outgoing token
-int ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
+SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
     using namespace engone;
     MEASURE;
     int startToken = info.at()+1;
@@ -204,8 +224,8 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
     while(!info.end()){
         Token& tok = info.get(endTok);
         if(tok.flags&TOKEN_MASK_QUOTED){
-            ERR_HEAD(tok, "Cannot have quotes in data type "<<tok<<".\n\n";
-                ERR_LINE(tok.tokenIndex,"bad");
+            ERR_HEAD3(tok, "Cannot have quotes in data type "<<tok<<".\n\n";
+                ERR_LINE2(tok.tokenIndex,"bad");
             )
             // NOTE: Don't return in order to stay synchronized.
             //   continue parsing like nothing happen.
@@ -265,23 +285,21 @@ int ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
     if(tokensParsed)
         *tokensParsed = endTok - startToken;
     if(outTypeId.length == 0)
-        return PARSE_ERROR;
-    return PARSE_SUCCESS;
+        return SignalDefault::FAILURE;
+    return SignalDefault::SUCCESS;
 }
-int ParseFunction(ParseInfo& info, ASTFunction*& expression, bool attempt, ASTStruct* parentStruct);
-int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt);
-int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
+SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
     Token structToken = info.get(info.at()+1);
     int startIndex = info.at()+1;
     if(!Equal(structToken,"struct")){
-        if(attempt) return PARSE_BAD_ATTEMPT;
-        ERR_HEAD(structToken,"expected struct not "<<structToken<<"\n";
-            ERR_LINE(structToken.tokenIndex,"bad");
+        if(attempt) return SignalAttempt::BAD_ATTEMPT;
+        ERR_HEAD3(structToken,"expected struct not "<<structToken<<"\n";
+            ERR_LINE2(structToken.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next(); // struct
     attempt=false;
@@ -295,8 +313,8 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             hideAnnotation=true;
         // } else if(Equal(name,"@export")) {
         } else {
-            WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                WARN_LINE(info.at(),"unknown");
+            WARN_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                WARN_LINE2(info.at(),"unknown");
             )
         }
         name = info.get(info.at()+1);
@@ -304,10 +322,10 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     }
     
     if(!IsName(name)){
-        ERR_HEAD(name,"expected a name, "<<name<<" isn't\n";
-            ERR_LINE(name.tokenIndex,"bad");
+        ERR_HEAD3(name,"expected a name, "<<name<<" isn't\n";
+            ERR_LINE2(name.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next(); // name
 
@@ -329,15 +347,15 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 info.next();
                 
                 if(astStruct->polyArgs.size()==0){
-                    ERR_HEAD(token, "empty polymorph list\n";
-                        ERR_LINE(token.tokenIndex,"bad");
+                    ERR_HEAD3(token, "empty polymorph list\n";
+                        ERR_LINE2(token.tokenIndex,"bad");
                     )
                 }
                 break;
             }
             if(!IsName(token)){
-                ERR_HEAD(token, token<<" is not a valid name for polymorphism\n";
-                    ERR_LINE(token.tokenIndex,"bad");
+                ERR_HEAD3(token, token<<" is not a valid name for polymorphism\n";
+                    ERR_LINE2(token.tokenIndex,"bad");
                 )
             }else{
                 info.next();
@@ -356,8 +374,8 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 info.next();
                 break;
             } else{
-                ERR_HEAD(token, token<<"is neither , or >\n";
-                    ERR_LINE(token.tokenIndex,"bad");
+                ERR_HEAD3(token, token<<"is neither , or >\n";
+                    ERR_LINE2(token.tokenIndex,"bad");
                 )
                 continue;
             }
@@ -367,10 +385,10 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     
     token = info.get(info.at()+1);
     if(!Equal(token,"{")){
-        ERR_HEAD(token,"expected { not "<<token<<"\n";
-            ERR_LINE(token.tokenIndex,"bad");
+        ERR_HEAD3(token,"expected { not "<<token<<"\n";
+            ERR_LINE2(token.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
     
@@ -388,7 +406,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     info.currentScopeId = astStruct->scopeId;
 
     int offset=0;
-    int errorParsingMembers = PARSE_SUCCESS;
+    auto errorParsingMembers = SignalAttempt::SUCCESS;
     bool hadRecentError = false;
     bool affectedByAlignment=false;
     // TODO: May want to change the structure of the while loop
@@ -411,8 +429,8 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
         if (Equal(name,"fn")) {
             // parse function?
             ASTFunction* func = 0;
-            int result = ParseFunction(info, func, false, astStruct);
-            if(result!=PARSE_SUCCESS){
+            SignalAttempt result = ParseFunction(info, func, false, astStruct);
+            if(result!=SignalAttempt::SUCCESS){
                 continue;
             }
             func->parentStruct = astStruct;
@@ -422,28 +440,28 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             if(!IsName(name)){
                 info.next();
                 if(!hadRecentError){
-                    ERR_HEAD(name, "expected a name, "<<name<<" isn't\n";
-                        ERR_LINE(name.tokenIndex,"bad");
+                    ERR_HEAD3(name, "expected a name, "<<name<<" isn't\n";
+                        ERR_LINE2(name.tokenIndex,"bad");
                     )
                 }
                 hadRecentError=true;
-                errorParsingMembers = PARSE_ERROR;
+                errorParsingMembers = SignalAttempt::FAILURE;
                 continue;
             }
             info.next();   
             Token token = info.get(info.at()+1);
             if(!Equal(token,":")){
-                ERR_HEAD(token,"expected : not "<<token<<"\n";
-                    ERR_LINE(token.tokenIndex,"bad");
+                ERR_HEAD3(token,"expected : not "<<token<<"\n";
+                    ERR_LINE2(token.tokenIndex,"bad");
                 )
-                errorParsingMembers = PARSE_ERROR;
+                errorParsingMembers = SignalAttempt::FAILURE;
                 continue;
             }    
             info.next();
-            int result = ParseTypeId(info,typeToken,nullptr);
-            if(result!=PARSE_SUCCESS) {
-                ERR_HEAD(typeToken, "failed parsing type "<<typeToken<<"\n";
-                    ERR_LINE(typeToken.tokenIndex,"bad");
+            SignalDefault result = ParseTypeId(info,typeToken,nullptr);
+            if(result!=SignalDefault::SUCCESS) {
+                ERR_HEAD3(typeToken, "failed parsing type "<<typeToken<<"\n";
+                    ERR_LINE2(typeToken.tokenIndex,"bad");
                 )
                 continue;
             }
@@ -460,14 +478,14 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
                 if(IsInteger(token2)) {
                     arrayLength = ConvertInteger(token2);
                     if(arrayLength<0){
-                        ERR_HEAD(token2, "Array cannot have negative size.\n\n";
-                            ERR_LINE(info.at()-1,"< 0");
+                        ERR_HEAD3(token2, "Array cannot have negative size.\n\n";
+                            ERR_LINE2(info.at()-1,"< 0");
                         )
                         arrayLength = 0;
                     }
                 } else {
-                    ERR_HEAD(token2, "The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.\n\n";
-                        ERR_LINE(info.at()-1, "must be positive integer literal");
+                    ERR_HEAD3(token2, "The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.\n\n";
+                        ERR_LINE2(info.at()-1, "must be positive integer literal");
                     )
                 }
                 std::string* str = info.ast->createString();
@@ -481,14 +499,14 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             
             TypeId typeId = info.ast->getTypeString(typeToken);
             
-            result = PARSE_SUCCESS;
+            SignalAttempt resultFromExpr = SignalAttempt::SUCCESS;
             ASTExpression* defaultValue=0;
             token = info.get(info.at()+1);
             if(Equal(token,"=")){
                 info.next();
-                result = ParseExpression(info,defaultValue,false);
+                resultFromExpr = ParseExpression(info,defaultValue,false);
             }
-            if(result == PARSE_SUCCESS){
+            if(resultFromExpr == SignalAttempt::SUCCESS){
                 astStruct->members.add({});
                 auto& mem = astStruct->members.last();
                 mem.name = name;
@@ -509,18 +527,18 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
             break;
         }else{
             if(!hadRecentError){ // no need to print message again, the user already know there are some issues here.
-                ERR_HEAD(token,"Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").\n\n";
+                ERR_HEAD3(token,"Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").\n\n";
                     if(typeEndToken!=-1){
                         TokenRange temp{};
                         temp.firstToken = typeToken;
                         temp.endIndex = typeEndToken;
                         PrintCode(temp,"evaluated type");
                     }
-                    ERR_LINE(token.tokenIndex,"bad");
+                    ERR_LINE2(token.tokenIndex,"bad");
                 )
             }
             hadRecentError=true;
-            errorParsingMembers = PARSE_ERROR;
+            errorParsingMembers = SignalAttempt::FAILURE;
             continue;
         }
     }
@@ -528,9 +546,7 @@ int ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     _GLOG(log::out << "Parsed struct "<<log::LIME<< name <<log::SILVER << " with "<<astStruct->members.size()<<" members\n";)
     return errorParsingMembers;
 }
-// int ParseStruct(ParseInfo& info, ASTStruct*& tempFunction, bool attempt);
-int ParseEnum(ParseInfo& info, ASTEnum*& tempFunction, bool attempt);
-int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
+SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
@@ -538,11 +554,11 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     int startIndex = info.at()+1;
     if(!Equal(token,"namespace")){
         if(attempt)
-            return PARSE_BAD_ATTEMPT;
-        ERR_HEAD(token,"expected namespace not "<<token<<"\n";
-            ERR_LINE(token.tokenIndex,"bad");
+            return SignalAttempt::BAD_ATTEMPT;
+        ERR_HEAD3(token,"expected namespace not "<<token<<"\n";
+            ERR_LINE2(token.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     attempt = false;
     info.next();
@@ -554,8 +570,8 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
         if(Equal(name,"@hide")){
             hideAnnotation=true;
         } else {
-            WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                WARN_LINE(info.at(),"unknown");
+            WARN_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                WARN_LINE2(info.at(),"unknown");
             )
         }
         name = info.get(info.at()+1);
@@ -563,19 +579,19 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     }
 
     if(!IsName(name)){
-        ERR_HEAD(name,"expected a name, "<<name<<" isn't\n";
-            ERR_LINE(name.tokenIndex,"bad");
+        ERR_HEAD3(name,"expected a name, "<<name<<" isn't\n";
+            ERR_LINE2(name.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
 
     token = info.get(info.at()+1);
     if(!Equal(token,"{")){
-        ERR_HEAD(token,"expected { not "<<token<<"\n";
-            ERR_LINE(token.tokenIndex,"bad");
+        ERR_HEAD3(token,"expected { not "<<token<<"\n";
+            ERR_LINE2(token.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
     
@@ -597,7 +613,7 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
 
     info.currentScopeId = newScope->id;
 
-    int error = PARSE_SUCCESS;
+    auto error = SignalAttempt::SUCCESS;
     while(!info.end()){
         Token& token = info.get(info.at()+1);
         if(Equal(token,"}")){
@@ -609,27 +625,27 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
         ASTFunction* tempFunction=0;
         ASTScope* tempNamespace=0;
     
-        int result=PARSE_BAD_ATTEMPT;
+        auto result=SignalAttempt::BAD_ATTEMPT;
 
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseFunction(info,tempFunction,true, nullptr);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseStruct(info,tempStruct,true);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseEnum(info,tempEnum,true);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseNamespace(info,tempNamespace,true);
 
-        if(result==PARSE_BAD_ATTEMPT){
+        if(result==SignalAttempt::BAD_ATTEMPT){
             Token& token = info.get(info.at()+1);
-            ERR_HEAD(token, "Unexpected '"<<token<<"' (ParseNamespace)\n";
-                ERR_LINE(token.tokenIndex,"bad");
+            ERR_HEAD3(token, "Unexpected '"<<token<<"' (ParseNamespace)\n";
+                ERR_LINE2(token.tokenIndex,"bad");
             )
             
             // test other parse type
             info.next(); // prevent infinite loop
         }
-        if(result==PARSE_ERROR){
+        if(result==SignalAttempt::FAILURE){
             
         }
             
@@ -653,18 +669,18 @@ int ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     _PLOG(log::out << "Namespace "<<name << "\n";)
     return error;
 }
-int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
+SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
     Token enumToken = info.get(info.at()+1);
     int startIndex = info.at()+1;
     if(!Equal(enumToken,"enum")){
-        if(attempt) return PARSE_BAD_ATTEMPT;
-        ERR_HEAD(enumToken,"expected struct not "<<enumToken<<"\n";
-            ERR_LINE(enumToken.tokenIndex,"bad");
+        if(attempt) return SignalAttempt::BAD_ATTEMPT;
+        ERR_HEAD3(enumToken,"expected struct not "<<enumToken<<"\n";
+            ERR_LINE2(enumToken.tokenIndex,"bad");
         )
-        return PARSE_ERROR;   
+        return SignalAttempt::FAILURE;   
     }
     attempt=false;
     info.next(); // enum
@@ -677,8 +693,8 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         if(Equal(name,"@hide")){
             hideAnnotation=true;
         } else {
-            WARN_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                WARN_LINE(info.at(),"unknown");
+            WARN_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                WARN_LINE2(info.at(),"unknown");
             )
         }
         name = info.get(info.at()+1);
@@ -686,19 +702,19 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     }
 
     if(!IsName(name)){
-        ERR_HEAD(name,"expected a name, "<<name<<" isn't\n";
-            ERR_LINE(name.tokenIndex,"bad");
+        ERR_HEAD3(name,"expected a name, "<<name<<" isn't\n";
+            ERR_LINE2(name.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next(); // name
     
     Token token = info.get(info.at()+1);
     if(!Equal(token,"{")){
-        ERR_HEAD(token,"expected { not "<<token<<"\n";
-            ERR_LINE(token.tokenIndex,"bad");
+        ERR_HEAD3(token,"expected { not "<<token<<"\n";
+            ERR_LINE2(token.tokenIndex,"bad");
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
     int nextId=0;
@@ -707,7 +723,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     // astEnum->tokenRange.startIndex = startIndex;
     // astEnum->tokenRange.tokenStream = info.tokens;
     astEnum->hidden = hideAnnotation;
-    int error = PARSE_SUCCESS;
+    auto error = SignalAttempt::SUCCESS;
     WHILE_TRUE {
         Token name = info.get(info.at()+1);
         
@@ -718,10 +734,10 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         
         if(!IsName(name)){
             info.next(); // move forward to prevent infinite loop
-            ERR_HEAD(name, "expected a name, "<<name<<" isn't\n";
-                ERR_LINE(name.tokenIndex,"bad");
+            ERR_HEAD3(name, "expected a name, "<<name<<" isn't\n";
+                ERR_LINE2(name.tokenIndex,"bad");
             )
-            error = PARSE_ERROR;
+            error = SignalAttempt::FAILURE;
             continue;
         }
         info.next();   
@@ -739,8 +755,8 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
                 nextId = ConvertHexadecimal(token);
                 token = info.get(info.at()+1);
             } else{
-                ERR_HEAD(token, token<<" is not an integer (i32)\n";
-                    ERR_LINE(token.tokenIndex,"bad");
+                ERR_HEAD3(token, token<<" is not an integer (i32)\n";
+                    ERR_LINE2(token.tokenIndex,"bad");
                 )
             }
         }
@@ -754,10 +770,10 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
             info.next();
             break;
         }else{
-            ERR_HEAD(token,"expected } or , not "<<token<<"\n";
-                ERR_LINE(token.tokenIndex,"bad");
+            ERR_HEAD3(token,"expected } or , not "<<token<<"\n";
+                ERR_LINE2(token.tokenIndex,"bad");
             )
-            error = PARSE_ERROR;
+            error = SignalAttempt::FAILURE;
             continue;
         }
     }
@@ -765,7 +781,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     // auto typeInfo = info.ast->getTypeInfo(info.currentScopeId, name, false, true);
     // int strId = info.ast->getTypeString(name);
     // if(!typeInfo){
-        // ERR_HEAD(name, name << " is taken\n";
+        // ERR_HEAD3(name, name << " is taken\n";
         // info.ast->destroy(astEnum);
         // astEnum = 0;
         // return PARSE_ERROR;
@@ -775,8 +791,7 @@ int ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     _PLOG(log::out << "Parsed enum "<<log::LIME<< name <<log::SILVER <<" with "<<astEnum->members.size()<<" members\n";)
     return error;
 }
-// parses arguments and puts them into fncall->left
-int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
+SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
     MEASURE;
 
     // TODO: sudden end, error handling
@@ -795,9 +810,9 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
                 expectComma=false;
                 continue;
             }
-            ERR_HEAD(tok,"Expected ',' to supply more arguments or ')' to end fncall (found "<<tok<<" instead)\n";
+            ERR_HEAD3(tok,"Expected ',' to supply more arguments or ')' to end fncall (found "<<tok<<" instead)\n";
             )
-            return PARSE_ERROR;
+            return SignalDefault::FAILURE;
         }
         bool named=false;
         Token eq = info.get(info.at()+2);
@@ -808,17 +823,17 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
             named=true;
             mustBeNamed = true;
         } else if(mustBeNamed){
-            ERR_HEAD(tok, "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
-                ERR_LINE(tok.tokenIndex,"bad");
+            ERR_HEAD3(tok, "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
+                ERR_LINE2(tok.tokenIndex,"bad");
             )
             // return or continue could desync the parsing so don't do that.
         }
 
         ASTExpression* expr=0;
-        int result = ParseExpression(info,expr,false);
-        if(result!=PARSE_SUCCESS){
+        SignalAttempt result = ParseExpression(info,expr,false);
+        if(result!=SignalAttempt::SUCCESS){
             // TODO: error message, parse other arguments instead of returning?
-            return PARSE_ERROR;                         
+            return SignalDefault::FAILURE;
         }
         if(named){
             expr->namedValue = tok;
@@ -837,18 +852,17 @@ int ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
         // tail = expr;
         expectComma = true;
     }
-    return PARSE_SUCCESS;
+    return SignalDefault::SUCCESS;
 }
-int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
+SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
     
     if(info.end()){
         if(attempt)
-            return PARSE_BAD_ATTEMPT;
-        ERR << "Sudden end\n";
-        return PARSE_ERROR;
+            return SignalAttempt::BAD_ATTEMPT;
+        return SignalAttempt::FAILURE;
     }
 
     std::vector<ASTExpression*> values;
@@ -877,8 +891,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 
                 Token memberName = info.get(info.at()+1);
                 if(!IsName(memberName)){
-                    ERR_HEAD(memberName, "Expected a property name, not "<<memberName<<".\n\n";
-                        ERR_LINE(memberName.tokenIndex,"bad");
+                    ERR_HEAD3(memberName, "Expected a property name, not "<<memberName<<".\n\n";
+                        ERR_LINE2(memberName.tokenIndex,"bad");
                     )
                     continue;
                 }
@@ -930,10 +944,10 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
 
                     // Parse the other arguments
                     int count = 0;
-                    int result = ParseArguments(info, tmp, &count);
-                    if(result!=PARSE_SUCCESS){
+                    SignalDefault result = ParseArguments(info, tmp, &count);
+                    if(result!=SignalDefault::SUCCESS){
                         info.ast->destroy(tmp);
-                        return result;
+                        return SignalAttempt::FAILURE;
                     }
 
                     _PLOG(log::out << "Parsed call "<<count <<"\n";)
@@ -946,7 +960,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     continue;
                 }
                 if(polyTypes.length()!=0){
-                    ERR_HEAD(info.now(),
+                    ERR_HEAD3(info.now(),
                     "Polymorphic arguments indicates a method call put the parenthesis for it is missing. '"<<info.get(info.at()+1)<<"' is not '('.";
                     )
                 }
@@ -982,10 +996,10 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
 
                 // if(Equal(token,"*") && (info.now().flags&TOKEN_SUFFIX_LINE_FEED)){
                 if(info.now().flags&TOKEN_SUFFIX_LINE_FEED){
-                    WARN_HEAD(token, "'"<<token << "' is treated as a multiplication but perhaps you meant to do a dereference since the operation exists on a new line. "
+                    WARN_HEAD3(token, "'"<<token << "' is treated as a multiplication but perhaps you meant to do a dereference since the operation exists on a new line. "
                         "Separate with a semi-colon for dereference or put the multiplication on the same line to silence this message.\n\n";
-                        WARN_LINE(info.at(), "semi-colon is recommended after statements");
-                        WARN_LINE(info.at()+1, "should this be left and right operation");
+                        WARN_LINE2(info.at(), "semi-colon is recommended after statements");
+                        WARN_LINE2(info.at()+1, "should this be left and right operation");
                     )
                 }
                 info.next();
@@ -1023,13 +1037,13 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 info.next();
                 attempt=false;
                 ASTExpression* indexExpr=nullptr;
-                int result = ParseExpression(info, indexExpr, false);
-                if(result != PARSE_SUCCESS){
+                SignalAttempt result = ParseExpression(info, indexExpr, false);
+                if(result != SignalAttempt::SUCCESS){
                     
                 }
                 Token tok = info.get(info.at()+1);
                 if(!Equal(tok,"]")){
-                    ERR_HEAD(tok,"bad\n\n";)
+                    ERR_HEAD3(tok,"bad\n\n";)
                 } else {
                     info.next();
                 }
@@ -1090,9 +1104,9 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     if((prev.flags&TOKEN_SUFFIX_LINE_FEED) == 0 
                          && !Equal(token,"}") && !Equal(token,",") && !Equal(token,"{") && !Equal(token,"]")
                          && !Equal(prev,")")){
-                        WARN_HEAD(token, "Did you forget the semi-colon to end the statement or was it intentional? Perhaps you mistyped a character? (put the next statement on a new line to silence this warning)\n\n"; 
-                            ERR_LINE(tokenIndex-1, "semi-colon here?");
-                            // ERR_LINE(tokenIndex, "; before this?");
+                        WARN_HEAD3(token, "Did you forget the semi-colon to end the statement or was it intentional? Perhaps you mistyped a character? (put the next statement on a new line to silence this warning)\n\n"; 
+                            ERR_LINE2(tokenIndex-1, "semi-colon here?");
+                            // ERR_LINE2(tokenIndex, "; before this?");
                             )
                         // TODO: ERROR instead of warning if special flag is set
                     }
@@ -1124,23 +1138,23 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 info.next();
                 Token tok = info.get(info.at()+1);
                 if(!Equal(tok,"<")){
-                    ERR_HEAD(tok, "expected < not "<<tok<<"\n";
-                        ERR_LINE(tok.tokenIndex,"bad");
+                    ERR_HEAD3(tok, "expected < not "<<tok<<"\n";
+                        ERR_LINE2(tok.tokenIndex,"bad");
                     )
                     continue;
                 }
                 info.next();
                 Token tokenTypeId{};
-                int result = ParseTypeId(info,tokenTypeId, nullptr);
-                if(result!=PARSE_SUCCESS){
-                    ERR_HEAD(tokenTypeId, tokenTypeId << "is not a valid data type\n";
-                        ERR_LINE(tokenTypeId.tokenIndex,"bad");
+                SignalDefault result = ParseTypeId(info,tokenTypeId, nullptr);
+                if(result!=SignalDefault::SUCCESS){
+                    ERR_HEAD3(tokenTypeId, tokenTypeId << "is not a valid data type\n";
+                        ERR_LINE2(tokenTypeId.tokenIndex,"bad");
                     )
                 }
                 tok = info.get(info.at()+1);
                 if(!Equal(tok,">")){
-                    ERR_HEAD(tok, "expected > not "<< tok<<"\n";
-                        ERR_LINE(tok.tokenIndex,"bad");
+                    ERR_HEAD3(tok, "expected > not "<< tok<<"\n";
+                        ERR_LINE2(tok.tokenIndex,"bad");
                     )
                 }
                 info.next();
@@ -1180,8 +1194,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 for(int i=0;i<token.length;i++){
                     char c = token.str[i];
                     if(num * 10 < num && !printedError) {
-                        ERR_HEAD(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                            ERR_LINE(token.tokenIndex,"to large!");
+                        ERR_HEAD3(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                            ERR_LINE2(token.tokenIndex,"to large!");
                         )
                         printedError = true;
                     }
@@ -1197,8 +1211,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     } else {
                         tmp = info.ast->createExpression(TypeId(AST_INT64));
                         if(!printedError){
-                            ERR_HEAD(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                                ERR_LINE(token.tokenIndex,"to large!");
+                            ERR_HEAD3(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                                ERR_LINE2(token.tokenIndex,"to large!");
                             )
                         }
                     }
@@ -1233,8 +1247,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             } else if(IsHexadecimal(token)){
                 info.next();
                 if(negativeNumber){
-                    ERR_HEAD(token,"Negative hexidecimals is not okay.\n\n";
-                        ERR_LINE(token.tokenIndex,"bad");
+                    ERR_HEAD3(token,"Negative hexidecimals is not okay.\n\n";
+                        ERR_LINE2(token.tokenIndex,"bad");
                     )
                     negativeNumber=false;
                 }
@@ -1248,8 +1262,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     tmp = info.ast->createExpression(TypeId(AST_UINT64));
                 } else {
                     tmp = info.ast->createExpression(TypeId(AST_UINT64));
-                    ERR_HEAD(token,"Hexidecimal overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                        ERR_LINE(token.tokenIndex,"to large!");
+                    ERR_HEAD3(token,"Hexidecimal overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                        ERR_LINE2(token.tokenIndex,"to large!");
                     )
                 }
                 tmp->i64Value =  ConvertHexadecimal(token); // TODO: Only works with 32 bit or 16,8 I suppose.
@@ -1276,7 +1290,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     // A string of zero size can be useful which is why
                     // the code below is commented out.
                     // if(token.length == 0){
-                        // ERR_HEAD(token, "string should not have a length of 0\n";
+                        // ERR_HEAD3(token, "string should not have a length of 0\n";
                         // This is a semantic error and since the syntax is correct
                         // we don't need to return PARSE_ERROR. We could but things will be fine.
                     // }
@@ -1330,7 +1344,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             //             info.next();
             //             break;
             //         }else {
-            //             ERR_HEAD(token, "expected ] not "<<token<<"\n";
+            //             ERR_HEAD3(token, "expected ] not "<<token<<"\n";
             //             continue;
             //         }
             //     }
@@ -1358,7 +1372,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 // tmp->name = token;
 
                 ASTExpression* left=nullptr;
-                int result = ParseExpression(info, left, false);
+                SignalAttempt result = ParseExpression(info, left, false);
                 tmp->left = left;
                 
                 tmp->tokenRange.firstToken = token;
@@ -1367,7 +1381,7 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             } else if(Equal(token,"nameof")) {
                 info.next();
                 Token token = {};
-                int result = ParseTypeId(info,token, nullptr);
+                SignalDefault result = ParseTypeId(info,token, nullptr);
 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NAMEOF));
                 tmp->name = token;
@@ -1444,10 +1458,10 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                     new(tmp->args)DynamicArray<ASTExpression*>();
 
                     int count = 0;
-                    int result = ParseArguments(info, tmp, &count);
-                    if(result!=PARSE_SUCCESS){
+                    SignalDefault result = ParseArguments(info, tmp, &count);
+                    if(result!=SignalDefault::SUCCESS){
                         info.ast->destroy(tmp);
-                        return result;
+                        return SignalAttempt::FAILURE;
                     }
 
                     _PLOG(log::out << "Parsed call "<<count <<"\n";)
@@ -1504,15 +1518,15 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                             prevNamed = token;
                             mustBeNamed = true;
                         } else if(mustBeNamed){
-                            ERR_HEAD(token, "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
-                                ERR_LINE(token.tokenIndex,"bad");
+                            ERR_HEAD3(token, "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
+                                ERR_LINE2(token.tokenIndex,"bad");
                             )
                             // return or continue could desync the parsing so don't do that.
                         }
 
                         ASTExpression* expr=0;
-                        int result = ParseExpression(info,expr,false);
-                        if(result!=PARSE_SUCCESS){
+                        SignalAttempt result = ParseExpression(info,expr,false);
+                        if(result!=SignalAttempt::SUCCESS){
                             // TODO: error message, parse other arguments instead of returning?
                             // return PARSE_ERROR; Returning would leak arguments so far
                             info.next(); // prevent infinite loop
@@ -1540,8 +1554,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                            info.next();
                            break;
                         } else {
-                            ERR_HEAD(token, "expected , or } not "<<token<<"\n";
-                                ERR_LINE(token.tokenIndex,"bad");
+                            ERR_HEAD3(token, "expected , or } not "<<token<<"\n";
+                                ERR_LINE2(token.tokenIndex,"bad");
                             )
                             continue;
                         }
@@ -1555,8 +1569,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 } else {
                     // if(polyTypes.size()!=0){
                     //     This is possible since types are can be parsed in an expression.
-                    //     ERR_HEAD(token, "Polymorphic types not expected with namespace or variable.\n\n";
-                    //         ERR_LINE(token.tokenIndex,"bad");
+                    //     ERR_HEAD3(token, "Polymorphic types not expected with namespace or variable.\n\n";
+                    //         ERR_LINE2(token.tokenIndex,"bad");
                     //     )
                     //     continue;
                     // }
@@ -1565,8 +1579,8 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                         
                         // Token tok = info.get(info.at()+1);
                         // if(!IsName(tok)){
-                        //     ERR_HEAD(tok, "'"<<tok<<"' is not a name.\n\n";
-                        //         ERR_LINE(tok.tokenIndex,"bad");
+                        //     ERR_HEAD3(tok, "'"<<tok<<"' is not a name.\n\n";
+                        //         ERR_LINE2(tok.tokenIndex,"bad");
                         //     )
                         //     continue;
                         // }
@@ -1613,43 +1627,43 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
                 // parse again
                 info.next();
                 ASTExpression* tmp=0;
-                int result = ParseExpression(info,tmp,false);
-                if(result!=PARSE_SUCCESS)
-                    return PARSE_ERROR;
+                SignalAttempt result = ParseExpression(info,tmp,false);
+                if(result!=SignalAttempt::SUCCESS)
+                    return SignalAttempt::FAILURE;
                 if(!tmp){
-                    ERR_HEAD(token, "got nothing from paranthesis in expression\n";
-                        ERR_LINE(token.tokenIndex,"bad");
+                    ERR_HEAD3(token, "got nothing from paranthesis in expression\n";
+                        ERR_LINE2(token.tokenIndex,"bad");
                     )
                 }
                 token = info.get(info.at()+1);
                 if(!Equal(token,")")){
-                    ERR_HEAD(token, "expected ) not "<<token<<"\n";   
-                        ERR_LINE(token.tokenIndex,"bad");
+                    ERR_HEAD3(token, "expected ) not "<<token<<"\n";   
+                        ERR_LINE2(token.tokenIndex,"bad");
                     )
                 }else
                     info.next();
                 values.push_back(tmp);  
             } else {
                 if(attempt){
-                    return PARSE_BAD_ATTEMPT;
+                    return SignalAttempt::BAD_ATTEMPT;
                 }else{
-                    ERR_HEAD(token, "'"<<token << "' is not a value. Values (or expressions) are expected after tokens that calls upon arguments, operations and assignments among other things.\n";
-                        ERR_LINE(tokenIndex,"should be a value");
-                        ERR_LINE(tokenIndex-1,"expects a value afterwards")
+                    ERR_HEAD3(token, "'"<<token << "' is not a value. Values (or expressions) are expected after tokens that calls upon arguments, operations and assignments among other things.\n";
+                        ERR_LINE2(tokenIndex,"should be a value");
+                        ERR_LINE2(tokenIndex-1,"expects a value afterwards")
                     );
-                    // ERR_LINE()
+                    // ERR_LINE2()
                     // printLine();
-                    return PARSE_ERROR;
+                    return SignalAttempt::FAILURE;
                     // Qutting here is okay because we have a defer which
                     // destroys parsed expressions. No memory leaks!
                 }
             }
         }
         if(negativeNumber){
-            ERR_HEAD(info.get(info.at()-1), "Unexpected - before "<<token<<"\n";
-                ERR_LINE(info.at()-1,"bad");
+            ERR_HEAD3(info.get(info.at()-1), "Unexpected - before "<<token<<"\n";
+                ERR_LINE2(info.at()-1,"bad");
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
             // quitting here is a little unexpected but there is
             // a defer which destroys parsed expresions so no memory leaks at least.
         }
@@ -1735,45 +1749,43 @@ int ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
             // we have a defer above which destroys expressions which is why we
             // clear the list to prevent it
             values.clear();
-            return PARSE_SUCCESS;
+            return SignalAttempt::SUCCESS;
         }
     }
     // shouldn't happen
-    return PARSE_ERROR;
+    return SignalAttempt::FAILURE;
 }
-int ParseBody(ParseInfo& info, ASTScope*& body, ScopeId parentScope, bool trulyGlobal = false);
-// returns 0 if syntax is wrong for flow parsing
-int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
+SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
     
     if(info.end()){
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     Token firstToken = info.get(info.at()+1);
     int startIndex = info.at()+1;
     if(Equal(firstToken,"if")){
         info.next();
         ASTExpression* expr=0;
-        int result = ParseExpression(info,expr,false);
-        if(result!=PARSE_SUCCESS){
+        SignalAttempt result = ParseExpression(info,expr,false);
+        if(result!=SignalAttempt::SUCCESS){
             // TODO: should more stuff be done here?
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
         ASTScope* body=0;
-        result = ParseBody(info,body, info.currentScopeId);
-        if(result!=PARSE_SUCCESS){
-            return PARSE_ERROR;
+        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId);
+        if(resultBody!=SignalDefault::SUCCESS){
+            return SignalAttempt::FAILURE;
         }
         
         ASTScope* elseBody=0;
         Token token = info.get(info.at()+1);
         if(Equal(token,"else")){
             info.next();
-            result = ParseBody(info,elseBody, info.currentScopeId);
-            if(result!=PARSE_SUCCESS){
-                return PARSE_ERROR;
+            resultBody = ParseBody(info,elseBody, info.currentScopeId);
+            if(resultBody!=SignalDefault::SUCCESS){
+                return SignalAttempt::FAILURE;
             }   
         }
 
@@ -1785,22 +1797,22 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
         statement->tokenRange.endIndex = info.at()+1;
         
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     }else if(Equal(firstToken,"while")){
         info.next();
         ASTExpression* expr=0;
-        int result = ParseExpression(info,expr,false);
-        if(result!=PARSE_SUCCESS){
+        SignalAttempt result = ParseExpression(info,expr,false);
+        if(result!=SignalAttempt::SUCCESS){
             // TODO: should more stuff be done here?
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
 
         info.functionScopes.last().loopScopes.add({});
         ASTScope* body=0;
-        result = ParseBody(info,body, info.currentScopeId);
+        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId);
         info.functionScopes.last().loopScopes.pop();
-        if(result!=PARSE_SUCCESS){
-            return PARSE_ERROR;
+        if(resultBody!=SignalDefault::SUCCESS){
+            return SignalAttempt::FAILURE;
         }
 
         statement = info.ast->createStatement(ASTStatement::WHILE);
@@ -1810,7 +1822,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
         statement->tokenRange.endIndex = info.at()+1;
         
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else if(Equal(firstToken,"for")){
         info.next();
         
@@ -1824,8 +1836,8 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
             } else if(Equal(token,"@pointer")){
                 pointerAnnot=true;
             } else {
-                WARN_HEAD(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for functions.\n\n";
-                    WARN_LINE(info.at(),"unknown");
+                WARN_HEAD3(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for functions.\n\n";
+                    WARN_LINE2(info.at(),"unknown");
                 )
             }
             token = info.get(info.at()+1);
@@ -1845,17 +1857,17 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         }
         
         ASTExpression* expr=0;
-        int result = ParseExpression(info,expr,false);
-        if(result!=PARSE_SUCCESS){
+        SignalAttempt result = ParseExpression(info,expr,false);
+        if(result!=SignalAttempt::SUCCESS){
             // TODO: should more stuff be done here?
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
         ASTScope* body=0;
         info.functionScopes.last().loopScopes.add({});
-        result = ParseBody(info,body, info.currentScopeId);
+        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId);
         info.functionScopes.last().loopScopes.pop();
-        if(result!=PARSE_SUCCESS){
-            return PARSE_ERROR;
+        if(resultBody!=SignalDefault::SUCCESS){
+            return SignalAttempt::FAILURE;
         }
         statement = info.ast->createStatement(ASTStatement::FOR);
         statement->varnames.add({varname});
@@ -1867,7 +1879,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
         statement->tokenRange.endIndex = info.at()+1;
         
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else if(Equal(firstToken,"return")){
         info.next();
         
@@ -1882,11 +1894,8 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
                 info.next();
                 break;
             }
-            int result = ParseExpression(info,expr,true);
-            if(result==PARSE_BAD_ATTEMPT){
-                break;
-            }
-            if(result!=PARSE_SUCCESS){
+            SignalAttempt result = ParseExpression(info,expr,true);
+            if(result!=SignalAttempt::SUCCESS){
                 break;
             }
             statement->returnValues.add(expr);
@@ -1910,7 +1919,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         // statement->rvalue = base;
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.endIndex = info.at()+1;
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else if(Equal(firstToken,"using")){
         info.next();
 
@@ -1920,13 +1929,14 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         // TODO: namespace environemnt, not just using X as Y
 
         Token originToken={};
-        int result = ParseTypeId(info, originToken, nullptr);
+        SignalDefault result = ParseTypeId(info, originToken, nullptr);
+        Assert(result == SignalDefault::SUCCESS);
         Token aliasToken = {};
         Token token = info.get(info.at()+1);
         if(Equal(token,"as")) {
             info.next();
             
-            int result = ParseTypeId(info, aliasToken, nullptr);
+            SignalDefault result = ParseTypeId(info, aliasToken, nullptr);
         }
         
         statement = info.ast->createStatement(ASTStatement::USING);
@@ -1939,14 +1949,14 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.endIndex = info.at()+1;
-        return PARSE_SUCCESS;        
+        return SignalAttempt::SUCCESS;        
     } else if(Equal(firstToken,"defer")){
         info.next();
 
         ASTScope* body = nullptr;
-        int result = ParseBody(info, body, info.currentScopeId);
-        if(result != PARSE_SUCCESS) {
-            return result;
+        SignalDefault result = ParseBody(info, body, info.currentScopeId);
+        if(result != SignalDefault::SUCCESS) {
+            return SignalAttempt::FAILURE;
         }
 
         statement = info.ast->createStatement(ASTStatement::DEFER);
@@ -1954,7 +1964,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.endIndex = info.at()+1;
-        return PARSE_SUCCESS;  
+        return SignalAttempt::SUCCESS;  
     } else if(Equal(firstToken, "break")) {
         info.next();
 
@@ -1964,7 +1974,7 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.endIndex = info.at()+1;
-        return PARSE_SUCCESS;
+        return SignalAttempt::SUCCESS;
     } else if(Equal(firstToken, "continue")) {
         info.next();
 
@@ -1976,25 +1986,25 @@ int ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
         
         statement->tokenRange.endIndex = info.at()+1;
         
-        return PARSE_SUCCESS;  
+        return SignalAttempt::SUCCESS;  
     }
     if(attempt)
-        return PARSE_BAD_ATTEMPT;
-    return PARSE_ERROR;
+        return SignalAttempt::BAD_ATTEMPT;
+    return SignalAttempt::FAILURE;
 }
-int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
+SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
     Token beginToken = info.get(info.at()+1);
     // int startIndex = info.at()+1;
     if(!Equal(beginToken,"operator")){
-        if(attempt) return PARSE_BAD_ATTEMPT;
-        ERR_HEAD(beginToken, "Expected 'operator' for operator overloading not '"<<beginToken<<"'.\n";
+        if(attempt) return SignalAttempt::BAD_ATTEMPT;
+        ERR_HEAD3(beginToken, "Expected 'operator' for operator overloading not '"<<beginToken<<"'.\n";
 
         )
             
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
     attempt = false;
@@ -2010,8 +2020,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
         } else {
             // It should not warn you because it is quite important that you use the right annotations with functions
             // Mispelling external or the calling convention would be very bad.
-            ERR_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for operators.\n\n";
-                ERR_LINE(info.at(),"unknown");
+            ERR_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for operators.\n\n";
+                ERR_LINE2(info.at(),"unknown");
             )
         }
         name = info.next();
@@ -2030,8 +2040,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
     if(!(op = IsOp(name, extraNext))){
         info.ast->destroy(function);
         function = nullptr;
-        ERR_HEAD(name,"Expected a valid operator, "<<name<<" is not.\n";)
-        return PARSE_ERROR;
+        ERR_HEAD3(name,"Expected a valid operator, "<<name<<" is not.\n";)
+        return SignalAttempt::FAILURE;
     }
     // info.next(); // next is done above
     while(extraNext--){
@@ -2061,8 +2071,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
                 info.next();
                 break;
             }
-            int result = ParseTypeId(info, tok, nullptr);
-            if(result == PARSE_SUCCESS) {
+            SignalDefault result = ParseTypeId(info, tok, nullptr);
+            if(result == SignalDefault::SUCCESS) {
                 function->polyArgs.add({tok});
             }
 
@@ -2074,7 +2084,7 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
                 info.next();
                 break;
             } else {
-                ERR_HEAD(tok, "expected , or > for in poly. arguments for operator "<<name<<"\n";
+                ERR_HEAD3(tok, "expected , or > for in poly. arguments for operator "<<name<<"\n";
             )
                 // parse error or what?
                 break;
@@ -2083,9 +2093,9 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
     }
     tok = info.get(info.at()+1);
     if(!Equal(tok,"(")){
-        ERR_HEAD(tok, "expected ( not "<<tok<<"\n";
+        ERR_HEAD3(tok, "expected ( not "<<tok<<"\n";
         )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
 
@@ -2101,8 +2111,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
             info.next();
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD(arg, "'"<<arg <<"' is not a valid argument name.\n\n";
-                    ERR_LINE(arg.tokenIndex,"bad");
+                ERR_HEAD3(arg, "'"<<arg <<"' is not a valid argument name.\n\n";
+                    ERR_LINE2(arg.tokenIndex,"bad");
                 )
             }
             continue;
@@ -2113,8 +2123,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
         if(!Equal(tok,":")){
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD(tok, "Expected : not "<<tok <<".\n\n";
-                    ERR_LINE(tok.tokenIndex,"bad");
+                ERR_HEAD3(tok, "Expected : not "<<tok <<".\n\n";
+                    ERR_LINE2(tok.tokenIndex,"bad");
                 )
             }
             continue;
@@ -2123,8 +2133,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
         info.next();
 
         Token dataType{};
-        int result = ParseTypeId(info,dataType, nullptr);
-        
+        SignalDefault result = ParseTypeId(info,dataType, nullptr);
+        Assert(result == SignalDefault::SUCCESS);
         // auto id = info.ast->getTypeInfo(info.currentScopeId,dataType)->id;
         TypeId strId = info.ast->getTypeString(dataType);
 
@@ -2148,8 +2158,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
         }else{
             printedErrors = true; // we bad and might keep being bad.
             // don't do printed errors?
-            ERR_HEAD(tok, "Expected , or ) not "<<tok <<".\n\n";
-                ERR_LINE(tok.tokenIndex,"bad");
+            ERR_HEAD3(tok, "Expected , or ) not "<<tok <<".\n\n";
+                ERR_LINE2(tok.tokenIndex,"bad");
             )
             continue;
             // Continuing since we saw ( and are inside of arguments.
@@ -2174,8 +2184,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
             }
             
             Token dt{};
-            int result = ParseTypeId(info,dt, nullptr);
-            if(result!=PARSE_SUCCESS){
+            SignalDefault result = ParseTypeId(info,dt, nullptr);
+            if(result!=SignalDefault::SUCCESS){
                 break; // prevent infinite loop
                 // info.next();
                 // continue as we have
@@ -2202,8 +2212,8 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
                     break;
                 if(!printedErrors){
                     printedErrors=true;
-                    ERR_HEAD(tok, "Expected a comma or curly brace. '"<<tok <<"' is not okay.\n";
-                        ERR_LINE(tok.tokenIndex,"bad coder");
+                    ERR_HEAD3(tok, "Expected a comma or curly brace. '"<<tok <<"' is not okay.\n";
+                        ERR_LINE2(tok.tokenIndex,"bad coder");
                     )
                 }
                 continue;
@@ -2219,37 +2229,36 @@ int ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
     
     if(Equal(bodyTok,";")){
         info.next();
-        ERR_HEAD(bodyTok,"Operator overloading must have a body. You have forgotten the body when defining '"<<function->name<<"'.\n\n";
-            ERR_LINE(bodyTok.tokenIndex,"replace with {}");
+        ERR_HEAD3(bodyTok,"Operator overloading must have a body. You have forgotten the body when defining '"<<function->name<<"'.\n\n";
+            ERR_LINE2(bodyTok.tokenIndex,"replace with {}");
         )
     } else if(Equal(bodyTok,"{")){
         info.functionScopes.add({});
         ASTScope* body = 0;
-        int result = ParseBody(info,body, function->scopeId);
+        SignalDefault result = ParseBody(info,body, function->scopeId);
         info.functionScopes.pop();
         function->body = body;
     } else {
-        ERR_HEAD(bodyTok,"Operator has no body! Did the return types parse incorrectly? Use curly braces to define the body.\n\n";
-            ERR_LINE(bodyTok.tokenIndex,"expected {");
+        ERR_HEAD3(bodyTok,"Operator has no body! Did the return types parse incorrectly? Use curly braces to define the body.\n\n";
+            ERR_LINE2(bodyTok.tokenIndex,"expected {");
         )
     }
 
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
-// out token contains a newly allocated string. use delete[] on it
-int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct){
+SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct){
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
     Token fnToken = info.get(info.at()+1);
     // int startIndex = info.at()+1;
     if(!Equal(fnToken,"fn")){
-        if(attempt) return PARSE_BAD_ATTEMPT;
-        ERR_HEAD(fnToken, "Expected fn for function not '"<<fnToken<<"'.\n";
+        if(attempt) return SignalAttempt::BAD_ATTEMPT;
+        ERR_HEAD3(fnToken, "Expected fn for function not '"<<fnToken<<"'.\n";
 
         )
             
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
     info.next();
     attempt = false;
@@ -2303,8 +2312,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         } else {
             // It should not warn you because it is quite important that you use the right annotations with functions
             // Mispelling external or the calling convention would be very bad.
-            ERR_HEAD(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                ERR_LINE(info.at(),"unknown");
+            ERR_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
+                ERR_LINE2(info.at(),"unknown");
 
                 // if(StartsWith(name, "@extern")) {
                 //     log::out << log::YELLOW << "Did you mean @extern-stdcall or @extern-cdecl\n";
@@ -2318,8 +2327,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         function->hidden = true;
         // native doesn't use a calling convention
         if(needsExplicitCallConvention && !specifiedConvention){
-            ERR_HEAD(name, "You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @cdecl instead.\n\n";
-                ERR_LINE(name.tokenIndex, "missing call convention");
+            ERR_HEAD3(name, "You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @cdecl instead.\n\n";
+                ERR_LINE2(name.tokenIndex, "missing call convention");
             )
         }
     }
@@ -2327,8 +2336,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     if(!IsName(name)){
         info.ast->destroy(function);
         function = nullptr;
-        ERR_HEAD(name,"expected a valid name, "<<name<<" is not.\n";)
-        return PARSE_ERROR;
+        ERR_HEAD3(name,"expected a valid name, "<<name<<" is not.\n";)
+        return SignalAttempt::FAILURE;
     }
     function->name = name;
 
@@ -2350,8 +2359,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                 info.next();
                 break;
             }
-            int result = ParseTypeId(info, tok, nullptr);
-            if(result == PARSE_SUCCESS) {
+            SignalDefault result = ParseTypeId(info, tok, nullptr);
+            if(result == SignalDefault::SUCCESS) {
                 function->polyArgs.add({tok});
             }
 
@@ -2363,7 +2372,7 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                 info.next();
                 break;
             } else {
-                ERR_HEAD(tok, "expected , or > for in poly. arguments for function "<<name<<"\n";
+                ERR_HEAD3(tok, "expected , or > for in poly. arguments for function "<<name<<"\n";
             )
                 // parse error or what?
                 break;
@@ -2372,9 +2381,9 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     }
     tok = info.next();
     if(!Equal(tok,"(")){
-        ERR_HEAD(tok, "expected ( not "<<tok<<"\n";
+        ERR_HEAD3(tok, "expected ( not "<<tok<<"\n";
             )
-        return PARSE_ERROR;
+        return SignalAttempt::FAILURE;
     }
 
     if(parentStruct) {
@@ -2404,8 +2413,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
             info.next();
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD(arg, "'"<<arg <<"' is not a valid argument name.\n\n";
-                    ERR_LINE(arg.tokenIndex,"bad");
+                ERR_HEAD3(arg, "'"<<arg <<"' is not a valid argument name.\n\n";
+                    ERR_LINE2(arg.tokenIndex,"bad");
                 )
             }
             continue;
@@ -2416,8 +2425,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         if(!Equal(tok,":")){
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD(tok, "Expected : not "<<tok <<".\n\n";
-                    ERR_LINE(tok.tokenIndex,"bad");
+                ERR_HEAD3(tok, "Expected : not "<<tok <<".\n\n";
+                    ERR_LINE2(tok.tokenIndex,"bad");
                 )
             }
             continue;
@@ -2426,8 +2435,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         info.next();
 
         Token dataType{};
-        int result = ParseTypeId(info,dataType, nullptr);
-        
+        SignalDefault result = ParseTypeId(info,dataType, nullptr);
+        Assert(result == SignalDefault::SUCCESS);
         // auto id = info.ast->getTypeInfo(info.currentScopeId,dataType)->id;
         TypeId strId = info.ast->getTypeString(dataType);
 
@@ -2441,8 +2450,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         if(Equal(tok,"=")){
             info.next();
             
-            int result = ParseExpression(info,defaultValue,false);
-            if(result!=PARSE_SUCCESS){
+            SignalAttempt result = ParseExpression(info,defaultValue,false);
+            if(result!=SignalAttempt::SUCCESS){
                 continue;
             }
             prevDefault = defaultValue->tokenRange;
@@ -2452,8 +2461,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
             // printedErrors doesn't matter here.
             // If we end up here than our parsing is probably correct so far and we might as
             // well log this error since it's probably a "real" error not caused by a cascade.
-            ERR_HEAD(tok, "Expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<".\n\n";
-                ERR_LINE(tok.tokenIndex,"bad");
+            ERR_HEAD3(tok, "Expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<".\n\n";
+                ERR_LINE2(tok.tokenIndex,"bad");
             )
             // continue; we don't continue since we want to parse comma if it exists
         }
@@ -2473,8 +2482,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
         }else{
             printedErrors = true; // we bad and might keep being bad.
             // don't do printed errors?
-            ERR_HEAD(tok, "Expected , or ) not "<<tok <<".\n\n";
-                ERR_LINE(tok.tokenIndex,"bad");
+            ERR_HEAD3(tok, "Expected , or ) not "<<tok <<".\n\n";
+                ERR_LINE2(tok.tokenIndex,"bad");
             )
             continue;
             // Continuing since we saw ( and are inside of arguments.
@@ -2499,8 +2508,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
             }
             
             Token dt{};
-            int result = ParseTypeId(info,dt, nullptr);
-            if(result!=PARSE_SUCCESS){
+            SignalDefault result = ParseTypeId(info,dt, nullptr);
+            if(result!=SignalDefault::SUCCESS){
                 break; // prevent infinite loop
                 // info.next();
                 // continue as we have
@@ -2527,8 +2536,8 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
                     break;
                 if(!printedErrors){
                     printedErrors=true;
-                    ERR_HEAD(tok, "Expected a comma or curly brace. '"<<tok <<"' is not okay.\n";
-                        ERR_LINE(tok.tokenIndex,"bad coder");
+                    ERR_HEAD3(tok, "Expected a comma or curly brace. '"<<tok <<"' is not okay.\n";
+                        ERR_LINE2(tok.tokenIndex,"bad coder");
                     )
                 }
                 continue;
@@ -2545,32 +2554,31 @@ int ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStru
     if(Equal(bodyTok,";")){
         info.next();
         if(function->needsBody()){
-            ERR_HEAD(bodyTok,"Functions must have a body. You have forgotten the body when defining '"<<function->name<<"'. Declarations and definitions happen at the same time in this language. This is possible because of out of order compilation.\n\n";
-                ERR_LINE(bodyTok.tokenIndex,"replace with {}");
+            ERR_HEAD3(bodyTok,"Functions must have a body. You have forgotten the body when defining '"<<function->name<<"'. Declarations and definitions happen at the same time in this language. This is possible because of out of order compilation.\n\n";
+                ERR_LINE2(bodyTok.tokenIndex,"replace with {}");
             )
         }
     } else if(Equal(bodyTok,"{")){
         if(!function->needsBody()) {
-            ERR_HEAD(bodyTok,"Native/external functions cannot have a body. Native functions are handled by the language. External functions link to functions outside your source code.\n\n";
-                ERR_LINE(bodyTok.tokenIndex,"use ; instead");
+            ERR_HEAD3(bodyTok,"Native/external functions cannot have a body. Native functions are handled by the language. External functions link to functions outside your source code.\n\n";
+                ERR_LINE2(bodyTok.tokenIndex,"use ; instead");
             )
         }
         
         info.functionScopes.add({});
         ASTScope* body = 0;
-        int result = ParseBody(info,body, function->scopeId);
+        SignalDefault result = ParseBody(info,body, function->scopeId);
         info.functionScopes.pop();
         function->body = body;
     } else if(function->needsBody()) {
-        ERR_HEAD(bodyTok,"Function has no body! Did the return types parse incorrectly? Use curly braces to define the body.\n\n";
-            ERR_LINE(bodyTok.tokenIndex,"expected {");
+        ERR_HEAD3(bodyTok,"Function has no body! Did the return types parse incorrectly? Use curly braces to define the body.\n\n";
+            ERR_LINE2(bodyTok.tokenIndex,"expected {");
         )
     }
 
-    return PARSE_SUCCESS;
+    return SignalAttempt::SUCCESS;
 }
-// normal assignment a = 9
-int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
+SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
@@ -2580,7 +2588,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     //     if(attempt){
     //         return PARSE_BAD_ATTEMPT;
     //     }
-    //     ERR_HEAD()
+    //     ERR_HEAD3()
     //     _PLOG(log::out <<log::RED<< "CompilerError: to few tokens for assignment\n";)
     //     // info.nextLine();
     //     return PARSE_ERROR;
@@ -2589,7 +2597,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
     // to make things easier attempt is checked here
     if(attempt && !(IsName(info.get(info.at()+1)) && (Equal(info.get(info.at()+2),",") || Equal(info.get(info.at()+2),":") || Equal(info.get(info.at()+2),"=") ))){
-        return PARSE_BAD_ATTEMPT;
+        return SignalAttempt::BAD_ATTEMPT;
     }
     attempt = true;
 
@@ -2599,10 +2607,10 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     while(!info.end()){
         Token name = info.get(info.at()+1);
         if(!IsName(name)){
-            ERR_HEAD(name, "Expected a valid name for assignment ('"<<name<<"' is not).\n\n";
-                ERR_LINE(info.at()+1,"cannot be a name");
+            ERR_HEAD3(name, "Expected a valid name for assignment ('"<<name<<"' is not).\n\n";
+                ERR_LINE2(info.at()+1,"cannot be a name");
             )
-            return PARSE_ERROR;
+            return SignalAttempt::FAILURE;
         }
         info.next();
 
@@ -2613,7 +2621,8 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
             attempt=false;
             
             Token typeToken{};
-            int result = ParseTypeId(info,typeToken, nullptr);
+            SignalDefault result = ParseTypeId(info,typeToken, nullptr);
+            Assert(result==SignalDefault::SUCCESS);
             // if(result!=PARSE_SUCCESS)
             //     return PARSE_ERROR;
             int arrayLength = -1;
@@ -2628,14 +2637,14 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
                 if(IsInteger(token2)) {
                     arrayLength = ConvertInteger(token2);
                     if(arrayLength<0){
-                        ERR_HEAD(token2, "Array cannot have negative size.\n\n";
-                            ERR_LINE(info.at()-1,"< 0");
+                        ERR_HEAD3(token2, "Array cannot have negative size.\n\n";
+                            ERR_LINE2(info.at()-1,"< 0");
                         )
                         arrayLength = 0;
                     }
                 } else {
-                    ERR_HEAD(token2, "The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.\n\n";
-                        ERR_LINE(info.at()-1, "must be positive integer literal");
+                    ERR_HEAD3(token2, "The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.\n\n";
+                        ERR_LINE2(info.at()-1, "must be positive integer literal");
                     )
                 }
                 std::string* str = info.ast->createString();
@@ -2670,8 +2679,7 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     if(Equal(token,"=")) {
         info.next(); // =
 
-        int result = 0;
-        result = ParseExpression(info,statement->firstExpression,false);
+        SignalAttempt result = ParseExpression(info,statement->firstExpression,false);
 
     } else if(Equal(token,";")){
         info.next(); // parse ';'. won't crash if at end
@@ -2679,9 +2687,9 @@ int ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
 
     statement->tokenRange.firstToken = info.get(startIndex);
     statement->tokenRange.endIndex = info.at()+1;
-    return PARSE_SUCCESS;  
+    return SignalAttempt::SUCCESS;  
 }
-int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal){
+SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal){
     using namespace engone;
     MEASURE;
     // Note: two infos in case ParseAssignment modifies it and then fails.
@@ -2743,12 +2751,12 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool tru
         ASTFunction* tempFunction=0;
         ASTScope* tempNamespace=0;
         
-        int result=PARSE_BAD_ATTEMPT;
+        SignalAttempt result=SignalAttempt::BAD_ATTEMPT;
 
         if(Equal(token,"{")){
             ASTScope* body=0;
-            result = ParseBody(info,body, info.currentScopeId);
-            if(result!=PARSE_SUCCESS){
+            SignalDefault result = ParseBody(info,body, info.currentScopeId);
+            if(result!=SignalDefault::SUCCESS){
                 info.next(); // skip { to avoid infinite loop
                 continue;
             }
@@ -2756,21 +2764,21 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool tru
             tempStatement->firstBody = body;
             tempStatement->tokenRange = body->tokenRange;
         }
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseFunction(info,tempFunction,true, nullptr);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseOperator(info,tempFunction,true);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseStruct(info,tempStruct,true);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseEnum(info,tempEnum,true);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseNamespace(info,tempNamespace,true);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseAssignment(info,tempStatement,true);
-        if(result==PARSE_BAD_ATTEMPT)
+        if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseFlow(info,tempStatement,true);
-        if(result==PARSE_BAD_ATTEMPT){
+        if(result==SignalAttempt::BAD_ATTEMPT){
             // bad name of function? it parses an expression
             // prop assignment or function call
             ASTExpression* expr=nullptr;
@@ -2782,25 +2790,25 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool tru
             }
         }
 
-        if(result==PARSE_BAD_ATTEMPT){
+        if(result==SignalAttempt::BAD_ATTEMPT){
             if(IsAnnotation(token)){
                  {
-                    WARN_HEAD(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for bodies.\n\n";
-                        WARN_LINE(info.at()+1,"unknown");
+                    WARN_HEAD3(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for bodies.\n\n";
+                        WARN_LINE2(info.at()+1,"unknown");
                     )
                 }
                 info.next();
             } else {
                 Token& token = info.get(info.at()+1);
-                ERR_HEAD(token, "Unexpected '"<<token<<"' (ParseBody).\n\n";
-                    ERR_LINE(info.at()+1,"what");
+                ERR_HEAD3(token, "Unexpected '"<<token<<"' (ParseBody).\n\n";
+                    ERR_LINE2(info.at()+1,"what");
                 )
                 // prevent infinite loop. Loop only occurs when scoped
                 info.next();
             }
         }
-        if(result==PARSE_ERROR){
-            
+        if(result!=SignalAttempt::SUCCESS){
+            // TODO: What should be done?
         }
         // We add the AST structures even during error to
         // avoid leaking memory.
@@ -2864,7 +2872,7 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool tru
         if(tempNamespace) {
             bodyLoc->add(tempNamespace, info.ast);
         }
-        if(result==PARSE_BAD_ATTEMPT){
+        if(result==SignalAttempt::BAD_ATTEMPT){
             // Try again. Important because loop would break after one time if scoped is false.
             // We want to give it another go.
             continue;
@@ -2897,7 +2905,7 @@ int ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool tru
 
 
     bodyLoc->tokenRange.endIndex = info.at()+1;
-    return PARSE_SUCCESS;
+    return SignalDefault::SUCCESS;
 }
 
 ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace){
@@ -2929,7 +2937,7 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
     info.currentScopeId = body->scopeId;
 
     info.functionScopes.add({});
-    int result = ParseBody(info, body, ast->globalScopeId, true);
+    SignalDefault result = ParseBody(info, body, ast->globalScopeId, true);
     info.functionScopes.pop();
     
     return body;

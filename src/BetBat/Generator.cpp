@@ -2,46 +2,24 @@
 #include "BetBat/Compiler.h"
 
 #undef ERR_HEAD2
-#undef ERR_HEAD
-#undef WARN_HEAD
-#undef WARN_LINE
-#undef ERR_END
-#undef ERR
-#undef ERRTYPE
-#undef ERRTOKENS
-#undef TOKENINFO
-#undef LOGAT
-#undef ERR_LINE
-
-#define ERR()      \
-    info.errors++; \
-    engone::log::out << engone::log::RED << "GenError, "
 #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000")
-#define ERR_HEAD(R, M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000") << M
-#define ERR_LINE(R, M) PrintCode(R, M)
-#define ERRTYPE(R, LT, RT, M) ERR_HEAD(R, "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M)
+
+#undef ERR_HEAD3
+#define ERR_HEAD3(R, M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000") << M
+
+#undef ERRTYPE
+#define ERRTYPE(R, LT, RT, M) ERR_HEAD3(R, "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M)
 // #define ERRTYPE2(R, LT, RT) ERR_HEAD2(R) << "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " "
-#define ERR_END MSG_END
 
-#define WARN_HEAD(R, M) info.compileInfo->warnings++;engone::log::out << WARN_DEFAULT_R(R,"Gen. warning","W0000") << M
-#define WARN_LINE(R, M) PrintCode(R, M)
+#undef WARN_HEAD3
+#define WARN_HEAD3(R, M) info.compileInfo->warnings++;engone::log::out << WARN_DEFAULT_R(R,"Gen. warning","W0000") << M
 
+#undef ERR_SECTION
+#define ERR_SECTION(CONTENT) { BASE_SECTION("Gen. error, E0000"); CONTENT; }
 
+#undef LOGAT
 #define LOGAT(R) R.firstToken.line << ":" << R.firstToken.column
 
-#define ERRTOKENS(R)                                            \
-    log::out << log::RED << "LN " << R.firstToken.line << ": "; \
-    R.print();                                                  \
-    log::out << "\n";
-
-#define TOKENINFO(R)
-    //                                                                         \
-    // {                                                                                           \
-    //     std::string temp = "";                                                                  \
-    //     R.feed(temp);                                                                           \
-    //     info.code->addDebugText(std::string("Ln ") + std::to_string(R.firstToken.line) + ": "); \
-    //     info.code->addDebugText(temp + "\n");                                                   \
-    // }
 
 #define MAKE_NODE_SCOPE(X) info.pushNode(dynamic_cast<ASTNode*>(X));NodeScope nodeScope{&info};
 
@@ -143,6 +121,7 @@ void GenInfo::addPop(int reg) {
     int size = DECODE_REG_SIZE(reg);
     if (size == 0 ) { // we don't print if we had errors since they probably caused size of 0
         if( errors == 0){
+            Assert(false);
             log::out << log::RED << "GenInfo::addPop : Cannot pop register with 0 size\n";
         }
         return;
@@ -455,7 +434,7 @@ u8 ASTOpToBytecode(TypeId astOp, bool floatVersion){
         // << log::RED << "GenExpr: operation " << expression->typeId.getId() << " not implemented\n";
         // ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
         //     info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-        // ERR_END
+        // 
     } else {
         // switch(op){
             if(false) ;
@@ -634,8 +613,15 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outType
     DynamicArray<TypeId> types{};
     int result = GenerateExpression(info,expression,&types,idScope);
     *outTypeId = AST_VOID;
-    if(types.size()==1)
-        *outTypeId = types[0];
+    if(types.size()>1){
+        ERR_HEAD3(expression->tokenRange, "Returns multiple values but the way you use the expression only supports one (or none).\n\n";
+            // ERR_LINE(expression->tokenRange,msg.c_str());
+            ERR_LINE(expression->tokenRange,"returns "+types.size() + " values");
+        )
+    } else {
+        if(types.size()==1)
+            *outTypeId = types[0];
+    }
     return result;
 }
 // outTypeId will represent the type (integer, struct...) but the value pushed on the stack will always
@@ -664,7 +650,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
             auto id = info.ast->findIdentifier(idScope, now->name);
             if (!id || id->type != Identifier::VAR) {
                 if(info.compileInfo->typeErrors==0){
-                    ERR_HEAD(now->tokenRange, "'"<<now->tokenRange.firstToken << " is undefined.\n\n";
+                    ERR_HEAD3(now->tokenRange, "'"<<now->tokenRange.firstToken << " is undefined.\n\n";
                         ERR_LINE(now->tokenRange,"bad");
                     )
                 }
@@ -704,7 +690,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
                 return GEN_ERROR;
             }
             if(!ltype.isPointer()){
-                ERR_HEAD(now->tokenRange,
+                ERR_HEAD3(now->tokenRange,
                     "'"<<now->tokenRange<<
                     "' must be a reference to some memory. "
                     "A variable, member or expression resulting in a dereferenced pointer would be.\n\n";
@@ -727,7 +713,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
                 endType.setPointerLevel(endType.getPointerLevel()-1);
             }
             if(endType.getPointerLevel()>1){ // one level of pointer is okay.
-                ERR_HEAD(now->tokenRange, "'"<<info.ast->typeToString(endType)<<"' has to many levels of pointing. Can only access members of a single or non-pointer.\n\n";
+                ERR_HEAD3(now->tokenRange, "'"<<info.ast->typeToString(endType)<<"' has to many levels of pointing. Can only access members of a single or non-pointer.\n\n";
                     ERR_LINE(now->tokenRange, "to pointy");
                 )
                 return GEN_ERROR;
@@ -735,9 +721,8 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
             TypeInfo* typeInfo = nullptr;
             typeInfo = info.ast->getTypeInfo(endType.baseType());
             if(!typeInfo || !typeInfo->astStruct){ // one level of pointer is okay.
-                std::string msg = info.ast->typeToString(endType);
-                ERR_HEAD(now->tokenRange, "'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.\n\n";
-                    ERR_LINE(now->left->tokenRange,msg.c_str());
+                ERR_HEAD3(now->tokenRange, "'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.\n\n";
+                    ERR_LINE(now->left->tokenRange, info.ast->typeToString(endType).c_str());
                 )
                 return GEN_ERROR;
             }
@@ -748,7 +733,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
                 // error should have been caught by type checker.
                 // if it was then we just return error here.
                 // don't want message printed twice.
-                // ERR_HEAD(now->tokenRange, "'"<<now->name << "' is not a member of struct '" << info.ast->typeToString(endType) << "'. "
+                // ERR_HEAD3(now->tokenRange, "'"<<now->name << "' is not a member of struct '" << info.ast->typeToString(endType) << "'. "
                 //         "These are the members: ";
                 //     for(int i=0;i<(int)typeInfo->astStruct->members.size();i++){
                 //         if(i!=0)
@@ -794,7 +779,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
                 continue;
             }
             if(endType.getPointerLevel()<1){
-                ERR_HEAD(now->left->tokenRange, "type '"<<info.ast->typeToString(endType)<<"' is not a pointer.\n\n";
+                ERR_HEAD3(now->left->tokenRange, "type '"<<info.ast->typeToString(endType)<<"' is not a pointer.\n\n";
                     ERR_LINE(now->left->tokenRange,"must be a pointer");
                 )
                 return GEN_ERROR;
@@ -815,7 +800,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
             
             if(!AST::IsInteger(rtype)){
                 std::string strtype = info.ast->typeToString(rtype);
-                ERR_HEAD(now->right->tokenRange, "Index operator ( array[23] ) requires integer type in the inner expression. '"<<strtype<<"' is not an integer.\n\n";
+                ERR_HEAD3(now->right->tokenRange, "Index operator ( array[23] ) requires integer type in the inner expression. '"<<strtype<<"' is not an integer.\n\n";
                     ERR_LINE(now->right->tokenRange,strtype.c_str());
                 )
                 return GEN_ERROR;
@@ -842,7 +827,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
             if(!endType.isPointer()){
                 if(info.compileInfo->typeErrors == 0){
                     std::string strtype = info.ast->typeToString(endType);
-                    ERR_HEAD(now->right->tokenRange, "Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.\n\n";
+                    ERR_HEAD3(now->right->tokenRange, "Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.\n\n";
                         ERR_LINE(now->right->tokenRange,strtype.c_str());
                     )
                 }
@@ -867,7 +852,7 @@ int GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outType
         }
     }
     if(pointerType){
-        ERR_HEAD(_expression->tokenRange,
+        ERR_HEAD3(_expression->tokenRange,
             "'"<<_expression->tokenRange<<
             "' must be a reference to some memory. "
             "A variable, member or expression resulting in a dereferenced pointer would work.\n\n";
@@ -893,7 +878,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
     // if(castType.isString()){
     //     castType = info.ast->convertToTypeId(castType,idScope);
     //     if(!castType.isValid()){
-    //         ERR_HEAD(expression->tokenRange,"Type "<<info.ast->getTokenFromTypeString(expression->castType) << " does not exist.\n";)
+    //         ERR_HEAD3(expression->tokenRange,"Type "<<info.ast->getTokenFromTypeString(expression->castType) << " does not exist.\n";)
     //     }
     // }
     // castType = info.ast->ensureNonVirtualId(castType);
@@ -951,7 +936,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             // no need to check for pointers or so.
             if (typeInfo && typeInfo->astEnum) {
                 // ERR_HEAD2(expression->tokenRange) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
-                // ERR_END
+                // 
                 // return GEN_ERROR;
                 outTypeIds->add(typeInfo->id);
                 return GEN_SUCCESS;
@@ -966,7 +951,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 // TODO: what about struct
                 _GLOG(log::out << " expr var push " << expression->name << "\n";)
 
-                TOKENINFO(expression->tokenRange)
                 // char buf[100];
                 // int len = sprintf(buf,"  expr push %s",expression->name->c_str());
                 // info.code->addDebugText(buf,len);
@@ -977,7 +961,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 return GEN_SUCCESS;
             } else {
                 if(info.compileInfo->typeErrors==0){
-                    ERR_HEAD(expression->tokenRange, "'"<<expression->tokenRange.firstToken<<"' is not declared.\n\n";
+                    ERR_HEAD3(expression->tokenRange, "'"<<expression->tokenRange.firstToken<<"' is not declared.\n\n";
                         ERR_LINE(expression->tokenRange,"undeclared");
                     )
                 }
@@ -1020,7 +1004,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     }
                     if(argIndex!=-1) {
                         if (fullArgs[argIndex] != nullptr) {
-                            ERR_HEAD(arg->namedValue.range(), "A named argument cannot specify an occupied parameter.\n\n";
+                            ERR_HEAD3(arg->namedValue.range(), "A named argument cannot specify an occupied parameter.\n\n";
                                 ERR_LINE(astFunc->tokenRange,"this overload");
                                 ERR_LINE(fullArgs[argIndex]->tokenRange,"occupied");
                                 ERR_LINE(arg->namedValue,"bad coder");
@@ -1029,7 +1013,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                             fullArgs[argIndex] = arg;
                         }
                     } else{
-                        ERR_HEAD(arg->tokenRange, "Named argument is not a parameter of '";funcImpl->print(info.ast,astFunc);log::out<<"'\n\n";
+                        ERR_HEAD3(arg->tokenRange, "Named argument is not a parameter of '";funcImpl->print(info.ast,astFunc);log::out<<"'\n\n";
                             ERR_LINE(arg->namedValue,"not valid");
                         )
                         // continue like nothing happened
@@ -1056,7 +1040,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                         int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
                         if(size>8){
                             // TODO: This should be moved to the type checker.
-                            ERR_HEAD(expression->tokenRange, "Argument types cannot be larger than 8 bytes.";
+                            ERR_HEAD3(expression->tokenRange, "Argument types cannot be larger than 8 bytes.";
                                 ERR_LINE(expression->tokenRange, "bad");
                             )
                             return GEN_ERROR;
@@ -1074,9 +1058,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 }
                 break; case CDECL_CONVENTION: {
                     Assert(false); // @Incomplete
-                }
-                break; case INTRINSIC: {
-                    // do nothing
                 }
             }
 
@@ -1121,6 +1102,13 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                         info.addPop(BC_REG_RBX);
                         info.addPop(BC_REG_RDI);
                         info.addInstruction({BC_MEMZERO, BC_REG_RDI, BC_REG_RBX});
+                    } else if(funcImpl->name == "rdtscp"){
+                        info.addInstruction({BC_RDTSCP, BC_REG_RAX, BC_REG_ECX, BC_REG_RDX});
+                        info.addPush(BC_REG_RAX); // timestamp counter
+                        info.addPush(BC_REG_ECX); // processor thing?
+                        
+                        outTypeIds->add(AST_UINT64);
+                        outTypeIds->add(AST_UINT32);
                     } 
                     // else if(funcImpl->name == "sin"){
                     //     info.addPop(BC_REG_EAX);
@@ -1138,8 +1126,8 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     //     info.addPush(BC_REG_EAX);
                     //     outTypeIds->add(AST_FLOAT32);
                     // }
-                     else {
-                        ERR_HEAD(expression->tokenRange, "'"<<funcImpl->name<<"' is not an intrinsic function\n";
+                    else {
+                        ERR_HEAD3(expression->tokenRange, "'"<<funcImpl->name<<"' is not an intrinsic function\n";
                             ERR_LINE(expression->tokenRange,"not an intrinsic");
                         )
                     }
@@ -1281,7 +1269,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
 
             TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId);
             if(!typeInfo){
-                ERR_HEAD(expression->tokenRange, expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
+                ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
                 )
                 return GEN_ERROR;
             }
@@ -1333,7 +1321,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
 
             TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId);
             if(!typeInfo){
-                ERR_HEAD(expression->tokenRange, expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
+                ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
                 )
                 return GEN_ERROR;
             }
@@ -1362,7 +1350,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
         } else if (expression->typeId == AST_NULL) {
             // TODO: Move into the type checker?
             // info.code->addDebugText("  expr push null");
-            TOKENINFO(expression->tokenRange)
             info.addLoadIm(BC_REG_RAX, 0);
             info.addPush(BC_REG_RAX);
 
@@ -1374,7 +1361,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
         } else {
             std::string typeName = info.ast->typeToString(expression->typeId);
             // info.addInstruction({BC_PUSH,BC_REG_RAX}); // push something so the stack stays synchronized, or maybe not?
-            ERR_HEAD(expression->tokenRange, "'" <<typeName << "' is an unknown data type.\n\n";
+            ERR_HEAD3(expression->tokenRange, "'" <<typeName << "' is an unknown data type.\n\n";
                 ERR_LINE(expression->tokenRange,typeName.c_str());
             )
             // log::out <<  log::RED<<"GenExpr: data type not implemented\n";
@@ -1419,7 +1406,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                         int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
                         if(size>8){
                             // TODO: This should be moved to the type checker.
-                            ERR_HEAD(expression->tokenRange, "Argument types cannot be larger than 8 bytes.";
+                            ERR_HEAD3(expression->tokenRange, "Argument types cannot be larger than 8 bytes.";
                                 ERR_LINE(expression->tokenRange, "bad");
                             )
                             return GEN_ERROR;
@@ -1570,7 +1557,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             if(result!=GEN_SUCCESS)
                 return GEN_ERROR;
             if(ltype.getPointerLevel()==3){
-                ERR_HEAD(expression->tokenRange,"Cannot take a reference of a triple pointer (compiler has a limit of 0-3 depth of pointing). Cast to u64 if you need triple pointers.";)
+                ERR_HEAD3(expression->tokenRange,"Cannot take a reference of a triple pointer (compiler has a limit of 0-3 depth of pointing). Cast to u64 if you need triple pointers.";)
                 return GEN_ERROR;
             }
             ltype.setPointerLevel(ltype.getPointerLevel()+1);
@@ -1581,7 +1568,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 return err;
 
             if (!ltype.isPointer()) {
-                ERR_HEAD(expression->left->tokenRange, "Cannot dereference " << info.ast->typeToString(ltype) << ".\n\n";
+                ERR_HEAD3(expression->left->tokenRange, "Cannot dereference " << info.ast->typeToString(ltype) << ".\n\n";
                     ERR_LINE(expression->left->tokenRange, "bad");
                 )
                 outTypeIds->add( AST_VOID);
@@ -1592,7 +1579,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             outId.setPointerLevel(outId.getPointerLevel()-1);
 
             if (outId == AST_VOID) {
-                ERR_HEAD(expression->left->tokenRange, "Cannot dereference " << info.ast->typeToString(ltype) << ".\n\n";
+                ERR_HEAD3(expression->left->tokenRange, "Cannot dereference " << info.ast->typeToString(ltype) << ".\n\n";
                     ERR_LINE(expression->left->tokenRange, "bad");
                 )
                 return GEN_ERROR;
@@ -1671,7 +1658,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 if (yes) {
                 } else {
                     ERR_HEAD2(expression->tokenRange) << "cannot cast " << info.ast->typeToString(ltype) << " to " << info.ast->typeToString(castType) << "\n";
-                    ERR_END
+                    
                     outTypeIds->add( ltype); // ltype since cast failed
                     return GEN_ERROR;
                 }
@@ -1730,7 +1717,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     bool found = typeInfo->astEnum->getMember(expression->name, &enumValue);
                     if (!found) {
                         Assert(info.compileInfo->typeErrors!=0);
-                        // ERR_HEAD(expression->tokenRange, expression->tokenRange.firstToken << " is not a member of enum " << typeInfo->astEnum->name << "\n";
+                        // ERR_HEAD3(expression->tokenRange, expression->tokenRange.firstToken << " is not a member of enum " << typeInfo->astEnum->name << "\n";
                         // )
                         return GEN_ERROR;
                     }
@@ -1760,7 +1747,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             if (!structInfo || !structInfo->astStruct) {
                 auto str = info.ast->typeToString(castType);
                 ERR_HEAD2(expression->tokenRange) << "cannot do initializer on non-struct " << log::YELLOW << str << "\n";
-                ERR_END
+                
                 return GEN_ERROR;
             }
 
@@ -1780,7 +1767,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 if (!expr->namedValue.str) {
                     if ((int)exprs.size() <= index) {
                         ERR_HEAD2(expr->tokenRange) << "To many members for struct " << astruct->name << " (" << astruct->members.size() << " member(s) allowed)\n";
-                        ERR_END
+                        
                         continue;
                     }
                     else
@@ -1795,12 +1782,12 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     }
                     if (memIndex == -1) {
                         ERR_HEAD2(expr->tokenRange) << expr->namedValue << " is not an member in " << astruct->name << "\n";
-                        ERR_END
+                        
                         continue;
                     } else {
                         if (exprs[memIndex]) {
                             ERR_HEAD2(expr->tokenRange) << "argument for " << astruct->members[memIndex].name << " is already specified at " << LOGAT(exprs[memIndex]->tokenRange) << "\n";
-                            ERR_END
+                            
                         } else {
                             exprs[memIndex] = expr;
                         }
@@ -1829,7 +1816,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     int result = GenerateDefaultValue(info, 0, 0, exprId, nullptr);
                     if (result != GEN_SUCCESS)
                         return result;
-                    // ERR_HEAD(expression->tokenRange, "Missing argument for " << astruct->members[index].name << " (call to " << astruct->name << ").\n";
+                    // ERR_HEAD3(expression->tokenRange, "Missing argument for " << astruct->members[index].name << " (call to " << astruct->name << ").\n";
                     // )
                     // continue;
                 } else {
@@ -1846,7 +1833,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 if (!PerformSafeCast(info, exprId, tid)) {   // implicit conversion
                     // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
                     ERRTYPE(expr->tokenRange, exprId, tid, "(initializer)\n");
-                    ERR_END
+                    
                     continue;
                 }
             }
@@ -1918,7 +1905,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
         else if(expression->typeId==AST_RANGE){
             TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Range"), info.ast->globalScopeId);
             if(!typeInfo){
-                ERR_HEAD(expression->tokenRange, expression->tokenRange<<" cannot be converted to struct Range since it doesn't exist. Did you forget #import \"Basic\".\n\n";
+                ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to struct Range since it doesn't exist. Did you forget #import \"Basic\".\n\n";
                     ERR_LINE(expression->tokenRange,"Where is Range?");
                 )
                 return GEN_ERROR;
@@ -1946,7 +1933,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             info.addPush(rreg);
             if(!PerformSafeCast(info,rtype,inttype)){
                 std::string msg = info.ast->typeToString(rtype);
-                ERR_HEAD(expression->right->tokenRange,"Cannot convert to "<<info.ast->typeToString(inttype)<<".\n\n";
+                ERR_HEAD3(expression->right->tokenRange,"Cannot convert to "<<info.ast->typeToString(inttype)<<".\n\n";
                     ERR_LINE(expression->right->tokenRange,msg.c_str());
                 )
             }
@@ -1954,7 +1941,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             info.addPush(lreg);
             if(!PerformSafeCast(info,ltype,inttype)){
                 std::string msg = info.ast->typeToString(ltype);
-                ERR_HEAD(expression->right->tokenRange,"Cannot convert to "<<info.ast->typeToString(inttype)<<".\n\n";
+                ERR_HEAD3(expression->right->tokenRange,"Cannot convert to "<<info.ast->typeToString(inttype)<<".\n\n";
                     ERR_LINE(expression->right->tokenRange,msg.c_str());
                 )
             }
@@ -1975,14 +1962,14 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
 
             if(!ltype.isPointer()){
                 std::string strtype = info.ast->typeToString(ltype);
-                ERR_HEAD(expression->right->tokenRange, "Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.\n\n";
+                ERR_HEAD3(expression->right->tokenRange, "Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.\n\n";
                     ERR_LINE(expression->right->tokenRange,strtype.c_str());
                 )
                 return GEN_ERROR;
             }
             if(!AST::IsInteger(rtype)){
                 std::string strtype = info.ast->typeToString(rtype);
-                ERR_HEAD(expression->right->tokenRange, "Index operator ( array[23] ) requires integer type in the inner expression. '"<<strtype<<"' is not an integer.\n\n";
+                ERR_HEAD3(expression->right->tokenRange, "Index operator ( array[23] ) requires integer type in the inner expression. '"<<strtype<<"' is not an integer.\n\n";
                     ERR_LINE(expression->right->tokenRange,strtype.c_str());
                 )
                 return GEN_ERROR;
@@ -2010,7 +1997,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             
             if(!AST::IsInteger(ltype)){
                 std::string strtype = info.ast->typeToString(ltype);
-                ERR_HEAD(expression->left->tokenRange, "Increment/decrement only works on integer types unless overloaded.\n\n";
+                ERR_HEAD3(expression->left->tokenRange, "Increment/decrement only works on integer types unless overloaded.\n\n";
                     ERR_LINE(expression->left->tokenRange, strtype.c_str());
                 )
                 return GEN_ERROR;
@@ -2046,7 +2033,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
             // }
             if(expression->typeId == AST_ASSIGN && expression->assignOpType == (OperationType)0){
                 // THIS IS PURELY ASSIGN NOT +=, *=
-                // WARN_HEAD(expression->tokenRange,"Expression is generated first and then reference. Right to left instead of left to right. "
+                // WARN_HEAD3(expression->tokenRange,"Expression is generated first and then reference. Right to left instead of left to right. "
                 // "This is important if you use assignments/increments/decrements on the same memory/reference/variable.\n\n";
                 //     WARN_LINE(expression->right->tokenRange,"generated first");
                 //     WARN_LINE(expression->left->tokenRange,"then this");
@@ -2125,7 +2112,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     if (op != AST_ADD && op != AST_SUB) {
                         std::string leftstr = info.ast->typeToString(ltype);
                         std::string rightstr = info.ast->typeToString(rtype);
-                        ERR_HEAD(expression->tokenRange, OpToStr((OperationType)op.getId()) << " does not work with pointers. Only addition and subtraction works\n\n";
+                        ERR_HEAD3(expression->tokenRange, OpToStr((OperationType)op.getId()) << " does not work with pointers. Only addition and subtraction works\n\n";
                             ERR_LINE(expression->left->tokenRange, leftstr.c_str());
                             ERR_LINE(expression->right->tokenRange,rightstr.c_str());
                         )
@@ -2143,7 +2130,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     if(bytecodeOp==0){
                         ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
                             info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-                        ERR_END
+                        
                     }
 
                     if(ltype.isPointer()){
@@ -2176,7 +2163,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     // ltype = rtype;
                     // info.addPush(reg);
 
-                    TOKENINFO(expression->tokenRange)
                     u8 bytecodeOp = ASTOpToBytecode(op,false);
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
@@ -2204,7 +2190,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     if(bytecodeOp==0){
                         ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
                             info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-                        ERR_END
+                        
                     }
 
                     // if(lsize > rsize){
@@ -2238,7 +2224,7 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                 //     if(bytecodeOp==0){
                 //         ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
                 //             info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-                //         ERR_END
+                //         
                 //     }
 
                 //     if(ltype == AST_CHAR){
@@ -2262,14 +2248,14 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     if(ltype.getId()>=AST_TRUE_PRIMITIVES){
                         bad=true;
                         std::string msg = info.ast->typeToString(ltype);
-                        ERR_HEAD(expression->left->tokenRange, "Cannot do operation on struct.\n\n";
+                        ERR_HEAD3(expression->left->tokenRange, "Cannot do operation on struct.\n\n";
                             ERR_LINE(expression->left->tokenRange,msg.c_str());
                         )
                     }
                     if(rtype.getId()>=AST_TRUE_PRIMITIVES){
                         bad=true;
                         std::string msg = info.ast->typeToString(rtype);
-                        ERR_HEAD(expression->right->tokenRange, "Cannot do operation on struct.\n\n";
+                        ERR_HEAD3(expression->right->tokenRange, "Cannot do operation on struct.\n\n";
                             ERR_LINE(expression->right->tokenRange,msg.c_str());
                         )
                     }
@@ -2296,7 +2282,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     u8 rsize = info.ast->getTypeSize(rtype);
                     // info.addPush(reg);
 
-                    TOKENINFO(expression->tokenRange)
                     u8 reg1 = RegBySize(FIRST_REG, lsize); // get the appropriate registers
                     u8 reg2 = RegBySize(SECOND_REG, rsize);
                     info.addPop(reg2); // note that right expression should be popped first
@@ -2306,7 +2291,6 @@ int GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<Ty
                     if(bytecodeOp==0){
                         ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
                             info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-                        ERR_END
                     }
 
                     if(ltype.isPointer()){
@@ -2357,7 +2341,7 @@ int GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId typeId, T
             // log::out << "GEN "<<typeInfo->astStruct->name<<"."<<member.name<<"\n";
             // log::out << " alignedSize "<<info.ast->getTypeAlignedSize(memdata.typeId)<<"\n";
             if(member.defaultValue && typeInfo->astStruct->polyArgs.size()){
-                WARN_HEAD((*tokenRange), "Polymorphism may not work with default values!";)
+                WARN_HEAD3((*tokenRange), "Polymorphism may not work with default values!";)
             }
             if(i+1<(int)typeInfo->astStruct->members.size()){
                 // structs in structs will be aligned by their individual members
@@ -2374,7 +2358,7 @@ int GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId typeId, T
                 int result = GenerateExpression(info, member.defaultValue, &typeId);
                 if (memdata.typeId != typeId) {
                     ERRTYPE(member.defaultValue->tokenRange, memdata.typeId, typeId, "(default member)\n");
-                    ERR_END
+                    
                 }
                 if(baseReg!=0){
                     int result = GeneratePop(info, baseReg, offset, typeId);
@@ -2420,13 +2404,13 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
             // NOTE: function may not have been added in the type checker stage for some reason.
             // THANK YOU, past me for writing this note. I was wondering what I broke and reading the
             // note made instantly realise that I broke something in the type checker.
-            ERR_HEAD(function->tokenRange, "'"<<function->name << "' was null (compiler bug)\n";
+            ERR_HEAD3(function->tokenRange, "'"<<function->name << "' was null (compiler bug)\n";
                 ERR_LINE(function->tokenRange, "bad");
             )
             // if (function->tokenRange.firstToken.str) {
             //     ERRTOKENS(function->tokenRange)
             // }
-            // ERR_END
+            // 
             return GEN_ERROR;
         }
         if (identifier->type != Identifier::FUNC) {
@@ -2443,7 +2427,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
     }
     if(function->linkConvention != LinkConventions::NONE){
         if(function->polyArgs.size()!=0 || (astStruct && astStruct->polyArgs.size()!=0)){
-            ERR_HEAD(function->tokenRange, "External/native functions cannot be polymorphic.\n\n";
+            ERR_HEAD3(function->tokenRange, "External/native functions cannot be polymorphic.\n\n";
                 ERR_LINE(function->tokenRange, "remove polymorphism");
             )
             return GEN_ERROR;
@@ -2452,7 +2436,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
             // TODO: This error prints multiple times for each duplicate definition of native function.
             //   With this, you know the location of the colliding functions but the error message is printed multiple times.
             //  It is better if the message is shown once and then show all locations at once.
-            ERR_HEAD(function->tokenRange, "External/native functions can only have one overload.\n\n";
+            ERR_HEAD3(function->tokenRange, "External/native functions can only have one overload.\n\n";
                 ERR_LINE(function->tokenRange, "bad");
             )
             return GEN_ERROR;
@@ -2472,7 +2456,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
                     function->_impls.last()->address = nativeFunction->jumpAddress;
                 }
             } else {
-                ERR_HEAD(function->tokenRange, "'"<<function->name<<"' is not an native function. None of the "<<info.compileInfo->nativeRegistry->nativeFunctions.size()<<" native functions matched.\n\n";
+                ERR_HEAD3(function->tokenRange, "'"<<function->name<<"' is not an native function. None of the "<<info.compileInfo->nativeRegistry->nativeFunctions.size()<<" native functions matched.\n\n";
                     ERR_LINE(function->name, "bad");
                 )
                 return GEN_ERROR;
@@ -2497,7 +2481,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
         Assert(("func has already been generated!",funcImpl->address == 0));
         // This happens with functions inside of polymorphic function.
         if(function->callConvention != BETCALL) {
-            ERR_HEAD(function->tokenRange, "The convention '" << function->callConvention << "' has not been implemented for user functions. The normal convention (betcall) is the only one that works.";
+            ERR_HEAD3(function->tokenRange, "The convention '" << function->callConvention << "' has not been implemented for user functions. The normal convention (betcall) is the only one that works.";
                 ERR_LINE(function->tokenRange,"use betcall");
             )
             continue;
@@ -2543,7 +2527,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
                 auto &argImpl = funcImpl->argumentTypes[i];
                 auto var = info.ast->addVariable(info.currentScopeId, arg.name);
                 if (!var) {
-                    ERR_HEAD(arg.name.range(), arg.name << " is already defined.\n";
+                    ERR_HEAD3(arg.name.range(), arg.name << " is already defined.\n";
                         ERR_LINE(arg.name.range(),"cannot use again");
                     )
                 }
@@ -2634,7 +2618,7 @@ int GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct 
                     }
                 }
                 if (!foundReturn) {
-                    ERR_HEAD(function->tokenRange,"Missing return statement in '" << function->name << "'.\n\n";
+                    ERR_HEAD3(function->tokenRange,"Missing return statement in '" << function->name << "'.\n\n";
                         ERR_LINE(function->tokenRange,"put a return in the body");
                     )
                 }
@@ -2659,7 +2643,7 @@ int GenerateFunctions(GenInfo& info, ASTScope* body){
     MEASURE;
     _GLOG(FUNC_ENTER)
     Assert(body || info.compileInfo->errors!=0);
-    if(!body) return PARSE_ERROR;
+    if(!body) return false;
     // MAKE_NODE_SCOPE(body); // we don't generate bytecode here so no need for this
 
     ScopeId savedScope = info.currentScopeId;
@@ -2692,7 +2676,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
     MEASURE;
     _GLOG(FUNC_ENTER)
     Assert(body||info.compileInfo->errors!=0);
-    if(!body) return PARSE_ERROR;
+    if(!body) return false;
 
     MAKE_NODE_SCOPE(body); // no need, the scope itself doesn't generate code
 
@@ -2719,7 +2703,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 if(info.compileInfo->typeErrors==0){
                     char msg[100];
                     sprintf(msg,"%d variables",(int)statement->varnames.size());
-                    ERR_HEAD(statement->tokenRange, "To many variables.";
+                    ERR_HEAD3(statement->tokenRange, "To many variables.";
                         ERR_LINE(statement->tokenRange, msg);
                         sprintf(msg,"%d return values",(int)typesFromExpr.size());
                         ERR_LINE(statement->firstExpression->tokenRange, msg);
@@ -2740,7 +2724,12 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 // _GLOG(log::out << log::LIME <<"assign pop "<<info.ast->typeToString(rightType)<<"\n";)
                 
                 TypeId declaredType = varname.versions_assignType[info.currentPolyVersion];
-                Assert(declaredType.isValid()); // Type checker should have fixed this. Implicit ones too.
+                if(!declaredType.isValid()){
+                    if(info.compileInfo->typeErrors == 0){
+                        Assert(declaredType.isValid()); // Type checker should have fixed this. Implicit ones too.
+                    }
+                    continue;
+                }
                 bool wasDeclaration = false;
                 Identifier* varIdentifier = info.ast->findIdentifier(info.currentScopeId, varname.name);
                 VariableInfo* varinfo = nullptr;
@@ -2771,19 +2760,19 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                             if(info.compileInfo->typeErrors==0){
                                 std::string leftstr = info.ast->typeToString(varinfo->typeId);
                                 std::string rightstr = info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]);
-                                ERR_HEAD(statement->tokenRange, "Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.\n\n";
+                                ERR_HEAD3(statement->tokenRange, "Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.\n\n";
                                     ERR_LINE(varname.name, leftstr.c_str());
                                     ERR_LINE(statement->firstExpression->tokenRange,rightstr.c_str());
                                 )
                             }
-                            // ERR_HEAD(varname.name.range(), "Type mismatch when assigning.\n\n";
+                            // ERR_HEAD3(varname.name.range(), "Type mismatch when assigning.\n\n";
                             //     ERR_LINE(varname.name.range(),"bad");
                             // )
                             continue;
                         }
                     }
                 } else {
-                    ERR_HEAD(varname.name.range(), "'"<<varname.name<<"' is defined as a non-variable and cannot be used.\n\n";
+                    ERR_HEAD3(varname.name.range(), "'"<<varname.name<<"' is defined as a non-variable and cannot be used.\n\n";
                         ERR_LINE(varname.name, "bad");
                     )
                     continue;
@@ -2803,13 +2792,13 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 int alignment = 0;
                 if (wasDeclaration) {
                     // if (leftSize == 0) {
-                    //     ERR_HEAD(statement->tokenRange, "Size of type " << "?" << " was 0\n";
+                    //     ERR_HEAD3(statement->tokenRange, "Size of type " << "?" << " was 0\n";
                     //     )
                     //     continue;
                     // }
                     if (varname.arrayLength>0){
                         if(statement->firstExpression) {
-                            ERR_HEAD(statement->firstExpression->tokenRange, "An expression is not allowed when declaring an array on the stack. The array is zero-initialized by default.\n\n";
+                            ERR_HEAD3(statement->firstExpression->tokenRange, "An expression is not allowed when declaring an array on the stack. The array is zero-initialized by default.\n\n";
                                 ERR_LINE(statement->firstExpression->tokenRange, "bad");
                             )
                             continue;
@@ -2835,7 +2824,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                             // Assert(size2 * varname.arrayLength <= pow(2,16)/2);
                             if(arraySize > pow(2,16)/2) {
                                 std::string msg = std::to_string(size2) + " * "+ std::to_string(varname.arrayLength) +" = "+std::to_string(arraySize);
-                                ERR_HEAD(statement->tokenRange, (int)(pow(2,16)/2) << " is the maximum size of arrays on the stack. "<<(arraySize)<<" was used which exceeds that. The limit comes from the instruction BC_INCR which uses a signed 16-bit integer.\n\n";
+                                ERR_HEAD3(statement->tokenRange, (int)(pow(2,16)/2) << " is the maximum size of arrays on the stack. "<<(arraySize)<<" was used which exceeds that. The limit comes from the instruction BC_INCR which uses a signed 16-bit integer.\n\n";
                                     ERR_LINE(statement->tokenRange, msg.c_str());
                                 )
                                 continue;
@@ -3077,7 +3066,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                 }
                 auto* varinfo_index = info.ast->addVariable(scopeForVariables,"nr");
                 if(!varinfo_index) {
-                    ERR_HEAD(statement->tokenRange, "nr variable already exists\n.";)
+                    ERR_HEAD3(statement->tokenRange, "nr variable already exists\n.";)
                     continue;
                 }
                 // auto iden = info.ast->findIdentifier(scopeForVariables,"nr");
@@ -3085,7 +3074,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
 
                 auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
                  if(!varinfo_item) {
-                    ERR_HEAD(statement->tokenRange, itemvar << " variable already exists\n.";)
+                    ERR_HEAD3(statement->tokenRange, itemvar << " variable already exists\n.";)
                     continue;
                 }
                 varinfo_item->typeId = itemtype;
@@ -3196,7 +3185,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             }else{
                 auto* varinfo_index = info.ast->addVariable(scopeForVariables,"nr");
                 if(!varinfo_index) {
-                    ERR_HEAD(statement->tokenRange, "nr variable already exists\n.";)
+                    ERR_HEAD3(statement->tokenRange, "nr variable already exists\n.";)
                     continue;
                 }
                 varinfo_index->typeId = AST_INT32;
@@ -3357,7 +3346,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
         } else if(statement->type == ASTStatement::BREAK) {
             GenInfo::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
-                ERR_HEAD(statement->tokenRange, "Break is only allowed in loops.\n\n";
+                ERR_HEAD3(statement->tokenRange, "Break is only allowed in loops.\n\n";
                     ERR_LINE(statement->tokenRange,"not in a loop");
                 )
                 continue;
@@ -3370,7 +3359,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
         } else if(statement->type == ASTStatement::CONTINUE) {
             GenInfo::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
-                ERR_HEAD(statement->tokenRange, "Continue is only allowed in loops.\n\n";
+                ERR_HEAD3(statement->tokenRange, "Continue is only allowed in loops.\n\n";
                     ERR_LINE(statement->tokenRange,"not in a loop");
                 )
                 continue;
@@ -3383,7 +3372,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             _GLOG(SCOPE_LOG("RETURN"))
 
             if (!info.currentFunction) {
-                ERR_HEAD(statement->tokenRange, "Return only allowed in function.\n\n";
+                ERR_HEAD3(statement->tokenRange, "Return only allowed in function.\n\n";
                     ERR_LINE(statement->tokenRange, "bad");
                 )
                 continue;
@@ -3391,7 +3380,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             }
             if ((int)statement->returnValues.size() != (int)info.currentFuncImpl->returnTypes.size()) {
                 // std::string msg = 
-                ERR_HEAD(statement->tokenRange, "Found " << statement->returnValues.size() << " return value(s) but should have " << info.currentFuncImpl->returnTypes.size() << " for '" << info.currentFunction->name << "'.\n\n";
+                ERR_HEAD3(statement->tokenRange, "Found " << statement->returnValues.size() << " return value(s) but should have " << info.currentFuncImpl->returnTypes.size() << " for '" << info.currentFunction->name << "'.\n\n";
                     ERR_LINE(info.currentFunction->tokenRange, "X return values");
                     ERR_LINE(statement->tokenRange, "Y values");
                 )
@@ -3420,7 +3409,7 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
                     // if(info.currentFunction->returnTypes[argi]!=dtype){
 
                     ERRTYPE(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)\n");
-                    ERR_END
+                    
                 }
                 GeneratePop(info, BC_REG_FP, retType.offset, retType.typeId);
             }
@@ -3435,24 +3424,21 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
         else if (statement->type == ASTStatement::EXPRESSION) {
             _GLOG(SCOPE_LOG("EXPRESSION"))
 
-            TypeId dtype = {};
-            int result = GenerateExpression(info, statement->firstExpression, &dtype);
+            DynamicArray<TypeId> exprTypes{};
+            int result = GenerateExpression(info, statement->firstExpression, &exprTypes);
             if (result == GEN_ERROR) {
                 continue;
             }
-            if (dtype != AST_VOID) {
-                // TODO: handle struct
-                // TypeInfo *typeInfo = info.ast->getTypeInfo(dtype);
-                // u32 size = info.ast->getTypeSize(dtype);
-                // u8 reg = RegBySize(BC_AX, size);
-                // info.addPop(reg);
-
-                GeneratePop(info, 0, 0, dtype);
+            if(exprTypes.size() > 0 && exprTypes[0] != AST_VOID){
+                for(int i =0;i < exprTypes.size();i++) {
+                    TypeId dtype = exprTypes[i];
+                    GeneratePop(info, 0, 0, dtype);
+                }
             }
         }
         else if (statement->type == ASTStatement::USING) {
             _GLOG(SCOPE_LOG("USING"))
-
+            Assert(false); // TODO: Fix this code and error messages
             Assert(statement->varnames.size()==1);
 
             Token* name = &statement->varnames[0].name;
@@ -3460,15 +3446,13 @@ int GenerateBody(GenInfo &info, ASTScope *body) {
             auto origin = info.ast->findIdentifier(info.currentScopeId, *name);
             if(!origin){
                 ERR_HEAD2(statement->tokenRange) << *name << " is not a variable (using)\n";
-                ERRTOKENS(statement->tokenRange);
-                ERR_END
+                
                 return GEN_ERROR;
             }
             auto aliasId = info.ast->addIdentifier(info.currentScopeId, *statement->alias);
             if(!aliasId){
                 ERR_HEAD2(statement->tokenRange) << *statement->alias << " is already a variable or alias (using)\n";
-                ERRTOKENS(statement->tokenRange);
-                ERR_END
+                
                 return GEN_ERROR;
             }
 
@@ -3570,7 +3554,9 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         if(e.funcImpl->address != FuncImpl::ADDRESS_INVALID){
             *((i32*)&inst) = e.funcImpl->address;
         } else {
-            ERR() << "Invalid function address for instruction["<<e.bcIndex << "]\n";
+            ERR_SECTION(
+                log::out << log::RED << "Invalid function address for instruction["<<e.bcIndex << "]\n"
+            )
             auto pair = resolveFailures.find(e.funcImpl);
             if(pair == resolveFailures.end())
                 resolveFailures[e.funcImpl] = 1;

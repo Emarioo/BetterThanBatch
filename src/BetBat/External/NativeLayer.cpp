@@ -4,6 +4,8 @@
 
 extern "C" {
     // int other();
+    
+    void(*WIN_Sleep)(DWORD) = Sleep;
 
     int __stdcall printme(){
         // WriteFile(GetStdHandle(STD_OUTPUT_HANDLE),"Oh snap\n",strlen("Oh snap\n"),NULL,NULL);
@@ -45,6 +47,9 @@ extern "C" {
         if ((t&2) ^ inv)
             taylor = -taylor;
         return taylor;
+    }
+    void NativeSleep(float seconds) {
+        WIN_Sleep((DWORD)(seconds * 1000));
     }
     /*
     Code to test sine

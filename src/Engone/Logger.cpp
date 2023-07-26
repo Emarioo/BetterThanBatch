@@ -108,18 +108,11 @@ namespace engone {
 		if(info.lineBuffer.used==0)
 			return;
 		*((char*)info.lineBuffer.data+info.lineBuffer.used) = 0;
-		print((char*)info.lineBuffer.data, info.lineBuffer.used);
-		info.lineBuffer.used = 0; // flush buffer
-	}
-	uint64 Logger::getMemoryUsage(){
-		uint64 sum=0;
-		for(auto& pair : m_threadInfos){
-			sum+=pair.second.lineBuffer.max;
-		}
-		return sum;
-	}
-	void Logger::print(char* str, int len) {
-		auto& info = getThreadInfo();
+		
+		char* str = (char*)info.lineBuffer.data;
+		int len = info.lineBuffer.used;
+		// print((char*)info.lineBuffer.data, info.lineBuffer.used);
+
 		m_printMutex.lock();
 		if (m_masterColor == log::NO_COLOR)
 			SetConsoleColor(info.color);
@@ -223,6 +216,33 @@ namespace engone {
 			SetConsoleColor(log::SILVER);
 
 		// TODO: write to report
+
+		info.lineBuffer.used = 0; // flush buffer
+	}
+	uint64 Logger::getMemoryUsage(){
+		uint64 sum=0;
+		for(auto& pair : m_threadInfos){
+			sum+=pair.second.lineBuffer.max;
+		}
+		return sum;
+	}
+	void Logger::print(char* str, int len) {
+		Assert(str);
+		if (len == 0) return;
+
+		auto& info = getThreadInfo();
+
+		char* buf = info.ensure(len);
+		if (buf) {
+			memcpy(buf, str, len);
+			info.use(len);
+			onEmptyLine=false;
+		} else {
+			printf("[Logger] : Failed ensuring %u bytes\n", len); \
+		}
+		if (str[len - 1] == '\n') {
+			flush();
+		}
 	}
 	log::Color Logger::getColor() {
 		auto& info = getThreadInfo();
@@ -258,7 +278,7 @@ namespace engone {
 			info.use(len);
 			onEmptyLine=false;
 		} else {
-			printf("[Logger] : Failed insuring %u bytes\n", len); \
+			printf("[Logger] : Failed ensuring %u bytes\n", len); \
 		}
 		if (value[len - 1] == '\n') {
 			flush();

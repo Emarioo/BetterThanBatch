@@ -2,12 +2,6 @@
 
 #include "BetBat/AST.h"
 
-#define PARSE_ERROR 0
-#define PARSE_BAD_ATTEMPT 2
-// #define PARSE_SUDDEN_END 4
-#define PARSE_SUCCESS 1
-// success but no accumulation
-#define PARSE_NO_VALUE 3
 struct CompileInfo;
 struct ParseInfo {
     ParseInfo(TokenStream* tokens) : tokens(tokens){}

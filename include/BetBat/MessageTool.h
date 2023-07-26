@@ -1,21 +1,59 @@
 #pragma once
 
+#include "BetBat/Util/StringBuilder.h"
+
+struct TokenRange;
+struct TokenStream;
+
+/*
+    Settings
+    Should be handled by user profiles
+*/
 #define ERR_HEADER_COLOR engone::log::BLOOD
 #define WARN_HEADER_COLOR engone::log::YELLOW
 // #define INFO_HEADER_COLOR engone::log::LIME
 #define MESSAGE_COLOR engone::log::SILVER
 
-#define MSG_LOCATION(F,L,C) TrimDir(F)<<":"<<(L)<<":"<<(C)
-#define MSG_TYPE(N,T) "("<<N<<", "<<T<<")"
-//  engone::log::out.setIndent(2);
+/*
+    Latest code for message handling
+*/
 #ifdef LOG_MSG_LOCATION
-#define MSG_CODE_LOCATION engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n" <<
+#define MSG_CODE_LOCATION engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n"
 #else
 #define MSG_CODE_LOCATION 
 #endif
+#define BASE_SECTION(CODE) engone::log::out << MSG_CODE_LOCATION; info.errors++; StringBuilder err_type{}; err_type += CODE
+
+#define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
+#define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type);
+#define ERR_MSG(STR) log::out << (StringBuilder{} + STR);
+#define ERR_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR);
+
+#define WARN_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR)
+
+// #define ERR_BUILDER(TR, CODE, MSG) PrintHead(ERR_HEADER_COLOR, TR, CODE, MSG);
+// #define WARN_BUILDER(TR, CODE, MSG) PrintHead(WARN_HEADER_COLOR, TR, CODE, MSG);
+
+// TODO: Color support in string builder?
+
+void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode);
+// , const StringBuilder& stringBuilder);
+void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode);
+// , const StringBuilder& stringBuilder);
+
+void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder);
+void PrintCode(const Token& token, const StringBuilder& stringBuilder);
+
+/*
+    Old messaging code
+    Should be deprecated when possible
+*/
+#define MSG_LOCATION(F,L,C) TrimDir(F)<<":"<<(L)<<":"<<(C)
+#define MSG_TYPE(N,T) "("<<N<<", "<<T<<")"
+//  engone::log::out.setIndent(2);
 #define MSG_CUSTOM(F,L,C,NAME,NUM) MSG_LOCATION(F,L,C) << " "<<MSG_TYPE(NAME,NUM) << ": "<<MESSAGE_COLOR
-#define ERR_CUSTOM(F,L,C,NAME,NUM) MSG_CODE_LOCATION ERR_HEADER_COLOR <<MSG_CUSTOM(F,L,C,NAME,NUM)
-#define WARN_CUSTOM(F,L,C,NAME,NUM) MSG_CODE_LOCATION WARN_HEADER_COLOR <<MSG_CUSTOM(F,L,C,NAME,NUM)
+#define ERR_CUSTOM(F,L,C,NAME,NUM) MSG_CODE_LOCATION << ERR_HEADER_COLOR <<MSG_CUSTOM(F,L,C,NAME,NUM)
+#define WARN_CUSTOM(F,L,C,NAME,NUM) MSG_CODE_LOCATION << WARN_HEADER_COLOR <<MSG_CUSTOM(F,L,C,NAME,NUM)
 
 #define MSG_END ; engone::log::out.setIndent(0);
 
@@ -25,7 +63,6 @@
 
 #define WARN_DEFAULT_R(R,NAME,NUM) WARN_CUSTOM(R.tokenStream()?R.tokenStream()->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
 
-struct TokenRange;
 void PrintCode(const TokenRange& tokenRange, const char* message = nullptr);
-struct TokenStream;
 void PrintCode(int index, TokenStream* stream, const char* message = nullptr);
+

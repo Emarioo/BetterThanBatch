@@ -1,9 +1,26 @@
-#import "Logger"
-#import "Math"
+// #import "Logger"
+// #import "Math"
 
-f = 0.99;
+// // #import "OS"
 
-println(sine(f));
-println(sinf(f)," ", cosf(f));
-println(tanf(f));
-println(sinf(f)/cosf(f));
+// // a = 1 + 1
+
+// fn @import NativeSleep(f: f32);
+
+// fn @intrinsic rdtscp() -> u64, u32;
+// // fn @intrinsic rdtsc() -> u64;
+
+// fn measure_rdtscp_overhead() -> u32 {
+//     overhead: u32;
+    // #define  1000000
+a, b = 9
+
+//     for 0..TC {
+//         a = rdtscp();
+//         b = rdtscp();
+//         overhead += b-a;
+//     }
+//     return overhead/TC;
+// }
+
+// println("diff ",measure_rdtscp_overhead());

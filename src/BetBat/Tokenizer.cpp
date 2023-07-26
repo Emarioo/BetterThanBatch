@@ -186,7 +186,91 @@ std::string Token::getLine(){
     // }
     return out;
 }
-void TokenRange::feed(std::string& outBuffer){
+u32 TokenRange::feed(char* outBuffer, u32 bufferSize) const {
+    using namespace engone;
+    // assert?
+    if(!tokenStream()) return 0;
+    int written = 0;
+    char* end = outBuffer + bufferSize;
+    #define CHECK_END if (outBuffer == end) return (u64)outBuffer - (u64)end - bufferSize;
+    for(int i=startIndex();i<endIndex;i++){
+        Token& tok = tokenStream()->get(i);
+        
+        if(!tok.str)
+            continue;
+        
+        if(tok.flags&TOKEN_DOUBLE_QUOTED){
+            *(outBuffer++) = '"';
+            CHECK_END
+        }
+        
+        else if(tok.flags&TOKEN_SINGLE_QUOTED){
+            *(outBuffer++) = '\'';
+            CHECK_END
+        }
+        
+        for(int j=0;j<tok.length;j++){
+            char chr = *(tok.str+j);
+            if(chr=='\n'){
+                *(outBuffer++) = '\\'; // Is this okay? should it create two characters?
+                CHECK_END
+                *(outBuffer++) = 'n'; // look at other feed functions
+                CHECK_END
+            }else{
+                *(outBuffer++) = chr;
+                CHECK_END
+            }
+        }
+        if(tok.flags&TOKEN_DOUBLE_QUOTED){
+            *(outBuffer++) = '"';
+            CHECK_END
+        } else if(tok.flags&TOKEN_SINGLE_QUOTED){
+            *(outBuffer++) = '\'';
+            CHECK_END
+        }
+        if(tok.flags&TOKEN_SUFFIX_SPACE && i!=endIndex){
+            *(outBuffer++) = ' ';
+            CHECK_END
+        }
+    }
+    #undef CHECK_END
+    return (u64)outBuffer - (u64)end - bufferSize;
+}
+u32 TokenRange::queryFeedSize() const {
+    using namespace engone;
+    // assert?
+    if(!tokenStream()) return 0;
+    u32 size = 0;
+    for(int i=startIndex();i<endIndex;i++){
+        Token& tok = tokenStream()->get(i);
+        
+        if(!tok.str)
+            continue;
+        
+        if(tok.flags&TOKEN_DOUBLE_QUOTED)
+            size++;
+        else if(tok.flags&TOKEN_SINGLE_QUOTED)
+            size++;
+
+        for(int j=0;j<tok.length;j++){
+            char chr = *(tok.str+j);
+            if(chr=='\n'){
+                size+=2;
+            }else
+                size+=1;
+        }
+        if(tok.flags&TOKEN_DOUBLE_QUOTED)
+            size+=1;
+        else if(tok.flags&TOKEN_SINGLE_QUOTED)
+            size+=1;
+            
+        if(tok.flags&TOKEN_SUFFIX_SPACE && i!=endIndex){
+            size+=1;
+        }
+    }
+    return size;
+}
+void TokenRange::feed(std::string& outBuffer) const {
     using namespace engone;
     // assert?
     if(!tokenStream()) return;
