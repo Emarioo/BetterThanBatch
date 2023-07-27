@@ -376,7 +376,7 @@ Bytecode* CompileSource(CompileOptions options) {
         int bytes = bytecode->getMemoryUsage();
     // _VLOG(
         if(!options.silent){
-            log::out << "Compiled " << FormatUnit((u64)compileInfo.lines) << " lines ("<<FormatUnit((u64)compileInfo.blankLines)<<" blanks, "<<FormatBytes(compileInfo.readBytes)<<" in source files) in " << FormatTime(seconds) << "\n (" << FormatUnit(compileInfo.lines / seconds) << " lines/s)\n";
+            log::out << "Compiled " << FormatUnit((u64)compileInfo.lines) << " lines ("<<FormatUnit((u64)compileInfo.blankLines)<<" blanks, "<<FormatBytes(compileInfo.readBytes)<<" in source files) in " <<log::LIME<< FormatTime(seconds)<<log::SILVER << "\n (" << FormatUnit(compileInfo.lines / seconds) << " lines/s)\n";
         }
     // )
     }
@@ -391,7 +391,8 @@ Bytecode* CompileSource(CompileOptions options) {
         log::out << log::YELLOW<<"Compiler had "<<compileInfo.warnings<<" warning(s)\n";
     }
     if(bytecode) {
-        bytecode->nativeRegistry = compileInfo.nativeRegistry;
+        if(!bytecode->nativeRegistry)
+            bytecode->nativeRegistry = compileInfo.nativeRegistry;
         compileInfo.nativeRegistry = nullptr;
         bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
     }

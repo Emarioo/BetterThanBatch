@@ -34,6 +34,7 @@ const char* InstToString(int type){
         CASE(BC_POP)
         CASE(BC_LI)
         CASE(BC_DATAPTR)
+        CASE(BC_CODEPTR)
 
         CASE(BC_EQ)
         CASE(BC_NEQ)
@@ -57,6 +58,7 @@ const char* InstToString(int type){
         CASE(BC_MEMZERO)
         CASE(BC_MEMCPY)
         CASE(BC_RDTSCP)
+        CASE(BC_CMP_SWAP)
 
         // CASE(BC_SIN)
         // CASE(BC_COS)
@@ -214,6 +216,16 @@ Bytecode* Bytecode::Create(){
     new(ptr)Bytecode();
     return ptr;
 }
+// bool Bytecode::exportSymbol(const std::string& name, u32 instructionIndex){
+//     for(int i=0;i<exportedSymbols.size();i++){
+//         if(exportedSymbols[i].name == name){
+//             return false;
+//         }
+//     }
+//     exportedSymbols.add({name,instructionIndex});
+
+//     return true;
+// }
 void Bytecode::Destroy(Bytecode* code){
     if(!code)
         return;
@@ -221,12 +233,27 @@ void Bytecode::Destroy(Bytecode* code){
     code->~Bytecode();
     engone::Free(code, sizeof(Bytecode));
 }
+void Bytecode::ensureAlignmentInData(int alignment){
+    Assert(alignment > 0);
+    int misalign = (alignment - (dataSegment.used%alignment)) % alignment;
+    if(dataSegment.max < dataSegment.used + misalign){
+        Assert(dataSegment.resize(dataSegment.max*2 + 100));
+    }
+    int index = dataSegment.used;
+    memset((char*)dataSegment.data + index,'_',misalign);
+    dataSegment.used+=misalign;
+}
 int Bytecode::appendData(const void* data, int size){
+    Assert(size > 0);
     if(dataSegment.max < dataSegment.used + size){
         dataSegment.resize(dataSegment.max*2 + 2*size);
     }
     int index = dataSegment.used;
-    memcpy((char*)dataSegment.data + index,data,size);
+    if(data) {
+        memcpy((char*)dataSegment.data + index,data,size);
+    } else {
+        memset((char*)dataSegment.data + index,0,size);
+    }
     dataSegment.used+=size;
     return index;
 }

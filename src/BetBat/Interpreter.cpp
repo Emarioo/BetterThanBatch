@@ -1,5 +1,7 @@
 #include "BetBat/Interpreter.h"
 
+#include <intrin.h>
+
 // needed for FRAME_SIZE
 #include "BetBat/Generator.h"
 
@@ -82,7 +84,7 @@ void* Interpreter::getReg(u8 id){
     Assert("tried to access bad register");
     return 0;
 }
-void yeah(int reg, void* from, void* to){
+void Interpreter::moveMemory(u8 reg, void* from, void* to){
     using namespace engone;
     int size = DECODE_REG_SIZE_TYPE(reg);
     if(from != to) {
@@ -90,16 +92,16 @@ void yeah(int reg, void* from, void* to){
     }
     if(size==BC_REG_8){
         *((u8* ) to) = *((u8* ) from);
-        _ILOG(log::out << (*(i8*)to);)
+        _ILOG(if(!silent) {log::out << (*(i8*)to);})
     }else if(size==BC_REG_16) {
         *((u16*) to) = *((u16*) from);
-        _ILOG(log::out << (*(i16*)to);)
+        _ILOG(if(!silent) {log::out << (*(i16*)to);})
     }else if(size==BC_REG_32)   { 
          *((u32*) to) = *((u32*) from);
-         _ILOG(log::out << (*(i32*)to);)
+         _ILOG(if(!silent) {log::out << (*(i32*)to);})
     }else if(size==BC_REG_64){
          *((u64*) to) = *((u64*) from);
-        _ILOG(log::out << (*(i64*)to);)
+        _ILOG(if(!silent) {log::out << (*(i64*)to);})
     }else 
         log::out <<log::RED <<"bad set to from\n";
         
@@ -118,7 +120,11 @@ void PrintPointer(void* ptr){
         engone::log::out << chr; 
     }
 }
+
 void Interpreter::execute(Bytecode* bytecode){
+    executePart(bytecode, 0, bytecode->length());
+}
+void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endInstruction){
     using namespace engone; 
     Assert(bytecode);
     if(!bytecode->nativeRegistry) {
@@ -130,16 +136,27 @@ void Interpreter::execute(Bytecode* bytecode){
         log::out << log::RED << "Interpreter does not support symbol relocations! Don't use function with @import annotation.\n";
         return;
     }
-    
-    _VLOG(log::out <<log::BLUE<< "##   Interpreter   ##\n";)
+    _VLOG(
+        if(!silent){
+        if(startInstruction==0 && endInstruction == bytecode->length())
+            log::out <<log::BLUE<< "##   Interpreter  ##\n";
+        else
+            log::out <<log::BLUE<< "##   Interpreter ("<<startInstruction<<" - "<<endInstruction<<")  ##\n";
+        }
+    )
     stack.resize(100*1024);
     
-    pc = 0;
+    pc = startInstruction;
     sp = (u64)stack.data+stack.max;
     fp = (u64)stack.data+stack.max;
     dp = (u64)bytecode->dataSegment.data;
     
     auto tp = MeasureTime();
+
+    #ifdef ILOG
+    #undef _ILOG
+    #define _ILOG(X) if(!silent){X};
+    #endif
     
     // _ILOG(log::out << "sp = "<<sp<<"\n";)
 
@@ -151,9 +168,12 @@ void Interpreter::execute(Bytecode* bytecode){
         log::out << log::YELLOW << "Interpreter ran bytecode with zero instructions. Bug?\n";
     Instruction* codePtr = (Instruction*)bytecode->codeSegment.data;
     Bytecode::Location* prevLocation = nullptr;
+    u32 stopAt = endInstruction;
     WHILE_TRUE_N(99999999) {
         // if(pc>=(u64)bytecode->length())
         if(pc>=(u64)length)
+            break;
+        if(pc == stopAt)
             break;
 
         // Instruction* inst = bytecode->get(pc);
@@ -162,6 +182,7 @@ void Interpreter::execute(Bytecode* bytecode){
         // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
         
         #ifdef ILOG
+        if(!silent) {
             auto location = bytecode->getLocation(pc);
             if(location && prevLocation != location){
                 if(location->preDesc.size()!=0)
@@ -180,6 +201,7 @@ void Interpreter::execute(Bytecode* bytecode){
             if(inst)
                 log::out << pc<<": "<<*inst<<", ";
             log::out.flush(); // flush the instruction in case a crash occurs.
+        }
         #endif
 
         executedInstructions++;
@@ -506,7 +528,7 @@ void Interpreter::execute(Bytecode* bytecode){
             void* to = getReg(r1);
 
             // SET_TO_FROM(r1)
-            yeah(r1,from,to);
+            moveMemory(r1,from,to);
 
             _ILOG(log::out << " = "<<(*(u64* )to)<<"\n";)
             break;
@@ -576,6 +598,19 @@ void Interpreter::execute(Bytecode* bytecode){
             _ILOG(log::out << *out<<" = "<< dataOffset<<" + "<< dp <<"\n";)
             break;
         }
+        break; case BC_CODEPTR: {
+            u8 r0 = DECODE_REG0(inst);
+            Assert(DECODE_REG_SIZE(r0) == 8);
+
+            u64* out = (u64*)getReg(r0);
+            u32 dataOffset = *(u32*)(codePtr + pc);
+            pc++;
+            
+            *out = pc + dataOffset;
+            
+            _ILOG(log::out << *out<<" = "<< dataOffset<<" + "<< pc <<"\n";)
+            break;
+        }
         break; case BC_PUSH:{
             u8 r0 = DECODE_REG0(inst);
             int rsize = 1<<DECODE_REG_SIZE_TYPE(r0);
@@ -603,7 +638,7 @@ void Interpreter::execute(Bytecode* bytecode){
                 log::out << log::RED<<"sp (pointer: "<<(uint64)to<<") not aligned by "<<rsize<<" bytes\n";
                 continue;
             }
-            yeah(r0,from,to);
+            moveMemory(r0,from,to);
             
             _ILOG(log::out <<"\n";)
             SP_CHANGE(-rsize)
@@ -635,7 +670,7 @@ void Interpreter::execute(Bytecode* bytecode){
                 log::out << log::RED<<"sp (pointer: "<<(uint64)from<<") not aligned by "<<rsize<<" bytes\n";
                 continue;
             }
-            yeah(r0,from,to);
+            moveMemory(r0,from,to);
             sp+=rsize;
             
             _ILOG(log::out <<"\n";)
@@ -943,6 +978,11 @@ void Interpreter::execute(Bytecode* bytecode){
                     #endif
                     break;
                 }
+                break; case NATIVE_NativeSleep:{
+                    float sleepTime = *(float*)(fp + argoffset + 4);
+                    Sleep(sleepTime);
+                    break;
+                }
                 break; default:{
                     auto* nativeFunction = bytecode->nativeRegistry->findFunction(addr);
                     if(nativeFunction){
@@ -1053,6 +1093,22 @@ void Interpreter::execute(Bytecode* bytecode){
                 } else if(size2==8){
                     *(i64*)out = *(float*)xp;
                 }
+            } else if(type==CAST_FLOAT_UINT){
+                int size = 1<<DECODE_REG_SIZE_TYPE(r1);
+                if(size!=4){
+                    log::out << log::RED << "float needs 4 byte register\n";
+                }
+                int size2 = 1<<DECODE_REG_SIZE_TYPE(r2);
+                // TODO: log out
+                if(size2==1) {
+                    *(u8*)out = *(float*)xp;
+                } else if(size2==2) {
+                    *(u16*)out = *(float*)xp;
+                } else if(size2==4) {
+                    *(u32*)out = *(float*)xp;
+                } else if(size2==8){
+                    *(u64*)out = *(float*)xp;
+                }
             } else if(type==CAST_SINT_FLOAT){
                 int fsize = 1<<DECODE_REG_SIZE_TYPE(r1);
                 int tsize = 1<<DECODE_REG_SIZE_TYPE(r2);
@@ -1068,6 +1124,22 @@ void Interpreter::execute(Bytecode* bytecode){
                     *(float*)out = *(i32*)xp;
                 } else if(fsize==8){
                     *(float*)out = *(i64*)xp;
+                }
+            } else if(type==CAST_UINT_FLOAT){
+                int fsize = 1<<DECODE_REG_SIZE_TYPE(r1);
+                int tsize = 1<<DECODE_REG_SIZE_TYPE(r2);
+                if(tsize!=4){
+                    log::out << log::RED << "float needs 4 byte register\n";
+                }
+                // TODO: log out
+                if(fsize==1) {
+                    *(float*)out = *(u8*)xp;
+                } else if(fsize==2) {
+                    *(float*)out = *(u16*)xp;
+                } else if(fsize==4) {
+                    *(float*)out = *(u32*)xp;
+                } else if(fsize==8){
+                    *(float*)out = *(u64*)xp;
                 }
             } else if(type==CAST_UINT_SINT){
                 int fsize = 1<<DECODE_REG_SIZE_TYPE(r1);
@@ -1138,6 +1210,8 @@ void Interpreter::execute(Bytecode* bytecode){
                 } else if(tsize==8){
                     *(i64*)out = temp;
                 }
+            } else {
+                Assert(("Cast type not implemented",false));
             }
             
             _ILOG(log::out <<"\n";)
@@ -1177,17 +1251,43 @@ void Interpreter::execute(Bytecode* bytecode){
             // log::out << "copied "<<size<<" bytes\n";
             break;
         }
+        break; case BC_RDTSCP: {
+            u8 r0 = DECODE_REG0(inst); // dst
+            u8 r1 = DECODE_REG1(inst); // src
+            u8 r2 = DECODE_REG2(inst); // size
+            Assert(r0 == BC_REG_RAX && r1 == BC_REG_ECX && r2 == BC_REG_RDX);
+                
+            u32 aux=0;
+            u64 count = __rdtscp(&aux);
+
+            void* countp = getReg(r0);
+            void* auxp = getReg(r1);
+
+            *((u64*)countp) = count;
+            *((u32*)auxp) = aux;
+
+            _ILOG(log::out << "\n";)
+            break;
+        }
+        break; default: {
+            log::out << log::RED << "Implement "<< log::PURPLE<< InstToString(opcode)<< "\n";
+            return;
+        }
         } // for switch
     }
-    log::out << "rax: "<<rax<<"\n";
+    if(!silent){
+        log::out << "rax: "<<rax<<"\n";
+    }
     if(userAllocatedBytes!=0){
         log::out << log::RED << "User program leaks "<<userAllocatedBytes<<" bytes\n";
     }
-    if(sp != (u64)stack.data+stack.max){
-        log::out << log::YELLOW<<"sp was "<<(i64)(sp - ((u64)stack.data+stack.max))<<", should be 0\n";
-    }
-    if(fp != (u64)stack.data+stack.max){
-        log::out << log::YELLOW<<"fp was "<<(i64)(fp - ((u64)stack.data+stack.max))<<", should be 0\n";
+    if(!expectValuesOnStack){
+        if(sp != (u64)stack.data+stack.max){
+            log::out << log::YELLOW<<"sp was "<<(i64)(sp - ((u64)stack.data+stack.max))<<", should be 0\n";
+        }
+        if(fp != (u64)stack.data+stack.max){
+            log::out << log::YELLOW<<"fp was "<<(i64)(fp - ((u64)stack.data+stack.max))<<", should be 0\n";
+        }
     }
     auto time = StopMeasure(tp);
     if(!silent){

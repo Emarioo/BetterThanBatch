@@ -35,6 +35,201 @@ engone::Logger& operator<<(engone::Logger& logger, LinkConventions convention){
     return logger << ToString(convention);
 }
 
+StringBuilder& operator<<(StringBuilder& builder, CallConventions convention){
+    return builder << ToString(convention);
+}
+StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
+    return builder << ToString(convention);
+}
+
+/*
+    x86/x64 instructions are complicated and it's not really my fault
+    if things seem confusing. I have tried my best to keep it simple.
+
+    Incomplete layout:    
+    [Prefix] [Opcode] [Mod|REG|R/M] [Displacement] [Immediate]
+
+    Opcode tells you about which instruction to run (add, mul, push, ...)
+    ModRM tells you about which register or memory location to use and how (reg to reg, mem to reg, reg to mem).
+    Displacement holds an offset when refering to memory
+    Some opcodes use immediates. There are multiple versions of add isntructions.
+    Some use immediates and some use registers.
+
+    Mod refers to addressing modes (or forms?). There are 4 values
+    0b11 means register to register.
+    The other 3 values means memory to register (or vice versa)
+    
+
+*/
+
+// https://www.felixcloutier.com/x86/index.html
+// https://defuse.ca/online-x86-assembler.htm#disassembly2
+// https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
+
+#define OPCODE_RET (u8)0xC3
+#define OPCODE_CALL_IMM (u8)0xE8
+#define OPCODE_CALL_RM_SLASH_2 (u8)0xFF
+#define OPCODE_NOP (u8)0x90
+
+// RM_REG means: Add REG to RM, RM = RM + REG
+// REG_RM: REG = REG + RM
+
+// #define OPCODE_ADD_RM_REG (u8)0x01
+#define OPCODE_ADD_REG_RM (u8)0x03
+#define OPCODE_ADD_RM_IMM_SLASH_0 (u8)0x81
+#define OPCODE_ADD_RM_IMM8_SLASH_0 (u8)0x83
+
+#define OPCODE_SUB_REG_RM (u8)0x2B
+#define OPCODE_SUB_RM_IMM_SLASH_5 (u8)0x81
+
+#define OPCODE_MOV_RM_IMM32_SLASH_0 (u8)0xC7
+#define OPCODE_MOV_RM_REG8 (u8)0x88
+#define OPCODE_MOV_RM_REG (u8)0x89
+#define OPCODE_MOV_REG_RM (u8)0x8B
+
+#define OPCODE_MOV_REG_RM8 (u8)0x8A
+
+#define OPCODE_LEA_REG_M (u8)0x8D
+
+// 2 means that the opcode takes 2 bytes
+// note that the bytes are swapped
+#define OPCODE_2_IMUL_REG_RM (u16)0xAF0F
+#define OPCODE_IDIV_RM_SLASH_7 (u8)0xF7
+
+// sign extends EAX into EDX, useful for IDIV
+#define OPCODE_CDQ (u8)0x99
+
+#define OPCODE_XOR_REG_RM (u8)0x33
+#define OPCODE_XOR_RM_IMM8_SLASH_6 (u8)0x83
+
+#define OPCODE_AND_RM_REG (u8)0x21
+
+#define OPCODE_OR_RM_REG (u8)0x09
+
+#define OPCODE_SHL_RM_CL_SLASH_4 (u8)0xD3
+#define OPCODE_SHR_RM_CL_SLASH_5 (u8)0xD3
+#define OPCODE_SHL_RM_IMM8_SLASH_4 (u8)0xC1
+
+// logical and with flags being set, registers are not modified
+#define OPCODE_TEST_RM_REG (u8)0x85
+
+#define OPCODE_NOT_RM_SLASH_2 (u8)0xF7
+
+#define OPCODE_2_SETE_RM8 (u16)0x940F
+#define OPCODE_2_SETNE_RM8 (u16)0x950F
+
+#define OPCODE_2_SETG_RM8 (u16)0x9F0F
+#define OPCODE_2_SETGE_RM8 (u16)0x9D0F
+#define OPCODE_2_SETL_RM8 (u16)0x9C0F
+#define OPCODE_2_SETLE_RM8 (u16)0x9E0F
+
+// zero extension
+#define OPCODE_2_MOVZX_REG_RM8 (u16)0xB60F
+#define OPCODE_2_MOVZX_REG_RM16 (u16)0xB70F
+
+#define OPCODE_2_CMOVZ_REG_RM (u16)0x440F
+
+#define OPCODE_AND_RM_IMM_SLASH_4 (u8)0x81
+#define OPCODE_AND_RM_IMM8_SLASH_4 (u8)0x83
+
+// sign extension
+#define OPCODE_2_MOVSX_REG_RM8 (u16)0xBE0F
+#define OPCODE_2_MOVSX_REG_RM16 (u16)0xBF0F
+// intel manual encourages REX.W with MOVSXD
+#define OPCODE_MOVSXD_REG_RM (u8)0x63
+
+// "FF /6" can be seen in x86 instruction sets.
+// This means that the REG field in ModRM should be 6
+// to use the push instruction
+#define OPCODE_PUSH_RM_SLASH_6 (u8)0xFF
+#define OPCODE_POP_RM_SLASH_0 (u8)0x8F
+
+#define OPCODE_INCR_RM_SLASH_0 (u8)0xFF
+
+#define OPCODE_CMP_RM_IMM8_SLASH_7 (u8)0x83
+#define OPCODE_CMP_REG_RM (u8)0x3B
+
+#define OPCODE_JMP_IMM32 (u8)0xE9
+
+// bytes are flipped
+#define OPCODE_2_JNE_IMM32 (u16)0x850F
+#define OPCODE_2_JE_IMM32 (u16)0x840F
+// je rel8
+#define OPCODE_JE_IMM8 (u8)0x74
+// jmp rel8
+#define OPCODE_JMP_IMM8 (u8)0xEB
+
+
+#define OPCODE_3_MOVSS_RM_REG (u32)0x110fF3
+// manual says "MOVSS xmm1, m32" but register to register might work too, test it though
+#define OPCODE_3_MOVSS_REG_RM (u32)0x100fF3
+// for double
+// #define OPCODE_MOVSD
+
+#define OPCODE_3_ADDSS_REG_RM (u32)0x580FF3
+#define OPCODE_3_SUBSS_REG_RM (u32)0x5C0FF3
+#define OPCODE_3_MULSS_REG_RM (u32)0x590FF3
+#define OPCODE_3_DIVSS_REG_RM (u32)0x5E0FF3
+
+// convert i32 (or i64 with rexw) to float
+#define OPCODE_3_CVTSI2SS_REG_RM (u32)0x2A0FF3
+#define OPCODE_4_REXW_CVTSI2SS_REG_RM (u32)0x2A0F48F3
+// convert float to i32 (or i64 with rexw)
+#define OPCODE_3_CVTSS2SI_REG_RM (u32)0x2D0FF3
+#define OPCODE_4_REXW_CVTSS2SI_REG_RM (u32)0x2D0F48F3
+
+#define OPCODE_2_CMPXCHG_RM_REG (u16)0xB10F
+
+// #define OPCODE_2_FSIN (u16)0xFED9
+// #define OPCODE_2_FCOS (u16)0xFFD9
+// // useful when calculating tan = sin/cos
+// #define OPCODE_2_FSINCOS (u16)0xFBD9
+
+#define OPCODE_3_RDTSCP (u32)0xF9010F
+#define OPCODE_2_RDTSC (u16)0x310F
+
+// the three other modes deal with memory
+#define MODE_REG 0b11
+// straight deref, no displacement
+// SP, BP does not work with this! see intel manual 32-bit addressing forms
+// TODO: Test that this works
+#define MODE_DEREF 0b00
+#define MODE_DEREF_DISP8 0b01
+#define MODE_DEREF_DISP32 0b10
+
+#define SIB_INDEX_NONE 0b100
+
+#define SIB_SCALE_1 0b00
+#define SIB_SCALE_2 0b01
+#define SIB_SCALE_4 0b10
+#define SIB_SCALE_8 0b11
+
+#define PREFIX_REXB (u8)0b01000001
+#define PREFIX_REXX (u8)0b01000010
+#define PREFIX_REXR (u8)0b01000100
+#define PREFIX_REXW (u8)0b01001000
+#define PREFIX_16BIT (u8)0x66
+#define PREFIX_LOCK (u8)0xF0
+
+#define REG_A 0b000
+#define REG_C 0b001
+#define REG_D 0b010
+#define REG_B 0b011
+#define REG_SP 0b100
+#define REG_BP 0b101
+#define REG_SI 0b110
+#define REG_DI 0b111
+
+#define REG_XMM0 0b000
+#define REG_XMM1 0b001
+#define REG_XMM2 0b010
+#define REG_XMM3 0b011
+#define REG_XMM4 0b100
+#define REG_XMM5 0b101
+#define REG_XMM6 0b110
+#define REG_XMM7 0b111
+
+
 bool Program_x64::_reserve(u32 newAllocationSize){
     if(newAllocationSize==0){
         if(_allocationSize!=0){
@@ -85,6 +280,11 @@ void Program_x64::add2(u16 word){
     *(text + head + 1) = *(ptr + 1);
     head+=2;
 }void Program_x64::add3(u32 word){
+    if(head>0){
+        // This is not how you use rex prefix
+        Assert(*(text + head - 1) != PREFIX_REXW);
+    }
+    Assert(0==(word&0xFF000000));
     if(head+3 >= _allocationSize ){
         Assert(_reserve(_allocationSize*3 + 100));
     }
@@ -181,187 +381,6 @@ void Program_x64::printHex(const char* path){
     }
 }
 
-/*
-    x86/x64 instructions are complicated and it's not really my fault
-    if things seem confusing. I have tried my best to keep it simple.
-
-    Incomplete layout:    
-    [Prefix] [Opcode] [Mod|REG|R/M] [Displacement] [Immediate]
-
-    Opcode tells you about which instruction to run (add, mul, push, ...)
-    ModRM tells you about which register or memory location to use and how (reg to reg, mem to reg, reg to mem).
-    Displacement holds an offset when refering to memory
-    Some opcodes use immediates. There are multiple versions of add isntructions.
-    Some use immediates and some use registers.
-
-    Mod refers to addressing modes (or forms?). There are 4 values
-    0b11 means register to register.
-    The other 3 values means memory to register (or vice versa)
-    
-
-*/
-
-// https://www.felixcloutier.com/x86/index.html
-// https://defuse.ca/online-x86-assembler.htm#disassembly2
-// https://www.intel.com/content/www/us/en/developer/articles/technical/intel-sdm.html
-
-#define OPCODE_RET (u8)0xC3
-#define OPCODE_CALL_IMM (u8)0xE8
-#define OPCODE_CALL_RM_SLASH_2 (u8)0xFF
-#define OPCODE_NOP (u8)0x90
-
-// RM_REG means: Add REG to RM, RM = RM + REG
-// REG_RM: REG = REG + RM
-
-// #define OPCODE_ADD_RM_REG (u8)0x01
-#define OPCODE_ADD_REG_RM (u8)0x03
-#define OPCODE_ADD_RM_IMM_SLASH_0 (u8)0x81
-#define OPCODE_ADD_RM_IMM8_SLASH_0 (u8)0x83
-
-#define OPCODE_SUB_REG_RM (u8)0x2B
-#define OPCODE_SUB_RM_IMM_SLASH_5 (u8)0x81
-
-#define OPCODE_MOV_RM_IMM32_SLASH_0 (u8)0xC7
-#define OPCODE_MOV_RM_REG8 (u8)0x88
-#define OPCODE_MOV_RM_REG (u8)0x89
-#define OPCODE_MOV_REG_RM (u8)0x8B
-
-#define OPCODE_MOV_REG_RM8 (u8)0x8A
-
-#define OPCODE_LEA_REG_M (u8)0x8D
-
-// 2 means that the opcode takes 2 bytes
-// note that the bytes are swapped
-#define OPCODE_2_IMUL_REG_RM (u16)0xAF0F
-#define OPCODE_IDIV_RM_SLASH_7 (u8)0xF7
-
-// sign extends EAX into EDX, useful for IDIV
-#define OPCODE_CDQ (u8)0x99
-
-#define OPCODE_XOR_REG_RM (u8)0x33
-#define OPCODE_XOR_RM_IMM8_SLASH_6 (u8)0x83
-
-#define OPCODE_AND_RM_REG (u8)0x21
-
-#define OPCODE_OR_RM_REG (u8)0x09
-
-#define OPCODE_SHL_RM_CL_SLASH_4 (u8)0xD3
-#define OPCODE_SHR_RM_CL_SLASH_5 (u8)0xD3
-#define OPCODE_SHL_RM_IMM8_SLASH_4 (u8)0xC1
-
-// logical and with flags being set, registers are not modified
-#define OPCODE_TEST_RM_REG (u8)0x85
-
-#define OPCODE_NOT_RM_SLASH_2 (u8)0xF7
-
-#define OPCODE_2_SETE_RM8 (u16)0x940F
-#define OPCODE_2_SETNE_RM8 (u16)0x950F
-
-#define OPCODE_2_SETG_RM8 (u16)0x9F0F
-#define OPCODE_2_SETGE_RM8 (u16)0x9D0F
-#define OPCODE_2_SETL_RM8 (u16)0x9C0F
-#define OPCODE_2_SETLE_RM8 (u16)0x9E0F
-
-// zero extension
-#define OPCODE_2_MOVZX_REG_RM8 (u16)0xB60F
-#define OPCODE_2_MOVZX_REG_RM16 (u16)0xB70F
-
-#define OPCODE_2_CMOVZ_REG_RM (u16)0x440F
-
-#define OPCODE_AND_RM_IMM_SLASH_4 (u8)0x81
-
-// sign extension
-#define OPCODE_2_MOVSX_REG_RM8 (u16)0xBE0F
-#define OPCODE_2_MOVSX_REG_RM16 (u16)0xBF0F
-// intel manual encourages REX.W with MOVSXD
-#define OPCODE_MOVSXD_REG_RM (u8)0x63
-
-// "FF /6" can be seen in x86 instruction sets.
-// This means that the REG field in ModRM should be 6
-// to use the push instruction
-#define OPCODE_PUSH_RM_SLASH_6 (u8)0xFF
-#define OPCODE_POP_RM_SLASH_0 (u8)0x8F
-
-#define OPCODE_INCR_RM_SLASH_0 (u8)0xFF
-
-#define OPCODE_CMP_RM_IMM8_SLASH_7 (u8)0x83
-#define OPCODE_CMP_REG_RM (u8)0x3B
-
-#define OPCODE_JMP_IMM32 (u8)0xE9
-
-// bytes are flipped
-#define OPCODE_2_JNE_IMM32 (u16)0x850F
-#define OPCODE_2_JE_IMM32 (u16)0x840F
-// je rel8
-#define OPCODE_JE_IMM8 (u8)0x74
-// jmp rel8
-#define OPCODE_JMP_IMM8 (u8)0xEB
-
-
-#define OPCODE_3_MOVSS_RM_REG (u32)0x110fF3
-// manual says "MOVSS xmm1, m32" but register to register might work too, test it though
-#define OPCODE_3_MOVSS_REG_RM (u32)0x100fF3
-// for double
-// #define OPCODE_MOVSD
-
-#define OPCODE_3_ADDSS_REG_RM (u32)0x580FF3
-#define OPCODE_3_SUBSS_REG_RM (u32)0x5C0FF3
-#define OPCODE_3_MULSS_REG_RM (u32)0x590FF3
-#define OPCODE_3_DIVSS_REG_RM (u32)0x5E0FF3
-
-// convert i32 (or i64 with rexw) to float
-#define OPCODE_3_CVTSI2SS_REG_RM (u32)0x2A0FF3
-// convert float to i32 (or i64 with rexw)
-#define OPCODE_3_CVTSS2SI_REG_RM (u32)0x2D0FF3
-
-// #define OPCODE_2_FSIN (u16)0xFED9
-// #define OPCODE_2_FCOS (u16)0xFFD9
-// // useful when calculating tan = sin/cos
-// #define OPCODE_2_FSINCOS (u16)0xFBD9
-
-#define OPCODE_3_RDTSCP (u32)0xF9010F
-#define OPCODE_2_RDTSC (u16)0x310F
-
-// the three other modes deal with memory
-#define MODE_REG 0b11
-// straight deref, no displacement
-// SP, BP does not work with this! see intel manual 32-bit addressing forms
-// TODO: Test that this works
-#define MODE_DEREF 0b00
-#define MODE_DEREF_DISP8 0b01
-#define MODE_DEREF_DISP32 0b10
-
-#define SIB_INDEX_NONE 0b100
-
-#define SIB_SCALE_1 0b00
-#define SIB_SCALE_2 0b01
-#define SIB_SCALE_4 0b10
-#define SIB_SCALE_8 0b11
-
-#define PREFIX_REXB (u8)0b01000001
-#define PREFIX_REXX (u8)0b01000010
-#define PREFIX_REXR (u8)0b01000100
-#define PREFIX_REXW (u8)0b01001000
-#define PREFIX_16BIT (u8)0x66
-
-#define REG_A 0b000
-#define REG_C 0b001
-#define REG_D 0b010
-#define REG_B 0b011
-#define REG_SP 0b100
-#define REG_BP 0b101
-#define REG_SI 0b110
-#define REG_DI 0b111
-
-#define REG_XMM0 0b000
-#define REG_XMM1 0b001
-#define REG_XMM2 0b010
-#define REG_XMM3 0b011
-#define REG_XMM4 0b100
-#define REG_XMM5 0b101
-#define REG_XMM6 0b110
-#define REG_XMM7 0b111
-
 u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false){
     u8 size = DECODE_REG_SIZE(bcreg);
     Assert(size&handlingSizes);
@@ -427,7 +446,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     addressTranslation.resize(bytecode->length());
 
     struct RelativeRelocation {
-        RelativeRelocation(i32 ip, i32 x64, i32 bc) : currentIP(ip), immediateToModify(x64), bcAddress(bc) {}
+        // RelativeRelocation(i32 ip, i32 x64, i32 bc) : currentIP(ip), immediateToModify(x64), bcAddress(bc) {}
         i32 currentIP=0; // It's more of a nextIP rarther than current. Needed when calculating relative offset
         // Address MUST point to an immediate (or displacement?) with 4 bytes.
         // You can add some flags to this struct for more variation.
@@ -453,7 +472,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         
         _CLOG(log::out << bcIndex << ": "<< inst;)
         if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JE || opcode==BC_JNE || opcode==BC_CALL || opcode==BC_DATAPTR|
-            opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32){
+            opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR){
             bcIndex++;
             imm = bytecode->getIm(bcIndex);
             addressTranslation[bcIndex] = prog->size();
@@ -1057,6 +1076,26 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->dataRelocations.add(reloc);
                 break;
             }
+            break; case BC_CODEPTR: {
+                u8 size = DECODE_REG_SIZE(op0);
+                Assert(size==8);
+
+                prog->add(PREFIX_REXW);
+                prog->add(OPCODE_LEA_REG_M);
+                prog->addModRM_rip(BCToProgramReg(op0,8), (u32)0);
+                RelativeRelocation reloc{};
+                reloc.immediateToModify = prog->size()-4;
+                reloc.currentIP = prog->size();
+                reloc.bcAddress = imm;
+                relativeRelocations.add(reloc);
+                // NamedRelocation reloc{};
+                // reloc.dataOffset = imm;
+                // reloc.
+                // reloc.textOffset = prog->size() - 4;
+                // prog->dataRelocations.add(reloc);
+                // prog->namedRelocations.add();
+                break;
+            }
             break; case BC_PUSH: {
                 if(IS_REG_XMM(op0)) {
                     u8 reg = BCToProgramReg(op0, 4|8, true);
@@ -1127,8 +1166,12 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             break; case BC_JMP: {
                 //NOTE: The online disassembler I use does not disassemble relative jumps correctly.
                 prog->add(OPCODE_JMP_IMM32);
-                relativeRelocations.add({(i32)prog->size()+4,(i32)prog->size(), imm});
                 prog->add4((u32)0);
+                RelativeRelocation reloc{};
+                reloc.currentIP = prog->size();
+                reloc.bcAddress = imm;
+                reloc.immediateToModify = prog->size()-4;
+                relativeRelocations.add(reloc);
                 break;
             }
             break; case BC_JNE: {
@@ -1145,8 +1188,13 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 
                 // I know, it's kind of funny that we use JE when the bytecode instruction is JNE
                 prog->add2(OPCODE_2_JE_IMM32);
-                relativeRelocations.add({(i32)prog->size()+4,(i32)prog->size(), imm});
                 prog->add4((u32)0);
+                
+                RelativeRelocation reloc{};
+                reloc.currentIP = prog->size();
+                reloc.bcAddress = imm;
+                reloc.immediateToModify = prog->size()-4;
+                relativeRelocations.add(reloc);
                 break;
             }
             break; case BC_CAST: {
@@ -1208,8 +1256,24 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     prog->add((u8)-8);
 
                     if(tsize == 8)
-                        prog->add(PREFIX_REXW);
-                    prog->add3(OPCODE_3_CVTSS2SI_REG_RM);
+                        prog->add4(OPCODE_4_REXW_CVTSS2SI_REG_RM);
+                    else
+                        prog->add3(OPCODE_3_CVTSS2SI_REG_RM);
+                    prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                    prog->add((u8)-8);
+
+                } else if(type==CAST_FLOAT_UINT){
+                    Assert(fsize == 4);
+
+                    prog->add(OPCODE_MOV_RM_REG);
+                    prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                    prog->add((u8)-8);
+
+                    if(tsize == 8)
+                        prog->add4(OPCODE_4_REXW_CVTSS2SI_REG_RM);
+                    else
+                        prog->add3(OPCODE_3_CVTSS2SI_REG_RM);
+
                     prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                     prog->add((u8)-8);
 
@@ -1226,11 +1290,40 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add(OPCODE_AND_RM_IMM_SLASH_4);
                         prog->addModRM(MODE_REG, 4, freg);
                         prog->add4((u32)0xFF);
-                    } else if(fsize == 8) {
-                        prog->add(PREFIX_REXW);
                     }
+                    if(fsize == 8)
+                        prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                    else
+                        prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
                     
-                    prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                    prog->addModRM(MODE_REG, REG_XMM0, freg);
+
+                    prog->add3(OPCODE_3_MOVSS_RM_REG);
+                    prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                    prog->add((u8)-8);
+
+                    prog->add(OPCODE_MOV_REG_RM);
+                    prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                    prog->add((u8)-8);
+                } else if(type==CAST_UINT_FLOAT){
+                    Assert(tsize == 4);
+                    
+                    if(fsize == 2){
+                        prog->add(PREFIX_REXW);
+                        prog->add(OPCODE_AND_RM_IMM_SLASH_4);
+                        prog->addModRM(MODE_REG, 4, freg);
+                        prog->add4((u32)0xFFFF);
+                    } else if(fsize == 1){
+                        prog->add(PREFIX_REXW);
+                        prog->add(OPCODE_AND_RM_IMM_SLASH_4);
+                        prog->addModRM(MODE_REG, 4, freg);
+                        prog->add4((u32)0xFF);
+                    }
+                    if(fsize == 8||fsize==4)
+                        prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                    else
+                        prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                    
                     prog->addModRM(MODE_REG, REG_XMM0, freg);
 
                     prog->add3(OPCODE_3_MOVSS_RM_REG);
@@ -1300,7 +1393,6 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     }
                 } else {
                     Assert(("Cast type not implemented in x64 backend",false));
-                    // floats... yay
                 }
 
                 break;
@@ -1326,8 +1418,13 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     prog->add4((u32)0);
                 } else if (linkConvention == LinkConventions::NONE){ // or export
                     prog->add(OPCODE_CALL_IMM);
-                    relativeRelocations.add({(i32)prog->size()+4,(i32)prog->size(), imm});
                     prog->add4((u32)0);
+                    
+                    RelativeRelocation reloc{};
+                    reloc.currentIP = prog->size();
+                    reloc.bcAddress = imm;
+                    reloc.immediateToModify = prog->size()-4;
+                    relativeRelocations.add(reloc);
                 } else if (linkConvention == LinkConventions::NATIVE){
                     //-- native function
                     switch(imm) {
@@ -1553,6 +1650,30 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->add(OPCODE_OR_RM_REG);
                 prog->addModRM(MODE_REG, REG_D, REG_A);
                 
+                break;
+            }
+            break; case BC_CMP_SWAP: {
+                // This instruction uses edx:eax and ecx.
+                // That is why the operands should specify these registers to indicate
+                // that they are used. This isn't a must, you could edx, eax and ecx before
+                // executing the instruction and then mov values into the operands
+                Assert(op0 == BC_REG_RBX && op1 == BC_REG_EAX && op2 == BC_REG_EDX);
+
+                u8 regPtr = BCToProgramReg(op0);
+                u8 regOld = BCToProgramReg(op1);
+                u8 regNew = BCToProgramReg(op2);
+                
+                prog->add(PREFIX_LOCK);
+                prog->add2(OPCODE_2_CMPXCHG_RM_REG);
+                prog->addModRM(MODE_DEREF, regNew, regPtr);
+
+                prog->add2(OPCODE_2_SETE_RM8);
+                prog->addModRM(MODE_REG, 0, regOld);
+
+                prog->add(OPCODE_AND_RM_IMM8_SLASH_4);
+                prog->addModRM(MODE_REG, 4, regOld);
+                prog->add((u8)0x1);
+
                 break;
             }
             // break; case BC_SIN: {

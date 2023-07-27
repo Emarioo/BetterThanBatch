@@ -59,7 +59,7 @@ namespace engone {
 	char* Logger::ThreadInfo::ensure(uint32 bytes) {
 		if (lineBuffer.max < lineBuffer.used + bytes + 1) { // +1 for \0
 			// TODO: increase by max*2x instead of used+bytes?
-			bool yes = lineBuffer.resize(lineBuffer.max*2 + bytes + 1);
+			bool yes = lineBuffer.resize(lineBuffer.max*2 + 2*bytes + 1);
 			if (!yes)
 				return nullptr;
 		}
@@ -270,19 +270,20 @@ namespace engone {
 
 		if (len == 0) return *this;
 
-		auto& info = getThreadInfo();
+		// auto& info = getThreadInfo();
 
-		char* buf = info.ensure(len);
-		if (buf) {
-			memcpy(buf, value, len);
-			info.use(len);
-			onEmptyLine=false;
-		} else {
-			printf("[Logger] : Failed ensuring %u bytes\n", len); \
-		}
-		if (value[len - 1] == '\n') {
-			flush();
-		}
+		print((char*)value, len);
+		// char* buf = info.ensure(len);
+		// if (buf) {
+		// 	memcpy(buf, value, len);
+		// 	info.use(len);
+		// 	onEmptyLine=false;
+		// } else {
+		// 	printf("[Logger] : Failed ensuring %u bytes\n", len); \
+		// }
+		// if (value[len - 1] == '\n') {
+		// 	flush();
+		// }
 		return *this;
 	}
 	Logger& Logger::operator<<(char* value) {

@@ -77,7 +77,7 @@ RootMacro* PreprocInfo::createRootMacro(const Token& name){
 
 void CertainMacro::addParam(const Token& name){
     Assert(name.length!=0);
-    parameters.push_back(name);
+    parameters.add(name);
     // auto pair = parameterMap.find(name);
     // if(pair == parameterMap.end()){
     //     parameterMap[name] = parameters.size()-1;
@@ -249,7 +249,7 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     info.next(); // define
     attempt = false;
     
-    Token name = info.get(info.at()+1);
+    Token name = info.next();
     
     if(name.flags&TOKEN_MASK_QUOTED){
         ERR_HEAD3(name, "Macro names cannot be quoted ("<<name<<").\n\n";
@@ -263,7 +263,6 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
         )
         return SignalAttempt::FAILURE;
     }
-    info.next();
     
     // if(info.matchMacro(name)){
     //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n";   
@@ -288,13 +287,27 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
             }
             
             if(token=="...") {
-                defTemp.indexOfVariadic = defTemp.parameters.size();
-            }
-            // TODO: token must be valid name
-            if(!IsName(token)){
+                if(defTemp.indexOfVariadic == -1) {
+                    defTemp.indexOfVariadic = defTemp.parameters.size();
+                    defTemp.addParam(token);
+                } else {
+                    if(!hadError){
+                        ERR_SECTION(
+                            ERR_HEAD(token)
+                            ERR_MSG("Macros can only have 1 variadic argument.")
+                            ERR_LINE(defTemp.parameters[defTemp.indexOfVariadic], "previous")
+                            ERR_LINE(token, "not allowed")
+                        )
+                    }
+                    
+                    hadError=true;
+                }
+            } else if(!IsName(token)){
                 if(!hadError){
-                    ERR_HEAD3(token, "'"<<token<<"' is not a valid name for arguments.\n\n";
-                        ERR_LINE2(token.tokenIndex, "bad");
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("'"<<token<<"' is not a valid name for arguments. The first character must be an alpha (a-Z) letter, the rest can be alpha and numeric (0-9). '...' is also available to specify a variadic argument.")
+                        ERR_LINE(token, "bad");
                     )
                 }
                 hadError=true;
@@ -1948,6 +1961,8 @@ TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
     // TokenStream::Destroy(info.outTokens);
     if(info.tempStream)
         TokenStream::Destroy(info.tempStream);
+
+    info.compileInfo->errors += info.errors;
     
     info.outTokens->streamName = info.inTokens->streamName;
     info.outTokens->finalizePointers();
@@ -1994,5 +2009,7 @@ void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
             info.inTokens->addImport(name,"");
         }
     }
+    
+    info.compileInfo->errors += info.errors;
 }
 #undef _macros

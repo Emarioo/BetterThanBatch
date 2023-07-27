@@ -63,6 +63,9 @@ fn @hide _print(t: f32){
     mul: u64 = 1;
     acc: u64 = 1;
     precision = 17;
+    // decrease precision for large numbers
+    if exp >= 128
+        precision -= ((exp+1) & 0x7F)>>2
     for i: 0..precision {
         mul *= 5;
         acc *= 10;
@@ -86,6 +89,13 @@ fn @hide _print(t: f32){
             digit = acc % 10;
             acc = acc / 10;
         }
+        
+        //     printi(index);
+        //     printc(' ');
+        //     printi(arr.len);
+        //     printc(' ');
+        //     printi(digit);
+        //     printc('\n');
         if(index == arr.len && digit == 0) {
             precision--;
             continue

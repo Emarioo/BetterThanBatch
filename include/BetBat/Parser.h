@@ -11,6 +11,8 @@ struct ParseInfo {
     AST* ast=nullptr;
     CompileInfo* compileInfo=nullptr;
 
+    int errors = 0;
+
     ScopeId currentScopeId=0;
     std::string currentNamespace = "";
 

@@ -150,3 +150,38 @@ void PrintCode(int index, TokenStream* stream, const char* message){
     // range.tokenStream = stream;
     PrintCode(range, message);
 }
+void PrintExample(int line, const StringBuilder& stringBuilder){
+    using namespace engone;
+
+    const log::Color codeColor = log::SILVER;
+    const log::Color markColor = log::CYAN;
+
+
+    int lastLine = line;
+    for(int i=0;i<stringBuilder.size();i++){
+        char chr = stringBuilder.data()[i];
+        if(chr == '\n') {
+            lastLine++;
+        }
+    }
+    int lineDigits = lastLine>0 ? ((int)log10(lastLine)+1) : 1;
+    
+    int currentLine = line;
+    for(int i=0;i<stringBuilder.size();i++){
+        char chr = stringBuilder.data()[i];
+        if(chr == '\n' || i==0) {
+            int numlen = currentLine>0 ? ((int)log10(currentLine)+1) : 1;
+            for(int j=0;j<lineDigits-numlen;j++)
+                log::out << " ";
+            const char* const linestr = " | ";
+            static const int linestrlen = strlen(linestr);
+            log::out << codeColor << currentLine<<linestr;
+
+            if(chr=='\n') {
+                currentLine++;
+            }
+        }
+        log::out << chr;
+    }
+    log::out << "\n";
+}

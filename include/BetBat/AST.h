@@ -33,7 +33,10 @@ enum PrimitiveType : u32 {
     AST_STRING, // converted to char[]
     AST_NULL, // converted to void*
 
+    AST_FUNC_REFERENCE,
+
     AST_TRUE_PRIMITIVES,
+
 
     AST_POLY,
 
@@ -290,6 +293,8 @@ struct FuncImpl {
         TypeId typeId{};
         int offset=0;
     };
+    u32 usages = 0;
+    bool isUsed() { return usages!=0; }
     DynamicArray<Spot> argumentTypes;
     DynamicArray<Spot> returnTypes;
     int argSize=0;
@@ -314,9 +319,10 @@ struct Identifier {
     FnOverloads funcOverloads{};
 };
 struct VariableInfo {
-    i32 frameOffset = 0;
+    i32 dataOffset = 0; // offset in frame, or offset in data segment
     i32 memberIndex = -1; // negative = normal variable, positive = variable in struct
     TypeId typeId=AST_VOID;
+    bool globalData = false; // false
     // ScopeId scopeId = 0; // do you really need this variable? can you get the identifier instead?
 
 };
@@ -357,6 +363,14 @@ struct ASTExpression : ASTNode {
     bool isValue=false;
     TypeId typeId = {}; // not polymorphic, primitive or operation
     
+    // enum ConstantType {
+    //     NONE,
+    //     CONSTANT
+    // };
+    bool isConstant() { return constantValue; }
+    bool constantValue = false;
+    bool computeWhenPossible = false;
+
     union {
         i64 i64Value=0;
         float f32Value;
@@ -425,7 +439,6 @@ struct ASTStatement : ASTNode {
             return assignString.isValid();
         }
     };
-    bool rangedForLoop=false; // otherwise sliced for loop
     DynamicArray<VarName> varnames;
     std::string* alias = nullptr;
     // TypeId typeId={};
@@ -451,6 +464,8 @@ struct ASTStatement : ASTNode {
 
     PolyVersions<DynamicArray<TypeId>> versions_expresssionTypes; // types from firstExpression
 
+    bool rangedForLoop=false; // otherwise sliced for loop
+    bool globalAssignment=false; // for variables, indicates whether variable refers to global data in data segment
     bool sharedContents = false; // this node is not the owner of it's nodes.
 
     void print(AST* ast, int depth);
@@ -558,12 +573,7 @@ struct ASTFunction : ASTNode {
 struct ASTScope : ASTNode {
     std::string* name = 0; // namespace
     ScopeId scopeId=0;
-    // ASTScope* next = 0;
-    enum Type {
-        BODY,
-        NAMESPACE,
-    };
-    Type type = BODY;
+    bool isNamespace = false;
 
     DynamicArray<ASTStruct*> structs{};
     void add(ASTStruct* astStruct, ASTStruct* tail = 0);
@@ -582,17 +592,18 @@ struct ASTScope : ASTNode {
     // using statements do. The code below should
     // maintain the order necessary to make using
     // work with functions and structs.
-    // enum SpoType : u8 {
-    //     STRUCT,
-    //     ENUM,
-    //     FUNCTION,
-    //     NAMESPACE,
-    // };
-    // struct Spot {
-    //     SpoType spotType;
-    //     u32 index;
-    // };
-    // DynamicArray<Spot> contentOrder{};
+    enum SpoType : u8 {
+        STRUCT,
+        ENUM,
+        FUNCTION,
+        NAMESPACE,
+        STATEMENT,
+    };
+    struct Spot {
+        SpoType spotType;
+        u32 index;
+    };
+    DynamicArray<Spot> contentOrder{};
 
     DynamicArray<ASTStatement*> statements{};    
     void add(ASTStatement* astStatement, ASTStatement* tail = 0);

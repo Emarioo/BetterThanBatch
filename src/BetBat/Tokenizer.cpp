@@ -1241,29 +1241,39 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
         log::out << log::LIME<<" @import '"<<str<<"'\n";
     }   
     #endif
-
+    token.str = (char*)outStream->tokenData.data + (uint64)token.str;
+    token.tokenIndex = outStream->length()-1;
+    token.tokenStream = outStream;
     outStream->finalizePointers();
-    // Last token should have line feed.
-    if(outStream->length()>0)
-        outStream->get(outStream->length()-1).flags |=TOKEN_SUFFIX_LINE_FEED;
     
     if(token.length!=0){
         // error happened in a way where we need to add a line feed
         _TLOG(log::out << "\n";)
     }
+
+    // README: Seemingly strange tokens can appear if you miss a quote somewhere.
+    //  This is not a bug. It happens since quoted tokens are allowed across lines.
     
     if(inQuotes){
-        log::out<<log::RED<<"TokenError: Missing end quote for '"<<token << "' at "<< token.line<<":"<<token.column<<"\n";
+        // TODO: Improve error message for tokens
+        log::out<<log::RED<<"TokenError: Missing end quote at "<<outStream->streamName <<":"<< token.line<<":"<<token.column<<"\n";
+        outStream->tokens.used--; // last token is corrupted and should be removed
         goto Tokenize_END;
     }
     if(inComment){
         log::out<<log::RED<<"TokenError: Missing end comment for "<<token.line<<":"<<token.column<<"\n";
+        outStream->tokens.used--; // last token is corrupted and should be removed
         goto Tokenize_END;
     }
     if(token.length!=0){
         log::out << log::RED<<"TokenError: Token '" << token << "' was left incomplete\n";
         goto Tokenize_END;
     }
+
+    // Last token should have line feed.
+    if(outStream->length()>0)
+        outStream->get(outStream->length()-1).flags |=TOKEN_SUFFIX_LINE_FEED;
+
     if(outStream->tokens.used!=0){
         Token* lastToken = ((Token*)outStream->tokens.data+outStream->tokens.used-1);
         int64 extraSpace = (int64)outStream->tokenData.data + outStream->tokenData.max - (int64)lastToken->str - lastToken->length;
@@ -1279,9 +1289,8 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
             goto Tokenize_END;
     }
     
-    
 Tokenize_END:
-    
+    // log::out << "Last: "<<outStream->get(outStream->length()-1)<<"\n";
     return outStream;
 }
 

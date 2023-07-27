@@ -16,7 +16,7 @@
 
 
 #undef ERR_SECTION
-#define ERR_SECTION(CONTENT) { info.errors++; StringBuilder err_type = "Parse error, E0000"; CONTENT }
+#define ERR_SECTION(CONTENT) { BASE_SECTION("Parse error, E0000"); CONTENT }
 
 /*
     Declaration of functions
@@ -494,7 +494,7 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
                 *str += ">";
                 typeToken = *str;
             }
-
+            Assert(arrayLength==-1);
             // std::string temps = typeToken;
             
             TypeId typeId = info.ast->getTypeString(typeToken);
@@ -527,6 +527,11 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             break;
         }else{
             if(!hadRecentError){ // no need to print message again, the user already know there are some issues here.
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").")
+                    ERR_LINE(token,"bad")
+                )
                 ERR_HEAD3(token,"Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").\n\n";
                     if(typeEndToken!=-1){
                         TokenRange temp{};
@@ -645,9 +650,9 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
             // test other parse type
             info.next(); // prevent infinite loop
         }
-        if(result==SignalAttempt::FAILURE){
+        // if(result==SignalAttempt::FAILURE){
             
-        }
+        // }
             
         // We add the AST structures even during error to
         // avoid leaking memory.
@@ -866,6 +871,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
     }
 
     std::vector<ASTExpression*> values;
+    std::vector<Token> extraTokens; // ops, assignOps and castTypes doesn't store the token so you know where it came from. We therefore use this array.
     std::vector<OperationType> ops;
     std::vector<OperationType> assignOps;
     // std::vector<OperationType> directOps; // ! & *
@@ -874,6 +880,14 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
     // extra info for directOps
     std::vector<Token> namespaceNames;
     defer { for(auto e : values) info.ast->destroy(e); };
+
+    bool shouldComputeExpression = false;
+
+    Token& token = info.get(info.at()+1);
+    if(Equal(token,"@run")) {
+        info.next();
+        shouldComputeExpression = true;
+    }
 
     bool negativeNumber=false;
     bool expectOperator=false;
@@ -1058,6 +1072,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 values.pop_back();
                 tmp->right = indexExpr;
                 values.push_back(tmp);
+                tmp->constantValue = tmp->left->constantValue && tmp->right->constantValue;
                 continue;
             } else if(Equal(token,"++")){
                 info.next();
@@ -1073,6 +1088,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tmp->left = values.back();
                 values.pop_back();
                 values.push_back(tmp);
+                tmp->constantValue = tmp->left->constantValue;
 
                 continue;
             } else if(Equal(token,"--")){
@@ -1089,6 +1105,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tmp->left = values.back();
                 values.pop_back();
                 values.push_back(tmp);
+                tmp->constantValue = tmp->left->constantValue;
 
                 continue;
             } else if(Equal(token,")")){
@@ -1097,7 +1114,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             } else {
                 ending = true;
                 if(Equal(token,";")){
-                    info.next();
+                    // info.next();
                 } else {
                     Token prev = info.now();
                     // Token next = info.get(info.at()+2);
@@ -1163,6 +1180,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // castTypes.push_back(dt);
                 TypeId strId = info.ast->getTypeString(tokenTypeId);
                 castTypes.push_back(strId);
+                extraTokens.push_back(token);
                 attempt=false;
                 continue;
             } else if(Equal(token,"-")){
@@ -1187,7 +1205,6 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             if(IsInteger(token)){
                 token = info.next();
                 
-                // TODO: handle to large numbers
                 Assert(token.str[0]!='-');
                 bool printedError = false;
                 u64 num=0;
@@ -1218,14 +1235,15 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     }
                 }else{
                     if ((num&0xFFFFFFFF00000000) == 0) {
-                        tmp = info.ast->createExpression(TypeId(AST_INT32));
+                        tmp = info.ast->createExpression(TypeId(AST_UINT32));
                     } else {
-                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                        tmp = info.ast->createExpression(TypeId(AST_UINT64));
                     }
                 }
                 tmp->i64Value = negativeNumber ? -num : num;
                 negativeNumber = false;
                 
+                tmp->constantValue = true;
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
@@ -1239,6 +1257,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     tmp->f32Value = -tmp->f32Value;
                 negativeNumber=false;
                 values.push_back(tmp);
+                tmp->constantValue = true;
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1268,6 +1287,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 }
                 tmp->i64Value =  ConvertHexadecimal(token); // TODO: Only works with 32 bit or 16,8 I suppose.
                 values.push_back(tmp);
+                tmp->constantValue = true;
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1281,9 +1301,11 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 if((token.flags&TOKEN_SINGLE_QUOTED)){
                     tmp = info.ast->createExpression(TypeId(AST_CHAR));
                     tmp->charValue = *token.str;
+                    tmp->constantValue = true;
                 }else if((token.flags&TOKEN_DOUBLE_QUOTED)) {
                     tmp = info.ast->createExpression(TypeId(AST_STRING));
                     tmp->name = token;
+                    tmp->constantValue = true;
                     // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
                     // new(tmp->name)std::string(token);
 
@@ -1304,6 +1326,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 info.next();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_BOOL));
                 tmp->boolValue = Equal(token,"true");
+                tmp->constantValue = true;
                 values.push_back(tmp);
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
@@ -1359,6 +1382,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NULL));
                 values.push_back(tmp);
+                tmp->constantValue = true;
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1374,6 +1398,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 ASTExpression* left=nullptr;
                 SignalAttempt result = ParseExpression(info, left, false);
                 tmp->left = left;
+                tmp->constantValue = left->constantValue;
                 
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1384,6 +1409,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 SignalDefault result = ParseTypeId(info,token, nullptr);
 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NAMEOF));
+                tmp->constantValue = true; // IMPORTANT: Won't be constant if you use the same method as sizeof
                 tmp->name = token;
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1677,8 +1703,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 if(!IsSingleOp(op1) && values.size()<2)
                     break;
                 OperationType op2 = ops[ops.size()-1];
-                // if(OpPrecedence(op1)>=OpPrecedence(op2)){
-                if(OpPrecedence(op1)>OpPrecedence(op2)){
+                if(OpPrecedence(op1)>=OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
+                // if(OpPrecedence(op1)>OpPrecedence(op2)){ // this code cause this: 3 = 3-1-1
                     nowOp = op1;
                     ops[ops.size()-2] = op2;
                     ops.pop_back();
@@ -1687,7 +1713,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     break;
                 }
             }else if(ending){
-                if(ops.size()<1){
+                if(ops.size()==0){
                     // NOTE: Break on base case when we end with no operators left and with one value. 
                     break;
                 }
@@ -1705,6 +1731,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             if(IsSingleOp(nowOp)){
                 // TODO: tokenRange is not properly set!
                 val->tokenRange.firstToken = er->tokenRange.firstToken;
+                val->tokenRange.endIndex = er->tokenRange.endIndex;
                 // val->tokenRange = er->tokenRange;
                 if(nowOp == AST_FROM_NAMESPACE){
                     Token& tok = namespaceNames.back();
@@ -1717,10 +1744,17 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 } else if(nowOp == AST_CAST){
                     val->castType = castTypes.back();
                     castTypes.pop_back();
+                    Token extraToken = extraTokens.back();
+                    extraTokens.pop_back();
+                    val->tokenRange.firstToken = extraToken;
+                    val->tokenRange.endIndex = er->tokenRange.firstToken.tokenIndex;
                 } else {
                     // val->tokenRange.startIndex--;
                 }
                 val->left = er;
+                if(val->typeId != AST_REFER) {
+                    val->constantValue = er->constantValue;
+                }
             } else if(values.size()>0){
                 auto el = values.back();
                 values.pop_back();
@@ -1735,6 +1769,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     val->assignOpType = assignOps.back();
                     assignOps.pop_back();
                 }
+                val->constantValue = val->left->constantValue && val->right->constantValue;
             }
 
             values.push_back(val);
@@ -1744,6 +1779,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
         expectOperator=!expectOperator;
         if(ending){
             expression = values.back();
+            expression->computeWhenPossible = shouldComputeExpression;
             Assert(values.size()==1);
 
             // we have a defer above which destroys expressions which is why we
@@ -2582,24 +2618,24 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
     using namespace engone;
     MEASURE;
     _PLOG(FUNC_ENTER)
-    
-    // if(info.tokens->length() < info.index+2){
-    //     // not enough tokens for assignment
-    //     if(attempt){
-    //         return PARSE_BAD_ATTEMPT;
-    //     }
-    //     ERR_HEAD3()
-    //     _PLOG(log::out <<log::RED<< "CompilerError: to few tokens for assignment\n";)
-    //     // info.nextLine();
-    //     return PARSE_ERROR;
-    // }
-    // int error=PARSE_SUCCESS;
+
+    bool globalAssignment = false;
+
+    int tokenAt = info.at();
+    Token globalToken = info.get(tokenAt+1);
+    if(Equal(globalToken,"global")){
+        globalAssignment = true;
+        tokenAt++;
+    }
 
     // to make things easier attempt is checked here
-    if(attempt && !(IsName(info.get(info.at()+1)) && (Equal(info.get(info.at()+2),",") || Equal(info.get(info.at()+2),":") || Equal(info.get(info.at()+2),"=") ))){
+    if(attempt && !(IsName(info.get(tokenAt+1)) && (Equal(info.get(tokenAt+2),",") || Equal(info.get(tokenAt+2),":") || Equal(info.get(tokenAt+2),"=") ))){
         return SignalAttempt::BAD_ATTEMPT;
     }
     attempt = true;
+
+    if(globalAssignment)
+        info.next();
 
     //-- Evaluate variables on the left side
     int startIndex = info.at()+1;
@@ -2674,6 +2710,7 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
     statement = info.ast->createStatement(ASTStatement::ASSIGN);
     statement->varnames.stealFrom(varnames);
     statement->firstExpression = nullptr;
+    statement->globalAssignment = globalAssignment;
 
     Token token = info.get(info.at()+1);
     if(Equal(token,"=")) {
@@ -2911,7 +2948,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
 ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace){
     using namespace engone;
     MEASURE;
-    // _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
+    _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     
     ParseInfo info{tokens};
     info.tokens = tokens;
@@ -2935,6 +2972,8 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
         
     }
     info.currentScopeId = body->scopeId;
+
+    info.compileInfo->errors += info.errors;
 
     info.functionScopes.add({});
     SignalDefault result = ParseBody(info, body, ast->globalScopeId, true);

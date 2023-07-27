@@ -133,6 +133,7 @@ AST *AST::Create() {
     ast->createPredefinedType(Token("char"),scopeId, AST_CHAR, 1);
     ast->createPredefinedType(Token("null"),scopeId, AST_NULL, 8);
     ast->createPredefinedType(Token("ast-string"),scopeId, AST_STRING, 0);
+    ast->createPredefinedType(Token("fn_ref"),scopeId, AST_FUNC_REFERENCE, 8);
     ast->createPredefinedType(Token("ast-id"),scopeId, AST_ID);
     ast->createPredefinedType(Token("ast-member"),scopeId, AST_MEMBER);
     ast->createPredefinedType(Token("ast-sizeof"),scopeId, AST_SIZEOF);
@@ -479,7 +480,7 @@ void AST::appendToMainBody(ASTScope *body) {
 ASTScope *AST::createBody() {
     auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
-    ptr->type = ASTScope::BODY;
+    ptr->isNamespace = false;
     return ptr;
 }
 ASTStatement *AST::createStatement(ASTStatement::Type type) {
@@ -515,7 +516,7 @@ ASTExpression *AST::createExpression(TypeId type) {
 ASTScope *AST::createNamespace(const Token& name) {
     auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
-    ptr->type = ASTScope::NAMESPACE;
+    ptr->isNamespace = true;
     ptr->name = (std::string*)engone::Allocate(sizeof(std::string));
     new(ptr->name)std::string(name);
     return ptr;
@@ -532,15 +533,19 @@ ASTScope *AST::createNamespace(const Token& name) {
 
 void ASTScope::add(ASTStatement *astStatement, ASTStatement* tail) {
     TAIL_ADD(statements, astStatement)
+    contentOrder.add({STATEMENT, statements.size()-1});
 }
 void ASTScope::add(ASTStruct *astStruct, ASTStruct* tail) {
     TAIL_ADD(structs, astStruct)
+    contentOrder.add({STRUCT, structs.size()-1});
 }
 void ASTScope::add(ASTFunction *astFunction, ASTFunction* tail) {
     TAIL_ADD(functions, astFunction)
+    contentOrder.add({FUNCTION, structs.size()-1});
 }
 void ASTScope::add(ASTEnum *astEnum, ASTEnum* tail) {
     TAIL_ADD(enums, astEnum)
+    contentOrder.add({ENUM, structs.size()-1});
 }
 void ASTScope::add(ASTScope* astNamespace, AST* ast, ASTScope* tail){
     Assert(("should not add null",astNamespace));
@@ -560,12 +565,12 @@ void ASTScope::add(ASTScope* astNamespace, AST* ast, ASTScope* tail){
             astNamespace->functions.cleanup();
             astNamespace->structs.cleanup();
             astNamespace->namespaces.cleanup();
-            // astNamespace->next = nullptr;
             ast->destroy(astNamespace);
             return;
         }
     }
     namespaces.add(astNamespace);
+    contentOrder.add({NAMESPACE, structs.size()-1});
 }
 void AST::Destroy(AST *ast) {
     if (!ast)
@@ -1556,9 +1561,9 @@ void ASTScope::print(AST *ast, int depth) {
     if(hidden) return;
 
     PrintSpace(depth);
-    if(type == BODY)
+    if(!isNamespace)
         log::out << "Body ";
-    if(type == NAMESPACE){
+    else {
         log::out << "Namespace ";
         if(name)
             log::out << " "<<*name;

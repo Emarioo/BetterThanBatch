@@ -795,7 +795,7 @@ namespace engone {
 			auto ptr = DataForThread::Create();
 			ptr->func = func;
 			ptr->userData = arg;
-
+			
 			HANDLE handle = CreateThread(NULL, 0, SomeThreadProc, ptr, 0,(DWORD*)&m_threadId);
 			if (handle==INVALID_HANDLE_VALUE) {
 				DWORD err = GetLastError();

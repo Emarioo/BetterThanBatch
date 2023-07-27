@@ -48,9 +48,10 @@ extern "C" {
             taylor = -taylor;
         return taylor;
     }
-    void NativeSleep(float seconds) {
+    void __stdcall NativeSleep(float seconds) {
         WIN_Sleep((DWORD)(seconds * 1000));
     }
+    // void NativeThreadCreate()
     /*
     Code to test sine
     auto tp = MeasureTime();

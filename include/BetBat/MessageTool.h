@@ -26,8 +26,10 @@ struct TokenStream;
 
 #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
 #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type);
-#define ERR_MSG(STR) log::out << (StringBuilder{} + STR);
+#define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
 #define ERR_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR);
+#define ERR_EXAMPLE_TINY(STR) log::out << log::LIME << "Example: " << MESSAGE_COLOR << (StringBuilder{} + STR)<<"\n";
+#define ERR_EXAMPLE(LN, STR) log::out << log::LIME << "Example:"; PrintExample(LN, StringBuilder{} + STR);
 
 #define WARN_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR)
 
@@ -43,6 +45,8 @@ void PrintHead(engone::log::Color color, const Token& token, const StringBuilder
 
 void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder);
 void PrintCode(const Token& token, const StringBuilder& stringBuilder);
+
+void PrintExample(int line, const StringBuilder& stringBuilder);
 
 /*
     Old messaging code

@@ -127,13 +127,14 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
             success = false;
             continue;
         }
+        implMem.typeId = tid;
         if(member.defaultValue){
             // TODO: Don't check default expression every time. Do check once and store type in AST.
             DynamicArray<TypeId> temp{};
             CheckExpression(info,structInfo->scopeId, member.defaultValue,&temp);
             if(temp.size()==0)
                 temp.add(AST_VOID);
-            if(temp.last() != implMem.typeId){
+            if(!info.ast->castable(implMem.typeId, temp.last())){
                 std::string deftype = info.ast->typeToString(temp.last());
                 std::string memtype = info.ast->typeToString(implMem.typeId);
                 ERR_HEAD3(member.defaultValue->tokenRange, "Type of default value does not match member.\n\n";
@@ -143,7 +144,6 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
                 continue; // continue when failing
             }
         }
-        implMem.typeId = tid;
         _TC_LOG(log::out << " checked member["<<i<<"] "<<info.ast->typeToString(tid)<<"\n";)
     }
     if(!success){
@@ -338,7 +338,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
     if(polyTokens.size() != baseInfo->astStruct->polyArgs.size()) {
         ERR_SECTION(
             ERR_HEAD(tokenRange)
-            ERR_MSG("Polymorphic type "<<typeString << " has "<< (u32)polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<(u32)baseInfo->astStruct->polyArgs.size()<< "\n")
+            ERR_MSG("Polymorphic type "<<typeString << " has "<< (u32)polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<(u32)baseInfo->astStruct->polyArgs.size()<<".")
         )
         // ERR() << "Polymorphic type "<<typeString << " has "<< polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<baseInfo->astStruct->polyArgs.size()<< "\n";
         if(printedError)
@@ -360,7 +360,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
     if(hm != SignalDefault::SUCCESS) {
         ERR_SECTION(
             ERR_HEAD(tokenRange)
-            ERR_MSG(__FUNCTION__ <<": structImpl for type "<<typeString << " failed\n")
+            ERR_MSG(__FUNCTION__ <<": structImpl for type "<<typeString << " failed.")
         )
     } else {
         _TC_LOG(log::out << typeString << " was evaluated to "<<typeInfo->structImpl->size<<" bytes\n";)
@@ -417,7 +417,7 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
                     structInfo->structImpl = astStruct->createImpl();
                     astStruct->nonPolyStruct = structInfo->structImpl;
                 }
-                yes = SignalDefault::SUCCESS == CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl);
+                yes = CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl) == SignalDefault::SUCCESS;
                 if(!yes){
                     astStruct->state = ASTStruct::TYPE_CREATED;
                     info.completedStructs = false;
@@ -607,6 +607,14 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         if(!overload && !operatorOverloadAttempt)
             overload = fnOverloads->getOverload(info.ast, argTypes, expr, true);
         if(overload){
+            if(overload->astFunc->body && overload->funcImpl->usages == 0){
+                CheckInfo::CheckImpl checkImpl{};
+                checkImpl.astFunc = overload->astFunc;
+                checkImpl.funcImpl = overload->funcImpl;
+                info.checkImpls.add(checkImpl);
+            }
+            overload->funcImpl->usages++;
+
             FNCALL_SUCCESS
             return SignalAttempt::SUCCESS;
         }
@@ -652,6 +660,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
 
     FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes,fnPolyArgs, expr);
     if(overload){
+        overload->funcImpl->usages++;
         FNCALL_SUCCESS
         return SignalAttempt::SUCCESS;
     }
@@ -744,10 +753,11 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     SignalDefault result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, outTypes);
 
     FnOverloads::Overload* newOverload = fnOverloads->addPolyImplOverload(polyFunc, funcImpl);
+    
     CheckInfo::CheckImpl checkImpl{};
     checkImpl.astFunc = polyFunc;
     checkImpl.funcImpl = funcImpl;
-    // checkImpl.scope = scope;
+    funcImpl->usages++;
     info.checkImpls.add(checkImpl);
 
     // Can overload be null since we generate a new func impl?
@@ -893,9 +903,28 @@ SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             // TODO: What about enum?
             auto iden = info.ast->findIdentifier(scopeId, expr->name);
             if(iden){
-                auto varinfo = info.ast->identifierToVariable(iden);
-                if(varinfo){
-                    outTypes->add(varinfo->typeId);
+                if(iden->type == Identifier::VAR){
+                    auto varinfo = info.ast->identifierToVariable(iden);
+                    if(varinfo){
+                        outTypes->add(varinfo->typeId);
+                    }
+                } else if(iden->type == Identifier::FUNC) {
+                    if(iden->funcOverloads.overloads.size() == 1) {
+                        auto overload = &iden->funcOverloads.overloads[0];
+                        if(overload->astFunc->body && overload->funcImpl->usages == 0){
+                            CheckInfo::CheckImpl checkImpl{};
+                            checkImpl.astFunc = overload->astFunc;
+                            checkImpl.funcImpl = overload->funcImpl;
+                            info.checkImpls.add(checkImpl);
+                        }
+                        overload->funcImpl->usages++;
+                        outTypes->add(AST_FUNC_REFERENCE);
+                    } else {
+                        // overload makes func reference ambiguous
+                        outTypes->add(AST_VOID);
+                    }
+                } else {
+                    INCOMPLETE
                 }
             } else {
                 ERR_HEAD3(expr->tokenRange, "'"<<expr->name<<"' is not declared.\n\n";
@@ -1048,10 +1077,13 @@ SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         
         if(!info.ast->castable(temp.last(),ti)){
             std::string strleft = info.ast->typeToString(temp.last());
-            std::string strright = info.ast->typeToString(ti);
-            ERR_HEAD3(expr->tokenRange, "'"<<strleft << "' cannot be casted to '"<<strright<<"'.\n\n";
-                ERR_LINE(expr->tokenRange,strleft.c_str());
-                ERR_LINE(expr->left->tokenRange,strright.c_str());
+            std::string strcast = info.ast->typeToString(ti);
+            ERR_SECTION(
+                ERR_HEAD(expr->tokenRange)
+                ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?.")
+                ERR_LINE(expr->left->tokenRange,strleft)
+                ERR_LINE(expr->tokenRange,strcast)
+                ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
             )
         }
     } else {
@@ -1065,8 +1097,8 @@ SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             if(result == SignalAttempt::SUCCESS)
                 return SignalDefault::SUCCESS;
 
-            if(result == SignalAttempt::FAILURE)
-                return SignalDefault::FAILURE;
+            if(result != SignalAttempt::BAD_ATTEMPT)
+                return CastSignal(result);
         }
 
         // TODO: This code is buggy and doesn't behave as it should for all types.
@@ -1160,6 +1192,8 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncIm
 
     // TODO: parentStruct argument may not be necessary since this function only calculates
     //  offsets of arguments and return values.
+
+    // TODO: Handle calling conventions
 
     funcImpl->argumentTypes.resize(func->arguments.size());
     funcImpl->returnTypes.resize(func->returnValues.size());
@@ -1343,10 +1377,11 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
     // };
     // _TC_LOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
     FnOverloads* fnOverloads = nullptr;
+    Identifier* iden = nullptr;
     if(parentStruct){
         fnOverloads = &parentStruct->getMethod(function->name);
     } else {
-        Identifier* iden = info.ast->findIdentifier(scope->scopeId, function->name);
+        iden = info.ast->findIdentifier(scope->scopeId, function->name);
         if(!iden){
             iden = info.ast->addIdentifier(scope->scopeId, function->name);
             iden->type = Identifier::FUNC;
@@ -1369,14 +1404,19 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
             // Assert(typeId.isValid());
             if(!typeId.isValid()){
                 std::string msg = info.ast->typeToString(function->arguments[i].stringType);
-                ERR_HEAD3(function->arguments[i].name.range(),
-                    "Unknown type '"<<msg<<"' for parameter '"<<function->arguments[i].name<<"'";
-                    if(function->parentStruct && i==0){
-                        log::out << " (this parameter is auto-generated for methods)";
-                    }
-                    log::out << ".\n\n";
-                    ERR_LINE(function->arguments[i].name.range(),msg.c_str());
+                ERR_SECTION(
+                    ERR_HEAD(function->arguments[i].name.range())
+                    ERR_MSG("Unknown type '"<<msg<<"' for parameter '"<<function->arguments[i].name<<"'" << ((function->parentStruct && i==0) ? " (this parameter is auto-generated for methods)" : "")<<".")
+                    ERR_LINE(function->arguments[i].name.range(),msg.c_str())
                 )
+                // ERR_HEAD3(function->arguments[i].name.range(),
+                //     "Unknown type '"<<msg<<"' for parameter '"<<function->arguments[i].name<<"'";
+                //     if(function->parentStruct && i==0){
+                //         log::out << " (this parameter is auto-generated for methods)";
+                //     }
+                //     log::out << ".\n\n";
+                //     ERR_LINE(function->arguments[i].name.range(),msg.c_str());
+                // )
             }
             argTypes.add(typeId);
         }
@@ -1408,30 +1448,44 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
             }
         }
         if(outOverload){
-            //  TODO: better error message which shows what and where the already defined variable/function is.
-            ERR_HEAD3(function->tokenRange, "Argument types are ambiguous with another overload of function '"<< function->name << "'.\n\n";
-                ERR_LINE(outOverload->astFunc->tokenRange,"initial overload");
-                ERR_LINE(function->tokenRange,"ambiguous overload");
-            )
-            // print list of overloads?
-        } else {
-            FuncImpl* funcImpl = function->createImpl();
-            funcImpl->name = function->name;
-            fnOverloads->addOverload(function, funcImpl);
-            if(parentStruct)
-                funcImpl->structImpl = parentStruct->nonPolyStruct;
-            DynamicArray<TypeId> retTypes{}; // @unused
-            SignalDefault yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, &retTypes);
-            
-            if(function->body){
-                CheckInfo::CheckImpl checkImpl{};
-                checkImpl.astFunc = function;
-                checkImpl.funcImpl = funcImpl;
-                // checkImpl.scope = scope;
-                info.checkImpls.add(checkImpl);
+            if(outOverload->astFunc->linkConvention != NATIVE &&
+                    function->linkConvention != NATIVE) {
+                //  TODO: better error message which shows what and where the already defined variable/function is.
+                ERR_HEAD3(function->tokenRange, "Argument types are ambiguous with another overload of function '"<< function->name << "'.\n\n";
+                    ERR_LINE(outOverload->astFunc->tokenRange,"existing overload");
+                    ERR_LINE(function->tokenRange,"new ambiguous overload");
+                )
+                // print list of overloads?
+            } else {
+                // native functions can be defined twice
             }
-
-            _TC_LOG(log::out << "ADD OVERLOAD ";funcImpl->print(info.ast, function);log::out<<"\n";)
+        } else {
+            if(iden && iden->funcOverloads.overloads.size()>0 && function->linkConvention == NATIVE) {
+                ERR_SECTION(
+                    ERR_HEAD(function->tokenRange)
+                    ERR_MSG("There already is an overload of the native function '"<<function->name<<"'.")
+                    ERR_LINE(iden->funcOverloads.overloads[0].astFunc->tokenRange, "previous")
+                    ERR_LINE(function->tokenRange, "new")
+                )
+            } else {
+                FuncImpl* funcImpl = function->createImpl();
+                funcImpl->name = function->name;
+                funcImpl->usages = 0;
+                fnOverloads->addOverload(function, funcImpl);
+                if(parentStruct)
+                    funcImpl->structImpl = parentStruct->nonPolyStruct;
+                DynamicArray<TypeId> retTypes{}; // @unused
+                SignalDefault yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, &retTypes);
+                // implementation isn't checked/generated
+                // if(function->body){
+                //     CheckInfo::CheckImpl checkImpl{};
+                //     checkImpl.astFunc = function;
+                //     checkImpl.funcImpl = funcImpl;
+                //     // checkImpl.scope = scope;
+                //     info.checkImpls.add(checkImpl);
+                // }
+                _TC_LOG(log::out << "ADD OVERLOAD ";funcImpl->print(info.ast, function);log::out<<"\n";)
+            }
         }
     } else {
         if(fnOverloads->polyOverloads.size()!=0){
@@ -1449,6 +1503,48 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     Assert(scope||info.compileInfo->errors!=0);
     if(!scope) return SignalDefault::FAILURE;
 
+    // for(int index = 0; index < scope->contentOrder.size(); index++){
+    //     auto& spot = scope->contentOrder[index];
+    //     switch(spot.spotType) {
+    //         case ASTScope::STATEMENT: {
+    //             auto it = scope->statements[spot.index];
+    //             if(it->hasNodes()){
+    //                 if(it->firstBody){
+    //                     SignalDefault result = CheckFunctions(info, it->firstBody);   
+    //                 }
+    //                 if(it->secondBody){
+    //                     SignalDefault result = CheckFunctions(info, it->secondBody);
+    //                 }
+    //             }
+    //         }
+    //         break; case ASTScope::NAMESPACE: {
+    //             auto it = scope->namespaces[spot.index];
+    //             CheckFunctions(info, it);
+    //         }
+    //         break; case ASTScope::FUNCTION: {
+    //             auto it = scope->functions[spot.index];
+    //             CheckFunction(info, it, nullptr, scope);
+    //             if(it->body){
+    //                 SignalDefault result = CheckFunctions(info, it->body);
+    //             }
+    //         }
+    //         break; case ASTScope::STRUCT: {
+    //             auto it = scope->structs[spot.index];
+    //             for(auto fn : it->functions){
+    //                 CheckFunction(info, fn , it, scope);
+    //                 if(fn->body){ // external/native function do not have bodies
+    //                     SignalDefault result = CheckFunctions(info, fn->body);
+    //                 }
+    //             }
+    //         }
+    //         break; case ASTScope::ENUM: {
+    //         }
+    //         break; default: {
+    //             INCOMPLETE
+    //         }
+    //     }
+    // }
+
     for(auto now : scope->namespaces) {
         CheckFunctions(info, now);
     }
@@ -1456,10 +1552,7 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     for(auto fn : scope->functions){
         CheckFunction(info, fn, nullptr, scope);
         if(fn->body){ // external/native function do not have bodies
-            // Assert(fn->body || info.compileInfo->errors!=0);
-            // if(fn->body){
-                SignalDefault result = CheckFunctions(info, fn->body);
-            // }
+            SignalDefault result = CheckFunctions(info, fn->body);
         }
     }
     for(auto it : scope->structs){
@@ -1475,13 +1568,9 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
         if(astate->hasNodes()){
             if(astate->firstBody){
                 SignalDefault result = CheckFunctions(info, astate->firstBody);   
-                // if(!result)
-                //     error = false;
             }
             if(astate->secondBody){
                 SignalDefault result = CheckFunctions(info, astate->secondBody);
-                // if(!result)
-                //     error = false;
             }
         }
     }
@@ -1629,7 +1718,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 if(info.compileInfo->typeErrors==0) {
                     ERR_SECTION(
                         ERR_HEAD(now->tokenRange)
-                        ERR_MSG("Too many variables were declared.\n\n")
+                        ERR_MSG("Too many variables were declared.")
                         ERR_LINE(now->tokenRange, now->varnames.size() + " variables")
                         ERR_LINE(now->tokenRange, typeArray.size() + " return values")
                     )
@@ -1657,6 +1746,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         }
                     }
                 }
+                // TODO: Do you need to do something about global data here?
                 _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) <<"\n";)
                 Identifier* varIdentifier = info.ast->findIdentifier(scope->scopeId, varname.name);
                 if(!varIdentifier){
@@ -1888,6 +1978,31 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     _VLOG(log::out << log::BLUE << "Type check:\n";)
 
     SignalDefault result = CheckEnums(info, scope);
+
+    /*
+        How to make global variables and using work with functions and structs
+        functions and structs are out of order while global and using isn't.
+
+        functions and structs therefore needs some kind of ordering which has been fixed with contentOrder.
+        With it, we know the order of functions, global, using and structs.
+
+    */
+    /*
+        Preprocessor cannot replace using (for some situations sure but not for all so you might as well go all in on using).
+        This: using Array<T> as A<T>
+        is not possible with macros because they don't allow special characters (for good reasons)
+    */
+    /* using needs to run alongside struct checks
+
+        using Node as N // DynamicArray hasn't been created yet
+        struct Node<T> {
+            sup: N*
+
+        }
+
+        a: Node
+    */
+
     
     // Jonathan Blow has a video about dependenies when
     // checking types (https://www.youtube.com/watch?v=4q0cgjXhhTo)

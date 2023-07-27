@@ -34,6 +34,7 @@
 #define BC_LI 32
 
 #define BC_DATAPTR 40
+#define BC_CODEPTR 41
 
 // TODO: You forgot about floating point comparisons!
 #define BC_EQ 50
@@ -56,14 +57,18 @@
 #define BC_CAST 90
 // flags for first operand
 #define CAST_FLOAT_SINT 0
-#define CAST_SINT_FLOAT 1
-#define CAST_SINT_UINT 2
-#define CAST_UINT_SINT 3
-#define CAST_SINT_SINT 4
+#define CAST_FLOAT_UINT 1
+#define CAST_SINT_FLOAT 2
+#define CAST_UINT_FLOAT 3
+#define CAST_SINT_UINT 4
+#define CAST_UINT_SINT 5
+#define CAST_SINT_SINT 6
 
 #define BC_MEMZERO 100
 #define BC_MEMCPY 101
 #define BC_RDTSCP 102
+// compare and swap, atomic
+#define BC_CMP_SWAP 103
 
 // #define BC_SIN 110
 // #define BC_COS 111
@@ -229,6 +234,13 @@ struct Bytecode {
     DynamicArray<ExternalRelocation> externalRelocations;
     void addExternalRelocation(const std::string& name,  u32 location);
 
+    // struct Symbol {
+    //     std::string name;
+    //     u32 bcIndex=0;
+    // };
+    // DynamicArray<Symbol> exportedSymbols; // usually function names
+    // bool exportSymbol(const std::string& name, u32 instructionIndex);
+
     Location* getLocation(u32 instructionIndex, u32* locationIndex = nullptr);
     Location* setLocationInfo(const TokenRange& token, u32 InstructionIndex=-1, u32* locationIndex = nullptr);
     Location* setLocationInfo(const char* preText, u32 InstructionIndex=-1);
@@ -240,8 +252,11 @@ struct Bytecode {
     // void addDebugText(const std::string& text, u32 instructionIndex=-1);
     // void addDebugText(Token& token, u32 instructionIndex=-1);
     // const char* getDebugText(u32 instructionIndex);
+
     // returns an offset relative to the beginning of the data segment where data was placed.
+    // data may be nullptr which will give you space with zero-initialized data.
     int appendData(const void* data, int size);
+    void ensureAlignmentInData(int alignment);
 
     bool add(Instruction inst);
     bool addIm(i32 data);

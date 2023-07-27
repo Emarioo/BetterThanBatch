@@ -26,7 +26,9 @@ struct GenInfo {
     // like push and pop but with a size
     void addStackSpace(i32 size);
     int saveStackMoment();
-    void restoreStackMoment(int moment, bool withoutModification = false);
+    void restoreStackMoment(int moment, bool withoutModification = false, bool withoutInstruction = false);
+
+    void popInstructions(u32 count);
 
     DynamicArray<ASTNode*> nodeStack; // kind of like a stack trace
     // ASTNode* prevNode=nullptr;

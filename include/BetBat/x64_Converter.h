@@ -1,6 +1,8 @@
 #pragma once
 #include "BetBat/Bytecode.h"
 
+#include "BetBat/Util/StringBuilder.h"
+
 /*
 Common mistakes
 
@@ -30,8 +32,12 @@ enum LinkConventions : u8 {
 };
 const char* ToString(CallConventions stuff);
 const char* ToString(LinkConventions stuff);
+
 engone::Logger& operator<<(engone::Logger& logger, CallConventions convention);
 engone::Logger& operator<<(engone::Logger& logger, LinkConventions convention);
+
+StringBuilder& operator<<(StringBuilder& builder, CallConventions convention);
+StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention);
 
 struct DataRelocation {
     u32 dataOffset; // offset in data segment

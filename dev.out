@@ -8,10 +8,10 @@ File Type: COFF OBJECT
 
 FILE HEADER VALUES
             8664 machine (x64)
-               1 number of sections
-        64C08762 time date stamp Wed Jul 26 04:39:30 2023
-              44 file pointer to symbol table
-               1 number of symbols
+               2 number of sections
+        64C2B74B time date stamp Thu Jul 27 20:28:27 2023
+              B7 file pointer to symbol table
+               2 number of symbols
                0 size of optional header
                0 characteristics
 
@@ -19,11 +19,11 @@ SECTION HEADER #1
    .text name
        0 physical address
        0 virtual address
-       8 size of raw data
-      3C file pointer to raw data (0000003C to 00000043)
-      44 file pointer to relocation table
+      3B size of raw data
+      64 file pointer to raw data (00000064 to 0000009E)
+      9F file pointer to relocation table
        0 file pointer to line numbers
-       0 number of relocations
+       2 number of relocations
        0 number of line numbers
 60500020 flags
          Code
@@ -31,13 +31,43 @@ SECTION HEADER #1
          Execute Read
 
 RAW DATA #1
-  00000000: FF F5 48 8B EC 8F C5 C3                          ÿõH.ì.ÅÃ
+  00000000: FF F5 48 8B EC 48 8D 1D 00 00 00 00 48 33 C0 C7  ÿõH.ìH......H3ÀÇ
+  00000010: C0 05 00 00 00 81 E0 FF FF FF FF FF F0 48 33 C0  À.....àÿÿÿÿÿðH3À
+  00000020: 8F C0 81 E0 FF FF FF FF FF F0 48 8D 1D 00 00 00  .À.àÿÿÿÿÿðH.....
+  00000030: 00 48 33 C0 8F C0 89 03 8F C5 C3                 .H3À.À...ÅÃ
+
+RELOCATIONS #1
+                                                Symbol    Symbol
+ Offset    Type              Applied To         Index     Name
+ --------  ----------------  -----------------  --------  ------
+ 00000008  REL32                      00000000         0  $d0
+ 0000002D  REL32                      00000000         0  $d0
+
+SECTION HEADER #2
+   .data name
+       0 physical address
+       0 virtual address
+       4 size of raw data
+      B3 file pointer to raw data (000000B3 to 000000B6)
+       0 file pointer to relocation table
+       0 file pointer to line numbers
+       0 number of relocations
+       0 number of line numbers
+C0400040 flags
+         Initialized Data
+         8 byte align
+         Read Write
+
+RAW DATA #2
+  00000000: 00 00 00 00                                      ....
 
 COFF SYMBOL TABLE
-000 00000000 SECT1  notype ()    External     | main
+000 00000000 SECT2  notype       External     | $d0
+001 00000000 SECT1  notype ()    External     | main
 
 String Table Size = 0x0 bytes
 
   Summary
 
-           8 .text
+           4 .data
+          3B .text

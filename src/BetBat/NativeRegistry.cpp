@@ -70,12 +70,13 @@ void NativeRegistry::initNativeContent(){
     ADD(CmdLineArgs)
 
     ADD(rdtscp)
+    ADD(compare_swap)
     
     ADD(sin)
     ADD(cos)
     ADD(tan)
 
-    ADD(Sleep)
+    ADD(NativeSleep)
 
     #undef ADD
 }

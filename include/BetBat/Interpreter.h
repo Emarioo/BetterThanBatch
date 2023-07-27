@@ -29,6 +29,10 @@ struct Interpreter {
     u64 rsi=0;
     u64 rdi=0;
     
+    bool expectValuesOnStack = false;
+
+    void moveMemory(u8 reg, void* from, void* to);
+
     void* getReg(u8 id);
     void* setReg(u8 id);
     
@@ -36,6 +40,9 @@ struct Interpreter {
     bool silent = false;
 
     void execute(Bytecode* bytecode);
+    // lastInstruction is exclusive
+    // execution will stop when program counters is equal to lastInstruction
+    void executePart(Bytecode* bytecode, u32 startInstruction, u32 lastInstruction);
 
     static const int CWD_LIMIT = 256;
     char cwdBuffer[CWD_LIMIT]{0};

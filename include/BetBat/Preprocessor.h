@@ -32,7 +32,7 @@ struct CertainMacro {
     DynamicArray<Parameter> sortedParameters{};
 
     // I tested how fast an unordered_map would be and it was slower than a normal array.
-    std::vector<std::string> parameters;
+    DynamicArray<Token> parameters;
     void addParam(const Token& name);
     int indexOfVariadic=-1; // tells you which argument is the infinite one, -1 for none
     // returns index to argumentNames
@@ -81,6 +81,8 @@ struct PreprocInfo {
     bool usingTempStream = false;
 
     CompileInfo* compileInfo = 0; // for caching includes
+
+    int errors = 0;
 
     // int ifdefDepth=0;
     // token range

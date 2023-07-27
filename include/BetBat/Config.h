@@ -20,7 +20,9 @@
 
 // DEV_FILE defaults to dev.btb if none is specified
 // #define DEV_FILE "examples/x64_test.btb"
-#define DEV_FILE "examples/floats.btb"
+// #define DEV_FILE "examples/floats.btb"
+// #define DEV_FILE "examples/const.btb"
+#define DEV_FILE "examples/threads.btb"
 #define COMPILE_x64
 
 #ifndef COMPILE_x64
@@ -28,6 +30,12 @@
 #endif
 
 #define DEBUG
+
+// With this flag, some shortcuts and other improvements are made
+// when compiling. Push and pop after each other is redundant for example.
+// The consequence is that the logged instructions won't resemble the final
+// output.
+// #define OPTIMIZED
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 // Will it ever be?
@@ -76,7 +84,7 @@
 // #define PLOG
 // type checker
 // #define TC_LOG
-// #define GLOG
+#define GLOG
 // #define ILOG
 // #define ILOG_REGS
 // x64 converter
@@ -107,6 +115,8 @@
 
 void SetLog(int type, bool active);
 bool GetLog(int type);
+
+#define INCOMPLETE Assert(("Incomplete",false));
 
 #ifdef TLOG
 #define _TLOG(x) x
