@@ -22,12 +22,12 @@
 // #define DEV_FILE "examples/x64_test.btb"
 // #define DEV_FILE "examples/floats.btb"
 // #define DEV_FILE "examples/const.btb"
-#define DEV_FILE "examples/threads.btb"
-#define COMPILE_x64
+// #define DEV_FILE "examples/threads.btb"
+#define CONFIG_DEFAULT_TARGET WINDOWS_x64
 
-#ifndef COMPILE_x64
-// #define SAVE_FP_IN_CALL_FRAME
-#endif
+// #ifndef COMPILE_x64
+// // #define SAVE_FP_IN_CALL_FRAME
+// #endif
 
 #define DEBUG
 
@@ -35,7 +35,7 @@
 // when compiling. Push and pop after each other is redundant for example.
 // The consequence is that the logged instructions won't resemble the final
 // output.
-// #define OPTIMIZED
+#define OPTIMIZED
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 // Will it ever be?
@@ -70,6 +70,8 @@
 // Debug config
 #ifdef DEBUG
 
+// #define DISABLE_BASE_STRUCTS
+
 #define VLOG
 
 // #define TLOG
@@ -84,7 +86,7 @@
 // #define PLOG
 // type checker
 // #define TC_LOG
-#define GLOG
+// #define GLOG
 // #define ILOG
 // #define ILOG_REGS
 // x64 converter

@@ -5,7 +5,6 @@
 */
 // fn @native prints(str: char[]) ;
 
-
 // intrinsics?
 // len is in bytes
 fn @intrinsic memcpy(dst: void*, src: void*, len: u64);
@@ -15,7 +14,7 @@ fn @intrinsic rdtscp() -> u64, u32;
 fn @intrinsic compare_swap(ptr: i32*, old: i32, new: i32) -> bool;
 
 // Functions below are not supported in x64 converter
-#ifndef X64
+// #ifndef X64
 // fn @native printi(num: i64) ;
 // fn @native printd(num: f32) ;
 // fn @native printc(chr: char) ;
@@ -28,20 +27,20 @@ fn @intrinsic compare_swap(ptr: i32*, old: i32, new: i32) -> bool;
 // // first and then using. Using won't be applied to functions.
 // // A macro is used instead,or now.
 // // File handle
-// #define File u64
-// enum FileFlag {
-//     FILE_NO_FLAG=0,
-//     FILE_ONLY_READ=1,
-//     FILE_CAN_CREATE=2,
-//     FILE_WILL_CREATE=4,
-// }
-// // // returns file handle and file size
-// fn @native FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64;
-// // returns read bytes
-// fn @native FileRead(file: File, buffer: void*, readBytes: u64) -> u64 ;
-// // returns written bytes
-// fn @native FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 ;
-// fn @native FileClose(file: File) ;
+#define File u64
+enum FileFlag {
+    FILE_NO_FLAG=0,
+    FILE_ONLY_READ=1,
+    FILE_CAN_CREATE=2,
+    FILE_WILL_CREATE=4,
+}
+// returns file handle and file size
+fn @native FileOpen(path: Slice<char>, flags: FileFlag) -> File, u64;
+// returns read bytes
+fn @native FileRead(file: File, buffer: void*, readBytes: u64) -> u64 ;
+// returns written bytes
+fn @native FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 ;
+fn @native FileClose(file: File) ;
 
 
 // // The returned string is heap allocated in the interpreter.
@@ -50,37 +49,37 @@ fn @intrinsic compare_swap(ptr: i32*, old: i32, new: i32) -> bool;
 // //   StringBuffer or StringBuilder and it puts the CWD in there while
 // //   still returning a slice. Perhaps the StringBuilder defaults to null
 // //   and if not provided it is heap allocated, otherwise allocated in StringBuilder.
-// fn @native CurrentWorkingDirectory() -> char[]; // should it be const?
-// fn @native StartTimePoint() -> u64;
-// fn @native EndTimePoint(timepoint: u64) -> f32; // TODO: Use f64 (double) when implemented
+fn @native CurrentWorkingDirectory() -> char[]; // should it be const?
+fn @native StartTimePoint() -> u64;
+fn @native EndTimePoint(timepoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 
-// fn @native CmdLineArgs() -> Slice<Slice<char>>; // const?
+fn @native CmdLineArgs() -> Slice<Slice<char>>; // const?
 
-// fn @native DirectoryIteratorCreate(rootPath: char[]) -> DirectoryIterator*;
-// fn @native DirectoryIteratorDestroy(iterator: DirectoryIterator*);
-// fn @native DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
-// fn @native DirectoryIteratorSkip(iterator: DirectoryIterator*);
+fn @native DirectoryIteratorCreate(rootPath: char[]) -> DirectoryIterator*;
+fn @native DirectoryIteratorDestroy(iterator: DirectoryIterator*);
+fn @native DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+fn @native DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
-// struct DirectoryIteratorData {
-//     name: char[]; // allocated by interpreter, the ptr should be const (char* const NOT const char*)
-//     fileSize: u64;
-//     lastWriteSeconds: f32;
-//     isDirectory: bool;
-// }
+struct DirectoryIteratorData {
+    name: char[]; // allocated by interpreter, the ptr should be const (char* const NOT const char*)
+    fileSize: u64;
+    lastWriteSeconds: f32;
+    isDirectory: bool;
+}
 
-// struct DirectoryIterator {
-//     _handle: u64;
-//     rootPath: char[]; // allocated by interpreter, should be char* const
-//     result: DirectoryIteratorData;
+struct DirectoryIterator {
+    _handle: u64;
+    rootPath: char[]; // allocated by interpreter, should be char* const
+    result: DirectoryIteratorData;
 
-//     fn next() -> DirectoryIteratorData* {
-//         return DirectoryIteratorNext(this);
-//     }
-//     fn skip() {
-//         DirectoryIteratorSkip(this);
-//     }
-// }
-#else
+    fn next() -> DirectoryIteratorData* {
+        return DirectoryIteratorNext(this);
+    }
+    fn skip() {
+        DirectoryIteratorSkip(this);
+    }
+}
+// #else
 
 struct Thread {
     handle: i64 = 0;
@@ -109,4 +108,4 @@ fn @import CloseHandle(handle: void*) -> bool;
 fn @import WaitForSingleObject(handle: void*, ms: u32) -> u32;
 fn @import GetLastError() -> u32;
 
-#endif
+// #endif

@@ -8,10 +8,10 @@ File Type: COFF OBJECT
 
 FILE HEADER VALUES
             8664 machine (x64)
-               2 number of sections
-        64C2B74B time date stamp Thu Jul 27 20:28:27 2023
-              B7 file pointer to symbol table
-               2 number of symbols
+               1 number of sections
+        64C40778 time date stamp Fri Jul 28 20:22:48 2023
+             14A file pointer to symbol table
+               1 number of symbols
                0 size of optional header
                0 characteristics
 
@@ -19,11 +19,11 @@ SECTION HEADER #1
    .text name
        0 physical address
        0 virtual address
-      3B size of raw data
-      64 file pointer to raw data (00000064 to 0000009E)
-      9F file pointer to relocation table
+     10E size of raw data
+      3C file pointer to raw data (0000003C to 00000149)
+     14A file pointer to relocation table
        0 file pointer to line numbers
-       2 number of relocations
+       0 number of relocations
        0 number of line numbers
 60500020 flags
          Code
@@ -31,43 +31,29 @@ SECTION HEADER #1
          Execute Read
 
 RAW DATA #1
-  00000000: FF F5 48 8B EC 48 8D 1D 00 00 00 00 48 33 C0 C7  ÿõH.ìH......H3ÀÇ
-  00000010: C0 05 00 00 00 81 E0 FF FF FF FF FF F0 48 33 C0  À.....àÿÿÿÿÿðH3À
-  00000020: 8F C0 81 E0 FF FF FF FF FF F0 48 8D 1D 00 00 00  .À.àÿÿÿÿÿðH.....
-  00000030: 00 48 33 C0 8F C0 89 03 8F C5 C3                 .H3À.À...ÅÃ
-
-RELOCATIONS #1
-                                                Symbol    Symbol
- Offset    Type              Applied To         Index     Name
- --------  ----------------  -----------------  --------  ------
- 00000008  REL32                      00000000         0  $d0
- 0000002D  REL32                      00000000         0  $d0
-
-SECTION HEADER #2
-   .data name
-       0 physical address
-       0 virtual address
-       4 size of raw data
-      B3 file pointer to raw data (000000B3 to 000000B6)
-       0 file pointer to relocation table
-       0 file pointer to line numbers
-       0 number of relocations
-       0 number of line numbers
-C0400040 flags
-         Initialized Data
-         8 byte align
-         Read Write
-
-RAW DATA #2
-  00000000: 00 00 00 00                                      ....
+  00000000: FF F5 48 8B EC E9 4F 00 00 00 FF F5 48 8B EC 48  ÿõH.ìéO...ÿõH.ìH
+  00000010: C7 C1 08 00 00 00 48 8B DD 48 2B D9 48 8B FB 48  ÇÁ....H.ÝH+ÙH.ûH
+  00000020: 8B D9 48 01 FB 48 39 DF 74 08 C6 07 00 48 FF C7  .ÙH.ûH9ßt.Æ..HÿÇ
+  00000030: EB F3 48 81 EC 08 00 00 00 48 33 C0 C7 C0 18 00  ëóH.ì....H3ÀÇÀ..
+  00000040: 00 00 89 85 F8 FF FF FF 48 81 C4 08 00 00 00 8F  ....øÿÿÿH.Ä.....
+  00000050: C5 C3 48 81 C4 10 00 00 00 48 81 EC 18 00 00 00  ÅÃH.Ä....H.ì....
+  00000060: 48 33 C0 89 85 FC FF FF FF 48 33 C0 81 E0 FF FF  H3À..üÿÿÿH3À.àÿÿ
+  00000070: FF FF FF F0 8F C0 89 85 F0 FF FF FF 48 33 C0 81  ÿÿÿð.À..ðÿÿÿH3À.
+  00000080: E0 FF FF FF FF FF F0 48 33 C0 8F C0 89 85 EE FF  àÿÿÿÿÿðH3À.À..îÿ
+  00000090: FF FF 48 81 EC 18 00 00 00 48 33 C0 8B 85 FC FF  ÿÿH.ì....H3À..üÿ
+  000000A0: FF FF 81 E0 FF FF FF FF FF F0 48 33 C0 48 8B 85  ÿÿ.àÿÿÿÿÿðH3ÀH..
+  000000B0: F0 FF FF FF FF F0 48 33 C0 66 8B 85 EE FF FF FF  ðÿÿÿÿðH3Àf..îÿÿÿ
+  000000C0: 48 81 E0 FF FF 00 00 FF F0 48 8B DC 48 33 C0 8F  H.àÿÿ..ÿðH.ÜH3À.
+  000000D0: C0 66 89 83 1E 00 00 00 8F C0 48 89 83 20 00 00  Àf.......ÀH.. ..
+  000000E0: 00 48 33 C0 8F C0 89 83 2C 00 00 00 E8 19 FF FF  .H3À.À..,...è.ÿÿ
+  000000F0: FF 48 8B DC 48 81 C4 18 00 00 00 48 33 C0 8B 83  ÿH.ÜH.Ä....H3À..
+  00000100: E8 FF FF FF 48 81 C4 18 00 00 00 8F C5 C3        èÿÿÿH.Ä.....ÅÃ
 
 COFF SYMBOL TABLE
-000 00000000 SECT2  notype       External     | $d0
-001 00000000 SECT1  notype ()    External     | main
+000 00000000 SECT1  notype ()    External     | main
 
 String Table Size = 0x0 bytes
 
   Summary
 
-           4 .data
-          3B .text
+         10E .text

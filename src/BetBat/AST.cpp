@@ -116,7 +116,7 @@ AST *AST::Create() {
     AST *ast = (AST *)engone::Allocate(sizeof(AST));
     new(ast) AST();
 
-    ScopeId scopeId = ast->createScope(0)->id;
+    ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO)->id;
     ast->globalScopeId = scopeId;
     // initialize default data types
     ast->createPredefinedType(Token("void"),scopeId, AST_VOID);
@@ -162,23 +162,29 @@ AST *AST::Create() {
     return ast;
 }
 
-VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, bool shadowPreviousVariables) {
+// VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, bool shadowPreviousVariables) {
+VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder contentOrder, Identifier** identifier) {
     using namespace engone;
-    
+    bool shadowPreviousVariables = false;
     auto id = addIdentifier(scopeId, name, shadowPreviousVariables);
     if(!id) {
         return nullptr;
     }
     id->type = Identifier::VAR;
     id->varIndex = variables.size();
+    id->order = contentOrder;
+    if(identifier)
+        *identifier = id;
     auto ptr = (VariableInfo*)engone::Allocate(sizeof(VariableInfo));
     new(ptr)VariableInfo();
     variables.push_back(ptr);
     return ptr;
 }
 
-Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
+// Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
+Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, ContentOrder contentOrder) {
     using namespace engone;
+    bool shadowPreviousIdentifiers = false;
     ScopeInfo* si = getScope(scopeId);
     if(!si)
         return nullptr;
@@ -190,20 +196,64 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPr
 
     // TODO: Delete variable info of previous identifier when shadowing
     si->identifierMap[sName] = {};
-    auto ptr = &si->identifierMap[sName];
-    ptr->name = name;
-    ptr->scopeId = scopeId;
-    return ptr;
+    auto id = &si->identifierMap[sName];
+    id->name = name;
+    id->scopeId = scopeId;
+    id->order = contentOrder;
+    return id;
 }
-Identifier* AST::findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes){
+// Identifier* AST::findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes){
+//     using namespace engone;
+//     if(searchParentScopes){
+//         // log::out << __func__<<": "<<name<<"\n";
+//         Token ns={};
+//         Token realName = TrimNamespace(Token(name), &ns);
+//         ScopeId nextScopeId = startScopeId;
+//         WHILE_TRUE {
+//             if(ns.str) {
+//                 ScopeInfo* nscope = getScope(ns, nextScopeId);
+//                 Assert(nscope);
+//                 auto pair = nscope->identifierMap.find(realName);
+//                 if(pair != nscope->identifierMap.end()){
+//                     return &pair->second;
+//                 }
+//             }
+//             ScopeInfo* si = getScope(nextScopeId);
+//             Assert(si);
+//             if(!ns.str) {
+//                 auto pair = si->identifierMap.find(realName);
+//                 if(pair != si->identifierMap.end()){
+//                     return &pair->second;
+//                 }
+//             }
+//             if(nextScopeId == 0 && si->parent == 0){
+//                 // quit when we checked global
+//                 break;
+//             }
+//             nextScopeId = si->parent;
+//         }
+//     } else {
+//         ScopeInfo* si = getScope(startScopeId);
+//         Assert(si);
+//         auto pair = si->identifierMap.find(name);
+//         if(pair != si->identifierMap.end()){
+//             return &pair->second;
+//         }
+//     }
+//     return nullptr;
+// }
+
+Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const Token& name, bool searchParentScopes){
     using namespace engone;
     if(searchParentScopes){
         // log::out << __func__<<": "<<name<<"\n";
         Token ns={};
         Token realName = TrimNamespace(Token(name), &ns);
         ScopeId nextScopeId = startScopeId;
+        ContentOrder nextOrder = contentOrder;
         WHILE_TRUE {
             if(ns.str) {
+                Assert(false); // broken with content order
                 ScopeInfo* nscope = getScope(ns, nextScopeId);
                 Assert(nscope);
                 auto pair = nscope->identifierMap.find(realName);
@@ -215,7 +265,8 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, const Token& name, bool se
             Assert(si);
             if(!ns.str) {
                 auto pair = si->identifierMap.find(realName);
-                if(pair != si->identifierMap.end()){
+                if(pair != si->identifierMap.end() && pair->second.order <= nextOrder){
+                // if(pair != si->identifierMap.end() && pair->second.type == Identifier::VAR && pair->second.order < nextOrder){
                     return &pair->second;
                 }
             }
@@ -224,14 +275,20 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, const Token& name, bool se
                 break;
             }
             nextScopeId = si->parent;
+            nextOrder = si->contentOrder;
         }
     } else {
         ScopeInfo* si = getScope(startScopeId);
         Assert(si);
         auto pair = si->identifierMap.find(name);
-        if(pair != si->identifierMap.end()){
+        if(pair == si->identifierMap.end()){
+            return nullptr;
+        }
+        // if(pair->second.type == Identifier::VAR && pair->second.order < contentOrder) {
+        if(pair->second.order <= contentOrder) {
             return &pair->second;
         }
+        return nullptr;
     }
     return nullptr;
 }
@@ -346,7 +403,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& 
     return outOverload;
 }
 
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly){
     // Assert(!fncallArgs); // not implemented yet, see other getOverload
     using namespace engone;
     FnOverloads::Overload* outOverload = nullptr;
@@ -357,19 +414,20 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& 
         auto& overload = polyImplOverloads[i];
         // The number of poly args must match. Using 1 poly arg when referring to a function with 2
         // does not make sense.
-        if(overload.funcImpl->polyArgs.size() != polyArgs.size())
+        if(overload.funcImpl->polyArgs.size() != polyArgs.size() && !implicitPoly)
             continue;
         // The args must match exactly. Otherwise, a new implementation should be generated.
         bool doesPolyArgsMatch = true;
-        for(int j=0;j<(int)polyArgs.size();j++){
-            if(polyArgs[j] != overload.funcImpl->polyArgs[j]){
-                doesPolyArgsMatch = false;
-                break;
+        if(!implicitPoly){
+            for(int j=0;j<(int)polyArgs.size();j++){
+                if(polyArgs[j] != overload.funcImpl->polyArgs[j]){
+                    doesPolyArgsMatch = false;
+                    break;
+                }
             }
+            if(!doesPolyArgsMatch)
+                continue;
         }
-        if(!doesPolyArgsMatch)
-            continue;
-
          if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
             || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
             || argTypes.size() > overload.astFunc->arguments.size()
@@ -467,13 +525,46 @@ FnOverloads& ASTStruct::getMethod(const std::string& name){
 
 void AST::appendToMainBody(ASTScope *body) {
     Assert(body);
-    #define _ADD(X) for(auto it : body->X) { mainBody->add(it); } body->X.cleanup();
-    _ADD(enums)
-    _ADD(functions)
-    _ADD(structs)
-    _ADD(statements)
-    for(auto it : body->namespaces) { mainBody->add(it, this); } body->namespaces.cleanup();
-    #undef ADD
+    for(auto it : body->content) {
+        switch(it.spotType) {
+        case ASTScope::STRUCT: {
+            mainBody->add(this, body->structs[it.index]);
+        }
+        break; case ASTScope::ENUM: {
+            mainBody->add(this, body->enums[it.index]);
+        }
+        break; case ASTScope::FUNCTION: {
+            mainBody->add(this, body->functions[it.index]);
+        }
+        break; case ASTScope::STATEMENT: {
+            mainBody->add(this, body->statements[it.index]);
+        }
+        break; case ASTScope::NAMESPACE: {
+            mainBody->add(this, body->namespaces[it.index]);
+        }
+    }
+    }
+    body->structs.cleanup();
+    body->enums.cleanup();
+    body->functions.cleanup();
+    body->statements.cleanup();
+    body->namespaces.cleanup();
+    // #define _ADD(X) for(auto it : body->X) { mainBody->add(this, it); } body->X.cleanup();
+    // _ADD(enums)
+    // _ADD(functions)
+    // _ADD(structs)
+    // _ADD(statements)
+    // // for(auto it : body->statements) { 
+    // //     // if(it->firstBody) {
+
+    // //     // } else if() {
+
+    // //     // }
+    // //     mainBody->add(it);
+    // // }
+    // _ADD(namespaces)
+    // // for(auto it : body->namespaces) { mainBody->add(it, this); } body->namespaces.cleanup();
+    // #undef ADD
     destroy(body);
 }
 
@@ -531,36 +622,63 @@ ASTScope *AST::createNamespace(const Token& name) {
 
 #define TAIL_ADD(M, S) Assert(("should not add null", S)); M.add(S);
 
-void ASTScope::add(ASTStatement *astStatement, ASTStatement* tail) {
+void ASTScope::add(AST* ast, ASTStatement *astStatement) {
     TAIL_ADD(statements, astStatement)
-    contentOrder.add({STATEMENT, statements.size()-1});
+    content.add({STATEMENT, statements.size()-1});
+    if(astStatement->firstBody) {
+        ast->getScope(astStatement->firstBody->scopeId)->contentOrder = content.size()-1;
+    }
+    if(astStatement->secondBody) {
+        ast->getScope(astStatement->secondBody->scopeId)->contentOrder = content.size()-1;
+    }
 }
-void ASTScope::add(ASTStruct *astStruct, ASTStruct* tail) {
+void ASTScope::add(AST* ast, ASTStruct *astStruct) {
     TAIL_ADD(structs, astStruct)
-    contentOrder.add({STRUCT, structs.size()-1});
+    content.add({STRUCT, structs.size()-1});
+    ast->getScope(astStruct->scopeId)->contentOrder = content.size()-1;
 }
-void ASTScope::add(ASTFunction *astFunction, ASTFunction* tail) {
+void ASTScope::add(AST* ast, ASTFunction *astFunction) {
     TAIL_ADD(functions, astFunction)
-    contentOrder.add({FUNCTION, structs.size()-1});
+    content.add({FUNCTION, functions.size()-1});
+    ast->getScope(astFunction->scopeId)->contentOrder = content.size()-1;
 }
-void ASTScope::add(ASTEnum *astEnum, ASTEnum* tail) {
+void ASTScope::add(AST* ast, ASTEnum *astEnum) {
     TAIL_ADD(enums, astEnum)
-    contentOrder.add({ENUM, structs.size()-1});
+    content.add({ENUM, enums.size()-1});
 }
-void ASTScope::add(ASTScope* astNamespace, AST* ast, ASTScope* tail){
+void ASTScope::add(AST* ast, ASTScope* astNamespace){
     Assert(("should not add null",astNamespace));
     for(auto ns : namespaces){
         // ASTScope* ns = namespaces.get(i);
 
         if(*ns->name == *astNamespace->name){
-            for(auto it : astNamespace->enums)
-                ns->add(it);
-            for(auto it : astNamespace->functions)
-                ns->add(it);
-            for(auto it : astNamespace->structs)
-                ns->add(it);
-            for(auto it : astNamespace->namespaces)
-                ns->add(it, ast);
+            for(auto it : astNamespace->content) {
+                switch(it.spotType) {
+                case ASTScope::STRUCT: {
+                    ns->add(ast, astNamespace->structs[it.index]);
+                }
+                break; case ASTScope::ENUM: {
+                    ns->add(ast, astNamespace->enums[it.index]);
+                }
+                break; case ASTScope::FUNCTION: {
+                    ns->add(ast, astNamespace->functions[it.index]);
+                }
+                break; case ASTScope::STATEMENT: {
+                    ns->add(ast, astNamespace->statements[it.index]);
+                }
+                break; case ASTScope::NAMESPACE: {
+                    ns->add(ast, astNamespace->namespaces[it.index]);
+                }
+            }
+            }
+            // for(auto it : astNamespace->enums)
+            //     ns->add(ast, it);
+            // for(auto it : astNamespace->functions)
+            //     ns->add(ast, it);
+            // for(auto it : astNamespace->structs)
+            //     ns->add(ast, it);
+            // for(auto it : astNamespace->namespaces)
+            //     ns->add(ast, it);
             astNamespace->enums.cleanup();
             astNamespace->functions.cleanup();
             astNamespace->structs.cleanup();
@@ -570,7 +688,8 @@ void ASTScope::add(ASTScope* astNamespace, AST* ast, ASTScope* tail){
         }
     }
     namespaces.add(astNamespace);
-    contentOrder.add({NAMESPACE, structs.size()-1});
+    content.add({NAMESPACE, namespaces.size()-1});
+    ast->getScope(astNamespace->scopeId)->contentOrder = content.size()-1;
 }
 void AST::Destroy(AST *ast) {
     if (!ast)
@@ -642,10 +761,12 @@ void AST::cleanup() {
     destroy(mainBody);
     mainBody = nullptr;
 }
-ScopeInfo* AST::createScope(ScopeId parentScope) {
+ScopeInfo* AST::createScope(ScopeId parentScope, ContentOrder contentOrder) {
     auto ptr = (ScopeInfo *)engone::Allocate(sizeof(ScopeInfo));
     new(ptr) ScopeInfo{(u32)_scopeInfos.size()};
     ptr->parent = parentScope;
+    ptr->contentOrder = contentOrder;
+    // engone::log::out << "Order: "<<contentOrder<<"\n";
     _scopeInfos.push_back(ptr);
     return ptr;
 }
@@ -1568,18 +1689,37 @@ void ASTScope::print(AST *ast, int depth) {
         if(name)
             log::out << " "<<*name;
     }
-    log::out << "(scope: "<<scopeId<<")";
+    log::out << "(scope: "<<scopeId<<", order: "<<ast->getScope(scopeId)->contentOrder<<")";
     log::out<<"\n";
     // #define MUL_PRINT(X,...) for(auto it : X) it->print(ast,depth+1); MUL_PRINT(...)
     // MUL_PRINT(structs, enums, functions, statements, namespaces);
     
-    #define PR(X) for(auto it : X) it->print(ast,depth+1);
-    PR(structs)
-    PR(enums)
-    PR(functions)
-    PR(statements)
-    PR(namespaces)
-    #undef PR
+    for(auto& it : content) {
+        switch(it.spotType) {
+        case STRUCT: {
+            structs[it.index]->print(ast, depth+1);
+        }
+        break; case ENUM: {
+            enums[it.index]->print(ast, depth+1);
+        }
+        break; case FUNCTION: {
+            functions[it.index]->print(ast, depth+1);
+        }
+        break; case STATEMENT: {
+            statements[it.index]->print(ast, depth+1);
+        }
+        break; case NAMESPACE: {
+            namespaces[it.index]->print(ast, depth+1);
+        }
+        }
+    }
+    // #define PR(X) for(auto it : X) it->print(ast,depth+1);
+    // PR(structs)
+    // PR(enums)
+    // PR(functions)
+    // PR(statements)
+    // PR(namespaces)
+    // #undef PR
 }
 void ASTFunction::print(AST *ast, int depth) {
     using namespace engone;
@@ -1596,7 +1736,7 @@ void ASTFunction::print(AST *ast, int depth) {
             }
             log::out << ">";
         }
-        log::out << " (scope: "<<scopeId<<") ";
+        log::out << " (scope: "<<scopeId<<", order: "<<ast->getScope(scopeId)->contentOrder<<") ";
         log::out << "\n";
         for (int i = 0; i < (int)arguments.size(); i++) {
             auto &arg = arguments[i];

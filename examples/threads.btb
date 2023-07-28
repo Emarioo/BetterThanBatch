@@ -1,39 +1,38 @@
-// #import "OS"
+/*
+    This is an example of of threads can be used in the language.
 
-// #import "Logger"
+*/
 
-// fn @native prints(n: char[]);
-// fn @native printc(n: char);
+#import "OS"
+#import "Logger"
+// #define THREAD_SAFE
 
-// #define log(X, ...) _print(X); _print(' '); log(...)
-// #define log(X) _print(X); _print('\n')
-
-// fn @stdcall hey(ptr: void*) -> u32 {
-//     prints("Hello: ");
-//     // _print(cast<i64>ptr);
-//     printc(cast<char>cast<u64>ptr);
-//     printc('\n')
-//     return 0;
-// }
-// prints("Woah\n")
-
-// thread = ThreadCreate(hey, cast<void*>cast<u64>65)
-// ThreadJoin(thread)
-// ThreadDestroy(thread)
-
-global var: i32 = 5
-fn add() {
-    // printc('0' + var)
-    var++;
+// threads require stdcall with the passed function
+fn @stdcall compute(num: u32*) -> u32 {
+    retries = 0
+    for 0..100_000 {
+        #ifdef THREAD_SAFE
+        lastNum = *num;
+        // if !compare_swap(cast<void*>num, *num, *num + 1) {
+        if !compare_swap(cast<void*>num, lastNum, lastNum + 1) {
+            it--
+            retries++
+        }
+        #else
+        (*num)++;
+        #endif
+    }
+    #ifdef THREAD_SAFE
+    log("Retries:", retries);
+    #endif
+    return 0;
 }
-add();
+final: u32 = 0
 
-// using i32 as int
+thread = ThreadCreate(compute, &final)
+compute(&final)
 
-fn add() -> int {
-    return 3
-}
+ThreadJoin(thread)
+ThreadDestroy(thread)
 
-using void as int
-
-add()
+log(final)

@@ -1,6 +1,6 @@
 // @macro-benchmark
 // #import "OS"
-// #import "Logger"
+#import "Logger"
 // #import "Basic"
 // #import "./macros"
 // #import "./macro-bench"
@@ -9,9 +9,44 @@
 // #import "./defer"
 // #import "./dir-iterator"
 // #import "./factorial"
-#import "operator"
+// #import "operator"
+
+// fn add(a: char) {
+
+// }
+
+// fn size<T>(a: T) -> i32 {
+//     return sizeof T;
+// }
 
 
+// struct Hello {
+//     a: u16 = 0;
+//     b: u64 = 0;
+//     c: u32 = 0;
+// }
+// a: i32;
+// b: u64;
+
+// size<char[]>("hello")
+// size<u32>(231)
+
+// size("hello")
+
+// size(a)
+// size(b)
+
+
+
+// fn @import FillHello(ptr: Hello*);
+
+// hello: Hello;
+// FillHello(&hello);
+
+// printData(&hello);
+// log(hello.a);
+// log(hello.b);
+// log(hello.c);
 
 // tp = StartTimePoint()
 

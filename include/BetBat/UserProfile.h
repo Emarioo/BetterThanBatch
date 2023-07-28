@@ -23,8 +23,8 @@ struct UserProfile {
 
     void cleanup();
 
-    UserProfile* CreateDefault();
-    void Destroy(UserProfile* ptr);
+    static UserProfile* CreateDefault();
+    static void Destroy(UserProfile* ptr);
 
     // key value pairs
     struct Value {

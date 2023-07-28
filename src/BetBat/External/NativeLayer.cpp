@@ -7,11 +7,18 @@ extern "C" {
     
     void(*WIN_Sleep)(DWORD) = Sleep;
 
-    int __stdcall printme(){
-        // WriteFile(GetStdHandle(STD_OUTPUT_HANDLE),"Oh snap\n",strlen("Oh snap\n"),NULL,NULL);
-        // return other();
-        return 3;
+    struct Hello {
+        u16 a = 0;
+        u64 b = 0;
+        u32 c = 0;
+    };
+    void FillHello(Hello* ptr) {
+        memset(ptr, 0, sizeof(Hello));
+        ptr->a = 1;
+        ptr->b = 2;
+        ptr->c = 3;
     }
+
     #ifdef OS_WINDOWS
     // void* Allocate(u64 size ){
     //     return HeapAlloc(GetProcessHeap(),0, size);

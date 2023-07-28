@@ -1659,7 +1659,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // executing the instruction and then mov values into the operands
                 Assert(op0 == BC_REG_RBX && op1 == BC_REG_EAX && op2 == BC_REG_EDX);
 
-                u8 regPtr = BCToProgramReg(op0);
+                u8 regPtr = BCToProgramReg(op0,8);
                 u8 regOld = BCToProgramReg(op1);
                 u8 regNew = BCToProgramReg(op2);
                 

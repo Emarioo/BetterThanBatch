@@ -6,6 +6,9 @@
 #include "BetBat/x64_Converter.h"
 
 typedef u32 ScopeId;
+typedef u32 ContentOrder;
+#define CONTENT_ORDER_ZERO 0
+#define CONTENT_ORDER_MAX (u32)-1
 struct ASTStruct;
 struct ASTEnum;
 struct ASTFunction;
@@ -228,7 +231,7 @@ struct FnOverloads {
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
     Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
-    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall);
+    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false);
     // Get base polymorphic overload which can match with the typeIds.
     // You want to generate the real overload afterwards.
     // ASTFunction* getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes);
@@ -299,7 +302,7 @@ struct FuncImpl {
     DynamicArray<Spot> returnTypes;
     int argSize=0;
     int returnSize=0;
-    i64 address = 0; // Set by generator
+    i64 address = ADDRESS_INVALID; // Set by generator
     u32 polyVersion=-1;
     DynamicArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
@@ -317,11 +320,14 @@ struct Identifier {
     ScopeId scopeId=0;
     u32 varIndex=0;
     FnOverloads funcOverloads{};
+    ContentOrder order = 0;
 };
 struct VariableInfo {
-    i32 dataOffset = 0; // offset in frame, or offset in data segment
     i32 memberIndex = -1; // negative = normal variable, positive = variable in struct
-    TypeId typeId=AST_VOID;
+    // i32 dataOffset = 0; // offset in frame, or offset in data segment
+    // TypeId typeId=AST_VOID;
+    PolyVersions<i32> versions_dataOffset{};
+    PolyVersions<TypeId> versions_typeId{};
     bool globalData = false; // false
     // ScopeId scopeId = 0; // do you really need this variable? can you get the identifier instead?
 
@@ -331,6 +337,7 @@ struct ScopeInfo {
     std::string name; // namespace
     ScopeId id = 0;
     ScopeId parent = 0;
+    ContentOrder contentOrder = CONTENT_ORDER_ZERO; // the index of this scope in the parent content list
 
     std::unordered_map<std::string, ScopeId> nameScopeMap;
     std::unordered_map<std::string, TypeInfo*> nameTypeMap;
@@ -384,6 +391,9 @@ struct ASTExpression : ASTNode {
     TypeId castType={};
     OperationType assignOpType = (OperationType)0;
 
+    // Used if expression type is AST_ID
+    Identifier* identifier = nullptr;
+
     // TypeId finalType={}; // evaluated by type checker
 
     DynamicArray<ASTExpression*>* args=nullptr; // fncall or initialiser
@@ -432,12 +442,15 @@ struct ASTStatement : ASTNode {
         Token name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
         int arrayLength=-1;
+        bool declaration = false;
         PolyVersions<TypeId> versions_assignType{};
         // true if variable declares a new variable (it does if it has a type)
         // false if variable implicitly declares a new type OR assigns to an existing variable
-        bool declaration(){
-            return assignString.isValid();
-        }
+        // bool declaration(){
+        //     return assignString.isValid();
+        // }
+        
+        Identifier* identifier = nullptr; // the contents of the identifier are polymorphic
     };
     DynamicArray<VarName> varnames;
     std::string* alias = nullptr;
@@ -464,6 +477,7 @@ struct ASTStatement : ASTNode {
 
     PolyVersions<DynamicArray<TypeId>> versions_expresssionTypes; // types from firstExpression
 
+    u32 age = 0;
     bool rangedForLoop=false; // otherwise sliced for loop
     bool globalAssignment=false; // for variables, indicates whether variable refers to global data in data segment
     bool sharedContents = false; // this node is not the owner of it's nodes.
@@ -532,6 +546,7 @@ struct ASTEnum : ASTNode {
 };
 struct ASTFunction : ASTNode {
     Token name{};
+    Identifier* identifier = nullptr;
     
     struct PolyArg {
         Token name{};
@@ -541,6 +556,7 @@ struct ASTFunction : ASTNode {
         Token name{};
         ASTExpression* defaultValue=0;
         TypeId stringType={};
+        Identifier* identifier = nullptr;
     };
     struct Ret {
         TokenRange valueToken{}; // for error messages
@@ -576,17 +592,20 @@ struct ASTScope : ASTNode {
     bool isNamespace = false;
 
     DynamicArray<ASTStruct*> structs{};
-    void add(ASTStruct* astStruct, ASTStruct* tail = 0);
+    void add(AST* ast, ASTStruct* astStruct);
     
     DynamicArray<ASTEnum*> enums{};
-    void add(ASTEnum* astEnum, ASTEnum* tail = 0);
+    void add(AST* ast, ASTEnum* astEnum);
 
     DynamicArray<ASTFunction*> functions{};
-    void add(ASTFunction* astFunction, ASTFunction* tail = 0);
+    void add(AST* ast, ASTFunction* astFunction);
     
     DynamicArray<ASTScope*> namespaces{};
-    void add(ASTScope* astNamespace, AST* ast, ASTScope* tail = 0);
+    void add(AST* ast, ASTScope* astNamespaces);
     
+    DynamicArray<ASTStatement*> statements{};    
+    void add(AST* ast, ASTStatement* astStatement);
+
     // Using doesn't affect functions or structs because
     // functions and structs doesn't have an order while
     // using statements do. The code below should
@@ -603,10 +622,7 @@ struct ASTScope : ASTNode {
         SpoType spotType;
         u32 index;
     };
-    DynamicArray<Spot> contentOrder{};
-
-    DynamicArray<ASTStatement*> statements{};    
-    void add(ASTStatement* astStatement, ASTStatement* tail = 0);
+    DynamicArray<Spot> content{};
 
     void print(AST* ast, int depth);
 };
@@ -619,7 +635,7 @@ struct AST {
     //-- Scope stuff
     ScopeId globalScopeId=0;
     std::vector<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
-    ScopeInfo* createScope(ScopeId parentScope);
+    ScopeInfo* createScope(ScopeId parentScope, ContentOrder contentOrder);
     ScopeInfo* getScope(ScopeId id);
     // Searches specified scope for a scope with a certain name.
     // Does not check parent scopes.
@@ -668,13 +684,16 @@ struct AST {
 
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
-    Identifier* findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes = true);
+    // Identifier* findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes = true);
+    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const Token& name, bool searchParentScopes = true);
     VariableInfo* identifierToVariable(Identifier* identifier);
 
     // Returns nullptr if variable already exists or if scopeId is invalid
-    VariableInfo* addVariable(ScopeId scopeId, const Token& name, bool shadowPreviousVariables=false);
+    VariableInfo* addVariable(ScopeId scopeId, const Token& name, ContentOrder contentOrder, Identifier** identifier);
+    // VariableInfo* addVariable(ScopeId scopeId, const Token& name, bool shadowPreviousVariables=false, Identifier** identifier = nullptr);
     // Returns nullptr if variable already exists or if scopeId is invalid
-    Identifier* addIdentifier(ScopeId scopeId, const Token& name, bool shadowPreviousIdentifier=false);
+    Identifier* addIdentifier(ScopeId scopeId, const Token& name, ContentOrder contentOrder);
+    // Identifier* addIdentifier(ScopeId scopeId, const Token& name, bool shadowPreviousIdentifier=false);
 
     void removeIdentifier(ScopeId scopeId, const Token& name);
     void removeIdentifier(Identifier* identifier);

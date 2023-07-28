@@ -55,3 +55,13 @@ fn matchEnd(str: char[], match: char[]) -> bool {
     }
     return true
 }
+
+#import "Logger"
+fn printData(t: void*) {
+    at = 0;
+    while at < sizeof T {
+        byte: u8 = *(cast<u8*>t + at);
+        log(at,":",byte);
+        at++
+    }
+}

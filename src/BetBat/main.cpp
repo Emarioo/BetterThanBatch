@@ -165,14 +165,16 @@ int main(int argc, const char** argv){
     
     std::string compilerPath = argv[0];
 
+    // UserProfile* userProfile = UserProfile::CreateDefault();
+
     std::vector<std::string> tests; // could be const char*
     std::vector<std::string> files;
     std::vector<std::string> outFiles;
     std::vector<std::string> filesToRun;
 
     TargetPlatform target = BYTECODE;
-    #ifdef COMPILE_x64
-    target = WINDOWS_x64;
+    #ifdef CONFIG_DEFAULT_TARGET
+    target = CONFIG_DEFAULT_TARGET;
     #endif
 
     bool onlyPreprocess = false;
@@ -343,55 +345,55 @@ int main(int argc, const char** argv){
         compileOptions.initialSourceFile = DEV_FILE;
         #endif
 
-        #ifndef COMPILE_x64
+        if(compileOptions.target == BYTECODE){
         // interpreter
-        CompileAndRun(compileOptions);
-        #else
-        #define OBJ_FILE "bin/dev.obj"
-        #define EXE_FILE "dev.exe"
+            CompileAndRun(compileOptions);
+        } else {
+            #define OBJ_FILE "bin/dev.obj"
+            #define EXE_FILE "dev.exe"
 
-        // CompileOptions options{};
-        // CompileAndExport({"examples/x64_test.btb"}, EXE_FILE);
+            // CompileOptions options{};
+            // CompileAndExport({"examples/x64_test.btb"}, EXE_FILE);
 
-        Program_x64* program = nullptr;
-        Bytecode* bytecode = CompileSource({DEV_FILE});
-        // bytecode->codeSegment.used=0;
-        // bytecode->add({BC_DATAPTR, BC_REG_RBX});
-        // bytecode->addIm(0);
-        // bytecode->add({BC_MOV_MR, BC_REG_RBX, BC_REG_AL, 1});
-        
-        if(bytecode)
-            program = ConvertTox64(bytecode);
+            Program_x64* program = nullptr;
+            Bytecode* bytecode = CompileSource(compileOptions);
+            // bytecode->codeSegment.used=0;
+            // bytecode->add({BC_DATAPTR, BC_REG_RBX});
+            // bytecode->addIm(0);
+            // bytecode->add({BC_MOV_MR, BC_REG_RBX, BC_REG_AL, 1});
+            
+            if(bytecode)
+                program = ConvertTox64(bytecode);
 
-        defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
-        if(program){
-            program->printHex("temp.hex");
-            // program = Program_x64::Create();
-            // u8 arr[]={ 0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 };
-            // program->addRaw(arr,sizeof(arr));
-            // NamedRelocation nr{};
-            // nr.name = "printme";
-            // nr.textOffset = 0x5;
-            // program->namedRelocations.add(nr);
+            defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
+            if(program){
+                program->printHex("temp.hex");
+                // program = Program_x64::Create();
+                // u8 arr[]={ 0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 };
+                // program->addRaw(arr,sizeof(arr));
+                // NamedRelocation nr{};
+                // nr.name = "printme";
+                // nr.textOffset = 0x5;
+                // program->namedRelocations.add(nr);
 
-            WriteObjectFile(OBJ_FILE,program);
+                WriteObjectFile(OBJ_FILE,program);
 
-            // auto objFile = ObjectFile::DeconstructFile(OBJ_FILE, false);
-            // defer { ObjectFile::Destroy(objFile); };
+                // auto objFile = ObjectFile::DeconstructFile(OBJ_FILE, false);
+                // defer { ObjectFile::Destroy(objFile); };
 
-            // link the object file and run the resulting executable
-            // error level is printed because it's the only way to get
-            // an output from the executable at the moment.
-            // Printing and writing to files require linkConvention to stdio.h or windows.
-            i32 errorLevel = 0;
-            engone::StartProgram("","link /nologo " OBJ_FILE 
-            " bin/NativeLayer.lib"
-            " uuid.lib"
-            " /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
-            engone::StartProgram("",EXE_FILE,PROGRAM_WAIT,&errorLevel);
-            log::out << "Error level: "<<errorLevel<<"\n";
+                // link the object file and run the resulting executable
+                // error level is printed because it's the only way to get
+                // an output from the executable at the moment.
+                // Printing and writing to files require linkConvention to stdio.h or windows.
+                i32 errorLevel = 0;
+                engone::StartProgram("","link /nologo " OBJ_FILE 
+                " bin/NativeLayer.lib"
+                " uuid.lib"
+                " /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
+                engone::StartProgram("",EXE_FILE,PROGRAM_WAIT,&errorLevel);
+                log::out << "Error level: "<<errorLevel<<"\n";
+            }
         }
-        #endif
 
         // {
         //     auto objFile = ObjectFile::DeconstructFile("bin/obj_test.obj", true);

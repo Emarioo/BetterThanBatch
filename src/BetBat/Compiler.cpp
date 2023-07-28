@@ -290,7 +290,7 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
         if(as.empty()){
             info.ast->appendToMainBody(body);
         } else {
-            info.ast->mainBody->add(body, info.ast);
+            info.ast->mainBody->add(info.ast, body);
         }
     }
     return true;
@@ -308,6 +308,7 @@ Bytecode* CompileSource(CompileOptions options) {
     CompileInfo compileInfo{};
     compileInfo.nativeRegistry = NativeRegistry::Create();
     compileInfo.nativeRegistry->initNativeContent();
+    compileInfo.targetPlatform = options.target;
     
     compileInfo.ast = AST::Create();
     defer { AST::Destroy(compileInfo.ast); };
@@ -317,8 +318,9 @@ Bytecode* CompileSource(CompileOptions options) {
     for(auto& path : options.importDirectories){
         compileInfo.importDirectories.push_back(path);
     }
-
-    const char* essentialStructs = 
+    #ifndef DISABLE_BASE_STRUCTS
+    StringBuilder essentialStructs{};
+    essentialStructs +=
     // "struct Slice<T> {"
     "struct @hide Slice<T> {"
         "ptr: T*;"
@@ -329,16 +331,15 @@ Bytecode* CompileSource(CompileOptions options) {
         "beg: i32;"
         "end: i32;"
     "}\n"
-    #ifdef COMPILE_x64
-    "#define X64\n"
-    #endif
     #ifdef OS_WINDOWS
     "#define OS_WINDOWS\n"
     #elif defined(OS_LINUX)
     "#define OS_LINUX\n"
     #endif
     ;
-    ParseFile(compileInfo, "<base>","",(char*)essentialStructs, strlen(essentialStructs));
+    essentialStructs += (options.target == WINDOWS_x64 ? "#define X64\n" : "");
+    ParseFile(compileInfo, "<base>","",essentialStructs.data(), strlen(essentialStructs));
+    #endif
 
     if(options.rawSource.data){
         ParseFile(compileInfo, "<raw-data>","",(char*)options.rawSource.data, options.rawSource.used);
@@ -384,6 +385,9 @@ Bytecode* CompileSource(CompileOptions options) {
     compileInfo.ast = nullptr;
     if(compileInfo.errors!=0){
         log::out << log::RED<<"Compiler failed with "<<compileInfo.errors<<" error(s) ("<<FormatTime(seconds)<<", "<<FormatUnit((u64)compileInfo.lines)<<" line(s), " << FormatUnit(compileInfo.lines / seconds) << " loc/s)\n";
+        if(compileInfo.nativeRegistry == bytecode->nativeRegistry) {
+            bytecode->nativeRegistry = nullptr;
+        }
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
     }

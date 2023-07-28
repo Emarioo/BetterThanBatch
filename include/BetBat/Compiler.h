@@ -80,15 +80,15 @@ struct CompileInfo {
 
     // TODO: Don't use macros when deciding target platform
     TargetPlatform targetPlatform = 
-    #ifdef COMPILE_x64
-    #ifdef OS_WINDOWS
-    TargetPlatform::WINDOWS_x64
-    #elif defined(OS_LINUX)
-    TargetPlatform::LINUX_x64
-    #endif
-    #else
+    // #ifdef COMPILE_x64
+    // #ifdef OS_WINDOWS
+    // TargetPlatform::WINDOWS_x64
+    // #elif defined(OS_LINUX)
+    // TargetPlatform::LINUX_x64
+    // #endif
+    // #else
     TargetPlatform::BYTECODE
-    #endif
+    // #endif
     ;
     
     int typeErrors=0; // used in generator to avoid printing the same errors

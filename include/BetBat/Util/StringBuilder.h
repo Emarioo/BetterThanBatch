@@ -9,6 +9,7 @@
 struct Token;
 struct TokenRange;
 
+// String inside the builder is null terminated
 // TODO: Allocator which the builder uses
 struct StringBuilder {
     StringBuilder() = default;

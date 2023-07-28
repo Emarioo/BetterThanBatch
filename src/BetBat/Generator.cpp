@@ -709,7 +709,8 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
 
         if(now->typeId == AST_ID) {
             // end point
-            auto id = info.ast->findIdentifier(idScope, now->name);
+            // auto id = info.ast->findIdentifier(idScope, now->name);
+            auto id = now->identifier;
             if (!id || id->type != Identifier::VAR) {
                 if(info.compileInfo->typeErrors==0){
                     ERR_HEAD3(now->tokenRange, "'"<<now->tokenRange.firstToken << " is undefined.\n\n";
@@ -719,7 +720,7 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 return SignalDefault::FAILURE;
             }
         
-            auto var = info.ast->identifierToVariable(id);
+            auto varinfo = info.ast->identifierToVariable(id);
             _GLOG(log::out << " expr var push " << now->name << "\n";)
             // TOKENINFO(now->tokenRange)
             // char buf[100];
@@ -727,15 +728,15 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
             // info.code->addDebugText(buf,len);
 
             TypeInfo *typeInfo = 0;
-            if(var->typeId.isNormalType())
-                typeInfo = info.ast->getTypeInfo(var->typeId);
-            TypeId typeId = var->typeId;
+            if(varinfo->versions_typeId[info.currentPolyVersion].isNormalType())
+                typeInfo = info.ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
+            TypeId typeId = varinfo->versions_typeId[info.currentPolyVersion];
             
-            if(var->globalData) {
+            if(varinfo->globalData) {
                 info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                info.code->addIm(var->dataOffset);
+                info.code->addIm(varinfo->versions_dataOffset[info.currentPolyVersion]);
             } else {
-                info.addLoadIm(BC_REG_RBX, var->dataOffset);
+                info.addLoadIm(BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                 info.addInstruction({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
             }
             info.addPush(BC_REG_RBX);
@@ -1060,10 +1061,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             }
             // }
             // check data type and get it
-            auto id = info.ast->findIdentifier(idScope, expression->name);
+            // auto id = info.ast->findIdentifier(idScope, , expression->name);
+            auto id = expression->identifier;
             if (id) {
                 if (id->type == Identifier::VAR) {
                     auto var = info.ast->identifierToVariable(id);
+                    // auto var = info.ast->identifierToVariable(id);
                     // TODO: check data type?
                     // fp + offset
                     // TODO: what about struct
@@ -1076,13 +1079,13 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     
                     if(var->globalData) {
                         info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                        info.code->addIm(var->dataOffset);
-                        GeneratePush(info, BC_REG_RBX, 0, var->typeId);
+                        info.code->addIm(var->versions_dataOffset[info.currentPolyVersion]);
+                        GeneratePush(info, BC_REG_RBX, 0, var->versions_typeId[info.currentPolyVersion]);
                     } else {
-                        GeneratePush(info, BC_REG_FP, var->dataOffset, var->typeId);
+                        GeneratePush(info, BC_REG_FP, var->versions_dataOffset[info.currentPolyVersion], var->versions_typeId[info.currentPolyVersion]);
                     }
 
-                    outTypeIds->add(var->typeId);
+                    outTypeIds->add(var->versions_typeId[info.currentPolyVersion]);
                     return SignalDefault::SUCCESS;
                 } else if (id->type == Identifier::FUNC) {
                     _GLOG(log::out << " expr func push " << expression->name << "\n";)
@@ -1270,10 +1273,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         outTypeIds->add(AST_UINT64);
                         outTypeIds->add(AST_UINT32);
                     } else if(funcImpl->name == "compare_swap"){
-                        info.addPop(BC_REG_RBX);
-                        info.addPop(BC_REG_EAX);
                         info.addPop(BC_REG_EDX);
-                        info.addInstruction({BC_RDTSCP, BC_REG_RBX, BC_REG_EAX, BC_REG_EDX});
+                        info.addPop(BC_REG_EAX);
+                        info.addPop(BC_REG_RBX);
+                        info.addInstruction({BC_CMP_SWAP, BC_REG_RBX, BC_REG_EAX, BC_REG_EDX});
                         info.addPush(BC_REG_AL);
                         
                         outTypeIds->add(AST_BOOL);
@@ -2531,7 +2534,7 @@ SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId
             if (member.defaultValue) {
                 TypeId typeId = {};
                 SignalDefault result = GenerateExpression(info, member.defaultValue, &typeId);
-                if (memdata.typeId != typeId) {
+                if (!PerformSafeCast(info, memdata.typeId, typeId)) {
                     ERRTYPE(member.defaultValue->tokenRange, memdata.typeId, typeId, "(default member)\n");
                     
                 }
@@ -2574,7 +2577,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
     //  are generated.
     Identifier* identifier = nullptr;
     if(!astStruct){
-        identifier = info.ast->findIdentifier(info.currentScopeId, function->name);
+        // TODO: Store function identifier in AST
+        identifier = info.ast->findIdentifier(info.currentScopeId, CONTENT_ORDER_MAX, function->name);
         if (!identifier) {
             // NOTE: function may not have been added in the type checker stage for some reason.
             // THANK YOU, past me for writing this note. I was wondering what I broke and reading the
@@ -2719,17 +2723,18 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // for(int i = function->arguments.size()-1;i>=0;i--){
                     auto &arg = function->arguments[i];
                     auto &argImpl = funcImpl->argumentTypes[i];
-                    auto var = info.ast->addVariable(info.currentScopeId, arg.name);
+                    // auto var = info.ast->addVariable(info.currentScopeId, arg.name);
+                    auto var = info.ast->identifierToVariable(arg.identifier);
                     if (!var) {
                         ERR_HEAD3(arg.name.range(), arg.name << " is already defined.\n";
                             ERR_LINE(arg.name.range(),"cannot use again");
                         )
                     }
-                    var->typeId = argImpl.typeId;
+                    // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
                     // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
-                    var->globalData = false;
-                    var->dataOffset = GenInfo::FRAME_SIZE + argImpl.offset;
-                    _GLOG(log::out << " " <<"["<<var->dataOffset<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
+                    // var->globalData = false;
+                    var->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + argImpl.offset;
+                    _GLOG(log::out << " " <<"["<<var->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
                 }
                 _GLOG(log::out << "\n";)
             }
@@ -2829,14 +2834,16 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // for(int i = function->arguments.size()-1;i>=0;i--){
                     auto &arg = function->arguments[i];
                     auto &argImpl = funcImpl->argumentTypes[i];
-                    auto var = info.ast->addVariable(info.currentScopeId, arg.name);
+                    Assert(arg.identifier); // bug in compiler?
+                    auto var = info.ast->identifierToVariable(arg.identifier);
+                    // auto var = info.ast->addVariable(info.currentScopeId, arg.name);
                     if (!var) {
                         ERR_HEAD3(arg.name.range(), arg.name << " is already defined.\n";
                             ERR_LINE(arg.name.range(),"cannot use again");
                         )
                     }
-                    var->typeId = argImpl.typeId;
-                    u8 size = info.ast->getTypeSize(var->typeId);
+                    // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
+                    u8 size = info.ast->getTypeSize(var->versions_typeId[info.currentPolyVersion]);
                     if(size>8) {
                         ERR_SECTION(
                             ERR_HEAD(arg.name)
@@ -2847,8 +2854,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
                     // stdcall should put first 4 args in registers but the function will put
                     // the arguments onto the stack automatically so in the end 8*i will work fine.
-                    var->dataOffset = GenInfo::FRAME_SIZE + 8 * i;
-                    _GLOG(log::out << " " <<"["<<var->dataOffset<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
+                    var->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + 8 * i;
+                    _GLOG(log::out << " " <<"["<<var->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
                 }
                 _GLOG(log::out << "\n";)
             }
@@ -3076,55 +3083,64 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     }
                     continue;
                 }
-                bool wasDeclaration = false;
-                Identifier* varIdentifier = info.ast->findIdentifier(info.currentScopeId, varname.name);
-                VariableInfo* varinfo = nullptr;
+
+                Identifier* varIdentifier = varname.identifier;
                 if(!varIdentifier){
-                    varinfo = info.ast->addVariable(info.currentScopeId, varname.name);
-                    varinfo->globalData = statement->globalAssignment;
-                    Assert(varinfo);
-                    varsToRemove.add(varname.name);
-                    varinfo->typeId = declaredType;
-                    wasDeclaration = true;
-                } else if(varIdentifier->type==Identifier::VAR) {
-                    // variable is already defined
-                    varinfo = info.ast->identifierToVariable(varIdentifier);
-                    Assert(varinfo);
-                    if(varname.declaration()){
-                        if(varIdentifier->scopeId == info.currentScopeId) {
-                            // info.ast->removeIdentifier(varIdentifier->scopeId, varname.name); // add variable already does this
-                            varinfo = info.ast->addVariable(info.currentScopeId, varname.name, true);
-                        } else {
-                            varinfo = info.ast->addVariable(info.currentScopeId, varname.name, true);
-                        }
-                        varinfo->globalData = statement->globalAssignment;
-                        varsToRemove.add(varname.name);
-                        Assert(varinfo);
-                        varinfo->typeId = declaredType;
-                        wasDeclaration=true;
-                    } else {
-                        // TODO: Check casting
-                        if(!info.ast->castable(declaredType, varinfo->typeId)){
-                            if(info.compileInfo->typeErrors==0){
-                                std::string leftstr = info.ast->typeToString(varinfo->typeId);
-                                std::string rightstr = info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]);
-                                ERR_HEAD3(statement->tokenRange, "Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.\n\n";
-                                    ERR_LINE(varname.name, leftstr.c_str());
-                                    ERR_LINE(statement->firstExpression->tokenRange,rightstr.c_str());
-                                )
-                            }
-                            // ERR_HEAD3(varname.name.range(), "Type mismatch when assigning.\n\n";
-                            //     ERR_LINE(varname.name.range(),"bad");
-                            // )
-                            continue;
-                        }
-                    }
-                } else {
-                    ERR_HEAD3(varname.name.range(), "'"<<varname.name<<"' is defined as a non-variable and cannot be used.\n\n";
-                        ERR_LINE(varname.name, "bad");
-                    )
+                    Assert(info.errors!=0); // there should have been errors
                     continue;
                 }
+                VariableInfo* varinfo = info.ast->identifierToVariable(varIdentifier);
+                if(!varinfo){
+                    Assert(info.errors!=0); // there should have been errors
+                    continue;
+                }
+                //  info.ast->findIdentifier(info.currentScopeId, varname.name);
+                // if(!varIdentifier){
+                //     varinfo = info.ast->addVariable(info.currentScopeId, varname.name);
+                //     varinfo->globalData = statement->globalAssignment;
+                //     Assert(varinfo);
+                //     varsToRemove.add(varname.name);
+                //     varinfo->typeId = declaredType;
+                //     wasDeclaration = true;
+                // } else if(varIdentifier->type==Identifier::VAR) {
+                //     // variable is already defined
+                //     varinfo = info.ast->identifierToVariable(varIdentifier);
+                //     Assert(varinfo);
+                //     if(varname.declaration()){
+                //         if(varIdentifier->scopeId == info.currentScopeId) {
+                //             // info.ast->removeIdentifier(varIdentifier->scopeId, varname.name); // add variable already does this
+                //             varinfo = info.ast->addVariable(info.currentScopeId, varname.name, true);
+                //         } else {
+                //             varinfo = info.ast->addVariable(info.currentScopeId, varname.name, true);
+                //         }
+                //         varinfo->globalData = statement->globalAssignment;
+                //         varsToRemove.add(varname.name);
+                //         Assert(varinfo);
+                //         varinfo->typeId = declaredType;
+                //         wasDeclaration=true;
+                //     } else {
+                //         // TODO: Check casting
+                //         if(!info.ast->castable(declaredType, varinfo->typeId)){
+                //             if(info.compileInfo->typeErrors==0){
+                //                 std::string leftstr = info.ast->typeToString(varinfo->typeId);
+                //                 std::string rightstr = info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]);
+                //                 ERR_HEAD3(statement->tokenRange, "Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.\n\n";
+                //                     ERR_LINE(varname.name, leftstr.c_str());
+                //                     ERR_LINE(statement->firstExpression->tokenRange,rightstr.c_str());
+                //                 )
+                //             }
+                //             // ERR_HEAD3(varname.name.range(), "Type mismatch when assigning.\n\n";
+                //             //     ERR_LINE(varname.name.range(),"bad");
+                //             // )
+                //             continue;
+                //         }
+                //     }
+                // } else {
+                //     ERR_HEAD3(varname.name.range(), "'"<<varname.name<<"' is defined as a non-variable and cannot be used.\n\n";
+                //         ERR_LINE(varname.name, "bad");
+                //     )
+                //     continue;
+                // }
                 // is this casting handled already? type checker perhaps?
                 // if(!info.ast->castable(typeFromExpr, declaredType)) {
                 //     ERRTYPE(statement->tokenRange, declaredType, typeFromExpr, "(assign)\n";
@@ -3138,7 +3154,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 // i32 asize = info.ast->getTypeAlignedSize(var->typeId);
 
                 int alignment = 0;
-                if (wasDeclaration) {
+                if (varname.declaration) {
                     // if (leftSize == 0) {
                     //     ERR_HEAD3(statement->tokenRange, "Size of type " << "?" << " was 0\n";
                     //     )
@@ -3163,7 +3179,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         // when slice is used but this may not be true in the future.
                         int arrayFrameOffset = 0;
                         {
-                            TypeInfo *typeInfo = info.ast->getTypeInfo(varinfo->typeId.baseType());
+                            TypeInfo *typeInfo = info.ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion].baseType());
                             TypeId innerType = typeInfo->structImpl->polyArgs[0];
                             if(!innerType.isValid())
                                 continue; // error message should have been printed in type checker
@@ -3204,7 +3220,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         // var->frameOffset = info.currentFrameOffset;
 
                         
-                        SignalDefault result = FramePush(info,varinfo->typeId,&varinfo->dataOffset,false, varinfo->globalData);
+                        SignalDefault result = FramePush(info,varinfo->versions_typeId[info.currentPolyVersion],&varinfo->versions_dataOffset[info.currentPolyVersion],false, varinfo->globalData);
 
                         // TODO: Don't hardcode this slice stuff, maybe I have to.
                         // push length
@@ -3216,19 +3232,19 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         info.addInstruction({BC_ADDI,BC_REG_RBX, BC_REG_FP, BC_REG_RBX});
                         info.addPush(BC_REG_RBX);
 
-                        GeneratePop(info, BC_REG_FP, varinfo->dataOffset, varinfo->typeId);
+                        GeneratePop(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                     } else {
-                        SignalDefault result = FramePush(info, varinfo->typeId, &varinfo->dataOffset,
+                        SignalDefault result = FramePush(info, varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
                             !statement->firstExpression && !varinfo->globalData, varinfo->globalData);
                     }
-                    _GLOG(log::out << "declare " << (varinfo->globalData?"global ":"")<< varname.name << " at " << varinfo->dataOffset << "\n";)
+                    _GLOG(log::out << "declare " << (varinfo->globalData?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
                     // NOTE: inconsistent
                     // char buf[100];
                     // int len = sprintf(buf," ^ was assigned %s",statement->name->c_str());
                     // info.code->addDebugText(buf,len);
                 }
                 if(varinfo){
-                    _GLOG(log::out << " " << varname.name << " : " << info.ast->typeToString(varinfo->typeId) << "\n";)
+                    _GLOG(log::out << " " << varname.name << " : " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << "\n";)
                 }
             }
             if(statement->firstExpression){
@@ -3253,24 +3269,27 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         GeneratePop(info, 0, 0, typeFromExpr);
                         continue;
                     }
+                    auto& varname = statement->varnames[i];
                     _GLOG(log::out << log::LIME <<"assign pop "<<info.ast->typeToString(typeFromExpr)<<"\n";)
                     
-                    TypeId stateTypeId = statement->varnames[i].versions_assignType[info.currentPolyVersion];
-                    Token* name = &statement->varnames[i].name;
-                    auto id = info.ast->findIdentifier(info.currentScopeId, *name);
-                    if(!id){
-                        Assert(info.errors!=0); // there should have been errors
-                        continue;
-                    }
+                    TypeId stateTypeId = varname.versions_assignType[info.currentPolyVersion];
+                    Identifier* id = varname.identifier;
+
+                    // Token* name = &statement->varnames[i].name;
+                    // auto id = info.ast->findIdentifier(info.currentScopeId, *name);
+                    // if(!id){
+                    //     Assert(info.errors!=0); // there should have been errors
+                    //     continue;
+                    // }
                     VariableInfo* var = info.ast->identifierToVariable(id);
                     if(!var){
                         Assert(info.errors!=0); // there should have been errors
                         continue;
                     }
 
-                    if(!PerformSafeCast(info, typeFromExpr, var->typeId)){
+                    if(!PerformSafeCast(info, typeFromExpr, var->versions_typeId[info.currentPolyVersion])){
                         if(info.compileInfo->typeErrors==0){
-                            ERRTYPE(statement->tokenRange, var->typeId, typeFromExpr, "(assign).\n\n";
+                            ERRTYPE(statement->tokenRange, var->versions_typeId[info.currentPolyVersion], typeFromExpr, "(assign).\n\n";
                                 ERR_LINE(statement->tokenRange,"bad");
                             )
                         }
@@ -3279,10 +3298,10 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     // Assert(!var->globalData || info.currentScopeId == info.ast->globalScopeId);
                     if(var->globalData) {
                         info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                        info.code->addIm(var->dataOffset);
-                        GeneratePop(info, BC_REG_RBX, 0, var->typeId);
+                        info.code->addIm(var->versions_dataOffset[info.currentPolyVersion]);
+                        GeneratePop(info, BC_REG_RBX, 0, var->versions_typeId[info.currentPolyVersion]);
                     } else {
-                        GeneratePop(info, BC_REG_FP, var->dataOffset, var->typeId);
+                        GeneratePop(info, BC_REG_FP, var->versions_dataOffset[info.currentPolyVersion], var->versions_typeId[info.currentPolyVersion]);
                     }
                 }
             }
@@ -3401,7 +3420,6 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
             };
 
-            Assert(statement->varnames.size()==1);
 
             int stackBeforeLoop = info.saveStackMoment();
             int frameBeforeLoop = info.currentFrameOffset;
@@ -3413,29 +3431,30 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             // not sure how well this works, we shall see.
             ScopeId scopeForVariables = statement->firstBody->scopeId;
 
+            Assert(statement->varnames.size()==2);
+            auto& varnameIt = statement->varnames[0];
+            auto& varnameNr = statement->varnames[1];
+            if(!varnameIt.versions_assignType[info.currentPolyVersion].isValid() || !varnameNr.versions_assignType[info.currentPolyVersion].isValid()){
+                // error has probably been handled somewhere. no need to print again.
+                continue;
+            }
+            if(!varnameNr.identifier || !varnameIt.identifier) {
+                if(info.compileInfo->typeErrors==0){
+                    ERR_SECTION(
+                        ERR_HEAD(statement->tokenRange)
+                        ERR_MSG("Identifier '"<<(varnameNr.identifier ? (varnameIt.identifier ? StringBuilder{} << varnameIt.name : "") : (varnameIt.identifier ? (StringBuilder{} << varnameNr.name <<" and " << varnameIt.name) : StringBuilder{} << varnameNr.name))<<"' in for loop was null. Bug in compiler?")
+                        ERR_LINE(statement->tokenRange, "")
+                    )
+                }
+                continue;
+            }
+            auto varinfo_index = info.ast->identifierToVariable(varnameNr.identifier);
+            auto varinfo_item = info.ast->identifierToVariable(varnameIt.identifier);
+
             if(statement->rangedForLoop){
-                Token& itemvar = statement->varnames[0].name;
-                TypeId itemtype = statement->varnames[0].versions_assignType[info.currentPolyVersion];
-                if(!itemtype.isValid()){
-                    // error has probably been handled somewhere. no need to print again.
-                    continue;
-                }
-                auto* varinfo_index = info.ast->addVariable(scopeForVariables,"nr");
-                if(!varinfo_index) {
-                    ERR_HEAD3(statement->tokenRange, "nr variable already exists\n.";)
-                    continue;
-                }
+                // TypeId itemtype = varname.versions_assignType[info.currentPolyVersion];
+                // auto varinfo_index = info.ast->addVariable(scopeForVariables,"nr", nullptr);
                 // auto iden = info.ast->findIdentifier(scopeForVariables,"nr");
-                // log::out << "IDEN VAR INDEX, "<<iden->varIndex<<"\n";
-
-                auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
-                 if(!varinfo_item) {
-                    ERR_HEAD3(statement->tokenRange, itemvar << " variable already exists\n.";)
-                    continue;
-                }
-                varinfo_item->typeId = itemtype;
-                varinfo_index->typeId = itemtype;
-
                 {
                     // i32 size = info.ast->getTypeSize(varinfo_index->typeId);
                     // i32 asize = info.ast->getTypeAlignedSize(varinfo_index->typeId);
@@ -3451,8 +3470,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     // TypeId typeId = statement->varnames[0].versions_assignType[info.currentPolyVersion];
                     TypeId typeId = AST_INT32; // you may want to use the type in varname, the reason i don't is because
                     // i seem to have used EAX here so it's best to keep doing that until i decide to fix this for real.
-                    FramePush(info, typeId, &varinfo_index->dataOffset,false, false);
-                    varinfo_item->dataOffset = varinfo_index->dataOffset;
+                    FramePush(info, typeId, &varinfo_index->versions_dataOffset[info.currentPolyVersion],false, false);
+                    varinfo_item->versions_dataOffset[info.currentPolyVersion] = varinfo_index->versions_dataOffset[info.currentPolyVersion];
 
                     TypeId dtype = {};
                     // Type should be checked in type checker and further down
@@ -3472,7 +3491,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         // before going into the loop
                     }
                     info.addPush(BC_REG_EAX);
-                    GeneratePop(info, BC_REG_FP, varinfo_index->dataOffset, typeId);
+                    GeneratePop(info, BC_REG_FP, varinfo_index->versions_dataOffset[info.currentPolyVersion], typeId);
                 }
                 // i32 itemsize = info.ast->getTypeSize(varinfo_item->typeId);
 
@@ -3502,7 +3521,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
 
                 info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, index_reg, 4});
-                info.code->addIm(varinfo_index->dataOffset);
+                info.code->addIm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->reverse){
                     info.addInstruction({BC_INCR,index_reg, 0xFF, 0xFF}); // hexidecimal represent -1
@@ -3511,7 +3530,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
                 
                 info.addInstruction({BC_MOV_RM_DISP32, index_reg, BC_REG_FP, 4});
-                info.code->addIm(varinfo_index->dataOffset);
+                info.code->addIm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->reverse){
                     // info.code->addDebugText("For condition (reversed)\n");
@@ -3536,16 +3555,9 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     info.code->getIm(ind) = info.code->length();
                 }
                 
-                info.ast->removeIdentifier(scopeForVariables, "nr");
-                info.ast->removeIdentifier(scopeForVariables, itemvar);
+                // info.ast->removeIdentifier(scopeForVariables, "nr");
+                // info.ast->removeIdentifier(scopeForVariables, itemvar);
             }else{
-                auto* varinfo_index = info.ast->addVariable(scopeForVariables,"nr");
-                if(!varinfo_index) {
-                    ERR_HEAD3(statement->tokenRange, "nr variable already exists\n.";)
-                    continue;
-                }
-                varinfo_index->typeId = AST_INT32;
-
                 {
                     // i32 size = info.ast->getTypeSize(varinfo_index->typeId);
                     // i32 asize = info.ast->getTypeAlignedSize(varinfo_index->typeId);
@@ -3558,7 +3570,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     // info.currentFrameOffset -= size;
                     // varinfo_index->frameOffset = info.currentFrameOffset;
 
-                    SignalDefault result = FramePush(info, varinfo_index->typeId, &varinfo_index->dataOffset, false, false);
+                    SignalDefault result = FramePush(info, varinfo_index->versions_typeId[info.currentPolyVersion], &varinfo_index->versions_dataOffset[info.currentPolyVersion], false, false);
 
                     if(statement->reverse){
                         TypeId dtype = {};
@@ -3576,31 +3588,33 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     }
                     info.addPush(BC_REG_EAX);
 
-                    Assert(varinfo_index->typeId == AST_INT32);
+                    Assert(varinfo_index->versions_typeId[info.currentPolyVersion] == AST_INT32);
 
-                    GeneratePop(info, BC_REG_FP,varinfo_index->dataOffset,varinfo_index->typeId);
+                    GeneratePop(info, BC_REG_FP,varinfo_index->versions_dataOffset[info.currentPolyVersion],varinfo_index->versions_typeId[info.currentPolyVersion]);
                 }
-                Token& itemvar = statement->varnames[0].name;
-                TypeId itemtype = statement->varnames[0].versions_assignType[info.currentPolyVersion];
-                if(!itemtype.isValid()){
-                    // error has probably been handled somewhere. no need to print again.
-                    // if it wasn't and you just found out that things went wrong here
-                    // then sorry.
-                    continue;
-                }
-                i32 itemsize = info.ast->getTypeSize(itemtype);
-                auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
-                varinfo_item->typeId = itemtype;
-                if(statement->pointer){
-                    varinfo_item->typeId.setPointerLevel(varinfo_item->typeId.getPointerLevel()+1);
-                }
+                // Token& itemvar = varname.name;
+                // TypeId itemtype = varname.versions_assignType[info.currentPolyVersion];
+                // if(!itemtype.isValid()){
+                //     // error has probably been handled somewhere. no need to print again.
+                //     // if it wasn't and you just found out that things went wrong here
+                //     // then sorry.
+                //     continue;
+                // }
+                i32 itemsize = info.ast->getTypeSize(varnameIt.versions_assignType[info.currentPolyVersion]);
+                // auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
+                // auto varinfo_item = info.ast->identifierToVariable(varname.identifier);
+                //  info.ast->addVariable(scopeForVariables,itemvar);
+                // varinfo_item->typeId = itemtype;
+                // if(statement->pointer){
+                //     varinfo_item->versions_typeId[info.currentPolyVersion].setPointerLevel(varinfo_item->typeId.getPointerLevel()+1);
+                // }
                 {
                     // TODO: Automate this code. Pushing and popping variables from the frame is used often and should be functions.
-                    i32 asize = info.ast->getTypeAlignedSize(varinfo_item->typeId);
+                    i32 asize = info.ast->getTypeAlignedSize(varinfo_item->versions_typeId[info.currentPolyVersion]);
                     if(asize==0)
                         continue;
 
-                    SignalDefault result = FramePush(info, varinfo_item->typeId, &varinfo_item->dataOffset, true, false);
+                    SignalDefault result = FramePush(info, varinfo_item->versions_typeId[info.currentPolyVersion], &varinfo_item->versions_dataOffset[info.currentPolyVersion], true, false);
                 }
 
                 _GLOG(log::out << "push loop\n");
@@ -3633,14 +3647,14 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 // info.code->addDebugText("Index increment/decrement\n");
 
                 info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, index_reg, 4});
-                info.code->addIm(varinfo_index->dataOffset);
+                info.code->addIm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
                 if(statement->reverse){
                     info.addInstruction({BC_INCR,index_reg, 0xFF, 0xFF}); // hexidecimal represent -1
                 }else{
                     info.addInstruction({BC_INCR,index_reg,1});
                 }
                 info.addInstruction({BC_MOV_RM_DISP32, index_reg, BC_REG_FP, 4});
-                info.code->addIm(varinfo_index->dataOffset);
+                info.code->addIm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->reverse){
                     // info.code->addDebugText("For condition (reversed)\n");
@@ -3667,10 +3681,10 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 info.addInstruction({BC_ADDI, ptr_reg, index_reg, src_reg});
                 if(statement->pointer){
                     info.addInstruction({BC_MOV_RM_DISP32, src_reg, BC_REG_FP, 8});
-                    info.code->addIm(varinfo_item->dataOffset);
+                    info.code->addIm(varinfo_item->versions_dataOffset[info.currentPolyVersion]);
 
                 } else {
-                    info.addLoadIm(BC_REG_RAX,varinfo_item->dataOffset);
+                    info.addLoadIm(BC_REG_RAX,varinfo_item->versions_dataOffset[info.currentPolyVersion]);
                     info.addInstruction({BC_MOV_RR, BC_REG_FP, dst_reg});
                     info.addInstruction({BC_ADDI,dst_reg, BC_REG_RAX, dst_reg});
 
@@ -3691,8 +3705,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 // delete nr, frameoffset needs to be changed to if so
                 // info.addPop(BC_REG_EAX); 
 
-                info.ast->removeIdentifier(scopeForVariables, "nr");
-                info.ast->removeIdentifier(scopeForVariables, itemvar);
+                // info.ast->removeIdentifier(scopeForVariables, "nr");
+                // info.ast->removeIdentifier(scopeForVariables, itemvar);
             }
 
             info.restoreStackMoment(stackBeforeLoop);
@@ -3842,21 +3856,22 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
             Token* name = &statement->varnames[0].name;
 
-            auto origin = info.ast->findIdentifier(info.currentScopeId, *name);
-            if(!origin){
-                ERR_HEAD2(statement->tokenRange) << *name << " is not a variable (using)\n";
+            // auto origin = info.ast->findIdentifier(info.currentScopeId, *name);
+            // if(!origin){
+            //     ERR_HEAD2(statement->tokenRange) << *name << " is not a variable (using)\n";
                 
-                return SignalDefault::FAILURE;
-            }
-            auto aliasId = info.ast->addIdentifier(info.currentScopeId, *statement->alias);
-            if(!aliasId){
-                ERR_HEAD2(statement->tokenRange) << *statement->alias << " is already a variable or alias (using)\n";
+            //     return SignalDefault::FAILURE;
+            // }
+            // Fix something with content order? Is something fixed in type checker? what?
+            // auto aliasId = info.ast->addIdentifier(info.currentScopeId, *statement->alias);
+            // if(!aliasId){
+            //     ERR_HEAD2(statement->tokenRange) << *statement->alias << " is already a variable or alias (using)\n";
                 
-                return SignalDefault::FAILURE;
-            }
+            //     return SignalDefault::FAILURE;
+            // }
 
-            aliasId->type = origin->type;
-            aliasId->varIndex = origin->varIndex;
+            // aliasId->type = origin->type;
+            // aliasId->varIndex = origin->varIndex;
         } else if (statement->type == ASTStatement::DEFER) {
             _GLOG(SCOPE_LOG("DEFER"))
 
@@ -3869,9 +3884,10 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             // Is it okay to do nothing with result?
         }
     }
-    for(auto& name : varsToRemove){
-        info.ast->removeIdentifier(body->scopeId,name);
-    }
+    Assert(varsToRemove.size()==0);
+    // for(auto& name : varsToRemove){
+    //     info.ast->removeIdentifier(body->scopeId,name);
+    // }
     if (lastOffset != info.currentFrameOffset) {
         _GLOG(log::out << "fix sp when exiting body\n";)
         // info.code->addDebugText("fix sp when exiting body\n");
@@ -3935,7 +3951,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         // skip jump instruction if no functions where generated
         info.popInstructions(2); // pop JMP and immediate
         // info.code->codeSegment.used = 0;
-        log::out << "Delete jump instruction\n";
+        _GLOG(log::out << "Delete jump instruction\n";)
     } else {
         info.code->getIm(skipIndex) = info.code->length();
     }

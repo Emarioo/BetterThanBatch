@@ -130,8 +130,10 @@ fn @hide _print(t: char){
     prints(Slice<char>{&t, 1})
 }
 fn @hide _print(t: bool){
-    if(t) prints("true");
-    else prints("false");
+    if t
+        prints("true");
+    else
+        prints("false");
 }
 fn @hide _print(t: char[]){
     prints(t);
@@ -142,3 +144,6 @@ fn @hide _print(t: char[]){
 #define print(X,...) _print(X); print(...);
 #define print()
 #define println(...) print(...); _print("\n");
+
+#define log(X, ...) _print(X); _print(' '); log(...)
+#define log(X) _print(X); _print('\n')

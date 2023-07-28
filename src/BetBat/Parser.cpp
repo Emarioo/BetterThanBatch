@@ -396,7 +396,7 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     //  internal namespaces, structs, enums...
 
     // Func
-    ScopeInfo* structScope = info.ast->createScope(info.currentScopeId);
+    ScopeInfo* structScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
     astStruct->scopeId = structScope->id;
 
     // ensure scope is the same when returning
@@ -607,7 +607,7 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
     // astNamespace->tokenRange.tokenStream = info.tokens;
     astNamespace->hidden = hideAnnotation;
 
-    ScopeInfo* newScope = info.ast->createScope(info.currentScopeId);
+    ScopeInfo* newScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
     astNamespace->scopeId = newScope->id;
 
     newScope->name = name;
@@ -657,16 +657,16 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
         // We add the AST structures even during error to
         // avoid leaking memory.
         if(tempNamespace) {
-            astNamespace->add(tempNamespace, info.ast);
+            astNamespace->add(info.ast, tempNamespace);
         }
         if(tempFunction) {
-            astNamespace->add(tempFunction);
+            astNamespace->add(info.ast, tempFunction);
         }
         if(tempStruct) {
-            astNamespace->add(tempStruct);
+            astNamespace->add(info.ast, tempStruct);
         }
         if(tempEnum) {
-            astNamespace->add(tempEnum);
+            astNamespace->add(info.ast, tempEnum);
         }
     }
 
@@ -1907,6 +1907,10 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         }
         statement = info.ast->createStatement(ASTStatement::FOR);
         statement->varnames.add({varname});
+        std::string* strnr = info.ast->createString();
+        *strnr = "nr";
+        Token nrToken = *strnr;
+        statement->varnames.add({nrToken});
         statement->reverse = reverseAnnotation;
         statement->pointer = pointerAnnot;
         statement->firstExpression = expr;
@@ -2089,7 +2093,7 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
 
     function->name = name;
 
-    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId);
+    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
     function->scopeId = funcScope->id;
 
     // ensure we leave this parse function with the same scope we entered with
@@ -2377,7 +2381,7 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
     }
     function->name = name;
 
-    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId);
+    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
     function->scopeId = funcScope->id;
 
     // ensure we leave this parse function with the same scope we entered with
@@ -2754,7 +2758,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             if(Equal(token,"{")) {
                 token = info.next();
                 scoped=true;
-                ScopeInfo* scopeInfo = info.ast->createScope(parentScope);
+                ScopeInfo* scopeInfo = info.ast->createScope(parentScope, info.getNextOrder());
                 bodyLoc->scopeId = scopeInfo->id;
 
                 info.currentScopeId = bodyLoc->scopeId;
@@ -2769,6 +2773,9 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         bodyLoc->tokenRange.firstToken = info.get(info.at()+1);
         // endToken is set later
     }
+
+    info.nextContentOrder.push_back(CONTENT_ORDER_ZERO);
+    defer { info.nextContentOrder.pop_back(); };
 
     DynamicArray<ASTStatement*> nearDefers{};
 
@@ -2868,7 +2875,8 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                             deferCopy->firstBody = myDefer->firstBody;
                             deferCopy->sharedContents = true;
 
-                            bodyLoc->add(deferCopy);
+                            bodyLoc->add(info.ast, deferCopy);
+                            info.nextContentOrder.back()++;
                         }
                     }
                     for(int j=info.functionScopes.last().defers.size()-1;j>=0;j--){
@@ -2878,7 +2886,8 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                         deferCopy->firstBody = myDefer->firstBody;
                         deferCopy->sharedContents = true;
 
-                        bodyLoc->add(deferCopy);
+                        bodyLoc->add(info.ast, deferCopy);
+                        info.nextContentOrder.back()++;
                     }
                 } else if(tempStatement->type == ASTStatement::CONTINUE || tempStatement->type == ASTStatement::BREAK){
                     if(info.functionScopes.last().loopScopes.size()!=0){
@@ -2890,24 +2899,30 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                             deferCopy->firstBody = myDefer->firstBody;
                             deferCopy->sharedContents = true;
 
-                            bodyLoc->add(deferCopy);
+                            bodyLoc->add(info.ast, deferCopy);
+                            info.nextContentOrder.back()++;
                         }
                     }
                 }
-                bodyLoc->add(tempStatement);
+                bodyLoc->add(info.ast, tempStatement);
+                info.nextContentOrder.back()++;
             }
         }
         if(tempFunction) {
-            bodyLoc->add(tempFunction);
+            bodyLoc->add(info.ast, tempFunction);
+            info.nextContentOrder.back()++;
         }
         if(tempStruct) {
-            bodyLoc->add(tempStruct);
+            bodyLoc->add(info.ast, tempStruct);
+            info.nextContentOrder.back()++;
         }
         if(tempEnum) {
-            bodyLoc->add(tempEnum);
+            bodyLoc->add(info.ast, tempEnum);
+            info.nextContentOrder.back()++;
         }
         if(tempNamespace) {
-            bodyLoc->add(tempNamespace, info.ast);
+            bodyLoc->add(info.ast, tempNamespace);
+            info.nextContentOrder.back()++;
         }
         if(result==SignalAttempt::BAD_ATTEMPT){
             // Try again. Important because loop would break after one time if scoped is false.
@@ -2935,11 +2950,10 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                 }
             }
         }
-        bodyLoc->add(nearDefers[i]);
+        bodyLoc->add(info.ast,nearDefers[i]);
+        info.nextContentOrder.back()++;
     }
     // nearDefers.cleanup(); // cleaned by destructor
-
-
 
     bodyLoc->tokenRange.endIndex = info.at()+1;
     return SignalDefault::SUCCESS;
@@ -2962,7 +2976,7 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
     } else {
         // TODO: Should namespaced imports from a source file you import as a namespace
         //  have global has their parent? It does now, ast->globalScopeId is used.
-        ScopeInfo* newScope = info.ast->createScope(ast->globalScopeId);
+        ScopeInfo* newScope = info.ast->createScope(ast->globalScopeId, CONTENT_ORDER_ZERO);
 
         newScope->name = theNamespace;
         info.ast->getScope(newScope->parent)->nameScopeMap[theNamespace] = newScope->id;

@@ -22,6 +22,8 @@ struct CheckInfo {
     bool anotherTurn = false;
 
     u32 currentPolyVersion=0;
+    std::vector<ContentOrder> currentContentOrder;
+    ContentOrder getCurrentOrder() { Assert(currentContentOrder.size()>0); return currentContentOrder.back(); }
 };
 
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);
