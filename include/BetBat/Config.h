@@ -23,11 +23,8 @@
 // #define DEV_FILE "examples/floats.btb"
 // #define DEV_FILE "examples/const.btb"
 // #define DEV_FILE "examples/threads.btb"
-#define CONFIG_DEFAULT_TARGET WINDOWS_x64
-
-// #ifndef COMPILE_x64
-// // #define SAVE_FP_IN_CALL_FRAME
-// #endif
+// #define DEV_FILE "examples/dir-iterator.btb"
+// #define CONFIG_DEFAULT_TARGET WINDOWS_x64
 
 #define DEBUG
 
@@ -50,6 +47,9 @@
 // of x size did not get freed. Then set a breakpoint in Allocate on the condition "bytes==x"
 // go up the call stack and see where it came from. Now you need to figure out things yourself.
 
+// Other bugs?
+// x64 generated program doesn't properly align function calls by 16 bytes.
+
 // #define LOG_ALLOCATIONS
 
 // #define LOG_ALLOC
@@ -70,7 +70,8 @@
 // Debug config
 #ifdef DEBUG
 
-// #define DISABLE_BASE_STRUCTS
+//
+// #define DISABLE_BASE_IMPORT
 
 #define VLOG
 
@@ -87,7 +88,7 @@
 // type checker
 // #define TC_LOG
 // #define GLOG
-// #define ILOG
+#define ILOG
 // #define ILOG_REGS
 // x64 converter
 // #define CLOG

@@ -7,7 +7,8 @@ const char *OpToStr(OperationType optype, bool null) {
     switch (optype) {
         CASE(ADD, +)
         CASE(SUB, -)
-        CASE(MUL, * (multiplication))
+        CASE(MUL, *)
+        // CASE(MUL, * (multiplication))
         CASE(DIV, /)
         CASE(MODULUS, %)
 
@@ -170,7 +171,7 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder 
     if(!id) {
         return nullptr;
     }
-    id->type = Identifier::VAR;
+    id->type = Identifier::VARIABLE;
     id->varIndex = variables.size();
     id->order = contentOrder;
     if(identifier)
@@ -266,7 +267,7 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
             if(!ns.str) {
                 auto pair = si->identifierMap.find(realName);
                 if(pair != si->identifierMap.end() && pair->second.order <= nextOrder){
-                // if(pair != si->identifierMap.end() && pair->second.type == Identifier::VAR && pair->second.order < nextOrder){
+                // if(pair != si->identifierMap.end() && pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
                     return &pair->second;
                 }
             }
@@ -284,7 +285,7 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
         if(pair == si->identifierMap.end()){
             return nullptr;
         }
-        // if(pair->second.type == Identifier::VAR && pair->second.order < contentOrder) {
+        // if(pair->second.type == Identifier::VARIABLE && pair->second.order < contentOrder) {
         if(pair->second.order <= contentOrder) {
             return &pair->second;
         }
@@ -317,9 +318,9 @@ bool AST::castable(TypeId from, TypeId to){
         return true;
     TypeId vp = AST_VOID;
     vp.setPointerLevel(1);
-    if(from.isPointer() && (to == vp || to==AST_UINT64 || to==AST_INT64))
+    if(from.isPointer() && (to == vp || to==AST_UINT64 || to==AST_INT64 || to==AST_BOOL))
         return true;
-    if((from == vp||from==AST_UINT64||from==AST_INT64) && to.isPointer())
+    if((from == vp||from==AST_UINT64||from==AST_INT64 || from==AST_BOOL) && to.isPointer())
         return true;
     if (from == AST_FLOAT32 && AST::IsInteger(to)) {
         return true;
@@ -403,7 +404,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& 
     return outOverload;
 }
 
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
     // Assert(!fncallArgs); // not implemented yet, see other getOverload
     using namespace engone;
     FnOverloads::Overload* outOverload = nullptr;
@@ -435,16 +436,26 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& 
             continue;
 
         bool found = true;
-        for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-            if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
-                found = false;
-                break;
+        if(canCast) {
+            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                if(!ast->castable(argTypes[j], overload.funcImpl->argumentTypes[j].typeId)) {
+                    found = false;
+                    break;
+                }
+                // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
-            // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+        } else {
+            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                if(argTypes[j] != overload.funcImpl->argumentTypes[j].typeId) {
+                    found = false;
+                    break;
+                }
+            }
         }
         if(!found)
             continue;
-           
+        if(canCast)
+            return &overload;
         // NOTE: You can return here because there should only be one matching overload.
         // But we keep going in case we find more matches which would indicate
         // a bug in the compiler. An optimised build would not do this.
@@ -926,6 +937,7 @@ TypeId AST::getTypeString(Token name){
 }
 Token AST::getTokenFromTypeString(TypeId typeId){
     static const Token non={};
+    Assert(typeId.isString());
     if(!typeId.isString())
         return non;
 
@@ -935,10 +947,10 @@ Token AST::getTokenFromTypeString(TypeId typeId){
     
     return _typeTokens[index];
 }
-TypeId AST::convertToTypeId(TypeId typeString, ScopeId scopeId){
+TypeId AST::convertToTypeId(TypeId typeString, ScopeId scopeId, bool transformVirtual){
     Assert(typeString.isString());
     Token tstring = getTokenFromTypeString(typeString);
-    return convertToTypeId(tstring, scopeId);
+    return convertToTypeId(tstring, scopeId, transformVirtual);
 }
 
 TypeInfo* AST::createType(Token name, ScopeId scopeId){
@@ -1010,7 +1022,7 @@ void AST::printTypesFromScope(ScopeId scopeId, int scopeLimit){
         nextScopeId = scope->parent;
     }
 }
-TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId) {
+TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVirtual) {
     using namespace engone;
     Token namespacing = {};
     u32 pointerLevel = 0;
@@ -1065,19 +1077,24 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId) {
     if(!typeInfo) {
         return {};
     }
-    WHILE_TRUE {
-        TypeInfo* virtualInfo = getTypeInfo(typeInfo->id);
-        if(virtualInfo && typeInfo != virtualInfo){
-            typeInfo = virtualInfo;
-        } else {
-            break;
+    if(transformVirtual) {
+        WHILE_TRUE {
+            TypeInfo* virtualInfo = getTypeInfo(typeInfo->id);
+            if(virtualInfo && typeInfo != virtualInfo){
+                typeInfo = virtualInfo;
+            } else {
+                break;
+            }
         }
+        TypeId out = typeInfo->id;
+        out.setPointerLevel(pointerLevel);
+        return out;
+    } else {
+        TypeId out = typeInfo->originalId;
+        out.setPointerLevel(pointerLevel);
+        return out;
     }
 
-    TypeId out = typeInfo->id;
-    out.setPointerLevel(pointerLevel);
-        
-    return out;
 }
 TypeInfo *AST::getBaseTypeInfo(TypeId id) {
     Assert(!id.isString());

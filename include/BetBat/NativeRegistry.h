@@ -16,9 +16,9 @@ enum NativeFunctionType {
 #define NATIVE_prints -3
 #define NATIVE_printd -4
 
-#define NATIVE_malloc -5
-#define NATIVE_realloc -6
-#define NATIVE_free -7
+#define NATIVE_Allocate -5
+#define NATIVE_Reallocate -6
+#define NATIVE_Free -7
 
 #define NATIVE_memcpy -8
 #define NATIVE_memzero -9
@@ -34,12 +34,13 @@ enum NativeFunctionType {
 #define NATIVE_DirectoryIteratorSkip -23
 
 #define NATIVE_CurrentWorkingDirectory -24
-#define NATIVE_StartTimePoint -25
-#define NATIVE_EndTimePoint -26
+#define NATIVE_StartMeasure -25
+#define NATIVE_StopMeasure -26
 
 #define NATIVE_CmdLineArgs -27
 
-#define NATIVE_rdtscp -35
+// #define NATIVE_rdtscp -34
+#define NATIVE_rdtsc -35
 #define NATIVE_compare_swap -36
 
 #define NATIVE_sin -40
@@ -48,40 +49,46 @@ enum NativeFunctionType {
 
 #define NATIVE_NativeSleep -50
 
-namespace Language {
-    template <typename T>
-    struct Slice {
-        T* ptr=nullptr;
-        u64 len=0;
-    };
-    // template <typename T>
-    // struct Array {
-    //     T* ptr=nullptr;
-    //     u64 len=0;
-    // };
+// namespace Language {
+//     template <typename T>
+//     struct Slice {
+//         T* ptr=nullptr;
+//         u64 len=0;
+//     };
+//     // should be null terminated
+//     // this 
+//     struct String {
+//         char* ptr;
+//         u32 len;
+//         u32 max;
+//     };
+//     // template <typename T>
+//     // struct Array {
+//     //     T* ptr=nullptr;
+//     //     u64 len=0;
+//     // };
 
-    struct DirectoryIteratorData {
-        Slice<char> name;
-        u64 fileSize;
-        float lastWriteSeconds;
-        u8 _[3]; // this language uses padding here
-        bool isDirectory;
-    };
+//     struct DirectoryIteratorData {
+//         Slice<char> name;
+//         u64 fileSize;
+//         float lastWriteSeconds;
+//         bool isDirectory;
+//     };
 
-    struct DirectoryIterator {
-        u64 _handle;
-        Slice<char> rootPath;
-        DirectoryIteratorData result{};
+//     struct DirectoryIterator {
+//         u64 _handle;
+//         Slice<char> rootPath;
+//         DirectoryIteratorData result{};
 
-        // fn next() -> DirectoryIteratorData* {
-        //     return DirectoryIteratorNext(this);
-        // }
-        // fn skip() {
-        //     DirectoryIteratorSkip(this);
-        // }
-    };
-}
-engone::Logger& operator<<(engone::Logger& logger, Language::Slice<char>& slice);
+//         // fn next() -> DirectoryIteratorData* {
+//         //     return DirectoryIteratorNext(this);
+//         // }
+//         // fn skip() {
+//         //     DirectoryIteratorSkip(this);
+//         // }
+//     };
+// }
+// engone::Logger& operator<<(engone::Logger& logger, Language::Slice<char>& slice);
 
 struct NativeRegistry {
     static int initializations;

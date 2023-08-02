@@ -108,7 +108,6 @@ struct ASTNode {
     // a function will prevent some of the changes you would need to make.
     bool needsBody() { return linkConvention == LinkConventions::NONE;}
 };
-typedef u32 PolyId;
 template<class T>
 struct PolyVersions {
     PolyVersions() = default;
@@ -154,7 +153,7 @@ struct TypeId {
         STRING = 0x1,
         STRUCT = 0x2,
         ENUM = 0x3,
-        VIRTUAL = 0x4, // polymorphic, may be pointless
+        // VIRTUAL = 0x4, // polymorphic, may be pointless
         TYPE_MASK = 0x1 | 0x2 | 0x4,
         POINTER_MASK = 0x8 | 0x10,
         POINTER_SHIFT = 3,
@@ -181,7 +180,7 @@ struct TypeId {
         return (_flags & VALID_MASK) != 0;
     }
     bool isString() const { return (_flags & TYPE_MASK) == STRING; }
-    bool isVirtual() const { return (_flags & TYPE_MASK) == VIRTUAL; }
+    // bool isVirtual() const { return (_flags & TYPE_MASK) == VIRTUAL; }
     TypeId baseType() {
         TypeId out = *this;
         out._flags = out._flags & ~POINTER_MASK;
@@ -197,7 +196,8 @@ struct TypeId {
     u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_SHIFT; }
     u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
     // TODO: Rename to something better
-    bool isNormalType() const { return isValid() && !isString() && !isPointer() && !isVirtual(); }
+    bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
+    //  && !isVirtual(); }
 };
 // struct TypeIds {
 //     TypeId* typeIds=nullptr;
@@ -231,7 +231,7 @@ struct FnOverloads {
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
     Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
-    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false);
+    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
     // Get base polymorphic overload which can match with the typeIds.
     // You want to generate the real overload afterwards.
     // ASTFunction* getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes);
@@ -263,10 +263,11 @@ struct StructImpl {
     // void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
 };
 struct TypeInfo {
-    TypeInfo(const std::string& name, TypeId id, u32 size=0) :  name(name), id(id), _size(size) {}
-    TypeInfo(TypeId id, u32 size=0) : id(id), _size(size) {}
+    TypeInfo(const std::string& name, TypeId id, u32 size=0) :  name(name), id(id), originalId(id), _size(size) {}
+    TypeInfo(TypeId id, u32 size=0) : id(id), originalId(id), _size(size) {}
     std::string name;
-    TypeId id={};
+    TypeId id={}; // can be virtual and point to a different type
+    TypeId originalId={};
     u32 _size=0;
     u32 _alignedSize=0;
     u32 arrlen=0;
@@ -275,10 +276,12 @@ struct TypeInfo {
     ASTEnum* astEnum=0;
 
     ScopeId scopeId = 0;
+    // bool isVirtualType = false;
+    // bool isVirtual() { return isVirtualType; }
     
     struct MemberData {
         TypeId typeId;
-        int index; 
+        int index;
         int offset;
     };
 
@@ -289,7 +292,6 @@ struct TypeInfo {
     MemberData getMember(int index);
     StructImpl* getImpl();
 };
-struct ASTFunction;
 struct FuncImpl {
     std::string name;
     struct Spot {
@@ -313,24 +315,48 @@ struct FuncImpl {
 struct Identifier {
     Identifier() {}
     enum Type {
-        VAR, FUNC
+        VARIABLE, FUNCTION
     };
-    Type type=VAR;
+    Type type=VARIABLE;
     std::string name{};
     ScopeId scopeId=0;
+    // struct Pair {
+    //     u32 polyVersion;
+    //     u32 varIndex;
+    // };
+    // PolyVersions<u32> versions_varIndex{};
     u32 varIndex=0;
     FnOverloads funcOverloads{};
     ContentOrder order = 0;
+
+    // How to support multiple variables in multiple poly versions
+    // multiple poly versions because of methods inherting members of 'this' argument
+    // multiple variables because of shadowing
+    // Global variables cannot be shadowed? 
+    // 
+
 };
 struct VariableInfo {
-    i32 memberIndex = -1; // negative = normal variable, positive = variable in struct
-    // i32 dataOffset = 0; // offset in frame, or offset in data segment
-    // TypeId typeId=AST_VOID;
+    enum Type : u8 {
+        LOCAL, GLOBAL, MEMBER
+    };
+    // you could do a union on memberIndex and dataOffset if you want to save space
+    i32 memberIndex = -1; // only used with MEMBER type
+
+    // i32 dataOffset = 0;
+    // TypeId typeId{};
     PolyVersions<i32> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
-    bool globalData = false; // false
+    Type type = LOCAL;
+    // bool globalData = false; // false
     // ScopeId scopeId = 0; // do you really need this variable? can you get the identifier instead?
 
+    // We use getters here because the implementation changes a lot
+    // i32 getDataOffset() { return dataOffset; }
+    // TypeId getTypeId() { return typeId; }
+    bool isMember() { return type == MEMBER; }
+    bool isLocal() { return type == LOCAL; }
+    bool isGlobal() { return type == GLOBAL; }
 };
 struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}
@@ -562,6 +588,9 @@ struct ASTFunction : ASTNode {
         TokenRange valueToken{}; // for error messages
         TypeId stringType;
     };
+
+    DynamicArray<Identifier*> memberIdentifiers; // only relevant with parent structs
+
     DynamicArray<PolyArg> polyArgs;
     DynamicArray<Arg> arguments; // you could rename to parameters
     DynamicArray<Ret> returnValues; // string type
@@ -651,17 +680,17 @@ struct AST {
     TypeId getTypeString(Token name);
     Token getTokenFromTypeString(TypeId typeString);
     // typeString must be a string type id.
-    TypeId convertToTypeId(TypeId typeString, ScopeId scopeId);
+    TypeId convertToTypeId(TypeId typeString, ScopeId scopeId, bool transformVirtual);
 
     std::vector<TypeInfo*> _typeInfos; // TODO: Use a bucket array
     TypeInfo* createType(Token name, ScopeId scopeId);
     TypeInfo* createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 size=0);
     // isValid() of the returned TypeId will be false if
     // type couldn't be converted.
-    TypeId convertToTypeId(Token typeString, ScopeId scopeId);
+    TypeId convertToTypeId(Token typeString, ScopeId scopeId, bool transformVirtual);
     // pointers NOT allowed
-    TypeInfo* convertToTypeInfo(Token typeString, ScopeId scopeId) {
-        return getTypeInfo(convertToTypeId(typeString,scopeId).baseType());
+    TypeInfo* convertToTypeInfo(Token typeString, ScopeId scopeId, bool transformVirtual) {
+        return getTypeInfo(convertToTypeId(typeString, scopeId, transformVirtual).baseType());
     }
     // pointers are allowed
     TypeInfo* getBaseTypeInfo(TypeId id);

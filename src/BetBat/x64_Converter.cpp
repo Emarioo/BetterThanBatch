@@ -135,7 +135,7 @@ StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
 // sign extension
 #define OPCODE_2_MOVSX_REG_RM8 (u16)0xBE0F
 #define OPCODE_2_MOVSX_REG_RM16 (u16)0xBF0F
-// intel manual encourages REX.W with MOVSXD
+// intel manual encourages REX.W with MOVSXD. Use normal mov otherwise
 #define OPCODE_MOVSXD_REG_RM (u8)0x63
 
 // "FF /6" can be seen in x86 instruction sets.
@@ -456,12 +456,13 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     DynamicArray<RelativeRelocation> relativeRelocations;
     relativeRelocations._reserve(40);
 
-    prog->add(OPCODE_PUSH_RM_SLASH_6);
-    prog->addModRM(MODE_REG,6,REG_BP);
+    // FP push is fixed by generator
+    // prog->add(OPCODE_PUSH_RM_SLASH_6);
+    // prog->addModRM(MODE_REG,6,REG_BP);
 
-    prog->add(PREFIX_REXW);
-    prog->add(OPCODE_MOV_REG_RM);
-    prog->addModRM(MODE_REG, REG_BP, REG_SP);
+    // prog->add(PREFIX_REXW);
+    // prog->add(OPCODE_MOV_REG_RM);
+    // prog->addModRM(MODE_REG, REG_BP, REG_SP);
 
     // for(int i=0;i<0;i++){
     for(int bcIndex=0;bcIndex<bytecode->length();bcIndex++){
@@ -835,12 +836,15 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             break; case BC_NEQ: {
                 Assert(op0 == op2 || op1 == op2);
                 u8 op01 = op0 == op2 ? op1 : op0;
-
+                // IMPORTANT: THERE MAY BE BUGS IF YOU COMPARE OPERANDS OF DIFFERENT SIZES.
+                //  SOME BITS MAY BE UNINITIALZIED.
                 u8 size = DECODE_REG_SIZE(op2);
+                u8 size2 = DECODE_REG_SIZE(op01);
+                // Assert(size == size2);
                 if(size == 8)
                     prog->add(PREFIX_REXW);
                 prog->add(OPCODE_XOR_REG_RM);
-                prog->addModRM(MODE_REG, BCToProgramReg(op2,0xC), BCToProgramReg(op01,0xC));
+                prog->addModRM(MODE_REG, BCToProgramReg(op2,0xF), BCToProgramReg(op01,0xF));
                 break;
             }
             break; case BC_NOT: {
@@ -881,7 +885,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 //  Doing AND on rcx and eax will give unexpected result if upper rax
                 //  has non-zero bits.
 
-                int temp = 0xC;
+                int temp = 0xF;
 
                 u8 lreg = BCToProgramReg(op0,temp);
                 u8 rreg = BCToProgramReg(op1,temp);
@@ -944,16 +948,48 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 
                 break;
             }
+                // prog->add(PREFIX_REXW);
+                // prog->add(OPCODE_XOR_REG_RM);
+                // prog->addModRM(MODE_REG,BCToProgramReg(op2,0xC),BCToProgramReg(op2,0xC));
             #define CODE_COMPARE(OPCODE) \
-                u8 size = DECODE_REG_SIZE(op0);\
-                if(size<DECODE_REG_SIZE(op1)) size = DECODE_REG_SIZE(op1);\
-                if(size == 8)  prog->add(PREFIX_REXW);\
+                u8 size0 = DECODE_REG_SIZE(op0);\
+                u8 size1 = DECODE_REG_SIZE(op1);\
+                if(size0>size1){\
+                    if(size1==1) {\
+                        prog->add(PREFIX_REXW);\
+                        prog->add2(OPCODE_2_MOVSX_REG_RM8);\
+                        prog->addModRM(MODE_REG, BCToProgramReg(op1,0xF), BCToProgramReg(op1,0xF));\
+                    } else if(size1==2) {\
+                        prog->add(PREFIX_REXW);\
+                        prog->add2(OPCODE_2_MOVSX_REG_RM16);\
+                        prog->addModRM(MODE_REG, BCToProgramReg(op1,0xF), BCToProgramReg(op1,0xF));\
+                    } else if(size1==4) {\
+                        prog->add(PREFIX_REXW);\
+                        prog->add(OPCODE_MOVSXD_REG_RM);\
+                        prog->addModRM(MODE_REG, BCToProgramReg(op1,0xF), BCToProgramReg(op1,0xF));\
+                    }\
+                    if(size0 == 8) prog->add(PREFIX_REXW);\
+                }else if(size1>size0) {\
+                    if(size0==1) {\
+                        prog->add(PREFIX_REXW);\
+                        prog->add2(OPCODE_2_MOVSX_REG_RM8);\
+                        prog->addModRM(MODE_REG, BCToProgramReg(op0,0xF), BCToProgramReg(op0,0xF));\
+                    } else if(size0==2) {\
+                        prog->add(PREFIX_REXW);\
+                        prog->add2(OPCODE_2_MOVSX_REG_RM16);\
+                        prog->addModRM(MODE_REG, BCToProgramReg(op0,0xF), BCToProgramReg(op0,0xF));\
+                    } else if(size0==4) {\
+                        prog->add(PREFIX_REXW);\
+                        prog->add(OPCODE_MOVSXD_REG_RM);\
+                        prog->addModRM(MODE_REG, BCToProgramReg(op0,0xF), BCToProgramReg(op0,0xF));\
+                    }\
+                    if(size1 == 8) prog->add(PREFIX_REXW);\
+                }\
                 prog->add(OPCODE_CMP_REG_RM);\
                 prog->addModRM(MODE_REG, BCToProgramReg(op0,0xC), BCToProgramReg(op1,0xC));\
-                if(size == 8)  prog->add(PREFIX_REXW);\
                 prog->add2(OPCODE);\
                 prog->addModRM(MODE_REG, 0, BCToProgramReg(op2,0xC));\
-                if(size == 8)  prog->add(PREFIX_REXW);\
+                if(size0 == 8 || size1 == 8)  prog->add(PREFIX_REXW);\
                 prog->add2(OPCODE_2_MOVZX_REG_RM8);\
                 prog->addModRM(MODE_REG, BCToProgramReg(op2,0xC), BCToProgramReg(op2,0xC));
 
@@ -1564,15 +1600,12 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     prog->addModRM(MODE_REG, REG_B, BCToProgramReg(op1,8));
                 }
                 /*
-                    mov rdx, rbx
-                    add rdx, 10
-                    loop:
-                    cmp rbx, rdx
-                    je end
-                    mov byte ptr [rbx], 0
-                    inc rbx
-                    jmp loop
-                    end:
+                    0:  48 01 fb                add    rbx,rdi
+                    3:  48 39 df                cmp    rdi,rbx
+                    6:  74 08                   je     0x10
+                    8:  c6 07 00                mov    BYTE PTR [rdi],0x0
+                    b:  48 ff c7                inc    rdi
+                    e:  eb f3                   jmp    0x3
                 */
                 // you might want this to be a function
                 u8 arr[] = { 0x48, 0x01, 0xFB, 0x48, 0x39, 0xDF, 0x74, 0x08, 0xC6, 0x07, 0x00, 0x48, 0xFF, 0xC7, 0xEB, 0xF3 };
@@ -1630,28 +1663,49 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->addRaw(arr, sizeof(arr));
                 break;
             }
-            break; case BC_RDTSCP: {
+            break; case BC_RDTSC: {
                 // This instruction uses edx:eax and ecx.
                 // That is why the operands should specify these registers to indicate
                 // that they are used. This isn't a must, you could edx, eax and ecx before
                 // executing the instruction and then mov values into the operands
-                Assert(op0 == BC_REG_RAX && op1 == BC_REG_ECX && op2 == BC_REG_RDX);
+                Assert(op0 == BC_REG_RAX && op1 == BC_REG_RDX);
                 
-                prog->add3(OPCODE_3_RDTSCP);
-                // prog->add2(OPCODE_2_RDTSC);
+                prog->add2(OPCODE_2_RDTSC);
                 
                 prog->add(PREFIX_REXW);
                 prog->add(OPCODE_SHL_RM_IMM8_SLASH_4);
                 prog->addModRM(MODE_REG, 4, REG_D);
                 prog->add((u8)32);
 
-                // rdtscp will zero extern 8 byte registers
+                // rdtsc will zero extern 8 byte registers
                 prog->add(PREFIX_REXW);
                 prog->add(OPCODE_OR_RM_REG);
                 prog->addModRM(MODE_REG, REG_D, REG_A);
                 
                 break;
             }
+            // break; case BC_RDTSCP: {
+            //     // This instruction uses edx:eax and ecx.
+            //     // That is why the operands should specify these registers to indicate
+            //     // that they are used. This isn't a must, you could edx, eax and ecx before
+            //     // executing the instruction and then mov values into the operands
+            //     Assert(op0 == BC_REG_RAX && op1 == BC_REG_ECX && op2 == BC_REG_RDX);
+                
+            //     prog->add3(OPCODE_3_RDTSCP);
+            //     // prog->add2(OPCODE_2_RDTSC);
+                
+            //     prog->add(PREFIX_REXW);
+            //     prog->add(OPCODE_SHL_RM_IMM8_SLASH_4);
+            //     prog->addModRM(MODE_REG, 4, REG_D);
+            //     prog->add((u8)32);
+
+            //     // rdtscp will zero extern 8 byte registers
+            //     prog->add(PREFIX_REXW);
+            //     prog->add(OPCODE_OR_RM_REG);
+            //     prog->addModRM(MODE_REG, REG_D, REG_A);
+                
+            //     break;
+            // }
             break; case BC_CMP_SWAP: {
                 // This instruction uses edx:eax and ecx.
                 // That is why the operands should specify these registers to indicate
@@ -1772,9 +1826,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             // confusing.
         }
     }
-    
-    prog->add(OPCODE_POP_RM_SLASH_0);
-    prog->addModRM(MODE_REG,0,REG_BP);
+    // FP pop is generated by the bytecode generator
+    // prog->add(OPCODE_POP_RM_SLASH_0);
+    // prog->addModRM(MODE_REG,0,REG_BP);
 
     prog->add(OPCODE_RET);
     

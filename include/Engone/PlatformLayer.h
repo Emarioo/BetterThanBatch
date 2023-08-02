@@ -26,12 +26,21 @@
 
 namespace engone {
 	typedef void* APIFile;
-	typedef void* RecursiveDirectoryIterator;
+	typedef void* DirectoryIterator;
+	// struct String {
+	// 	char* ptr;
+	// 	u32 len;
+	// 	u32 max;
+	// 	bool _reserve();
+	// };
 	struct DirectoryIteratorData{
-		std::string name;
-		uint64 fileSize;
-		double lastWriteSeconds;
-		bool isDirectory;
+		struct {
+			char* name = nullptr;
+			u64 namelen = 0;
+		};
+		uint64 fileSize = 0;
+		float lastWriteSeconds = 0.0;
+		bool isDirectory = false;
 	};
 	typedef uint64 TimePoint;
 	
@@ -71,6 +80,7 @@ namespace engone {
 	// Returns 0 if function failed
     // canWrite = true -> WRITE and READ. False only READ.
 	APIFile FileOpen(const std::string& path, uint64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
+	APIFile FileOpen(const char* path, u32 pathlen, uint64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
 	// Returns number of bytes read
 	// -1 means error with read
 	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes);
@@ -97,12 +107,14 @@ namespace engone {
 	// result must be valid memory.
 	// path should be a valid directory.
 	// empty string as path assumes working directory.
-	RecursiveDirectoryIterator RecursiveDirectoryIteratorCreate(const std::string& path);
+	DirectoryIterator DirectoryIteratorCreate(const char* path, int pathlen);
 	// false is returned on failure (invalid iterator, no more files/directories)
-	bool RecursiveDirectoryIteratorNext(RecursiveDirectoryIterator iterator, DirectoryIteratorData* result);
+	// result points to some data where the result of the iteration is stored. Don't forget to destroy potential
+	// allocations in the result wit ...IteratorDestroy.
+	bool DirectoryIteratorNext(DirectoryIterator iterator, DirectoryIteratorData* result);
 	// Skip the latest directory in the internal recursive queue. The latest found directory will be last in the queue.
-	void RecursiveDirectoryIteratorSkip(RecursiveDirectoryIterator iterator);
-	void RecursiveDirectoryIteratorDestroy(RecursiveDirectoryIterator iterator);
+	void DirectoryIteratorSkip(DirectoryIterator iterator);
+	void DirectoryIteratorDestroy(DirectoryIterator iterator, DirectoryIteratorData* dataToDestroy);
     
 	void SetConsoleColor(uint16 color);
 

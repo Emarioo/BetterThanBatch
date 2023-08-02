@@ -1,0 +1,7 @@
+
+struct String {
+    char* ptr; // null terminated
+    u64 len;
+
+    // TODO: Some useful functions
+}

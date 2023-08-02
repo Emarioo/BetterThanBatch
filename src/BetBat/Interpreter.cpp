@@ -1,6 +1,7 @@
 #include "BetBat/Interpreter.h"
 
 #include <intrin.h>
+#include "BetBat/External/NativeLayer.h"
 
 // needed for FRAME_SIZE
 #include "BetBat/Generator.h"
@@ -149,8 +150,11 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
     pc = startInstruction;
     sp = (u64)stack.data+stack.max;
     fp = (u64)stack.data+stack.max;
-    dp = (u64)bytecode->dataSegment.data;
     
+    if(sp % 16 == 0) {
+        sp -= 16 - sp % 16;
+    }
+
     auto tp = MeasureTime();
 
     #ifdef ILOG
@@ -593,9 +597,9 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
             u32 dataOffset = *(u32*)(codePtr + pc);
             pc++;
             
-            *out = dp + dataOffset;
+            *out = (u64)bytecode->dataSegment.data + dataOffset;
             
-            _ILOG(log::out << *out<<" = "<< dataOffset<<" + "<< dp <<"\n";)
+            _ILOG(log::out << *out<<" = "<< dataOffset<<" + "<< (u64)bytecode->dataSegment.data <<"\n";)
             break;
         }
         break; case BC_CODEPTR: {
@@ -692,19 +696,12 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                 log::out << log::YELLOW << "Call to instruction beyond all bytecode\n";
             }
             _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
-            #ifdef SAVE_FP_IN_CALL_FRAME
-            sp-=8;
-            *((u64*) sp) = fp;
-            #endif
             // _ILOG(log::out<<"save fp at "<<sp<<"\n";)
             // savedFp = (u64*)sp;
             // SP_CHANGE(-8)
             sp-=8;
             *((u64*) sp) = pc; // pc points to the next instruction, +1 not needed 
             // SP_CHANGE(-8)
-            #ifdef SAVE_FP_IN_CALL_FRAME
-            fp = sp;
-            #endif
             pc = addr;
             
             _ILOG(log::out <<" pc: "<< pc <<" fp: "<<fp<<" sp: "<<sp<<"\n";)
@@ -720,10 +717,10 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                 // } else {
                 //     _ILOG(log::out << log::RED << addr<<" is not a native function\n";)
                 // }
-                u64 fp = sp; // fp isn't saved if SAVE_FP_... isn't defined.
+                u64 fp = sp;
 
                 switch (addr) {
-                case NATIVE_malloc:{
+                case NATIVE_Allocate:{
                     u64 size = *(u64*)(fp+argoffset);
                     void* ptr = engone::Allocate(size);
                     if(ptr)
@@ -732,7 +729,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     *(u64*)(fp-8) = (u64)ptr;
                     break;
                 }
-                break; case NATIVE_realloc:{
+                break; case NATIVE_Reallocate:{
                     void* ptr = *(void**)(fp+argoffset+16);
                     u64 oldsize = *(u64*)(fp +argoffset + 8);
                     u64 size = *(u64*)(fp+argoffset);
@@ -743,7 +740,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     *(u64*)(fp-8) = (u64)ptr;
                     break;
                 }
-                break; case NATIVE_free:{
+                break; case NATIVE_Free:{
                     void* ptr = *(void**)(fp+argoffset + 8);
                     u64 size = *(u64*)(fp+argoffset);
                     engone::Free(ptr,size);
@@ -803,15 +800,15 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     u64 len = *(u64*)(fp+argoffset+16);
 
                     u32 flags = *(u32*)(fp+argoffset+4);
-
+                    INCOMPLETE
                     u64 fsize = 0;
-                    APIFile file = FileOpen(std::string(ptr,len), &fsize, flags);
+                    // APIFile file = FileOpen(std::string(ptr,len), &fsize, flags);
                     #ifdef VLOG
                     log::out <<log::GRAY<< "FileOpen: "<<std::string(ptr,len) << ", "<<flags<<"\n";
                     #endif
 
-                    *(u64*)(fp-8) = (u64)fsize;
-                    *(u64*)(fp-16) = (u64)file;
+                    // *(u64*)(fp-8) = (u64)fsize;
+                    // *(u64*)(fp-16) = (u64)file;
                     break;
                 }
                 break; case NATIVE_FileRead:{
@@ -856,83 +853,90 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                 }
                 break; case NATIVE_DirectoryIteratorCreate:{
                     // slice
-                    char* strptr = *(char**)(fp+argoffset + 0);
-                    u64 len = *(u64*)(fp+argoffset+8);
+                    // char* strptr = *(char**)(fp+argoffset + 0);
+                    // u64 len = *(u64*)(fp+argoffset+8);
+                    Language::Slice<char>* rootPath= *(Language::Slice<char>**)(fp + argoffset + 0);
 
-                    std::string rootPath = std::string(strptr,len);
-                    auto iterHandle = RecursiveDirectoryIteratorCreate(rootPath);
+                    log::out << "ok\n";
+
+                    // INCOMPLETE
+                    // std::string rootPath = std::string(strptr,len);
+                    auto iterator = DirectoryIteratorCreate(rootPath);
 
                     #ifdef VLOG
                     // log::out << log::GRAY<<"Create dir iterator: "<<rootPath<<"\n";
                     #endif
 
-                    auto iterator = (Language::DirectoryIterator*)engone::Allocate(sizeof(Language::DirectoryIterator));
-                    new(iterator)Language::DirectoryIterator();
-                    iterator->_handle = (u64)iterHandle;
-                    iterator->rootPath.ptr = (char*)engone::Allocate(len);
-                    iterator->rootPath.len = len;
-                    memcpy(iterator->rootPath.ptr, strptr, len);
+                    // auto iterator = (Language::DirectoryIterator*)engone::Allocate(sizeof(Language::DirectoryIterator));
+                    // new(iterator)Language::DirectoryIterator();
+                    // iterator->_handle = (u64)iterHandle;
+                    // iterator->rootPath.ptr = (char*)engone::Allocate(len);
+                    // iterator->rootPath.len = len;
+                    // memcpy(iterator->rootPath.ptr, strptr, len);
 
                     *(Language::DirectoryIterator**)(fp-8) = iterator;
                     break;
                 }
                 break; case NATIVE_DirectoryIteratorDestroy:{
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
-                    
-                    RecursiveDirectoryIteratorDestroy((RecursiveDirectoryIterator)iterator->_handle);
+                    // INCOMPLETE
+                    DirectoryIteratorDestroy(iterator);
 
                     #ifdef VLOG
                     // log::out << log::GRAY<<"Destroy dir iterator: "<<iterator->rootPath<<"\n";
                     #endif
-                    if(iterator->result.name.ptr) {
-                        Free(iterator->result.name.ptr, iterator->result.name.len);
-                        iterator->result.name.ptr = nullptr;
-                        iterator->result.name.len = 0;
-                    }
-                    engone::Free(iterator->rootPath.ptr,iterator->rootPath.len);
-                    iterator->~DirectoryIterator();
-                    engone::Free(iterator,sizeof(Language::DirectoryIterator));
+                    // if(iterator->result.name.ptr) {
+                    //     engone::Free(iterator->result.name.ptr, iterator->result.name.len);
+                    //     iterator->result.name.ptr = nullptr;
+                    //     iterator->result.name.len = 0;
+                    // }
+                    // engone::Free(iterator->rootPath.ptr,iterator->rootPath.len);
+                    // iterator->~DirectoryIterator();
+                    // engone::Free(iterator,sizeof(Language::DirectoryIterator));
                     break;
                 }
                 break; case NATIVE_DirectoryIteratorNext:{
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
                     
-                    DirectoryIteratorData result{};
-                    bool success = RecursiveDirectoryIteratorNext((RecursiveDirectoryIterator)iterator->_handle, &result);
+                    auto data = DirectoryIteratorNext(iterator);
 
-                    if(iterator->result.name.ptr) {
-                        Free(iterator->result.name.ptr, iterator->result.name.len);
-                        iterator->result.name.ptr = nullptr;
-                        iterator->result.name.len = 0;
-                    }
-                    if(success){
-                        iterator->result.lastWriteSeconds = result.lastWriteSeconds;
-                        iterator->result.fileSize = result.fileSize;
-                        iterator->result.isDirectory = result.isDirectory;
-                        iterator->result.name.ptr = (char*)Allocate((u64)result.name.length());
-                        memcpy(iterator->result.name.ptr, result.name.data(), result.name.length());
-                        iterator->result.name.len = (u64)result.name.length();
-                    }
-                    #ifdef VLOG
+                    // DirectoryIteratorData result{};
+                    // bool success = DirectoryIteratorNext((DirectoryIterator)iterator->_handle, &result);
+                    // INCOMPLETE
+                    // if(iterator->result.name.ptr) {
+                    //     engone::Free(iterator->result.name.ptr, iterator->result.name.len);
+                    //     iterator->result.name.ptr = nullptr;
+                    //     iterator->result.name.len = 0;
+                    // }
+                    // // if(success){
+                    // //     iterator->result.lastWriteSeconds = result.lastWriteSeconds;
+                    // //     iterator->result.fileSize = result.fileSize;
+                    // //     iterator->result.isDirectory = result.isDirectory;
+                    // //     iterator->result.name.ptr = (char*)Allocate((u64)result.name.length());
+                    // //     memcpy(iterator->result.name.ptr, result.name.data(), result.name.length());
+                    // //     iterator->result.name.len = (u64)result.name.length();
+                    // // }
+                    // #ifdef VLOG
+                    // // if(success)
+                    // // log::out << log::GRAY<<"Next dir iterator: "<<iterator->rootPath<<", file: "<<result.name<<"\n";
+                    // // else
+                    // // log::out << log::GRAY<<"Next dir iterator: "<<iterator->rootPath<<", finished\n";
+                    // #endif
                     // if(success)
-                    // log::out << log::GRAY<<"Next dir iterator: "<<iterator->rootPath<<", file: "<<result.name<<"\n";
+                    //     *(Language::DirectoryIteratorData**)(fp-8) = &iterator->result;
                     // else
-                    // log::out << log::GRAY<<"Next dir iterator: "<<iterator->rootPath<<", finished\n";
-                    #endif
-                    if(success)
-                        *(Language::DirectoryIteratorData**)(fp-8) = &iterator->result;
-                    else
-                        *(Language::DirectoryIteratorData**)(fp-8) = nullptr;
+                    // *(Language::DirectoryIteratorData**)(fp-8) = nullptr;
+                    *(Language::DirectoryIteratorData**)(fp-8) = data;
                     break;
                 }
                 break; case NATIVE_DirectoryIteratorSkip:{
                     Language::DirectoryIterator* iterator = *(Language::DirectoryIterator**)(fp+argoffset + 0);
                     
-                    RecursiveDirectoryIteratorSkip((RecursiveDirectoryIterator)iterator->_handle);
+                    DirectoryIteratorSkip(iterator);
 
-                    #ifdef VLOG
-                    // log::out << log::GRAY<<"Skip dir iterator: "<<iterator->result.name<<"\n";
-                    #endif
+                    // #ifdef VLOG
+                    // // log::out << log::GRAY<<"Skip dir iterator: "<<iterator->result.name<<"\n";
+                    // #endif
                     break;
                 }
                 break; case NATIVE_CurrentWorkingDirectory:{
@@ -949,7 +953,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     #endif
                     break;
                 }
-                break; case NATIVE_StartTimePoint:{
+                break; case NATIVE_StartMeasure:{
                     auto timePoint = MeasureTime();
                     
                     *(u64*)(fp-8) = (u64)timePoint;
@@ -959,7 +963,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     #endif
                     break;
                 }
-                break; case NATIVE_EndTimePoint:{
+                break; case NATIVE_StopMeasure:{
                     u64 timePoint = *(u64*)(fp+argoffset + 0);
 
                     double time = StopMeasure(timePoint);
@@ -1016,10 +1020,6 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
 
             // sp+=8;
             // _ILOG(log::out<<"loaded fp from "<<(fp+8)<<"\n";)
-            #ifdef SAVE_FP_IN_CALL_FRAME
-            fp = *((u64*)(sp));
-            sp+=8;
-            #endif
             // sp+=8;
             // SP_CHANGE(sp-fp)
             // _ILOG(log::out <<"pc: "<< pc<<" fp: "<< fp<<" sp: "<< sp<<"\n";)
@@ -1251,24 +1251,37 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
             // log::out << "copied "<<size<<" bytes\n";
             break;
         }
-        break; case BC_RDTSCP: {
-            u8 r0 = DECODE_REG0(inst); // dst
-            u8 r1 = DECODE_REG1(inst); // src
-            u8 r2 = DECODE_REG2(inst); // size
-            Assert(r0 == BC_REG_RAX && r1 == BC_REG_ECX && r2 == BC_REG_RDX);
+        break; case BC_RDTSC: {
+            u8 r0 = DECODE_REG0(inst); // count
+            Assert(r0 == BC_REG_RAX);
                 
-            u32 aux=0;
-            u64 count = __rdtscp(&aux);
+            u64 count = __rdtsc();
 
             void* countp = getReg(r0);
-            void* auxp = getReg(r1);
 
             *((u64*)countp) = count;
-            *((u32*)auxp) = aux;
 
             _ILOG(log::out << "\n";)
             break;
         }
+        // break; case BC_RDTSCP: {
+        //     u8 r0 = DECODE_REG0(inst); // dst
+        //     u8 r1 = DECODE_REG1(inst); // src
+        //     u8 r2 = DECODE_REG2(inst); // size
+        //     Assert(r0 == BC_REG_RAX && r1 == BC_REG_ECX && r2 == BC_REG_RDX);
+                
+        //     u32 aux=0;
+        //     u64 count = __rdtscp(&aux);
+
+        //     void* countp = getReg(r0);
+        //     void* auxp = getReg(r1);
+
+        //     *((u64*)countp) = count;
+        //     *((u32*)auxp) = aux;
+
+        //     _ILOG(log::out << "\n";)
+        //     break;
+        // }
         break; default: {
             log::out << log::RED << "Implement "<< log::PURPLE<< InstToString(opcode)<< "\n";
             return;

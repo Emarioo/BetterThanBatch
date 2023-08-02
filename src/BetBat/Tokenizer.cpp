@@ -315,13 +315,15 @@ void Token::print(bool skipSuffix) const{
     // }
     for(int i=0;i<length;i++){
         char chr = *(str+i);
-        Assert(chr!=0);
+        // Assert(chr!=0);
         if(chr=='\n'){
             log::out << "\\n"; // Is this okay?
         }else if(chr=='\t'){
             log::out << "\\t"; 
         }else if(chr=='\\'){
             log::out << "\\\\"; 
+        }else if(chr=='\0'){
+            log::out << "\\0"; 
         }else
             log::out << chr;
     }

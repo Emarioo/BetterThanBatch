@@ -318,7 +318,7 @@ Bytecode* CompileSource(CompileOptions options) {
     for(auto& path : options.importDirectories){
         compileInfo.importDirectories.push_back(path);
     }
-    #ifndef DISABLE_BASE_STRUCTS
+    #ifndef DISABLE_BASE_IMPORT
     StringBuilder essentialStructs{};
     essentialStructs +=
     // "struct Slice<T> {"
@@ -337,7 +337,7 @@ Bytecode* CompileSource(CompileOptions options) {
     "#define OS_LINUX\n"
     #endif
     ;
-    essentialStructs += (options.target == WINDOWS_x64 ? "#define X64\n" : "");
+    essentialStructs += (options.target == BYTECODE ? "#define LINK_BYTECODE\n" : "");
     ParseFile(compileInfo, "<base>","",essentialStructs.data(), strlen(essentialStructs));
     #endif
 

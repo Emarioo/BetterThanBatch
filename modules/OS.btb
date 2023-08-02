@@ -5,12 +5,19 @@
 */
 // fn @native prints(str: char[]) ;
 
+#ifdef LINK_BYTECODE
+#define LINK_TYPE @native
+#else
+#define LINK_TYPE @import
+#endif
+
 // intrinsics?
 // len is in bytes
 fn @intrinsic memcpy(dst: void*, src: void*, len: u64);
 fn @intrinsic memzero(dst: void*, len: u64);
 // returns time stamp counter and IA32_TSC_AUX 
-fn @intrinsic rdtscp() -> u64, u32;
+fn @intrinsic rdtsc() -> u64;
+// fn @intrinsic rdtscp() -> u64, u32;
 fn @intrinsic compare_swap(ptr: i32*, old: i32, new: i32) -> bool;
 
 // Functions below are not supported in x64 converter
@@ -19,9 +26,10 @@ fn @intrinsic compare_swap(ptr: i32*, old: i32, new: i32) -> bool;
 // fn @native printd(num: f32) ;
 // fn @native printc(chr: char) ;
 
-// fn @native malloc(size: u64) -> void* ;
-// fn @native realloc(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
-// fn @native free(ptr: void*, size: u64) ;
+fn LINK_TYPE Allocate(size: u64) -> void* ;
+fn LINK_TYPE Reallocate(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
+fn LINK_TYPE Free(ptr: void*, size: u64) ;
+
 
 // // using u64 as File does not work since functions are evaluated
 // // first and then using. Using won't be applied to functions.
@@ -42,7 +50,6 @@ fn @native FileRead(file: File, buffer: void*, readBytes: u64) -> u64 ;
 fn @native FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64 ;
 fn @native FileClose(file: File) ;
 
-
 // // The returned string is heap allocated in the interpreter.
 // // This allocation is freed when the interpreter finishes.
 // // TODO: You may want to change this so that you give the function a
@@ -50,15 +57,20 @@ fn @native FileClose(file: File) ;
 // //   still returning a slice. Perhaps the StringBuilder defaults to null
 // //   and if not provided it is heap allocated, otherwise allocated in StringBuilder.
 fn @native CurrentWorkingDirectory() -> char[]; // should it be const?
-fn @native StartTimePoint() -> u64;
-fn @native EndTimePoint(timepoint: u64) -> f32; // TODO: Use f64 (double) when implemented
+fn @native StartMeasure() -> u64;
+fn @native StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 
-fn @native CmdLineArgs() -> Slice<Slice<char>>; // const?
+fn @import CmdLineArgs() -> Slice<Slice<char>>*; // const?
 
-fn @native DirectoryIteratorCreate(rootPath: char[]) -> DirectoryIterator*;
-fn @native DirectoryIteratorDestroy(iterator: DirectoryIterator*);
-fn @native DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
-fn @native DirectoryIteratorSkip(iterator: DirectoryIterator*);
+// fn @import DirectoryIteratorCreate(path: char*, pathlen: i32) -> u64;
+// fn @import DirectoryIteratorNext(iterator: u64, result: DirectoryIteratorData*) -> bool;
+// fn @import DirectoryIteratorSkip(iterator: u64);
+// fn @import DirectoryIteratorDestroy(iterator: u64, dataToDestroy: DirectoryIteratorData*);
+
+fn LINK_TYPE DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterator*;
+fn LINK_TYPE DirectoryIteratorDestroy(iterator: DirectoryIterator*);
+fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
 struct DirectoryIteratorData {
     name: char[]; // allocated by interpreter, the ptr should be const (char* const NOT const char*)
@@ -66,13 +78,16 @@ struct DirectoryIteratorData {
     lastWriteSeconds: f32;
     isDirectory: bool;
 }
-
+// #import "Logger"
 struct DirectoryIterator {
     _handle: u64;
     rootPath: char[]; // allocated by interpreter, should be char* const
     result: DirectoryIteratorData;
 
     fn next() -> DirectoryIteratorData* {
+        // log("yeah")
+        // DirectoryIteratorNext(null);
+        // return null;
         return DirectoryIteratorNext(this);
     }
     fn skip() {
@@ -81,31 +96,31 @@ struct DirectoryIterator {
 }
 // #else
 
-struct Thread {
-    handle: i64 = 0;
-    id: u32 = 0;
-}
-fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
-    threadId: u32 = 0;
-    handle = CreateThread(null, 0, func, param, null, &threadId);
-    return Thread{handle, threadId};
-}
-fn ThreadDestroy(thread: Thread) {
-    CloseHandle(thread.handle);
-}
-fn ThreadJoin(thread: Thread) {
-    WaitForSingleObject(thread.handle, 0xFFFFFFFF);
-}
-fn @import CreateThread(
-  /* [in, optional]  LPSECURITY_ATTRIBUTES   */ lpThreadAttributes: void*,
-  /* [in]            SIZE_T                  */ dwStackSize: u64,
-  /* [in]            LPTHREAD_START_ROUTINE  */ lpStartAddress: fn_ref,
-  /* [in, optional]  __drv_aliasesMem LPVOID */ lpParameter: void*,
-  /* [in]            DWORD                   */ dwCreationFlags: void*,
-  /* [out, optional] LPDWORD                 */ lpThreadId: u32*
-) -> void* /* HANDLE */;
-fn @import CloseHandle(handle: void*) -> bool;
-fn @import WaitForSingleObject(handle: void*, ms: u32) -> u32;
-fn @import GetLastError() -> u32;
+// struct Thread {
+//     handle: i64 = 0;
+//     id: u32 = 0;
+// }
+// fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
+//     threadId: u32 = 0;
+//     handle = CreateThread(null, 0, func, param, null, &threadId);
+//     return Thread{handle, threadId};
+// }
+// fn ThreadDestroy(thread: Thread) {
+//     CloseHandle(thread.handle);
+// }
+// fn ThreadJoin(thread: Thread) {
+//     WaitForSingleObject(thread.handle, 0xFFFFFFFF);
+// }
+// fn @dllimport CreateThread(
+//   /* [in, optional]  LPSECURITY_ATTRIBUTES   */ lpThreadAttributes: void*,
+//   /* [in]            SIZE_T                  */ dwStackSize: u64,
+//   /* [in]            LPTHREAD_START_ROUTINE  */ lpStartAddress: fn_ref,
+//   /* [in, optional]  __drv_aliasesMem LPVOID */ lpParameter: void*,
+//   /* [in]            DWORD                   */ dwCreationFlags: void*,
+//   /* [out, optional] LPDWORD                 */ lpThreadId: u32*
+// ) -> void* /* HANDLE */;
+// fn @dllimport CloseHandle(handle: void*) -> bool;
+// fn @dllimport WaitForSingleObject(handle: void*, ms: u32) -> u32;
+// fn @dllimport GetLastError() -> u32;
 
 // #endif

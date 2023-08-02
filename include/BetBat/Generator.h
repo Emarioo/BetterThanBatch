@@ -76,16 +76,12 @@ struct GenInfo {
     // int currentFunctionScope=0;
     // FunctionScope* getFunctionScope(int index=-1);
     int currentFrameOffset = 0;
-    int functionStackMoment = 0;    
+    // int functionStackMoment = 0;    
 
-    // #ifndef SAVE_FP_IN_CALL_FRAME
-    // static const int FRAME_SIZE=8;
-    // // x64 just saves the instruction pointer (pc)
-    // // interpreter may occasionally have this one too
-    // #else
-    // ITS ALWAYS 16 BECAUSE FP IS ACTUALLY SAVED, ALTOUGH MANUALLY INSTEAD OF INTERPRETER
     static const int FRAME_SIZE=16; // pc, fp
-    // #endif
+    // what the relative stack pointer should be right after a funtion call.
+    // frame pointer should be pushed afterwards which will result in -16 as virtualStackPointer
+    static const int VIRTUAL_STACK_START=-8; // pc
 
     // Extra details
     // FuncImpl* recentFuncImpl=nullptr; // used by fncall

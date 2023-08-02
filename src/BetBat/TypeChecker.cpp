@@ -96,6 +96,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
         if(info.errors == 0){
             // Assert(id.isValid()); // poly arg type could have failed, an error would have been logged
         }
+        // Assert(astStruct->polyArgs[i].virtualType->isVirtual());
         prevVirtuals[i] = astStruct->polyArgs[i].virtualType->id;
         astStruct->polyArgs[i].virtualType->id = id;
     }
@@ -112,7 +113,6 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
     //-- Check members
     for (int i = 0;i<(int)astStruct->members.size();i++) {
         auto& member = astStruct->members[i];
-        // auto& baseMem = astStruct->baseImpl.members[i];
         auto& implMem = structImpl->members[i];
 
         Assert(member.stringType.isString());
@@ -180,21 +180,25 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
         if(alignedSize<asize)
             alignedSize = asize > 8 ? 8 : asize;
 
-        if(i+1<(int)astStruct->members.size()){
-            auto& implMema = structImpl->members[i+1];
-            i32 nextSize = info.ast->getTypeSize(implMema.typeId); // TODO: Use getTypeAlignedSize instead?
-            nextSize = nextSize>8?8:nextSize;
-            // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
-            int misalign = (offset + size) % nextSize;
-            if(misalign!=0){
-                offset+=nextSize-misalign;
-            }
-        } else {
-            int misalign = (offset + size) % alignedSize;
-            if(misalign!=0){
-                offset+=alignedSize-misalign;
-            }
+        if(offset % asize != 0) {
+            offset += asize - (offset % asize);
         }
+
+        // if(i+1<(int)astStruct->members.size()){
+        //     auto& implMema = structImpl->members[i+1];
+        //     i32 nextSize = info.ast->getTypeSize(implMema.typeId); // TODO: Use getTypeAlignedSize instead?
+        //     nextSize = nextSize>8?8:nextSize;
+        //     // i32 asize = info.ast->getTypeAlignedSize(implMem.typeId);
+        //     int misalign = (offset + size) % nextSize;
+        //     if(misalign!=0){
+        //         offset+=nextSize-misalign;
+        //     }
+        // } else {
+        //     int misalign = (offset + size) % alignedSize;
+        //     if(misalign!=0){
+        //         offset+=alignedSize-misalign;
+        //     }
+        // }
         
         implMem.offset = offset;
         offset+=size;
@@ -303,9 +307,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
         }
         *realTypeName += ">";
-        typeId = info.ast->convertToTypeId(*realTypeName, scopeId);
+        typeId = info.ast->convertToTypeId(*realTypeName, scopeId, true);
     } else {
-        typeId = info.ast->convertToTypeId(typeName, scopeId);
+        typeId = info.ast->convertToTypeId(typeName, scopeId, true);
     }
 
     if(typeId.isValid()) {
@@ -330,7 +334,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
         // ERR_HEAD2(tokenRange) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // type isn't polymorphic and does just not exist
     }
-    TypeInfo* baseInfo = info.ast->convertToTypeInfo(baseType, scopeId);
+    TypeInfo* baseInfo = info.ast->convertToTypeInfo(baseType, scopeId, true);
     if(!baseInfo) {
         // ERR_HEAD2(tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // print error? base type for polymorphic type doesn't exist
@@ -407,7 +411,7 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
         }
         if(astStruct->state == ASTStruct::TYPE_CREATED){
             if(!structInfo) // TYPE_EMPTY may have set structInfo. No need to do it again.
-                structInfo = info.ast->convertToTypeInfo(astStruct->name, scope->scopeId);   
+                structInfo = info.ast->convertToTypeInfo(astStruct->name, scope->scopeId, true);   
             Assert(structInfo); // compiler bug
 
             // log::out << "Evaluating "<<*astStruct->name<<"\n";
@@ -589,7 +593,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         fnOverloads = &ti->astStruct->getMethod(baseName);
     } else {
         Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName);
-        if(!iden || iden->type != Identifier::FUNC){
+        if(!iden || iden->type != Identifier::FUNCTION){
             if(operatorOverloadAttempt)
                 return SignalAttempt::BAD_ATTEMPT;
 
@@ -602,6 +606,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         fnOverloads = &iden->funcOverloads;
     }
     bool implicitPoly = false;
+    // if(fnPolyArgs.size()==0){
     if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
         // match args with normal impls
         FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, expr, fnOverloads->overloads.size()==1 && !operatorOverloadAttempt);
@@ -660,27 +665,42 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     // if match then return that impl
     // if not then try to generate a implementation
     
+    // TODO: Allow implicit cast. Same as we do with normal functions.
     FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr, implicitPoly);
     if(overload){
         overload->funcImpl->usages++;
         FNCALL_SUCCESS
         return SignalAttempt::SUCCESS;
     }
+    // bool useCanCast = false;
+    overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr, implicitPoly, true);
+    if(overload){
+        overload->funcImpl->usages++;
+        FNCALL_SUCCESS
+        return SignalAttempt::SUCCESS;
+    }
+
     ASTFunction* polyFunc = nullptr;
-    // // Find possible polymorphic type and later create implementation for it
-    for(int i=0;i<(int)fnOverloads->polyOverloads.size();i++){
-        FnOverloads::PolyOverload& overload = fnOverloads->polyOverloads[i];
-        if(overload.astFunc->polyArgs.size() != fnPolyArgs.size())
-            continue;// unless implicit polymorphic types
-        if(parentAstStruct){
-            for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
-            }
-        }
-        for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-            overload.astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
-        }
-        defer {
+    if(implicitPoly) {
+        // if(parentAstStruct) {
+        //     // ignoring methods for the time being
+        //     INCOMPLETE
+        // }
+        // What needs to be done compared to other code paths is that fnPolyArgs is empty and needs to be decided.
+        // This can get complicated fn size<T>(a: Slice<T*>)
+        DynamicArray<TypeId> choosenTypes{};
+        DynamicArray<TypeId> realChoosenTypes{};
+        FnOverloads::PolyOverload* polyOverload = nullptr;
+        for(int i=0;i<(int)fnOverloads->polyOverloads.size();i++){
+
+            FnOverloads::PolyOverload& overload = fnOverloads->polyOverloads[i];
+            // continue if more args than possible
+            // continue if less args than minimally required
+            if(expr->nonNamedArgs > overload.astFunc->arguments.size() || 
+                expr->nonNamedArgs < overload.astFunc->nonDefaults ||
+                argTypes.size() > overload.astFunc->arguments.size()
+                )
+                continue;
             for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
                 overload.astFunc->polyArgs[j].virtualType->id = {};
             }
@@ -689,38 +709,219 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                     parentAstStruct->polyArgs[j].virtualType->id = {};
                 }
             }
-        };
-        // continue if more args than possible
-        // continue if less args than minimally required
-        if(expr->nonNamedArgs > overload.astFunc->arguments.size() || 
-            expr->nonNamedArgs < overload.astFunc->nonDefaults ||
-            argTypes.size() > overload.astFunc->arguments.size()
-            )
-            continue;
-        bool found = true;
-        for (u32 j=0;j<expr->nonNamedArgs;j++){
-            // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
-            TypeId argType = CheckType(info, overload.astFunc->scopeId,overload.astFunc->arguments[j].stringType,
-                overload.astFunc->arguments[j].name,nullptr);
-            // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
-            // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
-            if(argType != argTypes[j]){
-                found = false;
-                break;
+            // @IMPORTANT TODO: NAMESPACES ARE IGNORED AT THE MOMENT. HANDLE THEM!
+            // TODO: Fix this code it does not work properly. Some behaviour is missing.
+            bool found = true;
+            for (u32 j=0;j<expr->nonNamedArgs;j++){
+                TypeId typeToMatch = argTypes[j];
+                // Assert(typeToMatch.isValid());
+                // We begin by matching the first argument.
+                // We can't use CheckType because it will create types and we need some more fine tuned checking.
+                // We begin checking the base type (we ignore polymoprhism and pointer level)
+                // If the arguments match then we have a primitive type. We don't need to decide poly arguments here and everything is fine.
+                // If it didn't match then we check if the type is polymorphic. If so then we must decide now.
+
+                ScopeId argScope = overload.astFunc->scopeId;
+
+                TypeId stringType = overload.astFunc->arguments[j].stringType;
+                Token typeString = info.ast->getTokenFromTypeString(stringType);
+
+                u32 plevel=0;
+                std::vector<Token> polyTokens;
+                Token typeName = AST::TrimPointer(typeString, &plevel);
+                Token baseToken = AST::TrimPolyTypes(typeName, &polyTokens);
+                // namespace?
+                
+
+                // TypeId baseType = info.ast->convertToTypeId(baseToken, argScope, false);
+                TypeInfo* typeInfo = info.ast->convertToTypeInfo(baseToken, argScope, false);
+                TypeId baseType = typeInfo->id;
+                // TypeInfo* typeInfo = info.ast->getTypeInfo(baseType);
+                // if(typeInfo->id != baseType) {
+                bool isVirtual = false;
+                for(int k = 0;k<overload.astFunc->polyArgs.size();k++){
+                    if(overload.astFunc->polyArgs[k].virtualType->originalId == typeInfo->originalId) {
+                        isVirtual = true;
+                        break;
+                    }
+                }
+                if(isVirtual) {
+                    if(polyTokens.size() != 0){
+                        // This code should allow implicit calculation of incomplete polymorphic types.
+                        // This sould be allowed: fn add<T>(a: T<i32>).
+                        // But it's not so we get this: fn add<T>(a: T), no polymorphic types
+                        INCOMPLETE
+                    }
+                    // polymorphic type! we must decide!
+                    // check if type exists in choosen types
+                    // if so then reuse, if not then use up a time
+                    int typeIndex = -1;
+                    for(int k=0;k<choosenTypes.size();k++){
+                        // NOTE: The choosen poly type must match in full.
+                        if(choosenTypes[k].baseType() == typeToMatch.baseType() &&
+                            choosenTypes[k].getPointerLevel() + plevel == typeToMatch.getPointerLevel()
+                        ) {
+                            typeIndex = k;
+                            break;
+                        }
+                    }
+                    if(typeIndex !=-1){
+                        // one of the choosen types fulfill the type to match
+                        // no need to do anything
+                        continue;
+                    } else {
+                        if(choosenTypes.size() >= overload.astFunc->polyArgs.size()) {
+                            // no types remaining
+                            found = false;
+                            break;
+                        }
+                        TypeId newChoosen = typeToMatch;
+                        newChoosen.setPointerLevel(typeToMatch.getPointerLevel() - plevel);
+                        choosenTypes.add(newChoosen);
+
+                        // size<T,K>(T* <K>*)
+                        // size(u32**)
+                    }
+                } else {
+                    // baseType isn't one of the polymorphic arguments
+                    // we can't choose a polymorphic argument so things match
+                    if(baseType.baseType() == typeToMatch.baseType()){
+                        if(typeToMatch.getPointerLevel() != plevel || polyTokens.size() != 0) {
+                            found = false; // pointers don't match or our baseType has some polyTokens which typeToMatch doesn't have.
+                            break;
+                        }
+                        continue; // sweet, a simple match no polymorphic arguments to worry about
+                    }
+                    if(polyTokens.size() == 0){
+                        found = false; // alright, types can't possibly ever match no matter what polymorphic arguments we choose.
+                        break;
+                    }
+                    // crap, no match, more code
+
+                    INCOMPLETE
+                }
+            }
+            if(found){
+                // NOTE: You can break here because there should only be one matching overload.
+                // But we keep going in case we find more matches which would indicate
+                // a bug in the compiler. An optimised build would not do this.
+                if(polyFunc) {
+                    // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+                    Assert(("More than one match!",false));
+                    // return outFunc;
+                    break;
+                }
+                polyFunc = overload.astFunc;
+                polyOverload = &overload;
+                realChoosenTypes.stealFrom(choosenTypes);
+                //break;
             }
         }
-        if(found){
-            // NOTE: You can break here because there should only be one matching overload.
-            // But we keep going in case we find more matches which would indicate
-            // a bug in the compiler. An optimised build would not do this.
-            if(polyFunc) {
-                // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
-                Assert(("More than one match!",false));
-                // return outFunc;
-                break;
+        if(polyFunc) {
+            // We found a function
+            fnPolyArgs.resize(polyFunc->polyArgs.size());
+            for(int i = 0; i < polyFunc->polyArgs.size();i++) {
+                if(i < realChoosenTypes.size()) {
+                    fnPolyArgs[i] = realChoosenTypes[i];
+                } else {
+                    fnPolyArgs[i] = AST_VOID;
+                }
             }
-            polyFunc = overload.astFunc;
-            //break;
+            //-- Double check so that the types we choose actually works.
+            // Just in case the code for implicit types has bugs.
+            // IMPORTANT: We also run CheckType in case types needs to be created.
+            if(parentAstStruct){
+                for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+                    parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
+                }
+            }
+            for(int j=0;j<(int)polyOverload->astFunc->polyArgs.size();j++){
+                polyOverload->astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
+            }
+            defer {
+                for(int j=0;j<(int)polyOverload->astFunc->polyArgs.size();j++){
+                    polyOverload->astFunc->polyArgs[j].virtualType->id = {};
+                }
+                if(parentAstStruct){
+                    for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+                        parentAstStruct->polyArgs[j].virtualType->id = {};
+                    }
+                }
+            };
+            bool found = true;
+            for (u32 j=0;j<expr->nonNamedArgs;j++){
+                // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
+                TypeId argType = CheckType(info, polyOverload->astFunc->scopeId,polyOverload->astFunc->arguments[j].stringType,
+                    polyOverload->astFunc->arguments[j].name,nullptr);
+                // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
+                // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
+                if(argType != argTypes[j]){
+                    found = false;
+                    break;
+                }
+            }
+            Assert(found); // If function we thought would match doesn't then the code is incorrect.
+        }
+    } else {
+        // // Find possible polymorphic type and later create implementation for it
+        for(int i=0;i<(int)fnOverloads->polyOverloads.size();i++){
+            FnOverloads::PolyOverload& overload = fnOverloads->polyOverloads[i];
+            if(overload.astFunc->polyArgs.size() != fnPolyArgs.size())
+                continue;
+            // continue if more args than possible
+            // continue if less args than minimally required
+            if(expr->nonNamedArgs > overload.astFunc->arguments.size() || 
+                expr->nonNamedArgs < overload.astFunc->nonDefaults ||
+                argTypes.size() > overload.astFunc->arguments.size()
+                )
+                continue;
+            if(parentAstStruct){
+                for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+                    parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
+                }
+            }
+            for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
+                overload.astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
+            }
+            defer {
+                for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
+                    overload.astFunc->polyArgs[j].virtualType->id = {};
+                }
+                if(parentAstStruct){
+                    for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+                        parentAstStruct->polyArgs[j].virtualType->id = {};
+                    }
+                }
+            };
+            bool found = true;
+            for (u32 j=0;j<expr->nonNamedArgs;j++){
+                // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
+                TypeId argType = CheckType(info, overload.astFunc->scopeId,overload.astFunc->arguments[j].stringType,
+                    overload.astFunc->arguments[j].name,nullptr);
+                // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
+                // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
+                if(!info.ast->castable(argTypes[j], argType)){
+                    found = false;
+                    break;
+                }
+                // if(argType != argTypes[j]){
+                //     found = false;
+                //     break;
+                // }
+            }
+            if(found){
+                // NOTE: You can break here because there should only be one matching overload.
+                // But we keep going in case we find more matches which would indicate
+                // a bug in the compiler. An optimised build would not do this.
+                if(polyFunc) {
+                    // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
+                    Assert(("More than one match!",false));
+                    // return outFunc;
+                    break;
+                }
+                polyFunc = overload.astFunc;
+                //break;
+            }
         }
     }
     if(!polyFunc){
@@ -764,6 +965,8 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
 
     // Can overload be null since we generate a new func impl?
     overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr);
+    if(!overload)
+        overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr, false, true);
     Assert(overload == newOverload);
     if(!overload){
         ERR_HEAD3(expr->tokenRange, "Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
@@ -828,7 +1031,7 @@ SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             // TODO: Generator passes idScope. What is it and is it required in type checker?
             // A simple check to see if the identifier in the expr node is an enum type.
             // no need to check for pointers or so.
-            TypeInfo *typeInfo = info.ast->convertToTypeInfo(expr->left->name, scopeId);
+            TypeInfo *typeInfo = info.ast->convertToTypeInfo(expr->left->name, scopeId, true);
             if (typeInfo && typeInfo->astEnum) {
                 i32 enumValue;
                 bool found = typeInfo->astEnum->getMember(expr->name, &enumValue);
@@ -906,12 +1109,12 @@ SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             auto iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name);
             if(iden){
                 expr->identifier = iden;
-                if(iden->type == Identifier::VAR){
+                if(iden->type == Identifier::VARIABLE){
                     auto varinfo = info.ast->identifierToVariable(iden);
                     if(varinfo){
                         outTypes->add(varinfo->versions_typeId[info.currentPolyVersion]);
                     }
-                } else if(iden->type == Identifier::FUNC) {
+                } else if(iden->type == Identifier::FUNCTION) {
                     if(iden->funcOverloads.overloads.size() == 1) {
                         auto overload = &iden->funcOverloads.overloads[0];
                         if(overload->astFunc->body && overload->funcImpl->usages == 0){
@@ -947,7 +1150,7 @@ SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             Token& name = expr->left->name;
             // TODO: Handle function pointer type
             // This code may need to update when code for AST_ID does
-            if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name)) && iden->type==Identifier::VAR){
+            if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name)) && iden->type==Identifier::VARIABLE){
                 auto var = info.ast->identifierToVariable(iden);
                 Assert(var);
                 if(var){
@@ -1000,7 +1203,7 @@ SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         //     Token& name = expr->left->name;
         //     // TODO: Handle function pointer type
         //     // This code may need to update when code for AST_ID does
-        //     if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, name)) && iden->type==Identifier::VAR){
+        //     if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, name)) && iden->type==Identifier::VARIABLE){
         //         auto var = info.ast->identifierToVariable(iden);
         //         Assert(var);
         //         if(var){
@@ -1030,7 +1233,7 @@ SignalDefault CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             // Token& name = expr->name;
             // TODO: Handle function pointer type
             // This code may need to update when code for AST_ID does
-            if(IsName(expr->name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name)) && iden->type==Identifier::VAR){
+            if(IsName(expr->name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name)) && iden->type==Identifier::VARIABLE){
                 auto var = info.ast->identifierToVariable(iden);
                 Assert(var);
                 if(var){
@@ -1387,9 +1590,9 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
         iden = info.ast->findIdentifier(scope->scopeId, CONTENT_ORDER_MAX, function->name);
         if(!iden){
             iden = info.ast->addIdentifier(scope->scopeId, function->name, CONTENT_ORDER_ZERO);
-            iden->type = Identifier::FUNC;
+            iden->type = Identifier::FUNCTION;
         }
-        if(iden->type != Identifier::FUNC){
+        if(iden->type != Identifier::FUNCTION){
             ERR_HEAD3(function->tokenRange, "'"<< function->name << "' is already defined as a non-function.\n";
             )
             return SignalDefault::FAILURE;
@@ -1401,6 +1604,17 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
         auto& arg = function->arguments[i];
         auto var = info.ast->addVariable(function->scopeId, arg.name, CONTENT_ORDER_ZERO, &arg.identifier);
     }
+    if(parentStruct) {
+        function->memberIdentifiers.resize(parentStruct->members.size());
+        for(int i=0;i<(int)parentStruct->members.size();i++){
+            auto& mem = parentStruct->members[i];
+            auto varinfo = info.ast->addVariable(function->scopeId, mem.name, CONTENT_ORDER_ZERO, &function->memberIdentifiers[i]);
+            if(varinfo){
+                varinfo->type = VariableInfo::MEMBER;
+            }
+        }
+    }
+
     if(function->polyArgs.size()==0 && (!parentStruct || parentStruct->polyArgs.size() == 0)){
         // The code below is used to 
         // Acquire identifiable arguments
@@ -1637,6 +1851,21 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
             // vars.add(std::string(arg.name));
         }   
     }
+    if(func->parentStruct) {
+        for (int i=0;i<(int)func->memberIdentifiers.size();i++) {
+            auto iden = func->memberIdentifiers[i];
+            if(!iden) continue; // happens if an argument has the same name as the member. If so the arg is prioritised and the member ignored.
+            auto& memImpl = funcImpl->structImpl->members[i];
+            _TC_LOG(log::out << " " << iden->name<<": "<< info.ast->typeToString(memImpl.typeId) <<"\n";)
+            // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
+            auto varinfo = info.ast->identifierToVariable(iden);
+            if(varinfo){
+                varinfo->versions_typeId[info.currentPolyVersion] = memImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
+                // the same type as the generator.
+                // vars.add(std::string(arg.name));
+            }   
+        }
+    }
     _TC_LOG(log::out << "\n";)
 
     CheckRest(info, func->body);
@@ -1773,11 +2002,11 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 if(!varname.identifier){
                     auto varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
                     Assert(varinfo);
-                    varinfo-> globalData = now->globalAssignment;
+                    varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
                     varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
                     varname.declaration = true;
                     // vars.add(varname.name);
-                } else if(varname.identifier->type==Identifier::VAR) {
+                } else if(varname.identifier->type==Identifier::VARIABLE) {
                     // variable is already defined
                     auto varinfo = info.ast->identifierToVariable(varname.identifier);
                     Assert(varinfo);
@@ -1793,7 +2022,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         Assert(varinfo);
                         varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
                         varname.declaration = true;
-                        varinfo-> globalData = now->globalAssignment;
+                        varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
                         // vars.add(varname.name);
                     } else {
                         if(!info.ast->castable(varname.versions_assignType[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])){
@@ -1919,7 +2148,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     }
                 }
             }
-            std::string strtype = info.ast->typeToString(typeArray.last());
+            std::string strtype = info.ast->typeToString(temp.last());
             ERR_HEAD3(now->firstExpression->tokenRange, "The expression in for loop must be a Slice or Range.\n\n";
                 ERR_LINE(now->firstExpression->tokenRange,strtype.c_str());
             )
@@ -1936,7 +2165,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             if(now->varnames.size()==1 && now->alias){
                 Token& name = now->varnames[0].name;
                 TypeId originType = CheckType(info, scope->scopeId, name, now->tokenRange, nullptr);
-                TypeId aliasType = info.ast->convertToTypeId(*now->alias, scope->scopeId);
+                TypeId aliasType = info.ast->convertToTypeId(*now->alias, scope->scopeId, true);
                 if(originType.isValid() && !aliasType.isValid()){
                     TypeInfo* aliasInfo = info.ast->createType(*now->alias, scope->scopeId);
                     aliasInfo->id = originType;

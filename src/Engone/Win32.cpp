@@ -55,29 +55,35 @@ namespace engone {
 		HANDLE handle;
 		std::vector<std::string> directories;
 	};
-	static std::unordered_map<RecursiveDirectoryIterator,RDIInfo> s_rdiInfos;
+	static std::unordered_map<DirectoryIterator,RDIInfo> s_rdiInfos;
 	static uint64 s_uniqueRDI=0;
 	
-	RecursiveDirectoryIterator RecursiveDirectoryIteratorCreate(const std::string& path){
-		RecursiveDirectoryIterator iterator = (RecursiveDirectoryIterator)(++s_uniqueRDI);
+	DirectoryIterator DirectoryIteratorCreate(const char* name, int pathlen){
+		DirectoryIterator iterator = (DirectoryIterator)(++s_uniqueRDI);
 		auto& info = s_rdiInfos[iterator] = {};
-		info.root = path;
+		info.root.resize(pathlen);
+		memcpy((char*)info.root.data(), name, pathlen);
 		info.handle=INVALID_HANDLE_VALUE;
-		info.directories.push_back(path);
+		info.directories.push_back(info.root);
+
 		
-		// bool success = RecursiveDirectoryIteratorNext(iterator,result);
+		// DWORD err = GetLastError();
+		// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(uint64)iterator);
+		
+		// bool success = DirectoryIteratorNext(iterator,result);
 		// if(!success){
-		// 	RecursiveDirectoryIteratorDestroy(iterator);
+		// 	DirectoryIteratorDestroy(iterator);
 		// 	return 0;
 		// }
 		return iterator;
 	}
-	bool RecursiveDirectoryIteratorNext(RecursiveDirectoryIterator iterator, DirectoryIteratorData* result){
+	bool DirectoryIteratorNext(DirectoryIterator iterator, DirectoryIteratorData* result){
 		auto info = s_rdiInfos.find(iterator);
 		if(info==s_rdiInfos.end()){
 			return false;
 		}
-		
+        // printf("NEXT\n");
+
 		WIN32_FIND_DATAA data;
 		WHILE_TRUE {
 			if(info->second.handle==INVALID_HANDLE_VALUE){
@@ -97,7 +103,14 @@ namespace engone {
                 temp+="*";
 				// printf("FindFirstFile %s\n",temp.c_str());
 				info->second.directories.erase(info->second.directories.begin());
-				HANDLE handle = FindFirstFileA(temp.c_str(),&data);
+				// fprintf(stderr, "%s %p\n", temp.c_str(), &data);
+				
+				// DWORD err = GetLastError();
+				// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(uint64)iterator);
+				HANDLE handle=INVALID_HANDLE_VALUE;
+				handle = FindFirstFileA(temp.c_str(),&data);
+				// handle = FindFirstFileA("src\\*",&data);
+				// fprintf(stderr, "WHY%s %p\n", temp.c_str(), &data);
 				
 				if(handle==INVALID_HANDLE_VALUE){
 					DWORD err = GetLastError();
@@ -123,18 +136,47 @@ namespace engone {
 					continue;
 				}
 			}
+			// fprintf(stderr, "%p %p\n", iterator, result);
 			if(strcmp(data.cFileName,".")==0||strcmp(data.cFileName,"..")==0){
 				continue;
 			}
 			break;
 		}
-		result->name.clear();
+
+
+		int cFileNameLen = strlen(data.cFileName);
+		int newLength = cFileNameLen;
 		if(!info->second.dir.empty())
-			result->name += info->second.dir+"/";
-		result->name += data.cFileName;
+			newLength += info->second.dir.length()+1;
+
+		if(!result->name) {
+			result->name = (char*)Allocate(newLength + 1);
+			result->namelen = newLength;
+		} else {
+			result->name = (char*)Reallocate(result->name, result->namelen + 1, newLength + 1);
+			result->namelen = newLength;
+		}
+        // printf("np: %p\n",result->name);
+
+		if(!info->second.dir.empty()) {
+			memcpy(result->name, info->second.dir.c_str(), info->second.dir.length());
+			result->name[info->second.dir.length()] = '/';
+			memcpy(result->name + info->second.dir.length() + 1, data.cFileName, cFileNameLen);
+		} else {
+			memcpy(result->name, data.cFileName, cFileNameLen);
+		}
+		result->name[result->namelen] = '\0';
+		// result->name.clear();
+		// if(!info->second.dir.empty())
+		// 	result->name += info->second.dir+"/";
+		// result->name += data.cFileName;
 		
-        // printf("f: %s\n",result->name.c_str());
-        
+        // printf("f: %s\n",result->name);
+		// for(int i=0;i<result->namelen.size();i++){
+		// 	if(result->name[i]=='\\')
+		// 		((char*)result->name.data())[i] = '/';
+		// }
+
 		result->fileSize = (uint64)data.nFileSizeLow+(uint64)data.nFileSizeHigh*((uint64)MAXDWORD+1);
 		uint64 time = (uint64)data.ftLastWriteTime.dwLowDateTime+(uint64)data.ftLastWriteTime.dwHighDateTime*((uint64)MAXDWORD+1);
 		result->lastWriteSeconds = time/10000000.f; // 100-nanosecond intervals
@@ -143,14 +185,14 @@ namespace engone {
             info->second.directories.push_back(result->name);
         }
 
-		for(int i=0;i<result->name.size();i++){
+		for(int i=0;i<result->namelen;i++){
 			if(result->name[i]=='\\')
-				((char*)result->name.data())[i] = '/';
+				result->name[i] = '/';
 		}
 
 		return true;
 	}
-	void RecursiveDirectoryIteratorSkip(RecursiveDirectoryIterator iterator){
+	void DirectoryIteratorSkip(DirectoryIterator iterator){
 		auto info = s_rdiInfos.find(iterator);
 		if(info==s_rdiInfos.end()){
 			return;
@@ -158,7 +200,7 @@ namespace engone {
 		if(!info->second.directories.empty())
 			info->second.directories.pop_back();
 	}
-	void RecursiveDirectoryIteratorDestroy(RecursiveDirectoryIterator iterator){
+	void DirectoryIteratorDestroy(DirectoryIterator iterator, DirectoryIteratorData* dataToDestroy){
 		auto info = s_rdiInfos.find(iterator);
 		if(info==s_rdiInfos.end()){
 			return;
@@ -170,6 +212,11 @@ namespace engone {
 				DWORD err = GetLastError();
 				PL_PRINTF("[WinError %lu] Error closing '%llu'\n",err,(uint64)iterator);
 			}
+		}
+		if(dataToDestroy && dataToDestroy->name) {
+			Free(dataToDestroy->name, dataToDestroy->namelen + 1);
+			dataToDestroy->name = nullptr;
+			dataToDestroy->namelen = 0;
 		}
 		s_rdiInfos.erase(iterator);
 	}
@@ -192,6 +239,8 @@ namespace engone {
 		if(!once){
 			once=true;
 			#ifdef USE_RDTSC
+			// TODO: Does this work on all Windows versions?
+			//  Could it fail? In any case, something needs to be handled.
 			DWORD mhz = 0;
 			DWORD size = sizeof(DWORD);
 			LONG err = RegGetValueA(
@@ -203,7 +252,7 @@ namespace engone {
 				&mhz,
 				&size
 			);
-			frequency = mhz * 1000000;
+			frequency = (u64)mhz * (u64)1000000;
 			#else
 			BOOL success = QueryPerformanceFrequency((LARGE_INTEGER*)&frequency);
 			// if(!success){
@@ -226,6 +275,9 @@ namespace engone {
 	void Sleep(double seconds){
         Win32Sleep((uint32)(seconds*1000));   
     }
+    APIFile FileOpen(const char* path, int len, uint64* outFileSize, uint32 flags){
+		return FileOpen(std::string(path,len), outFileSize, flags);
+	}
     APIFile FileOpen(const std::string& path, uint64* outFileSize, uint32 flags){
         DWORD access = GENERIC_READ|GENERIC_WRITE;
         DWORD sharing = 0;

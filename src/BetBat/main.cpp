@@ -116,6 +116,13 @@ int main(int argc, const char** argv){
 
     // double out = log10(92.3);
 
+    // auto it = DirectoryIteratorCreate("src", 3);
+    // DirectoryIteratorData data;
+    // while(DirectoryIteratorNext(it, &data)){
+    //     log::out << data.name << "\n";
+    // }
+    // auto args = CmdLineArgs();
+
     // return 0;
 
     // UserProfile profile{};
@@ -389,8 +396,16 @@ int main(int argc, const char** argv){
                 engone::StartProgram("","link /nologo " OBJ_FILE 
                 " bin/NativeLayer.lib"
                 " uuid.lib"
+                // " Kernel32.lib"
+                " shell32.lib"
                 " /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
-                engone::StartProgram("",EXE_FILE,PROGRAM_WAIT,&errorLevel);
+                std::string hoho{};
+                hoho += EXE_FILE;
+                for(auto& arg : compileOptions.userArgs){
+                    hoho += " ";
+                    hoho += arg;
+                }
+                engone::StartProgram("",(char*)hoho.data(),PROGRAM_WAIT,&errorLevel);
                 log::out << "Error level: "<<errorLevel<<"\n";
             }
         }

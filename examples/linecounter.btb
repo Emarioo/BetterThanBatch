@@ -1,7 +1,30 @@
 #import "OS"
+#import "Logger"
 
 // directory iterator
 // threads
 // whitelist file formats
 // blacklist directories
 // time measurements
+
+args = CmdLineArgs();
+log("arglen:",args.len);
+for *args {
+    log("Arg",nr,":", it);
+}
+
+fn PrintHelp() {
+    log("Help:");
+    log(" -help : Show help information.");
+    log(" -threads : Argument after -threads specifies the amount of threads to use.");
+    log(" -root");
+    log(" -debug : Spits out information. It is recommended to pipe stdout into a file.");
+}
+
+threadAmount = 4
+rootPath = "."
+
+
+
+// default amount of thread is 4
+// 

@@ -2,6 +2,7 @@
 
 #include "BetBat/Bytecode.h"
 #include "BetBat/NativeRegistry.h"
+#include "BetBat/External/NativeLayer.h"
 
 struct Interpreter {
     ~Interpreter(){
@@ -25,7 +26,6 @@ struct Interpreter {
     u64 sp=0;
     u64 fp=0;
     u64 pc=0;
-    u64 dp=0;
     u64 rsi=0;
     u64 rdi=0;
     

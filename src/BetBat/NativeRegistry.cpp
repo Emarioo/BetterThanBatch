@@ -1,10 +1,10 @@
 #include "BetBat/NativeRegistry.h"
 
 
-engone::Logger& operator<<(engone::Logger& logger, Language::Slice<char>& slice){
-    logger << std::string(slice.ptr,slice.len);
-    return logger;
-}
+// engone::Logger& operator<<(engone::Logger& logger, Language::Slice<char>& slice){
+//     logger << std::string(slice.ptr,slice.len);
+//     return logger;
+// }
 
 int NativeRegistry::initializations = 0;
 
@@ -48,9 +48,9 @@ void NativeRegistry::initNativeContent(){
     ADD(printc)
     ADD(prints)
     ADD(printd)
-    ADD(malloc)
-    ADD(realloc)
-    ADD(free)
+    ADD(Allocate)
+    ADD(Reallocate)
+    ADD(Free)
     ADD(memcpy)
     ADD(memzero)
     ADD(FileOpen)
@@ -64,12 +64,13 @@ void NativeRegistry::initNativeContent(){
     ADD(DirectoryIteratorSkip)
 
     ADD(CurrentWorkingDirectory)
-    ADD(StartTimePoint)
-    ADD(EndTimePoint)
+    ADD(StartMeasure)
+    ADD(StopMeasure)
 
     ADD(CmdLineArgs)
 
-    ADD(rdtscp)
+    ADD(rdtsc)
+    // ADD(rdtscp)
     ADD(compare_swap)
     
     ADD(sin)

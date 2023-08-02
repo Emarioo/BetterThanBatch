@@ -1,52 +1,195 @@
 // @macro-benchmark
 // #import "OS"
-#import "Logger"
+// #import "Logger"
 // #import "Basic"
 // #import "./macros"
 // #import "./macro-bench"
 // #import "./overloading"
 
 // #import "./defer"
-// #import "./dir-iterator"
-// #import "./factorial"
+#import "./dir-iterator"
 // #import "operator"
+// #import "linecounter"
+
+// #import "Array"
+
+// arr: DynamicArray<i32>;
+
+// arr.add(3)
+// arr.add(9)
+// arr.add(4)
+// arr.pop()
+// arr.add(23)
+
+// for arr.sliced() {
+//     log(it);
+// }
+// log(sizeof i32)
+
+// struct Poly<T> {
+//     num: T;
+//     fn incr() {
+//         num++;
+//     }
+// }
+// a: Poly<i32>;
+// a.incr();
+// log(a.num)
+// a.incr();
+// a.incr();
+// log(a.num)
+
+
+// fn @import Testit() -> i32;
+
+// str = "o"
+// for @reverse str {
+//     log(it,nr)
+// }
+
+// fn matchEnd(str: char[], match: char[]) -> bool {
+//     // log("lens",str.len, match.len)
+//     if str.len < match.len
+//         return false
+//     for @reverse match {
+//         // log("nr:",nr)
+//         thing = match.ptr[nr];
+//         // log("i:",nr + str.len - match.len)
+//         chr = str.ptr[nr + str.len - match.len];
+//         // log("i2:",nr + str.len - match.len)
+//         if thing != chr {
+//             // log("ret1")
+//             return false
+//         }
+//         // log("cont")
+//     }
+//     // log("ret2")
+//     return true
+// }
+// matchEnd("src/BetBat/AST.cpp",".cpp");
+
+// Testit();
+// fn @import DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterator*;
+// fn @import DirectoryIteratorDestroy(iterator: DirectoryIterator*);
+// fn @import DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+// // fn @import DirectoryIteratorSkip(iterator: DirectoryIterator*);
+
+// struct DirectoryIteratorData {
+//     name: char[]; // allocated by interpreter, the ptr should be const (char* const NOT const char*)
+//     fileSize: u64;
+//     lastWriteSeconds: f32;
+//     isDirectory: bool;
+// }
+// // #import "Logger"
+// struct DirectoryIterator {
+//     _handle: u64;
+//     rootPath: char[]; // allocated by interpreter, should be char* const
+//     result: DirectoryIteratorData;
+//     fn next() -> DirectoryIteratorData* {
+//         // log("yeah")
+//         DirectoryIteratorNext(null);
+//         return null;
+//         // return DirectoryIteratorNext(this);
+//     }
+//     // fn skip() {
+//     //     DirectoryIteratorSkip(this);
+//     // }
+// }
+// // fn next() -> DirectoryIteratorData* {
+// // // fn next() {
+// // //     // log("yeah")
+// //     DirectoryIteratorNext(null);
+// //     return null;
+// // //     // return DirectoryIteratorNext(this);
+// // }
+
+// // next()
+// // DirectoryIteratorNext(null);
+
+// iter: DirectoryIterator*;
+// // root = ".";
+// // root = "docs";
+// // iter = DirectoryIteratorCreate(&root);
+// // defer { DirectoryIteratorDestroy(iter); }
+
+// // result: DirectoryIteratorData*;
+// // loop = 0;
+// // printData(iter);
+// // result = 
+// // DirectoryIteratorNext(iter);
+// // DirectoryIteratorNext(iter._handle);
+// iter.next()
+
+// // fn @import DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+
+
+// a = "src\\*\0";
+
+// data: char[1000];
+// fn @dllimport FindFirstFileA(name: char*, data: void*) -> void*;
+
+// handle = FindFirstFileA(a.ptr, data.ptr);
+
+// iter: DirectoryIterator*;
+// root = ".";
+// // root = "docs";
+// iter = DirectoryIteratorCreate(&root);
+// defer { DirectoryIteratorDestroy(iter); }
+
+// result: DirectoryIteratorData*;
+// loop = 0;
+// printData(iter);
+// result = 
+// DirectoryIteratorNext(iter);
+// DirectoryIteratorNext(iter._handle);
+// iter.next()
+
+// struct Ok {
+//     fn hell() -> i32* {
+//         return null
+//     }
+// }
+// ok: Ok
+
+// ok.hell();
 
 // fn add(a: char) {
 
 // }
 
+// struct A<K> {
+//     a: K = 0;
+//     fn size(a: K) -> i32 {
+//         return sizeof K
+//     }
+// }
+// a: A<u64>;
+// // a.size(cast<u64>4)
+// a.size(4)
+
 // fn size<T>(a: T) -> i32 {
 //     return sizeof T;
 // }
+// size(cast<u64>9);
 
+// size<Slice<i32>>(Slice<i32>{});
+
+// size(43)
 
 // struct Hello {
-//     a: u16 = 0;
-//     b: u64 = 0;
-//     c: u32 = 0;
+//     a: u16 = 1;
+//     a2: u16 = 2;
+//     b: u64 = 3;
+//     c: u32 = 4;
 // }
-// a: i32;
-// b: u64;
-
-// size<char[]>("hello")
-// size<u32>(231)
-
-// size("hello")
-
-// size(a)
-// size(b)
-
-
 
 // fn @import FillHello(ptr: Hello*);
 
 // hello: Hello;
-// FillHello(&hello);
-
 // printData(&hello);
-// log(hello.a);
-// log(hello.b);
-// log(hello.c);
+
+// FillHello(&hello);
+// printData(&hello);
 
 // tp = StartTimePoint()
 

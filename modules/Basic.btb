@@ -44,24 +44,36 @@ struct @hide Range {
 //     }
 // }
 
+#import "Logger"
 // Test: matchEnd("__add.cpp__","++.cpp++");
 fn matchEnd(str: char[], match: char[]) -> bool {
+    // log("lens",str.len, match.len)
     if str.len < match.len
         return false
     for @reverse match {
+        // log("nr:",nr)
+        // thing = match.ptr[nr];
+        // log("i:",nr + str.len - match.len)
         chr = str.ptr[nr + str.len - match.len];
-        if it != chr
+        // log("i2:",nr + str.len - match.len)
+        if it != chr {
+            // log("ret1")
             return false
+        }
+        // log("cont")
     }
+    // log("ret2")
     return true
 }
 
-#import "Logger"
-fn printData(t: void*) {
+fn printData<T>(t: T*) {
     at = 0;
     while at < sizeof T {
-        byte: u8 = *(cast<u8*>t + at);
-        log(at,":",byte);
+        byte: u8 = *(cast<u8*>cast<void*>t + at);
+        if at % 8 == 0 {
+            print('\n',at,": ");
+        }
+        print(byte, ' ')
         at++
     }
 }

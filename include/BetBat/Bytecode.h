@@ -66,9 +66,10 @@
 
 #define BC_MEMZERO 100
 #define BC_MEMCPY 101
-#define BC_RDTSCP 102
+#define BC_RDTSC 102
+// #define BC_RDTSCP 103
 // compare and swap, atomic
-#define BC_CMP_SWAP 103
+#define BC_CMP_SWAP 104
 
 // #define BC_SIN 110
 // #define BC_COS 111

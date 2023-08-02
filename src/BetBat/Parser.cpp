@@ -282,6 +282,12 @@ SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
         outTypeId.length += tok.length;
         info.next();
     }
+    Token tok = info.get(endTok);
+    if(Equal(tok,"*")){
+        endTok++;
+        outTypeId.length += tok.length;
+        info.next();
+    }
     if(tokensParsed)
         *tokensParsed = endTok - startToken;
     if(outTypeId.length == 0)
@@ -2747,25 +2753,34 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
     ScopeId prevScope = info.currentScopeId;
     defer { info.currentScopeId = prevScope; }; // ensure that we exit with the same scope we came in with
 
-    bool scoped=false;
+    bool expectEndingCurlyBrace = false;
+    // bool inheritScope = true;
+    bool inheritScope = false; // Read note below as to why this is false (why scopes always are created)
     if(bodyLoc){
 
     } else {
         bodyLoc = info.ast->createBody();
 
-        if(!info.end()){
-            Token token = info.get(info.at()+1);
-            if(Equal(token,"{")) {
-                token = info.next();
-                scoped=true;
-                ScopeInfo* scopeInfo = info.ast->createScope(parentScope, info.getNextOrder());
-                bodyLoc->scopeId = scopeInfo->id;
-
-                info.currentScopeId = bodyLoc->scopeId;
-            }
+        Token token = info.get(info.at()+1);
+        if(Equal(token,"{")) {
+            token = info.next();
+            expectEndingCurlyBrace = true;
+            inheritScope = false;
         }
-        if(!scoped){
+        // NOTE: Always creating scope even with "if true  print("hey")" with no curly brace
+        //  because it makes things more consistent and easier to deal with. If a scope wasn't created
+        //  then content order must count the statements of the if body. I don't think not creating a
+        //  scope has any benefits. Sure, you could declare a variable inside the if statement and use
+        //  it outside since it wouldn't be enclosed in a scope but the complication there is
+        //  how it should be initialized (zero or default values as normal I guess?).
+        if(inheritScope) {
+            // Code to use the current scope for this body.
             bodyLoc->scopeId = info.currentScopeId;
+        } else {
+            ScopeInfo* scopeInfo = info.ast->createScope(parentScope, info.getNextOrder());
+            bodyLoc->scopeId = scopeInfo->id;
+
+            info.currentScopeId = bodyLoc->scopeId;
         }
     }
 
@@ -2774,14 +2789,19 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         // endToken is set later
     }
 
-    info.nextContentOrder.push_back(CONTENT_ORDER_ZERO);
-    defer { info.nextContentOrder.pop_back(); };
-
+    if(!inheritScope || trulyGlobal) {
+        info.nextContentOrder.push_back(CONTENT_ORDER_ZERO);
+    }
+    defer {
+        if(!inheritScope || trulyGlobal) {
+            info.nextContentOrder.pop_back(); 
+        }
+    };
     DynamicArray<ASTStatement*> nearDefers{};
 
     while(!info.end()){
         Token& token = info.get(info.at()+1);
-        if(scoped && Equal(token,"}")){
+        if(expectEndingCurlyBrace && Equal(token,"}")){
             info.next();
             break;
         }
@@ -2924,13 +2944,19 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             bodyLoc->add(info.ast, tempNamespace);
             info.nextContentOrder.back()++;
         }
+
         if(result==SignalAttempt::BAD_ATTEMPT){
             // Try again. Important because loop would break after one time if scoped is false.
             // We want to give it another go.
             continue;
         }
+        // skip semi-colon if it's there.
+        Token tok = info.get(info.at()+1);
+        if(Equal(tok,";")){
+            info.next();
+        }
         // current body may have the same "parentScope == bodyLoc->scopeId" will make sure break 
-        if(!scoped && !trulyGlobal){
+        if(!expectEndingCurlyBrace && !trulyGlobal){
             break;
         }
     }

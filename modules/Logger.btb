@@ -50,7 +50,7 @@ fn @hide _print(t: i64){
 }
 // IMPORTANT: This function does not print accurate
 //  floats. It has some precision issues.
-fn @hide _print(t: f32){
+fn _print(t: f32){
     // #ifndef X64
     // printd(t)
     // #else

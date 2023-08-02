@@ -107,8 +107,10 @@ void GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
         code->get(code->length()-1).opcode == BC_POP &&
         code->get(code->length()-1).op0 == BC_REG_FP));
 
-    Assert(nodeStack.size()!=0);
     code->add(inst);
+    // Assert(nodeStack.size()!=0); // can't assert because some instructions are added which doesn't link to any AST node.
+    if(nodeStack.size()==0)
+        return;
     if(nodeStack.last()->tokenRange.firstToken.line == lastLine &&
         nodeStack.last()->tokenRange.firstToken.tokenStream == lastStream){
         // log::out << "loc "<<lastLocationIndex<<"\n";
@@ -323,9 +325,9 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
         return true;
     TypeId vp = AST_VOID;
     vp.setPointerLevel(1);
-    if(from.isPointer() && (to == vp || to==AST_UINT64 || to==AST_INT64))
+    if(from.isPointer() && (to == vp || to==AST_UINT64 || to==AST_INT64 || to==AST_BOOL))
         return true;
-    if((from == vp||from==AST_UINT64||from==AST_INT64) && to.isPointer())
+    if((from == vp||from==AST_UINT64||from==AST_INT64 || from==AST_BOOL) && to.isPointer())
         return true;
     // TODO: I just threw in currentScopeId. Not sure if it is supposed to be in all cases.
     // auto fti = info.ast->getTypeInfo(from);
@@ -557,6 +559,8 @@ SignalDefault GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId)
     return SignalDefault::SUCCESS;
 }
 
+SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope = -1);
+SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outTypeId, ScopeId idScope = -1);
 // pop of structs
 SignalDefault GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
     using namespace engone;
@@ -587,33 +591,75 @@ SignalDefault GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
     }    
     return SignalDefault::SUCCESS;
 }
-SignalDefault GenerateDefaultValue(GenInfo& info, u8 baseReg, int offset, TypeId typeId, TokenRange* tokenRange = 0);
-// int FramePush(GenInfo& info, TypeId typeId, i32* outFrameOffset, bool genDefault){
-//     // IMPORTANT: This code has been copied to array assignment. Change that code
-//     //  when changing code here.
-//     i32 size = info.ast->getTypeSize(typeId);
-//     i32 asize = info.ast->getTypeAlignedSize(typeId);
-//     size = 8;
-//     asize = 8;
-//     if(asize==0)
-//         return SignalDefault::FAILURE;
-//     int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
-//     if (diff != asize) {
-//         info.currentFrameOffset -= diff; // align
-//         info.addIncrSp(-diff);
-//     }
-//     info.currentFrameOffset -= size;
-//     *outFrameOffset = info.currentFrameOffset;
+// baseReg as 0 will push default values to stack
+// non-zero as baseReg will mov default values to the pointer in baseReg
+SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId typeId, TokenRange* tokenRange = nullptr, bool zeroInitialize=true) {
+    using namespace engone;
+    MEASURE;
+    Assert(DECODE_REG_SIZE(baseReg) == 8);
     
-//     info.addIncrSp(-size);
+    // MAKE_NODE_SCOPE(_expression);
+    // Assert(typeInfo)
+    TypeInfo* typeInfo = 0;
+    if(typeId.isNormalType())
+        typeInfo = info.ast->getTypeInfo(typeId);
+    u8 size = info.ast->getTypeSize(typeId);
+    if(baseReg != 0) {
+        Assert(baseReg != BC_REG_RBX); // is used with BC_MEMZERO, you would have to push baseReg and then pop after BC_MEMZERO to maintain it.
+        // That is inefficient though so it's better to use a different register all together.
+        if(baseReg != BC_REG_RDI){
+            info.addLoadIm(BC_REG_RDI, offset);
+            info.addInstruction({BC_ADDI, baseReg, BC_REG_RDI, BC_REG_RDI});
+        } else {
+            info.addLoadIm(BC_REG_RBX, offset);
+            info.addInstruction({BC_ADDI, baseReg, BC_REG_RBX, BC_REG_RDI});
+        }
+        info.addLoadIm(BC_REG_RBX, size);
+        info.addInstruction({BC_MEMZERO, BC_REG_RDI, BC_REG_RBX});
+    }
+    if (typeInfo && typeInfo->astStruct) {
+        for (int i = typeInfo->astStruct->members.size() - 1; i >= 0; i--) {
+            auto &member = typeInfo->astStruct->members[i];
+            auto memdata = typeInfo->getMember(i);
+            // log::out << "GEN "<<typeInfo->astStruct->name<<"."<<member.name<<"\n";
+            // log::out << " alignedSize "<<info.ast->getTypeAlignedSize(memdata.typeId)<<"\n";
+            // if(i+1<(int)typeInfo->astStruct->members.size()){
+            //     // structs in structs will be aligned by their individual members
+            //     // instead of the alignment of the structs as a whole.
+            //     // This will make sure the structs are aligned.
+            //     auto prevMem = typeInfo->getMember(i+1);
+            //     u32 alignSize = info.ast->getTypeAlignedSize(prevMem.typeId);
+            //     // log::out << "Try align "<<alignSize<<"\n";
+            //     // info.addAlign(alignSize);
+            // }
 
-//     if(genDefault){
-//         int result = GenerateDefaultValue(info, BC_REG_FP, info.currentFrameOffset, typeId);
-//         if(result!=SignalDefault::SUCCESS)
-//             return SignalDefault::FAILURE;
-//     }
-//     return SignalDefault::SUCCESS;
-// }
+            if (member.defaultValue) {
+                TypeId tempTypeId = {};
+                SignalDefault result = GenerateExpression(info, member.defaultValue, &tempTypeId);
+                if (!PerformSafeCast(info, tempTypeId, memdata.typeId)) {
+                    ERRTYPE(member.defaultValue->tokenRange, tempTypeId, memdata.typeId, "(default member)\n");
+                }
+                if(baseReg!=0){
+                    SignalDefault result = GeneratePop(info, baseReg, offset + memdata.offset, memdata.typeId);
+                }
+            } else {
+                SignalDefault result = GenerateDefaultValue(info, baseReg, offset + memdata.offset, memdata.typeId, tokenRange, false);
+            }
+        }
+    } else {
+        // only structs have default values, otherwise zero is the default
+        info.addInstruction({BC_BXOR, BC_REG_RAX, BC_REG_RAX, BC_REG_RAX});
+        Assert(size <= 8);
+        if(baseReg == 0){
+            info.addPush(BC_REG_RAX);
+        } else {
+            u8 reg = RegBySize(BC_AX,size);
+            info.addInstruction({BC_MOV_RM_DISP32,reg,baseReg,size});
+            info.code->addIm(offset);
+        }
+    }
+    return SignalDefault::SUCCESS;
+}
 SignalDefault FramePush(GenInfo& info, TypeId typeId, i32* outFrameOffset, bool genDefault, bool staticData){
     Assert(outFrameOffset);
     // IMPORTANT: This code has been copied to array assignment. Change that code
@@ -627,12 +673,12 @@ SignalDefault FramePush(GenInfo& info, TypeId typeId, i32* outFrameOffset, bool 
         info.code->ensureAlignmentInData(asize);
         int offset = info.code->appendData(nullptr,size);
         
-        info.addInstruction({BC_DATAPTR, BC_REG_RBX});
+        info.addInstruction({BC_DATAPTR, BC_REG_RDI});
         info.code->addIm(offset);
 
         *outFrameOffset = offset;
         if(genDefault){
-            SignalDefault result = GenerateDefaultValue(info, BC_REG_RBX, 0, typeId);
+            SignalDefault result = GenerateDefaultValue(info, BC_REG_RDI, 0, typeId);
             if(result!=SignalDefault::SUCCESS)
                 return SignalDefault::FAILURE;
         }
@@ -661,17 +707,12 @@ SignalDefault FramePush(GenInfo& info, TypeId typeId, i32* outFrameOffset, bool 
     }
     return SignalDefault::SUCCESS;
 }
-// int FramePop(){
-//     Assert(("FramePop not implemented",false));
-// }
-
 /*
 ##################################
     Generation functions below
 ##################################
 */
-SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope = -1);
-SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outTypeId, ScopeId idScope = -1){
+SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outTypeId, ScopeId idScope){
     DynamicArray<TypeId> types{};
     SignalDefault result = GenerateExpression(info,expression,&types,idScope);
     *outTypeId = AST_VOID;
@@ -711,7 +752,7 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
             // end point
             // auto id = info.ast->findIdentifier(idScope, now->name);
             auto id = now->identifier;
-            if (!id || id->type != Identifier::VAR) {
+            if (!id || id->type != Identifier::VARIABLE) {
                 if(info.compileInfo->typeErrors==0){
                     ERR_HEAD3(now->tokenRange, "'"<<now->tokenRange.firstToken << " is undefined.\n\n";
                         ERR_LINE(now->tokenRange,"bad");
@@ -732,12 +773,23 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 typeInfo = info.ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
             TypeId typeId = varinfo->versions_typeId[info.currentPolyVersion];
             
-            if(varinfo->globalData) {
-                info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                info.code->addIm(varinfo->versions_dataOffset[info.currentPolyVersion]);
-            } else {
-                info.addLoadIm(BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                info.addInstruction({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
+            switch(varinfo->type) {
+                case VariableInfo::GLOBAL: {
+                    info.addInstruction({BC_DATAPTR, BC_REG_RBX});
+                    info.code->addIm(varinfo->versions_dataOffset[info.currentPolyVersion]);
+                }
+                break; case VariableInfo::LOCAL: {
+                    info.addLoadIm(BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    info.addInstruction({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
+                }
+                break; case VariableInfo::MEMBER: {
+                    // NOTE: Is member variable/argument always at this offset with all calling conventions?
+                    info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
+                    info.code->addIm(GenInfo::FRAME_SIZE);
+                    
+                    info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
+                }
             }
             info.addPush(BC_REG_RBX);
 
@@ -1049,7 +1101,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             //   It might be important but I just don't know why. Yes it was important past me.
             //   AST_VAR and variables have simular syntax.
             // if (expression->name) {
-            TypeInfo *typeInfo = info.ast->convertToTypeInfo(expression->name, idScope);
+            TypeInfo *typeInfo = info.ast->convertToTypeInfo(expression->name, idScope, true);
             // A simple check to see if the identifier in the expr node is an enum type.
             // no need to check for pointers or so.
             if (typeInfo && typeInfo->astEnum) {
@@ -1064,8 +1116,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // auto id = info.ast->findIdentifier(idScope, , expression->name);
             auto id = expression->identifier;
             if (id) {
-                if (id->type == Identifier::VAR) {
-                    auto var = info.ast->identifierToVariable(id);
+                if (id->type == Identifier::VARIABLE) {
+                    auto varinfo = info.ast->identifierToVariable(id);
                     // auto var = info.ast->identifierToVariable(id);
                     // TODO: check data type?
                     // fp + offset
@@ -1077,17 +1129,32 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     // info.code->addDebugText(buf,len);
                     // log::out << "AST_VAR: "<<id->name<<", "<<id->varIndex<<", "<<var->frameOffset<<"\n";
                     
-                    if(var->globalData) {
-                        info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                        info.code->addIm(var->versions_dataOffset[info.currentPolyVersion]);
-                        GeneratePush(info, BC_REG_RBX, 0, var->versions_typeId[info.currentPolyVersion]);
-                    } else {
-                        GeneratePush(info, BC_REG_FP, var->versions_dataOffset[info.currentPolyVersion], var->versions_typeId[info.currentPolyVersion]);
+                    switch(varinfo->type) {
+                        case VariableInfo::GLOBAL: {
+                            info.addInstruction({BC_DATAPTR, BC_REG_RBX});
+                            info.code->addIm(varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            GeneratePush(info, BC_REG_RBX, 0, varinfo->versions_typeId[info.currentPolyVersion]);
+                        }
+                        break; case VariableInfo::LOCAL: {
+                            GeneratePush(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion],
+                                varinfo->versions_typeId[info.currentPolyVersion]);
+                        }
+                        break; case VariableInfo::MEMBER: {
+                            // NOTE: Is member variable/argument always at this offset with all calling conventions?
+                            info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
+                            info.code->addIm(GenInfo::FRAME_SIZE);
+                            
+                            // info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            // info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
+
+                            GeneratePush(info, BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion],
+                                varinfo->versions_typeId[info.currentPolyVersion]);
+                        }
                     }
 
-                    outTypeIds->add(var->versions_typeId[info.currentPolyVersion]);
+                    outTypeIds->add(varinfo->versions_typeId[info.currentPolyVersion]);
                     return SignalDefault::SUCCESS;
-                } else if (id->type == Identifier::FUNC) {
+                } else if (id->type == Identifier::FUNCTION) {
                     _GLOG(log::out << " expr func push " << expression->name << "\n";)
 
                     if(id->funcOverloads.overloads.size()==1){
@@ -1192,8 +1259,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
                         if(size>8){
                             // TODO: This should be moved to the type checker.
-                            ERR_HEAD3(expression->tokenRange, "Argument types cannot be larger than 8 bytes.";
-                                ERR_LINE(expression->tokenRange, "bad");
+                            ERR_SECTION(
+                                ERR_HEAD(expression->tokenRange)
+                                ERR_MSG("Argument types cannot be larger than 8 bytes when using stdcall.")
+                                ERR_LINE(expression->tokenRange, "bad")
                             )
                             return SignalDefault::FAILURE;
                         }
@@ -1228,8 +1297,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         } else {
                             Assert(argType.getPointerLevel()==1);
                             info.addPop(BC_REG_RBX);
-                            info.addInstruction({BC_MOV_MR, BC_REG_RBX, BC_REG_RBX, 8});
-                            info.addPush(BC_REG_RBX);
+                            info.addInstruction({BC_MOV_MR, BC_REG_RBX, BC_REG_RAX, 8});
+                            info.addPush(BC_REG_RAX);
+                            // info.addInstruction({BC_MOV_MR, BC_REG_RBX, BC_REG_RBX, 8});
+                            // info.addPush(BC_REG_RBX);
                         }
                     }
                 } else {
@@ -1265,13 +1336,18 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         info.addPop(BC_REG_RBX);
                         info.addPop(BC_REG_RDI);
                         info.addInstruction({BC_MEMZERO, BC_REG_RDI, BC_REG_RBX});
-                    } else if(funcImpl->name == "rdtscp"){
-                        info.addInstruction({BC_RDTSCP, BC_REG_RAX, BC_REG_ECX, BC_REG_RDX});
+                    } else if(funcImpl->name == "rdtsc"){
+                        info.addInstruction({BC_RDTSC, BC_REG_RAX, BC_REG_RDX});
                         info.addPush(BC_REG_RAX); // timestamp counter
-                        info.addPush(BC_REG_ECX); // processor thing?
                         
                         outTypeIds->add(AST_UINT64);
-                        outTypeIds->add(AST_UINT32);
+                    // } else if(funcImpl->name == "rdtscp"){
+                    //     info.addInstruction({BC_RDTSC, BC_REG_RAX, BC_REG_ECX, BC_REG_RDX});
+                    //     info.addPush(BC_REG_RAX); // timestamp counter
+                    //     info.addPush(BC_REG_ECX); // processor thing?
+                        
+                    //     outTypeIds->add(AST_UINT64);
+                    //     outTypeIds->add(AST_UINT32);
                     } else if(funcImpl->name == "compare_swap"){
                         info.addPop(BC_REG_EDX);
                         info.addPop(BC_REG_EAX);
@@ -1445,7 +1521,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             int& constIndex = expression->versions_constStrIndex[info.currentPolyVersion];
             auto& constString = info.ast->getConstString(constIndex);
 
-            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId);
+            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId, true);
             if(!typeInfo){
                 ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
                 )
@@ -1497,7 +1573,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             int constIndex = expression->versions_constStrIndex[info.currentPolyVersion];
             auto& constString = info.ast->getConstString(constIndex);
 
-            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId);
+            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId, true);
             if(!typeInfo){
                 ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
                 )
@@ -1531,7 +1607,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             info.addLoadIm(BC_REG_RAX, 0);
             info.addPush(BC_REG_RAX);
 
-            TypeInfo *typeInfo = info.ast->convertToTypeInfo(Token("void"), info.ast->globalScopeId);
+            TypeInfo *typeInfo = info.ast->convertToTypeInfo(Token("void"), info.ast->globalScopeId, true);
             TypeId newId = typeInfo->id;
             newId.setPointerLevel(1);
             outTypeIds->add( newId);
@@ -1795,7 +1871,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // info.addInstruction({BC_NOT, reg, reg2});
             // info.addPush(reg2);
 
-            outTypeIds->add( ltype);
+            outTypeIds->add(AST_BOOL);
         }
         else if (expression->typeId == AST_BNOT) {
             SignalDefault result = GenerateExpression(info, expression->left, &ltype);
@@ -1887,7 +1963,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             TypeId exprId;
 
             if(expression->left->typeId == AST_ID){
-                TypeInfo *typeInfo = info.ast->convertToTypeInfo(expression->left->name, idScope);
+                TypeInfo *typeInfo = info.ast->convertToTypeInfo(expression->left->name, idScope, true);
                 // A simple check to see if the identifier in the expr node is an enum type.
                 // no need to check for pointers or so.
                 if (typeInfo && typeInfo->astEnum) {
@@ -2081,7 +2157,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // }
         }
         else if(expression->typeId==AST_RANGE){
-            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Range"), info.ast->globalScopeId);
+            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Range"), info.ast->globalScopeId, true);
             if(!typeInfo){
                 ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to struct Range since it doesn't exist. Did you forget #import \"Basic\".\n\n";
                     ERR_LINE(expression->tokenRange,"Where is Range?");
@@ -2502,64 +2578,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
     // An entry point has been missed if the assert above fire.
     return SignalDefault::SUCCESS;
 }
-SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId typeId, TokenRange* tokenRange) {
-    using namespace engone;
-    MEASURE;
-    
-    // MAKE_NODE_SCOPE(_expression);
-    // Assert(typeInfo)
-    TypeInfo* typeInfo = 0;
-    if(typeId.isNormalType())
-        typeInfo = info.ast->getTypeInfo(typeId);
-    u8 size = info.ast->getTypeSize(typeId);
-    if (typeInfo && typeInfo->astStruct) {
-        for (int i = typeInfo->astStruct->members.size() - 1; i >= 0; i--) {
-            auto &member = typeInfo->astStruct->members[i];
-            auto memdata = typeInfo->getMember(i);
-            // log::out << "GEN "<<typeInfo->astStruct->name<<"."<<member.name<<"\n";
-            // log::out << " alignedSize "<<info.ast->getTypeAlignedSize(memdata.typeId)<<"\n";
-            if(member.defaultValue && typeInfo->astStruct->polyArgs.size()){
-                WARN_HEAD3((*tokenRange), "Polymorphism may not work with default values!";)
-            }
-            if(i+1<(int)typeInfo->astStruct->members.size()){
-                // structs in structs will be aligned by their individual members
-                // instead of the alignment of the structs as a whole.
-                // This will make sure the structs are aligned.
-                auto prevMem = typeInfo->getMember(i+1);
-                u32 alignSize = info.ast->getTypeAlignedSize(prevMem.typeId);
-                // log::out << "Try align "<<alignSize<<"\n";
-                // info.addAlign(alignSize);
-            }
 
-            if (member.defaultValue) {
-                TypeId typeId = {};
-                SignalDefault result = GenerateExpression(info, member.defaultValue, &typeId);
-                if (!PerformSafeCast(info, memdata.typeId, typeId)) {
-                    ERRTYPE(member.defaultValue->tokenRange, memdata.typeId, typeId, "(default member)\n");
-                    
-                }
-                if(baseReg!=0){
-                    SignalDefault result = GeneratePop(info, baseReg, offset + memdata.offset, typeId);
-                }
-            } else {
-                SignalDefault result = GenerateDefaultValue(info, baseReg, offset + memdata.offset, memdata.typeId, tokenRange);
-            }
-        }
-    } else {
-        Assert(size <= 8);
-        if(baseReg == 0){
-            info.addPush(BC_REG_RAX);
-        } else {
-            u8 reg = RegBySize(BC_AX,size);
-            info.addInstruction({BC_BXOR, reg, reg, reg});
-            // info.addLoadIm(BC_REG_RCX,offset);
-            // info.addInstruction({BC_ADDI,BC_REG_RCX, baseReg, BC_REG_RCX});
-            info.addInstruction({BC_MOV_RM_DISP32,reg,baseReg,size});
-            info.code->addIm(offset);
-        }
-    }
-    return SignalDefault::SUCCESS;
-}
 SignalDefault GenerateBody(GenInfo &info, ASTScope *body);
 SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct = nullptr){
     using namespace engone;
@@ -2592,7 +2611,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             // 
             return SignalDefault::FAILURE;
         }
-        if (identifier->type != Identifier::FUNC) {
+        if (identifier->type != Identifier::FUNCTION) {
             // I have a feeling some error has been printed if we end up here.
             // Double check that though.
             return SignalDefault::FAILURE;
@@ -2698,22 +2717,11 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             info.currentFuncImpl = prevFuncImpl;
             info.currentScopeId = prevScopeId; };
 
-        info.functionStackMoment = info.saveStackMoment();
-
-        int lastOffset = info.currentFrameOffset;
-        //-- Align
-        // int modu = (- info.virtualStackPointer) % 8;
-        // int diff = 8 - modu;
-        // if (modu != 0) {
-        //     // log::out << "   align\n";
-        //     info.code->addDebugText("   align\n");
-        //     info.addIncrSp(-diff); // Align
-        //     // TODO: does something need to be done with stackAlignment list.
-        // }
-        // expecting 8-bit alignment when generating function
-        Assert(info.virtualStackPointer % 8 == 0);
-        
-        info.currentFrameOffset = 0; // reset frame offset at beginning of function
+        // info.functionStackMoment = info.saveStackMoment();
+        // -8 since the start of the frame is 0 and after the program counter is -8
+        info.virtualStackPointer = GenInfo::VIRTUAL_STACK_START;
+        // reset frame offset at beginning of function
+        info.currentFrameOffset = 0;
 
         if(function->callConvention == BETCALL) {
             if (function->arguments.size() != 0) {
@@ -2724,8 +2732,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     auto &arg = function->arguments[i];
                     auto &argImpl = funcImpl->argumentTypes[i];
                     // auto var = info.ast->addVariable(info.currentScopeId, arg.name);
-                    auto var = info.ast->identifierToVariable(arg.identifier);
-                    if (!var) {
+                    auto varinfo = info.ast->identifierToVariable(arg.identifier);
+                    if (!varinfo) {
                         ERR_HEAD3(arg.name.range(), arg.name << " is already defined.\n";
                             ERR_LINE(arg.name.range(),"cannot use again");
                         )
@@ -2733,10 +2741,27 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
                     // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
                     // var->globalData = false;
-                    var->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + argImpl.offset;
-                    _GLOG(log::out << " " <<"["<<var->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
+                    varinfo->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + argImpl.offset;
+                    _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
                 }
                 _GLOG(log::out << "\n";)
+            }
+            if(function->parentStruct){
+                // This doesn't need to be done here. Data offset is known in type checker since it 
+                // depends on the struct type. The argument data offset is predictable. But
+                // since the data offset for normal arguments are done here we might as well
+                // to members here to for consistency.
+                // TypeInfo* ti = info.ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion]);
+                // ti->ast
+                Assert(function->memberIdentifiers.size() == funcImpl->structImpl->members.size());
+                for(int i=0;i<(int)function->memberIdentifiers.size();i++){
+                    auto identifier  = function->memberIdentifiers[i];
+                    if(!identifier) continue; // see type checker as to why this may happen
+                    auto& memImpl = funcImpl->structImpl->members[i];
+
+                    auto varinfo = info.ast->identifierToVariable(identifier);
+                    varinfo->versions_dataOffset[info.currentPolyVersion] = memImpl.offset;
+                }
             }
             
             // HELLO READ THIS!
@@ -2747,10 +2772,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
 
             // x64's call instruction does ignores the base pointer (frame pointer).
             // The interpreter does can do either.
-            #ifndef SAVE_FP_IN_CALL_FRAME
             info.addPush(BC_REG_FP);
             info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
-            #endif
             if (funcImpl->returnTypes.size() != 0) {
                 _GLOG(log::out << "space for " << funcImpl->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
                 
@@ -2785,7 +2808,6 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
             SignalDefault result = GenerateBody(info, function->body);
-            info.currentFrameOffset = lastOffset;
 
             for(int i=0;i<(int)function->polyArgs.size();i++){
                 auto& arg = function->polyArgs[i];
@@ -2859,6 +2881,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 }
                 _GLOG(log::out << "\n";)
             }
+            // Fix member variables for stdcall.
+            Assert(!function->parentStruct);
             
             // HELLO READ THIS!
             // Before changing this code to make the caller make space for return values instead of
@@ -2871,10 +2895,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
 
             // x64's call instruction does ignores the base pointer (frame pointer).
             // The interpreter does can do either.
-            #ifndef SAVE_FP_IN_CALL_FRAME
             info.addPush(BC_REG_FP);
             info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
-            #endif
 
             if (funcImpl->returnTypes.size() > 2) {
                 ERR_SECTION(
@@ -2924,7 +2946,6 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
             SignalDefault result = GenerateBody(info, function->body);
-            info.currentFrameOffset = lastOffset;
 
             for(int i=0;i<(int)function->polyArgs.size();i++){
                 auto& arg = function->polyArgs[i];
@@ -2966,11 +2987,13 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 info.addInstruction({BC_RET});
             }
         }
+        // Assert(info.virtualStackPointer == GenInfo::VIRTUAL_STACK_START);
+        // Assert(info.currentFrameOffset == 0);
         // needs to be done after frame pop
-        info.restoreStackMoment(info.functionStackMoment);
-        for (auto &arg : function->arguments) {
-            info.ast->removeIdentifier(info.currentScopeId, arg.name);
-        }
+        // info.restoreStackMoment(info.functionStackMoment, false, true);
+        // for (auto &arg : function->arguments) {
+        //     info.ast->removeIdentifier(info.currentScopeId, arg.name);
+        // }
     }
     return SignalDefault::SUCCESS;
 }
@@ -3102,7 +3125,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 //     varsToRemove.add(varname.name);
                 //     varinfo->typeId = declaredType;
                 //     wasDeclaration = true;
-                // } else if(varIdentifier->type==Identifier::VAR) {
+                // } else if(varIdentifier->type==Identifier::VARIABLE) {
                 //     // variable is already defined
                 //     varinfo = info.ast->identifierToVariable(varIdentifier);
                 //     Assert(varinfo);
@@ -3220,7 +3243,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         // var->frameOffset = info.currentFrameOffset;
 
                         
-                        SignalDefault result = FramePush(info,varinfo->versions_typeId[info.currentPolyVersion],&varinfo->versions_dataOffset[info.currentPolyVersion],false, varinfo->globalData);
+                        SignalDefault result = FramePush(info,varinfo->versions_typeId[info.currentPolyVersion],&varinfo->versions_dataOffset[info.currentPolyVersion],false, varinfo->isGlobal());
 
                         // TODO: Don't hardcode this slice stuff, maybe I have to.
                         // push length
@@ -3235,9 +3258,9 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         GeneratePop(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                     } else {
                         SignalDefault result = FramePush(info, varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
-                            !statement->firstExpression && !varinfo->globalData, varinfo->globalData);
+                            !statement->firstExpression && !varinfo->isGlobal(), varinfo->isGlobal());
                     }
-                    _GLOG(log::out << "declare " << (varinfo->globalData?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
+                    _GLOG(log::out << "declare " << (varinfo->isGlobal()?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
                     // NOTE: inconsistent
                     // char buf[100];
                     // int len = sprintf(buf," ^ was assigned %s",statement->name->c_str());
@@ -3296,7 +3319,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         continue;
                     }
                     // Assert(!var->globalData || info.currentScopeId == info.ast->globalScopeId);
-                    if(var->globalData) {
+                    if(var->isGlobal()) {
                         info.addInstruction({BC_DATAPTR, BC_REG_RBX});
                         info.code->addIm(var->versions_dataOffset[info.currentPolyVersion]);
                         GeneratePop(info, BC_REG_RBX, 0, var->versions_typeId[info.currentPolyVersion]);
@@ -3581,7 +3604,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             continue;
                         }
                         info.addPop(BC_REG_RAX);
-                        info.addPop(BC_REG_RAX);
+                        info.addPop(BC_REG_RDX); // throw
                         info.addInstruction({BC_CAST,CAST_UINT_SINT, BC_REG_RAX,BC_REG_EAX});
                     }else{
                         info.addLoadIm(BC_REG_EAX,-1);
@@ -3829,10 +3852,11 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
             // fix stack pointer before returning
             // info.addIncrSp(-info.currentFrameOffset);
-            info.currentFrameOffset = lastOffset;
-            info.restoreStackMoment(info.functionStackMoment - 8, true); // -8 to not include BC_REG_FP
+            // info.restoreStackMoment(-8 - 8, true); // -8 to not include BC_REG_FP
+            info.restoreStackMoment(GenInfo::VIRTUAL_STACK_START - 8, true); // -8 to not include BC_REG_FP
             info.addInstruction({BC_POP, BC_REG_FP},true);
             info.addInstruction({BC_RET});
+            info.currentFrameOffset = lastOffset;
         }
         else if (statement->type == ASTStatement::EXPRESSION) {
             _GLOG(SCOPE_LOG("EXPRESSION"))
@@ -3960,7 +3984,12 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     // info.code->addDebugText("GLOBAL CODE SEGMENT\n");
 
     info.currentPolyVersion = 0;
+    info.virtualStackPointer = GenInfo::VIRTUAL_STACK_START;
+    info.currentFrameOffset = 0;
+    info.addPush(BC_REG_FP);
+    info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
     result = GenerateBody(info, info.ast->mainBody);
+    info.addPop(BC_REG_FP);
     // TODO: What to do about result? nothing?
 
     std::unordered_map<FuncImpl*, int> resolveFailures;
