@@ -21,7 +21,7 @@ SET GCC_DEFINITIONS=-DOS_WINDOWS
 SET GCC_COMPILE_OPTIONS=-std=c++14
 SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
-@REM /O2
+@REM SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc /O2
 SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
 SET MSVC_LINK_OPTIONS=/nologo Advapi32.lib
 SET MSVC_INCLUDE_DIRS=/Iinclude
@@ -102,6 +102,9 @@ if !compileSuccess! == 0 (
     @REM prog examples/x64_test.btb -target win-x64 -out test.exe
     dumpbin bin/dev.obj /ALL > dev.out
     @REM dumpbin bin/obj_min.obj /ALL > min.out
+
+
+    @REM prog examples/linecounter.btb -out test.exe -target win-x64
 
     @REM link objtest.obj /DEFAULTLIB:LIBCMT
 

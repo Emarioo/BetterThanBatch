@@ -1,9 +1,12 @@
 // #import "OS"
 
+
 fn @native prints(str: char[]);
-fn @native printi(str: i64);
 fn @native printc(str: char);
+#ifdef LINK_BYTECODE
+fn @native printi(str: i64);
 fn @native printd(str: f32);
+#endif
 
 /*
     The reason functions are named "print" and not "log"
@@ -17,7 +20,7 @@ fn @native printd(str: f32);
 fn @hide _print(t: i64){
     // If you are worried that this language will be filled with ifdefs like C/C++
     // then you can calm down. This is just temporary.
-    #ifndef X64
+    #ifdef LINK_BYTECODE
     printi(t)
     #else
     

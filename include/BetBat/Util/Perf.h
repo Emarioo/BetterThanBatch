@@ -4,9 +4,6 @@
 
 #ifdef LOG_MEASURES
 #define MEASURE MeasureScope scopeMeasure = {__FUNCTION__};
-#else
-#define MEASURE
-#endif
 struct ScopeStat {
     const char* fname=0;
     double time=0;
@@ -37,3 +34,6 @@ enum PrintFilters : u32 {
     SORT_TIME = 0x4,
 };
 void PrintMeasures(u32 filters = SORT_TIME, u32 limit=(u32)-1);
+#else
+#define MEASURE
+#endif

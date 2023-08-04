@@ -1,22 +1,34 @@
 // import allocation functions
 #import "OS"
+// #import "Logger"
+
+#define ARRAY_CLEANUP(ARR) for @ptr ARR.sliced() it.cleanup(); ARR.cleanup();
 
 // TODO: Asserts
+// Note that memory is uninitialized
 struct DynamicArray<T> {
     // zero initialized by default
     ptr: T*;
     max: u32; // allocated bytes
     len: u32; // elements in allocation
 
+    fn cleanup() { this._reserve(0); }
+
     // returns index where element was inserted
-    fn add(newElement: T) -> u32 {
+    // fn add(newElement: T) -> u32 {
+    fn add(newElement: T) -> T* {
         if(len + 1 > max){
-            if(!this._reserve(5 + max * 1.5)){
-                return -1;
+            re = this._reserve(7 + max * 2);
+            // log("re",re);
+            if(!re){
+                // return -1;
+                return null;
+                // return;
             }
         }
         ptr[len] = newElement;
-        return len++;
+        return ptr + len++ * sizeof T;
+        // return len++;
     }
     fn sliced() -> Slice<T> {
         return Slice<T>{ptr, len};
@@ -34,13 +46,19 @@ struct DynamicArray<T> {
             return null;
         return ptr + index * sizeof T;
     }
+    fn resize(newLen: u32) -> bool {
+        if newLen > max {
+            if !this._reserve(newLen)
+                return false;
+        }
+        len = newLen;
+        return true;
+    }
     fn _reserve(newMax: u32) -> bool {
+        // log("newMax",newMax)
         if(newMax==0){
+            // log("oh")
             if(max!=0){
-                // for(u32 i = 0; i < used; i++){
-                //     (ptr + i)->~T();
-                // }
-
                 Free(ptr, max * sizeof T);
             }
             ptr = null;
@@ -48,8 +66,12 @@ struct DynamicArray<T> {
             len = 0;
             return true;
         }
+        // log("what",cast<u64>ptr)
         if(!ptr){
+            // log("huh")
             ptr = Allocate(newMax * sizeof T);
+            // log("allocSize",newMax * sizeof T)
+            // log("ptr",ptr)
             // Assert(ptr);
             // initialization of elements is done when adding them
             if(!ptr)
@@ -57,11 +79,6 @@ struct DynamicArray<T> {
             max = newMax;
             return true;
         } else {
-            // if(newMax < max) {
-            //     for(u32 i = newMax; i < used; i++){
-            //         (ptr + i)->~T();
-            //     }
-            // }
             newPtr: T* = Reallocate(ptr, max * sizeof T, newMax * sizeof T);
             // Assert(newPtr);
             if(!newPtr)
@@ -76,3 +93,19 @@ struct DynamicArray<T> {
         return false;
     }
 }
+
+// Some code to quickly test an array
+// #import "Logger"
+// #import "Array"
+// arr: DynamicArray<i32>;
+// arr.add(4)
+// arr.add(23)
+// arr.pop()
+// arr.add(92)
+// arr.add(92)
+// arr.add(92)
+// for arr.sliced() {
+//     log(it)
+// }
+// log(arr.len, arr.max)
+// arr._reserve(0);

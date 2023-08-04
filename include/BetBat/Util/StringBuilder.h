@@ -31,8 +31,10 @@ struct StringBuilder {
         builder.len=0;
         builder.max=0;
         builder.owner=true;
-        // Assert(_reserve(arr.max));
-        // Assert(resize(arr.used));
+        // bool yes = _reserve(arr.max);
+        // Assert(yes);
+        // yes = resize(arr.used);
+        // Assert(yes);
         // for(int i=0;i<used;i++){
         //     _ptr[i] = arr._ptr[i];
         // }
@@ -53,8 +55,8 @@ struct StringBuilder {
         builder.len=0;
         builder.max=0;
         builder.owner=true;
-        // Assert(_reserve(arr.max));
-        // Assert(resize(arr.used));
+        // Assert(bool yes = _reserve(arr.max));
+        // Assert(yes = resize(arr.used));
         // for(int i=0;i<used;i++){
         //     _ptr[i] = arr._ptr[i];
         // }
@@ -190,7 +192,8 @@ struct StringBuilder {
     void ensure(u32 length) {
         if(max>=length)
             return;
-        Assert(_reserve(max + length + 10));
+        bool yes = _reserve(max + length + 10);
+        Assert(yes);
     }
     bool _reserve(u32 newMax) {
         Assert(owner);

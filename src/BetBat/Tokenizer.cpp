@@ -990,6 +990,9 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
                     } else if(nextChr=='0'){
                         tmp = '\0';
                         _TLOG(log::out << "\\0";)
+                    } else if(nextChr=='r'){
+                        tmp = '\r';
+                        _TLOG(log::out << "\\r";)
                     } else{
                         tmp = '?';
                         _TLOG(log::out << tmp;)

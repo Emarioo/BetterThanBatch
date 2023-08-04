@@ -5,8 +5,17 @@
 
 #import "OS"
 #import "Logger"
-// #define THREAD_SAFE
+#define THREAD_SAFE
 
+final: u32 = 0
+
+thread = ThreadCreate(compute, &final)
+// compute(&final)
+
+ThreadJoin(thread)
+ThreadDestroy(thread)
+
+log(final)
 // threads require stdcall with the passed function
 fn @stdcall compute(num: u32*) -> u32 {
     retries = 0
@@ -27,12 +36,3 @@ fn @stdcall compute(num: u32*) -> u32 {
     #endif
     return 0;
 }
-final: u32 = 0
-
-thread = ThreadCreate(compute, &final)
-compute(&final)
-
-ThreadJoin(thread)
-ThreadDestroy(thread)
-
-log(final)

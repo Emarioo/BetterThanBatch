@@ -123,6 +123,10 @@ int main(int argc, const char** argv){
     // }
     // auto args = CmdLineArgs();
 
+    // float a = 1.8;
+    // i32 k = a;
+    // log::out << k<<"\n";
+
     // return 0;
 
     // UserProfile profile{};
@@ -368,7 +372,7 @@ int main(int argc, const char** argv){
             // bytecode->add({BC_DATAPTR, BC_REG_RBX});
             // bytecode->addIm(0);
             // bytecode->add({BC_MOV_MR, BC_REG_RBX, BC_REG_AL, 1});
-            
+            PrintMeasures();
             if(bytecode)
                 program = ConvertTox64(bytecode);
 

@@ -72,6 +72,7 @@ void NativeRegistry::initNativeContent(){
     ADD(rdtsc)
     // ADD(rdtscp)
     ADD(compare_swap)
+    ADD(atomic_add)
     
     ADD(sin)
     ADD(cos)

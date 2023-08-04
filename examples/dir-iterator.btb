@@ -4,6 +4,8 @@
 
 // startTime = StartMeasure();
 
+startTime: u64 = 9;
+
 iter: DirectoryIterator*;
 // root = ".";
 root = "src";
@@ -13,12 +15,12 @@ defer { DirectoryIteratorDestroy(iter); }
 
 result: DirectoryIteratorData*;
 loop = 0;
-// printData(iter);
-// result = 
-// DirectoryIteratorNext(iter);
-// DirectoryIteratorNext(iter._handle);
-// iter.next()
-// while cast<bool>(result = iter.next()) && loop < 100 {
+// // printData(iter);
+// // result = 
+// // DirectoryIteratorNext(iter);
+// // DirectoryIteratorNext(iter._handle);
+// // iter.next()
+// // while cast<bool>(result = iter.next()) && loop < 100 {
 while result = iter.next() {
     loop++;
     // log("oh 1");

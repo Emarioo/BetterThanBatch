@@ -1,55 +1,16 @@
-// #import "Logger"
-
-/* Forced by the compiler
-struct @hide Slice<T> {
-    ptr: T*;
-    len: u64;
-}
-struct @hide Range {
-    beg: i32;
-    end: i32;
-}
-*/
-
-// struct Memory<T> {
-//     ptr: T*;
-//     max: u64;
-//     used: u64;
-//     // fn resize()
-// }
-
-
 // Use native functions instead
-// fn memset(ptr: void*, len: u64, value: u8 = 0) {
-//     for 0..len {
-//         *(cast<u8*>ptr + nr) = value;
-//     }
-// }
-// fn memcmp(ptrA: void*, ptrB: void*, len: u64) -> i32 {
-//     for 0..len {
-//         if *(cast<u8*>ptrA + nr) != *(cast<u8*>ptrB + nr) {
-//             return *(cast<u8*>ptrA + nr) - *(cast<u8*>ptrB + nr);
-//         }
-//     }
-//     return 0;
-// }
-// fn equal(a: char[], b: char[]) -> i32 {
-//     if a.len != b.len
-//         return false
-//     return !memcmp(a.ptr, b.ptr, a.len);
-// }
-// fn memcpy(dst: void*, src: void*, len: u64) {
-//     for 0..len {
-//         *(cast<u8*>dst + nr) = *(cast<u8*>src + nr);
-//     }
-// }
+fn equal(a: char[], b: char[]) -> i32 {
+    if a.len != b.len
+        return false
+    return !memcmp(a.ptr, b.ptr, a.len);
+}
 
-#import "Logger"
+// #import "Logger"
 // Test: matchEnd("__add.cpp__","++.cpp++");
 fn matchEnd(str: char[], match: char[]) -> bool {
     // log("lens",str.len, match.len)
-    if str.len < match.len
-        return false
+    if str.len < match.len || match.len == 0
+        return false;
     for @reverse match {
         // log("nr:",nr)
         // thing = match.ptr[nr];
@@ -58,13 +19,42 @@ fn matchEnd(str: char[], match: char[]) -> bool {
         // log("i2:",nr + str.len - match.len)
         if it != chr {
             // log("ret1")
-            return false
+            return false;
         }
         // log("cont")
     }
     // log("ret2")
-    return true
+    return true;
 }
+fn findString(str: char[], match: char[]) -> bool {
+    return findStringAt(str, match) != -1;
+}
+// returns -1 if not found
+// returns index of the first character of the first found matched string
+fn findStringAt(str: char[], match: char[]) -> u32 {
+    if str.len < match.len || match.len == 0
+        return false;
+    correct = 0;
+    foundIndex = -1;
+    for str {
+        if it == match.ptr[correct] {
+            correct++;
+            if correct == match.len {
+                foundIndex = nr - match.len + 1;
+                break;
+            }
+        } else {
+            correct = 0;
+            foundIndex = -1;
+        }
+    }
+
+    return foundIndex;
+}
+// Look at Utility.cpp
+// fn FormatTime() {
+    
+// }
 
 fn printData<T>(t: T*) {
     at = 0;

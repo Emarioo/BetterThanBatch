@@ -169,11 +169,23 @@ extern "C" {
     void* __stdcall Allocate(u64 size) {
         return engone::Allocate(size);
     }
-    void* __stdcall Rellocate(void* ptr, u64 oldSize, u64 newSize) {
+    void* __stdcall Reallocate(void* ptr, u64 oldSize, u64 newSize) {
         return engone::Reallocate(ptr, oldSize, newSize);
     }
     void __stdcall Free(void* ptr, u64 size) {
         engone::Free(ptr,size);
+    }
+    u64 __stdcall FileOpen(Language::Slice<char>* path, bool readOnly, u64* outFileSize) {
+        return (u64)engone::FileOpen(path->ptr, path->len, outFileSize, readOnly ? engone::FILE_ONLY_READ : engone::FILE_WILL_CREATE);
+    }
+    u64 __stdcall FileRead(u64 file, void* buffer, u64 length) {
+        return engone::FileRead((void*)file, buffer, length);
+    }
+    u64 __stdcall FileWrite(u64 file, void* buffer, u64 length) {
+        return engone::FileWrite((void*)file, buffer, length);
+    }
+    void __stdcall FileClose(u64 file) {
+        engone::FileClose((void*)file);
     }
     Language::DirectoryIterator* __stdcall DirectoryIteratorCreate(Language::Slice<char>* rootPath) {
         void* iteratorHandle = engone::DirectoryIteratorCreate(rootPath->ptr, rootPath->len);

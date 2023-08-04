@@ -429,10 +429,11 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             info.next();
             break;
         }
-
+        bool wasFunction = false;
         Token typeToken{};
         int typeEndToken = -1;
         if (Equal(name,"fn")) {
+            wasFunction = true;
             // parse function?
             ASTFunction* func = 0;
             SignalAttempt result = ParseFunction(info, func, false, astStruct);
@@ -532,21 +533,23 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             info.next();
             break;
         }else{
+            if(wasFunction)
+                continue;
             if(!hadRecentError){ // no need to print message again, the user already know there are some issues here.
                 ERR_SECTION(
                     ERR_HEAD(token)
                     ERR_MSG("Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").")
                     ERR_LINE(token,"bad")
                 )
-                ERR_HEAD3(token,"Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").\n\n";
-                    if(typeEndToken!=-1){
-                        TokenRange temp{};
-                        temp.firstToken = typeToken;
-                        temp.endIndex = typeEndToken;
-                        PrintCode(temp,"evaluated type");
-                    }
-                    ERR_LINE2(token.tokenIndex,"bad");
-                )
+                // ERR_HEAD3(token,"Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").\n\n";
+                //     if(typeEndToken!=-1){
+                //         TokenRange temp{};
+                //         temp.firstToken = typeToken;
+                //         temp.endIndex = typeEndToken;
+                //         PrintCode(temp,"evaluated type");
+                //     }
+                //     ERR_LINE2(token.tokenIndex,"bad");
+                // )
             }
             hadRecentError=true;
             errorParsingMembers = SignalAttempt::FAILURE;
@@ -1126,11 +1129,12 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // Token next = info.get(info.at()+2);
                     if((prev.flags&TOKEN_SUFFIX_LINE_FEED) == 0 
                          && !Equal(token,"}") && !Equal(token,",") && !Equal(token,"{") && !Equal(token,"]")
-                         && !Equal(prev,")")){
-                        WARN_HEAD3(token, "Did you forget the semi-colon to end the statement or was it intentional? Perhaps you mistyped a character? (put the next statement on a new line to silence this warning)\n\n"; 
-                            ERR_LINE2(tokenIndex-1, "semi-colon here?");
-                            // ERR_LINE2(tokenIndex, "; before this?");
-                            )
+                         && !Equal(prev,")"))
+                    {
+                        // WARN_HEAD3(token, "Did you forget the semi-colon to end the statement or was it intentional? Perhaps you mistyped a character? (put the next statement on a new line to silence this warning)\n\n"; 
+                        //     ERR_LINE2(tokenIndex-1, "semi-colon here?");
+                        //     // ERR_LINE2(tokenIndex, "; before this?");
+                        //     )
                         // TODO: ERROR instead of warning if special flag is set
                     }
                 }
@@ -1873,9 +1877,9 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         bool pointerAnnot = false;
         while (IsAnnotation(token)){
             info.next();
-            if(Equal(token,"@reverse")){
+            if(Equal(token,"@reverse") || Equal(token,"@rev")){
                 reverseAnnotation=true;
-            } else if(Equal(token,"@pointer")){
+            } else if(Equal(token,"@pointer") || Equal(token,"@ptr")){
                 pointerAnnot=true;
             } else {
                 WARN_HEAD3(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for functions.\n\n";

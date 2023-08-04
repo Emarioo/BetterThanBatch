@@ -246,7 +246,7 @@ bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const c
         }else{
             auto fileInfo = info.getStream(fullPath);
             if(fileInfo){   
-                log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";
+                _VLOG(log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";)
             }else{
                 bool yes = ParseFile(info, fullPath, item.as);
                 // ASTScope* body = ParseFile(info, fullPath, item.as);
@@ -354,9 +354,9 @@ Bytecode* CompileSource(CompileOptions options) {
         //     compileInfo.ast->appendToMainBody(body);
         // }
     }
-    
+    #ifdef AST_LOG
     _VLOG(log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
-
+    #endif
     TypeCheck(compileInfo.ast, compileInfo.ast->mainBody, &compileInfo);
     
     // if(compileInfo.errors==0){
@@ -461,8 +461,9 @@ void CompileAndExport(CompileOptions options, Path outPath){
 
                     std::string cmd = "link /nologo ";
                     cmd += objPath + " ";
-                    // cmd += "bin/NativeLayer.lib ";
-                    // cmd += "uuid.lib ";
+                    cmd += "bin/NativeLayer.lib ";
+                    cmd += "uuid.lib ";
+                    cmd += "shell32.lib ";
                     for (int i = 0;i<bytecode->linkDirectives.size();i++) {
                         auto& dir = bytecode->linkDirectives[i];
                         cmd += dir + " ";

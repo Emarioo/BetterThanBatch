@@ -18,11 +18,13 @@ struct TokenStream;
     Latest code for message handling
 */
 #ifdef LOG_MSG_LOCATION
-#define MSG_CODE_LOCATION engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n"
+#define MSG_CODE_LOCATION2 engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n" <<
+#define MSG_CODE_LOCATION engone::log::out << engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n"
 #else
-#define MSG_CODE_LOCATION 
+#define MSG_CODE_LOCATION2
+#define MSG_CODE_LOCATION
 #endif
-#define BASE_SECTION(CODE) engone::log::out << MSG_CODE_LOCATION; info.errors++; StringBuilder err_type{}; err_type += CODE
+#define BASE_SECTION(CODE) MSG_CODE_LOCATION; info.errors++; StringBuilder err_type{}; err_type += CODE
 
 #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
 #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type);
@@ -56,8 +58,8 @@ void PrintExample(int line, const StringBuilder& stringBuilder);
 #define MSG_TYPE(N,T) "("<<N<<", "<<T<<")"
 //  engone::log::out.setIndent(2);
 #define MSG_CUSTOM(F,L,C,NAME,NUM) MSG_LOCATION(F,L,C) << " "<<MSG_TYPE(NAME,NUM) << ": "<<MESSAGE_COLOR
-#define ERR_CUSTOM(F,L,C,NAME,NUM) MSG_CODE_LOCATION << ERR_HEADER_COLOR <<MSG_CUSTOM(F,L,C,NAME,NUM)
-#define WARN_CUSTOM(F,L,C,NAME,NUM) MSG_CODE_LOCATION << WARN_HEADER_COLOR <<MSG_CUSTOM(F,L,C,NAME,NUM)
+#define ERR_CUSTOM(F,L,C,NAME,NUM) MSG_CODE_LOCATION2 ERR_HEADER_COLOR <<MSG_CUSTOM(F,L,C,NAME,NUM)
+#define WARN_CUSTOM(F,L,C,NAME,NUM) MSG_CODE_LOCATION2 WARN_HEADER_COLOR <<MSG_CUSTOM(F,L,C,NAME,NUM)
 
 #define MSG_END ; engone::log::out.setIndent(0);
 

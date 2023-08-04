@@ -478,14 +478,14 @@ SignalAttempt ParseUndef(PreprocInfo& info, bool attempt){
         )
         return SignalAttempt::FAILURE;
     }
+    attempt = false;
+    info.next();
+    info.next();
     if(token.flags&TOKEN_SUFFIX_LINE_FEED){
         ERR_HEAD3(token, "Unexpected line feed (expected a macro name)\n";
         )
         return SignalAttempt::FAILURE;
     }
-
-    info.next();
-    info.next();
     
     Token name = info.next();
 
@@ -825,6 +825,7 @@ SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, T
         // info.next();
 
         std::string temp = std::to_string(parseToken.line);
+        Assert(temp.size()-1 < sizeof(buffer));
         strcpy(buffer, temp.data());
         outToken = parseToken;
         outToken.str = (char*)buffer;
@@ -837,7 +838,7 @@ SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, T
         // info.next();
 
         std::string temp = std::to_string(parseToken.column);
-
+        Assert(temp.size()-1 < sizeof(buffer));
         strcpy(buffer, temp.data());
         outToken = parseToken;
         outToken.str = (char*)buffer;
@@ -852,7 +853,7 @@ SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, T
         // token.str = (char*)info.inTokens->streamName.data();
         // token.length = info.inTokens->streamName.length();
         auto& temp = info.inTokens->streamName;
-
+        Assert(temp.size()-1 < sizeof(buffer));
         strcpy(buffer, temp.data());
         outToken = parseToken;
         outToken.str = (char*)buffer;
@@ -874,7 +875,7 @@ SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, T
         // }
         
         auto temp = TrimDir(info.inTokens->streamName);
-
+        Assert(temp.size()-1 < sizeof(buffer));
         strcpy(buffer, temp.data());
         outToken = parseToken;
         outToken.str = (char*)buffer;
@@ -897,7 +898,7 @@ SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, T
         i32 num = info.compileInfo->globalUniqueCounter++;
 
         std::string temp = std::to_string(num);
-
+        Assert(temp.size()-1 < sizeof(buffer));
         strcpy(buffer, temp.data());
         outToken = parseToken;
         outToken.str = (char*)buffer;

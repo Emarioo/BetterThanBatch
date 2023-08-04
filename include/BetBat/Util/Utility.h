@@ -4,7 +4,7 @@
 #include "Engone/Logger.h"
 #include "Engone/PlatformLayer.h"
 
-#include "BetBat/Config.h"
+// #include "BetBat/Config.h"
 
 #include <functional>
 #include <string.h>
@@ -67,8 +67,11 @@ struct ScopeDebug {
 #define COMBINE1(X,Y) X##Y
 #define COMBINE(X,Y) COMBINE1(X,Y)
 
-#define WHILE_TRUE int COMBINE(limit,__LINE__)=1000; while(Assert(COMBINE(limit,__LINE__)--))
-#define WHILE_TRUE_N(LIMIT) int COMBINE(limit,__LINE__)=LIMIT; while(Assert(COMBINE(limit,__LINE__)--))
+#define WHILE_TRUE u64 COMBINE(limit,__LINE__)=1000; while(Assert(COMBINE(limit,__LINE__)--))
+#define WHILE_TRUE_N(LIMIT) u64 COMBINE(limit,__LINE__)=LIMIT; while(Assert(COMBINE(limit,__LINE__)--))
+
+// #define WHILE_TRUE while(true)
+// #define WHILE_TRUE_N(LIMIT) while(true)
 
 // #define defer std::function<void()> COMBINE(func,__LINE__){};DeferStruct COMBINE(defer,__LINE__)(COMBINE(func,__LINE__));COMBINE(func,__LINE__)=[&]()
 #define defer DeferStruct COMBINE(defer,__LINE__){};COMBINE(defer,__LINE__)._func=[&]()

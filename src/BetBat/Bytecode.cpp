@@ -60,6 +60,7 @@ const char* InstToString(int type){
         CASE(BC_RDTSC)
         // CASE(BC_RDTSCP)
         CASE(BC_CMP_SWAP)
+        CASE(BC_ATOMIC_ADD)
 
         // CASE(BC_SIN)
         // CASE(BC_COS)
@@ -238,7 +239,8 @@ void Bytecode::ensureAlignmentInData(int alignment){
     Assert(alignment > 0);
     int misalign = (alignment - (dataSegment.used%alignment)) % alignment;
     if(dataSegment.max < dataSegment.used + misalign){
-        Assert(dataSegment.resize(dataSegment.max*2 + 100));
+        bool yes = dataSegment.resize(dataSegment.max*2 + 100);
+        Assert(yes);
     }
     int index = dataSegment.used;
     memset((char*)dataSegment.data + index,'_',misalign);
@@ -312,7 +314,8 @@ Bytecode::Location* Bytecode::setLocationInfo(u32 locationIndex, u32 instruction
         int newSize = codeSegment.max*1.5+20;
         newSize += (instructionIndex-debugSegment.max)*2;
         int oldmax = debugSegment.max;
-        Assert(debugSegment.resize(newSize));
+        bool yes = debugSegment.resize(newSize);
+        Assert(yes);
         memset((char*)debugSegment.data + oldmax*debugSegment.getTypeSize(),0xFF,(debugSegment.max-oldmax)*debugSegment.getTypeSize());
     }
     u32& index = *((u32*)debugSegment.data + instructionIndex);
@@ -342,7 +345,8 @@ Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 
         int newSize = codeSegment.max*1.5+20;
         newSize += (instructionIndex-debugSegment.max)*2;
         int oldmax = debugSegment.max;
-        Assert(debugSegment.resize(newSize));
+        bool yes = debugSegment.resize(newSize);
+        Assert(yes);
         memset((char*)debugSegment.data + oldmax*debugSegment.getTypeSize(),0xFF,(debugSegment.max-oldmax)*debugSegment.getTypeSize());
     }
     u32& index = *((u32*)debugSegment.data + instructionIndex);
@@ -350,7 +354,8 @@ Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 
         debugSegment.used = instructionIndex + 1;
     }
     if(index == -1){
-        Assert(debugLocations.add({}));
+        bool yes = debugLocations.add({});
+        Assert(yes);
         index = debugLocations.size()-1;
     }
     auto ptr = debugLocations.getPtr(index); // may return nullptr;

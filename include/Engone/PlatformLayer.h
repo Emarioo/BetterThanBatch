@@ -13,6 +13,10 @@
 // #define Assert(expression) if(!(expression)) {fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__);*((char*)0) = 0;}
 #define Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 
+// You can only disable this if you don't use any important code in the expression.
+// Like a resize or something.
+// #define Assert(expression) 
+
 #define PL_PRINT_ERRORS
 
 #define MegaBytes(x) (x*1024llu*1024llu)

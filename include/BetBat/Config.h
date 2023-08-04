@@ -24,16 +24,16 @@
 // #define DEV_FILE "examples/const.btb"
 // #define DEV_FILE "examples/threads.btb"
 // #define DEV_FILE "examples/dir-iterator.btb"
-// #define CONFIG_DEFAULT_TARGET WINDOWS_x64
+#define CONFIG_DEFAULT_TARGET WINDOWS_x64
 
-#define DEBUG
+// #define DEBUG
 
 // With this flag, some shortcuts and other improvements are made
 // when compiling. Push and pop after each other is redundant for example.
 // The consequence is that the logged instructions won't resemble the final
 // output.
 #define OPTIMIZED
-// #define LOG_MEASURES
+#define LOG_MEASURES
 // Silent is not used at the moment.
 // Will it ever be?
 // #define SILENT
@@ -65,15 +65,23 @@
 // Hashtag will always be used. @ is taken, $ feels wrong, # makes you feel at home.
 #define PREPROC_TERM "#"
 
-#define LOG_MSG_LOCATION
+// #define LOG_MSG_LOCATION
+
+// THESE SHOULD BE OFF FOR THE COMPILER TO WORK PROPERLY
+// #define DISABLE_BASE_IMPORT
+// #define DISABLE_ZERO_INITIALIZATION
+// Disabling this will most certainly produce flawed instructions
+// but it will be easier to read the instructions when debugging
+// #define DISABLE_FAULTY_X64
 
 // Debug config
 #ifdef DEBUG
 
-//
-// #define DISABLE_BASE_IMPORT
 
 #define VLOG
+
+// will print AST
+// #define AST_LOG
 
 // #define TLOG
 
@@ -87,16 +95,19 @@
 // #define PLOG
 // type checker
 // #define TC_LOG
-// #define GLOG
-#define ILOG
+#define GLOG
+// #define ILOG
 // #define ILOG_REGS
 // x64 converter
-// #define CLOG
+#define CLOG
 
 // #define OLOG
 // #define USE_DEBUG_INFO
 #endif
 
+/*
+   Don't touch these
+*/
 #ifdef PLOG
 #define USE_DEBUG_INFO
 #endif

@@ -1,5 +1,8 @@
+
+#include "BetBat/Config.h"
 #include "BetBat/Util/Perf.h"
 
+#include <unordered_map>
 
 std::unordered_map<u64, ScopeStat> scopeStatMap;
 // u64 parentScope=0;

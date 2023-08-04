@@ -42,6 +42,7 @@ enum NativeFunctionType {
 // #define NATIVE_rdtscp -34
 #define NATIVE_rdtsc -35
 #define NATIVE_compare_swap -36
+#define NATIVE_atomic_add -37
 
 #define NATIVE_sin -40
 #define NATIVE_cos -41

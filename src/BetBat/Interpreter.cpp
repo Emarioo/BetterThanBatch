@@ -146,14 +146,17 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
         }
     )
     stack.resize(100*1024);
+    memset(stack.data, 0, stack.max);
     
     pc = startInstruction;
     sp = (u64)stack.data+stack.max;
     fp = (u64)stack.data+stack.max;
     
-    if(sp % 16 == 0) {
-        sp -= 16 - sp % 16;
+    if(sp % 16 != 8) {
+        sp -= 8 - sp % 16;
     }
+
+    u64 expectedStackPointer = sp;
 
     auto tp = MeasureTime();
 
@@ -493,7 +496,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
             }
 
             if(((uint64)to % operandSize) != 0){
-                log::out << log::RED<<"r1 (pointer: "<<(uint64)from<<") not aligned by "<<operandSize<<" bytes\n";
+                log::out << log::RED<<"r1 (pointer: "<<(uint64)to<<") not aligned by "<<operandSize<<" bytes\n";
                 continue;
             }
             u64 value = 0;
@@ -708,7 +711,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
     
             // if((i64)addr<0){
             if(linkConvention == LinkConventions::NATIVE){
-                int argoffset = GenInfo::FRAME_SIZE - 8; // native functions doesn't save
+                int argoffset = GenInfo::FRAME_SIZE; // native functions doesn't save
                 // the frame pointer. FRAME_SIZE is based on that you do so -8 to get just pc being saved
                 
                 // auto* nativeFunction = nativeRegistry->findFunction(addr);
@@ -717,7 +720,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                 // } else {
                 //     _ILOG(log::out << log::RED << addr<<" is not a native function\n";)
                 // }
-                u64 fp = sp;
+                u64 fp = sp - 8;
 
                 switch (addr) {
                 case NATIVE_Allocate:{
@@ -730,9 +733,9 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     break;
                 }
                 break; case NATIVE_Reallocate:{
-                    void* ptr = *(void**)(fp+argoffset+16);
+                    void* ptr = *(void**)(fp+argoffset);
                     u64 oldsize = *(u64*)(fp +argoffset + 8);
-                    u64 size = *(u64*)(fp+argoffset);
+                    u64 size = *(u64*)(fp+argoffset+16);
                     ptr = engone::Reallocate(ptr,oldsize,size);
                     if(ptr)
                         userAllocatedBytes += size - oldsize;
@@ -741,8 +744,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     break;
                 }
                 break; case NATIVE_Free:{
-                    void* ptr = *(void**)(fp+argoffset + 8);
-                    u64 size = *(u64*)(fp+argoffset);
+                    void* ptr = *(void**)(fp+argoffset);
+                    u64 size = *(u64*)(fp+argoffset+8);
                     engone::Free(ptr,size);
                     userAllocatedBytes -= size;
                     _ILOG(log::out << "free "<<size<<" old ptr: "<<ptr<<"\n";)
@@ -758,7 +761,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     break;
                 }
                 break; case NATIVE_printd:{
-                    float num = *(float*)(fp+argoffset+4);
+                    float num = *(float*)(fp+argoffset);
                     #ifdef ILOG
                     log::out << log::LIME<<"print: "<<num<<"\n";
                     #else                    
@@ -767,7 +770,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     break;
                 }
                 break; case NATIVE_printc: {
-                    char chr = *(char*)(fp+argoffset + 7); // +7 comes from the alignment after char
+                    char chr = *(char*)(fp+argoffset); // +7 comes from the alignment after char
                     #ifdef ILOG
                     log::out << log::LIME << "print: "<<chr<<"\n";
                     #else
@@ -796,59 +799,46 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     // The order may seem strange but it's actually correct.
                     // It's just complicated.
                     // slice
-                    char* ptr = *(char**)(fp+argoffset + 8);
-                    u64 len = *(u64*)(fp+argoffset+16);
+                    Language::Slice<char>* path = *(Language::Slice<char>**)(fp+argoffset + 0);
+                    bool readOnly = *(bool*)(fp+argoffset+8);
+                    u64* outFileSize = *(u64**)(fp+argoffset+16);
 
-                    u32 flags = *(u32*)(fp+argoffset+4);
-                    INCOMPLETE
-                    u64 fsize = 0;
-                    // APIFile file = FileOpen(std::string(ptr,len), &fsize, flags);
-                    #ifdef VLOG
-                    log::out <<log::GRAY<< "FileOpen: "<<std::string(ptr,len) << ", "<<flags<<"\n";
-                    #endif
+                    // INCOMPLETE
+                    u64 file = FileOpen(path, readOnly, outFileSize);
 
-                    // *(u64*)(fp-8) = (u64)fsize;
-                    // *(u64*)(fp-16) = (u64)file;
+                    *(u64*)(fp-8) = (u64)file;
                     break;
                 }
                 break; case NATIVE_FileRead:{
                     // The order may seem strange but it's actually correct.
                     // It is just complicated.
                     // slice
-                    u64 file = *(u64*)(fp+argoffset + 16);
+                    u64 file = *(u64*)(fp+argoffset);
                     void* buffer = *(void**)(fp+argoffset+8);
-                    u64 readBytes = *(u64*)(fp+argoffset);
+                    u64 readBytes = *(u64*)(fp+argoffset+16);
 
-                    u64 bytes = FileRead((APIFile)file, buffer, readBytes);
-                    #ifdef VLOG
-                    log::out <<log::GRAY<< "FileRead: "<<file << ", "<<buffer<<", "<<readBytes<<"\n";
-                    #endif
+                    u64 bytes = FileRead(file, buffer, readBytes);
                     *(u64*)(fp-8) = (u64)bytes;
-                    // *(u64*)(fp-16) = (u64)file;
                     break;
                 }
                 break; case NATIVE_FileWrite:{
                     // The order may seem strange but it's actually correct.
                     // It is just complicated.
                     // slice
-                    u64 file = *(u64*)(fp+argoffset + 16);
+                    u64 file = *(u64*)(fp+argoffset);
                     void* buffer = *(void**)(fp+argoffset+8);
-                    u64 writeBytes = *(u64*)(fp+argoffset);
+                    u64 writeBytes = *(u64*)(fp+argoffset+16);
 
-                    u64 bytes = FileWrite((APIFile)file, buffer, writeBytes);
-                    #ifdef VLOG
-                    log::out << log::GRAY<<"FileWrite: "<<file << ", "<<buffer<<", "<<writeBytes<<"\n";
-                    #endif
+                    u64 bytes = FileWrite(file, buffer, writeBytes);
                     *(u64*)(fp-8) = (u64)bytes;
-                    // *(u64*)(fp-16) = (u64)file;
                     break;
                 }
                 break; case NATIVE_FileClose:{
                     u64 file = *(u64*)(fp+argoffset);
                     FileClose((APIFile)file);
-                    #ifdef VLOG
-                    log::out << log::GRAY<<"FileClose: "<<file<<"\n";
-                    #endif
+                    // #ifdef VLOG
+                    // log::out << log::GRAY<<"FileClose: "<<file<<"\n";
+                    // #endif
                     break;
                 }
                 break; case NATIVE_DirectoryIteratorCreate:{
@@ -856,8 +846,6 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     // char* strptr = *(char**)(fp+argoffset + 0);
                     // u64 len = *(u64*)(fp+argoffset+8);
                     Language::Slice<char>* rootPath= *(Language::Slice<char>**)(fp + argoffset + 0);
-
-                    log::out << "ok\n";
 
                     // INCOMPLETE
                     // std::string rootPath = std::string(strptr,len);
@@ -959,7 +947,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     *(u64*)(fp-8) = (u64)timePoint;
 
                     #ifdef VLOG
-                    log::out << log::GRAY<<"Start time point: "<<(u64)timePoint<<"\n";
+                    log::out << log::GRAY<<"Start mesaure: "<<(u64)timePoint<<"\n";
                     #endif
                     break;
                 }
@@ -970,7 +958,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
 
                     *(float*)(fp - 8) = (float)time;
                     #ifdef VLOG
-                    log::out << log::GRAY<<"End time point: "<<(u64)timePoint << ", "<<time<<"\n";
+                    log::out << log::GRAY<<"Stop measure: "<<(u64)timePoint << ", "<<time<<"\n";
                     #endif
                     break;
                 }
@@ -1083,7 +1071,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     log::out << log::RED << "float needs 4 byte register\n";
                 }
                 int size2 = 1<<DECODE_REG_SIZE_TYPE(r2);
-                // TODO: log out
+                // TODO: log out+
                 if(size2==1) {
                     *(i8*)out = *(float*)xp;
                 } else if(size2==2) {
@@ -1295,7 +1283,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
         log::out << log::RED << "User program leaks "<<userAllocatedBytes<<" bytes\n";
     }
     if(!expectValuesOnStack){
-        if(sp != (u64)stack.data+stack.max){
+        if(sp != expectedStackPointer){
             log::out << log::YELLOW<<"sp was "<<(i64)(sp - ((u64)stack.data+stack.max))<<", should be 0\n";
         }
         if(fp != (u64)stack.data+stack.max){

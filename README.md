@@ -24,6 +24,9 @@ not done early has been completed, partly at least, then
 I shall spend time on examples, documentation and most
 importantly proper testing.
 
+The compiler is very unstable at the moment. It isn't
+ready to be used by anyone.
+
 ## Features
 - #import to divide your code into multiple files
 - #include to tokenize a file and transfer the tokens into another file.

@@ -585,17 +585,19 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
     using namespace engone;
     using namespace COFF_Format;
     Assert(program);
-
+    #define CHECK Assert(outOffset <= outSize);
+    // TODO: It this estimation correct?
     u64 outSize = 2000 + program->size()
         + program->dataRelocations.size() * 30 // 20 for relocations and 10 for symbols, some relocations refer to the same symbols
         + program->namedRelocations.size() * 45 // a little extra since functions have bigger names
         + program->globalSize;
-    u8* outData = (u8*)Allocate(outSize); // TODO: Don't use hardcoded size
+    u8* outData = (u8*)Allocate(outSize);
     defer { Free(outData, outSize); };
     u64 outOffset = 0;
 
     COFF_File_Header* header = (COFF_File_Header*)(outData + outOffset);
     outOffset+=COFF_File_Header::SIZE;
+    CHECK
 
     header->Machine = (Machine_Flags)IMAGE_FILE_MACHINE_AMD64;
     header->Characteristics = (COFF_Header_Flags)0;
@@ -612,6 +614,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
     header->NumberOfSections++;
     textSection = (Section_Header*)(outData+outOffset);
     outOffset+=Section_Header::SIZE;
+    CHECK
 
     strcpy(textSection->Name,".text");
     textSection->NumberOfLineNumbers = 0;
@@ -629,6 +632,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         header->NumberOfSections++;
         dataSection = (Section_Header*)(outData+outOffset);
         outOffset+=Section_Header::SIZE;
+        CHECK
 
         strcpy(dataSection->Name,".data");
         dataSection->NumberOfLineNumbers = 0;
@@ -668,6 +672,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
             auto& dataRelocation = program->dataRelocations[i];
             COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
             outOffset += COFF_Relocation::SIZE;
+            CHECK
             
             coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
             coffReloc->VirtualAddress = dataRelocation.textOffset;
@@ -690,6 +695,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
             auto& namedRelocation = program->namedRelocations[i];
             COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
             outOffset += COFF_Relocation::SIZE;
+            CHECK
             
             coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
             coffReloc->VirtualAddress = namedRelocation.textOffset;
@@ -721,6 +727,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         // header->NumberOfSymbols++; incremented when adding relocations
         Symbol_Record* symbol = (Symbol_Record*)(outData+outOffset);
         outOffset+=Symbol_Record::SIZE;
+        CHECK
         sprintf(symbol->Name.ShortName,"$d%u",i);
         symbol->SectionNumber = dataSectionNumber;
         symbol->Value = dataSymbols[i];
@@ -734,6 +741,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         // header->NumberOfSymbols++; incremented when adding relocations
         Symbol_Record* symbol = (Symbol_Record*)(outData+outOffset);
         outOffset+=Symbol_Record::SIZE;
+        CHECK
         auto& name = namedSymbols[i];
         if(name.length()<=8) {
             strcpy(symbol->Name.ShortName, name.c_str());
@@ -757,6 +765,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         header->NumberOfSymbols++;
         Symbol_Record* symbol = (Symbol_Record*)(outData+outOffset);
         outOffset+=Symbol_Record::SIZE;
+        CHECK
         strcpy(symbol->Name.ShortName, "main");
         symbol->SectionNumber = textSectionNumber;
         symbol->Value = 0; // address of main function?
@@ -767,6 +776,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
 
     *(u32*)(outData + outOffset) = stringTableOffset;
     outOffset += 4;
+    CHECK
     for (int i=0;i<namedSymbols.size();i++) {
         auto& name = namedSymbols[i];
         if(name.length()<=8) {
@@ -774,13 +784,14 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         } else {
             strcpy((char*)outData + outOffset, name.c_str());
             outOffset += name.length()+1;
+            CHECK
         }
     }
 
     Assert(outOffset <= outSize); // bad estimation when allocation at beginning of function
-
     auto file = FileOpen(path, 0, FILE_WILL_CREATE);
     Assert(file);
     FileWrite(file,outData,outOffset);
     FileClose(file);
+    #undef CHECK
 }

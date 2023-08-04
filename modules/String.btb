@@ -1,7 +1,85 @@
+#import "OS"
 
+// heap allocated for now
 struct String {
-    char* ptr; // null terminated
-    u64 len;
+    // I was gonna say, the order ptr, len, max
+    // allows you to cast String to char[] but that's wrong
+    // because len in slice is 8 bytes while being 4 bytes here.
+    ptr: char*; // null terminated
+    len: u32;
+    max: u32; // does not include \0
+
+    fn cleanup() {
+        this._reserve(0)
+    }
+
+    fn sliced() -> Slice<char> {
+        return Slice<char>{ptr, len};
+    }
+
+    fn append(str: char[]) {
+        if len + str.len > max {
+            if !this._reserve(str.len + max * 2) {
+                return;
+            }
+        }
+        memcpy(ptr + len, str.ptr, str.len);
+        len += str.len;
+        ptr[len] = '\0';
+    }
 
     // TODO: Some useful functions
+    fn _reserve(newMax: u32) -> bool {
+        // log("newMax",newMax)
+        if(newMax==0){
+            // log("oh")
+            if(max!=0){
+                Free(ptr, max + 1);
+            }
+            ptr = null;
+            max = 0;
+            len = 0;
+            return true;
+        }
+        // log("what",cast<u64>ptr)
+        if(!ptr){
+            // log("huh")
+            ptr = Allocate(newMax + 1);
+            // log("allocSize",newMax * sizeof T)
+            // log("ptr",ptr)
+            // Assert(ptr);
+            // initialization of elements is done when adding them
+            if(!ptr)
+                return false;
+            max = newMax;
+            return true;
+        } else {
+            newPtr: char* = Reallocate(ptr, max + 1, newMax + 1);
+            // Assert(newPtr);
+            if(!newPtr)
+                return false;
+            ptr = newPtr;
+            max = newMax;
+            if(len > newMax){
+                len = newMax;
+            }
+            return true;
+        }
+        return false;
+    }
 }
+
+// #import "String"
+// #import "Logger"
+
+// a0 = "my"
+// a1 = "stuff"
+
+// str: String;
+// defer str.cleanup();
+
+// str.append(a0)
+// str.append(a1)
+// str.append(a0)
+
+// log(str.sliced())

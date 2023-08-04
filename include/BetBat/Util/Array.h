@@ -17,8 +17,10 @@ struct DynamicArray {
         // if(arr.used>0){
             // engone::log::out << "copy "<<arr.used<<"\n";
         // }
-        Assert(_reserve(arr.max));
-        Assert(resize(arr.used));
+        bool yes = _reserve(arr.max);
+        Assert(yes);
+        yes = resize(arr.used);
+        Assert(yes);
         for(int i=0;i<used;i++){
             _ptr[i] = arr._ptr[i];
         }
@@ -30,8 +32,10 @@ struct DynamicArray {
         // if(arr.used>0){
             // engone::log::out << "copy "<<arr.used<<"\n";
         // }
-        Assert(_reserve(arr.max));
-        Assert(resize(arr.used));
+        bool yes = _reserve(arr.max);
+        Assert(yes);
+        yes = resize(arr.used);
+        Assert(yes);
         for(int i=0;i<used;i++){
             _ptr[i] = arr._ptr[i];
         }

@@ -1,5 +1,8 @@
 #import "OS"
 #import "Logger"
+#import "String"
+#import "Basic"
+#import "Array"
 
 // directory iterator
 // threads
@@ -7,24 +10,256 @@
 // blacklist directories
 // time measurements
 
-args = CmdLineArgs();
-log("arglen:",args.len);
-for *args {
-    log("Arg",nr,":", it);
+// args = CmdLineArgs();
+// log("arglen:",args.len);
+// for *args {
+//     log("Arg",nr,":", it);
+// }
+
+struct Options {
+    fn cleanup() {
+        ARRAY_CLEANUP(whitelistedDirectories)
+        ARRAY_CLEANUP(whitelistedFormats)
+        ARRAY_CLEANUP(blacklistedDirectories)
+    }
+    threadAmount: u32 = 5;
+    rootPath: char[];
+    whitelistedDirectories: DynamicArray<String>;
+    whitelistedFormats: DynamicArray<String>;
+    blacklistedDirectories: DynamicArray<String>;
+    // blacklistedPaths? sometimes you may want to blacklist names in file names
+    // whitelistedFormats can be used to allow specific files
 }
+options: Options;
+defer { options.cleanup(); }
+options.rootPath = ".";
+options.whitelistedDirectories.add(String{}).append("src");
+options.whitelistedDirectories.add(String{}).append("include");
 
-fn PrintHelp() {
-    log("Help:");
-    log(" -help : Show help information.");
-    log(" -threads : Argument after -threads specifies the amount of threads to use.");
-    log(" -root");
-    log(" -debug : Spits out information. It is recommended to pipe stdout into a file.");
+options.blacklistedDirectories.add(String{}).append("git");
+// options.blacklistedDirectories.add(String{}).append("bin");
+options.blacklistedDirectories.add(String{}).append(".vs");
+
+// options.whitelistedFormats.add(String{}).append("/out");
+options.whitelistedFormats.add(String{}).append(".cpp");
+options.whitelistedFormats.add(String{}).append(".h");
+
+options.blacklistedDirectories.add(String{}).append("T");
+
+// if args specify formats then don't add default ones.
+
+CalculateFiles(&options);
+
+// fn PrintHelp() {
+//     log("Help:");
+//     log(" -help : Show help information.");
+//     log(" -threads : Argument after -threads specifies the amount of threads to use.");
+//     log(" -root");
+//     log(" -debug : Spits out information. It is recommended to pipe stdout into a file.");
+// }
+
+fn CalculateFiles(options: Options*) {
+    // TODO: Check that whitelistedFormats begins with a dot. "cpp" isn't allowed, ".cpp" is.
+    // TODO: Warn that there are no whitelisted formats so no files will be checked.
+    // TODO: Notify that no whitelisted directories will allow all directories in root path that aren't blacklisted
+
+    iterator = DirectoryIteratorCreate(&options.rootPath);
+    defer { DirectoryIteratorDestroy(iterator); }
+    if !iterator {
+        // error message
+        return
+    }
+
+    files: DynamicArray<String>;
+
+    result: DirectoryIteratorData*;
+    // iterator.result works too
+    while result = iterator.next() {
+        // TODO: blacklist, whitelist
+
+        if result.isDirectory {
+            blacklisted = false;
+            for @ptr options.blacklistedDirectories.sliced() {
+                if findString(result.name,it.sliced()) {
+                    blacklisted = true;
+                    break;
+                }
+            }
+            if blacklisted {
+                iterator.skip();
+                continue;   
+            }
+            whitelisted = options.whitelistedDirectories.len == 0;
+            for @ptr options.whitelistedDirectories.sliced() {
+                // log("check",result.name,it.sliced())
+                if findString(result.name,it.sliced()) {
+                    // log(" yes");
+                    whitelisted = true;
+                    break;
+                }
+            }
+            if !whitelisted
+                iterator.skip();
+            continue;
+        }
+        
+        whitelisted = false
+        for @ptr options.whitelistedFormats.sliced() {
+            if matchEnd(result.name,it.sliced()) {
+                whitelisted = true;
+                break;
+            }
+        }
+        if !whitelisted  continue;
+
+        files.add(String{}).append(result.name);
+    }
+
+    // for @ptr files.sliced() {
+    //     log(it.sliced())
+    // }
+
+    // A note about the design. ThreadInfo should be kept here or inside MasterInfo
+    // because you may want to know how each thread performed. If ThreadInfo is created
+    // in the thread function then that individual informtion is lost.
+
+    masterInfo: MasterInfo;
+    masterInfo.files = files;
+    defer masterInfo.cleanup();
+
+    masterInfo.threadInfos.resize(options.threadAmount);
+    memzero(masterInfo.threadInfos.ptr, masterInfo.threadInfos.max * sizeof ThreadInfo);
+    
+    tp = StartMeasure();
+
+    // TODO: Write a non-threaded versions with #ifdef when using the interpreter.
+
+    // IMPORTANT: DO NOT REALLOCATE THREAD INFOS! THE POINTERS TO THE INFOS IS PASSED
+    //  TO THE THREADS SO REALLOCATING WOULD INVALIDATE THE POINTER.
+    for @ptr masterInfo.threadInfos.sliced() {
+        it.masterInfo = &masterInfo;
+        it.thread = ThreadCreate(CalculateLines, it);
+    }
+
+    for @ptr masterInfo.threadInfos.sliced() {
+        if !it.thread.handle // may happen if the thread couldn't be created for some reason
+            continue;
+        ThreadJoin(it.thread);
+        ThreadDestroy(it.thread);
+    }
+
+    time = StopMeasure(tp);
+
+    log("Lines:",masterInfo.data.lines, "(blank lines:",masterInfo.data.blankLines,")");
+    log("Bytes:",masterInfo.data.readCharacters);
+    log("Time:",time*1000,"ms");
 }
+struct CalcData {
+    lines: u32;
+    blankLines: u32;
+    commentLines: u32;
+    readCharacters: u64;
 
-threadAmount = 4
-rootPath = "."
+    // thread safe
+    fn combine(data: CalcData*) {
+        // #define REC(X,...) X += data.X; REC(...)
+        #define REC(X,...) atomic_add(cast<void*>&X, data.X); REC(...)
+        REC(lines, blankLines, commentLines, readCharacters);
+        #undef REC
+    }
+}
+struct ThreadInfo {
+    thread: Thread;
+    path: char[]; // current path
+    data: CalcData;
+    masterInfo: MasterInfo*;
+}
+struct MasterInfo {
+    files: DynamicArray<String>;
+    usedFiles: u32 = 0;
+    data: CalcData;
 
+    threadInfos: DynamicArray<ThreadInfo>;
+    
+    // thread safe    
+    fn nextFile() -> char[] {
+        if usedFiles == files.len
+            return Slice<char>{null,0};
+        while true {
+            oldVal = usedFiles;
+            if !compare_swap(cast<void*>&usedFiles, oldVal, oldVal + 1) {
+                // log("Retry")
+                continue;
+            }
 
+            return files.getPtr(oldVal).sliced();
+        }
+        // won't ever run
+        return Slice<char>{null,0};
+    }
 
-// default amount of thread is 4
-// 
+    fn cleanup() {
+        ARRAY_CLEANUP(files)
+        threadInfos.cleanup();
+    }
+}
+fn @stdcall CalculateLines(_info: void*) -> u32 {
+    info: ThreadInfo* = _info;
+    Assert(info.masterInfo)
+    
+    while true {
+        info.path = info.masterInfo.nextFile();
+        if !info.path.ptr // no more files
+            break;
+
+        fileSize: u64 = 0;
+        file = FileOpen(&info.path, true,  outFileSize = &fileSize);
+        defer FileClose(file);
+
+        if !file
+            continue;
+        if fileSize == 0 {
+            info.data.lines += 1;
+            continue;
+        }
+
+        // TODO: Reuse buffer instead of allocating and freeing per file
+        bufferSize = fileSize;
+        buffer: char* = Allocate(bufferSize);
+        defer Free(buffer, bufferSize);
+
+        readBytes = FileRead(file, buffer, fileSize);
+
+        // blanks, line feeds with only whitespace characters between.
+        // \r, space, tab
+        // comments
+
+        // TODO: assert if readBytes
+        blanks = 0;
+        lines = 1; // files always have one line
+        index = 0
+        solelyWhitespace = true;
+        while index < readBytes {
+            chr = buffer[index];
+            if chr == '\n' {
+                lines++;
+                if solelyWhitespace
+                    blanks++;
+                solelyWhitespace = true;
+            } else if chr != ' ' && chr != '\t' && chr != '\r' {
+                solelyWhitespace = false;
+            }
+            index++;
+        }
+        if solelyWhitespace
+            blanks++;
+
+        info.data.lines += lines;
+        info.data.blankLines += blanks;
+        info.data.readCharacters += fileSize;
+    }
+    // NativeSleep(0.1);
+    // log(info.data.lines)
+    info.masterInfo.data.combine(&info.data);
+    return 0;
+}

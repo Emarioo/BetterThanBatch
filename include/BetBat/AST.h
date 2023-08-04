@@ -121,7 +121,8 @@ struct PolyVersions {
     T& get(u32 index) {
         if(index >= _array.used) {
             Assert(("Probably a bug",index < 1000));
-            Assert(_array.resize(index + 4));
+            bool yes = _array.resize(index + 1);
+            Assert(yes);
         }
         return _array.get(index);
     }
@@ -501,7 +502,7 @@ struct ASTStatement : ASTNode {
     };
     DynamicArray<ASTExpression*> returnValues{};
 
-    PolyVersions<DynamicArray<TypeId>> versions_expresssionTypes; // types from firstExpression
+    PolyVersions<DynamicArray<TypeId>> versions_expressionTypes; // types from firstExpression
 
     u32 age = 0;
     bool rangedForLoop=false; // otherwise sliced for loop

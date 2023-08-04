@@ -70,6 +70,7 @@
 // #define BC_RDTSCP 103
 // compare and swap, atomic
 #define BC_CMP_SWAP 104
+#define BC_ATOMIC_ADD 105
 
 // #define BC_SIN 110
 // #define BC_COS 111
@@ -94,9 +95,9 @@ u8
 
 #define DECODE_REG_TYPE(X) ((X)&~BC_REG_MASK)
 
-#define DECODE_REG_SIZE_TYPE(X) (((X)&BC_REG_MASK)>>6)
-#define ENCODE_REG_SIZE_TYPE(X) ((X)<<6)
-#define DECODE_REG_SIZE(X) (X==0?0:(1<<DECODE_REG_SIZE_TYPE(X)))
+#define DECODE_REG_SIZE_TYPE(X) (u8)(((X)&BC_REG_MASK)>>6)
+#define ENCODE_REG_SIZE_TYPE(X) (u8)((X)<<6)
+#define DECODE_REG_SIZE(X) (u8)(X==0?0:(1<<DECODE_REG_SIZE_TYPE(X)))
 
 // The ordering is strange to make it easier to convert it
 // to x86 representation.

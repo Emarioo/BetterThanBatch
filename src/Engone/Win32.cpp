@@ -275,7 +275,7 @@ namespace engone {
 	void Sleep(double seconds){
         Win32Sleep((uint32)(seconds*1000));   
     }
-    APIFile FileOpen(const char* path, int len, uint64* outFileSize, uint32 flags){
+    APIFile FileOpen(const char* path, u32 len, uint64* outFileSize, uint32 flags){
 		return FileOpen(std::string(path,len), outFileSize, flags);
 	}
     APIFile FileOpen(const std::string& path, uint64* outFileSize, uint32 flags){

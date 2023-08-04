@@ -10,6 +10,8 @@ struct GenInfo {
     CompileInfo* compileInfo=nullptr;
     int errors=0;
     int warnings=0;
+
+    bool hasErrors();
     
     struct AlignInfo {
         int diff=0;
