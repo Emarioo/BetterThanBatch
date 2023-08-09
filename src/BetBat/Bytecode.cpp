@@ -128,10 +128,10 @@ void Bytecode::cleanup(){
     dataSegment.resize(0);
     debugSegment.resize(0);
     debugLocations.cleanup();
-    if(nativeRegistry){
-        NativeRegistry::Destroy(nativeRegistry);
-        nativeRegistry = nullptr;
-    }
+    // if(nativeRegistry && nativeRegistry != NativeRegistry::GetGlobal()){
+    //     NativeRegistry::Destroy(nativeRegistry);
+    //     nativeRegistry = nullptr;
+    // }
     // debugText.clear();
     // debugText.shrink_to_fit();
 }
@@ -214,7 +214,8 @@ void Instruction::print(){
 }
 
 Bytecode* Bytecode::Create(){
-    Bytecode* ptr = (Bytecode*)engone::Allocate(sizeof(Bytecode));
+    // Bytecode* ptr = (Bytecode*)engone::Allocate(sizeof(Bytecode));
+    Bytecode* ptr = TRACK_ALLOC(Bytecode);
     new(ptr)Bytecode();
     return ptr;
 }
@@ -233,7 +234,8 @@ void Bytecode::Destroy(Bytecode* code){
         return;
     code->cleanup();
     code->~Bytecode();
-    engone::Free(code, sizeof(Bytecode));
+    TRACK_FREE(code, Bytecode);
+    // engone::Free(code, sizeof(Bytecode));
 }
 void Bytecode::ensureAlignmentInData(int alignment){
     Assert(alignment > 0);

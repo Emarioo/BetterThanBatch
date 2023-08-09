@@ -1,10 +1,11 @@
 #include "BetBat/Compiler.h"
+#include "BetBat/Util/TestSuite.h"
 
 #include <math.h>
 
 void print_help(){
     using namespace engone;
-    log::out << log::BLUE << "##   Help   ##\n";
+    log::out << log::BLUE << "##   Help (outdated)   ##\n";
     log::out << log::GRAY << "More information can be found here:\n"
         "https://github.com/Emarioo/BetterThanBatch/tree/master/docs\n";
     #define PRINT_USAGE(X) log::out << log::YELLOW << X ": "<<log::SILVER;
@@ -48,190 +49,108 @@ void print_help(){
     #undef PRINT_DESC
     #undef PRINT_EXAMPLES
     #undef PRINT_EXAMPLE
-    // log::out << log::YELLOW << "compiler.exe -log [type0,type1,...]: "<<log::SILVER;
-    // log::out << "Prints debug info. The argument after determines what "
-    //          << "type of info to print. Types are tokenizer, preprocessor, parser, "
-    //          << "optimizer, interpreter and threads. Comma can be used to specify multiple. "
-    //          << "Script files can be specified before and after\n";
-    // log::out << log::LIME << " Examples:\n";
-    // log::out << "  compiler.exe script.btb -log  "<<log::GRAY<<"(log by itself gives some basic information)\n";
-    // log::out << "  -log tok          "<<log::GRAY<<"(extra info about tokenizer)\n";
-    // log::out << "  -log pre,par,thr  "<<log::GRAY<<"(extra info about preprocessor, parser and threads)\n";
-    // log::out << "  -log opt,int      "<<log::GRAY<<"(extra info about optimizer and interpreter)\n";
-
-    /*
-        compiler main.btb -out main.btbc
-        compiler -run main.btbc
-
-
-    */
 }
-// 0.025915
-// float sine(float x) {
-//     const float RAD = 1.57079632679f;
-//     int inv = (x<0)<<1;
-//     if(inv)
-//         x = -x;
-//     int t = x/RAD;
-//     if (t&1)
-//         x = RAD * (1+t) - x;
-//     else
-//         x = x - RAD * t;
-
-//     // not faster by the way
-//     // x = x - RAD * (t+(t&1));
-//     // u32 temp0 = (*(u32*)&x ^ ((t&1)<<31)); // flip sign bit
-//     // x = *(float*)&temp0;
-
-//     // float taylor = (x - x*x*x/(2*3) + x*x*x*x*x/(2*3*4*5) - x*x*x*x*x*x*x/(2*3*4*5*6*7) + x*x*x*x*x*x*x*x*x/(2*3*4*5*6*7*8*9));
-//     float taylor = x - x*x*x/(2*3) * ( 1 - x*x/(4*5) * ( 1 - x*x/(6*7) * (1 - x*x/(8*9))));
-//     if ((t&2) ^ inv)
-//         taylor = -taylor;
-//     return taylor;
-//     // not faster by the way
-//     // u32 temp = (*(u32*)&out ^ ((t&2)<<30)); // flip sign bit
-//     // return *(float*)&temp;
-// }
+// #include <typeinfo>
+// struct A {
+//     int ok;
+// };
 int main(int argc, const char** argv){
     using namespace engone;
-    // float yeh = 5.23f;
-    // i64 num = 9;
-    // float ok = 0.52f + num;
-    // auto tp = MeasureTime();
-    // float value = 3;
-    // float sum = 0;
-    // // for(int t=0;t<1000000;t++){
-    // for(int t=0;t<100;t++){
-    //     value -= 0.1f;
-    //     // value += 0.1f;
-    //     // 1.57079632679f/8.f;
-    //     float f = sine(value);
-    //     // float f = sinf(value);
-    //     sum += f;
-    //     printf("%f: %f\n", value, sine(value) - sinf(value));
-    //     // printf("%f: %f = %f ~ %f\n", value, sine(value) - sinf(value), sine(value), sinf(value));
-    // }
-    // printf("Time %f\n",(float)StopMeasure(tp)*1000.f);
-    // printf("sum: %f\n", sum);
+    
+    // A a;
+    // const auto& yeah = typeid(a);
+    // log::out << yeah.name()<<"\n";
 
-    // double out = log10(92.3);
+    // return 1;
+    CompileOptions compileOptions{};
 
-    // auto it = DirectoryIteratorCreate("src", 3);
-    // DirectoryIteratorData data;
-    // while(DirectoryIteratorNext(it, &data)){
-    //     log::out << data.name << "\n";
-    // }
-    // auto args = CmdLineArgs();
-
-    // float a = 1.8;
-    // i32 k = a;
-    // log::out << k<<"\n";
-
-    // return 0;
-
-    // UserProfile profile{};
-    // profile.deserialize("myprofile.txt");
-    // profile.serialize("myprofile2.txt");
-
-    // return 0;
-
-    // for(int i=0;i<23;i++){
-    //     int c = i + 9;
-    //     int d = 12;
-    //     int a = c + d - (i + 2) - i*d*9;
-    // }
-    // // ReadObjectFile();
-    // int a = 23;
-    // int b = 2;
-    // int c = a && b;
-    // return 0;
-
-    // u8 a = global + 2;
-
-    // auto p = &a;
-
-    // *p = 9;
-
-    // u64 b = a * (192 + a * 9 - 23 / a * 23);
-    // u16 c = b;
-
-
-    // log::out.enableReport(false);
-
-    // PerfTestTokenize("src/BetBat/Generator.cpp", 1);
-    // PerfTestTokenize("src/BetBat/Generator.cpp", 15);
-    // PerfTestTokenize("src/BetBat/Parser.cpp", 15);
-    // return false;
-
-    #define IfArg(X) if(!strcmp(arg,X))
-    #define MODE_COMPILE 1
-    #define MODE_OUT 2
-    #define MODE_RUN 4
-    #define MODE_USER_ARGS 5
-    // #define MODE_TEST 29
-    // #define MODE_LOG 120
-    int mode = MODE_COMPILE; // and run unless out files
+    std::string compilerPath = argv[0];
+    Path compilerDir = compilerPath;
+    compilerDir = compilerDir.getAbsolute().getDirectory();
+    if(compilerDir.text.length()>4){
+        if(compilerDir.text.substr(compilerDir.text.length()-5,5) == "/bin/")
+            compilerDir = compilerDir.text.substr(0,compilerDir.text.length() - 4);
+    }
+    compileOptions.resourceDirectory = compilerDir.text;
     
     bool devmode=false;
     
-    std::string compilerPath = argv[0];
-
     // UserProfile* userProfile = UserProfile::CreateDefault();
 
-    std::vector<std::string> tests; // could be const char*
-    std::vector<std::string> files;
-    std::vector<std::string> outFiles;
-    std::vector<std::string> filesToRun;
-
-    TargetPlatform target = BYTECODE;
     #ifdef CONFIG_DEFAULT_TARGET
-    target = CONFIG_DEFAULT_TARGET;
+    compileOptions.target = CONFIG_DEFAULT_TARGET;
     #endif
 
     bool onlyPreprocess = false;
+    bool runFile = false;
 
-    std::vector<std::string> userArgs;
+    if (argc < 2) {
+        print_help();
+        return 1;
+    }
 
+    bool invalidArguments = false;
+    #define ArgIs(X) !strcmp(arg,X)
+    #define MODE_COMPILE 1
+    #define MODE_OUT 2
+    #define MODE_RUN 4
+    int mode = MODE_COMPILE; // and run unless out files
     for(int i=1;i<argc;i++){
         const char* arg = argv[i];
         int len = strlen(argv[i]);
-        if(mode==MODE_USER_ARGS){
-            userArgs.push_back(arg);
-            continue;
-        }
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
         if(!strcmp(arg,"--help")||!strcmp(arg,"-help")) {
             print_help();
             return 1;
-        } else IfArg("-run") {
-            mode = MODE_RUN;
-        } else IfArg("-preproc") {
+        } else if (ArgIs("-run")) {
+            runFile = true;
+        } else if (ArgIs("-preproc")) {
             onlyPreprocess = true;
-        } else IfArg("-out") {
-            mode = MODE_OUT;
-        } else IfArg("-dev") {
-            devmode = true;
-        } else IfArg("-target"){
+        } else if (ArgIs("-out")) {
             i++;
-            // TODO: Print error message if target argument is missing
             if(i<argc){
                 arg = argv[i];
-                target = ToTarget(arg);
-                Assert(target != UNKNOWN_TARGET);
-                // TODO: Error message if target is unknown
+                compileOptions.outputFile = arg;
+                // TODO: Disallow paths that start with a dash since they resemble arguments
             } else {
-                Assert(false);
+                invalidArguments = true;
+                log::out << log::RED << "You must specify a file path after '-out'.\n";
+                // TODO: print list of targets
+                // for(int j=0;j<){
+                // }
             }
-        } else IfArg("-user-args") {
-            mode = MODE_USER_ARGS;
-        } else if(mode==MODE_COMPILE){ 
-            files.push_back(arg);
-        } else if(mode==MODE_RUN){
-            filesToRun.push_back(arg);
-        } else if(mode==MODE_OUT){
-            outFiles.push_back(arg);
+        } else if (ArgIs("-dev")) {
+            devmode = true;
+        } else if (ArgIs("-target")){
+            i++;
+            if(i<argc){
+                arg = argv[i];
+                compileOptions.target = ToTarget(arg);
+                if(compileOptions.target == UNKNOWN_TARGET) {
+                    invalidArguments = true;
+                    log::out << log::RED << arg << " is not a valid target.\n";
+                    // TODO: print list of targets
+                }
+            } else {
+                invalidArguments = true;
+                log::out << log::RED << "You must specify a target after '-target'.\n";
+                // TODO: print list of targets
+                // for(int j=0;j<){
+                // }
+            }
+        } else if(ArgIs("-user-args")) {
+            i++;
+            for(;i<argc;i++) {
+                const char* arg = argv[i];
+                int len = strlen(argv[i]);
+                compileOptions.userArgs.add(arg);
+            }
         } else {
-            log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
+            if(*arg == '-') {
+                log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
+            } else {
+                compileOptions.initialSourceFile = arg;
+            }
         }
         /*
         else if(mode==MODE_TEST){
@@ -279,75 +198,28 @@ int main(int argc, const char** argv){
         */
     }
 
-    if(files.size() != outFiles.size() && outFiles.size()!=0){
-        log::out << log::RED <<"The amount of input and output files must match!\n";
-        int index = 0;
-        // TODO: Prettier formatting. What about really long file names.
-        WHILE_TRUE {
-            if(index<(int)files.size()){
-                log::out << files[index];
-            } else {
-                log::out << "?";
-            }
-            log::out << " - ";
-            if(index<(int)outFiles.size()){
-                log::out << outFiles[index];
-            } else {
-                log::out << "?";
-            }
-            log::out << "\n";
-        }
-        return 0;
-    }
-    // if(!tests.empty()){
-    //     // TestSuite(tests);
-    // }
-    Path compilerDir = compilerPath;
-    compilerDir = compilerDir.getAbsolute().getDirectory();
-    if(compilerDir.text.length()>4){
-        if(compilerDir.text.substr(compilerDir.text.length()-5,5) == "/bin/")
-            compilerDir = compilerDir.text.substr(0,compilerDir.text.length() - 4);
-    }
-    CompileOptions compileOptions{};
-    compileOptions.compilerDirectory = compilerDir.text;
-    compileOptions.userArgs = userArgs;
-    compileOptions.target = target;
-    for(int i = 0; i < (int)files.size();i++){
-        if(onlyPreprocess){
-            if(outFiles.size()==0) // TODO: Error message
-                continue;
-            auto stream = TokenStream::Tokenize(files[i]);
-            CompileInfo compileInfo{};
-            auto stream2 = Preprocess(&compileInfo, stream);
-            stream2->writeToFile(outFiles[i]);
-            TokenStream::Destroy(stream);
-            TokenStream::Destroy(stream2);
-            continue;
-        }
-        compileOptions.initialSourceFile = files[i].c_str();
-
-        if(outFiles.size()==0){
-            log::out << log::GRAY << "Compile and run: "<<files[i] << "\n";
-            Assert(target == BYTECODE); // TODO: error message
-            CompileAndRun(compileOptions);
+    if(onlyPreprocess){
+        if (compileOptions.initialSourceFile.text.size() == 0) {
+            log::out << log::RED << "You must specify a file when using -preproc\n";
         } else {
-            CompileAndExport(compileOptions, outFiles[i]);
+            if(compileOptions.outputFile.text.size() == 0) {
+                log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
+            } else{
+                auto stream = TokenStream::Tokenize(compileOptions.initialSourceFile.text);
+                CompileInfo compileInfo{};
+                auto stream2 = Preprocess(&compileInfo, stream);
+                stream2->writeToFile(compileOptions.outputFile.text);
+                TokenStream::Destroy(stream);
+                TokenStream::Destroy(stream2);
+            }
         }
     }
-    for(std::string& file : filesToRun){
-        Bytecode* bc = ImportBytecode(file);
-        if(bc){
-            log::out << log::GRAY<<"Running "<<file << "\n";
-            RunBytecode(bc, userArgs);
-            Bytecode::Destroy(bc);
+    else if(!devmode){
+        if(compileOptions.outputFile.text.size()==0) {
+            CompileAndRun(&compileOptions);
         } else {
-            log::out <<log::RED <<"Failed importing "<<file <<"\n";
+            CompileAndExport(&compileOptions);
         }
-    }
-    if(!devmode && files.empty()
-        && filesToRun.empty()){
-        print_help();
-        // log::out << "No input files!\n";
     } else if(devmode){
         log::out << log::BLACK<<"[DEVMODE]\n";
         #ifndef DEV_FILE
@@ -356,62 +228,76 @@ int main(int argc, const char** argv){
         compileOptions.initialSourceFile = DEV_FILE;
         #endif
 
+        // DynamicArray<std::string> tests;
+        // tests.add("tests/what/struct.btb");
+        // TestSuite(tests);
+
         if(compileOptions.target == BYTECODE){
-        // interpreter
-            CompileAndRun(compileOptions);
+            CompileAndRun(&compileOptions);
         } else {
             #define OBJ_FILE "bin/dev.obj"
             #define EXE_FILE "dev.exe"
+            compileOptions.outputFile = EXE_FILE;
+            CompileAndRun(&compileOptions);
+            // CompileAndExport(&compileOptions);
 
-            // CompileOptions options{};
-            // CompileAndExport({"examples/x64_test.btb"}, EXE_FILE);
+            // for(int i=0;i<100;i++) {
+            //     auto opts = compileOptions;
+            //     CompileAndRun(&opts);
+            // }
 
-            Program_x64* program = nullptr;
-            Bytecode* bytecode = CompileSource(compileOptions);
-            // bytecode->codeSegment.used=0;
-            // bytecode->add({BC_DATAPTR, BC_REG_RBX});
-            // bytecode->addIm(0);
-            // bytecode->add({BC_MOV_MR, BC_REG_RBX, BC_REG_AL, 1});
-            PrintMeasures();
-            if(bytecode)
-                program = ConvertTox64(bytecode);
+            // // CompileOptions options{};
+            // // CompileAndExport({"examples/x64_test.btb"}, EXE_FILE);
 
-            defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
-            if(program){
-                program->printHex("temp.hex");
-                // program = Program_x64::Create();
-                // u8 arr[]={ 0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 };
-                // program->addRaw(arr,sizeof(arr));
-                // NamedRelocation nr{};
-                // nr.name = "printme";
-                // nr.textOffset = 0x5;
-                // program->namedRelocations.add(nr);
+            // Program_x64* program = nullptr;
+            // Bytecode* bytecode = CompileSource(&compileOptions);
+            // // bytecode->codeSegment.used=0;
+            // // bytecode->add({BC_DATAPTR, BC_REG_RBX});
+            // // bytecode->addIm(0);
+            // // bytecode->add({BC_MOV_MR, BC_REG_RBX, BC_REG_AL, 1});
+            // #ifdef LOG_MEASURES
+            // PrintMeasures();
+            // #endif
 
-                WriteObjectFile(OBJ_FILE,program);
+            // if(bytecode)
+            //     program = ConvertTox64(bytecode);
 
-                // auto objFile = ObjectFile::DeconstructFile(OBJ_FILE, false);
-                // defer { ObjectFile::Destroy(objFile); };
+            // defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
+            // if(program){
+            //     program->printHex("temp.hex");
+            //     // program = Program_x64::Create();
+            //     // u8 arr[]={ 0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 };
+            //     // program->addRaw(arr,sizeof(arr));
+            //     // NamedRelocation nr{};
+            //     // nr.name = "printme";
+            //     // nr.textOffset = 0x5;
+            //     // program->namedRelocations.add(nr);
 
-                // link the object file and run the resulting executable
-                // error level is printed because it's the only way to get
-                // an output from the executable at the moment.
-                // Printing and writing to files require linkConvention to stdio.h or windows.
-                i32 errorLevel = 0;
-                engone::StartProgram("","link /nologo " OBJ_FILE 
-                " bin/NativeLayer.lib"
-                " uuid.lib"
-                // " Kernel32.lib"
-                " shell32.lib"
-                " /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
-                std::string hoho{};
-                hoho += EXE_FILE;
-                for(auto& arg : compileOptions.userArgs){
-                    hoho += " ";
-                    hoho += arg;
-                }
-                engone::StartProgram("",(char*)hoho.data(),PROGRAM_WAIT,&errorLevel);
-                log::out << "Error level: "<<errorLevel<<"\n";
-            }
+            //     WriteObjectFile(OBJ_FILE,program);
+
+            //     // auto objFile = ObjectFile::DeconstructFile(OBJ_FILE, false);
+            //     // defer { ObjectFile::Destroy(objFile); };
+
+            //     // link the object file and run the resulting executable
+            //     // error level is printed because it's the only way to get
+            //     // an output from the executable at the moment.
+            //     // Printing and writing to files require linkConvention to stdio.h or windows.
+            //     i32 errorLevel = 0;
+            //     engone::StartProgram("","link /nologo " OBJ_FILE 
+            //     " bin/NativeLayer.lib"
+            //     " uuid.lib"
+            //     // " Kernel32.lib"
+            //     " shell32.lib"
+            //     " /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
+            //     std::string hoho{};
+            //     hoho += EXE_FILE;
+            //     for(auto& arg : compileOptions.userArgs){
+            //         hoho += " ";
+            //         hoho += arg;
+            //     }
+            //     engone::StartProgram("",(char*)hoho.data(),PROGRAM_WAIT,&errorLevel);
+            //     log::out << "Error level: "<<errorLevel<<"\n";
+            // }
         }
 
         // {
@@ -432,10 +318,13 @@ int main(int argc, const char** argv){
     //     log::out << (log::Color)(i%16);
     //     log::out << chr;
     // }
-    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage();
+    NativeRegistry::DestroyGlobal();
+    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage();
     if(finalMemory!=0){
         log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";
         PrintRemainingTrackTypes();
+
+        Tracker::PrintTrackedTypes();
     }
     // log::out << "Total allocated bytes: "<<GetTotalAllocatedBytes() << "\n";
     log::out.cleanup();

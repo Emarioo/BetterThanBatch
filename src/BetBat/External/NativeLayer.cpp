@@ -2,6 +2,8 @@
 
 #include "Engone/Win32Includes.h"
 
+// #include "BetBat/Config.h"
+
 #include "Engone/PlatformLayer.h"
 #include <stdio.h>
 
@@ -82,7 +84,7 @@ extern "C" {
             if(argCount == 0 || totalTextSize == 0)
                 return &commandLineArgs;
             char* raw = (char*)engone::Allocate(argCount * sizeof(Language::Slice<char>) + totalTextSize);
-            Assert((u64)raw % 16 == 0);
+            // Assert((u64)raw % 16 == 0);
             argPtr = (Language::Slice<char>*)raw;
             textPtr = raw + argCount * sizeof(Language::Slice<char>);
         }
@@ -160,10 +162,13 @@ extern "C" {
         return &commandLineArgs;
     }
     u64 __stdcall StartMeasure() {
-        return engone::MeasureTime();
+        return engone::StartMeasure();
     }
     float __stdcall StopMeasure(u64 timePoint) {
         return engone::StopMeasure(timePoint);
+    }
+    float __stdcall DiffMeasure(u64 endSubStart) {
+        return engone::DiffMeasure(endSubStart);
     }
 
     void* __stdcall Allocate(u64 size) {
@@ -200,7 +205,7 @@ extern "C" {
     }
     void __stdcall DirectoryIteratorDestroy(Language::DirectoryIterator* iterator) {
         engone::DirectoryIteratorDestroy((void*)iterator->_handle, (engone::DirectoryIteratorData*)&iterator->result);
-        Assert(!iterator->result.name.ptr);
+        // Assert(!iterator->result.name.ptr);
         #ifdef VLOG
         // log::out << log::GRAY<<"Destroy dir iterator: "<<iterator->rootPath<<"\n";
         #endif

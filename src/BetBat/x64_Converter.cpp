@@ -233,7 +233,8 @@ StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
 bool Program_x64::_reserve(u32 newAllocationSize){
     if(newAllocationSize==0){
         if(_allocationSize!=0){
-            engone::Free(text, _allocationSize);
+            TRACK_ARRAY_FREE(text, u8, _allocationSize);
+            // engone::Free(text, _allocationSize);
         }
         text = nullptr;
         _allocationSize = 0;
@@ -241,7 +242,8 @@ bool Program_x64::_reserve(u32 newAllocationSize){
         return true;
     }
     if(!text){
-        text = (u8*)engone::Allocate(newAllocationSize);
+        // text = (u8*)engone::Allocate(newAllocationSize);
+        text = TRACK_ARRAY_ALLOC(u8, newAllocationSize);
         Assert(text);
         // initialization of elements is done when adding them
         if(!text)
@@ -249,7 +251,9 @@ bool Program_x64::_reserve(u32 newAllocationSize){
         _allocationSize = newAllocationSize;
         return true;
     } else {
+        TRACK_DELS(u8, _allocationSize);
         u8* newText = (u8*)engone::Reallocate(text, _allocationSize, newAllocationSize);
+        TRACK_ADDS(u8, newAllocationSize);
         Assert(newText);
         if(!newText)
             return false;
@@ -359,6 +363,7 @@ void Program_x64::printHex(const char* path){
         Assert(file);
 
         const int stride = 12;
+        // Intentionally not tracking this allocation. It's allocated and freed here so there's no need.
         char* buffer = (char*)Allocate(size()*3);
         for(int i = 0;i<head;i++){
             u8 a = text[i]>>4;
@@ -428,7 +433,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     // TODO: You may want some functions to handle the allocation here.
     //  like how you can reserve memory for the text allocation.
     if(bytecode->dataSegment.used!=0){
-        prog->globalData = (u8*)engone::Allocate(bytecode->dataSegment.used);
+        prog->globalData = TRACK_ARRAY_ALLOC(u8, bytecode->dataSegment.used);
+        // prog->globalData = (u8*)engone::Allocate(bytecode->dataSegment.used);
         Assert(prog->globalData);
         prog->globalSize = bytecode->dataSegment.used;
         memcpy(prog->globalData, bytecode->dataSegment.data, prog->globalSize);
@@ -1601,8 +1607,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     #endif
                     break; default: {
                         failure = true;
-                        Assert(bytecode->nativeRegistry);
-                        auto* nativeFunction = bytecode->nativeRegistry->findFunction(imm);
+                        // Assert(bytecode->nativeRegistry);
+                        auto nativeRegistry = NativeRegistry::GetGlobal();
+                        auto* nativeFunction = nativeRegistry->findFunction(imm);
+                        // auto* nativeFunction = bytecode->nativeRegistry->findFunction(imm);
                         if(nativeFunction){
                             log::out << log::RED << "Native '"<<nativeFunction->name<<"' (id: "<<imm<<") is not implemented in x64 converter (" OS_NAME ").\n";
                         } else {
@@ -1901,12 +1909,14 @@ void Program_x64::Destroy(Program_x64* program) {
     using namespace engone;
     Assert(program);
     program->~Program_x64();
-    Free(program,sizeof(Program_x64));
+    TRACK_FREE(program, Program_x64);
+    // engone::Free(program,sizeof(Program_x64));
 }
 Program_x64* Program_x64::Create() {
     using namespace engone;
 
-    auto program = (Program_x64*)Allocate(sizeof(Program_x64));
+    // auto program = (Program_x64*)engone::Allocate(sizeof(Program_x64));
+    auto program = TRACK_ALLOC(Program_x64);
     new(program)Program_x64();
     return program;
 }

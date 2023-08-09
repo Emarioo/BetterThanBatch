@@ -12,7 +12,7 @@ struct CheckInfo {
         FuncImpl* funcImpl=nullptr;
         // ASTScope* scope = nullptr; // scope where function came from
     };
-    DynamicArray<CheckImpl> checkImpls{};
+    QuickArray<CheckImpl> checkImpls{};
 
     int funcDepth=0;
     
@@ -22,8 +22,11 @@ struct CheckInfo {
     bool anotherTurn = false;
 
     u32 currentPolyVersion=0;
-    std::vector<ContentOrder> currentContentOrder;
-    ContentOrder getCurrentOrder() { Assert(currentContentOrder.size()>0); return currentContentOrder.back(); }
+    QuickArray<ContentOrder> currentContentOrder;
+    ContentOrder getCurrentOrder() { Assert(currentContentOrder.size()>0); return currentContentOrder.last(); }
+
+    DynamicArray<TypeId> prevVirtuals{};
+    TinyArray<TypeId> temp_defaultArgs{};
 };
 
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);

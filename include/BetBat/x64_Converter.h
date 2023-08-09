@@ -51,7 +51,8 @@ struct NamedRelocation {
 struct Program_x64 {
     ~Program_x64(){
         _reserve(0);
-        engone::Free(globalData, globalSize);
+        TRACK_ARRAY_FREE(globalData, u8, globalSize);
+        // engone::Free(globalData, globalSize);
         dataRelocations.cleanup();
         namedRelocations.cleanup();
     }

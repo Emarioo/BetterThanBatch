@@ -1,5 +1,5 @@
 # BetterThanBatch
-A compiler and runtime for a new programming language.
+A compiler for a new programming language.
 
 It will be better than batch for your average scripting needs.
 It will be useful for making neat programs, exploring data structures
@@ -15,17 +15,36 @@ Inspiration from:
 Example of errors with named arguments
 ![](docs/img/err-named-arg.png)
 
+The image below shows the compiler's performance.
+The compiler was compiled by the MSVC compiler with /O2 optimization.
+The compiler is about 3 times slower without the optimization flag.
+![](docs/img/perf-2023-08-06.png)
+You can find more measurements in [perf-2023-08-06-O2.txt](docs/stats/perf-2023-08-06-O2.txt).
+rdtsc was used. 2.9 GHz is the clock speed of my laptop. The power cable was plugged in
+my laptop. I get slower results when it's not plugged in.
+The measurement is probably not very accurate but it gives you an idea
+of the compiler's speed and moving forward we will know whether it
+became faster or slower because I will test it again on the same computer with same
+settings (power cable plugged in). In the future, I will write a program
+with 2000 to 6000 lines of code which should also give more accurate
+results when compiled. Then we will know if the correlation between time
+and lines of code is linear or exponential (or something else).
+
+I want to emphasize that I don't know how to measure a program's performance
+correctly. Take all measurements with a large quantity of salt just in case I have
+made a mistake.
+
 ## Disclaimer
+The compiler is very unstable at the moment. It isn't
+ready to be used by anyone.
+
 The documentation is old, minimal and outright lacking.
-This is due to me prioritising the features and stability
+This is due to me prioritizing the features and stability
 of the compiler. Once some of the hard features that would
 require major alterations to the compiler's architecture if
 not done early has been completed, partly at least, then
 I shall spend time on examples, documentation and most
 importantly proper testing.
-
-The compiler is very unstable at the moment. It isn't
-ready to be used by anyone.
 
 ## Features
 - #import to divide your code into multiple files

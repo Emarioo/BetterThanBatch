@@ -1,0 +1,707 @@
+100 calls of CompileAndRun on linecounter.btb.
+Compiled with MSVC compiler WITH /O2 flag.
+Also, all asserts in the code were deleted (empty macro).
+Unfortunately, 500 lines of code is all that is available at the moment.
+More scripts/programs should be created in the language to test the compiler
+more thorougly.
+
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.24 ms (97.14 K lines/s)
+  (bc: 4.62 ms, x64: 104.20 us, obj: 412.34 us)
+ linker: 62.11 ms
+ total: 67.35 ms (7.56 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.27 ms (96.59 K lines/s)
+  (bc: 4.61 ms, x64: 103.10 us, obj: 463.56 us)
+ linker: 53.97 ms
+ total: 59.24 ms (8.59 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.58 ms (91.20 K lines/s)
+  (bc: 4.98 ms, x64: 108.59 us, obj: 429.75 us)
+ linker: 52.74 ms
+ total: 58.33 ms (8.73 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.98 ms (102.24 K lines/s)
+  (bc: 4.33 ms, x64: 114.15 us, obj: 457.59 us)
+ linker: 65.74 ms
+ total: 70.72 ms (7.20 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 6.73 ms (75.64 K lines/s)
+  (bc: 5.81 ms, x64: 166.87 us, obj: 581.02 us)
+ linker: 83.85 ms
+ total: 90.58 ms (5.62 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 8.26 ms (61.62 K lines/s)
+  (bc: 7.22 ms, x64: 198.73 us, obj: 668.02 us)
+ linker: 86.99 ms
+ total: 95.26 ms (5.34 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 7.06 ms (72.10 K lines/s)
+  (bc: 6.10 ms, x64: 155.75 us, obj: 626.44 us)
+ linker: 78.93 ms
+ total: 86.00 ms (5.92 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.52 ms (92.18 K lines/s)
+  (bc: 4.63 ms, x64: 164.58 us, obj: 649.28 us)
+ linker: 74.22 ms
+ total: 79.75 ms (6.38 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 6.42 ms (79.28 K lines/s)
+  (bc: 5.58 ms, x64: 147.04 us, obj: 569.17 us)
+ linker: 66.48 ms
+ total: 72.91 ms (6.98 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.48 ms (92.94 K lines/s)
+  (bc: 4.81 ms, x64: 142.58 us, obj: 435.91 us)
+ linker: 56.25 ms
+ total: 61.72 ms (8.25 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.11 ms (99.51 K lines/s)
+  (bc: 4.53 ms, x64: 123.91 us, obj: 359.35 us)
+ linker: 53.70 ms
+ total: 58.81 ms (8.65 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.23 ms (97.39 K lines/s)
+  (bc: 4.51 ms, x64: 148.08 us, obj: 491.55 us)
+ linker: 54.63 ms
+ total: 59.86 ms (8.50 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.38 ms (94.63 K lines/s)
+  (bc: 4.76 ms, x64: 133.86 us, obj: 365.47 us)
+ linker: 56.94 ms
+ total: 62.32 ms (8.17 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.17 ms (98.55 K lines/s)
+  (bc: 4.57 ms, x64: 136.97 us, obj: 381.01 us)
+ linker: 55.49 ms
+ total: 60.65 ms (8.39 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.66 ms (89.94 K lines/s)
+  (bc: 5.05 ms, x64: 122.88 us, obj: 381.14 us)
+ linker: 54.79 ms
+ total: 60.45 ms (8.42 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.31 ms (95.84 K lines/s)
+  (bc: 4.66 ms, x64: 140.24 us, obj: 439.97 us)
+ linker: 55.85 ms
+ total: 61.16 ms (8.32 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.01 ms (101.56 K lines/s)
+  (bc: 4.42 ms, x64: 141.13 us, obj: 355.54 us)
+ linker: 55.98 ms
+ total: 60.99 ms (8.35 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.05 ms (100.79 K lines/s)
+  (bc: 4.48 ms, x64: 147.49 us, obj: 353.71 us)
+ linker: 53.84 ms
+ total: 58.89 ms (8.64 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.03 ms (101.12 K lines/s)
+  (bc: 4.43 ms, x64: 124.74 us, obj: 394.97 us)
+ linker: 53.87 ms
+ total: 58.90 ms (8.64 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.93 ms (103.27 K lines/s)
+  (bc: 4.35 ms, x64: 139.39 us, obj: 369.56 us)
+ linker: 55.66 ms
+ total: 60.59 ms (8.40 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.16 ms (98.67 K lines/s)
+  (bc: 4.50 ms, x64: 129.88 us, obj: 402.91 us)
+ linker: 54.67 ms
+ total: 59.83 ms (8.51 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.37 ms (94.70 K lines/s)
+  (bc: 4.63 ms, x64: 165.89 us, obj: 492.42 us)
+ linker: 61.19 ms
+ total: 66.57 ms (7.65 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.27 ms (96.63 K lines/s)
+  (bc: 4.66 ms, x64: 120.73 us, obj: 399.96 us)
+ linker: 55.33 ms
+ total: 60.60 ms (8.40 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.10 ms (99.77 K lines/s)
+  (bc: 4.55 ms, x64: 141.61 us, obj: 343.06 us)
+ linker: 52.95 ms
+ total: 58.05 ms (8.77 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.10 ms (99.78 K lines/s)
+  (bc: 4.48 ms, x64: 117.30 us, obj: 406.56 us)
+ linker: 55.18 ms
+ total: 60.29 ms (8.44 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.29 ms (96.24 K lines/s)
+  (bc: 4.65 ms, x64: 130.35 us, obj: 440.62 us)
+ linker: 55.41 ms
+ total: 60.70 ms (8.39 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.55 ms (91.65 K lines/s)
+  (bc: 4.94 ms, x64: 131.55 us, obj: 387.61 us)
+ linker: 57.36 ms
+ total: 62.92 ms (8.09 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.32 ms (95.68 K lines/s)
+  (bc: 4.69 ms, x64: 130.09 us, obj: 428.63 us)
+ linker: 54.98 ms
+ total: 60.31 ms (8.44 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.17 ms (98.43 K lines/s)
+  (bc: 4.48 ms, x64: 119.53 us, obj: 486.18 us)
+ linker: 54.28 ms
+ total: 59.45 ms (8.56 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 6.01 ms (84.65 K lines/s)
+  (bc: 5.44 ms, x64: 127.92 us, obj: 379.26 us)
+ linker: 52.36 ms
+ total: 58.38 ms (8.72 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.99 ms (102.01 K lines/s)
+  (bc: 4.39 ms, x64: 126.27 us, obj: 375.94 us)
+ linker: 54.91 ms
+ total: 59.90 ms (8.50 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.87 ms (104.61 K lines/s)
+  (bc: 4.31 ms, x64: 129.70 us, obj: 357.82 us)
+ linker: 52.30 ms
+ total: 57.17 ms (8.90 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.02 ms (101.43 K lines/s)
+  (bc: 4.44 ms, x64: 116.98 us, obj: 377.07 us)
+ linker: 53.73 ms
+ total: 58.75 ms (8.66 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.60 ms (90.83 K lines/s)
+  (bc: 5.06 ms, x64: 125.73 us, obj: 347.63 us)
+ linker: 54.52 ms
+ total: 60.13 ms (8.47 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.01 ms (101.66 K lines/s)
+  (bc: 4.45 ms, x64: 119.34 us, obj: 348.73 us)
+ linker: 53.89 ms
+ total: 58.90 ms (8.64 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.46 ms (93.26 K lines/s)
+  (bc: 4.87 ms, x64: 125.34 us, obj: 408.66 us)
+ linker: 53.08 ms
+ total: 58.54 ms (8.69 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.98 ms (102.14 K lines/s)
+  (bc: 4.42 ms, x64: 125.28 us, obj: 345.38 us)
+ linker: 53.61 ms
+ total: 58.59 ms (8.69 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.17 ms (98.49 K lines/s)
+  (bc: 4.61 ms, x64: 126.27 us, obj: 361.70 us)
+ linker: 54.61 ms
+ total: 59.78 ms (8.51 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.89 ms (104.05 K lines/s)
+  (bc: 4.34 ms, x64: 115.50 us, obj: 354.74 us)
+ linker: 52.87 ms
+ total: 57.76 ms (8.81 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.97 ms (102.50 K lines/s)
+  (bc: 4.38 ms, x64: 129.01 us, obj: 393.80 us)
+ linker: 53.96 ms
+ total: 58.92 ms (8.64 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.01 ms (101.69 K lines/s)
+  (bc: 4.41 ms, x64: 111.22 us, obj: 392.67 us)
+ linker: 54.12 ms
+ total: 59.12 ms (8.61 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.95 ms (102.76 K lines/s)
+  (bc: 4.40 ms, x64: 128.97 us, obj: 360.36 us)
+ linker: 53.61 ms
+ total: 58.57 ms (8.69 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.90 ms (103.89 K lines/s)
+  (bc: 4.37 ms, x64: 113.39 us, obj: 332.48 us)
+ linker: 53.69 ms
+ total: 58.59 ms (8.69 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.92 ms (103.51 K lines/s)
+  (bc: 4.37 ms, x64: 120.23 us, obj: 361.67 us)
+ linker: 53.64 ms
+ total: 58.56 ms (8.69 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.73 ms (88.80 K lines/s)
+  (bc: 5.16 ms, x64: 123.27 us, obj: 362.33 us)
+ linker: 54.78 ms
+ total: 60.51 ms (8.41 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.93 ms (103.18 K lines/s)
+  (bc: 4.33 ms, x64: 126.46 us, obj: 404.57 us)
+ linker: 53.84 ms
+ total: 58.78 ms (8.66 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.06 ms (100.55 K lines/s)
+  (bc: 4.46 ms, x64: 122.16 us, obj: 390.09 us)
+ linker: 53.70 ms
+ total: 58.76 ms (8.66 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.03 ms (101.15 K lines/s)
+  (bc: 4.46 ms, x64: 102.93 us, obj: 387.60 us)
+ linker: 53.68 ms
+ total: 58.71 ms (8.67 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.52 ms (92.15 K lines/s)
+  (bc: 4.95 ms, x64: 116.23 us, obj: 364.58 us)
+ linker: 54.48 ms
+ total: 60.01 ms (8.48 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.51 ms (92.34 K lines/s)
+  (bc: 4.83 ms, x64: 111.10 us, obj: 480.25 us)
+ linker: 54.27 ms
+ total: 59.78 ms (8.51 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.59 ms (91.14 K lines/s)
+  (bc: 5.01 ms, x64: 126.07 us, obj: 372.18 us)
+ linker: 54.27 ms
+ total: 59.86 ms (8.50 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.21 ms (97.62 K lines/s)
+  (bc: 4.68 ms, x64: 103.60 us, obj: 352.57 us)
+ linker: 53.85 ms
+ total: 59.06 ms (8.62 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.19 ms (98.08 K lines/s)
+  (bc: 4.61 ms, x64: 118.69 us, obj: 368.43 us)
+ linker: 54.42 ms
+ total: 59.62 ms (8.54 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.03 ms (101.23 K lines/s)
+  (bc: 4.45 ms, x64: 101.70 us, obj: 404.65 us)
+ linker: 54.98 ms
+ total: 60.01 ms (8.48 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.08 ms (100.27 K lines/s)
+  (bc: 4.49 ms, x64: 115.76 us, obj: 366.66 us)
+ linker: 53.50 ms
+ total: 58.57 ms (8.69 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.04 ms (101.04 K lines/s)
+  (bc: 4.44 ms, x64: 98.73 us, obj: 427.15 us)
+ linker: 53.97 ms
+ total: 59.01 ms (8.63 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.01 ms (101.62 K lines/s)
+  (bc: 4.41 ms, x64: 117.34 us, obj: 386.13 us)
+ linker: 54.57 ms
+ total: 59.58 ms (8.54 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.54 ms (91.88 K lines/s)
+  (bc: 4.98 ms, x64: 103.04 us, obj: 379.48 us)
+ linker: 54.33 ms
+ total: 59.87 ms (8.50 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.68 ms (89.65 K lines/s)
+  (bc: 5.08 ms, x64: 122.55 us, obj: 374.72 us)
+ linker: 59.87 ms
+ total: 65.55 ms (7.77 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.07 ms (100.35 K lines/s)
+  (bc: 4.48 ms, x64: 102.89 us, obj: 404.28 us)
+ linker: 53.38 ms
+ total: 58.45 ms (8.71 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.93 ms (103.15 K lines/s)
+  (bc: 4.34 ms, x64: 128.93 us, obj: 370.15 us)
+ linker: 52.87 ms
+ total: 57.80 ms (8.81 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.60 ms (90.87 K lines/s)
+  (bc: 5.03 ms, x64: 102.85 us, obj: 387.90 us)
+ linker: 53.44 ms
+ total: 59.04 ms (8.62 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.55 ms (91.78 K lines/s)
+  (bc: 4.93 ms, x64: 119.85 us, obj: 396.40 us)
+ linker: 55.23 ms
+ total: 60.78 ms (8.37 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.95 ms (102.74 K lines/s)
+  (bc: 4.39 ms, x64: 100.86 us, obj: 362.41 us)
+ linker: 53.04 ms
+ total: 57.99 ms (8.78 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.99 ms (102.08 K lines/s)
+  (bc: 4.42 ms, x64: 115.96 us, obj: 360.82 us)
+ linker: 54.65 ms
+ total: 59.64 ms (8.53 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.99 ms (101.91 K lines/s)
+  (bc: 4.46 ms, x64: 102.95 us, obj: 355.37 us)
+ linker: 53.99 ms
+ total: 58.99 ms (8.63 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.50 ms (92.56 K lines/s)
+  (bc: 4.91 ms, x64: 121.87 us, obj: 371.67 us)
+ linker: 53.42 ms
+ total: 58.92 ms (8.64 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.92 ms (103.46 K lines/s)
+  (bc: 4.38 ms, x64: 105.10 us, obj: 362.22 us)
+ linker: 54.66 ms
+ total: 59.59 ms (8.54 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.94 ms (102.97 K lines/s)
+  (bc: 4.40 ms, x64: 115.75 us, obj: 345.32 us)
+ linker: 53.31 ms
+ total: 58.26 ms (8.74 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.03 ms (101.28 K lines/s)
+  (bc: 4.43 ms, x64: 101.47 us, obj: 418.45 us)
+ linker: 53.86 ms
+ total: 58.89 ms (8.64 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.49 ms (92.73 K lines/s)
+  (bc: 4.89 ms, x64: 117.41 us, obj: 364.45 us)
+ linker: 53.35 ms
+ total: 58.84 ms (8.65 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.41 ms (94.03 K lines/s)
+  (bc: 4.87 ms, x64: 98.68 us, obj: 361.79 us)
+ linker: 53.44 ms
+ total: 58.86 ms (8.65 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.90 ms (103.94 K lines/s)
+  (bc: 4.34 ms, x64: 115.60 us, obj: 346.60 us)
+ linker: 55.47 ms
+ total: 60.36 ms (8.43 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.97 ms (102.50 K lines/s)
+  (bc: 4.43 ms, x64: 95.75 us, obj: 361.89 us)
+ linker: 54.13 ms
+ total: 59.10 ms (8.61 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.96 ms (102.57 K lines/s)
+  (bc: 4.40 ms, x64: 113.61 us, obj: 358.35 us)
+ linker: 53.84 ms
+ total: 58.80 ms (8.66 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.53 ms (92.02 K lines/s)
+  (bc: 4.96 ms, x64: 104.40 us, obj: 382.97 us)
+ linker: 54.80 ms
+ total: 60.33 ms (8.44 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.02 ms (101.47 K lines/s)
+  (bc: 4.43 ms, x64: 120.98 us, obj: 373.59 us)
+ linker: 54.15 ms
+ total: 59.17 ms (8.60 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.00 ms (101.76 K lines/s)
+  (bc: 4.46 ms, x64: 102.33 us, obj: 361.01 us)
+ linker: 53.41 ms
+ total: 58.42 ms (8.71 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.61 ms (90.67 K lines/s)
+  (bc: 4.98 ms, x64: 118.92 us, obj: 411.33 us)
+ linker: 53.52 ms
+ total: 59.13 ms (8.61 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.44 ms (93.64 K lines/s)
+  (bc: 4.88 ms, x64: 103.66 us, obj: 367.32 us)
+ linker: 53.35 ms
+ total: 58.78 ms (8.66 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.70 ms (89.33 K lines/s)
+  (bc: 5.12 ms, x64: 121.02 us, obj: 361.05 us)
+ linker: 53.13 ms
+ total: 58.83 ms (8.65 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.38 ms (94.61 K lines/s)
+  (bc: 4.84 ms, x64: 99.93 us, obj: 365.89 us)
+ linker: 53.58 ms
+ total: 58.96 ms (8.63 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.88 ms (104.28 K lines/s)
+  (bc: 4.32 ms, x64: 114.80 us, obj: 353.04 us)
+ linker: 52.63 ms
+ total: 57.51 ms (8.85 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 6.20 ms (82.08 K lines/s)
+  (bc: 5.56 ms, x64: 105.13 us, obj: 446.99 us)
+ linker: 59.00 ms
+ total: 65.21 ms (7.81 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.93 ms (103.16 K lines/s)
+  (bc: 4.36 ms, x64: 122.49 us, obj: 358.73 us)
+ linker: 53.38 ms
+ total: 58.31 ms (8.73 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.96 ms (102.54 K lines/s)
+  (bc: 4.41 ms, x64: 101.24 us, obj: 381.24 us)
+ linker: 52.61 ms
+ total: 57.57 ms (8.84 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.39 ms (94.46 K lines/s)
+  (bc: 4.64 ms, x64: 124.36 us, obj: 508.59 us)
+ linker: 55.95 ms
+ total: 61.34 ms (8.30 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.97 ms (102.32 K lines/s)
+  (bc: 4.40 ms, x64: 98.54 us, obj: 388.01 us)
+ linker: 53.86 ms
+ total: 58.84 ms (8.65 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.00 ms (101.82 K lines/s)
+  (bc: 4.42 ms, x64: 120.10 us, obj: 369.74 us)
+ linker: 52.97 ms
+ total: 57.97 ms (8.78 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.93 ms (103.22 K lines/s)
+  (bc: 4.40 ms, x64: 103.07 us, obj: 352.90 us)
+ linker: 53.55 ms
+ total: 58.48 ms (8.70 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.70 ms (89.27 K lines/s)
+  (bc: 5.11 ms, x64: 117.48 us, obj: 376.63 us)
+ linker: 53.12 ms
+ total: 58.83 ms (8.65 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.91 ms (103.56 K lines/s)
+  (bc: 4.38 ms, x64: 110.35 us, obj: 343.41 us)
+ linker: 53.41 ms
+ total: 58.33 ms (8.73 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.98 ms (102.21 K lines/s)
+  (bc: 4.40 ms, x64: 116.44 us, obj: 368.52 us)
+ linker: 55.26 ms
+ total: 60.25 ms (8.45 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.41 ms (94.12 K lines/s)
+  (bc: 4.87 ms, x64: 104.16 us, obj: 350.20 us)
+ linker: 53.69 ms
+ total: 59.10 ms (8.61 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.00 ms (101.81 K lines/s)
+  (bc: 4.43 ms, x64: 115.57 us, obj: 359.03 us)
+ linker: 53.95 ms
+ total: 58.95 ms (8.63 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.00 ms (101.73 K lines/s)
+  (bc: 4.46 ms, x64: 102.15 us, obj: 366.63 us)
+ linker: 57.13 ms
+ total: 62.14 ms (8.19 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.24 ms (97.19 K lines/s)
+  (bc: 4.55 ms, x64: 119.95 us, obj: 469.30 us)
+ linker: 53.13 ms
+ total: 58.37 ms (8.72 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.94 ms (103.05 K lines/s)
+  (bc: 4.39 ms, x64: 104.16 us, obj: 366.78 us)
+ linker: 54.64 ms
+ total: 59.58 ms (8.54 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 4.92 ms (103.39 K lines/s)
+  (bc: 4.32 ms, x64: 115.48 us, obj: 387.53 us)
+ linker: 53.59 ms
+ total: 58.52 ms (8.70 K lines/s)
+
+Error level: 1
+Compiled 509 lines (318 blanks, 23.39 KB in source files)
+ compiler: 5.03 ms (101.17 K lines/s)
+  (bc: 4.48 ms, x64: 106.85 us, obj: 360.02 us)
+ linker: 54.44 ms
+ total: 59.48 ms (8.56 K lines/s)
+
+Error level: 1

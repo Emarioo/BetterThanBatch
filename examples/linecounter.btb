@@ -10,6 +10,10 @@
 // blacklist directories
 // time measurements
 
+// TODO: Command line argsg
+// TODO: Have a look at the allocations. Define LOG_ALLOCATIONS in NativeLayer (can be done through Config.h).
+//   I am seeing Reallocate 10 -> 10 which is really dumb. There is a bug somewhere.
+
 // args = CmdLineArgs();
 // log("arglen:",args.len);
 // for *args {
@@ -43,8 +47,6 @@ options.blacklistedDirectories.add(String{}).append(".vs");
 // options.whitelistedFormats.add(String{}).append("/out");
 options.whitelistedFormats.add(String{}).append(".cpp");
 options.whitelistedFormats.add(String{}).append(".h");
-
-options.blacklistedDirectories.add(String{}).append("T");
 
 // if args specify formats then don't add default ones.
 
@@ -112,6 +114,8 @@ fn CalculateFiles(options: Options*) {
         }
         if !whitelisted  continue;
 
+        // Optimize by using a bucket array of linear allocators for the file names.
+        // Currently, each file name is allocated separately which isn't ideal.
         files.add(String{}).append(result.name);
     }
 
@@ -150,7 +154,7 @@ fn CalculateFiles(options: Options*) {
 
     time = StopMeasure(tp);
 
-    log("Lines:",masterInfo.data.lines, "(blank lines:",masterInfo.data.blankLines,")");
+    log("Lines:",(masterInfo.data.lines-masterInfo.data.blankLines), "(including blanks:",masterInfo.data.lines,")");
     log("Bytes:",masterInfo.data.readCharacters);
     log("Time:",time*1000,"ms");
 }
@@ -207,6 +211,12 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
     info: ThreadInfo* = _info;
     Assert(info.masterInfo)
     
+    bufferSize = 0;
+    buffer: char* = null;
+    defer Free(buffer, bufferSize);
+
+    #define DEFAULT_BUFFER_SIZE 0x100000
+
     while true {
         info.path = info.masterInfo.nextFile();
         if !info.path.ptr // no more files
@@ -217,16 +227,26 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
         defer FileClose(file);
 
         if !file
-            continue;
+            continue;   
         if fileSize == 0 {
             info.data.lines += 1;
             continue;
         }
 
-        // TODO: Reuse buffer instead of allocating and freeing per file
-        bufferSize = fileSize;
-        buffer: char* = Allocate(bufferSize);
-        defer Free(buffer, bufferSize);
+        if bufferSize < fileSize {
+            if buffer {
+                // bufferSize = DEFAULT_BUFFER_SIZE;
+                if bufferSize*2 < fileSize {
+                    buffer = Reallocate(buffer, bufferSize, fileSize);
+                } else {
+                    buffer = Reallocate(buffer, bufferSize, bufferSize*2);
+                    bufferSize = bufferSize * 2;
+                }
+            } else {
+                bufferSize = DEFAULT_BUFFER_SIZE;
+                buffer = Allocate(DEFAULT_BUFFER_SIZE);
+            }
+        }
 
         readBytes = FileRead(file, buffer, fileSize);
 

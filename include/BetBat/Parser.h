@@ -13,8 +13,8 @@ struct ParseInfo {
 
     int errors = 0;
 
-    std::vector<ContentOrder> nextContentOrder;
-    ContentOrder getNextOrder() { Assert(nextContentOrder.size()>0); return nextContentOrder.back(); }
+    QuickArray<ContentOrder> nextContentOrder;
+    ContentOrder getNextOrder() { Assert(nextContentOrder.size()>0); return nextContentOrder.last(); }
 
     ScopeId currentScopeId=0;
     std::string currentNamespace = "";

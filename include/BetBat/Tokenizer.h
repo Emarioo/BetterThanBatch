@@ -9,6 +9,7 @@
 #include "BetBat/Util/Utility.h"
 #include "BetBat/Util/Array.h"
 #include "BetBat/Util/Perf.h"
+#include "BetBat/Util/Tracker.h"
 
 #define TOKEN_SUFFIX_LINE_FEED 0x1
 // SPACE suffic is remove if LINE_FEED is present in mask/flag 
@@ -16,6 +17,16 @@
 #define TOKEN_DOUBLE_QUOTED 0x4
 #define TOKEN_SINGLE_QUOTED 0x8
 #define TOKEN_MASK_QUOTED 0x0C
+#define TOKEN_ALPHANUM 0x10
+#define TOKEN_NUMERIC 0x20
+
+struct TextBuffer {
+    std::string origin;
+    char* buffer = nullptr;
+    int size = 0;
+    int startLine = 1;
+    int startColumn = 1;
+};
 
 struct TokenRange;
 struct TokenStream;
@@ -32,6 +43,17 @@ struct Token {
     i16 column=0;
     int tokenIndex=0;
     TokenStream* tokenStream = nullptr; // don't keep this here
+
+    // u8 type = 0;
+    // u8 flags = 0;
+    // u16 line = 0;
+    // u16 column = 0;
+    // u16 tokenStream = 0;
+    // u32 tokenIndex = 0;
+
+    // u32 extraData = 0; // points to extra data
+    // str, length
+    // integer, float
 
     int calcLength() const;
 
@@ -106,7 +128,8 @@ struct TokenStream {
     // nullptr is never returned, data can always be processed into tokens.
     // There may be errors in the stream though.
     // Allocations in optionalBase will be used if not null
-    static TokenStream* Tokenize(const char* text, u64 length, TokenStream* optionalBase=0);
+    // static TokenStream* Tokenize(const char* text, u64 length, TokenStream* optionalBase=0);
+    static TokenStream* Tokenize(TextBuffer* textBuffer, TokenStream* optionalBase=0);
     void cleanup(bool leaveAllocations=false);
     
     //-- extra info like @disable/enable and @version
@@ -136,11 +159,14 @@ struct TokenStream {
 
     //-- For parsing
 
-    Token& now();
-    Token& next(); // move forward
-    int at();
-    bool end();
-    void finish();
+    // for these to work you would need an index that they are based on.
+    // this index cannot exist in this struct (readHead for example) because
+    // multiple threads wouldn't be able to use  these functions.
+    // Token& now();
+    // Token& next(); // move forward
+    // int at();
+    // bool end();
+    // void finish();
 
     // TokenRange getLine(int index);
     
@@ -173,8 +199,8 @@ struct TokenStream {
         std::string name;
         std::string as="";
     };
-    std::vector<Import> importList;
-    int lines=0; // total number of lines excluding whitespace and comments.
+    DynamicArray<Import> importList;
+    int lines=0; // processed lines excluding whitespace and comments.
     int blankLines=0; // lines with only whitespace or comments.
     int commentCount=0; // multiline slash counts as one comment
     int readBytes=0;
@@ -187,7 +213,7 @@ struct TokenStream {
     engone::Memory<Token> tokens{}; // the tokens themselves
     engone::Memory<char> tokenData{}; // the data the tokens refer to
     
-    int readHead=0;
+    // int readHead=0; // doesn't work when using multiple threads
 };
 double ConvertDecimal(const Token& token);
 bool IsInteger(const Token& token);

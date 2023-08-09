@@ -10,8 +10,8 @@ struct TokenRef{
     operator int() { return index; };
 };
 // Tokens in argument
-typedef std::vector<TokenRef> TokenList;
-typedef std::vector<TokenList> Arguments;
+typedef QuickArray<TokenRef> TokenList;
+typedef DynamicArray<TokenList> Arguments;
 struct TokenSpan {
     int start=0;
     int end=0;
@@ -19,6 +19,13 @@ struct TokenSpan {
 };
 engone::Logger& operator<<(engone::Logger& logger, const TokenSpan& span);
 struct CertainMacro {
+    ~CertainMacro(){
+        cleanup();
+    }
+    void cleanup() {
+        sortedParameters.cleanup();
+        parameters.cleanup();
+    }
     Token name{};
     TokenSpan contentRange{};
     int start=-1;
@@ -46,10 +53,11 @@ struct CertainMacro {
 };
 struct RootMacro {
     Token name;
-    std::unordered_map<int, CertainMacro> certainMacros;
-    bool hasInfinite=false;
-    CertainMacro infDefined{};
-    CertainMacro* matchArgCount(int count, bool includeInf = true);
+    // TODO: Allocator for macros
+    std::unordered_map<int, CertainMacro*> certainMacros;
+    bool hasVariadic=false;
+    CertainMacro variadicMacro{};
+    // CertainMacro* matchArgCount(int count, bool includeInf = true);
 };
 struct EvalInfo {
     // step 1
@@ -62,14 +70,34 @@ struct EvalInfo {
 
     int finalFlags=0;
 
-    std::vector<CertainMacro*> superMacros{};
-    std::vector<Arguments*> superArgs{};
+    QuickArray<CertainMacro*> superMacros{};
+    QuickArray<Arguments*> superArgs{};
 
     bool matchSuperArg(const Token& name, CertainMacro*& superMacro, Arguments*& superArgs, int& argIndex);
 
     CertainMacro* macro=0;
 
     TokenList output{};
+};
+struct Env {
+    TokenSpan range{};
+    int callIndex=0;
+    int ownsCall=-1; // env will pop the call when popped
+
+    bool firstTime=true;
+    bool unwrapOutput=false;
+    int outputToCall=-1; // index of call
+    // int calculationArgIndex=-1; // used with unwrap
+
+    int finalFlags = 0;
+};
+struct MacroCall {
+    RootMacro* rootMacro = nullptr;
+    CertainMacro* certainMacro = nullptr;
+    DynamicArray<TokenSpan> argumentRanges{}; // input to current range
+    bool unwrapped=false;
+    bool useDetailedArgs=false;
+    DynamicArray<DynamicArray<const Token*>> detailedArguments{};
 };
 struct CompileInfo;
 struct PreprocInfo {
@@ -78,11 +106,12 @@ struct PreprocInfo {
     TokenStream* inTokens = 0;
     TokenStream* outTokens = 0;
     TokenStream* tempStream = 0; // Used when parsing final contents of a macro.
-    bool usingTempStream = false;
+    bool usingTempStream = false; // used to find recursion bugs
 
     CompileInfo* compileInfo = 0; // for caching includes
 
-    int errors = 0;
+    u32 errors = 0;
+    u32 warnings = 0;
 
     // int ifdefDepth=0;
     // token range
@@ -92,20 +121,19 @@ struct PreprocInfo {
     
     int macroRecursionDepth=0;
 
-    // std::vector<CertainMacro*> superMacros{};
-    // std::vector<Arguments*> superArgs{};
+    // DynamicArray<CertainMacro*> superMacros{};
+    // DynamicArray<Arguments*> superArgs{};
     // bool matchSuperArg(Token& name, CertainMacro*& superMacro, Arguments*& superArgs, int& argIndex);
 
-    // std::vector<std::string> defineStack;
+    // DynamicArray<std::string> defineStack;
     
     // ptr may be invalidated if you add defines to the unordered map.
-    RootMacro* createRootMacro(const Token& name);
-    void removeRootMacro(const Token& name);
-    RootMacro* matchMacro(const Token& token);
+    // RootMacro* createRootMacro(const Token& name);
+    // RootMacro* matchMacro(const Token& token);
     
     void addToken(Token inToken);
     
-    // int index=0; // using readHead from inTokens instead
+    int index=0; // using readHead from inTokens instead
     int at();
     bool end();
     Token& now();
@@ -113,6 +141,17 @@ struct PreprocInfo {
     int length();
     Token& get(int index);
     // void nextline();
+
+    // Used when parsing macros
+    bool macroArraysInUse = false;
+    DynamicArray<const Token*> outputTokens{};
+    DynamicArray<i16> outputTokensFlags{};
+    // outputTokens._reserve(15000);
+    DynamicArray<MacroCall> calls{};
+    // calls._reserve(30);
+    DynamicArray<Env> environments{};
+    // environments._reserve(50);
+    DynamicArray<bool> unwrappedArgs{};
 };
 TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* tokens);
 void PreprocessImports(CompileInfo* compileInfo, TokenStream* tokens);

@@ -205,7 +205,8 @@ namespace COFF_Format {
 struct ObjectFile {
     ObjectFile() = default;
     ~ObjectFile() {
-        engone::Free(_rawFileData,fileSize);
+        TRACK_ARRAY_FREE(_rawFileData, u8, fileSize);
+        // engone::Free(_rawFileData,fileSize);
         _rawFileData=nullptr;
         fileSize=0;
     }

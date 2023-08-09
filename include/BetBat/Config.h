@@ -28,16 +28,22 @@
 
 // #define DEBUG
 
+// should enable optimized options and disable slow ones.
+#define RELEASE
+
 // With this flag, some shortcuts and other improvements are made
 // when compiling. Push and pop after each other is redundant for example.
 // The consequence is that the logged instructions won't resemble the final
 // output.
 #define OPTIMIZED
-#define LOG_MEASURES
+// #define LOG_MEASURES
 // Silent is not used at the moment.
+#ifndef RELEASE
+// #define ENABLE_TRACKER
+// #define LOG_TRACKER
+#endif
 // Will it ever be?
 // #define SILENT
-
 // Causes for memory leaks (or negative final memory):
 // - new keyword instead of engone::Allocate
 
@@ -73,6 +79,14 @@
 // Disabling this will most certainly produce flawed instructions
 // but it will be easier to read the instructions when debugging
 // #define DISABLE_FAULTY_X64
+// Disables the non essential asserts
+// not the ones that bound check in arrays
+// or perhaps you do both?
+#ifdef RELEASE
+#define DISABLE_ASSERTS
+#endif
+
+#include "BetBat/Asserts.h"
 
 // Debug config
 #ifdef DEBUG
@@ -95,11 +109,11 @@
 // #define PLOG
 // type checker
 // #define TC_LOG
-#define GLOG
+// #define GLOG
 // #define ILOG
 // #define ILOG_REGS
 // x64 converter
-#define CLOG
+// #define CLOG
 
 // #define OLOG
 // #define USE_DEBUG_INFO
@@ -108,6 +122,7 @@
 /*
    Don't touch these
 */
+
 #ifdef PLOG
 #define USE_DEBUG_INFO
 #endif
@@ -134,24 +149,24 @@ bool GetLog(int type);
 
 #ifdef TLOG
 #define _TLOG(x) x
-#elif defined(DEBUG)
-#define _TLOG(x) if(GetLog(LOG_TOKENIZER)){x}
+// #elif defined(DEBUG)
+// #define _TLOG(x) if(GetLog(LOG_TOKENIZER)){x}
 #else
 #define _TLOG(x)
 #endif
 
 #ifdef MLOG
 #define _MLOG(x) x
-#elif defined(DEBUG)
-#define _MLOG(x) if(GetLog(LOG_PREPROCESSOR)){x}
+// #elif defined(DEBUG)
+// #define _MLOG(x) if(GetLog(LOG_PREPROCESSOR)){x}
 #else
 #define _MLOG(x)
 #endif
 
 #ifdef PLOG
 #define _PLOG(x) x
-#elif defined(DEBUG)
-#define _PLOG(x) if(GetLog(LOG_PARSER)){x}
+// #elif defined(DEBUG)
+// #define _PLOG(x) if(GetLog(LOG_PARSER)){x}
 #else
 #define _PLOG(x)
 #endif
@@ -166,16 +181,16 @@ bool GetLog(int type);
 
 #ifdef GLOG
 #define _GLOG(x) x
-#elif defined(DEBUG)
-#define _GLOG(x) if(GetLog(LOG_INTERPRETER)){x;}
+// #elif defined(DEBUG)
+// #define _GLOG(x) if(GetLog(LOG_INTERPRETER)){x;}
 #else
 #define _GLOG(x)
 #endif
 
 #ifdef OLOG
 #define _OLOG(x) x
-#elif defined(DEBUG)
-#define _OLOG(x) if(GetLog(LOG_OPTIMIZER)){x;}
+// #elif defined(DEBUG)
+// #define _OLOG(x) if(GetLog(LOG_OPTIMIZER)){x;}
 #else
 #define _OLOG(x)
 #endif
@@ -190,16 +205,16 @@ bool GetLog(int type);
 
 #ifdef ILOG
 #define _ILOG(x) x
-#elif defined(DEBUG)
-#define _ILOG(x) if(GetLog(LOG_INTERPRETER)){x;}
+// #elif defined(DEBUG)
+// #define _ILOG(x) if(GetLog(LOG_INTERPRETER)){x;}
 #else
 #define _ILOG(x)
 #endif
 
 #ifdef VLOG
 #define _VLOG(x) x
-#elif defined(DEBUG)
-#define _VLOG(x) if(GetLog(LOG_ANY)) {x}
+// #elif defined(DEBUG)
+// #define _VLOG(x) if(GetLog(LOG_ANY)) {x}
 #else
 #define _VLOG(x)
 #endif

@@ -4,12 +4,13 @@
 #include "Engone/Logger.h"
 #include "Engone/PlatformLayer.h"
 
-// #include "BetBat/Config.h"
+#include "BetBat/Config.h"
 
 #include <functional>
 #include <string.h>
 #include <unordered_map>
 #include <math.h>
+#include <intrin.h>
 
 // File not found or innaccesible: Returns memory with NO data.
 // File with zero in size: Returns memory with valid pointer (memory.data = (void*)1) but zero in size.
@@ -64,11 +65,11 @@ struct ScopeDebug {
 
 #define BROKEN engone::log::out << engone::log::RED<< __FUNCTION__<<":"<<__LINE__<<" is broken\n"
 
-#define COMBINE1(X,Y) X##Y
-#define COMBINE(X,Y) COMBINE1(X,Y)
+// #define COMBINE1(X,Y) X##Y
+// #define COMBINE(X,Y) COMBINE1(X,Y)
 
-#define WHILE_TRUE u64 COMBINE(limit,__LINE__)=1000; while(Assert(COMBINE(limit,__LINE__)--))
-#define WHILE_TRUE_N(LIMIT) u64 COMBINE(limit,__LINE__)=LIMIT; while(Assert(COMBINE(limit,__LINE__)--))
+// // #define WHILE_TRUE u64 COMBINE(limit,__LINE__)=1000; while(Assert(COMBINE(limit,__LINE__)--))
+// // #define WHILE_TRUE_N(LIMIT) u64 COMBINE(limit,__LINE__)=LIMIT; while(Assert(COMBINE(limit,__LINE__)--))
 
 // #define WHILE_TRUE while(true)
 // #define WHILE_TRUE_N(LIMIT) while(true)

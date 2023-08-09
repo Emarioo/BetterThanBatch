@@ -3,7 +3,8 @@
 #include "Engone/Typedefs.h"
 
 // linear allocation for nows
-struct BucketMemory {
+template<typename T>
+struct BucketArray {
     const u64 BUCKET_SIZE;
     struct Bucket {
         void* data;

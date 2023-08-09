@@ -148,8 +148,8 @@ engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange){
     return logger;
 }
 void TokenStream::addImport(const std::string& name, const std::string& as){
-    importList.push_back({name,as});
-    auto& p = importList.back().name;
+    importList.add({name,as});
+    auto& p = importList.last().name;
     ReplaceChar((char*)p.data(),p.length(),'\\','/');
 }
 
@@ -408,24 +408,24 @@ TokenRange Token::range() const {
     // return (TokenRange)*this;
 }
 static Token END_TOKEN{"$END$"};
-Token& TokenStream::next(){
-    if(readHead == length())
-        return END_TOKEN;
-    return get(readHead++);
-}
-Token& TokenStream::now(){
-    return get(readHead-1);
-}
-bool TokenStream::end(){
-    Assert(readHead<=length());
-    return readHead==length();
-}
-void TokenStream::finish(){
-    readHead = length();
-}
-int TokenStream::at(){
-    return readHead-1;
-}
+// Token& TokenStream::next(){
+//     if(readHead == length())
+//         return END_TOKEN;
+//     return get(readHead++);
+// }
+// Token& TokenStream::now(){
+//     return get(readHead-1);
+// }
+// bool TokenStream::end(){
+//     Assert(readHead<=length());
+//     return readHead==length();
+// }
+// void TokenStream::finish(){
+//     readHead = length();
+// }
+// int TokenStream::at(){
+//     return readHead-1;
+// }
 bool TokenStream::copyInfo(TokenStream& out){
     out.streamName = streamName;
     out.importList = std::move(importList);
@@ -724,14 +724,28 @@ void TokenStream::printData(int charsPerLine){
         log::out << "\n";
 }
 TokenStream* TokenStream::Tokenize(const std::string& filePath){
-    engone::Memory<char> memory = ReadFile(filePath.c_str());
-    if(!memory.data)
+    u64 fileSize = 0;
+    auto file = engone::FileOpen(filePath, &fileSize, engone::FILE_ONLY_READ);
+    if(!file)
         return nullptr;
-    auto stream = Tokenize((char*)memory.data,memory.max);
-    stream->streamName = filePath;
-    if(memory.max != 0) {
-        memory.resize(0);
-    }
+    TextBuffer textBuffer{};
+    // textBuffer.buffer = (char*)engone::Allocate(fileSize);
+    // TODO: Reuse buffers, request them from compileInfo?
+    textBuffer.buffer = TRACK_ARRAY_ALLOC(char, fileSize);
+    textBuffer.size = fileSize;
+    bool yes = engone::FileRead(file, textBuffer.buffer, textBuffer.size);
+    Assert(yes);
+        
+    engone::FileClose(file);
+    
+    textBuffer.origin = filePath;
+    textBuffer.startColumn = 1;
+    textBuffer.startLine = 1;
+    
+    auto stream = Tokenize(&textBuffer);
+
+    TRACK_ARRAY_FREE(textBuffer.buffer, char, textBuffer.size);
+    // engone::Free(textBuffer.buffer, textBuffer.size);
     return stream;
 }
 TokenStream* TokenStream::Create(){
@@ -743,16 +757,18 @@ TokenStream* TokenStream::Create(){
     }
     #endif
 
-    TokenStream* ptr = (TokenStream*)engone::Allocate(sizeof(TokenStream));
+    // TokenStream* ptr = (TokenStream*)engone::Allocate(sizeof(TokenStream));
+    TokenStream* ptr = TRACK_ALLOC(TokenStream);
     new(ptr)TokenStream();
     return ptr;
 }
 void TokenStream::Destroy(TokenStream* stream){
     // stream->cleanup();
     stream->~TokenStream();
-    engone::Free(stream,sizeof(TokenStream));
+    // engone::Free(stream,sizeof(TokenStream));
+    TRACK_FREE(stream,TokenStream);
 }
-TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* optionalIn){
+TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optionalIn){
     using namespace engone;
     MEASURE
     // _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
@@ -769,8 +785,11 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
     } else {
         outStream = TokenStream::Create();
     }
+    u32 length = textBuffer->size;
+    char* text = textBuffer->buffer;
+    outStream->streamName = textBuffer->origin;
     // outStream->readBytes = length;
-    outStream->readBytes += length;
+    outStream->readBytes += textBuffer->size;
     outStream->lines = 0;
     outStream->enabled=-1; // enable all layers by default
     // TODO: do not assume token data will be same or less than textData. It's just asking for a bug
@@ -791,8 +810,8 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
     
     const char* specials = "+-*/%=<>!&|~" "$@#{}()[]" ":;.,";
     int specialLength = strlen(specials);
-    int line=1;
-    int column=1;
+    int line=textBuffer->startLine;
+    int column=textBuffer->startColumn;
     
     Token token = {};
     // token.str = text;
@@ -804,6 +823,7 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
     bool inComment = false;
     bool inEnclosedComment = false;
     bool isNumber = false;
+    bool isAlpha = false; // alpha and then alphanumeric
 
     // int commentNestDepth = 0; // C doesn't have this and it's not very good. /*/**/*/
     
@@ -1079,12 +1099,15 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
                 token.str = (char*)outStream->tokenData.used;
                 token.line = ln;
                 token.column = col;
+                token.flags = 0;
                 
                 if(chr>='0'&&chr<='9') {
                     canBeDot=true;
                     isNumber=true;
-                } else
-                    canBeDot=false;
+                } else {
+                    canBeDot = false;
+                    isAlpha = true;
+                }
             }
             if(!(chr>='0'&&chr<='9') && chr!='.') // TODO: how does it work with hexidecimals?
                 canBeDot=false;
@@ -1101,7 +1124,10 @@ TokenStream* TokenStream::Tokenize(const char* text, u64 length, TokenStream* op
                 token.flags |= TOKEN_SUFFIX_LINE_FEED;
             else if(chr==' ')
                 token.flags |= TOKEN_SUFFIX_SPACE;
-                
+            if(isAlpha)
+                token.flags |= TOKEN_ALPHANUM;
+            if(isNumber)
+                token.flags |= TOKEN_NUMERIC;
             // _TLOG(log::out << " : Add " << token << "\n";)
             
             canBeDot=false;
@@ -1310,17 +1336,20 @@ void PerfTestTokenize(const engone::Memory<char>& textData, int times){
     using namespace engone;
     log::out << "Data "<<textData.used<<" "<<textData.max<<"\n";
     // log::out <<log::RED<< __FUNCTION__ <<" is broken\n";
-    TokenStream* baseStream = TokenStream::Tokenize((char*)textData.data,textData.max); // initial tokenize to get sufficient allocations
+    TextBuffer textBuffer{};
+    textBuffer.buffer = (char*)textData.data;
+    textBuffer.size = textData.max;
+    TokenStream* baseStream = TokenStream::Tokenize(&textBuffer); // initial tokenize to get sufficient allocations
     // TokenStream* baseStream = nullptr;
     // log::out << "start\n";
     auto rounds = new Round[times];
-    auto startT = engone::MeasureTime();
+    auto startT = engone::StartMeasure();
     for(int i=0;i<times;i++){
         // log::out << "running "<<i<<"\n";
         // heap allocation is included.
-        auto mini = engone::MeasureTime();
+        auto mini = engone::StartMeasure();
         // base = Tokenize(textData);
-        baseStream = TokenStream::Tokenize((char*)textData.data, textData.max,baseStream);
+        baseStream = TokenStream::Tokenize(&textBuffer, baseStream);
         rounds[i].lines = baseStream->lines;
         rounds[i].tokens = baseStream->tokens.used;
         // rounds[i].lines = baseStream->lines + baseStream->blankLines;

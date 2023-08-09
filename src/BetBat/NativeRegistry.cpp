@@ -8,16 +8,32 @@
 
 int NativeRegistry::initializations = 0;
 
-NativeRegistry* NativeRegistry::Create(){
-    // Assert(false);
-    auto ptr = (NativeRegistry*)engone::Allocate(sizeof(NativeRegistry));
-    new(ptr)NativeRegistry();
-    return ptr;
+// NativeRegistry* s_globalRegistry = nullptr;
+NativeRegistry s_globalRegistry{};
+NativeRegistry* NativeRegistry::GetGlobal(){
+    if(!s_globalRegistry.initialized) {
+        // s_globalRegistry = Create();
+        // s_globalRegistry->initNativeContent();
+        s_globalRegistry.initNativeContent();
+    }
+    // return s_globalRegistry;
+    return &s_globalRegistry;
 }
-void NativeRegistry::Destroy(NativeRegistry* ptr){
-    ptr->~NativeRegistry();
-    engone::Free(ptr, sizeof(NativeRegistry));
+void NativeRegistry::DestroyGlobal(){
+    s_globalRegistry.nativeFunctions._reserve(0);
+    // if(s_globalRegistry)
+        // NativeRegistry::Destroy(s_globalRegistry);
 }
+// NativeRegistry* NativeRegistry::Create(){
+//     // Assert(false);
+//     auto ptr = (NativeRegistry*)engone::Allocate(sizeof(NativeRegistry));
+//     new(ptr)NativeRegistry();
+//     return ptr;
+// }
+// void NativeRegistry::Destroy(NativeRegistry* ptr){
+//     ptr->~NativeRegistry();
+//     engone::Free(ptr, sizeof(NativeRegistry));
+// }
 
 NativeRegistry::NativeFunction* NativeRegistry::findFunction(const Token& name){
     Assert(initialized);

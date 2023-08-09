@@ -10,7 +10,7 @@ struct Interpreter {
     }
     engone::Memory<char> cmdArgsBuffer{};
     Language::Slice<Language::Slice<char>> cmdArgs{};
-    void setCmdArgs(const std::vector<std::string>& inCmdArgs);
+    void setCmdArgs(const DynamicArray<std::string>& inCmdArgs);
     
     u64 rax;
     u64 rbx;

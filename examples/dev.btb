@@ -12,3 +12,20 @@
 // #import "operator"
 // #import "threads"
 #import "linecounter"
+
+// #import "OS"
+// #import "Logger"
+// #import "Basic"
+// #import "String"
+
+// str: String;
+// str.append("src");
+// str.append("src");
+// str.append("src89889");
+
+
+// #define A "coo"
+
+// a: A;
+// log("ea")
+// prints(A)

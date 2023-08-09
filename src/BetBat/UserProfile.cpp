@@ -2,6 +2,8 @@
 
 #include "Engone/PlatformLayer.h"
 
+#include "BetBat/Util/Tracker.h"
+
 // #define _UP_LOG(X) X
 #define _UP_LOG(X) ;
 
@@ -204,11 +206,13 @@ bool UserProfile::deserialize(const std::string& path){
         return true;
     }
 
-    char* buffer = (char*)Allocate(fileSize);
+    char* buffer = TRACK_ARRAY_ALLOC(char, fileSize);
+    // char* buffer = (char*)Allocate(fileSize);
     bool yes = FileRead(file,buffer,fileSize);
     if(!yes) {
         FileClose(file);
-        Free(buffer, fileSize);
+        // Free(buffer, fileSize);
+        TRACK_ARRAY_FREE(buffer, char, fileSize);
         return false;
     };
     
@@ -398,7 +402,8 @@ bool UserProfile::deserialize(const std::string& path){
         }
     }
 
-    Free(buffer, fileSize);
+    TRACK_ARRAY_FREE(buffer, char, fileSize);
+    // Free(buffer, fileSize);
     _UP_LOG(
     print(true);
     )
@@ -425,11 +430,13 @@ void UserProfile::print(bool printComments){
     }
 }
 UserProfile* UserProfile::CreateDefault(){
-    UserProfile* ptr = (UserProfile*)engone::Allocate(sizeof(UserProfile));
+    // UserProfile* ptr = (UserProfile*)engone::Allocate(sizeof(UserProfile));
+    UserProfile* ptr = TRACK_ALLOC(UserProfile);
     new(ptr)UserProfile();
     return ptr;
 }
 void UserProfile::Destroy(UserProfile* ptr){
     ptr->~UserProfile();
-    engone::Free(ptr,sizeof(UserProfile));
+    TRACK_FREE(ptr, UserProfile);
+    // engone::Free(ptr,sizeof(UserProfile));
 }

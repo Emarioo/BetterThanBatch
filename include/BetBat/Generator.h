@@ -12,12 +12,13 @@ struct GenInfo {
     int warnings=0;
 
     bool hasErrors();
+    bool hasForeignErrors();
     
     struct AlignInfo {
         int diff=0;
         int size=0;
     };
-    std::vector<AlignInfo> stackAlignment;
+    DynamicArray<AlignInfo> stackAlignment;
     int virtualStackPointer=0;
     void addPop(int reg);
     void addPush(int reg);
@@ -32,7 +33,7 @@ struct GenInfo {
 
     void popInstructions(u32 count);
 
-    DynamicArray<ASTNode*> nodeStack; // kind of like a stack trace
+    QuickArray<ASTNode*> nodeStack; // kind of like a stack trace
     // ASTNode* prevNode=nullptr;
     TokenStream* lastStream=nullptr;
     u32 lastLine = 0;
@@ -55,12 +56,12 @@ struct GenInfo {
         // Index of instruction where looping starts.h
         int continueAddress = 0;
         int stackMoment=0;
-        std::vector<int> resolveBreaks;
+        QuickArray<int> resolveBreaks;
         Identifier counter = {}; // may not be used right now but the size of
         // loop scope collides with std::string when tracking allocations.
         int _ = 0; // offset memory for tracking again
     };
-    std::vector<LoopScope*> loopScopes;
+    QuickArray<LoopScope*> loopScopes;
     
     LoopScope* pushLoop();
     LoopScope* getLoop(int index);
@@ -74,7 +75,7 @@ struct GenInfo {
     void addCallToResolve(int bcIndex, FuncImpl* funcImpl);
 
     // TODO: avoid vector and unordered_map. resizing vector may do unwanted things with the map (like whole a copy).
-    // std::vector<FunctionScope*> functionScopes;
+    // DynamicArray<FunctionScope*> functionScopes;
     // int currentFunctionScope=0;
     // FunctionScope* getFunctionScope(int index=-1);
     int currentFrameOffset = 0;

@@ -226,7 +226,7 @@ struct Bytecode {
 
     DynamicArray<std::string> linkDirectives;
 
-    NativeRegistry* nativeRegistry = nullptr;
+    // NativeRegistry* nativeRegistry = nullptr;
 
     struct ExternalRelocation {
         std::string name;

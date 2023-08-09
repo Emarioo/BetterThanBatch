@@ -75,6 +75,8 @@ std::string Path::getFormat() const {
 }
 Path Path::getFileName(bool withoutFormat) const {
     std::string name = TrimDir(text);
+    if(!withoutFormat)
+        return name;
     int index = name.find(".");
     if(index == std::string::npos || index + 1 == text.length()) {
         return name;
@@ -123,200 +125,469 @@ TargetPlatform ToTarget(const std::string& str){
     return UNKNOWN_TARGET;
     #undef CASE
 }
+bool CompileInfo::removeRootMacro(const Token& name) {
+    macroLock.lock();
+    auto pair = _rootMacros.find(name);
+    bool removed = false;
+    if(pair!=_rootMacros.end()){
+        for(auto& pair : pair->second->certainMacros) {
+            pair.second->~CertainMacro();
+            TRACK_FREE(pair.second, CertainMacro);
+            // engone::Free(pair.second, sizeof(CertainMacro));
+        }
+        pair->second->~RootMacro();
+        TRACK_FREE(pair->second, RootMacro);
+        _rootMacros.erase(pair);
+        removed = true;
+    }
+    macroLock.unlock();
+    return removed;
+}
+void CompileInfo::addStats(i32 errors, i32 warnings){
+    otherLock.lock();
+    compileOptions->compileStats.errors += errors;
+    compileOptions->compileStats.warnings += warnings;
+    otherLock.unlock();
+}
 void CompileInfo::addLinkDirective(const std::string& name){
+    otherLock.lock();
     for(int i=0;i<linkDirectives.size();i++){
-        if(name == linkDirectives[i])
+        if(name == linkDirectives[i]) {
+            otherLock.unlock();
             return;
+        }
     }
     linkDirectives.add(name);
+    otherLock.unlock();
 }
 void CompileInfo::cleanup(){
-    for(auto& pair : tokenStreams){
-        TokenStream::Destroy(pair.second.stream);
-    }
+    // for(auto& pair : tokenStreams){
+    //     TokenStream::Destroy(pair.second->initialStream);
+    //     TokenStream::Destroy(pair.second->finalStream);
+    // }
     tokenStreams.clear();
+    for(auto& it : streams){
+        if(it->initialStream)
+            TokenStream::Destroy(it->initialStream);
+        if(it->finalStream)
+            TokenStream::Destroy(it->finalStream);
+        // engone::Free(it,sizeof(Stream));
+        TRACK_FREE(it, Stream);
+    }
+    streams.cleanup();
     for(auto& pair : includeStreams){
         TokenStream::Destroy(pair.second);
     }
     includeStreams.clear();
-    for(auto& stream : streamsToClean){
-        TokenStream::Destroy(stream);
+    for(auto& pair : _rootMacros) {
+        for(auto& pair : pair.second->certainMacros) {
+            pair.second->~CertainMacro();
+            TRACK_FREE(pair.second, CertainMacro);
+            // engone::Free(pair.second, sizeof(CertainMacro));
+        }
+        pair.second->~RootMacro();
+        // engone::log::out << "no\n";
+        TRACK_FREE(pair.second, RootMacro);
+        // engone::Free(pair.second, sizeof(RootMacro));
     }
-    streamsToClean.resize(0);
-    if(nativeRegistry){
-        NativeRegistry::Destroy(nativeRegistry);
-        nativeRegistry = nullptr;
-    }
+    // for(auto& stream : streamsToClean){
+    //     TokenStream::Destroy(stream);
+    // }
+    // streamsToClean.resize(0);
 }
-bool CompileInfo::addStream(TokenStream* stream){
-    auto pair = tokenStreams.find(stream->streamName);
-    // stream should never be added again.
-    Assert(pair==tokenStreams.end());
-    if(pair!=tokenStreams.end()) return false;
-    auto ptr = &(tokenStreams[stream->streamName] = {});
-    ptr->stream = stream;
-    lines += stream->lines;
-    blankLines += stream->blankLines;
-    commentCount += stream->commentCount;
-    readBytes += stream->readBytes;
-    return true;
-}
-CompileInfo::FileInfo* CompileInfo::getStream(const Path& name){
-    auto pair = tokenStreams.find(name.text);
-    if(pair == tokenStreams.end())
-        return nullptr;
-    return &pair->second;
-}
-// does not handle backslash
-bool ParseFile(CompileInfo& info, const Path& path, std::string as = "", const char* textData = nullptr, u64 textLength = 0){
-    using namespace engone;
 
-    if(!textData){ // path can be anything if textData is present.
-        Assert(path.isAbsolute()); // A bug at the call site if not absolute
+CompileInfo::Stream* CompileInfo::addStream(const Path& path){
+    streamLock.lock();
+    auto pair = tokenStreams.find(path.text);
+    if(pair!=tokenStreams.end() && pair->second) {
+        streamLock.unlock();
+        return nullptr;
     }
-    _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefPath(path.text)<<"\n";)
-    TokenStream* tokenStream = nullptr;
-    if(textData) {
-        tokenStream = TokenStream::Tokenize(textData,textLength);
-        tokenStream->streamName = path.text;
-    } else {
-        tokenStream = TokenStream::Tokenize(path.text);
+    tokenStreams[path.text] = nullptr;
+    streamLock.unlock();
+    return nullptr;
+}
+CompileInfo::Stream* CompileInfo::addStream(TokenStream* tokenStream){
+    streamLock.lock();
+    auto pair = tokenStreams.find(tokenStream->streamName);
+    if(pair!=tokenStreams.end() && pair->second) {
+        streamLock.unlock();
+        return nullptr;
     }
-    if(!tokenStream){
-        log::out << log::RED << "Failed tokenization: " << BriefPath(path.text) <<"\n";
-        info.errors++;
+    Stream* stream = tokenStreams[tokenStream->streamName] = TRACK_ALLOC(Stream);
+    // Stream* stream = tokenStreams[tokenStream->streamName] = (Stream*)engone::Allocate(sizeof(Stream));
+    new(stream)Stream();
+    stream->initialStream = tokenStream;
+    streams.add(stream);
+
+    compileOptions->compileStats.lines += tokenStream->lines;
+    compileOptions->compileStats.blankLines += tokenStream->blankLines;
+    compileOptions->compileStats.commentCount += tokenStream->commentCount;
+    compileOptions->compileStats.readBytes += tokenStream->readBytes;
+    streamLock.unlock();
+    return stream;
+}
+bool CompileInfo::hasStream(const Path& name){
+    streamLock.lock();
+    auto pair = tokenStreams.find(name.text);
+    if(pair == tokenStreams.end()) {
+        streamLock.unlock();
         return false;
     }
-    info.addStream(tokenStream);
-
-    // tokenStream->printData();
-    
-    if (tokenStream->enabled & LAYER_PREPROCESSOR) {
+    streamLock.unlock();
+    return true;
+}
+CompileInfo::Stream* CompileInfo::getStream(const Path& name){
+    streamLock.lock();
+    auto pair = tokenStreams.find(name.text);
+    Stream* ptr = nullptr;
+    if(pair != tokenStreams.end())
+        ptr = pair->second;
+    streamLock.lock();
+    return ptr;
+}
+RootMacro* CompileInfo::matchMacro(const Token& name){
+    if(name.flags&TOKEN_MASK_QUOTED)
+        return nullptr;
         
-        _VLOG(log::out <<log::BLUE<< "Preprocess (imports): "<<BriefPath(path.text)<<"\n";)
-        PreprocessImports(&info, tokenStream);
+    macroLock.lock();
+    auto pair = _rootMacros.find(name);
+    RootMacro* ptr = nullptr;
+    if(pair != _rootMacros.end()){
+        ptr = pair->second;
     }
+    _MLOG(MLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<token<<"\n";))
+    macroLock.unlock();
     
-    Path dir = path.getDirectory();
-    for(auto& item : tokenStream->importList){
-        Path importName = "";
-        int dotindex = item.name.find_last_of(".");
-        int slashindex = item.name.find_last_of("/");
-        // log::out << "dot "<<dotindex << " slash "<<slashindex<<"\n";
-        if(dotindex==-1 || dotindex<slashindex){
-            importName = item.name+".btb";
+    return ptr;
+}
+RootMacro* CompileInfo::ensureRootMacro(const Token& name, bool ensureBlank){
+    if(name.flags&TOKEN_MASK_QUOTED)
+        return nullptr;
+    macroLock.lock();
+
+    RootMacro* rootMacro = nullptr;
+    auto pair = _rootMacros.find(name);
+    if(pair != _rootMacros.end()){
+        rootMacro = pair->second;
+    } else {
+        // rootMacro = (RootMacro*)engone::Allocate(sizeof(RootMacro));
+        rootMacro = TRACK_ALLOC(RootMacro);
+        // engone::log::out << "yes\n";
+        new(rootMacro)RootMacro();
+        rootMacro->name = name;
+        _rootMacros[name] = rootMacro;
+    }
+    if(ensureBlank) {
+        // READ BEFORE CHANGING! 
+        //You usually want a base case for variadic arguments when
+        // using it recursively. Instead of having to specify the blank
+        // base macro yourself, the compiler does it for you.
+        // IMPORTANT: It should NOT happen for macro(...)
+        // because the blank macro with zero arguments would be
+        // used instead of the variadic one making it impossible to
+        // use macro(...).
+        auto pair = rootMacro->certainMacros.find(0);
+        if(pair == rootMacro->certainMacros.end()) {
+            CertainMacro* macro = TRACK_ALLOC(CertainMacro);
+            // CertainMacro* macro = (CertainMacro*) engone::Allocate(sizeof(CertainMacro));
+            new(macro)CertainMacro();
+            macro->blank = true;
+            rootMacro->certainMacros[0] = macro;
+        }
+    }
+    macroLock.unlock();
+    return rootMacro;
+}
+void CompileInfo::insertCertainMacro(RootMacro* rootMacro, CertainMacro* localMacro) {
+    macroLock.lock();
+    if(!localMacro->isVariadic()){
+        auto pair = rootMacro->certainMacros.find(localMacro->parameters.size());
+        CertainMacro* macro = nullptr;
+        if(pair!=rootMacro->certainMacros.end()){
+            // if(!certainMacro->isVariadic() && !certainMacro->isBlank()){
+            //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
+            //         ERR_LINE(certainMacro->name, "previous");
+            //         ERR_LINE2(name.tokenIndex, "replacement");
+            //     )
+            // }
+            macro = pair->second;
+            *macro = *localMacro;
+            // if(includeInf && rootMacro->hasVariadic && (int)rootMacro->variadicMacro.parameters.size()-1<=count) {
+            //     macro = &rootMacro->variadicMacro;
+            //     _MLOG(MLOG_MATCH(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< rootMacro->variadicMacro.parameters.size()<<" (inf)\n";))
+            // }
+        }else{
+            // _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< pair->second.parameters.size()<<"\n";))
+            // macro = (CertainMacro*) engone::Allocate(sizeof(CertainMacro));
+            macro = TRACK_ALLOC(CertainMacro);
+            new(macro)CertainMacro(*localMacro);
+            rootMacro->certainMacros[localMacro->parameters.size()] = macro;
+        }
+    }else{
+        // if(rootMacro->hasVariadic){
+        //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
+        //         ERR_LINE(certainMacro->name, "previous");
+        //         ERR_LINE2(name.tokenIndex, "replacement");
+        //     )
+        // }
+        rootMacro->hasVariadic = true;
+        rootMacro->variadicMacro = *localMacro;
+    }
+    macroLock.unlock();
+}
+
+bool CompileInfo::removeCertainMacro(RootMacro* rootMacro, int argumentAmount, bool variadic){
+    bool removed=false;
+    macroLock.lock();
+    if(variadic) {
+        if(rootMacro->hasVariadic) {
+            rootMacro->hasVariadic = false;
+            removed = true;
+            rootMacro->variadicMacro.cleanup();
+            rootMacro->variadicMacro = {};
+        }
+    } else {
+        auto pair = rootMacro->certainMacros.find(argumentAmount);
+        if(pair != rootMacro->certainMacros.end()){
+            removed = true;
+            pair->second->~CertainMacro();
+            TRACK_FREE(pair->second,CertainMacro);
+            rootMacro->certainMacros.erase(pair);
+        }
+    }
+    macroLock.unlock();
+    return removed;
+}
+CertainMacro* CompileInfo::matchArgCount(RootMacro* rootMacro, int count, bool includeInf){
+    macroLock.lock();
+    auto pair = rootMacro->certainMacros.find(count);
+    CertainMacro* macro = nullptr;
+    if(pair==rootMacro->certainMacros.end()){
+        if(includeInf && rootMacro->hasVariadic && (int)rootMacro->variadicMacro.parameters.size()-1<=count) {
+            macro = &rootMacro->variadicMacro;
+            _MLOG(MLOG_MATCH(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< rootMacro->variadicMacro.parameters.size()<<" (inf)\n";))
+        }
+    }else{
+        macro = pair->second;
+        _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< macro->parameters.size()<<"\n";))
+    }
+    macroLock.unlock();
+    return macro;
+}
+// Thread procedure
+u32 ProcessSource(void* ptr) {
+    using namespace engone;
+    ThreadCompileInfo* thread = (ThreadCompileInfo*)ptr;
+    // get file from a list to tokenize, wait with semaphore if list is empty.
+    CompileInfo* info = thread->info;
+    WHILE_TRUE {
+        info->sourceLock.lock();
+        info->waitingThreads++;
+        if(info->waitingThreads == CompileInfo::THREAD_COUNT && info->sourcesToProcess.size() == 0) {
+            info->sourceWaitLock.signal();
+        }
+        info->sourceLock.unlock();
+
+        info->sourceWaitLock.wait();
+
+        info->sourceLock.lock();
+        info->waitingThreads--;
+        if(info->sourcesToProcess.size() == 0) {
+            // all files processed, time to quit
+            info->sourceWaitLock.signal();
+            info->sourceLock.unlock();
+            return 0;
+        }
+        SourceToProcess source = info->sourcesToProcess.last();
+        info->sourcesToProcess.pop();
+        if(info->sourcesToProcess.size() != 0)
+            // signal that there are more sources to process for other threads
+            info->sourceWaitLock.signal();
+        // if(source.textBuffer)
+        //     log::out << "Proc source "<<source.textBuffer->origin<<"\n";
+        // else
+        //     log::out << "Proc source "<<source.path.text<<"\n";
+        info->sourceLock.unlock();
+
+        
+        _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefPath(source.path.text)<<"\n";)
+        TokenStream* tokenStream = nullptr;
+        if(source.textBuffer) {
+            tokenStream = TokenStream::Tokenize(source.textBuffer);
+            // tokenStream->streamName = path.text;
         } else {
-            importName = item.name;
+            Assert(source.path.isAbsolute()); // A bug at the call site if not absolute
+            tokenStream = TokenStream::Tokenize(source.path.text);
         }
-        // TODO: import AS
+        if(!tokenStream){
+            log::out << log::RED << "Failed tokenization: " << BriefPath(source.path.text) <<"\n";
+            info->compileOptions->compileStats.errors++;
+            return false;
+        }
+
+        // tokenStream->printData();
         
-        Path fullPath = {};
-        // TODO: Test "/src.btb", "ok./hum" and other unusual paths
+        if (tokenStream->enabled & LAYER_PREPROCESSOR) {
+            
+            _VLOG(log::out <<log::BLUE<< "Preprocess (imports): "<<BriefPath(source.path.text)<<"\n";)
+            PreprocessImports(info, tokenStream);
+        }
+
+        // Assert(("can't add stream until it's completly processed, other threads would have access to it otherwise which may cause strange behaviour",false));
+        // IMPORTANT: If you decide to multithread preprocessor then you need to 
+        // add the stream later since the preprocessor will modify it.
+        auto stream = info->addStream(tokenStream);
+        Assert(stream);
+        stream->as = source.as;
+        // Stream is nullptr if it already exists.
+        // We assert because this should never happen.
+        // If it does then we just tokenized the same file twice.
         
-        //-- Search directory of current source file
-        if(importName.text.find("./")==0) {
-            fullPath = dir.text + importName.text.substr(2);
-        } 
-        //-- Search cwd or absolute path
-        else if(FileExist(importName.text)){
-            fullPath = importName;
-            if(!fullPath.isAbsolute())
-                fullPath = fullPath.getAbsolute();
-        }
-        else if(fullPath = dir.text + importName.text, FileExist(fullPath.text)){
-            // fullpath =  dir.text + importName.text;
-        }
-        //-- Search additional import directories.
-        // TODO: DO THIS WITH #INCLUDE TOO!
-        else {
-            for(int i=0;i<(int)info.importDirectories.size();i++){
-                const Path& dir = info.importDirectories[i];
-                Assert(dir.isDir() && dir.isAbsolute());
-                Path path = dir.text + importName.text;
-                bool yes = FileExist(path.text);
-                if(yes) {
-                    fullPath = path;
-                    break;
+        // TODO: How does this work when using textBuffer which isn't a file path
+        Path dir = source.path.getDirectory();
+        for(auto& item : tokenStream->importList){
+            Path importName = "";
+            int dotindex = item.name.find_last_of(".");
+            int slashindex = item.name.find_last_of("/");
+            // log::out << "dot "<<dotindex << " slash "<<slashindex<<"\n";
+            if(dotindex==-1 || dotindex<slashindex){
+                importName = item.name+".btb";
+            } else {
+                importName = item.name;
+            }
+            // TODO: import AS
+            
+            Path fullPath = {};
+            // TODO: Test "/src.btb", "ok./hum" and other unusual paths
+            
+            //-- Search directory of current source file
+            if(importName.text.find("./")==0) {
+                fullPath = dir.text + importName.text.substr(2);
+            } 
+            //-- Search cwd or absolute path
+            else if(FileExist(importName.text)){
+                fullPath = importName;
+                if(!fullPath.isAbsolute())
+                    fullPath = fullPath.getAbsolute();
+            }
+            else if(fullPath = dir.text + importName.text, FileExist(fullPath.text)){
+                // fullpath =  dir.text + importName.text;
+            }
+            //-- Search additional import directories.
+            // TODO: DO THIS WITH #INCLUDE TOO!
+            else {
+                // We only read importDirectories which makes this thread safe
+                // if we had modified it in anyway then it wouldn't have been.
+                for(int i=0;i<(int)info->importDirectories.size();i++){
+                    const Path& dir = info->importDirectories[i];
+                    Assert(dir.isDir() && dir.isAbsolute());
+                    Path path = dir.text + importName.text;
+                    bool yes = FileExist(path.text);
+                    if(yes) {
+                        fullPath = path;
+                        break;
+                    }
+                }
+            }
+            
+            if(fullPath.text.empty()){
+                log::out << log::RED << "Could not find import '"<<importName.text<<"' (import from '"<<BriefPath(source.path.text,20)<<"'\n";
+            } else {
+                if(info->hasStream(fullPath)){   
+                    _VLOG(log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";)
+                }else{
+                    info->sourceLock.lock();
+                    info->addStream(fullPath);
+                    // log::out << "Add source "<<fullPath.getFileName().text<<"\n";
+                    SourceToProcess source{};
+                    source.path = fullPath;
+                    source.as = item.as;
+                    source.textBuffer = nullptr;
+                    info->sourcesToProcess.add(source);
+                    if(info->sourcesToProcess.size() == 1)
+                        info->sourceWaitLock.signal();
+                    info->sourceLock.unlock();
                 }
             }
         }
-        
-        if(fullPath.text.empty()){
-            log::out << log::RED << "Could not find import '"<<importName.text<<"' (import from '"<<BriefPath(path.text,20)<<"'\n";
-        }else{
-            auto fileInfo = info.getStream(fullPath);
-            if(fileInfo){   
-                _VLOG(log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";)
-            }else{
-                bool yes = ParseFile(info, fullPath, item.as);
-                // ASTScope* body = ParseFile(info, fullPath, item.as);
-                // if(body){
-                //     if(item.as.empty()){
-                //         info.ast->appendToMainBody(body);
-                //     } else {
-                //         info.ast->mainBody->add(body, info.ast);
-                //     }
-                // }
-            }
-        }
     }
+    // TODO: Run Preprocess in multiple threads. This requires a depencency system
+    //   since one stream may need another stream's macros so that stream must
+    //   be processed first.
 
-    bool macroBenchmark = tokenStream->length() && Equal(tokenStream->get(0),"@macro-benchmark");
+    // Use an array of streams where a stream in it will only depend on stream to the right.
+    // You use an integer called currentDependencyDepth (or something). Each stream has it's own
+    // dependency depth. If the current depth is less or equal than a steam's depth, it is safe to
+    // process that stream. The question then is how to calculate the depth.
+    // There may be a flaw with this approach.
 
-    // second preprocess in case imports defined macros which
-    // are used in this source file
-    TokenStream* finalStream = tokenStream;
-    if (tokenStream->enabled & LAYER_PREPROCESSOR) {
-        _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(path.text)<<"\n";)
-        finalStream = Preprocess(&info, tokenStream);
-        if(macroBenchmark){
-            log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
-            #ifndef LOG_MEASURES
-            if(finalStream->length()<50){
-                finalStream->print();
-                log::out<<"\n";
-            }
-            #endif
-        }
-        info.streamsToClean.add(finalStream);
-        // tokenStream->print();
-    }
-    if(macroBenchmark)
-        return true;
-    
-    _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(path.text)<<"\n";)
-    ASTScope* body = ParseTokenStream(finalStream,info.ast,&info, as);
-    if(body){
-        if(as.empty()){
-            info.ast->appendToMainBody(body);
-        } else {
-            info.ast->mainBody->add(info.ast, body);
-        }
-    }
-    return true;
+    // Another solution would be to have a list of dependencies for each stream but you would need
+    // to do a lot of linear searches so you probably want to avoid that. It could be interesting to test it
+    // in case it turns out to work pretty well. The simpler things are better sometimes.
+
+    // WHILE_TRUE {
+    //     info->sourceLock.lock();
+    //     info->waitingThreads++;
+    //     if(info->waitingThreads == CompileInfo::THREAD_COUNT && info->sourcesToProcess.size() == 0) {
+    //         info->sourceWaitLock.signal();
+    //     }
+    //     info->sourceLock.unlock();
+
+    //     info->sourceWaitLock.wait();
+
+    //     info->sourceLock.lock();
+    //     info->waitingThreads--;
+    //     if(info->sourcesToProcess.size() == 0) {
+    //         // all files processed, time to quit
+    //         info->sourceWaitLock.signal();
+    //         info->sourceLock.unlock();
+    //         return 0;
+    //     }
+    //     SourceToProcess source = info->sourcesToProcess.last();
+    //     info->sourcesToProcess.pop();
+    //     if(info->sourcesToProcess.size() != 0)
+    //         // signal that there are more sources to process for other threads
+    //         info->sourceWaitLock.signal();
+    //     // if(source.textBuffer)
+    //     //     log::out << "Proc source "<<source.textBuffer->origin<<"\n";
+    //     // else
+    //     //     log::out << "Proc source "<<source.path.text<<"\n";
+    //     info->sourceLock.unlock();
+
+    //     int i = compileInfo.streams.size()-1; // process essential first
+    //     CompileInfo::Stream* stream = compileInfo.streams[i];
+    //      // are used in this source file
+    //     TokenStream* procStream = stream->initialStream;
+    //     if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
+    //         _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+    //         procStream = Preprocess(&compileInfo, stream->initialStream);
+    //         stream->finalStream = procStream;
+    //     }
+    // }
+    return 0;
 }
 
-Bytecode* CompileSource(CompileOptions options) {
+Bytecode* CompileSource(CompileOptions* options) {
     using namespace engone;
-    Bytecode* bytecode=0;
-    double seconds = 0;
     
     // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
-
-    auto startCompileTime = engone::MeasureTime();
+    options->compileStats.start_bytecode = engone::StartMeasure();
     
     CompileInfo compileInfo{};
-    compileInfo.nativeRegistry = NativeRegistry::Create();
-    compileInfo.nativeRegistry->initNativeContent();
-    compileInfo.targetPlatform = options.target;
+    // compileInfo.nativeRegistry = NativeRegistry::GetGlobal();
+    // compileInfo.nativeRegistry = NativeRegistry::Create();
+    // compileInfo.nativeRegistry->initNativeContent();
+    // compileInfo.targetPlatform = options->target;
+    compileInfo.compileOptions = options;
     
     compileInfo.ast = AST::Create();
-    defer { AST::Destroy(compileInfo.ast); };
+    defer { AST::Destroy(compileInfo.ast); compileInfo.ast = nullptr; };
     // compileInfo.compilerDir = TrimLastFile(compilerPath);
-    options.compilerDirectory = options.compilerDirectory.getAbsolute();
-    compileInfo.importDirectories.push_back(options.compilerDirectory.text + "modules/");
-    for(auto& path : options.importDirectories){
-        compileInfo.importDirectories.push_back(path);
+    options->resourceDirectory = options->resourceDirectory.getAbsolute();
+    compileInfo.importDirectories.add(options->resourceDirectory.text + "modules/");
+    for(auto& path : options->importDirectories){
+        compileInfo.importDirectories.add(path);
     }
     #ifndef DISABLE_BASE_IMPORT
     StringBuilder essentialStructs{};
@@ -337,23 +608,96 @@ Bytecode* CompileSource(CompileOptions options) {
     "#define OS_LINUX\n"
     #endif
     ;
-    essentialStructs += (options.target == BYTECODE ? "#define LINK_BYTECODE\n" : "");
-    ParseFile(compileInfo, "<base>","",essentialStructs.data(), strlen(essentialStructs));
+    essentialStructs += (options->target == BYTECODE ? "#define LINK_BYTECODE\n" : "");
+    TextBuffer essentialBuffer{};
+    essentialBuffer.origin = "<base>";
+    essentialBuffer.size = essentialStructs.size();
+    essentialBuffer.buffer = essentialStructs.data();
+    // ParseFile(compileInfo, "","",&essentialBuffer);
     #endif
+    // if(options->initialSourceBuffer.buffer){
+    //     ParseFile(compileInfo, "","",&options->initialSourceBuffer);
+    // } else {
+    //     ParseFile(compileInfo, options->initialSourceFile.getAbsolute());
+    // }
 
-    if(options.rawSource.data){
-        ParseFile(compileInfo, "<raw-data>","",(char*)options.rawSource.data, options.rawSource.used);
-        // ASTScope* body = ParseFile(compileInfo, std::string("<raw-data>"),"",(char*)options.rawSource.data, options.rawSource.used);
-        // if(body) {
-        //     compileInfo.ast->appendToMainBody(body);
-        // }
+    SourceToProcess essentialSource{};
+    essentialSource.textBuffer = &essentialBuffer;
+    compileInfo.sourcesToProcess.add(essentialSource);
+
+    SourceToProcess initialSource{};
+    if(options->initialSourceBuffer.buffer){
+        initialSource.textBuffer = &options->initialSourceBuffer;
     } else {
-        ParseFile(compileInfo, options.initialSourceFile.getAbsolute());
-        // ASTScope* body = ParseFile(compileInfo, options.initialSourceFile.getAbsolute());
-        // if(body) {
-        //     compileInfo.ast->appendToMainBody(body);
-        // }
+        initialSource.path = options->initialSourceFile.getAbsolute();
     }
+    compileInfo.sourcesToProcess.add(initialSource);
+
+    Assert(!options->singleThreaded); // TODO: Implement not multithreading
+
+    compileInfo.sourceWaitLock.init(1, 1);
+
+    ThreadCompileInfo threadInfos[CompileInfo::THREAD_COUNT]{};
+    for(int i=1;i<CompileInfo::THREAD_COUNT;i++){
+        threadInfos[i].info = &compileInfo;
+        threadInfos[i]._thread.init(ProcessSource, threadInfos+i);
+    }
+    threadInfos[0].info = &compileInfo;
+    ProcessSource(threadInfos + 0);
+
+    for(int i=0;i<CompileInfo::THREAD_COUNT;i++){
+        threadInfos[i]._thread.join();
+    }
+    {
+        int i = compileInfo.streams.size()-1; // process essential first
+        CompileInfo::Stream* stream = compileInfo.streams[i];
+         // are used in this source file
+        TokenStream* procStream = stream->initialStream;
+        if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
+            _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+            procStream = Preprocess(&compileInfo, stream->initialStream);
+            stream->finalStream = procStream;
+        }
+        _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+        ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
+        if(body){
+            if(stream->as.empty()){
+                compileInfo.ast->appendToMainBody(body);
+            } else {
+                compileInfo.ast->mainBody->add(compileInfo.ast, body);
+            }
+        }
+    }
+    for(int i=compileInfo.streams.size()-2;i>=0;i--){
+        CompileInfo::Stream* stream = compileInfo.streams[i];
+         // are used in this source file
+        TokenStream* procStream = stream->initialStream;
+        if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
+            _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+            procStream = Preprocess(&compileInfo, stream->initialStream);
+            // if(macroBenchmark){
+            //     log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
+            //     #ifndef LOG_MEASURES
+            //     if(finalStream->length()<50){
+            //         finalStream->print();
+            //         log::out<<"\n";
+            //     }
+            //     #endif
+            // }
+            stream->finalStream = procStream;
+            // tokenStream->print();
+        }
+        _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+        ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
+        if(body){
+            if(stream->as.empty()){
+                compileInfo.ast->appendToMainBody(body);
+            } else {
+                compileInfo.ast->mainBody->add(compileInfo.ast, body);
+            }
+        }
+    }
+
     #ifdef AST_LOG
     _VLOG(log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
     #endif
@@ -363,101 +707,183 @@ Bytecode* CompileSource(CompileOptions options) {
     // }
     // if (tokens.enabled & LAYER_GENERATOR){
 
-    if(compileInfo.ast
-        // && compileInfo.errors==0 /* commented out so we keep going and catch more errors */
-        ){
-        _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
-        bytecode = Generate(compileInfo.ast, &compileInfo);
-    // }
+    Bytecode* bytecode=0;
+    _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
+    bytecode = Generate(compileInfo.ast, &compileInfo);
+    if(bytecode) {
+        compileInfo.compileOptions->compileStats.bytecodeSize = bytecode->getMemoryUsage();
     }
 
-    // _VLOG(log::out << "\n";)
-    seconds = engone::StopMeasure(startCompileTime);
-    if(bytecode && compileInfo.errors==0){
-        int bytes = bytecode->getMemoryUsage();
-    // _VLOG(
-        if(!options.silent){
-            log::out << "Compiled " << FormatUnit((u64)compileInfo.lines) << " lines ("<<FormatUnit((u64)compileInfo.blankLines)<<" blanks, "<<FormatBytes(compileInfo.readBytes)<<" in source files) in " <<log::LIME<< FormatTime(seconds)<<log::SILVER << "\n (" << FormatUnit(compileInfo.lines / seconds) << " lines/s)\n";
-        }
-    // )
-    }
     AST::Destroy(compileInfo.ast);
     compileInfo.ast = nullptr;
-    if(compileInfo.errors!=0){
-        log::out << log::RED<<"Compiler failed with "<<compileInfo.errors<<" error(s) ("<<FormatTime(seconds)<<", "<<FormatUnit((u64)compileInfo.lines)<<" line(s), " << FormatUnit(compileInfo.lines / seconds) << " loc/s)\n";
-        if(compileInfo.nativeRegistry == bytecode->nativeRegistry) {
-            bytecode->nativeRegistry = nullptr;
-        }
+
+    options->compileStats.end_bytecode = StartMeasure();
+
+    if(!options->silent && compileInfo.compileOptions->compileStats.errors!=0){
+        compileInfo.compileOptions->compileStats.printFailed();
+        // if(compileInfo.nativeRegistry == bytecode->nativeRegistry) {
+        //     bytecode->nativeRegistry = nullptr;
+        // }
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
     }
-    if(compileInfo.warnings!=0){
-        log::out << log::YELLOW<<"Compiler had "<<compileInfo.warnings<<" warning(s)\n";
+    if(!options->silent && compileInfo.compileOptions->compileStats.warnings!=0){
+        compileInfo.compileOptions->compileStats.printWarnings();
     }
     if(bytecode) {
-        if(!bytecode->nativeRegistry)
-            bytecode->nativeRegistry = compileInfo.nativeRegistry;
-        compileInfo.nativeRegistry = nullptr;
+        // if(!bytecode->nativeRegistry)
+        //     bytecode->nativeRegistry = compileInfo.nativeRegistry;
+        // compileInfo.nativeRegistry = nullptr;
         bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
     }
+
     compileInfo.cleanup();
     return bytecode;
 }
 
-void CompileAndRun(CompileOptions options) {
+void CompileStats::printSuccess(CompileOptions* opts){
     using namespace engone;
+    log::out << "Compiled " << FormatUnit((u64)lines) << " non-blank lines ("<<FormatUnit((u64)blankLines)<<" blanks, "<<FormatBytes(readBytes)<<")\n";
+    if(opts) {
+        if(opts->initialSourceBuffer.buffer) {
+            log::out << " text buffer: "<<opts->initialSourceBuffer.origin<<"\n";
+        } else {
+            // log::out << " initial file: "<< opts->initialSourceFile.getFileName().text<<"\n";
+            log::out << " initial file: "<< BriefPath(opts->initialSourceFile.getAbsolute().text,30)<<"\n";
+        }
+        log::out << " target: "<<opts->target<<", output: "<<opts->outputFile.text << "\n";
+    }
+    bool withoutLinker = end_objectfile == 0;
+    if(withoutLinker) {
+        double time_bytecode = DiffMeasure(end_bytecode - start_bytecode);
+        log::out << " source->bytecode (total): " <<log::LIME<< FormatTime(time_bytecode)<<log::SILVER << " (" << FormatUnit(lines / time_bytecode) << " lines/s)\n";
+    } else {
+        double time_compiler = DiffMeasure(end_objectfile - start_bytecode);
+        double time_bytecode = DiffMeasure(end_bytecode - start_bytecode);
+        double time_converter = DiffMeasure(end_convertx64 - start_convertx64);
+        double time_objwriter = DiffMeasure(end_objectfile - start_objectfile);
+        double time_linker = DiffMeasure(end_linker - start_linker);
+        double time_total = DiffMeasure(end_linker - start_bytecode);
+        log::out << " compiler: " <<log::LIME<< FormatTime(time_compiler)<<log::SILVER << " (" << FormatUnit(lines / time_compiler) << " lines/s)\n";
+        log::out << "  (bc: "<<log::LIME<< FormatTime(time_bytecode)<<log::SILVER <<", x64: " <<log::LIME<< FormatTime(time_converter)<<log::SILVER << ", obj: " <<log::LIME<< FormatTime(time_objwriter)<<log::SILVER << ")\n";
+        log::out << " linker: " <<log::LIME<< FormatTime(time_linker)<<log::SILVER << "\n";
+        log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::SILVER<<" (" << FormatUnit(lines / time_total) << " lines/s)\n"; 
+        // log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::SILVER<<" (" <<log::LIME<< FormatUnit(lines / time_total) << " lines/s"<<log::SILVER<<")\n"; 
+    }
+}
+void CompileStats::printFailed(){
+    using namespace engone;
+
+    double total = 0.0;
+    bool withoutLinker = end_objectfile == 0;
+    if(withoutLinker) {
+        total = DiffMeasure(end_bytecode - start_bytecode);
+    } else {
+        total = DiffMeasure(end_linker - start_bytecode);
+    }
+    
+    log::out << log::RED<<"Compiler failed with "<<errors<<" error(s) ("<<FormatTime(total)<<", "<<FormatUnit((u64)lines)<<" line(s), " << FormatUnit(lines / total) << " lines/s)\n";
+}
+void CompileStats::printWarnings(){
+    using namespace engone;
+    log::out << log::YELLOW<<"Compiler had "<<warnings<<" warning(s)\n";
+}
+void CompileAndRun(CompileOptions* options) {
+    using namespace engone;
+    
     Bytecode* bytecode = CompileSource(options);
-    if(bytecode){
-        RunBytecode(bytecode, options.userArgs);
+    if(!bytecode)
+        return;
+    defer {
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
+    };
+
+    switch (options->target) {
+        case WINDOWS_x64: {
+            options->outputFile = "bin/temp.exe";
+            bool yes = ExportTarget(options, bytecode);
+            if(!yes)
+                return;
+        }
+        break;
     }
+
+    options->compileStats.printSuccess(options);
+
+    log::out <<"\n";
+
+    switch (options->target) {
+        case BYTECODE: {
+            RunBytecode(options, bytecode);
+        }
+        break; case WINDOWS_x64: {
+            std::string hoho{};
+            hoho += options->outputFile.text;
+            for(auto& arg : options->userArgs){
+                hoho += " ";
+                hoho += arg;
+            }
+            int errorCode = 0;
+            engone::StartProgram("",(char*)hoho.data(),PROGRAM_WAIT,&errorCode);
+            log::out << "Error level: "<<errorCode<<"\n";
+        }
+    }
+
     #ifdef LOG_MEASURES
     PrintMeasures();
     #endif
 }
-void RunBytecode(Bytecode* bytecode, const std::vector<std::string>& userArgs){
+void RunBytecode(CompileOptions* options, Bytecode* bytecode){
     Assert(bytecode);
         
     Interpreter interpreter{};
-    interpreter.setCmdArgs(userArgs);
+    interpreter.setCmdArgs(options->userArgs);
     // interpreter.silent = true;
     interpreter.execute(bytecode);
     interpreter.cleanup();
 }
-void CompileAndExport(CompileOptions options, Path outPath){
+void CompileAndExport(CompileOptions* options){
     using namespace engone;
-    Bytecode* bytecode = nullptr;
-    // doing switch statement directly to see if the target is implemented
-    switch(options.target){
-        case BYTECODE: {
-            bytecode = CompileSource(options);
-            bool yes = ExportBytecode(outPath, bytecode);
-            Bytecode::Destroy(bytecode);
-            if(yes)
-                log::out << log::LIME<<"Exported "<<options.initialSourceFile.text << " into bytecode in "<<outPath.text<<"\n";
-            else
-                log::out <<log::RED <<"Failed exporting "<<options.initialSourceFile.text << " into bytecode in "<<outPath.text<<"\n";
-        }
-        break; case WINDOWS_x64: {
-            // TODO: The user may not want the temporary object files to end up in bin
+    
+    Bytecode* bytecode = CompileSource(options);
+    if(!bytecode) {
+        return;
+    }
+    defer {
+        Bytecode::Destroy(bytecode);
+        bytecode = nullptr;
+    };
 
-            bytecode = CompileSource(options);
-            Program_x64* program = nullptr;
-            
-            if(bytecode)
-                program = ConvertTox64(bytecode);
+    bool yes = ExportTarget(options, bytecode);
+
+    options->compileStats.printSuccess(options);
+}
+bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
+    using namespace engone;
+    Assert(bytecode);
+    switch(options->target){
+        case WINDOWS_x64: {
+            Path& outPath = options->outputFile;
+
+            options->compileStats.start_convertx64 = StartMeasure();
+            Program_x64* program = ConvertTox64(bytecode);
+            options->compileStats.end_convertx64 = StartMeasure();
 
             if(program){
-                auto format = outPath.getFormat();
+                auto format = options->outputFile.getFormat();
                 bool outputIsObject = format == "o" || format == "obj";
 
                 if(outputIsObject){
+                    options->compileStats.start_objectfile = StartMeasure();
                     WriteObjectFile(outPath.text,program);
-                    log::out << log::LIME<<"Exported "<<options.initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
+                    options->compileStats.end_objectfile = StartMeasure();
+                    // log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
                 } else {
                     std::string objPath = "bin/" + outPath.getFileName(true).text + ".obj";
+                    options->compileStats.start_objectfile = StartMeasure();
                     WriteObjectFile(objPath,program);
+                    options->compileStats.end_objectfile = StartMeasure();
 
                     std::string cmd = "link /nologo ";
                     cmd += objPath + " ";
@@ -470,91 +896,96 @@ void CompileAndExport(CompileOptions options, Path outPath){
                     }
                     cmd += "/DEFAULTLIB:LIBCMT ";
                     cmd += "/OUT:" + outPath.text+" ";
-
+                    
+                    options->compileStats.start_linker = StartMeasure();
                     int exitCode = 0;
                     engone::StartProgram("",(char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                    options->compileStats.end_linker = StartMeasure();
+
                     // msvc linker returns a fatal error as exit code
-                    if(exitCode == 0)
-                        log::out << log::LIME<<"Exported "<<options.initialSourceFile.text << " into an executable: "<<outPath.text<<".\n";
+                    // if(exitCode == 0)
+                    //     log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an executable: "<<outPath.text<<".\n";
                 }
-            } else {
-                log::out <<log::RED <<"Failed converting "<<options.initialSourceFile.text << " to x64 program.\n";
-            }
-            if(bytecode)
-                Bytecode::Destroy(bytecode);
-            if(program)
                 Program_x64::Destroy(program); 
+                return true;
+            } else {
+                // log::out <<log::RED <<"Failed converting "<<options->initialSourceFile.text << " to x64 program.\n";
+                return false;
+            }
         }
+        //break; case BYTECODE: {
+        //     return ExportBytecode(options, bytecode);
+        // }
         break; default: {
-            log::out << log::RED << "Target " << options.target << " is missing some implementations.\n";
+            log::out << log::RED << "Target "<<options->target << " is not supported\n";
         }
     }
-}
-struct BTBCHeader{
-    u32 magicNumber = 0x13579BDF;
-    char humanChars[4] = {'B','T','B','C'};
-    // TODO: Version number for interpreter?
-    // TODO: Version number for bytecode format?
-    u32 codeSize = 0;
-    u32 dataSize = 0;
-};
-
-bool ExportBytecode(Path filePath, const Bytecode* bytecode){
-    using namespace engone;
-    Assert(bytecode);
-    auto file = FileOpen(filePath.text, 0, engone::FILE_WILL_CREATE);
-    if(!file)
-        return false;
-    BTBCHeader header{};
-
-    Assert(bytecode->codeSegment.used*bytecode->codeSegment.getTypeSize() < ((u64)1<<32));
-    header.codeSize = bytecode->codeSegment.used*bytecode->codeSegment.getTypeSize();
-    Assert(bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize() < ((u64)1<<32));
-    header.dataSize = bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize();
-
-    // TOOD: Check error when writing files
-    int err = FileWrite(file, &header, sizeof(header));
-    if(err!=-1 && bytecode->codeSegment.data){
-        err = FileWrite(file, bytecode->codeSegment.data, header.codeSize);
-    }
-    if(err!=-1 && bytecode->dataSegment.data) {
-        err = FileWrite(file, bytecode->dataSegment.data, header.dataSize);
-    }
-    // debugSegment is ignored
-
-    FileClose(file);
     return true;
 }
-Bytecode* ImportBytecode(Path filePath){
-    using namespace engone;
-    u64 fileSize = 0;
-    auto file = FileOpen(filePath.text, &fileSize, engone::FILE_ONLY_READ);
+// struct BTBCHeader{
+//     u32 magicNumber = 0x13579BDF;
+//     char humanChars[4] = {'B','T','B','C'};
+//     // TODO: Version number for interpreter?
+//     // TODO: Version number for bytecode format?
+//     u32 codeSize = 0;
+//     u32 dataSize = 0;
+// };
+// bool ExportBytecode(CompileOptions* options, Bytecode* bytecode){
+//     using namespace engone;
+//     Assert(bytecode);
+//     auto file = FileOpen(options->outputFile.text, 0, engone::FILE_WILL_CREATE);
+//     if(!file)
+//         return false;
+//     BTBCHeader header{};
 
-    if(fileSize < sizeof(BTBCHeader))
-        return nullptr; // File is to small for a bytecode file
+//     Assert(bytecode->codeSegment.used*bytecode->codeSegment.getTypeSize() < ((u64)1<<32));
+//     header.codeSize = bytecode->codeSegment.used*bytecode->codeSegment.getTypeSize();
+//     Assert(bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize() < ((u64)1<<32));
+//     header.dataSize = bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize();
 
-    BTBCHeader baseHeader{};
-    BTBCHeader header{};
+//     // TOOD: Check error when writing files
+//     int err = FileWrite(file, &header, sizeof(header));
+//     if(err!=-1 && bytecode->codeSegment.data){
+//         err = FileWrite(file, bytecode->codeSegment.data, header.codeSize);
+//     }
+//     if(err!=-1 && bytecode->dataSegment.data) {
+//         err = FileWrite(file, bytecode->dataSegment.data, header.dataSize);
+//     }
+//     // debugSegment is ignored
 
-    // TOOD: Check error when writing files
-    FileRead(file, &header, sizeof(header));
+//     FileClose(file);
+//     return true;
+// }
+// Bytecode* ImportBytecode(Path filePath){
+//     using namespace engone;
+//     u64 fileSize = 0;
+//     auto file = FileOpen(filePath.text, &fileSize, engone::FILE_ONLY_READ);
+
+//     if(fileSize < sizeof(BTBCHeader))
+//         return nullptr; // File is to small for a bytecode file
+
+//     BTBCHeader baseHeader{};
+//     BTBCHeader header{};
+
+//     // TOOD: Check error when writing files
+//     FileRead(file, &header, sizeof(header));
     
-    if(strncmp((char*)&baseHeader,(char*)&header,8)) // TODO: Don't use hardcoded 8?
-        return nullptr; // Magic number and human characters is incorrect. Meaning not a bytecode file.
+//     if(strncmp((char*)&baseHeader,(char*)&header,8)) // TODO: Don't use hardcoded 8?
+//         return nullptr; // Magic number and human characters is incorrect. Meaning not a bytecode file.
 
-    if(fileSize != sizeof(BTBCHeader) + header.codeSize + header.dataSize)
-        return nullptr; // Corrupt file. Sizes does not match.
+//     if(fileSize != sizeof(BTBCHeader) + header.codeSize + header.dataSize)
+//         return nullptr; // Corrupt file. Sizes does not match.
     
-    Bytecode* bc = Bytecode::Create();
-    bc->codeSegment.resize(header.codeSize/bc->codeSegment.getTypeSize());
-    bc->codeSegment.used = header.codeSize/bc->codeSegment.getTypeSize();
-    bc->dataSegment.resize(header.dataSize/bc->dataSegment.getTypeSize());
-    bc->dataSegment.used = header.dataSize/bc->dataSegment.getTypeSize();
-    FileRead(file, bc->codeSegment.data, header.codeSize);
-    FileRead(file, bc->dataSegment.data, header.dataSize);
+//     Bytecode* bc = Bytecode::Create();
+//     bc->codeSegment.resize(header.codeSize/bc->codeSegment.getTypeSize());
+//     bc->codeSegment.used = header.codeSize/bc->codeSegment.getTypeSize();
+//     bc->dataSegment.resize(header.dataSize/bc->dataSegment.getTypeSize());
+//     bc->dataSegment.used = header.dataSize/bc->dataSegment.getTypeSize();
+//     FileRead(file, bc->codeSegment.data, header.codeSize);
+//     FileRead(file, bc->dataSegment.data, header.dataSize);
 
-    // debugSegment is ignored
+//     // debugSegment is ignored
 
-    FileClose(file);
-    return bc;
-}
+//     FileClose(file);
+//     return bc;
+// }

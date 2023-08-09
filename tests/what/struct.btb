@@ -1,0 +1,16 @@
+TEXT-CASE base
+struct A {
+    a: i32;
+    b: i64;
+}
+a: A;
+a = A{1,2}
+a: A = A{1,2};
+@TEST-CASE 0
+_test_ a+b == 1
+_test_ a-b == 3
+_test_ a*b == 5
+_test_ a/b == 9
+@TEST-CASE 1
+
+@TEST-CASE 2

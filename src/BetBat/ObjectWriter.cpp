@@ -117,7 +117,8 @@ namespace COFF_Format {
 
 void ObjectFile::Destroy(ObjectFile* objectFile){
     objectFile->~ObjectFile();
-    engone::Free(objectFile,sizeof(ObjectFile));
+    // engone::Free(objectFile,sizeof(ObjectFile));
+    TRACK_FREE(objectFile,ObjectFile);
 }
 ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
     using namespace engone;
@@ -128,7 +129,8 @@ ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
     auto file = FileOpen(path,&fileSize,FILE_ONLY_READ);
     if(!file)
         return nullptr;
-    u8* filedata = (u8*)engone::Allocate(fileSize);
+    u8* filedata = TRACK_ARRAY_ALLOC(u8, fileSize);
+    // u8* filedata = (u8*)engone::Allocate(fileSize);
     // defer {engone::Free(filedata,fileSize); };
 
     FileRead(file,filedata,fileSize);
@@ -136,7 +138,8 @@ ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
     if(!silent)
         log::out << "Read file "<<path << ", size: "<<fileSize<<"\n";
 
-    ObjectFile* objectFile = (ObjectFile*)engone::Allocate(sizeof(ObjectFile));
+    // ObjectFile* objectFile = (ObjectFile*)engone::Allocate(sizeof(ObjectFile));
+    ObjectFile* objectFile = TRACK_ALLOC(ObjectFile);
     new(objectFile)ObjectFile();
     objectFile->_rawFileData = filedata;
     objectFile->fileSize = fileSize;
@@ -467,8 +470,10 @@ void ObjectFile::writeFile(const std::string& path) {
 
     // log::out << "Final Size (aligned): "<<finalSize<<"\n";
 
-    u8* outData = (u8*)Allocate(finalSize);
-    defer { Free(outData,finalSize); };
+    u8* outData = TRACK_ARRAY_ALLOC(u8,finalSize);
+    // u8* outData = (u8*)Allocate(finalSize);
+    // defer { Free(outData,finalSize); };
+    defer { TRACK_ARRAY_FREE(outData,u8,finalSize); };
 
     Assert((u64)outData % 8 == 0);
 
@@ -591,8 +596,10 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         + program->dataRelocations.size() * 30 // 20 for relocations and 10 for symbols, some relocations refer to the same symbols
         + program->namedRelocations.size() * 45 // a little extra since functions have bigger names
         + program->globalSize;
-    u8* outData = (u8*)Allocate(outSize);
-    defer { Free(outData, outSize); };
+    // u8* outData = (u8*)Allocate(outSize);
+    // defer { Free(outData, outSize); };
+    u8* outData = TRACK_ARRAY_ALLOC(u8,outSize);
+    defer { TRACK_ARRAY_FREE(outData, u8, outSize); };
     u64 outOffset = 0;
 
     COFF_File_Header* header = (COFF_File_Header*)(outData + outOffset);

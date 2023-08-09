@@ -226,13 +226,15 @@ struct FnOverloads {
         ASTFunction* astFunc=0;
         // DynamicArray<TypeId> argTypes{};
     };
-    DynamicArray<Overload> overloads{};
-    DynamicArray<Overload> polyImplOverloads{};
-    DynamicArray<PolyOverload> polyOverloads{};
+    QuickArray<Overload> overloads{};
+    QuickArray<Overload> polyImplOverloads{};
+    QuickArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
-    Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
+    Overload* getOverload(AST* ast, TinyArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
+    Overload* getOverload(AST* ast, TinyArray<TypeId>& argTypes, TinyArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
+    // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
+    // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
     // Get base polymorphic overload which can match with the typeIds.
     // You want to generate the real overload afterwards.
     // ASTFunction* getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes);
@@ -254,14 +256,9 @@ struct StructImpl {
         TypeId typeId={};
         int offset=0;
     };
-    DynamicArray<Member> members{};
+    QuickArray<Member> members{};
     
-    DynamicArray<TypeId> polyArgs;
-
-    // std::unordered_map<std::string, FnOverloads> methods;
-    
-    // FnOverloads::Overload* getMethod(const std::string& name, std::vector<TypeId>& typeIds);
-    // void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
+    QuickArray<TypeId> polyArgs;
 };
 struct TypeInfo {
     TypeInfo(const std::string& name, TypeId id, u32 size=0) :  name(name), id(id), originalId(id), _size(size) {}
@@ -301,13 +298,13 @@ struct FuncImpl {
     };
     u32 usages = 0;
     bool isUsed() { return usages!=0; }
-    DynamicArray<Spot> argumentTypes;
-    DynamicArray<Spot> returnTypes;
+    QuickArray<Spot> argumentTypes;
+    QuickArray<Spot> returnTypes;
     int argSize=0;
     int returnSize=0;
     i64 address = ADDRESS_INVALID; // Set by generator
     u32 polyVersion=-1;
-    DynamicArray<TypeId> polyArgs;
+    QuickArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
     void print(AST* ast, ASTFunction* astFunc);
     static const u64 ADDRESS_INVALID = 0; // undefined or not address that hasn't been set
@@ -371,7 +368,7 @@ struct ScopeInfo {
 
     std::unordered_map<std::string, Identifier> identifierMap;
 
-    std::vector<ScopeInfo*> usingScopes;
+    QuickArray<ScopeInfo*> usingScopes;
 
     // Returns the full namespace.
     // Name of parent scopes are concatenated.
@@ -423,7 +420,8 @@ struct ASTExpression : ASTNode {
 
     // TypeId finalType={}; // evaluated by type checker
 
-    DynamicArray<ASTExpression*>* args=nullptr; // fncall or initialiser
+    QuickArray<ASTExpression*> args; // fncall or initialiser
+    // DynamicArray<ASTExpression*>* args=nullptr; // fncall or initialiser
     u32 nonNamedArgs = 0;
 
     // PolyVersions<DynamicArray<TypeId>> versions_argTypes{};
@@ -438,7 +436,7 @@ struct ASTExpression : ASTNode {
     PolyVersions<TypeId> versions_outTypeSizeof{};
     PolyVersions<TypeId> versions_castType{};
 
-    void printArgTypes(AST* ast, DynamicArray<TypeId>& argTypes);
+    void printArgTypes(AST* ast, TinyArray<TypeId>& argTypes);
 
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
@@ -461,7 +459,7 @@ struct ASTStatement : ASTNode {
         STATEMENT_TYPE_COUNT,
     };
     ~ASTStatement(){
-        returnValues.~DynamicArray<ASTExpression*>();
+        // returnValues.~QuickArray<ASTExpression*>();
     }
     Type type = EXPRESSION;
     // int opType = 0;
@@ -500,7 +498,7 @@ struct ASTStatement : ASTNode {
         };
         // DynamicArray<ASTExpression*> returnValues{};
     };
-    DynamicArray<ASTExpression*> returnValues{};
+    QuickArray<ASTExpression*> returnValues{};
 
     PolyVersions<DynamicArray<TypeId>> versions_expressionTypes; // types from firstExpression
 
@@ -525,14 +523,14 @@ struct ASTStruct : ASTNode {
         ASTExpression* defaultValue=0;
         TypeId stringType{};
     };
-    DynamicArray<Member> members{};
+    QuickArray<Member> members{};
     struct PolyArg {
         Token name{};
         TypeInfo* virtualType = nullptr;
     };
-    DynamicArray<PolyArg> polyArgs;
+    QuickArray<PolyArg> polyArgs;
 
-    StructImpl* createImpl();
+    // StructImpl* createImpl();
     
     State state=TYPE_EMPTY;
 
@@ -546,7 +544,7 @@ struct ASTStruct : ASTNode {
     FnOverloads& getMethod(const std::string& name);
     // void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
 
-    DynamicArray<ASTFunction*> functions{};
+    QuickArray<ASTFunction*> functions{};
     // ASTFunction* functions = 0;
     // ASTFunction* functionsTail = 0;
     // done in parser stage
@@ -565,7 +563,7 @@ struct ASTEnum : ASTNode {
         Token name{};
         int enumValue=0;
     };
-    DynamicArray<Member> members{};
+    QuickArray<Member> members{};
     
     bool getMember(const Token& name, int* out);
 
@@ -590,16 +588,16 @@ struct ASTFunction : ASTNode {
         TypeId stringType;
     };
 
-    DynamicArray<Identifier*> memberIdentifiers; // only relevant with parent structs
+    QuickArray<Identifier*> memberIdentifiers; // only relevant with parent structs
 
-    DynamicArray<PolyArg> polyArgs;
-    DynamicArray<Arg> arguments; // you could rename to parameters
-    DynamicArray<Ret> returnValues; // string type
+    QuickArray<PolyArg> polyArgs;
+    QuickArray<Arg> arguments; // you could rename to parameters
+    QuickArray<Ret> returnValues; // string type
     u32 nonDefaults=0; // used when matching overload, having it here avoids recalculations of it
 
-    DynamicArray<FuncImpl*> _impls{};
-    FuncImpl* createImpl();
-    const DynamicArray<FuncImpl*>& getImpls(){
+    QuickArray<FuncImpl*> _impls{};
+    // FuncImpl* createImpl();
+    const QuickArray<FuncImpl*>& getImpls(){
         return _impls;
     }
 
@@ -621,19 +619,19 @@ struct ASTScope : ASTNode {
     ScopeId scopeId=0;
     bool isNamespace = false;
 
-    DynamicArray<ASTStruct*> structs{};
+    QuickArray<ASTStruct*> structs{};
     void add(AST* ast, ASTStruct* astStruct);
     
-    DynamicArray<ASTEnum*> enums{};
+    QuickArray<ASTEnum*> enums{};
     void add(AST* ast, ASTEnum* astEnum);
 
-    DynamicArray<ASTFunction*> functions{};
+    QuickArray<ASTFunction*> functions{};
     void add(AST* ast, ASTFunction* astFunction);
     
-    DynamicArray<ASTScope*> namespaces{};
+    QuickArray<ASTScope*> namespaces{};
     void add(AST* ast, ASTScope* astNamespaces);
     
-    DynamicArray<ASTStatement*> statements{};    
+    QuickArray<ASTStatement*> statements{};    
     void add(AST* ast, ASTStatement* astStatement);
 
     // Using doesn't affect functions or structs because
@@ -652,7 +650,7 @@ struct ASTScope : ASTNode {
         SpoType spotType;
         u32 index;
     };
-    DynamicArray<Spot> content{};
+    QuickArray<Spot> content{};
 
     void print(AST* ast, int depth);
 };
@@ -664,7 +662,7 @@ struct AST {
     
     //-- Scope stuff
     ScopeId globalScopeId=0;
-    std::vector<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
+    QuickArray<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
     ScopeInfo* createScope(ScopeId parentScope, ContentOrder contentOrder);
     ScopeInfo* getScope(ScopeId id);
     // Searches specified scope for a scope with a certain name.
@@ -677,13 +675,14 @@ struct AST {
     ScopeInfo* getScopeFromParents(Token name, ScopeId scopeId);
 
     //-- Types
-    std::vector<Token> _typeTokens;
+    QuickArray<Token> _typeTokens;
     TypeId getTypeString(Token name);
     Token getTokenFromTypeString(TypeId typeString);
     // typeString must be a string type id.
     TypeId convertToTypeId(TypeId typeString, ScopeId scopeId, bool transformVirtual);
 
-    std::vector<TypeInfo*> _typeInfos; // TODO: Use a bucket array
+    QuickArray<TypeInfo*> _typeInfos; // TODO: Use a bucket array, might not make a difference since typeInfos are allocated in a linear allocator
+    // DynamicArray<TypeInfo*> _typeInfos; // TODO: Use a bucket array
     TypeInfo* createType(Token name, ScopeId scopeId);
     TypeInfo* createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 size=0);
     // isValid() of the returned TypeId will be false if
@@ -704,13 +703,13 @@ struct AST {
     //-- OTHER
     ASTScope* mainBody=0;
 
-    std::vector<std::string*> tempStrings;
+    QuickArray<std::string*> tempStrings;
     std::string* createString();
 
     // static const u32 NEXT_ID = 0x100;
     u32 nextTypeId=AST_OPERATION_COUNT;
     
-    std::vector<VariableInfo*> variables;
+    QuickArray<VariableInfo*> variables;
 
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
@@ -738,17 +737,44 @@ struct AST {
         u32 address = 0;
     };
     std::unordered_map<std::string, u32> _constStringMap;
-    DynamicArray<ConstString> _constStrings;
+    QuickArray<ConstString> _constStrings;
+
+    char* linearAllocation = nullptr;
+    u32 linearAllocationMax = 0;
+    u32 linearAllocationUsed = 0;
+    void initLinear(){
+        Assert(!linearAllocation);
+        linearAllocationMax = 0x1000000;
+        linearAllocationUsed = 0;
+        linearAllocation = TRACK_ARRAY_ALLOC(char, linearAllocationMax);
+         // (char*)engone::Allocate(linearAllocationMax);
+        Assert(linearAllocation);
+    }
+    void* allocate(u32 size) {
+        // const int align = 8;
+        // int diff = (align - (linearAllocationUsed % align)) % align;
+        // linearAllocationUsed += diff;
+        // if(diff) {
+        //     engone::log::out << "dif "<<diff<<"\n";
+        // }
+
+        // TODO: If we don't have enough space then create a new linear allocator
+        //  and allocate stuff there. Buckets of linear allocators basically.
+        Assert(linearAllocationUsed + size < linearAllocationMax);
+        void* ptr = linearAllocation + linearAllocationUsed;
+        linearAllocationUsed += size;
+        return ptr;
+    }
 
     // outIndex is used with getConstString(u32)
     ConstString& getConstString(const std::string& str, u32* outIndex);
     ConstString& getConstString(u32 index);
 
     // Must be used after TrimPointer
-    static Token TrimPolyTypes(Token token, std::vector<Token>* outPolyTypes = nullptr);
+    static Token TrimPolyTypes(Token token, TinyArray<Token>* outPolyTypes = nullptr);
     static Token TrimNamespace(Token token, Token* outNamespace = nullptr);
     static Token TrimPointer(Token& token, u32* level = nullptr);
-    static Token TrimBaseType(Token token, Token* outNamespace, u32* level, std::vector<Token>* outPolyTypes, Token* typeName);
+    static Token TrimBaseType(Token token, Token* outNamespace, u32* level, TinyArray<Token>* outPolyTypes, Token* typeName);
     // true if id is one of u8-64, i8-64
     static bool IsInteger(TypeId id);
     // will return false for non number types
@@ -757,6 +783,9 @@ struct AST {
     // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
     void appendToMainBody(ASTScope* body);
     
+    StructImpl* createStructImpl();
+    FuncImpl* createFuncImpl(ASTFunction* astFunc);
+
     ASTScope* createBody();
     ASTFunction* createFunction();
     ASTStruct* createStruct(const Token& name);

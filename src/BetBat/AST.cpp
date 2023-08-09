@@ -114,8 +114,11 @@ AST *AST::Create() {
     }
 #endif
 
-    AST *ast = (AST *)engone::Allocate(sizeof(AST));
+    // AST *ast = (AST *)engone::Allocate(sizeof(AST));
+    AST *ast = TRACK_ALLOC(AST);
     new(ast) AST();
+
+    ast->initLinear();
 
     ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO)->id;
     ast->globalScopeId = scopeId;
@@ -136,7 +139,7 @@ AST *AST::Create() {
     ast->createPredefinedType(Token("ast-string"),scopeId, AST_STRING, 0);
     ast->createPredefinedType(Token("fn_ref"),scopeId, AST_FUNC_REFERENCE, 8);
     ast->createPredefinedType(Token("ast-id"),scopeId, AST_ID);
-    ast->createPredefinedType(Token("ast-member"),scopeId, AST_MEMBER);
+    // ast->createPredefinedType(Token("ast-member"),scopeId, AST_MEMBER);
     ast->createPredefinedType(Token("ast-sizeof"),scopeId, AST_SIZEOF);
     ast->createPredefinedType(Token("ast-call"),scopeId, AST_FNCALL);
     ast->createPredefinedType(Token("ast-poly"),scopeId, AST_POLY);
@@ -176,9 +179,10 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder 
     id->order = contentOrder;
     if(identifier)
         *identifier = id;
-    auto ptr = (VariableInfo*)engone::Allocate(sizeof(VariableInfo));
+    auto ptr = (VariableInfo*)allocate(sizeof(VariableInfo));
+    // auto ptr = (VariableInfo*)engone::Allocate(sizeof(VariableInfo));
     new(ptr)VariableInfo();
-    variables.push_back(ptr);
+    variables.add(ptr);
     return ptr;
 }
 
@@ -343,7 +347,8 @@ bool AST::castable(TypeId from, TypeId to){
     return false;
 
 }
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
+// FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
     using namespace engone;
     // Assume the only overload. The generator may do implicit casting if needed.
     //   Or not because the generator pushes arguments to get types in order to
@@ -404,7 +409,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& 
     return outOverload;
 }
 
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
+// FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& argTypes, TinyArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
     // Assert(!fncallArgs); // not implemented yet, see other getOverload
     using namespace engone;
     FnOverloads::Overload* outOverload = nullptr;
@@ -580,46 +586,54 @@ void AST::appendToMainBody(ASTScope *body) {
 }
 
 ASTScope *AST::createBody() {
-    auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
+    auto ptr = (ASTScope *)allocate(sizeof(ASTScope));
+    // auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
     ptr->isNamespace = false;
     return ptr;
 }
 ASTStatement *AST::createStatement(ASTStatement::Type type) {
-    auto ptr = (ASTStatement *)engone::Allocate(sizeof(ASTStatement));
+    // auto ptr = (ASTStatement *)engone::Allocate(sizeof(ASTStatement));
+    auto ptr = (ASTStatement *)allocate(sizeof(ASTStatement));
     new(ptr) ASTStatement();
     ptr->type = type;
     return ptr;
 }
 ASTStruct *AST::createStruct(const Token &name) {
-    auto ptr = (ASTStruct *)engone::Allocate(sizeof(ASTStruct));
+    auto ptr = (ASTStruct *)allocate(sizeof(ASTStruct));
+    // auto ptr = (ASTStruct *)engone::Allocate(sizeof(ASTStruct));
     new(ptr) ASTStruct();
     ptr->name = name;
     return ptr;
 }
 ASTEnum *AST::createEnum(const Token &name) {
-    auto ptr = (ASTEnum *)engone::Allocate(sizeof(ASTEnum));
+    auto ptr = (ASTEnum *)allocate(sizeof(ASTEnum));
+    // auto ptr = (ASTEnum *)engone::Allocate(sizeof(ASTEnum));
     new(ptr) ASTEnum();
     ptr->name = name;
     return ptr;
 }
 ASTFunction *AST::createFunction() {
-    auto ptr = (ASTFunction *)engone::Allocate(sizeof(ASTFunction));
+    auto ptr = (ASTFunction *)allocate(sizeof(ASTFunction));
+    // auto ptr = (ASTFunction *)engone::Allocate(sizeof(ASTFunction));
     new(ptr) ASTFunction();
     return ptr;
 }
 ASTExpression *AST::createExpression(TypeId type) {
-    auto ptr = (ASTExpression *)engone::Allocate(sizeof(ASTExpression));
+    auto ptr = (ASTExpression *)allocate(sizeof(ASTExpression));
+    // auto ptr = (ASTExpression *)engone::Allocate(sizeof(ASTExpression));
     new(ptr) ASTExpression();
     ptr->isValue = (u32)type.getId() < AST_PRIMITIVE_COUNT;
     ptr->typeId = type;
     return ptr;
 }
 ASTScope *AST::createNamespace(const Token& name) {
-    auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
+    auto ptr = (ASTScope *)allocate(sizeof(ASTScope));
+    // auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
     ptr->isNamespace = true;
-    ptr->name = (std::string*)engone::Allocate(sizeof(std::string));
+    // ptr->name = (std::string*)engone::Allocate(sizeof(std::string));
+    ptr->name = (std::string*)allocate(sizeof(std::string));
     new(ptr->name)std::string(name);
     return ptr;
 }
@@ -707,7 +721,8 @@ void AST::Destroy(AST *ast) {
         return;
     ast->cleanup();
     ast->~AST();
-    engone::Free(ast, sizeof(AST));
+    // engone::Free(ast, sizeof(AST));
+    TRACK_FREE(ast, AST);
 }
 
 AST::ConstString& AST::getConstString(const std::string& str, u32* outIndex){
@@ -734,51 +749,67 @@ void AST::cleanup() {
     for (auto &scope : _scopeInfos) {
         scope->nameTypeMap.clear();
         scope->~ScopeInfo();
-        engone::Free(scope, sizeof(ScopeInfo));
+        // engone::Free(scope, sizeof(ScopeInfo));
     }
-    _scopeInfos.clear();
+    _scopeInfos.cleanup();
 
-    for(auto& pair : _typeInfos){
+    // for(auto& ti : _typeInfos){
+    for(int i=0;i<_typeInfos.size();i++){
+        auto ti = _typeInfos[i];
         // typeInfos is resized and filled with nullptrs
         // when types are created
-        if(!pair) continue;
+        if(!ti) continue;
 
-        if(pair->structImpl){
+        if(ti->structImpl){
             // log::out << pair->astStruct->name << " CLEANED\n";
-            pair->structImpl->~StructImpl();
-            engone::Free(pair->structImpl, sizeof(StructImpl));
+            ti->structImpl->~StructImpl();
+            // engone::Free(pair->structImpl, sizeof(StructImpl));
         }
-        pair->~TypeInfo();
-        engone::Free(pair, sizeof(TypeInfo));
+        ti->~TypeInfo();
+        // engone::Free(pair, sizeof(TypeInfo));
     }
-    _typeInfos.clear();
+    _typeInfos.cleanup();
     _constStringMap.clear();
     _constStrings._reserve(0);
 
+
     for(auto& str : tempStrings){
         str->~basic_string<char>();
-        engone::Free(str, sizeof(std::string));
+        // engone::Free(str, sizeof(std::string));
     }
-    tempStrings.clear();
+    tempStrings.cleanup();
 
     for(auto ptr : variables){
         ptr->~VariableInfo();
-        engone::Free(ptr, sizeof(VariableInfo));
+        // engone::Free(ptr, sizeof(VariableInfo));
     }
-    variables.clear();
+    variables.cleanup();
 
     nextTypeId = AST_OPERATION_COUNT;
 
     destroy(mainBody);
     mainBody = nullptr;
+
+    // make sure allocated nodes and other objects in linear allocator
+    // have been destroyed before freeing it.
+    if(linearAllocation) {
+        TRACK_ARRAY_FREE(linearAllocation, char, linearAllocationMax);
+        // engone::Free(linearAllocation, linearAllocationMax);
+    }
+    // log::out << "Linear: "<<linearAllocationUsed<<"\n";
+    linearAllocation = nullptr;
+    linearAllocationMax = 0;
+    linearAllocationUsed = 0;
 }
 ScopeInfo* AST::createScope(ScopeId parentScope, ContentOrder contentOrder) {
-    auto ptr = (ScopeInfo *)engone::Allocate(sizeof(ScopeInfo));
+    
+    // auto ptr = (ScopeInfo *)engone::Allocate(sizeof(ScopeInfo));
+    auto ptr = (ScopeInfo *)allocate(sizeof(ScopeInfo));
     new(ptr) ScopeInfo{(u32)_scopeInfos.size()};
     ptr->parent = parentScope;
     ptr->contentOrder = contentOrder;
     // engone::log::out << "Order: "<<contentOrder<<"\n";
-    _scopeInfos.push_back(ptr);
+    _scopeInfos.add(ptr);
     return ptr;
 }
 ScopeInfo* AST::getScope(ScopeId id){
@@ -932,7 +963,7 @@ TypeId AST::getTypeString(Token name){
         if(name == _typeTokens[i])
             return TypeId::CreateString(i);
     }
-    _typeTokens.push_back(name);
+    _typeTokens.add(name);
     return TypeId::CreateString(_typeTokens.size()-1);
 }
 Token AST::getTokenFromTypeString(TypeId typeId){
@@ -952,7 +983,22 @@ TypeId AST::convertToTypeId(TypeId typeString, ScopeId scopeId, bool transformVi
     Token tstring = getTokenFromTypeString(typeString);
     return convertToTypeId(tstring, scopeId, transformVirtual);
 }
+// void ll(AST* ast){
+//     for(int i=0;i<ast->_typeInfos.size();i++){
+//         auto ti = ast->_typeInfos[i];
+//         // typeInfos is resized and filled with nullptrs
+//         // when types are created
+//         // if(!ti) continue;
 
+//         if(ti->structImpl){
+//             // log::out << pair->astStruct->name << " CLEANED\n";
+//             // ti->structImpl->~StructImpl();
+//             // engone::Free(pair->structImpl, sizeof(StructImpl));
+//         }
+//         // ti->~TypeInfo();
+//         // engone::Free(pair, sizeof(TypeInfo));
+//     }
+// }
 TypeInfo* AST::createType(Token name, ScopeId scopeId){
     using namespace engone;
     auto scope = getScope(scopeId);
@@ -965,29 +1011,34 @@ TypeInfo* AST::createType(Token name, ScopeId scopeId){
     // You could check if name already exists in parent
     // scopes to but I think it is fine for now.
 
-    auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
-    Assert(ptr);
+    // auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
+    auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
+    // Assert(ptr);
     new(ptr) TypeInfo{name, TypeId::Create(nextTypeId++)};
     ptr->scopeId = scopeId;
     scope->nameTypeMap[name] = ptr;
     if(ptr->id.getId() >= _typeInfos.size()) {
-        _typeInfos.resize(ptr->id.getId() + 20);
+        _typeInfos.resize(ptr->id.getId() + AST_PRIMITIVE_COUNT);
+
     }
     _typeInfos[ptr->id.getId()] = ptr;
+    // ll(this);
     return ptr;
 }
 TypeInfo* AST::createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 size) {
-    auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
+    // auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
+    auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
     new(ptr) TypeInfo{name, id, size};
     ptr->scopeId = scopeId;
     auto scope = getScope(scopeId);
     if(!scope) return nullptr;
     
     if(ptr->id.getId() >= _typeInfos.size()) {
-        _typeInfos.resize(ptr->id.getId() + 20);
+        _typeInfos.resize(ptr->id.getId() + AST_PRIMITIVE_COUNT);
     }
     _typeInfos[ptr->id.getId()] = ptr;
     scope->nameTypeMap[ptr->name] = ptr;
+    // ll(this);
     return ptr;
 }
 void AST::printTypesFromScope(ScopeId scopeId, int scopeLimit){
@@ -1026,7 +1077,8 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVir
     using namespace engone;
     Token namespacing = {};
     u32 pointerLevel = 0;
-    std::vector<Token> polyTypes;
+    // TINY_ARRAY(Token,polyTypes,4);
+    // std::vector<Token> polyTypes;
     Token typeName = {}; // base name + poly names
 
     typeName = TrimPointer(typeString, &pointerLevel);
@@ -1162,9 +1214,10 @@ TypeId AST::ensureNonVirtualId(TypeId id){
     return id;
 }
 std::string* AST::createString(){
-    std::string* ptr = (std::string*)engone::Allocate(sizeof(std::string));
+    // std::string* ptr = (std::string*)engone::Allocate(sizeof(std::string));
+    std::string* ptr = (std::string*)allocate(sizeof(std::string));
     new(ptr)std::string();
-    tempStrings.push_back(ptr);
+    tempStrings.add(ptr);
     return ptr;
 }
 void AST::destroy(ASTScope *scope) {
@@ -1172,7 +1225,7 @@ void AST::destroy(ASTScope *scope) {
     //     destroy(scope->next);
     if (scope->name) {
         scope->name->~basic_string<char>();
-        engone::Free(scope->name, sizeof(std::string));
+        // engone::Free(scope->name, sizeof(std::string));
         scope->name = nullptr;
     }
     #define DEST(X) for(auto it : scope->X) destroy(it);
@@ -1183,7 +1236,8 @@ void AST::destroy(ASTScope *scope) {
     DEST(namespaces)
     #undef DEST
     scope->~ASTScope();
-    engone::Free(scope, sizeof(ASTScope));
+    // not done with linear allocator
+    // engone::Free(scope, sizeof(ASTScope));
 }
 void AST::destroy(ASTStruct *astStruct) {
     for (auto &mem : astStruct->members) {
@@ -1198,7 +1252,7 @@ void AST::destroy(ASTStruct *astStruct) {
         destroy(f);
     }
     astStruct->~ASTStruct();
-    engone::Free(astStruct, sizeof(ASTStruct));
+    // engone::Free(astStruct, sizeof(ASTStruct));
 }
 void AST::destroy(ASTFunction *function) {
     // if (function->next)
@@ -1211,16 +1265,16 @@ void AST::destroy(ASTFunction *function) {
     }
     for(auto ptr : function->_impls){
         ptr->~FuncImpl();
-        engone::Free(ptr,sizeof(FuncImpl));
+        // engone::Free(ptr,sizeof(FuncImpl));
     }
     function->~ASTFunction();
-    engone::Free(function, sizeof(ASTFunction));
+    // engone::Free(function, sizeof(ASTFunction));
 }
 void AST::destroy(ASTEnum *astEnum) {
     // if (astEnum->next)
     //     destroy(astEnum->next);
     astEnum->~ASTEnum();
-    engone::Free(astEnum, sizeof(ASTEnum));
+    // engone::Free(astEnum, sizeof(ASTEnum));
 }
 void AST::destroy(ASTStatement *statement) {
     // if (statement->next)
@@ -1228,7 +1282,8 @@ void AST::destroy(ASTStatement *statement) {
     if(!statement->sharedContents){
         if (statement->alias){
             statement->alias->~basic_string<char>();
-            engone::Free(statement->alias, sizeof(std::string));
+            TRACK_FREE(statement->alias,std::string);
+            // engone::Free(statement->alias, sizeof(std::string));
             statement->alias = nullptr;
         }
         if(statement->hasNodes()){
@@ -1245,18 +1300,21 @@ void AST::destroy(ASTStatement *statement) {
         }
     }
     statement->~ASTStatement();
-    engone::Free(statement, sizeof(ASTStatement));
+    // engone::Free(statement, sizeof(ASTStatement));
 }
 void AST::destroy(ASTExpression *expression) {
     // if (expression->next)
     //     destroy(expression->next);
-    if(expression->args){
-        for(ASTExpression* expr : *expression->args){
-            destroy(expr);
-        }
-        expression->args->~DynamicArray<ASTExpression*>();
-        engone::Free(expression->args,sizeof(DynamicArray<ASTExpression*>));
+    for(ASTExpression* expr : expression->args){
+        destroy(expr);
     }
+    // if(expression->args){
+    //     for(ASTExpression* expr : *expression->args){
+    //         destroy(expr);
+    //     }
+    //     expression->args->~DynamicArray<ASTExpression*>();
+    //     engone::Free(expression->args,sizeof(DynamicArray<ASTExpression*>));
+    // }
     // if (expression->name) {
     //     expression->name->~basic_string<char>();
     //     engone::Free(expression->name, sizeof(std::string));
@@ -1272,7 +1330,7 @@ void AST::destroy(ASTExpression *expression) {
     if (expression->right)
         destroy(expression->right);
     expression->~ASTExpression();
-    engone::Free(expression, sizeof(ASTExpression));
+    // engone::Free(expression, sizeof(ASTExpression));
 }
 u32 TypeInfo::getSize() {
     if (astStruct) {
@@ -1363,7 +1421,7 @@ Token AST::TrimPointer(Token& token, u32* outLevel){
     return out;
 }
 Token AST::TrimBaseType(Token typeString, Token* outNamespace, 
-    u32* level, std::vector<Token>* outPolyTypes, Token* typeName)
+    u32* level, TinyArray<Token>* outPolyTypes, Token* typeName)
 {
     if(!typeString.str || !outNamespace || !level || !outPolyTypes) {
         return typeString;
@@ -1443,14 +1501,14 @@ Token AST::TrimBaseType(Token typeString, Token* outNamespace,
             // we would need to go through the array to find
             // empty tokens.
             if(acc.str)
-                outPolyTypes->push_back(acc);
+                outPolyTypes->add(acc);
             acc = {};
         }
     }
     
     return typeString;
 }
-Token AST::TrimPolyTypes(Token typeString, std::vector<Token>* outPolyTypes) {
+Token AST::TrimPolyTypes(Token typeString, TinyArray<Token>* outPolyTypes) {
     //-- Trim poly types
     Assert(typeString.str[typeString.length-1] != '*');
     if(typeString.length < 2 || typeString.str[typeString.length-1] != '>') {
@@ -1495,7 +1553,7 @@ Token AST::TrimPolyTypes(Token typeString, std::vector<Token>* outPolyTypes) {
             // we would need to go through the array to find
             // empty tokens.
             if(acc.str)
-                outPolyTypes->push_back(acc);
+                outPolyTypes->add(acc);
             acc = {};
         }
     }
@@ -1572,19 +1630,28 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
     }
     return ti->_size > 8 ? 8 : ti->_size;
 }
-void ASTExpression::printArgTypes(AST* ast, DynamicArray<TypeId>& argTypes){
+void ASTExpression::printArgTypes(AST* ast, TinyArray<TypeId>& argTypes){
     using namespace engone;
-    Assert(args);
-    Assert(args->size() == argTypes.size());
-    for(int i=0;i<(int)args->size();i++){
+    Assert(args.size() == argTypes.size());
+    for(int i=0;i<(int)args.size();i++){
         if(i!=0) log::out << ", ";
-        if(args->get(i)->namedValue.str)
-            log::out << args->get(i)->namedValue <<"=";
+        if(args.get(i)->namedValue.str)
+            log::out << args.get(i)->namedValue <<"=";
         log::out << ast->typeToString(argTypes[i]);
     }
+    
+    // Assert(args);
+    // Assert(args->size() == argTypes.size());
+    // for(int i=0;i<(int)args->size();i++){
+    //     if(i!=0) log::out << ", ";
+    //     if(args->get(i)->namedValue.str)
+    //         log::out << args->get(i)->namedValue <<"=";
+    //     log::out << ast->typeToString(argTypes[i]);
+    // }
 }
-StructImpl* ASTStruct::createImpl(){
-    auto ptr = (StructImpl*)engone::Allocate(sizeof(StructImpl));
+StructImpl* AST::createStructImpl(){
+    auto ptr = (StructImpl*)allocate(sizeof(StructImpl));
+    // auto ptr = (StructImpl*)engone::Allocate(sizeof(StructImpl));
     new(ptr)StructImpl();
     return ptr;
 }
@@ -1599,10 +1666,11 @@ void FuncImpl::print(AST* ast, ASTFunction* astFunc){
     }
     log::out << ")";
 }
-FuncImpl* ASTFunction::createImpl(){
-    FuncImpl* ptr = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
+FuncImpl* AST::createFuncImpl(ASTFunction* astFunc){
+    // FuncImpl* ptr = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
+    FuncImpl* ptr = (FuncImpl*)allocate(sizeof(FuncImpl));
     new(ptr)FuncImpl();
-    bool nonAllocationFailure = _impls.add(ptr);
+    bool nonAllocationFailure = astFunc->_impls.add(ptr);
     Assert(nonAllocationFailure);
     return ptr;
 }
@@ -1922,7 +1990,8 @@ void ASTExpression::print(AST *ast, int depth) {
         else
             log::out << "missing print impl.";
         if (typeId == AST_FNCALL) {
-            if (args && args->size()!=0) {
+            // if (args && args->size()!=0) {
+            if (args.size()!=0) {
                 log::out << " args:\n";
                 // for(auto arg : *args){
                 //     arg->print(ast, depth + 1);
@@ -1992,12 +2061,13 @@ void ASTExpression::print(AST *ast, int depth) {
             }
         }
     }
-    if(args){
-        for(ASTExpression* expr : *args){
+    // if(args){
+        // for(ASTExpression* expr : *args){
+        for(ASTExpression* expr : args){
             if (expr) {
                 expr->print(ast, depth+1);
             }
         }
-    }
+    // }
 }
 /* #endregion */

@@ -1,154 +1,165 @@
 #include "BetBat/Util/TestSuite.h"
 
-#define SERR engone::log::out << engone::log::RED<<"Error: "
+#undef ERR_SECTION
+#define ERR_SECTION(CONTENT) { CONTENT }
 
-#define _SLOG(x) x;
+#define ERR_HEAD_SUITE() log::out << log::RED << "TestSuite: "<<log::SILVER;
+#define ERR_MSG_SUITE(MSG) log::out << log::SILVER << MSG << "\n";
 
+void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins, DynamicArray<TestCase>* outTestCases){
+    using namespace engone;
+    Assert(outTestCases);
+    Assert(outTestOrigins);
+    u64 fileSize = 0;
+    auto file = engone::FileOpen(path, &fileSize, FILE_ONLY_READ);
+    if(!file) {
+        ERR_SECTION(
+            ERR_HEAD_SUITE()
+            ERR_MSG_SUITE("Cannot open '"<<path<<"'.")
+        )
+        return;
+    }
+    char* buffer = (char*)engone::Allocate(fileSize);
+    Assert(buffer);
+    bool yes = engone::FileRead(file, buffer, fileSize);
+    Assert(yes);
+    engone::FileClose(file);
 
-// int findConstant(Bytecode& code, Decimal number){
-//     int count = 0;
-//     for(int i=0;i<(int)code.constNumbers.used;i++){
-//         Number* num = code.getConstNumber(i);
-//         if(num->value == number){
-//             count++;
-//         }
-//     }
-//     return count;
-// }
-// int findConstant(Bytecode& code, const char* str){
-//     int count = 0;
-//     String temp{};
-//     temp.memory.data = (void*)str;
-//     temp.memory.used = strlen(str);
-//     for(int i=0;i<(int)code.constStrings.used;i++){
-//         String* string = code.getConstString(i);
-//         if(*string == temp){
-//             count++;
-//         }
-//     }
-//     return count;
-// }
-// bool hasConstraint(Bytecode& code, Decimal number, int min, int max = -1){
-//     int count = findConstant(code,number);
-//     bool yes=false;
-//     if(max==-1) yes = count==min;
-//     else yes = count>=min&&count<=max;
-//     if(!yes){
-//         if(max==-1){
-//             _SLOG(SERR << "Incorrect count of "<<number<<" ("<<min<<" == "<<count<<")\n";)
-//         }else{
-//             _SLOG(SERR << "Incorrect count of "<<number<<" ("<<min<<" <= "<<count<<" <= "<<max<<")\n";)
-//         }
-//     }
-//     return yes;
-// }
-// bool hasNumbers(Bytecode& code, int min, int max=-1){
-//     int count = code.constNumbers.used;
-//     bool yes=false;
-//     if(max==-1) yes = count==min;
-//     else yes = count>=min&&count<=max;
-//     if(!yes){
-//         if(max==-1){
-//             _SLOG(SERR << "Incorrect total numbers ("<<min<<" == "<<count<<")\n";)
-//         }else{
-//             _SLOG(SERR << "Incorrect total numbers ("<<min<<" <= "<<count<<" <= "<<max<<")\n";)
-//         }
-//     }
-//     return yes;
-// }
-bool hasTokens(TokenStream& tokens, int min, int max=-1){
-    int count = tokens.length();
-    bool yes=false;
-    if(max==-1) yes = count==min;
-    else yes = count>=min&&count<=max;
-    if(!yes){
-        if(max==-1){
-            _SLOG(SERR << "Incorrect token count ("<<min<<" == "<<count<<")\n";)
-        }else{
-            _SLOG(SERR << "Incorrect token count ("<<min<<" <= "<<count<<" <= "<<max<<")\n";)
+    TestOrigin origin{};
+    origin.buffer = buffer;
+    origin.size = fileSize;
+    outTestOrigins->add(origin);
+
+    // TODO: Not handling comments or quotes. Expect wierd things if @ is
+    //   found in one.
+    const char* const testKey = "TEST-CASE ";
+    const int testKeyLen = strlen(testKey);
+    // const char* const textKey = "text ";
+    // const int textKeyLen = strlen(textKey);
+    TestCase nextTest = {};
+    #define FINALIZE_TEST(END_INDEX) if(nextTest.textBuffer.buffer) {\
+        nextTest.textBuffer.size = (u64)buffer + END_INDEX - (u64)nextTest.textBuffer.buffer;\
+        outTestCases->add(nextTest);\
+        }
+    int line = 1;
+    int column = 1;
+    int index = 0;
+    while(index<(int)fileSize){
+        char chr = buffer[index];
+        index++;
+        column++;
+        if(chr == '\n') {
+            line++;
+            column = 1;
+        }
+
+        if(chr != '@')
+            continue;
+
+        if(fileSize - index >= testKeyLen && !strncmp(buffer + index, testKey, testKeyLen)) {
+            FINALIZE_TEST(index-1)
+            
+            index += testKeyLen;
+            column += testKeyLen;
+
+            int startIndex = -1;
+            int nameLen = 0;
+            bool hadLineFeed = false;
+            while (index<fileSize){
+                char chr = buffer[index];
+                index++;
+                column++;
+                if(chr == '\n') {
+                    line++;
+                    column = 1;
+                }
+                if(chr == '\n') {
+                    hadLineFeed=true;
+                    break;
+                }
+                if(chr == ' ' || chr == '\t' || chr == '\r') {
+                    if (startIndex!=-1)
+                        break;
+                    continue;
+                }
+                if(startIndex==-1)
+                    startIndex = index-1;
+                nameLen++;
+            }
+            if(!hadLineFeed){
+                while (index<fileSize){
+                    char chr = buffer[index];
+                    index++;
+                    column++;
+                    if(chr == '\n') {
+                        line++;
+                        column = 1;
+                    }
+                    if(chr == '\n')
+                        break;
+                }
+            }
+            if(startIndex==-1){
+                ERR_SECTION(
+                    ERR_HEAD_SUITE()
+                    ERR_MSG_SUITE("Bad syntax.")
+                    // TODO: Print file and line
+                )
+            } else {
+                nextTest.testName = std::string(buffer + startIndex,nameLen);
+                nextTest.textBuffer.origin = path;
+                nextTest.textBuffer.buffer = buffer + index;
+                nextTest.textBuffer.startLine = line;
+                nextTest.textBuffer.startColumn = column;
+            }
+        } else {
+            // TODO: text insertion
+            ERR_SECTION(
+                ERR_HEAD_SUITE()
+                ERR_MSG_SUITE("Bad syntax.")
+            )
         }
     }
-    return yes;
+    FINALIZE_TEST(index)
+    #undef FINALIZE_TEST
 }
 
-
-#define TEST_VALUE(S) {\
-        Context::TestValue& val = data->context.testValues[data->testValueIndex++];\
-        if(val.type==REF_STRING && !(val.string == S)){\
-            return TEST_FAILED;\
-        }}
-
-#define TEST_FAILED 0
-#define TEST_SUCCESS 1
-struct TestData {
-    engone::Memory<char> text{};
-    TokenStream* tokens=0;
-    Bytecode* bytecode = 0;
-    Interpreter interpreter{};
-    int testValueIndex = 0;
-    
-    void init(const char* path){
-        // text = ReadFile(path);
-        tokens = TokenStream::Tokenize(path);
-    }
-    ~TestData(){
-        text.resize(0);
-        TokenStream::Destroy(tokens);
-        Bytecode::Destroy(bytecode);
-        interpreter.cleanup();
-    }
-};
-typedef int (*TestCase(TestData* data));
-
-// int TestSumtest(TestData* data){
-//     using namespace engone;
-//     int err=0;
-
-//     if(!hasTokens(*data->tokens,13))
-//         return TEST_FAILED;
-
-//     data->bytecode = GenerateScript(*data->tokens,&err);
-//     if(err||
-//         !hasConstraint(data->bytecode,1,1)||
-//         !hasConstraint(data->bytecode,2,1)||
-//         !hasNumbers(data->bytecode,2)
-//     ) return TEST_FAILED;
-
-//     data->context.execute(data->bytecode);
-
-//     TEST_VALUE("3");
-    
-//     return TEST_SUCCESS;
-// }
-int TestMacro(){
-    return 0;
-}
-
-bool VectorContains(std::vector<std::string>& list, const std::string& str){
-    for(std::string& it : list){
-        if (it == str) 
-            return true;
-    }
-    return false;
-}
-
-void TestSuite(std::vector<std::string>& tests, bool testall){
+void TestSuite(DynamicArray<std::string>& tests){
     using namespace engone;
-    int failedCases = 0;
-    int totalCases = 0;
+    VerifyTests(tests);
+}
 
-#define RUN_TEST(P,F) {TestData data;data.init(P);int result = F(&data);totalCases++;if(result==TEST_FAILED) failedCases++; }
 
-    // if(testall||VectorContains(tests,"sumtest"))
-    //     RUN_TEST("tests/sumtest.btb",TestSumtest)
+void VerifyTests(DynamicArray<std::string>& filesToTest){
+    using namespace engone;
+    DynamicArray<TestCase> testCases{};
+    DynamicArray<TestOrigin> testOrigins{};
+    testOrigins.resize(filesToTest.size());
 
-    int successfulCases = totalCases-failedCases;
+    for (auto& file : filesToTest) {
+        ParseTestCases(file, &testOrigins, &testCases);
+    }
+    log::out << "Test cases ("<<testCases.size()<<"):\n";
+    for(auto& testCase : testCases){
+        log::out << " "<<testCase.testName << ": "<<testCase.textBuffer.size<<" bytes (origin: "<<testCase.textBuffer.origin<<")\n";
+    }
 
-    float rate = (float)successfulCases/totalCases;
-    if(rate<1.f) log::out << log::YELLOW;
-    else log::out << log::GREEN;
-    log::out << (100.f*rate)<<"% Success ("<<successfulCases<<" correct cases)\n";
-    if(rate!=1.f){
-        log::out << log::RED << failedCases<<" cases failed\n";
+    for(int i=0;i<testCases.size();i++) {
+        auto& testcase = testCases[i];
+
+        CompileOptions options{};
+        options.silent=true;
+        options.target = BYTECODE;
+        // options.initialSourceFile = testcase.textBuffer.origin;
+        options.initialSourceBuffer = testcase.textBuffer;
+        // options.initialSourceBufferSize = testcase.size;
+        Bytecode* bytecode = CompileSource(&options);
+        // TODO: Compile source and run?
+        // What happens in text?
+        Bytecode::Destroy(bytecode);
+    }
+
+    for(auto& origin : testOrigins) {
+        engone::Free(origin.buffer, origin.size);
     }
 }

@@ -6,9 +6,9 @@
 // #undef ERRAT
 
 #undef WARN_HEAD3
-#define WARN_HEAD3(T, M) info.compileInfo->warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
+#define WARN_HEAD3(T, M) info.compileInfo->compileOptions->compileStats.warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
 #undef ERR_HEAD3
-#define ERR_HEAD3(T, M) info.compileInfo->errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000") << M
+#define ERR_HEAD3(T, M) info.compileInfo->compileOptions->compileStats.errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000") << M
 #undef ERR_LINE2
 #define ERR_LINE2(I, M) PrintCode(I, info.tokens, M)
 #undef WARN_LINE2
@@ -353,18 +353,22 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
                 info.next();
                 
                 if(astStruct->polyArgs.size()==0){
-                    ERR_HEAD3(token, "empty polymorph list\n";
-                        ERR_LINE2(token.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("empty polymorph list.")
+                        ERR_LINE(token,"bad");
                     )
                 }
                 break;
             }
+            info.next(); // must skip name to prevent infinite loop
             if(!IsName(token)){
-                ERR_HEAD3(token, token<<" is not a valid name for polymorphism\n";
-                    ERR_LINE2(token.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("'"<<token<<"' is not a valid name for polymorphism. (TODO: Invalidate the struct somehow?)")
+                    ERR_LINE(token,"bad");
                 )
             }else{
-                info.next();
                 ASTStruct::PolyArg arg={};
                 arg.name = token;
                 astStruct->polyArgs.add(arg);
@@ -380,8 +384,10 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
                 info.next();
                 break;
             } else{
-                ERR_HEAD3(token, token<<"is neither , or >\n";
-                    ERR_LINE2(token.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("'"<<token<<"' is neither , or >.")
+                    ERR_LINE(token,"bad")
                 )
                 continue;
             }
@@ -856,7 +862,8 @@ SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count)
         } else {
             fncall->nonNamedArgs++;
         }
-        fncall->args->add(expr);
+        // fncall->args->add(expr);
+        fncall->args.add(expr);
         // if(tail){
         //     tail->next = expr;
         // }else{
@@ -879,15 +886,21 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
         return SignalAttempt::FAILURE;
     }
 
-    std::vector<ASTExpression*> values;
-    std::vector<Token> extraTokens; // ops, assignOps and castTypes doesn't store the token so you know where it came from. We therefore use this array.
-    std::vector<OperationType> ops;
-    std::vector<OperationType> assignOps;
-    // std::vector<OperationType> directOps; // ! & *
-    // extra info for directOps
-    std::vector<TypeId> castTypes;
-    // extra info for directOps
-    std::vector<Token> namespaceNames;
+    // std::vector<ASTExpression*> values;
+    // std::vector<Token> extraTokens; // ops, assignOps and castTypes doesn't store the token so you know where it came from. We therefore use this array.
+    // std::vector<OperationType> ops;
+    // std::vector<OperationType> assignOps;
+    // std::vector<TypeId> castTypes;
+    // std::vector<Token> namespaceNames;
+    
+    // TODO: This is bad, improved somehow
+    TINY_ARRAY(ASTExpression*, values, 5);
+    TINY_ARRAY(Token, extraTokens, 5); // ops, assignOps and castTypes doesn't store the token so you know where it came from. We therefore use this array.
+    TINY_ARRAY(OperationType, ops, 5);
+    TINY_ARRAY(OperationType, assignOps, 5);
+    TINY_ARRAY(TypeId, castTypes, 5);
+    TINY_ARRAY(Token, namespaceNames, 5);
+
     defer { for(auto e : values) info.ast->destroy(e); };
 
     bool shouldComputeExpression = false;
@@ -954,13 +967,14 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
                     // new(tmp->name)std::string(std::string(token)+polyTypes);
                     
-                    tmp->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
-                    new(tmp->args)DynamicArray<ASTExpression*>();
+                    // tmp->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
+                    // new(tmp->args)DynamicArray<ASTExpression*>();
 
                     // Create "this" argument in methods
-                    tmp->args->add(values.back());
+                    // tmp->args->add(values.last());
+                    tmp->args.add(values.last());
                     tmp->nonNamedArgs++;
-                    values.pop_back();
+                    values.pop();
                     
 
                     tmp->boolValue = true; // indicicate fncall to struct method
@@ -979,7 +993,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     tmp->tokenRange.endIndex = info.at()+1;
                     // tmp->tokenRange.tokenStream = info.tokens;
 
-                    values.push_back(tmp);
+                    values.add(tmp);
                     continue;
                 }
                 if(polyTypes.length()!=0){
@@ -992,27 +1006,27 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tmp->name = memberName;
                 // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
                 // new(tmp->name)std::string(token);
-                tmp->left = values.back();
-                values.pop_back();
+                tmp->left = values.last();
+                values.pop();
                 tmp->tokenRange.firstToken = tmp->left->tokenRange.firstToken;
                 // tmp->tokenRange.startIndex = tmp->left->tokenRange.startIndex;
                 tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
-                values.push_back(tmp);
+                values.add(tmp);
                 continue;
             } else if (Equal(token,"=")) {
                 info.next();
 
-                ops.push_back(AST_ASSIGN);
-                assignOps.push_back((OperationType)0);
+                ops.add(AST_ASSIGN);
+                assignOps.add((OperationType)0);
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
             } else if((opType = IsAssignOp(token)) && Equal(info.get(info.at()+2),"=")) {
                 info.next();
                 info.next();
 
-                ops.push_back(AST_ASSIGN);
-                assignOps.push_back(opType);
+                ops.add(AST_ASSIGN);
+                assignOps.add(opType);
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
             } else if((opType = IsOp(token,extraOpNext))){
@@ -1031,7 +1045,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // used for doing next on the extra arrows for bit shifts
                 }
 
-                ops.push_back(opType);
+                ops.add(opType);
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
             // } else if (Equal(token,"..")){
@@ -1046,14 +1060,14 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
 
             //     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_RANGE));
             //     tmp->tokenRange.firstToken = token;
-            //     tmp->tokenRange.startIndex = values.back()->tokenRange.startIndex;
+            //     tmp->tokenRange.startIndex = values.last()->tokenRange.startIndex;
             //     tmp->tokenRange.endIndex = info.at()+1;
             //     tmp->tokenRange.tokenStream = info.tokens;
 
-            //     tmp->left = values.back();
-            //     values.pop_back();
+            //     tmp->left = values.last();
+            //     values.pop();
             //     tmp->right = rightExpr;
-            //     values.push_back(tmp);
+            //     values.add(tmp);
             //     continue;
             } else if(Equal(token,"[")){
                 int startIndex = info.at()+1;
@@ -1077,10 +1091,10 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
 
-                tmp->left = values.back();
-                values.pop_back();
+                tmp->left = values.last();
+                values.pop();
                 tmp->right = indexExpr;
-                values.push_back(tmp);
+                values.add(tmp);
                 tmp->constantValue = tmp->left->constantValue && tmp->right->constantValue;
                 continue;
             } else if(Equal(token,"++")){
@@ -1094,9 +1108,9 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // tmp->tokenRange.tokenStream = info.tokens;
                 tmp->boolValue = true;
 
-                tmp->left = values.back();
-                values.pop_back();
-                values.push_back(tmp);
+                tmp->left = values.last();
+                values.pop();
+                values.add(tmp);
                 tmp->constantValue = tmp->left->constantValue;
 
                 continue;
@@ -1111,9 +1125,9 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // tmp->tokenRange.tokenStream = info.tokens;
                 tmp->boolValue = true;
 
-                tmp->left = values.back();
-                values.pop_back();
-                values.push_back(tmp);
+                tmp->left = values.last();
+                values.pop();
+                values.add(tmp);
                 tmp->constantValue = tmp->left->constantValue;
 
                 continue;
@@ -1142,23 +1156,23 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
         }else{
             if(Equal(token,"&")){
                 info.next();
-                ops.push_back(AST_REFER);
+                ops.add(AST_REFER);
                 attempt = false;
                 continue;
             }else if(Equal(token,"*")){
                 info.next();
-                ops.push_back(AST_DEREF);
+                ops.add(AST_DEREF);
                 attempt = false;
 
                 continue;
             } else if(Equal(token,"!")){
                 info.next();
-                ops.push_back(AST_NOT);
+                ops.add(AST_NOT);
                 attempt = false;
                 continue;
             } else if(Equal(token,"~")){
                 info.next();
-                ops.push_back(AST_BNOT);
+                ops.add(AST_BNOT);
                 attempt = false;
                 continue;
             } else if(Equal(token,"cast")){
@@ -1185,12 +1199,12 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     )
                 }
                 info.next();
-                ops.push_back(AST_CAST);
+                ops.add(AST_CAST);
                 // TypeId dt = info.ast->getTypeInfo(info.currentScopeId,tokenTypeId)->id;
-                // castTypes.push_back(dt);
+                // castTypes.add(dt);
                 TypeId strId = info.ast->getTypeString(tokenTypeId);
-                castTypes.push_back(strId);
-                extraTokens.push_back(token);
+                castTypes.add(strId);
+                extraTokens.add(token);
                 attempt=false;
                 continue;
             } else if(Equal(token,"-")){
@@ -1200,13 +1214,13 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 continue;
             } else if(Equal(token,"++")){
                 info.next();
-                ops.push_back(AST_INCREMENT);
+                ops.add(AST_INCREMENT);
 
                 attempt = false;
                 continue;
             } else if(Equal(token,"--")){
                 info.next();
-                ops.push_back(AST_DECREMENT);
+                ops.add(AST_DECREMENT);
 
                 attempt = false;
                 continue;
@@ -1254,7 +1268,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 negativeNumber = false;
                 
                 tmp->constantValue = true;
-                values.push_back(tmp);
+                values.add(tmp);
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1266,7 +1280,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 if(negativeNumber)
                     tmp->f32Value = -tmp->f32Value;
                 negativeNumber=false;
-                values.push_back(tmp);
+                values.add(tmp);
                 tmp->constantValue = true;
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
@@ -1296,7 +1310,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     )
                 }
                 tmp->i64Value =  ConvertHexadecimal(token); // TODO: Only works with 32 bit or 16,8 I suppose.
-                values.push_back(tmp);
+                values.add(tmp);
                 tmp->constantValue = true;
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
@@ -1327,7 +1341,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                         // we don't need to return PARSE_ERROR. We could but things will be fine.
                     // }
                 }
-                values.push_back(tmp);
+                values.add(tmp);
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1337,7 +1351,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_BOOL));
                 tmp->boolValue = Equal(token,"true");
                 tmp->constantValue = true;
-                values.push_back(tmp);
+                values.add(tmp);
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
@@ -1382,7 +1396,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             //         }
             //     }
                 
-            //     values.push_back(tmp);
+            //     values.add(tmp);
             //     tmp->tokenRange.firstToken = token;
             //     tmp->tokenRange.startIndex = info.at();
             //     tmp->tokenRange.endIndex = info.at()+1;
@@ -1391,7 +1405,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             else if(Equal(token,"null")){
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NULL));
-                values.push_back(tmp);
+                values.add(tmp);
                 tmp->constantValue = true;
                 tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
@@ -1412,7 +1426,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.endIndex = info.at()+1;
-                values.push_back(tmp);
+                values.add(tmp);
             } else if(Equal(token,"nameof")) {
                 info.next();
                 Token token = {};
@@ -1423,7 +1437,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tmp->name = token;
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.endIndex = info.at()+1;
-                values.push_back(tmp);
+                values.add(tmp);
             } else if(IsName(token)){
                 info.next();
                 int startToken=info.at();
@@ -1473,12 +1487,12 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     
                     std::string ns = "";
                     while(ops.size()>0){
-                        OperationType op = ops.back();
+                        OperationType op = ops.last();
                         if(op == AST_FROM_NAMESPACE) {
-                            ns += namespaceNames.back();
+                            ns += namespaceNames.last();
                             ns += "::";
-                            namespaceNames.pop_back();
-                            ops.pop_back();
+                            namespaceNames.pop();
+                            ops.pop();
                         } else {
                             break;
                         }
@@ -1490,8 +1504,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
                     // new(tmp->name)std::string(std::move(ns));
                     tmp->name = polyName;
-                    tmp->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
-                    new(tmp->args)DynamicArray<ASTExpression*>();
+                    // tmp->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
+                    // new(tmp->args)DynamicArray<ASTExpression*>();
 
                     int count = 0;
                     SignalDefault result = ParseArguments(info, tmp, &count);
@@ -1501,7 +1515,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     }
 
                     _PLOG(log::out << "Parsed call "<<count <<"\n";)
-                    values.push_back(tmp);
+                    values.add(tmp);
                     tmp->tokenRange.firstToken = token;
                     // tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
@@ -1510,18 +1524,18 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // initializer
                     info.next();
                     ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
-                    initExpr->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
-                    new(initExpr->args)DynamicArray<ASTExpression*>();
+                    // initExpr->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
+                    // new(initExpr->args)DynamicArray<ASTExpression*>();
                     // NOTE: Type checker works on TypeIds not AST_FROM_NAMESPACE.
                     //  AST_FROM... is used for functions and variables.
                     std::string ns = "";
                     while(ops.size()>0){
-                        OperationType op = ops.back();
+                        OperationType op = ops.last();
                         if(op == AST_FROM_NAMESPACE) {
-                            ns += namespaceNames.back();
+                            ns += namespaceNames.last();
                             ns += "::";
-                            namespaceNames.pop_back();
-                            ops.pop_back();
+                            namespaceNames.pop();
+                            ops.pop();
                         } else {
                             break;
                         }
@@ -1573,7 +1587,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                             // expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
                             // new(expr->namedValue)std::string(token);
                         }
-                        initExpr->args->add(expr);
+                        // initExpr->args->add(expr);
+                        initExpr->args.add(expr);
                         // if(tail){
                         //     tail->next = expr;
                         // }else{
@@ -1597,7 +1612,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                         }
                     }
                     // log::out << "Parse initializer "<<count<<"\n";
-                    values.push_back(initExpr);
+                    values.add(initExpr);
                     initExpr->tokenRange.firstToken = token;
                     // initExpr->tokenRange.startIndex = startToken;
                     initExpr->tokenRange.endIndex = info.at()+1;
@@ -1620,8 +1635,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                         //     )
                         //     continue;
                         // }
-                        ops.push_back(AST_FROM_NAMESPACE);
-                        namespaceNames.push_back(token);
+                        ops.add(AST_FROM_NAMESPACE);
+                        namespaceNames.add(token);
                         continue; // do a second round here?
                         // TODO: detect more ::
                     } else {
@@ -1630,23 +1645,23 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                         Token nsToken = polyName;
                         int nsOps = 0;
                         while(ops.size()>0){
-                            OperationType op = ops.back();
+                            OperationType op = ops.last();
                             if(op == AST_FROM_NAMESPACE) {
                                 nsOps++;
-                                ops.pop_back();
+                                ops.pop();
                             } else {
                                 break;
                             }
                         }
                         for(int i=0;i<nsOps;i++){
-                            Token& tok = namespaceNames.back();
+                            Token& tok = namespaceNames.last();
                             if(i==0){
                                 nsToken = tok;
                             } else {
                                 nsToken.length+=tok.length;
                             }
                             nsToken.length+=2; // colons
-                            namespaceNames.pop_back();
+                            namespaceNames.pop();
                         }
                         if(nsOps!=0){
                             nsToken.length += polyName.length;
@@ -1654,7 +1669,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
 
                         tmp->name = nsToken;
 
-                        values.push_back(tmp);
+                        values.add(tmp);
                         tmp->tokenRange.firstToken = nsToken;
                         tmp->tokenRange.endIndex = info.at()+1;
                     }
@@ -1678,7 +1693,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     )
                 }else
                     info.next();
-                values.push_back(tmp);  
+                values.add(tmp);  
             } else {
                 if(attempt){
                     return SignalAttempt::BAD_ATTEMPT;
@@ -1717,7 +1732,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // if(OpPrecedence(op1)>OpPrecedence(op2)){ // this code cause this: 3 = 3-1-1
                     nowOp = op1;
                     ops[ops.size()-2] = op2;
-                    ops.pop_back();
+                    ops.pop();
                 }else{
                     // _PLOG(log::out << "break\n";)
                     break;
@@ -1727,13 +1742,13 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // NOTE: Break on base case when we end with no operators left and with one value. 
                     break;
                 }
-                nowOp = ops.back();
-                ops.pop_back();
+                nowOp = ops.last();
+                ops.pop();
             }else{
                 break;
             }
-            auto er = values.back();
-            values.pop_back();
+            auto er = values.last();
+            values.pop();
 
             auto val = info.ast->createExpression(TypeId(nowOp));
             // val->tokenRange.tokenStream = info.tokens;
@@ -1744,18 +1759,18 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 val->tokenRange.endIndex = er->tokenRange.endIndex;
                 // val->tokenRange = er->tokenRange;
                 if(nowOp == AST_FROM_NAMESPACE){
-                    Token& tok = namespaceNames.back();
+                    Token& tok = namespaceNames.last();
                     val->name = tok;
                     // val->name = (std::string*)engone::Allocate(sizeof(std::string));
                     // new(val->name)std::string(tok);
                     val->tokenRange.firstToken = tok;
                     // val->tokenRange.startIndex -= 2; // -{namespace name} -{::}
-                    namespaceNames.pop_back();
+                    namespaceNames.pop();
                 } else if(nowOp == AST_CAST){
-                    val->castType = castTypes.back();
-                    castTypes.pop_back();
-                    Token extraToken = extraTokens.back();
-                    extraTokens.pop_back();
+                    val->castType = castTypes.last();
+                    castTypes.pop();
+                    Token extraToken = extraTokens.last();
+                    extraTokens.pop();
                     val->tokenRange.firstToken = extraToken;
                     val->tokenRange.endIndex = er->tokenRange.firstToken.tokenIndex;
                 } else {
@@ -1766,8 +1781,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     val->constantValue = er->constantValue;
                 }
             } else if(values.size()>0){
-                auto el = values.back();
-                values.pop_back();
+                auto el = values.last();
+                values.pop();
                 val->tokenRange.firstToken = el->tokenRange.firstToken;
                 // val->tokenRange.startIndex = el->tokenRange.startIndex;
                 val->tokenRange.endIndex = er->tokenRange.endIndex;
@@ -1776,25 +1791,25 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
 
                 if(nowOp==AST_ASSIGN){
                     Assert(assignOps.size()>0);
-                    val->assignOpType = assignOps.back();
-                    assignOps.pop_back();
+                    val->assignOpType = assignOps.last();
+                    assignOps.pop();
                 }
                 val->constantValue = val->left->constantValue && val->right->constantValue;
             }
 
-            values.push_back(val);
+            values.add(val);
         }
         // Attempt succeeded. Failure is now considered an error.
         attempt = false;
         expectOperator=!expectOperator;
         if(ending){
-            expression = values.back();
+            expression = values.last();
             expression->computeWhenPossible = shouldComputeExpression;
             Assert(values.size()==1);
 
             // we have a defer above which destroys expressions which is why we
             // clear the list to prevent it
-            values.clear();
+            values.resize(0);
             return SignalAttempt::SUCCESS;
         }
     }
@@ -1934,8 +1949,8 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         info.next();
         
         statement = info.ast->createStatement(ASTStatement::RETURN);
-        // statement->returnValues = (std::vector<ASTExpression*>*)engone::Allocate(sizeof(std::vector<ASTExpression*>));
-        // new(statement->returnValues)std::vector<ASTExpression*>();
+        // statement->returnValues = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
+        // new(statement->returnValues)DynamicArray<ASTExpression*>();
 
         WHILE_TRUE {
             ASTExpression* expr=0;
@@ -1993,7 +2008,8 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         
         statement->varnames.add({originToken});
         if(aliasToken.str){
-            statement->alias = (std::string*)engone::Allocate(sizeof(std::string));
+            // statement->alias = (std::string*)engone::Allocate(sizeof(std::string));
+            statement->alias = TRACK_ALLOC(std::string);
             new(statement->alias)std::string(aliasToken);
         }
 
@@ -2651,9 +2667,14 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
     if(globalAssignment)
         info.next();
 
+    statement = info.ast->createStatement(ASTStatement::ASSIGN);
+    // statement->varnames.stealFrom(varnames);
+    statement->firstExpression = nullptr;
+    statement->globalAssignment = globalAssignment;
+
     //-- Evaluate variables on the left side
     int startIndex = info.at()+1;
-    DynamicArray<ASTStatement::VarName> varnames{};
+    // DynamicArray<ASTStatement::VarName> varnames{};
     while(!info.end()){
         Token name = info.get(info.at()+1);
         if(!IsName(name)){
@@ -2664,7 +2685,7 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
         }
         info.next();
 
-        varnames.add({name});
+        statement->varnames.add({name});
         Token token = info.get(info.at()+1);
         if(Equal(token,":")){
             info.next(); // :
@@ -2706,10 +2727,10 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
             
             TypeId strId = info.ast->getTypeString(typeToken);
 
-            int index = varnames.size()-1;
-            while(index>=0 && !varnames[index].assignString.isValid()){
-                varnames[index].assignString = strId;
-                varnames[index].arrayLength = arrayLength;
+            int index = statement->varnames.size()-1;
+            while(index>=0 && !statement->varnames[index].assignString.isValid()){
+                statement->varnames[index].assignString = strId;
+                statement->varnames[index].arrayLength = arrayLength;
                 index--;
             }
         }
@@ -2721,10 +2742,10 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
         break;
     }
 
-    statement = info.ast->createStatement(ASTStatement::ASSIGN);
-    statement->varnames.stealFrom(varnames);
-    statement->firstExpression = nullptr;
-    statement->globalAssignment = globalAssignment;
+    // statement = info.ast->createStatement(ASTStatement::ASSIGN);
+    // // statement->varnames.stealFrom(varnames);
+    // statement->firstExpression = nullptr;
+    // statement->globalAssignment = globalAssignment;
 
     Token token = info.get(info.at()+1);
     if(Equal(token,"=")) {
@@ -2794,11 +2815,11 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
     }
 
     if(!inheritScope || trulyGlobal) {
-        info.nextContentOrder.push_back(CONTENT_ORDER_ZERO);
+        info.nextContentOrder.add(CONTENT_ORDER_ZERO);
     }
     defer {
         if(!inheritScope || trulyGlobal) {
-            info.nextContentOrder.pop_back(); 
+            info.nextContentOrder.pop(); 
         }
     };
     DynamicArray<ASTStatement*> nearDefers{};
@@ -2900,7 +2921,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                             deferCopy->sharedContents = true;
 
                             bodyLoc->add(info.ast, deferCopy);
-                            info.nextContentOrder.back()++;
+                            info.nextContentOrder.last()++;
                         }
                     }
                     for(int j=info.functionScopes.last().defers.size()-1;j>=0;j--){
@@ -2911,7 +2932,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                         deferCopy->sharedContents = true;
 
                         bodyLoc->add(info.ast, deferCopy);
-                        info.nextContentOrder.back()++;
+                        info.nextContentOrder.last()++;
                     }
                 } else if(tempStatement->type == ASTStatement::CONTINUE || tempStatement->type == ASTStatement::BREAK){
                     if(info.functionScopes.last().loopScopes.size()!=0){
@@ -2924,29 +2945,29 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                             deferCopy->sharedContents = true;
 
                             bodyLoc->add(info.ast, deferCopy);
-                            info.nextContentOrder.back()++;
+                            info.nextContentOrder.last()++;
                         }
                     }
                 }
                 bodyLoc->add(info.ast, tempStatement);
-                info.nextContentOrder.back()++;
+                info.nextContentOrder.last()++;
             }
         }
         if(tempFunction) {
             bodyLoc->add(info.ast, tempFunction);
-            info.nextContentOrder.back()++;
+            info.nextContentOrder.last()++;
         }
         if(tempStruct) {
             bodyLoc->add(info.ast, tempStruct);
-            info.nextContentOrder.back()++;
+            info.nextContentOrder.last()++;
         }
         if(tempEnum) {
             bodyLoc->add(info.ast, tempEnum);
-            info.nextContentOrder.back()++;
+            info.nextContentOrder.last()++;
         }
         if(tempNamespace) {
             bodyLoc->add(info.ast, tempNamespace);
-            info.nextContentOrder.back()++;
+            info.nextContentOrder.last()++;
         }
 
         if(result==SignalAttempt::BAD_ATTEMPT){
@@ -2981,7 +3002,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             }
         }
         bodyLoc->add(info.ast,nearDefers[i]);
-        info.nextContentOrder.back()++;
+        info.nextContentOrder.last()++;
     }
     // nearDefers.cleanup(); // cleaned by destructor
 
@@ -3017,7 +3038,7 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
     }
     info.currentScopeId = body->scopeId;
 
-    info.compileInfo->errors += info.errors;
+    info.compileInfo->compileOptions->compileStats.errors += info.errors;
 
     info.functionScopes.add({});
     SignalDefault result = ParseBody(info, body, ast->globalScopeId, true);

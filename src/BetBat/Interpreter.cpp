@@ -25,9 +25,10 @@ void Interpreter::cleanup(){
     cmdArgs.ptr = nullptr;
     cmdArgs.len = 0;
 }
-void Interpreter::setCmdArgs(const std::vector<std::string>& inCmdArgs){
+void Interpreter::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
     using namespace engone;
     // cmdArgs.resize(inCmdArgs.size());
+    // cmdArgs.ptr = TRACK_ARRAY_ALLOC(Language::Slice<char>);
     cmdArgs.ptr = (Language::Slice<char>*)engone::Allocate(sizeof(Language::Slice<char>)*inCmdArgs.size());
     cmdArgs.len = inCmdArgs.size();
     u64 totalText = 0;
@@ -128,10 +129,12 @@ void Interpreter::execute(Bytecode* bytecode){
 void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endInstruction){
     using namespace engone; 
     Assert(bytecode);
-    if(!bytecode->nativeRegistry) {
-        bytecode->nativeRegistry = NativeRegistry::Create();
-        bytecode->nativeRegistry->initNativeContent();
-    }
+    auto nativeRegistry = NativeRegistry::GetGlobal();
+    // if(!bytecode->nativeRegistry) {
+    //     bytecode->nativeRegistry = NativeRegistry::GetGlobal();
+    //     // bytecode->nativeRegistry = NativeRegistry::Create();
+    //     // bytecode->nativeRegistry->initNativeContent();
+    // }
 
     if(bytecode->externalRelocations.size()>0){
         log::out << log::RED << "Interpreter does not support symbol relocations! Don't use function with @import annotation.\n";
@@ -158,7 +161,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
 
     u64 expectedStackPointer = sp;
 
-    auto tp = MeasureTime();
+    auto tp = StartMeasure();
 
     #ifdef ILOG
     #undef _ILOG
@@ -942,7 +945,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     break;
                 }
                 break; case NATIVE_StartMeasure:{
-                    auto timePoint = MeasureTime();
+                    auto timePoint = StartMeasure();
                     
                     *(u64*)(fp-8) = (u64)timePoint;
 
@@ -976,7 +979,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     break;
                 }
                 break; default:{
-                    auto* nativeFunction = bytecode->nativeRegistry->findFunction(addr);
+                    // auto* nativeFunction = bytecode->nativeRegistry->findFunction(addr);
+                    auto* nativeFunction = nativeRegistry->findFunction(addr);
                     if(nativeFunction){
                         // _ILOG(
                         log::out << log::RED << "Native '"<<nativeFunction->name<<"' ("<<addr<<") has no impl. in interpreter\n";

@@ -70,7 +70,8 @@
         "*.rh": "cpp",
         "windows.h": "c",
         "winbase.h": "c",
-        "errhandlingapi.h": "c"
+        "errhandlingapi.h": "c",
+        "array": "cpp"
     },
     "cmake.configureOnOpen": false
 }

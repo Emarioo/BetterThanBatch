@@ -11,7 +11,7 @@
 
 // RDTSC togerher with cpu frequency from the windows register
 // is more accurate than QueryPerformance-Counter/Frequency
-#define USE_RDTSC
+// #define USE_RDTSC
 
 // #define LOG_ALLOCATIONS
 
@@ -25,12 +25,11 @@
 // #include <windows.h>
 
 // #include <mutex>
-
 // Cheeky include
 #include "BetBat/Util/Perf.h"
-
 #include "Engone/Win32Includes.h"
 
+#include "BetBat/Util/Array.h"
 
 #ifdef USE_RDTSC
 // to get cpu clock speed
@@ -53,7 +52,9 @@ namespace engone {
 		std::string root;
 		std::string dir;
 		HANDLE handle;
-		std::vector<std::string> directories;
+		DynamicArray<std::string> directories;
+		char* tempPtr = nullptr; // used in result
+		u32 max = 0; // not including \0
 	};
 	static std::unordered_map<DirectoryIterator,RDIInfo> s_rdiInfos;
 	static uint64 s_uniqueRDI=0;
@@ -64,7 +65,7 @@ namespace engone {
 		info.root.resize(pathlen);
 		memcpy((char*)info.root.data(), name, pathlen);
 		info.handle=INVALID_HANDLE_VALUE;
-		info.directories.push_back(info.root);
+		info.directories.add(info.root);
 
 		
 		// DWORD err = GetLastError();
@@ -85,14 +86,14 @@ namespace engone {
         // printf("NEXT\n");
 
 		WIN32_FIND_DATAA data;
-		WHILE_TRUE {
+		while(true) {
 			if(info->second.handle==INVALID_HANDLE_VALUE){
-				if(info->second.directories.empty()){
+				if(info->second.directories.size()==0){
 					return false;
 				}
                 info->second.dir.clear();
                 
-				if(!info->second.directories[0].empty()){
+				if(info->second.directories[0].size()!=0){
                     info->second.dir += info->second.directories[0];
 				}
                 
@@ -102,7 +103,9 @@ namespace engone {
                 
                 temp+="*";
 				// printf("FindFirstFile %s\n",temp.c_str());
-				info->second.directories.erase(info->second.directories.begin());
+				// TODO: This does a memcpy on the whole array (almost).
+				//  That's gonna be slow!
+				info->second.directories.remove(0);
 				// fprintf(stderr, "%s %p\n", temp.c_str(), &data);
 				
 				// DWORD err = GetLastError();
@@ -149,13 +152,16 @@ namespace engone {
 		if(!info->second.dir.empty())
 			newLength += info->second.dir.length()+1;
 
-		if(!result->name) {
-			result->name = (char*)Allocate(newLength + 1);
-			result->namelen = newLength;
-		} else {
-			result->name = (char*)Reallocate(result->name, result->namelen + 1, newLength + 1);
-			result->namelen = newLength;
+		if(!info->second.tempPtr) {
+			info->second.max = 256;
+			info->second.tempPtr = (char*)Allocate(info->second.max + 1);
+		} else if(info->second.max < newLength) {
+			u32 old = info->second.max;
+			info->second.max = info->second.max + newLength;
+			info->second.tempPtr = (char*)Reallocate(info->second.tempPtr, old + 1, info->second.max + 1);
 		}
+		result->name = info->second.tempPtr;
+		result->namelen = newLength;
         // printf("np: %p\n",result->name);
 
 		if(!info->second.dir.empty()) {
@@ -182,7 +188,7 @@ namespace engone {
 		result->lastWriteSeconds = time/10000000.f; // 100-nanosecond intervals
 		result->isDirectory = data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY;
 		if(result->isDirectory){
-            info->second.directories.push_back(result->name);
+            info->second.directories.add(result->name);
         }
 
 		for(int i=0;i<result->namelen;i++){
@@ -197,8 +203,8 @@ namespace engone {
 		if(info==s_rdiInfos.end()){
 			return;
 		}
-		if(!info->second.directories.empty())
-			info->second.directories.pop_back();
+		if(info->second.directories.size()!=0)
+			info->second.directories.pop();
 	}
 	void DirectoryIteratorDestroy(DirectoryIterator iterator, DirectoryIteratorData* dataToDestroy){
 		auto info = s_rdiInfos.find(iterator);
@@ -213,14 +219,19 @@ namespace engone {
 				PL_PRINTF("[WinError %lu] Error closing '%llu'\n",err,(uint64)iterator);
 			}
 		}
+		if(info->second.tempPtr) {
+			Free(info->second.tempPtr, info->second.max);
+			info->second.tempPtr = nullptr;
+			info->second.max = 0;
+		}
 		if(dataToDestroy && dataToDestroy->name) {
-			Free(dataToDestroy->name, dataToDestroy->namelen + 1);
+			// Free(dataToDestroy->name, dataToDestroy->namelen + 1);
 			dataToDestroy->name = nullptr;
 			dataToDestroy->namelen = 0;
 		}
 		s_rdiInfos.erase(iterator);
 	}
-	TimePoint MeasureTime(){
+	TimePoint StartMeasure(){
 		#ifdef USE_RDTSC
 		return (u64)__rdtsc();
 		#else
@@ -271,6 +282,34 @@ namespace engone {
 		// }
 		#endif
 		return (double)(endPoint-startPoint)/(double)frequency;
+	}
+	double DiffMeasure(TimePoint endSubStart) {
+		if(!once){
+			once=true;
+			#ifdef USE_RDTSC
+			// TODO: Does this work on all Windows versions?
+			//  Could it fail? In any case, something needs to be handled.
+			DWORD mhz = 0;
+			DWORD size = sizeof(DWORD);
+			LONG err = RegGetValueA(
+				HKEY_LOCAL_MACHINE,
+				"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+				"~MHz",
+				RRF_RT_DWORD,
+				NULL,
+				&mhz,
+				&size
+			);
+			frequency = (u64)mhz * (u64)1000000;
+			#else
+			BOOL success = QueryPerformanceFrequency((LARGE_INTEGER*)&frequency);
+			// if(!success){
+			// 	PL_PRINTF("time failed\n");	
+			// }
+			// TODO: handle err
+			#endif
+		}
+		return (double)(endSubStart)/(double)frequency;
 	}
 	void Sleep(double seconds){
         Win32Sleep((uint32)(seconds*1000));   
@@ -334,14 +373,14 @@ namespace engone {
 				DWORD err = GetLastError();
 				printf("[WinError %lu] Error aquiring file size from '%s'",err,path.c_str());
 				*outFileSize = 0;
-				Assert(outFileSize);
+				// Assert(outFileSize);
 			}
 		}
 		return TO_INTERNAL(handle);
 	}
 	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes){
-		Assert(readBytes!=(uint64)-1); // -1 indicates no bytes read
-		Assert(buffer);
+		// Assert(readBytes!=(uint64)-1); // -1 indicates no bytes read
+		// Assert(buffer);
 		DWORD bytesRead=0;
 		DWORD success = ReadFile(TO_HANDLE(file),buffer,readBytes,&bytesRead,NULL);
 		if(!success){
@@ -352,8 +391,8 @@ namespace engone {
 		return bytesRead;
 	}
 	uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes){
-		Assert(writeBytes!=(uint64)-1); // -1 indicates no bytes read
-		Assert(buffer);
+		// Assert(writeBytes!=(uint64)-1); // -1 indicates no bytes read
+		// Assert(buffer);
 		DWORD bytesWritten=0;
 		DWORD success = WriteFile(TO_HANDLE(file),buffer,writeBytes,&bytesWritten,NULL);
 		if(!success){
@@ -585,7 +624,9 @@ namespace engone {
 	}
 	void* Allocate(uint64 bytes){
 		if(bytes==0) return nullptr;
-		MEASURE;
+		#ifndef NO_PERF
+		MEASURE
+		#endif
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
         void* ptr = malloc(bytes);
 		if(!ptr) return nullptr;
@@ -614,7 +655,9 @@ namespace engone {
 		return ptr;
 	}
     void* Reallocate(void* ptr, uint64 oldBytes, uint64 newBytes){
-		MEASURE;
+		#ifndef NO_PERF
+		MEASURE
+		#endif
         if(newBytes==0){
             Free(ptr,oldBytes);
             return nullptr;   
@@ -656,15 +699,17 @@ namespace engone {
     }
 	void Free(void* ptr, uint64 bytes){
 		if(!ptr) return;
-		MEASURE;
+		#ifndef NO_PERF
+		MEASURE
+		#endif
 		free(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
 		PrintTracking(bytes,ENGONE_TRACK_FREE);
 		// s_allocStatsMutex.lock();
 		s_allocatedBytes-=bytes;
 		s_numberAllocations--;
-		Assert(s_allocatedBytes>=0);
-		Assert(s_numberAllocations>=0);
+		// Assert(s_allocatedBytes>=0);
+		// Assert(s_numberAllocations>=0);
 
 		// for(auto& slot : allocationsSlots){
 		// 	if(slot.ptr != ptr)
@@ -713,9 +758,22 @@ namespace engone {
 		//		function sets color without changing the variable.
 		SetConsoleTextAttribute((HANDLE)m_consoleHandle, color);
 	}
-    Semaphore::Semaphore(int initial, int max) {
+    Semaphore::Semaphore(u32 initial, u32 max) {
+		Assert(!m_internalHandle);
 		m_initial = initial;
 		m_max = max;
+	}
+	void Semaphore::init(u32 initial, u32 max) {
+		Assert(!m_internalHandle);
+		m_initial = initial;
+		m_max = max;
+		HANDLE handle = CreateSemaphore(NULL, m_initial, m_max, NULL);
+		if (handle == INVALID_HANDLE_VALUE) {
+			DWORD err = GetLastError();
+			PL_PRINTF("[WinError %lu] CreateSemaphore\n",err);
+		} else {
+			m_internalHandle = TO_INTERNAL(handle);
+		}
 	}
 	void Semaphore::cleanup() {
 		if (m_internalHandle != 0){
@@ -733,8 +791,9 @@ namespace engone {
 			if (handle == INVALID_HANDLE_VALUE) {
 				DWORD err = GetLastError();
                 PL_PRINTF("[WinError %lu] CreateSemaphore\n",err);
-			}else
+			} else {
                 m_internalHandle = TO_INTERNAL(handle);
+			}
 		}
 		if (m_internalHandle != 0) {
 			DWORD res = WaitForSingleObject(TO_HANDLE(m_internalHandle), INFINITE);

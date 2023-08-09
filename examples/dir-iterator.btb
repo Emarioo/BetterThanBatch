@@ -1,5 +1,5 @@
 #import "OS"
-// #import "Logger"
+#import "Logger"
 #import "Basic"
 
 // startTime = StartMeasure();
@@ -37,7 +37,8 @@ while result = iter.next() {
     if !eh
         continue;
     // log("):")
-    prints(result.name); prints("\n");
+    log(result.name);
+    // prints(result.name); prints("\n");
     // prints(": ");
     // printi(result.fileSize);
     // prints(" bytes, ");

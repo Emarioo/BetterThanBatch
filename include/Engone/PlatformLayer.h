@@ -11,11 +11,11 @@
 // TODO: Check if file exists.
 
 // #define Assert(expression) if(!(expression)) {fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__);*((char*)0) = 0;}
-#define Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
+// #define Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 
 // You can only disable this if you don't use any important code in the expression.
 // Like a resize or something.
-// #define Assert(expression) 
+// #define Assert(expression)
 
 #define PL_PRINT_ERRORS
 
@@ -67,9 +67,11 @@ namespace engone {
 	
 	void PrintRemainingTrackTypes();
 	
-	TimePoint MeasureTime();
+	TimePoint StartMeasure();
 	// returns time in seconds
-	double StopMeasure(TimePoint timePoint);
+	double StopMeasure(TimePoint startPoint);
+	// example: DiffMeasure(StartMeasure() - StartMeasure())
+	double DiffMeasure(TimePoint endSubStart);
     
     // Note that the platform/os may not have the accuracy you need.
     void Sleep(double seconds);
@@ -138,6 +140,7 @@ namespace engone {
 		void cleanup();
 		
 		void init(uint32(*func)(void*), void* arg);
+		// joins and destroys the thread
 		void join();
 		
         // True: Thread is doing stuff or finished and waiting to be joined.
@@ -157,9 +160,12 @@ namespace engone {
 	};
     class Semaphore {
 	public:
-		Semaphore(int initial=1, int maxLocks=1);
-		~Semaphore() {cleanup();}
+		Semaphore() = default;
+		Semaphore(u32 initial, u32 maxLocks);
+		~Semaphore() { cleanup(); }
 		void cleanup();
+
+		void init(u32 initial, u32 maxLocks);
 
 		void wait();
 		// count is how much to increase the semaphore's count by.

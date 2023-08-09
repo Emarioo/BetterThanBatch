@@ -3,8 +3,14 @@
 #include "Engone/Alloc.h"
 #include "Engone/Logger.h"
 #include "Engone/Typedefs.h"
+#include "BetBat/Util/Tracker.h"
 
 #include <string>
+
+// struct TinyString {
+//     char* ptr=0;
+//     u32 length;
+// };
 
 struct Token;
 struct TokenRange;
@@ -199,7 +205,8 @@ struct StringBuilder {
         Assert(owner);
         if(newMax==0){
             if(max!=0){
-                engone::Free(_ptr, max+1);
+                TRACK_ARRAY_FREE(_ptr, char, max+1);
+                // engone::Free(_ptr, max+1);
             }
             _ptr = nullptr;
             max = 0;
@@ -207,14 +214,17 @@ struct StringBuilder {
             return true;
         }
         if(!_ptr){
-            _ptr = (char*)engone::Allocate(newMax+1);
+            // _ptr = (char*)engone::Allocate(newMax+1);
+            _ptr = TRACK_ARRAY_ALLOC(char, newMax+1);
             Assert(_ptr);
             if(!_ptr)
                 return false;
             max = newMax;
             return true;
         } else {
+            TRACK_DELS(char, max + 1);
             char* newPtr = (char*)engone::Reallocate(_ptr, max+1, newMax+1);
+            TRACK_ADDS(char, newMax+1);
             Assert(newPtr);
             if(!newPtr)
                 return false;

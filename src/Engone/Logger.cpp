@@ -4,7 +4,7 @@
 //#include "Engone/Win32Includes.h"
 
 #include "Engone/PlatformLayer.h"
-
+#include "BetBat/Asserts.h"
 
 #include <time.h>
 #include <string.h>

@@ -97,8 +97,11 @@ struct NativeRegistry {
     std::unordered_map<std::string,u32> nativeFunctionMap;
     std::unordered_map<i64,u32> nativeFunctionMap2;
 
-    static NativeRegistry* Create();
-    static void Destroy(NativeRegistry*);
+    static NativeRegistry* GetGlobal();
+    static void DestroyGlobal();
+
+    // static NativeRegistry* Create();
+    // static void Destroy(NativeRegistry*);
     
     struct NativeFunction {
         NativeFunction(i64 jumpAddress) : jumpAddress(jumpAddress) {}

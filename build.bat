@@ -9,8 +9,9 @@
 @REM ########
 
 @REM SET USE_GCC=1
-SET USE_MSVC=1
 SET USE_DEBUG=1
+SET USE_MSVC=1
+SET USE_OPTIMIZATIONS=1
 
 @REM Advapi is used for winreg which accesses the windows registry
 @REM to get cpu clock frequency which is used with rdtsc.
@@ -21,8 +22,11 @@ SET GCC_DEFINITIONS=-DOS_WINDOWS
 SET GCC_COMPILE_OPTIONS=-std=c++14
 SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
-@REM SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc /O2
-SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
+if !USE_OPTIMIZATIONS!==1 (
+    SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc /O2
+) else (
+    SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
+)
 SET MSVC_LINK_OPTIONS=/nologo Advapi32.lib
 SET MSVC_INCLUDE_DIRS=/Iinclude
 SET MSVC_DEFINITIONS=/DOS_WINDOWS
@@ -75,6 +79,8 @@ if !USE_GCC!==1 (
     SET compileSuccess=!errorlevel!
 )
 
+@REM prog examples/dev.btb -out garb.exe
+
 set /a endTime=6000*(100%time:~3,2% %% 100 )+100*(100%time:~6,2% %% 100 )+(100%time:~9,2% %% 100 )
 set /a finS=(endTime-startTime)/100
 set /a finS2=(endTime-startTime)%%100
@@ -82,9 +88,9 @@ set /a finS2=(endTime-startTime)%%100
 echo Compiled in %finS%.%finS2% seconds
 
 @REM Not using MSVC_COMPILE_OPTIONS because debug information may be added
-cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS src\BetBat\External\NativeLayer.cpp /Fo:bin/NativeLayer.obj
-cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS src\Engone\Win32.cpp /Fo:bin/NativeLayer2.obj
-lib bin/NativeLayer.obj bin/NativeLayer2.obj Advapi32.lib /OUT:bin/NativeLayer.lib
+cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DNO_PERF /DNO_TRACKER src\BetBat\External\NativeLayer.cpp /Fo:bin/NativeLayer.obj
+cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DNO_PERF /DNO_TRACKER /DOS_WINDOWS src\Engone\Win32.cpp /Fo:bin/Win32.obj
+lib /nologo bin/NativeLayer.obj bin/Win32.obj Advapi32.lib /OUT:bin/NativeLayer.lib
 dumpbin /ALL bin/NativeLayer.obj > nat.out
 
 if !compileSuccess! == 0 (
@@ -100,9 +106,8 @@ if !compileSuccess! == 0 (
     prog -dev
     @REM  > temp
     @REM prog examples/x64_test.btb -target win-x64 -out test.exe
-    dumpbin bin/dev.obj /ALL > dev.out
+    @REM dumpbin bin/dev.obj /ALL > dev.out
     @REM dumpbin bin/obj_min.obj /ALL > min.out
-
 
     @REM prog examples/linecounter.btb -out test.exe -target win-x64
 

@@ -4,11 +4,11 @@
 
 #include "Engone/PlatformLayer.h"
 
-#define ALLOC_NEW(CLASS) new((CLASS*)engone::Allocate(sizeof(CLASS))) CLASS
-#define ALLOC_DELETE(CLASS,VAR) {VAR->~CLASS();engone::Free(VAR,sizeof(CLASS));}
+// #define ALLOC_NEW(CLASS) new((CLASS*)engone::Allocate(sizeof(CLASS))) CLASS
+// #define ALLOC_DELETE(CLASS,VAR) {VAR->~CLASS();engone::Free(VAR,sizeof(CLASS));}
 
-#define ALLOC_TYPE_HEAP 0
-#define ALLOC_TYPE_GAME_MEMORY 1
+// #define ALLOC_TYPE_HEAP 0
+// #define ALLOC_TYPE_GAME_MEMORY 1
 
 namespace engone {
 	template <typename T>
