@@ -83,6 +83,11 @@
 #define BC_SQRT 120
 #define BC_ROUND 121
 
+// used when running test cases
+// The stack must be aligned to 16 bytes because
+// there are some functions being called inside which reguire it.
+#define BC_TEST_VALUE 200
+
 // #define BC_SIN 110
 // #define BC_COS 111
 // #define BC_TAN 112

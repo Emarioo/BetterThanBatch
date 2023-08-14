@@ -29,7 +29,20 @@
 #endif
 
 namespace engone {
-	typedef void* APIFile;
+	struct APIFile {
+		u64 internal=0;
+		operator bool() {
+			return internal;
+		}
+		operator i32() = delete;
+	};
+	struct APIPipe {
+		u64 internal=0;
+		operator bool() {
+			return internal;
+		}
+		operator i32() = delete;
+	};
 	typedef void* DirectoryIterator;
 	// struct String {
 	// 	char* ptr;
@@ -162,7 +175,7 @@ namespace engone {
 		ThreadId getId();
 
 	private:
-		void* m_internalHandle = 0;
+		u64 m_internalHandle = 0;
 		ThreadId m_threadId=0;
 		
 		friend class FileMonitor;
@@ -181,7 +194,7 @@ namespace engone {
 		void signal(int count=1);
 
 	private:
-		void* m_internalHandle = 0;
+		u64 m_internalHandle = 0;
 		uint32 m_initial = 1;
 		uint32 m_max = 1;
 	};
@@ -197,7 +210,7 @@ namespace engone {
 		ThreadId getOwner();
 	private:
 		ThreadId m_ownerThread = 0;
-		void* m_internalHandle = 0;
+		u64 m_internalHandle = 0;
 	};
 	
 	#define PROGRAM_NEW_CONSOLE 1
@@ -206,12 +219,23 @@ namespace engone {
 
 	// Starts an exe at path. Uses CreateProcess from windows.h
 	// commandLine cannot be constant (CreateProcessA in windows api says so)
-	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0, int* exitCode=0, APIFile inPipe=0, APIFile outPipe=0);
+	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0, int* exitCode=0, APIFile inFile={}, APIFile outFile={}, APIFile errFile={});
 
-	APIFile PipeCreate(bool inheritRead, bool inheritWrite);
-	void PipeDestroy(APIFile pipe);
-	int PipeRead(APIFile pipe,void* buffer, int size);
-	int PipeWrite(APIFile pipe,void* buffer, int size);
+	APIPipe PipeCreate(u64 pipeBuffer, bool inheritRead, bool inheritWrite);
+	void PipeDestroy(APIPipe pipe);
+	u64 PipeRead(APIPipe pipe,void* buffer, u64 size);
+	u64 PipeWrite(APIPipe pipe,void* buffer, u64 size);
+	APIFile PipeGetRead(APIPipe pipe);
+	APIFile PipeGetWrite(APIPipe pipe);
+
+	bool SetStandardOut(APIFile file);
+	APIFile GetStandardOut();
+	
+	bool SetStandardErr(APIFile file);
+	APIFile GetStandardErr();
+	
+	bool SetStandardIn(APIFile file);
+	APIFile GetStandardIn();
 
 	typedef void(*VoidFunction)();
 	// @return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 
@@ -231,6 +255,12 @@ namespace engone {
 	// calls AllocConsole and sets stdin and stdout
 	void CreateConsole();
 
+	// these should be intrinsics
+	// bool compare_swap(i32* ptr, i32 oldValue, i32 newValue);
+	// void atomic_add(i32* ptr, i32 value);
+	// #define compare_swap(ptr, oldValue, newValue)
+	// #define atomic_add
+	
 	// Monitor a directory or file where any changes to files will call the callback with certain path.
 	class FileMonitor {
 	public:

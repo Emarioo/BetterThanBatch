@@ -89,6 +89,17 @@ struct CompileOptions {
     bool singleThreaded=false;
     u32 threadCount=3;
 
+    struct TestLocation {
+        // TODO: store file name elsewhere, duplicated data
+        std::string file;
+        int line=0;
+        int column=0;
+    };
+    DynamicArray<TestLocation> testLocations;
+    // returns index of the newly added test location
+    TestLocation* getTestLocation(int index);
+    int addTestLocation(TokenRange& range);
+
     CompileStats compileStats;
 };
 // NOTE: struct since more info may be added to each import name
@@ -165,7 +176,7 @@ struct CompileInfo {
     // thread safe
     void addStats(i32 errors, i32 warnings);
     void addStats(i32 lines, i32 blankLines, i32 commentCount, i32 readBytes);
-    
+
     CompileOptions* compileOptions = nullptr;
 
     AST* ast=0;

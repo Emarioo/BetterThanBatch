@@ -2073,6 +2073,53 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         statement->tokenRange.endIndex = info.at()+1;
         
         return SignalAttempt::SUCCESS;  
+    // } else if(!(firstToken.flags&TOKEN_MASK_QUOTED) && firstToken.length == 5 && !strncmp(firstToken.str, "test", 4) && firstToken.str[4]>='0' && firstToken.str[4] <= '9') {
+    } else if(Equal(firstToken,"test")) {
+        info.next();
+        
+        // test4 {type} {value} {expression}
+        // test1 {value} {expression}
+
+        // integer/float or string
+
+        // int byteCount = firstToken.str[4]-'0';
+        // if(byteCount!=1 || byteCount!=2||byteCount!=4||byteCount!=8) {
+        //     ERR_SECTION(
+        //         ERR_HEAD(firstToken)
+        //         ERR_MSG("Test statement uses these keyword: test1, test2, test4, test8. The numbers describe the bytes to test. '"<<byteCount<<"' is not one of them.")
+        //         ERR_LINE(firstToken, byteCount + " is not allowed")
+        //     )
+        // } else {
+        //     statement->bytesToTest = byteCount;
+        // }
+
+        // Token valueToken = info.get(info.at()+1);
+        // info.next();
+
+        statement = info.ast->createStatement(ASTStatement::TEST);
+
+        // if(IsInteger(valueToken) || IsDecimal(valueToken) || IsHexadecimal(valueToken) || (valueToken.flags&TOKEN_MASK_QUOTED)) {
+        //     statement->testValueToken = valueToken;
+        // } else {
+        //     ERR_SECTION(
+        //         ERR_HEAD(valueToken)
+        //         ERR_MSG("Test statement requires a value after the keyword such as an integer, decimal, hexidecimal or string.")
+        //         ERR_LINE(valueToken, "not a valid value")
+        //     )
+        // }
+
+        SignalAttempt result = ParseExpression(info, statement->testValue, false);
+        
+        if(Equal(info.get(info.at()+1),";")) info.next();
+        
+        result = ParseExpression(info, statement->firstExpression, false);
+
+        statement->tokenRange.firstToken = firstToken;
+        statement->tokenRange.endIndex = info.at()+1;
+
+        if(Equal(info.get(info.at()+1),";")) info.next();
+        
+        return SignalAttempt::SUCCESS;  
     }
     if(attempt)
         return SignalAttempt::BAD_ATTEMPT;

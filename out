@@ -1,0 +1,113 @@
+Microsoft (R) COFF/PE Dumper Version 14.36.32535.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file bin\garb.obj
+
+File Type: COFF OBJECT
+
+main:
+  0000000000000000: FF F5              push        rbp
+  0000000000000002: 48 8B EC           mov         rbp,rsp
+  0000000000000005: 48 33 C0           xor         rax,rax
+  0000000000000008: C7 C0 03 00 00 00  mov         eax,3
+  000000000000000E: FF F0              push        rax
+  0000000000000010: 48 33 C0           xor         rax,rax
+  0000000000000013: C7 C0 01 00 00 00  mov         eax,1
+  0000000000000019: FF F0              push        rax
+  000000000000001B: 48 33 C0           xor         rax,rax
+  000000000000001E: C7 C0 02 00 00 00  mov         eax,2
+  0000000000000024: 8F C1              pop         rcx
+  0000000000000026: 01 C1              add         ecx,eax
+  0000000000000028: FF F1              push        rcx
+  000000000000002A: 8F C0              pop         rax
+  000000000000002C: 8F C2              pop         rdx
+  000000000000002E: 48 89 E3           mov         rbx,rsp
+  0000000000000031: 48 83 C3 04        add         rbx,4
+  0000000000000035: 48 83 EC 30        sub         rsp,30h
+  0000000000000039: 48 89 E3           mov         rbx,rsp
+  000000000000003C: C6 03 5F           mov         byte ptr [rbx],5Fh
+  000000000000003F: 48 39 C2           cmp         rdx,rax
+  0000000000000042: 74 03              je          0000000000000047
+  0000000000000044: C6 03 78           mov         byte ptr [rbx],78h
+  0000000000000047: B9 F4 FF FF FF     mov         ecx,0FFFFFFF4h
+  000000000000004C: FF 15 00 00 00 00  call        qword ptr [__imp_GetStdHandle]
+  0000000000000052: 48 C7 44 24 20 00  mov         qword ptr [rsp+20h],0
+                    00 00 00
+  000000000000005B: 4D 31 C9           xor         r9,r9
+  000000000000005E: 49 C7 C0 01 00 00  mov         r8,1
+                    00
+  0000000000000065: 48 89 DA           mov         rdx,rbx
+  0000000000000068: 48 89 C1           mov         rcx,rax
+  000000000000006B: FF 15 00 00 00 00  call        qword ptr [__imp_WriteFile]
+  0000000000000071: 48 83 C4 30        add         rsp,30h
+  0000000000000075: 48 33 C0           xor         rax,rax
+  0000000000000078: C7 C0 04 00 00 00  mov         eax,4
+  000000000000007E: FF F0              push        rax
+  0000000000000080: 48 33 C0           xor         rax,rax
+  0000000000000083: C7 C0 01 00 00 00  mov         eax,1
+  0000000000000089: FF F0              push        rax
+  000000000000008B: 48 33 C0           xor         rax,rax
+  000000000000008E: C7 C0 02 00 00 00  mov         eax,2
+  0000000000000094: 8F C1              pop         rcx
+  0000000000000096: 01 C1              add         ecx,eax
+  0000000000000098: FF F1              push        rcx
+  000000000000009A: 8F C0              pop         rax
+  000000000000009C: 8F C2              pop         rdx
+  000000000000009E: 48 89 E3           mov         rbx,rsp
+  00000000000000A1: 48 83 C3 04        add         rbx,4
+  00000000000000A5: 48 83 EC 30        sub         rsp,30h
+  00000000000000A9: 48 89 E3           mov         rbx,rsp
+  00000000000000AC: C6 03 5F           mov         byte ptr [rbx],5Fh
+  00000000000000AF: 48 39 C2           cmp         rdx,rax
+  00000000000000B2: 74 03              je          00000000000000B7
+  00000000000000B4: C6 03 78           mov         byte ptr [rbx],78h
+  00000000000000B7: B9 F4 FF FF FF     mov         ecx,0FFFFFFF4h
+  00000000000000BC: FF 15 00 00 00 00  call        qword ptr [__imp_GetStdHandle]
+  00000000000000C2: 48 C7 44 24 20 00  mov         qword ptr [rsp+20h],0
+                    00 00 00
+  00000000000000CB: 4D 31 C9           xor         r9,r9
+  00000000000000CE: 49 C7 C0 01 00 00  mov         r8,1
+                    00
+  00000000000000D5: 48 89 DA           mov         rdx,rbx
+  00000000000000D8: 48 89 C1           mov         rcx,rax
+  00000000000000DB: FF 15 00 00 00 00  call        qword ptr [__imp_WriteFile]
+  00000000000000E1: 48 83 C4 30        add         rsp,30h
+  00000000000000E5: 48 33 C0           xor         rax,rax
+  00000000000000E8: C7 C0 04 00 00 00  mov         eax,4
+  00000000000000EE: FF F0              push        rax
+  00000000000000F0: 48 33 C0           xor         rax,rax
+  00000000000000F3: C7 C0 02 00 00 00  mov         eax,2
+  00000000000000F9: FF F0              push        rax
+  00000000000000FB: 48 33 C0           xor         rax,rax
+  00000000000000FE: C7 C0 02 00 00 00  mov         eax,2
+  0000000000000104: 8F C1              pop         rcx
+  0000000000000106: 01 C1              add         ecx,eax
+  0000000000000108: FF F1              push        rcx
+  000000000000010A: 8F C0              pop         rax
+  000000000000010C: 8F C2              pop         rdx
+  000000000000010E: 48 89 E3           mov         rbx,rsp
+  0000000000000111: 48 83 C3 04        add         rbx,4
+  0000000000000115: 48 83 EC 30        sub         rsp,30h
+  0000000000000119: 48 89 E3           mov         rbx,rsp
+  000000000000011C: C6 03 5F           mov         byte ptr [rbx],5Fh
+  000000000000011F: 48 39 C2           cmp         rdx,rax
+  0000000000000122: 74 03              je          0000000000000127
+  0000000000000124: C6 03 78           mov         byte ptr [rbx],78h
+  0000000000000127: B9 F4 FF FF FF     mov         ecx,0FFFFFFF4h
+  000000000000012C: FF 15 00 00 00 00  call        qword ptr [__imp_GetStdHandle]
+  0000000000000132: 48 C7 44 24 20 00  mov         qword ptr [rsp+20h],0
+                    00 00 00
+  000000000000013B: 4D 31 C9           xor         r9,r9
+  000000000000013E: 49 C7 C0 01 00 00  mov         r8,1
+                    00
+  0000000000000145: 48 89 DA           mov         rdx,rbx
+  0000000000000148: 48 89 C1           mov         rcx,rax
+  000000000000014B: FF 15 00 00 00 00  call        qword ptr [__imp_WriteFile]
+  0000000000000151: 48 83 C4 30        add         rsp,30h
+  0000000000000155: 8F C5              pop         rbp
+  0000000000000157: C3                 ret
+
+  Summary
+
+         158 .text

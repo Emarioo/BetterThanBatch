@@ -44,7 +44,7 @@ auto Win32Sleep = Sleep;
 namespace engone {
     //-- Platform specific
     
-#define TO_INTERNAL(X) (void*)((uint64)X+1)
+#define TO_INTERNAL(X) ((uint64)X+1)
 #define TO_HANDLE(X) (HANDLE)((uint64)X-1)
     
 	// Recursive directory iterator info
@@ -338,7 +338,8 @@ namespace engone {
 	}
     APIFile FileOpen(const std::string& path, uint64* outFileSize, uint32 flags){
         DWORD access = GENERIC_READ|GENERIC_WRITE;
-        DWORD sharing = 0;
+        // DWORD sharing = 0;
+        DWORD sharing = FILE_SHARE_READ|FILE_SHARE_WRITE;
         if(flags&FILE_ONLY_READ){
             access = GENERIC_READ;
             sharing = FILE_SHARE_READ;
@@ -371,6 +372,10 @@ namespace engone {
 				temp+=chr;
 			}
 		}
+		SECURITY_ATTRIBUTES sa;
+		ZeroMemory(&sa, sizeof(SECURITY_ATTRIBUTES));
+		sa.nLength = sizeof(sa);
+		sa.bInheritHandle = true;
         
 		HANDLE handle = CreateFileA(path.c_str(),access,sharing,NULL,creation,FILE_ATTRIBUTE_NORMAL, NULL);
 		
@@ -383,7 +388,7 @@ namespace engone {
 			}else {
 				PL_PRINTF("[WinError %lu] Error opening '%s'\n",err,path.c_str());
 			}
-			return 0;
+			return {};
 		}else if (outFileSize){
             
 			DWORD success = GetFileSizeEx(handle, (LARGE_INTEGER*)outFileSize);
@@ -395,16 +400,16 @@ namespace engone {
 				// Assert(outFileSize);
 			}
 		}
-		return TO_INTERNAL(handle);
+		return {TO_INTERNAL(handle)};
 	}
 	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes){
 		// Assert(readBytes!=(uint64)-1); // -1 indicates no bytes read
 		// Assert(buffer);
 		DWORD bytesRead=0;
-		DWORD success = ReadFile(TO_HANDLE(file),buffer,readBytes,&bytesRead,NULL);
+		DWORD success = ReadFile(TO_HANDLE(file.internal),buffer,readBytes,&bytesRead,NULL);
 		if(!success){
 			DWORD err = GetLastError();
-			PL_PRINTF("[WinError %lu] FileRead '%llu'\n",err,(uint64)file);
+			PL_PRINTF("[WinError %lu] FileRead '%llu'\n",err,file.internal);
 			return -1;
 		}
 		return bytesRead;
@@ -413,10 +418,10 @@ namespace engone {
 		// Assert(writeBytes!=(uint64)-1); // -1 indicates no bytes read
 		// Assert(buffer);
 		DWORD bytesWritten=0;
-		DWORD success = WriteFile(TO_HANDLE(file),buffer,writeBytes,&bytesWritten,NULL);
+		DWORD success = WriteFile(TO_HANDLE(file.internal),buffer,writeBytes,&bytesWritten,NULL);
 		if(!success){
 			DWORD err = GetLastError();
-			PL_PRINTF("[WinError %lu] FileWrite '%llu'\n",err,(uint64)file);
+			PL_PRINTF("[WinError %lu] FileWrite '%llu'\n",err,file.internal);
 			return -1;
 		}
 		return bytesWritten;
@@ -424,19 +429,19 @@ namespace engone {
 	bool FileSetHead(APIFile file, uint64 position){
 		DWORD success = 0;
 		if(position==(uint64)-1){
-			success = SetFilePointerEx(file,{0},NULL,FILE_END);
+			success = SetFilePointerEx(TO_HANDLE(file.internal),{0},NULL,FILE_END);
 		}else{
-			success = SetFilePointerEx(file,*(LARGE_INTEGER*)&position,NULL,FILE_BEGIN);
+			success = SetFilePointerEx(TO_HANDLE(file.internal),*(LARGE_INTEGER*)&position,NULL,FILE_BEGIN);
 		}
 		if(success) return true;
 		
 		DWORD err = GetLastError();
-		PL_PRINTF("[WinError %lu] FileSetHead '%llu'\n",err,(uint64)file);
+		PL_PRINTF("[WinError %lu] FileSetHead '%llu'\n",err,file.internal);
 		return false;
 	}
 	void FileClose(APIFile file){
 		if(file)
-			CloseHandle(TO_HANDLE(file));
+			CloseHandle(TO_HANDLE(file.internal));
 	}
 	bool FileExist(const std::string& path){
         DWORD attributes = GetFileAttributesA(path.c_str());   
@@ -1187,9 +1192,9 @@ namespace engone {
 		HANDLE readH=0;	
 		HANDLE writeH=0;	
 	};
-	std::unordered_map<APIFile,PipeInfo> pipes;
-	uint64 pipeIndex=0x500000;
-	APIFile PipeCreate(bool inheritRead,bool inheritWrite){
+	std::unordered_map<u64,PipeInfo> pipes;
+	u64 pipeIndex=0x500000;
+	APIPipe PipeCreate(u64 pipeBuffer, bool inheritRead,bool inheritWrite){
 		PipeInfo info{};
 		
 		SECURITY_ATTRIBUTES saAttr; 
@@ -1197,11 +1202,11 @@ namespace engone {
 		saAttr.bInheritHandle = inheritRead||inheritWrite;
 		saAttr.lpSecurityDescriptor = NULL; 
 		
-		DWORD err = CreatePipe(&info.readH,&info.writeH,&saAttr,0);
+		DWORD err = CreatePipe(&info.readH,&info.writeH,&saAttr,pipeBuffer);
 		if(!err){
 			err = GetLastError();
 			PL_PRINTF("[WinError %lu] Cannot create pipe\n",err);
-			return 0;
+			return {};
 		}
 		
 		if(!inheritRead){
@@ -1219,21 +1224,21 @@ namespace engone {
 			}
 		}
 		
-		pipes[(APIFile)pipeIndex] = info;
-		return (APIFile)(pipeIndex++);
+		pipes[pipeIndex] = info;
+		return {pipeIndex++};
 	}
-	void PipeDestroy(APIFile pipe){
-		auto& info = pipes[pipe];
+	void PipeDestroy(APIPipe pipe){
+		auto& info = pipes[pipe.internal];
 		if(info.readH)
 			CloseHandle(info.readH);
 		if(info.writeH)
 			CloseHandle(info.writeH);
-		pipes.erase(pipe);
+		pipes.erase(pipe.internal);
 	}
-	int PipeRead(APIFile pipe,void* buffer, int size){
-		auto& info = pipes[pipe];
+	u64 PipeRead(APIPipe pipe,void* buffer, u64 size){
+		auto& info = pipes[pipe.internal];
 		DWORD read=0;
-		DWORD err = ReadFile(info.readH,buffer,size,&read,0);
+		DWORD err = ReadFile(info.readH,buffer,size,&read,NULL);
 		if(!err){
 			err = GetLastError();
 			if(err==ERROR_BROKEN_PIPE){
@@ -1245,10 +1250,10 @@ namespace engone {
 		
 		return read;
 	}
-	int PipeWrite(APIFile pipe,void* buffer, int size){
-		auto& info = pipes[pipe];
+	u64 PipeWrite(APIPipe pipe,void* buffer, u64 size){
+		auto& info = pipes[pipe.internal];
 		DWORD written=0;
-		DWORD err = WriteFile(info.writeH,buffer,size,&written,0);
+		DWORD err = WriteFile(info.writeH,buffer,size,&written,NULL);
 		if(!err){
 			err = GetLastError();
 			PL_PRINTF("[WinError %lu] Pipe write failed\n",err);
@@ -1256,7 +1261,36 @@ namespace engone {
 		}
 		return written;
 	}
-	bool StartProgram(const std::string& path, char* commandLine, int flags, int* exitCode, APIFile fStdin, APIFile fStdout) {
+	APIFile PipeGetRead(APIPipe pipe){
+		auto& info = pipes[pipe.internal];
+		return {TO_INTERNAL(info.readH)};
+	}
+	APIFile PipeGetWrite(APIPipe pipe){
+		auto& info = pipes[pipe.internal];
+		return {TO_INTERNAL(info.writeH)};
+	}
+	bool SetStandardOut(APIFile file){
+		DWORD res = SetStdHandle(STD_OUTPUT_HANDLE, TO_HANDLE(file.internal));
+		return res;
+	}
+	APIFile GetStandardOut(){
+		return {TO_INTERNAL(GetStdHandle(STD_OUTPUT_HANDLE))};
+	}
+	bool SetStandardErr(APIFile file){
+		DWORD res = SetStdHandle(STD_ERROR_HANDLE, TO_HANDLE(file.internal));
+		return res;
+	}
+	APIFile GetStandardErr(){
+		return {TO_INTERNAL(GetStdHandle(STD_ERROR_HANDLE))};
+	}
+	bool SetStandardIn(APIFile file){
+		DWORD res = SetStdHandle(STD_INPUT_HANDLE, TO_HANDLE(file.internal));
+		return res;
+	}
+	APIFile GetStandardIn(){
+		return {TO_INTERNAL(GetStdHandle(STD_INPUT_HANDLE))};
+	}
+	bool StartProgram(const std::string& path, char* commandLine, int flags, int* exitCode, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
 		// if (!FileExist(path)) {
 		// 	return false;
 		// }
@@ -1268,27 +1302,33 @@ namespace engone {
 		// additional information
 		STARTUPINFOA si;
 		PROCESS_INFORMATION pi;
-        
 		// set the size of the structures
 		ZeroMemory(&si, sizeof(si));
 		si.cb = sizeof(si);
 		ZeroMemory(&pi, sizeof(pi));
         
 		if(fStdin){
-			auto& info = pipes[fStdin];
-			si.hStdInput = info.readH;
+			// auto& info = pipes[fStdin];
+			// si.hStdInput = info.readH;
+			si.hStdInput = TO_HANDLE(fStdin.internal);
 		}
 		if(fStdout){
-			auto& info = pipes[fStdout];
-			si.hStdOutput = info.writeH;
-			si.hStdError = info.writeH;
+			// auto& info = pipes[fStdout];
+			// si.hStdOutput = info.writeH;
+			// si.hStdError = info.writeH;
+			si.hStdOutput = TO_HANDLE(fStdout.internal);
 		}
-		bool inheritHandles=false;
-		if(fStdin||fStdout){
+		if(fStderr){
+			// auto& info = pipes[fStderr];
+			// si.hStdError = info.writeH;
+			si.hStdError = TO_HANDLE(fStderr.internal);
+		}
+		bool inheritHandles=true;
+		if(fStdin||fStdout||fStderr){
 			si.dwFlags |= STARTF_USESTDHANDLES;
-			inheritHandles = true;
+			// inheritHandles = true;
 		}
-		inheritHandles = true;
+		// inheritHandles = false;
 		 
 		int slashIndex = path.find_last_of("\\");
     
@@ -1313,8 +1353,8 @@ namespace engone {
                        commandLine,        // Command line
                        NULL,           // Process handle not inheritable
                        NULL,           // Thread handle not inheritable
-                       inheritHandles,          // Set handle inheritance to FALSE
-                       createFlags,              // No creation flags
+                       inheritHandles,          // Set handle inheritance
+                       createFlags,              // creation flags
                        NULL,           // Use parent's environment block
                        dir,   // starting directory 
                        &si,            // Pointer to STARTUPINFO structure
@@ -1358,16 +1398,16 @@ namespace engone {
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 		
-		if(fStdin){
-			auto& info = pipes[fStdin];
-			CloseHandle(info.readH);
-			info.readH = 0;
-		}
-		if(fStdout){
-			auto& info = pipes[fStdout];
-			CloseHandle(info.writeH);
-			info.writeH=0;
-		}
+		// if(fStdin){
+		// 	auto& info = pipes[fStdin];
+		// 	CloseHandle(info.readH);
+		// 	info.readH = 0;
+		// }
+		// if(fStdout){
+		// 	auto& info = pipes[fStdout];
+		// 	CloseHandle(info.writeH);
+		// 	info.writeH=0;
+		// }
 		return true;
 	}
 	FileMonitor::~FileMonitor() { cleanup(); }
@@ -1375,7 +1415,7 @@ namespace engone {
 		m_mutex.lock();
 		m_running = false;
 		if (m_thread.joinable()) {
-			HANDLE handle = m_thread.m_internalHandle;
+			HANDLE handle = TO_HANDLE(m_thread.m_internalHandle);
 			int err = CancelSynchronousIo(handle);
 			if (err == 0) {
 				err = GetLastError();

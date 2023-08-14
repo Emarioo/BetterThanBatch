@@ -1105,6 +1105,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
         // data type
         if (AST::IsInteger(expression->typeId)) {
             i64 val = expression->i64Value;
+            // Assert(!(val&0xFFFFFFFF00000000));
 
             // TODO: immediate only allows 32 bits. What about larger values?
             // info.code->addDebugText("  expr push int");
@@ -4155,6 +4156,56 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
             SignalDefault result = GenerateBody(info, statement->firstBody);
             // Is it okay to do nothing with result?
+        } else if (statement->type == ASTStatement::TEST) {
+            int moment = info.saveStackMoment();
+            DynamicArray<TypeId> exprTypes{};
+            SignalDefault result = GenerateExpression(info, statement->testValue, &exprTypes);
+            if(exprTypes.size() != 1) {
+                ERR_SECTION(
+                    ERR_HEAD(statement->testValue->tokenRange)
+                    ERR_MSG("The expression in test statements must consist of 1 type.")
+                    ERR_LINE(statement->testValue->tokenRange,exprTypes.size()<<" types")
+                )
+                continue;
+            }
+            int size = info.ast->getTypeSize(exprTypes.last());
+            if(size > 8 ) {
+                ERR_SECTION(
+                    ERR_HEAD(statement->testValue->tokenRange)
+                    ERR_MSG("Type cannot be larger than 8 bytes. Test statement doesn't handle larger structs.")
+                    ERR_LINE(statement->testValue->tokenRange,"bad")
+                )
+                continue;
+            }
+            exprTypes.resize(0);
+            result = GenerateExpression(info, statement->firstExpression, &exprTypes);
+            if(exprTypes.size() != 1) {
+                ERR_SECTION(
+                    ERR_HEAD(statement->firstExpression->tokenRange)
+                    ERR_MSG("The expression in test statements must consist of 1 type.")
+                    ERR_LINE(statement->firstExpression->tokenRange,exprTypes.size()<<" types")
+                )
+                continue;
+            }
+            size = info.ast->getTypeSize(exprTypes.last());
+            if(size > 8) {
+                ERR_SECTION(
+                    ERR_HEAD(statement->firstExpression->tokenRange)
+                    ERR_MSG("Type cannot be larger than 8 bytes. Test statement doesn't handle larger structs.")
+                    ERR_LINE(statement->testValue->tokenRange,"bad")
+                )
+                continue;
+            }
+            // TODO: Should the types match? u16 - i32 might be fine but f32 - u16 shouldn't be okay.
+            info.addPop(BC_REG_RAX);
+            info.addPop(BC_REG_RDX);
+            
+            info.addAlign(16); // TEST_VALUE calls stdcall functions which needs 16-byte alignment
+            info.addInstruction({BC_TEST_VALUE, 8, BC_REG_RDX, BC_REG_RAX});
+            int loc = info.compileInfo->compileOptions->addTestLocation(statement->tokenRange);
+            info.code->addIm(loc);
+            
+            info.restoreStackMoment(moment);
         }
     }
     // Assert(varsToRemove.size()==0);

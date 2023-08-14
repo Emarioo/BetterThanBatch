@@ -50,7 +50,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control",
-				"match": "\\b(if|else|while|for|break|continue|fn|return|defer|each|cast|_test_|using|as)\\b"
+				"match": "\\b(if|else|while|for|break|continue|fn|return|defer|each|cast|test|using|as)\\b"
 			},{
 				"name": "entity.name.class",
 				"match": "\\b(struct)\\b"

@@ -830,8 +830,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     break;
                 }
                 break; case NATIVE_FileClose:{
-                    u64 file = *(u64*)(fp+argoffset);
-                    FileClose((APIFile)file);
+                    APIFile file = *(APIFile*)(fp+argoffset);
+                    FileClose(file);
                     // #ifdef VLOG
                     // log::out << log::GRAY<<"FileClose: "<<file<<"\n";
                     // #endif
@@ -1357,6 +1357,34 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
         //     _ILOG(log::out << "\n";)
         //     break;
         // }
+        break; case BC_TEST_VALUE: {
+            u8 r0 = DECODE_REG0(inst); // bytes
+            u8 r1 = DECODE_REG1(inst); // test value
+            u8 r2 = DECODE_REG2(inst); // computed value
+            // TODO: Strings don't work yet
+
+            u32 data = *(u32*)(codePtr + pc);
+            pc++;
+
+            u8* testValue = (u8*)getReg(r1);
+            u8* computedValue = (u8*)getReg(r2);
+
+            bool same = !strncmp((char*)testValue, (char*)computedValue, r0);
+
+            char tmp[]{
+                same ? '_' : 'x',
+                '-',
+                (char)((data>>8)&0xFF),
+                (char)(data&0xFF)
+            };
+            // fwrite(&tmp, 1, 1, stderr);
+
+            auto out = engone::GetStandardErr();
+            engone::FileWrite(out, &tmp, 4);
+
+            _ILOG(log::out << "\n";)
+            break;
+        }
         break; default: {
             log::out << log::RED << "Implement "<< log::PURPLE<< InstToString(opcode)<< "\n";
             return;

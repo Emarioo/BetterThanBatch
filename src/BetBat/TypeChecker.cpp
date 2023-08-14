@@ -2394,6 +2394,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 // }
                 continue;
             }
+        } else if(now->type == ASTStatement::TEST) {
+            CheckExpression(info, scope->scopeId, now->testValue, &typeArray, false);
+            typeArray.resize(0);
+            CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
         } else {
             Assert(("Statement type not handled!",false));
         }

@@ -85,6 +85,7 @@ StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
 #define OPCODE_MOV_REG_RM (u8)0x8B
 
 #define OPCODE_MOV_REG_RM8 (u8)0x8A
+#define OPCODE_MOV_RM_IMM8_SLASH_0 (u8)0xC6
 
 #define OPCODE_LEA_REG_M (u8)0x8D
 
@@ -404,6 +405,32 @@ void Program_x64::printHex(const char* path){
         log::out << "\n";
     }
 }
+void Program_x64::printAsm(const char* path){
+    using namespace engone;
+    Assert(this);
+
+    WriteObjectFile("bin/garb.obj", this);
+
+    auto pipe = PipeCreate(0x100000, true, true);
+
+    auto prev = GetStandardOut();
+    SetStandardOut(PipeGetWrite(pipe));
+
+    engone::StartProgram("","dumpbin /NOLOGO /DISASM:BYTES bin/garb.obj", PROGRAM_WAIT);
+
+    SetStandardOut(prev);
+
+    int bufferSize = 0x100000;
+    char* buffer = (char*)Allocate(bufferSize);
+    int readBytes = PipeRead(pipe, buffer, bufferSize);
+    PipeDestroy(pipe);
+    // TODO: Filter out some useless information in the buffer.
+    auto file = FileOpen(path, 0, FILE_WILL_CREATE);
+    FileWrite(file, buffer, readBytes);
+    FileClose(file);
+
+    Free(buffer,bufferSize);
+}
 
 u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false){
     u8 size = DECODE_REG_SIZE(bcreg);
@@ -504,7 +531,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         
         _CLOG(log::out << bcIndex << ": "<< inst;)
         if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JE || opcode==BC_JNE || opcode==BC_CALL || opcode==BC_DATAPTR|
-            opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR){
+            opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR||opcode==BC_TEST_VALUE){
             bcIndex++;
             imm = bytecode->getIm(bcIndex);
             addressTranslation[bcIndex] = prog->size();
@@ -1057,48 +1084,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // prog->add(PREFIX_REXW);
                 // prog->add(OPCODE_XOR_REG_RM);
                 // prog->addModRM(MODE_REG,BCToProgramReg(op2,0xC),BCToProgramReg(op2,0xC));
-            #define CODE_COMPARE(OPCODE) \
-                u8 size0 = DECODE_REG_SIZE(op0);\
-                u8 size1 = DECODE_REG_SIZE(op1);\
-                if(size0>size1){\
-                    if(size1==1) {\
-                        prog->add(PREFIX_REXW);\
-                        prog->add2(OPCODE_2_MOVSX_REG_RM8);\
-                        prog->addModRM(MODE_REG, BCToProgramReg(op1,0xF), BCToProgramReg(op1,0xF));\
-                    } else if(size1==2) {\
-                        prog->add(PREFIX_REXW);\
-                        prog->add2(OPCODE_2_MOVSX_REG_RM16);\
-                        prog->addModRM(MODE_REG, BCToProgramReg(op1,0xF), BCToProgramReg(op1,0xF));\
-                    } else if(size1==4) {\
-                        prog->add(PREFIX_REXW);\
-                        prog->add(OPCODE_MOVSXD_REG_RM);\
-                        prog->addModRM(MODE_REG, BCToProgramReg(op1,0xF), BCToProgramReg(op1,0xF));\
-                    }\
-                    if(size0 == 8) prog->add(PREFIX_REXW);\
-                }else if(size1>size0) {\
-                    if(size0==1) {\
-                        prog->add(PREFIX_REXW);\
-                        prog->add2(OPCODE_2_MOVSX_REG_RM8);\
-                        prog->addModRM(MODE_REG, BCToProgramReg(op0,0xF), BCToProgramReg(op0,0xF));\
-                    } else if(size0==2) {\
-                        prog->add(PREFIX_REXW);\
-                        prog->add2(OPCODE_2_MOVSX_REG_RM16);\
-                        prog->addModRM(MODE_REG, BCToProgramReg(op0,0xF), BCToProgramReg(op0,0xF));\
-                    } else if(size0==4) {\
-                        prog->add(PREFIX_REXW);\
-                        prog->add(OPCODE_MOVSXD_REG_RM);\
-                        prog->addModRM(MODE_REG, BCToProgramReg(op0,0xF), BCToProgramReg(op0,0xF));\
-                    }\
-                    if(size1 == 8) prog->add(PREFIX_REXW);\
-                }\
-                prog->add(OPCODE_CMP_REG_RM);\
-                prog->addModRM(MODE_REG, BCToProgramReg(op0,0xC), BCToProgramReg(op1,0xC));\
-                prog->add2(OPCODE);\
-                prog->addModRM(MODE_REG, 0, BCToProgramReg(op2,0xC));\
-                if(size0 == 8 || size1 == 8)  prog->add(PREFIX_REXW);\
-                prog->add2(OPCODE_2_MOVZX_REG_RM8);\
-                prog->addModRM(MODE_REG, BCToProgramReg(op2,0xC), BCToProgramReg(op2,0xC));
-
+            
             break; case BC_LT:
             case BC_LTE:
             case BC_GT:
@@ -1726,6 +1712,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         call   QWORD PTR [rip+0x0]          # WriteFile(...)
                         add    rsp,0x38
                         */
+                        // Assert(false); // is the assembly wrong?
+                        // rdx should be buffer and r8 length
                         NamedRelocation reloc0{};
                         reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
                         reloc0.textOffset = prog->size() + 0xB;
@@ -1807,6 +1795,117 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             break; case BC_RET: {
                 prog->add(OPCODE_RET);
                 break;
+            }
+            break; case BC_TEST_VALUE: {
+                // Assert(op0 == 8 && op1 == BC_REG_RDX && op2 == BC_REG_RAX);
+                // // op0 bytes
+                // // op1 test value
+                // // op2 computed value
+
+
+
+                // // IMPORTANT: stack must be aligned when calling functions
+                // #ifdef OS_WINDOWS
+                // /*
+                // 0:  48 89 e3                mov    rbx,rsp
+                // 3:  48 83 c3 04             add    rbx,0x4
+                // 7:  48 83 ec 30             sub    rsp,0x30
+                // b:  48 89 e3                mov    rbx,rsp
+                // e:  c6 03 5f                mov    BYTE PTR [rbx],0x5f
+                // 11: 48 39 c2                cmp    rdx,rax
+                // 14: 74 03                   je     19 <hop>
+                // 16: c6 03 78                mov    BYTE PTR [rbx],0x78
+                // 0000000000000019 <hop>:
+                // 19: b9 f4 ff ff ff          mov    ecx,0xfffffff4
+                // 1e: ff 15 00 00 00 00       call   QWORD PTR [rip+0x0]        # 24 <hop+0xb>
+                // 24: 48 c7 44 24 20 00 00    mov    QWORD PTR [rsp+0x20],0x0
+                // 2b: 00 00
+                // 2d: 4d 31 c9                xor    r9,r9
+                // 30: 49 c7 c0 01 00 00 00    mov    r8,0x1
+                // 37: 48 89 da                mov    rdx,rbx
+                // 3a: 48 89 c1                mov    rcx,rax
+                // 3d: ff 15 00 00 00 00       call   QWORD PTR [rip+0x0]        # 43 <hop+0x2a>
+                // 43: 48 83 c4 30             add    rsp,0x30
+                // */
+                // NamedRelocation reloc0{};
+                // reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
+                // reloc0.textOffset = prog->size() + 0x20;
+                // NamedRelocation reloc1{};
+                // reloc1.name = "__imp_WriteFile";
+                // reloc1.textOffset = prog->size() + 0x3F;
+                // u8 arr[]={ 0x48, 0x89, 0xE3, 0x48, 0x83, 0xC3, 0x04, 0x48, 0x83, 0xEC, 0x30, 0x48, 0x89, 0xE3, 0xC6, 0x03, 0x5F, 0x48, 0x39, 0xC2, 0x74, 0x03, 0xC6, 0x03, 0x78, 0xB9, 0xF4, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0xC7, 0xC0, 0x01, 0x00, 0x00, 0x00, 0x48, 0x89, 0xDA, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x30 };
+                // prog->addRaw(arr,sizeof(arr));
+
+                // prog->namedRelocations.add(reloc0);
+                // prog->namedRelocations.add(reloc1);
+                // #endif
+                Assert(op0 == 8 && op1 == BC_REG_RDX && op2 == BC_REG_RAX);
+                // op0 bytes
+                // op1 test value
+                // op2 computed value
+
+                // imm
+
+                // IMPORTANT: stack must be aligned when calling functions
+                #ifdef OS_WINDOWS
+                /*
+mov    rbx,rsp
+sub    rbx,0x8
+sub    rsp,0x30
+mov    DWORD PTR [rbx],0x99993057
+cmp    rdx,rax
+je     hop
+mov    BYTE PTR [rbx],0x78
+hop:
+mov    ecx,0xfffffff4
+call   QWORD PTR [rip+0x0]    
+mov    QWORD PTR [rsp+0x20],0x0
+xor    r9,r9
+mov    r8,0x4
+mov    rdx,rbx
+mov    rcx,rax
+call   QWORD PTR [rip+0x0]    
+add    rsp,0x30
+
+                0x00:  48 89 e3                mov    rbx,rsp
+                0x03:  48 83 c3 08             add    rbx,0x8
+                0x07:  48 83 ec 30             sub    rsp,0x30
+                0x0b:  c7 03 57 30 99 99       mov    DWORD PTR [rbx],0x99993057
+                0x11: 48 39 c2                cmp    rdx,rax
+                0x14: 74 03                   je     19 <hop>
+                0x16: c6 03 78                mov    BYTE PTR [rbx],0x78
+                0x0000000000000019 <hop>:
+                0x19: b9 f4 ff ff ff          mov    ecx,0xfffffff4
+                0x1e: ff 15 00 00 00 00       call   QWORD PTR [rip+0x0]        # 24 <hop+0xb>
+                0x24: 48 c7 44 24 20 00 00    mov    QWORD PTR [rsp+0x20],0x0
+                0x2b: 00 00
+                0x2d: 4d 31 c9                xor    r9,r9
+                0x30: 49 c7 c0 04 00 00 00    mov    r8,0x4
+                0x37: 48 89 da                mov    rdx,rbx
+                0x3a: 48 89 c1                mov    rcx,rax
+                0x3d: ff 15 00 00 00 00       call   QWORD PTR [rip+0x0]        # 43 <hop+0x2a>
+                0x43: 48 83 c4 30             add    rsp,0x30
+                */
+
+                // TODO: This code could be a subroutine. 100 tests instructions alone would generate
+                // 4600 bytes of machine code. With a subroutine you would get less than 1500 (100*12 + 46) which scales well
+                // when using even more test intstructions.
+
+                NamedRelocation reloc0{};
+                reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
+                reloc0.textOffset = prog->size() + 0x20;
+                NamedRelocation reloc1{};
+                reloc1.name = "__imp_WriteFile";
+                reloc1.textOffset = prog->size() + 0x3F;
+                u8 arr[]=
+                { 0x48, 0x89, 0xE3, 0x48, 0x83, 0xEB, 0x08, 0x48, 0x83, 0xEC, 0x30, 0xC7, 0x03, 0x57, 0x30, 0x99, 0x99, 0x48, 0x39, 0xC2, 0x74, 0x03, 0xC6, 0x03, 0x78, 0xB9, 0xF4, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0xC7, 0xC0, 0x04, 0x00, 0x00, 0x00, 0x48, 0x89, 0xDA, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x30 };
+                arr[0x0F] = (imm>>8)&0xFF;
+                arr[0x10] = imm&0xFF;
+                prog->addRaw(arr,sizeof(arr));
+
+                prog->namedRelocations.add(reloc0);
+                prog->namedRelocations.add(reloc1);
+                #endif
             }
             break; case BC_MEMZERO: {
                 // Assert(op0 == BC_REG_RDI && op1 == BC_REG_RBX);

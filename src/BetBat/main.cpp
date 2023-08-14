@@ -95,6 +95,7 @@ int main(int argc, const char** argv){
 
     bool onlyPreprocess = false;
     bool runFile = false;
+    bool runTests = false;
 
     if (argc < 2) {
         print_help();
@@ -133,6 +134,8 @@ int main(int argc, const char** argv){
             }
         } else if (ArgIs("-dev")) {
             devmode = true;
+        } else if (ArgIs("-tests")) {
+            runTests = true;
         } else if (ArgIs("-target")){
             i++;
             if(i<argc){
@@ -183,8 +186,11 @@ int main(int argc, const char** argv){
                 TokenStream::Destroy(stream2);
             }
         }
-    }
-    else if(!devmode){
+    } else if(runTests) {
+        // DynamicArray<std::string> tests;
+        // tests.add("tests/simple/operations.btb");
+        TestSuite(TEST_ALL);
+    } else if(!devmode){
         if(compileOptions.outputFile.text.size()==0) {
             CompileAndRun(&compileOptions);
         } else {
@@ -198,10 +204,14 @@ int main(int argc, const char** argv){
         compileOptions.initialSourceFile = DEV_FILE;
         #endif
 
-        // DynamicArray<std::string> tests;
+        #ifdef RUN_TEST_SUITE
+        DynamicArray<std::string> tests;
+        tests.add("tests/simple/operations.btb");
+        // tests.add("tests/flow/loops.btb");
         // tests.add("tests/what/struct.btb");
-        // TestSuite(tests);
-
+        VerifyTests(tests);
+        if(true) {} else
+        #endif
         if(compileOptions.target == BYTECODE){
             CompileAndRun(&compileOptions);
         } else {

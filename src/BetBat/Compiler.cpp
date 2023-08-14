@@ -910,16 +910,18 @@ Bytecode* CompileSource(CompileOptions* options) {
 
     options->compileStats.end_bytecode = StartMeasure();
 
-    if(!options->silent && compileInfo.compileOptions->compileStats.errors!=0){
-        compileInfo.compileOptions->compileStats.printFailed();
+    if(compileInfo.compileOptions->compileStats.errors!=0){
+        if(!options->silent)
+            compileInfo.compileOptions->compileStats.printFailed();
         // if(compileInfo.nativeRegistry == bytecode->nativeRegistry) {
         //     bytecode->nativeRegistry = nullptr;
         // }
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
     }
-    if(!options->silent && compileInfo.compileOptions->compileStats.warnings!=0){
-        compileInfo.compileOptions->compileStats.printWarnings();
+    if(compileInfo.compileOptions->compileStats.warnings!=0){
+        if(!options->silent)
+            compileInfo.compileOptions->compileStats.printWarnings();
     }
     if(bytecode) {
         // if(!bytecode->nativeRegistry)
@@ -932,6 +934,16 @@ Bytecode* CompileSource(CompileOptions* options) {
     return bytecode;
 }
 
+int CompileOptions::addTestLocation(TokenRange& range){
+    testLocations.add({});
+    testLocations.last().line = range.firstToken.line;
+    testLocations.last().column = range.firstToken.column;
+    testLocations.last().file = Path{range.tokenStream()->streamName}.getFileName().text;
+    return testLocations.size()-1;
+}
+CompileOptions::TestLocation* CompileOptions::getTestLocation(int index) {
+    return testLocations.getPtr(index);
+}
 void CompileStats::printSuccess(CompileOptions* opts){
     using namespace engone;
     log::out << "Compiled " << FormatUnit((u64)lines) << " non-blank lines ("<<FormatUnit((u64)blankLines)<<" blanks, "<<FormatBytes(readBytes)<<")\n";
@@ -1030,7 +1042,7 @@ void RunBytecode(CompileOptions* options, Bytecode* bytecode){
         
     Interpreter interpreter{};
     interpreter.setCmdArgs(options->userArgs);
-    // interpreter.silent = true;
+    interpreter.silent = options->silent;
     interpreter.execute(bytecode);
     interpreter.cleanup();
 }
@@ -1065,8 +1077,9 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 auto format = options->outputFile.getFormat();
                 bool outputIsObject = format == "o" || format == "obj";
 
-                #ifdef DUMP_HEX
-                program->printHex("bin/temphex.txt");
+                #ifdef DUMP_ASM
+                // program->printHex("bin/temphex.txt");
+                program->printAsm("bin/temp.asm");
                 #endif
                 if(outputIsObject){
                     options->compileStats.start_objectfile = StartMeasure();
@@ -1096,8 +1109,9 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                     int exitCode = 0;
                     engone::StartProgram("",(char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
                     options->compileStats.end_linker = StartMeasure();
-
-                    log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
+                    
+                    if(!options->silent)
+                        log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
 
                     // msvc linker returns a fatal error as exit code
                     // if(exitCode == 0)

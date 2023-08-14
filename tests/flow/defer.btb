@@ -1,0 +1,27 @@
+@TEST-CASE yeet
+fn fun(i: i32){
+    defer prints("fun1 defer\n")
+    defer prints("fun2 defer\n")
+    if(i >1){
+        prints("before return\n");
+        return
+    }
+    prints("end of fun\n")
+}
+i = -1;
+while i < 10; {
+    i++;
+    printi(i);
+    printc("\n");
+    defer prints("while defer\n")
+    if(i>5){
+        prints("before break\n")
+        if(i==8){
+            continue;
+        }
+        defer prints("if defer\n");
+        continue;
+    }
+    fun(i);
+}
+prints("END\n")

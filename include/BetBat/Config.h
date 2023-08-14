@@ -24,7 +24,9 @@
 // #define DEV_FILE "examples/const.btb"
 // #define DEV_FILE "examples/threads.btb"
 // #define DEV_FILE "examples/dir-iterator.btb"
-// #define CONFIG_DEFAULT_TARGET WINDOWS_x64
+#define CONFIG_DEFAULT_TARGET WINDOWS_x64
+
+// #define RUN_TEST_SUITE
 
 // #define DEBUG
 
@@ -43,7 +45,7 @@
 #define ENABLE_TRACKER
 // #define LOG_TRACKER
 #define LOG_MSG_LOCATION
-#define DUMP_HEX
+#define DUMP_ASM
 #endif
 // Will it ever be?
 // #define SILENT

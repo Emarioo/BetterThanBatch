@@ -467,6 +467,7 @@ struct ASTStatement : ASTNode {
         USING,
         BODY,
         DEFER,
+        TEST,
 
         STATEMENT_TYPE_COUNT,
     };
@@ -491,6 +492,10 @@ struct ASTStatement : ASTNode {
     };
     DynamicArray<VarName> varnames;
     std::string* alias = nullptr;
+
+    ASTExpression* testValue = nullptr;
+    // Token testValueToken{};
+    // int bytesToTest = 0;
     // TypeId typeId={};
 
     // true if bodies and expressions can be used.
@@ -522,7 +527,6 @@ struct ASTStatement : ASTNode {
     // };
     PolyVersions<DynamicArray<TypeId>> versions_expressionTypes; // types from firstExpression
 
-    u32 age = 0;
     bool rangedForLoop=false; // otherwise sliced for loop
     bool globalAssignment=false; // for variables, indicates whether variable refers to global data in data segment
     bool sharedContents = false; // this node is not the owner of it's nodes.

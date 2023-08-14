@@ -1,0 +1,39 @@
+@TEST-CASE while
+i = 0
+sum = 0
+while i < 5 {
+    sum += i
+    i++
+}
+test 5; i;
+test 10; sum;
+@TEST-CASE for
+i = 0
+for 0..5 {
+    test i; it;
+    test i; nr;
+    i++
+}
+test 5; i;
+@TEST-CASE for-rev
+i = 0
+N = 5
+for @rev (-2)..N {
+    test N - 1 - i; it;
+    test N - 1 - i; nr;
+    i++
+}
+test 7; i;
+@TEST-CASE for-ptr
+arr: i32[] {
+    0,1,2,3,4
+}
+for @ptr arr {
+    test nr; *it;
+    *it = nr*2
+}
+for arr {
+    test 2*nr; it;
+}
+
+// TODO: nested loops
