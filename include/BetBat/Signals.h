@@ -33,6 +33,7 @@ enum class SignalDetailed : u32 {
 };
 
 SignalDefault CastSignal(SignalAttempt signal);
+SignalAttempt CastSignal(SignalDefault signal);
 
 // used to catch mistakes
 bool operator==(SignalDefault, SignalDefault);

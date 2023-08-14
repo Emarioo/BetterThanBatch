@@ -1,0 +1,186 @@
+/*
+    Quick bland showcase of rendering
+    
+    Resources:
+        https://learnopengl.com
+        https://www.glfw.org/documentation.html
+*/
+
+#import "Graphics"
+#import "Logger"
+#import "OS"
+
+fn @import Sleep(ms: i32); // windows sleep, remove this later
+
+#define GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",#line,glErrCode,":",glewGetErrorString(glErrCode)); }
+#ifndef GLCHECK
+#define GLCHECK
+#endif
+
+main(); 1
+
+fn main(){
+    yes = glfwInit();
+    if !yes {
+        log("glfwInit failed");
+        return;
+    }
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    title = @cstr "Yes sir"
+    width = 800;
+    height = 600;
+    window = glfwCreateWindow(width, height, title, null, null);
+    if !window {
+        log("window failed");
+        glfwTerminate();
+        return;
+    }
+
+    glfwMakeContextCurrent(window);
+
+    err = glewInit();
+    if err {
+        msg = glewGetErrorString(err);
+        log("glew failed: ",msg)
+        glfwTerminate();
+        return;
+    }
+
+    glViewport(0, 0, width, height);
+    GLCHECK
+
+    vshader = "
+        #version 330 core
+        layout (location = 0) in vec3 aPos;
+        void main()
+        {
+            gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+        }
+        ";
+
+    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    GLCHECK
+    glShaderSource(vertexShader, 1, &vshader.ptr, null);
+    GLCHECK
+    glCompileShader(vertexShader);
+    GLCHECK
+
+    success: i32; // reused further down
+    infoLog: char[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if !success {
+        glGetShaderInfoLog(vertexShader, 512, null, infoLog.ptr);
+        log("Vertex shader error: ",infoLog);
+    }
+
+    fshader = "
+        #version 330 core
+        out vec4 FragColor;
+
+        void main()
+        {
+            FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+        } 
+        ";
+
+    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    GLCHECK
+    glShaderSource(fragmentShader, 1, &fshader.ptr, null);
+    GLCHECK
+    glCompileShader(fragmentShader);
+    GLCHECK
+
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    GLCHECK
+    if !success {
+        glGetShaderInfoLog(fragmentShader, 512, null, infoLog.ptr);
+        GLCHECK
+        log("Fragment shader error: ",infoLog);
+    }
+
+    shaderProgram = glCreateProgram();
+    GLCHECK
+    glAttachShader(shaderProgram, vertexShader);
+    GLCHECK
+    glAttachShader(shaderProgram, fragmentShader);
+    GLCHECK
+    glLinkProgram(shaderProgram);
+    GLCHECK
+
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    GLCHECK
+    if !success {
+        glGetProgramInfoLog(shaderProgram, 512, null, infoLog.ptr);
+        GLCHECK
+        log("Fragment shader error: ",infoLog);
+    }
+
+    glUseProgram(shaderProgram);
+    GLCHECK
+
+    VBO: u32;
+    VAO: u32;
+    // vertices: f32[9];
+
+    glGenVertexArrays(1, &VAO);
+    GLCHECK
+    glGenBuffers(1, &VBO);
+    GLCHECK
+
+    glBindVertexArray(VAO);
+    GLCHECK
+
+    glBindBuffer(GL_ARRAY_BUFFER, VBO);
+    GLCHECK
+    // glBufferData(GL_ARRAY_BUFFER, 9 * sizeof f32 , vertices.ptr, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, 9 * sizeof f32 , null, GL_DYNAMIC_DRAW);
+    GLCHECK
+
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof f32, cast<void*>cast<u64>0);
+    GLCHECK
+    glEnableVertexAttribArray(0);
+    GLCHECK
+
+    vertices: f32[9] {
+        -0.5,
+        0, // set in loop
+        0.0,
+        0.5,
+        -0.5,
+        0.0,
+        0.0,
+        0.5,
+        0.0,
+    };
+
+    a = 0;
+    dir = 1;
+    while !glfwWindowShouldClose(window) {
+        if a > 400
+            dir = -1
+        if a <= 0
+            dir = 1
+        a += dir
+
+        glClearColor(a / 400.0,0.3,0.5,1);
+        glClear(GL_COLOR_BUFFER_BIT);
+
+        vertices.ptr[1] = a/400.0 - 0.8;
+
+        // TODO: Try element array
+        // TODO: Try uniform functions (glUniform4f)
+
+        glBufferSubData(GL_ARRAY_BUFFER, 0, 9 * sizeof f32, vertices.ptr);
+        // GLCHECK
+        glDrawArrays(GL_TRIANGLES, 0, 3);
+        // GLCHECK
+        glfwSwapBuffers(window);
+
+        glfwPollEvents();
+        Sleep(1)
+    }
+
+    glfwTerminate();
+}

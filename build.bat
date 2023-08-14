@@ -11,7 +11,7 @@
 @REM SET USE_GCC=1
 SET USE_DEBUG=1
 SET USE_MSVC=1
-SET USE_OPTIMIZATIONS=1
+@REM SET USE_OPTIMIZATIONS=1
 
 @REM Advapi is used for winreg which accesses the windows registry
 @REM to get cpu clock frequency which is used with rdtsc.
@@ -28,7 +28,8 @@ if !USE_OPTIMIZATIONS!==1 (
     SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
 )
 SET MSVC_LINK_OPTIONS=/nologo Advapi32.lib
-SET MSVC_INCLUDE_DIRS=/Iinclude
+@REM  gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.8/lib/glfw3_mt.lib libs/glew-2.1.0/lib/glew32s.lib 
+SET MSVC_INCLUDE_DIRS=/Iinclude /Ilibs/glfw-3.3.8/include /Ilibs/glew-2.1.0/include
 SET MSVC_DEFINITIONS=/DOS_WINDOWS
 
 if !USE_DEBUG!==1 (
@@ -91,7 +92,7 @@ echo Compiled in %finS%.%finS2% seconds
 cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DNO_PERF /DNO_TRACKER src\BetBat\External\NativeLayer.cpp /Fo:bin/NativeLayer.obj
 cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DNO_PERF /DNO_TRACKER /DOS_WINDOWS src\Engone\Win32.cpp /Fo:bin/Win32.obj
 lib /nologo bin/NativeLayer.obj bin/Win32.obj Advapi32.lib /OUT:bin/NativeLayer.lib
-dumpbin /ALL bin/NativeLayer.obj > nat.out
+@REM dumpbin /ALL bin/NativeLayer.obj > nat.out
 
 if !compileSuccess! == 0 (
     echo f | XCOPY /y /q !output! prog.exe > nul

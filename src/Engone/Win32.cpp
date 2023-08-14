@@ -11,7 +11,7 @@
 
 // RDTSC togerher with cpu frequency from the windows register
 // is more accurate than QueryPerformance-Counter/Frequency
-// #define USE_RDTSC
+#define USE_RDTSC
 
 // #define LOG_ALLOCATIONS
 
@@ -34,8 +34,8 @@
 #ifdef USE_RDTSC
 // to get cpu clock speed
 #include <winreg.h>
+// #include <intrin.h> // included by Win32Includes
 // #pragma comment(lib,"Advapi32.lib")
-#include <intrin.h>
 #endif
 
 // Name collision
@@ -145,7 +145,6 @@ namespace engone {
 			}
 			break;
 		}
-
 
 		int cFileNameLen = strlen(data.cFileName);
 		int newLength = cFileNameLen;
@@ -310,6 +309,26 @@ namespace engone {
 			#endif
 		}
 		return (double)(endSubStart)/(double)frequency;
+	}
+	u64 GetClockSpeed(){
+		static u64 clockSpeed = 0; // frequency
+		if(clockSpeed==0){
+			// TODO: Does this work on all Windows versions?
+			//  Could it fail? In any case, something needs to be handled.
+			DWORD mhz = 0;
+			DWORD size = sizeof(DWORD);
+			LONG err = RegGetValueA(
+				HKEY_LOCAL_MACHINE,
+				"HARDWARE\\DESCRIPTION\\System\\CentralProcessor\\0",
+				"~MHz",
+				RRF_RT_DWORD,
+				NULL,
+				&mhz,
+				&size
+			);
+			clockSpeed = (u64)mhz * (u64)1000000;
+		}
+		return frequency;
 	}
 	void Sleep(double seconds){
         Win32Sleep((uint32)(seconds*1000));   
@@ -631,7 +650,7 @@ namespace engone {
         void* ptr = malloc(bytes);
 		if(!ptr) return nullptr;
 		
-		PrintTracking(bytes,ENGONE_TRACK_ALLOC);
+		// Pri+ntTracking(bytes,ENGONE_TRACK_ALLOC);
 		
 		// s_allocStatsMutex.lock();
 		s_allocatedBytes+=bytes;
@@ -704,7 +723,7 @@ namespace engone {
 		#endif
 		free(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
-		PrintTracking(bytes,ENGONE_TRACK_FREE);
+		// PrintTracking(bytes,ENGONE_TRACK_FREE);
 		// s_allocStatsMutex.lock();
 		s_allocatedBytes-=bytes;
 		s_numberAllocations--;
@@ -786,6 +805,7 @@ namespace engone {
         }
 	}
 	void Semaphore::wait() {
+		MEASURE
 		if (m_internalHandle == 0) {
 			HANDLE handle = CreateSemaphore(NULL, m_initial, m_max, NULL);
 			if (handle == INVALID_HANDLE_VALUE) {
@@ -804,11 +824,15 @@ namespace engone {
 		}
 	}
 	void Semaphore::signal(int count) {
+		MEASURE
 		if (m_internalHandle != 0) {
 			BOOL yes = ReleaseSemaphore(TO_HANDLE(m_internalHandle), count, NULL);
 			if (!yes) {
 				DWORD err = GetLastError();
-				PL_PRINTF("[WinError %lu] ReleaseSemaphore\n",err);
+				if(err == ERROR_TOO_MANY_POSTS)
+					PL_PRINTF("[WinError %lu] ReleaseSemaphore, to many posts\n",err);
+				else
+					PL_PRINTF("[WinError %lu] ReleaseSemaphore\n",err);
 			}
 		}
 	}
@@ -823,6 +847,7 @@ namespace engone {
         }
 	}
 	void Mutex::lock() {
+		MEASURE
 		if (m_internalHandle == 0) {
 			HANDLE handle = CreateMutex(NULL, false, NULL);
 			if (handle == INVALID_HANDLE_VALUE) {
@@ -834,8 +859,10 @@ namespace engone {
 		if (m_internalHandle != 0) {
 			DWORD res = WaitForSingleObject(TO_HANDLE(m_internalHandle), INFINITE);
 			uint32 newId = Thread::GetThisThreadId();
-			if (m_ownerThread != 0) {
-				PL_PRINTF("Mutex : Locking twice, old owner: %u, new owner: %u\n",m_ownerThread,newId);
+			auto owner = m_ownerThread;
+			// printf("Lock %d %d\n",newId, (int)m_internalHandle);
+			if (owner != 0) {
+				PL_PRINTF("Mutex : Locking twice, old owner: %u, new owner: %u\n",owner,newId);
 			}
 			m_ownerThread = newId;
 			if (res == WAIT_FAILED) {
@@ -846,7 +873,9 @@ namespace engone {
 		}
 	}
 	void Mutex::unlock() {
+		MEASURE
 		if (m_internalHandle != 0) {
+			// printf("Unlock %d %d\n",m_ownerThread, (int)m_internalHandle);
 			m_ownerThread = 0;
 			BOOL yes = ReleaseMutex(TO_HANDLE(m_internalHandle));
 			if (!yes) {
@@ -894,7 +923,38 @@ namespace engone {
 		DataForThread::Destroy(data);
 		return ret;
 	}
-	
+	u32 Thread::CreateTLSIndex() {
+		DWORD ind = TlsAlloc();
+		if(ind == TLS_OUT_OF_INDEXES) {
+			DWORD err = GetLastError();
+			PL_PRINTF("[WinError %lu] TlsAlloc\n",err);
+		}
+		return ind+1;
+	}
+	bool Thread::DestroyTLSIndex(u32 index) {
+		bool yes = TlsFree((DWORD)(index-1));
+		if(!yes) {
+			DWORD err = GetLastError();
+			PL_PRINTF("[WinError %lu] TlsFree\n",err);
+		}
+		return yes;
+	}
+	void* Thread::GetTLSValue(u32 index){
+		void* ptr = TlsGetValue((DWORD)(index-1));
+		DWORD err = GetLastError();
+		if(err!=ERROR_SUCCESS){
+			PL_PRINTF("[WinError %lu] TlsGetValue, invalid index\n",err);
+		}
+		return ptr;
+	}
+	bool Thread::SetTLSValue(u32 index, void* ptr){
+		bool yes = TlsSetValue((DWORD)(index-1), ptr);
+		if(!yes) {
+			DWORD err = GetLastError();
+			PL_PRINTF("[WinError %lu] TlsSetValue, invalid index\n",err);
+		}
+		return yes;
+	}
 	void Thread::init(uint32(*func)(void*), void* arg) {
 		if (!m_internalHandle) {
 			// const uint32 stackSize = 1024*1024;

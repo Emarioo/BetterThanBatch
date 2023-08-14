@@ -89,10 +89,13 @@ void NativeRegistry::initNativeContent(){
     // ADD(rdtscp)
     ADD(compare_swap)
     ADD(atomic_add)
+    ADD(strlen)
     
     ADD(sin)
     ADD(cos)
     ADD(tan)
+    ADD(sqrt)
+    ADD(round)
 
     ADD(NativeSleep)
 

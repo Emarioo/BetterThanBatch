@@ -24,23 +24,26 @@
 // #define DEV_FILE "examples/const.btb"
 // #define DEV_FILE "examples/threads.btb"
 // #define DEV_FILE "examples/dir-iterator.btb"
-#define CONFIG_DEFAULT_TARGET WINDOWS_x64
+// #define CONFIG_DEFAULT_TARGET WINDOWS_x64
 
 // #define DEBUG
 
 // should enable optimized options and disable slow ones.
-#define RELEASE
+// #define RELEASE
 
 // With this flag, some shortcuts and other improvements are made
 // when compiling. Push and pop after each other is redundant for example.
 // The consequence is that the logged instructions won't resemble the final
 // output.
 #define OPTIMIZED
+#define SINGLE_THREADED
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 #ifndef RELEASE
-// #define ENABLE_TRACKER
+#define ENABLE_TRACKER
 // #define LOG_TRACKER
+#define LOG_MSG_LOCATION
+#define DUMP_HEX
 #endif
 // Will it ever be?
 // #define SILENT
@@ -63,22 +66,19 @@
 // #define DEBUG_RESIZE
 
 // Language config
-// Only here to compare speeds
-// #define SLOW_PREPROCESSOR
 
 #define PREPROC_REC_LIMIT 100
 // You could enforce hashtag (replace macro with hashtag)
 // Hashtag will always be used. @ is taken, $ feels wrong, # makes you feel at home.
 #define PREPROC_TERM "#"
 
-// #define LOG_MSG_LOCATION
 
 // THESE SHOULD BE OFF FOR THE COMPILER TO WORK PROPERLY
 // #define DISABLE_BASE_IMPORT
 // #define DISABLE_ZERO_INITIALIZATION
 // Disabling this will most certainly produce flawed instructions
 // but it will be easier to read the instructions when debugging
-// #define DISABLE_FAULTY_X64
+#define ENABLE_FAULTY_X64
 // Disables the non essential asserts
 // not the ones that bound check in arrays
 // or perhaps you do both?
@@ -109,7 +109,7 @@
 // #define PLOG
 // type checker
 // #define TC_LOG
-// #define GLOG
+#define GLOG
 // #define ILOG
 // #define ILOG_REGS
 // x64 converter

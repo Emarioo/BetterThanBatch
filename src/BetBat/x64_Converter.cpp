@@ -19,6 +19,7 @@ const char* ToString(LinkConventions stuff){
         CASE(NONE,"none")
         CASE(NATIVE,"native")
         CASE(DLLIMPORT,"dllimport")
+        CASE(VARIMPORT,"varimport")
         CASE(IMPORT,"import")
     }
     return "<unknown-link>";
@@ -119,6 +120,11 @@ StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
 #define OPCODE_2_SETL_RM8 (u16)0x9C0F
 #define OPCODE_2_SETLE_RM8 (u16)0x9E0F
 
+#define OPCODE_2_SETA_RM8 (u16)0x970F
+#define OPCODE_2_SETAE_RM8 (u16)0x930F
+#define OPCODE_2_SETB_RM8 (u16)0x920F
+#define OPCODE_2_SETBE_RM8 (u16)0x960F
+
 // zero extension
 #define OPCODE_2_MOVZX_REG_RM8 (u16)0xB60F
 #define OPCODE_2_MOVZX_REG_RM16 (u16)0xB70F
@@ -177,6 +183,14 @@ StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
 // conver float to i32 (or i64 with rexw) with truncation (float is rounded down)
 #define OPCODE_3_CVTTSS2SI_REG_RM (u32)0x2C0FF3
 #define OPCODE_4_REXW_CVTTSS2SI_REG_RM (u32)0x2C0F48F3
+
+// float comparisson, sets flags, see https://www.felixcloutier.com/x86/comiss
+#define OPCODE_2_COMISS_REG_RM (u16)0x2F0F
+#define OPCODE_2_UCOMISS_REG_RM (u16)0x2E0F
+
+#define OPCODE_4_ROUNDSS_REG_RM_IMM8 (u32)0x0A3A0F66
+
+#define OPCODE_3_SQRTSS_REG_RM (u32)0x510FF3
 
 #define OPCODE_2_CMPXCHG_RM_REG (u16)0xB10F
 
@@ -403,7 +417,6 @@ u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false){
 
     if(IS_REG_XMM(bcreg)) {
         Assert(allowXMM);
-        Assert(BC_REG_XMM3 - BC_REG_XMM0 == 3);
         return DECODE_REG_TYPE(bcreg) - BC_XMM0;
     }
 
@@ -418,6 +431,13 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     _VLOG(log::out <<log::BLUE<< "x64 Converter:\n";)
 
     Program_x64* prog = Program_x64::Create();
+
+    // TODO: Multithreading here is possible. Each thread could output instructions into it's own
+    //   section of instructions. Then you would finish up with relocations which you can use multiple threads
+    //   for too. The only thing is that when translating relocations from bytecode to x64 you would need
+    //   to store information about which section it points to.
+    //   This is my initial thought on how to allow multiple threads. There are probably some other
+    //   issues you need to figure out.
 
     // prog->add(PREFIX_REXW);
     // prog->add(OPCODE_MOV_REG_RM);
@@ -579,7 +599,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 //  but you really don't. Keep track of which operand is destination and output
                 //  and which one is register and register/memory
                 i8 size = (i8)op2;
-                #ifndef DISABLE_FAULTY_X64
+                #ifndef ENABLE_FAULTY_X64
                 if(DECODE_REG_TYPE(op0)!=DECODE_REG_TYPE(op1) && size != 8) {
                     prog->add(PREFIX_REXW);
                     prog->add(OPCODE_XOR_REG_RM);
@@ -799,42 +819,83 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
                 break;
             }
-            break; case BC_SUBF:
-            case BC_MULF:
-            case BC_DIVF:
-            case BC_ADDF: {
-                prog->add(OPCODE_MOV_RM_REG);
-                prog->addModRM_SIB(MODE_DEREF_DISP8, BCToProgramReg(op0), SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                prog->add((u8)-8);
+            break; case BC_FMOD: {
+                Assert(op0 == BC_REG_XMM0f && op1 == BC_REG_XMM1f  && op2 == BC_REG_XMM2f);
 
-                prog->add3(OPCODE_3_MOVSS_REG_RM);
-                prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                prog->add((u8)-8);
+                //    xmm3 = xmm0 - rounddown(x / y) * y
+                /*
+                    movss xmm2, xmm0
+                    divss xmm2, xmm1
+                    roundss xmm2, xmm2, 1
+                    mulss xmm2, xmm1
+                    subss xmm0, xmm2
+                    movss xmm2, xmm0
+                */
+                // OPCODE_3_MOVSS_REG_RM
+                // OPCODE_3_ROUNDSS_REG_RM
+                // OPCODE_3_DIVSS_REG_RM
+                // OPCODE_3_MULSS_REG_RM
+                // OPCODE_3_SUBSS_REG_RM
 
-                prog->add(OPCODE_MOV_RM_REG);
-                prog->addModRM_SIB(MODE_DEREF_DISP8, BCToProgramReg(op1), SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                prog->add((u8)-8);
+                u8 arr[]{ 0xF3, 0x0F, 0x10, 0xD0, 0xF3, 0x0F, 0x5E, 0xD1, 0x66, 0x0F, 0x3A, 0x0A, 0xD2, 0x01, 0xF3, 0x0F, 0x59, 0xD1, 0xF3, 0x0F, 0x5C, 0xC2, 0xF3, 0x0F, 0x10, 0xD0 };
+                prog->addRaw(arr,sizeof(arr));
+                break;
+            }
+            break; case BC_FSUB:
+            case BC_FMUL:
+            case BC_FDIV:
+            case BC_FADD: {
+                Assert(IS_REG_XMM(op0) && IS_REG_XMM(op1) && op0 == op2);
+                
+                u8 reg0 = BCToProgramReg(op0, 4, true);
+                u8 reg1 = BCToProgramReg(op1, 4, true);
+                u8 reg2 = reg0;
 
                 u32 operation = 0;
                 switch(opcode) {
-                    case BC_ADDF: operation = OPCODE_3_ADDSS_REG_RM; break;
-                    case BC_SUBF: operation = OPCODE_3_SUBSS_REG_RM; break;
-                    case BC_MULF: operation = OPCODE_3_MULSS_REG_RM; break;
-                    case BC_DIVF: operation = OPCODE_3_DIVSS_REG_RM; break;
+                    case BC_FADD: operation = OPCODE_3_ADDSS_REG_RM; break;
+                    case BC_FSUB: operation = OPCODE_3_SUBSS_REG_RM; break;
+                    case BC_FMUL: operation = OPCODE_3_MULSS_REG_RM; break;
+                    case BC_FDIV: operation = OPCODE_3_DIVSS_REG_RM; break;
                 }
                 prog->add3(operation);
-                prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                prog->add((u8)-8);
+                prog->addModRM(MODE_REG, reg2, reg1);
 
-                prog->add3(OPCODE_3_MOVSS_RM_REG);
-                prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                prog->add((u8)-8);
+                // Code that works with eax instead of xmm
+                // u8 reg0 = BCToProgramReg(op0, 4);
+                // u8 reg1 = BCToProgramReg(op1, 4);
+                // prog->add(OPCODE_MOV_RM_REG);
+                // prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                // prog->add((u8)-8);
 
-                prog->add(OPCODE_MOV_REG_RM);
-                prog->addModRM_SIB(MODE_DEREF_DISP8, BCToProgramReg(op2), SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                prog->add((u8)-8);
+                // prog->add3(OPCODE_3_MOVSS_REG_RM);
+                // prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                // prog->add((u8)-8);
+
+                // prog->add(OPCODE_MOV_RM_REG);
+                // prog->addModRM_SIB(MODE_DEREF_DISP8, reg1, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                // prog->add((u8)-8);
+
+                // u32 operation = 0;
+                // switch(opcode) {
+                //     case BC_FADD: operation = OPCODE_3_ADDSS_REG_RM; break;
+                //     case BC_FSUB: operation = OPCODE_3_SUBSS_REG_RM; break;
+                //     case BC_FMUL: operation = OPCODE_3_MULSS_REG_RM; break;
+                //     case BC_FDIV: operation = OPCODE_3_DIVSS_REG_RM; break;
+                // }
+                // prog->add3(operation);
+                // prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                // prog->add((u8)-8);
+
+                // prog->add3(OPCODE_3_MOVSS_RM_REG);
+                // prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                // prog->add((u8)-8);
+
+                // prog->add(OPCODE_MOV_REG_RM);
+                // prog->addModRM_SIB(MODE_DEREF_DISP8, BCToProgramReg(op2), SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                // prog->add((u8)-8);
             }
-            // break; case BC_SUBF: {
+            // break; case BC_FSUB: {
             //     prog->add(OPCODE_MOV_RM_REG);
             //     prog->addModRM_SIB(MODE_DEREF_DISP8, BCToProgramReg(op0), SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
             //     prog->add((u8)-8);
@@ -1038,20 +1099,119 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->add2(OPCODE_2_MOVZX_REG_RM8);\
                 prog->addModRM(MODE_REG, BCToProgramReg(op2,0xC), BCToProgramReg(op2,0xC));
 
-            break; case BC_LT: {
-                CODE_COMPARE(OPCODE_2_SETL_RM8)
+            break; case BC_LT:
+            case BC_LTE:
+            case BC_GT:
+            case BC_GTE: {
+                u8 reg0 = BCToProgramReg(op0,0xF);
+                u8 reg1 = BCToProgramReg(op1,0xF);
+                u8 reg2 = BCToProgramReg(op2,0xF);
+                u8 size0 = DECODE_REG_SIZE(op0);
+                u8 size1 = DECODE_REG_SIZE(op1);
+                u8 size2 = DECODE_REG_SIZE(op2);
+                if(size0>size1){
+                    if(size1==1) {
+                        prog->add(PREFIX_REXW);
+                        prog->add2(OPCODE_2_MOVSX_REG_RM8);
+                        prog->addModRM(MODE_REG, reg1, reg1);
+                    } else if(size1==2) {
+                        prog->add(PREFIX_REXW);
+                        prog->add2(OPCODE_2_MOVSX_REG_RM16);
+                        prog->addModRM(MODE_REG, reg1, reg1);
+                    } else if(size1==4) {
+                        prog->add(PREFIX_REXW);
+                        prog->add(OPCODE_MOVSXD_REG_RM);
+                        prog->addModRM(MODE_REG, reg1, reg1);
+                    }
+                    if(size0 == 8) prog->add(PREFIX_REXW);
+                }else if(size1>size0) {
+                    if(size0==1) {
+                        prog->add(PREFIX_REXW);
+                        prog->add2(OPCODE_2_MOVSX_REG_RM8);
+                        prog->addModRM(MODE_REG, reg0, reg0);
+                    } else if(size0==2) {
+                        prog->add(PREFIX_REXW);
+                        prog->add2(OPCODE_2_MOVSX_REG_RM16);
+                        prog->addModRM(MODE_REG, reg0, reg0);\
+                    } else if(size0==4) {
+                        prog->add(PREFIX_REXW);
+                        prog->add(OPCODE_MOVSXD_REG_RM);
+                        prog->addModRM(MODE_REG, reg0, reg0);
+                    }
+                    if(size1 == 8) prog->add(PREFIX_REXW);
+                }
+                prog->add(OPCODE_CMP_REG_RM);
+                prog->addModRM(MODE_REG, reg0, reg1);
+
+                switch(opcode) {
+                    break; case BC_LT: {
+                        prog->add2(OPCODE_2_SETL_RM8);
+                    }
+                    break; case BC_LTE: {
+                        prog->add2(OPCODE_2_SETLE_RM8);
+                    }
+                    break; case BC_GT: {
+                        prog->add2(OPCODE_2_SETG_RM8);
+                    }
+                    break; case BC_GTE: {
+                        prog->add2(OPCODE_2_SETGE_RM8);
+                    }
+                }
+                prog->addModRM(MODE_REG, 0, reg2);
+                if(size2 == 8)
+                    prog->add(PREFIX_REXW);
+                prog->add2(OPCODE_2_MOVZX_REG_RM8);
+                prog->addModRM(MODE_REG, reg2, reg2);
                 break;
             }
-            break; case BC_LTE: {
-                CODE_COMPARE(OPCODE_2_SETLE_RM8)
-                break;
-            }
-            break; case BC_GT: {
-                CODE_COMPARE(OPCODE_2_SETG_RM8)
-                break;
-            }
-            break; case BC_GTE: {
-                CODE_COMPARE(OPCODE_2_SETGE_RM8)
+            break; case BC_FLT:
+            case BC_FLTE:
+            case BC_FGT:
+            case BC_FGTE:
+            case BC_FEQ:
+            case BC_FNEQ: {
+                Assert(op0 == BC_REG_XMM0f && op1 == BC_REG_XMM1f);
+
+                u8 reg0 = BCToProgramReg(op0,4, true);
+                u8 reg1 = BCToProgramReg(op1,4, true);
+                u8 reg2 = BCToProgramReg(op2,0xF);
+
+                u8 size2 = DECODE_REG_SIZE(op2);
+                
+                // NOTE: UCOMISS is another instructions you could use.
+                // It depends if you care about ordered or unordered (NaN comparison)
+                // I am not sure how we care about it at the moment so we always use ordered (COMISS)
+                prog->add2(OPCODE_2_COMISS_REG_RM);
+                prog->addModRM(MODE_REG, reg0, reg1);
+                
+                switch(opcode) {
+                    break; case BC_FLT: {
+                        prog->add2(OPCODE_2_SETB_RM8);
+                    }
+                    break; case BC_FLTE: {
+                        prog->add2(OPCODE_2_SETBE_RM8);
+                    }
+                    break; case BC_FGT: {
+                        prog->add2(OPCODE_2_SETA_RM8);
+                    }
+                    break; case BC_FGTE: {
+                        prog->add2(OPCODE_2_SETAE_RM8);
+                    }
+                    break; case BC_FEQ: {
+                        prog->add2(OPCODE_2_SETE_RM8);
+                    }
+                    break; case BC_FNEQ: {
+                        prog->add2(OPCODE_2_SETNE_RM8);
+                    }
+                    break; default: {
+                        Assert(false);
+                    }
+                }
+                prog->addModRM(MODE_REG, 0, reg2);
+                if(size2 == 8)
+                    prog->add(PREFIX_REXW);
+                prog->add2(OPCODE_2_MOVZX_REG_RM8);
+                prog->addModRM(MODE_REG, reg2, reg2);
                 break;
             }
             break; case BC_ORI: {
@@ -1190,7 +1350,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     prog->addModRM_SIB(MODE_DEREF, reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                 } else {
                     int size = DECODE_REG_SIZE(op0);
-                    #ifndef DISABLE_FAULTY_X64
+                    #ifndef ENABLE_FAULTY_X64
                     if(size == 4){
                         // prog->add(PREFIX_REXW); // rexw will sign extend the immediate
                         prog->add(OPCODE_AND_RM_IMM_SLASH_4);
@@ -1232,7 +1392,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add(PREFIX_REXB);
                         reg = reg - 8;
                     }
-                    #ifndef DISABLE_FAULTY_X64
+                    #ifndef ENABLE_FAULTY_X64
                     if(size != 8){
                         prog->add(PREFIX_REXW);
                         prog->add(OPCODE_XOR_REG_RM);
@@ -1281,11 +1441,15 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             break; case BC_CAST: {
                 u8 type = op0;
 
-                int fsize = 1<<DECODE_REG_SIZE_TYPE(op1);
-                int tsize = 1<<DECODE_REG_SIZE_TYPE(op2);
-                u8 freg = BCToProgramReg(op1,0xF);
-                u8 treg = BCToProgramReg(op2,0xF);
-                Assert(freg == treg);
+                int fsize = DECODE_REG_SIZE(op1);
+                int tsize = DECODE_REG_SIZE(op2);
+
+                bool fromXmm = IS_REG_XMM(op1);
+                bool toXmm = IS_REG_XMM(op2);
+
+                u8 freg = BCToProgramReg(op1, 0xF, fromXmm);
+                u8 treg = BCToProgramReg(op2, 0xF, toXmm);
+                Assert(freg == treg || fromXmm != toXmm);
 
                 // if(fsize == tsize){
                 //     break; // nothing to change
@@ -1310,10 +1474,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
                 // u32 operation = 0;
                 // switch(opcode) {
-                //     case BC_ADDF: operation = OPCODE_3_ADDSS_REG_RM; break;
-                //     case BC_SUBF: operation = OPCODE_3_SUBSS_REG_RM; break;
-                //     case BC_MULF: operation = OPCODE_3_MULSS_REG_RM; break;
-                //     case BC_DIVF: operation = OPCODE_3_DIVSS_REG_RM; break;
+                //     case BC_FADD: operation = OPCODE_3_ADDSS_REG_RM; break;
+                //     case BC_FSUB: operation = OPCODE_3_SUBSS_REG_RM; break;
+                //     case BC_FMUL: operation = OPCODE_3_MULSS_REG_RM; break;
+                //     case BC_FDIV: operation = OPCODE_3_DIVSS_REG_RM; break;
                 // }
                 // prog->add3(operation);
                 // prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
@@ -1331,36 +1495,45 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
                 if(type==CAST_FLOAT_SINT){
                     Assert(fsize == 4);
+                    Assert(!toXmm);
 
-                    prog->add(OPCODE_MOV_RM_REG);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
-
-                    if(tsize == 8)
-                        prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
-                    else
+                    if(fromXmm) {
                         prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                        prog->addModRM(MODE_REG, treg, freg);
+                    } else {
+                        prog->add(OPCODE_MOV_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
 
-                } else if(type==CAST_FLOAT_UINT){
-                    Assert(fsize == 4);
+                        if(tsize == 8)
+                            prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
+                        else
+                            prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                    }
+                // } else if(type==CAST_FLOAT_UINT){
+                //     Assert(fsize == 4);
 
-                    prog->add(OPCODE_MOV_RM_REG);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                //     if(fromXmm) {
+                //         prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                //         prog->addModRM(MODE_REG, treg, freg);
+                //     } else {
+                //         prog->add(OPCODE_MOV_RM_REG);
+                //         prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                //         prog->add((u8)-8);
 
-                    if(tsize == 8)
-                        prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
-                    else
-                        prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                //         if(tsize == 8)
+                //             prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
+                //         else
+                //             prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
 
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
-
+                //         prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                //         prog->add((u8)-8);
+                //     }
                 } else if(type==CAST_SINT_FLOAT){
                     Assert(tsize == 4);
-                    
+                    Assert(!fromXmm);
                     if(fsize == 2){
                         prog->add(PREFIX_REXW);
                         prog->add(OPCODE_AND_RM_IMM_SLASH_4);
@@ -1377,15 +1550,19 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     else
                         prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
                     
-                    prog->addModRM(MODE_REG, REG_XMM0, freg);
+                    if(toXmm) {
+                        prog->addModRM(MODE_REG, treg, freg);
+                    } else {
+                        prog->addModRM(MODE_REG, REG_XMM0, freg);
 
-                    prog->add3(OPCODE_3_MOVSS_RM_REG);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                        prog->add3(OPCODE_3_MOVSS_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
 
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                    }
                 } else if(type==CAST_UINT_FLOAT){
                     Assert(tsize == 4);
                     
@@ -1404,16 +1581,20 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
                     else
                         prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
-                    
-                    prog->addModRM(MODE_REG, REG_XMM0, freg);
 
-                    prog->add3(OPCODE_3_MOVSS_RM_REG);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                    if(toXmm) {
+                        prog->addModRM(MODE_REG, treg, freg);
+                    } else {
+                        prog->addModRM(MODE_REG, REG_XMM0, freg);
 
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                        prog->add3(OPCODE_3_MOVSS_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                    }
                 } else if(type==CAST_UINT_SINT || type==CAST_SINT_UINT){
                     if(minSize==1){
                         prog->add(PREFIX_REXW);
@@ -1481,7 +1662,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             break; case BC_CALL: {
                 LinkConventions linkConvention = (LinkConventions)op0;
                 CallConventions callConvention = (CallConventions)op1;
-                if(linkConvention == LinkConventions::DLLIMPORT) {
+                if(linkConvention == LinkConventions::DLLIMPORT || linkConvention == LinkConventions::VARIMPORT) {
                     Assert(bytecode->externalRelocations[imm].location == bcIndex);
                     prog->add(OPCODE_CALL_RM_SLASH_2);
                     prog->addModRM_rip(2,(u32)0);
@@ -1710,6 +1891,21 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->addRaw(arr, sizeof(arr));
                 break;
             }
+            break; case BC_STRLEN: {
+                Assert(op0 == BC_REG_RSI && op1 == BC_REG_RCX && op2 == BC_REG_RAX);
+                /*
+                xor rcx, rcx
+                top:
+                mov al, [rsi + rcx]
+                inc ecx
+                cmp al, 0
+                jne top
+                dec ecx
+                */
+                u8 arr[] = { 0x48, 0x31, 0xC9, 0x8A, 0x04, 0x0E, 0xFF, 0xC1, 0x3C, 0x00, 0x75, 0xF7, 0xFF, 0xC9 };
+                prog->addRaw(arr, sizeof(arr));
+                break;
+            }
             break; case BC_RDTSC: {
                 // This instruction uses edx:eax and ecx.
                 // That is why the operands should specify these registers to indicate
@@ -1777,7 +1973,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
                 break;
             }
-             break; case BC_ATOMIC_ADD: {
+            break; case BC_ATOMIC_ADD: {
                 // This instruction uses edx:eax and ecx.
                 // That is why the operands should specify these registers to indicate
                 // that they are used. This isn't a must, you could edx, eax and ecx before
@@ -1790,6 +1986,36 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->add(PREFIX_LOCK);
                 prog->add(OPCODE_ADD_RM_REG);
                 prog->addModRM(MODE_DEREF, regVal, regPtr);
+
+                break;
+            }
+            break; case BC_SQRT: {
+                // This instruction uses edx:eax and ecx.
+                // That is why the operands should specify these registers to indicate
+                // that they are used. This isn't a must, you could edx, eax and ecx before
+                // executing the instruction and then mov values into the operands
+                Assert(op0 == BC_REG_XMM0f);
+
+                u8 reg = BCToProgramReg(op0, 4, true);
+
+                prog->add3(OPCODE_3_SQRTSS_REG_RM);
+                prog->addModRM(MODE_REG, reg, reg);
+
+                break;
+            }
+            break; case BC_ROUND: {
+                // This instruction uses edx:eax and ecx.
+                // That is why the operands should specify these registers to indicate
+                // that they are used. This isn't a must, you could edx, eax and ecx before
+                // executing the instruction and then mov values into the operands
+                Assert(op0 == BC_REG_XMM0f);
+
+                u8 reg = BCToProgramReg(op0, 4, true);
+
+                prog->add4(OPCODE_4_ROUNDSS_REG_RM_IMM8);
+                prog->addModRM(MODE_REG, reg, reg);
+                prog->add((u8)0); // immediate describes rounding mode. 0 means "round to" which I believe will
+                // choose the number that is closest to the actual number. There where round toward, up, and toward as well (round to is probably a good default).
 
                 break;
             }
@@ -1875,6 +2101,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         // }
     }
 
+    // TODO: If you have many relocations you can use process them using multiple threads.
+    //  It can't be too few because the overhead of managing the threads would be worse
+    //  than the performance gain.
     for(int i=0;i<relativeRelocations.size();i++) {
         auto& rel = relativeRelocations[i];
         if(rel.bcAddress == bytecode->length())

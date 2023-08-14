@@ -210,6 +210,7 @@ struct TokenStream {
     static const int VERSION_MAX = 5;
     char version[VERSION_MAX+1]{0};
 
+    // TODO: Replace with QuickArray? Tracker doesn't exist in Memory
     engone::Memory<Token> tokens{}; // the tokens themselves
     engone::Memory<char> tokenData{}; // the data the tokens refer to
     

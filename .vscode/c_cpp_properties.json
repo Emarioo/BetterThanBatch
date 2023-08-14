@@ -3,7 +3,9 @@
         {
             "name": "Win32",
             "includePath": [
-                "${workspaceFolder}/include/**"
+                "${workspaceFolder}/include/**",
+                "${workspaceFolder}/libs/glew-2.1.0/include/**",
+                "${workspaceFolder}/libs/glfw-3.3.8/include/**"
             ],
             "defines": [
                 "_DEBUG",

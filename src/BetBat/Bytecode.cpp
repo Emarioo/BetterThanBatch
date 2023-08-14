@@ -13,15 +13,15 @@ const char* InstToString(int type){
         CASE(BC_MOV_MR_DISP32)
         
         CASE(BC_MODI)
-        CASE(BC_MODF)
+        CASE(BC_FMOD)
         CASE(BC_ADDI)
-        CASE(BC_ADDF)
+        CASE(BC_FADD)
         CASE(BC_SUBI)
-        CASE(BC_SUBF)
+        CASE(BC_FSUB)
         CASE(BC_MULI)
-        CASE(BC_MULF)
+        CASE(BC_FMUL)
         CASE(BC_DIVI)
-        CASE(BC_DIVF)
+        CASE(BC_FDIV)
         CASE(BC_INCR)
         
         CASE(BC_JMP)
@@ -70,10 +70,10 @@ const char* InstToString(int type){
     return "BC_?";
 }
 int RegBySize(u8 regName, int size){
-    if(size==1) return ENCODE_REG_SIZE_TYPE(BC_REG_8) | regName;
-    else if(size==2) return ENCODE_REG_SIZE_TYPE(BC_REG_16) | regName;
-    else if(size==4) return ENCODE_REG_SIZE_TYPE(BC_REG_32) | regName;
-    else if(size==8) return ENCODE_REG_SIZE_TYPE(BC_REG_64) | regName;
+    if(size==1) return ENCODE_REG_BITS(regName, BC_REG_8);
+    else if(size==2) return ENCODE_REG_BITS(regName, BC_REG_16);
+    else if(size==4) return ENCODE_REG_BITS(regName, BC_REG_32);
+    else if(size==8) return ENCODE_REG_BITS(regName, BC_REG_64);
     else {
         // TypeChecker may fail and give an invalid type with size 0.
         // 
@@ -157,10 +157,15 @@ const char* RegToStr(u8 reg){
         CASE(R8,r8)
         CASE(R9,r9)
 
-        CASE(XMM0,xmm0)
-        CASE(XMM1,xmm1)
-        CASE(XMM2,xmm2)
-        CASE(XMM3,xmm3)
+        CASE(XMM0f,xmm0f)
+        CASE(XMM1f,xmm1f)
+        CASE(XMM2f,xmm2f)
+        CASE(XMM3f,xmm3f)
+        
+        CASE(XMM0d,xmm0d)
+        CASE(XMM1d,xmm1d)
+        CASE(XMM2d,xmm2d)
+        CASE(XMM3d,xmm3d)
 
         case 0: return "";
     }

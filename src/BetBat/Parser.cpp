@@ -340,7 +340,7 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     // astStruct->tokenRange.startIndex = startIndex;
     // astStruct->tokenRange.tokenStream = info.tokens;
     astStruct->polyName = name;
-    astStruct->hidden = hideAnnotation;
+    astStruct->setHidden(hideAnnotation);
     Token token = info.get(info.at()+1);
     if(Equal(token,"<")){
         info.next();
@@ -620,7 +620,7 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
     astNamespace->tokenRange.firstToken = token;
     // astNamespace->tokenRange.startIndex = startIndex;
     // astNamespace->tokenRange.tokenStream = info.tokens;
-    astNamespace->hidden = hideAnnotation;
+    astNamespace->setHidden(hideAnnotation);
 
     ScopeInfo* newScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
     astNamespace->scopeId = newScope->id;
@@ -742,7 +742,7 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     astEnum->tokenRange.firstToken = enumToken;
     // astEnum->tokenRange.startIndex = startIndex;
     // astEnum->tokenRange.tokenStream = info.tokens;
-    astEnum->hidden = hideAnnotation;
+    astEnum->setHidden(hideAnnotation);
     auto error = SignalAttempt::SUCCESS;
     WHILE_TRUE {
         Token name = info.get(info.at()+1);
@@ -1154,6 +1154,12 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 }
             }
         }else{
+            bool cstring = false;
+            if(IsAnnotation(token) && Equal(token, "@cstr")){
+                info.next();
+                token = info.get(info.at() + 1);
+                cstring = true;
+            }
             if(Equal(token,"&")){
                 info.next();
                 ops.add(AST_REFER);
@@ -1330,6 +1336,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     tmp = info.ast->createExpression(TypeId(AST_STRING));
                     tmp->name = token;
                     tmp->constantValue = true;
+                    if(cstring)
+                        tmp->flags |= ASTNode::NULL_TERMINATED;
                     // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
                     // new(tmp->name)std::string(token);
 
@@ -1747,6 +1755,16 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             }else{
                 break;
             }
+            if(expectOperator && opType != 0 && ending) {
+                expectOperator = false; // prevent duplicate messages
+                ERR_SECTION(
+                    ERR_HEAD(info.get(info.at()))
+                    ERR_MSG("Operation '"<<info.get(info.at())<<"' needs a left and right expression but the right is missing.")
+                    ERR_LINE(info.get(info.at()), "Missing expression to the right")
+                )
+                continue; // ignore operation
+            }
+
             auto er = values.last();
             values.pop();
 
@@ -1795,6 +1813,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     assignOps.pop();
                 }
                 val->constantValue = val->left->constantValue && val->right->constantValue;
+            } else {
+                Assert(("Bug in compiler",false));
             }
 
             values.add(val);
@@ -1936,8 +1956,8 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         *strnr = "nr";
         Token nrToken = *strnr;
         statement->varnames.add({nrToken});
-        statement->reverse = reverseAnnotation;
-        statement->pointer = pointerAnnot;
+        statement->setReverse(reverseAnnotation);
+        statement->setPointer(pointerAnnot);
         statement->firstExpression = expr;
         statement->firstBody = body;
         statement->tokenRange.firstToken = firstToken;
@@ -1955,7 +1975,7 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         WHILE_TRUE {
             ASTExpression* expr=0;
             Token token = info.get(info.at()+1);
-            if(Equal(token,";")&&statement->returnValues.size()==0){ // return 1,; should not be allowed, that's why we do &&!base
+            if(Equal(token,";")&&statement->arrayValues.size()==0){ // return 1,; should not be allowed, that's why we do &&!base
                 info.next();
                 break;
             }
@@ -1963,7 +1983,7 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
             if(result!=SignalAttempt::SUCCESS){
                 break;
             }
-            statement->returnValues.add(expr);
+            statement->arrayValues.add(expr);
             // if(!base){
             //     base = expr;
             //     prev = expr;
@@ -2082,7 +2102,7 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
     Token name = info.next();
     while (IsAnnotation(name)){
         if(Equal(name,"@hide")){
-            function->hidden=true;
+            function->setHidden(true);
         } else {
             // It should not warn you because it is quite important that you use the right annotations with functions
             // Mispelling external or the calling convention would be very bad.
@@ -2343,11 +2363,17 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         //   the programmer from making mistakes. With two annotations, they may forget to specify the calling convention.
         //   Calling convention is very important. If extern and call convention is combined then they won't forget.
         if(Equal(name,"@hide")){
-            function->hidden=true;
+            function->setHidden(true);
         } else if (Equal(name,"@dllimport")){
             function->callConvention = CallConventions::STDCALL;
             specifiedConvention = true;
             function->linkConvention = LinkConventions::DLLIMPORT;
+            needsExplicitCallConvention = true;
+            linkToken = name;
+        } else if (Equal(name,"@varimport")){
+            function->callConvention = CallConventions::STDCALL;
+            specifiedConvention = true;
+            function->linkConvention = LinkConventions::VARIMPORT;
             needsExplicitCallConvention = true;
             linkToken = name;
         } else if (Equal(name,"@import")){
@@ -2390,7 +2416,7 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         continue;
     }
     if(function->linkConvention != LinkConventions::NONE){
-        function->hidden = true;
+        function->setHidden(true);
         // native doesn't use a calling convention
         if(needsExplicitCallConvention && !specifiedConvention){
             ERR_HEAD3(name, "You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @cdecl instead.\n\n";
@@ -2672,6 +2698,8 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
     statement->firstExpression = nullptr;
     statement->globalAssignment = globalAssignment;
 
+    Token lengthTokenOfLastVar{};
+
     //-- Evaluate variables on the left side
     int startIndex = info.at()+1;
     // DynamicArray<ASTStatement::VarName> varnames{};
@@ -2706,6 +2734,7 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
                 info.next();
 
                 if(IsInteger(token2)) {
+                    lengthTokenOfLastVar = token2;
                     arrayLength = ConvertInteger(token2);
                     if(arrayLength<0){
                         ERR_HEAD3(token2, "Array cannot have negative size.\n\n";
@@ -2753,7 +2782,62 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
 
         SignalAttempt result = ParseExpression(info,statement->firstExpression,false);
 
-    } else if(Equal(token,";")){
+    } else if(Equal(token,"{")) {
+        // array initializer
+        info.next(); // {
+
+        while(true){
+            Token token = info.get(info.at()+1);
+            if(Equal(token, "}")) {
+                info.next(); // }
+                break;
+            }
+            ASTExpression* expr = nullptr;
+            SignalAttempt result = ParseExpression(info, expr, false);
+            
+            if(result == SignalAttempt::SUCCESS) {
+                Assert(expr);
+                statement->arrayValues.add(expr);
+            }
+
+            token = info.get(info.at()+1);
+            if(Equal(token, ",")) {
+                info.next(); // ,
+                // TODO: Error if you see consecutive commas
+                // Note that a trailing comma is allowed: { 1, 2, }
+                // It's convenient
+            } else if(Equal(token, "}")) {
+                info.next(); // }
+                break;
+            } else {
+                info.next(); // prevent infinite loop
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Unexpected token '"<<token<<"' at end of array initializer. Use comma for another element or ending curly brace to end initializer.")
+                    ERR_LINE(token, "expected , or }")
+                )
+            }
+        }
+        if(statement->varnames.last().arrayLength<1){
+            // Set arrayLength explicitly if it was 0.
+            // Otherwise the user set a length for the array and defined less values which is okay.
+            // The rest of the values in the array will be zero initialized
+            statement->varnames.last().arrayLength = statement->arrayValues.size();
+        }
+        if(statement->arrayValues.size() > statement->varnames.last().arrayLength) {
+            ERR_SECTION(
+                ERR_HEAD(token) // token should be {
+                ERR_MSG("You cannot have more expressions in the array initializer than the array length you specified.")
+                // TODO: Show which token defined the array length
+                ERR_LINE(lengthTokenOfLastVar, "the maximum length")
+                // You could do a token range from the first expression to the last but that could spam the console
+                // with 100 expressions which would be annoying so maybe show 5 or 8 values and then do ...
+                ERR_LINE(token, ""<<statement->arrayValues.size()<<" expressions")
+            )
+        }
+    }
+    token = info.get(info.at()+1);
+    if(Equal(token,";")){
         info.next(); // parse ';'. won't crash if at end
     }
 
@@ -2844,11 +2928,12 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
 
         if(Equal(token,"{")){
             ASTScope* body=0;
-            SignalDefault result = ParseBody(info,body, info.currentScopeId);
-            if(result!=SignalDefault::SUCCESS){
+            SignalDefault result2 = ParseBody(info,body, info.currentScopeId);
+            if(result2!=SignalDefault::SUCCESS){
                 info.next(); // skip { to avoid infinite loop
                 continue;
             }
+            result = CastSignal(result2);
             tempStatement = info.ast->createStatement(ASTStatement::BODY);
             tempStatement->firstBody = body;
             tempStatement->tokenRange = body->tokenRange;
@@ -2889,8 +2974,10 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                 info.next();
             } else {
                 Token& token = info.get(info.at()+1);
-                ERR_HEAD3(token, "Unexpected '"<<token<<"' (ParseBody).\n\n";
-                    ERR_LINE2(info.at()+1,"what");
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Did not expect '"<<token<<"' when parsing body. A new statement, struct or function was expected (or enum, namespace, ...).")
+                    ERR_LINE(token,"what")
                 )
                 // prevent infinite loop. Loop only occurs when scoped
                 info.next();

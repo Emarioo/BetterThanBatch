@@ -1242,8 +1242,13 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         // Assert(constString);
         expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
-        TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
-        if(outTypes) outTypes->add(theType);
+        if(expr->flags & ASTNode::NULL_TERMINATED) {
+            TypeId theType = CheckType(info, scopeId, "char*", expr->tokenRange, nullptr);
+            if(outTypes) outTypes->add(theType);
+        } else {
+            TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+            if(outTypes) outTypes->add(theType);
+        }
     } else if(expr->typeId == AST_NULL){
         // u32 index=0;
         // auto constString = info.ast->getConstString(expr->name,&index);
@@ -1856,14 +1861,14 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     }
     
     for(auto astate : scope->statements) {
-        if(astate->hasNodes()){
+        // if(astate->hasNodes()){
             if(astate->firstBody){
                 SignalDefault result = CheckFunctions(info, astate->firstBody);   
             }
             if(astate->secondBody){
                 SignalDefault result = CheckFunctions(info, astate->secondBody);
             }
-        }
+        // }
     }
     
     return SignalDefault::SUCCESS;
@@ -2029,7 +2034,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             // if(typeArray.size()==0)
             //     typeArray.add(AST_VOID);
         } else if(now->type == ASTStatement::RETURN){
-            for(auto ret : now->returnValues){
+            for(auto ret : now->arrayValues){
                 typeArray.resize(0);
                 SignalAttempt result = CheckExpression(info, scope->scopeId, ret, &typeArray, false);
             }
@@ -2048,6 +2053,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 if(typeArray.size()==0)
                     typeArray.add(AST_VOID);
             }
+
             for(auto& t : typeArray)
                 poly_typeArray.add(t);
             bool hadError = false;
@@ -2138,6 +2144,52 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         ERR_LINE(varname.name, "bad");
                     )
                 }
+                if(now->arrayValues.size()!=0) {
+                    TypeInfo* arrTypeInfo = info.ast->getTypeInfo(now->varnames.last().versions_assignType[info.currentPolyVersion].baseType());
+                    if(!arrTypeInfo->astStruct || arrTypeInfo->astStruct->name != "Slice") {
+                        ERR_SECTION(
+                            ERR_HEAD(now->varnames.last().name)
+                            ERR_MSG("Variables that use array initializers must use the 'Slice<T>' type")
+                            ERR_LINE(now->varnames.last().name, "must use Slice<T> not "<<info.ast->typeToString(arrTypeInfo->id))
+                            // TODO: Print the location of the type instead of the variable name
+                        )
+                    } else {
+                    TypeId elementType = arrTypeInfo->structImpl->polyArgs[0];
+                    for(int j=0;j<now->arrayValues.size();j++){
+                        ASTExpression* value = now->arrayValues[j];
+                        typeArray.resize(0);
+                        SignalAttempt result = CheckExpression(info, scope->scopeId, value, &typeArray, false);
+                        if(result != SignalAttempt::SUCCESS){
+                            continue;
+                        }
+                        if(typeArray.size()!=1) {
+                            if(typeArray.size()==0) {
+                                ERR_SECTION(
+                                    ERR_HEAD(value->tokenRange)
+                                    ERR_MSG("Expressions in array initializers cannot consist of of no values. Did you call a function that returns void?")
+                                    ERR_LINE(value->tokenRange, "bad")
+                                )
+                                continue;
+                            } else {
+                                ERR_SECTION(
+                                    ERR_HEAD(value->tokenRange)
+                                    ERR_MSG("Expressions in array initializers cannot consist of multiple values. Did you call a function that returns more than one value?")
+                                    ERR_LINE(value->tokenRange, "bad")
+                                    // TODO: Print the types in rightTypes
+                                )
+                                continue;
+                            }
+                        }
+                        if(!info.ast->castable(typeArray[0], elementType)) {
+                            ERR_SECTION(
+                                ERR_HEAD(value->tokenRange)
+                                ERR_MSG("Cannot cast '"<<info.ast->typeToString(typeArray[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
+                                ERR_LINE(value->tokenRange, "cannot cast")
+                            )
+                        }
+                    }
+                    }
+                }
             }
             _TC_LOG(log::out << "\n";)
         } else if(now->type == ASTStatement::WHILE){
@@ -2187,7 +2239,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         varnameIt.versions_assignType[info.currentPolyVersion] = itemtype;
                         
                         auto vartype = memdata.typeId;
-                        if(!now->pointer){
+                        if(!now->isPointer()){
                             vartype.setPointerLevel(vartype.getPointerLevel()-1);
                         }
                         varinfo_item->versions_typeId[info.currentPolyVersion] = vartype;
@@ -2207,7 +2259,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     auto mem0 = iterinfo->getMember(0);
                     auto mem1 = iterinfo->getMember(1);
                     if(mem0.typeId == mem1.typeId && AST::IsInteger(mem0.typeId)){
-                        if(now->pointer){
+                        if(now->isPointer()){
                             ERR_SECTION(
                                 ERR_HEAD(now->tokenRange)
                                 ERR_MSG("@pointer annotation isn't allowed when Range is used in a for loop. @pointer only works with Slice.")

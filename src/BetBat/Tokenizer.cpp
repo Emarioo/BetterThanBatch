@@ -127,8 +127,10 @@ void TokenRange::print(){
         
         for(int j=0;j<tok.length;j++){
             char chr = *(tok.str+j);
-            Assert(chr!=0);
-            if(chr=='\n'){
+            // Assert(chr!=0);
+            if(chr=='\0'){
+                log::out << "\\0"; // Is this okay?
+            }else if(chr=='\n'){
                 log::out << "\\n"; // Is this okay?
             }else
                 log::out << chr;

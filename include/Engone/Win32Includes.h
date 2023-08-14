@@ -22,6 +22,7 @@
 
 #include <windows.h>
 
+#include <intrin.h>
 // Used for ConvertArguments in Win32.cpp
 #include <shellapi.h>
 

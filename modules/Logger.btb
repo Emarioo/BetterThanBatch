@@ -3,6 +3,7 @@
 
 fn @native prints(str: char[]);
 fn @native printc(str: char);
+fn @intrinsic strlen(str: char*) -> u32;
 #ifdef LINK_BYTECODE
 fn @native printi(str: i64);
 fn @native printd(str: f32);
@@ -51,6 +52,10 @@ fn @hide _print(t: i64){
     prints(str);
     #endif
 }
+fn _print(str: char*){
+    slice = Slice<char>{str, strlen(str)};
+    prints(slice);
+}
 // IMPORTANT: This function does not print accurate
 //  floats. It has some precision issues.
 fn _print(t: f32){
@@ -69,6 +74,7 @@ fn _print(t: f32){
     // decrease precision for large numbers
     if exp >= 128
         precision -= ((exp+1) & 0x7F)>>2
+    // _print(precision)
     for i: 0..precision {
         mul *= 5;
         acc *= 10;
@@ -112,11 +118,15 @@ fn _print(t: f32){
         arr.ptr[--index] = '0';
     if sign 
         arr.ptr[--index] = '-';
-
+    // _print(index)
+    // _print(' ')
+    // _print(arr.len)
     arr.ptr += index;
     arr.len -= index;
-
-    prints(arr)
+    if !arr.len
+        prints("0.0")
+    else
+        prints(arr)
 
     // fn printBits(bits: u64) {
     //     for @reverse 0..32 {

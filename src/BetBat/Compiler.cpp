@@ -1,5 +1,9 @@
 #include "BetBat/Compiler.h"
 
+#ifdef OS_WINDOWS
+#include <intrin.h>
+#endif
+
 Path::Path(const char* path) : text(path), _type((Type)0) {
     ReplaceChar((char*)text.data(), text.length(), '\\', '/');
 #ifdef OS_WINDOWS
@@ -144,10 +148,30 @@ bool CompileInfo::removeRootMacro(const Token& name) {
     return removed;
 }
 void CompileInfo::addStats(i32 errors, i32 warnings){
+    #ifdef OS_WINDOWS
+    _interlockedadd(&compileOptions->compileStats.errors, errors);
+    _interlockedadd(&compileOptions->compileStats.warnings, warnings);
+    #else
     otherLock.lock();
     compileOptions->compileStats.errors += errors;
     compileOptions->compileStats.warnings += warnings;
     otherLock.unlock();
+    #endif
+}
+void CompileInfo::addStats(i32 lines, i32 blankLines, i32 commentCount, i32 readBytes){
+    #ifdef OS_WINDOWS
+    _interlockedadd(&compileOptions->compileStats.lines, lines);
+    _interlockedadd(&compileOptions->compileStats.blankLines, blankLines);
+    _interlockedadd(&compileOptions->compileStats.commentCount, commentCount);
+    _interlockedadd(&compileOptions->compileStats.readBytes, readBytes);
+    #else
+    otherLock.lock();
+    compileOptions->compileStats.lines += tokenStream->lines;
+    compileOptions->compileStats.blankLines += tokenStream->blankLines;
+    compileOptions->compileStats.commentCount += tokenStream->commentCount;
+    compileOptions->compileStats.readBytes += tokenStream->readBytes;
+    otherLock.unlock();
+    #endif
 }
 void CompileInfo::addLinkDirective(const std::string& name){
     otherLock.lock();
@@ -172,7 +196,7 @@ void CompileInfo::cleanup(){
         if(it->finalStream)
             TokenStream::Destroy(it->finalStream);
         // engone::Free(it,sizeof(Stream));
-        TRACK_FREE(it, Stream);
+        TRACK_FREE(it, StreamToProcess);
     }
     streams.cleanup();
     for(auto& pair : includeStreams){
@@ -196,37 +220,50 @@ void CompileInfo::cleanup(){
     // streamsToClean.resize(0);
 }
 
-CompileInfo::Stream* CompileInfo::addStream(const Path& path){
+StreamToProcess* CompileInfo::addStream(const Path& path){
     streamLock.lock();
     auto pair = tokenStreams.find(path.text);
     if(pair!=tokenStreams.end() && pair->second) {
         streamLock.unlock();
         return nullptr;
     }
-    tokenStreams[path.text] = nullptr;
-    streamLock.unlock();
-    return nullptr;
-}
-CompileInfo::Stream* CompileInfo::addStream(TokenStream* tokenStream){
-    streamLock.lock();
-    auto pair = tokenStreams.find(tokenStream->streamName);
-    if(pair!=tokenStreams.end() && pair->second) {
-        streamLock.unlock();
-        return nullptr;
-    }
-    Stream* stream = tokenStreams[tokenStream->streamName] = TRACK_ALLOC(Stream);
+    // tokenStreams[path.text] = nullptr;
+    StreamToProcess* stream = tokenStreams[path.text] = TRACK_ALLOC(StreamToProcess);
     // Stream* stream = tokenStreams[tokenStream->streamName] = (Stream*)engone::Allocate(sizeof(Stream));
-    new(stream)Stream();
-    stream->initialStream = tokenStream;
+    new(stream)StreamToProcess();
+    // stream->initialStream = tokenStream;
     streams.add(stream);
+    stream->index = streams.size()-1;
 
-    compileOptions->compileStats.lines += tokenStream->lines;
-    compileOptions->compileStats.blankLines += tokenStream->blankLines;
-    compileOptions->compileStats.commentCount += tokenStream->commentCount;
-    compileOptions->compileStats.readBytes += tokenStream->readBytes;
+    // TODO: Atomic add here? I haven't because we need a lock here for the streams anyway.
+    // compileOptions->compileStats.lines += tokenStream->lines;
+    // compileOptions->compileStats.blankLines += tokenStream->blankLines;
+    // compileOptions->compileStats.commentCount += tokenStream->commentCount;
+    // compileOptions->compileStats.readBytes += tokenStream->readBytes;
     streamLock.unlock();
     return stream;
 }
+// StreamToProcess* CompileInfo::addStream(TokenStream* tokenStream){
+//     streamLock.lock();
+//     auto pair = tokenStreams.find(tokenStream->streamName);
+//     if(pair!=tokenStreams.end() && pair->second) {
+//         streamLock.unlock();
+//         return nullptr;
+//     }
+//     StreamToProcess* stream = tokenStreams[tokenStream->streamName] = TRACK_ALLOC(StreamToProcess);
+//     // Stream* stream = tokenStreams[tokenStream->streamName] = (Stream*)engone::Allocate(sizeof(Stream));
+//     new(stream)StreamToProcess();
+//     stream->initialStream = tokenStream;
+//     streams.add(stream);
+
+//     // TODO: Atomic add here? I haven't because we need a lock here for the streams anyway.
+//     compileOptions->compileStats.lines += tokenStream->lines;
+//     compileOptions->compileStats.blankLines += tokenStream->blankLines;
+//     compileOptions->compileStats.commentCount += tokenStream->commentCount;
+//     compileOptions->compileStats.readBytes += tokenStream->readBytes;
+//     streamLock.unlock();
+//     return stream;
+// }
 bool CompileInfo::hasStream(const Path& name){
     streamLock.lock();
     auto pair = tokenStreams.find(name.text);
@@ -237,10 +274,21 @@ bool CompileInfo::hasStream(const Path& name){
     streamLock.unlock();
     return true;
 }
-CompileInfo::Stream* CompileInfo::getStream(const Path& name){
+int CompileInfo::indexOfStream(const Path& name){
     streamLock.lock();
     auto pair = tokenStreams.find(name.text);
-    Stream* ptr = nullptr;
+    if(pair == tokenStreams.end()) {
+        streamLock.unlock();
+        return -1;
+    }
+    int index = pair->second->index;
+    streamLock.unlock();
+    return index;
+}
+StreamToProcess* CompileInfo::getStream(const Path& name){
+    streamLock.lock();
+    auto pair = tokenStreams.find(name.text);
+    StreamToProcess* ptr = nullptr;
     if(pair != tokenStreams.end())
         ptr = pair->second;
     streamLock.lock();
@@ -292,8 +340,8 @@ RootMacro* CompileInfo::ensureRootMacro(const Token& name, bool ensureBlank){
             CertainMacro* macro = TRACK_ALLOC(CertainMacro);
             // CertainMacro* macro = (CertainMacro*) engone::Allocate(sizeof(CertainMacro));
             new(macro)CertainMacro();
-            macro->blank = true;
             rootMacro->certainMacros[0] = macro;
+            rootMacro->hasBlank = true;
         }
     }
     macroLock.unlock();
@@ -311,6 +359,9 @@ void CompileInfo::insertCertainMacro(RootMacro* rootMacro, CertainMacro* localMa
             //         ERR_LINE2(name.tokenIndex, "replacement");
             //     )
             // }
+            if(localMacro->parameters.size() == 0) {
+                rootMacro->hasBlank = false;
+            }
             macro = pair->second;
             *macro = *localMacro;
             // if(includeInf && rootMacro->hasVariadic && (int)rootMacro->variadicMacro.parameters.size()-1<=count) {
@@ -346,6 +397,13 @@ bool CompileInfo::removeCertainMacro(RootMacro* rootMacro, int argumentAmount, b
             removed = true;
             rootMacro->variadicMacro.cleanup();
             rootMacro->variadicMacro = {};
+            if(rootMacro->hasBlank){
+                auto blank = rootMacro->certainMacros[0];
+                blank->~CertainMacro();
+                TRACK_FREE(blank,CertainMacro);
+                rootMacro->certainMacros.erase(0);
+                rootMacro->hasBlank = false;
+            }
         }
     } else {
         auto pair = rootMacro->certainMacros.find(argumentAmount);
@@ -378,38 +436,66 @@ CertainMacro* CompileInfo::matchArgCount(RootMacro* rootMacro, int count, bool i
 // Thread procedure
 u32 ProcessSource(void* ptr) {
     using namespace engone;
+    // MEASURE_THREAD()
+    // MEASURE_SCOPE
+
     ThreadCompileInfo* thread = (ThreadCompileInfo*)ptr;
     // get file from a list to tokenize, wait with semaphore if list is empty.
     CompileInfo* info = thread->info;
+    DynamicArray<Path> tempPaths;
+    
+    // TODO: Optimize the code here. There is a lot slow locks. Is it possible to use atomic instructions instead?
+
+    info->sourceLock.lock();
+    info->availableThreads++;
+    info->waitingThreads++;
+    info->sourceLock.unlock();
     WHILE_TRUE {
-        info->sourceLock.lock();
-        info->waitingThreads++;
-        if(info->waitingThreads == CompileInfo::THREAD_COUNT && info->sourcesToProcess.size() == 0) {
-            info->sourceWaitLock.signal();
-        }
-        info->sourceLock.unlock();
+        MEASUREN("Process Source")
+        // info->sourceLock.lock();
+        // info->waitingThreads++;
+        // // If the last thread finished and there are no sources we are done.
+        // // We must signal the lock that we are done so that all thread doesn't freeze.
+        // if(info->waitingThreads == info->compileOptions->threadCount && info->sourcesToProcess.size() == 0) {
+        //     info->sourceWaitLock.signal();
+        // }
+        // info->sourceLock.unlock();
 
-        info->sourceWaitLock.wait();
+        info->sourceWaitLock.wait(); // wait here when there are no sources to process
 
         info->sourceLock.lock();
+        info->signaled = false;
         info->waitingThreads--;
+
         if(info->sourcesToProcess.size() == 0) {
-            // all files processed, time to quit
-            info->sourceWaitLock.signal();
+            // we quit because the semaphore shouldn't be signaled unless there is content
+            // if there isn't content then it was signaled to stop
+            // log::out << "Quit no sources\n";
+            info->availableThreads--;
+            if(!info->signaled){
+                info->sourceWaitLock.signal();
+                info->signaled=true;
+            }
             info->sourceLock.unlock();
-            return 0;
+            break;
         }
         SourceToProcess source = info->sourcesToProcess.last();
         info->sourcesToProcess.pop();
-        if(info->sourcesToProcess.size() != 0)
-            // signal that there are more sources to process for other threads
-            info->sourceWaitLock.signal();
+        if(info->sourcesToProcess.size() > 0) {
+            if(!info->signaled) {
+                // log::out << "Signal more sources\n";
+                info->sourceWaitLock.signal();
+                info->signaled = true;
+            }
+        }
+        // if(info->sourcesToProcess.size() != 0)
+        //     // signal that there are more sources to process for other threads
+        //     info->sourceWaitLock.signal();
         // if(source.textBuffer)
         //     log::out << "Proc source "<<source.textBuffer->origin<<"\n";
         // else
         //     log::out << "Proc source "<<source.path.text<<"\n";
         info->sourceLock.unlock();
-
         
         _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefPath(source.path.text)<<"\n";)
         TokenStream* tokenStream = nullptr;
@@ -425,7 +511,7 @@ u32 ProcessSource(void* ptr) {
             info->compileOptions->compileStats.errors++;
             return false;
         }
-
+        info->addStats(tokenStream->lines, tokenStream->blankLines, tokenStream->commentCount, tokenStream->readBytes);
         // tokenStream->printData();
         
         if (tokenStream->enabled & LAYER_PREPROCESSOR) {
@@ -437,16 +523,20 @@ u32 ProcessSource(void* ptr) {
         // Assert(("can't add stream until it's completly processed, other threads would have access to it otherwise which may cause strange behaviour",false));
         // IMPORTANT: If you decide to multithread preprocessor then you need to 
         // add the stream later since the preprocessor will modify it.
-        auto stream = info->addStream(tokenStream);
-        Assert(stream);
-        stream->as = source.as;
+        auto stream = source.stream;
+        stream->initialStream = tokenStream;
+        // auto stream = info->addStream(tokenStream);
+        // Assert(stream);
+        // stream->as = source.as;
         // Stream is nullptr if it already exists.
         // We assert because this should never happen.
         // If it does then we just tokenized the same file twice.
         
         // TODO: How does this work when using textBuffer which isn't a file path
+        tempPaths.resize(tokenStream->importList.size());
         Path dir = source.path.getDirectory();
-        for(auto& item : tokenStream->importList){
+        for(int i=0;i<tokenStream->importList.size();i++){
+            auto& item = tokenStream->importList[i];
             Path importName = "";
             int dotindex = item.name.find_last_of(".");
             int slashindex = item.name.find_last_of("/");
@@ -494,23 +584,55 @@ u32 ProcessSource(void* ptr) {
             if(fullPath.text.empty()){
                 log::out << log::RED << "Could not find import '"<<importName.text<<"' (import from '"<<BriefPath(source.path.text,20)<<"'\n";
             } else {
-                if(info->hasStream(fullPath)){   
-                    _VLOG(log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";)
-                }else{
-                    info->sourceLock.lock();
-                    info->addStream(fullPath);
-                    // log::out << "Add source "<<fullPath.getFileName().text<<"\n";
-                    SourceToProcess source{};
-                    source.path = fullPath;
-                    source.as = item.as;
-                    source.textBuffer = nullptr;
-                    info->sourcesToProcess.add(source);
-                    if(info->sourcesToProcess.size() == 1)
-                        info->sourceWaitLock.signal();
-                    info->sourceLock.unlock();
-                }
+                // if(info->hasStream(fullPath)){   
+                //     _VLOG(log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";)
+                //     tempPaths[i] = {};
+                // }else{
+                    tempPaths[i] = fullPath;
+                    // info->addStream(fullPath);
+                    // info->sourceLock.lock();
+                    // info->addStream(fullPath);
+                    // // log::out << "Add source "<<fullPath.getFileName().text<<"\n";
+                    // SourceToProcess source{};
+                    // source.path = fullPath;
+                    // source.as = item.as;
+                    // source.textBuffer = nullptr;
+                    // info->sourcesToProcess.add(source);
+                    // if(info->sourcesToProcess.size() == 1)
+                    //     info->sourceWaitLock.signal();
+                    // info->sourceLock.unlock();
+                // }
             }
         }
+        info->sourceLock.lock();
+        for(int i=0;i<tokenStream->importList.size();i++){
+            auto& item = tokenStream->importList[i];
+            if(tempPaths[i].text.size()==0)
+                continue;
+            // log::out << "Add source "<<tempPaths[i].getFileName().text<<"\n";
+            auto importStream = info->addStream(tempPaths[i]);
+            if(!importStream) {
+                _VLOG(log::out << log::LIME << "Already imported "<<BriefPath(source.path.text,20)<<"\n";)
+                continue;
+            }
+            if(stream->dependencyIndex > importStream->index)
+                stream->dependencyIndex = importStream->index;
+            importStream->as = item.as;
+            SourceToProcess source{};
+            source.path = tempPaths[i];
+            // source.as = item.as;
+            source.textBuffer = nullptr;
+            source.stream = importStream;
+            info->sourcesToProcess.add(source);
+        }
+        if(info->waitingThreads == info->availableThreads-1 || info->sourcesToProcess.size()>0) {
+            if(!info->signaled) {
+                info->sourceWaitLock.signal();
+                info->signaled=true;
+            }
+        }
+        info->waitingThreads++;
+        info->sourceLock.unlock();
     }
     // TODO: Run Preprocess in multiple threads. This requires a depencency system
     //   since one stream may need another stream's macros so that stream must
@@ -522,55 +644,110 @@ u32 ProcessSource(void* ptr) {
     // process that stream. The question then is how to calculate the depth.
     // There may be a flaw with this approach.
 
-    // Another solution would be to have a list of dependencies for each stream but you would need
-    // to do a lot of linear searches so you probably want to avoid that. It could be interesting to test it
-    // in case it turns out to work pretty well. The simpler things are better sometimes.
-
-    // WHILE_TRUE {
-    //     info->sourceLock.lock();
-    //     info->waitingThreads++;
-    //     if(info->waitingThreads == CompileInfo::THREAD_COUNT && info->sourcesToProcess.size() == 0) {
-    //         info->sourceWaitLock.signal();
-    //     }
-    //     info->sourceLock.unlock();
-
-    //     info->sourceWaitLock.wait();
-
-    //     info->sourceLock.lock();
-    //     info->waitingThreads--;
-    //     if(info->sourcesToProcess.size() == 0) {
-    //         // all files processed, time to quit
-    //         info->sourceWaitLock.signal();
-    //         info->sourceLock.unlock();
-    //         return 0;
-    //     }
-    //     SourceToProcess source = info->sourcesToProcess.last();
-    //     info->sourcesToProcess.pop();
-    //     if(info->sourcesToProcess.size() != 0)
-    //         // signal that there are more sources to process for other threads
-    //         info->sourceWaitLock.signal();
-    //     // if(source.textBuffer)
-    //     //     log::out << "Proc source "<<source.textBuffer->origin<<"\n";
-    //     // else
-    //     //     log::out << "Proc source "<<source.path.text<<"\n";
-    //     info->sourceLock.unlock();
-
-    //     int i = compileInfo.streams.size()-1; // process essential first
-    //     CompileInfo::Stream* stream = compileInfo.streams[i];
-    //      // are used in this source file
-    //     TokenStream* procStream = stream->initialStream;
-    //     if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
-    //         _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
-    //         procStream = Preprocess(&compileInfo, stream->initialStream);
-    //         stream->finalStream = procStream;
-    //     }
+    info->sourceLock.lock();
+    // int readDependencyIndex = info->streams.size()-1;
+    info->completedDependencyIndex = info->streams.size();
+    info->waitingThreads++;
+    info->availableThreads++;
+    // for(int i=0;i<info->streams.size();i++){
+    //     StreamToProcess* stream = info->streams[i];
+    //     log::out << BriefPath(stream->initialStream->streamName,10)<<"\n";
     // }
+    // if(info->waitingThreads == info->compileOptions->threadCount)
+    //     info->sourceWaitLock.signal(); // we must signal to prevent all threads from waiting
+    info->sourceLock.unlock();
+    // Another solution would be to have a list of dependencies for each stream but you would need
+    // to do a lot of linear searches so you probably want to avoid that.
+    // info->dependencyIndex = info->streams.size()-1;
+    // return 0;
+    WHILE_TRUE {
+        MEASUREN("Process macro")
+        info->sourceWaitLock.wait();
+
+        // TODO: Is it possible to skip some locks and use atomic intrinsics instead?
+        info->sourceLock.lock();
+        info->signaled = false;
+        info->waitingThreads--;
+        // TODO: Optimize by not going starting from the end and going through the whole stream array. Start from an index where
+        //  you know that everything to the right has been processed.
+        if(info->completedDependencyIndex==0) {
+            if(!info->signaled) {
+                info->sourceWaitLock.signal();
+                info->signaled = true;
+            }
+            info->sourceLock.unlock();
+            break;
+        }
+        StreamToProcess* stream = nullptr;
+        int index = info->completedDependencyIndex-1;
+        bool allCompleted = true;
+        while(index >= 0) {
+            stream = info->streams[index];
+            if(stream->available && stream->dependencyIndex >= info->completedDependencyIndex) {
+                stream->available = false;
+                break;
+            }
+            if(!stream->completed){
+                allCompleted = false;
+            }
+            index--;
+        }
+        if(index == -1) {
+            if(allCompleted) {
+                Assert(info->completedDependencyIndex == 0);
+                if(!info->signaled) {
+                    info->sourceWaitLock.signal();
+                    info->signaled = true;
+                }
+                info->sourceLock.unlock();
+                break;
+            } else {
+                info->waitingThreads++;
+                info->sourceLock.unlock();
+                continue;
+            }
+        }
+        if(!info->signaled) {
+            info->sourceWaitLock.signal(); // one stream was available there may be more
+            info->signaled = true;
+        }
+        info->sourceLock.unlock();
+
+         // are used in this source file
+        if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
+            // log::out << "Pre "<<BriefPath(stream->initialStream->streamName)<<"\n";
+            _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+            stream->finalStream = Preprocess(info, stream->initialStream);
+        }
+
+        info->sourceLock.lock();
+        stream->completed = true;
+        
+        while(info->completedDependencyIndex>0){
+            StreamToProcess* s = info->streams[info->completedDependencyIndex-1];
+            if(!s->completed) {
+                break;
+            }
+            info->completedDependencyIndex--;
+        }
+
+        if(!info->signaled) {
+            info->sourceWaitLock.signal();
+            info->signaled = true;
+        }
+        info->waitingThreads++;
+        info->sourceLock.unlock();
+    }
     return 0;
 }
 
 Bytecode* CompileSource(CompileOptions* options) {
     using namespace engone;
     
+    #ifdef SINGLE_THREADED
+    options->threadCount = 1;
+    #endif
+
     // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
     options->compileStats.start_bytecode = engone::StartMeasure();
     
@@ -623,6 +800,7 @@ Bytecode* CompileSource(CompileOptions* options) {
 
     SourceToProcess essentialSource{};
     essentialSource.textBuffer = &essentialBuffer;
+    essentialSource.stream = compileInfo.addStream(essentialSource.textBuffer->origin);
     compileInfo.sourcesToProcess.add(essentialSource);
 
     SourceToProcess initialSource{};
@@ -631,33 +809,43 @@ Bytecode* CompileSource(CompileOptions* options) {
     } else {
         initialSource.path = options->initialSourceFile.getAbsolute();
     }
+    initialSource.stream = compileInfo.addStream(initialSource.path);
     compileInfo.sourcesToProcess.add(initialSource);
+
 
     Assert(!options->singleThreaded); // TODO: Implement not multithreading
 
     compileInfo.sourceWaitLock.init(1, 1);
 
-    ThreadCompileInfo threadInfos[CompileInfo::THREAD_COUNT]{};
-    for(int i=1;i<CompileInfo::THREAD_COUNT;i++){
+    TINY_ARRAY(ThreadCompileInfo, threadInfos, 4);
+    threadInfos.resize(options->threadCount);
+    memset(threadInfos._ptr, 0, sizeof(ThreadCompileInfo)*threadInfos.max);
+    // ThreadCompileInfo threadInfos[CompileInfo::THREAD_COUNT]{};
+    // DynamicArray<ThreadCompileInfo>
+    for(int i=1;i<options->threadCount;i++){
         threadInfos[i].info = &compileInfo;
-        threadInfos[i]._thread.init(ProcessSource, threadInfos+i);
+        threadInfos[i]._thread.init(ProcessSource, threadInfos._ptr+i);
     }
     threadInfos[0].info = &compileInfo;
-    ProcessSource(threadInfos + 0);
+    ProcessSource(threadInfos._ptr + 0);
 
-    for(int i=0;i<CompileInfo::THREAD_COUNT;i++){
+    for(int i=1;i<options->threadCount;i++){
         threadInfos[i]._thread.join();
     }
+    // for(int i=0;i<compileInfo.streams.size();i++){
+    //     StreamToProcess* stream = compileInfo.streams[i];
+    //     log::out << BriefPath(stream->initialStream->streamName,10)<<"\n";
+    // }
     {
         int i = compileInfo.streams.size()-1; // process essential first
-        CompileInfo::Stream* stream = compileInfo.streams[i];
+        StreamToProcess* stream = compileInfo.streams[i];
          // are used in this source file
-        TokenStream* procStream = stream->initialStream;
-        if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
-            _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
-            procStream = Preprocess(&compileInfo, stream->initialStream);
-            stream->finalStream = procStream;
-        }
+        // if (!stream->finalStream && (stream->initialStream->enabled & LAYER_PREPROCESSOR)) {
+        //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+        //     stream->finalStream = Preprocess(&compileInfo, stream->initialStream);
+        // }
+
+        TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
         _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
         ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
         if(body){
@@ -669,24 +857,25 @@ Bytecode* CompileSource(CompileOptions* options) {
         }
     }
     for(int i=compileInfo.streams.size()-2;i>=0;i--){
-        CompileInfo::Stream* stream = compileInfo.streams[i];
+        StreamToProcess* stream = compileInfo.streams[i];
          // are used in this source file
-        TokenStream* procStream = stream->initialStream;
-        if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
-            _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
-            procStream = Preprocess(&compileInfo, stream->initialStream);
-            // if(macroBenchmark){
-            //     log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
-            //     #ifndef LOG_MEASURES
-            //     if(finalStream->length()<50){
-            //         finalStream->print();
-            //         log::out<<"\n";
-            //     }
-            //     #endif
-            // }
-            stream->finalStream = procStream;
-            // tokenStream->print();
-        }
+        // TokenStream* procStream = stream->initialStream;
+        // if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
+        //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+        //     procStream = Preprocess(&compileInfo, stream->initialStream);
+        //     // if(macroBenchmark){
+        //     //     log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
+        //     //     #ifndef LOG_MEASURES
+        //     //     if(finalStream->length()<50){
+        //     //         finalStream->print();
+        //     //         log::out<<"\n";
+        //     //     }
+        //     //     #endif
+        //     // }
+        //     stream->finalStream = procStream;
+        //     // tokenStream->print();
+        // }
+        TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
         _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
         ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
         if(body){
@@ -709,7 +898,9 @@ Bytecode* CompileSource(CompileOptions* options) {
 
     Bytecode* bytecode=0;
     _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
+    // auto tp = StartMeasure();
     bytecode = Generate(compileInfo.ast, &compileInfo);
+    // log::out << "TIM: "<<StopMeasure(tp)*1000<<"\n";
     if(bytecode) {
         compileInfo.compileOptions->compileStats.bytecodeSize = bytecode->getMemoryUsage();
     }
@@ -874,6 +1065,9 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 auto format = options->outputFile.getFormat();
                 bool outputIsObject = format == "o" || format == "obj";
 
+                #ifdef DUMP_HEX
+                program->printHex("bin/temphex.txt");
+                #endif
                 if(outputIsObject){
                     options->compileStats.start_objectfile = StartMeasure();
                     WriteObjectFile(outPath.text,program);
@@ -894,13 +1088,16 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                         auto& dir = bytecode->linkDirectives[i];
                         cmd += dir + " ";
                     }
-                    cmd += "/DEFAULTLIB:LIBCMT ";
+                    cmd += "/DEFAULTLIB:MSVCRT ";
+                    // cmd += "/DEFAULTLIB:LIBCMT ";
                     cmd += "/OUT:" + outPath.text+" ";
                     
                     options->compileStats.start_linker = StartMeasure();
                     int exitCode = 0;
                     engone::StartProgram("",(char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
                     options->compileStats.end_linker = StartMeasure();
+
+                    log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
 
                     // msvc linker returns a fatal error as exit code
                     // if(exitCode == 0)

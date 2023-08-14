@@ -1,0 +1,126 @@
+@macro-benchmark
+/*
+    A script to benchmark macros.
+    Use LOG_MEAURES
+
+    Toggle SLOW_PROCESSOR in Config.h to see difference in speed.
+    (it might have been removed)
+*/
+
+#define ADDS(X,...) X + ADDS(...)
+#define ADDS(X) X
+
+#define OVER()
+#define OVER(X,Y,...) umf OVER1(X,...) wha OVER1(Y,...) so OVER(...)
+#define OVER1(X, Y) OVER_1 ( OVER(X,X) )
+#define OVER1(X,...) OVER_1 ( OVER1(...) )
+#define OVER1()
+
+#define MASSIVE(X,...,Y) DECR(X, X, ..., X, X) MASSIVE(...) DECR(Y, Y, ..., Y, Y)
+#define MASSIVE()
+#define DECR(HUMMUS,...,Y) HUMMUS  OAEO HUMMUS oaE o Y eAEE ae aOEPAPE  DECR(...) HUMMUS
+#define DECR() ENDING MEE
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+OVER(First, #unwrap DECR(AOAD KP AKD PKDPA, J AOI DJ O,  DKAOd a, adoAD JAO))
+
+
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)
+MASSIVE(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau)

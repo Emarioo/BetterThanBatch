@@ -1,5 +1,6 @@
 #include "BetBat/Signals.h"
 
+#include "BetBat/Asserts.h"
 #include "Engone/PlatformLayer.h"
 
 
@@ -12,6 +13,17 @@ SignalDefault CastSignal(SignalAttempt signal){
     }
     Assert(("Cannot cast signal",false));
     return SignalDefault::COMPLETE_FAILURE;
+    #undef CASE
+}
+SignalAttempt CastSignal(SignalDefault signal){
+    #define CASE(A) case SignalDefault::A: return SignalAttempt::A;
+    switch(signal){
+        CASE(SUCCESS)
+        CASE(FAILURE)
+        CASE(COMPLETE_FAILURE)
+    }
+    Assert(("Cannot cast signal",false));
+    return SignalAttempt::COMPLETE_FAILURE;
     #undef CASE
 }
 

@@ -3,6 +3,7 @@
 // #import "Logger"
 // #import "Basic"
 // #import "String"
+#import "Math"
 
 // #import "macros"
 // #import "macro-bench"
@@ -11,21 +12,30 @@
 // #import "dir-iterator"
 // #import "operator"
 // #import "threads"
-#import "linecounter"
+// #import "linecounter"
+// #import "graphics/quad.btb"
+// #import "a"
+// #import "b"
 
-// #import "OS"
-// #import "Logger"
-// #import "Basic"
-// #import "String"
+// cast<i32>((0.5 % 0.15)*100)
+// cast<i32>((9.0 % 3.0)*100)
 
-// str: String;
-// str.append("src");
-// str.append("src");
-// str.append("src89889");
+// 1.2 < 1.3
+// 1.3004 < 1.3
+// -4.0 <= -2.
+// 9.09 <= 9.09
+// -9.0 > 1.3
+// 0.1 > -0.001
+// 99999.0 >= 99998.99999999
+// 99999.0 >= -2.0
+// -4.0 >= -2.
+// 1.0000009 == 1.0000009
+// 1.0000009 == -1.0
+// 3.2 != 4.02
+// 3.2 != 3.2
 
-
-// #define A "coo"
-
-// a: A;
-// log("ea")
-// prints(A)
+// cast<i32>round(3.3)
+// cast<i32>round(3.7)
+// cast<i32>sqrt(1)
+// cast<i32>sqrt(2)
+// cast<i32>sqrt(3.99999999)

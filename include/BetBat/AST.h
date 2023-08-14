@@ -32,6 +32,7 @@ enum PrimitiveType : u32 {
     AST_CHAR,
     
     AST_FLOAT32,
+    AST_FLOAT64, // not supported yet
     
     AST_STRING, // converted to char[]
     AST_NULL, // converted to void*
@@ -93,15 +94,26 @@ enum OperationType : u32 {
     AST_OPERATION_COUNT,
 };
 struct ASTNode {
+    // TODO: Add a flag which you can check to know whether there are enums or not.
+    //  If there aren't then you don't need to go through all the nodes.
     TokenRange tokenRange{};
     // TODO: Some of these do not need to exist in
     // every type of node
-    bool hidden=false;
-    bool reverse=false;
-    bool pointer=false;
+    enum Flags : u16 {
+        HIDDEN,
+        REVERSE,
+        POINTER,
+        NULL_TERMINATED, // for AST_STRING
+    };
+    u16 flags = 0;
     LinkConventions linkConvention = LinkConventions::NONE;
     CallConventions callConvention = BETCALL;
 
+    #define SET_FLAG(N,F) void set##N(bool on) { flags = on ? flags | F : flags & ~F; } bool is##N() { return flags&F; }
+    SET_FLAG(Pointer,POINTER)
+    SET_FLAG(Reverse,REVERSE)
+    SET_FLAG(Hidden,HIDDEN)
+    #undef SET_FLAG
     // A lot of places need to know whether a function has a body.
     // When function should have a body or not has changed a lot recently
     // and I have needed to rewrite a lot. Having the requirement abstracted in
@@ -483,10 +495,13 @@ struct ASTStatement : ASTNode {
 
     // true if bodies and expressions can be used.
     // false if returnValues should be used.
-    bool hasNodes(){
-        // Return is the only one that uses return values
-        return type != ASTStatement::RETURN;
-    }
+    // use this to determine which part of a union to
+    // initialize or cleanup
+    // Not used!
+    // bool hasNodes(){
+    //     // Return is the only one that uses return values
+    //     return type != ASTStatement::RETURN;
+    // }
     // with a union you have to use hasNodes before using the expressions.
     // this is annoying so I am not using a union but you might want to
     // to save 24 bytes.
@@ -498,8 +513,13 @@ struct ASTStatement : ASTNode {
         };
         // DynamicArray<ASTExpression*> returnValues{};
     };
-    QuickArray<ASTExpression*> returnValues{};
-
+    // IMPORTANT: If you put an array in a union then you must explicitly
+    // do cleanup in the destructor. Destructor in unions isn't called since
+    // C++ doesn't know which variable to destruct.
+    // union {
+        // QuickArray<ASTExpression*> returnValues{};
+    QuickArray<ASTExpression*> arrayValues; // for array initialized
+    // };
     PolyVersions<DynamicArray<TypeId>> versions_expressionTypes; // types from firstExpression
 
     u32 age = 0;
@@ -779,6 +799,7 @@ struct AST {
     static bool IsInteger(TypeId id);
     // will return false for non number types
     static bool IsSigned(TypeId id);
+    static bool IsDecimal(TypeId id);
 
     // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
     void appendToMainBody(ASTScope* body);

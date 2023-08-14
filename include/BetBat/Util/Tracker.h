@@ -59,6 +59,9 @@ struct TrackLocation {
 #endif // ENABLE_TRACKER
 
 // completly thread safe
+// TODO init and cleanup functions
+// you have to disable tracking when the destructors of
+// global data is called. 
 struct Tracker {
     // enabled by default
     static void SetTracking(bool enabled);

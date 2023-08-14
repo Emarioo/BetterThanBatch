@@ -3,6 +3,9 @@
 #include "Engone/Win32Includes.h"
 
 // #include "BetBat/Config.h"
+// #define GLEW_STATIC
+// #include "GL/glew.h"
+// #include "GLFW/glfw3.h"
 
 #include "Engone/PlatformLayer.h"
 #include <stdio.h>

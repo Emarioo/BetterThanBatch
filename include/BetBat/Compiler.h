@@ -43,12 +43,12 @@ engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target);
 TargetPlatform ToTarget(const std::string& str);
 struct CompileOptions;
 struct CompileStats {
-    u32 errors=0;
-    u32 warnings=0;
-    u32 lines=0;
-    u32 blankLines=0;
-    u32 readBytes=0; // from the files, DOES NOT COUNT includeStreams! yet?
-    u32 commentCount=0;
+    volatile long errors=0;
+    volatile long warnings=0;
+    volatile long lines=0;
+    volatile long blankLines=0;
+    volatile long readBytes=0; // from the files, DOES NOT COUNT includeStreams! yet?
+    volatile long commentCount=0;
 
     // time measurements
     u64 start_bytecode = 0;
@@ -87,13 +87,27 @@ struct CompileOptions {
     DynamicArray<std::string> userArgs; // arguments to pass to the interpreter or executable
     bool silent=false;
     bool singleThreaded=false;
+    u32 threadCount=3;
 
     CompileStats compileStats;
+};
+// NOTE: struct since more info may be added to each import name
+struct StreamToProcess {
+    // these are read only
+    TokenStream* initialStream = nullptr; // from tokenizer
+    TokenStream* finalStream = nullptr; // preprocessed
+    std::string as="";
+    int dependencyIndex = 0x7FFFFFFF;
+    bool available = true; // for processing
+    bool completed = false;
+    int index = 0;
 };
 struct SourceToProcess {
     Path path = "";
     std::string as = "";
     TextBuffer* textBuffer = nullptr;
+    StreamToProcess* stream = nullptr;
+    // StreamToProcess* dependent = nullptr;
 };
 // ThreadLexingInfo was another name I considered but
 // it didn't seem appropriate since the thread may do more than lexing in the future.
@@ -106,17 +120,10 @@ struct ThreadCompileInfo {
 struct CompileInfo {
     void cleanup();
     
-    // NOTE: struct since more info may be added to each import name
-    struct Stream {
-        // these are read only
-        TokenStream* initialStream = nullptr; // from tokenizer
-        TokenStream* finalStream = nullptr; // preprocessed
-        std::string as="";
-    };
     // TODO: allocator for streams
-    std::unordered_map<std::string, Stream*> tokenStreams; // import streams
+    std::unordered_map<std::string, StreamToProcess*> tokenStreams; // import streams
 
-    QuickArray<Stream*> streams;
+    QuickArray<StreamToProcess*> streams;
 
     std::unordered_map<std::string, TokenStream*> includeStreams;
 
@@ -126,18 +133,30 @@ struct CompileInfo {
     void addLinkDirective(const std::string& name);
 
     // thread safe
-    Stream* addStream(TokenStream* stream);
-    Stream* addStream(const Path& path);
+    // StreamToProcess* addStream(TokenStream* stream);
+    // returns null if the stream's name already exists.
+    StreamToProcess* addStream(const Path& path);
     // NOT thread safe
-    Stream* getStream(const Path& name);
+    StreamToProcess* getStream(const Path& name);
     // thread safe
     bool hasStream(const Path& name);
+    int indexOfStream(const Path& name);
 
-    static const u32 THREAD_COUNT = 4;
+    // #ifdef SINGLE_THREADED
+    // static const u32 THREAD_COUNT = 1;
+    // #else
+    // static const u32 THREAD_COUNT = 4;
+    // #endif
+
     DynamicArray<SourceToProcess> sourcesToProcess{};
     engone::Semaphore sourceWaitLock{};
     engone::Mutex sourceLock{};
     int waitingThreads = 0;
+    int availableThreads = 0;
+    bool waitForContent = false;
+    bool signaled=false;
+    // int readDependencyIndex = 0;
+    int completedDependencyIndex = 0;
 
     engone::Mutex streamLock{}; // tokenStream
     // engone::Mutex includeStreamLock{};
@@ -145,6 +164,7 @@ struct CompileInfo {
     
     // thread safe
     void addStats(i32 errors, i32 warnings);
+    void addStats(i32 lines, i32 blankLines, i32 commentCount, i32 readBytes);
     
     CompileOptions* compileOptions = nullptr;
 

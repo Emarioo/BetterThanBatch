@@ -14,10 +14,11 @@
 // #define Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 #define Assert(expression)
 
-// intrinsics?
+// TODO: Move intrinsics elsewhere
 // len is in bytes
 fn @intrinsic memcpy(dst: void*, src: void*, len: u64);
 fn @intrinsic memzero(dst: void*, len: u64);
+fn @intrinsic strlen(ptr: char*) -> u32;
 // returns time stamp counter and IA32_TSC_AUX 
 fn @intrinsic rdtsc() -> u64;
 // fn @intrinsic rdtscp() -> u64, u32;

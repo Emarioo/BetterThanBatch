@@ -12,16 +12,21 @@ struct Interpreter {
     Language::Slice<Language::Slice<char>> cmdArgs{};
     void setCmdArgs(const DynamicArray<std::string>& inCmdArgs);
     
-    u64 rax;
-    u64 rbx;
-    u64 rcx;
-    u64 rdx;
+    volatile u64 rax=0;
+    volatile u64 rbx=0;
+    volatile u64 rcx=0;
+    volatile u64 rdx=0;
     // #define UNION_REG(N) union{u64 r##N##x; u32 e##N##x; u16 N##x; struct{u8 N##l; u8 N##h;};};
     
     // UNION_REG(a)
     // UNION_REG(b)
     // UNION_REG(c)
     // UNION_REG(d)
+
+    volatile u64 xmm0d=0;
+    volatile u64 xmm1d=0;
+    volatile u64 xmm2d=0;
+    volatile u64 xmm3d=0;
     
     u64 sp=0;
     u64 fp=0;
@@ -31,9 +36,9 @@ struct Interpreter {
     
     bool expectValuesOnStack = false;
 
-    void moveMemory(u8 reg, void* from, void* to);
+    void moveMemory(u8 reg, volatile void* from, volatile void* to);
 
-    void* getReg(u8 id);
+    volatile void* getReg(u8 id);
     void* setReg(u8 id);
     
     engone::Memory<u8> stack{};

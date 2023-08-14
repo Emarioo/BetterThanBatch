@@ -24,12 +24,14 @@ enum CallConventions : u8 {
     CDECL_CONVENTION, // Not implemented yet. CDECL is a macro, hence the name CONVENTION.
 };
 enum LinkConventions : u8 {
-    NONE, // no linkConvention export/import
+    NONE=0x00, // no linkConvention export/import
     // DLLEXPORT, // .drectve section is needed to pass /EXPORT: to the linker. The exported function must use stdcall convention
-    DLLIMPORT, // linkConvention with dll, function are renamed to __impl_
-    IMPORT, // external from the source code, linkConvention with static library or object files
-    NATIVE, // for interpreter or other inplementation in x64 converter
+    IMPORT=0x80, // external from the source code, linkConvention with static library or object files
+    DLLIMPORT=0x81, // linkConvention with dll, function are renamed to __impl_
+    VARIMPORT=0x82, // linkConvention with extern global variables (extern FUNCPTRTYPE someFunction;)
+    NATIVE=0x10, // for interpreter or other inplementation in x64 converter
 };
+#define IS_IMPORT(X) (X&(u8)0x80)
 const char* ToString(CallConventions stuff);
 const char* ToString(LinkConventions stuff);
 

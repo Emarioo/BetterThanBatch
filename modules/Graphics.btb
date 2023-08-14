@@ -1,0 +1,133 @@
+
+
+
+/*
+    OpenGL related code using GLFW and GLEW
+*/
+#link "gdi32.lib user32.lib OpenGL32.lib"
+// #link "libs/glew-2.1.0/lib/glew32.lib"
+#link "libs/glew-2.1.0/lib/glew32s.lib"
+#link "libs/glfw-3.3.8/lib/glfw3_mt.lib"
+// #link "libs/glfw-3.3.8/lib/glfw3.lib"
+// #link "/NODEFAULTLIB:MSVCRT"
+// #link "/DEFAULTLIB:LIBCMT"
+// #link "/NODEFAULTLIB:LIBCMT"
+
+
+#define GLFW_CONTEXT_VERSION_MAJOR  0x00022002
+#define GLFW_CONTEXT_VERSION_MINOR  0x00022003
+#define GLFW_OPENGL_PROFILE         0x00022008
+#define GLFW_OPENGL_CORE_PROFILE    0x00032001
+fn @import glfwInit() -> i32;
+fn @import glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
+fn @import glfwTerminate();
+fn @import glfwMakeContextCurrent(window: void*);
+fn @import glfwWindowShouldClose(window: void*) -> i32;
+fn @import glfwSwapBuffers(window: void*);
+fn @import glfwPollEvents();
+fn @import glfwWindowHint(target: i32, hint: i32);
+
+#define GL_COLOR_BUFFER_BIT 0x00004000
+#define GLEW_VERSION 1
+#define GL_STATIC_DRAW 0x88E4
+#define GL_DYNAMIC_DRAW 0x88E8
+#define GL_ARRAY_BUFFER 0x8892
+#define GL_ELEMENT_ARRAY_BUFFER 0x8893
+
+#define GL_COMPILE_STATUS 0x8B81
+#define GL_LINK_STATUS 0x8B82
+#define GL_FRAGMENT_SHADER 0x8B30
+#define GL_VERTEX_SHADER 0x8B31
+
+#define GL_FLOAT 0x1406
+#define GL_UNSIGNED_INT 0x1405
+#define GL_FALSE 0
+#define GL_TRUE 1
+#define GL_TRIANGLES 0x0004
+
+fn @import glClear(mask: u32);
+fn @import glewInit() -> i32;
+fn @import glClearColor(red: f32, green: f32, blue: f32, alpha: f32);
+fn @import glViewport(x: i32, y: i32, w: i32, h: i32);
+
+#define glGenBuffers(...) __glewGenBuffers(...)
+fn @varimport __glewGenBuffers(size: i32, buffers: u32*);
+
+#define glDeleteBuffers(...) __glewDeleteBuffers(...)
+fn @varimport __glewDeleteBuffers(size: i32, buffers: u32*);
+#define glBindBuffer(...) __glewBindBuffer(...)
+fn @varimport __glewBindBuffer(target: u32, buffer: u32);
+#define glBufferData(...) __glewBufferData(...)
+fn @varimport __glewBufferData(target: u32, size: u64, data: void*, usage: u32);
+#define glCreateShader(...) __glewCreateShader(...)
+fn @varimport __glewCreateShader(type: u32) -> u32;
+#define glShaderSource(...) __glewShaderSource(...)
+fn @varimport __glewShaderSource(shader: u32, count: i32, string: char**, length: i32*);
+#define glCompileShader(...) __glewCompileShader(...)
+fn @varimport __glewCompileShader(shader: u32);
+#define glGetShaderiv(...) __glewGetShaderiv(...)
+fn @varimport __glewGetShaderiv(shader: u32, pname: u32, param: i32*);
+#define glGetShaderInfoLog(...) __glewGetShaderInfoLog(...)
+fn @varimport __glewGetShaderInfoLog(shader: u32, bufSize: i32, length: i32*, infoLog: char*);
+#define glCreateProgram(...) __glewCreateProgram(...)
+fn @varimport __glewCreateProgram() -> u32;
+#define glAttachShader(...) __glewAttachShader(...)
+fn @varimport __glewAttachShader(program: u32, shader: u32);
+#define glLinkProgram(...) __glewLinkProgram(...)
+fn @varimport __glewLinkProgram(program: u32);
+#define glUseProgram(...) __glewUseProgram(...)
+fn @varimport __glewUseProgram(program: u32);
+#define glGetProgramiv(...) __glewGetProgramiv(...)
+fn @varimport __glewGetProgramiv(program: u32, pname: u32, param: i32*);
+#define glGetProgramInfoLog(...) __glewGetProgramInfoLog(...)
+fn @varimport __glewGetProgramInfoLog(program: u32, bufSize: i32, length: i32*, infoLog: char*);
+
+#define glDeleteShader(...) __glewDeleteShader(...)
+fn @varimport __glewDeleteShader(shader: u32);
+
+#define glVertexAttribPointer(...) __glewVertexAttribPointer(...)
+fn @varimport __glewVertexAttribPointer(index: u32, size: i32, type: u32, normalized: bool, stride: i32, pointer: void*);
+
+#define glEnableVertexAttribArray(...) __glewEnableVertexAttribArray(...)
+fn @varimport __glewEnableVertexAttribArray(index: u32);
+
+#define glGenVertexArrays(...) __glewGenVertexArrays(...)
+fn @varimport __glewGenVertexArrays(b: i32, arrays: u32*);
+
+#define glBindVertexArray(...) __glewBindVertexArray(...)
+fn @varimport __glewBindVertexArray(array: u32);
+
+#define glDeleteVertexArrays(...) __glewDeleteVertexArrays(...)
+fn @varimport __glewDeleteVertexArrays(n: i32, arrays: u32*);
+
+#define glBufferSubData(...) __glewBufferSubData(...)
+fn @varimport __glewBufferSubData(target: u32, offset: i64, size: i64, data: void*);
+
+fn @import glDrawArrays(mode: u32, first: i32, count: i32);
+fn @import glDrawElements(mode: u32, count: i32, type: u32, indices: void*);
+// TODO: Add glPolygonMode, GL_FRONT_AND_BACK, GL_LINE, GL_FILL
+
+#define glGetUniformLocation(...) __glewGetUniformLocation(...)
+fn @varimport __glewGetUniformLocation(program: u32, name: char*);
+
+#define glUniform1i(...) __glewUniform1i(...)
+#define glUniform2i(...) __glewUniform2i(...)
+#define glUniform3i(...) __glewUniform3i(...)
+#define glUniform4i(...) __glewUniform4i(...)
+#define glUniform1f(...) __glewUniform1f(...)
+#define glUniform2f(...) __glewUniform2f(...)
+#define glUniform3f(...) __glewUniform3f(...)
+#define glUniform4f(...) __glewUniform4f(...)
+fn @varimport __glewUniform1i(location: i32, v0: i32);
+fn @varimport __glewUniform2i(location: i32, v0: i32, v1: i32);
+fn @varimport __glewUniform3i(location: i32, v0: i32, v1: i32, v2: i32);
+fn @varimport __glewUniform4i(location: i32, v0: i32, v1: i32, v2: i32, v3: i32);
+fn @varimport __glewUniform1f(location: i32, v0: f32);
+fn @varimport __glewUniform2f(location: i32, v0: f32, v1: f32);
+fn @varimport __glewUniform3f(location: i32, v0: f32, v1: f32, v2: f32);
+fn @varimport __glewUniform4f(location: i32, v0: f32, v1: f32, v2: f32, v3: f32);
+
+
+fn @import glewGetErrorString(error: u32) -> char*;
+fn @import glewGetString(name: u32) -> char*;
+fn @import glGetError() -> u32;

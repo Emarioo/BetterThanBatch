@@ -129,10 +129,22 @@ void Tracker::PrintTrackedTypes(){
         for(int k=0;k<s_uniqueTrackLocations.size();k++){
             auto& loc2 = trackType->locations[k];
             int len = strlen(loc2.fname);
-            if(len > 25)
-                log::out << "  "<<(loc2.fname+(len-25)) << ":"<<loc2.line<<"\n";
-            else
-                log::out << "  "<<loc2.fname << ":"<<loc2.line<<"\n";
+            int cutoff = len-1;
+            int slashCount = 2;
+            while(cutoff>0){
+                if(loc2.fname[cutoff] == '/' || loc2.fname[cutoff] == '\\'){
+                    slashCount--;
+                    if(!slashCount) {
+                        cutoff++;
+                        break;
+                    }
+                }
+                cutoff--;
+            }
+            // if(len > 25)
+            log::out << "  "<<(loc2.fname+(cutoff)) << ":"<<loc2.line<<"\n";
+            // else
+            //     log::out << "  "<<loc2.fname << ":"<<loc2.line<<"\n";
         }
         totalMemory += trackType->count * trackType->size;
     }

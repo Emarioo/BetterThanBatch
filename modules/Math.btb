@@ -7,16 +7,21 @@
 // tan
 // asin,acos,atan2?
 
+fn @intrinsic sqrt(v: f32) -> f32;
+fn @intrinsic round(v: f32) -> f32;
+// TODO: Intrinsics for min and max
+
+
 // From NativeLayer
-fn @import sine(f: f32) -> f32;
+// fn @import sine(f: f32) -> f32;
 
 // These come from the C standard library
-fn @import sinf(f: f32) -> f32;
-fn @import cosf(f: f32) -> f32;
-fn @import tanf(f: f32) -> f32;
-fn @import log10f(f: f32) -> f32;
-fn @import log2f(f: f32) -> f32;
-fn @import logf(f: f32) -> f32;
+// fn @import sinf(f: f32) -> f32;
+// fn @import cosf(f: f32) -> f32;
+// fn @import tanf(f: f32) -> f32;
+// fn @import log10f(f: f32) -> f32;
+// fn @import log2f(f: f32) -> f32;
+// fn @import logf(f: f32) -> f32;
 
 // Not tested yet
 // fn exp(x: f32, y: i32) -> f32{

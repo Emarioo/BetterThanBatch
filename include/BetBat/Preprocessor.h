@@ -45,8 +45,8 @@ struct CertainMacro {
     // returns index to argumentNames
     bool isVariadic() { return indexOfVariadic != -1; }
     u32 nonVariadicArguments() { return isVariadic() ? parameters.size() - 1 : parameters.size(); }
-    bool isBlank() { return blank; }
-    bool blank = false;
+    // bool isBlank() { return blank; }
+    // bool blank = false;
     // -1 if not found
     int matchArg(const Token& token);
     // int matchArg(Token token);
@@ -55,7 +55,8 @@ struct RootMacro {
     Token name;
     // TODO: Allocator for macros
     std::unordered_map<int, CertainMacro*> certainMacros;
-    bool hasVariadic=false;
+    bool hasVariadic = false;
+    bool hasBlank = false;
     CertainMacro variadicMacro{};
     // CertainMacro* matchArgCount(int count, bool includeInf = true);
 };
@@ -119,6 +120,8 @@ struct PreprocInfo {
     // end index is not included
     // std::unordered_map<std::string,RootMacro> _macros; // moved to compiler info for global access
     
+    Token parsedMacroName{}; // #line and #column use this when inside macros
+
     int macroRecursionDepth=0;
 
     // DynamicArray<CertainMacro*> superMacros{};

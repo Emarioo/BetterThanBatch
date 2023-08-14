@@ -1286,18 +1286,21 @@ void AST::destroy(ASTStatement *statement) {
             // engone::Free(statement->alias, sizeof(std::string));
             statement->alias = nullptr;
         }
-        if(statement->hasNodes()){
-            if (statement->firstExpression)
-                destroy(statement->firstExpression);
-            if (statement->firstBody)
-                destroy(statement->firstBody);
-            if (statement->secondBody)
-                destroy(statement->secondBody);
-        } else {
-            for(ASTExpression* expr : statement->returnValues){
-                destroy(expr);
-            }
+        // NOTE: hasNodes isn't used properly anywhere.
+        // if(statement->hasNodes()){
+        if (statement->firstExpression)
+            destroy(statement->firstExpression);
+        if (statement->firstBody)
+            destroy(statement->firstBody);
+        if (statement->secondBody)
+            destroy(statement->secondBody);
+        // } else {
+        // assign may use arrayValues (union, returnValues)
+        // we must destroy does values
+        for(ASTExpression* expr : statement->arrayValues){
+            destroy(expr);
         }
+        // }
     }
     statement->~ASTStatement();
     // engone::Free(statement, sizeof(ASTStatement));
@@ -1747,6 +1750,10 @@ bool AST::IsSigned(TypeId id) {
     if(!id.isNormalType()) return false;
     return AST_INT8 <= id.getId() && id.getId() <= AST_INT64;
 }
+bool AST::IsDecimal(TypeId id){
+    // TODO: Add float64
+    return id == AST_FLOAT32 || id == AST_FLOAT64;
+}
 /* #region  */
 void PrintSpace(int count) {
     using namespace engone;
@@ -1764,7 +1771,7 @@ void AST::print(int depth) {
 }
 void ASTScope::print(AST *ast, int depth) {
     using namespace engone;
-    if(hidden) return;
+    if(isHidden()) return;
 
     PrintSpace(depth);
     if(!isNamespace)
@@ -1809,7 +1816,7 @@ void ASTScope::print(AST *ast, int depth) {
 void ASTFunction::print(AST *ast, int depth) {
     using namespace engone;
     // if(!hidden && (!body || !body->nativeCode)) {
-    if(!hidden) {
+    if(!isHidden()) {
         PrintSpace(depth);
         log::out << "Func " << name;
         if(polyArgs.size()!=0){
@@ -1860,7 +1867,7 @@ void ASTFunction::print(AST *ast, int depth) {
 }
 void ASTStruct::print(AST *ast, int depth) {
     using namespace engone;
-    if(!hidden){
+    if(!isHidden()){
         PrintSpace(depth);
         log::out << "Struct " << name;
         if (polyArgs.size() != 0) {
@@ -1903,7 +1910,7 @@ void ASTStruct::print(AST *ast, int depth) {
 }
 void ASTEnum::print(AST *ast, int depth) {
     using namespace engone;
-    if(!hidden){
+    if(!isHidden()){
         PrintSpace(depth);
         log::out << "Enum " << name << " { ";
         for (int i = 0; i < (int)members.size(); i++) {
@@ -1938,7 +1945,7 @@ void ASTStatement::print(AST *ast, int depth) {
     //     lvalue->print(ast, depth + 1);
     // }
     
-    if(hasNodes()){
+    // if(hasNodes()){
         if (firstExpression) {
             firstExpression->print(ast, depth + 1);
         }
@@ -1948,13 +1955,13 @@ void ASTStatement::print(AST *ast, int depth) {
         if (secondBody) {
             secondBody->print(ast, depth + 1);
         }
-    } else {
-        for(ASTExpression* expr : returnValues){
+    // } else {
+        for(ASTExpression* expr : arrayValues){
             if (expr) {
                 expr->print(ast, depth+1);
             }
         }
-    }
+    // }
 }
 void ASTExpression::print(AST *ast, int depth) {
     using namespace engone;

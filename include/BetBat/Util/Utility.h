@@ -10,7 +10,8 @@
 #include <string.h>
 #include <unordered_map>
 #include <math.h>
-#include <intrin.h>
+
+#include <atomic>
 
 // File not found or innaccesible: Returns memory with NO data.
 // File with zero in size: Returns memory with valid pointer (memory.data = (void*)1) but zero in size.
@@ -38,7 +39,6 @@ std::string TrimDir(const std::string& path);
 std::string BriefPath(const std::string& path, int max=40);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
-
 
 #define FUNC_ENTER ScopeDebug scopeDebug{__FUNCTION__,info.funcDepth};
 #define FUNC_ENTER_IF(COND) ScopeDebug scopeDebug{(COND)?__FUNCTION__:nullptr,info.funcDepth};

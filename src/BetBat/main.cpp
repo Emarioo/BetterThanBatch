@@ -2,6 +2,7 @@
 #include "BetBat/Util/TestSuite.h"
 
 #include <math.h>
+#include "BetBat/glfwtest.h"
 
 void print_help(){
     using namespace engone;
@@ -57,9 +58,20 @@ void print_help(){
 int main(int argc, const char** argv){
     using namespace engone;
     
+    // float k = 0.2f;
+    // bool a = 0.1f < k;
+    // bool b = 0.1f <= k;
+    // bool c = 0.1f > k;
+    // bool d = 0.1f >= k;
+    // bool e = 0.1f == k;
+    // bool f = 0.1f != k;
+
+    // TestWindow();
+    // return 0;
     // A a;
     // const auto& yeah = typeid(a);
     // log::out << yeah.name()<<"\n";
+    MeasureInit();
 
     // return 1;
     CompileOptions compileOptions{};
@@ -152,50 +164,6 @@ int main(int argc, const char** argv){
                 compileOptions.initialSourceFile = arg;
             }
         }
-        /*
-        else if(mode==MODE_TEST){
-            mode = MODE_RUN;
-            tests.push_back(arg);
-        } else if(mode==MODE_LOG) {
-            mode = MODE_RUN;
-            int corrects[6]{0};
-            const char* strs[]{"tokenizer","preprocessor","parser","optimizer","interpreter","threads"};
-            for (int j=0;j<len;j++){
-                char chr = arg[j];
-                if(chr!=','){
-                    for (int k=0;k<6;k++){
-                        // log::out << "T "<<k<<" "<<chr<<"\n";
-                        if(strs[k][corrects[k]] == chr){
-                            // log::out << "R "<<k<<" "<<chr<<"\n";
-                            corrects[k]++;
-                            if(corrects[k] == (int)strlen(strs[k])){
-                                corrects[k] = 0;
-                                SetLog(1<<k,true);
-                            }
-                        }else{
-                            corrects[k]=0;
-                        }
-                    }
-                }
-                if(chr == ',' || j+1 == len){
-                    int max = 0;
-                    int index = -1;
-                    for (int k=0;k<6;k++){
-                        if(corrects[k] >= max){
-                            index = k;
-                            max = corrects[k];
-                        }
-                        corrects[k] = 0;
-                    }
-                    // log::out << "on "<<index<<"\n";
-                    if(index!=-1){
-                        SetLog(1<<index,true);
-                    }
-                    continue;
-                }
-            }
-        }
-        */
     }
 
     if(onlyPreprocess){
@@ -203,10 +171,12 @@ int main(int argc, const char** argv){
             log::out << log::RED << "You must specify a file when using -preproc\n";
         } else {
             if(compileOptions.outputFile.text.size() == 0) {
+                // TODO: Output to a default file like preproc.btb
                 log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
             } else{
                 auto stream = TokenStream::Tokenize(compileOptions.initialSourceFile.text);
                 CompileInfo compileInfo{};
+                compileInfo.compileOptions = &compileOptions;
                 auto stream2 = Preprocess(&compileInfo, stream);
                 stream2->writeToFile(compileOptions.outputFile.text);
                 TokenStream::Destroy(stream);
@@ -319,7 +289,7 @@ int main(int argc, const char** argv){
     //     log::out << chr;
     // }
     NativeRegistry::DestroyGlobal();
-    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage();
+    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
     if(finalMemory!=0){
         log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";
         PrintRemainingTrackTypes();
@@ -329,4 +299,5 @@ int main(int argc, const char** argv){
     // log::out << "Total allocated bytes: "<<GetTotalAllocatedBytes() << "\n";
     log::out.cleanup();
     // system("pause");
+    Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
 }

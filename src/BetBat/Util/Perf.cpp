@@ -7,13 +7,36 @@
 #include "BetBat/Util/Array.h"
 
 #include <unordered_map>
+
 #ifdef LOG_MEASURES
 ScopeStat scopeStatArray[SCOPE_STAT_ARRAY]{0};
 std::unordered_map<const char*, u32> scopeStatMap;
+engone::Mutex scopeStatLock{};
+MeasureScope* parentMeasureScope = nullptr;
+engone::TLSIndex measureParentTLSIndex= 0;
+static DynamicArray<ScopeStat> stats{};
+
+void MeasureInit(){
+    measureParentTLSIndex = engone::Thread::CreateTLSIndex();
+    Assert(measureParentTLSIndex);
+}
+u32 MeasureGetMemoryUsage() {
+    return stats.max * sizeof(ScopeStat);
+}
+void MeasureCleanup() {
+    stats.cleanup();
+}
 // u64 parentScope=0;
 void PrintMeasures(u32 filters, u32 limit){
     using namespace engone;
-    DynamicArray<ScopeStat> stats;
+    // struct DisplayStat {
+    //     std::string uniqueTime;
+    //     std::string totalTime;
+    //     std::string hits;
+    //     std::string name;
+    // };
+    stats.resize(0);
+
     double totalTime = 0;
     for(int i=0;i<SCOPE_STAT_ARRAY;i++){
         ScopeStat* it = scopeStatArray + i;
@@ -31,7 +54,7 @@ void PrintMeasures(u32 filters, u32 limit){
                 // TODO: Sorting is doesn't work when using hits and time at
                 //  the same time. Fix it you lazy goofball!
                 if(((filters & SORT_HITS) && stats[j].hits < stats[j+1].hits) ||
-                    ((filters & SORT_TIME) && stats[j].counter < stats[j+1].counter)
+                    ((filters & SORT_TIME) && stats[j].uniqueCycles < stats[j+1].uniqueCycles)
                     // ((filters & SORT_TIME) && stats[j].time < stats[j+1].time)
                 ){
                     ScopeStat tmp = stats[j];
@@ -44,51 +67,71 @@ void PrintMeasures(u32 filters, u32 limit){
 
     log::out << log::BLUE << "Measure statistics:\n";
     int maxName = 0;
+    int maxTotalTime = 0;
     int maxTime = 0;
     int maxHits = 0;
     u32 i = 0;
     for(auto& stat : stats){
         if(i >= limit)
             break;
-        double time = engone::DiffMeasure(stat.counter);
+        i++;
+        double time = engone::DiffMeasure(stat.uniqueCycles);
         // double time = stat.time;
         if((filters & MIN_MICROSECOND) && time < 1e-6)
             continue; // Cannot use break unless you sort by time.
-        int len = strlen(stat.fname);
-        if(maxName < len)
-            maxName = len;
+        
         const char* timeString = FormatTime(time);
+        int len=0;
         len = strlen(timeString);
         if(maxTime < len)
             maxTime = len;
+
+        double totaltime = engone::DiffMeasure(stat.totalCycles);
+        const char* totalString = FormatTime(totaltime);
+        len = strlen(totalString);
+        if(maxTotalTime < len)
+            maxTotalTime = len;
+
         len = log10(stat.hits);
         if(maxHits < len)
             maxHits = len;
-        i++;
+
+        len = strlen(stat.fname);
+        if(maxName < len)
+            maxName = len;
+
     }
     #define SPACING(L)  for(int _j = 0; _j < (L);_j++) log::out << " ";
     i = 0;
     for(auto& stat : stats){
         if(i >= limit)
             break;
-        double time = engone::DiffMeasure(stat.counter);
+        double time = engone::DiffMeasure(stat.uniqueCycles);
+        double ttime = engone::DiffMeasure(stat.totalCycles);
         // double time = stat.time;
         if((filters & MIN_MICROSECOND) && time < 1e-6)
             continue; // Cannot use break unless you sort by time.
         log::out << log::LIME;
-        log::out <<" "<<(const char*)stat.fname;
-        int len = strlen(stat.fname);
-        SPACING(maxName - len)
-        const char* timeString = FormatTime(time);
-        log::out << " : ";
-        len = strlen(timeString);
-        SPACING(maxTime - len)
-        log::out << timeString;
-        log::out << ", ";
+        int len;
         len = log10(stat.hits);
+        log::out << stat.hits<<", ";
         SPACING(maxHits - len)
-        log::out << stat.hits;
-        log::out << " hits\n";
+
+        const char* timeString = FormatTime(time);
+        len = strlen(timeString);
+        log::out << timeString<<", ";
+        SPACING(maxTime - len)
+
+        const char* ttimeString = FormatTime(ttime);
+        len = strlen(ttimeString);
+        log::out << ttimeString<<", ";
+        SPACING(maxTotalTime - len)
+
+
+        log::out << log::SILVER<<(const char*)stat.fname;
+        len = strlen(stat.fname);
+        // SPACING(maxName - len)
+        log::out << "\n";
 
         i++;
     }

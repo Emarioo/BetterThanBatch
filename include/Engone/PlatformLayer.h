@@ -72,6 +72,8 @@ namespace engone {
 	double StopMeasure(TimePoint startPoint);
 	// example: DiffMeasure(StartMeasure() - StartMeasure())
 	double DiffMeasure(TimePoint endSubStart);
+	// Returns value in Hz
+	u64 GetClockSpeed();
     
     // Note that the platform/os may not have the accuracy you need.
     void Sleep(double seconds);
@@ -131,7 +133,8 @@ namespace engone {
 	bool PollError(PlatformError* out);
 	void TestPlatformErrors();
 
-    typedef uint32 ThreadId;
+    typedef u32 ThreadId;
+    typedef u32 TLSIndex;
 	class Thread {
 	public:
 		Thread() = default;
@@ -149,6 +152,12 @@ namespace engone {
 		bool joinable();
 
 		static ThreadId GetThisThreadId();
+
+		static TLSIndex CreateTLSIndex(); // 0 is means failure
+		static bool DestroyTLSIndex(TLSIndex index);
+
+		static void* GetTLSValue(TLSIndex index);
+		static bool SetTLSValue(TLSIndex index, void* ptr);
 
 		ThreadId getId();
 

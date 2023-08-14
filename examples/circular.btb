@@ -1,5 +1,0 @@
-@import ./ast
-
-oh = HM{99};
-printi(oh.n)
-// printi(a)

@@ -1,0 +1,622 @@
+// #import "OS"
+#import "./overloading"
+// #import "./ranged-for"
+// fn printi(a: i64) { @native-code }
+
+// printi(23);
+
+// fn add() -> char, i32 {
+//     return 'A', 92
+// }
+
+// a, b = add();
+
+// printi(a)
+// printi(b)
+
+// struct Base {
+//     f: i32;
+//     fn hey {
+
+//     }
+// }
+
+// struct Poly<T> {
+//     f: i32;
+//     fn add<T>(){
+//     // fn add(){
+//         // prints("hey");
+//         printi(cast<i64>sizeof T)
+//         printi(cast<i64>sizeof K)
+//     }
+// }
+// a: A;
+// a: A<u8>;
+
+// a.add<u16>();
+// a.add();
+
+// fn add<T>(){
+//     t: T;
+//     printi(cast<i64>sizeof t);
+//     printi(cast<i64>sizeof T);
+// }
+// add<i32>();
+// add<i64>();
+// add<i8>();
+// add<char>();
+// add<bool>();
+// add<Slice<char>>();
+
+
+// k = "wee";
+
+// printi(cast<i64>sizeof k);
+
+// fn fun<T>(){
+//     printi(sizeof T)
+// }
+
+// struct A<T>{
+//     a: T;
+// }
+
+// fn fun<T>(){
+//     // a: A<T>;
+//     // printi(sizeof A<T>)
+//     // a: Slice<
+//     prints(nameof Slice<T>);
+// }
+// fun<i32>();
+
+// #import "Logger"
+// #import "Basic"
+
+// struct Range{
+//     a: i32;
+// }
+// fn printi(n: i64) { @native-code }
+// fn printc(chr: char) { @native-code }
+// fn printd(chr: f32) { @native-code }
+// fn prints(n: Slice<char>) { @native-code }
+
+// fn log<T>(t: T){
+    // print(t)
+    // print("\n")
+// }
+// fn log<T>(s: Slice<T>) {
+//     prints(s)
+// }
+// log<bool>(Slice<bool>{null,8})
+
+
+
+// fn plog<T>(t: T, k: i32){
+//     printc('I');
+//     printi(cast<i64>(sizeof T))
+//     // log(t);
+// }
+// plog<f32>(25.23, false)
+
+
+// struct C {
+//     a: i32;
+//     b: f32;
+// }
+// struct L {
+//     a: bool;
+//     b: i64;
+// }
+// struct K {
+//     a: C;
+//     b: L;
+// }
+// l: K;
+// l = K{C{6,3.8}, L{false, 992351}};
+// printi(cast<i64>l.a.a)
+// printd(l.a.b)
+// printi(l.b.b)
+
+// struct A<T,K> {
+//     t: T;
+//     k: K;
+// }
+// a: A<A<i32,f32>,A<bool,i64>>;
+
+// printi(cast<i64>sizeof A<A<i32,f32>,A<bool,char>>)
+// struct One<T> {
+//     t: T;
+// }
+// struct Two<T,K> {
+//     t: T;
+//     k: K;
+// }
+// str = "Hello sir!"
+// prints(str)
+// fn fun(a: i32, b: i32) {}
+// fn fun(a: i32, b: i32, c: i32 = 3) {}
+
+// fun(1,2,a=3)
+
+
+// fun(23, b = 9);
+
+// fn fun(a: i32, b: i32) {}
+
+
+// fn fun(a: i32, c: bool = 23){ printi(cast<i64>a)}
+// fn fun(a: i32, b: i32){ printi(cast<i64>a)}
+
+// fun(a=23)
+// fun(a=23)
+
+// fn fun<T>(a: T, b: i32 = 23){printi(cast<i64>a)}//prints("T")}
+
+// fun(92);
+// fun<bool>(true, a = 23);
+// fn fun(a: Two<bool,char>){}
+// fn fun<T>(a: T){}
+
+// fn f(a: i32){}
+
+
+// f(false)
+
+// a = kea;
+
+// fn fun<S>(a: A<S>){}
+// fun<i32>(B<i32,f32>{5});
+// fun<i32>(Two<i32,f32>{});
+// fun(Two<bool,char>{});
+
+
+
+// printd(0.82)
+
+// fn log(n: i32){
+//     prints("i32");
+// }
+
+// fn log<T>(t: T, b: i32, a: i32 = 5){
+//     prints("t i32 i32?\n")
+// }
+// fn log<T>(t: T, a: i32){
+//     prints("t i32\n")
+// }
+// fn log<T, K>(t: T, k: K){
+//     prints("t k\n")
+// }
+// fn log(t: bool, a: i32) {
+//     prints("bool i32\n")
+// }
+// fn log<T>(t: T) {} // ok
+// fn log<K>(k: K) {} // bad
+// fn log<K>(k: K, n: i32) {} // ok
+// fn log<K>(k: K, b: bool) {} // ok
+
+// fn log<T,K>(arr: Array<T>*, arr2: List<K>*) {}
+// fn log<T>(arr: Array<T>*, arr2: List<i32>*) {}
+
+// log(Array<i32>,List<i32>)
+
+// fn log<T>(arr: Array<Array<T,K>>*) {}
+// fn log(arr: Array<List<i32>>*) {}
+
+// fn log<T>(T) {}
+// fn log<T>(T, T) {}
+// fn log(i32) {}
+
+// // log(false, a = 6);
+// log<bool>(false)
+// log(true)
+// log<bool, i32>(false, 23)
+// log(23);
+
+// // it = Item{1,'A'};
+// // printc(it.id);
+
+// // items: i32[1];
+// for items {
+// //     // items.ptr[nr] = 3;
+// //     // items.ptr[nr] = Item{1,'K'};
+//     items.ptr[0] = Item{3+nr*11, 'A' + nr*2};
+// //     // items.ptr[nr] = Item{'A' + nr*2};
+// }
+// it: i32;
+// p = &it;
+// // *p = 23;
+// it: Item;
+// *&it = Item{3, 232 };
+// // it.id = 292
+
+// printi(it.id)
+// printc('\n');
+
+
+// struct Item {
+//     a: char;
+//     data: i32[2];
+
+//     b: char;
+// }
+// print(sizeof Item)
+// it: Item = Item{65,b=65};
+// print(cast<u64>it.data.ptr);
+// print(it.data.len);
+
+// items: Item[3];
+// for @pointer items {
+//     *it = Item{3+nr*11, 'A' + nr};
+//     printi(nr);
+//     printc(':')
+//     printc(it.id);
+//     printc(',')
+//     printi(it.data);
+//     printc('\n')
+// }   
+
+// str = "hello"
+// range = 0..str.len
+
+// printi(range.now)
+// printi(range.end)
+
+// for slice {
+
+// }
+
+// for @reverse str {
+//     printi(nr)
+//     printc(':');
+//     // printi(str.ptr[it])
+//     // printc(str.ptr[it])
+//     printc(it)
+//     printc('\n');
+// }
+
+// arr: i32[3];
+// i=0;
+// while i < arr.len {
+//     arr.ptr[i] = i*2+1;
+//     i++;
+// }
+
+// for @reverse arr {
+//     printi(nr);
+//     printc(':');
+//     printi(it);
+//     printc('\n');
+// }
+// printc('\n');
+
+// str = "abcdef"
+// for v: str {
+//     printi(nr);
+//     printc(':');
+//     printc(v);
+//     printc('\n');
+// }
+// cast<u64>&arr + 16
+
+// diff = cast<u64>(&start - &arr);
+
+// printi(cast<u64>arr.ptr)
+// prints(" \n");
+// printi(cast<u64>&arr + 16)
+
+// printi(cast<u64>&start - cast<u64>&arr);
+
+// fn poly<T>(t: T) {
+//     printi(t);
+// }
+// struct Po<T> {
+//     a: T;
+//     fn pr(){
+//         poly<T>(a);
+//     }
+// }
+
+// a = Slice<char>{null,1};
+// printc(a.ptr[0]);
+
+
+// fn fun(i: i32){
+//     defer prints("fun1 defer\n")
+//     defer prints("fun2 defer\n")
+
+
+//     if(i >1){
+//         prints("before return\n");
+//         return
+//     }
+//     prints("end of fun\n")
+// }
+// i = -1;
+// while i < 10; {
+//     i++;
+//     printi(i);
+//     printc("\n");
+//     defer prints("while defer\n")
+
+//     if(i>5){
+//         prints("before break\n")
+//         if(i==8){
+//             continue;
+//         }
+//         defer prints("if defer\n");
+//         continue;
+//     }
+//     fun(i);
+// }
+// prints("END\n")
+
+// file, size = FileOpen("test.bat",FileFlag.FILE_ONLY_READ);
+// buffer = cast<char*> malloc(size)
+// FileRead(file, buffer, size)
+// defer {
+//     FileClose(file)
+//     free(buffer,size)
+// }
+
+// i = 0
+// while i < size; {
+//     printc(buffer[i]);
+//     i+=1;
+// }
+// printc("\n")
+
+
+// = ok();
+
+// a: i32, b: i32;
+// a, b : i32, c : f32;
+// a, b : i32, c : f32 = ok();
+// a, b, c = ok();
+
+// struct Ret {
+//     a: i32;
+//     b: i32;
+// }
+// fn ok() -> Ret {
+//     return Ret{44, 99}
+// }
+
+// a = ok();
+
+// printi(a.a)
+// printi(a.b)
+
+// A = B = 9
+// A = B += 9
+// a: i32;
+// ptr: i32* = &a;
+// ptr *= 7
+
+// a = 8 + 1 = 1 ( a |= b )
+// printi(b)
+
+// struct Vec<T>{
+//     x: T;
+//     fn add<T>(a: T) {
+//         this.x += a;
+//     }
+// }
+// v = Vec<i32>{2};
+// v.add<i32>(1)
+
+// struct Vec {
+//     x: i32;
+//     fn add<T>(a: T) {
+//         this.x += a;
+//     }
+// }
+// #define E i32
+// #import "OS"
+// FileOpen();
+// FileRead();
+// FileWrite();
+// FileClose();
+
+// v = Vec{3};
+// printi(v.add())
+// v.add<i32>()
+// v.add<i32>(2.2)
+// struct Vec<E> {
+// // struct Vec {
+//     x: E;
+//     fn add<T>(a: E) -> T{
+//         this.x += a
+//         // fn test(dd: E){
+
+//         // }
+//         return "S"
+//     }
+//     // fn add() -> i32 {
+//     //     return "A"
+//     // }
+// }
+// v = Vec<i32>{3};
+// printc(v.add<i32>(2.2))
+// printi(v.x)
+
+// struct Vec<N>{
+//     x: N;
+//     // fn add<i32>(a: i32 ) { 
+//     fn add(a: i32) { 
+//     // fn add(a: i32 ) { 
+//         // printi(this.x); 
+//         this.x += cast<f32>a+0.5;
+//     }
+// }
+// // fn V_add(this: V*, a: i32) { this.x += a}
+
+// v = V{5};
+// // printi(v.x);
+// // v.x += 23;
+// v.add<f32>(0.5);
+// printi(v.x);
+
+// *(&var + 4) = 5
+// *(&(*ptr).b + 4) = 5
+
+// *(ptr + 4) = 4
+
+// ad = 32
+
+// p = &((*(ad+4)).eed)
+
+// struct A<T>{
+//     fn add(t: T) {
+//         printi(t)
+//     }
+// }
+
+// fn top<T>(){
+//     fn low(){
+//         a: T;
+//     }
+// }
+
+// fn ee({
+//     return
+// }
+
+// a: A;
+// a.add(33);
+
+// fn add<T>(a: T, b: T) -> T {
+//     sum: T = a + b;
+//     sum: i32 = 2;
+//     return sum;
+// }
+
+// fn addi(a: i32, b: i32) -> i32 { return a + b }
+
+// printi(add<i32>(1.4,2.5))
+// printi(addi(1.6,2.5))
+// printi(add<f32>(1.6,2.5))
+// printi(add<i32>(8,42))
+
+// printi(1.6 + 2.5)
+
+// a: i16 = 256* 10 + 13;
+// printi(*(&a))
+// printi(*(cast<i8*>&a + 1))
+
+// struct A {
+//     a: i64;
+// }
+// a = A{9};
+// p = &a;
+// printi(*(&p.a + 0));
+// printi(*(&p));
+// printi((&p).a);
+// printi(p.a);
+// printi(a.a);
+
+// #import "Basic"
+
+// struct poly<T> {
+//     num: T;
+// }
+
+// struct wa {
+// // struct wa<P> {
+//     a: poly<i32>;
+//     // b: poly<P>;
+//     b: poly<i64>;
+// }
+
+// // w = wa<i64>{ poly<i64>{5} };
+// // w = wa<i64>{ poly<i32>{92}, poly<i64*>{null} };
+// w = wa{ poly<i32>{123}, poly<i64>{32} };
+
+// enum TIP {
+//     One = 0x1,
+//     T = 0x4
+// }
+
+// printi(cast<i32>TIP.One)
+// printi(cast<i32>TIP.T)
+
+// a: i32 = TIP.One;
+
+// a: TIP;
+// using TIP as tip;
+// b: tip;
+
+// struct O {
+//     a: i32
+// }
+// namespace A {
+//     namespace SUP {
+//         struct B {
+//             a: i32;
+//             // b: O
+//         }
+//     }
+// }
+// struct P<T> {
+//     a: T
+// }
+// using P<i32> as Num
+// // using A::SUP as K
+// // b: K::B;
+// n = Num{29};
+// printi(n.a);
+// b: A::B;
+
+// using 
+
+// var = 27;
+
+// using var as var2;
+
+// printi(var2);
+// var = 29
+// printi(var2);
+
+// struct aa{
+//     a: i32;
+//     b: i64;
+//     c: i32;
+// }
+// // {
+// //     a: u8;
+// //     // printi(cast<i64>&a + cast<i64>1);
+// // }
+// // {
+// // a: aa = aa{5,15};
+// a: aa = aa{5,15,27};
+// //     // printi(cast<i64> &a);
+// printi(a.a);
+// printi(a.b);
+// printi(a.c);
+// }
+    // fn get() -> i32 {
+    //     return this.num;
+    // }
+// struct Num {
+//     n: i32;
+// }
+// {
+//     using Num<T> as Num<R>
+//     using T as Num;
+
+    // fn clamp<T>(a: T) -> T{
+    //     return a + 1
+    // }
+// operator +<T=i32,f32>(){
+
+// }
+
+// }
+// a = poly{ext<i32>{5}};
+// printi(a.a.t);
+// printi(a.add());
+// p = &a;
+// printi(p.num);
+// prints("hello!\n")
+
+// fn printi(n: i32) @native
+// fn printi(n: i32) @dll

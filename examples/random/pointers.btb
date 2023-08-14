@@ -1,0 +1,17 @@
+
+/*
+    Data types...
+    Enum for primitive ones (i32, bool) 
+    As for structs and pointers. There can be many.
+    Pointer can have pointers to pointers to pointers.
+*/
+a = 5.
+b = 12.
+p = &a
+p = p + 8
+
+c = *p + 1000000.9
+
+// p : i32* = &a
+// p : i32[] = {&a,1,length: 92}
+// p : i32[] = [1,9,2,5,7]
