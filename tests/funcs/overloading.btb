@@ -1,0 +1,6 @@
+@TEST-CASE index-operator
+operator [](slice: Slice<char>, index: i64) -> i32 {
+    return slice.ptr[index];
+}
+str = "Hello";
+test 'H'; str[0];

@@ -80,6 +80,8 @@ namespace engone {
 
 		// extra report which is individual for each thread
 		void useThreadReports(bool yes);
+
+		void flushInternal();
 		
 		void flush();
 

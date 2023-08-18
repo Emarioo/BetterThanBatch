@@ -30,7 +30,7 @@ fn @intrinsic atomic_add(ptr: i32*, value: i32);
 // fn @native printd(num: f32) ;
 // fn @native printc(chr: char) ;
 
-fn LINK_TYPE Allocate(size: u64) -> void* ;
+fn LINK_TYPE Allocate(size: u64) -> void*;
 fn LINK_TYPE Reallocate(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
 fn LINK_TYPE Free(ptr: void*, size: u64) ;
 
@@ -44,7 +44,7 @@ fn LINK_TYPE Free(ptr: void*, size: u64) ;
 //     FILE_NO_FLAG=0,
 //     FILE_ONLY_READ=1,
 //     FILE_CAN_CREATE=2,
-//     FILE_WILL_CREATE=4,
+//     FILE_ALWAYS_CREATE=4,
 // }
 // returns file handle and file size
 fn LINK_TYPE FileOpen(path: Slice<char>*, readOnly: bool, outFileSize: u64* = null) -> File;
@@ -72,6 +72,10 @@ fn LINK_TYPE DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterato
 fn LINK_TYPE DirectoryIteratorDestroy(iterator: DirectoryIterator*);
 fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
 fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);
+
+fn @import GetClockSpeed() -> u64;
+
+fn @import ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCode: i32* = null) -> bool;
 
 struct DirectoryIteratorData {
     name: char[]; // Allocated by interpreter; can't be String because of that. The ptr should be const (char* const NOT const char*)

@@ -244,7 +244,7 @@ void VerifyTests(DynamicArray<std::string>& filesToTest){
             std::string hoho{};
             hoho += options.outputFile.text;
             int errorCode = 0;
-            engone::StartProgram("",(char*)hoho.data(),PROGRAM_WAIT,&errorCode);
+            engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
             // log::out << "Error level: "<<errorCode<<"\n";
 
         }

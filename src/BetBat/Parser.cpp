@@ -46,7 +46,7 @@ SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed);
 // zero means no operation
 bool IsSingleOp(OperationType nowOp){
     return nowOp == AST_REFER || nowOp == AST_DEREF || nowOp == AST_NOT || nowOp == AST_BNOT||
-        nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST || nowOp == AST_INCREMENT || nowOp == AST_DECREMENT;
+        nowOp == AST_FROM_NAMESPACE || nowOp == AST_CAST || nowOp == AST_INCREMENT || nowOp == AST_DECREMENT || nowOp == AST_UNARY_SUB;
 }
 // info is required to perform next when encountering
 // two arrow tokens
@@ -132,13 +132,15 @@ int OpPrecedence(int op){
         case AST_BLSHIFT:
         case AST_BRSHIFT:
             return 13;
+        // All unary operators have the same precedence
+        // It wouldn't make sense for !~0 to be rearranged to ~!0
         case AST_BNOT:
         case AST_NOT:
+            // return 15;
         case AST_CAST:
-            return 15;
         case AST_REFER:
         case AST_DEREF:
-            return 16;
+            // return 16;
         case AST_MEMBER:
         case AST_FROM_NAMESPACE:
             return 20;
@@ -911,7 +913,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
         shouldComputeExpression = true;
     }
 
-    bool negativeNumber=false;
+    // bool negativeNumber=false;
     bool expectOperator=false;
     WHILE_TRUE {
         int tokenIndex = info.at()+1;
@@ -976,8 +978,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     tmp->nonNamedArgs++;
                     values.pop();
                     
-
-                    tmp->boolValue = true; // indicicate fncall to struct method
+                    tmp->setMemberCall(true);
 
                     // Parse the other arguments
                     int count = 0;
@@ -1106,7 +1107,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
-                tmp->boolValue = true;
+                tmp->setPostAction(true);
 
                 tmp->left = values.last();
                 values.pop();
@@ -1123,7 +1124,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
-                tmp->boolValue = true;
+                tmp->setPostAction(true);
 
                 tmp->left = values.last();
                 values.pop();
@@ -1169,7 +1170,6 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 info.next();
                 ops.add(AST_DEREF);
                 attempt = false;
-
                 continue;
             } else if(Equal(token,"!")){
                 info.next();
@@ -1181,7 +1181,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 ops.add(AST_BNOT);
                 attempt = false;
                 continue;
-            } else if(Equal(token,"cast")){
+            } else if(Equal(token,"cast") || Equal(token,"cast_unsafe")) {
                 info.next();
                 Token tok = info.get(info.at()+1);
                 if(!Equal(tok,"<")){
@@ -1206,6 +1206,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 }
                 info.next();
                 ops.add(AST_CAST);
+                // NOTE: unsafe cast is handled further down
+
                 // TypeId dt = info.ast->getTypeInfo(info.currentScopeId,tokenTypeId)->id;
                 // castTypes.add(dt);
                 TypeId strId = info.ast->getTypeString(tokenTypeId);
@@ -1215,63 +1217,153 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 continue;
             } else if(Equal(token,"-")){
                 info.next();
-                negativeNumber=!negativeNumber;
+                ops.add(AST_UNARY_SUB);
                 attempt = false;
                 continue;
             } else if(Equal(token,"++")){
                 info.next();
                 ops.add(AST_INCREMENT);
-
                 attempt = false;
                 continue;
             } else if(Equal(token,"--")){
                 info.next();
                 ops.add(AST_DECREMENT);
-
                 attempt = false;
                 continue;
             }
 
             if(IsInteger(token)){
                 token = info.next();
+
+                bool negativeNumber = false;
+                if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
+                    ops.pop();
+                    negativeNumber = true;
+                }
+                Assert(token.str[0]!='-');// ensure that the tokenizer hasn't been changed
+                // to clump the - together with the number token
                 
-                Assert(token.str[0]!='-');
                 bool printedError = false;
                 u64 num=0;
                 for(int i=0;i<token.length;i++){
                     char c = token.str[i];
                     if(num * 10 < num && !printedError) {
-                        ERR_HEAD3(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                            ERR_LINE2(token.tokenIndex,"to large!");
+                        ERR_SECTION(
+                            ERR_HEAD(token)
+                            // TODO: Show the limit? pow(2,64)-1
+                            ERR_MSG("Number overflow! '"<<token<<"' is to large for 64-bit integers!")
+                            ERR_LINE(token,"to large!");
                         )
                         printedError = true;
                     }
                     num = num*10 + (c-'0');
                 }
-
-                ASTExpression* tmp = 0;
-                if(negativeNumber) {
-                    if ((num&0xFFFFFFFF80000000) == 0) {
-                        tmp = info.ast->createExpression(TypeId(AST_INT32));
-                    } else if((num&0x8000000000000000) == 0) {
-                        tmp = info.ast->createExpression(TypeId(AST_INT64));
-                    } else {
-                        tmp = info.ast->createExpression(TypeId(AST_INT64));
-                        if(!printedError){
-                            ERR_HEAD3(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                                ERR_LINE2(token.tokenIndex,"to large!");
-                            )
-                        }
+                bool unsignedSuffix = false;
+                bool signedSuffix = false;
+                Token tok = info.get(info.at()+1);
+                if((token.flags&TOKEN_SUFFIX_LINE_FEED)==0 && 0==(token.flags&TOKEN_SUFFIX_SPACE)) {
+                    if(Equal(tok,"u")) {
+                        info.next();
+                        unsignedSuffix  = true;
+                    } else if(Equal(tok,"s")) {
+                        info.next();
+                        signedSuffix  = true;
+                    } else if(IsName(tok)){
+                        ERR_SECTION(
+                            ERR_HEAD(tok)
+                            ERR_MSG("'"<<tok<<"' is not a known suffix for integers. The available ones are: 92u (unsigned), 31924s (signed).")
+                            ERR_LINE(tok,"invalid suffix")
+                        )
                     }
-                }else{
+                }
+                ASTExpression* tmp = 0;
+                if(unsignedSuffix) {
+                    if(negativeNumber) {
+                        ERR_SECTION(
+                            ERR_HEAD(tok)
+                            ERR_MSG("You cannot use an unsigned suffix and a minus at the same time. They collide.")
+                            ERR_LINE(tok,"remove?")
+                        )
+                    }
                     if ((num&0xFFFFFFFF00000000) == 0) {
                         tmp = info.ast->createExpression(TypeId(AST_UINT32));
                     } else {
                         tmp = info.ast->createExpression(TypeId(AST_UINT64));
                     }
+                } else if(signedSuffix || negativeNumber) {
+                    if ((num&0xFFFFFFFF80000000) == 0) {
+                        tmp = info.ast->createExpression(TypeId(AST_INT32));
+                    } else if((num&0x8000000000000000) == 0 || (negativeNumber && (num == 0x8000000000000000))) {
+                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                    } else {
+                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                        if(!printedError){
+                            // This message is different from the one in the loop above.
+                            // This complains about to large number for signed integers while the above
+                            // complains about unsigned and signed integers. We don't need
+                            // to print if the above already did.
+                            ERR_SECTION(
+                                ERR_HEAD(token)
+                                // TODO: Show the limit? pow(2,63)-1 or -pow(2,63) if negative
+                                ERR_MSG("'"<<token<<"' is to large for signed 64-bit integers! Larger integers are not supported. Consider using an unsigned 64-bit integer.")
+                                ERR_LINE(token,"to large");
+                            )
+                        }
+                    }
+                } else {
+                    // default will result in signed integers when possible.
+                    if ((num&0xFFFFFFFF00000000) == 0) {
+                        tmp = info.ast->createExpression(TypeId(AST_INT32));
+                    } else if((num&0x8000000000000000) == 0) {
+                        tmp = info.ast->createExpression(TypeId(AST_INT64));
+                    } else {
+                        tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                    }
                 }
+                // if(negativeNumber) {
+                //     if(unsignedSuffix) {
+                //         ERR_SECTION(
+                //             ERR_HEAD(tok)
+                //             ERR_MSG("You cannot use an unsigned suffix and a minus at the same time. They collide.")
+                //             ERR_LINE(tok,"remove?")
+                //         )
+                //     }
+                //     if ((num&0xFFFFFFFF80000000) == 0) {
+                //         tmp = info.ast->createExpression(TypeId(AST_INT32));
+                //     } else if((num&0x8000000000000000) == 0) {
+                //         tmp = info.ast->createExpression(TypeId(AST_INT64));
+                //     } else {
+                //         tmp = info.ast->createExpression(TypeId(AST_INT64));
+                //         if(!printedError){
+                //             ERR_HEAD3(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                //                 ERR_LINE2(token.tokenIndex,"to large!");
+                //             )
+                //         }
+                //     }
+                // }else{
+                //     // we default to signed but we use unsigned if the number doesn't fit
+                //     if(unsignedSuffix && (num&0x8000000000000000)!=0) {
+                //         if(signedSuffix) {
+                //             ERR_SECTION(
+                //                 ERR_HEAD(tok)
+                //                 ERR_MSG("You cannot use an unsigned suffix and a minus at the same time. They collide.")
+                //                 ERR_LINE(tok,"remove?")
+                //             )
+                //         }
+                //         if ((num&0xFFFFFFFF00000000) == 0) {
+                //             tmp = info.ast->createExpression(TypeId(AST_UINT32));
+                //         } else {
+                //             tmp = info.ast->createExpression(TypeId(AST_UINT64));
+                //         }
+                //     } else {
+                //         if ((num&0xFFFFFFFF00000000) == 0) {
+                //             tmp = info.ast->createExpression(TypeId(AST_INT32));
+                //         } else {
+                //             tmp = info.ast->createExpression(TypeId(AST_INT64));
+                //         }
+                //     }
+                // }
                 tmp->i64Value = negativeNumber ? -num : num;
-                negativeNumber = false;
                 
                 tmp->constantValue = true;
                 values.add(tmp);
@@ -1280,12 +1372,23 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsDecimal(token)){
+                Token tok = info.get(info.at()+1);
+                if((token.flags&TOKEN_SUFFIX_LINE_FEED)==0 && 0==(token.flags&TOKEN_SUFFIX_SPACE)
+                && Equal(tok,"d")) {
+                    info.next();
+                    // TODO: 213.3d is parsed as a double
+                    Assert(("doubles not supported",false));
+                }
                 token = info.next();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FLOAT32));
                 tmp->f32Value = ConvertDecimal(token);
-                if(negativeNumber)
+                Assert(token.str[0]!='-');// ensure that the tokenizer hasn't been changed
+                // to clump the - together with the number token
+
+                if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
+                    ops.pop();
                     tmp->f32Value = -tmp->f32Value;
-                negativeNumber=false;
+                }
                 values.add(tmp);
                 tmp->constantValue = true;
                 tmp->tokenRange.firstToken = token;
@@ -1295,15 +1398,17 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsHexadecimal(token)){
                 info.next();
-                if(negativeNumber){
-                    ERR_HEAD3(token,"Negative hexidecimals is not okay.\n\n";
-                        ERR_LINE2(token.tokenIndex,"bad");
-                    )
-                    negativeNumber=false;
-                }
+                // if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
+                //     ops.pop();
+                //     ERR_SECTION(
+                //         ERR_HEAD(token)
+                //         ERR_MSG("Negative hexidecimals is not okay.")
+                //         ERR_LINE(token,"bad");
+                //     )
+                // }
                 // 0x000000001 will be treated as 64 bit value and
-                // it probably should because you wouldn't use so many 
-                // zero for no reason.
+                // it probably should because you added those 
+                // zero for that exact reason.
                 ASTExpression* tmp = nullptr;
                 if(token.length-2<=8) {
                     tmp = info.ast->createExpression(TypeId(AST_UINT32));
@@ -1444,6 +1549,71 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tmp->constantValue = true; // IMPORTANT: Won't be constant if you use the same method as sizeof
                 tmp->name = token;
                 tmp->tokenRange.firstToken = token;
+                tmp->tokenRange.endIndex = info.at()+1;
+                values.add(tmp);
+            } else if(Equal(token, "asm")) {
+                info.next();
+
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ASM));
+                tmp->tokenRange.firstToken = token;
+
+                // TODO: asm<i32>{...} casting
+
+                Token curly = info.get(info.at()+1);
+                if(!Equal(curly, "{")) {
+                    ERR_SECTION(
+                        ERR_HEAD(curly)
+                        ERR_MSG("'asm' keyword (inline assembly) requires a body with curly braces")
+                        ERR_LINE(curly,"should be }")
+                    )
+                    continue;
+                }
+                info.next();
+                int depth = 1;
+                Token token{};
+                Token& firstToken = info.get(info.at()+1);
+                TokenStream* stream = firstToken.tokenStream;
+                while(!info.end()){
+                    token = info.get(info.at() + 1);
+                    if(Equal(token,"{")) {
+                        depth ++;
+                        continue;
+                    }
+                    if(Equal(token,"}")) {
+                        depth--;
+                        if(depth==0) {
+                            // info.next(); // Done after loop. it's easier since we might have quit due to end of stream.
+                            break;
+                        }
+                    }
+                    if(token.tokenStream != stream) {
+                        ERR_SECTION(
+                            ERR_HEAD(token)
+                            ERR_MSG("Tokens in inlined assembly must come frome the same source file due to implementation restrictions. (it will be fixed later)")
+                            ERR_LINE(firstToken,"first file")
+                            ERR_LINE(token,"second file")
+                        )
+                    }
+                    // Inline assembly is parsed here. The content of the assembly can be known
+                    // with tokenRange in ASTNode. We know the range of tokens for the inline assembly.
+                    // If you used a macro from another stream then we have problems.
+                    // TODO: We want to search for instructions where variables are used like this
+                    //   mov eax, [var] and change the instruction to one that gets the variable.
+                    //   Can't do that here though since we need to know the variables first.
+                    //   It must be done in type checker.
+                    info.next();
+                }
+                token = info.get(info.at()+1);
+                if(!Equal(token, "}")) {
+                    ERR_SECTION(
+                        ERR_HEAD(curly)
+                        ERR_MSG("Missing ending curly brace for inline assembly.")
+                        ERR_LINE(curly,"starts here")
+                    )
+                    continue;
+                }
+                info.next();
+
                 tmp->tokenRange.endIndex = info.at()+1;
                 values.add(tmp);
             } else if(IsName(token)){
@@ -1718,14 +1888,14 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 }
             }
         }
-        if(negativeNumber){
-            ERR_HEAD3(info.get(info.at()-1), "Unexpected - before "<<token<<"\n";
-                ERR_LINE2(info.at()-1,"bad");
-            )
-            return SignalAttempt::FAILURE;
-            // quitting here is a little unexpected but there is
-            // a defer which destroys parsed expresions so no memory leaks at least.
-        }
+        // if(negativeNumber){
+        //     ERR_HEAD3(info.get(info.at()-1), "Unexpected - before "<<token<<"\n";
+        //         ERR_LINE2(info.at()-1,"bad");
+        //     )
+        //     return SignalAttempt::FAILURE;
+        //     // quitting here is a little unexpected but there is
+        //     // a defer which destroys parsed expresions so no memory leaks at least.
+        // }
         
         ending = ending || info.end();
 
@@ -1736,14 +1906,24 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 if(!IsSingleOp(op1) && values.size()<2)
                     break;
                 OperationType op2 = ops[ops.size()-1];
-                if(OpPrecedence(op1)>=OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
-                // if(OpPrecedence(op1)>OpPrecedence(op2)){ // this code cause this: 3 = 3-1-1
-                    nowOp = op1;
-                    ops[ops.size()-2] = op2;
-                    ops.pop();
-                }else{
-                    // _PLOG(log::out << "break\n";)
-                    break;
+                if(IsSingleOp(op1)) {
+                    if(!IsSingleOp(op2)) {
+                        nowOp = op1;
+                        ops[ops.size()-2] = op2;
+                        ops.pop();
+                    } else {
+                        break;
+                    }
+                } else {
+                    if(OpPrecedence(op1)>=OpPrecedence(op2)){ // this code produces this: 1 = 3-1-1
+                    // if(OpPrecedence(op1)>OpPrecedence(op2)){ // this code cause this: 3 = 3-1-1
+                        nowOp = op1;
+                        ops[ops.size()-2] = op2;
+                        ops.pop();
+                    }else{
+                        // _PLOG(log::out << "break\n";)
+                        break;
+                    }
                 }
             }else if(ending){
                 if(ops.size()==0){
@@ -1789,8 +1969,18 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     castTypes.pop();
                     Token extraToken = extraTokens.last();
                     extraTokens.pop();
+                    if(Equal(extraToken,"cast_unsafe")) {
+                        val->setUnsafeCast(true);
+                    }
                     val->tokenRange.firstToken = extraToken;
                     val->tokenRange.endIndex = er->tokenRange.firstToken.tokenIndex;
+                } else if(nowOp == AST_UNARY_SUB){
+                    // I had an idea about replacing unary sub with AST_SUB
+                    // and creating an integer expression with a zero in it as left node
+                    // and the node from unary as the right. The benefit of this is that
+                    // you have one less operation (AST_UNARY_SUB) to worry about.
+                    // The bad is that you create a new expression and operator overloading
+                    // wouldn't work with unary sub.
                 } else {
                     // val->tokenRange.startIndex--;
                 }
@@ -2169,8 +2359,12 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
     //  added to the tree and be usable. Parse and then throw away.
     //  Stuff following the operator overload´syntax will then parse fine.
     
+    Token name2 = info.get(info.at()+1);
     // What about +=, -=?
-    if(!(op = IsOp(name, extraNext))){
+    if(Equal(name, "[") && Equal(name2, "]")) {
+        info.next();// ]
+        name.length++;
+    } else if(!(op = IsOp(name, extraNext))){
         info.ast->destroy(function);
         function = nullptr;
         ERR_HEAD3(name,"Expected a valid operator, "<<name<<" is not.\n";)
@@ -2534,6 +2728,7 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         argv.name.line = tok.line;
         argv.name.column = tok.column+1;
         argv.defaultValue = nullptr;
+        function->nonDefaults++;
 
         std::string* str = info.ast->createString();
         *str = parentStruct->polyName + "*"; // TODO: doesn't work with polymorhpism
@@ -2822,6 +3017,10 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
     // // statement->varnames.stealFrom(varnames);
     // statement->firstExpression = nullptr;
     // statement->globalAssignment = globalAssignment;
+    
+    // We usually don't want the tokenRange to include the expression.
+    statement->tokenRange.firstToken = info.get(startIndex);
+    statement->tokenRange.endIndex = info.at()+1;
 
     Token token = info.get(info.at()+1);
     if(Equal(token,"=")) {
@@ -2888,8 +3087,8 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
         info.next(); // parse ';'. won't crash if at end
     }
 
-    statement->tokenRange.firstToken = info.get(startIndex);
-    statement->tokenRange.endIndex = info.at()+1;
+    // statement->tokenRange.firstToken = info.get(startIndex);
+    // statement->tokenRange.endIndex = info.at()+1;
     return SignalAttempt::SUCCESS;  
 }
 SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal){
@@ -2953,6 +3152,20 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             info.nextContentOrder.pop(); 
         }
     };
+
+    Token tok = info.get(info.at() + 1);
+    if(IsAnnotation(tok)) {
+        if(Equal(tok, "@dump-asm")) {
+            info.next();
+            bodyLoc->flags |= ASTNode::DUMP_ASM;
+        } else if(Equal(tok, "@dump-bc")) {
+            info.next();
+            bodyLoc->flags |= ASTNode::DUMP_BC;
+        }
+        // Annotation may belong to statement so we don't
+        // complain about not recognizing it here.
+    }
+
     DynamicArray<ASTStatement*> nearDefers{};
 
     while(!info.end()){

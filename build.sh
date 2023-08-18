@@ -1,8 +1,12 @@
 #!/bin/bash
 
+# This file hasn't been updated in a while and probably doesn't
+# Compile things properly.
+
 # USE_DEBUG=1
 
-GCC_COMPILE_OPTIONS="-std=c++14 -O3"
+GCC_COMPILE_OPTIONS="-std=c++14"
+# GCC_COMPILE_OPTIONS="-std=c++14 -O3"
 GCC_INCLUDE_DIRS="-Iinclude"
 GCC_DEFINITIONS="-DOS_LINUX"
 GCC_WARN="-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable"

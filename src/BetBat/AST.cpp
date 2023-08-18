@@ -11,6 +11,7 @@ const char *OpToStr(OperationType optype, bool null) {
         // CASE(MUL, * (multiplication))
         CASE(DIV, /)
         CASE(MODULUS, %)
+        CASE(UNARY_SUB, -)
 
         CASE(EQUAL, ==)
         CASE(NOT_EQUAL, !=)
@@ -320,12 +321,22 @@ void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
 bool AST::castable(TypeId from, TypeId to){
     if (from == to)
         return true;
-    TypeId vp = AST_VOID;
-    vp.setPointerLevel(1);
-    if(from.isPointer() && (to == vp || to==AST_UINT64 || to==AST_INT64 || to==AST_BOOL))
-        return true;
-    if((from == vp||from==AST_UINT64||from==AST_INT64 || from==AST_BOOL) && to.isPointer())
-        return true;
+    if(from.isPointer()) {
+        if (to == AST_BOOL)
+            return true;
+        if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
+            from.getPointerLevel() - to.getPointerLevel() == 1)
+            return true;
+        if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+            return true;
+    }
+    if(to.isPointer()) {
+        if ((from.baseType() == AST_UINT64 || from.baseType() == AST_INT64) && 
+            to.getPointerLevel() - from.getPointerLevel() == 1)
+            return true;
+        if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+            return true;
+    }
     if (from == AST_FLOAT32 && AST::IsInteger(to)) {
         return true;
     }
@@ -350,6 +361,7 @@ bool AST::castable(TypeId from, TypeId to){
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
 FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
     using namespace engone;
+    // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
     //   Or not because the generator pushes arguments to get types in order to
     //   get overload. It's first when we have the overload that the casting can happen.
@@ -362,32 +374,58 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
     FnOverloads::Overload* outOverload = nullptr;
     for(int i=0;i<(int)overloads.size();i++){
         auto& overload = overloads[i];
+        bool found = true;
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
         //   unnecessary.
+        if (fncall->hasImplicitThis()) {
+            if(fncall->nonNamedArgs > overload.astFunc->arguments.size()-1 // can't match if the call has more essential args than the total args the overload has
+                || fncall->nonNamedArgs < overload.astFunc->nonDefaults-1 // can't match if the call has less essential args than the overload (excluding defaults)
+                || argTypes.size() > overload.astFunc->arguments.size()-1
+                )
+                continue;
 
-        if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
-            || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
-            || argTypes.size() > overload.astFunc->arguments.size()
-            )
-            continue;
-
-        bool found = true;
-        if(canCast){
-            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                if(!ast->castable(argTypes[j],overload.funcImpl->argumentTypes[j].typeId)) {
-                    found = false;
-                    break;
+            if(canCast){
+                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(!ast->castable(argTypes[j],overload.funcImpl->argumentTypes[j+1].typeId)) {
+                        found = false;
+                        break;
+                    }
+                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
-                // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+            } else {
+                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(overload.funcImpl->argumentTypes[j+1].typeId != argTypes[j]) {
+                        found = false;
+                        break;
+                    }
+                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+                }
             }
-        } else {
-            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
-                    found = false;
-                    break;
+        } else 
+        {
+            if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
+                || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
+                || argTypes.size() > overload.astFunc->arguments.size()
+                )
+                continue;
+
+            if(canCast){
+                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(!ast->castable(argTypes[j],overload.funcImpl->argumentTypes[j].typeId)) {
+                        found = false;
+                        break;
+                    }
+                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
-                // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+            } else {
+                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
+                        found = false;
+                        break;
+                    }
+                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+                }
             }
         }
         if(!found)
@@ -411,8 +449,8 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
 
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
 FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& argTypes, TinyArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-    // Assert(!fncallArgs); // not implemented yet, see other getOverload
     using namespace engone;
+    Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
     FnOverloads::Overload* outOverload = nullptr;
     // TODO: Check all overloads in case there are more than one match.
     //  Good way of finding a bug in the compiler.
@@ -532,12 +570,14 @@ void FnOverloads::addPolyOverload(ASTFunction* astFunc){
     // po.argTypes.stealFrom(typeIds);
 }
 
-FnOverloads& ASTStruct::getMethod(const std::string& name){
+FnOverloads* ASTStruct::getMethod(const std::string& name, bool create){
     auto pair = _methods.find(name);
     if(pair == _methods.end()){
-        return (_methods[name] = {});
+        if(create)
+            return &(_methods[name] = {});
+        return nullptr;
     }
-    return pair->second;
+    return &pair->second;
 }
 
 void AST::appendToMainBody(ASTScope *body) {
@@ -1748,7 +1788,7 @@ bool AST::IsInteger(TypeId id) {
 }
 bool AST::IsSigned(TypeId id) {
     if(!id.isNormalType()) return false;
-    return AST_INT8 <= id.getId() && id.getId() <= AST_INT64;
+    return AST_INT8 <= id.getId() && id.getId() <= AST_INT64; // AST_CHAR is not signed
 }
 bool AST::IsDecimal(TypeId id){
     // TODO: Add float64
@@ -1994,6 +2034,8 @@ void ASTExpression::print(AST *ast, int depth) {
             log::out <<name;
         else if(typeId == AST_SIZEOF)
             log::out << name;
+        else if(typeId == AST_ASM)
+            log::out << "?";
         else
             log::out << "missing print impl.";
         if (typeId == AST_FNCALL) {

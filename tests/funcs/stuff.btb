@@ -1,0 +1,4 @@
+@TEST-CASE call-conventions
+struct Big { a: u64; b: u64; }
+// Should throw error
+fn @stdcall a(b: Big) {}

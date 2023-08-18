@@ -16,6 +16,15 @@ fn @native printd(str: f32);
     if the language took that name from you.
 */
 
+#define log(X, ...) _print(X); _print(' '); log(...)
+#define log(X) _print(X); _print('\n')
+
+// macros does not travel across imports yet ):
+// Now they do haha!
+#define print(X,...) _print(X); print(...);
+#define print()
+#define println(...) print(...); _print("\n");
+
 // IMPORTANT: SAFE_CONVERSIONS in x64_Converter must be defined for this function to work properly.
 //  There will be some unexpected bits otherwise.
 fn @hide _print(t: i64){
@@ -33,25 +42,75 @@ fn @hide _print(t: i64){
     // One last thing, the memory should be allocated using a linear allocator
     // or some other temporary allocator. Perhaps you can allocate it on the
     // stack or something?
+    // log("int")
     if t == 0 {
         printc('0')
         return;
     }
-
+    signed = false;
+    if t < 0 {
+        signed = true;
+        t = 0-t;
+    }
     str: char[20];
     used = 19;
     while t > 0 && used > 0 {
-        num = t % 10;
+        num: u32 = t % 10;
+        // log('A','0'+num)
+        // log(,num)
         str.ptr[used] = num + '0';
         used--;
         
         t = t / 10;
     }
     str.ptr += used + 1;
-    str.len -= used - 1;
+    // str.len -= used - 1;
+    str.len -= used + 1;
+    if signed
+        printc('-');
     prints(str);
     #endif
 }
+// fn @hide _print(t: u64){
+//     // If you are worried that this language will be filled with ifdefs like C/C++
+//     // then you can calm down. This is just temporary.
+//     #ifdef LINK_BYTECODE
+//     printi(t)
+//     #else
+    
+//     // optimise by using a log10 function to know how many characters you need.
+//     // then allocate some memory for that space
+//     // run a while looop filling up that memory
+//     // then print all characters at once
+//     // free memory
+//     // One last thing, the memory should be allocated using a linear allocator
+//     // or some other temporary allocator. Perhaps you can allocate it on the
+//     // stack or something?
+//     if t == 0 {
+//         printc('0')
+//         return;
+//     }
+//     signed = false;
+//     if t < 0 {
+//         signed = true;
+//         t = 0-t;
+//     }
+//     str: char[20];
+//     used = 19;
+//     while t > 0 && used > 0 {
+//         num = t % 10;
+//         str.ptr[used] = num + '0';
+//         used--;
+        
+//         t = t / 10;
+//     }
+//     str.ptr += used + 1;
+//     str.len -= used + 1;
+//     if signed
+//         printc('-');
+//     prints(str);
+//     #endif
+// }
 fn _print(str: char*){
     slice = Slice<char>{str, strlen(str)};
     prints(slice);
@@ -63,80 +122,115 @@ fn _print(t: f32){
     // printd(t)
     // #else
     bits: u32 = *cast<u32*>cast<void*>&t;
-
+    // log("float")
     sign = (bits >> 31) & 1;
     exp = (bits >> 23) & 0xFF
-    mantissa = bits & 0x7FFFFF
+    mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
+    
+// 0x8000_0000_0000_0000
 
-    mul: u64 = 1;
-    acc: u64 = 1;
-    precision = 17;
-    // decrease precision for large numbers
-    if exp >= 128
-        precision -= ((exp+1) & 0x7F)>>2
-    // _print(precision)
-    for i: 0..precision {
-        mul *= 5;
-        acc *= 10;
-        if mantissa & (1 << (22 - i)) {
-            acc += mul;
+    // printBits(bits);
+    if sign
+        _print('-');
+// 01011111000000000000000000000000
+    intPart: u64 = 0;
+    decimalBits: i32 = 23 - (exp-127);
+    log(decimalBits)
+    // _print('\n')
+    // _print(exp)
+    // _print('\n')
+    if decimalBits < 1 {
+        // log(mantissa);
+        intPart = (mantissa) << (0-decimalBits);
+        // log("herea");
+        // printBits(intPart);
+        if intPart == 0 {
+            printc('0')
+        } else {
+            str: char[23];
+            used = 22;
+            while intPart > 0u && used > 0 {
+                digit: u8 = intPart % 10;
+                // log("i",intPart);
+                // log("d",digit);
+                str.ptr[used] = digit + '0';
+                used--;
+                intPart = intPart / 10;
+            }
+            str.ptr += used + 1;
+            str.len -= used + 1;
+            prints(str);
         }
-    }
+        // _print(intPart);
+        _print('.');
+        _print('0');
+    } else {
+        if exp > 126u
+            intPart = (mantissa) >> decimalBits;
+        _print(intPart);
+        _print('.');
 
-    if exp < 128
-        acc = acc >> (127 - exp);
-    else
-        acc = acc << ((exp+1) & 0x7F);
+        decimals: char[24];
 
-    arr: char[30];
-    index = 30;
-    rounds = precision
-    while acc != 0 || rounds > 0 {
-        rounds--;
-        digit = 0;
-        if acc != 0 {
+        acc: u64 = 0;
+        mul: u64 = 1;
+        // _print(decimalBits); _print('\n')
+        precision = 19; // digits u64 can contain (18446744073709551615)
+        minBits = decimalBits - precision;
+        if minBits < 0
+            minBits = 0;
+        for @rev minBits..decimalBits {
+            mul *= 5;
+            acc = acc*10
+            // log("nr", nr)
+            if nr < 24 {
+                bit = 1 & (mantissa >> nr)
+                if bit {
+                    acc += mul;
+                }
+                // _print(acc); _print('\n')
+            }
+        }
+        // _print(acc);
+        if acc == 0
+            _print('0');
+        blank = true;
+        lastZero = 0
+        limit = precision;
+        if decimalBits < precision;
+            limit = decimalBits;
+        for @rev 0..limit {
             digit = acc % 10;
             acc = acc / 10;
+            if !blank || digit != 0 {
+                decimals.ptr[nr] = digit + '0';
+                if blank
+                    lastZero = nr+1
+                blank = false;
+            }
         }
-        
-        //     printi(index);
-        //     printc(' ');
-        //     printi(arr.len);
-        //     printc(' ');
-        //     printi(digit);
-        //     printc('\n');
-        if(index == arr.len && digit == 0) {
-            precision--;
-            continue
-        }
-        arr.ptr[--index] = '0' + digit;
-        if index == 30 - precision {
-            arr.ptr[--index] = '.';
-        }
+        decimals.len = lastZero;
+        _print(decimals)
     }
-    if arr.ptr[index] == '.'
-        arr.ptr[--index] = '0';
-    if sign 
-        arr.ptr[--index] = '-';
-    // _print(index)
-    // _print(' ')
-    // _print(arr.len)
-    arr.ptr += index;
-    arr.len -= index;
-    if !arr.len
-        prints("0.0")
-    else
-        prints(arr)
 
-    // fn printBits(bits: u64) {
-    //     for @reverse 0..32 {
-    //         if bits & (cast<u64>1 << nr) {
-    //             print('1')
-    //         } else 
-    //             print('0')
-    //     }
-    //     print('\n')
-    // }
+    fn printBits(bits: u64) {
+        for @reverse 0..64 {
+            if bits & (cast<u64>1 << nr) {
+                print('1')
+            } else 
+                print('0')
+        }
+        print('\n')
+    }
+    fn printBits(bits: u32) {
+        for @reverse 0..32 {
+            if bits & (cast<u64>1 << nr) {
+                print('1')
+            } else 
+                print('0')
+        }
+        print('\n')
+    }
     // #endif
 }
 fn @hide _print(t: char){
@@ -151,12 +245,3 @@ fn @hide _print(t: bool){
 fn @hide _print(t: char[]){
     prints(t);
 }
-
-// macros does not travel across imports yet ):
-// Now they do haha!
-#define print(X,...) _print(X); print(...);
-#define print()
-#define println(...) print(...); _print("\n");
-
-#define log(X, ...) _print(X); _print(' '); log(...)
-#define log(X) _print(X); _print('\n')

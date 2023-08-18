@@ -53,11 +53,11 @@ namespace engone {
 			fileFlags = O_CREAT | O_RDWR;
             mode = S_IRUSR | S_IWUSR;
         }
-		if(flags&FILE_WILL_CREATE){
+		if(flags&FILE_ALWAYS_CREATE){
 			fileFlags = O_CREAT | O_TRUNC | O_RDWR;
 			mode = S_IRUSR | S_IWUSR;
 		}
-        // Assert(("Not implemented for linux",0 == (flags&FILE_WILL_CREATE)));
+        // Assert(("Not implemented for linux",0 == (flags&FILE_ALWAYS_CREATE)));
         
 		// if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){
 		// 	std::string temp;

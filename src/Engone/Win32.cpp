@@ -39,7 +39,10 @@
 #endif
 
 // Name collision
-auto Win32Sleep = Sleep;
+auto WIN_Sleep = Sleep;
+
+auto WIN_SHARE_READ = FILE_SHARE_READ;
+auto WIN_SHARE_WRITE = FILE_SHARE_WRITE;
 
 namespace engone {
     //-- Platform specific
@@ -328,26 +331,25 @@ namespace engone {
 			);
 			clockSpeed = (u64)mhz * (u64)1000000;
 		}
-		return frequency;
+		return clockSpeed;
 	}
 	void Sleep(double seconds){
-        Win32Sleep((uint32)(seconds*1000));   
+        WIN_Sleep((uint32)(seconds*1000));   
     }
     APIFile FileOpen(const char* path, u32 len, uint64* outFileSize, uint32 flags){
 		return FileOpen(std::string(path,len), outFileSize, flags);
 	}
     APIFile FileOpen(const std::string& path, uint64* outFileSize, uint32 flags){
         DWORD access = GENERIC_READ|GENERIC_WRITE;
-        // DWORD sharing = 0;
-        DWORD sharing = FILE_SHARE_READ|FILE_SHARE_WRITE;
+        DWORD sharing = WIN_SHARE_READ|WIN_SHARE_WRITE;
         if(flags&FILE_ONLY_READ){
             access = GENERIC_READ;
-            sharing = FILE_SHARE_READ;
 		}
+		
 		DWORD creation = OPEN_EXISTING;
-		if(flags&FILE_CAN_CREATE)
-			creation = OPEN_ALWAYS;
-		if(flags&FILE_WILL_CREATE)
+		// if(flags&FILE_CAN_CREATE)
+		// 	creation = OPEN_ALWAYS;
+		if(flags&FILE_ALWAYS_CREATE)
 			creation = CREATE_ALWAYS;
 		
 		if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){
@@ -377,12 +379,14 @@ namespace engone {
 		sa.nLength = sizeof(sa);
 		sa.bInheritHandle = true;
         
-		HANDLE handle = CreateFileA(path.c_str(),access,sharing,NULL,creation,FILE_ATTRIBUTE_NORMAL, NULL);
+		HANDLE handle = CreateFileA(path.c_str(),access,sharing,&sa,creation,FILE_ATTRIBUTE_NORMAL, NULL);
 		
 		if(handle==INVALID_HANDLE_VALUE){
 			DWORD err = GetLastError();
 			if(err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND){
-				PL_PRINTF("[WinError %lu] Cannot find '%s'\n",err,path.c_str());
+				// this can happen, it's not really an error, no need to print.
+				// denied access to some more fundamental error is important however.
+				// PL_PRINTF("[WinError %lu] Cannot find '%s'\n",err,path.c_str());
 			}else if(err == ERROR_ACCESS_DENIED){
 				PL_PRINTF("[WinError %lu] Denied access to '%s'\n",err,path.c_str()); // tried to open a directory?
 			}else {
@@ -439,6 +443,37 @@ namespace engone {
 		PL_PRINTF("[WinError %lu] FileSetHead '%llu'\n",err,file.internal);
 		return false;
 	}
+	u64 FileGetSize(APIFile file){
+		u64 size = 0;
+		bool yes = GetFileSizeEx(TO_HANDLE(file.internal),(LARGE_INTEGER*)&size);
+		if(!yes) {
+			DWORD err = GetLastError();
+			PL_PRINTF("[WinError %lu] GetFileSizeEx '%llu'\n",err,file.internal);
+		}
+		return size;
+	}
+	bool FileFlushBuffers(APIFile file){
+		bool yes = FlushFileBuffers(TO_HANDLE(file.internal));
+		if(!yes) {
+			DWORD err = GetLastError();
+			if (err == ERROR_INVALID_HANDLE) {
+				// you might have use stdout/stdin/stderr
+			} else {
+				PL_PRINTF("[WinError %lu] FlushFileBuffers '%llu'\n",err,file.internal);
+			}
+		}
+		return yes;
+	}
+	u64 FileGetHead(APIFile file) {
+		u64 head = 0;
+		DWORD success = SetFilePointerEx(TO_HANDLE(file.internal),{0},(LARGE_INTEGER*)&head,FILE_CURRENT);
+		if(success)
+			return head;
+		
+		DWORD err = GetLastError();
+		PL_PRINTF("[WinError %lu] SetFilePointerEx '%llu'\n",err,file.internal);
+		return false;
+	}
 	void FileClose(APIFile file){
 		if(file)
 			CloseHandle(TO_HANDLE(file.internal));
@@ -479,7 +514,9 @@ namespace engone {
 		if(handle==INVALID_HANDLE_VALUE){
 			DWORD err = GetLastError();
 			if(err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND){
-				PL_PRINTF("[WinError %lu] Cannot find '%s'\n",err,path.c_str());
+				// this can happen, it's not really an error, no need to print.
+				// denied access to some more fundamental error is important however.
+				// PL_PRINTF("[WinError %lu] Cannot find '%s'\n",err,path.c_str());
 			}else if(err == ERROR_ACCESS_DENIED){
 				PL_PRINTF("[WinError %lu] Denied access to '%s'\n",err,path.c_str()); // tried to open a directory?
 			}else {
@@ -1200,7 +1237,7 @@ namespace engone {
 		SECURITY_ATTRIBUTES saAttr; 
 		saAttr.nLength = sizeof(SECURITY_ATTRIBUTES); 
 		saAttr.bInheritHandle = inheritRead||inheritWrite;
-		saAttr.lpSecurityDescriptor = NULL; 
+		saAttr.lpSecurityDescriptor = NULL;
 		
 		DWORD err = CreatePipe(&info.readH,&info.writeH,&saAttr,pipeBuffer);
 		if(!err){
@@ -1290,12 +1327,72 @@ namespace engone {
 	APIFile GetStandardIn(){
 		return {TO_INTERNAL(GetStdHandle(STD_INPUT_HANDLE))};
 	}
-	bool StartProgram(const std::string& path, char* commandLine, int flags, int* exitCode, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
+	bool ExecuteCommand(const std::string& cmd, bool asynchonous, int* exitCode){
+		if(cmd.length() == 0) return false;
+
+		auto pipe = PipeCreate(100 + cmd.length(), true, true);
+
+		// additional information
+		STARTUPINFOA si;
+		PROCESS_INFORMATION pi;
+		// set the size of the structures
+		ZeroMemory(&si, sizeof(si));
+		si.cb = sizeof(si);
+		ZeroMemory(&pi, sizeof(pi));
+        
+		bool inheritHandles=true;
+		 
+		DWORD createFlags = 0;
+
+		HANDLE prev = GetStdHandle(STD_INPUT_HANDLE);
+		SetStdHandle(STD_INPUT_HANDLE, TO_HANDLE(PipeGetRead(pipe).internal));
+			
+		PipeWrite(pipe, (void*)cmd.data(), cmd.length());
+
+		BOOL yes = CreateProcessA(NULL,   // the path
+			(char*)cmd.data(),        // Command line
+			NULL,           // Process handle not inheritable
+			NULL,           // Thread handle not inheritable
+			inheritHandles,          // Set handle inheritance
+			createFlags,              // creation flags
+			NULL,           // Use parent's environment block
+			NULL,   // starting directory 
+			&si,            // Pointer to STARTUPINFO structure
+			&pi             // Pointer to PROCESS_INFORMATION structure (removed extra parentheses)
+			);
+		
+		SetStdHandle(STD_INPUT_HANDLE, prev);
+
+		if(!asynchonous){
+			WaitForSingleObject(pi.hProcess,INFINITE);
+			if(exitCode){
+				BOOL success = GetExitCodeProcess(pi.hProcess, (DWORD*)exitCode);
+				if(!success){
+					DWORD err = GetLastError();
+					printf("[WinError %lu] ExecuteCommand, failed aquring exit code (path: %s)\n",err,cmd.c_str());	
+				}else{
+					if(success==STILL_ACTIVE){
+						printf("[WinWarning] ExecuteCommand, cannot get exit code, process is active (path: %s)\n",cmd.c_str());	
+					}else{
+						
+					}
+				}
+			}
+		}
+
+		PipeDestroy(pipe);
+		
+		CloseHandle(pi.hProcess);
+		CloseHandle(pi.hThread);
+
+		return true;
+	}
+	bool StartProgram(char* commandLine, u32 flags, int* exitCode, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
 		// if (!FileExist(path)) {
 		// 	return false;
 		// }
 		
-		if(path.empty() && !commandLine){
+		if(!commandLine || strlen(commandLine) == 0){
 			return false;
 		}
         
@@ -1326,30 +1423,27 @@ namespace engone {
 		bool inheritHandles=true;
 		if(fStdin||fStdout||fStderr){
 			si.dwFlags |= STARTF_USESTDHANDLES;
-			// inheritHandles = true;
+			inheritHandles = true;
 		}
 		// inheritHandles = false;
 		 
-		int slashIndex = path.find_last_of("\\");
+		// int slashIndex = path.find_last_of("\\");
     
-		std::string workingDir{};
+		// std::string workingDir{};
 		const char* dir = NULL;
-		if(slashIndex!=-1)
-			workingDir = path.substr(0, slashIndex);
+		// if(slashIndex!=-1)
+		// 	workingDir = path.substr(0, slashIndex);
 		// else
 		// 	workingDir = GetWorkingDirectory();
         
-		if(!workingDir.empty())
-			dir = workingDir.c_str();
+		// if(!workingDir.empty())
+		// 	dir = workingDir.c_str();
 			
 		DWORD createFlags = 0;
 		if(flags&PROGRAM_NEW_CONSOLE)
 			createFlags |= CREATE_NEW_CONSOLE;
 			
-		char* exepath = 0;
-		if(!path.empty())
-			exepath = (char*)path.data();
-		BOOL yes = CreateProcessA(exepath,   // the path
+		BOOL yes = CreateProcessA(NULL,   // the path
                        commandLine,        // Command line
                        NULL,           // Process handle not inheritable
                        NULL,           // Thread handle not inheritable
@@ -1363,15 +1457,9 @@ namespace engone {
         if(!yes){
 			DWORD err = GetLastError();
 			if(err == ERROR_BAD_EXE_FORMAT){
-				if(path.empty())
-					printf("[WinError %lu] StartProgram, bad_exe_format %s\n",err,commandLine);
-				else
-					printf("[WinError %lu] StartProgram, bad_exe_format %s\n",err,path.c_str());
+				printf("[WinError %lu] StartProgram, bad_exe_format %s\n",err,commandLine);
 			}else{
-				if(path.empty())
-					printf("[WinError %lu] StartProgram, could not start %s\n",err,commandLine);
-				else
-					printf("[WinError %lu] StartProgram, could not start %s\n",err,path.c_str());
+				printf("[WinError %lu] StartProgram, could not start %s\n",err,commandLine);
 				// TODO: does the handles need to be closed? probably not since CreateProcess failed. double check.	
 			}
 			return false;
@@ -1382,10 +1470,10 @@ namespace engone {
 				BOOL success = GetExitCodeProcess(pi.hProcess, (DWORD*)exitCode);
 				if(!success){
 					DWORD err = GetLastError();
-					printf("[WinError %lu] StartProgram, failed aquring exit code (path: %s)\n",err,path.c_str());	
+					printf("[WinError %lu] StartProgram, failed acquring exit code (path: %s)\n",err,commandLine);	
 				}else{
 					if(success==STILL_ACTIVE){
-						printf("[WinWarning] StartProgram, cannot get exit code, process is active (path: %s)\n",path.c_str());	
+						printf("[WinWarning] StartProgram, cannot get exit code, process is active (path: %s)\n",commandLine);	
 					}else{
 						
 					}
@@ -1398,16 +1486,6 @@ namespace engone {
 		CloseHandle(pi.hProcess);
 		CloseHandle(pi.hThread);
 		
-		// if(fStdin){
-		// 	auto& info = pipes[fStdin];
-		// 	CloseHandle(info.readH);
-		// 	info.readH = 0;
-		// }
-		// if(fStdout){
-		// 	auto& info = pipes[fStdout];
-		// 	CloseHandle(info.writeH);
-		// 	info.writeH=0;
-		// }
 		return true;
 	}
 	FileMonitor::~FileMonitor() { cleanup(); }

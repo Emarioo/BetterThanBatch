@@ -80,9 +80,10 @@ bool StartsWith(const Token& token, const char* str){
 }
 bool IsHexadecimal(const Token& token){
     if(token.flags & TOKEN_MASK_QUOTED) return false;
-    if(!token.str||token.length<3 || token.length> 2 + 8) return 0; // 2+8 means 0x + 4 bytes
+    if(!token.str||token.length<3) return false;
     if(token.str[0] != '0') return false;
     if(token.str[1] != 'x') return false;
+    // Assert(token.length <= 2 + 8); // restrict to 32 bit hexidecimals. 64-bit not handled properly
     for(int i=2;i<token.length;i++){
         char chr = token.str[i];
         char al = chr&(~32);
@@ -659,7 +660,7 @@ void TokenStream::printTokens(int tokensPerLine, bool showlncol){
 }
 void TokenStream::writeToFile(const std::string& path){
     using namespace engone;
-    auto file = FileOpen(path, nullptr, FILE_WILL_CREATE);
+    auto file = FileOpen(path, nullptr, FILE_ALWAYS_CREATE);
     Assert(file);
     #define WRITE(X, L) FileWrite(file, X, L);
     for(int j=0;j<(int)tokens.used;j++){
@@ -770,14 +771,28 @@ void TokenStream::Destroy(TokenStream* stream){
     // engone::Free(stream,sizeof(TokenStream));
     TRACK_FREE(stream,TokenStream);
 }
+bool specialsTable[256]{0};
+bool initializedSpecialsTable = false;
+void InitSpecialsTable() {
+    initializedSpecialsTable = true;
+    for(int i=0;i<256;i++) {
+        char chr = i;
+        char tmp = chr & ~32;
+        specialsTable[i] = (tmp<'A'||tmp>'Z')
+            && (chr<'0'||chr>'9')
+            && (chr!='_');
+    }
+}
 TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optionalIn){
     using namespace engone;
     MEASURE
+    // PROFILE_SCOPE
     // _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
     // TODO: handle errors like outStream->add returning false
     // if(optionalIn){
     //     log::out << log::RED << "tokenize optional in not implemented\n";   
     // }
+    if(!initializedSpecialsTable) InitSpecialsTable();
     // char* text = (char*)textData.data;
     // int length = textData.used;
     TokenStream* outStream = nullptr;
@@ -824,9 +839,11 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
     bool isSingleQuotes = false;
     bool inComment = false;
     bool inEnclosedComment = false;
+    
     bool isNumber = false;
     bool isAlpha = false; // alpha and then alphanumeric
 
+    bool inHexidecimal = false;
     // int commentNestDepth = 0; // C doesn't have this and it's not very good. /*/**/*/
     
     bool canBeDot = false; // used to deal with decimals (eg. 255.92) as one token
@@ -1047,12 +1064,21 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
             // quicker but do we identify a character as special when it shouldn't?
             // the if above checks ensures that we only do this if we char isn't
             // quote, comment or delim but are there other cases?
-            isSpecial = !(
-                   (chr>='a'&&chr<='z')
-                || (chr>='A'&&chr<='Z')
-                || (chr>='0'&&chr<='9')
-                || (chr=='_')
-            );
+
+            isSpecial = specialsTable[chr];
+            // is a table faster than below?
+            // test with optimized build
+            // char tmp = chr & ~32;
+            // isSpecial = (tmp<'A'||tmp>'Z')
+            //     && (chr<'0'||chr>'9')
+            //     && (chr!='_');
+
+            // isSpecial = !(
+            //        (chr>='a'&&chr<='z')
+            //     || (chr>='A'&&chr<='Z')
+            //     || (chr>='0'&&chr<='9')
+            //     || (chr=='_')
+            // );
             
             // faster than for loop slower than a-z, 0-9
             // isSpecial = false
@@ -1106,6 +1132,9 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                 if(chr>='0'&&chr<='9') {
                     canBeDot=true;
                     isNumber=true;
+                    if(chr == '0' && nextChr == 'x') {
+                        inHexidecimal = true;
+                    }
                 } else {
                     canBeDot = false;
                     isAlpha = true;
@@ -1113,13 +1142,20 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
             }
             if(!(chr>='0'&&chr<='9') && chr!='.') // TODO: how does it work with hexidecimals?
                 canBeDot=false;
-            if(!(isNumber && chr=='_')) {
-                outStream->addData(chr);
+            if(!isNumber || chr!='_') {
+                outStream->addData(chr);    
                 token.length++;
             }
         }
         
-        if(token.length!=0 && (isDelim || isQuotes || isComment || isSpecial || index==length)){
+        bool nextLiteralSuffix = false;
+        {
+            char tmp = nextChr & ~32;
+            if(isNumber && !inHexidecimal) {
+                nextLiteralSuffix = !inHexidecimal && isNumber && ((tmp>='A'&&tmp<='Z') || nextChr == '_');
+            }
+        }
+        if(token.length!=0 && (isDelim || isQuotes || isComment || isSpecial || nextLiteralSuffix || index==length)){
             token.flags = 0;
             // TODO: is checking line feed necessary? line feed flag of last token is set further up.
             if(chr=='\n')
@@ -1134,6 +1170,8 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
             
             canBeDot=false;
             isNumber=false;
+            isAlpha=false;
+            inHexidecimal = false;
             
             outStream->addToken(token);
             token = {};

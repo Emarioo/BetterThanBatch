@@ -2,27 +2,41 @@
 #include "BetBat/Tokenizer.h"
 
 
-void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode) {
+void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode, TokenStream** prevStream) {
     // , const StringBuilder& stringBuilder) {
     using namespace engone;
     log::out << color;
     log::out << TrimDir(tokenRange.tokenStream()->streamName)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
     log::out << " ("<<errorCode<<")";
     log::out << ": " <<  MESSAGE_COLOR;
+    Assert(prevStream);
+    if(prevStream)
+        *prevStream = tokenRange.tokenStream();
     //  << stringBuilder;
 }
-void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode) {
-    // , const StringBuilder& stringBuilder) {
-    PrintHead(color, token.operator TokenRange(), errorCode);
-    // , stringBuilder);
+void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode, TokenStream** prevStream) {
+    PrintHead(color, token.operator TokenRange(), errorCode, prevStream);
 }
-
-void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder){
+void PrintCode(const Token& token, const StringBuilder& stringBuilder, TokenStream** prevStream){
+     PrintCode(token.operator TokenRange(), stringBuilder, prevStream);
+}
+void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream){
     using namespace engone;
     if(!tokenRange.tokenStream())
         return;
     int start = tokenRange.startIndex();
     int end = tokenRange.endIndex;
+    // If you call PrintCode multiple times in an error message and the file is the same
+    // then we don't need to print this.
+    // If the lines we print come from different files then we do need to print this because
+    // otherwise we will assume the line we print comes from the location the head of error message
+    // displayed.
+    Assert(prevStream);
+    if(!prevStream || tokenRange.tokenStream() != *prevStream) {
+        log::out << log::GRAY << "-- "<<TrimDir(tokenRange.tokenStream()->streamName) <<":"<<tokenRange.firstToken.line << " --\n";
+        *prevStream = tokenRange.tokenStream();
+    }
+
     // log::out <<"We " <<start << " "<<end<<"\n";
     while(start>0){
         Token& prev = tokenRange.tokenStream()->get(start-1);
@@ -131,9 +145,6 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder)
             log::out << " " << stringBuilder;
     }
     log::out << "\n";
-}
-void PrintCode(const Token& token, const StringBuilder& stringBuilder){
-     PrintCode(token.operator TokenRange(), stringBuilder);
 }
 
 void PrintCode(const TokenRange& tokenRange, const char* message){

@@ -21,7 +21,9 @@ struct GenInfo {
     DynamicArray<AlignInfo> stackAlignment;
     int virtualStackPointer=0;
     void addPop(int reg);
-    void addPush(int reg);
+    // DON'T USE withoutInstruction UNLESS YOU ARE 100% CERTAIN ABOUT WHAT YOU ARE DOING.
+    // It's mainly used for cast with ast_asm.
+    void addPush(int reg, bool withoutInstruction = false);
     void addIncrSp(i16 offset);
     void addAlign(int alignment);
     // Negative value to make some space for values
@@ -40,9 +42,14 @@ struct GenInfo {
     u32 lastLocationIndex = (u32)-1;
     void pushNode(ASTNode* node);
     void popNode();
-    void addInstruction(Instruction inst, bool bypassAsserts = false);
+    // returns false if a modified or different instruction was added
+    bool addInstruction(Instruction inst, bool bypassAsserts = false);
     void addLoadIm(u8 reg, i32 value);
+    void addLoadIm2(u8 reg, i64 value);
+    // different from load immediate
+    void addImm(i32 value);
     void addCall(LinkConventions linkConvention, CallConventions callConvention);
+    QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
     ASTFunction* currentFunction=nullptr;
     FuncImpl* currentFuncImpl=nullptr;

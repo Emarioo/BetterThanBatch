@@ -50,7 +50,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control",
-				"match": "\\b(if|else|while|for|break|continue|fn|return|defer|each|cast|test|using|as)\\b"
+				"match": "\\b(if|else|while|for|break|continue|global|fn|return|asm|defer|each|operator|cast|test|using|as)\\b"
 			},{
 				"name": "entity.name.class",
 				"match": "\\b(struct)\\b"
@@ -85,7 +85,7 @@
 		"types":{
 			"patterns": [{
 				"name":"entity.name.type",
-				"match": "(?<=\\w+\\s*:\\s*)(?<base>(\\w+::)*(\\w+)(\\<(\\g'base')(,\\g'base')*\\>)?)"
+				"match": "((?<=\\w+\\s*:\\s*)|(?<=-\\>\\s*))(?<base>(\\w+::)*(\\w+)(\\<(\\g'base')(,\\g'base')*\\>)?)"
 			}]
 		},
 		"strings": {
@@ -121,7 +121,7 @@
 			"patterns": [
 				{
 					"name": "constant.numeric",
-					"match": "(\\b\\d+(\\.)\\d+\\b)|(\\b\\d+\\b)|(false)|(true)"
+					"match": "(\\b\\d+(\\.)\\d+\\b)|(\\b\\d+\\b)|(false)|(true)|(null)"
 				}
 			]
 		}

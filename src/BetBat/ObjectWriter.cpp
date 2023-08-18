@@ -576,7 +576,7 @@ void ObjectFile::writeFile(const std::string& path) {
     // header->PointerToSymbolTable = fileOffset;
     fileOffset += stringTableSize;
 
-    auto file = FileOpen(path,nullptr,FILE_WILL_CREATE);
+    auto file = FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
     if(!file) {
         log::out << "failed creating\n";
         return;
@@ -722,10 +722,11 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
     if (dataSection){
         dataSection->SizeOfRawData = program->globalSize;
         dataSection->PointerToRawData = outOffset;
-        if(program->size() !=0){
+        if(dataSection->SizeOfRawData !=0){
             Assert(program->globalData);
             memcpy(outData + outOffset, program->globalData, dataSection->SizeOfRawData);
             outOffset += dataSection->SizeOfRawData;
+            // log::out << "Global data: "<<program->globalSize<<"\n";
         }
     }
 
@@ -796,7 +797,7 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
     }
 
     Assert(outOffset <= outSize); // bad estimation when allocation at beginning of function
-    auto file = FileOpen(path, 0, FILE_WILL_CREATE);
+    auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
     Assert(file);
     FileWrite(file,outData,outOffset);
     FileClose(file);

@@ -14,7 +14,13 @@ struct CheckInfo {
     };
     QuickArray<CheckImpl> checkImpls{};
 
-    int funcDepth=0;
+    int funcDepth=0; // FUNC_ENTER
+    
+    bool hasErrors();
+    bool hasForeignErrors();
+
+    FuncImpl* currentFuncImpl = nullptr;
+    ASTFunction* currentAstFunc = nullptr;
     
     // struct step    
     bool completedStructs = false;

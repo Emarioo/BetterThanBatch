@@ -109,7 +109,7 @@ void UserProfile::cleanup(){
 bool UserProfile::serialize(const std::string& path){
     using namespace engone;
 
-    auto file = FileOpen(path, nullptr, FILE_WILL_CREATE);
+    auto file = FileOpen(path, nullptr, FILE_ALWAYS_CREATE);
     if(!file) return false;
 
     // TODO: Use a buffer and sprintf and decrease the amount of calls to FileWrite

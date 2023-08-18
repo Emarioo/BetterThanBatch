@@ -97,7 +97,7 @@ namespace COFF_Format {
         char Name[8]; // null terminated unless name is exactly 8 bytes. Read MSDOCS on how to use longer names.
         u32 VirtualSize=0; // 0 for object files
         u32 VirtualAddress=0; // should be 0 for simplicity, it offsets relocations but isn't necessary.
-        u32 SizeOfRawData=0; // size of section
+        u32 SizeOfRawData=0; // size of section data
         u32 PointerToRawData=0; // 4-byte aligned for best performance
         u32 PointerToRelocations=0;
         u32 PointerToLineNumbers=0;
@@ -216,9 +216,9 @@ struct ObjectFile {
     COFF_Format::COFF_File_Header* header = nullptr;
 
     std::string getSectionName(int sectionIndex);
-    DynamicArray<COFF_Format::Section_Header*> sections{};
+    QuickArray<COFF_Format::Section_Header*> sections{};
 
-    DynamicArray<COFF_Format::Symbol_Record*> symbols{};
+    QuickArray<COFF_Format::Symbol_Record*> symbols{};
 
     u32 stringTableSize = 0;
     char* stringTableData = nullptr;

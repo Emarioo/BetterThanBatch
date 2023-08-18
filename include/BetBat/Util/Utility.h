@@ -38,6 +38,8 @@ std::string TrimLastFile(const std::string& path);
 std::string TrimDir(const std::string& path);
 std::string BriefPath(const std::string& path, int max=40);
 
+void OutputAsHex(const char* path, char* data, int size);
+
 // bool BeginsWith(const std::string& string, const std::string& has);
 
 #define FUNC_ENTER ScopeDebug scopeDebug{__FUNCTION__,info.funcDepth};

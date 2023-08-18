@@ -1,5 +1,5 @@
 /*
-    Quick bland showcase of rendering
+    Quick showcase of rendering
     
     Resources:
         https://learnopengl.com
@@ -10,14 +10,7 @@
 #import "Logger"
 #import "OS"
 
-fn @import Sleep(ms: i32); // windows sleep, remove this later
-
-#define GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",#line,glErrCode,":",glewGetErrorString(glErrCode)); }
-#ifndef GLCHECK
-#define GLCHECK
-#endif
-
-main(); 1
+main();
 
 fn main(){
     yes = glfwInit();

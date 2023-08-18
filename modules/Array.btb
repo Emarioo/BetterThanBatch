@@ -12,13 +12,13 @@ struct DynamicArray<T> {
     max: u32; // allocated bytes
     len: u32; // elements in allocation
 
-    fn cleanup() { this._reserve(0); }
+    fn cleanup() { _reserve(0); }
 
     // returns index where element was inserted
     // fn add(newElement: T) -> u32 {
     fn add(newElement: T) -> T* {
         if(len + 1 > max){
-            re = this._reserve(7 + max * 2);
+            re = _reserve(7 + max * 2);
             // log("re",re);
             if(!re){
                 // return -1;
@@ -48,7 +48,7 @@ struct DynamicArray<T> {
     }
     fn resize(newLen: u32) -> bool {
         if newLen > max {
-            if !this._reserve(newLen)
+            if !_reserve(newLen)
                 return false;
         }
         len = newLen;

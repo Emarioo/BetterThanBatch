@@ -438,6 +438,8 @@ u32 ProcessSource(void* ptr) {
     using namespace engone;
     // MEASURE_THREAD()
     // MEASURE_SCOPE
+    PROFILE_THREAD
+    PROFILE_SCOPE
 
     ThreadCompileInfo* thread = (ThreadCompileInfo*)ptr;
     // get file from a list to tokenize, wait with semaphore if list is empty.
@@ -445,6 +447,10 @@ u32 ProcessSource(void* ptr) {
     DynamicArray<Path> tempPaths;
     
     // TODO: Optimize the code here. There is a lot slow locks. Is it possible to use atomic instructions instead?
+
+    // TODO: There is a very rare bug here where a thread locks a mutex twice.
+    //   There may be a bug in the mutex struct or here. Not sure.
+    //   Luckily it's rare and the system will probably change so fixing it isn't necessary.
 
     info->sourceLock.lock();
     info->availableThreads++;
@@ -774,6 +780,9 @@ Bytecode* CompileSource(CompileOptions* options) {
         "ptr: T*;"
         "len: u64;"
     "}\n"
+    // "operator [](slice: Slice<char>, index: u32) -> char {"
+    //     "return slice.ptr[index];"
+    // "}\n"
     // "struct Range {" 
     "struct @hide Range {" 
         "beg: i32;"
@@ -1028,7 +1037,7 @@ void CompileAndRun(CompileOptions* options) {
                 hoho += arg;
             }
             int errorCode = 0;
-            engone::StartProgram("",(char*)hoho.data(),PROGRAM_WAIT,&errorCode);
+            engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
             log::out << "Error level: "<<errorCode<<"\n";
         }
     }
@@ -1077,17 +1086,15 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 auto format = options->outputFile.getFormat();
                 bool outputIsObject = format == "o" || format == "obj";
 
-                #ifdef DUMP_ASM
-                // program->printHex("bin/temphex.txt");
-                program->printAsm("bin/temp.asm");
-                #endif
+                std::string objPath = "";
                 if(outputIsObject){
                     options->compileStats.start_objectfile = StartMeasure();
                     WriteObjectFile(outPath.text,program);
                     options->compileStats.end_objectfile = StartMeasure();
+                    objPath = outPath.text;
                     // log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
                 } else {
-                    std::string objPath = "bin/" + outPath.getFileName(true).text + ".obj";
+                    objPath = "bin/" + outPath.getFileName(true).text + ".obj";
                     options->compileStats.start_objectfile = StartMeasure();
                     WriteObjectFile(objPath,program);
                     options->compileStats.end_objectfile = StartMeasure();
@@ -1107,9 +1114,32 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                     
                     options->compileStats.start_linker = StartMeasure();
                     int exitCode = 0;
-                    engone::StartProgram("",(char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                    engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
                     options->compileStats.end_linker = StartMeasure();
                     
+                    if(exitCode == 0) { // 0 means success
+                        for(int i=0;i<bytecode->debugDumps.size();i++) {
+                            auto& dump = bytecode->debugDumps[i];
+                            if(dump.description.empty()) {
+                                log::out << "Dump: "<<log::GOLD<<"unnamed\n";
+                            } else {
+                                log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
+                            }
+                            if(dump.dumpBytecode) {
+                                for(int j=dump.startIndex;j<dump.endIndex;j++){
+                                    log::out << " ";
+                                    bytecode->printInstruction(j, true);
+                                    u8 immCount = bytecode->immediatesOfInstruction(j);
+                                    j += immCount;
+                                }
+                            }
+                            if(dump.dumpAsm) {
+                                Assert(false);
+                                // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM
+                            }
+                        }
+                    }
+
                     if(!options->silent)
                         log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
 
@@ -1117,6 +1147,10 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                     // if(exitCode == 0)
                     //     log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an executable: "<<outPath.text<<".\n";
                 }
+                #ifdef DUMP_ALL_ASM
+                // program->printHex("bin/temphex.txt");
+                program->printAsm("bin/temp.asm", objPath.data());
+                #endif
                 Program_x64::Destroy(program); 
                 return true;
             } else {
@@ -1144,7 +1178,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 // bool ExportBytecode(CompileOptions* options, Bytecode* bytecode){
 //     using namespace engone;
 //     Assert(bytecode);
-//     auto file = FileOpen(options->outputFile.text, 0, engone::FILE_WILL_CREATE);
+//     auto file = FileOpen(options->outputFile.text, 0, engone::FILE_ALWAYS_CREATE);
 //     if(!file)
 //         return false;
 //     BTBCHeader header{};

@@ -1,7 +1,10 @@
 #import "OS"
+#import "Logger"
+
+#define LN printc('L'); printc('N'); _print(#line); _print('\n')
 
 // heap allocated for now
-struct String {
+struct StringBuilder {
     // I was gonna say, the order ptr, len, max
     // allows you to cast String to char[] but that's wrong
     // because len in slice is 8 bytes while being 4 bytes here.
@@ -10,16 +13,28 @@ struct String {
     max: u32; // does not include \0
 
     fn cleanup() {
-        this._reserve(0)
+        _reserve(0)
     }
 
     fn sliced() -> Slice<char> {
         return Slice<char>{ptr, len};
     }
-
+    fn clear() { len = 0; }
+    fn append(value: i64) {
+        if len + 20 > max {
+            _reserve(len + 20);
+        }
+        len += swrite_unsafe(ptr + len, value);
+    }
+    fn append(value: f32) {
+        if len + 25 > max {
+            _reserve(len + 25);
+        }
+        len += swrite_unsafe(ptr + len, value);
+    }
     fn append(str: char[]) {
         if len + str.len > max {
-            if !this._reserve(str.len + max * 2) {
+            if !_reserve(str.len + max * 2) {
                 return;
             }
         }
@@ -27,7 +42,7 @@ struct String {
         len += str.len;
         ptr[len] = '\0';
     }
-
+    
     // TODO: Some useful functions
     fn _reserve(newMax: u32) -> bool {
         // log("newMax",newMax)
@@ -45,6 +60,7 @@ struct String {
         if(!ptr){
             // log("huh")
             ptr = Allocate(newMax + 1);
+            *ptr = '\0';
             // log("allocSize",newMax * sizeof T)
             // log("ptr",ptr)
             // Assert(ptr);
@@ -83,3 +99,230 @@ struct String {
 // str.append(a0)
 
 // log(str.sliced())
+
+// #import "OS"
+
+fn @intrinsic strlen(str: char*) -> u32;
+
+// Returns the amount of written bytes
+// Will put a null termination at the end of the written bytes
+fn @hide swrite_unsafe(buffer: char*, slice: char[]) -> u32 {
+    memcpy(buffer, slice.ptr, slice.len);
+    buffer[slice.len] = '\0';
+    return slice.len;
+}
+// Returns the amount of written bytes
+// Will put a null termination at the end of the written bytes
+fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> u32 {
+    len = strlen(cstr);
+    memcpy(buffer, cstr, len);
+    buffer[len] = '\0';
+    return len;
+}
+// Returns the amount of written bytes
+// Will put a null termination at the end of the written bytes
+fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
+    start = buffer;
+    if value == 0 {
+        buffer[0] = '0';
+        buffer[1] = '\0';
+        return 1;
+    }
+    if value < 0 {
+        value = -value;
+        *buffer = '-';
+        buffer++;
+    }
+    str: char[21];
+    used = 20;
+    while value > 0 && used > 0 {
+        num = value % 10;
+        value = value / 10;
+        str.ptr[used] = num + '0';
+        used--;
+    }
+    str.ptr += used + 1;
+    str.len -= used + 1;
+
+    memcpy(buffer, str.ptr, str.len);
+    buffer += str.len;
+    *buffer = '\0'; // not include in written bytes
+
+    return cast<u64>(buffer - start);
+}
+// Returns the amount of written bytes
+// Will put a null termination at the end of the written bytes
+fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
+    start = buffer;
+    bits: u32 = *cast<u32*>cast<void*>&t;
+
+    sign = (bits >> 31) & 1;
+    exp = (bits >> 23) & 0xFF
+    mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
+
+    if sign {
+        *buffer = '-';
+        buffer++;
+    }
+
+    // log("Bro")
+
+    intPart: u64 = 0;
+    decimalBits: i32 = 23 - (exp-127);
+    if decimalBits < 1 {
+        intPart = (mantissa) << (0-decimalBits);
+
+        log("pl");
+        if intPart == 0 {
+            *buffer = '0';
+            buffer++;
+        } else {
+            // we don't use swrite_unsafe because it uses
+            // i64 but we need u64 for the extra large integers.
+            str: char[23];
+            used = 22;
+            while intPart > 0u && used > 0 {
+                digit: u8 = intPart % 10;
+                // log("i",intPart);
+                // log("d",digit);
+                str.ptr[used] = digit + '0';
+                used--;
+                intPart = intPart / 10;
+            }
+            str.ptr += used + 1;
+            str.len -= used + 1;
+            // prints(str);
+            
+            memcpy(buffer, str.ptr, str.len);
+            buffer += str.len;
+            log("o");
+        }
+
+        // buffer += swrite_unsafe(buffer, intPart);
+        *buffer = '.';
+        buffer++;
+        *buffer = '0';
+        buffer++;
+    } else {
+        // log("ya");
+
+        LN
+        if exp > 126u
+            intPart = (mantissa) >> decimalBits;
+        LN
+        log(intPart)
+        buffer += swrite_unsafe(buffer, intPart);
+        *buffer = '.';
+        buffer++;
+        LN
+        decimals: char[24];
+
+        acc: u64 = 0;
+        mul: u64 = 1;
+        precision = 19; // digits u64 can contain (18446744073709551615)
+        minBits = decimalBits - precision;
+        if minBits < 0
+            minBits = 0;
+        for @rev minBits..decimalBits {
+            mul *= 5;
+            acc = acc*10
+            if nr < 24 {
+                bit = 1 & (mantissa >> nr)
+                if bit {
+                    acc += mul;
+                }
+            }
+        }
+        LN
+        if acc == 0 {
+            *buffer = '0';
+            buffer++;
+        }
+        blank = true;
+        lastZero = 0;
+        limit = precision;
+        if decimalBits < precision;
+            limit = decimalBits;
+            LN
+        for @rev 0..limit {
+            digit = acc % 10;
+            acc = acc / 10;
+            if !blank || digit != 0 {
+                decimals.ptr[nr] = digit + '0';
+                if blank
+                    lastZero = nr+1
+                blank = false;
+            }
+        }
+        LN
+        decimals.len = lastZero;
+        memcpy(buffer, decimals.ptr, decimals.len);
+        buffer += decimals.len;
+        LN
+    }
+    *buffer = '\0'; // not include in written bytes
+    return cast<u64>(buffer - start);
+}
+
+
+// TODO: swrite needs to be tested, mainly with baseOffset
+// returns the amount of written bytes
+// returns 0 if buffer was to small to fit the number
+// baseOffset is optional
+// the written amount will be added onto baseOffset
+// will put a null termination at the end of the written bytes if 
+// space is available
+// fn @hide swrite(buffer: Slice<char>*, value: i64, baseOffset: u32* = null) -> u32 {
+//     // optimise by using a log10 function, unless they are slow, to know how many characters you need.
+//     offset = 0;
+//     if baseOffset
+//         offset = *baseOffset;
+//     if value == 0 {
+//         if buffer.len - offset < 1 {
+//             return 0;
+//         }
+//         buffer.ptr[offset++] = '0';
+//         if buffer.len - offset > 0 {
+//             buffer.ptr[offset] = '\0';
+//         }
+//         if baseOffset;
+//             *baseOffset = offset;
+//         return 1;
+//     }
+//     signed = false;
+//     if value < 0 {
+//         signed = true;
+//         value = -value;
+//     }
+//     str: char[21];
+//     used = 20;
+//     while value > 0 && used > 0 {
+//         num = value % 10;
+//         str.ptr[used] = num + '0';
+//         // log("a ",num, used)
+//         used--;
+        
+//         value = value / 10;
+//     }
+//     if signed {
+//         str.ptr[used] = '-';
+//         used--;
+//     }
+//     str.ptr += used + 1;
+//     str.len -= used + 1;
+//     // log(strstr.len)
+//     if str.len > buffer.len - offset {
+//         return 0;
+//     }
+//     memcpy(buffer.ptr + offset, str.ptr, str.len);
+//     offset += str.len;
+//     if 1 > buffer.len - offset {
+//         buffer.ptr[offset] = '\0';
+//     }
+
+//     if baseOffset {
+//         *baseOffset = offset;
+//     }
+//     // log(written);
+//     return str.len;
+// }

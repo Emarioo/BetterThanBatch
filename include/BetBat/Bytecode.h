@@ -36,13 +36,22 @@
 #define BC_DATAPTR 40
 #define BC_CODEPTR 41
 
-// TODO: You forgot about floating point comparisons!
 #define BC_EQ 50
 #define BC_NEQ  51
+
 #define BC_LT   52
 #define BC_LTE  53
 #define BC_GT   54
 #define BC_GTE  55
+
+// Don't rearrange these. You can use the bits to tell
+// whether the left or right type is signed/unsigned.
+#define CMP_UINT_UINT 0
+#define CMP_UINT_SINT 1
+#define CMP_SINT_UINT 2
+#define CMP_SINT_SINT 3
+#define CMP_DECODE(L,R,...) (u8)(((u8)__VA_ARGS__(ltype)<<1) | (u8)__VA_ARGS__(rtype)) 
+
 #define BC_ANDI  56
 #define BC_ORI   57
 #define BC_NOT  58
@@ -82,6 +91,10 @@
 
 #define BC_SQRT 120
 #define BC_ROUND 121
+
+#define BC_ASM 130
+#define ASM_ENCODE_INDEX(ind) (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)
+#define ASM_DECODE_INDEX(op0,op1,op2) (u32)(op0 | (op1<<8) | (op2<<16))
 
 // used when running test cases
 // The stack must be aligned to 16 bytes because
@@ -132,9 +145,15 @@ u8
 #define BC_SI 7
 #define BC_DI 8
 
+#define IS_REG_NORMAL(reg) (BC_AX <= DECODE_REG_TYPE(reg) && DECODE_REG_TYPE(reg) <= BC_DI)
+
 // These are used with calling conventions
 #define BC_R8 9
 #define BC_R9 10
+#define BC_R10 11
+#define BC_R11 12
+
+#define IS_REG_RX(reg) (BC_R8 <= DECODE_REG_TYPE(reg) && DECODE_REG_TYPE(reg) <= BC_R11)
 
 #define BC_XMM0 20
 #define BC_XMM1 21
@@ -148,11 +167,6 @@ u8
 #define BC_REG_BL (ENCODE_REG_BITS(BC_BX, BC_REG_8))
 #define BC_REG_CL (ENCODE_REG_BITS(BC_CX, BC_REG_8))
 #define BC_REG_DL (ENCODE_REG_BITS(BC_DX, BC_REG_8))
-
-// #define BC_REG_AH (ENCODE_REG_BITS(BC_REG_8)|5)
-// #define BC_REG_BH (ENCODE_REG_BITS(BC_REG_8)|6)
-// #define BC_REG_CH (ENCODE_REG_BITS(BC_REG_8)|7)
-// #define BC_REG_DH (ENCODE_REG_BITS(BC_REG_8)|8)
 
 #define BC_REG_AX (ENCODE_REG_BITS(BC_AX, BC_REG_16))
 #define BC_REG_BX (ENCODE_REG_BITS(BC_BX, BC_REG_16))
@@ -177,12 +191,13 @@ u8
 #define BC_REG_R8  (ENCODE_REG_BITS(BC_R8, BC_REG_64))
 #define BC_REG_R9  (ENCODE_REG_BITS(BC_R9, BC_REG_64))
 
-
+// float
 #define BC_REG_XMM0f (ENCODE_REG_BITS(BC_XMM0, BC_REG_32))
 #define BC_REG_XMM1f (ENCODE_REG_BITS(BC_XMM1, BC_REG_32))
 #define BC_REG_XMM2f (ENCODE_REG_BITS(BC_XMM2, BC_REG_32))
 #define BC_REG_XMM3f (ENCODE_REG_BITS(BC_XMM3, BC_REG_32))
 
+// double
 #define BC_REG_XMM0d (ENCODE_REG_BITS(BC_XMM0, BC_REG_64))
 #define BC_REG_XMM1d (ENCODE_REG_BITS(BC_XMM1, BC_REG_64))
 #define BC_REG_XMM2d (ENCODE_REG_BITS(BC_XMM2, BC_REG_64))
@@ -231,6 +246,7 @@ struct Bytecode {
     
     engone::Memory<Instruction> codeSegment{};
     engone::Memory<u8> dataSegment{};
+
     
     engone::Memory<u32> debugSegment{}; // indices to debugLocations
     struct Location {
@@ -247,6 +263,27 @@ struct Bytecode {
 
     DynamicArray<std::string> linkDirectives;
 
+    // Assembly or bytecode dump after the compilation is done.
+    struct Dump {
+        bool dumpBytecode = false;
+        bool dumpAsm = false;
+        int startIndex = 0;
+        int endIndex = 0;
+        int startIndexAsm = 0;
+        int endIndexAsm = 0;
+        std::string description;
+    };
+    DynamicArray<Dump> debugDumps;
+
+    QuickArray<char> rawInlineAssembly;
+    QuickArray<u8> rawInstructions; // modified when passed converter
+    struct ASM {
+        u32 start; // points to raw inline assembly
+        u32 end; // exclusive
+        u32 iStart=0; // points to raw instructions
+        u32 iEnd=0; // exclusive
+    };
+    QuickArray<ASM> asmInstances;
     // NativeRegistry* nativeRegistry = nullptr;
 
     struct ExternalRelocation {
@@ -281,8 +318,14 @@ struct Bytecode {
     int appendData(const void* data, int size);
     void ensureAlignmentInData(int alignment);
 
-    bool add(Instruction inst);
-    bool addIm(i32 data);
+    void printInstruction(u32 index, bool printImmediates);
+    // Returns the number of immediates an instruction uses.
+    // When getting the next instruction you should skip by the amount of 
+    // immediates.
+    u32 immediatesOfInstruction(u32 index);
+
+    bool add_notabug(Instruction inst);
+    bool addIm_notabug(i32 data);
     inline Instruction& get(uint index){
         return *((Instruction*)codeSegment.data + index);
     }

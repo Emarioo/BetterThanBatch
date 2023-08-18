@@ -103,11 +103,13 @@ void PrintMeasures(u32 filters, u32 limit){
     }
     #define SPACING(L)  for(int _j = 0; _j < (L);_j++) log::out << " ";
     i = 0;
+    float summedTime = 0;
     for(auto& stat : stats){
-        if(i >= limit)
-            break;
         double time = engone::DiffMeasure(stat.uniqueCycles);
         double ttime = engone::DiffMeasure(stat.totalCycles);
+        summedTime += time;
+        if(i >= limit)
+            break;
         // double time = stat.time;
         if((filters & MIN_MICROSECOND) && time < 1e-6)
             continue; // Cannot use break unless you sort by time.
@@ -135,7 +137,8 @@ void PrintMeasures(u32 filters, u32 limit){
 
         i++;
     }
+    
     // Total time of all measurements is useless information
-    // log::out << log::LIME << " Total : "<<FormatTime(totalTime)<<log::GRAY<<" (does not represent the compile time of the program since measurements collide)\n";
+    log::out << log::LIME << " Total : "<<FormatTime(summedTime) <<log::GRAY<<" (threads may cause unexpected timings)\n";
 }
 #endif

@@ -1,7 +1,7 @@
-
-fn @native printi(n: i64);
-fn @native prints(s: char[]);
-#define NL prints("\n");
+#import "Logger"
+// fn @native printi(n: i64);
+// fn @native prints(s: char[]);
+// #define NL prints("\n");
 
 struct vec2 {
     x: i32;
@@ -22,5 +22,8 @@ operator | (a: vec2, b: vec2) -> vec2 {
 
 f = vec2{3,7} | vec2{-4,2};
 
-printi(f.x); NL
-printi(f.y); NL
+// printi(f.x); NL
+// printi(f.y); NL
+
+// log(f.x,f.y)
+log(f.x,f.y)

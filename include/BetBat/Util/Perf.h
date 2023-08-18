@@ -91,7 +91,7 @@ struct MeasureScope;
 extern ScopeStat scopeStatArray[SCOPE_STAT_ARRAY];
 extern std::unordered_map<const char*, u32> scopeStatMap;
 extern engone::Mutex scopeStatLock;
-extern MeasureScope* parentMeasureScope;
+// extern MeasureScope* parentMeasureScope;
 extern engone::TLSIndex measureParentTLSIndex;
 
 struct MeasureScope {

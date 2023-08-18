@@ -4,15 +4,16 @@
 /*
     OpenGL related code using GLFW and GLEW
 */
-#link "gdi32.lib user32.lib OpenGL32.lib"
-// #link "libs/glew-2.1.0/lib/glew32.lib"
-#link "libs/glew-2.1.0/lib/glew32s.lib"
-#link "libs/glfw-3.3.8/lib/glfw3_mt.lib"
-// #link "libs/glfw-3.3.8/lib/glfw3.lib"
+// #link "gdi32.lib user32.lib OpenGL32.lib"
+// #link "libs/glew-2.1.0/lib/glew32s.lib"
+// #link "libs/glfw-3.3.8/lib/glfw3_mt.lib"
 // #link "/NODEFAULTLIB:MSVCRT"
 // #link "/DEFAULTLIB:LIBCMT"
 // #link "/NODEFAULTLIB:LIBCMT"
 
+/*
+    Imports
+*/
 
 #define GLFW_CONTEXT_VERSION_MAJOR  0x00022002
 #define GLFW_CONTEXT_VERSION_MINOR  0x00022003
@@ -44,6 +45,17 @@ fn @import glfwWindowHint(target: i32, hint: i32);
 #define GL_FALSE 0
 #define GL_TRUE 1
 #define GL_TRIANGLES 0x0004
+#define GL_CULL_FACE 0x0B44
+
+#define GL_BLEND 0x0BE2
+#define GL_SRC_COLOR 0x0300
+#define GL_ONE_MINUS_SRC_COLOR 0x0301
+#define GL_SRC_ALPHA 0x0302
+#define GL_ONE_MINUS_SRC_ALPHA 0x0303
+#define GL_DST_ALPHA 0x0304
+#define GL_ONE_MINUS_DST_ALPHA 0x0305
+#define GL_DST_COLOR 0x0306
+#define GL_ONE_MINUS_DST_COLOR 0x0307
 
 fn @import glClear(mask: u32);
 fn @import glewInit() -> i32;
@@ -110,6 +122,10 @@ fn @import glDrawElements(mode: u32, count: i32, type: u32, indices: void*);
 #define glGetUniformLocation(...) __glewGetUniformLocation(...)
 fn @varimport __glewGetUniformLocation(program: u32, name: char*);
 
+fn @import glEnable(cap: u32);
+fn @import glDisable(cap: u32);
+fn @import glBlendFunc(sfactor: u32, dfactor: u32);
+
 #define glUniform1i(...) __glewUniform1i(...)
 #define glUniform2i(...) __glewUniform2i(...)
 #define glUniform3i(...) __glewUniform3i(...)
@@ -131,3 +147,156 @@ fn @varimport __glewUniform4f(location: i32, v0: f32, v1: f32, v2: f32, v3: f32)
 fn @import glewGetErrorString(error: u32) -> char*;
 fn @import glewGetString(name: u32) -> char*;
 fn @import glGetError() -> u32;
+
+
+/*
+    Language specific
+*/
+
+#import "Logger"
+
+fn @import Sleep(ms: i32); // windows sleep, remove this later
+
+#define GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",#line,glErrCode,":",glewGetErrorString(glErrCode)); }
+#ifndef GLCHECK
+#define GLCHECK
+#endif
+
+// returns GLFWwindow*
+fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
+    yes = glfwInit();
+    if !yes {
+        log("glfwInit failed");
+        return null;
+    }
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+    glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+    glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+    title = @cstr "Yes sir"
+    window = glfwCreateWindow(width, height, title, null, null);
+    if !window {
+        log("window failed");
+        glfwTerminate();
+        return null;
+    }
+
+    glfwMakeContextCurrent(window);
+
+    err = glewInit();
+    if err {
+        msg = glewGetErrorString(err);
+        log("glew failed: ",msg)
+        glfwTerminate();
+        return null;
+    }
+
+    glViewport(0, 0, width, height);
+    GLCHECK
+
+    glEnable(GL_BLEND)
+    glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+    // glEnable(GL_CULL)
+
+    return window;
+}
+// returns program id which can be passes to glUseProgram
+fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
+    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    GLCHECK
+    glShaderSource(vertexShader, 1, &vshader.ptr, null);
+    GLCHECK
+    glCompileShader(vertexShader);
+    GLCHECK
+
+    success: i32; // reused further down
+    infoLog: char[512];
+    glGetShaderiv(vertexShader, GL_COMPILE_STATUS, &success);
+    if !success {
+        glGetShaderInfoLog(vertexShader, 512, null, infoLog.ptr);
+        log("Vertex shader error: ",infoLog);
+    }
+
+    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    GLCHECK
+    glShaderSource(fragmentShader, 1, &fshader.ptr, null);
+    GLCHECK
+    glCompileShader(fragmentShader);
+    GLCHECK
+
+    glGetShaderiv(fragmentShader, GL_COMPILE_STATUS, &success);
+    GLCHECK
+    if !success {
+        glGetShaderInfoLog(fragmentShader, 512, null, infoLog.ptr);
+        GLCHECK
+        log("Fragment shader error: ",infoLog);
+    }
+
+    shaderProgram = glCreateProgram();
+    GLCHECK
+    glAttachShader(shaderProgram, vertexShader);
+    GLCHECK
+    glAttachShader(shaderProgram, fragmentShader);
+    GLCHECK
+    glLinkProgram(shaderProgram);
+    GLCHECK
+
+    glGetProgramiv(shaderProgram, GL_LINK_STATUS, &success);
+    GLCHECK
+    if !success {
+        glGetProgramInfoLog(shaderProgram, 512, null, infoLog.ptr);
+        GLCHECK
+        log("Fragment shader error: ",infoLog);
+    }
+    
+    glDeleteShader(vertexShader);
+    glDeleteShader(fragmentShader);  
+
+    return shaderProgram;
+}
+struct UIColor{
+    r: f32;
+    g: f32;
+    b: f32;
+    a: f32;
+}
+struct UIBox {
+    x: f32;
+    y: f32;
+    w: f32;
+    h: f32;
+    color: UIColor;
+    textureId: i32 = -1;
+};
+struct UIText {
+    x: f32;
+    y: f32;
+    h: f32;
+    length: u32 = 0;
+    string: char* = null;
+    // std::string text;
+    color: UIColor;
+    fontId: i32 = 0;
+    
+    editing: bool = false;
+    cursorIndex: i32 = -1;
+};
+
+struct UIModule {
+     /* ... */ 
+    fn makeBox(id: u64 = 0) -> UIBox* {
+        return MakeBox(this, id);
+    }
+    fn makeText(id: u64 = 0) -> UIText* {
+        return MakeText(this, id);
+    }
+    fn getWidthOfText(text: UIText*) -> f32 {
+        return GetWidthOfText(this, text);
+    }
+}
+fn @import CreateUIModule() -> UIModule*;
+fn @import DestroyUIModule(ptr: UIModule*);
+fn @import RenderUIModule(ptr: UIModule*, width: f32, height: f32);
+fn @import GetWidthOfText(ptr: UIModule*, text: UIText*) -> f32;
+fn @import MakeBox(ptr: UIModule*, id: u64 = 0) -> UIBox*;
+fn @import MakeText(ptr: UIModule*, id: u64 = 0) -> UIText*;

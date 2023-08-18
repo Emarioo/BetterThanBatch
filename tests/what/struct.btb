@@ -1,16 +1,26 @@
-TEXT-CASE base
-struct A {
-    a: i32;
-    b: i64;
+@TEST-CASE access
+struct Base {
+    mem: i32;
+    fn hey() -> i32 {
+        return mem; // abreviated access of this.mem
+    }
+    fn incr() {
+        mem = 1 + hey(); // abreviated access of this.hey()
+    }
 }
-a: A;
-a = A{1,2}
-a: A = A{1,2};
-@TEST-CASE 0
-test 1 a+b == 1
-test 1 a-b == 3
-test 1 a*b == 5
-test 1 a/b == 9
-@TEST-CASE 1
+base: Base;
+*cast<i32*>&base.mem
+// Bug 0: Parsing issues, this happens: *& ( (cast<i32*>base) .mem )
+//   the member access should happen first though.
+base.incr();
 
-@TEST-CASE 2
+@TEST-CASE shortcuts
+
+struct Base {
+    mem: i32;
+}
+base = Base{}
+base = Base{2}
+
+base2: Base = .{3}
+base2 = .{7}

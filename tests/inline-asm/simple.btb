@@ -1,0 +1,8 @@
+@TEST-CASE stack-stuff
+a =
+cast_unsafe<i32>
+asm {
+    mov eax, 23
+    push rax
+}
+test 23; a;

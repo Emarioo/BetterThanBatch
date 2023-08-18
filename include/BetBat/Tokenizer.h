@@ -9,6 +9,7 @@
 #include "BetBat/Util/Utility.h"
 #include "BetBat/Util/Array.h"
 #include "BetBat/Util/Perf.h"
+#include "BetBat/Util/Profiler.h"
 #include "BetBat/Util/Tracker.h"
 
 #define TOKEN_SUFFIX_LINE_FEED 0x1

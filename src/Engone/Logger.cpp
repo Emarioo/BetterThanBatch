@@ -113,6 +113,8 @@ namespace engone {
 		int len = info.lineBuffer.used;
 		// print((char*)info.lineBuffer.data, info.lineBuffer.used);
 
+		auto outFile = engone::GetStandardOut();
+
 		m_printMutex.lock();
 		if (m_masterColor == log::NO_COLOR)
 			SetConsoleColor(info.color);
@@ -122,18 +124,24 @@ namespace engone {
 		if(m_enabledConsole){
 			if(lastPrintedChar=='\n'){
 			// 	preIndent=false;
-				for(int j=0;j<m_nextIndent;j++)
-					fwrite(" ",1, 1, stdout);
+				for(int j=0;j<m_nextIndent;j++) {
+					engone::FileWrite(outFile, " ", 1);
+					// fwrite(" ",1, 1, stdout);
+				}
 				m_nextIndent = m_indent;
 			}
 			int last = 0;
 			for(int i=0;i<len;i++){
 				if(str[i]=='\n'||i+1==len){
-					fwrite(str+last,1,i+1-last,stdout);
+					engone::FileWrite(outFile, str + last, i+1-last);
+
+					// fwrite(str+last,1,i+1-last,stdout);
 					last = i+1;
 					if(str[i]=='\n' && i+1!=len){
-						for(int j=0;j<m_indent;j++)
-							fwrite(" ",1, 1, stdout);
+						for(int j=0;j<m_indent;j++) {
+							engone::FileWrite(outFile, " ", 1);
+							// fwrite(" ",1, 1, stdout);
+						}
 					}
 				}
 			}
@@ -158,7 +166,7 @@ namespace engone {
 				auto find = m_logFiles.find(path);
 				APIFile file={};
 				if(find==m_logFiles.end()){
-					file = FileOpen(path,0,FILE_WILL_CREATE);
+					file = FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
@@ -176,7 +184,8 @@ namespace engone {
 				auto find = m_logFiles.find(path);
 				APIFile file={};
 				if(find==m_logFiles.end()){
-					file = FileOpen(path,0,FILE_CAN_CREATE);
+					// file = FileOpen(path,0,FILE_CAN_CREATE);
+					file = FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
@@ -195,7 +204,8 @@ namespace engone {
 				auto find = m_logFiles.find(path);
 				APIFile file={};
 				if(find==m_logFiles.end()){
-					file = FileOpen(path,0,FILE_CAN_CREATE);
+					// file = FileOpen(path,0,FILE_CAN_CREATE);
+					file = FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
@@ -226,12 +236,25 @@ namespace engone {
 		}
 		return sum;
 	}
+	void Logger::flushInternal() {
+		m_printMutex.lock();
+		for(auto& pair : m_logFiles){
+			engone::FileFlushBuffers(pair.second);
+		}
+		m_printMutex.unlock();
+		engone::FileFlushBuffers(engone::GetStandardOut());
+	}
 	void Logger::print(char* str, int len) {
 		Assert(str);
 		if (len == 0) return;
-
+		
 		auto& info = getThreadInfo();
-
+		if(len > 0x1000) {
+			log::out << log::YELLOW << "Logger: Printing and ensuring a lot of bytes ("<<len<<"). You flush the bytes multiple times!\n";
+		}
+		// large
+		// TODO: If len is really large then we do some extra flushes so
+		//  we don't need to ensure megabytes of data.
 		char* buf = info.ensure(len);
 		if (buf) {
 			memcpy(buf, str, len);

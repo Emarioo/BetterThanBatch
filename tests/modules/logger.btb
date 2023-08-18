@@ -1,0 +1,9 @@
+@TEST-CASE decimals
+
+// these are some good tests but you should use
+// swrite and compare against that buffer instead
+// of log like this.
+log(123.27);
+log(0.027);
+log(123.0027);
+log(-123.0027);

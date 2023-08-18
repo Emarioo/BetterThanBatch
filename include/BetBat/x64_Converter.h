@@ -91,7 +91,9 @@ struct Program_x64 {
     void add4(i64 dword);
 
     void printHex(const char* path = nullptr);
-    void printAsm(const char* path = nullptr);
+    void printAsm(const char* path, const char* objpath = nullptr);
+
+    void set(u32 index, u8 byte) { Assert(index < head); text[index] = byte; }
 
     // TODO: Relocations, global data, symbols
     static void Destroy(Program_x64* program);

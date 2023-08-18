@@ -92,10 +92,11 @@ namespace engone {
     void Sleep(double seconds);
 	
 	enum FileFlag : uint32{
-		FILE_NO_FLAG=0,
-		FILE_ONLY_READ=1,
-		FILE_CAN_CREATE=2,
-		FILE_WILL_CREATE=4,
+		FILE_NO_FLAG = 0,
+		FILE_ONLY_READ = 1, // FILE_ONLY_READ is taken
+		FILE_ALWAYS_CREATE = 2,
+		// FILE_SHARE_READ = 8, // always true
+		// FILE_SHARE_WRITE = 16,
 	};
 
 	// Returns 0 if function failed
@@ -107,10 +108,13 @@ namespace engone {
 	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes);
 	// @return Number of bytes written. -1 indicates an error
 	uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes);
-	// @return True if successful, false if not
-	// position as -1 will move the head to end of file.
-	bool FileSetHead(APIFile file, uint64 position);
+	// @return True if successful, false if not.
+	// @param position as -1 will move the head to end of file.
+	bool FileSetHead(APIFile file, u64 position);
+	u64 FileGetHead(APIFile file);
+	u64 FileGetSize(APIFile file);
 	void FileClose(APIFile file);
+	bool FileFlushBuffers(APIFile file);
     
     bool FileExist(const std::string& path);
     bool DirectoryExist(const std::string& path);
@@ -166,7 +170,8 @@ namespace engone {
 
 		static ThreadId GetThisThreadId();
 
-		static TLSIndex CreateTLSIndex(); // 0 is means failure
+		// 0 indicates failure
+		static TLSIndex CreateTLSIndex();
 		static bool DestroyTLSIndex(TLSIndex index);
 
 		static void* GetTLSValue(TLSIndex index);
@@ -217,9 +222,14 @@ namespace engone {
 	#define PROGRAM_WAIT 2
 	// PROGRAM_ASYNC or something instead? you usually want to wait? or not?
 
+	bool ExecuteCommand(const std::string& cmd, bool asynchronous = false, int* exitCode = nullptr);
+
 	// Starts an exe at path. Uses CreateProcess from windows.h
 	// commandLine cannot be constant (CreateProcessA in windows api says so)
-	bool StartProgram(const std::string& path, char* commandLine=NULL, int flags=0, int* exitCode=0, APIFile inFile={}, APIFile outFile={}, APIFile errFile={});
+	// exitCode is ignored unless you wait for the process to finish.
+	// TODO: Implement APIProcess so that you can get do some stuff in the mean time and then wait
+	//   for the process to finishd and get the exitCode.
+	bool StartProgram(char* commandLine, u32 flags=0, int* exitCode=0, APIFile inFile={}, APIFile outFile={}, APIFile errFile={});
 
 	APIPipe PipeCreate(u64 pipeBuffer, bool inheritRead, bool inheritWrite);
 	void PipeDestroy(APIPipe pipe);

@@ -19,10 +19,6 @@
 ############### */
 
 // DEV_FILE defaults to dev.btb if none is specified
-// #define DEV_FILE "examples/x64_test.btb"
-// #define DEV_FILE "examples/floats.btb"
-// #define DEV_FILE "examples/const.btb"
-// #define DEV_FILE "examples/threads.btb"
 // #define DEV_FILE "examples/dir-iterator.btb"
 #define CONFIG_DEFAULT_TARGET WINDOWS_x64
 
@@ -38,14 +34,14 @@
 // The consequence is that the logged instructions won't resemble the final
 // output.
 #define OPTIMIZED
-#define SINGLE_THREADED
+// #define SINGLE_THREADED
 // #define LOG_MEASURES
 // Silent is not used at the moment.
 #ifndef RELEASE
 #define ENABLE_TRACKER
 // #define LOG_TRACKER
 #define LOG_MSG_LOCATION
-#define DUMP_ASM
+#define DUMP_ALL_ASM
 #endif
 // Will it ever be?
 // #define SILENT
@@ -80,7 +76,7 @@
 // #define DISABLE_ZERO_INITIALIZATION
 // Disabling this will most certainly produce flawed instructions
 // but it will be easier to read the instructions when debugging
-#define ENABLE_FAULTY_X64
+// #define ENABLE_FAULTY_X64
 // Disables the non essential asserts
 // not the ones that bound check in arrays
 // or perhaps you do both?
@@ -111,11 +107,11 @@
 // #define PLOG
 // type checker
 // #define TC_LOG
-#define GLOG
+// #define GLOG
 // #define ILOG
 // #define ILOG_REGS
 // x64 converter
-// #define CLOG
+#define CLOG
 
 // #define OLOG
 // #define USE_DEBUG_INFO

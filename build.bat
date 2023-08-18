@@ -27,9 +27,8 @@ if !USE_OPTIMIZATIONS!==1 (
 ) else (
     SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc
 )
-SET MSVC_LINK_OPTIONS=/nologo Advapi32.lib
-@REM  gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.8/lib/glfw3_mt.lib libs/glew-2.1.0/lib/glew32s.lib 
-SET MSVC_INCLUDE_DIRS=/Iinclude /Ilibs/glfw-3.3.8/include /Ilibs/glew-2.1.0/include
+SET MSVC_LINK_OPTIONS=/nologo /ignore:4099 Advapi32.lib gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.8/lib/glfw3_mt.lib libs/glew-2.1.0/lib/glew32s.lib 
+SET MSVC_INCLUDE_DIRS=/Iinclude /Ilibs/stb/include /Ilibs/glfw-3.3.8/include /Ilibs/glew-2.1.0/include 
 SET MSVC_DEFINITIONS=/DOS_WINDOWS
 
 if !USE_DEBUG!==1 (
@@ -39,12 +38,12 @@ if !USE_DEBUG!==1 (
     SET GCC_COMPILE_OPTIONS=!GCC_COMPILE_OPTIONS! -g
 )
 
-@REM #############  Unity build
 mkdir bin 2> nul
 SET srcfile=bin\all.cpp
 SET srcfiles=
 SET output=bin\compiler.exe
 
+@REM Retrieve files
 type nul > !srcfile!
 @REM echo #include ^"pch.h^" >> !srcfile!
 for /r %%i in (*.cpp) do (
@@ -59,7 +58,7 @@ for /r %%i in (*.cpp) do (
         )
     )
 )
-@REM echo HOHO
+echo #include ^"../src/Native/NativeLayer.cpp^" >> !srcfile!
 
 @REM #####   Compiling
 
@@ -89,9 +88,13 @@ set /a finS2=(endTime-startTime)%%100
 echo Compiled in %finS%.%finS2% seconds
 
 @REM Not using MSVC_COMPILE_OPTIONS because debug information may be added
-cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DNO_PERF /DNO_TRACKER src\BetBat\External\NativeLayer.cpp /Fo:bin/NativeLayer.obj
-cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DNO_PERF /DNO_TRACKER /DOS_WINDOWS src\Engone\Win32.cpp /Fo:bin/Win32.obj
-lib /nologo bin/NativeLayer.obj bin/Win32.obj Advapi32.lib /OUT:bin/NativeLayer.lib
+cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
+@REM lib /nologo bin/NativeLayer.obj Advapi32.lib /OUT:bin/NativeLayer.lib
+
+lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
+
+@REM cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DNO_PERF /DNO_TRACKER /DOS_WINDOWS src\Engone\Win32.cpp /Fo:bin/Win32.obj
+@REM lib /nologo bin/NativeLayer.obj bin/Win32.obj Advapi32.lib /OUT:bin/NativeLayer.lib
 @REM dumpbin /ALL bin/NativeLayer.obj > nat.out
 
 if !compileSuccess! == 0 (

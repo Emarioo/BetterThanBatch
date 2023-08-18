@@ -1,0 +1,8 @@
+@TEST-CASE unsigned-signed
+
+23u
+9s
+-9s
+-23u
+
+// TODO: Test automatic conversion of to 64-bit

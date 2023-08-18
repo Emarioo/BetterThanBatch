@@ -24,14 +24,16 @@ struct TokenStream;
 #define MSG_CODE_LOCATION2
 #define MSG_CODE_LOCATION
 #endif
-#define BASE_SECTION(CODE) MSG_CODE_LOCATION; info.errors++; StringBuilder err_type{}; err_type += CODE
+#define BASE_SECTION(CODE) MSG_CODE_LOCATION; info.errors++; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE
 
 #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
-#define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type);
-#define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
-#define ERR_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR);
-#define ERR_EXAMPLE_TINY(STR) log::out << log::LIME << "Example: " << MESSAGE_COLOR << (StringBuilder{} + STR)<<"\n";
-#define ERR_EXAMPLE(LN, STR) log::out << log::LIME << "Example:"; PrintExample(LN, StringBuilder{} + STR);
+#define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
+#define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";
+#define ERR_MSG_LOG(STR) engone::log::out << STR ;
+// #define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
+#define ERR_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream);
+#define ERR_EXAMPLE_TINY(STR) engone::log::out << engone::log::LIME << "Example: " << MESSAGE_COLOR << (StringBuilder{} + STR)<<"\n";
+#define ERR_EXAMPLE(LN, STR) engone::log::out << engone::log::LIME << "Example:"; PrintExample(LN, StringBuilder{} + STR);
 
 #define WARN_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR)
 
@@ -40,13 +42,11 @@ struct TokenStream;
 
 // TODO: Color support in string builder?
 
-void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode);
-// , const StringBuilder& stringBuilder);
-void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode);
-// , const StringBuilder& stringBuilder);
+void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode , TokenStream** prevStream = nullptr);
+void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode, TokenStream** prevStream = nullptr);
 
-void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder);
-void PrintCode(const Token& token, const StringBuilder& stringBuilder);
+void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr);
+void PrintCode(const Token& token, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr);
 
 void PrintExample(int line, const StringBuilder& stringBuilder);
 

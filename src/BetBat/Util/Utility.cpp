@@ -35,15 +35,45 @@ ReadFileFailed:
     printf("ReadFile : Error %s\n",path);
     return {};
 }
+void OutputAsHex(const char* path, char* data, int size) {
+    using namespace engone;
+    auto file = FileOpen("data.txt",0,FILE_ALWAYS_CREATE);
+    Assert(file);
+
+    const int stride = 16;
+    // Intentionally not tracking this allocation. It's allocated and freed here so there's no need.
+    int bufferSize = size*2 + size / stride;
+    char* buffer = (char*)Allocate(bufferSize);
+    int offset = 0;
+    for(int i = 0;i<size;i++){
+        u8 a = data[i]>>4;
+        u8 b = data[i]&0xF;
+        
+        #define HEXIFY(X) (char)(X<10 ? '0'+X : 'A'+X - 10)
+        buffer[offset] = HEXIFY(a);
+        buffer[offset+1] = HEXIFY(b);
+        offset+=2;
+        if(i%stride == stride - 1) {
+            buffer[offset] = '\n';
+            offset++;
+        }
+        #undef HEXIFY
+    }
+
+    FileWrite(file, buffer, bufferSize);
+
+    Free(buffer,bufferSize);
+    FileClose(file);
+}
 // bool WriteFile(const char* path, engone::Memory buffer){
-//     auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);
+//     auto file = engone::FileOpen(path,0,engone::FILE_ALWAYS_CREATE);
 //     if(!file) return false;
 //     if(!engone::FileWrite(file,buffer.data,buffer.used)) return false;
 //     engone::FileClose(file);
 //     return true;
 // }
 // bool WriteFile(const char* path, std::string& buffer){
-//     auto file = engone::FileOpen(path,0,engone::FILE_WILL_CREATE);
+//     auto file = engone::FileOpen(path,0,engone::FILE_ALWAYS_CREATE);
 //     if(!file) return false;
 //     if(!engone::FileWrite(file,buffer.data(),buffer.length())) return false;
 //     engone::FileClose(file);
@@ -154,7 +184,7 @@ Some example code with pipes
     // auto pipe = PipeCreate(false,true);
     
     // std::string cmd = "cmd /C \"dir\"";
-    // StartProgram("",(char*)cmd.data(),0,0,0,pipe);
+    // StartProgram((char*)cmd.data(),0,0,0,pipe);
     
     // char buffer[1024];
     // WHILE_TRUE {

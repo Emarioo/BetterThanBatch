@@ -1,7 +1,5 @@
 #include "BetBat/Interpreter.h"
 
-#include "BetBat/External/NativeLayer.h"
-
 // needed for FRAME_SIZE
 #include "BetBat/Generator.h"
 
@@ -567,11 +565,17 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
         }
         break; case BC_LI:{
             u8 r0 = DECODE_REG0(inst);
+            u8 r1 = DECODE_REG1(inst); // extra big immediate
             
             volatile void* out = getReg(r0);
             
-            i32 data = *(i32*)(codePtr + pc);
+            i64 data = *(i32*)(codePtr + pc);
             pc++;
+            if(r1 == 2){
+                i64 data2 = *(i32*)(codePtr + pc);
+                pc++;
+                data |= data2<<32;
+            }
             
             _ILOG(log::out << data<<"\n";)
             

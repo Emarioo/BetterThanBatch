@@ -47,17 +47,24 @@ enum PrimitiveType : u32 {
     // TODO: should these be moved somewhere else?
     AST_ID, // variable, enum, type
     AST_FNCALL,
+    AST_ASM, // inline assembly
     AST_SIZEOF,
     AST_NAMEOF,
     
     AST_PRIMITIVE_COUNT, // above types are true with isValue
 };
 enum OperationType : u32 {
+    // TODO: Add BINOP (binary) and UNOP (unary) in the enum names.
+    //  If you could arrange binary and unary ops so that you can determine the difference
+    //  using a bitmask (op & BINARY_UNARY_MASK), that would signifcantly speed up code which currently has
+    //  to check if an op is equal to any of the operations (op == AST_NOT || op == AST_INCREMENT || ...)
+    //  
     AST_ADD=AST_PRIMITIVE_COUNT,  
     AST_SUB,
     AST_MUL,
     AST_DIV,
     AST_MODULUS,
+    AST_UNARY_SUB,
     
     AST_EQUAL,
     AST_NOT_EQUAL,
@@ -100,10 +107,12 @@ struct ASTNode {
     // TODO: Some of these do not need to exist in
     // every type of node
     enum Flags : u16 {
-        HIDDEN,
-        REVERSE,
-        POINTER,
-        NULL_TERMINATED, // for AST_STRING
+        HIDDEN = 0x1,
+        REVERSE = 0x2,
+        POINTER = 0x4,
+        NULL_TERMINATED = 0x8, // for AST_STRING
+        DUMP_ASM = 0x10,
+        DUMP_BC = 0x20,
     };
     u16 flags = 0;
     LinkConventions linkConvention = LinkConventions::NONE;
@@ -164,8 +173,8 @@ struct TypeId {
     enum TypeType : u32 {
         PRIMITIVE = 0x0,
         STRING = 0x1,
-        STRUCT = 0x2,
-        ENUM = 0x3,
+        POISON = 0x2,
+        // ENUM = 0x3,
         // VIRTUAL = 0x4, // polymorphic, may be pointless
         TYPE_MASK = 0x1 | 0x2 | 0x4,
         POINTER_MASK = 0x8 | 0x10,
@@ -193,8 +202,9 @@ struct TypeId {
         return (_flags & VALID_MASK) != 0;
     }
     bool isString() const { return (_flags & TYPE_MASK) == STRING; }
+    bool isPoison() const { return (_flags & TYPE_MASK) == POISON; }
     // bool isVirtual() const { return (_flags & TYPE_MASK) == VIRTUAL; }
-    TypeId baseType() {
+    TypeId baseType() const {
         TypeId out = *this;
         out._flags = out._flags & ~POINTER_MASK;
         return out; 
@@ -212,23 +222,6 @@ struct TypeId {
     bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
     //  && !isVirtual(); }
 };
-// struct TypeIds {
-//     TypeId* typeIds=nullptr;
-//     int len = 0;
-//     void cleanup(){
-//         if(!typeIds) return;
-//         engone::Free(typeIds, len*sizeof(TypeId));
-//         typeIds = nullptr;
-//         len = 0;
-//     }
-//     void init(int len){
-//         Assert(!typeIds);
-//         typeIds = (TypeId*)engone::Allocate(len*sizeof(TypeId));
-//         if(!typeIds)
-//             return;
-//         this->len = len;
-//     }
-// };
 struct FnOverloads {
     struct Overload {
         ASTFunction* astFunc=0;
@@ -400,19 +393,44 @@ struct ASTExpression : ASTNode {
         // engone::log::out << "default init\n";
         // *(char*)0 = 9;
     }
+    // enum Type: u8 {
+    //     NORMAL = 0,
+    //     INLINE_ASSEMBLY = 1,
+
+    // };
     // ASTExpression() { memset(this,0,sizeof(*this)); }
     // ASTExpression() : left(0), right(0), castType(0) { }
     // Token token{};
-    bool isValue=false;
+    bool isValue = false;
     TypeId typeId = {}; // not polymorphic, primitive or operation
-    
+    // Type expressionType = NORMAL;
     // enum ConstantType {
     //     NONE,
     //     CONSTANT
     // };
     bool isConstant() { return constantValue; }
+    // TODO: Bit field for all the bools
     bool constantValue = false;
     bool computeWhenPossible = false;
+
+    bool implicitThisArg = false;
+    bool memberCall = false;
+    bool postAction = false;
+    bool unsafeCast = false;
+    bool hasImplicitThis() const { return implicitThisArg; }
+    void setImplicitThis(bool yes) { implicitThisArg = yes; }
+
+    bool isMemberCall() const { return memberCall; }
+    void setMemberCall(bool yes) { memberCall = yes; }
+
+    bool isPostAction() const { return postAction; }
+    void setPostAction(bool yes) { postAction = yes; }
+    
+    bool isUnsafeCast() { return unsafeCast; }
+    void setUnsafeCast(bool yes) { unsafeCast = yes; }
+
+    // bool isInlineAssembly() const { return expressionType & INLINE_ASSEMBLY; }
+    // void setInlineAssembly(bool yes) { expressionType = (Type)((expressionType&~INLINE_ASSEMBLY)); if (yes) expressionType = (Type)(expressionType|INLINE_ASSEMBLY); }
 
     union {
         i64 i64Value=0;
@@ -420,6 +438,7 @@ struct ASTExpression : ASTNode {
         bool boolValue;
         char charValue;
     };
+
     Token name{};
     Token namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
     ASTExpression* left=0; // FNCALL has arguments in order left to right
@@ -565,7 +584,7 @@ struct ASTStruct : ASTNode {
     std::unordered_map<std::string, FnOverloads> _methods;
     
     // FnOverloads* addMethod(const std::string& name);
-    FnOverloads& getMethod(const std::string& name);
+    FnOverloads* getMethod(const std::string& name, bool create = false);
     // void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
 
     QuickArray<ASTFunction*> functions{};
@@ -762,6 +781,17 @@ struct AST {
     };
     std::unordered_map<std::string, u32> _constStringMap;
     QuickArray<ConstString> _constStrings;
+
+    u32 globalDataOffset = 0;
+    u32 aquireGlobalSpace(int size) {
+        u32 offset = globalDataOffset;
+        globalDataOffset += size;
+        return offset;
+    }
+    // from type checker
+    u32 preallocatedGlobalSpace() {
+        return globalDataOffset;
+    }
 
     char* linearAllocation = nullptr;
     u32 linearAllocationMax = 0;

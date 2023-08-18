@@ -1,14 +1,16 @@
 #include "BetBat/Generator.h"
 #include "BetBat/Compiler.h"
 
-#undef ERR_HEAD2
-#define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000")
+// #undef ERR_HEAD2
+// #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000")
 
-#undef ERR_HEAD3
-#define ERR_HEAD3(R, M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000") << M
+// #undef ERR_SECTION(
+// ERR_HEAD
+// #define ERR_SECTION(
+// ERR_HEAD(R, M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000") << M
 
 #undef ERRTYPE
-#define ERRTYPE(R, LT, RT, M) ERR_HEAD3(R, "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M)
+#define ERRTYPE(R, LT, RT, M) ERR_SECTION(ERR_HEAD(R)ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(R,info.ast->typeToString(LT)) ERR_LINE(R,info.ast->typeToString(RT)))
 // #define ERRTYPE2(R, LT, RT) ERR_HEAD2(R) << "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " "
 
 #undef WARN_HEAD3
@@ -66,6 +68,7 @@ void GenInfo::popInstructions(u32 count){
     Assert(code->length() >= count);
 
     code->codeSegment.used-=count;
+    indexOfNonImmediates.used-=count;
 
     if(code->codeSegment.used>0){
         for(int i = code->codeSegment.used-1;i>=0;i--){
@@ -80,7 +83,7 @@ void GenInfo::popInstructions(u32 count){
         }
     }
 }
-void GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
+bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
     using namespace engone;
 
     // This is here to prevent mistakes.
@@ -94,13 +97,65 @@ void GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
         Assert(inst.op2 != 0);
     }
 
-    #ifdef OPTIMIZED
-    if(inst.opcode == BC_POP && code->length()>0
-         && code->get(code->length()-1).opcode == BC_PUSH
-         && inst.op0 == code->get(code->length()-1).op0) {
+    if(code->length() == 693) {
+        int k = 923;
+    }
 
-        popInstructions(1);
-        return;
+    #ifdef OPTIMIZED
+    /*
+        Some of this code is kind of neat. It has a cascading effect where
+            li eax, push eax, pop ecx   becomes
+            li eax, mov eax, ecx        but then again
+            li ecx
+    */
+    // IMPORTANT: THE CODE DOESN'T EXPECT IMMEDIATES.
+    //  There should be a variable which can tell us the previous bytes are an immediate and if so
+    //  where the real instruction is.
+    //  I have disabled some optimizations to prevent this bug from happening untill I fix it..
+    if(indexOfNonImmediates.size()>0){
+        int index = indexOfNonImmediates.last();
+        if(inst.opcode == BC_POP && code->get(index).opcode == BC_PUSH
+        && inst.op0 == code->get(index).op0) {
+            popInstructions(1);
+            _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
+            return false;
+        }
+        if(inst.opcode == BC_POP && code->get(index).opcode == BC_PUSH
+        && DECODE_REG_SIZE(inst.op0) == DECODE_REG_SIZE(code->get(index).op0)) {
+            u8 op = code->get(index).op0;
+            popInstructions(1);
+            _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
+            bool yes = addInstruction({BC_MOV_RR, op, inst.op0});
+            if(yes) {
+                _GLOG(log::out << log::GRAY << "(replaced with register move)\n";)
+            }
+            return false;
+        }
+        if(inst.opcode == BC_MOV_RR && inst.op0 == code->get(index).op0) {
+            u8 opcode = code->get(index).opcode;
+            u8* outOp = nullptr;
+            switch(opcode) {
+                // add, mul and other instructions don't work
+                // because output registers are also input registers
+                case BC_DATAPTR:
+                case BC_CODEPTR:
+                case BC_LI: {
+                    outOp = &code->get(index).op0;
+                    break;
+                }
+                case BC_MOV_MR:
+                case BC_MOV_MR_DISP32: {
+                    outOp = &code->get(index).op1;
+                    break;
+                }
+            }
+            if(outOp) {
+                *outOp = inst.op1;
+                _GLOG(log::out << log::GRAY << "(modified instruction)\n";)
+                _GLOG(code->printInstruction(index);)
+                return false;
+            }
+        }
     }
     #endif
 
@@ -110,11 +165,11 @@ void GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
             code->get(code->length()-1).opcode == BC_POP &&
             code->get(code->length()-1).op0 == BC_REG_FP));
     }
-
-    code->add(inst);
+    indexOfNonImmediates.add(code->length());
+    code->add_notabug(inst);
     // Assert(nodeStack.size()!=0); // can't assert because some instructions are added which doesn't link to any AST node.
     if(nodeStack.size()==0)
-        return;
+        return true;
     if(nodeStack.last()->tokenRange.firstToken.line == lastLine &&
         nodeStack.last()->tokenRange.firstToken.tokenStream == lastStream){
         // log::out << "loc "<<lastLocationIndex<<"\n";
@@ -127,10 +182,19 @@ void GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
         if(nodeStack.last()->tokenRange.tokenStream())
             location->desc = nodeStack.last()->tokenRange.firstToken.getLine();
     }
+    return true;
 }
 void GenInfo::addLoadIm(u8 reg, i32 value){
-    addInstruction({BC_LI,reg}, true);
-    code->addIm(value);
+    addInstruction({BC_LI, reg}, true);
+    code->addIm_notabug(value);
+}
+void GenInfo::addLoadIm2(u8 reg, i64 value){
+    addInstruction({BC_LI, reg, 2}, true);
+    code->addIm_notabug(value&0xFFFFFFFF);
+    code->addIm_notabug(value>>32);
+}
+void GenInfo::addImm(i32 value){
+    code->addIm_notabug(value);
 }
 void GenInfo::addPop(int reg) {
     using namespace engone;
@@ -175,7 +239,7 @@ void GenInfo::addPop(int reg) {
     }
     _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
 }
-void GenInfo::addPush(int reg) {
+void GenInfo::addPush(int reg, bool withoutInstruction) {
     using namespace engone;
     int size = DECODE_REG_SIZE(reg);
     if (size == 0 ) { // we don't print if we had errors since they probably caused size of 0
@@ -190,12 +254,15 @@ void GenInfo::addPush(int reg) {
     // TODO: Instructions are generated from top-down and the stackAlignment
     //   sees pop and push in this way but how about jumps. It doesn't consider this. Is it an issue?
     if (diff) {
+        Assert(false); // shouldn't happen anymore
         virtualStackPointer -= diff;
         // code->addDebugText("align sp\n");
         i16 offset = -diff;
         addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
     }
-    addInstruction({BC_PUSH, (u8)reg}, true);
+    if(!withoutInstruction) {
+        addInstruction({BC_PUSH, (u8)reg}, true);
+    }
     stackAlignment.add({diff, size});
     virtualStackPointer -= size;
     _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
@@ -332,6 +399,8 @@ void GenInfo::restoreStackMoment(int moment, bool withoutModification, bool with
 // uses register A
 // TODO: handle struct cast?
 bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
+    if(!from.isValid() || !to.isValid())
+        return false;
     if (from == to)
         return true;
     TypeId vp = AST_VOID;
@@ -526,7 +595,7 @@ SignalDefault GeneratePushFromValues(GenInfo& info, u8 baseReg, int baseOffset, 
             info.addInstruction({BC_MOV_MR, baseReg, reg, (u8)size});
         }else{
             info.addInstruction({BC_MOV_MR_DISP32, baseReg, reg, (u8)size});
-            info.code->addIm(*movingOffset);
+            info.addImm(*movingOffset);
         }
         info.addPush(reg);
         *movingOffset += size;
@@ -572,7 +641,7 @@ SignalDefault GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId)
             // "Use addModRM_disp32 instead". We always use disp32 to avoid the assert.
             // Well, the assert occurs anyway.
             info.addInstruction({BC_MOV_MR_DISP32, baseReg, reg, (u8)size});
-            info.code->addIm(offset);
+            info.addImm(offset);
         }
         info.addPush(reg);
     } else {
@@ -600,6 +669,10 @@ SignalDefault GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
     if(typeId.isNormalType())
         typeInfo = info.ast->getTypeInfo(typeId);
     u8 size = info.ast->getTypeSize(typeId);
+    if(size == 0) {
+        Assert(info.hasForeignErrors());
+        return SignalDefault::FAILURE;
+    }
     if (!typeInfo || !typeInfo->astStruct) {
         _GLOG(log::out << "move return value\n";)
         u8 reg = RegBySize(BC_AX, size);
@@ -613,7 +686,7 @@ SignalDefault GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
                 info.addInstruction({BC_MOV_RM, reg, baseReg, size});
             }else{
                 info.addInstruction({BC_MOV_RM_DISP32, reg, baseReg, size});
-                info.code->addIm(offset);
+                info.addImm(offset);
             }
         }
     } else {
@@ -694,7 +767,7 @@ SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId
         } else {
             u8 reg = RegBySize(BC_AX,size);
             info.addInstruction({BC_MOV_RM_DISP32,reg,baseReg,size});
-            info.code->addIm(offset);
+            info.addImm(offset);
         }
         #else
         // Not setting zero here is certainly a bad idea
@@ -707,6 +780,11 @@ SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId
 }
 SignalDefault FramePush(GenInfo& info, TypeId typeId, i32* outFrameOffset, bool genDefault, bool staticData){
     Assert(outFrameOffset);
+    Assert(!staticData); // This is unsafe if functions use the static data before FramePush makes space for it.
+    // This usually result static offsets always pointing at the start of the data segment. Then when FramePush
+    // runs those offsets would be valid but it's already to late.
+    // I am leaveing the comment here in case you decide to use FramePush to handle static data in the future WHICH YOU REALLY SHOULDN'T!
+
     // IMPORTANT: This code has been copied to array assignment. Change that code
     //  when changing code here.
     i32 size = info.ast->getTypeSize(typeId);
@@ -719,7 +797,7 @@ SignalDefault FramePush(GenInfo& info, TypeId typeId, i32* outFrameOffset, bool 
         int offset = info.code->appendData(nullptr,size);
         
         info.addInstruction({BC_DATAPTR, BC_REG_RDI});
-        info.code->addIm(offset);
+        info.addImm(offset);
 
         *outFrameOffset = offset;
         if(genDefault){
@@ -762,9 +840,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, TypeI
     SignalDefault result = GenerateExpression(info,expression,&types,idScope);
     *outTypeId = AST_VOID;
     if(types.size()>1){
-        ERR_HEAD3(expression->tokenRange, "Returns multiple values but the way you use the expression only supports one (or none).\n\n";
-            // ERR_LINE(expression->tokenRange,msg.c_str());
-            ERR_LINE(expression->tokenRange,"returns "+types.size() + " values");
+        ERR_SECTION(
+            ERR_HEAD(expression->tokenRange)
+            ERR_MSG("Returns multiple values but the way you use the expression only supports one (or none).")
+            ERR_LINE(expression->tokenRange,"returns "<<types.size() << " values")
         )
     } else {
         if(types.size()==1)
@@ -800,7 +879,9 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
             auto id = now->identifier;
             if (!id || id->type != Identifier::VARIABLE) {
                 if(!info.hasForeignErrors()){
-                    ERR_HEAD3(now->tokenRange, "'"<<now->tokenRange.firstToken << " is undefined.\n\n";
+                    ERR_SECTION(
+                        ERR_HEAD(now->tokenRange)
+                        ERR_MSG("'"<<now->tokenRange.firstToken << " is undefined.")
                         ERR_LINE(now->tokenRange,"bad");
                     )
                 }
@@ -822,7 +903,7 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
             switch(varinfo->type) {
                 case VariableInfo::GLOBAL: {
                     info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                    info.code->addIm(varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
                 }
                 break; case VariableInfo::LOCAL: {
                     info.addLoadIm(BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion]);
@@ -830,8 +911,9 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 }
                 break; case VariableInfo::MEMBER: {
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
+                    Assert(info.currentFunction->callConvention == BETCALL);
                     info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
-                    info.code->addIm(GenInfo::FRAME_SIZE);
+                    info.addImm(GenInfo::FRAME_SIZE);
                     
                     info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
@@ -855,12 +937,13 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 return SignalDefault::FAILURE;
             }
             if(!tempTypes.last().isPointer()){
-                ERR_HEAD3(now->tokenRange,
-                    "'"<<now->tokenRange<<
+                ERR_SECTION(
+                    ERR_HEAD(now->tokenRange)
+                    ERR_MSG("'"<<now->tokenRange<<
                     "' must be a reference to some memory. "
-                    "A variable, member or expression resulting in a dereferenced pointer would be.\n\n";
-                    ERR_LINE(now->tokenRange, "must be a reference");
-                    )
+                    "A variable, member or expression resulting in a dereferenced pointer would be.")
+                    ERR_LINE(now->tokenRange, "must be a reference")
+                )
                 return SignalDefault::FAILURE;
             }
             endType = tempTypes.last();
@@ -878,16 +961,20 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 endType.setPointerLevel(endType.getPointerLevel()-1);
             }
             if(endType.getPointerLevel()>1){ // one level of pointer is okay.
-                ERR_HEAD3(now->tokenRange, "'"<<info.ast->typeToString(endType)<<"' has to many levels of pointing. Can only access members of a single or non-pointer.\n\n";
-                    ERR_LINE(now->tokenRange, "to pointy");
+                ERR_SECTION(
+                    ERR_HEAD(now->tokenRange)
+                    ERR_MSG("'"<<info.ast->typeToString(endType)<<"' has to many levels of pointing. Can only access members of a single or non-pointer.")
+                    ERR_LINE(now->tokenRange, "to pointy")
                 )
                 return SignalDefault::FAILURE;
             }
             TypeInfo* typeInfo = nullptr;
             typeInfo = info.ast->getTypeInfo(endType.baseType());
             if(!typeInfo || !typeInfo->astStruct){ // one level of pointer is okay.
-                ERR_HEAD3(now->tokenRange, "'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.\n\n";
-                    ERR_LINE(now->left->tokenRange, info.ast->typeToString(endType).c_str());
+                ERR_SECTION(
+                    ERR_HEAD(now->tokenRange)
+                    ERR_MSG("'"<<info.ast->typeToString(endType)<<"' is not a struct. Cannot access member.")
+                    ERR_LINE(now->left->tokenRange, info.ast->typeToString(endType).c_str())
                 )
                 return SignalDefault::FAILURE;
             }
@@ -898,7 +985,8 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 // error should have been caught by type checker.
                 // if it was then we just return error here.
                 // don't want message printed twice.
-                // ERR_HEAD3(now->tokenRange, "'"<<now->name << "' is not a member of struct '" << info.ast->typeToString(endType) << "'. "
+                // ERR_SECTION(
+                // ERR_HEAD(now->tokenRange, "'"<<now->name << "' is not a member of struct '" << info.ast->typeToString(endType) << "'. "
                 //         "These are the members: ";
                 //     for(int i=0;i<(int)typeInfo->astStruct->members.size();i++){
                 //         if(i!=0)
@@ -944,8 +1032,10 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 continue;
             }
             if(endType.getPointerLevel()<1){
-                ERR_HEAD3(now->left->tokenRange, "type '"<<info.ast->typeToString(endType)<<"' is not a pointer.\n\n";
-                    ERR_LINE(now->left->tokenRange,"must be a pointer");
+                ERR_SECTION(
+                    ERR_HEAD(now->left->tokenRange)
+                    ERR_MSG("type '"<<info.ast->typeToString(endType)<<"' is not a pointer.")
+                    ERR_LINE(now->left->tokenRange,"must be a pointer")
                 )
                 return SignalDefault::FAILURE;
             }
@@ -965,7 +1055,9 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
             
             if(!AST::IsInteger(tempTypes.last())){
                 std::string strtype = info.ast->typeToString(tempTypes.last());
-                ERR_HEAD3(now->right->tokenRange, "Index operator ( array[23] ) requires integer type in the inner expression. '"<<strtype<<"' is not an integer.\n\n";
+                ERR_SECTION(
+                    ERR_HEAD(now->right->tokenRange)
+                    ERR_MSG("Index operator (array[23]) requires integer type in the inner expression. '"<<strtype<<"' is not an integer. (Operator overloading doesn't work here)")
                     ERR_LINE(now->right->tokenRange,strtype.c_str());
                 )
                 return SignalDefault::FAILURE;
@@ -981,8 +1073,10 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 info.addPop(reg); // integer
                 info.addPop(BC_REG_RBX); // reference
 
-                info.addLoadIm(BC_REG_EAX, typesize);
-                info.addInstruction({BC_MULI, reg, BC_REG_EAX, reg});
+                if(typesize>1){
+                    info.addLoadIm(BC_REG_EAX, typesize);
+                    info.addInstruction({BC_MULI, reg, BC_REG_EAX, reg});
+                }
                 info.addInstruction({BC_ADDI, BC_REG_RBX, reg, BC_REG_RBX});
 
                 info.addPush(BC_REG_RBX);
@@ -992,8 +1086,10 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
             if(!endType.isPointer()){
                 if(!info.hasForeignErrors()){
                     std::string strtype = info.ast->typeToString(endType);
-                    ERR_HEAD3(now->right->tokenRange, "Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.\n\n";
-                        ERR_LINE(now->right->tokenRange,strtype.c_str());
+                    ERR_SECTION(
+                        ERR_HEAD(now->left->tokenRange)
+                        ERR_MSG("Index operator (array[23]) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer. (Operator overloading doesn't work here)")
+                        ERR_LINE(now->left->tokenRange,strtype.c_str());
                     )
                 }
                 return SignalDefault::FAILURE;
@@ -1009,25 +1105,437 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
             // dereference pointer to pointer
             info.addInstruction({BC_MOV_MR, BC_REG_RBX, BC_REG_RCX, 8});
             
-            info.addLoadIm(BC_REG_EAX, typesize);
-            info.addInstruction({BC_MULI, reg, BC_REG_EAX, reg});
+            if(typesize>1){
+                info.addLoadIm(BC_REG_EAX, typesize);
+                info.addInstruction({BC_MULI, reg, BC_REG_EAX, reg});
+            }
             info.addInstruction({BC_ADDI, BC_REG_RCX, reg, BC_REG_RCX});
 
             info.addPush(BC_REG_RCX);
         }
     }
     if(pointerType && !wasNonReference){
-        ERR_HEAD3(_expression->tokenRange,
-            "'"<<_expression->tokenRange<<
+        ERR_SECTION(
+            ERR_HEAD(_expression->tokenRange)
+            ERR_MSG("'"<<_expression->tokenRange<<
             "' must be a reference to some memory. "
-            "A variable, member or expression resulting in a dereferenced pointer would work.\n\n";
-            ERR_LINE(_expression->tokenRange, "must be a reference");
+            "A variable, member or expression resulting in a dereferenced pointer would work.")
+            ERR_LINE(_expression->tokenRange, "must be a reference")
         )
         return SignalDefault::FAILURE;
     }
     if(wasNonReference)
         *wasNonReference = pointerType;
     *outTypeId = endType;
+    return SignalDefault::SUCCESS;
+}
+SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator){
+    using namespace engone;
+    ASTFunction* astFunc = nullptr;
+    FuncImpl* funcImpl = nullptr;
+    {
+        FnOverloads::Overload overload = expression->versions_overload[info.currentPolyVersion];
+        astFunc = overload.astFunc;
+        funcImpl = overload.funcImpl;
+    }
+    if(!info.hasForeignErrors()) {
+        // not ok, type checker should have generated the right overload.
+        Assert(astFunc && funcImpl);
+    }
+    if(!astFunc || !funcImpl) {
+        return SignalDefault::FAILURE;
+    }
+
+    // overload comes from type checker
+    if(isOperator) {
+        _GLOG(log::out << "Operator overload: ";funcImpl->print(info.ast,nullptr);log::out << "\n";)
+    } else {
+        _GLOG(log::out << "Overload: ";funcImpl->print(info.ast,nullptr);log::out << "\n";)
+    }
+    TINY_ARRAY(ASTExpression*,fullArgs,5);
+    // std::vector<ASTExpression*> fullArgs;
+    fullArgs.resize(astFunc->arguments.size());
+    
+    if(isOperator) {
+        fullArgs[0] = expression->left;
+        fullArgs[1] = expression->right;
+    } else {
+        for (int i = 0; i < (int)expression->args.size();i++) {
+            ASTExpression* arg = expression->args.get(i);
+            Assert(arg);
+            if(!arg->namedValue.str){
+                if(expression->hasImplicitThis()) {
+                    fullArgs[i+1] = arg;
+                } else {
+                    fullArgs[i] = arg;
+                }
+            }else{
+                int argIndex = -1;
+                for(int j=0;j<(int)astFunc->arguments.size();j++){
+                    if(astFunc->arguments[j].name==arg->namedValue){
+                        argIndex=j;
+                        break;
+                    }
+                }
+                if(argIndex!=-1) {
+                    if (fullArgs[argIndex] != nullptr) {
+                        ERR_SECTION(
+                            ERR_HEAD(arg->namedValue.range())
+                            ERR_MSG( "A named argument cannot specify an occupied parameter.")
+                            ERR_LINE(astFunc->tokenRange,"this overload")
+                            ERR_LINE(fullArgs[argIndex]->tokenRange,"occupied")
+                            ERR_LINE(arg->namedValue,"bad coder")
+                        )
+                    } else {
+                        fullArgs[argIndex] = arg;
+                    }
+                } else{
+                    ERR_SECTION(
+                        ERR_HEAD(arg->tokenRange)
+                        ERR_MSG_LOG("Named argument is not a parameter of '"; funcImpl->print(info.ast,astFunc); engone::log::out << "'\n")
+                        ERR_LINE(arg->namedValue,"not valid")
+                    )
+                    // continue like nothing happened
+                }
+            }
+        }
+        for (int i = 0; i < (int)astFunc->arguments.size(); i++) {
+            auto &arg = astFunc->arguments[i];
+            if (!fullArgs[i])
+                fullArgs[i] = arg.defaultValue;
+        }
+    }
+
+    // I don't think there is anything to fix in there because conventions
+    // are really about assembly instructions which type checker has nothing to do with.
+    // log::out << log::YELLOW << "Fix call conventions in type checker\n";
+    int startSP = info.saveStackMoment();
+    switch(astFunc->callConvention){
+        case BETCALL: {
+            // Assert(0 == (-info.virtualStackPointer) % 8); // should be aligned
+
+            // info.addIncrSp(-funcImpl->argSize);
+            
+            int alignment = 16;
+            int stackSpace = funcImpl->argSize;
+            stackSpace += MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
+            info.addIncrSp(-stackSpace);
+        }
+        break; case STDCALL: {
+            for(int i=0;i<astFunc->arguments.size();i++){
+                int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
+                if(size>8){
+                    // TODO: This should be moved to the type checker.
+                    ERR_SECTION(
+                        ERR_HEAD(expression->tokenRange)
+                        ERR_MSG("Argument types cannot be larger than 8 bytes when using stdcall.")
+                        ERR_LINE(expression->tokenRange, "bad")
+                    )
+                    return SignalDefault::FAILURE;
+                }
+            }
+
+            int alignment = 16;
+            int stackSpace = astFunc->arguments.size() * 8;
+            if(stackSpace<32)
+                stackSpace = 32;
+            stackSpace += MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
+            info.addIncrSp(-stackSpace);
+            // int misalign = MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
+            // info.addIncrSp(-misalign);
+        }
+        break; case CDECL_CONVENTION: {
+            Assert(false); // @Incomplete
+        }
+    }
+
+    int virtualArgumentSpace = info.virtualStackPointer;
+    for(int i=0;i<(int)fullArgs.size();i++){
+        auto arg = fullArgs[i];
+        if(expression->hasImplicitThis() && i == 0) {
+            // Make sure we actually have this stored before at the base pointer of
+            // the current function.
+            Assert(info.currentFunction && info.currentFunction->parentStruct);
+            Assert(info.currentFunction->callConvention == BETCALL);
+            // NOTE: Is member variable/argument always at this offset with all calling conventions?
+            info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
+            info.addImm(GenInfo::FRAME_SIZE);
+            info.addPush(BC_REG_RBX);
+            continue;
+        } else {
+            Assert(arg);
+        }
+        
+        TypeId argType = {};
+        SignalDefault result = SignalDefault::FAILURE;
+        if(expression->isMemberCall() && i == 0) {
+            // method call and first argument which is 'this'
+            bool nonReference = false;
+            result = GenerateReference(info, arg, &argType, -1, &nonReference);
+            if(result==SignalDefault::SUCCESS){
+                if(!nonReference) {
+                    if(!argType.isPointer()){
+                        argType.setPointerLevel(1);
+                    } else {
+                        Assert(argType.getPointerLevel()==1);
+                        info.addPop(BC_REG_RBX);
+                        info.addInstruction({BC_MOV_MR, BC_REG_RBX, BC_REG_RAX, 8});
+                        info.addPush(BC_REG_RAX);
+                        // info.addInstruction({BC_MOV_MR, BC_REG_RBX, BC_REG_RBX, 8});
+                        // info.addPush(BC_REG_RBX);
+                    }
+                }
+            }
+        } else {
+            result = GenerateExpression(info, arg, &argType);
+            // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
+            bool wasSafelyCasted = PerformSafeCast(info,argType, funcImpl->argumentTypes[i].typeId);
+            if(!wasSafelyCasted && !info.hasErrors()){
+                ERR_SECTION(
+                    ERR_HEAD(expression->tokenRange)
+                    ERR_MSG("Cannot cast " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(funcImpl->argumentTypes[i].typeId))
+                )
+            }
+            // Assert(wasSafelyCasted);
+        }
+    }
+    auto callConvention = astFunc->callConvention;
+    if(info.compileInfo->compileOptions->target == BYTECODE &&
+        (IS_IMPORT(astFunc->linkConvention))) {
+        callConvention = BETCALL;
+    }
+
+    // operator overloads should always use BETCALL
+    Assert(!isOperator || callConvention == BETCALL);
+
+    switch (callConvention) {
+        case INTRINSIC: {
+            // TODO: You could do some special optimisations when using intrinsics.
+            //  If the arguments are strictly variables or constants then you can use a mov instruction 
+            //  instead messing with push and pop.
+            if(funcImpl->name == "memcpy"){
+                info.addPop(BC_REG_RBX);
+                info.addPop(BC_REG_RSI);
+                info.addPop(BC_REG_RDI);
+                info.addInstruction({BC_MEMCPY, BC_REG_RDI, BC_REG_RSI, BC_REG_RBX});
+            } else if(funcImpl->name == "strlen"){
+                info.addPop(BC_REG_RSI);
+                info.addInstruction({BC_STRLEN, BC_REG_RSI, BC_REG_RCX, BC_REG_RAX});
+                info.addPush(BC_REG_ECX); // len
+                outTypeIds->add(AST_UINT32);
+            } else if(funcImpl->name == "memzero"){
+                info.addPop(BC_REG_RBX); // ptr
+                info.addPop(BC_REG_RDI);
+                info.addInstruction({BC_MEMZERO, BC_REG_RDI, BC_REG_RBX});
+            } else if(funcImpl->name == "rdtsc"){
+                // no input
+                info.addInstruction({BC_RDTSC, BC_REG_RAX, BC_REG_RDX});
+                info.addPush(BC_REG_RAX); // timestamp counter
+                
+                outTypeIds->add(AST_UINT64);
+            // } else if(funcImpl->name == "rdtscp"){
+            //     info.addInstruction({BC_RDTSC, BC_REG_RAX, BC_REG_ECX, BC_REG_RDX});
+            //     info.addPush(BC_REG_RAX); // timestamp counter
+            //     info.addPush(BC_REG_ECX); // processor thing?
+                
+            //     outTypeIds->add(AST_UINT64);
+            //     outTypeIds->add(AST_UINT32);
+            } else if(funcImpl->name == "compare_swap"){
+                info.addPop(BC_REG_EDX); // new
+                info.addPop(BC_REG_EAX); // old
+                info.addPop(BC_REG_RBX); // ptr
+                info.addInstruction({BC_CMP_SWAP, BC_REG_RBX, BC_REG_EAX, BC_REG_EDX});
+                info.addPush(BC_REG_AL);
+                
+                outTypeIds->add(AST_BOOL);
+            } else if(funcImpl->name == "atomic_add"){
+                info.addPop(BC_REG_EAX);
+                info.addPop(BC_REG_RBX);
+                info.addInstruction({BC_ATOMIC_ADD, BC_REG_RBX, BC_REG_EAX});
+            } else if(funcImpl->name == "sqrt"){
+                info.addPop(BC_REG_XMM0f);
+                info.addInstruction({BC_SQRT, BC_REG_XMM0f});
+                info.addPush(BC_REG_XMM0f);
+                outTypeIds->add(AST_FLOAT32);
+            } else if(funcImpl->name == "round"){
+                info.addPop(BC_REG_XMM0f);
+                info.addInstruction({BC_ROUND, BC_REG_XMM0f});
+                info.addPush(BC_REG_XMM0f);
+                outTypeIds->add(AST_FLOAT32);
+            } 
+            // else if(funcImpl->name == "sin"){
+            //     info.addPop(BC_REG_EAX);
+            //     info.addInstruction({BC_SIN, BC_REG_EAX});
+            //     info.addPush(BC_REG_EAX);
+            //     outTypeIds->add(AST_FLOAT32);
+            // } else if(funcImpl->name == "cos"){
+            //     info.addPop(BC_REG_EAX);
+            //     info.addInstruction({BC_COS, BC_REG_EAX});
+            //     info.addPush(BC_REG_EAX);
+            //     outTypeIds->add(AST_FLOAT32);
+            // } else if(funcImpl->name == "tan"){
+            //     info.addPop(BC_REG_EAX);
+            //     info.addInstruction({BC_TAN, BC_REG_EAX});
+            //     info.addPush(BC_REG_EAX);
+            //     outTypeIds->add(AST_FLOAT32);
+            // }
+            else {
+                ERR_SECTION(
+                    ERR_HEAD(expression->tokenRange)
+                    ERR_MSG("'"<<funcImpl->name<<"' is not an intrinsic function.")
+                    ERR_LINE(expression->tokenRange,"not an intrinsic")
+                )
+            }
+            return SignalDefault::SUCCESS;
+        }
+        break; case BETCALL: {
+            // I have not implemented linkConvention because it's rare
+            // that you need it for BETCALL.
+            if(info.compileInfo->compileOptions->target != BYTECODE) {
+                Assert(astFunc->linkConvention == LinkConventions::NONE || astFunc->linkConvention == NATIVE);
+            }
+            // TODO: It would be more efficient to do GeneratePop right after the argument expressions are generated instead
+            //  of pushing them to the stack and then popping them here. You would save some pushing and popping
+            //  The only difficulty is handling all the calling conventions. stdcall requires some more thought
+            //  it's arguments should be put in registers and those are probably used when generating expressions. 
+            if(fullArgs.size() != 0){
+                int baseOffset = virtualArgumentSpace - info.virtualStackPointer;
+                // info.addLoadIm(BC_REG_RBX, virtualSP - info.virtualStackPointer);
+                info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
+                for(int i=fullArgs.size()-1;i>=0;i--){
+                    auto arg = fullArgs[i];
+                    
+                    // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
+                    GeneratePop(info,BC_REG_RBX, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+                    
+                    // TODO: Use this instead?
+                    // int baseOffset = virtualArgumentSpace - info.virtualStackPointer;
+                    // GeneratePop(info,BC_REG_SP, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+                }
+            }
+            
+            if(info.compileInfo->compileOptions->target == BYTECODE &&
+                (astFunc->linkConvention == IMPORT || astFunc->linkConvention == DLLIMPORT)) {
+                info.addCall(NATIVE, astFunc->callConvention);
+            } else {
+                info.addCall(astFunc->linkConvention, astFunc->callConvention);
+            }
+            info.addCallToResolve(info.code->length(),funcImpl);
+            info.addImm(999999999);
+
+            if (funcImpl->returnTypes.size()==0) {
+                _GLOG(log::out << "pop arguments\n");
+                info.restoreStackMoment(startSP);
+                outTypeIds->add(AST_VOID);
+            } else {
+                _GLOG(log::out << "extract return values\n";)
+                // NOTE: info.currentScopeId MAY NOT WORK FOR THE TYPES IF YOU PASS FUNCTION POINTERS!
+                
+                // Hello! This stuff is very complicated and you can make many mistakes!
+                // I removed the BC_MOV_RR because I thought "Huh, this doesn't need to be here. I guess it was left behind when I changed some stuff."
+                // Don't do that you dummy!
+
+                // These two lines combined tell us where to find the return values on the stack.
+                // sp at this moment in time is at the end of current call frame
+                // sp + frame size would be the start of the call frame we had 
+                // this is were the return values can be found
+                info.addInstruction({BC_MOV_RR,BC_REG_SP,BC_REG_RBX});
+                // sp is our correct value right here. DO NOT rearrange this instruction because
+                // sp is very sensitive. You should rarely use stack pointer because of this but here we have to.
+                
+                // we restore AFTER we got the stack pointer because it resets alignments and arg offset
+                // which we don't want to include when adding our offsets. Once again, it's complicated.
+                info.restoreStackMoment(startSP); // PLEASE FOR GOODNESS SAKE DO NOT REFACTOR THIS RESTORE ELSE WHERE!
+                
+                for (int i = 0;i<(int)funcImpl->returnTypes.size(); i++) {
+                    auto &ret = funcImpl->returnTypes[i];
+                    TypeId typeId = ret.typeId;
+
+                    GeneratePush(info, BC_REG_RBX, -GenInfo::FRAME_SIZE + ret.offset - funcImpl->returnSize, typeId);
+                    outTypeIds->add(ret.typeId);
+                }
+            }
+        }
+        break; case STDCALL: {
+            if(fullArgs.size() > 4) {
+                Assert(virtualArgumentSpace - info.virtualStackPointer == fullArgs.size()*8);
+                int argOffset = fullArgs.size()*8;
+                info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
+                for(int i=fullArgs.size()-1;i>=4;i--){
+                    auto arg = fullArgs[i];
+                    
+                    // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
+                    // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
+                    u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
+                    GeneratePop(info,BC_REG_RBX, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
+                }
+            }
+            auto& argTypes = funcImpl->argumentTypes;
+            if(fullArgs.size() > 3){
+                if(argTypes[3].typeId == AST_FLOAT32)
+                    info.addPop(BC_REG_XMM3f);
+                else
+                    info.addPop(BC_REG_R9);
+            }
+            if(fullArgs.size() > 2){
+                if(argTypes[2].typeId == AST_FLOAT32)
+                    info.addPop(BC_REG_XMM2f);
+                else
+                    info.addPop(BC_REG_R8);
+            }
+            if(fullArgs.size() > 1){
+                if(argTypes[1].typeId == AST_FLOAT32)
+                    info.addPop(BC_REG_XMM1f);
+                else
+                    info.addPop(BC_REG_RDX);
+            }
+            if(fullArgs.size() > 0){
+                if(argTypes[0].typeId == AST_FLOAT32)
+                    info.addPop(BC_REG_XMM0f);
+                else
+                    info.addPop(BC_REG_RCX);
+            }
+            // native function can be handled normally
+            info.addCall(astFunc->linkConvention, astFunc->callConvention);
+            if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
+                || astFunc->linkConvention == LinkConventions::VARIMPORT){
+                if(astFunc->linkConvention == DLLIMPORT){
+                    info.code->addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
+                } else if(astFunc->linkConvention == VARIMPORT){
+                    info.code->addExternalRelocation(funcImpl->name, info.code->length());
+                } else {
+                    info.code->addExternalRelocation(funcImpl->name, info.code->length());
+                }
+                info.addImm(info.code->externalRelocations.size()-1);
+            } else {
+                // linkin == native, none or export should be fine
+                info.addCallToResolve(info.code->length(), funcImpl);
+                info.addImm(999999);
+            }
+
+            Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
+
+            if (funcImpl->returnTypes.size()==0) {
+                info.restoreStackMoment(startSP);
+                outTypeIds->add(AST_VOID);
+            } else {
+                // return type must fit in RAX
+                Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
+                
+                info.restoreStackMoment(startSP);
+                
+                auto &ret = funcImpl->returnTypes[0];
+                if(ret.typeId == AST_FLOAT32) {
+                    // 
+                    info.addPush(BC_REG_XMM0f);
+                } else {
+                    u8 reg = RegBySize(BC_AX, info.ast->getTypeSize(ret.typeId));
+                    info.addPush(reg);
+                }
+                outTypeIds->add(ret.typeId);
+            }
+        }
+    }
     return SignalDefault::SUCCESS;
 }
 SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope) {
@@ -1045,7 +1553,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
     // if(castType.isString()){
     //     castType = info.ast->convertToTypeId(castType,idScope);
     //     if(!castType.isValid()){
-    //         ERR_HEAD3(expression->tokenRange,"Type "<<info.ast->getTokenFromTypeString(expression->castType) << " does not exist.\n";)
+    //         ERR_SECTION(
+// ERR_HEAD(expression->tokenRange,"Type "<<info.ast->getTokenFromTypeString(expression->castType) << " does not exist.\n";)
     //     }
     // }
     // castType = info.ast->ensureNonVirtualId(castType);
@@ -1084,7 +1593,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             
             int offset = info.code->appendData(pushedValues, pushedSize);
             info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-            info.code->addIm(offset);
+            info.addImm(offset);
             for(int i=0;i<outTypeIds->size();i++){
                 SignalDefault result = GeneratePushFromValues(info, BC_REG_RBX, 0, outTypeIds->get(i));
             }
@@ -1115,7 +1624,11 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // TypeInfo *typeInfo = info.ast->getTypeInfo(expression->typeId);
             u32 size = info.ast->getTypeSize(expression->typeId);
             u8 reg = RegBySize(BC_AX, size);
-            info.addLoadIm(reg, val);
+            if(size == 8) {
+                info.addLoadIm2(reg, val);
+            } else {
+                info.addLoadIm(reg, val);
+            }
             info.addPush(reg);
         }
         else if (expression->typeId == AST_BOOL) {
@@ -1135,6 +1648,18 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             info.addPush(BC_REG_AL);
         }
         else if (expression->typeId == AST_FLOAT32) {
+            float val = expression->f32Value;
+
+            // TOKENINFO(expression->tokenRange)
+            // info.code->addDebugText("  expr push float");
+            info.addLoadIm(BC_REG_EAX, *(u32*)&val);
+            info.addPush(BC_REG_EAX);
+            
+            // outTypeIds->add( expression->typeId);
+            // return SignalDefault::SUCCESS;
+        }
+        else if (expression->typeId == AST_FLOAT64) {
+            Assert(("64-bit floats not implement",false));
             float val = expression->f32Value;
 
             // TOKENINFO(expression->tokenRange)
@@ -1184,7 +1709,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     switch(varinfo->type) {
                         case VariableInfo::GLOBAL: {
                             info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                            info.code->addIm(varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
                             GeneratePush(info, BC_REG_RBX, 0, varinfo->versions_typeId[info.currentPolyVersion]);
                         }
                         break; case VariableInfo::LOCAL: {
@@ -1194,7 +1719,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         break; case VariableInfo::MEMBER: {
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
                             info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
-                            info.code->addIm(GenInfo::FRAME_SIZE);
+                            info.addImm(GenInfo::FRAME_SIZE);
                             
                             // info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
@@ -1212,7 +1737,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if(id->funcOverloads.overloads.size()==1){
                         info.addInstruction({BC_CODEPTR, BC_REG_RAX});
                         info.addCallToResolve(info.code->length(), id->funcOverloads.overloads[0].funcImpl);
-                        info.code->addIm(id->funcOverloads.overloads[0].funcImpl->address);
+                        info.addImm(id->funcOverloads.overloads[0].funcImpl->address);
 
                         // info.code->exportSymbol(expression->name, id->funcOverloads.overloads[0].funcImpl->address);
                     } else {
@@ -1232,387 +1757,17 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 }
             } else {
                 if(!info.hasForeignErrors()){
-                    ERR_HEAD3(expression->tokenRange, "'"<<expression->tokenRange.firstToken<<"' is not declared.\n\n";
-                        ERR_LINE(expression->tokenRange,"undeclared");
+                    ERR_SECTION(
+                        ERR_HEAD(expression->tokenRange)
+                        ERR_MSG("'"<<expression->tokenRange.firstToken<<"' is not declared.")
+                        ERR_LINE(expression->tokenRange,"undeclared")
                     )
                 }
                 return SignalDefault::FAILURE;
             }
         }
         else if (expression->typeId == AST_FNCALL) {
-            ASTFunction* astFunc = nullptr;
-            FuncImpl* funcImpl = nullptr;
-            {
-                FnOverloads::Overload overload = expression->versions_overload[info.currentPolyVersion];
-                astFunc = overload.astFunc;
-                funcImpl = overload.funcImpl;
-            }
-            if(!info.hasForeignErrors()) {
-                // not ok, type checker should have generated the right overload.
-                Assert(astFunc && funcImpl);
-            }
-            if(!astFunc || !funcImpl) {
-                return SignalDefault::FAILURE;
-            }
-
-            // overload comes from type checker
-            _GLOG(log::out << "Overload: ";funcImpl->print(info.ast,nullptr);log::out << "\n";)
-
-            TINY_ARRAY(ASTExpression*,fullArgs,5);
-            // std::vector<ASTExpression*> fullArgs;
-            fullArgs.resize(astFunc->arguments.size());
-            
-            // for (int i = 0; i < (int)expression->args->size();i++) {
-            //     ASTExpression* arg = expression->args->get(i);
-            for (int i = 0; i < (int)expression->args.size();i++) {
-                ASTExpression* arg = expression->args.get(i);
-                Assert(arg);
-                if(!arg->namedValue.str){
-                    fullArgs[i] = arg;
-                }else{
-                    int argIndex = -1;
-                    for(int j=0;j<(int)astFunc->arguments.size();j++){
-                        if(astFunc->arguments[j].name==arg->namedValue){
-                            argIndex=j;
-                            break;
-                        }
-                    }
-                    if(argIndex!=-1) {
-                        if (fullArgs[argIndex] != nullptr) {
-                            ERR_HEAD3(arg->namedValue.range(), "A named argument cannot specify an occupied parameter.\n\n";
-                                ERR_LINE(astFunc->tokenRange,"this overload");
-                                ERR_LINE(fullArgs[argIndex]->tokenRange,"occupied");
-                                ERR_LINE(arg->namedValue,"bad coder");
-                            )
-                        } else {
-                            fullArgs[argIndex] = arg;
-                        }
-                    } else{
-                        ERR_HEAD3(arg->tokenRange, "Named argument is not a parameter of '";funcImpl->print(info.ast,astFunc);log::out<<"'\n\n";
-                            ERR_LINE(arg->namedValue,"not valid");
-                        )
-                        // continue like nothing happened
-                    }
-                }
-            }
-            for (int i = 0; i < (int)astFunc->arguments.size(); i++) {
-                auto &arg = astFunc->arguments[i];
-                if (!fullArgs[i])
-                    fullArgs[i] = arg.defaultValue;
-            }
-            // I don't think there is anything to fix in there because conventions
-            // are really about assembly instructions which type checker has nothing to do with.
-            // log::out << log::YELLOW << "Fix call conventions in type checker\n";
-            int startSP = info.saveStackMoment();
-            switch(astFunc->callConvention){
-                case BETCALL: {
-                    // Assert(0 == (-info.virtualStackPointer) % 8); // should be aligned
-
-                    // info.addIncrSp(-funcImpl->argSize);
-                    
-                    int alignment = 16;
-                    int stackSpace = funcImpl->argSize;
-                    stackSpace += MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
-                    info.addIncrSp(-stackSpace);
-                }
-                break; case STDCALL: {
-                    for(int i=0;i<astFunc->arguments.size();i++){
-                        int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
-                        if(size>8){
-                            // TODO: This should be moved to the type checker.
-                            ERR_SECTION(
-                                ERR_HEAD(expression->tokenRange)
-                                ERR_MSG("Argument types cannot be larger than 8 bytes when using stdcall.")
-                                ERR_LINE(expression->tokenRange, "bad")
-                            )
-                            return SignalDefault::FAILURE;
-                        }
-                    }
-
-                    int alignment = 16;
-                    int stackSpace = astFunc->arguments.size() * 8;
-                    if(stackSpace<32)
-                        stackSpace = 32;
-                    stackSpace += MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
-                    info.addIncrSp(-stackSpace);
-                    // int misalign = MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
-                    // info.addIncrSp(-misalign);
-                }
-                break; case CDECL_CONVENTION: {
-                    Assert(false); // @Incomplete
-                }
-            }
-
-            int virtualArgumentSpace = info.virtualStackPointer;
-            for(int i=0;i<(int)fullArgs.size();i++){
-                auto arg = fullArgs[i];
-                
-                TypeId argType = {};
-                SignalDefault result = SignalDefault::FAILURE;
-                if(expression->boolValue && i == 0) {
-                    // method call and first argument which is 'this'
-                    bool nonReference = false;
-                    result = GenerateReference(info, arg, &argType, -1, &nonReference);
-                    if(result==SignalDefault::SUCCESS){
-                        if(!nonReference) {
-                            if(!argType.isPointer()){
-                                argType.setPointerLevel(1);
-                            } else {
-                                Assert(argType.getPointerLevel()==1);
-                                info.addPop(BC_REG_RBX);
-                                info.addInstruction({BC_MOV_MR, BC_REG_RBX, BC_REG_RAX, 8});
-                                info.addPush(BC_REG_RAX);
-                                // info.addInstruction({BC_MOV_MR, BC_REG_RBX, BC_REG_RBX, 8});
-                                // info.addPush(BC_REG_RBX);
-                            }
-                        }
-                    }
-                } else {
-                    result = GenerateExpression(info, arg, &argType);
-                    // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
-                    bool wasSafelyCasted = PerformSafeCast(info,argType, funcImpl->argumentTypes[i].typeId);
-                    if(!wasSafelyCasted && !info.hasErrors()){
-                        ERR_SECTION(
-                            ERR_HEAD(expression->tokenRange)
-                            ERR_MSG("Cannot cast " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(funcImpl->argumentTypes[i].typeId))
-                        )
-                    }
-                    // Assert(wasSafelyCasted);
-                }
-            }
-            auto callConvention = astFunc->callConvention;
-            if(info.compileInfo->compileOptions->target == BYTECODE &&
-                (IS_IMPORT(astFunc->linkConvention))) {
-                callConvention = BETCALL;
-            }
-
-            switch (callConvention) {
-                case INTRINSIC: {
-                    // TODO: You could do some special optimisations when using intrinsics.
-                    //  If the arguments are strictly variables or constants then you can use a mov instruction 
-                    //  instead messing with push and pop.
-                    if(funcImpl->name == "memcpy"){
-                        info.addPop(BC_REG_RBX);
-                        info.addPop(BC_REG_RSI);
-                        info.addPop(BC_REG_RDI);
-                        info.addInstruction({BC_MEMCPY, BC_REG_RDI, BC_REG_RSI, BC_REG_RBX});
-                    } else if(funcImpl->name == "strlen"){
-                        info.addPop(BC_REG_RSI);
-                        info.addInstruction({BC_STRLEN, BC_REG_RSI, BC_REG_RCX, BC_REG_RAX});
-                        info.addPush(BC_REG_ECX); // len
-                        outTypeIds->add(AST_UINT32);
-                    } else if(funcImpl->name == "memzero"){
-                        info.addPop(BC_REG_RBX); // ptr
-                        info.addPop(BC_REG_RDI);
-                        info.addInstruction({BC_MEMZERO, BC_REG_RDI, BC_REG_RBX});
-                    } else if(funcImpl->name == "rdtsc"){
-                        // no input
-                        info.addInstruction({BC_RDTSC, BC_REG_RAX, BC_REG_RDX});
-                        info.addPush(BC_REG_RAX); // timestamp counter
-                        
-                        outTypeIds->add(AST_UINT64);
-                    // } else if(funcImpl->name == "rdtscp"){
-                    //     info.addInstruction({BC_RDTSC, BC_REG_RAX, BC_REG_ECX, BC_REG_RDX});
-                    //     info.addPush(BC_REG_RAX); // timestamp counter
-                    //     info.addPush(BC_REG_ECX); // processor thing?
-                        
-                    //     outTypeIds->add(AST_UINT64);
-                    //     outTypeIds->add(AST_UINT32);
-                    } else if(funcImpl->name == "compare_swap"){
-                        info.addPop(BC_REG_EDX); // new
-                        info.addPop(BC_REG_EAX); // old
-                        info.addPop(BC_REG_RBX); // ptr
-                        info.addInstruction({BC_CMP_SWAP, BC_REG_RBX, BC_REG_EAX, BC_REG_EDX});
-                        info.addPush(BC_REG_AL);
-                        
-                        outTypeIds->add(AST_BOOL);
-                    } else if(funcImpl->name == "atomic_add"){
-                        info.addPop(BC_REG_EAX);
-                        info.addPop(BC_REG_RBX);
-                        info.addInstruction({BC_ATOMIC_ADD, BC_REG_RBX, BC_REG_EAX});
-                    } else if(funcImpl->name == "sqrt"){
-                        info.addPop(BC_REG_XMM0f);
-                        info.addInstruction({BC_SQRT, BC_REG_XMM0f});
-                        info.addPush(BC_REG_XMM0f);
-                        outTypeIds->add(AST_FLOAT32);
-                    } else if(funcImpl->name == "round"){
-                        info.addPop(BC_REG_XMM0f);
-                        info.addInstruction({BC_ROUND, BC_REG_XMM0f});
-                        info.addPush(BC_REG_XMM0f);
-                        outTypeIds->add(AST_FLOAT32);
-                    } 
-                    // else if(funcImpl->name == "sin"){
-                    //     info.addPop(BC_REG_EAX);
-                    //     info.addInstruction({BC_SIN, BC_REG_EAX});
-                    //     info.addPush(BC_REG_EAX);
-                    //     outTypeIds->add(AST_FLOAT32);
-                    // } else if(funcImpl->name == "cos"){
-                    //     info.addPop(BC_REG_EAX);
-                    //     info.addInstruction({BC_COS, BC_REG_EAX});
-                    //     info.addPush(BC_REG_EAX);
-                    //     outTypeIds->add(AST_FLOAT32);
-                    // } else if(funcImpl->name == "tan"){
-                    //     info.addPop(BC_REG_EAX);
-                    //     info.addInstruction({BC_TAN, BC_REG_EAX});
-                    //     info.addPush(BC_REG_EAX);
-                    //     outTypeIds->add(AST_FLOAT32);
-                    // }
-                    else {
-                        ERR_HEAD3(expression->tokenRange, "'"<<funcImpl->name<<"' is not an intrinsic function\n";
-                            ERR_LINE(expression->tokenRange,"not an intrinsic");
-                        )
-                    }
-                    return SignalDefault::SUCCESS;
-                }
-                break; case BETCALL: {
-                    // I have not implemented linkConvention because it's rare
-                    // that you need it for BETCALL.
-                    if(info.compileInfo->compileOptions->target != BYTECODE) {
-                        Assert(astFunc->linkConvention == LinkConventions::NONE || astFunc->linkConvention == NATIVE);
-                    }
-                    // TODO: It would be more efficient to do GeneratePop right after the argument expressions are generated instead
-                    //  of pushing them to the stack and then popping them here. You would save some pushing and popping
-                    //  The only difficulty is handling all the calling conventions. stdcall requires some more thought
-                    //  it's arguments should be put in registers and those are probably used when generating expressions. 
-                    if(fullArgs.size() != 0){
-                        int baseOffset = virtualArgumentSpace - info.virtualStackPointer;
-                        // info.addLoadIm(BC_REG_RBX, virtualSP - info.virtualStackPointer);
-                        info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
-                        for(int i=fullArgs.size()-1;i>=0;i--){
-                            auto arg = fullArgs[i];
-                            
-                            // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-                            GeneratePop(info,BC_REG_RBX, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-                            
-                            // TODO: Use this instead?
-                            // int baseOffset = virtualArgumentSpace - info.virtualStackPointer;
-                            // GeneratePop(info,BC_REG_SP, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-                        }
-                    }
-                    
-                    if(info.compileInfo->compileOptions->target == BYTECODE &&
-                        (astFunc->linkConvention == IMPORT || astFunc->linkConvention == DLLIMPORT)) {
-                        info.addCall(NATIVE, astFunc->callConvention);
-                    } else {
-                        info.addCall(astFunc->linkConvention, astFunc->callConvention);
-                    }
-                    info.addCallToResolve(info.code->length(),funcImpl);
-                    info.code->addIm(999999999);
-
-                    if (funcImpl->returnTypes.size()==0) {
-                        _GLOG(log::out << "pop arguments\n");
-                        info.restoreStackMoment(startSP);
-                        outTypeIds->add(AST_VOID);
-                    } else {
-                        _GLOG(log::out << "extract return values\n";)
-                        // NOTE: info.currentScopeId MAY NOT WORK FOR THE TYPES IF YOU PASS FUNCTION POINTERS!
-                        
-                        // Hello! This stuff is very complicated and you can make many mistakes!
-                        // I removed the BC_MOV_RR because I thought "Huh, this doesn't need to be here. I guess it was left behind when I changed some stuff."
-                        // Don't do that you dummy!
-
-                        // These two lines combined tell us where to find the return values on the stack.
-                        // sp at this moment in time is at the end of current call frame
-                        // sp + frame size would be the start of the call frame we had 
-                        // this is were the return values can be found
-                        info.addInstruction({BC_MOV_RR,BC_REG_SP,BC_REG_RBX});
-                        // sp is our correct value right here. DO NOT rearrange this instruction because
-                        // sp is very sensitive. You should rarely use stack pointer because of this but here we have to.
-                        
-                        // we restore AFTER we got the stack pointer because it resets alignments and arg offset
-                        // which we don't want to include when adding our offsets. Once again, it's complicated.
-                        info.restoreStackMoment(startSP); // PLEASE FOR GOODNESS SAKE DO NOT REFACTOR THIS RESTORE ELSE WHERE!
-                        
-                        for (int i = 0;i<(int)funcImpl->returnTypes.size(); i++) {
-                            auto &ret = funcImpl->returnTypes[i];
-                            TypeId typeId = ret.typeId;
-
-                            GeneratePush(info, BC_REG_RBX, -GenInfo::FRAME_SIZE + ret.offset - funcImpl->returnSize, typeId);
-                            outTypeIds->add(ret.typeId);
-                        }
-                    }
-                }
-                break; case STDCALL: {
-                    if(fullArgs.size() > 4) {
-                        Assert(virtualArgumentSpace - info.virtualStackPointer == fullArgs.size()*8);
-                        int argOffset = fullArgs.size()*8;
-                        info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
-                        for(int i=fullArgs.size()-1;i>=4;i--){
-                            auto arg = fullArgs[i];
-                            
-                            // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-                            // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
-                            u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
-                            GeneratePop(info,BC_REG_RBX, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
-                        }
-                    }
-                    auto& argTypes = funcImpl->argumentTypes;
-                    if(fullArgs.size() > 3){
-                        if(argTypes[3].typeId == AST_FLOAT32)
-                            info.addPop(BC_REG_XMM3f);
-                        else
-                            info.addPop(BC_REG_R9);
-                    }
-                    if(fullArgs.size() > 2){
-                        if(argTypes[2].typeId == AST_FLOAT32)
-                            info.addPop(BC_REG_XMM2f);
-                        else
-                            info.addPop(BC_REG_R8);
-                    }
-                    if(fullArgs.size() > 1){
-                        if(argTypes[1].typeId == AST_FLOAT32)
-                            info.addPop(BC_REG_XMM1f);
-                        else
-                            info.addPop(BC_REG_RDX);
-                    }
-                    if(fullArgs.size() > 0){
-                        if(argTypes[0].typeId == AST_FLOAT32)
-                            info.addPop(BC_REG_XMM0f);
-                        else
-                            info.addPop(BC_REG_RCX);
-                    }
-                    // native function can be handled normally
-                    info.addCall(astFunc->linkConvention, astFunc->callConvention);
-                    if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
-                        || astFunc->linkConvention == LinkConventions::VARIMPORT){
-                        if(astFunc->linkConvention == DLLIMPORT){
-                            info.code->addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
-                        } else if(astFunc->linkConvention == VARIMPORT){
-                            info.code->addExternalRelocation(funcImpl->name, info.code->length());
-                        } else {
-                            info.code->addExternalRelocation(funcImpl->name, info.code->length());
-                        }
-                        info.code->addIm(info.code->externalRelocations.size()-1);
-                    } else {
-                        // linkin == native, none or export should be fine
-                        info.addCallToResolve(info.code->length(), funcImpl);
-                        info.code->addIm(999999);
-                    }
-
-                    Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
-
-                    if (funcImpl->returnTypes.size()==0) {
-                        info.restoreStackMoment(startSP);
-                        outTypeIds->add(AST_VOID);
-                    } else {
-                        // return type must fit in RAX
-                        Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
-                        
-                        info.restoreStackMoment(startSP);
-                        
-                        auto &ret = funcImpl->returnTypes[0];
-                        if(ret.typeId == AST_FLOAT32) {
-                            // 
-                            info.addPush(BC_REG_XMM0f);
-                        } else {
-                            u8 reg = RegBySize(BC_AX, info.ast->getTypeSize(ret.typeId));
-                            info.addPush(reg);
-                        }
-                        outTypeIds->add(ret.typeId);
-                    }
-                }
-            }
-            return SignalDefault::SUCCESS;
+            return GenerateFnCall(info, expression, outTypeIds, false);
         } else if(expression->typeId==AST_STRING){
             // Assert(expression->constStrIndex!=-1);
             int& constIndex = expression->versions_constStrIndex[info.currentPolyVersion];
@@ -1623,7 +1778,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 typeInfo = info.ast->convertToTypeInfo(Token("char*"), info.ast->globalScopeId, true);
                 Assert(typeInfo);
                 info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                info.code->addIm(constString.address);
+                info.addImm(constString.address);
                 info.addPush(BC_REG_RBX);
                 TypeId ti = AST_CHAR;
                 ti.setPointerLevel(1);
@@ -1631,7 +1786,9 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             } else {
                 typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId, true);
                 if(!typeInfo){
-                    ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
+                    ERR_SECTION(
+                        ERR_HEAD(expression->tokenRange)
+                        ERR_MSG("'"<<expression->tokenRange<<"' cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"")
                     )
                     return SignalDefault::FAILURE;
                 }
@@ -1651,13 +1808,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
                 // first member is pushed last
                 info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                info.code->addIm(constString.address);
+                info.addImm(constString.address);
                 info.addPush(BC_REG_RBX);
                 outTypeIds->add(typeInfo->id);
             }
             return SignalDefault::SUCCESS;
         } else if(expression->typeId == AST_SIZEOF){
-            // TOKENINFO(expression->tokenRange)
 
             // TypeId typeId = info.ast->convertToTypeId(expression->name, idScope);
             // Assert(typeId.isValid()); // Did type checker fix this? Maybe not on errors?
@@ -1670,7 +1826,48 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
             outTypeIds->add(AST_UINT32);
             return SignalDefault::SUCCESS;
-        } else if(expression->typeId == AST_NAMEOF){
+        } else if(expression->typeId == AST_ASM){
+            // TODO: How does polymorphism complicated this?
+            //   You don't want duplicate inline assembly.
+
+            u32 start = info.code->rawInlineAssembly.used;
+
+            // +2 and -1 to avoid adding "asm { }"
+            u32 startT = expression->tokenRange.startIndex()+2;
+            u32 endT = expression->tokenRange.endIndex-1;
+            TokenStream* stream = expression->tokenRange.tokenStream();
+            /// We can assume that all tokens come from the same stream for now.
+            for (int i=startT; i < endT; i++) {
+                Token& tok = stream->get(i);
+                // OPTIMIZE: TODO: You can compute the character length of the inline assembly in the parser and
+                //  resize in advance instead of resizing per token.
+                info.code->rawInlineAssembly._reserve(info.code->rawInlineAssembly.used + tok.length + 2); // +2 for space or line feed
+                memcpy(info.code->rawInlineAssembly._ptr + info.code->rawInlineAssembly.used,
+                     tok.str, tok.length);
+                info.code->rawInlineAssembly.used += tok.length;
+                if(tok.flags&TOKEN_SUFFIX_LINE_FEED) {
+                    info.code->rawInlineAssembly._ptr[info.code->rawInlineAssembly.used] = '\n';
+                    info.code->rawInlineAssembly.used += 1;
+                } else if(tok.flags&TOKEN_SUFFIX_SPACE) {
+                    info.code->rawInlineAssembly._ptr[info.code->rawInlineAssembly.used] = ' ';
+                    info.code->rawInlineAssembly.used += 1;
+                }
+                Assert(0==(tok.flags&TOKEN_MASK_QUOTED));
+            }
+
+            u32 end = info.code->rawInlineAssembly.used;
+
+            int asmInstanceIndex = info.code->asmInstances.size();
+            info.code->asmInstances.add({start, end});
+
+            // NOTE: ASM_ENCODE_INDEX result in 3 expression separated by comma
+            info.addInstruction({BC_ASM, ASM_ENCODE_INDEX(asmInstanceIndex)});
+            // info.addInstruction({BC_ASM, (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)});
+
+            outTypeIds->add(AST_VOID);
+            return SignalDefault::SUCCESS;
+        } 
+        else if(expression->typeId == AST_NAMEOF){
             // TypeId typeId = info.ast->convertToTypeId(expression->name, idScope);
             // Assert(typeId.isValid());
 
@@ -1682,7 +1879,9 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
             TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Slice<char>"), info.ast->globalScopeId, true);
             if(!typeInfo){
-                ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"\n";
+                ERR_SECTION(
+                    ERR_HEAD(expression->tokenRange)
+                    ERR_MSG("'"<<expression->tokenRange<<"' cannot be converted to Slice<char> because Slice doesn't exist. Did you forget #import \"Basic\"")
                 )
                 return SignalDefault::FAILURE;
             }
@@ -1703,7 +1902,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
             // first member is pushed last
             info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-            info.code->addIm(constString.address);
+            info.addImm(constString.address);
             info.addPush(BC_REG_RBX);
 
             outTypeIds->add(typeInfo->id);
@@ -1720,10 +1919,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             outTypeIds->add( newId);
             return SignalDefault::SUCCESS;
         } else {
-            std::string typeName = info.ast->typeToString(expression->typeId);
+            auto typeName = info.ast->typeToString(expression->typeId);
             // info.addInstruction({BC_PUSH,BC_REG_RAX}); // push something so the stack stays synchronized, or maybe not?
-            ERR_HEAD3(expression->tokenRange, "'" <<typeName << "' is an unknown data type.\n\n";
-                ERR_LINE(expression->tokenRange,typeName.c_str());
+            ERR_SECTION(
+                ERR_HEAD(expression->tokenRange)
+                ERR_MSG("'" <<typeName << "' is an unknown data type.")
+                ERR_LINE(expression->tokenRange, typeName)
             )
             // log::out <<  log::RED<<"GenExpr: data type not implemented\n";
             outTypeIds->add( AST_VOID);
@@ -1736,190 +1937,17 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
         TypeId ltype = AST_VOID;
         if(operatorImpl){
-            ASTFunction* astFunc = nullptr;
-            FuncImpl* funcImpl = nullptr;
-            {
-                FnOverloads::Overload overload = expression->versions_overload[info.currentPolyVersion];
-                astFunc = overload.astFunc;
-                funcImpl = overload.funcImpl;
-            }
-            Assert(astFunc && funcImpl);
-
-            // overload comes from type checker
-            _GLOG(log::out << "Operator overload: ";funcImpl->print(info.ast,nullptr);log::out << "\n";)
-
-            TINY_ARRAY(ASTExpression*,fullArgs,5);
-            // std::vector<ASTExpression*> fullArgs;
-            fullArgs.add(expression->left);
-            fullArgs.add(expression->right);
-
-            // I don't think there is anything to fix in there because conventions
-            // are really about assembly instructions which type checker has nothing to do with.
-            // log::out << log::YELLOW << "Fix call conventions in type checker\n";
-            int startSP = info.saveStackMoment();
-            switch(astFunc->callConvention){
-                case BETCALL: {
-                    Assert(0 == (-info.virtualStackPointer) % 8); // should be aligned
-
-                    info.addIncrSp(-funcImpl->argSize);
-                }
-                break; case STDCALL: {
-                    for(int i=0;i<astFunc->arguments.size();i++){
-                        int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
-                        if(size>8){
-                            // TODO: This should be moved to the type checker.
-                            ERR_HEAD3(expression->tokenRange, "Argument types cannot be larger than 8 bytes.";
-                                ERR_LINE(expression->tokenRange, "bad");
-                            )
-                            return SignalDefault::FAILURE;
-                        }
-                    }
-
-                    int alignment = 16;
-                    int stackSpace = astFunc->arguments.size() * 8;
-                    if(stackSpace<32)
-                        stackSpace = 32;
-                    stackSpace += MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
-                    info.addIncrSp(-stackSpace);
-                    // int misalign = MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
-                    // info.addIncrSp(-misalign);
-                }
-                break; case CDECL_CONVENTION: {
-                    Assert(false); // @Incomplete
-                }
-            }
-
-            int virtualSP = info.virtualStackPointer;
-            for(int i=0;i<(int)fullArgs.size();i++){
-                auto arg = fullArgs[i];
-                
-                TypeId argType = {};
-                SignalDefault result = SignalDefault::FAILURE;
-                result = GenerateExpression(info, arg, &argType);
-                // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
-                bool wasSafelyCasted = PerformSafeCast(info,argType, funcImpl->argumentTypes[i].typeId);
-                Assert(wasSafelyCasted);
-            }
-
-            switch (astFunc->callConvention) {
-                break; case BETCALL: {
-                    // I have not implemented linkConvention because it's rare
-                    // that you need it for BETCALL.
-                    if(fullArgs.size() != 0){
-                        int baseOffset = virtualSP - info.virtualStackPointer;
-                        // info.addLoadIm(BC_REG_RBX, virtualSP - info.virtualStackPointer);
-                        info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
-                        for(int i=fullArgs.size()-1;i>=0;i--){
-                            auto arg = fullArgs[i];
-                            
-                            // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-                            GeneratePop(info,BC_REG_RBX, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-                        }
-                    }
-
-                    info.addCall(astFunc->linkConvention, astFunc->callConvention);
-                    info.addCallToResolve(info.code->length(),funcImpl);
-                    info.code->addIm(999999999);
-
-                    if (funcImpl->returnTypes.size()==0) {
-                        _GLOG(log::out << "pop arguments\n");
-                        info.restoreStackMoment(startSP);
-                        outTypeIds->add(AST_VOID);
-                    } else {
-                        _GLOG(log::out << "extract return values\n";)
-                        // NOTE: info.currentScopeId MAY NOT WORK FOR THE TYPES IF YOU PASS FUNCTION POINTERS!
-                        
-                        // Hello! This stuff is very complicated and you can make many mistakes!
-                        // I removed the BC_MOV_RR because I thought "Huh, this doesn't need to be here. I guess it was left behind when I changed some stuff."
-                        // Don't do that you dummy!
-
-                        // These two lines combined tell us where to find the return values on the stack.
-                        // sp at this moment in time is at the end of current call frame
-                        // sp + frame size would be the start of the call frame we had 
-                        // this is were the return values can be found
-                        int offset = -GenInfo::FRAME_SIZE;
-                        info.addInstruction({BC_MOV_RR,BC_REG_SP,BC_REG_RBX});
-                        // sp is our correct value right here. DO NOT rearrange this instruction because
-                        // sp is very sensitive. You should rarely use stack pointer because of this but here we have to.
-                        
-                        // we restore AFTER we got the stack pointer because it resets alignments and arg offset
-                        // which we don't want to include when adding our offsets. Once again, it's complicated.
-                        info.restoreStackMoment(startSP); // PLEASE FOR GOODNESS SAKE DO NOT REFACTOR THIS RESTORE ELSE WHERE!
-                        
-                        for (int i = 0;i<(int)funcImpl->returnTypes.size(); i++) {
-                            auto &ret = funcImpl->returnTypes[i];
-                            TypeId typeId = ret.typeId;
-
-                            GeneratePush(info, BC_REG_RBX, offset + ret.offset, typeId);
-                            outTypeIds->add(ret.typeId);
-                        }
-                    }
-                }
-                // break; case STDCALL: {
-                //     if(fullArgs.size() > 4) {
-                //         Assert(virtualSP - info.virtualStackPointer == fullArgs.size()*8);
-                //         int argOffset = fullArgs.size()*8;
-                //         info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
-                //         for(int i=fullArgs.size()-1;i>=4;i--){
-                //             auto arg = fullArgs[i];
-                            
-                //             // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-                //             // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
-                //             u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
-                //             GeneratePop(info,BC_REG_RBX, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
-                //         }
-                //     }
-                //     if(fullArgs.size() > 3){
-                //         info.addPop(BC_REG_R9);
-                //     }
-                //     if(fullArgs.size() > 2){
-                //         info.addPop(BC_REG_R8);
-                //     }
-                //     if(fullArgs.size() > 1){
-                //         info.addPop(BC_REG_RDX);
-                //     }
-                //     if(fullArgs.size() > 0){
-                //         info.addPop(BC_REG_RCX);
-                //     }
-                //     // native function can be handled normally
-                //     info.addCall(astFunc->linkConvention, astFunc->callConvention);
-                //     if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT){
-                //         if(astFunc->linkConvention == DLLIMPORT){
-                //             info.code->addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
-                //         } else
-                //             info.code->addExternalRelocation(funcImpl->name, info.code->length());
-                //         info.code->addIm(info.code->externalRelocations.size()-1);
-                //     } else {
-                //         // linkin == native, none or export should be fine
-                //         info.addCallToResolve(info.code->length(), funcImpl);
-                //         info.code->addIm(999999);
-                //     }
-
-                //     Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
-
-                //     if (funcImpl->returnTypes.size()==0) {
-                //         info.restoreStackMoment(startSP);
-                //         outTypeIds->add(AST_VOID);
-                //     } else {
-                //         // return type must fit in RAX
-                //         Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
-                        
-                //         info.restoreStackMoment(startSP);
-                        
-                //         auto &ret = funcImpl->returnTypes[0];
-                //         info.addPush(BC_REG_RAX);
-                //         outTypeIds->add(ret.typeId);
-                //     }
-                // }
-            }
-            return SignalDefault::SUCCESS;
+            return GenerateFnCall(info, expression, outTypeIds, true);
         } else if (expression->typeId == AST_REFER) {
 
             SignalDefault result = GenerateReference(info,expression->left,&ltype,idScope);
             if(result!=SignalDefault::SUCCESS)
                 return SignalDefault::FAILURE;
             if(ltype.getPointerLevel()==3){
-                ERR_HEAD3(expression->tokenRange,"Cannot take a reference of a triple pointer (compiler has a limit of 0-3 depth of pointing). Cast to u64 if you need triple pointers.";)
+                ERR_SECTION(
+                    ERR_HEAD(expression->tokenRange)
+                    ERR_MSG("Cannot take a reference of a triple pointer (compiler has a limit of 0-3 depth of pointing). Cast to u64 if you need triple pointers.")
+                )
                 return SignalDefault::FAILURE;
             }
             ltype.setPointerLevel(ltype.getPointerLevel()+1);
@@ -1930,8 +1958,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 return result;
 
             if (!ltype.isPointer()) {
-                ERR_HEAD3(expression->left->tokenRange, "Cannot dereference " << info.ast->typeToString(ltype) << ".\n\n";
-                    ERR_LINE(expression->left->tokenRange, "bad");
+                ERR_SECTION(
+                    ERR_HEAD(expression->left->tokenRange)
+                    ERR_MSG("Cannot dereference " << info.ast->typeToString(ltype) << ".")
+                    ERR_LINE(expression->left->tokenRange, "bad")
                 )
                 outTypeIds->add( AST_VOID);
                 return SignalDefault::FAILURE;
@@ -1941,8 +1971,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             outId.setPointerLevel(outId.getPointerLevel()-1);
 
             if (outId == AST_VOID) {
-                ERR_HEAD3(expression->left->tokenRange, "Cannot dereference " << info.ast->typeToString(ltype) << ".\n\n";
-                    ERR_LINE(expression->left->tokenRange, "bad");
+                ERR_SECTION(
+                    ERR_HEAD(expression->left->tokenRange)
+                    ERR_MSG("Cannot dereference " << info.ast->typeToString(ltype) << ".")
+                    ERR_LINE(expression->left->tokenRange, "bad")
                 )
                 return SignalDefault::FAILURE;
             }
@@ -2002,54 +2034,47 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
             // TypeInfo *ti = info.ast->getTypeInfo(ltype);
             // TypeInfo *tic = info.ast->getTypeInfo(castType);
-            u32 ti = info.ast->getTypeSize(ltype);
+            u32 typeSize = info.ast->getTypeSize(ltype);
             TypeId castType = expression->versions_castType[info.currentPolyVersion];
-            u32 tic = info.ast->getTypeSize(castType);
-            u8 lreg = RegBySize(BC_AX, ti);
-            u8 creg = RegBySize(BC_AX, tic);
-            if (
-                // (AST::IsInteger(castType) && AST::IsInteger(ltype))
-                (castType.isPointer() && ltype.isPointer()) || (castType.isPointer() && (ltype == (TypeId)AST_INT64 ||
-                 ltype == (TypeId)AST_UINT64 || ltype == (TypeId)AST_INT32)) || ((castType == (TypeId)AST_INT64 ||
-                  castType == (TypeId)AST_UINT64 || ltype == (TypeId)AST_INT32) && ltype.isPointer())) {
-                info.addPop(lreg);
-                info.addPush(creg);
-                // data is fine as it is, just change the data type
+            u32 castSize = info.ast->getTypeSize(castType);
+            u8 lreg = RegBySize(BC_AX, typeSize);
+            u8 creg = RegBySize(BC_AX, castSize);
+            if(expression->isUnsafeCast()) {
+                if(expression->left->typeId == AST_ASM) {
+                    // TODO: Deprecate this and use asm<i32> {} instead of cast_unsafe<i32> asm {}
+                    //  asm<i32> makes more since because the casting is a little special since
+                    //  we don't know what type the inline assembly produces. Maybe it does 2 pushes
+                    //  or none. With unsafe cast we assume a type which isn't ideal.
+                    //  Unfortunately, it's difficult to know what type is pushed in the inline assembly.
+                    //  It might ruin the stack and frame pointers.
+                    info.addPush(creg, true);
+                    // The unsafe cast implies that the asm block did this. hopefully it did.
+                } else {
+                    info.addPop(lreg);
+                    info.addPush(creg);
+                }
+                outTypeIds->add(castType);
             } else {
+                // if ((castType.isPointer() && ltype.isPointer()) || (castType.isPointer() && (ltype == (TypeId)AST_INT64 ||
+                //     ltype == (TypeId)AST_UINT64 || ltype == (TypeId)AST_INT32)) || ((castType == (TypeId)AST_INT64 ||
+                //     castType == (TypeId)AST_UINT64 || ltype == (TypeId)AST_INT32) && ltype.isPointer())) {
+                //     info.addPop(lreg);
+                //     info.addPush(creg);
+                //     outTypeIds->add(castType);
+                //     // data is fine as it is, just change the data type
+                // } else {
                 bool yes = PerformSafeCast(info, ltype, castType);
                 if (yes) {
+                    outTypeIds->add(castType);
                 } else {
-                    ERR_HEAD2(expression->tokenRange) << "cannot cast " << info.ast->typeToString(ltype) << " to " << info.ast->typeToString(castType) << "\n";
+                    Assert(info.hasForeignErrors());
+                    // ERR_HEAD2(expression->tokenRange) << "cannot cast " << info.ast->typeToString(ltype) << " to " << info.ast->typeToString(castType) << "\n";
                     
                     outTypeIds->add(ltype); // ltype since cast failed
                     return SignalDefault::FAILURE;
                 }
+                // }
             }
-            // } else if(AST::IsInteger(castType)&&ltype==AST_FLOAT32){
-
-            //     info.addPop(lreg);
-            //     info.addInstruction({BC_CASTI64,lreg,creg});
-            //     info.addPush(creg);
-            // } else if(castType == AST_FLOAT32 && AST::IsInteger(ltype)){
-            //     info.addPop(lreg);
-            //     info.addInstruction({BC_CASTF32,lreg,creg});
-            //     info.addPush(creg);
-            // } else {
-            //     ERR_HEAD2(expression->tokenRange) << "cannot cast "<<info.ast->typeToString(ltype) << " to "<<info.ast->typeToString(castType)<<"\n";
-            //     outTypeIds->add( ltype; // ltype since cast failed
-            //     return SignalDefault::FAILURE;
-            // }
-
-            //  float f = 7.29;
-            // u32 raw = *(u32*)&f;
-            // log::out << " "<<(void*)raw<<"\n";
-
-            // u32 sign = raw>>31;
-            // u32 expo = ((raw&0x80000000)>>(23));
-            // u32 mant = ((raw&&0x80000000)>>(23));
-            // log::out << sign << " "<<expo << " "<<mant<<"\n";
-
-            outTypeIds->add( castType); // NOTE: we use castType and not ltype
         }
         else if (expression->typeId == AST_FROM_NAMESPACE) {
             // info.code->addDebugText("ast-namespaced expr\n");
@@ -2079,7 +2104,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     bool found = typeInfo->astEnum->getMember(expression->name, &enumValue);
                     if (!found) {
                         Assert(info.hasForeignErrors());
-                        // ERR_HEAD3(expression->tokenRange, expression->tokenRange.firstToken << " is not a member of enum " << typeInfo->astEnum->name << "\n";
+                        // ERR_SECTION(
+                        // ERR_HEAD(expression->tokenRange, expression->tokenRange.firstToken << " is not a member of enum " << typeInfo->astEnum->name << "\n";
                         // )
                         return SignalDefault::FAILURE;
                     }
@@ -2108,8 +2134,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // TypeInfo *structInfo = info.ast->getTypeInfo(info.currentScopeId, Token(*expression->name));
             if (!structInfo || !structInfo->astStruct) {
                 auto str = info.ast->typeToString(castType);
-                ERR_HEAD2(expression->tokenRange) << "cannot do initializer on non-struct " << log::YELLOW << str << "\n";
-                
+                ERR_SECTION(
+                    ERR_HEAD(expression->tokenRange)
+                    ERR_MSG_LOG("cannot do initializer on non-struct " << log::YELLOW << str << "\n")
+                )
                 return SignalDefault::FAILURE;
             }
 
@@ -2132,8 +2160,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
                 if (!expr->namedValue.str) {
                     if ((int)exprs.size() <= index) {
-                        ERR_HEAD2(expr->tokenRange) << "To many members for struct " << astruct->name << " (" << astruct->members.size() << " member(s) allowed)\n";
-                        
+                        ERR_SECTION(
+                            ERR_HEAD(expr->tokenRange)
+                            ERR_MSG("To many members for struct " << astruct->name << " (" << astruct->members.size() << " member(s) allowed).")
+                        )
                         continue;
                     }
                     else
@@ -2147,12 +2177,17 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         }
                     }
                     if (memIndex == -1) {
-                        ERR_HEAD2(expr->tokenRange) << expr->namedValue << " is not an member in " << astruct->name << "\n";
-                        
+                        ERR_SECTION(
+                            ERR_HEAD(expr->tokenRange)
+                            ERR_MSG("'"<<expr->namedValue << "' is not an member in " << astruct->name << ".")
+                        )
                         continue;
                     } else {
                         if (exprs[memIndex]) {
-                            ERR_HEAD2(expr->tokenRange) << "argument for " << astruct->members[memIndex].name << " is already specified at " << LOGAT(exprs[memIndex]->tokenRange) << "\n";
+                            ERR_SECTION(
+                                ERR_HEAD(expr->tokenRange)
+                                ERR_MSG("Argument for " << astruct->members[memIndex].name << " is already specified at " << LOGAT(exprs[memIndex]->tokenRange) << ".")
+                            )
                             
                         } else {
                             exprs[memIndex] = expr;
@@ -2182,7 +2217,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     SignalDefault result = GenerateDefaultValue(info, 0, 0, exprId, nullptr);
                     if (result != SignalDefault::SUCCESS)
                         return result;
-                    // ERR_HEAD3(expression->tokenRange, "Missing argument for " << astruct->members[index].name << " (call to " << astruct->name << ").\n";
+                    // ERR_SECTION(
+                // ERR_HEAD(expression->tokenRange, "Missing argument for " << astruct->members[index].name << " (call to " << astruct->name << ").\n";
                     // )
                     // continue;
                 } else {
@@ -2198,7 +2234,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 TypeId tid = structInfo->getMember(index).typeId;
                 if (!PerformSafeCast(info, exprId, tid)) {   // implicit conversion
                     // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                    ERRTYPE(expr->tokenRange, exprId, tid, "(initializer)\n");
+                    ERRTYPE(expr->tokenRange, exprId, tid, "(initializer)");
                     
                     continue;
                 }
@@ -2262,7 +2298,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // }
             // if(index!=-1){
             //     info.addInstruction({BC_LI,BC_REG_EAX});
-            //     info.code->addIm(typeInfo->astEnum->members[index].enumValue);
+            //     info.addImm(typeInfo->astEnum->members[index].enumValue);
             //     info.addPush(BC_REG_EAX);
 
             //     outTypeIds->add( AST_INT32;
@@ -2271,8 +2307,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
         else if(expression->typeId==AST_RANGE){
             TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token("Range"), info.ast->globalScopeId, true);
             if(!typeInfo){
-                ERR_HEAD3(expression->tokenRange, expression->tokenRange<<" cannot be converted to struct Range since it doesn't exist. Did you forget #import \"Basic\".\n\n";
-                    ERR_LINE(expression->tokenRange,"Where is Range?");
+                ERR_SECTION(
+                    ERR_HEAD(expression->tokenRange)
+                    ERR_MSG("'"<<expression->tokenRange<<"' cannot be converted to struct Range since it doesn't exist. Did you forget #import \"Basic\".")
+                    ERR_LINE(expression->tokenRange,"Where is Range?")
                 )
                 return SignalDefault::FAILURE;
             }
@@ -2299,15 +2337,19 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             info.addPush(rreg);
             if(!PerformSafeCast(info,rtype,inttype)){
                 std::string msg = info.ast->typeToString(rtype);
-                ERR_HEAD3(expression->right->tokenRange,"Cannot convert to "<<info.ast->typeToString(inttype)<<".\n\n";
-                    ERR_LINE(expression->right->tokenRange,msg.c_str());
+                ERR_SECTION(
+                    ERR_HEAD(expression->right->tokenRange)
+                    ERR_MSG("Cannot convert to "<<info.ast->typeToString(inttype)<<".")
+                    ERR_LINE(expression->right->tokenRange,msg.c_str())
                 )
             }
 
             info.addPush(lreg);
             if(!PerformSafeCast(info,ltype,inttype)){
                 std::string msg = info.ast->typeToString(ltype);
-                ERR_HEAD3(expression->right->tokenRange,"Cannot convert to "<<info.ast->typeToString(inttype)<<".\n\n";
+                ERR_SECTION(
+                    ERR_HEAD(expression->right->tokenRange)
+                    ERR_MSG("Cannot convert to "<<info.ast->typeToString(inttype)<<".")
                     ERR_LINE(expression->right->tokenRange,msg.c_str());
                 )
             }
@@ -2316,6 +2358,13 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             return SignalDefault::SUCCESS;
         } 
         else if(expression->typeId == AST_INDEX){
+            FuncImpl* operatorImpl = nullptr;
+            if(expression->versions_overload._array.size()>0)
+                operatorImpl = expression->versions_overload[info.currentPolyVersion].funcImpl;
+            TypeId ltype = AST_VOID;
+            if(operatorImpl){
+                return GenerateFnCall(info, expression, outTypeIds, true);
+            }
             // TOKENINFO(expression->tokenRange);
             SignalDefault err = GenerateExpression(info, expression->left, &ltype);
             if (err != SignalDefault::SUCCESS)
@@ -2329,16 +2378,20 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             if(!ltype.isPointer()){
                 if(!info.hasForeignErrors()){
                     std::string strtype = info.ast->typeToString(ltype);
-                    ERR_HEAD3(expression->right->tokenRange, "Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.\n\n";
-                        ERR_LINE(expression->right->tokenRange,strtype.c_str());
+                    ERR_SECTION(
+                        ERR_HEAD(expression->right->tokenRange)
+                        ERR_MSG("Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.")
+                        ERR_LINE(expression->right->tokenRange,strtype.c_str())
                     )
                 }
                 return SignalDefault::FAILURE;
             }
             if(!AST::IsInteger(rtype)){
                 std::string strtype = info.ast->typeToString(rtype);
-                ERR_HEAD3(expression->right->tokenRange, "Index operator ( array[23] ) requires integer type in the inner expression. '"<<strtype<<"' is not an integer.\n\n";
-                    ERR_LINE(expression->right->tokenRange,strtype.c_str());
+                ERR_SECTION(
+                    ERR_HEAD(expression->right->tokenRange)
+                    ERR_MSG("Index operator ( array[23] ) requires integer type in the inner expression. '"<<strtype<<"' is not an integer.")
+                    ERR_LINE(expression->right->tokenRange,strtype.c_str())
                 )
                 return SignalDefault::FAILURE;
             }
@@ -2349,8 +2402,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             u8 reg = RegBySize(BC_DX,rsize);
             info.addPop(reg); // integer
             info.addPop(BC_REG_RBX); // reference
-            info.addLoadIm(BC_REG_EAX, lsize);
-            info.addInstruction({BC_MULI, reg, BC_REG_EAX, reg});
+            if(lsize>1){
+                info.addLoadIm(BC_REG_EAX, lsize);
+                info.addInstruction({BC_MULI, reg, BC_REG_EAX, reg});
+            }
             info.addInstruction({BC_ADDI, BC_REG_RBX, reg, BC_REG_RBX});
 
             SignalDefault result = GeneratePush(info, BC_REG_RBX, 0, ltype);
@@ -2363,10 +2418,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 return SignalDefault::FAILURE;
             }
             
-            if(!AST::IsInteger(ltype)){
+            if(!AST::IsInteger(ltype) && !ltype.isPointer()){
                 std::string strtype = info.ast->typeToString(ltype);
-                ERR_HEAD3(expression->left->tokenRange, "Increment/decrement only works on integer types unless overloaded.\n\n";
-                    ERR_LINE(expression->left->tokenRange, strtype.c_str());
+                ERR_SECTION(
+                    ERR_HEAD(expression->left->tokenRange)
+                    ERR_MSG("Increment/decrement only works on integer types unless overloaded.")
+                    ERR_LINE(expression->left->tokenRange, strtype.c_str())
                 )
                 return SignalDefault::FAILURE;
             }
@@ -2378,7 +2435,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
             info.addInstruction({BC_MOV_MR, BC_REG_RBX, reg, size});
             // post
-            if(expression->boolValue)
+            if(expression->isPostAction())
                 info.addPush(reg);
             if(expression->typeId == AST_INCREMENT)
                 info.addInstruction({BC_INCR, reg, 1, 0});
@@ -2386,10 +2443,48 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 info.addInstruction({BC_INCR, reg, (u8)-1, (u8)-1});
             info.addInstruction({BC_MOV_RM, reg, BC_REG_RBX, size});
             // pre
-            if(!expression->boolValue)
+            if(!expression->isPostAction())
                 info.addPush(reg);
                 
             outTypeIds->add(ltype);
+        }
+        else if(expression->typeId == AST_UNARY_SUB){
+            SignalDefault result = GenerateExpression(info, expression->left, &ltype, idScope);
+            if(result != SignalDefault::SUCCESS){
+                return SignalDefault::FAILURE;
+            }
+            
+            if(AST::IsInteger(ltype)) {
+                u8 size = info.ast->getTypeSize(ltype);
+                u8 regFinal = RegBySize(BC_AX, size);
+                u8 regValue = RegBySize(BC_DX, size);
+
+                info.addInstruction({BC_BXOR, regFinal, regFinal, regFinal});
+                info.addPop(regValue);
+                info.addInstruction({BC_SUBI, regFinal, regValue, regFinal});
+                info.addPush(regFinal);
+                outTypeIds->add(ltype);
+            } else if (AST::IsDecimal(ltype)) {
+                u8 size = info.ast->getTypeSize(ltype);
+                u8 regMask = RegBySize(BC_AX, size);
+                u8 regValue = RegBySize(BC_DX, size);
+                if(size == 8)
+                    info.addLoadIm2(regMask, 0x8000000000000000);
+                else
+                    info.addLoadIm(regMask, 0x80000000);
+                info.addPop(regValue);
+                info.addInstruction({BC_BXOR, regValue, regMask, regValue});
+                info.addPush(regValue);
+                outTypeIds->add(ltype);
+            } else {
+                std::string strtype = info.ast->typeToString(ltype);
+                ERR_SECTION(
+                    ERR_HEAD(expression->left->tokenRange)
+                    ERR_MSG("Unary subtraction only works with integers and decimals.")
+                    ERR_LINE(expression->left->tokenRange, strtype.c_str())
+                )
+                return SignalDefault::FAILURE;
+            }
         }
         else {
             // I commented this out at some point for some reason. Not sure why?
@@ -2421,11 +2516,11 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 info.addPop(BC_REG_RBX);
 
                 if (!PerformSafeCast(info, rtype, assignType)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
-                    std::string leftstr = info.ast->typeToString(assignType);
-                    std::string rightstr = info.ast->typeToString(rtype);
-                    ERRTYPE(expression->tokenRange, assignType, rtype, "\n\n";
-                        ERR_LINE(expression->left->tokenRange, leftstr.c_str());
-                        ERR_LINE(expression->right->tokenRange,rightstr.c_str());
+                    // std::string leftstr = info.ast->typeToString(assignType);
+                    // std::string rightstr = info.ast->typeToString(rtype);
+                    ERRTYPE(expression->tokenRange, assignType, rtype, ""
+                        // ERR_LINE(expression->left->tokenRange, leftstr.c_str());
+                        // ERR_LINE(expression->right->tokenRange,rightstr.c_str());
                     )
                     return SignalDefault::FAILURE;
                 }
@@ -2447,13 +2542,6 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 //  perhaps implement a function called GenerateCopy? nah, come up with a better name, rename GeneratePop/Push too.
                 result = GeneratePop(info, BC_REG_RBX, 0, assignType);
                 result = GeneratePush(info, BC_REG_RBX, 0, assignType);
-
-                // int rsize = info.ast->getTypeSize(rtype);
-                // u8 reg = RegBySize(BC_AX, rsize);
-                // info.addPop(reg);
-                // // info.addPop(BC_REG_RBX);
-                // info.addInstruction({BC_MOV_RM, reg, BC_REG_RBX}); size?
-                // info.addPush(reg);
                 
                 outTypeIds->add(rtype);
             } else {
@@ -2466,25 +2554,50 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 if (err != SignalDefault::SUCCESS)
                     return err;
 
-                TypeId op = expression->typeId;
+                TypeId operationType = expression->typeId;
                 if(expression->typeId==AST_ASSIGN){
                     TypeId assignType={};
                     SignalDefault result = GenerateReference(info,expression->left,&assignType,idScope);
                     if(result!=SignalDefault::SUCCESS) return SignalDefault::FAILURE;
                     Assert(assignType == ltype);
-                    op = expression->assignOpType;
+                    operationType = expression->assignOpType;
                     info.addPop(BC_REG_RBX);
+                }
+                if(operationType == AST_GREATER_EQUAL){
+                    int a = 0;
                 }
                 u8 FIRST_REG = BC_CX; 
                 u8 SECOND_REG = BC_AX;
                 u8 OUT_REG = BC_CX;
-                if(((ltype.isPointer() && AST::IsInteger(rtype)) || (AST::IsInteger(ltype) && rtype.isPointer()))){
-                    if (op != AST_ADD && op != AST_SUB) {
-                        std::string leftstr = info.ast->typeToString(ltype);
-                        std::string rightstr = info.ast->typeToString(rtype);
-                        ERR_HEAD3(expression->tokenRange, OpToStr((OperationType)op.getId()) << " does not work with pointers. Only addition and subtraction works\n\n";
-                            ERR_LINE(expression->left->tokenRange, leftstr.c_str());
-                            ERR_LINE(expression->right->tokenRange,rightstr.c_str());
+                // if(ltype.isPointer() || rtype.isPointer()){
+                if(((ltype.isPointer() && AST::IsInteger(rtype)) || (AST::IsInteger(ltype) && rtype.isPointer()) || (ltype.isPointer() && rtype.isPointer()))){
+                    // TODO: Add operation should not be possible with two pointers.
+                    if(operationType == AST_ADD && ltype.isPointer() && rtype.isPointer()) {
+                        ERR_SECTION(
+                            ERR_HEAD(expression->tokenRange)
+                            ERR_MSG("You cannot add two pointers together. (is this a good or bad restriction?)")
+                            ERR_LINE(expression->left->tokenRange, info.ast->typeToString(ltype));
+                            ERR_LINE(expression->right->tokenRange, info.ast->typeToString(rtype));
+                        )
+                        return SignalDefault::FAILURE;
+                    }
+                    if((operationType == AST_EQUAL || operationType == AST_NOT_EQUAL)) {
+                        if((AST::IsInteger(rtype) && info.ast->getTypeSize(rtype) != 8) || (AST::IsInteger(rtype) && info.ast->getTypeSize(rtype) != 8)) {
+                            ERR_SECTION(
+                                ERR_HEAD(expression->tokenRange)
+                                ERR_MSG("When using equal operator with a pointer and integer they must be of the same size. The integer must be u64 or i64.")
+                                ERR_LINE(expression->left->tokenRange, info.ast->typeToString(ltype));
+                                ERR_LINE(expression->right->tokenRange, info.ast->typeToString(rtype));
+                            )
+                            return SignalDefault::FAILURE;
+                        }
+                    }
+                    if (operationType != AST_ADD && operationType != AST_SUB  && operationType != AST_EQUAL  && operationType != AST_NOT_EQUAL) {
+                        ERR_SECTION(
+                            ERR_HEAD(expression->tokenRange)
+                            ERR_MSG(OpToStr((OperationType)operationType.getId()) << " does not work with pointers. Only addition and subtraction works.")
+                            ERR_LINE(expression->left->tokenRange, info.ast->typeToString(ltype));
+                            ERR_LINE(expression->right->tokenRange, info.ast->typeToString(rtype));
                         )
                         return SignalDefault::FAILURE;
                     }
@@ -2496,11 +2609,13 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
 
-                    u8 bytecodeOp = ASTOpToBytecode(op,false);
+                    u8 bytecodeOp = ASTOpToBytecode(operationType,false);
                     if(bytecodeOp==0){
-                        ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
-                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-                        
+                        ERR_SECTION(
+                            ERR_HEAD(expression->tokenRange)
+                            ERR_MSG("Operation "<<expression->tokenRange.firstToken << " not available for types "<<
+                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"")
+                        )
                     }
 
                     if(ltype.isPointer()){
@@ -2519,25 +2634,16 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         outTypeIds->add(rtype);
                     }
                 } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR) && (AST::IsInteger(rtype) || rtype == AST_CHAR)){
-                    // u8 reg = RegBySize(BC_DX, info.ast->getTypeSize(rtype));
-                    // info.addPop(reg);
-                    // if (!PerformSafeCast(info, ltype, rtype)) {
-                    //     std::string leftstr = info.ast->typeToString(ltype);
-                    //     std::string rightstr = info.ast->typeToString(rtype);
-                    //     ERRTYPE(expression->tokenRange, ltype, rtype, "\n\n";
-                    //         ERR_LINE(expression->left->tokenRange, leftstr.c_str());
-                    //         ERR_LINE(expression->right->tokenRange,rightstr.c_str());
-                    //     )
-                    //     return SignalDefault::FAILURE;
-                    // }
-                    // ltype = rtype;
-                    // info.addPush(reg);
-
-                    u8 bytecodeOp = ASTOpToBytecode(op,false);
+                    
+                    u8 bytecodeOp = ASTOpToBytecode(operationType,false);
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
                     // We do a little switchero on the registers to better
-                    // adapt to x64 instructions
+                    // adapt to x64 instructions. This is stupid if you generate instructions for
+                    // multiple architectures but we won't and probably won't. Plus we will probably
+                    // do a revamp on our own bytecode and registers.
+                    bool compareOp = bytecodeOp == BC_LT || bytecodeOp == BC_LTE || bytecodeOp == BC_GT || bytecodeOp == BC_GTE;
+                    u8 cmpType = CMP_SINT_SINT;
                     if(bytecodeOp == BC_DIVI) {
                         FIRST_REG = BC_AX;
                         SECOND_REG = BC_CX;
@@ -2550,6 +2656,19 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         FIRST_REG = BC_AX;
                         SECOND_REG = BC_CX;
                         OUT_REG = BC_AX;
+                    } else if(compareOp) {
+                        if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
+                            ERR_SECTION(
+                                ERR_HEAD(expression->tokenRange)
+                                ERR_MSG("You cannot compare signed and unsigned integers. Both integers must be either signed or unsigned.")
+                                ERR_LINE(expression->left->tokenRange,(AST::IsSigned(ltype)?"signed":"unsigned"))
+                                ERR_LINE(expression->right->tokenRange,(AST::IsSigned(rtype)?"signed":"unsigned"))
+                            )
+                        }
+                        // cmpType = (u8)(((u8)AST::IsSigned(ltype)<<1) | (u8)AST::IsSigned(rtype));
+                        cmpType = CMP_DECODE(ltype,rtype,AST::IsSigned);
+                        FIRST_REG = BC_AX;
+                        SECOND_REG = BC_CX;
                     }
                     u8 reg1 = RegBySize(FIRST_REG, lsize); // get the appropriate registers
                     u8 reg2 = RegBySize(SECOND_REG, rsize);
@@ -2558,18 +2677,26 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     info.addPop(reg1);
 
                     if(bytecodeOp==0){
-                        ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
-                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-                        
+                        ERR_SECTION(
+                            ERR_HEAD(expression->tokenRange)
+                            ERR_MSG("Operation "<<expression->tokenRange.firstToken << " not available for types "<<
+                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<".")
+                        )
                     }
 
                     // if(lsize > rsize){
-                        info.addInstruction({bytecodeOp, reg1, reg2, regOut});
-                        info.addPush(regOut);
+                        if(compareOp) {
+                            info.addInstruction({bytecodeOp, cmpType, reg1, reg2});
+                            outTypeIds->add(AST_BOOL);
+                            info.addPush(reg2);
+                        } else {
+                            info.addInstruction({bytecodeOp, reg1, reg2, regOut});
+                            outTypeIds->add(ltype);
+                            info.addPush(regOut);
+                        }
                         if(expression->typeId==AST_ASSIGN){
                             info.addInstruction({BC_MOV_RM, regOut, BC_REG_RBX, lsize});
                         }
-                        outTypeIds->add(ltype);
                     // }else{
                     //     info.addInstruction({bytecodeOp, reg1, reg2, reg2});
                     //     info.addPush(reg2);
@@ -2579,39 +2706,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     //     outTypeIds->add(rtype);
                     // }
                 } else if ((AST::IsDecimal(ltype) || AST::IsInteger(ltype)) && (AST::IsDecimal(rtype) || AST::IsInteger(rtype))){
-                    // u8 reg = RegBySize(BC_DX, info.ast->getTypeSize(rtype));
-                    // info.addPop(reg);
-                    // if (!PerformSafeCast(info, ltype, rtype)) {
-                    //     std::string leftstr = info.ast->typeToString(ltype);
-                    //     std::string rightstr = info.ast->typeToString(rtype);
-                    //     ERRTYPE(expression->tokenRange, ltype, rtype, "\n\n";
-                    //         ERR_LINE(expression->left->tokenRange, leftstr.c_str());
-                    //         ERR_LINE(expression->right->tokenRange,rightstr.c_str());
-                    //     )
-                    //     return SignalDefault::FAILURE;
-                    // }
-                    // ltype = rtype;
-                    // info.addPush(reg);
                     Assert(ltype != AST_FLOAT64 && rtype != AST_FLOAT64);
 
-                    u8 bytecodeOp = ASTOpToBytecode(op,true);
+                    u8 bytecodeOp = ASTOpToBytecode(operationType,true);
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
-                    // We do a little switchero on the registers to better
-                    // adapt to x64 instructions
-                    // if(bytecodeOp == BC_DIVI) {
-                    //     FIRST_REG = BC_AX;
-                    //     SECOND_REG = BC_CX;
-                    //     OUT_REG = BC_AX;
-                    // } else if(bytecodeOp == BC_MODI) {
-                    //     FIRST_REG = BC_AX;
-                    //     SECOND_REG = BC_CX;
-                    //     OUT_REG = BC_DX;
-                    // } else if(bytecodeOp == BC_BLSHIFT || bytecodeOp == BC_BRSHIFT) {
-                    //     FIRST_REG = BC_AX;
-                    //     SECOND_REG = BC_CX;
-                    //     OUT_REG = BC_AX;
-                    // }
+
                     u8 reg1i = RegBySize(BC_AX, lsize); // get the appropriate registers
                     u8 reg2i = RegBySize(BC_AX, rsize);
                     
@@ -2629,13 +2729,23 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     
                     if(AST::IsInteger(rtype)){
                         info.addPop(reg2i); // note that right expression should be popped first
-                        info.addInstruction({BC_CAST, CAST_SINT_FLOAT, reg2i, reg2});
+                        // log::out << __FILE__ << ":"<<__LINE__<<"\n";
+                        // Assert(false);
+                        if(AST::IsSigned(rtype)){
+                            info.addInstruction({BC_CAST, CAST_SINT_FLOAT, reg2i, reg2});
+                        } else {
+                            info.addInstruction({BC_CAST, CAST_UINT_FLOAT, reg2i, reg2});
+                        }
                     } else {
                         info.addPop(reg2);
                     }
                     if(AST::IsInteger(ltype)){
                         info.addPop(reg1i);
-                        info.addInstruction({BC_CAST, CAST_SINT_FLOAT, reg1i, reg1});
+                        if(AST::IsSigned(rtype)){
+                            info.addInstruction({BC_CAST, CAST_SINT_FLOAT, reg1i, reg1});
+                        } else {
+                            info.addInstruction({BC_CAST, CAST_UINT_FLOAT, reg1i, reg1});
+                        }
                     } else {
                         info.addPop(reg1);
                     }
@@ -2643,7 +2753,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if(bytecodeOp==0){
                         ERR_SECTION(
                             ERR_HEAD(expression->tokenRange)
-                            ERR_MSG("Operation "<< OpToStr((OperationType)op.getId()) << " not available for types "<<info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype))
+                            ERR_MSG("Operation "<< OpToStr((OperationType)operationType.getId()) << " not available for types "<<info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype))
                             // ERR_LINE(expression->left->tokenRange, info.ast->typeToString(ltype))
                             // ERR_LINE(expression->right->tokenRange, info.ast->typeToString(rtype))
                             ERR_LINE(expression->tokenRange, "types don't work with the operation")
@@ -2659,60 +2769,85 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         outTypeIds->add(AST_BOOL);
                     else
                         outTypeIds->add(AST_FLOAT32);
-                } 
-                // else if ((ltype == AST_CHAR && AST::IsInteger(rtype))||
-                //     (AST::IsInteger(ltype)&&rtype == AST_CHAR)){
+                } else if (operationType == AST_AND || operationType==AST_OR || operationType == AST_NOT){
+                    
+                    // if (!PerformSafeCast(info, rtype, ltype)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
+                    //     std::string leftstr = info.ast->typeToString(ltype);
+                    //     std::string rightstr = info.ast->typeToString(rtype);
+                    //     ERRTYPE(expression->tokenRange, ltype, rtype, "\n\n";
+                    //         ERR_LINE(expression->left->tokenRange, leftstr.c_str());
+                    //         ERR_LINE(expression->right->tokenRange,rightstr.c_str());
+                    //     )
+                    //     return SignalDefault::FAILURE;
+                    // }
+                    // rtype = ltype;
+                    
+                    u8 lsize = info.ast->getTypeSize(ltype);
+                    u8 rsize = info.ast->getTypeSize(rtype);
+                    // info.addPush(reg);
 
-                //     TOKENINFO(expression->tokenRange)
-                //     u8 lsize = info.ast->getTypeSize(ltype);
-                //     u8 rsize = info.ast->getTypeSize(rtype);
-                //     u8 lreg = RegBySize(FIRST_REG, lsize); // get the appropriate registers
-                //     u8 rreg = RegBySize(SECOND_REG, rsize);
-                //     info.addPop(rreg); // note that right expression should be popped first
-                //     info.addPop(lreg);
+                    u8 reg1 = RegBySize(FIRST_REG, lsize); // get the appropriate registers
+                    u8 reg2 = RegBySize(SECOND_REG, rsize);
+                    info.addPop(reg2); // note that right expression should be popped first
+                    info.addPop(reg1);
 
-                //     u8 bytecodeOp = ASTOpToBytecode(op,false);
-                //     if(bytecodeOp==0){
-                //         ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
-                //             info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-                //         
-                //     }
+                    u8 bytecodeOp = ASTOpToBytecode(operationType,false);
+                    if(bytecodeOp==0){
+                        ERR_SECTION(
+                            ERR_HEAD(expression->tokenRange)
+                            ERR_MSG("Operation "<<expression->tokenRange.firstToken << " not available for types "<<
+                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<".")
+                        )
+                    }
 
-                //     if(ltype == AST_CHAR){
-                //         info.addInstruction({bytecodeOp, lreg, rreg, lreg});
-                //         info.addPush(lreg);
-                //         if(expression->typeId==AST_ASSIGN){
-                //             info.addInstruction({BC_MOV_RM, lreg, BC_REG_RBX, lsize});
-                //         }
-                //         outTypeIds->add(ltype);
-                //     }else{
-                //         info.addInstruction({bytecodeOp, lreg, rreg, rreg});
-                //         info.addPush(rreg);
-                //         if(expression->typeId==AST_ASSIGN){
-                //             info.addInstruction({BC_MOV_RM, rreg, BC_REG_RBX, rsize});
-                //         }
-                //         outTypeIds->add(rtype);
-                //     }
-                // } 
-                else {
+                    info.addInstruction({bytecodeOp, reg1, reg2, reg1});
+                    u8 rego = RegBySize(FIRST_REG, 1);
+                    info.addPush(rego);
+                    outTypeIds->add(AST_BOOL);
+                    // if(ltype.isPointer()){
+                    // }else{
+                    //     info.addInstruction({bytecodeOp, reg1, reg2, reg2});
+                    //     outTypeIds->add(rtype);
+                    // }
+                    // if(expression->typeId==AST_ASSIGN){
+                    //     info.addInstruction({BC_MOV_RM, reg2, BC_REG_RBX, rsize});
+                    // }
+                    // if(ltype.isPointer()){
+                    //     info.addPush(reg1);
+                    // }else{
+                    //     info.addPush(reg2);
+                    // }
+                } else {
                     int bad = false;
                     if(ltype.getId()>=AST_TRUE_PRIMITIVES){
                         bad=true;
                         std::string msg = info.ast->typeToString(ltype);
-                        ERR_HEAD3(expression->left->tokenRange, "Cannot do operation on struct.\n\n";
+                        ERR_SECTION(
+                            ERR_HEAD(expression->left->tokenRange)
+                            ERR_MSG("Cannot do operation on struct.")
                             ERR_LINE(expression->left->tokenRange,msg.c_str());
                         )
                     }
                     if(rtype.getId()>=AST_TRUE_PRIMITIVES){
                         bad=true;
                         std::string msg = info.ast->typeToString(rtype);
-                        ERR_HEAD3(expression->right->tokenRange, "Cannot do operation on struct.\n\n";
+                        ERR_SECTION(
+                            ERR_HEAD(expression->right->tokenRange)
+                            ERR_MSG("Cannot do operation on struct.")
                             ERR_LINE(expression->right->tokenRange,msg.c_str());
                         )
                     }
                     if(bad){
                         return SignalDefault::FAILURE;
-                    }
+                    } 
+                    // compare is special with signed, unsigned
+                    ERR_SECTION(
+                        ERR_HEAD(expression->tokenRange)
+                        ERR_MSG("Operation "<<expression->tokenRange.firstToken << " not available for types "<<
+                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype) <<". Some operations haven't been implemented for some types yet.")
+                        ERR_LINE(expression->tokenRange,"bad");
+                    )
+                    return SignalDefault::FAILURE;
 
                     // u32 rsize = info.ast->getTypeSize(rtype);
 
@@ -2721,9 +2856,9 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if (!PerformSafeCast(info, rtype, ltype)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
                         std::string leftstr = info.ast->typeToString(ltype);
                         std::string rightstr = info.ast->typeToString(rtype);
-                        ERRTYPE(expression->tokenRange, ltype, rtype, "\n\n";
-                            ERR_LINE(expression->left->tokenRange, leftstr.c_str());
-                            ERR_LINE(expression->right->tokenRange,rightstr.c_str());
+                        ERRTYPE(expression->tokenRange, ltype, rtype, ""
+                            // ERR_LINE(expression->left->tokenRange, leftstr.c_str());
+                            // ERR_LINE(expression->right->tokenRange,rightstr.c_str());
                         )
                         return SignalDefault::FAILURE;
                     }
@@ -2738,10 +2873,13 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
 
-                    u8 bytecodeOp = ASTOpToBytecode(op,false);
+                    u8 bytecodeOp = ASTOpToBytecode(operationType,false);
                     if(bytecodeOp==0){
-                        ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
-                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
+                        ERR_SECTION(
+                            ERR_HEAD(expression->tokenRange)
+                            ERR_MSG("Operation "<<expression->tokenRange.firstToken << " not available for types "<<
+                            info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<".")
+                        )
                     }
 
                     if(ltype.isPointer()){
@@ -2799,8 +2937,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             // NOTE: function may not have been added in the type checker stage for some reason.
             // THANK YOU, past me for writing this note. I was wondering what I broke and reading the
             // note made instantly realise that I broke something in the type checker.
-            ERR_HEAD3(function->tokenRange, "'"<<function->name << "' was null (compiler bug)\n";
-                ERR_LINE(function->tokenRange, "bad");
+            ERR_SECTION(
+                ERR_HEAD(function->tokenRange)
+                ERR_MSG("'"<<function->name << "' was null (compiler bug).")
+                ERR_LINE(function->tokenRange, "bad")
             )
             // if (function->tokenRange.firstToken.str) {
             //     ERRTOKENS(function->tokenRange)
@@ -2822,8 +2962,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
     }
     if(function->linkConvention != LinkConventions::NONE){
         if(function->polyArgs.size()!=0 || (astStruct && astStruct->polyArgs.size()!=0)){
-            ERR_HEAD3(function->tokenRange, "Imported/native functions cannot be polymorphic.\n\n";
-                ERR_LINE(function->tokenRange, "remove polymorphism");
+            ERR_SECTION(
+                ERR_HEAD(function->tokenRange)
+                ERR_MSG("Imported/native functions cannot be polymorphic.")
+                ERR_LINE(function->tokenRange, "remove polymorphism")
             )
             return SignalDefault::FAILURE;
         }
@@ -2831,8 +2973,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             // TODO: This error prints multiple times for each duplicate definition of native function.
             //   With this, you know the location of the colliding functions but the error message is printed multiple times.
             //  It is better if the message is shown once and then show all locations at once.
-            ERR_HEAD3(function->tokenRange, "Imported/native functions can only have one overload.\n\n";
-                ERR_LINE(function->tokenRange, "bad");
+            ERR_SECTION(
+                ERR_HEAD(function->tokenRange)
+                ERR_MSG("Imported/native functions can only have one overload.")
+                ERR_LINE(function->tokenRange, "bad")
             )
             return SignalDefault::FAILURE;
         }
@@ -2861,8 +3005,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                         ERR_LINE(function->name, "bad");
                     )
                 } else {
-                    ERR_HEAD3(function->tokenRange, "'"<<function->name<<"' is not a native function. None of the "<<nativeRegistry->nativeFunctions.size()<<" native functions matched.\n\n";
-                        ERR_LINE(function->name, "bad");
+                    ERR_SECTION(
+                        ERR_HEAD(function->tokenRange)
+                        ERR_MSG("'"<<function->name<<"' is not a native function. None of the "<<nativeRegistry->nativeFunctions.size()<<" native functions matched.")
+                        ERR_LINE(function->name, "bad")
                     )
                 }
                 return SignalDefault::FAILURE;
@@ -2933,8 +3079,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // auto var = info.ast->addVariable(info.currentScopeId, arg.name);
                     auto varinfo = info.ast->identifierToVariable(arg.identifier);
                     if (!varinfo) {
-                        ERR_HEAD3(arg.name.range(), arg.name << " is already defined.\n";
-                            ERR_LINE(arg.name.range(),"cannot use again");
+                        ERR_SECTION(
+                            ERR_HEAD(arg.name.range())
+                            ERR_MSG(arg.name << " is already defined.")
+                            ERR_LINE(arg.name.range(),"cannot use again")
                         )
                     }
                     // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
@@ -3041,8 +3189,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                         }
                     }
                     if (!foundReturn) {
-                        ERR_HEAD3(function->tokenRange,"Missing return statement in '" << function->name << "'.\n\n";
-                            ERR_LINE(function->tokenRange,"put a return in the body");
+                        ERR_SECTION(
+                            ERR_HEAD(function->tokenRange)
+                            ERR_MSG("Missing return statement in '" << function->name << "'.")
+                            ERR_LINE(function->tokenRange,"put a return in the body")
                         )
                     }
                 }
@@ -3065,8 +3215,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     auto var = info.ast->identifierToVariable(arg.identifier);
                     // auto var = info.ast->addVariable(info.currentScopeId, arg.name);
                     if (!var) {
-                        ERR_HEAD3(arg.name.range(), arg.name << " is already defined.\n";
-                            ERR_LINE(arg.name.range(),"cannot use again");
+                        ERR_SECTION(
+                            ERR_HEAD(arg.name.range())
+                            ERR_MSG(arg.name << " is already defined.")
+                            ERR_LINE(arg.name.range(),"cannot use again")
                         )
                     }
                     // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
@@ -3126,7 +3278,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     info.addInstruction({BC_MOV_RM_DISP32, R2, BC_REG_FP, size});\
                 else \
                     info.addInstruction({BC_MOV_RM_DISP32, R, BC_REG_FP, size});\
-                info.code->addIm(GenInfo::FRAME_SIZE + I * 8);
+                info.addImm(GenInfo::FRAME_SIZE + I * 8);
                     
             if(argTypes.size() > 3){
                 // MOV_ARG(3, BC_REG_R9, BC_REG_XMM3)
@@ -3183,8 +3335,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                         }
                     }
                     if (!foundReturn) {
-                        ERR_HEAD3(function->tokenRange,"Missing return statement in '" << function->name << "'.\n\n";
-                            ERR_LINE(function->tokenRange,"put a return in the body");
+                        ERR_SECTION(
+                            ERR_HEAD(function->tokenRange)
+                            ERR_MSG("Missing return statement in '" << function->name << "'.")
+                            ERR_LINE(function->tokenRange,"put a return in the body")
                         )
                     }
                 }
@@ -3241,7 +3395,8 @@ SignalDefault GenerateFunctions(GenInfo& info, ASTScope* body){
 }
 SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
     using namespace engone;
-    MEASURE;
+    MEASURE
+    PROFILE_SCOPE
     _GLOG(FUNC_ENTER)
     Assert(body||info.hasForeignErrors());
     if(!body) return SignalDefault::FAILURE;
@@ -3260,6 +3415,23 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
         SignalDefault result = GenerateBody(info, it);
     }
 
+    Bytecode::Dump debugDump{};
+    if(body->flags & ASTNode::DUMP_ASM) {
+        debugDump.dumpAsm = true;
+    } else if(body->flags & ASTNode::DUMP_BC) {
+        debugDump.dumpBytecode = true;
+    }
+    debugDump.startIndex = info.code->length();
+
+    defer {
+        if(debugDump.dumpAsm || debugDump.dumpBytecode) {
+            debugDump.description = TrimDir(body->tokenRange.tokenStream()->streamName) + ":"+std::to_string(body->tokenRange.firstToken.line);
+            debugDump.endIndex = info.code->length();
+            Assert(debugDump.startIndex <= debugDump.endIndex);
+            info.code->debugDumps.add(debugDump);
+        }
+    };
+
     // DynamicArray<std::string> varsToRemove;
 
     for (auto statement : body->statements) {
@@ -3270,12 +3442,14 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             auto& typesFromExpr = statement->versions_expressionTypes[info.currentPolyVersion];
             if(statement->firstExpression && typesFromExpr.size() < statement->varnames.size()) {
                 if(!info.hasForeignErrors()){
-                    char msg[100];
-                    sprintf(msg,"%d variables",(int)statement->varnames.size());
-                    ERR_HEAD3(statement->tokenRange, "To many variables.";
-                        ERR_LINE(statement->tokenRange, msg);
-                        sprintf(msg,"%d return values",(int)typesFromExpr.size());
-                        ERR_LINE(statement->firstExpression->tokenRange, msg);
+                    // char msg[100];
+                    ERR_SECTION(
+                        ERR_HEAD(statement->tokenRange)
+                        ERR_MSG("To many variables.")
+                        // sprintf(msg,"%d variables",(int)statement->varnames.size());
+                        ERR_LINE(statement->tokenRange, statement->varnames.size() << " variables");
+                        // sprintf(msg,"%d return values",(int)typesFromExpr.size());
+                        ERR_LINE(statement->firstExpression->tokenRange, typesFromExpr.size() << " return values");
                     )
                 }
                 continue;
@@ -3345,7 +3519,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 int alignment = 0;
                 if (varname.declaration) {
                     // if (leftSize == 0) {
-                    //     ERR_HEAD3(statement->tokenRange, "Size of type " << "?" << " was 0\n";
+                    //     ERR_SECTION(
+// ERR_HEAD(statement->tokenRange, "Size of type " << "?" << " was 0\n";
                     //     )
                     //     continue;
                     // }
@@ -3353,8 +3528,10 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         Assert(!statement->globalAssignment);
                         // TODO: Fix arrays with static data
                         if(statement->firstExpression) {
-                            ERR_HEAD3(statement->firstExpression->tokenRange, "An expression is not allowed when declaring an array on the stack. The array is zero-initialized by default.\n\n";
-                                ERR_LINE(statement->firstExpression->tokenRange, "bad");
+                            ERR_SECTION(
+                                ERR_HEAD(statement->firstExpression->tokenRange)
+                                ERR_MSG("An expression is not allowed when declaring an array on the stack. The array is zero-initialized by default.")
+                                ERR_LINE(statement->firstExpression->tokenRange, "bad")
                             )
                             continue;
                         }
@@ -3378,9 +3555,11 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             
                             // Assert(size2 * varname.arrayLength <= pow(2,16)/2);
                             if(arraySize > pow(2,16)/2) {
-                                std::string msg = std::to_string(size2) + " * "+ std::to_string(varname.arrayLength) +" = "+std::to_string(arraySize);
-                                ERR_HEAD3(statement->tokenRange, (int)(pow(2,16)/2) << " is the maximum size of arrays on the stack. "<<(arraySize)<<" was used which exceeds that. The limit comes from the instruction BC_INCR which uses a signed 16-bit integer.\n\n";
-                                    ERR_LINE(statement->tokenRange, msg.c_str());
+                                // std::string msg = std::to_string(size2) + " * "+ std::to_string(varname.arrayLength) +" = "+std::to_string(arraySize);
+                                ERR_SECTION(
+                                    ERR_HEAD(statement->tokenRange)
+                                    ERR_MSG((int)(pow(2,16)/2) << " is the maximum size of arrays on the stack. "<<(arraySize)<<" was used which exceeds that. The limit comes from the instruction BC_INCR which uses a signed 16-bit integer.")
+                                    ERR_LINE(statement->tokenRange, size2 << " * " << std::to_string(varname.arrayLength) << " = " << std::to_string(arraySize))
                                 )
                                 continue;
                             }
@@ -3427,8 +3606,10 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
                         GeneratePop(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                     } else {
-                        SignalDefault result = FramePush(info, varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
-                            !statement->firstExpression && !varinfo->isGlobal(), varinfo->isGlobal());
+                        if(!varinfo->isGlobal()) {
+                            SignalDefault result = FramePush(info, varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
+                                !statement->firstExpression, false);
+                        }
                     }
                     _GLOG(log::out << "declare " << (varinfo->isGlobal()?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
                     // NOTE: inconsistent
@@ -3477,7 +3658,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         case VariableInfo::GLOBAL: {
                             Assert(false); // broken with arrays
                             // info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                            // info.code->addIm(varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            // info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // GeneratePop(info, BC_REG_RBX, 0, varinfo->versions_typeId[info.currentPolyVersion]);
                         }
                         break; case VariableInfo::LOCAL: {
@@ -3491,7 +3672,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             // // TODO: Verify that  you
                             // // NOTE: Is member variable/argument always at this offset with all calling conventions?
                             // info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
-                            // info.code->addIm(GenInfo::FRAME_SIZE);
+                            // info.addImm(GenInfo::FRAME_SIZE);
                             
                             // // info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // // info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
@@ -3538,11 +3719,14 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         Assert(info.errors!=0); // there should have been errors
                         continue;
                     }
+                    // if(varinfo->versions_typeId[info.currentPolyVersion] == AST_VOID) {
+                        
+                    // }
 
                     if(!PerformSafeCast(info, typeFromExpr, varinfo->versions_typeId[info.currentPolyVersion])){
                         if(!info.hasForeignErrors()){
-                            ERRTYPE(statement->tokenRange, varinfo->versions_typeId[info.currentPolyVersion], typeFromExpr, "(assign).\n\n";
-                                ERR_LINE(statement->tokenRange,"bad");
+                            ERRTYPE(statement->tokenRange, varinfo->versions_typeId[info.currentPolyVersion], typeFromExpr, "(assign)."
+                                // ERR_LINE(statement->tokenRange,"bad");
                             )
                         }
                         continue;
@@ -3551,7 +3735,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     switch(varinfo->type) {
                         case VariableInfo::GLOBAL: {
                             info.addInstruction({BC_DATAPTR, BC_REG_RBX});
-                            info.code->addIm(varinfo->versions_dataOffset[info.currentPolyVersion]);
+                            info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
                             GeneratePop(info, BC_REG_RBX, 0, varinfo->versions_typeId[info.currentPolyVersion]);
                         }
                         break; case VariableInfo::LOCAL: {
@@ -3564,7 +3748,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             // TODO: Verify that  you
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
                             info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
-                            info.code->addIm(GenInfo::FRAME_SIZE);
+                            info.addImm(GenInfo::FRAME_SIZE);
                             
                             // info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
@@ -3600,7 +3784,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             info.addPop(reg);
             info.addInstruction({BC_JNE, reg});
             u32 skipIfBodyIndex = info.code->length();
-            info.code->addIm(0);
+            info.addImm(0);
 
             result = GenerateBody(info, statement->firstBody);
             if (result != SignalDefault::SUCCESS)
@@ -3610,7 +3794,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             if (statement->secondBody) {
                 info.addInstruction({BC_JMP});
                 skipElseBodyIndex = info.code->length();
-                info.code->addIm(0);
+                info.addImm(0);
             }
 
             // fix address for jump instruction
@@ -3657,14 +3841,14 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             info.addPop(reg);
             info.addInstruction({BC_JNE, reg});
             loopScope->resolveBreaks.add(info.code->length());
-            info.code->addIm(0);
+            info.addImm(0);
 
             result = GenerateBody(info, statement->firstBody);
             if (result != SignalDefault::SUCCESS)
                 continue;
 
             info.addInstruction({BC_JMP});
-            info.code->addIm(loopScope->continueAddress);
+            info.addImm(loopScope->continueAddress);
 
             for (auto ind : loopScope->resolveBreaks) {
                 info.code->getIm(ind) = info.code->length();
@@ -3789,7 +3973,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
 
                 info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, index_reg, 4});
-                info.code->addIm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+                info.addImm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->isReverse()){
                     info.addInstruction({BC_INCR,index_reg, 0xFF, 0xFF}); // hexidecimal represent -1
@@ -3798,26 +3982,29 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
                 
                 info.addInstruction({BC_MOV_RM_DISP32, index_reg, BC_REG_FP, 4});
-                info.code->addIm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+                info.addImm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->isReverse()){
                     // info.code->addDebugText("For condition (reversed)\n");
-                    info.addInstruction({BC_GTE,index_reg,length_reg,BC_REG_EAX});
+                    // info.addInstruction({BC_GTE,index_reg,length_reg,BC_REG_EAX});
+                    info.addInstruction({BC_GTE,CMP_SINT_SINT,index_reg,length_reg});
                 } else {
                     // info.code->addDebugText("For condition\n");
-                    info.addInstruction({BC_LT,index_reg,length_reg,BC_REG_EAX});
+                    // info.addInstruction({BC_LT,index_reg,length_reg,BC_REG_EAX});
+                    info.addInstruction({BC_LT,CMP_SINT_SINT,index_reg,length_reg});
                 }
-                info.addInstruction({BC_JNE, BC_REG_EAX});
+                // info.addInstruction({BC_JNE, BC_REG_EAX});
+                info.addInstruction({BC_JNE, length_reg});
                 // resolve end, not break, resolveBreaks is bad naming
                 loopScope->resolveBreaks.add(info.code->length());
-                info.code->addIm(0);
+                info.addImm(0);
 
                 result = GenerateBody(info, statement->firstBody);
                 if (result != SignalDefault::SUCCESS)
                     continue;
 
                 info.addInstruction({BC_JMP});
-                info.code->addIm(loopScope->continueAddress);
+                info.addImm(loopScope->continueAddress);
 
                 for (auto ind : loopScope->resolveBreaks) {
                     info.code->getIm(ind) = info.code->length();
@@ -3915,43 +4102,50 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 // info.code->addDebugText("Index increment/decrement\n");
 
                 info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, index_reg, DECODE_REG_SIZE(index_reg)});
-                info.code->addIm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+                info.addImm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
                 if(statement->isReverse()){
                     info.addInstruction({BC_INCR,index_reg, 0xFF, 0xFF}); // hexidecimal represent -1
                 }else{
                     info.addInstruction({BC_INCR,index_reg,1});
                 }
                 info.addInstruction({BC_MOV_RM_DISP32, index_reg, BC_REG_FP, DECODE_REG_SIZE(index_reg)});
-                info.code->addIm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+                info.addImm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->isReverse()){
                     // info.code->addDebugText("For condition (reversed)\n");
                     info.addLoadIm(length_reg,-1); // length reg is not used with reversed
-                    info.addInstruction({BC_GT,index_reg,length_reg,BC_REG_RAX});
+                    // info.addInstruction({BC_GT,index_reg,length_reg,BC_REG_RAX});
+                    info.addInstruction({BC_GT,CMP_SINT_SINT,index_reg,length_reg});
                 } else {
                     // info.code->addDebugText("For condition\n");
-                    info.addInstruction({BC_LT,index_reg,length_reg,BC_REG_RAX});
+                    // info.addInstruction({BC_LT,index_reg,length_reg,BC_REG_RAX});
+                    info.addInstruction({BC_LT,CMP_SINT_SINT,index_reg,length_reg});
                 }
                 // resolve end, not break, resolveBreaks is bad naming
-                info.addInstruction({BC_JNE, BC_REG_RAX});
+                // info.addInstruction({BC_JNE, BC_REG_RAX});
+                info.addInstruction({BC_JNE, length_reg});
                 loopScope->resolveBreaks.add(info.code->length());
-                info.code->addIm(0);
+                info.addImm(0);
 
                 // BE VERY CAREFUL SO YOU DON'T USE BUSY REGISTERS AND OVERWRITE
                 // VALUES. UNEXPECTED VALUES WILL HAPPEN AND IT WILL BE PAINFUL.
                 
                 // NOTE: index_reg is modified here since it isn't needed anymore
                 if(statement->isPointer()){
-                    info.addLoadIm(BC_REG_RBX,itemsize);
-                    info.addInstruction({BC_MULI, index_reg, BC_REG_RBX, index_reg});
+                    if(itemsize>1){
+                        info.addLoadIm(BC_REG_RBX,itemsize);
+                        info.addInstruction({BC_MULI, index_reg, BC_REG_RBX, index_reg});
+                    }
                     info.addInstruction({BC_ADDI, ptr_reg, index_reg, ptr_reg});
 
                     info.addInstruction({BC_MOV_RM_DISP32, ptr_reg, BC_REG_FP, 8});
-                    info.code->addIm(varinfo_item->versions_dataOffset[info.currentPolyVersion]);
+                    info.addImm(varinfo_item->versions_dataOffset[info.currentPolyVersion]);
 
                 } else {
-                    info.addLoadIm(BC_REG_RBX,itemsize);
-                    info.addInstruction({BC_MULI, index_reg, BC_REG_RBX, index_reg});
+                    if(itemsize>1){
+                        info.addLoadIm(BC_REG_RBX,itemsize);
+                        info.addInstruction({BC_MULI, index_reg, BC_REG_RBX, index_reg});
+                    }
                     info.addInstruction({BC_ADDI, ptr_reg, index_reg, ptr_reg});
 
                     info.addLoadIm(BC_REG_RDI,varinfo_item->versions_dataOffset[info.currentPolyVersion]);
@@ -3969,7 +4163,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     continue;
 
                 info.addInstruction({BC_JMP});
-                info.code->addIm(loopScope->continueAddress);
+                info.addImm(loopScope->continueAddress);
 
                 for (auto ind : loopScope->resolveBreaks) {
                     info.code->getIm(ind) = info.code->length();
@@ -3989,8 +4183,10 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
         } else if(statement->type == ASTStatement::BREAK) {
             GenInfo::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
-                ERR_HEAD3(statement->tokenRange, "Break is only allowed in loops.\n\n";
-                    ERR_LINE(statement->tokenRange,"not in a loop");
+                ERR_SECTION(
+                    ERR_HEAD(statement->tokenRange)
+                    ERR_MSG("Break is only allowed in loops.")
+                    ERR_LINE(statement->tokenRange,"not in a loop")
                 )
                 continue;
             }
@@ -3998,34 +4194,40 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             
             info.addInstruction({BC_JMP});
             loop->resolveBreaks.add(info.code->length());
-            info.code->addIm(0);
+            info.addImm(0);
         } else if(statement->type == ASTStatement::CONTINUE) {
             GenInfo::LoopScope* loop = info.getLoop(info.loopScopes.size()-1);
             if(!loop) {
-                ERR_HEAD3(statement->tokenRange, "Continue is only allowed in loops.\n\n";
-                    ERR_LINE(statement->tokenRange,"not in a loop");
+                ERR_SECTION(
+                    ERR_HEAD(statement->tokenRange)
+                    ERR_MSG("Continue is only allowed in loops.")
+                    ERR_LINE(statement->tokenRange,"not in a loop")
                 )
                 continue;
             }
             info.restoreStackMoment(loop->stackMoment, true);
 
             info.addInstruction({BC_JMP});
-            info.code->addIm(loop->continueAddress);
+            info.addImm(loop->continueAddress);
         } else if (statement->type == ASTStatement::RETURN) {
             _GLOG(SCOPE_LOG("RETURN"))
 
             if (!info.currentFunction) {
-                ERR_HEAD3(statement->tokenRange, "Return only allowed in function.\n\n";
-                    ERR_LINE(statement->tokenRange, "bad");
+                ERR_SECTION(
+                    ERR_HEAD(statement->tokenRange)
+                    ERR_MSG("Return only allowed in function.")
+                    ERR_LINE(statement->tokenRange, "bad")
                 )
                 continue;
                 // return SignalDefault::FAILURE;
             }
             if ((int)statement->arrayValues.size() != (int)info.currentFuncImpl->returnTypes.size()) {
                 // std::string msg = 
-                ERR_HEAD3(statement->tokenRange, "Found " << statement->arrayValues.size() << " return value(s) but should have " << info.currentFuncImpl->returnTypes.size() << " for '" << info.currentFunction->name << "'.\n\n";
-                    ERR_LINE(info.currentFunction->tokenRange, "X return values");
-                    ERR_LINE(statement->tokenRange, "Y values");
+                ERR_SECTION(
+                    ERR_HEAD(statement->tokenRange)
+                    ERR_MSG("Found " << statement->arrayValues.size() << " return value(s) but should have " << info.currentFuncImpl->returnTypes.size() << " for '" << info.currentFunction->name << "'.")
+                    ERR_LINE(info.currentFunction->tokenRange, "X return values")
+                    ERR_LINE(statement->tokenRange, "Y values")
                 )
             }
 
@@ -4048,7 +4250,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         if (!PerformSafeCast(info, dtype, retType.typeId)) {
                             // if(info.currentFunction->returnTypes[argi]!=dtype){
 
-                            ERRTYPE(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)\n");
+                            ERRTYPE(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)");
 
                             GeneratePop(info, 0, 0, dtype); // throw away value to prevent cascading bugs
                         }
@@ -4203,7 +4405,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             info.addAlign(16); // TEST_VALUE calls stdcall functions which needs 16-byte alignment
             info.addInstruction({BC_TEST_VALUE, 8, BC_REG_RDX, BC_REG_RAX});
             int loc = info.compileInfo->compileOptions->addTestLocation(statement->tokenRange);
-            info.code->addIm(loc);
+            info.addImm(loc);
             
             info.restoreStackMoment(moment);
         }
@@ -4228,6 +4430,11 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 // Generate data from the type checker
 SignalDefault GenerateData(GenInfo& info) {
     using namespace engone;
+
+    // type checker requested some space for global variables
+    // (at the time of writing this at least)
+    if(info.ast->preallocatedGlobalSpace())
+        info.code->appendData(nullptr, info.ast->preallocatedGlobalSpace());
 
     // IMPORTANT: TODO: Some data like 64-bit integers needs alignment.
     //   Strings don's so it's fine for now but don't forget about fixing this.
@@ -4275,9 +4482,9 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     // info.code->addDebugText("FUNCTION SEGMENT\n");
     info.code->setLocationInfo("FUNCTION SEGMENT");
     _GLOG(log::out << "Jump to skip functions\n";)
-    info.code->add({BC_JMP});
+    info.code->add_notabug({BC_JMP});
     int skipIndex = info.code->length();
-    info.code->addIm(0);
+    info.addImm(0);
     // IMPORTANT: Functions are generated before the code because
     //  compile time execution will need these functions to exist.
     //  There is still a dependency problem if you use compile time execution
@@ -4285,8 +4492,8 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     result = GenerateFunctions(info, info.ast->mainBody);
     if(skipIndex == info.code->length() -1) {
         // skip jump instruction if no functions where generated
-        info.popInstructions(2); // pop JMP and immediate
-        // info.code->codeSegment.used = 0;
+        // info.popInstructions(2); // pop JMP and immediate
+        info.code->codeSegment.used = 0;
         _GLOG(log::out << "Delete jump instruction\n";)
     } else {
         info.code->getIm(skipIndex) = info.code->length();

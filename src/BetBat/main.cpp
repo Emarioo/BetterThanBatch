@@ -1,8 +1,16 @@
+
 #include "BetBat/Compiler.h"
 #include "BetBat/Util/TestSuite.h"
 
 #include <math.h>
-#include "BetBat/glfwtest.h"
+// #include "BetBat/glfwtest.h"
+
+#define STB_IMAGE_IMPLEMENTATION
+#define STB_IMAGE_WRITE_IMPLEMENTATION
+#include "stb/stb_image.h"
+#include "stb/stb_image_write.h"
+#undef STB_IMAGE_IMPLEMENTATION
+#undef STB_IMAGE_WRITE_IMPLEMENTATION
 
 void print_help(){
     using namespace engone;
@@ -55,9 +63,82 @@ void print_help(){
 // struct A {
 //     int ok;
 // };
+#include "Engone/Win32Includes.h"
 int main(int argc, const char** argv){
     using namespace engone;
     
+
+    // log::out << "hello\n";
+
+    // SECURITY_ATTRIBUTES sa;
+    // sa.nLength = sizeof(sa);
+    // sa.lpSecurityDescriptor = NULL;
+    // sa.bInheritHandle = TRUE;
+
+    // HANDLE h = CreateFileA("out.log",
+    //     GENERIC_WRITE|GENERIC_READ,
+    //     // FILE_APPEND_DATA,
+    //     FILE_SHARE_WRITE | FILE_SHARE_READ,
+    //     &sa,
+    //     // OPEN_ALWAYS,
+    //     CREATE_ALWAYS,
+    //     FILE_ATTRIBUTE_NORMAL,
+    //     NULL );
+
+    // PROCESS_INFORMATION pi; 
+    // STARTUPINFOA si;
+    // BOOL ret = FALSE; 
+    // DWORD flags = CREATE_NO_WINDOW;
+
+    // ZeroMemory( &pi, sizeof(PROCESS_INFORMATION) );
+    // ZeroMemory( &si, sizeof(STARTUPINFO) );
+    // si.cb = sizeof(STARTUPINFOA); 
+    // si.dwFlags |= STARTF_USESTDHANDLES;
+    // si.hStdInput = NULL;
+    // si.hStdError = h;
+    // si.hStdOutput = h;
+
+    // char* cmd = "ml64";
+    // ret = CreateProcessA(NULL, cmd, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
+
+    // if ( ret ) 
+    // {
+    //     CloseHandle(pi.hProcess);
+    //     CloseHandle(pi.hThread);
+    //     return 0;
+    // }
+
+    // return -1;
+
+
+    // auto file = engone::FileOpen("temps.txt", 0, FILE_ALWAYS_CREATE);
+
+    // // auto prev = engone::GetStandardOut();
+    // // engone::SetStandardOut(file);
+
+    // engone::StartProgram("ml64 /c", PROGRAM_WAIT, 0, {}, file);
+    // // log::out << "Hey!\n";
+
+    // engone::FileClose(file);
+
+    // engone::SetStandardOut(prev);
+
+    u64 u = 0;
+    i64 s = -23;
+    bool gus = u > s;
+    bool gsu = s > u;
+
+    bool lsu = s < u;
+    bool lus = u < s;
+
+    bool gesu = s >= u;
+    bool geus = u >= s;
+    
+    bool lesu = s <= u;
+    bool leus = u <= s;
+    // float l = n;
+    // float l = k;
+
     // float k = 0.2f;
     // bool a = 0.1f < k;
     // bool b = 0.1f <= k;
@@ -72,6 +153,8 @@ int main(int argc, const char** argv){
     // const auto& yeah = typeid(a);
     // log::out << yeah.name()<<"\n";
     MeasureInit();
+
+    ProfilerInitialize();
 
     // return 1;
     CompileOptions compileOptions{};
@@ -263,7 +346,7 @@ int main(int argc, const char** argv){
             //     // an output from the executable at the moment.
             //     // Printing and writing to files require linkConvention to stdio.h or windows.
             //     i32 errorLevel = 0;
-            //     engone::StartProgram("","link /nologo " OBJ_FILE 
+            //     engone::StartProgram("link /nologo " OBJ_FILE 
             //     " bin/NativeLayer.lib"
             //     " uuid.lib"
             //     // " Kernel32.lib"
@@ -275,7 +358,7 @@ int main(int argc, const char** argv){
             //         hoho += " ";
             //         hoho += arg;
             //     }
-            //     engone::StartProgram("",(char*)hoho.data(),PROGRAM_WAIT,&errorLevel);
+            //     engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorLevel);
             //     log::out << "Error level: "<<errorLevel<<"\n";
             // }
         }
@@ -298,6 +381,10 @@ int main(int argc, const char** argv){
     //     log::out << (log::Color)(i%16);
     //     log::out << chr;
     // }
+    // ProfilerPrint();
+    // ProfilerExport("profiled.dat");
+    ProfilerCleanup();
+
     NativeRegistry::DestroyGlobal();
     int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
     if(finalMemory!=0){
@@ -310,4 +397,5 @@ int main(int argc, const char** argv){
     log::out.cleanup();
     // system("pause");
     Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+
 }

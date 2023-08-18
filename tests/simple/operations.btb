@@ -6,6 +6,11 @@ test 6; -2*-3;
 test 0; 2/3;
 test 499; cast<i32>((0.5 % 0.15)*10000);
 
+// TEST OPERATIONS WITH 64-bit numbers like 99999999999999!
+// TODO: Not just the one below, loads more tests
+test 1; 120331 < 999999999999999
+test 0; 95679105467774 < 9999999999999 // very specific test which returned 1 at some point
+
 test 1; 1.2 < 1.3;
 test 0; 1.3004 < 1.3;
 test 1; -4.0 <= -2.;
@@ -34,3 +39,53 @@ test 2; cast<i32>sqrt(3.9999999);
 // Python evaluates the math to this: -2159226 while this compiler gives this result: -2158333.
 test -2158333; cast<i32>(100000*(5. / 6. - 7. )* 7. / 8. * 4. + (1. / 4. / (1. - 5. + 1. - 4. * 7. - 2. * 3. / 2. - (6. / 3. )/ 2. + (6. / 6. + 8. - 7. )+ 5. )));
 test 69; 8+1*(5-8%6+4*3%1%7-4-7+7+(8+7))*4+5%(6/2+(6+8/4*1*5*2*6));
+
+@TEST-CASE special
+var:u64 = 2
+varf:f32 = -12415.92913
+test -2; -var;
+test 12415.92913; -varf;
+
+a = 6;
+pa = &a;
+ppa = &pa;
+test 6; *ppa[0]; // test precedence between deref and index operations
+
+data: u64* = &var;
+test 2; *cast<u32*>data;
+// Bug 0: deref was performed before cast (issue in parser)
+
+test 1; 3-1-1; // tests precedence
+
+test 1<<32; 0x100000000; // 64-bit immediate, also testing byte order
+
+ptr: char* = 0;
+++(*cast<u64*>&ptr);
+test cast<u64>1; ptr;
+
+cast<u64>cast<char*>null
+cast<u64>cast<void*>null
+cast<u64*>cast<void*>null
+cast<u64*>cast<char*>null // should fail
+
+@TEST-CASE conversions
+
+// unsigned conversion
+test 1; cast<f32>0x8100_0001 > 0.0;
+test 1; cast<f32>0x8100_0000_0000_0001 > 0.0;
+test 1; cast<f32>0x8100_0000_0000_0010 > 0.0;
+test 1; cast<f32>0x8100_0000_0000_0011 > 0.0;
+
+test 17.0; cast<f32>cast<u64>0x0000_0000_0000_0011; // A bug at some point produced 18.0 instead of 17.0
+
+test 1; cast<u64>0x8000_0000_0000_0000 > 0
+test 0; cast<u64>0x8000_0000_0000_0000 >= 0
+test 0; cast<u64>0x8000_0000_0000_0000 < 0
+test 0; cast<u64>0x8000_0000_0000_0000 <= 0
+
+// TODO: Signed conversions of 8,16,32,64-bit integers and floats.
+// TODO: f64
+
+// This code caused a crash at one point.
+t: f32 = 0;
+t == 0;

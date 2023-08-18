@@ -2,7 +2,7 @@
 
 #include "BetBat/Bytecode.h"
 #include "BetBat/NativeRegistry.h"
-#include "BetBat/External/NativeLayer.h"
+#include "Native/NativeLayer.h"
 
 struct Interpreter {
     ~Interpreter(){
