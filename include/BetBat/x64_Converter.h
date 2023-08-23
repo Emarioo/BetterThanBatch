@@ -57,6 +57,10 @@ struct Program_x64 {
         // engone::Free(globalData, globalSize);
         dataRelocations.cleanup();
         namedRelocations.cleanup();
+        if(debugInformation) {
+            DebugInformation::Destroy(debugInformation);
+            debugInformation = nullptr;
+        }
     }
     
     u8* text=nullptr;
@@ -68,6 +72,8 @@ struct Program_x64 {
 
     DynamicArray<DataRelocation> dataRelocations;
     DynamicArray<NamedRelocation> namedRelocations;
+
+    DebugInformation* debugInformation = nullptr;
 
     u64 size() { return head; }
  
@@ -102,3 +108,5 @@ struct Program_x64 {
     bool _reserve(u32 newAllocationSize);
 };
 Program_x64* ConvertTox64(Bytecode* bytecode);
+// The function will print the reformatted content if outBuffer is null
+void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes);

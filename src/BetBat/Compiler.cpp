@@ -503,7 +503,7 @@ u32 ProcessSource(void* ptr) {
         //     log::out << "Proc source "<<source.path.text<<"\n";
         info->sourceLock.unlock();
         
-        _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefPath(source.path.text)<<"\n";)
+        _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefString(source.path.text)<<"\n";)
         TokenStream* tokenStream = nullptr;
         if(source.textBuffer) {
             tokenStream = TokenStream::Tokenize(source.textBuffer);
@@ -513,7 +513,7 @@ u32 ProcessSource(void* ptr) {
             tokenStream = TokenStream::Tokenize(source.path.text);
         }
         if(!tokenStream){
-            log::out << log::RED << "Failed tokenization: " << BriefPath(source.path.text) <<"\n";
+            log::out << log::RED << "Failed tokenization: " << BriefString(source.path.text) <<"\n";
             info->compileOptions->compileStats.errors++;
             return false;
         }
@@ -522,7 +522,7 @@ u32 ProcessSource(void* ptr) {
         
         if (tokenStream->enabled & LAYER_PREPROCESSOR) {
             
-            _VLOG(log::out <<log::BLUE<< "Preprocess (imports): "<<BriefPath(source.path.text)<<"\n";)
+            _VLOG(log::out <<log::BLUE<< "Preprocess (imports): "<<BriefString(source.path.text)<<"\n";)
             PreprocessImports(info, tokenStream);
         }
 
@@ -588,10 +588,10 @@ u32 ProcessSource(void* ptr) {
             }
             
             if(fullPath.text.empty()){
-                log::out << log::RED << "Could not find import '"<<importName.text<<"' (import from '"<<BriefPath(source.path.text,20)<<"'\n";
+                log::out << log::RED << "Could not find import '"<<importName.text<<"' (import from '"<<BriefString(source.path.text,20)<<"'\n";
             } else {
                 // if(info->hasStream(fullPath)){   
-                //     _VLOG(log::out << log::LIME << "Already imported "<<BriefPath(fullPath.text,20)<<"\n";)
+                //     _VLOG(log::out << log::LIME << "Already imported "<<BriefString(fullPath.text,20)<<"\n";)
                 //     tempPaths[i] = {};
                 // }else{
                     tempPaths[i] = fullPath;
@@ -618,7 +618,7 @@ u32 ProcessSource(void* ptr) {
             // log::out << "Add source "<<tempPaths[i].getFileName().text<<"\n";
             auto importStream = info->addStream(tempPaths[i]);
             if(!importStream) {
-                _VLOG(log::out << log::LIME << "Already imported "<<BriefPath(source.path.text,20)<<"\n";)
+                _VLOG(log::out << log::LIME << "Already imported "<<BriefString(source.path.text,20)<<"\n";)
                 continue;
             }
             if(stream->dependencyIndex > importStream->index)
@@ -657,7 +657,7 @@ u32 ProcessSource(void* ptr) {
     info->availableThreads++;
     // for(int i=0;i<info->streams.size();i++){
     //     StreamToProcess* stream = info->streams[i];
-    //     log::out << BriefPath(stream->initialStream->streamName,10)<<"\n";
+    //     log::out << BriefString(stream->initialStream->streamName,10)<<"\n";
     // }
     // if(info->waitingThreads == info->compileOptions->threadCount)
     //     info->sourceWaitLock.signal(); // we must signal to prevent all threads from waiting
@@ -721,8 +721,8 @@ u32 ProcessSource(void* ptr) {
 
          // are used in this source file
         if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
-            // log::out << "Pre "<<BriefPath(stream->initialStream->streamName)<<"\n";
-            _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+            // log::out << "Pre "<<BriefString(stream->initialStream->streamName)<<"\n";
+            _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
             stream->finalStream = Preprocess(info, stream->initialStream);
         }
 
@@ -843,19 +843,19 @@ Bytecode* CompileSource(CompileOptions* options) {
     }
     // for(int i=0;i<compileInfo.streams.size();i++){
     //     StreamToProcess* stream = compileInfo.streams[i];
-    //     log::out << BriefPath(stream->initialStream->streamName,10)<<"\n";
+    //     log::out << BriefString(stream->initialStream->streamName,10)<<"\n";
     // }
     {
         int i = compileInfo.streams.size()-1; // process essential first
         StreamToProcess* stream = compileInfo.streams[i];
          // are used in this source file
         // if (!stream->finalStream && (stream->initialStream->enabled & LAYER_PREPROCESSOR)) {
-        //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+        //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
         //     stream->finalStream = Preprocess(&compileInfo, stream->initialStream);
         // }
 
         TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
-        _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+        _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
         ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
         if(body){
             if(stream->as.empty()){
@@ -870,7 +870,7 @@ Bytecode* CompileSource(CompileOptions* options) {
          // are used in this source file
         // TokenStream* procStream = stream->initialStream;
         // if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
-        //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+        //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
         //     procStream = Preprocess(&compileInfo, stream->initialStream);
         //     // if(macroBenchmark){
         //     //     log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
@@ -885,7 +885,7 @@ Bytecode* CompileSource(CompileOptions* options) {
         //     // tokenStream->print();
         // }
         TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
-        _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefPath(stream->initialStream->streamName)<<"\n";)
+        _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
         ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
         if(body){
             if(stream->as.empty()){
@@ -932,15 +932,187 @@ Bytecode* CompileSource(CompileOptions* options) {
         if(!options->silent)
             compileInfo.compileOptions->compileStats.printWarnings();
     }
-    if(bytecode) {
-        // if(!bytecode->nativeRegistry)
-        //     bytecode->nativeRegistry = compileInfo.nativeRegistry;
-        // compileInfo.nativeRegistry = nullptr;
-        bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
+    // if(bytecode) {        
+    //     bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
+    // }
+    // compileInfo.cleanup();
+    // return bytecode;
+
+    defer {
+        if(bytecode) {
+            Bytecode::Destroy(bytecode);
+        }
+        compileInfo.cleanup();
+        return nullptr;
+    };
+
+    if(!bytecode) {
+        return nullptr;
+    }
+    bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
+
+    if(options->outputFile.text.empty()) {
+        switch (options->target) {
+            case WINDOWS_x64: {
+                options->outputFile = "bin/temp.exe";
+                break;
+            }
+            case BYTECODE: {
+                // nothing
+                break;
+            }
+            default: {
+                Assert(false);
+            }
+        }
     }
 
-    compileInfo.cleanup();
-    return bytecode;
+    switch(options->target){
+        case WINDOWS_x64: {
+            Path& outPath = options->outputFile;
+
+            options->compileStats.start_convertx64 = StartMeasure();
+            Program_x64* program = ConvertTox64(bytecode);
+            options->compileStats.end_convertx64 = StartMeasure();
+
+            if(program){
+                auto format = options->outputFile.getFormat();
+                bool outputIsObject = format == "o" || format == "obj";
+
+                std::string objPath = "";
+                if(outputIsObject){
+                    options->compileStats.start_objectfile = StartMeasure();
+                    WriteObjectFile(outPath.text,program);
+                    options->compileStats.end_objectfile = StartMeasure();
+                    objPath = outPath.text;
+                    // log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
+                } else {
+                    objPath = "bin/" + outPath.getFileName(true).text + ".obj";
+                    options->compileStats.start_objectfile = StartMeasure();
+                    WriteObjectFile(objPath,program);
+                    options->compileStats.end_objectfile = StartMeasure();
+
+                    std::string cmd = "link /nologo ";
+                    cmd += objPath + " ";
+                    cmd += "bin/NativeLayer.lib ";
+                    cmd += "uuid.lib ";
+                    cmd += "shell32.lib ";
+                    for (int i = 0;i<bytecode->linkDirectives.size();i++) {
+                        auto& dir = bytecode->linkDirectives[i];
+                        cmd += dir + " ";
+                    }
+                    cmd += "/DEFAULTLIB:MSVCRT ";
+                    // cmd += "/DEFAULTLIB:LIBCMT ";
+                    cmd += "/OUT:" + outPath.text+" ";
+                    
+                    options->compileStats.start_linker = StartMeasure();
+                    int exitCode = 0;
+                    engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                    options->compileStats.end_linker = StartMeasure();
+                    
+                    if(exitCode == 0) { // 0 means success
+                        QuickArray<char> textBuffer{};
+                        for(int i=0;i<bytecode->debugDumps.size();i++) {
+                            auto& dump = bytecode->debugDumps[i];
+                            if(dump.description.empty()) {
+                                log::out << "Dump: "<<log::GOLD<<"unnamed\n";
+                            } else {
+                                log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
+                            }
+                            if(dump.dumpBytecode) {
+                                for(int j=dump.startIndex;j<dump.endIndex;j++){
+                                    log::out << " ";
+                                    bytecode->printInstruction(j, true);
+                                    u8 immCount = bytecode->immediatesOfInstruction(j);
+                                    j += immCount;
+                                }
+                            }
+                            if(dump.dumpAsm) {
+                                #define DUMP_ASM_OBJ "bin/dump_asm.obj"
+                                #define DUMP_ASM_ASM "bin/dump_asm.asm"
+
+                                WriteObjectFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+
+                                // TODO: You may want to redirect stdout and reformat the
+                                //  text from dumpbin
+
+                                auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
+
+                                std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
+                                cmd += DUMP_ASM_OBJ;
+                                
+                                int exitCode = 0;
+                                engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, file);
+
+                                u32 fileSize = engone::FileGetHead(file);
+                                engone::FileSetHead(file, 0);
+
+                                textBuffer.resize(fileSize);
+                                engone::FileRead(file, textBuffer._ptr, fileSize);
+
+                                engone::FileClose(file);
+
+                                ReformatDumpbinAsm(textBuffer, nullptr, true);
+
+                                // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM
+                            }
+                        }
+                    }
+
+                    if(!options->silent)
+                        log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
+
+                    // msvc linker returns a fatal error as exit code
+                    // if(exitCode == 0)
+                    //     log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an executable: "<<outPath.text<<".\n";
+                }
+                #ifdef DUMP_ALL_ASM
+                // program->printHex("bin/temphex.txt");
+                program->printAsm("bin/temp.asm", objPath.data());
+                #endif
+                Program_x64::Destroy(program); 
+                return nullptr;
+            } else {
+                // log::out <<log::RED <<"Failed converting "<<options->initialSourceFile.text << " to x64 program.\n";
+                return nullptr;
+            }
+            break; 
+        }
+        // Bytecode exporting has been disabled because you rarely use it.
+        // You usually want to execute it right away or at compile time.
+        // If you want to save time by compiling the bytecode in advance then
+        // you probably want to save even more time by compiling into machine instructions
+        // instead of bytecode which runs in an interpreter.
+        // case BYTECODE: {
+        //     return ExportBytecode(options, bytecode);
+        //     break;
+        // }
+        default: {
+            log::out << log::RED << "Target "<<options->target << " is not supported\n";
+        }
+    }
+    
+    options->compileStats.printSuccess(options);
+
+    if(options->executeOutput) {
+        switch (options->target) {
+            case BYTECODE: {
+                RunBytecode(options, bytecode);
+            }
+            break; case WINDOWS_x64: {
+                std::string hoho{};
+                hoho += options->outputFile.text;
+                for(auto& arg : options->userArgs){
+                    hoho += " ";
+                    hoho += arg;
+                }
+                int errorCode = 0;
+                engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
+                log::out << "Error level: "<<errorCode<<"\n";
+            }
+        }
+    }
+    return nullptr;
 }
 
 int CompileOptions::addTestLocation(TokenRange& range){
@@ -961,7 +1133,7 @@ void CompileStats::printSuccess(CompileOptions* opts){
             log::out << " text buffer: "<<opts->initialSourceBuffer.origin<<"\n";
         } else {
             // log::out << " initial file: "<< opts->initialSourceFile.getFileName().text<<"\n";
-            log::out << " initial file: "<< BriefPath(opts->initialSourceFile.getAbsolute().text,30)<<"\n";
+            log::out << " initial file: "<< BriefString(opts->initialSourceFile.getAbsolute().text,30)<<"\n";
         }
         log::out << " target: "<<opts->target<<", output: "<<opts->outputFile.text << "\n";
     }
@@ -1028,8 +1200,9 @@ void CompileAndRun(CompileOptions* options) {
     switch (options->target) {
         case BYTECODE: {
             RunBytecode(options, bytecode);
+            break;
         }
-        break; case WINDOWS_x64: {
+        case WINDOWS_x64: {
             std::string hoho{};
             hoho += options->outputFile.text;
             for(auto& arg : options->userArgs){
@@ -1039,6 +1212,7 @@ void CompileAndRun(CompileOptions* options) {
             int errorCode = 0;
             engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
             log::out << "Error level: "<<errorCode<<"\n";
+            break;
         }
     }
 
@@ -1118,6 +1292,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                     options->compileStats.end_linker = StartMeasure();
                     
                     if(exitCode == 0) { // 0 means success
+                        QuickArray<char> textBuffer{};
                         for(int i=0;i<bytecode->debugDumps.size();i++) {
                             auto& dump = bytecode->debugDumps[i];
                             if(dump.description.empty()) {
@@ -1134,7 +1309,32 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                                 }
                             }
                             if(dump.dumpAsm) {
-                                Assert(false);
+                                #define DUMP_ASM_OBJ "bin/dump_asm.obj"
+                                #define DUMP_ASM_ASM "bin/dump_asm.asm"
+
+                                WriteObjectFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+
+                                // TODO: You may want to redirect stdout and reformat the
+                                //  text from dumpbin
+
+                                auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
+
+                                std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
+                                cmd += DUMP_ASM_OBJ;
+                                
+                                int exitCode = 0;
+                                engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, file);
+
+                                u32 fileSize = engone::FileGetHead(file);
+                                engone::FileSetHead(file, 0);
+
+                                textBuffer.resize(fileSize);
+                                engone::FileRead(file, textBuffer._ptr, fileSize);
+
+                                engone::FileClose(file);
+
+                                ReformatDumpbinAsm(textBuffer, nullptr, true);
+
                                 // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM
                             }
                         }

@@ -1,0 +1,212 @@
+Microsoft (R) Debugging Information Dumper  Version 14.00.23611
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+***** SECTION #2
+
+*** SYMBOLS
+
+(00000C) S_OBJNAME: Signature: 00000000, C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch\test.obj
+
+(000058) S_COMPILE3:
+         Language: C
+         Target processor: x64
+         Compiled for edit and continue: no
+         Compiled without debugging info: no
+         Compiled with LTCG: no
+         Compiled with /bzalign: no
+         Managed code present: no
+         Compiled with /GS: yes
+         Compiled with /hotpatch: yes
+         Converted by CVTCIL: no
+         MSIL module: no
+         Compiled with /sdl: no
+         Compiled with pgo: no
+         .EXP module: no
+         Pad bits = 0x0000
+         Frontend Version: Major = 19, Minor = 36, Build = 32535, QFE = 0
+         Backend Version: Major = 19, Minor = 36, Build = 32535, QFE = 0
+         Version string: Microsoft (R) Optimizing Compiler
+
+
+*** SYMBOLS
+
+
+(00009C) S_GPROC32_ID: [0000:00000000], Cb: 00000019, ID:             0x1002, cool
+         Parent: 00000000, End: 00000000, Next: 00000000
+         Debug start: 00000004, Debug end: 00000014
+
+(0000C8)  S_FRAMEPROC:
+          Frame size = 0x00000018 bytes
+          Pad size = 0x00000000 bytes
+          Offset of pad in frame = 0x00000000
+          Size of callee save registers = 0x00000000
+          Address of exception handler = 0000:00000000
+          Function info: asynceh invalid_pgo_counts opt_for_speed Local=rsp Param=rsp (0x00114200)
+(0000E6)  S_REGREL32: rsp+00000000, Type:       T_INT4(0074), a
+
+(0000F6) S_PROC_ID_END
+
+
+*** LINES
+
+  0000:00000000-00000019, flags = 0000, fileid = 00000000
+
+      7 00000000      8 00000004      9 0000000B     10 00000014
+
+*** SYMBOLS
+
+
+(000144) S_GPROC32_ID: [0000:00000000], Cb: 00000006, ID:             0x1004, ok
+         Parent: 00000000, End: 00000000, Next: 00000000
+         Debug start: 00000000, Debug end: 00000005
+
+(00016E)  S_FRAMEPROC:
+          Frame size = 0x00000000 bytes
+          Pad size = 0x00000000 bytes
+          Offset of pad in frame = 0x00000000
+          Size of callee save registers = 0x00000000
+          Address of exception handler = 0000:00000000
+          Function info: asynceh invalid_pgo_counts opt_for_speed Local=rsp Param=rsp (0x00114200)
+
+(00018C) S_PROC_ID_END
+
+
+*** LINES
+
+  0000:00000000-00000006, flags = 0000, fileid = 00000028
+
+      9 00000000     10 00000000     11 00000005
+
+*** SYMBOLS
+
+
+(0001D0) S_GPROC32_ID: [0000:00000000], Cb: 00000006, ID:             0x1005, ok1
+         Parent: 00000000, End: 00000000, Next: 00000000
+         Debug start: 00000000, Debug end: 00000005
+
+(0001FB)  S_FRAMEPROC:
+          Frame size = 0x00000000 bytes
+          Pad size = 0x00000000 bytes
+          Offset of pad in frame = 0x00000000
+          Size of callee save registers = 0x00000000
+          Address of exception handler = 0000:00000000
+          Function info: asynceh invalid_pgo_counts opt_for_speed Local=rsp Param=rsp (0x00114200)
+
+(000219) S_PROC_ID_END
+
+
+*** LINES
+
+  0000:00000000-00000006, flags = 0000, fileid = 00000028
+
+     12 00000000     13 00000000     14 00000005
+
+*** SYMBOLS
+
+
+(000260) S_GPROC32_ID: [0000:00000000], Cb: 00000026, ID:             0x1006, main
+         Parent: 00000000, End: 00000000, Next: 00000000
+         Debug start: 00000004, Debug end: 00000021
+
+(00028C)  S_FRAMEPROC:
+          Frame size = 0x00000038 bytes
+          Pad size = 0x00000000 bytes
+          Offset of pad in frame = 0x00000000
+          Size of callee save registers = 0x00000000
+          Address of exception handler = 0000:00000000
+          Function info: asynceh invalid_pgo_counts opt_for_speed Local=rsp Param=rsp (0x00114200)
+(0002AA)  S_REGREL32: rsp+00000020, Type:       T_INT4(0074), MY_CRAZY_NAME
+
+(0002C6) S_PROC_ID_END
+
+
+*** LINES
+
+  0000:00000000-00000026, flags = 0000, fileid = 00000028
+
+     16 00000000     18 00000004     20 0000000C     22 0000001D
+     24 00000021
+
+*** FILECHKSUMS
+
+FileId  St.Offset  Cb  Type  ChksumBytes
+     0  00000001   20  SHA_256  ABFE1D4A14D9741E4FDA1C2A64C17D307335B9E935233CA61D54A0FFE82382ED
+    28  0000004E   20  SHA_256  02780397ECB2E8AA783A91DEC79447D93DE92F05B86A17A587CB02F0104D0860
+
+*** STRINGTABLE
+
+00000000 
+00000001 C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch\src\Other\test2.c
+0000004e C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch\src\Other\test.c
+
+
+*** SYMBOLS
+
+
+(000418) S_BUILDINFO:             0x100F
+
+
+***** SECTION #6
+
+*** TYPES
+
+0x1000 : Length = 10, Leaf = 0x1201 LF_ARGLIST argument count = 1
+	list[0] = T_NOTYPE(0000)
+
+0x1001 : Length = 14, Leaf = 0x1008 LF_PROCEDURE
+	Return type = T_VOID(0003), Call type = C Near
+	Func attr = none
+	# Parms = 0, Arg list type = 0x1000
+
+0x1002 : Length = 18, Leaf = 0x1601 LF_FUNC_ID
+	Type = 0x1001		Scope = global	cool
+
+0x1003 : Length = 14, Leaf = 0x1008 LF_PROCEDURE
+	Return type = T_INT4(0074), Call type = C Near
+	Func attr = none
+	# Parms = 0, Arg list type = 0x1000
+
+0x1004 : Length = 14, Leaf = 0x1601 LF_FUNC_ID
+	Type = 0x1003		Scope = global	ok
+
+0x1005 : Length = 14, Leaf = 0x1601 LF_FUNC_ID
+	Type = 0x1003		Scope = global	ok1
+
+0x1006 : Length = 18, Leaf = 0x1601 LF_FUNC_ID
+	Type = 0x1003		Scope = global	main
+
+0x1007 : Length = 66, Leaf = 0x1605 LF_STRING_ID
+	C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch
+	No sub string
+
+0x1008 : Length = 114, Leaf = 0x1605 LF_STRING_ID
+	C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\bin\HostX64\x64\cl.exe
+	No sub string
+
+0x1009 : Length = 26, Leaf = 0x1605 LF_STRING_ID
+	src/Other/test.c
+	No sub string
+
+0x100a : Length = 74, Leaf = 0x1605 LF_STRING_ID
+	C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch\test.pdb
+	No sub string
+
+0x100b : Length = 266, Leaf = 0x1605 LF_STRING_ID
+	-c -IC:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch -Z7 -MT -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\include" -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\ATLMFC\i
+	No sub string
+
+0x100c : Length = 250, Leaf = 0x1605 LF_STRING_ID
+	nclude" -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\VS\include" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\ucrt" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um" -I"C:\Program
+	No sub string
+
+0x100d : Length = 14, Leaf = 0x1604 LF_SUBSTR_LIST
+	String ID's (count = 2): 0x100B 0x100C
+
+0x100e : Length = 214, Leaf = 0x1605 LF_STRING_ID
+	 Files (x86)\Windows Kits\10\include\10.0.19041.0\shared" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\winrt" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\cppwinrt" -TC -X
+	List of sub string ID's = 0x100D
+
+0x100f : Length = 26, Leaf = 0x1603 LF_BUILDINFO
+	String ID's (count = 5): 0x1007 0x1008 0x1009 0x100A 0x100E
+

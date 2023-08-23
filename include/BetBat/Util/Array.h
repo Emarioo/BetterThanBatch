@@ -162,7 +162,8 @@ struct TinyArray {
     }
 };
 
-// Do not pop or add elements while iterating
+// Do not pop or add elements while iterating.
+// Be careful at least.
 template<typename T>
 struct DynamicArray {
     DynamicArray() = default;

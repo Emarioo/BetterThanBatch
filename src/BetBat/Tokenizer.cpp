@@ -572,8 +572,6 @@ bool TokenStream::addToken(Token token){
         if(!tokens.resize(tokens.max*2 + 100))
             return false;
     }
-    // if(token.flags&TOKEN_SUFFIX_LINE_FEED)
-    //     lines++;
     token.tokenIndex = tokens.used;
     token.tokenStream = this;
     *((Token*)tokens.data + tokens.used) = token;

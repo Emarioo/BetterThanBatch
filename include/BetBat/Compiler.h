@@ -86,7 +86,9 @@ struct CompileOptions {
     Path outputFile{};
     DynamicArray<std::string> userArgs; // arguments to pass to the interpreter or executable
     bool silent=false;
-    bool singleThreaded=false;
+    bool singleThreaded = false;
+    bool useDebugInformation = false;
+    bool executeOutput = false;
     u32 threadCount=3;
 
     struct TestLocation {

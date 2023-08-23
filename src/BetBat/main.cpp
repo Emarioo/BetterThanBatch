@@ -1,6 +1,7 @@
 
 #include "BetBat/Compiler.h"
 #include "BetBat/Util/TestSuite.h"
+#include "BetBat/PDBWriter.h"
 
 #include <math.h>
 // #include "BetBat/glfwtest.h"
@@ -67,6 +68,13 @@ void print_help(){
 int main(int argc, const char** argv){
     using namespace engone;
     
+    // DeconstructPDB("test.pdb");
+    // auto obj = ObjectFile::DeconstructFile("test.obj");
+    // DeconstructDebugSymbols(obj->
+    // DeconstructPDB("test.pdb");
+    // DeconstructPDB("bin/compiler.pdb");
+    // Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+    // return 0;
 
     // log::out << "hello\n";
 
@@ -123,19 +131,19 @@ int main(int argc, const char** argv){
 
     // engone::SetStandardOut(prev);
 
-    u64 u = 0;
-    i64 s = -23;
-    bool gus = u > s;
-    bool gsu = s > u;
+    // u64 u = 0;
+    // i64 s = -23;
+    // bool gus = u > s;
+    // bool gsu = s > u;
 
-    bool lsu = s < u;
-    bool lus = u < s;
+    // bool lsu = s < u;
+    // bool lus = u < s;
 
-    bool gesu = s >= u;
-    bool geus = u >= s;
+    // bool gesu = s >= u;
+    // bool geus = u >= s;
     
-    bool lesu = s <= u;
-    bool leus = u <= s;
+    // bool lesu = s <= u;
+    // bool leus = u <= s;
     // float l = n;
     // float l = k;
 
@@ -275,9 +283,12 @@ int main(int argc, const char** argv){
         TestSuite(TEST_ALL);
     } else if(!devmode){
         if(compileOptions.outputFile.text.size()==0) {
-            CompileAndRun(&compileOptions);
+            compileOptions.executeOutput = true;
+            CompileSource(&compileOptions);
+            // CompileAndRun(&compileOptions);
         } else {
-            CompileAndExport(&compileOptions);
+            CompileSource(&compileOptions); // won't execute
+            // CompileAndExport(&compileOptions);
         }
     } else if(devmode){
         log::out << log::BLACK<<"[DEVMODE]\n";
@@ -296,81 +307,18 @@ int main(int argc, const char** argv){
         if(true) {} else
         #endif
         if(compileOptions.target == BYTECODE){
-            CompileAndRun(&compileOptions);
+            compileOptions.executeOutput = true;
+            CompileSource(&compileOptions);
+            // CompileAndRun(&compileOptions);
         } else {
             #define OBJ_FILE "bin/dev.obj"
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
-            CompileAndRun(&compileOptions);
-            // CompileAndExport(&compileOptions);
-
-            // for(int i=0;i<100;i++) {
-            //     auto opts = compileOptions;
-            //     CompileAndRun(&opts);
-            // }
-
-            // // CompileOptions options{};
-            // // CompileAndExport({"examples/x64_test.btb"}, EXE_FILE);
-
-            // Program_x64* program = nullptr;
-            // Bytecode* bytecode = CompileSource(&compileOptions);
-            // // bytecode->codeSegment.used=0;
-            // // bytecode->add({BC_DATAPTR, BC_REG_RBX});
-            // // bytecode->addIm(0);
-            // // bytecode->add({BC_MOV_MR, BC_REG_RBX, BC_REG_AL, 1});
-            // #ifdef LOG_MEASURES
-            // PrintMeasures();
-            // #endif
-
-            // if(bytecode)
-            //     program = ConvertTox64(bytecode);
-
-            // defer { if(bytecode) Bytecode::Destroy(bytecode); if(program) Program_x64::Destroy(program); };
-            // if(program){
-            //     program->printHex("temp.hex");
-            //     // program = Program_x64::Create();
-            //     // u8 arr[]={ 0x48, 0x83, 0xEC, 0x28, 0xE8, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x28, 0xC3 };
-            //     // program->addRaw(arr,sizeof(arr));
-            //     // NamedRelocation nr{};
-            //     // nr.name = "printme";
-            //     // nr.textOffset = 0x5;
-            //     // program->namedRelocations.add(nr);
-
-            //     WriteObjectFile(OBJ_FILE,program);
-
-            //     // auto objFile = ObjectFile::DeconstructFile(OBJ_FILE, false);
-            //     // defer { ObjectFile::Destroy(objFile); };
-
-            //     // link the object file and run the resulting executable
-            //     // error level is printed because it's the only way to get
-            //     // an output from the executable at the moment.
-            //     // Printing and writing to files require linkConvention to stdio.h or windows.
-            //     i32 errorLevel = 0;
-            //     engone::StartProgram("link /nologo " OBJ_FILE 
-            //     " bin/NativeLayer.lib"
-            //     " uuid.lib"
-            //     // " Kernel32.lib"
-            //     " shell32.lib"
-            //     " /DEFAULTLIB:LIBCMT",PROGRAM_WAIT);
-            //     std::string hoho{};
-            //     hoho += EXE_FILE;
-            //     for(auto& arg : compileOptions.userArgs){
-            //         hoho += " ";
-            //         hoho += arg;
-            //     }
-            //     engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorLevel);
-            //     log::out << "Error level: "<<errorLevel<<"\n";
-            // }
+            compileOptions.useDebugInformation = true;
+            // compileOptions.executeOutput = true;
+            CompileSource(&compileOptions);
+            // CompileAndRun(&compileOptions);
         }
-
-        // {
-        //     auto objFile = ObjectFile::DeconstructFile("bin/obj_test.obj", true);
-        //     defer { ObjectFile::Destroy(objFile); };
-        //     objFile->writeFile("bin/obj_min.obj");
-            // auto objFile2 = ObjectFile::DeconstructFile("bin/obj_min.obj", false);
-            // defer { ObjectFile::Destroy(objFile2); };
-        // }
-
         // Bytecode::Destroy(bytecode);
         
         // PerfTestTokenize("example/build_fast.btb",200);

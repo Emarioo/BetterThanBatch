@@ -1,0 +1,177 @@
+Microsoft (R) Debugging Information Dumper  Version 14.00.23611
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+*** IDs
+
+0x1000 : Length = 18, Leaf = 0x1601 LF_FUNC_ID
+	Type = 0x1001		Scope = global	cool
+
+0x1001 : Length = 18, Leaf = 0x1601 LF_FUNC_ID
+	Type = 0x1002		Scope = global	main
+
+0x1002 : Length = 66, Leaf = 0x1605 LF_STRING_ID
+	C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch
+	No sub string
+
+0x1003 : Length = 114, Leaf = 0x1605 LF_STRING_ID
+	C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\bin\HostX64\x64\cl.exe
+	No sub string
+
+0x1004 : Length = 266, Leaf = 0x1605 LF_STRING_ID
+	-c -IC:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch -Zi -MT -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\include" -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\ATLMFC\i
+	No sub string
+
+0x1005 : Length = 250, Leaf = 0x1605 LF_STRING_ID
+	nclude" -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\VS\include" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\ucrt" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um" -I"C:\Program
+	No sub string
+
+0x1006 : Length = 14, Leaf = 0x1604 LF_SUBSTR_LIST
+	String ID's (count = 2): 0x1004 0x1005
+
+0x1007 : Length = 214, Leaf = 0x1605 LF_STRING_ID
+	 Files (x86)\Windows Kits\10\include\10.0.19041.0\shared" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\winrt" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\cppwinrt" -TC -X
+	List of sub string ID's = 0x1006
+
+0x1008 : Length = 26, Leaf = 0x1605 LF_STRING_ID
+	src/Other/test.c
+	No sub string
+
+0x1009 : Length = 74, Leaf = 0x1605 LF_STRING_ID
+	C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch\test.pdb
+	No sub string
+
+0x100a : Length = 26, Leaf = 0x1603 LF_BUILDINFO
+	String ID's (count = 5): 0x1002 0x1003 0x1008 0x1009 0x1007
+
+0x100b : Length = 14, Leaf = 0x1601 LF_FUNC_ID
+	Type = 0x1002		Scope = global	ok
+
+0x100c : Length = 266, Leaf = 0x1605 LF_STRING_ID
+	-c -IC:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch -Yd -Zi -MT -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\include" -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Tools\MSVC\14.36.32532\ATLM
+	No sub string
+
+0x100d : Length = 238, Leaf = 0x1605 LF_STRING_ID
+	FC\include" -I"C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\VS\include" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\ucrt" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\um"
+	No sub string
+
+0x100e : Length = 14, Leaf = 0x1604 LF_SUBSTR_LIST
+	String ID's (count = 2): 0x100C 0x100D
+
+0x100f : Length = 230, Leaf = 0x1605 LF_STRING_ID
+	 -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\shared" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\winrt" -I"C:\Program Files (x86)\Windows Kits\10\include\10.0.19041.0\cppwinrt" -TC -X
+	List of sub string ID's = 0x100E
+
+0x1010 : Length = 26, Leaf = 0x1603 LF_BUILDINFO
+	String ID's (count = 5): 0x1002 0x1003 0x1008 0x1009 0x100F
+
+
+*** MODULES
+
+
+*** PUBLICS
+
+
+
+*** TYPES
+
+0x1000 : Length = 10, Leaf = 0x1201 LF_ARGLIST argument count = 1
+	list[0] = T_NOTYPE(0000)
+
+0x1001 : Length = 14, Leaf = 0x1008 LF_PROCEDURE
+	Return type = T_VOID(0003), Call type = C Near
+	Func attr = none
+	# Parms = 0, Arg list type = 0x1000
+
+0x1002 : Length = 14, Leaf = 0x1008 LF_PROCEDURE
+	Return type = T_INT4(0074), Call type = C Near
+	Func attr = none
+	# Parms = 0, Arg list type = 0x1000
+
+0x1003 : Length = 10, Leaf = 0x1002 LF_POINTER
+	Pointer (__ptr64), Size: 8
+	Element type : 0x1002
+
+
+*** TYPES Mismatch Warnings
+
+
+*** SYMBOLS
+
+
+*** GLOBALS
+
+
+
+*** COFF SYMBOL RVA
+
+
+*** INLINEE LINES
+
+
+*** LINES
+
+
+*** IL LINES
+
+
+*** SOURCE FILES
+
+
+*** SECTION CONTRIBUTIONS
+
+DBI::getEnumContrib and DBI::getEnumContrib2 failed
+
+*** SEGMENT MAP
+
+
+*** FPO
+
+DBIOpenDbg(, dbgtypeFPO,) failed.
+DBIOpenDbg(, dbgtypeNewFPO,) failed.
+
+*** TokenMap
+
+DBIOpenDbg(, dbgtypeTokenRidMap,) failed.
+
+*** FIXUPS
+
+DBIOpenDbg(, dbgtypeFixup,) failed.
+
+*** OMAP FROM SRC
+
+DBIOpenDbg(, dbgtypeOmapFromSrc,) failed.
+
+*** OMAP TO SRC
+
+DBIOpenDbg(, dbgtypeOmapToSrc,) failed.
+
+*** PDATA/XDATA
+
+DBIOpenDbg(, dbgtypePdata,) failed.
+
+*** SECTION HEADERS
+
+DBIOpenDbg(, dbgtypeSectionHdr,) failed.
+
+*** ORIGINAL SECTION HEADERS
+
+DBIOpenDbg(, dbgtypeSectionHdrOrig,) failed.
+
+*** CROSS MODULE EXPORTS
+
+
+*** CROSS MODULE IMPORTS
+
+
+*** FUNCTION TOKEN MAP
+
+
+*** TYPE TOKEN MAP
+
+
+*** MERGED ASSEMBLY INPUT
+
+
+*** STRINGTABLE
+

@@ -416,10 +416,7 @@ void Program_x64::printAsm(const char* path, const char* objpath){
     if(!objpath)
         WriteObjectFile("bin/garb.obj", this);
 
-    auto pipe = PipeCreate(0x100000, true, true);
-
-    auto prev = GetStandardOut();
-    SetStandardOut(PipeGetWrite(pipe));
+    auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
 
     std::string cmd = "dumpbin /NOLOGO /DISASM:BYTES ";
     if(!objpath)
@@ -427,22 +424,117 @@ void Program_x64::printAsm(const char* path, const char* objpath){
     else
         cmd += objpath;
 
-    engone::StartProgram((char*)cmd.c_str(), PROGRAM_WAIT);
+    engone::StartProgram((char*)cmd.c_str(), PROGRAM_WAIT, nullptr, {}, file);
 
-    SetStandardOut(prev);
-
-    int bufferSize = 0x100000;
-    char* buffer = (char*)Allocate(bufferSize);
-    int readBytes = PipeRead(pipe, buffer, bufferSize);
-    PipeDestroy(pipe);
-    // TODO: Filter out some useless information in the buffer.
-    auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
-    FileWrite(file, buffer, readBytes);
     engone::FileClose(file);
-
-    engone::Free(buffer,bufferSize);
 }
+void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes) {
+    using namespace engone;
 
+    int maxAddressChars = 0;
+    int addressChars = 0; 
+    int index = 0;
+    bool skipLine = false;
+    bool processContent = false;
+    int wasZero = true;
+    while(true) {
+        if(index >= inBuffer.size())
+            break;
+        char chr = inBuffer.get(index);
+        char nextChr = 0;
+        if(index + 1 < inBuffer.size())
+            nextChr = inBuffer.get(index+1);
+        char nextChr2 = 0;
+        if(index + 2 < inBuffer.size())
+            nextChr2 = inBuffer.get(index+2);
+        index++;
+        
+        if(skipLine) {
+            if(chr == '\n') {
+                skipLine = false;
+            }
+            continue;
+        }
+
+        if(processContent) {
+            if(addressChars != 0 || chr != '0' || nextChr == ':') {
+                addressChars++;
+            }
+            if(nextChr == ':') {
+                skipLine = true;
+                processContent = false;
+                if(maxAddressChars < addressChars) {
+                    maxAddressChars = addressChars;
+                    addressChars = 0;
+                }
+            }
+            continue;
+        }
+        if(chr == ' ' && nextChr == ' ' && nextChr2 == '0') {
+            index++;
+            processContent = true;
+            addressChars = 0;
+        } else if(chr == ' ' && nextChr == ' ' && nextChr2 == 'S') {
+            break; // "  Summary"
+        } else {
+            skipLine = true;
+        }
+    }
+
+    index = 0;
+    processContent = false;
+    int atAddressChar = 0;
+    skipLine = false;
+    bool procAddress = false;
+    while(true) {
+        if(index >= inBuffer.size())
+            break;
+        char chr = inBuffer.get(index);
+        char nextChr = 0;
+        if(index + 1 < inBuffer.size())
+            nextChr = inBuffer.get(index+1);
+        char nextChr2 = 0;
+        if(index + 2 < inBuffer.size())
+            nextChr2 = inBuffer.get(index+2);
+        index++;
+        
+        if(skipLine) {
+            if(chr == '\n') {
+                skipLine = false;
+            }
+            continue;
+        }
+
+        if(processContent) {
+            if(procAddress) {
+                if(16-maxAddressChars <= atAddressChar) {
+                    log::out << chr;
+                }
+                if(atAddressChar == 17) { // nextChr == ':'
+                    procAddress = false;
+                    continue;
+                }
+                atAddressChar++;
+                continue;
+            }
+            log::out << chr;
+            if(chr == '\n') {
+                processContent = false;
+            }
+            continue;
+        }
+        if(chr == ' ' && nextChr == ' ' && (nextChr2 == '0' || nextChr2 == ' ')) {
+            index++;
+            processContent = true;
+            procAddress = true;
+            atAddressChar = 0;
+        } else if(chr == ' ' && nextChr == ' ' && nextChr2 == 'S') {
+            break; // "  Summary"
+        } else {
+            skipLine = true;
+        }
+    }
+}
 u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool allowRX = false){
     u8 size = DECODE_REG_SIZE(bcreg);
     Assert(size&handlingSizes);
@@ -475,23 +567,16 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
     Program_x64* prog = Program_x64::Create();
 
+    // steal debug information
+    prog->debugInformation = bytecode->debugInformation;
+    bytecode->debugInformation = nullptr;
+
     // TODO: Multithreading here is possible. Each thread could output instructions into it's own
     //   section of instructions. Then you would finish up with relocations which you can use multiple threads
     //   for too. The only thing is that when translating relocations from bytecode to x64 you would need
     //   to store information about which section it points to.
     //   This is my initial thought on how to allow multiple threads. There are probably some other
     //   issues you need to figure out.
-
-    // prog->add(PREFIX_REXW);
-    // prog->add(OPCODE_MOV_REG_RM);
-    // prog->addModRM_SIB(MODE_DEREF, REG_SI, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-
-    // prog->add((u8)(PREFIX_REXW));
-    // prog->add(OPCODE_MOV_REG_RM);
-    // prog->addModRM_SIB(MODE_DEREF_DISP8, REG_B, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-    // prog->add((u8)8);
-    // prog->printHex();
-    // return prog;
 
     // TODO: You may want some functions to handle the allocation here.
     //  like how you can reserve memory for the text allocation.
@@ -2709,8 +2794,26 @@ add    rsp,0x30
     // FP pop is generated by the bytecode generator
     // prog->add(OPCODE_POP_RM_SLASH_0);
     // prog->addModRM(MODE_REG,0,REG_BP);
+    Assert(prog->text[prog->size()-1] == OPCODE_RET); // bytecode generator should have added a return
+    // prog->add(OPCODE_RET);
 
-    prog->add(OPCODE_RET);
+    if(prog->debugInformation) {
+        int funcs = prog->debugInformation->functions.size();
+        for(int i=0;i<funcs;i++){
+            auto& fun = prog->debugInformation->functions[i];
+            fun.funcStart = addressTranslation[fun.funcStart];
+            fun.funcEnd = addressTranslation[fun.funcEnd];
+            fun.srcStart = addressTranslation[fun.srcStart];
+            fun.srcEnd = addressTranslation[fun.srcEnd];
+            // Don't forget to add new translations here
+
+            int lines = fun.lines.size();
+            for(int j=0;j<lines;j++) {
+                auto& line = fun.lines[j];
+                line.funcOffset = addressTranslation[line.funcOffset];
+            }
+        }
+    }
 
     for(int i=0;i<bytecode->debugDumps.size();i++){
         Bytecode::Dump& dump = bytecode->debugDumps[i];

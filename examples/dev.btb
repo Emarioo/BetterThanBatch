@@ -14,18 +14,18 @@
 // #import "threads"
 // #import "linecounter"
 // #import "graphics/quad.btb"
-// #import "graphics/perf.btb"
+#import "graphics/perf.btb"
 // #import "a"
 // #import "b"
 
-a = 9;
+// a: u64 = 9;
 
-if 1 {
-    // @dump-asm 
-@dump-bc
-    a = 9;
-    a + 2
-}
+// if 1 {
+//     @dump-bc
+// // @dump-asm
+//     a = 0x1000_0000_0000_0000;
+//     a + 2
+// }
 
 // log(intPart)
 // buffer: char[200];

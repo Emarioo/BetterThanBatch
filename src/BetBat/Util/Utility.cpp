@@ -155,7 +155,7 @@ std::string TrimDir(const std::string& path){
         return path;
     return path.substr(slashI+1);
 }
-std::string BriefPath(const std::string& path, int max){
+std::string BriefString(const std::string& path, int max){
     if((int)path.length()>max){
         return std::string("...") + path.substr(path.length()-max,max);
     }   

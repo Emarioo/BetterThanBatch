@@ -3047,6 +3047,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         //     continue;
         // }
 
+        Assert(!info.compileInfo->compileOptions->useDebugInformation);
+
         _GLOG(log::out << "Function " << funcImpl->name << "\n";)
         
         funcImpl->address = info.code->length();
@@ -3432,10 +3434,13 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
         }
     };
 
-    // DynamicArray<std::string> varsToRemove;
-
     for (auto statement : body->statements) {
         MAKE_NODE_SCOPE(statement);
+
+        auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
+        fun.lines.add({});
+        fun.lines.last().funcOffset = info.code->length();
+        fun.lines.last().lineNumber = statement->tokenRange.firstToken.line;
         if (statement->type == ASTStatement::ASSIGN) {
             _GLOG(SCOPE_LOG("ASSIGN"))
             
@@ -3518,13 +3523,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
                 int alignment = 0;
                 if (varname.declaration) {
-                    // if (leftSize == 0) {
-                    //     ERR_SECTION(
-// ERR_HEAD(statement->tokenRange, "Size of type " << "?" << " was 0\n";
-                    //     )
-                    //     continue;
-                    // }
                     if (varname.arrayLength>0){
+                        Assert(!info.compileInfo->compileOptions->useDebugInformation);
                         Assert(!statement->globalAssignment);
                         // TODO: Fix arrays with static data
                         if(statement->firstExpression) {
@@ -3607,8 +3607,15 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         GeneratePop(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                     } else {
                         if(!varinfo->isGlobal()) {
+                            // address of global variables is managed in type checker
                             SignalDefault result = FramePush(info, varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
                                 !statement->firstExpression, false);
+
+                            auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
+                            fun.localVariables.add({});
+                            fun.localVariables.last().name = varname.name;
+                            fun.localVariables.last().frameOffset = varinfo->versions_dataOffset[info.currentPolyVersion];
+                            fun.localVariables.last().typeIndex = 0; // TODO: This isn't right
                         }
                     }
                     _GLOG(log::out << "declare " << (varinfo->isGlobal()?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
@@ -4476,6 +4483,10 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
 
     SignalDefault result = GenerateData(info);
 
+    // TODO: No need to create debug information if the compile options
+    //  doesn't specify it.
+    info.code->createDebugInformation();
+
     // TODO: Skip function generation if there are no functions.
     //   We would need to go through every scope to know that though.
     //   Maybe the type checker can inform the generator?
@@ -4502,14 +4513,42 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     info.code->setLocationInfo("GLOBAL CODE SEGMENT");
     // info.code->addDebugText("GLOBAL CODE SEGMENT\n");
 
+    auto di = info.code->debugInformation;
+
+    info.debugFunctionIndex = di->functions.size();
+    di->functions.add({});
+    // It is dangerous to take a pointer to an element of an array that may reallocate the elements
+    // but the array should only reallocate when generating new functions which we have already done.
+    // this function is the last function we are adding. Taking the pointer is therefore not dangerous.
+    DebugInformation::Function* dfun = &di->functions.last();
+    dfun->name = "main";
+    dfun->fileIndex = di->files.size();
+    di->files.add(info.compileInfo->compileOptions->initialSourceFile.text);
+    
+    dfun->typeIndex = 0; // func with no args or return types
+
+    dfun->funcStart = info.code->length();
+
     info.currentPolyVersion = 0;
     info.virtualStackPointer = GenInfo::VIRTUAL_STACK_START;
     info.currentFrameOffset = 0;
     info.addPush(BC_REG_FP);
     info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
-    result = GenerateBody(info, info.ast->mainBody);
-    info.addPop(BC_REG_FP);
+    
+    dfun->srcStart = info.code->length();
+
     // TODO: What to do about result? nothing?
+    result = GenerateBody(info, info.ast->mainBody);
+    
+    dfun->srcEnd = info.code->length();
+
+    info.addPop(BC_REG_FP);
+
+    // Return instruction should be right at funcEnd.
+    // I know this from looking at cvdump and dumpbin of some C code.
+    dfun->funcEnd = info.code->length();
+    info.addInstruction({BC_RET});
+
 
     std::unordered_map<FuncImpl*, int> resolveFailures;
     for(auto& e : info.callsToResolve){

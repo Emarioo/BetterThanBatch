@@ -8,6 +8,16 @@
 @REM  g++ is used when debugging.
 @REM ########
 
+@REM @REM cl /c src/Other/test.c /Z7
+@REM cl /c src/Other/test.c /Zi
+@REM @REM cl /c src/Other/test.c
+@REM @REM cl /c src/Other/test.c /Z7
+@REM dumpbin /ALL test.obj > out
+@REM cvdump test.obj > out2
+@REM cvdump vc140.pdb > out3
+
+@REM exit /B
+
 @REM SET USE_GCC=1
 SET USE_DEBUG=1
 SET USE_MSVC=1
@@ -88,14 +98,19 @@ set /a finS2=(endTime-startTime)%%100
 echo Compiled in %finS%.%finS2% seconds
 
 @REM Not using MSVC_COMPILE_OPTIONS because debug information may be added
-cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
+@REM cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
+@REM lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
+
 @REM lib /nologo bin/NativeLayer.obj Advapi32.lib /OUT:bin/NativeLayer.lib
-
-lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
-
-@REM cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DNO_PERF /DNO_TRACKER /DOS_WINDOWS src\Engone\Win32.cpp /Fo:bin/Win32.obj
-@REM lib /nologo bin/NativeLayer.obj bin/Win32.obj Advapi32.lib /OUT:bin/NativeLayer.lib
 @REM dumpbin /ALL bin/NativeLayer.obj > nat.out
+
+@REM cl /c src/Other/test.c /Z7
+cl /c src/Other/test.c /I. /Fdtest.pdb /Z7
+@REM cl /c src/Other/test.c
+@REM cl /c src/Other/test.c /Z7
+dumpbin /ALL test.obj > out
+cvdump test.obj > out2
+cvdump test.pdb > out3
 
 if !compileSuccess! == 0 (
     echo f | XCOPY /y /q !output! prog.exe > nul

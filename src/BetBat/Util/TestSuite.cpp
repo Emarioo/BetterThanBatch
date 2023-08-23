@@ -185,7 +185,7 @@ void VerifyTests(DynamicArray<std::string>& filesToTest){
     }
     log::out << log::GOLD << "Test cases ("<<testCases.size()<<"):\n";
     for(auto& testCase : testCases){
-        log::out << " "<<testCase.testName << "["<<testCase.textBuffer.size<<" B]: "<<BriefPath(testCase.textBuffer.origin,17)<<")\n";
+        log::out << " "<<testCase.testName << "["<<testCase.textBuffer.size<<" B]: "<<BriefString(testCase.textBuffer.origin,17)<<")\n";
     }
 
     bool useInterp = false;

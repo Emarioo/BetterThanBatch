@@ -1388,6 +1388,20 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                     continue;
                 }
             }
+            
+            // if(0 == (baseToken.flags & TOKEN_MASK_QUOTED)) {
+            // } else {
+            //     if(info.tempStream->length() > 0) {
+            //         Token& prev = info.tempStream->get(info.tempStream->length()-1);
+            //     }
+            // }
+
+            // IMPORTANT: Setting line and column like this might cause
+            //  issues. The error messages are strange when displaying 
+            //  evaluation of macros. Does this fix that or make it worse?
+            // baseToken.column = macroName.column;
+            // baseToken.line = macroName.line;
+
             info.tempStream->addToken(baseToken);
             // info.outTokens->addToken(baseToken);
             

@@ -2,6 +2,8 @@
 #include "Engone/Logger.h"
 #include "BetBat/Util/Utility.h"
 
+#include "BetBat/PDBWriter.h"
+
 #include <time.h>
 
 namespace COFF_Format {
@@ -205,11 +207,11 @@ ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
                 if(!silent)
                     log::out <<((char*)stringTablePointer + offset)<<"\n";
             } else {
-                for(int i=0;i<8;i++) {
-                    if(0==baselog->Name[i])
+                for(int j=0;j<8;j++) {
+                    if(0==baselog->Name[j])
                         break; 
                     if(!silent)
-                        log::out << baselog->Name[i];
+                        log::out << baselog->Name[j];
                 }
                 if(!silent)
                     log::out << " \n";
@@ -225,6 +227,14 @@ ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
                 LOGIT(NumberOfLineNumbers)
                 LOGIT(Characteristics)
             }
+        }
+        if(objectFile->getSectionName(i) == ".debug$S") {
+            u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
+            DeconstructDebugSymbols(data, sectionHeader->SizeOfRawData);
+        }
+        if(objectFile->getSectionName(i) == ".debug$T") {
+            u8* data = objectFile->_rawFileData + sectionHeader->PointerToRawData;
+            // DeconstructDebugTypes(data, sectionHeader->SizeOfRawData);
         }
         for(int i=0;i<sectionHeader->NumberOfRelocations;i++){
             COFF_Relocation* relocation = (COFF_Relocation*)(objectFile->_rawFileData + sectionHeader->PointerToRelocations + i*COFF_Relocation::SIZE);
@@ -586,21 +596,36 @@ void ObjectFile::writeFile(const std::string& path) {
     FileClose(file);
 }
 
-void WriteObjectFile(const std::string& path, Program_x64* program){
+void WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u32 to){
     using namespace engone;
     using namespace COFF_Format;
     Assert(program);
+
+    if(to==-1){
+        to = program->size();
+    }
+
     #define CHECK Assert(outOffset <= outSize);
     // TODO: It this estimation correct?
     u64 outSize = 2000 + program->size()
         + program->dataRelocations.size() * 30 // 20 for relocations and 10 for symbols, some relocations refer to the same symbols
         + program->namedRelocations.size() * 45 // a little extra since functions have bigger names
         + program->globalSize;
+
+    if(program->debugInformation) {
+        outSize += program->debugInformation->files.size() * 256;
+        outSize += program->debugInformation->functions.size() * 100;
+        // IMPORTANT: We need to estimate better by checking the contnet of each function
+    }
     // u8* outData = (u8*)Allocate(outSize);
     // defer { Free(outData, outSize); };
     u8* outData = TRACK_ARRAY_ALLOC(u8,outSize);
     defer { TRACK_ARRAY_FREE(outData, u8, outSize); };
     u64 outOffset = 0;
+
+    /*
+        We begin with the header and sections
+    */
 
     COFF_File_Header* header = (COFF_File_Header*)(outData + outOffset);
     outOffset+=COFF_File_Header::SIZE;
@@ -617,6 +642,11 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
     Section_Header* textSection = nullptr;
     const int dataSectionNumber = 2;
     Section_Header* dataSection = nullptr;
+    
+    const int debugSSectionNumber = 3;
+    Section_Header* debugSSection = nullptr;
+    const int debugTSectionNumber = 4;
+    Section_Header* debugTSection = nullptr;
 
     header->NumberOfSections++;
     textSection = (Section_Header*)(outData+outOffset);
@@ -656,12 +686,59 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
             IMAGE_SCN_MEM_WRITE |
             IMAGE_SCN_MEM_READ);
     }
+    if(program->debugInformation) {
+        header->NumberOfSections++;
+        debugSSection = (Section_Header*)(outData+outOffset);
+        outOffset+=Section_Header::SIZE;
+        CHECK
 
-    textSection->SizeOfRawData = program->size();
+        strcpy(debugSSection->Name,".debug$S");
+        debugSSection->NumberOfLineNumbers = 0;
+        debugSSection->PointerToLineNumbers = 0;
+
+        debugSSection->NumberOfRelocations = 0;
+        debugSSection->PointerToRelocations = 0;
+
+        debugSSection->VirtualAddress = 0;
+        debugSSection->VirtualSize = 0;
+        debugSSection->Characteristics = (Section_Flags)(
+            IMAGE_SCN_CNT_INITIALIZED_DATA |
+            IMAGE_SCN_ALIGN_1BYTES |
+            IMAGE_SCN_MEM_DISCARDABLE |
+            IMAGE_SCN_MEM_READ);
+
+        debugTSection = (Section_Header*)(outData+outOffset);
+        outOffset+=Section_Header::SIZE;
+        CHECK
+        
+        strcpy(debugTSection->Name,".debug$T");
+        debugTSection->NumberOfLineNumbers = 0;
+        debugTSection->PointerToLineNumbers = 0;
+
+        debugTSection->NumberOfRelocations = 0;
+        debugTSection->PointerToRelocations = 0;
+
+        debugTSection->VirtualAddress = 0;
+        debugTSection->VirtualSize = 0;
+        debugTSection->Characteristics = (Section_Flags)(
+            IMAGE_SCN_CNT_INITIALIZED_DATA |
+            IMAGE_SCN_ALIGN_1BYTES |
+            IMAGE_SCN_MEM_DISCARDABLE |
+            IMAGE_SCN_MEM_READ);
+
+    }
+
+    /*
+        Here we deal with the data of the sections and
+        other data.
+    */
+    u32 programSize = to - from;
+    
+    textSection->SizeOfRawData = programSize;
     textSection->PointerToRawData = outOffset;
-    if(program->size() !=0){
+    if(programSize !=0 ){
         Assert(program->text);
-        memcpy(outData + outOffset, program->text, textSection->SizeOfRawData);
+        memcpy(outData + outOffset, program->text + from, textSection->SizeOfRawData);
         outOffset += textSection->SizeOfRawData;
     }
     std::unordered_map<i32, i32> dataSymbolMap;
@@ -728,7 +805,78 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
             outOffset += dataSection->SizeOfRawData;
             // log::out << "Global data: "<<program->globalSize<<"\n";
         }
+        CHECK
     }
+
+    if(debugSSection) {
+        debugSSection->PointerToRawData = outOffset;
+        
+        // TODO: You may want to move some of this code into PDBWriter
+        // 4-byte alignment per sub section
+        if((outOffset & 3) != 0)
+            outOffset += 4 - outOffset & 3;
+
+        *(u32*)(outData + outOffset) = CV_SIGNATURE_C13;
+        outOffset += 4;
+
+        *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_SYMBOLS;
+        outOffset += 4;
+        u32* sectionLength = (u32*)(outData + outOffset);
+        outOffset += 4;
+
+        { // OBJNAME record
+            u16* recordLength = (u16*)(outData + outOffset);
+            outOffset += 2;
+            *(RecordType*)(outData + outOffset) = RecordType::S_OBJNAME;
+            outOffset += 2;
+
+            *(u32*)(outData + outOffset) = 0; // signature, usually 0 for some reason.
+            outOffset += 4;
+
+            strcpy((char*)outData + outOffset, path.c_str());
+
+            *recordLength = outOffset - ((u64)recordLength - (u64)outData);
+        }
+        { // COMPILE3 record
+            u16* recordLength = (u16*)(outData + outOffset);
+            outOffset += 2;
+            *(RecordType*)(outData + outOffset) = RecordType::S_COMPILE3;
+            outOffset += 2;
+
+            Record_COMPILE3* comp = (Record_COMPILE3*)(outData + outOffset);
+            outOffset += sizeof(Record_COMPILE3) - 2;
+
+            memset(comp, 0, sizeof(Record_COMPILE3));
+            comp->machine = CV_CFL_X64;
+            comp->verFEMinor = 1;
+            comp->verMinor = 1;
+            comp->flags.iLanguage = 0xFF;
+
+            const char* name = "BTB Compiler";
+            strcpy((char*)outData + outOffset, name);
+            outOffset += strlen(name) + 1;
+
+            *recordLength = outOffset - ((u64)recordLength - (u64)outData);
+        }
+
+        // TODO: Go through debug information and add the content to
+        //  the debug sections.
+
+        // TODO: PROCFLAGS in GPROC needs special bits set
+
+        // 4-byte alignment per sub section
+        if((outOffset & 3) != 0)
+            outOffset += 4 - outOffset & 3;
+
+        *sectionLength = outOffset - ((u64)sectionLength - (u64)outData);
+        
+        debugSSection->SizeOfRawData = outOffset - debugSSection->PointerToRawData;
+        Assert(debugTSection);
+
+        CHECK
+    }
+
+    Assert(false); // fix debug relocations for functions!
 
     header->PointerToSymbolTable = outOffset;
     for (int i=0;i<dataSymbols.size();i++) {
@@ -744,6 +892,9 @@ void WriteObjectFile(const std::string& path, Program_x64* program){
         symbol->Type = 0;
         symbol->NumberOfAuxSymbols = 0;
     }
+
+
+
     int stringTableOffset = 4; // 4 because the integer for the string table size is included
     for (int i=0;i<namedSymbols.size();i++) {
         // header->NumberOfSymbols++; incremented when adding relocations
