@@ -27,6 +27,7 @@ struct Path {
     Path getAbsolute() const;
     Path getDirectory() const;
     Path getFileName(bool withoutFormat = false) const;
+    // does not include .
     std::string getFormat() const;
 
     std::string text{};

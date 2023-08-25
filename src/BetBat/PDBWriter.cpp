@@ -4,11 +4,507 @@
 #include "BetBat/Asserts.h"
 #include "BetBat/Util/Array.h"
 
-
 extern const char* registerNames_x64[];
 extern const char* registerNames_AMD64[];
+const char MSF_MAGIC[] = "Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53";
 
-void DeconstructPDB(const char* path) {
+bool PDBFile::writeFile(const char* path) {
+    INCOMPLETE
+    return false;
+}
+u32 PDBFile::createStream() {
+    // start at 5 beacuse PDB, TPI exists at fixed indices.
+    int found = -1;
+    for(int i=5;i<streams.size();i++) {
+        auto& stream = streams[i];
+        if(stream.streamNumber == Stream::STREAM_AVAILABLE) {
+            found = i;
+            break;
+        }
+    }
+    if(!found) {
+        streams.add({});
+        found = streams.size()-1;
+    }
+    auto& stream = streams[found];
+    stream.streamNumber = found;
+    return found;
+}
+u32 PDBFile::requestStream(u32 streamNumber) {
+    Assert(streamNumber == PDB_NUMBER || streamNumber == TPI_NUMBER || streamNumber == DBI_NUMBER || streamNumber == IPI_NUMBER);
+    streams.resize(streamNumber + 1); // +1 since stream numbers are indices. The first stream is the stream table/directory.
+    auto& stream = streams[streamNumber];
+    if(stream.streamNumber != Stream::STREAM_AVAILABLE)
+        return -1; // stream isn't available
+
+    stream.streamNumber = streamNumber;
+    return streamNumber;
+}
+void PDBFile::removeStream(u32 streamNumber) {
+    if(streams.size() >= streamNumber)
+        return;
+    auto& stream = streams[streamNumber];
+    stream.size = 0;
+    stream.streamNumber = Stream::STREAM_AVAILABLE;
+    stream.blockIndices.cleanup();
+    // TODO: Free blocks?
+}
+bool PDBFile::write(u32 streamNumber, u32 offset, u32 bytes, u8* src) {
+    if(streams.size() >= streamNumber)
+        return false;
+    INCOMPLETE
+    return true;
+}
+bool PDBFile::read(u32 streamNumber, u32 offset, u32 bytes, u8* dst){
+    if(streams.size() >= streamNumber)
+        return false;
+
+    auto& stream = streams[streamNumber];
+    u32 virtual_block1 = offset / BLOCK_SIZE;
+    u32 virtual_block2 = (offset + bytes - 1) / BLOCK_SIZE;
+    
+    Assert(virtual_block1 < stream.blockIndices.size() && virtual_block2 < stream.blockIndices.size());
+
+    u32 block1 = stream.blockIndices[virtual_block1];
+    u32 block2 = stream.blockIndices[virtual_block2];
+
+    if(virtual_block1 == virtual_block2) {
+        memcpy(dst, _baseData + block1 * BLOCK_SIZE + offset % BLOCK_SIZE, bytes);
+        return true;
+    } else if (block1 == block2 -1) {
+        // blocks are adjacent so it's fine
+        memcpy(dst, _baseData + block1 * BLOCK_SIZE + offset % BLOCK_SIZE, bytes);
+        return true;
+    } else {
+        u32 size1 = BLOCK_SIZE - (offset % BLOCK_SIZE);
+        u32 size2 = (offset + bytes) % BLOCK_SIZE;
+        memcpy(dst, _baseData + block1 * BLOCK_SIZE + offset % BLOCK_SIZE, size1);
+        memcpy(dst, _baseData + block2 * BLOCK_SIZE, size2);
+        return true;
+    }
+}
+u32 PDBFile::requestBlock() {
+    if(_baseSize < 3 * BLOCK_SIZE) {
+        if(!resizeBaseByBlocks(10))
+            return false;
+    }
+    // Assert(_baseSize > 3 * BLOCK_SIZE);
+
+    INCOMPLETE
+    return -1;
+}
+bool PDBFile::resizeBaseByBlocks(u32 newBlockCount) {
+    u32 newSize = newBlockCount * BLOCK_SIZE;
+    if(!_baseData) {
+        _baseData = (u8*)engone::Allocate(newSize);
+        Assert(_baseData);
+        if(!_baseData)
+            return false;
+        _baseSize = newSize;
+        return true;
+    } else {
+        Assert(newSize > _baseSize); // no point in resizing down
+        u8* newData = (u8*)engone::Reallocate(_baseData, _baseSize, newSize);
+        Assert(newData);
+        if(!newData)
+            return false;
+        _baseData = newData;
+        _baseSize = newSize;
+        return true;
+    }
+}
+u8* PDBFile::takePointer(u32 streamNumber, u32 offset, u32 bytes){
+    if(streams.size() >= streamNumber)
+        return nullptr;
+
+    auto& stream = streams[streamNumber];
+    u32 virtual_block1 = offset / BLOCK_SIZE;
+    u32 virtual_block2 = (offset + bytes - 1) / BLOCK_SIZE;
+    
+    // TODO: Create new blocks
+    Assert(virtual_block1 < stream.blockIndices.size() && virtual_block2 < stream.blockIndices.size());
+
+    u32 block1 = stream.blockIndices[virtual_block1];
+    u32 block2 = stream.blockIndices[virtual_block2];
+    if(virtual_block1 == virtual_block2) { // can't do block1 == block2 if blockIndices has duplicates, you would loop around otherwise which doesn't make sense for a pointer
+        return _baseData + block1 * BLOCK_SIZE + offset % BLOCK_SIZE;
+    } else if (block1 == block2 -1) {
+        // blocks are adjacent so it's fine
+        return _baseData + block1 * BLOCK_SIZE + offset % BLOCK_SIZE;
+    } else {
+        return nullptr; // not on same or adjacent block
+    }
+}
+
+
+bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation* inOutInfo) {
+    using namespace engone;
+    // TODO: This function is very messy. Clean it up by moving
+    //   code into functions.
+    Assert(inOutInfo);
+    #undef WRITE
+    #undef ALIGN4
+    #define WRITE(TYPE, EXPR) *(TYPE*)(outData + outOffset) = (EXPR); outOffset += sizeof(TYPE);
+    #define ALIGN4 if((outOffset & 3) != 0)  outOffset += 4 - outOffset & 3;
+    
+    inOutInfo->functionTypeIndices.resize(di->functions.size());
+    
+    u32 blockCount = 20;
+    u32 blockSize = 0x1000;
+    u32 outSize = blockSize * blockCount; // TODO: Do a better estimation
+    u8* outData = (u8*)engone::Allocate(outSize);
+    memset(outData, 0, outSize);
+    u32 outOffset = 0;
+    
+    u32 nextFreeBlock = 3;
+    u32 block_streamTableTable = nextFreeBlock++;
+
+    struct Stream {
+        // u32 index = 0;
+        u32 byteSize=0;
+        DynamicArray<u32> blockIndices;
+    };
+    DynamicArray<Stream> streams2;
+
+    // TODO: Block indices (and blocks) should be reserved by a stream
+    //   when the stream needs a new block instead of here since we
+    //   don't know how many blocks a stream needs.
+
+    Stream stream_tableOld{};
+    stream_tableOld.blockIndices.add(nextFreeBlock++);
+    Stream stream_pdb{};
+    stream_pdb.blockIndices.add(nextFreeBlock++);
+    Stream stream_tpi{};
+    stream_tpi.blockIndices.add(nextFreeBlock++);
+    Stream stream_dbi{}; // not used
+    stream_dbi.byteSize = 0;
+    Stream stream_ipi{};
+    stream_ipi.blockIndices.add(nextFreeBlock++);
+
+    Stream stream_table{};
+    stream_table.blockIndices.add(nextFreeBlock++);
+
+    u32 tpiHashStreamNumber = 5;
+    Stream stream_tpiHash{};
+    // stream_tpiHash.blockIndices.add(nextFreeBlock++);
+    u32 ipiHashStreamNumber = 6;
+    Stream stream_ipiHash{};
+    // stream_ipiHash.blockIndices.add(nextFreeBlock++);
+
+    {
+        u32 baseOffset = stream_pdb.blockIndices[0] * blockSize;
+        outOffset = baseOffset;
+
+        PDBHeader* pdbHeader = (PDBHeader*)(outData + outOffset);
+        memset(pdbHeader, 0, sizeof(PDBHeader));
+        outOffset += sizeof(PDBHeader);
+        pdbHeader->impv = PDBImpvVC70;
+        pdbHeader->sig = 0;
+        pdbHeader->age = inOutInfo->age;
+        memcpy(pdbHeader->guid, inOutInfo->guid, sizeof(pdbHeader->guid));
+        
+        // Named stream map
+        // I don't think it's needed
+        WRITE(u32, 0); // string data size
+        WRITE(u32, 0); // value count
+        WRITE(u32, 1); // bucket count, // cannot be zero
+        WRITE(u32, 0); // word count present
+        WRITE(u32, 0); // word count deleted
+
+        stream_pdb.byteSize = outOffset - baseOffset;
+    }
+    u32 bareProcedure = -1;
+    {
+        u32 baseOffset = stream_tpi.blockIndices[0] * blockSize;
+        outOffset = baseOffset;
+
+        TPIHeader* tpiHeader = (TPIHeader*)(outData + outOffset);
+        memset(tpiHeader, 0, sizeof(TPIHeader));
+        outOffset += sizeof(TPIHeader);
+        tpiHeader->Version = (u32)TPIStreamVersion::V80;
+        tpiHeader->HeaderSize = sizeof(TPIHeader);
+        tpiHeader->NumHashBuckets = TPIHeader::MAX_BUCKETS;
+        tpiHeader->HashAuxStreamIndex = -1;
+        tpiHeader->HashKeySize = 4;
+        tpiHeader->HashStreamIndex = tpiHashStreamNumber;
+
+        u32 nextTypeIndex = 0x1000; // below 0x1000 are predefined types
+        
+        u32 typeRecordStart = outOffset;
+
+        // u32 emptyArgList = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_ARGLIST);
+        //     WRITE(u32, 1); // arg count
+        //     // arguments
+        //     WRITE(u32, T_NOTYPE);
+
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+        // bareProcedure = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_PROCEDURE);
+
+        //     WRITE(u32, T_VOID); // type index of return value
+        //     // TODO: Change call convention to something proper
+        //     WRITE(u8, CV_CALL_GENERIC); // call convention (CV_call_e)
+        //     WRITE(u8, 0); // attributes (CV_funcattr_t), I think it can be zero.
+        //     // typedef struct CV_funcattr_t {
+        //     //     unsigned char  cxxreturnudt :1;  // true if C++ style ReturnUDT
+        //     //     unsigned char  ctor         :1;  // true if func is an instance constructor
+        //     //     unsigned char  ctorvbase    :1;  // true if func is an instance constructor of a class with virtual bases
+        //     //     unsigned char  unused       :5;  // unused
+        //     // } CV_funcattr_t; 
+        //     WRITE(u16, 0); // number of parameters
+        //     WRITE(u32, emptyArgList); // arg list type
+
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+
+        // FORN(di->functions) {
+        //     ALIGN4
+        //     inOutInfo->functionTypeIndices[nr] = nextTypeIndex++;
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_FUNC_ID);
+
+        //     WRITE(u32, 0); // scope, 0 means global
+        //     assert(bareProcedure != -1);
+        //     WRITE(u32, bareProcedure); // procedure type
+        //     strcpy((char*)outData + outOffset,it->name.c_str());
+        //     outOffset += it->name.length() + 1;
+            
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+        
+        tpiHeader->TypeIndexBegin = 0x1000;
+        tpiHeader->TypeRecordBytes = outOffset - typeRecordStart;
+        tpiHeader->TypeIndexEnd = nextTypeIndex;
+        
+        stream_tpi.byteSize = outOffset - baseOffset;
+    }
+    // TODO: Set size of the streams in stream list
+    // TODO: Set FPM properly
+    {
+        u32 baseOffset = stream_ipi.blockIndices[0] * blockSize;
+        outOffset = baseOffset;
+
+        TPIHeader* ipiHeader = (TPIHeader*)(outData + outOffset);
+        memset(ipiHeader, 0, sizeof(TPIHeader));
+        outOffset += sizeof(TPIHeader);
+        ipiHeader->Version = (u32)TPIStreamVersion::V80;
+        ipiHeader->HeaderSize = sizeof(TPIHeader);
+        ipiHeader->NumHashBuckets = TPIHeader::MAX_BUCKETS;
+        ipiHeader->HashAuxStreamIndex = -1;
+        ipiHeader->HashKeySize = 4;
+        ipiHeader->HashStreamIndex = ipiHashStreamNumber;
+
+        u32 nextTypeIndex = 0x1000; // below 0x1000 are predefined types
+        
+        u32 typeRecordStart = outOffset;
+
+        // FORN(di->functions) {
+        //     ALIGN4
+        //     inOutInfo->functionTypeIndices[nr] = nextTypeIndex++;
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_FUNC_ID);
+
+        //     WRITE(u32, 0); // scope, 0 means global
+        //     assert(bareProcedure != -1);
+        //     WRITE(u32, bareProcedure); // procedure type
+        //     strcpy((char*)outData + outOffset,it->name.c_str());
+        //     outOffset += it->name.length() + 1;
+            
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+
+        // u32 PROJECT_FOLDER_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
+
+        //     // TOOD: don't use hardcoded string
+        //     std::string str = "C:\\Users\\datao\\Desktop\\Backup\\CodeProjects\\BetterThanBatch";
+        //     strcpy((char*)outData + outOffset, str.c_str());
+        //     outOffset += str.length() + 1;
+            
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+        // u32 COMPILER_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
+
+        //     // TOOD: don't use hardcoded string
+        //     std::string str = "C:\\Users\\datao\\Desktop\\Backup\\CodeProjects\\BetterThanBatch\\bin\\compiler.exe";
+        //     strcpy((char*)outData + outOffset, str.c_str());
+        //     outOffset += str.length() + 1;
+            
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+        // u32 SOURCE_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
+
+        //     // TOOD: don't use hardcoded string
+        //     std::string str = engone::GetWorkingDirectory();
+        //     str += "\\";
+        //     str += "examples\\debug-test.btb";
+        //     strcpy((char*)outData + outOffset, str.c_str());
+        //     outOffset += str.length() + 1;
+            
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+        // u32 PDB_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
+
+        //     // TOOD: don't use hardcoded string
+        //     std::string str = engone::GetWorkingDirectory();
+        //     str += "\\";
+        //     str += "bin\\dev.pdb";
+        //     strcpy((char*)outData + outOffset, str.c_str());
+        //     outOffset += str.length() + 1;
+            
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+        // u32 BUILDINFO_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     u16* typeLength = (u16*)(outData + outOffset);
+        //     outOffset += 2;
+        //     WRITE(LeafType, LF_BUILDINFO); // leaf type
+        //     WRITE(u16, 4); // arg count
+        //     // arguments
+        //     WRITE(u32, PROJECT_FOLDER_id);
+        //     WRITE(u32, COMPILER_id);
+        //     WRITE(u32, SOURCE_id);
+        //     WRITE(u32, PDB_id);
+        //     // The final argument is usually arguments that was passed to the compiler
+        //     // perhaps we can skip it?
+        //     *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+        // }
+        ipiHeader->TypeIndexBegin = 0x1000;
+        ipiHeader->TypeRecordBytes = outOffset - typeRecordStart;
+        ipiHeader->TypeIndexEnd = nextTypeIndex; // TODO: Is it supposed to be exclusive?
+
+        stream_ipi.byteSize = outOffset - baseOffset;
+    }
+    // Streams are added here after their sizes are calculated.
+    streams2.add(stream_tableOld);
+    streams2.add(stream_pdb);
+    streams2.add(stream_tpi);
+    streams2.add(stream_dbi);
+    streams2.add(stream_ipi);
+    streams2.add(stream_tpiHash);
+    streams2.add(stream_ipiHash);
+
+    Assert(nextFreeBlock <= blockCount);
+
+    u32 blockOfValidFPM = 1; // 1 or 2
+    MSFHeader* msfHeader = nullptr;
+    {
+        u32 baseOffset = 0;
+        outOffset = baseOffset;
+
+        // MSF Header
+
+        msfHeader = (MSFHeader*)(outData + outOffset);
+        outOffset += sizeof(MSFHeader);
+        new(msfHeader)MSFHeader();
+        // log::out << "MSF: "<<(const char*)msfHeader<<"\n";
+        msfHeader->blockSize = blockSize;
+        msfHeader->blockOfValidFPM = 1;
+        msfHeader->blockCount = nextFreeBlock;
+        msfHeader->block_of_block_to_streamTable = block_streamTableTable;
+
+        outOffset = msfHeader->block_of_block_to_streamTable * blockSize;
+        WRITE(u32, stream_table.blockIndices[0]);
+    }
+    {
+        // stream table/directory
+        u32 baseOffset = stream_table.blockIndices[0] * blockSize;
+        outOffset = baseOffset;
+
+        // You have to appreciate the macros here. They are amazing.
+        WRITE(u32, streams2.size()); // stream count
+        // we don't know the size of the stream table yet so we take a pointer
+        // to it here and set it later.
+        u32* stream_tableSize = (u32*)(outData + outOffset);
+        for(int i=0;i<streams2.size();i++){
+            auto& it = streams2[i];
+            WRITE(u32, it.byteSize);
+        }
+        FOR(streams2) {
+            // Each stream is limited to one block so we would have
+            // some problems if the stream uses more than that.
+            Assert(it.byteSize < blockSize);
+            for (int i=0;i<it.blockIndices.size();i++) {
+                WRITE(u32, it.blockIndices[i]);
+            }
+        }
+        u32 size = outOffset - baseOffset;
+        Assert(size < blockSize);
+        *stream_tableSize = size;
+        msfHeader->bytesOfStreamTable = size;
+
+        // old stream table/directory
+        u32 baseOffset_old = stream_tableOld.blockIndices[0] * blockSize;
+
+        memcpy(outData + baseOffset_old, outData + baseOffset, size);
+
+        // set the block index of the normal stream table which exists in the old stream table
+        *(u32*)(outData + baseOffset_old + 4 + streams2.size() * 4) = stream_table.blockIndices[0];
+    }
+
+    u8* fpm1 = outData + 1 * blockSize;
+    u8* fpm2 = outData + 2 * blockSize;
+    memset(fpm1, 0xFF, blockSize);
+    memset(fpm2, 0, blockSize);
+    // memset(fpm2, 0xFF, blockSize);
+
+    for(u32 i=0;i<nextFreeBlock;i++){
+        u32 byte = i>>3;
+        u32 bit = i&7;
+        fpm1[byte] &= ~(1 << bit);
+        fpm2[byte] &= ~(1 << bit);
+        // engone::log::out << "Use "<<byte<<":"<<bit<<"\n";
+    }
+
+    auto file = engone::FileOpen(path, nullptr, engone::FILE_ALWAYS_CREATE);
+    if(!file) {
+        engone::Free(outData, outSize);
+        return false;
+    }
+    u32 usedMemory = nextFreeBlock * blockSize;
+    engone::FileWrite(file, outData, usedMemory);
+    engone::FileClose(file);
+    engone::Free(outData, outSize);
+    return true;
+}
+
+bool DeconstructPDB(const char* path) {
     using namespace engone;
     
     u64 fileSize = 0;
@@ -24,12 +520,11 @@ void DeconstructPDB(const char* path) {
     u32 offset = 0;
 
     // BIGMSF_HDR
-    const char magic[] = "Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53";
-    if(fileSize < sizeof(magic) || strncmp((char*)fileData + offset, magic, sizeof(magic))) {
+    if(fileSize < sizeof(MSF_MAGIC) || strncmp((char*)fileData + offset, MSF_MAGIC, sizeof(MSF_MAGIC))) {
         log::out << log::RED << "MSF signature is wrong\n";
-        return;
+        return false;
     }
-    offset += sizeof(magic);
+    offset += sizeof(MSF_MAGIC);
 
     // 4-byte alignment
     if(offset & 3)  offset += 4 - (offset&3);
@@ -47,6 +542,8 @@ void DeconstructPDB(const char* path) {
     u32 mpspnpn_SI_PERSIST = *(i32*)(fileData + offset);
     offset += 4; // padding
 
+    // log::out << "Offset now: "<<offset<<"\n";
+
     log::out << "Block size "<<blockSize <<"\n";
     log::out << "Block number of valid FPM "<<blockNumberOfValidFPM <<"\n";
     log::out << "Block count "<<blockCount <<"\n";
@@ -56,15 +553,31 @@ void DeconstructPDB(const char* path) {
     // DUDE! this doesn't point to stream directory blocks!
     // it points to an index that points to the stream directory/table.
     u32* streamDirectoryBlocks = (u32*)(fileData + (*(u32*)(fileData + offset)) * blockSize);
-    int n = ceil((double)bytesOfStreamDirectory / blockSize);
-    offset += 4 * n;
+    // int n = ceil((double)bytesOfStreamDirectory / blockSize);
+    // offset += 4 * n;
+
+    u8* fpm1 = fileData + 1 * blockSize;
+    u8* fpm2 = fileData + 2 * blockSize;
+    for(int i=0;i<20;i++){
+        u32 byte = i>>3;
+        u32 bit = i&7;
+        u32 used = (fpm1[byte] & (1 << bit)) >> bit;
+        engone::log::out << "Use "<<i<<" "<<byte<<":"<<bit<<" = "<<used<<"\n";
+    }
+    for(int i=0;i<20;i++){
+        u32 byte = i>>3;
+        u32 bit = i&7;
+        u32 used = (fpm2[byte] & (1 << bit)) >> bit;
+        engone::log::out << "Use "<<i<<" "<<byte<<":"<<bit<<" = "<<used<<"\n";
+    }
 
     u32 firstStreamDirectory = *streamDirectoryBlocks;
     log::out << "First stream dir "<<firstStreamDirectory<<"\n";
     offset = firstStreamDirectory * blockSize; // PDB Header location
+    u32 startOffset = offset;
     u32 streamCount = *(i32*)(fileData + offset);
     offset += 4;
-    u32* streamSizes = (u32*)(fileData + offset); // page no. of valid FPM
+    u32* streamSizes = (u32*)(fileData + offset);
     offset += 4 * streamCount;
     Assert(0==(offset&3));
     u8* streamBlocks = fileData + offset;
@@ -75,22 +588,22 @@ void DeconstructPDB(const char* path) {
         u32 byteSize;
         DynamicArray<u32> blockIndices;
     };
-    DynamicArray<Stream> streams;
+    DynamicArray<Stream> streams2;
 
     int streamIndex = 0;
     int streamBlocksOffset = 0;
     while (streamIndex < streamCount) {
         int blocks = ceil((double)streamSizes[streamIndex] / blockSize);
         int size = streamSizes[streamIndex];
-        streams.add({});
-        streams.last().blockIndices._reserve(blocks);
-        streams.last().byteSize = size;
+        streams2.add({});
+        streams2.last().blockIndices._reserve(blocks);
+        streams2.last().byteSize = size;
         log::out << "stream " << streamIndex << ", size "<<size<<"\n";
         log::out << " blocks["<<blocks<<"]:";
         while(blocks > 0){
             blocks--;
             u32 blockIndex = *(u32*)(streamBlocks + streamBlocksOffset);
-            streams.last().blockIndices.add(blockIndex);
+            streams2.last().blockIndices.add(blockIndex);
             streamBlocksOffset+=4;
             log::out << " " <<blockIndex;
             if(blocks !=0)
@@ -99,19 +612,22 @@ void DeconstructPDB(const char* path) {
         log::out << "\n";
         streamIndex++;
     }
+    u32 actualSizeOfDirectory = (offset - startOffset + streamBlocksOffset);
+    Assert(bytesOfStreamDirectory == actualSizeOfDirectory);
+    // log::out << "Stream directory size: "<<(realSize)<<"\n";
     u32 names_stream = -1;
     // IMPORTANT: A stream can consist of multiple blocks.
     //  We ignore this at the moment when reading data and increasing offset.
     //  We do this because this is just an experiment to understanding
     //  the format of PDB.
     {
-        Stream& pdbStream = streams[1];
+        Stream& pdbStream = streams2[1];
         Assert(pdbStream.blockIndices.size() > 0);
         offset = pdbStream.blockIndices[0] * blockSize;
 
-        PDBStreamHeader pdbHeader;
-        memcpy(&pdbHeader, fileData + offset, sizeof(PDBStreamHeader));
-        offset += sizeof(PDBStreamHeader);
+        PDBHeader pdbHeader;
+        memcpy(&pdbHeader, fileData + offset, sizeof(PDBHeader));
+        offset += sizeof(PDBHeader);
 
         Assert(pdbHeader.impv == PDBImpvVC70);
 
@@ -160,24 +676,24 @@ void DeconstructPDB(const char* path) {
         }
     }
     if (names_stream != -1){
-        Stream& namesStream = streams[names_stream];
+        Stream& namesStream = streams2[names_stream];
         Assert(namesStream.blockIndices.size() > 0);
         offset = namesStream.blockIndices[0] * blockSize;
 
         // what format?
     }
     {
-        Stream& tpiStream = streams[2];
+        Stream& tpiStream = streams2[2];
         Assert(tpiStream.blockIndices.size() > 0);
         offset = tpiStream.blockIndices[0] * blockSize;
 
-        TPIStreamHeader tpiHeader;
-        memcpy(&tpiHeader, fileData + offset, sizeof(TPIStreamHeader));
-        offset += sizeof(TPIStreamHeader);
+        TPIHeader tpiHeader;
+        memcpy(&tpiHeader, fileData + offset, sizeof(TPIHeader));
+        offset += sizeof(TPIHeader);
 
         log::out << "TPI hash stream: "<<tpiHeader.HashStreamIndex<<"\n";
 
-        Assert(tpiHeader.HeaderSize == sizeof(TPIStreamHeader));
+        Assert(tpiHeader.HeaderSize == sizeof(TPIHeader));
         Assert(tpiHeader.Version == (u32)TPIStreamVersion::V80);
         // llvm docs says that it's rare to see a version other than V80 and
         // if you do then the way you deserialize that version might be different from V80.
@@ -187,16 +703,16 @@ void DeconstructPDB(const char* path) {
         DeconstructDebugTypes(fileData + offset, tpiHeader.TypeRecordBytes, true);
     }
     {
-        Stream& ipiStream = streams[4];
+        Stream& ipiStream = streams2[4];
         Assert(ipiStream.blockIndices.size() > 0);
         offset = ipiStream.blockIndices[0] * blockSize;
 
-        TPIStreamHeader ipiHeader; // IPI stream uses the same header as TPI
-        memcpy(&ipiHeader, fileData + offset, sizeof(TPIStreamHeader));
-        offset += sizeof(TPIStreamHeader);
+        TPIHeader ipiHeader; // IPI stream uses the same header as TPI
+        memcpy(&ipiHeader, fileData + offset, sizeof(TPIHeader));
+        offset += sizeof(TPIHeader);
         log::out << "IPI hash stream: "<<ipiHeader.HashStreamIndex<<"\n";
 
-        Assert(ipiHeader.HeaderSize == sizeof(TPIStreamHeader));
+        Assert(ipiHeader.HeaderSize == sizeof(TPIHeader));
         Assert(ipiHeader.Version == (u32)TPIStreamVersion::V80);
         // llvm docs says that it's rare to see a version other than V80 and
         // if you do then the way you deserialize that version might be different from V80.
@@ -206,7 +722,7 @@ void DeconstructPDB(const char* path) {
         DeconstructDebugTypes(fileData + offset, ipiHeader.TypeRecordBytes, true);
     }
     {
-        Stream& dbiStream = streams[3];
+        Stream& dbiStream = streams2[3];
         if(dbiStream.blockIndices.size() == 0) {
             log::out << "No DBI stream\n";
         } else {
@@ -224,6 +740,7 @@ void DeconstructPDB(const char* path) {
     }
 
     engone::Free(fileData, fileSize);
+    return true;
 }
 
 void DeconstructDebugSymbols(u8* buffer, u32 size) {
@@ -406,17 +923,17 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
 
                     log::out << " fileid "<<fileid <<"\n";
 
-                    DebugLine* lines = (DebugLine*)(buffer + offset);
-                    offset += nLines * sizeof(DebugLine);
+                    CV_Line_t* lines = (CV_Line_t*)(buffer + offset);
+                    offset += nLines * sizeof(CV_Line_t);
 
-                    DebugColumn* columns = nullptr;
+                    CV_Column_t* columns = nullptr;
                     if(hasColumns) {
-                        columns = (DebugColumn*)(buffer + offset);
-                        offset += nLines * sizeof(DebugColumn);
+                        columns = (CV_Column_t*)(buffer + offset);
+                        offset += nLines * sizeof(CV_Column_t);
                     }
 
                     for(int i=0;i<nLines;i++) {
-                        DebugLine line = lines[i];
+                        CV_Line_t line = lines[i];
 
                         if(hasColumns) {
                             log::out << "  column special? ";
@@ -432,7 +949,10 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                 u32 offstFileName;
                 u8 cbChecksum;
                 u8 ChecksumType;
+                u32 startOffset = offset;
                 while(offset < nextOffset) {
+                    u32 fileid = offset - startOffset;
+
                     offstFileName = *(u32*)(buffer + offset);
                     offset += 4;
                     cbChecksum = *(u8*)(buffer + offset);
@@ -440,7 +960,7 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                     ChecksumType = *(u8*)(buffer + offset);
                     offset += 1;
 
-                    log::out << "stfile " << offstFileName << ", checksum size "<<cbChecksum<<", chktype ";
+                    log::out << "fileid "<<fileid<<", stfile " << offstFileName << ", checksum size "<<cbChecksum<<", chktype ";
 
                     switch(ChecksumType) {
                         case CHKSUM_TYPE_NONE :
@@ -459,7 +979,12 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                             log::out << ChecksumType;
                             break;
                     }
-                    log::out<<"\n";
+                    log::out<<"\n" << " ";
+                    for(int j=0;j<cbChecksum;j++){
+                        u8 chr = *(buffer + offset + j);
+                        log::out << (char)((chr>>4) < 10 ? (chr>>4) + '0' : (chr>>4) - 10 + 'A')<< (char)((chr&0x0F) < 10 ? (chr&0x0F) + '0' : (chr&0x0F) - 10 + 'A');
+                    }
+                    log::out << "\n";
 
                     Assert(cbChecksum < 256);
                     offset += cbChecksum;
@@ -513,7 +1038,7 @@ void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
     while(offset < size) {
         typeCount++;
 
-        Assert(size % 4 == 0);
+        // Assert(size % 4 == 0);
         
         u16 length = *(u16*)(buffer + offset);
         offset += 2;
@@ -608,12 +1133,599 @@ void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
         }
 
         offset = nextOffset;
-        // 4-byte alignment
-        if((offset & 3) != 0)
+        // 4-byte alignment if from PDB, debug$T is not supposed to be aligned
+        if(fromPDB && (offset & 3) != 0)
             offset += 4 - offset & 3;
     }
 }
+PDBFile* PDBFile::Deconstruct(const char* path) {
+    using namespace engone;
+    // TODO: Fix memory leaks
+    PDBFile* pdb = (PDBFile*)engone::Allocate(sizeof(PDBFile));
+    new(pdb)PDBFile();
+    
+    u64 fileSize = 0;
+    auto file = FileOpen(path, &fileSize, FILE_ONLY_READ);
+    Assert(file);
+    u8* fileData = (u8*)engone::Allocate(fileSize);
+    auto rb = FileRead(file, fileData, fileSize);
+    Assert(rb == fileSize);
+    FileClose(file);
 
+    pdb->rawData = fileData;
+    pdb->rawSize = fileSize;
+    
+    log::out << "PDB["<<fileSize<<"]:\n";
+
+    // #undef WRITE
+    // #define WRITE(TYPE, EXPR) *(TYPE*)(outData + outOffset) = (EXPR); outOffset += sizeof(TYPE);
+    #undef ALIGN4
+    #define ALIGN4 if((offset & 3) != 0)  offset += 4 - offset & 3;
+    
+
+    u32 offset = 0;
+
+    // IMPORTANT: BLOCK SIZE MUST BE 0x1000!
+
+    pdb->msfHeader = (MSFHeader*)(fileData + offset);
+    // BIGMSF_HDR
+    if(fileSize < sizeof(MSF_MAGIC) || strncmp((char*)pdb->msfHeader->magic, MSF_MAGIC, sizeof(MSF_MAGIC))) {
+        log::out << log::RED << "MSF signature is wrong\n";
+        return nullptr;
+    }
+    offset += sizeof(MSFHeader);
+
+    Assert(fileSize == pdb->msfHeader->blockSize * pdb->msfHeader->blockCount);
+
+    u32 blockSize = pdb->msfHeader->blockSize;
+
+    log::out << "Block size "<<pdb->msfHeader->blockSize <<"\n";
+    log::out << "Block number of valid FPM "<<pdb->msfHeader->blockOfValidFPM <<"\n";
+    log::out << "Block count "<<pdb->msfHeader->blockCount <<"\n";
+    log::out << "Bytes of stream directory "<<pdb->msfHeader->bytesOfStreamTable <<"\n";
+    // log::out << "SI_PERSIST.mpspnpn "<<mpspnpn_SI_PERSIST <<"\n";
+
+    // DUDE! this doesn't point to stream directory blocks!
+    // it points to an index that points to the stream directory/table.
+    u32* streamDirectoryBlocks = (u32*)(fileData + pdb->msfHeader->block_of_block_to_streamTable * blockSize);
+
+    u8* fpm1 = fileData + 1 * blockSize;
+    u8* fpm2 = fileData + 2 * blockSize;
+    for(int i=0;i<20;i++){
+        u32 byte = i>>3;
+        u32 bit = i&7;
+        u32 used = (fpm1[byte] & (1 << bit)) >> bit;
+        engone::log::out << "Use "<<i<<" "<<byte<<":"<<bit<<" = "<<used<<"\n";
+    }
+    for(int i=0;i<20;i++){
+        u32 byte = i>>3;
+        u32 bit = i&7;
+        u32 used = (fpm2[byte] & (1 << bit)) >> bit;
+        engone::log::out << "Use "<<i<<" "<<byte<<":"<<bit<<" = "<<used<<"\n";
+    }
+
+    u32 firstStreamDirectory = *streamDirectoryBlocks;
+    pdb->block_of_streamTable = firstStreamDirectory;
+    log::out << "First stream dir "<<firstStreamDirectory<<"\n";
+    offset = firstStreamDirectory * blockSize; // PDB Header location
+    u32 startOffset = offset;
+    u32 streamCount = *(i32*)(fileData + offset);
+    offset += 4;
+    u32* streamSizes = (u32*)(fileData + offset);
+    offset += 4 * streamCount;
+    Assert(0==(offset&3));
+    u8* streamBlocks = fileData + offset;
+    
+    log::out << "Stream count " << streamCount << "\n";
+
+    int streamIndex = 0;
+    int streamBlocksOffset = 0;
+    while (streamIndex < streamCount) {
+        int blocks = ceil((double)streamSizes[streamIndex] / blockSize);
+        int size = streamSizes[streamIndex];
+
+        StreamOld* stream = new StreamOld();
+        pdb->streams2.add(stream);
+        stream->byteSize = size;
+        stream->blockIndices._reserve(blocks);
+
+        log::out << "stream " << streamIndex << ", size "<<size<<"\n";
+        log::out << " blocks["<<blocks<<"]:";
+        while(blocks > 0){
+            blocks--;
+            u32 blockIndex = *(u32*)(streamBlocks + streamBlocksOffset);
+
+            stream->blockIndices.add(blockIndex);
+            streamBlocksOffset+=4;
+            log::out << " " <<blockIndex;
+            if(blocks !=0)
+                log::out << ",";
+        }
+        log::out << "\n";
+        streamIndex++;
+    }
+    u32 actualSizeOfDirectory = (offset - startOffset + streamBlocksOffset);
+    Assert(pdb->msfHeader->bytesOfStreamTable == actualSizeOfDirectory);
+
+    {
+        log::out << "Old stream table?\n";
+        offset = pdb->streams2[0]->blockIndices[0] * blockSize; // PDB Header location
+        u32 startOffset = offset;
+        u32 streamCount = *(i32*)(fileData + offset);
+        offset += 4;
+        u32* streamSizes = (u32*)(fileData + offset);
+        offset += 4 * streamCount;
+        Assert(0==(offset&3));
+        u8* streamBlocks = fileData + offset;
+        
+        log::out << "Stream count " << streamCount << "\n";
+
+        int streamIndex = 0;
+        int streamBlocksOffset = 0;
+        while (streamIndex < streamCount) {
+            int blocks = ceil((double)streamSizes[streamIndex] / blockSize);
+            int size = streamSizes[streamIndex];
+
+            StreamOld* stream = new StreamOld();
+            pdb->streams_old.add(stream);
+            stream->byteSize = size;
+            stream->blockIndices._reserve(blocks);
+
+            log::out << "stream " << streamIndex << ", size "<<size<<"\n";
+            log::out << " blocks["<<blocks<<"]:";
+            while(blocks > 0){
+                blocks--;
+                u32 blockIndex = *(u32*)(streamBlocks + streamBlocksOffset);
+
+                stream->blockIndices.add(blockIndex);
+                streamBlocksOffset+=4;
+                log::out << " " <<blockIndex;
+                if(blocks !=0)
+                    log::out << ",";
+            }
+            log::out << "\n";
+            streamIndex++;
+        }
+    }
+
+    // auto& streams = pdb->streams_old;
+    auto& streams = pdb->streams2;
+
+    // log::out << "Stream directory size: "<<(realSize)<<"\n";
+    u32 names_stream = -1;
+    // IMPORTANT: A stream can consist of multiple blocks.
+    //  We ignore this at the moment when reading data and increasing offset.
+    //  We do this because this is just an experiment to understanding
+    //  the format of PDB.
+    {
+        StreamOld* pdbStream = streams[1];
+        Assert(pdbStream->blockIndices.size() > 0);
+        offset = pdbStream->blockIndices[0] * blockSize;
+
+        pdb->pdbHeader = (PDBHeader*)(fileData + offset);
+        offset += sizeof(PDBHeader);
+
+        Assert(pdb->pdbHeader->impv == PDBImpvVC70);
+
+        log::out << "impv "<<pdb->pdbHeader->impv <<"\n";
+        log::out << "sig "<<pdb->pdbHeader->sig <<"\n";
+        log::out << "age "<<pdb->pdbHeader->age <<"\n";
+        
+        u32 stringDataSize = *(u32*)(fileData + offset);
+        offset += 4;
+        char* stringData = (char*)(fileData + offset);
+        offset += stringDataSize;
+        log::out << "Strings size: "<<stringDataSize<<"\n";
+
+        u32 valueCount = *(u32*)(fileData + offset);
+        offset += 4;
+        u32 bucketCount = *(u32*)(fileData + offset);
+        offset += 4;
+
+        u32 wordCount = *(u32*)(fileData + offset);
+        offset += 4;
+        u32* presentArray = (u32*)(fileData + offset);
+        offset += wordCount * 4;
+        
+        u32 wordCount2 = *(u32*)(fileData + offset);
+        offset += 4;
+        u32* deletedArray = (u32*)(fileData + offset);
+        offset += wordCount2 * 4;
+
+        for(int i=0;i<wordCount;i++){
+            for(int j=0;j<32;j++){
+                u8 bit = ((presentArray[i]>>j)& 0x1);
+                log::out << i<<"."<<j<<"\n";
+                if(bit) {
+                    u32 key = *(u32*)(fileData + offset);
+                    char* str = stringData + key;
+                    u32 value = *(u32*)(fileData + offset + 4);
+                    log::out << " kv: "<<(str) << " "<<value<<"\n";
+                    if(!strcmp(str, "/names")){
+                        names_stream = value;
+                    }
+                }
+                offset += 4 + 4;
+            }
+            
+        }
+    }
+    if (names_stream != -1){
+        StreamOld* namesStream = streams[names_stream];
+        Assert(namesStream->blockIndices.size() > 0);
+        offset = namesStream->blockIndices[0] * blockSize;
+
+        // what format?
+    }
+    {
+        StreamOld* tpiStream = streams[2];
+        Assert(tpiStream->blockIndices.size() > 0);
+        offset = tpiStream->blockIndices[0] * blockSize;
+
+        pdb->tpiHeader = (TPIHeader*)(fileData + offset);
+        offset += sizeof(TPIHeader);
+
+        log::out << "TPI hash stream: "<<pdb->tpiHeader->HashStreamIndex<<"\n";
+        
+        log::out << "type begin " << pdb->tpiHeader->TypeIndexBegin << ", end " <<pdb->tpiHeader->TypeIndexEnd<<"\n";
+
+        Assert(pdb->tpiHeader->HeaderSize == sizeof(TPIHeader));
+        Assert(pdb->tpiHeader->Version == (u32)TPIStreamVersion::V80);
+        // llvm docs says that it's rare to see a version other than V80 and
+        // if you do then the way you deserialize that version might be different from V80.
+
+        DeconstructDebugTypes(fileData + offset, pdb->tpiHeader->TypeRecordBytes, true);
+
+        StreamOld* hashStream = streams[pdb->tpiHeader->HashStreamIndex];
+        
+        Assert(hashStream->blockIndices.size() > 0);
+        offset = hashStream->blockIndices[0] * blockSize;
+        u32 baseOffset = offset;
+
+        log::out << "buckets " << pdb->tpiHeader->NumHashBuckets<<"\n";
+ 
+        u32* valueBuffer = (u32*)(pdb->rawData + baseOffset + pdb->tpiHeader->HashValueBufferOffset);
+        int valueCount = pdb->tpiHeader->HashValueBufferLength / pdb->tpiHeader->HashKeySize;
+        log::out << "hash values\n";
+        for(int i=0;i<valueCount;i++){
+            log::out << " "<<i<<" "<<valueBuffer[i]<<"\n";
+        }
+        struct Pair {
+            u32 typeIndex;
+            u32 offset;
+        };
+        Pair* indexBuffer = (Pair*)(pdb->rawData + baseOffset + pdb->tpiHeader->IndexOffsetBufferOffset);
+        int indexCount = pdb->tpiHeader->HashValueBufferLength / pdb->tpiHeader->HashKeySize;
+        log::out << "index buffer\n";
+        for(int i=0;i<indexCount;i++){
+            auto& pair = indexBuffer[i];
+            log::out << " "<<i<<" "<<pair.typeIndex << " "<<pair.offset<<"\n";
+        }
+
+        // offset = baseOffset + pdb->tpiHeader->HashAdjBufferOffset;
+
+
+
+    }
+    {
+        StreamOld* ipiStream = streams[4];
+        Assert(ipiStream->blockIndices.size() > 0);
+        offset = ipiStream->blockIndices[0] * blockSize;
+
+        pdb->ipiHeader = (TPIHeader*)(fileData + offset);
+        offset += sizeof(TPIHeader);
+
+        log::out << "IPI hash stream: "<<pdb->ipiHeader->HashStreamIndex<<"\n";
+        log::out << "type begin " << pdb->ipiHeader->TypeIndexBegin << ", end " <<pdb->ipiHeader->TypeIndexEnd<<"\n";
+
+        Assert(pdb->ipiHeader->HeaderSize == sizeof(TPIHeader));
+        Assert(pdb->ipiHeader->Version == (u32)TPIStreamVersion::V80);
+        // llvm docs says that it's rare to see a version other than V80 and
+        // if you do then the way you deserialize that version might be different from V80.
+
+        // TODO: Hash values/buckets...?
+
+        DeconstructDebugTypes(fileData + offset, pdb->ipiHeader->TypeRecordBytes, true);
+
+        StreamOld* hashStream = streams[pdb->ipiHeader->HashStreamIndex];
+        Assert(hashStream->blockIndices.size() > 0);
+        offset = hashStream->blockIndices[0] * blockSize;
+        u32 baseOffset = offset;
+
+        log::out << "buckets " << pdb->ipiHeader->NumHashBuckets<<"\n";
+ 
+        u32* valueBuffer = (u32*)(pdb->rawData + baseOffset + pdb->ipiHeader->HashValueBufferOffset);
+        int valueCount = pdb->ipiHeader->HashValueBufferLength / pdb->ipiHeader->HashKeySize;
+        log::out << "hash values\n";
+        for(int i=0;i<valueCount;i++){
+            log::out << " "<<i<<" "<<valueBuffer[i]<<"\n";
+        }
+        struct Pair {
+            u32 typeIndex;
+            u32 offset;
+        };
+        Pair* indexBuffer = (Pair*)(pdb->rawData + baseOffset + pdb->ipiHeader->IndexOffsetBufferOffset);
+        int indexCount = pdb->ipiHeader->HashValueBufferLength / pdb->ipiHeader->HashKeySize;
+        log::out << "index buffer\n";
+        for(int i=0;i<indexCount;i++){
+            auto& pair = indexBuffer[i];
+            log::out << " "<<i<<" "<<pair.typeIndex << " "<<pair.offset<<"\n";
+        }
+
+        // offset = baseOffset + pdb->ipiHeader.HashAdjBufferOffset;
+
+    }
+    {
+        StreamOld* dbiStream = streams[3];
+        if(dbiStream->blockIndices.size() == 0) {
+            log::out << "No DBI stream\n";
+        } else {
+            Assert(dbiStream->blockIndices.size() > 0);
+            offset = dbiStream->blockIndices[0] * blockSize;
+
+            // DBIStreamHeader dbiHeader;
+            // memcpy(&dbiHeader, fileData + offset, sizeof(DBIStreamHeader));
+            // offset += sizeof(DBIStreamHeader);
+
+            // Assert(dbiHeader.VersionHeader == (u32)DbiStreamVersion::V70);
+
+            // DeconstructDebugTypes(fileData + offset, ipiHeader.TypeRecordBytes, true);
+        }
+    }
+
+    // engone::Free(fileData, fileSize);
+
+    return pdb;
+}
+bool PDBFile::WriteFile(PDBFile* pdb, const char* path) {
+    return false;
+}
+bool PDBFile::WriteEmpty(const char* path) {
+    using namespace engone;
+    #undef WRITE
+    #undef ALIGN4
+    #define WRITE(TYPE, EXPR) *(TYPE*)(outData + outOffset) = (EXPR); outOffset += sizeof(TYPE);
+    #define ALIGN4 if((outOffset & 3) != 0)  outOffset += 4 - outOffset & 3;
+    
+    u32 blockSize = 0x1000;
+
+    u32 outOffset = 0;
+    u32 outSize = 20*0x1000;
+    u8* outData = (u8*)Allocate(outSize);
+    memset(outData, 0, outSize);
+
+    // pdb
+    // for(int i=1;i<pdb->streams_old.size();i++){
+    //     pdb->streams_old[i]->blockIndices = pdb->streams[i]->blockIndices;
+    // }
+
+    // pdb->pdbHeader->sig = 0;
+    // pdb->pdbHeader->age = 0;
+
+    // // must be set
+    // pdb->tpiHeader->HashStreamIndex=0;
+    // pdb->tpiHeader->HashKeySize=4;
+    // pdb->tpiHeader->NumHashBuckets=TPIHeader::MAX_BUCKETS;
+    // // pdb->tpiHeader->IndexOffsetBufferOffset=0;
+    // // pdb->tpiHeader->IndexOffsetBufferLength=0;
+
+    // // can be disabled
+    // pdb->tpiHeader->HashAuxStreamIndex=-1;
+    // pdb->tpiHeader->HashValueBufferOffset=0;
+    // pdb->tpiHeader->HashValueBufferLength=0;
+    // pdb->tpiHeader->HashAdjBufferOffset=0;
+    // pdb->tpiHeader->HashAdjBufferLength=0;
+
+    // pdb->tpiHeader->TypeRecordBytes = 0;
+    // pdb->tpiHeader->TypeIndexBegin = 0x1000;
+    // pdb->tpiHeader->TypeIndexEnd = 0x1000;
+    
+    // // must be set
+    // pdb->ipiHeader->HashStreamIndex=0;
+    // pdb->ipiHeader->HashKeySize=4;
+    // pdb->ipiHeader->NumHashBuckets=TPIHeader::MAX_BUCKETS;
+    // // pdb->ipiHeader->IndexOffsetBufferOffset=0;
+    // // pdb->ipiHeader->IndexOffsetBufferLength=0;
+
+    // // can be disabled
+    // pdb->ipiHeader->HashAuxStreamIndex=-1;
+    // pdb->ipiHeader->HashValueBufferOffset=0;
+    // pdb->ipiHeader->HashValueBufferLength=0;
+    // pdb->ipiHeader->HashAdjBufferOffset=0;
+    // pdb->ipiHeader->HashAdjBufferLength=0;
+    
+    // pdb->ipiHeader->TypeRecordBytes = 0;
+    // pdb->ipiHeader->TypeIndexBegin = 0x1000;
+    // pdb->ipiHeader->TypeIndexEnd = 0x1000;
+    
+
+    u32 nextFreeBlock = 3;
+
+    
+    struct StreamOld {
+        u32 byteSize;
+        QuickArray<u32> blockIndices;
+    };
+    
+    DynamicArray<StreamOld*> streams2;
+    // pdb->streams2.resize(5);
+    #define ADDSTREAM streams2.add(new StreamOld{500}); streams2.last()->blockIndices.add(0);
+    // pdb->streams2.add(new Stream{});
+    ADDSTREAM
+    ADDSTREAM
+    ADDSTREAM
+    ADDSTREAM
+    ADDSTREAM
+
+    {
+        u32 block = nextFreeBlock++;
+        u32 oldBlock = streams2[1]->blockIndices[0];
+        streams2[1]->blockIndices[0] = block;
+
+        // memcpy(outData + block * blockSize, pdb->rawData + oldBlock * blockSize, blockSize);
+
+        outOffset = block * blockSize;
+        PDBHeader* pdbHeader = (PDBHeader*)(outData + outOffset);
+        outOffset += sizeof(PDBHeader);
+        new(pdbHeader)PDBHeader();
+        pdbHeader->impv = PDBImpvVC70;
+
+        // bucket count for named stream map cannot be 0
+        WRITE(u32, 0); // string data size
+        WRITE(u32, 0); // value count
+        WRITE(u32, 1); // bucket count
+        WRITE(u32, 0); // word count present
+        WRITE(u32, 0); // word count deleted
+
+    }
+    {
+        u32 block = nextFreeBlock++;
+        u32 oldBlock = streams2[2]->blockIndices[0];
+        streams2[2]->blockIndices[0] = block;
+
+        outOffset = block * blockSize;
+        TPIHeader* tpiHeader = (TPIHeader*)(outData + outOffset);
+        outOffset += sizeof(TPIHeader);
+        new(tpiHeader)TPIHeader();
+        tpiHeader->Version = (u32)TPIStreamVersion::V80;
+        tpiHeader->HeaderSize = sizeof(TPIHeader);
+        tpiHeader->HashKeySize = 4;
+        tpiHeader->NumHashBuckets = TPIHeader::MAX_BUCKETS;
+        tpiHeader->TypeRecordBytes = 0;
+        tpiHeader->TypeIndexBegin = tpiHeader->TypeIndexEnd = 0x1000;
+    }
+    streams2[3]->blockIndices.cleanup();
+    streams2[3]->byteSize = 0;
+    {
+        u32 block = nextFreeBlock++;
+        u32 oldBlock = streams2[4]->blockIndices[0];
+        streams2[4]->blockIndices[0] = block;
+
+        outOffset = block * blockSize;
+        TPIHeader* ipiHeader = (TPIHeader*)(outData + outOffset);
+        outOffset += sizeof(TPIHeader);
+        new(ipiHeader)TPIHeader();
+        ipiHeader->Version = (u32)TPIStreamVersion::V80;
+        ipiHeader->HeaderSize = sizeof(TPIHeader);
+        ipiHeader->HashKeySize = 4;
+        ipiHeader->NumHashBuckets = TPIHeader::MAX_BUCKETS;
+        ipiHeader->TypeRecordBytes = 0;
+        ipiHeader->TypeIndexBegin = ipiHeader->TypeIndexEnd = 0x1000;
+    }
+    // for(int i=;i<pdb->streams2.size();i++){
+    //     if(pdb->streams2[i]->blockIndices.size() < 1)
+    //         continue;
+
+    //     u32 block = nextFreeBlock++;
+    //     u32 oldBlock = pdb->streams2[i]->blockIndices[0];
+    //     pdb->streams2[i]->blockIndices[0] = block;
+
+    //     memcpy(outData + block * blockSize, pdb->rawData + oldBlock * blockSize, blockSize);
+    // }
+    u32 streamTable_block = nextFreeBlock++;
+    // u32 oldStreamTable_block = nextFreeBlock++;
+    // {
+    //     pdb->msfHeader->block_of_block_to_streamTable = nextFreeBlock++;
+    //     outOffset = pdb->msfHeader->block_of_block_to_streamTable * blockSize;
+    //     WRITE(u32, streamTable_block);
+    // }
+    MSFHeader* msfHeader = nullptr;
+    {
+        outOffset = 0;
+        msfHeader = (MSFHeader*)(outData + outOffset);
+        outOffset += sizeof(MSFHeader);
+        new(msfHeader)MSFHeader();
+        // msfHeader->blockCount = nextFreeBlock; // not fully known yet
+        msfHeader->blockOfValidFPM = 1;
+        msfHeader->blockSize = 0x1000;
+        // msfHeader->bytesOfStreamTable = ; // not known yet
+        msfHeader->block_of_block_to_streamTable = nextFreeBlock++;
+
+        outOffset = msfHeader->block_of_block_to_streamTable * blockSize;
+        WRITE(u32, streamTable_block);
+    }
+
+    {
+        // what if MSFHeader.block_of_block_to_streamTable was modified?
+        // block_of_streamTable might not be valid anymore
+        outOffset = streamTable_block * blockSize;
+        u32 baseOffset = outOffset;
+        // u32 baseOffset = pdb->block_of_streamTable * blockSize;
+
+        // You have to appreciate the macros here. They are amazing.
+        WRITE(u32, streams2.size()); // stream count
+        // we don't know the size of the stream table yet so we take a pointer
+        // to it here and set it later.
+        u32* stream_tableSize = (u32*)(outData + outOffset);
+        for(int i=0;i<streams2.size();i++){
+            auto& it = streams2[i];
+            WRITE(u32, it->byteSize);
+            // WRITE(u32, 0x1000);
+        }
+        streams2[0]->blockIndices[0] = streamTable_block;
+        // pdb->streams2[0]->blockIndices[0] = oldStreamTable_block;
+        FOR(streams2) {
+            // Each stream is limited to one block so we would have
+            // some problems if the stream uses more than that.
+            Assert(it->byteSize < blockSize);
+            for (int i=0;i<it->blockIndices.size();i++) {
+                WRITE(u32, it->blockIndices[i]);
+            }
+        }
+        u32 size = outOffset - baseOffset;
+        Assert(size < blockSize);
+        *stream_tableSize = size;
+        msfHeader->bytesOfStreamTable = size;
+    }
+    // {
+    //      // old stream table/directory
+    //     u32 baseOffset_old = oldStreamTable_block * blockSize;
+    //     u32 baseOffset = streamTable_block * blockSize;
+
+    //     memcpy(outData + baseOffset_old, outData + baseOffset, pdb->msfHeader->bytesOfStreamTable);
+
+    //     // set the block index of the normal stream table which exists in the old stream table
+    //     *(u32*)(outData + baseOffset_old + 4 + pdb->streams2.size() * 4) = streamTable_block;
+    // }
+
+    msfHeader->blockCount = nextFreeBlock;
+
+    u8* fpm1 = outData + 1 * blockSize;
+    u8* fpm2 = outData + 2 * blockSize;
+    
+    memset(fpm1, 0xFF, blockSize);
+    memset(fpm2, 0, blockSize);
+
+    // TODO: Not sure if this is correct.
+    //   Should the fpm2 not be touched at all?
+    //   Some PDB's i've seen has both fpm's modified.
+    for(u32 i=0;i<nextFreeBlock;i++){
+        u32 byte = i>>3;
+        u32 bit = i&7;
+        fpm1[byte] &= ~(1 << bit);
+        fpm2[byte] &= ~(1 << bit);
+        // engone::log::out << "Use "<<byte<<":"<<bit<<"\n";
+    }
+
+    auto file = engone::FileOpen(path, nullptr, engone::FILE_ALWAYS_CREATE);
+    if(!file) {
+        return false;
+    }
+    
+    // engone::FileWrite(file, pdb->rawData, pdb->rawSize);
+    u32 usedBytes = nextFreeBlock * blockSize;
+    engone::FileWrite(file, outData, usedBytes);
+    engone::FileClose(file);
+    return true;
+}
+void PDBFile::cleanup() {
+
+}
+void PDBFile::Destroy(PDBFile* pdb) {
+    pdb->cleanup();
+    pdb->~PDBFile();
+    engone::Free(pdb, sizeof(PDBFile));
+}
 const char* ToString(SubSectionType type, bool nullAsUnknown) {
     if(type & DEBUG_S_IGNORE) return "DEBUG_S_IGNORE";
     #define CASE(X) case X: return #X;

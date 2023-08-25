@@ -19,7 +19,7 @@
 ############### */
 
 // DEV_FILE defaults to dev.btb if none is specified
-// #define DEV_FILE "examples/dir-iterator.btb"
+#define DEV_FILE "examples/debug-test.btb"
 #define CONFIG_DEFAULT_TARGET WINDOWS_x64
 
 // #define RUN_TEST_SUITE
@@ -28,6 +28,12 @@
 
 // should enable optimized options and disable slow ones.
 // #define RELEASE
+
+// Tries to produce a smaller object file and executable.
+// for debugging purposes. This is not meant to be a small optimized build.
+#define MINIMAL_DEBUG
+// Generates object file and debug information but no executable
+#define DISABLE_LINKING
 
 // With this flag, some shortcuts and other improvements are made
 // when compiling. Push and pop after each other is redundant for example.
@@ -43,27 +49,12 @@
 #define LOG_MSG_LOCATION
 #define DUMP_ALL_ASM
 #endif
-// Will it ever be?
-// #define SILENT
-// Causes for memory leaks (or negative final memory):
-// - new keyword instead of engone::Allocate
-
-// How to find memory leaks
-// turn on LOG_ALLOCATIONS. This will log all calls to Allocate, Reallocate and Free.
-// Then match allocated sizes with the frees and you should see that one or more allocations
-// of x size did not get freed. Then set a breakpoint in Allocate on the condition "bytes==x"
-// go up the call stack and see where it came from. Now you need to figure out things yourself.
-
-// Other bugs?
-// x64 generated program doesn't properly align function calls by 16 bytes.
 
 // #define LOG_ALLOCATIONS
 
 // #define LOG_ALLOC
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
-
-// Language config
 
 #define PREPROC_REC_LIMIT 100
 // You could enforce hashtag (replace macro with hashtag)
@@ -81,7 +72,11 @@
 // not the ones that bound check in arrays
 // or perhaps you do both?
 #ifdef RELEASE
-#define DISABLE_ASSERTS
+// all asserts shouldn't be disabled.
+// bounds check can be disabled
+// asserts that probably won't fail and
+// are hit often can be disabled for performance.
+// #define DISABLE_ASSERTS
 #endif
 
 #include "BetBat/Asserts.h"

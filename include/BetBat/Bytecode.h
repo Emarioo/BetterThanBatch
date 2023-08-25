@@ -1,6 +1,7 @@
 #pragma once
 #include "BetBat/Tokenizer.h"
 #include "BetBat/NativeRegistry.h"
+#include "BetBat/DebugInformation.h"
 
 #define BC_MOV_RR 1
 #define BC_MOV_RM 2
@@ -237,62 +238,6 @@ struct Instruction {
 };
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction);
 
-// Extensive debug information.
-// The information is converted debug information
-// for PDB, ".debug$S", and ".debug$T".
-// Don't forget to translate all bytecode offsets
-// to machine instruction offsets.
-struct DebugInformation {
-    static DebugInformation* Create();
-    static void Destroy(DebugInformation*);
-    /*
-    We don't need to know these things here:
-        OBJNAME: path to object file, WE KNOW THIS LATER
-        COMPILE3: Information about compilation which is really about x64, WE KNOW THIS LATER
-    */
-
-    struct Line {
-        u32 lineNumber;
-        u32 funcOffset; // offset of function start
-    };
-    struct LocalVar {
-        std::string name;
-        u32 frameOffset = 0;
-        u32 typeIndex;
-    };
-    struct Function {
-        u32 funcStart; // first instruction in the function
-        u32 funcEnd; // the byte after the last instruction (also called exclusive)
-        u32 srcStart; // the instruction where actual source code starts
-        u32 srcEnd; // exclusive
-
-        std::string name;
-
-        // type index to procedure typ
-        u32 typeIndex;
-
-        DynamicArray<LocalVar> localVariables;
-
-        u32 fileIndex;
-
-        DynamicArray<Line> lines;
-
-        // ignoring FRAMEPROCSYM at the moment
-        // we may need to store the amount of bytes for the frame
-
-        // may need some flags for type of function
-        // call convention, far or near call and such
-
-        // there are loads more for FRAMEPROCSYM you might need
-        // inline assembly, alloca, SEH, inlined
-    };
-    DynamicArray<Function> functions;
-
-    DynamicArray<std::string> files;
-
-
-};
-
 struct Bytecode {
     static Bytecode* Create();
     static void Destroy(Bytecode*);
@@ -304,7 +249,6 @@ struct Bytecode {
     engone::Memory<u8> dataSegment{};
 
     DebugInformation* debugInformation = nullptr;
-    void createDebugInformation();
 
     // This is debug data for interpreter
     engone::Memory<u32> debugSegment{}; // indices to debugLocations

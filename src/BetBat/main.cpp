@@ -69,12 +69,20 @@ int main(int argc, const char** argv){
     using namespace engone;
     
     // DeconstructPDB("test.pdb");
-    // auto obj = ObjectFile::DeconstructFile("test.obj");
     // DeconstructDebugSymbols(obj->
     // DeconstructPDB("test.pdb");
     // DeconstructPDB("bin/compiler.pdb");
-    // Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
-    // return 0;
+    // DeconstructPDB("bin/dev.pdb");
+
+    // auto obj = ObjectFile::DeconstructFile("test.obj");
+
+    // auto pdb = PDBFile::Deconstruct("test.pdb");
+    // PDBFile::WriteFile(pdb, "test2.pdb");
+    PDBFile::WriteEmpty("test2.pdb");
+    auto pdb2 = PDBFile::Deconstruct("test2.pdb");
+    // PDBFile::Destroy(pdb);
+    Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+    return 0;
 
     // log::out << "hello\n";
 
@@ -315,10 +323,15 @@ int main(int argc, const char** argv){
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
             compileOptions.useDebugInformation = true;
-            // compileOptions.executeOutput = true;
+            compileOptions.executeOutput = true;
             CompileSource(&compileOptions);
             // CompileAndRun(&compileOptions);
         }
+
+        // DeconstructPDB("bin/dev.pdb");
+        PDBFile::Deconstruct("bin/dev.pdb");
+        // DeconstructPDB("test.pdb");
+
         // Bytecode::Destroy(bytecode);
         
         // PerfTestTokenize("example/build_fast.btb",200);

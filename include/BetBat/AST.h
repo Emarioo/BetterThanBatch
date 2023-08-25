@@ -3,8 +3,6 @@
 #include "BetBat/Tokenizer.h"
 #include "BetBat/Signals.h"
 
-#include "BetBat/x64_Converter.h"
-
 typedef u32 ScopeId;
 typedef u32 ContentOrder;
 #define CONTENT_ORDER_ZERO 0
@@ -16,6 +14,32 @@ struct AST;
 struct FuncImpl;
 struct ASTExpression;
 struct ASTScope;
+
+enum CallConventions : u8 {
+    BETCALL, // The default. Native functions use this.
+    STDCALL, // Currently default x64 calling convention.
+    INTRINSIC, // Special implementation. Usually a function directly coupled to an instruction.
+    CDECL_CONVENTION, // Not implemented yet. CDECL is a macro, hence the name CONVENTION.
+};
+enum LinkConventions : u8 {
+    NONE=0x00, // no linkConvention export/import
+    // DLLEXPORT, // .drectve section is needed to pass /EXPORT: to the linker. The exported function must use stdcall convention
+    IMPORT=0x80, // external from the source code, linkConvention with static library or object files
+    DLLIMPORT=0x81, // linkConvention with dll, function are renamed to __impl_
+    VARIMPORT=0x82, // linkConvention with extern global variables (extern FUNCPTRTYPE someFunction;)
+    NATIVE=0x10, // for interpreter or other inplementation in x64 converter
+};
+
+#define IS_IMPORT(X) (X&(u8)0x80)
+const char* ToString(CallConventions stuff);
+const char* ToString(LinkConventions stuff);
+
+engone::Logger& operator<<(engone::Logger& logger, CallConventions convention);
+engone::Logger& operator<<(engone::Logger& logger, LinkConventions convention);
+
+StringBuilder& operator<<(StringBuilder& builder, CallConventions convention);
+StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention);
+
 
 enum PrimitiveType : u32 {
     AST_VOID=0,

@@ -3048,6 +3048,13 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         // }
 
         Assert(!info.compileInfo->compileOptions->useDebugInformation);
+        // IMPORTANT: How to deal with overloading and polymorphism?
+        // add #0 at the end of the function name?
+        // DebugInformation::Function* dfun = &di->functions.last();
+        // dfun->name = "main";
+        // dfun->fileIndex = di->files.size();
+        // di->files.add(info.compileInfo->compileOptions->initialSourceFile.text);
+        
 
         _GLOG(log::out << "Function " << funcImpl->name << "\n";)
         
@@ -3615,7 +3622,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             fun.localVariables.add({});
                             fun.localVariables.last().name = varname.name;
                             fun.localVariables.last().frameOffset = varinfo->versions_dataOffset[info.currentPolyVersion];
-                            fun.localVariables.last().typeIndex = 0; // TODO: This isn't right
+                            fun.localVariables.last().typeId = varinfo->versions_typeId[info.currentPolyVersion];
                         }
                     }
                     _GLOG(log::out << "declare " << (varinfo->isGlobal()?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
@@ -4485,7 +4492,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
 
     // TODO: No need to create debug information if the compile options
     //  doesn't specify it.
-    info.code->createDebugInformation();
+    info.code->debugInformation = DebugInformation::Create(ast);
 
     // TODO: Skip function generation if there are no functions.
     //   We would need to go through every scope to know that though.
@@ -4525,7 +4532,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     dfun->fileIndex = di->files.size();
     di->files.add(info.compileInfo->compileOptions->initialSourceFile.text);
     
-    dfun->typeIndex = 0; // func with no args or return types
+    dfun->funcImpl = nullptr; // func with no args or return types
 
     dfun->funcStart = info.code->length();
 

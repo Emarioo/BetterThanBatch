@@ -2,42 +2,6 @@
 
 #include "BetBat/ObjectWriter.h"
 
-const char* ToString(CallConventions stuff){
-    #define CASE(X,N) case X: return N;
-    switch(stuff){
-        CASE(BETCALL,"betcall")
-        CASE(STDCALL,"stdcall")
-        CASE(INTRINSIC,"intrinsic")
-        CASE(CDECL_CONVENTION,"cdecl")
-    }
-    return "<unknown-call>";
-    #undef CASE
-}
-const char* ToString(LinkConventions stuff){
-    #define CASE(X,N) case X: return N;
-    switch(stuff){
-        CASE(NONE,"none")
-        CASE(NATIVE,"native")
-        CASE(DLLIMPORT,"dllimport")
-        CASE(VARIMPORT,"varimport")
-        CASE(IMPORT,"import")
-    }
-    return "<unknown-link>";
-    #undef CASE
-}
-engone::Logger& operator<<(engone::Logger& logger, CallConventions convention){
-    return logger << ToString(convention);
-}
-engone::Logger& operator<<(engone::Logger& logger, LinkConventions convention){
-    return logger << ToString(convention);
-}
-
-StringBuilder& operator<<(StringBuilder& builder, CallConventions convention){
-    return builder << ToString(convention);
-}
-StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
-    return builder << ToString(convention);
-}
 
 /*
     x86/x64 instructions are complicated and it's not really my fault

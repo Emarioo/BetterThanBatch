@@ -67,6 +67,9 @@ struct ScopeDebug {
 
 #define BROKEN engone::log::out << engone::log::RED<< __FUNCTION__<<":"<<__LINE__<<" is broken\n"
 
+#define FOR(LIST) for(auto& it : LIST)
+#define FORN(LIST) auto it = LIST.data(); for(int nr=0; nr < LIST.size() && (it = &LIST[nr]); nr++)
+
 // #define COMBINE1(X,Y) X##Y
 // #define COMBINE(X,Y) COMBINE1(X,Y)
 

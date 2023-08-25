@@ -230,4 +230,4 @@ struct ObjectFile {
     static void Destroy(ObjectFile* objectFile);
 };
 
-void WriteObjectFile(const std::string& name, Program_x64* program, u32 from = 0, u32 to = (u32)-1);
+bool WriteObjectFile(const std::string& name, Program_x64* program, u32 from = 0, u32 to = (u32)-1);

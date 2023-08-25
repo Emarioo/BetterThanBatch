@@ -51,7 +51,7 @@ struct GenInfo {
     void addCall(LinkConventions linkConvention, CallConventions callConvention);
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
-    u32 debugFunctionIndex = -1;
+    u32 debugFunctionIndex = (u32)-1;
     ASTFunction* currentFunction=nullptr;
     FuncImpl* currentFuncImpl=nullptr;
     ScopeId currentScopeId = 0;

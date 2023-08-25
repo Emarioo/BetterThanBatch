@@ -121,21 +121,7 @@ bool Bytecode::add_notabug(Instruction instruction){
     _GLOG(printInstruction(length()-1, false);)
     return true;
 }
-DebugInformation* DebugInformation::Create() {
-    auto ptr = TRACK_ALLOC(DebugInformation);
-    // auto ptr = (DebugInformation*)engone::Allocate(sizeof(DebugInformation));
-    new(ptr)DebugInformation();
-    return ptr;
-}
-void DebugInformation::Destroy(DebugInformation* ptr){
-    ptr->~DebugInformation();
-    TRACK_FREE(ptr, DebugInformation);
-    // engone::Free(ptr, sizeof(DebugInformation));
-}
-void Bytecode::createDebugInformation(){
-    Assert(!debugInformation);
-    debugInformation = DebugInformation::Create();
-}
+
 void Bytecode::printInstruction(u32 index, bool printImmediates){
     using namespace engone;
     Assert(index < length());

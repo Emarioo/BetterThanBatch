@@ -89,6 +89,9 @@ struct TinyArray {
     u32 size() const {
         return used;
     }
+    T* data() const {
+        return _ptr;
+    }
     bool _reserve(u32 newMax){
         MEASURE
         if(newMax==0){
@@ -257,6 +260,9 @@ struct DynamicArray {
     }
     u32 size() const {
         return used;
+    }
+    T* data() const {
+        return _ptr;
     }
     bool _reserve(u32 newMax){
         MEASURE
@@ -455,6 +461,9 @@ struct QuickArray {
     }
     u32 size() const {
         return used;
+    }
+    T* data() const {
+        return _ptr;
     }
     bool _reserve(u32 newMax){
         MEASURE
