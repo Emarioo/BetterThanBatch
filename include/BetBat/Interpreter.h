@@ -16,12 +16,6 @@ struct Interpreter {
     volatile u64 rbx=0;
     volatile u64 rcx=0;
     volatile u64 rdx=0;
-    // #define UNION_REG(N) union{u64 r##N##x; u32 e##N##x; u16 N##x; struct{u8 N##l; u8 N##h;};};
-    
-    // UNION_REG(a)
-    // UNION_REG(b)
-    // UNION_REG(c)
-    // UNION_REG(d)
 
     volatile u64 xmm0d=0;
     volatile u64 xmm1d=0;
@@ -53,7 +47,8 @@ struct Interpreter {
     char cwdBuffer[CWD_LIMIT]{0};
     u32 usedCwd=0;
 
-    
+    // resets registers and other things but keeps the alloctions.
+    void reset();
     void cleanup();
     void printRegisters();
 };

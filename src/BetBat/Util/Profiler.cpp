@@ -11,18 +11,22 @@ void ProfilerSession::cleanup() {
         context.cleanup();
     }
 }
-
+void ProfilerEnable(bool yes){
+    global_profilerSession.allowNewContexts = yes;
+}
 void ProfilerInitThread() {
     global_profilerSession.initContextForThread();
 }
 void ProfilerSession::initContextForThread() {
     using namespace engone;
-    // log::out << "Good day\n";
+    if(!allowNewContexts)
+        return;
     if(usedContexts == maxContexts) {
         log::out << log::RED << "Profiler has no more available contexts!\n";
         return;
     }
     long res = _InterlockedIncrement(&usedContexts);
+    // log::out << "Good day "<<(res-1)<<"\n";
     ProfilerContext* context = &contexts[res-1];
     new(context)ProfilerContext();
     context->ensure(4096*4);

@@ -31,8 +31,9 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
     // If the lines we print come from different files then we do need to print this because
     // otherwise we will assume the line we print comes from the location the head of error message
     // displayed.
-    Assert(prevStream);
-    if(!prevStream || tokenRange.tokenStream() != *prevStream) {
+    // Assert(prevStream);
+    // if(!prevStream || tokenRange.tokenStream() != *prevStream) {
+    if(prevStream && tokenRange.tokenStream() != *prevStream) {
         log::out << log::GRAY << "-- "<<TrimDir(tokenRange.tokenStream()->streamName) <<":"<<tokenRange.firstToken.line << " --\n";
         *prevStream = tokenRange.tokenStream();
     }

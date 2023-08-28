@@ -152,7 +152,6 @@ AST *AST::Create() {
     }
 #endif
 
-    // AST *ast = (AST *)engone::Allocate(sizeof(AST));
     AST *ast = TRACK_ALLOC(AST);
     new(ast) AST();
 
@@ -218,7 +217,6 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder 
     if(identifier)
         *identifier = id;
     auto ptr = (VariableInfo*)allocate(sizeof(VariableInfo));
-    // auto ptr = (VariableInfo*)engone::Allocate(sizeof(VariableInfo));
     new(ptr)VariableInfo();
     variables.add(ptr);
     return ptr;
@@ -664,13 +662,11 @@ void AST::appendToMainBody(ASTScope *body) {
 
 ASTScope *AST::createBody() {
     auto ptr = (ASTScope *)allocate(sizeof(ASTScope));
-    // auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
     ptr->isNamespace = false;
     return ptr;
 }
 ASTStatement *AST::createStatement(ASTStatement::Type type) {
-    // auto ptr = (ASTStatement *)engone::Allocate(sizeof(ASTStatement));
     auto ptr = (ASTStatement *)allocate(sizeof(ASTStatement));
     new(ptr) ASTStatement();
     ptr->type = type;
@@ -678,27 +674,23 @@ ASTStatement *AST::createStatement(ASTStatement::Type type) {
 }
 ASTStruct *AST::createStruct(const Token &name) {
     auto ptr = (ASTStruct *)allocate(sizeof(ASTStruct));
-    // auto ptr = (ASTStruct *)engone::Allocate(sizeof(ASTStruct));
     new(ptr) ASTStruct();
     ptr->name = name;
     return ptr;
 }
 ASTEnum *AST::createEnum(const Token &name) {
     auto ptr = (ASTEnum *)allocate(sizeof(ASTEnum));
-    // auto ptr = (ASTEnum *)engone::Allocate(sizeof(ASTEnum));
     new(ptr) ASTEnum();
     ptr->name = name;
     return ptr;
 }
 ASTFunction *AST::createFunction() {
     auto ptr = (ASTFunction *)allocate(sizeof(ASTFunction));
-    // auto ptr = (ASTFunction *)engone::Allocate(sizeof(ASTFunction));
     new(ptr) ASTFunction();
     return ptr;
 }
 ASTExpression *AST::createExpression(TypeId type) {
     auto ptr = (ASTExpression *)allocate(sizeof(ASTExpression));
-    // auto ptr = (ASTExpression *)engone::Allocate(sizeof(ASTExpression));
     new(ptr) ASTExpression();
     ptr->isValue = (u32)type.getId() < AST_PRIMITIVE_COUNT;
     ptr->typeId = type;
@@ -706,10 +698,8 @@ ASTExpression *AST::createExpression(TypeId type) {
 }
 ASTScope *AST::createNamespace(const Token& name) {
     auto ptr = (ASTScope *)allocate(sizeof(ASTScope));
-    // auto ptr = (ASTScope *)engone::Allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
     ptr->isNamespace = true;
-    // ptr->name = (std::string*)engone::Allocate(sizeof(std::string));
     ptr->name = (std::string*)allocate(sizeof(std::string));
     new(ptr->name)std::string(name);
     return ptr;
@@ -879,8 +869,6 @@ void AST::cleanup() {
     linearAllocationUsed = 0;
 }
 ScopeInfo* AST::createScope(ScopeId parentScope, ContentOrder contentOrder) {
-    
-    // auto ptr = (ScopeInfo *)engone::Allocate(sizeof(ScopeInfo));
     auto ptr = (ScopeInfo *)allocate(sizeof(ScopeInfo));
     new(ptr) ScopeInfo{(u32)_scopeInfos.size()};
     ptr->parent = parentScope;
@@ -1088,7 +1076,6 @@ TypeInfo* AST::createType(Token name, ScopeId scopeId){
     // You could check if name already exists in parent
     // scopes to but I think it is fine for now.
 
-    // auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
     auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
     // Assert(ptr);
     new(ptr) TypeInfo{name, TypeId::Create(nextTypeId++)};
@@ -1103,7 +1090,6 @@ TypeInfo* AST::createType(Token name, ScopeId scopeId){
     return ptr;
 }
 TypeInfo* AST::createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 size) {
-    // auto ptr = (TypeInfo *)engone::Allocate(sizeof(TypeInfo));
     auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
     new(ptr) TypeInfo{name, id, size};
     ptr->scopeId = scopeId;
@@ -1291,7 +1277,6 @@ TypeId AST::ensureNonVirtualId(TypeId id){
     return id;
 }
 std::string* AST::createString(){
-    // std::string* ptr = (std::string*)engone::Allocate(sizeof(std::string));
     std::string* ptr = (std::string*)allocate(sizeof(std::string));
     new(ptr)std::string();
     tempStrings.add(ptr);
@@ -1371,6 +1356,8 @@ void AST::destroy(ASTStatement *statement) {
             destroy(statement->firstBody);
         if (statement->secondBody)
             destroy(statement->secondBody);
+        if (statement->testValue)
+            destroy(statement->testValue);
         // } else {
         // assign may use arrayValues (union, returnValues)
         // we must destroy does values
@@ -1731,7 +1718,6 @@ void ASTExpression::printArgTypes(AST* ast, TinyArray<TypeId>& argTypes){
 }
 StructImpl* AST::createStructImpl(){
     auto ptr = (StructImpl*)allocate(sizeof(StructImpl));
-    // auto ptr = (StructImpl*)engone::Allocate(sizeof(StructImpl));
     new(ptr)StructImpl();
     return ptr;
 }
@@ -1747,7 +1733,6 @@ void FuncImpl::print(AST* ast, ASTFunction* astFunc){
     log::out << ")";
 }
 FuncImpl* AST::createFuncImpl(ASTFunction* astFunc){
-    // FuncImpl* ptr = (FuncImpl*)engone::Allocate(sizeof(FuncImpl));
     FuncImpl* ptr = (FuncImpl*)allocate(sizeof(FuncImpl));
     new(ptr)FuncImpl();
     bool nonAllocationFailure = astFunc->_impls.add(ptr);

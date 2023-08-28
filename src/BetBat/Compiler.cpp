@@ -229,7 +229,6 @@ StreamToProcess* CompileInfo::addStream(const Path& path){
     }
     // tokenStreams[path.text] = nullptr;
     StreamToProcess* stream = tokenStreams[path.text] = TRACK_ALLOC(StreamToProcess);
-    // Stream* stream = tokenStreams[tokenStream->streamName] = (Stream*)engone::Allocate(sizeof(Stream));
     new(stream)StreamToProcess();
     // stream->initialStream = tokenStream;
     streams.add(stream);
@@ -319,7 +318,6 @@ RootMacro* CompileInfo::ensureRootMacro(const Token& name, bool ensureBlank){
     if(pair != _rootMacros.end()){
         rootMacro = pair->second;
     } else {
-        // rootMacro = (RootMacro*)engone::Allocate(sizeof(RootMacro));
         rootMacro = TRACK_ALLOC(RootMacro);
         // engone::log::out << "yes\n";
         new(rootMacro)RootMacro();
@@ -338,7 +336,6 @@ RootMacro* CompileInfo::ensureRootMacro(const Token& name, bool ensureBlank){
         auto pair = rootMacro->certainMacros.find(0);
         if(pair == rootMacro->certainMacros.end()) {
             CertainMacro* macro = TRACK_ALLOC(CertainMacro);
-            // CertainMacro* macro = (CertainMacro*) engone::Allocate(sizeof(CertainMacro));
             new(macro)CertainMacro();
             rootMacro->certainMacros[0] = macro;
             rootMacro->hasBlank = true;
@@ -370,7 +367,6 @@ void CompileInfo::insertCertainMacro(RootMacro* rootMacro, CertainMacro* localMa
             // }
         }else{
             // _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< pair->second.parameters.size()<<"\n";))
-            // macro = (CertainMacro*) engone::Allocate(sizeof(CertainMacro));
             macro = TRACK_ALLOC(CertainMacro);
             new(macro)CertainMacro(*localMacro);
             rootMacro->certainMacros[localMacro->parameters.size()] = macro;
@@ -515,7 +511,17 @@ u32 ProcessSource(void* ptr) {
         if(!tokenStream){
             log::out << log::RED << "Failed tokenization: " << BriefString(source.path.text) <<"\n";
             info->compileOptions->compileStats.errors++;
-            return false;
+            
+            info->sourceLock.lock();
+            if(info->waitingThreads == info->availableThreads-1 || info->sourcesToProcess.size()>0) {
+                if(!info->signaled) {
+                    info->sourceWaitLock.signal();
+                    info->signaled=true;
+                }
+            }
+            info->waitingThreads++;
+            info->sourceLock.unlock();
+            continue;
         }
         info->addStats(tokenStream->lines, tokenStream->blankLines, tokenStream->commentCount, tokenStream->readBytes);
         // tokenStream->printData();
@@ -700,8 +706,6 @@ u32 ProcessSource(void* ptr) {
         }
         if(index == -1) {
             if(allCompleted) {
-                // The assert is triggered sometimes. Probably a thread bug here.
-                Assert(info->completedDependencyIndex == 0);
                 if(!info->signaled) {
                     info->sourceWaitLock.signal();
                     info->signaled = true;
@@ -721,7 +725,7 @@ u32 ProcessSource(void* ptr) {
         info->sourceLock.unlock();
 
          // are used in this source file
-        if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
+        if (stream->initialStream && stream->initialStream->enabled & LAYER_PREPROCESSOR) {
             // log::out << "Pre "<<BriefString(stream->initialStream->streamName)<<"\n";
             _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
             stream->finalStream = Preprocess(info, stream->initialStream);
@@ -766,7 +770,10 @@ Bytecode* CompileSource(CompileOptions* options) {
     compileInfo.compileOptions = options;
     
     compileInfo.ast = AST::Create();
-    defer { AST::Destroy(compileInfo.ast); compileInfo.ast = nullptr; };
+    defer { 
+        AST::Destroy(compileInfo.ast);
+        compileInfo.ast = nullptr;
+    };
     // compileInfo.compilerDir = TrimLastFile(compilerPath);
     options->resourceDirectory = options->resourceDirectory.getAbsolute();
     compileInfo.importDirectories.add(options->resourceDirectory.text + "modules/");
@@ -822,7 +829,6 @@ Bytecode* CompileSource(CompileOptions* options) {
     initialSource.stream = compileInfo.addStream(initialSource.path);
     compileInfo.sourcesToProcess.add(initialSource);
 
-
     Assert(!options->singleThreaded); // TODO: Implement not multithreading
 
     compileInfo.sourceWaitLock.init(1, 1);
@@ -856,13 +862,15 @@ Bytecode* CompileSource(CompileOptions* options) {
         // }
 
         TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
-        _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
-        ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
-        if(body){
-            if(stream->as.empty()){
-                compileInfo.ast->appendToMainBody(body);
-            } else {
-                compileInfo.ast->mainBody->add(compileInfo.ast, body);
+        if(procStream) {
+            _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
+            ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
+            if(body){
+                if(stream->as.empty()){
+                    compileInfo.ast->appendToMainBody(body);
+                } else {
+                    compileInfo.ast->mainBody->add(compileInfo.ast, body);
+                }
             }
         }
     }
@@ -886,13 +894,15 @@ Bytecode* CompileSource(CompileOptions* options) {
         //     // tokenStream->print();
         // }
         TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
-        _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
-        ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
-        if(body){
-            if(stream->as.empty()){
-                compileInfo.ast->appendToMainBody(body);
-            } else {
-                compileInfo.ast->mainBody->add(compileInfo.ast, body);
+        if(procStream) {
+            _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
+            ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
+            if(body){
+                if(stream->as.empty()){
+                    compileInfo.ast->appendToMainBody(body);
+                } else {
+                    compileInfo.ast->mainBody->add(compileInfo.ast, body);
+                }
             }
         }
     }
@@ -913,10 +923,20 @@ Bytecode* CompileSource(CompileOptions* options) {
     // log::out << "TIM: "<<StopMeasure(tp)*1000<<"\n";
     if(bytecode) {
         compileInfo.compileOptions->compileStats.bytecodeSize = bytecode->getMemoryUsage();
-    }
+        bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
 
-    // AST::Destroy(compileInfo.ast);
-    // compileInfo.ast = nullptr;
+        if(!options->useDebugInformation && bytecode->debugInformation) {
+            // We don't want debug information unless we specified it in 
+            // the options. We delete the information here as a temporary
+            // solution but we shouldn't create it to begin with.
+            DebugInformation::Destroy(bytecode->debugInformation);
+            bytecode->debugInformation = nullptr;
+        }
+    }
+    if(compileInfo.ast) {
+        AST::Destroy(compileInfo.ast);
+        compileInfo.ast = nullptr;
+    }
 
     options->compileStats.end_bytecode = StartMeasure();
 
@@ -933,212 +953,9 @@ Bytecode* CompileSource(CompileOptions* options) {
         if(!options->silent)
             compileInfo.compileOptions->compileStats.printWarnings();
     }
-    // if(bytecode) {        
-    //     bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
-    // }
-    // compileInfo.cleanup();
-    // return bytecode;
 
-    defer {
-        if(bytecode) {
-            Bytecode::Destroy(bytecode);
-            bytecode = nullptr;
-        }
-        if(compileInfo.ast) {
-            AST::Destroy(compileInfo.ast);
-            compileInfo.ast = nullptr;
-        }
-        compileInfo.cleanup();
-        return nullptr;
-    };
-
-    if(!bytecode) {
-        return nullptr;
-    }
-    bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
-
-    #ifdef DISABLE_LINKING
-    options->executeOutput = false;
-    if(options->outputFile.text.empty()) {
-        options->outputFile = "bin/temp.obj";
-    } else if(options->outputFile.getFormat() != "obj") {
-        options->outputFile = options->outputFile.getDirectory().text
-            + options->outputFile.getFileName(true).text
-            + ".obj";
-    }
-    #endif
-
-    if(options->outputFile.text.empty()) {
-        switch (options->target) {
-            case WINDOWS_x64: {
-                options->outputFile = "bin/temp.exe";
-                break;
-            }
-            case BYTECODE: {
-                // nothing
-                break;
-            }
-            default: {
-                Assert(false);
-            }
-        }
-    }
-
-    switch(options->target){
-        case WINDOWS_x64: {
-            Path& outPath = options->outputFile;
-
-            options->compileStats.start_convertx64 = StartMeasure();
-            Program_x64* program = ConvertTox64(bytecode);
-            options->compileStats.end_convertx64 = StartMeasure();
-
-            if(!program){
-                return nullptr;
-            }
-            auto format = options->outputFile.getFormat();
-            bool outputIsObject = format == "o" || format == "obj";
-
-            std::string objPath = "";
-            if(outputIsObject){
-                options->compileStats.start_objectfile = StartMeasure();
-                WriteObjectFile(outPath.text,program);
-                options->compileStats.end_objectfile = StartMeasure();
-                objPath = outPath.text;
-                // log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
-            } else {
-                objPath = "bin/" + outPath.getFileName(true).text + ".obj";
-                options->compileStats.start_objectfile = StartMeasure();
-                WriteObjectFile(objPath,program);
-                options->compileStats.end_objectfile = StartMeasure();
-
-                std::string cmd = "link /nologo ";
-                cmd += objPath + " ";
-                if(options->useDebugInformation)
-                    cmd += "/DEBUG ";
-                #ifndef MINIMAL_DEBUG
-                cmd += "bin/NativeLayer.lib ";
-                cmd += "uuid.lib ";
-                cmd += "shell32.lib ";
-                #endif
-                cmd += "/DEFAULTLIB:MSVCRT ";
-                // cmd += "/DEFAULTLIB:LIBCMT ";
-                
-                for (int i = 0;i<bytecode->linkDirectives.size();i++) {
-                    auto& dir = bytecode->linkDirectives[i];
-                    cmd += dir + " ";
-                }
-
-                cmd += "/OUT:" + outPath.text+" ";
-                
-                options->compileStats.start_linker = StartMeasure();
-                int exitCode = 0;
-                engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
-                options->compileStats.end_linker = StartMeasure();
-                
-                if(exitCode == 0) { // 0 means success
-                    QuickArray<char> textBuffer{};
-                    for(int i=0;i<bytecode->debugDumps.size();i++) {
-                        auto& dump = bytecode->debugDumps[i];
-                        if(dump.description.empty()) {
-                            log::out << "Dump: "<<log::GOLD<<"unnamed\n";
-                        } else {
-                            log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
-                        }
-                        if(dump.dumpBytecode) {
-                            for(int j=dump.startIndex;j<dump.endIndex;j++){
-                                log::out << " ";
-                                bytecode->printInstruction(j, true);
-                                u8 immCount = bytecode->immediatesOfInstruction(j);
-                                j += immCount;
-                            }
-                        }
-                        if(dump.dumpAsm) {
-                            #define DUMP_ASM_OBJ "bin/dump_asm.obj"
-                            #define DUMP_ASM_ASM "bin/dump_asm.asm"
-
-                            WriteObjectFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
-
-                            // TODO: You may want to redirect stdout and reformat the
-                            //  text from dumpbin
-
-                            auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
-
-                            std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
-                            cmd += DUMP_ASM_OBJ;
-                            
-                            int exitCode = 0;
-                            engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, file);
-
-                            u32 fileSize = engone::FileGetHead(file);
-                            engone::FileSetHead(file, 0);
-
-                            textBuffer.resize(fileSize);
-                            engone::FileRead(file, textBuffer._ptr, fileSize);
-
-                            engone::FileClose(file);
-
-                            ReformatDumpbinAsm(textBuffer, nullptr, true);
-
-                            // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM
-                        }
-                    }
-                }
-
-                if(!options->silent)
-                    log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
-
-                // msvc linker returns a fatal error as exit code
-                // if(exitCode == 0)
-                //     log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an executable: "<<outPath.text<<".\n";
-            }
-            #ifdef DUMP_ALL_ASM
-            // program->printHex("bin/temphex.txt");
-            program->printAsm("bin/temp.asm", objPath.data());
-            #endif
-            Program_x64::Destroy(program); 
-            break; 
-        }
-        // Bytecode exporting has been disabled because you rarely use it.
-        // You usually want to execute it right away or at compile time.
-        // If you want to save time by compiling the bytecode in advance then
-        // you probably want to save even more time by compiling into machine instructions
-        // instead of bytecode which runs in an interpreter.
-        // case BYTECODE: {
-        //     return ExportBytecode(options, bytecode);
-        //     break;
-        // }
-        default: {
-            log::out << log::RED << "Target "<<options->target << " is not supported\n";
-        }
-    }
-    
-    options->compileStats.printSuccess(options);
-
-    if(options->executeOutput) {
-        switch (options->target) {
-            case BYTECODE: {
-                RunBytecode(options, bytecode);
-                break; 
-            }
-            case WINDOWS_x64: {
-                if(options->outputFile.getFormat() != ".exe") {
-                    log::out << log::RED << "Cannot execute '" << options->outputFile.getFileName().text <<"'. The file format must be '.exe'.\n";
-                } else {
-                    std::string hoho{};
-                    hoho += options->outputFile.text;
-                    for(auto& arg : options->userArgs){
-                        hoho += " ";
-                        hoho += arg;
-                    }
-                    int errorCode = 0;
-                    engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
-                    log::out << "Error level: "<<errorCode<<"\n";
-                }
-                break;
-            }
-        }
-    }
-    return nullptr;
+    compileInfo.cleanup();
+    return bytecode;
 }
 
 int CompileOptions::addTestLocation(TokenRange& range){
@@ -1161,7 +978,16 @@ void CompileStats::printSuccess(CompileOptions* opts){
             // log::out << " initial file: "<< opts->initialSourceFile.getFileName().text<<"\n";
             log::out << " initial file: "<< BriefString(opts->initialSourceFile.getAbsolute().text,30)<<"\n";
         }
-        log::out << " target: "<<opts->target<<", output: "<<opts->outputFile.text << "\n";
+        log::out << " target: "<<opts->target<<", output: ";
+        if(opts->compileStats.generatedFiles.size() == 0) {
+            log::out << "nothing";
+        }
+        for(int i=0;i<opts->compileStats.generatedFiles.size();i++){
+            if(i!=0)
+                log::out << ", ";
+            log::out << opts->compileStats.generatedFiles[i];
+        }
+        log::out << "\n";
     }
     bool onlyBytecode = end_objectfile == 0;
     bool withoutLinker = end_linker == 0;
@@ -1208,82 +1034,37 @@ void CompileStats::printWarnings(){
     using namespace engone;
     log::out << log::YELLOW<<"Compiler had "<<warnings<<" warning(s)\n";
 }
-void CompileAndRun(CompileOptions* options) {
-    using namespace engone;
-    
-    Bytecode* bytecode = CompileSource(options);
-    if(!bytecode)
-        return;
-    defer {
-        Bytecode::Destroy(bytecode);
-        bytecode = nullptr;
-    };
-
-    switch (options->target) {
-        case WINDOWS_x64: {
-            options->outputFile = "bin/temp.exe";
-            bool yes = ExportTarget(options, bytecode);
-            if(!yes)
-                return;
-        }
-        break;
-    }
-
-    options->compileStats.printSuccess(options);
-
-    log::out <<"\n";
-
-    switch (options->target) {
-        case BYTECODE: {
-            RunBytecode(options, bytecode);
-            break;
-        }
-        case WINDOWS_x64: {
-            std::string hoho{};
-            hoho += options->outputFile.text;
-            for(auto& arg : options->userArgs){
-                hoho += " ";
-                hoho += arg;
-            }
-            int errorCode = 0;
-            engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
-            log::out << "Error level: "<<errorCode<<"\n";
-            break;
-        }
-    }
-
-    #ifdef LOG_MEASURES
-    PrintMeasures();
-    #endif
-}
-void RunBytecode(CompileOptions* options, Bytecode* bytecode){
-    Assert(bytecode);
-        
-    Interpreter interpreter{};
-    interpreter.setCmdArgs(options->userArgs);
-    interpreter.silent = options->silent;
-    interpreter.execute(bytecode);
-    interpreter.cleanup();
-}
-void CompileAndExport(CompileOptions* options){
-    using namespace engone;
-    
-    Bytecode* bytecode = CompileSource(options);
-    if(!bytecode) {
-        return;
-    }
-    defer {
-        Bytecode::Destroy(bytecode);
-        bytecode = nullptr;
-    };
-
-    bool yes = ExportTarget(options, bytecode);
-
-    options->compileStats.printSuccess(options);
-}
 bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     using namespace engone;
-    Assert(bytecode);
+    bool failure = false;
+    #ifdef DISABLE_LINKING
+    log::out << log::YELLOW << "Linker is disabled in Config.h\n";
+    options->executeOutput = false;
+    if(options->outputFile.text.empty()) {
+        options->outputFile = "bin/temp.obj";
+    } else if(options->outputFile.getFormat() != "obj") {
+        options->outputFile = options->outputFile.getDirectory().text
+            + options->outputFile.getFileName(true).text
+            + ".obj";
+    }
+    #endif
+
+    if(options->outputFile.text.empty()) {
+        switch (options->target) {
+            case WINDOWS_x64: {
+                options->outputFile = "bin/temp.exe";
+                break;
+            }
+            case BYTECODE: {
+                // nothing
+                break;
+            }
+            default: {
+                Assert(false);
+            }
+        }
+    }
+
     switch(options->target){
         case WINDOWS_x64: {
             Path& outPath = options->outputFile;
@@ -1292,117 +1073,203 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             Program_x64* program = ConvertTox64(bytecode);
             options->compileStats.end_convertx64 = StartMeasure();
 
-            if(program){
-                auto format = options->outputFile.getFormat();
-                bool outputIsObject = format == "o" || format == "obj";
+            if(!program){
+                failure = true;
+                break;
+            }
+            auto format = options->outputFile.getFormat();
+            bool outputIsObject = format == "o" || format == "obj";
 
-                std::string objPath = "";
-                if(outputIsObject){
-                    options->compileStats.start_objectfile = StartMeasure();
-                    WriteObjectFile(outPath.text,program);
-                    options->compileStats.end_objectfile = StartMeasure();
-                    objPath = outPath.text;
-                    // log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
-                } else {
-                    objPath = "bin/" + outPath.getFileName(true).text + ".obj";
-                    options->compileStats.start_objectfile = StartMeasure();
-                    WriteObjectFile(objPath,program);
-                    options->compileStats.end_objectfile = StartMeasure();
+            std::string objPath = "";
+            if(outputIsObject){
+                options->compileStats.start_objectfile = StartMeasure();
+                bool yes = WriteObjectFile(outPath.text,program);
+                if(yes) {
+                    options->compileStats.generatedFiles.add(outPath.text);
+                }
+                options->compileStats.end_objectfile = StartMeasure();
+                objPath = outPath.text;
+                // log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
+            } else {
+                objPath = "bin/" + outPath.getFileName(true).text + ".obj";
+                options->compileStats.start_objectfile = StartMeasure();
+                bool yes = WriteObjectFile(objPath,program);
+                if(yes) {
+                    options->compileStats.generatedFiles.add(objPath);
+                }
+                options->compileStats.end_objectfile = StartMeasure();
 
-                    std::string cmd = "link /nologo ";
-                    cmd += objPath + " ";
-                    cmd += "bin/NativeLayer.lib ";
-                    cmd += "uuid.lib ";
-                    cmd += "shell32.lib ";
-                    for (int i = 0;i<bytecode->linkDirectives.size();i++) {
-                        auto& dir = bytecode->linkDirectives[i];
-                        cmd += dir + " ";
-                    }
-                    cmd += "/DEFAULTLIB:MSVCRT ";
-                    // cmd += "/DEFAULTLIB:LIBCMT ";
-                    cmd += "/OUT:" + outPath.text+" ";
-                    
-                    options->compileStats.start_linker = StartMeasure();
-                    int exitCode = 0;
-                    engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
-                    options->compileStats.end_linker = StartMeasure();
-                    
-                    if(exitCode == 0) { // 0 means success
-                        QuickArray<char> textBuffer{};
-                        for(int i=0;i<bytecode->debugDumps.size();i++) {
-                            auto& dump = bytecode->debugDumps[i];
-                            if(dump.description.empty()) {
-                                log::out << "Dump: "<<log::GOLD<<"unnamed\n";
-                            } else {
-                                log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
-                            }
-                            if(dump.dumpBytecode) {
-                                for(int j=dump.startIndex;j<dump.endIndex;j++){
-                                    log::out << " ";
-                                    bytecode->printInstruction(j, true);
-                                    u8 immCount = bytecode->immediatesOfInstruction(j);
-                                    j += immCount;
-                                }
-                            }
-                            if(dump.dumpAsm) {
-                                #define DUMP_ASM_OBJ "bin/dump_asm.obj"
-                                #define DUMP_ASM_ASM "bin/dump_asm.asm"
+                std::string cmd = "link /nologo ";
+                if(options->useDebugInformation)
+                    cmd += "/DEBUG ";
+                cmd += objPath + " ";
+                #ifndef MINIMAL_DEBUG
+                cmd += "bin/NativeLayer.lib ";
+                cmd += "uuid.lib ";
+                cmd += "shell32.lib ";
+                #endif
+                cmd += "/DEFAULTLIB:MSVCRT ";
+                // cmd += "/DEFAULTLIB:LIBCMT ";
+                
+                for (int i = 0;i<bytecode->linkDirectives.size();i++) {
+                    auto& dir = bytecode->linkDirectives[i];
+                    cmd += dir + " ";
+                }
 
-                                WriteObjectFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                cmd += "/OUT:" + outPath.text+" ";
 
-                                // TODO: You may want to redirect stdout and reformat the
-                                //  text from dumpbin
+                if(outPath.text.find("/") != std::string::npos) {
+                    log::out << log::RED << "MSVC Linker must output files to the current working directory!\n";
+                    // TODO: This can be fixed quite easily by moving the file 
+                    //   afterwards or temporarily changing the current working directory
+                }
 
-                                auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
+                if(!options->silent)
+                    log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
+                
+                options->compileStats.start_linker = StartMeasure();
+                int exitCode = 0;
+                engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                options->compileStats.end_linker = StartMeasure();
+                
+                if(exitCode == 0) { // 0 means success
+                    options->compileStats.generatedFiles.add(outPath.text);
 
-                                std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
-                                cmd += DUMP_ASM_OBJ;
-                                
-                                int exitCode = 0;
-                                engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, file);
-
-                                u32 fileSize = engone::FileGetHead(file);
-                                engone::FileSetHead(file, 0);
-
-                                textBuffer.resize(fileSize);
-                                engone::FileRead(file, textBuffer._ptr, fileSize);
-
-                                engone::FileClose(file);
-
-                                ReformatDumpbinAsm(textBuffer, nullptr, true);
-
-                                // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM
+                    // TODO: Move the asm dump code to it's own file.
+                    QuickArray<char> textBuffer{};
+                    for(int i=0;i<bytecode->debugDumps.size();i++) {
+                        auto& dump = bytecode->debugDumps[i];
+                        if(dump.description.empty()) {
+                            log::out << "Dump: "<<log::GOLD<<"unnamed\n";
+                        } else {
+                            log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
+                        }
+                        if(dump.dumpBytecode) {
+                            for(int j=dump.startIndex;j<dump.endIndex;j++){
+                                log::out << " ";
+                                bytecode->printInstruction(j, true);
+                                u8 immCount = bytecode->immediatesOfInstruction(j);
+                                j += immCount;
                             }
                         }
+                        if(dump.dumpAsm) {
+                            #define DUMP_ASM_OBJ "bin/dump_asm.obj"
+                            #define DUMP_ASM_ASM "bin/dump_asm.asm"
+
+                            bool yes = WriteObjectFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                            // if(yes) {
+                            //     options->compileStats.generatedFiles.add(DUMP_ASM_OBJ);
+                            // }
+                            // TODO: You may want to redirect stdout and reformat the
+                            //  text from dumpbin
+
+                            auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
+
+                            std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
+                            cmd += DUMP_ASM_OBJ;
+                            
+                            int exitCode = 0;
+                            engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, file);
+                            // if(exitCode == 0) {
+                            //     options->compileStats.generatedFiles.add(DUMP_ASM_ASM);
+                            // }
+                            u32 fileSize = engone::FileGetHead(file);
+                            engone::FileSetHead(file, 0);
+
+                            textBuffer.resize(fileSize);
+                            engone::FileRead(file, textBuffer._ptr, fileSize);
+
+                            engone::FileClose(file);
+
+                            ReformatDumpbinAsm(textBuffer, nullptr, true);
+
+                            // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM
+                        }
                     }
-
-                    if(!options->silent)
-                        log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
-
-                    // msvc linker returns a fatal error as exit code
-                    // if(exitCode == 0)
-                    //     log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an executable: "<<outPath.text<<".\n";
+                } else {
+                    failure = true;
                 }
-                #ifdef DUMP_ALL_ASM
-                // program->printHex("bin/temphex.txt");
-                program->printAsm("bin/temp.asm", objPath.data());
-                #endif
-                Program_x64::Destroy(program); 
-                return true;
-            } else {
-                // log::out <<log::RED <<"Failed converting "<<options->initialSourceFile.text << " to x64 program.\n";
-                return false;
             }
+            #ifdef DUMP_ALL_ASM
+            // program->printHex("bin/temphex.txt");
+            program->printAsm("bin/temp.asm", objPath.data());
+            #endif
+            Program_x64::Destroy(program);
+            break; 
         }
-        //break; case BYTECODE: {
+        // Bytecode exporting has been disabled because you rarely use it.
+        // You usually want to execute it right away or at compile time.
+        // If you want to save time by compiling the bytecode in advance then
+        // you probably want to save even more time by compiling into machine instructions
+        // instead of bytecode which runs in an interpreter.
+        // case BYTECODE: {
         //     return ExportBytecode(options, bytecode);
+        //     break;
         // }
-        break; default: {
-            log::out << log::RED << "Target "<<options->target << " is not supported\n";
+        default: {
+            log::out << log::RED << "Cannot export "<<options->target << " (not supported).\n";
+        }
+    }
+    return !failure;
+}
+bool ExecuteTarget(CompileOptions* options, Bytecode* bytecode) {
+    using namespace engone;
+    switch (options->target) {
+        case BYTECODE: {
+            Assert(bytecode);
+            Interpreter interpreter{};
+            interpreter.setCmdArgs(options->userArgs);
+            interpreter.silent = options->silent;
+            interpreter.execute(bytecode);
+            interpreter.cleanup();
+            break; 
+        }
+        case WINDOWS_x64: {
+            if(options->outputFile.getFormat() != "exe") {
+                log::out << log::RED << "Cannot execute '" << options->outputFile.getFileName().text <<"'. The file format must be '.exe'.\n";
+            } else {
+                std::string hoho{};
+                hoho += options->outputFile.text;
+                for(auto& arg : options->userArgs){
+                    hoho += " ";
+                    hoho += arg;
+                }
+                int errorCode = 0;
+                engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
+                log::out << "Error level: "<<errorCode<<"\n";
+            }
+            break;
+        }
+        default: {
+             log::out << log::RED << "Cannot execute "<<options->target << " (not supported)\n";
         }
     }
     return true;
 }
+bool CompileAll(CompileOptions* options){
+    auto bytecode = CompileSource(options);
+    if(!bytecode) {
+        return false;
+    }
+    defer {
+        Bytecode::Destroy(bytecode);
+        bytecode = nullptr;
+    };
+
+    bool yes = ExportTarget(options, bytecode);
+    if(!yes) {
+        return false;
+    }
+
+    options->compileStats.printSuccess(options);
+
+    if(options->executeOutput) {
+        ExecuteTarget(options, bytecode);
+    }
+
+    return true;
+}
+
 // struct BTBCHeader{
 //     u32 magicNumber = 0x13579BDF;
 //     char humanChars[4] = {'B','T','B','C'};

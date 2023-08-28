@@ -63,6 +63,11 @@ struct CompileStats {
 
     u32 bytecodeSize = 0;
 
+    ~CompileStats(){
+        generatedFiles.cleanup();
+    }
+    DynamicArray<std::string> generatedFiles;
+
     void printSuccess(CompileOptions* options);
     void printFailed();
     void printWarnings();
@@ -209,12 +214,7 @@ struct CompileInfo {
 
 Bytecode* CompileSource(CompileOptions* options);
 bool ExportTarget(CompileOptions* options, Bytecode* bytecode);
-bool ExportExecutable(CompileOptions* options, Bytecode* bytecode);
-void RunBytecode(CompileOptions* options, Bytecode* bytecode);
+bool ExecuteTarget(CompileOptions* options);
+// bool ExecuteBytecode(CompileOptions* options, Bytecode* bytecode);
 
-void CompileAndRun(CompileOptions* options);
-void CompileAndExport(CompileOptions* options);
-
-// bool ExportBytecode(CompileOptions* options, Bytecode* bytecode);
-// // Content of userArgs is copied
-// Bytecode* ImportBytecode(Path filePath);
+bool CompileAll(CompileOptions* options);

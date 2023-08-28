@@ -12,6 +12,8 @@
 #define PROFILE_THREAD ProfilerInitThread();
 #define PROFILE_SCOPE ProfilerZone profilerZone = {__FUNCTION__, __COUNTER__};
 // #define PROFILE_SCOPE_N(CSTR) PerfZone perfZone = {CSTR, __COUNTER__};
+// Not thread safe. It's a good idea to call this before compiling source code when there's only the main thread.
+void ProfilerEnable(bool yes);
 void ProfilerInitialize();
 void ProfilerInitThread();
 void ProfilerCleanup();
@@ -44,6 +46,7 @@ struct ProfilerSession {
     static const int maxContexts = 16;
     ProfilerContext contexts[maxContexts];
     volatile long usedContexts = 0;
+    bool allowNewContexts = true;
 
     // init context for current thread
     // a slot in thread local storage is set
@@ -63,7 +66,7 @@ struct ProfilerZone {
     ~ProfilerZone() {
         endCycles = __rdtsc();
         auto context = (ProfilerContext*)engone::Thread::GetTLSValue(global_profilerSession.contextTLS);
-        context->insertNewZone(this);
+        if(context) context->insertNewZone(this);
     }
     u64 startCycles = 0;
     u64 endCycles = 0;

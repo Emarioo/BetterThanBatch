@@ -1,19 +1,11 @@
 #include "BetBat/Parser.h"
 #include "BetBat/Compiler.h"
 
-
-
-// #undef ERRAT
-
 #undef WARN_HEAD3
 #define WARN_HEAD3(T, M) info.compileInfo->compileOptions->compileStats.warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
-#undef ERR_HEAD3
-#define ERR_HEAD3(T, M) info.compileInfo->compileOptions->compileStats.errors++;engone::log::out << ERR_DEFAULT_T(info.tokens,T,"Parse error","E0000") << M
-#undef ERR_LINE2
-#define ERR_LINE2(I, M) PrintCode(I, info.tokens, M)
+
 #undef WARN_LINE2
 #define WARN_LINE2(I, M) PrintCode(I, info.tokens, M)
-
 
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) { BASE_SECTION("Parse error, E0000"); CONTENT }
@@ -226,8 +218,10 @@ SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
     while(!info.end()){
         Token& tok = info.get(endTok);
         if(tok.flags&TOKEN_MASK_QUOTED){
-            ERR_HEAD3(tok, "Cannot have quotes in data type "<<tok<<".\n\n";
-                ERR_LINE2(tok.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(tok)
+                ERR_MSG("Cannot have quotes in data type "<<tok<<".")
+                ERR_LINE(tok,"bad")
             )
             // NOTE: Don't return in order to stay synchronized.
             //   continue parsing like nothing happen.
@@ -304,8 +298,10 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     int startIndex = info.at()+1;
     if(!Equal(structToken,"struct")){
         if(attempt) return SignalAttempt::BAD_ATTEMPT;
-        ERR_HEAD3(structToken,"expected struct not "<<structToken<<"\n";
-            ERR_LINE2(structToken.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(structToken)
+            ERR_MSG("expected struct not "<<structToken<<".")
+            ERR_LINE(structToken ,"bad")
         )
         return SignalAttempt::FAILURE;
     }
@@ -330,8 +326,10 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     }
     
     if(!IsName(name)){
-        ERR_HEAD3(name,"expected a name, "<<name<<" isn't\n";
-            ERR_LINE2(name.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("Expected a name, "<<name<<" isn't.")
+            ERR_LINE(name,"bad")
         )
         return SignalAttempt::FAILURE;
     }
@@ -399,8 +397,10 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     
     token = info.get(info.at()+1);
     if(!Equal(token,"{")){
-        ERR_HEAD3(token,"expected { not "<<token<<"\n";
-            ERR_LINE2(token.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Expected { not "<<token<<".")
+            ERR_LINE(token,"bad");
         )
         return SignalAttempt::FAILURE;
     }
@@ -455,8 +455,10 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             if(!IsName(name)){
                 info.next();
                 if(!hadRecentError){
-                    ERR_HEAD3(name, "expected a name, "<<name<<" isn't\n";
-                        ERR_LINE2(name.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(name)
+                        ERR_MSG("Expected a name, "<<name<<" isn't.")
+                        ERR_LINE(name,"bad")
                     )
                 }
                 hadRecentError=true;
@@ -466,8 +468,10 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             info.next();   
             Token token = info.get(info.at()+1);
             if(!Equal(token,":")){
-                ERR_HEAD3(token,"expected : not "<<token<<"\n";
-                    ERR_LINE2(token.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Expected : not "<<token<<".")
+                    ERR_LINE(token,"bad")
                 )
                 errorParsingMembers = SignalAttempt::FAILURE;
                 continue;
@@ -475,8 +479,10 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             info.next();
             SignalDefault result = ParseTypeId(info,typeToken,nullptr);
             if(result!=SignalDefault::SUCCESS) {
-                ERR_HEAD3(typeToken, "failed parsing type "<<typeToken<<"\n";
-                    ERR_LINE2(typeToken.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(typeToken)
+                    ERR_MSG("Failed parsing type "<<typeToken<<".")
+                    ERR_LINE(typeToken,"bad")
                 )
                 continue;
             }
@@ -493,14 +499,18 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
                 if(IsInteger(token2)) {
                     arrayLength = ConvertInteger(token2);
                     if(arrayLength<0){
-                        ERR_HEAD3(token2, "Array cannot have negative size.\n\n";
-                            ERR_LINE2(info.at()-1,"< 0");
+                        ERR_SECTION(
+                            ERR_HEAD(token2)
+                            ERR_MSG("Array cannot have negative size.")
+                            ERR_LINE(info.get(info.at()-1),"< 0")
                         )
                         arrayLength = 0;
                     }
                 } else {
-                    ERR_HEAD3(token2, "The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.\n\n";
-                        ERR_LINE2(info.at()-1, "must be positive integer literal");
+                    ERR_SECTION(
+                        ERR_HEAD(token2)
+                        ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
+                        ERR_LINE(info.get(info.at()-1), "must be positive integer literal")
                     )
                 }
                 std::string* str = info.ast->createString();
@@ -549,14 +559,15 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
                     ERR_MSG("Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").")
                     ERR_LINE(token,"bad")
                 )
-                // ERR_HEAD3(token,"Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").\n\n";
+                // ERR_SECTION(
+                // ERR_HEAD(token,"Expected a curly brace or semi-colon to mark the end of the member (was: "<<token<<").\n\n";
                 //     if(typeEndToken!=-1){
                 //         TokenRange temp{};
                 //         temp.firstToken = typeToken;
                 //         temp.endIndex = typeEndToken;
                 //         PrintCode(temp,"evaluated type");
                 //     }
-                //     ERR_LINE2(token.tokenIndex,"bad");
+                //     ERR_LINE(token.tokenIndex,"bad");
                 // )
             }
             hadRecentError=true;
@@ -577,8 +588,10 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
     if(!Equal(token,"namespace")){
         if(attempt)
             return SignalAttempt::BAD_ATTEMPT;
-        ERR_HEAD3(token,"expected namespace not "<<token<<"\n";
-            ERR_LINE2(token.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Expected namespace not "<<token<<".")
+            ERR_LINE(token,"bad")
         )
         return SignalAttempt::FAILURE;
     }
@@ -601,8 +614,10 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
     }
 
     if(!IsName(name)){
-        ERR_HEAD3(name,"expected a name, "<<name<<" isn't\n";
-            ERR_LINE2(name.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("Expected a name, "<<name<<" isn't.")
+            ERR_LINE(name,"bad");
         )
         return SignalAttempt::FAILURE;
     }
@@ -610,8 +625,10 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
 
     token = info.get(info.at()+1);
     if(!Equal(token,"{")){
-        ERR_HEAD3(token,"expected { not "<<token<<"\n";
-            ERR_LINE2(token.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Expected { not "<<token<<".")
+            ERR_LINE(token,"bad")
         )
         return SignalAttempt::FAILURE;
     }
@@ -660,8 +677,10 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
 
         if(result==SignalAttempt::BAD_ATTEMPT){
             Token& token = info.get(info.at()+1);
-            ERR_HEAD3(token, "Unexpected '"<<token<<"' (ParseNamespace)\n";
-                ERR_LINE2(token.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Unexpected '"<<token<<"' (ParseNamespace).")
+                ERR_LINE(token,"bad")
             )
             
             // test other parse type
@@ -699,8 +718,10 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     int startIndex = info.at()+1;
     if(!Equal(enumToken,"enum")){
         if(attempt) return SignalAttempt::BAD_ATTEMPT;
-        ERR_HEAD3(enumToken,"expected struct not "<<enumToken<<"\n";
-            ERR_LINE2(enumToken.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(enumToken)
+            ERR_MSG("Expected struct not "<<enumToken<<".")
+            ERR_LINE(enumToken,"bad");
         )
         return SignalAttempt::FAILURE;   
     }
@@ -724,8 +745,10 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     }
 
     if(!IsName(name)){
-        ERR_HEAD3(name,"expected a name, "<<name<<" isn't\n";
-            ERR_LINE2(name.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("Expected a name, "<<name<<" isn't.")
+            ERR_LINE(name,"bad")
         )
         return SignalAttempt::FAILURE;
     }
@@ -733,8 +756,10 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     
     Token token = info.get(info.at()+1);
     if(!Equal(token,"{")){
-        ERR_HEAD3(token,"expected { not "<<token<<"\n";
-            ERR_LINE2(token.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Expected { not "<<token<<":")
+            ERR_LINE(token,"bad")
         )
         return SignalAttempt::FAILURE;
     }
@@ -756,8 +781,10 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         
         if(!IsName(name)){
             info.next(); // move forward to prevent infinite loop
-            ERR_HEAD3(name, "expected a name, "<<name<<" isn't\n";
-                ERR_LINE2(name.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(name)
+                ERR_MSG("Expected a name, "<<name<<" isn't.")
+                ERR_LINE(name,"bad")
             )
             error = SignalAttempt::FAILURE;
             continue;
@@ -777,8 +804,10 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
                 nextId = ConvertHexadecimal(token);
                 token = info.get(info.at()+1);
             } else{
-                ERR_HEAD3(token, token<<" is not an integer (i32)\n";
-                    ERR_LINE2(token.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG(token<<" is not an integer (i32).")
+                    ERR_LINE(token,"bad")
                 )
             }
         }
@@ -792,8 +821,10 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
             info.next();
             break;
         }else{
-            ERR_HEAD3(token,"expected } or , not "<<token<<"\n";
-                ERR_LINE2(token.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Expected } or , not "<<token<<".")
+                ERR_LINE(token,"bad");
             )
             error = SignalAttempt::FAILURE;
             continue;
@@ -803,7 +834,8 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     // auto typeInfo = info.ast->getTypeInfo(info.currentScopeId, name, false, true);
     // int strId = info.ast->getTypeString(name);
     // if(!typeInfo){
-        // ERR_HEAD3(name, name << " is taken\n";
+        // ERR_SECTION(
+        // ERR_HEAD(name, name << " is taken\n";
         // info.ast->destroy(astEnum);
         // astEnum = 0;
         // return PARSE_ERROR;
@@ -832,7 +864,9 @@ SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count)
                 expectComma=false;
                 continue;
             }
-            ERR_HEAD3(tok,"Expected ',' to supply more arguments or ')' to end fncall (found "<<tok<<" instead)\n";
+            ERR_SECTION(
+                ERR_HEAD(tok)
+                ERR_MSG("Expected ',' to supply more arguments or ')' to end fncall (found "<<tok<<" instead).")
             )
             return SignalDefault::FAILURE;
         }
@@ -845,8 +879,10 @@ SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count)
             named=true;
             mustBeNamed = true;
         } else if(mustBeNamed){
-            ERR_HEAD3(tok, "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
-                ERR_LINE2(tok.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(tok)
+                ERR_MSG("Expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<".")
+                ERR_LINE(tok,"bad")
             )
             // return or continue could desync the parsing so don't do that.
         }
@@ -859,8 +895,6 @@ SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count)
         }
         if(named){
             expr->namedValue = tok;
-            // expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
-            // new(expr->namedValue)std::string(tok);
         } else {
             fncall->nonNamedArgs++;
         }
@@ -929,8 +963,10 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 
                 Token memberName = info.get(info.at()+1);
                 if(!IsName(memberName)){
-                    ERR_HEAD3(memberName, "Expected a property name, not "<<memberName<<".\n\n";
-                        ERR_LINE2(memberName.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(memberName)
+                        ERR_MSG("Expected a property name, not "<<memberName<<".")
+                        ERR_LINE(memberName,"bad")
                     )
                     continue;
                 }
@@ -966,11 +1002,6 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // fncall for strucy methods
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
                     tmp->name = memberName;
-                    // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
-                    // new(tmp->name)std::string(std::string(token)+polyTypes);
-                    
-                    // tmp->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
-                    // new(tmp->args)DynamicArray<ASTExpression*>();
 
                     // Create "this" argument in methods
                     // tmp->args->add(values.last());
@@ -998,15 +1029,14 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     continue;
                 }
                 if(polyTypes.length()!=0){
-                    ERR_HEAD3(info.now(),
-                    "Polymorphic arguments indicates a method call put the parenthesis for it is missing. '"<<info.get(info.at()+1)<<"' is not '('.";
+                    ERR_SECTION(
+                        ERR_HEAD(info.now())
+                        ERR_MSG("Polymorphic arguments indicates a method call put the parenthesis for it is missing. '"<<info.get(info.at()+1)<<"' is not '('.")
                     )
                 }
                 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_MEMBER));
                 tmp->name = memberName;
-                // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
-                // new(tmp->name)std::string(token);
                 tmp->left = values.last();
                 values.pop();
                 tmp->tokenRange.firstToken = tmp->left->tokenRange.firstToken;
@@ -1081,7 +1111,10 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 }
                 Token tok = info.get(info.at()+1);
                 if(!Equal(tok,"]")){
-                    ERR_HEAD3(tok,"bad\n\n";)
+                    ERR_SECTION(
+                        ERR_HEAD(tok)
+                        ERR_MSG("bad")
+                    )
                 } else {
                     info.next();
                 }
@@ -1147,8 +1180,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                          && !Equal(prev,")"))
                     {
                         // WARN_HEAD3(token, "Did you forget the semi-colon to end the statement or was it intentional? Perhaps you mistyped a character? (put the next statement on a new line to silence this warning)\n\n"; 
-                        //     ERR_LINE2(tokenIndex-1, "semi-colon here?");
-                        //     // ERR_LINE2(tokenIndex, "; before this?");
+                        //     ERR_LINE(tokenIndex-1, "semi-colon here?");
+                        //     // ERR_LINE(tokenIndex, "; before this?");
                         //     )
                         // TODO: ERROR instead of warning if special flag is set
                     }
@@ -1185,8 +1218,10 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 info.next();
                 Token tok = info.get(info.at()+1);
                 if(!Equal(tok,"<")){
-                    ERR_HEAD3(tok, "expected < not "<<tok<<"\n";
-                        ERR_LINE2(tok.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(tok)
+                        ERR_MSG("Expected < not "<<tok<<".")
+                        ERR_LINE(tok,"bad")
                     )
                     continue;
                 }
@@ -1194,14 +1229,18 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 Token tokenTypeId{};
                 SignalDefault result = ParseTypeId(info,tokenTypeId, nullptr);
                 if(result!=SignalDefault::SUCCESS){
-                    ERR_HEAD3(tokenTypeId, tokenTypeId << "is not a valid data type\n";
-                        ERR_LINE2(tokenTypeId.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(tokenTypeId)
+                        ERR_MSG(tokenTypeId << "is not a valid data type.")
+                        ERR_LINE(tokenTypeId,"bad");
                     )
                 }
                 tok = info.get(info.at()+1);
                 if(!Equal(tok,">")){
-                    ERR_HEAD3(tok, "expected > not "<< tok<<"\n";
-                        ERR_LINE2(tok.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(tok)
+                        ERR_MSG("expected > not "<< tok<<".")
+                        ERR_LINE(tok,"bad");
                     )
                 }
                 info.next();
@@ -1335,8 +1374,9 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 //     } else {
                 //         tmp = info.ast->createExpression(TypeId(AST_INT64));
                 //         if(!printedError){
-                //             ERR_HEAD3(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                //                 ERR_LINE2(token.tokenIndex,"to large!");
+                //             ERR_SECTION(
+                        // ERR_HEAD(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
+                //                 ERR_LINE(token.tokenIndex,"to large!");
                 //             )
                 //         }
                 //     }
@@ -1416,8 +1456,10 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     tmp = info.ast->createExpression(TypeId(AST_UINT64));
                 } else {
                     tmp = info.ast->createExpression(TypeId(AST_UINT64));
-                    ERR_HEAD3(token,"Hexidecimal overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                        ERR_LINE2(token.tokenIndex,"to large!");
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("Hexidecimal overflow! '"<<token<<"' is to large for 64-bit integers!")
+                        ERR_LINE(token,"to large!");
                     )
                 }
                 tmp->i64Value =  ConvertHexadecimal(token); // TODO: Only works with 32 bit or 16,8 I suppose.
@@ -1443,13 +1485,12 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     tmp->constantValue = true;
                     if(cstring)
                         tmp->flags |= ASTNode::NULL_TERMINATED;
-                    // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
-                    // new(tmp->name)std::string(token);
 
                     // A string of zero size can be useful which is why
                     // the code below is commented out.
                     // if(token.length == 0){
-                        // ERR_HEAD3(token, "string should not have a length of 0\n";
+                        // ERR_SECTION(
+                        // ERR_HEAD(token, "string should not have a length of 0\n";
                         // This is a semantic error and since the syntax is correct
                         // we don't need to return PARSE_ERROR. We could but things will be fine.
                     // }
@@ -1504,7 +1545,8 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             //             info.next();
             //             break;
             //         }else {
-            //             ERR_HEAD3(token, "expected ] not "<<token<<"\n";
+            //             ERR_SECTION(
+                    // ERR_HEAD(token, "expected ] not "<<token<<"\n";
             //             continue;
             //         }
             //     }
@@ -1679,11 +1721,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     ns += polyTypes;
 
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
-                    // tmp->name = (std::string*)engone::Allocate(sizeof(std::string));
-                    // new(tmp->name)std::string(std::move(ns));
                     tmp->name = polyName;
-                    // tmp->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
-                    // new(tmp->args)DynamicArray<ASTExpression*>();
 
                     int count = 0;
                     SignalDefault result = ParseArguments(info, tmp, &count);
@@ -1702,8 +1740,6 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // initializer
                     info.next();
                     ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
-                    // initExpr->args = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
-                    // new(initExpr->args)DynamicArray<ASTExpression*>();
                     // NOTE: Type checker works on TypeIds not AST_FROM_NAMESPACE.
                     //  AST_FROM... is used for functions and variables.
                     std::string ns = "";
@@ -1746,8 +1782,10 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                             prevNamed = token;
                             mustBeNamed = true;
                         } else if(mustBeNamed){
-                            ERR_HEAD3(token, "expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<"\n";
-                                ERR_LINE2(token.tokenIndex,"bad");
+                            ERR_SECTION(
+                                ERR_HEAD(token)
+                                ERR_MSG("Expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<".")
+                                ERR_LINE(token,"bad")
                             )
                             // return or continue could desync the parsing so don't do that.
                         }
@@ -1762,8 +1800,6 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                         }
                         if(named){
                             expr->namedValue = token;
-                            // expr->namedValue = (std::string*)engone::Allocate(sizeof(std::string));
-                            // new(expr->namedValue)std::string(token);
                         }
                         // initExpr->args->add(expr);
                         initExpr->args.add(expr);
@@ -1783,8 +1819,10 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                            info.next();
                            break;
                         } else {
-                            ERR_HEAD3(token, "expected , or } not "<<token<<"\n";
-                                ERR_LINE2(token.tokenIndex,"bad");
+                            ERR_SECTION(
+                                ERR_HEAD(token)
+                                ERR_MSG("Expected , or } not "<<token<<".")
+                                ERR_LINE(token,"bad")
                             )
                             continue;
                         }
@@ -1798,8 +1836,9 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 } else {
                     // if(polyTypes.size()!=0){
                     //     This is possible since types are can be parsed in an expression.
-                    //     ERR_HEAD3(token, "Polymorphic types not expected with namespace or variable.\n\n";
-                    //         ERR_LINE2(token.tokenIndex,"bad");
+                    //     ERR_SECTION(
+                    // ERR_HEAD(token, "Polymorphic types not expected with namespace or variable.\n\n";
+                    //         ERR_LINE(token.tokenIndex,"bad");
                     //     )
                     //     continue;
                     // }
@@ -1808,8 +1847,9 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                         
                         // Token tok = info.get(info.at()+1);
                         // if(!IsName(tok)){
-                        //     ERR_HEAD3(tok, "'"<<tok<<"' is not a name.\n\n";
-                        //         ERR_LINE2(tok.tokenIndex,"bad");
+                        //     ERR_SECTION(
+                        // ERR_HEAD(tok, "'"<<tok<<"' is not a name.\n\n";
+                        //         ERR_LINE(tok.tokenIndex,"bad");
                         //     )
                         //     continue;
                         // }
@@ -1860,14 +1900,18 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 if(result!=SignalAttempt::SUCCESS)
                     return SignalAttempt::FAILURE;
                 if(!tmp){
-                    ERR_HEAD3(token, "got nothing from paranthesis in expression\n";
-                        ERR_LINE2(token.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("Got nothing from paranthesis in expression.")
+                        ERR_LINE(token,"bad")
                     )
                 }
                 token = info.get(info.at()+1);
                 if(!Equal(token,")")){
-                    ERR_HEAD3(token, "expected ) not "<<token<<"\n";   
-                        ERR_LINE2(token.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("Expected ) not "<<token<<".")
+                        ERR_LINE(token,"bad")
                     )
                 }else
                     info.next();
@@ -1876,11 +1920,13 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 if(attempt){
                     return SignalAttempt::BAD_ATTEMPT;
                 }else{
-                    ERR_HEAD3(token, "'"<<token << "' is not a value. Values (or expressions) are expected after tokens that calls upon arguments, operations and assignments among other things.\n";
-                        ERR_LINE2(tokenIndex,"should be a value");
-                        ERR_LINE2(tokenIndex-1,"expects a value afterwards")
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("'"<<token << "' is not a value. Values (or expressions) are expected after tokens that calls upon arguments, operations and assignments among other things.")
+                        ERR_LINE(info.get(tokenIndex),"should be a value")
+                        ERR_LINE(info.get(tokenIndex-1),"expects a value afterwards")
                     );
-                    // ERR_LINE2()
+                    // ERR_LINE()
                     // printLine();
                     return SignalAttempt::FAILURE;
                     // Qutting here is okay because we have a defer which
@@ -1889,8 +1935,9 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             }
         }
         // if(negativeNumber){
-        //     ERR_HEAD3(info.get(info.at()-1), "Unexpected - before "<<token<<"\n";
-        //         ERR_LINE2(info.at()-1,"bad");
+        //     ERR_SECTION(
+            // ERR_HEAD(info.get(info.at()-1), "Unexpected - before "<<token<<"\n";
+        //         ERR_LINE(info.at()-1,"bad");
         //     )
         //     return SignalAttempt::FAILURE;
         //     // quitting here is a little unexpected but there is
@@ -1959,8 +2006,6 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 if(nowOp == AST_FROM_NAMESPACE){
                     Token& tok = namespaceNames.last();
                     val->name = tok;
-                    // val->name = (std::string*)engone::Allocate(sizeof(std::string));
-                    // new(val->name)std::string(tok);
                     val->tokenRange.firstToken = tok;
                     // val->tokenRange.startIndex -= 2; // -{namespace name} -{::}
                     namespaceNames.pop();
@@ -2159,8 +2204,6 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         info.next();
         
         statement = info.ast->createStatement(ASTStatement::RETURN);
-        // statement->returnValues = (DynamicArray<ASTExpression*>*)engone::Allocate(sizeof(DynamicArray<ASTExpression*>));
-        // new(statement->returnValues)DynamicArray<ASTExpression*>();
 
         WHILE_TRUE {
             ASTExpression* expr=0;
@@ -2218,7 +2261,6 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         
         statement->varnames.add({originToken});
         if(aliasToken.str){
-            // statement->alias = (std::string*)engone::Allocate(sizeof(std::string));
             statement->alias = TRACK_ALLOC(std::string);
             new(statement->alias)std::string(aliasToken);
         }
@@ -2323,8 +2365,9 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
     // int startIndex = info.at()+1;
     if(!Equal(beginToken,"operator")){
         if(attempt) return SignalAttempt::BAD_ATTEMPT;
-        ERR_HEAD3(beginToken, "Expected 'operator' for operator overloading not '"<<beginToken<<"'.\n";
-
+        ERR_SECTION(
+            ERR_HEAD(beginToken)
+            ERR_MSG("Expected 'operator' for operator overloading not '"<<beginToken<<"'.")
         )
             
         return SignalAttempt::FAILURE;
@@ -2343,8 +2386,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
         } else {
             // It should not warn you because it is quite important that you use the right annotations with functions
             // Mispelling external or the calling convention would be very bad.
-            ERR_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for operators.\n\n";
-                ERR_LINE2(info.at(),"unknown");
+            ERR_SECTION(
+                ERR_HEAD(name)
+                ERR_MSG("'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for operators.")
+                ERR_LINE(info.get(info.at()),"unknown")
             )
         }
         name = info.next();
@@ -2367,7 +2412,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
     } else if(!(op = IsOp(name, extraNext))){
         info.ast->destroy(function);
         function = nullptr;
-        ERR_HEAD3(name,"Expected a valid operator, "<<name<<" is not.\n";)
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("Expected a valid operator, "<<name<<" is not.")
+        )
         return SignalAttempt::FAILURE;
     }
     // info.next(); // next is done above
@@ -2411,8 +2459,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
                 info.next();
                 break;
             } else {
-                ERR_HEAD3(tok, "expected , or > for in poly. arguments for operator "<<name<<"\n";
-            )
+                ERR_SECTION(
+                    ERR_HEAD(tok)
+                    ERR_MSG("Expected , or > for in poly. arguments for operator "<<name<<".")
+                )
                 // parse error or what?
                 break;
             }
@@ -2420,7 +2470,9 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
     }
     tok = info.get(info.at()+1);
     if(!Equal(tok,"(")){
-        ERR_HEAD3(tok, "expected ( not "<<tok<<"\n";
+        ERR_SECTION(
+            ERR_HEAD(tok)
+            ERR_MSG("Expected ( not "<<tok<<".")
         )
         return SignalAttempt::FAILURE;
     }
@@ -2438,8 +2490,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
             info.next();
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD3(arg, "'"<<arg <<"' is not a valid argument name.\n\n";
-                    ERR_LINE2(arg.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(arg)
+                    ERR_MSG("'"<<arg <<"' is not a valid argument name.")
+                    ERR_LINE(arg,"bad")
                 )
             }
             continue;
@@ -2450,8 +2504,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
         if(!Equal(tok,":")){
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD3(tok, "Expected : not "<<tok <<".\n\n";
-                    ERR_LINE2(tok.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(tok)
+                    ERR_MSG("Expected : not "<<tok <<".")
+                    ERR_LINE(tok,"bad")
                 )
             }
             continue;
@@ -2485,8 +2541,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
         }else{
             printedErrors = true; // we bad and might keep being bad.
             // don't do printed errors?
-            ERR_HEAD3(tok, "Expected , or ) not "<<tok <<".\n\n";
-                ERR_LINE2(tok.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(tok)
+                ERR_MSG("Expected , or ) not "<<tok <<".")
+                ERR_LINE(tok,"bad")
             )
             continue;
             // Continuing since we saw ( and are inside of arguments.
@@ -2539,8 +2597,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
                     break;
                 if(!printedErrors){
                     printedErrors=true;
-                    ERR_HEAD3(tok, "Expected a comma or curly brace. '"<<tok <<"' is not okay.\n";
-                        ERR_LINE2(tok.tokenIndex,"bad coder");
+                    ERR_SECTION(
+                        ERR_HEAD(tok)
+                        ERR_MSG("Expected a comma or curly brace. '"<<tok <<"' is not okay.")
+                        ERR_LINE(tok,"bad coder");
                     )
                 }
                 continue;
@@ -2556,8 +2616,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
     
     if(Equal(bodyTok,";")){
         info.next();
-        ERR_HEAD3(bodyTok,"Operator overloading must have a body. You have forgotten the body when defining '"<<function->name<<"'.\n\n";
-            ERR_LINE2(bodyTok.tokenIndex,"replace with {}");
+        ERR_SECTION(
+            ERR_HEAD(bodyTok)
+            ERR_MSG("Operator overloading must have a body. You have forgotten the body when defining '"<<function->name<<"'.")
+            ERR_LINE(bodyTok,"replace with {}")
         )
     } else if(Equal(bodyTok,"{")){
         info.functionScopes.add({});
@@ -2566,8 +2628,10 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
         info.functionScopes.pop();
         function->body = body;
     } else {
-        ERR_HEAD3(bodyTok,"Operator has no body! Did the return types parse incorrectly? Use curly braces to define the body.\n\n";
-            ERR_LINE2(bodyTok.tokenIndex,"expected {");
+        ERR_SECTION(
+            ERR_HEAD(bodyTok)
+            ERR_MSG("Operator has no body! Did the return types parse incorrectly? Use curly braces to define the body.")
+            ERR_LINE(bodyTok,"expected {")
         )
     }
 
@@ -2581,8 +2645,9 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
     // int startIndex = info.at()+1;
     if(!Equal(fnToken,"fn")){
         if(attempt) return SignalAttempt::BAD_ATTEMPT;
-        ERR_HEAD3(fnToken, "Expected fn for function not '"<<fnToken<<"'.\n";
-
+        ERR_SECTION(
+            ERR_HEAD(fnToken)
+            ERR_MSG("Expected fn for function not '"<<fnToken<<"'.")
         )
             
         return SignalAttempt::FAILURE;
@@ -2645,8 +2710,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         } else {
             // It should not warn you because it is quite important that you use the right annotations with functions
             // Mispelling external or the calling convention would be very bad.
-            ERR_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                ERR_LINE2(info.at(),"unknown");
+            ERR_SECTION(
+                ERR_HEAD(name)
+                ERR_MSG("'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.")
+                ERR_LINE(info.get(info.at()),"unknown")
 
                 // if(StartsWith(name, "@extern")) {
                 //     log::out << log::YELLOW << "Did you mean @extern-stdcall or @extern-cdecl\n";
@@ -2660,8 +2727,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         function->setHidden(true);
         // native doesn't use a calling convention
         if(needsExplicitCallConvention && !specifiedConvention){
-            ERR_HEAD3(name, "You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @cdecl instead.\n\n";
-                ERR_LINE2(name.tokenIndex, "missing call convention");
+            ERR_SECTION(
+                ERR_HEAD(name)
+                ERR_MSG("You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @cdecl instead.")
+                ERR_LINE(name, "missing call convention")
             )
         }
     }
@@ -2669,7 +2738,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
     if(!IsName(name)){
         info.ast->destroy(function);
         function = nullptr;
-        ERR_HEAD3(name,"expected a valid name, "<<name<<" is not.\n";)
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("Expected a valid name, "<<name<<" is not.")
+        )
         return SignalAttempt::FAILURE;
     }
     function->name = name;
@@ -2705,8 +2777,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
                 info.next();
                 break;
             } else {
-                ERR_HEAD3(tok, "expected , or > for in poly. arguments for function "<<name<<"\n";
-            )
+                ERR_SECTION(
+                    ERR_HEAD(tok)
+                    ERR_MSG("Expected , or > for in poly. arguments for function "<<name<<".")
+                )
                 // parse error or what?
                 break;
             }
@@ -2714,8 +2788,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
     }
     tok = info.next();
     if(!Equal(tok,"(")){
-        ERR_HEAD3(tok, "expected ( not "<<tok<<"\n";
-            )
+        ERR_SECTION(
+            ERR_HEAD(tok)
+            ERR_MSG("Expected ( not "<<tok<<".")
+        )
         return SignalAttempt::FAILURE;
     }
 
@@ -2747,8 +2823,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
             info.next();
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD3(arg, "'"<<arg <<"' is not a valid argument name.\n\n";
-                    ERR_LINE2(arg.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(arg)
+                    ERR_MSG("'"<<arg <<"' is not a valid argument name.")
+                    ERR_LINE(arg,"bad")
                 )
             }
             continue;
@@ -2759,8 +2837,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         if(!Equal(tok,":")){
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_HEAD3(tok, "Expected : not "<<tok <<".\n\n";
-                    ERR_LINE2(tok.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(tok)
+                    ERR_MSG("Expected : not "<<tok <<".")
+                    ERR_LINE(tok,"bad")
                 )
             }
             continue;
@@ -2795,8 +2875,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
             // printedErrors doesn't matter here.
             // If we end up here than our parsing is probably correct so far and we might as
             // well log this error since it's probably a "real" error not caused by a cascade.
-            ERR_HEAD3(tok, "Expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<".\n\n";
-                ERR_LINE2(tok.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(tok)
+                ERR_MSG("Expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<".")
+                ERR_LINE(tok,"bad")
             )
             // continue; we don't continue since we want to parse comma if it exists
         }
@@ -2816,8 +2898,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         }else{
             printedErrors = true; // we bad and might keep being bad.
             // don't do printed errors?
-            ERR_HEAD3(tok, "Expected , or ) not "<<tok <<".\n\n";
-                ERR_LINE2(tok.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(tok)
+                ERR_MSG("Expected , or ) not "<<tok <<".")
+                ERR_LINE(tok,"bad")
             )
             continue;
             // Continuing since we saw ( and are inside of arguments.
@@ -2870,8 +2954,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
                     break;
                 if(!printedErrors){
                     printedErrors=true;
-                    ERR_HEAD3(tok, "Expected a comma or curly brace. '"<<tok <<"' is not okay.\n";
-                        ERR_LINE2(tok.tokenIndex,"bad coder");
+                    ERR_SECTION(
+                        ERR_HEAD(tok)
+                        ERR_MSG("Expected a comma or curly brace. '"<<tok <<"' is not okay.")
+                        ERR_LINE(tok,"bad coder")
                     )
                 }
                 continue;
@@ -2888,14 +2974,18 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
     if(Equal(bodyTok,";")){
         info.next();
         if(function->needsBody()){
-            ERR_HEAD3(bodyTok,"Functions must have a body. You have forgotten the body when defining '"<<function->name<<"'. Declarations and definitions happen at the same time in this language. This is possible because of out of order compilation.\n\n";
-                ERR_LINE2(bodyTok.tokenIndex,"replace with {}");
+            ERR_SECTION(
+                ERR_HEAD(bodyTok)
+                ERR_MSG("Functions must have a body. You have forgotten the body when defining '"<<function->name<<"'. Declarations and definitions happen at the same time in this language. This is possible because of out of order compilation.")
+                ERR_LINE(bodyTok,"replace with {}")
             )
         }
     } else if(Equal(bodyTok,"{")){
         if(!function->needsBody()) {
-            ERR_HEAD3(bodyTok,"Native/external functions cannot have a body. Native functions are handled by the language. External functions link to functions outside your source code.\n\n";
-                ERR_LINE2(bodyTok.tokenIndex,"use ; instead");
+            ERR_SECTION(
+                ERR_HEAD(bodyTok)
+                ERR_MSG("Native/external functions cannot have a body. Native functions are handled by the language. External functions link to functions outside your source code.")
+                ERR_LINE(bodyTok,"use ; instead")
             )
         }
         
@@ -2905,8 +2995,10 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         info.functionScopes.pop();
         function->body = body;
     } else if(function->needsBody()) {
-        ERR_HEAD3(bodyTok,"Function has no body! Did the return types parse incorrectly? Use curly braces to define the body.\n\n";
-            ERR_LINE2(bodyTok.tokenIndex,"expected {");
+        ERR_SECTION(
+            ERR_HEAD(bodyTok)
+            ERR_MSG("Function has no body! Did the return types parse incorrectly? Use curly braces to define the body.")
+            ERR_LINE(bodyTok,"expected {")
         )
     }
 
@@ -2948,8 +3040,10 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
     while(!info.end()){
         Token name = info.get(info.at()+1);
         if(!IsName(name)){
-            ERR_HEAD3(name, "Expected a valid name for assignment ('"<<name<<"' is not).\n\n";
-                ERR_LINE2(info.at()+1,"cannot be a name");
+            ERR_SECTION(
+                ERR_HEAD(name)
+                ERR_MSG("Expected a valid name for assignment ('"<<name<<"' is not).")
+                ERR_LINE(info.get(info.at()+1),"cannot be a name");
             )
             return SignalAttempt::FAILURE;
         }
@@ -2979,14 +3073,18 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
                     lengthTokenOfLastVar = token2;
                     arrayLength = ConvertInteger(token2);
                     if(arrayLength<0){
-                        ERR_HEAD3(token2, "Array cannot have negative size.\n\n";
-                            ERR_LINE2(info.at()-1,"< 0");
+                        ERR_SECTION(
+                            ERR_HEAD(token2)
+                            ERR_MSG("Array cannot have negative size.")
+                            ERR_LINE(info.get(info.at()-1),"< 0")
                         )
                         arrayLength = 0;
                     }
                 } else {
-                    ERR_HEAD3(token2, "The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.\n\n";
-                        ERR_LINE2(info.at()-1, "must be positive integer literal");
+                    ERR_SECTION(
+                        ERR_HEAD(token2)
+                        ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
+                        ERR_LINE(info.get(info.at()-1), "must be positive integer literal")
                     )
                 }
                 std::string* str = info.ast->createString();

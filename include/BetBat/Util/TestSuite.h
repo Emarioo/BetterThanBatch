@@ -24,6 +24,6 @@ enum TestSelection : u64 {
     TEST_FLOW       = 0x2,
 };
 
-void TestSuite(TestSelection testSelection);
+u32 TestSuite(TestSelection testSelection);
 
-void VerifyTests(DynamicArray<std::string>& filesToTest);
+u32 VerifyTests(DynamicArray<std::string>& filesToTest);

@@ -1,22 +1,6 @@
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Compiler.h"
 
-/*
-    Old logging
-    Should be deprecated but it's a lot of work
-*/
-// Remember to wrap macros in {} when using if or loops since macros may have multiple statements.
-// #define ERR() info.errors++; engone::log::out << engone::log::RED <<"TypeError: "
-
-// #undef ERR_SECTION(
-// ERR_HEAD
-// #define ERR_SECTION(
-// ERR_HEAD(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Type error","E0000")
-
-// #undef ERR_SECTION(
-// ERR_HEAD
-// #define ERR_SECTION(
-// ERR_HEAD(R,M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Type error","E0000") << M
 #undef WARN_HEAD3
 #define WARN_HEAD3(R,M) info.compileInfo->compileOptions->compileStats.warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
 
@@ -1453,6 +1437,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         bool printedError = false;
         auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
         if (ti.isValid()) {
+
         } else if(!printedError){
             ERR_SECTION(
                 ERR_HEAD(expr->tokenRange)
@@ -1464,7 +1449,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         expr->versions_castType[info.currentPolyVersion] = ti;
         
         if(expr->isUnsafeCast()) {
-
+            
         } else if (expr->left->typeId == AST_ASM) {
             ERR_SECTION(
                 ERR_HEAD(expr->tokenRange)
@@ -2338,6 +2323,16 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         ERR_LINE(varname.name, "bad")
                     )
                 }
+                if(vi < poly_typeArray.size()){
+                    if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
+                        ERR_SECTION(
+                            ERR_HEAD(now->firstExpression->tokenRange)
+                            ERR_MSG("Type mismatch " << info.ast->typeToString(poly_typeArray[vi]) << " - " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << ".")
+                            ERR_LINE(varname.name, info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]))
+                            ERR_LINE(now->firstExpression->tokenRange, info.ast->typeToString(poly_typeArray[vi]))
+                        )
+                    }
+                }
                 if(varname.declaration && varinfo->isGlobal()) {
                     u32 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
                     u32 offset = info.ast->aquireGlobalSpace(size);
@@ -2353,40 +2348,40 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             // TODO: Print the location of the type instead of the variable name
                         )
                     } else {
-                    TypeId elementType = arrTypeInfo->structImpl->polyArgs[0];
-                    for(int j=0;j<now->arrayValues.size();j++){
-                        ASTExpression* value = now->arrayValues[j];
-                        typeArray.resize(0);
-                        SignalAttempt result = CheckExpression(info, scope->scopeId, value, &typeArray, false);
-                        if(result != SignalAttempt::SUCCESS){
-                            continue;
-                        }
-                        if(typeArray.size()!=1) {
-                            if(typeArray.size()==0) {
-                                ERR_SECTION(
-                                    ERR_HEAD(value->tokenRange)
-                                    ERR_MSG("Expressions in array initializers cannot consist of of no values. Did you call a function that returns void?")
-                                    ERR_LINE(value->tokenRange, "bad")
-                                )
-                                continue;
-                            } else {
-                                ERR_SECTION(
-                                    ERR_HEAD(value->tokenRange)
-                                    ERR_MSG("Expressions in array initializers cannot consist of multiple values. Did you call a function that returns more than one value?")
-                                    ERR_LINE(value->tokenRange, "bad")
-                                    // TODO: Print the types in rightTypes
-                                )
+                        TypeId elementType = arrTypeInfo->structImpl->polyArgs[0];
+                        for(int j=0;j<now->arrayValues.size();j++){
+                            ASTExpression* value = now->arrayValues[j];
+                            typeArray.resize(0);
+                            SignalAttempt result = CheckExpression(info, scope->scopeId, value, &typeArray, false);
+                            if(result != SignalAttempt::SUCCESS){
                                 continue;
                             }
+                            if(typeArray.size()!=1) {
+                                if(typeArray.size()==0) {
+                                    ERR_SECTION(
+                                        ERR_HEAD(value->tokenRange)
+                                        ERR_MSG("Expressions in array initializers cannot consist of of no values. Did you call a function that returns void?")
+                                        ERR_LINE(value->tokenRange, "bad")
+                                    )
+                                    continue;
+                                } else {
+                                    ERR_SECTION(
+                                        ERR_HEAD(value->tokenRange)
+                                        ERR_MSG("Expressions in array initializers cannot consist of multiple values. Did you call a function that returns more than one value?")
+                                        ERR_LINE(value->tokenRange, "bad")
+                                        // TODO: Print the types in rightTypes
+                                    )
+                                    continue;
+                                }
+                            }
+                            if(!info.ast->castable(typeArray[0], elementType)) {
+                                ERR_SECTION(
+                                    ERR_HEAD(value->tokenRange)
+                                    ERR_MSG("Cannot cast '"<<info.ast->typeToString(typeArray[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
+                                    ERR_LINE(value->tokenRange, "cannot cast")
+                                )
+                            }
                         }
-                        if(!info.ast->castable(typeArray[0], elementType)) {
-                            ERR_SECTION(
-                                ERR_HEAD(value->tokenRange)
-                                ERR_MSG("Cannot cast '"<<info.ast->typeToString(typeArray[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
-                                ERR_LINE(value->tokenRange, "cannot cast")
-                            )
-                        }
-                    }
                     }
                 }
             }
@@ -2602,6 +2597,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             CheckExpression(info, scope->scopeId, now->testValue, &typeArray, false);
             typeArray.resize(0);
             CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            typeArray.resize(0);
         } else {
             Assert(("Statement type not handled!",false));
         }

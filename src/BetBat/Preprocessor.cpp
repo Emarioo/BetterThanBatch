@@ -12,11 +12,6 @@
 #undef WARN_LINE2
 #define WARN_LINE2(I, M) PrintCode(I, info.inTokens, M)
 
-#undef ERR_HEAD3
-#define ERR_HEAD3(T, M) info.errors++;engone::log::out << ERR_DEFAULT_T(info.inTokens,T,"Preproc. error","E0000") << M
-#undef ERR_LINE2
-#define ERR_LINE2(I, M) PrintCode(I, info.inTokens, M)
-
 // #define MLOG_MATCH(X) X
 #define MLOG_MATCH(X)
 
@@ -144,7 +139,9 @@ SignalAttempt ParseDirective(PreprocInfo& info, bool attempt, const char* str){
         if(attempt){
             return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD3(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Expected " << PREPROC_TERM << " since this wasn't an attempt found '"<<token<<"'")
             )
             return SignalAttempt::FAILURE;
         }
@@ -153,7 +150,9 @@ SignalAttempt ParseDirective(PreprocInfo& info, bool attempt, const char* str){
         if(attempt) {
             return SignalAttempt::BAD_ATTEMPT;
         } else {
-            ERR_HEAD3(token, "Cannot have space after preprocessor directive\n";
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Cannot have space after preprocessor directive")
             )
             return SignalAttempt::FAILURE;
         }
@@ -163,7 +162,9 @@ SignalAttempt ParseDirective(PreprocInfo& info, bool attempt, const char* str){
         if(attempt){
             return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD3(token, "Expected "<<str<<" found '"<<token<<"'\n";
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Expected "<<str<<" found '"<<token<<"'")
             )
             return SignalAttempt::FAILURE;
         }
@@ -181,13 +182,17 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
         if(attempt){
             return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD3(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'\n";
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Expected " << PREPROC_TERM << " since this wasn't an attempt found '"<<token<<"'")
             )
             return SignalAttempt::FAILURE;
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
-        ERR_HEAD3(token, "Cannot have space after preprocessor directive\n";
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Cannot have space after preprocessor directive")
         )
         // info.next();
         return SignalAttempt::FAILURE;
@@ -206,7 +211,9 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
         if(attempt){
             return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD3(token, "Expected define found '"<<token<<"'\n";
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Expected define found '"<<token<<"'")
             )
             return SignalAttempt::FAILURE;
         }
@@ -219,14 +226,18 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     Token name = info.next();
     
     if(name.flags&TOKEN_MASK_QUOTED){
-        ERR_HEAD3(name, "Macro names cannot be quoted ("<<name<<").\n\n";
-            ERR_LINE2(name.tokenIndex,"");
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("Macro names cannot be quoted ("<<name<<").")
+            ERR_LINE(name,"");
         )
         return SignalAttempt::FAILURE;
     }
     if(!IsName(name)){
-        ERR_HEAD3(name, "'"<<name<<"' is not a valid name for macros. If the name is valid for variables then it is valid for macros.\n\n";
-            ERR_LINE2(name.tokenIndex, "bad");
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("'"<<name<<"' is not a valid name for macros. If the name is valid for variables then it is valid for macros.")
+            ERR_LINE(name, "bad");
         )
         return SignalAttempt::FAILURE;
     }
@@ -240,8 +251,10 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     if(!((name.flags&TOKEN_SUFFIX_SPACE) || (name.flags&TOKEN_SUFFIX_LINE_FEED))){
         Token token = info.next();
         if(token!="("){
-            ERR_HEAD3(token, "'"<<token<<"' is not allowed directly after a macro's name. Either use a '(' to indicate arguments or a space for none.\n\n";
-                ERR_LINE2(token.tokenIndex,"bad");
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("'"<<token<<"' is not allowed directly after a macro's name. Either use a '(' to indicate arguments or a space for none.")
+                ERR_LINE(token,"bad");
             )
             return SignalAttempt::FAILURE;
         }
@@ -289,8 +302,10 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
                 // cool
             } else{
                 if(!hadError){
-                    ERR_HEAD3(token, "'"<<token<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.\n\n";   
-                        ERR_LINE2(token.tokenIndex, "bad");
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("'"<<token<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.")
+                        ERR_LINE(token, "bad");
                     )
                 }
                 hadError = true;
@@ -341,7 +356,8 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
             if(token==PREPROC_TERM){
                 if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
                     continue;
-                    // ERR_HEAD3(token, "SPACE AFTER "<<token<<"!\n";
+                    // ERR_SECTION(
+                    // ERR_HEAD(token, "SPACE AFTER "<<token<<"!\n";
                     // )
                     // return SignalAttempt::FAILURE;
                 }
@@ -352,8 +368,10 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
                     break;
                 }
                 if(token=="define" || token=="multidefine"){
-                    ERR_HEAD3(token, "Macro definitions inside macros are not allowed.\n\n";
-                        ERR_LINE2(info.at()+1,"not allowed");
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("Macro definitions inside macros are not allowed.")
+                        ERR_LINE(token,"not allowed")
                     )
                     invalidContent = true;
                 }
@@ -366,9 +384,11 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
                 }
             }
             if(info.end()&&multiline){
-                ERR_HEAD3(token, "Missing enddef for macro '"<<name<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments)\n\n";
-                    ERR_LINE2(name.tokenIndex,"this needs #enddef somewhere");
-                    ERR_LINE2(info.length()-1,"macro content ends here!");
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Missing enddef for macro '"<<name<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments)")
+                    ERR_LINE(name, "this needs #enddef somewhere")
+                    ERR_LINE(info.get(info.length()-1),"macro content ends here!")
                 )
             }
         }
@@ -419,14 +439,18 @@ SignalAttempt ParseUndef(PreprocInfo& info, bool attempt){
         if(attempt){
             return SignalAttempt::BAD_ATTEMPT;
         }else{
-            ERR_HEAD3(token, "Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'.\n";
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Expected " PREPROC_TERM " since this wasn't an attempt found '"<<token<<"'.")
             )
             
             return SignalAttempt::FAILURE;
         }
     }
     if(token.flags&TOKEN_SUFFIX_SPACE){
-        ERR_HEAD3(token, "Cannot have space after preprocessor directive\n";
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Cannot have space after preprocessor directive.")
         )
         return SignalAttempt::FAILURE;
     }
@@ -435,7 +459,9 @@ SignalAttempt ParseUndef(PreprocInfo& info, bool attempt){
         if(attempt){
             return SignalAttempt::BAD_ATTEMPT;
         }
-        ERR_HEAD3(token, "Expected undef (since this wasn't an attempt)\n";
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Expected undef (since this wasn't an attempt)")
         )
         return SignalAttempt::FAILURE;
     }
@@ -443,7 +469,9 @@ SignalAttempt ParseUndef(PreprocInfo& info, bool attempt){
     info.next();
     info.next();
     if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-        ERR_HEAD3(token, "Unexpected line feed (expected a macro name)\n";
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Unexpected line feed (expected a macro name).")
         )
         return SignalAttempt::FAILURE;
     }
@@ -473,7 +501,9 @@ SignalAttempt ParseUndef(PreprocInfo& info, bool attempt){
     } else if (IsInteger(token) && (token.flags&TOKEN_SUFFIX_LINE_FEED)){
         int argCount = ConvertInteger(token);
         if(argCount<0){
-            ERR_HEAD3(token, "ArgCount cannot be negative '"<<argCount<<"'\n";
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("ArgCount cannot be negative '"<<argCount<<"'")
             )
             return SignalAttempt::FAILURE;
         }
@@ -505,7 +535,9 @@ SignalAttempt ParseImport(PreprocInfo& info, bool attempt){
 
     Token name = info.get(info.at()+1);
     if(!(name.flags&TOKEN_MASK_QUOTED)){
-        ERR_HEAD3(name, "expected a string not "<<name<<"\n";
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("expected a string not "<<name<<".")
         )
         return SignalAttempt::FAILURE;
     }
@@ -516,7 +548,9 @@ SignalAttempt ParseImport(PreprocInfo& info, bool attempt){
         info.next();
         token = info.get(info.at()+1);
         if(token.flags & TOKEN_MASK_QUOTED){
-            ERR_HEAD3(token, "don't use quotes with "<<log::YELLOW<<"as\n";
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Don't use quotes with "<<log::YELLOW<<"as.");
             )
             return SignalAttempt::FAILURE;
         }
@@ -539,7 +573,9 @@ SignalAttempt ParseLink(PreprocInfo& info, bool attempt){
 
     Token name = info.get(info.at()+1);
     if(!(name.flags&TOKEN_MASK_QUOTED)){
-        ERR_HEAD3(name, "expected a string not "<<name<<"\n";
+        ERR_SECTION(
+            ERR_HEAD(name)
+            ERR_MSG("Expected a string not "<<name<<".")
         )
         return SignalAttempt::FAILURE;
     }
@@ -562,7 +598,9 @@ SignalAttempt ParseInclude(PreprocInfo& info, bool attempt){
     // and info.at changes it output
     Token token = info.get(tokIndex);
     if(!(token.flags&TOKEN_MASK_QUOTED)){
-        ERR_HEAD3(token, "expected a string not "<<token<<"\n";
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("expected a string not "<<token<<".")
         )
         return SignalAttempt::FAILURE;
     }
@@ -610,8 +648,10 @@ SignalAttempt ParseInclude(PreprocInfo& info, bool attempt){
     // TODO: Search additional import directories
     
     if(fullpath.text.empty()){
-        ERR_HEAD3(token, "Could not include '"<<filepath<<"' (not found). Format is not appended automatically (while import does append .btb).\n\n";
-            ERR_LINE2(tokIndex,"not found");
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Could not include '"<<filepath<<"' (not found). Format is not appended automatically (while import does append .btb).")
+            ERR_LINE(info.get(tokIndex),"not found")
         )
         return SignalAttempt::FAILURE;
     }
@@ -637,7 +677,9 @@ SignalAttempt ParseInclude(PreprocInfo& info, bool attempt){
     info.compileInfo->otherLock.unlock();
     
     if(!includeStream){
-        ERR_HEAD3(token, "Error with token stream for "<<filepath<<" (bug in the compiler!)\n";
+        ERR_SECTION(
+            ERR_HEAD(token)
+            ERR_MSG("Error with token stream for "<<filepath<<" (bug in the compiler!).")
         )
         return SignalAttempt::FAILURE;
     }
@@ -694,7 +736,9 @@ SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
         Token token = info.get(info.at()+1);
         if(token==PREPROC_TERM){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-                ERR_HEAD3(token, "SPACE AFTER "<<token<<"!\n";
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("SPACE AFTER "<<token<<"!")
                 )
                 return SignalAttempt::FAILURE;
             }
@@ -738,7 +782,9 @@ SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
             // log::out << log::GRAY<<" skip "<<skip << "\n";
         }
         if(info.end()){
-            ERR_HEAD3(info.get(info.length()-1), "Missing endif somewhere for ifdef or ifndef\n";
+            ERR_SECTION(
+                ERR_HEAD(info.get(info.length()-1))
+                ERR_MSG("Missing endif somewhere for ifdef or ifndef.")
             )
             return SignalAttempt::FAILURE;
         }
@@ -984,8 +1030,10 @@ SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall
 
         if(call && Equal(token,"...")){
             if(argRange.start != index-1){
-                ERR_HEAD3(token,"Infinite argument should be it's own argument. You cannot combine it with other tokens.\n\n";
-                    ERR_LINE2(token.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Infinite argument should be it's own argument. You cannot combine it with other tokens.")
+                    ERR_LINE(token,"bad")
                 )
             }
             add_arg();
@@ -1004,8 +1052,10 @@ SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall
                 }
             }
             if(!Equal(tokenRange.stream->get(index),",")&&!Equal(tokenRange.stream->get(index),")")){
-                ERR_HEAD3(tokenRange.stream->get(index),"Infinite argument should be it's own argument. You cannot combine it with other tokens.\n\n";
-                    ERR_LINE2(index,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(tokenRange.stream->get(index))
+                    ERR_MSG("Infinite argument should be it's own argument. You cannot combine it with other tokens.")
+                    ERR_LINE(tokenRange.stream->get(index),"bad")
                 )
             }
         } else if(Equal(token,PREPROC_TERM)){ // annotation instead of directive?
@@ -1037,7 +1087,10 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
         if(attempt){
             return SignalAttempt::BAD_ATTEMPT;
         }
-        ERR_HEAD3(macroName, "Macro '"<<macroName<<"' is undefined. Cannot evaluate. (this error message shouldn't happen)\n";)
+        ERR_SECTION(
+            ERR_HEAD(macroName)
+            ERR_MSG("Macro '"<<macroName<<"' is undefined. Cannot evaluate. (this error message shouldn't happen).")
+        )
         return SignalAttempt::FAILURE;
     }
     info.next();
@@ -1067,6 +1120,7 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     // DynamicArray<bool> unwrappedArgs{};
     info.calls.add({});
     info.environments.add({});
+    u32 finalFlags = 0;
     {
         MacroCall& initialCall = info.calls.last();
         Env& initialEnv = info.environments.last();
@@ -1090,14 +1144,17 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
             }
             argCount = initialCall.useDetailedArgs ? initialCall.detailedArguments.size() : initialCall.argumentRanges.size();
             initialEnv.finalFlags = argRange.stream->get(argRange.start - 1).flags;
+            finalFlags = initialEnv.finalFlags;
         }
         if(!initialCall.unwrapped || initialCall.useDetailedArgs){
             Assert(!initialCall.unwrapped); // how does unwrap work here?
             // initialCall.certainMacro = rootMacro->matchArgCount(argCount);
             initialCall.certainMacro = info.compileInfo->matchArgCount(rootMacro, argCount, true);
             if(!initialCall.certainMacro){
-                ERR_HEAD3(macroName, "Macro '"<<macroName<<"' cannot have "<<(argCount)<<" arguments.\n\n";
-                    ERR_LINE2(macroName.tokenIndex,"bad");
+                ERR_SECTION(
+                    ERR_HEAD(macroName)
+                    ERR_MSG("Macro '"<<macroName<<"' cannot have "<<(argCount)<<" arguments.")
+                    ERR_LINE(macroName,"bad")
                 )
                 return SignalAttempt::FAILURE;
             }
@@ -1138,8 +1195,10 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                     // call->certainMacro = call->rootMacro->matchArgCount(call->argumentRanges.size());
                 // }
                 if(!call->certainMacro){
-                    ERR_HEAD3(call->rootMacro->name, "Macro '"<<"?"<<"' cannot have "<<(argCount)<<" arguments.\n\n";
-                        ERR_LINE2(call->rootMacro->name.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(call->rootMacro->name)
+                        ERR_MSG("Macro '"<<"?"<<"' cannot have "<<(argCount)<<" arguments.")
+                        ERR_LINE(call->rootMacro->name,"bad")
                     )
                     continue;
                 }
@@ -1273,8 +1332,10 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                 Assert(!innerCall.unwrapped); // how does unwrap work here?
                 innerCall.certainMacro = info.compileInfo->matchArgCount(deeperMacro, argCount, true);
                 if(!innerCall.certainMacro){
-                    ERR_HEAD3(token, "Macro '"<<token<<"' cannot have "<<(argCount)<<" arguments.\n\n";
-                        ERR_LINE2(token.tokenIndex,"bad");
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("Macro '"<<token<<"' cannot have "<<(argCount)<<" arguments.")
+                        ERR_LINE(token,"bad")
                     )
                     continue;
                 }
@@ -1321,8 +1382,10 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
         Env& env = info.environments.last();
         MacroCall* call = env.callIndex!=-1 ? &info.calls[env.callIndex] : nullptr;
         Token& tok = call ? call->certainMacro->name : info.now();
-        ERR_HEAD3(tok, "Reached recursion limit of "<<PREPROC_REC_LIMIT<<" for macros\n";
-            ERR_LINE2(tok.tokenIndex,"bad");
+        ERR_SECTION(
+            ERR_HEAD(tok)
+            ERR_MSG("Reached recursion limit of "<<PREPROC_REC_LIMIT<<" for macros.")
+            ERR_LINE(tok,"bad")
         )
         return SignalAttempt::FAILURE;
     }
@@ -1396,11 +1459,17 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
             //     }
             // }
 
-            // IMPORTANT: Setting line and column like this might cause
-            //  issues. The error messages are strange when displaying 
-            //  evaluation of macros. Does this fix that or make it worse?
-            // baseToken.column = macroName.column;
-            // baseToken.line = macroName.line;
+            // IMPORTANT: Setting the column, line, and flags is necessary because
+            //  the when looking at the tokens you would otherwise see them at the original
+            //  location at the definition of the macro. This messes with the lines in the
+            //  error messages and the debugger would show the location of the macro definition 
+            //  instead of where the macro was used.
+            baseToken.column = macroName.column;
+            baseToken.line = macroName.line;
+            if(i == info.outputTokens.size()-1) {
+                baseToken.flags &= ~(TOKEN_SUFFIX_LINE_FEED | TOKEN_SUFFIX_SPACE);
+                baseToken.flags |= finalFlags & (TOKEN_SUFFIX_LINE_FEED | TOKEN_SUFFIX_SPACE);
+            }
 
             info.tempStream->addToken(baseToken);
             // info.outTokens->addToken(baseToken);
@@ -1441,7 +1510,8 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
         //     // ParseDefine also makes sure that #define doesn't occur but we have to 
         //     // do it here to in case tokens were merged resulting in #define.
         //     if(Equal(info.get(info.at()+2),"define") || Equal(info.get(info.at()+2),"multidefine")) {
-        //         ERR_HEAD3(info.get(info.at()+2), "Macro definitions inside macros are not allowed.\n\n";
+        //         ERR_SECTION(
+    // ERR_HEAD(info.get(info.at()+2), "Macro definitions inside macros are not allowed.\n\n";
         //             ERR_LINE2(info.at()+2,"not allowed");
         //         )
         //         info.next();
@@ -1607,7 +1677,9 @@ void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
 
         Token name = info.get(info.at()+1);
         if(!(name.flags&TOKEN_MASK_QUOTED)){
-            ERR_HEAD3(name, "expected a string not "<<name<<"\n";
+            ERR_SECTION(
+                ERR_HEAD(name)
+                ERR_MSG("expected a string not "<<name<<".")
             )
             continue;
         }
@@ -1618,7 +1690,9 @@ void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
             info.next();
             token = info.get(info.at()+1);
             if(token.flags & TOKEN_MASK_QUOTED){
-                ERR_HEAD3(token, "don't use quotes with "<<log::YELLOW<<"as\n";
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Don't use quotes with "<<log::YELLOW<<"as.")
                 )
                 continue;
             }

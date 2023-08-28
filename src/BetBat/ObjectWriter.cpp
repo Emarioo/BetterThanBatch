@@ -6,6 +6,9 @@
 
 #include <time.h>
 
+// included for the Path struct
+#include "BetBat/Compiler.h"
+
 namespace COFF_Format {
     #define SWITCH_START(TYPE) const char* ToString(TYPE flags);\
         engone::Logger& operator<<(engone::Logger& logger, TYPE flags){return logger << ToString(flags);}\
@@ -132,15 +135,12 @@ ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
     if(!file)
         return nullptr;
     u8* filedata = TRACK_ARRAY_ALLOC(u8, fileSize);
-    // u8* filedata = (u8*)engone::Allocate(fileSize);
-    // defer {engone::Free(filedata,fileSize); };
 
     FileRead(file,filedata,fileSize);
     FileClose(file);
     if(!silent)
         log::out << "Read file "<<path << ", size: "<<fileSize<<"\n";
 
-    // ObjectFile* objectFile = (ObjectFile*)engone::Allocate(sizeof(ObjectFile));
     ObjectFile* objectFile = TRACK_ALLOC(ObjectFile);
     new(objectFile)ObjectFile();
     objectFile->_rawFileData = filedata;
@@ -481,8 +481,6 @@ void ObjectFile::writeFile(const std::string& path) {
     // log::out << "Final Size (aligned): "<<finalSize<<"\n";
 
     u8* outData = TRACK_ARRAY_ALLOC(u8,finalSize);
-    // u8* outData = (u8*)Allocate(finalSize);
-    // defer { Free(outData,finalSize); };
     defer { TRACK_ARRAY_FREE(outData,u8,finalSize); };
 
     Assert((u64)outData % 8 == 0);
@@ -617,8 +615,6 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
         outSize += program->debugInformation->functions.size() * 100;
         // IMPORTANT: We need to estimate better by checking the contnet of each function
     }
-    // u8* outData = (u8*)Allocate(outSize);
-    // defer { Free(outData, outSize); };
     u8* outData = TRACK_ARRAY_ALLOC(u8,outSize);
     defer { TRACK_ARRAY_FREE(outData, u8, outSize); };
     u64 outOffset = 0;
@@ -830,192 +826,270 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
             Debug types
         */
         TypeInformation typeInformation{};
+        typeInformation.functionTypeIndices.resize(di->functions.size());
         typeInformation.age = 0;
         memset(typeInformation.guid, 0x12, sizeof(typeInformation.guid));
-        typeInformation.functionTypeIndices.resize(di->functions.size());
-        bool result = WritePDBFile("bin/dev.pdb", di, &typeInformation);
+        Path objpath = path;
+        objpath = objpath.getAbsolute();
+        Path pdbpath = path;
+        pdbpath = pdbpath.getDirectory().text + pdbpath.getFileName(true).text + ".pdb";
+        pdbpath = pdbpath.getAbsolute();
+        bool result = WritePDBFile(pdbpath.text.c_str(), di, &typeInformation);
         if(!result) {
             return false;
         }
-
-        debugTSection->PointerToRawData = outOffset;
-        WRITE(u32, CV_SIGNATURE_C13);
-        u32 nextTypeIndex = 0x1000; // below 0x1000 are predefined types
-        
-        log::out << log::YELLOW << "LF_FUNC_ID should be in ID types\n";
-
-        u32 TYPESERVER_id = nextTypeIndex++;
-        {
-            u16* typeLength = (u16*)(outData + outOffset);
-            outOffset += 2;
-            WRITE(LeafType, LF_STRING_ID); // leaf type
-
-            // TODO: Does age or guid need to be some special values
-            memcpy(outData + outOffset, typeInformation.guid, sizeof(typeInformation.guid));
-            outOffset += 16;
-            WRITE(u32, typeInformation.age);
-
-            const char* pdbpath = "C:\\Users\\datao\\Desktop\\Backup\\CodeProjects\\BetterThanBatch\\bin\\dev.pdb";
-            strcpy((char*)outData + outOffset, pdbpath);
-            outOffset += strlen(pdbpath) + 1;
+        if(debugTSection) {
+            debugTSection->PointerToRawData = outOffset;
+            WRITE(u32, CV_SIGNATURE_C13);
+            u32 nextTypeIndex = 0x1000; // below 0x1000 are predefined types
             
-            *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+            u32 TYPESERVER_id = nextTypeIndex++;
+            {
+                u16* typeLength = (u16*)(outData + outOffset);
+                outOffset += 2;
+                WRITE(LeafType, LF_TYPESERVER2); // leaf type
+
+                // TODO: Does age or guid need to be some special values
+                memcpy(outData + outOffset, typeInformation.guid, sizeof(typeInformation.guid));
+                outOffset += 16;
+                WRITE(u32, typeInformation.age);
+
+                strcpy((char*)outData + outOffset, pdbpath.text.c_str());
+                outOffset += pdbpath.text.length() + 1;
+                
+                *typeLength = outOffset - sizeof(*typeLength) - ((u64)typeLength - (u64)outData);
+            }
+            debugTSection->SizeOfRawData = outOffset - debugTSection->PointerToRawData;
         }
-        debugTSection->SizeOfRawData = outOffset - debugTSection->PointerToRawData;
-        ALIGN4
-        
         /*
             Debug symbols
         */
-        funcSymbols._reserve(program->debugInformation->functions.size());
-        debugSSection->PointerToRawData = outOffset;
-        
-        // TODO: You may want to move some of this code into PDBWriter
-        // 4-byte alignment per sub section
-        // if((outOffset & 3) != 0)
-        //     outOffset += 4 - outOffset & 3;
-
-        WRITE(u32, CV_SIGNATURE_C13);
-        
-        Assert(funcSymbols.size() == 0);
-        // IMPORTANT: functions can't be overloaded
-        for(int i=0;i<di->functions.size();i++){
-            auto& fun = di->functions[i];
-            FuncSymbol sym;
-            sym.name = fun.name;
-            sym.address = fun.funcStart;
-            sym.symbolIndex = totalSymbols++;
-            // sym.sectionNumber = textSectionNumber;
-            funcSymbols.add(sym);
-        }
-
-        struct OffSegReloc {
-            u32 off_address = 0;
-            u32 seg_address = 0;
-            u32 symbolIndex = 0;
-        };
-        DynamicArray<OffSegReloc> offSegRelocations;
-
-        QuickArray<u32> fileIds;
-        fileIds.resize(di->files.size());
-        QuickArray<u32> fileStringIndex;
-        fileStringIndex.resize(di->files.size());
-        { // string table
-            *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_STRINGTABLE;
-            outOffset += 4;
-            u32* sectionLength = (u32*)(outData + outOffset);
-            outOffset += 4;
+        if(debugSSection) {
+            funcSymbols._reserve(program->debugInformation->functions.size());
+            ALIGN4
+            debugSSection->PointerToRawData = outOffset;
             
-            u32 startOffset = outOffset;
-
-            WRITE(char, 0); // empty string, C object files has them
+            WRITE(u32, CV_SIGNATURE_C13);
             
-            for(int i=0;i<di->files.size();i++) {
-                auto& file = di->files[i];
-                fileStringIndex[i] = outOffset - startOffset;
-                // TODO: Won't work if file path is absolute.
-                std::string absPath = engone::GetWorkingDirectory();
-                absPath += "\\";
-                absPath += file;
-                strcpy((char*)outData + outOffset, absPath.c_str());
-                outOffset += absPath.length() + 1;
-            }
-            *sectionLength = outOffset - sizeof(*sectionLength) - ((u64)sectionLength - (u64)outData);;
-        }
-        { // files
-            *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_FILECHKSMS;
-            outOffset += 4;
-            u32* sectionLength = (u32*)(outData + outOffset);
-            outOffset += 4;
-            u32 startOffset = outOffset;
-            for(int i=0;i<di->files.size();i++) {
-                auto& file = di->files[i];
-                u32 fileid = outOffset - startOffset;
-                fileIds[i] = fileid;
-
-                WRITE(u32, fileStringIndex[i]); // index into string table
-                WRITE(u8, 0); // byte count for checksum
-                WRITE(u8, CHKSUM_TYPE_NONE); // checksum type
-                
-                ALIGN4
-            }
-            *sectionLength = outOffset - sizeof(*sectionLength) - ((u64)sectionLength - (u64)outData);;
-        }
-        { // symbols
-            *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_SYMBOLS;
-            outOffset += 4;
-            u32* sectionLength = (u32*)(outData + outOffset);
-            outOffset += 4;
-
-            { // OBJNAME record
-                u16* recordLength = (u16*)(outData + outOffset);
-                outOffset += 2;
-                *(RecordType*)(outData + outOffset) = RecordType::S_OBJNAME;
-                outOffset += 2;
-
-                *(u32*)(outData + outOffset) = 0; // signature, usually 0 for some reason.
-                outOffset += 4;
-
-                // TODO: This won't work if path already is absolute.
-                //   Operating systems use different ways to indicate absolute paths
-                //   so you should use a class/struct for it. Like Path in Compiler.h.
-                std::string absPath = engone::GetWorkingDirectory();
-                absPath += "\\";
-                absPath += path;
-
-                strcpy((char*)outData + outOffset, absPath.c_str());
-                outOffset += absPath.length() + 1;
-
-                *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
-            }
-            { // COMPILE3 record
-                u16* recordLength = (u16*)(outData + outOffset);
-                outOffset += 2;
-                *(RecordType*)(outData + outOffset) = RecordType::S_COMPILE3;
-                outOffset += 2;
-
-                Record_COMPILE3* comp = (Record_COMPILE3*)(outData + outOffset);
-                outOffset += sizeof(Record_COMPILE3) - 2;
-
-                memset(comp, 0, sizeof(Record_COMPILE3));
-                comp->machine = CV_CFL_X64;
-                comp->verFEMinor = 1;
-                comp->verMinor = 1;
-                // comp->flags.iLanguage = 0xFF;
-                comp->flags.iLanguage = CV_CFL_C; // TEMPORARY:
-                
-                const char* name = "BTB Compiler";
-                strcpy((char*)outData + outOffset, name);
-                outOffset += strlen(name) + 1;
-
-                *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
-            }
-            // Not needed I think?
-            // { // BUILDINFO record
-            //     u16* recordLength = (u16*)(outData + outOffset);
-            //     outOffset += 2;
-            //     *(RecordType*)(outData + outOffset) = RecordType::S_BUILDINFO;
-            //     outOffset += 2;
-
-            //     WRITE(u32, BUILDINFO_id);
-
-            //     *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
-            // }
-            for(int i=0;i<di->functions.size();i++) {
+            Assert(funcSymbols.size() == 0);
+            // IMPORTANT: functions can't be overloaded
+            for(int i=0;i<di->functions.size();i++){
                 auto& fun = di->functions[i];
-                {
+                FuncSymbol sym;
+                sym.name = fun.name;
+                sym.address = fun.funcStart;
+                sym.symbolIndex = totalSymbols++;
+                // sym.sectionNumber = textSectionNumber;
+                funcSymbols.add(sym);
+            }
+
+            struct OffSegReloc {
+                u32 off_address = 0;
+                u32 seg_address = 0;
+                u32 symbolIndex = 0;
+            };
+            DynamicArray<OffSegReloc> offSegRelocations;
+
+            QuickArray<u32> fileIds;
+            fileIds.resize(di->files.size());
+            QuickArray<u32> fileStringIndex;
+            fileStringIndex.resize(di->files.size());
+            { // string table
+                ALIGN4
+                *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_STRINGTABLE;
+                outOffset += 4;
+                u32* sectionLength = (u32*)(outData + outOffset);
+                outOffset += 4;
+                u32 sectionStartOffset = outOffset;
+
+                WRITE(char, 0); // empty string, C object files has them
+                
+                for(int i=0;i<di->files.size();i++) {
+                    auto& file = di->files[i];
+                    fileStringIndex[i] = outOffset - sectionStartOffset;
+                    // TODO: Won't work if file path is absolute.
+                    // std::string absPath = engone::GetWorkingDirectory();
+                    // absPath += "\\";
+                    // absPath += file;
+                    Path apath = file;
+                    std::string absPath = apath.getAbsolute().text;
+                    strcpy((char*)outData + outOffset, absPath.c_str());
+                    outOffset += absPath.length() + 1;
+                }
+                *sectionLength = outOffset - sectionStartOffset;
+            }
+            { // files
+                ALIGN4
+                *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_FILECHKSMS;
+                outOffset += 4;
+                u32* sectionLength = (u32*)(outData + outOffset);
+                outOffset += 4;
+                u32 startOffset = outOffset;
+                for(int i=0;i<di->files.size();i++) {
+                    auto& file = di->files[i];
+                    u32 fileid = outOffset - startOffset;
+                    fileIds[i] = fileid;
+
+                    WRITE(u32, fileStringIndex[i]); // index into string table
+                    WRITE(u8, 0); // byte count for checksum
+                    WRITE(u8, CHKSUM_TYPE_NONE); // checksum type
+                    
+                    ALIGN4
+                }
+                *sectionLength = outOffset - sizeof(*sectionLength) - ((u64)sectionLength - (u64)outData);;
+            }
+            { // symbols
+                ALIGN4
+                *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_SYMBOLS;
+                outOffset += 4;
+                u32* sectionLength = (u32*)(outData + outOffset);
+                outOffset += 4;
+                u32 sectionStartOffset = outOffset;
+
+                { // OBJNAME record
                     u16* recordLength = (u16*)(outData + outOffset);
                     outOffset += 2;
-                    *(RecordType*)(outData + outOffset) = RecordType::S_GPROC32;
+                    *(RecordType*)(outData + outOffset) = RecordType::S_OBJNAME;
                     outOffset += 2;
 
-                    WRITE(u32, 0) // parent
-                    WRITE(u32, 0) // end
-                    WRITE(u32, 0) // next
-                    WRITE(u32, fun.funcEnd - fun.funcStart) // len
-                    WRITE(u32, fun.srcStart) // dbgstart
-                    WRITE(u32, fun.srcEnd) // dbgend
-                    WRITE(u32, typeInformation.functionTypeIndices[i]) // typeind
+                    *(u32*)(outData + outOffset) = 0; // signature, usually 0 for some reason.
+                    outOffset += 4;
+
+                    // TODO: This won't work if path already is absolute.
+                    //   Operating systems use different ways to indicate absolute paths
+                    //   so you should use a class/struct for it. Like Path in Compiler.h.
+                    // std::string absPath = engone::GetWorkingDirectory();
+                    // absPath += "\\";
+                    // absPath += path;
+
+                    strcpy((char*)outData + outOffset, objpath.text.c_str());
+                    outOffset += objpath.text.length() + 1;
+
+                    *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                }
+                { // COMPILE3 record
+                    u16* recordLength = (u16*)(outData + outOffset);
+                    outOffset += 2;
+                    *(RecordType*)(outData + outOffset) = RecordType::S_COMPILE3;
+                    outOffset += 2;
+
+                    Record_COMPILE3* comp = (Record_COMPILE3*)(outData + outOffset);
+                    outOffset += sizeof(Record_COMPILE3) - 2;
+
+                    memset(comp, 0, sizeof(Record_COMPILE3));
+                    comp->machine = CV_CFL_X64;
+                    comp->verFEMinor = 1;
+                    comp->verMinor = 1;
+                    comp->flags.iLanguage = 0xFF;
+                    // comp->flags.iLanguage = CV_CFL_C; // TEMPORARY:
+                    
+                    const char* name = "BTB Compiler";
+                    strcpy((char*)outData + outOffset, name);
+                    outOffset += strlen(name) + 1;
+
+                    *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                }
+                // Not needed I think?
+                // { // BUILDINFO record
+                //     u16* recordLength = (u16*)(outData + outOffset);
+                //     outOffset += 2;
+                //     *(RecordType*)(outData + outOffset) = RecordType::S_BUILDINFO;
+                //     outOffset += 2;
+
+                //     WRITE(u32, BUILDINFO_id);
+
+                //     *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                // }
+                for(int i=0;i<di->functions.size();i++) {
+                    auto& fun = di->functions[i];
+                    {
+                        u16* recordLength = (u16*)(outData + outOffset);
+                        outOffset += 2;
+                        *(RecordType*)(outData + outOffset) = RecordType::S_GPROC32;
+                        outOffset += 2;
+
+                        WRITE(u32, 0) // parent
+                        WRITE(u32, 0) // end
+                        WRITE(u32, 0) // next
+                        WRITE(u32, fun.funcEnd - fun.funcStart) // len
+                        WRITE(u32, fun.srcStart) // dbgstart
+                        WRITE(u32, fun.srcEnd) // dbgend
+                        WRITE(u32, typeInformation.functionTypeIndices[i]) // typeind
+
+                        OffSegReloc reloc;
+                        reloc.symbolIndex = funcSymbols[i].symbolIndex;
+                        reloc.off_address = outOffset - debugSSection->PointerToRawData;
+                        WRITE(u32, 0) // off
+                        reloc.seg_address = outOffset - debugSSection->PointerToRawData;
+                        WRITE(u16, 0) // seg
+                        offSegRelocations.add(reloc);
+                        
+                        WRITE(u8, 0) // flags, I THINK ZERO WILL WORK BUT MAYBE NOT?
+
+                        strcpy((char*)outData + outOffset, fun.name.c_str());
+                        outOffset += fun.name.length() + 1;
+
+                        *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                    }
+                    {
+                        u16* recordLength = (u16*)(outData + outOffset);
+                        outOffset += 2;
+                        *(RecordType*)(outData + outOffset) = RecordType::S_FRAMEPROC;
+                        outOffset += 2;
+
+                        WRITE(u32, 0) // size of frame
+                        WRITE(u32, 0) // padding in frame
+                        WRITE(u32, 0) // padding offset
+                        WRITE(u32, 0) // bytes for saved registers
+                        WRITE(u32, 0) // exception handler offset
+                        WRITE(u16, 0) // excpetion handler id
+                        WRITE(u32, 0) // flags
+                        
+                        // These might need to bes in the flags but I am not sure.
+                        // u32 encodedLocalBasePointer : 2;  // record function's local pointer explicitly.
+                        // u32 encodedParamBasePointer : 2;  // record function's parameter pointer explicitly.
+
+                        *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                    }
+                    for(int j=0;j<fun.localVariables.size();j++){
+                        auto& var = fun.localVariables[j];
+                        {
+                            u16* recordLength = (u16*)(outData + outOffset);
+                            outOffset += 2;
+                            *(RecordType*)(outData + outOffset) = RecordType::S_REGREL32;
+                            outOffset += 2;
+
+                            WRITE(u32, var.frameOffset); // offset in frame
+                            // TODO: Don't always use int as type
+                            WRITE(u32, T_INT4); // type
+                            WRITE(u16, CV_AMD64_RBP); // Object files from C uses AMD64 instead of x64
+
+                            strcpy((char*)outData + outOffset, var.name.c_str());
+                            outOffset += var.name.length() + 1;
+
+                            *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                        }
+                    }
+                    {
+                        u16* recordLength = (u16*)(outData + outOffset);
+                        outOffset += 2;
+                        *(RecordType*)(outData + outOffset) = RecordType::S_PROC_ID_END;
+                        outOffset += 2;
+
+                        *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                    }
+                }
+
+                *sectionLength = outOffset - sectionStartOffset;
+            }
+            { // lines
+                ALIGN4
+                for(int i=0;i<di->functions.size();i++) {
+                    auto& fun = di->functions[i];
+                    *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_LINES;
+                    outOffset += 4;
+                    u32* sectionLength = (u32*)(outData + outOffset);
+                    outOffset += 4;
 
                     OffSegReloc reloc;
                     reloc.symbolIndex = funcSymbols[i].symbolIndex;
@@ -1024,134 +1098,63 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
                     reloc.seg_address = outOffset - debugSSection->PointerToRawData;
                     WRITE(u16, 0) // seg
                     offSegRelocations.add(reloc);
-                    
-                    WRITE(u8, 0) // flags, I THINK ZERO WILL WORK BUT MAYBE NOT?
+                    WRITE(u16, 0); // flags, you can specify columns if you want; we don't.
+                    WRITE(u32, fun.funcEnd - fun.funcStart); // size of this block or something?
 
-                    strcpy((char*)outData + outOffset, fun.name.c_str());
+                    // TODO: Support columns? CV_LINES_HAVE_COLUMNS
 
-                    *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
-                }
-                {
-                    u16* recordLength = (u16*)(outData + outOffset);
-                    outOffset += 2;
-                    *(RecordType*)(outData + outOffset) = RecordType::S_FRAMEPROC;
-                    outOffset += 2;
+                    WRITE(u32, fileIds[fun.fileIndex]);
+                    WRITE(u32, fun.lines.size());
+                    WRITE(u32, 12 + fun.lines.size() * sizeof(CV_Line_t)); // file block
 
-                    WRITE(u32, 0) // size of frame
-                    WRITE(u32, 0) // padding in frame
-                    WRITE(u32, 0) // padding offset
-                    WRITE(u32, 0) // bytes for saved registers
-                    WRITE(u32, 0) // exception handler offset
-                    WRITE(u16, 0) // excpetion handler id
-                    WRITE(u32, 0) // flags
-                    
-                    // These might need to bes in the flags but I am not sure.
-                    // u32 encodedLocalBasePointer : 2;  // record function's local pointer explicitly.
-                    // u32 encodedParamBasePointer : 2;  // record function's parameter pointer explicitly.
-
-                    *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
-                }
-                for(int j=0;j<fun.localVariables.size();j++){
-                    auto& var = fun.localVariables[j];
-                    {
-                        u16* recordLength = (u16*)(outData + outOffset);
-                        outOffset += 2;
-                        *(RecordType*)(outData + outOffset) = RecordType::S_REGREL32;
-                        outOffset += 2;
-
-                        WRITE(u32, var.frameOffset); // offset in frame
-                        // TODO: Don't always use int as type
-                        WRITE(u32, T_INT4); // type
-                        WRITE(u16, CV_AMD64_RBP); // Object files from C uses AMD64 instead of x64
-
-                        strcpy((char*)outData + outOffset, var.name.c_str());
-                        outOffset += var.name.length() + 1;
-
-                        *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                    for (int j=0;j<fun.lines.size();j++) {
+                        auto& line = fun.lines[j];
+                        // line.
+                        CV_Line_t data;
+                        data.fStatement = 1;
+                        if(j == 0)
+                            data.offset = 0;
+                        else
+                            data.offset = line.funcOffset - fun.funcStart;
+                        data.linenumStart = line.lineNumber;
+                        data.deltaLineEnd = 0;
+                        WRITE(CV_Line_t, data);
                     }
-                }
-                {
-                    u16* recordLength = (u16*)(outData + outOffset);
-                    outOffset += 2;
-                    *(RecordType*)(outData + outOffset) = RecordType::S_PROC_ID_END;
-                    outOffset += 2;
-
-                    *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                    *sectionLength = outOffset - sizeof(*sectionLength) - ((u64)sectionLength - (u64)outData);;
                 }
             }
 
-            *sectionLength = outOffset - sizeof(*sectionLength) - ((u64)sectionLength - (u64)outData);;
-        }
-        { // lines
-            for(int i=0;i<di->functions.size();i++) {
-                auto& fun = di->functions[i];
-                *(SubSectionType*)(outData + outOffset) = SubSectionType::DEBUG_S_LINES;
-                outOffset += 4;
-                u32* sectionLength = (u32*)(outData + outOffset);
-                outOffset += 4;
+            ALIGN4
 
-                OffSegReloc reloc;
-                reloc.symbolIndex = funcSymbols[i].symbolIndex;
-                reloc.off_address = outOffset - debugSSection->PointerToRawData;
-                WRITE(u32, 0) // off
-                reloc.seg_address = outOffset - debugSSection->PointerToRawData;
-                WRITE(u16, 0) // seg
-                offSegRelocations.add(reloc);
-                WRITE(u16, 0); // flags, you can specify columns if you want; we don't.
-                WRITE(u32, fun.funcEnd - fun.funcStart); // size of this block or something?
+            CHECK
+            debugSSection->SizeOfRawData = outOffset - debugSSection->PointerToRawData;
 
-                // TODO: Support columns? CV_LINES_HAVE_COLUMNS
+            if(offSegRelocations.size()!=0){
+                debugSSection->PointerToRelocations = outOffset;
+                debugSSection->NumberOfRelocations = offSegRelocations.size() * 2;
 
-                WRITE(u32, fileIds[fun.fileIndex]);
-                WRITE(u32, fun.lines.size());
-                WRITE(u32, 12 + fun.lines.size() * sizeof(CV_Line_t)); // file block
+                for(int i=0;i<offSegRelocations.size();i++){
+                    auto& reloc = offSegRelocations[i];
+                    {
+                        COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
+                        outOffset += COFF_Relocation::SIZE;
+                        CHECK
+                        
+                        coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_SECREL;
+                        coffReloc->VirtualAddress = reloc.off_address;
 
-                for (int j=0;j<fun.lines.size();j++) {
-                    auto& line = fun.lines[j];
-                    // line.
-                    CV_Line_t data;
-                    data.fStatement = 1;
-                    data.offset = line.funcOffset;
-                    data.linenumStart = line.lineNumber;
-                    data.deltaLineEnd = 0;
-                    WRITE(CV_Line_t, data);
-                }
-                *sectionLength = outOffset - sizeof(*sectionLength) - ((u64)sectionLength - (u64)outData);;
-            }
-        }
+                        coffReloc->SymbolTableIndex = reloc.symbolIndex;
+                    }
+                    {
+                        COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
+                        outOffset += COFF_Relocation::SIZE;
+                        CHECK
+                        
+                        coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_SECTION;
+                        coffReloc->VirtualAddress = reloc.seg_address;
 
-        // 4-byte alignment per sub section
-        // if((outOffset & 3) != 0)
-        //     outOffset += 4 - outOffset & 3;
-        
-        CHECK
-        debugSSection->SizeOfRawData = outOffset - debugSSection->PointerToRawData;
-
-        if(offSegRelocations.size()!=0){
-            debugSSection->PointerToRelocations = outOffset;
-            debugSSection->NumberOfRelocations = offSegRelocations.size() * 2;
-
-            for(int i=0;i<offSegRelocations.size();i++){
-                auto& reloc = offSegRelocations[i];
-                {
-                    COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
-                    outOffset += COFF_Relocation::SIZE;
-                    CHECK
-                    
-                    coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_SECREL;
-                    coffReloc->VirtualAddress = reloc.off_address;
-
-                    coffReloc->SymbolTableIndex = reloc.symbolIndex;
-                }
-                {
-                    COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
-                    outOffset += COFF_Relocation::SIZE;
-                    CHECK
-                    
-                    coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_SECTION;
-                    coffReloc->VirtualAddress = reloc.seg_address;
-
-                    coffReloc->SymbolTableIndex = reloc.symbolIndex;
+                        coffReloc->SymbolTableIndex = reloc.symbolIndex;
+                    }
                 }
             }
         }

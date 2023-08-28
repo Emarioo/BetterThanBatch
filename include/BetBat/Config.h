@@ -19,7 +19,7 @@
 ############### */
 
 // DEV_FILE defaults to dev.btb if none is specified
-#define DEV_FILE "examples/debug-test.btb"
+// #define DEV_FILE "examples/debug_test.btb"
 #define CONFIG_DEFAULT_TARGET WINDOWS_x64
 
 // #define RUN_TEST_SUITE
@@ -33,7 +33,7 @@
 // for debugging purposes. This is not meant to be a small optimized build.
 #define MINIMAL_DEBUG
 // Generates object file and debug information but no executable
-#define DISABLE_LINKING
+// #define DISABLE_LINKING
 
 // With this flag, some shortcuts and other improvements are made
 // when compiling. Push and pop after each other is redundant for example.

@@ -1943,15 +1943,23 @@ struct PDBFile {
     // A pointer can only be taken from a stream if it exists on one block.
 
     // Memory from src is copied to the offset inside the stream.
-    bool write(u32 streamNumber, u32 offset, u32 bytes, u8* src);
+    bool write(u32 streamNumber, u32 offset, u32 bytes, void* src);
     // Memory from the offset in the stream is copied to dst.
-    bool read(u32 streamNumber, u32 offset, u32 bytes, u8* dst);
+    bool read(u32 streamNumber, u32 offset, u32 bytes, void* dst);
+    template<typename T>
+    bool writeValue(u32 streamNumber, u32 offset, const T& value) {
+        return write(streamNumber, offset, sizeof(T), (void*)&value);
+    }
 
     // Returns a pointer to the request memory range.
     // Returns nullptr if the memory range [offset, offset + bytes] exists within
     // more than one block.
+    // DO NOT write to an address beyond the range. You may write to blocks of other streams.
     u8* takePointer(u32 streamNumber, u32 offset, u32 bytes);
 
+    ~PDBFile() {
+        cleanup();
+    }
     // Makes the struct as good as new (frees all memory).
     void cleanup();
     // Called if the pdb came from Deconstruct.
@@ -1959,6 +1967,7 @@ struct PDBFile {
     // Call Destroy when you are done with the PDB.
     // Deserialize is an alternative name for this function.
     static PDBFile* Deconstruct(const char* path);
+    static PDBFile* CreateEmpty();
 
     // PDB header
     PDBHeader* getPDB() { return (PDBHeader*)takePointer(PDB_NUMBER, 0, sizeof(PDBHeader)); }
@@ -1984,6 +1993,7 @@ struct PDBFile {
 
     u8* _baseData = nullptr; // allocation
     u32 _baseSize = 0; // size of data allocation
+    u32 _blockCount = 0;
 
     u32 validFPM = 1; // PDB from disc may use 2
 
@@ -1995,26 +2005,25 @@ struct PDBFile {
     };
     DynamicArray<Stream> streams;
 
-    // multistream file header
-    MSFHeader* getMSF() { return (MSFHeader*)_baseData; }
-
     // Returns -1 on failure
     u32 requestBlock();
 
-    bool resizeBaseByBlocks(u32 newBlockCount);
+    static const u32 MIN_BLOCK_COUNT = 5 + 5;
+    bool reserveTotalBlocks(u32 newBlockCount);
+    bool setFreeBlock(i32 blockIndex, bool beFree);
+    bool isBlockFree(i32 blockIndex);
+};
+/*
+    Older unused code.
+    It's important because it's kind of working while everything else isn't (at the time of writing atow).
 
-    /*
-        Older unused code.
-        It's important because it's kind of working while everything else isn't (at the time of writing atow).
-
-        Other stuff, mostly for testing.
-    */
+    Other stuff, mostly for testing.
+*/
+struct PDBFile_old {
     // I had a hard time getting the format right. The code in this function
     // was the first that successfully created a PDB.
     static bool WriteEmpty(const char* path);
-
-    static bool WriteFile(PDBFile* pdb, const char* path);
-
+    static PDBFile_old* Deconstruct(const char* path);
 
     u8* rawData = nullptr;
     u32 rawSize = 0;
@@ -2032,7 +2041,6 @@ struct PDBFile {
     };
     DynamicArray<StreamOld*> streams2;
     DynamicArray<StreamOld*> streams_old;
-
 };
 
 const char* ToString(LeafType type, bool nullAsUnknown = false);
@@ -2040,5 +2048,3 @@ const char* ToString(SubSectionType type, bool nullAsUnknown = false);
 const char* ToString(RecordType type, bool nullAsUnknown = false);
 void DeconstructDebugSymbols(u8* buffer, u32 size);
 void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB = false);
-bool DeconstructPDB(const char* path);
-

@@ -24,16 +24,6 @@ void NativeRegistry::DestroyGlobal(){
     // if(s_globalRegistry)
         // NativeRegistry::Destroy(s_globalRegistry);
 }
-// NativeRegistry* NativeRegistry::Create(){
-//     // Assert(false);
-//     auto ptr = (NativeRegistry*)engone::Allocate(sizeof(NativeRegistry));
-//     new(ptr)NativeRegistry();
-//     return ptr;
-// }
-// void NativeRegistry::Destroy(NativeRegistry* ptr){
-//     ptr->~NativeRegistry();
-//     engone::Free(ptr, sizeof(NativeRegistry));
-// }
 
 NativeRegistry::NativeFunction* NativeRegistry::findFunction(const Token& name){
     Assert(initialized);

@@ -1,17 +1,10 @@
 #include "BetBat/Generator.h"
 #include "BetBat/Compiler.h"
 
-// #undef ERR_HEAD2
-// #define ERR_HEAD2(R) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000")
-
-// #undef ERR_SECTION(
-// ERR_HEAD
-// #define ERR_SECTION(
-// ERR_HEAD(R, M) info.errors++; engone::log::out << ERR_DEFAULT_R(R,"Gen. error","E0000") << M
-
 #undef ERRTYPE
-#define ERRTYPE(R, LT, RT, M) ERR_SECTION(ERR_HEAD(R)ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(R,info.ast->typeToString(LT)) ERR_LINE(R,info.ast->typeToString(RT)))
-// #define ERRTYPE2(R, LT, RT) ERR_HEAD2(R) << "Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " "
+#undef ERRTYPE1
+#define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD(L) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(L,info.ast->typeToString(LT)) ERR_LINE(R,info.ast->typeToString(RT)))
+#define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD(R) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(R,info.ast->typeToString(RT)))
 
 #undef WARN_HEAD3
 #define WARN_HEAD3(R, M) info.compileInfo->warnings++;engone::log::out << WARN_DEFAULT_R(R,"Gen. warning","W0000") << M
@@ -28,7 +21,6 @@
 /* #region  */
 GenInfo::LoopScope* GenInfo::pushLoop(){
     LoopScope* ptr = TRACK_ALLOC(LoopScope);
-    // LoopScope* ptr = (LoopScope*)engone::Allocate(sizeof(LoopScope));
     new(ptr) LoopScope();
     if(!ptr)
         return nullptr;
@@ -403,12 +395,23 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
         return false;
     if (from == to)
         return true;
-    TypeId vp = AST_VOID;
-    vp.setPointerLevel(1);
-    if(from.isPointer() && (to == vp || to==AST_UINT64 || to==AST_INT64 || to==AST_BOOL))
-        return true;
-    if((from == vp||from==AST_UINT64||from==AST_INT64 || from==AST_BOOL) && to.isPointer())
-        return true;
+    if(from.isPointer()) {
+        if (to == AST_BOOL)
+            return true;
+        if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
+            from.getPointerLevel() - to.getPointerLevel() == 1)
+            return true;
+        if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+            return true;
+    }
+    if(to.isPointer()) {
+        if ((from.baseType() == AST_UINT64 || from.baseType() == AST_INT64) && 
+            to.getPointerLevel() - from.getPointerLevel() == 1)
+            return true;
+        if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+            return true;
+    }
+
     // TODO: I just threw in currentScopeId. Not sure if it is supposed to be in all cases.
     // auto fti = info.ast->getTypeInfo(from);
     // auto tti = info.ast->getTypeInfo(to);
@@ -468,7 +471,11 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
         return true;
     }
     // Asserts when we have missed a conversion
-    Assert(!info.ast->castable(from,to));
+    if(!info.hasForeignErrors()){
+        std::string l = info.ast->typeToString(from);
+        std::string r = info.ast->typeToString(to);
+        Assert(!info.ast->castable(from,to));
+    }
     return false;
 
     // allow cast between unsigned/signed numbers of all sizes. It's the most convenient.
@@ -538,11 +545,6 @@ u8 ASTOpToBytecode(TypeId astOp, bool floatVersion){
             CASE(AST_NOT_EQUAL, BC_FNEQ)
         // }
         // TODO: do OpToStr first and then if it fails print the typeId number
-        // log::out
-        // << log::RED << "GenExpr: operation " << expression->typeId.getId() << " not implemented\n";
-        // ERR_HEAD2(expression->tokenRange) << " operation "<<expression->tokenRange.firstToken << " not available for types "<<
-        //     info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<"\n";
-        // 
     } else {
         // switch(op){
             if(false) ;
@@ -748,7 +750,7 @@ SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId
                 TypeId tempTypeId = {};
                 SignalDefault result = GenerateExpression(info, member.defaultValue, &tempTypeId);
                 if (!PerformSafeCast(info, tempTypeId, memdata.typeId)) {
-                    ERRTYPE(member.defaultValue->tokenRange, tempTypeId, memdata.typeId, "(default member)\n");
+                    ERRTYPE(member.name, member.defaultValue->tokenRange, tempTypeId, memdata.typeId, "(default member)\n");
                 }
                 if(baseReg!=0){
                     SignalDefault result = GeneratePop(info, baseReg, offset + memdata.offset, memdata.typeId);
@@ -1679,9 +1681,6 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // A simple check to see if the identifier in the expr node is an enum type.
             // no need to check for pointers or so.
             if (typeInfo && typeInfo->astEnum) {
-                // ERR_HEAD2(expression->tokenRange) << "cannot access "<<(expression->member?*expression->member:"?")<<" from non-enum "<<*expression->name<<"\n";
-                // 
-                // return SignalDefault::FAILURE;
                 outTypeIds->add(typeInfo->id);
                 return SignalDefault::SUCCESS;
             }
@@ -2062,13 +2061,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 //     info.addPush(creg);
                 //     outTypeIds->add(castType);
                 //     // data is fine as it is, just change the data type
-                // } else {
+                // } else { 
                 bool yes = PerformSafeCast(info, ltype, castType);
                 if (yes) {
                     outTypeIds->add(castType);
                 } else {
                     Assert(info.hasForeignErrors());
-                    // ERR_HEAD2(expression->tokenRange) << "cannot cast " << info.ast->typeToString(ltype) << " to " << info.ast->typeToString(castType) << "\n";
                     
                     outTypeIds->add(ltype); // ltype since cast failed
                     return SignalDefault::FAILURE;
@@ -2234,14 +2232,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 TypeId tid = structInfo->getMember(index).typeId;
                 if (!PerformSafeCast(info, exprId, tid)) {   // implicit conversion
                     // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                    ERRTYPE(expr->tokenRange, exprId, tid, "(initializer)");
+                    ERRTYPE1(expr->tokenRange, exprId, tid, "(initializer)");
                     
                     continue;
                 }
             }
             // if((int)exprs.size()!=(int)structInfo->astStruct->members.size()){
-            //     ERR_HEAD2(expression->tokenRange) << "Found "<<exprs.size()<<" initializer values but "<<*expression->name<<" requires "<<structInfo->astStruct->members.size()<<"\n";
-            //     log::out <<log::RED<< "LN "<<expression->tokenRange.firstFToken.line <<": "; expression->tokenRange.print();log::out << "\n";
             //     // return SignalDefault::FAILURE;
             // }
 
@@ -2518,7 +2514,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 if (!PerformSafeCast(info, rtype, assignType)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
                     // std::string leftstr = info.ast->typeToString(assignType);
                     // std::string rightstr = info.ast->typeToString(rtype);
-                    ERRTYPE(expression->tokenRange, assignType, rtype, ""
+                    ERRTYPE1(expression->tokenRange, assignType, rtype, ""
                         // ERR_LINE(expression->left->tokenRange, leftstr.c_str());
                         // ERR_LINE(expression->right->tokenRange,rightstr.c_str());
                     )
@@ -2856,7 +2852,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if (!PerformSafeCast(info, rtype, ltype)) { // CASTING RIGHT VALUE TO TYPE ON THE LEFT
                         std::string leftstr = info.ast->typeToString(ltype);
                         std::string rightstr = info.ast->typeToString(rtype);
-                        ERRTYPE(expression->tokenRange, ltype, rtype, ""
+                        ERRTYPE1(expression->tokenRange, ltype, rtype, ""
                             // ERR_LINE(expression->left->tokenRange, leftstr.c_str());
                             // ERR_LINE(expression->right->tokenRange,rightstr.c_str());
                         )
@@ -3047,14 +3043,26 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         //     continue;
         // }
 
-        Assert(!info.compileInfo->compileOptions->useDebugInformation);
+        // Assert(!info.compileInfo->compileOptions->useDebugInformation);
         // IMPORTANT: How to deal with overloading and polymorphism?
         // add #0 at the end of the function name?
         // DebugInformation::Function* dfun = &di->functions.last();
         // dfun->name = "main";
         // dfun->fileIndex = di->files.size();
         // di->files.add(info.compileInfo->compileOptions->initialSourceFile.text);
+        DebugInformation* di = info.code->debugInformation;
+        Assert(di);
         
+        info.debugFunctionIndex = di->functions.size();
+        di->functions.add({});
+        DebugInformation::Function* dfun = &di->functions.last();
+        dfun->name = funcImpl->name;
+        if(function->body->statements.size()>0) {
+            dfun->fileIndex = di->addOrGetFile(function->body->statements[0]->tokenRange.tokenStream()->streamName);
+        } else {
+            dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->initialSourceFile.text);
+        }
+        dfun->funcImpl = nullptr; // func with no args or return types
 
         _GLOG(log::out << "Function " << funcImpl->name << "\n";)
         
@@ -3076,6 +3084,13 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         info.virtualStackPointer = GenInfo::VIRTUAL_STACK_START;
         // reset frame offset at beginning of function
         info.currentFrameOffset = 0;
+
+        dfun->funcStart = info.code->length();
+
+        #define DFUN_ADD_VAR(NAME, OFFSET, TYPE) dfun->localVariables.add({});\
+                            dfun->localVariables.last().name = NAME;\
+                            dfun->localVariables.last().frameOffset = OFFSET;\
+                            dfun->localVariables.last().typeId = TYPE;
 
         if(function->callConvention == BETCALL) {
             if (function->arguments.size() != 0) {
@@ -3099,6 +3114,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // var->globalData = false;
                     varinfo->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + argImpl.offset;
                     _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
+                    DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
                 }
                 _GLOG(log::out << "\n";)
             }
@@ -3169,50 +3185,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             //  Generating them multiple times for each function is bad.
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
-            SignalDefault result = GenerateBody(info, function->body);
-
-            for(int i=0;i<(int)function->polyArgs.size();i++){
-                auto& arg = function->polyArgs[i];
-                arg.virtualType->id = {}; // disable types
-            }
-            if(astStruct){
-                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-                    auto& arg = astStruct->polyArgs[i];
-                    arg.virtualType->id = {}; // disable types
-                }
-            }
-
-            // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
-            if (funcImpl->returnTypes.size() != 0) {
-                // check last statement for a return and "exit" early
-                bool foundReturn = function->body->statements.size()>0
-                    && function->body->statements.get(function->body->statements.size()-1)
-                    ->type == ASTStatement::RETURN;
-                // TODO: A return statement might be okay in an inner scope and not necessarily the
-                //  top scope.
-                if(!foundReturn){
-                    for(auto it : function->body->statements){
-                        if (it->type == ASTStatement::RETURN) {
-                            foundReturn = true;
-                            break;
-                        }
-                    }
-                    if (!foundReturn) {
-                        ERR_SECTION(
-                            ERR_HEAD(function->tokenRange)
-                            ERR_MSG("Missing return statement in '" << function->name << "'.")
-                            ERR_LINE(function->tokenRange,"put a return in the body")
-                        )
-                    }
-                }
-            }
-            if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
-                // add return if it doesn't exist
-                
-                info.addPop(BC_REG_FP);
-                info.addInstruction({BC_RET});
-            }
-        } else if(function->callConvention == STDCALL) {
+        }  else if(function->callConvention == STDCALL) {
             if (function->arguments.size() != 0) {
                 _GLOG(log::out << "set " << function->arguments.size() << " args\n");
                 // int offset = 0;
@@ -3221,9 +3194,9 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     auto &arg = function->arguments[i];
                     auto &argImpl = funcImpl->argumentTypes[i];
                     Assert(arg.identifier); // bug in compiler?
-                    auto var = info.ast->identifierToVariable(arg.identifier);
-                    // auto var = info.ast->addVariable(info.currentScopeId, arg.name);
-                    if (!var) {
+                    auto varinfo = info.ast->identifierToVariable(arg.identifier);
+                    // auto varinfo = info.ast->addVariable(info.currentScopeId, arg.name);
+                    if (!varinfo) {
                         ERR_SECTION(
                             ERR_HEAD(arg.name.range())
                             ERR_MSG(arg.name << " is already defined.")
@@ -3231,7 +3204,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                         )
                     }
                     // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
-                    u8 size = info.ast->getTypeSize(var->versions_typeId[info.currentPolyVersion]);
+                    u8 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
                     if(size>8) {
                         ERR_SECTION(
                             ERR_HEAD(arg.name)
@@ -3242,8 +3215,9 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
                     // stdcall should put first 4 args in registers but the function will put
                     // the arguments onto the stack automatically so in the end 8*i will work fine.
-                    var->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + 8 * i;
-                    _GLOG(log::out << " " <<"["<<var->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
+                    varinfo->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + 8 * i;
+                    _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
+                    DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
                 }
                 _GLOG(log::out << "\n";)
             }
@@ -3315,8 +3289,57 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             //  Generating them multiple times for each function is bad.
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
-            SignalDefault result = GenerateBody(info, function->body);
+        }
+        
+        dfun->srcStart = info.code->length();
+        
+        SignalDefault result = GenerateBody(info, function->body);
 
+        dfun->srcEnd = info.code->length();
+
+        if(function->callConvention == BETCALL) {
+            for(int i=0;i<(int)function->polyArgs.size();i++){
+                auto& arg = function->polyArgs[i];
+                arg.virtualType->id = {}; // disable types
+            }
+            if(astStruct){
+                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
+                    auto& arg = astStruct->polyArgs[i];
+                    arg.virtualType->id = {}; // disable types
+                }
+            }
+
+            // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
+            if (funcImpl->returnTypes.size() != 0) {
+                // check last statement for a return and "exit" early
+                bool foundReturn = function->body->statements.size()>0
+                    && function->body->statements.get(function->body->statements.size()-1)
+                    ->type == ASTStatement::RETURN;
+                // TODO: A return statement might be okay in an inner scope and not necessarily the
+                //  top scope.
+                if(!foundReturn){
+                    for(auto it : function->body->statements){
+                        if (it->type == ASTStatement::RETURN) {
+                            foundReturn = true;
+                            break;
+                        }
+                    }
+                    if (!foundReturn) {
+                        ERR_SECTION(
+                            ERR_HEAD(function->tokenRange)
+                            ERR_MSG("Missing return statement in '" << function->name << "'.")
+                            ERR_LINE(function->tokenRange,"put a return in the body")
+                        )
+                    }
+                }
+            }
+            if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
+                // add return if it doesn't exist
+                
+                info.addPop(BC_REG_FP);
+                info.addInstruction({BC_RET});
+            }
+        } else if(function->callConvention == STDCALL) {
             for(int i=0;i<(int)function->polyArgs.size();i++){
                 auto& arg = function->polyArgs[i];
                 arg.virtualType->id = {}; // disable types
@@ -3359,13 +3382,13 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 info.addInstruction({BC_RET});
             }
         }
+        
+        dfun->funcEnd = info.code->length() - 1;
+
         // Assert(info.virtualStackPointer == GenInfo::VIRTUAL_STACK_START);
         // Assert(info.currentFrameOffset == 0);
         // needs to be done after frame pop
         // info.restoreStackMoment(info.functionStackMoment, false, true);
-        // for (auto &arg : function->arguments) {
-        //     info.ast->removeIdentifier(info.currentScopeId, arg.name);
-        // }
     }
     return SignalDefault::SUCCESS;
 }
@@ -3739,7 +3762,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
                     if(!PerformSafeCast(info, typeFromExpr, varinfo->versions_typeId[info.currentPolyVersion])){
                         if(!info.hasForeignErrors()){
-                            ERRTYPE(statement->tokenRange, varinfo->versions_typeId[info.currentPolyVersion], typeFromExpr, "(assign)."
+                            ERRTYPE1(statement->tokenRange, typeFromExpr, varinfo->versions_typeId[info.currentPolyVersion], "(assign)."
                                 // ERR_LINE(statement->tokenRange,"bad");
                             )
                         }
@@ -4264,7 +4287,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         if (!PerformSafeCast(info, dtype, retType.typeId)) {
                             // if(info.currentFunction->returnTypes[argi]!=dtype){
 
-                            ERRTYPE(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)");
+                            ERRTYPE1(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)");
 
                             GeneratePop(info, 0, 0, dtype); // throw away value to prevent cascading bugs
                         }
@@ -4299,7 +4322,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         if (!PerformSafeCast(info, dtype, retType.typeId)) {
                             // if(info.currentFunction->returnTypes[argi]!=dtype){
 
-                            ERRTYPE(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)\n");
+                            ERRTYPE1(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)\n");
                             
                             GeneratePop(info, 0, 0, dtype);
                         } else {
@@ -4529,9 +4552,13 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     // this function is the last function we are adding. Taking the pointer is therefore not dangerous.
     DebugInformation::Function* dfun = &di->functions.last();
     dfun->name = "main";
-    dfun->fileIndex = di->files.size();
-    di->files.add(info.compileInfo->compileOptions->initialSourceFile.text);
     
+    if(info.ast->mainBody->statements.size()>0) {
+        dfun->fileIndex = di->addOrGetFile(info.ast->mainBody->statements[0]->tokenRange.tokenStream()->streamName);
+    } else {
+        dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->initialSourceFile.text);
+    }
+
     dfun->funcImpl = nullptr; // func with no args or return types
 
     dfun->funcStart = info.code->length();

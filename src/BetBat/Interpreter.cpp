@@ -22,6 +22,22 @@ void Interpreter::cleanup(){
     cmdArgs.ptr = nullptr;
     cmdArgs.len = 0;
 }
+void Interpreter::reset(){
+    rax=0;
+    rbx=0;
+    rcx=0;
+    rdx=0;
+    xmm0d=0;
+    xmm1d=0;
+    xmm2d=0;
+    xmm3d=0;
+    sp=0;
+    fp=0;
+    pc=0;
+    rsi=0;
+    rdi=0;
+    memset(stack.data, 0, stack.max);
+}
 void Interpreter::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
     using namespace engone;
     // cmdArgs.resize(inCmdArgs.size());

@@ -110,13 +110,13 @@ echo Compiled in %finS%.%finS2% seconds
 @REM dumpbin /ALL bin/NativeLayer.obj > nat.out
 
 @REM cl /c /NOLOGO src/Other/test.c /Z7
-cl /c /nologo src/Other/test.c /Fdtest.pdb /Zi
-cvdump test.pdb > out3
-link /nologo test.obj /pdb:testexe.pdb /DEFAULTLIB:LIBCMT /INCREMENTAL:NO /OUT:test.exe /DEBUG 
+@REM cl /c /nologo src/Other/test.c /Fdtest.pdb /Zi
+@REM cvdump test.pdb > out3
+@REM link /nologo test.obj /pdb:testexe.pdb /DEFAULTLIB:LIBCMT /INCREMENTAL:NO /OUT:test.exe /DEBUG 
 @REM cl /c src/Other/test.c
 @REM cl /c src/Other/test.c /Z7
-dumpbin /ALL test.obj > out
-cvdump test.obj > out2
+@REM dumpbin /ALL test.obj > out
+@REM cvdump test.obj > out2
 
 @REM cl /c src/Other/test.c /I. /Fdtest.pdb /Zi
 @REM cl /c src/Other/test.c
@@ -136,13 +136,15 @@ if !compileSuccess! == 0 (
 
     prog -dev
     
-    cvdump test2.pdb
+    @REM cvdump test2.pdb
     @REM cvdump bin/dev.pdb
+    @REM cvdump dev1.pdb
 
+    @REM cvdump dev.obj
+    @REM cvdump dev.obj > dev2
+    @REM dumpbin dev.obj /ALL > dev
 
     @REM cvdump bin/dev.pdb > dev2
-    @REM cvdump bin/dev.obj > dev2
-    @REM dumpbin bin/dev.obj /ALL > dev.out
 
     @REM  > temp
     @REM prog examples/x64_test.btb -target win-x64 -out test.exe

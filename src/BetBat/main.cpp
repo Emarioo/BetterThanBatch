@@ -25,7 +25,7 @@ void print_help(){
     PRINT_USAGE("compiler.exe [file0 file1 ...]")
     PRINT_DESC("Arguments after the executable specifies source files to compile. "
              "They will compile and run seperately. Use #import inside the source files for more files in your "
-             "projects.\n")
+             "projects. The exit code will be zero if the compilation succeeded; non-zero if something failed.\n")
     PRINT_EXAMPLES
     PRINT_EXAMPLE("  compiler.exe file0.btb script.txt\n")
     log::out << "\n";
@@ -60,120 +60,32 @@ void print_help(){
     #undef PRINT_EXAMPLES
     #undef PRINT_EXAMPLE
 }
-// #include <typeinfo>
-// struct A {
-//     int ok;
-// };
-#include "Engone/Win32Includes.h"
+#define EXIT_CODE_NOTHING 0
+#define EXIT_CODE_SUCCESS 0
+#define EXIT_CODE_FAILURE 1
 int main(int argc, const char** argv){
     using namespace engone;
     
+    u32 a = 1;
+    u32 b = 32;
+    u32 c = a << b;
+
+
     // DeconstructPDB("test.pdb");
     // DeconstructDebugSymbols(obj->
     // DeconstructPDB("test.pdb");
     // DeconstructPDB("bin/compiler.pdb");
     // DeconstructPDB("bin/dev.pdb");
 
-    // auto obj = ObjectFile::DeconstructFile("test.obj");
-
-    // auto pdb = PDBFile::Deconstruct("test.pdb");
-    // PDBFile::WriteFile(pdb, "test2.pdb");
-    PDBFile::WriteEmpty("test2.pdb");
-    auto pdb2 = PDBFile::Deconstruct("test2.pdb");
-    // PDBFile::Destroy(pdb);
-    Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
-    return 0;
-
-    // log::out << "hello\n";
-
-    // SECURITY_ATTRIBUTES sa;
-    // sa.nLength = sizeof(sa);
-    // sa.lpSecurityDescriptor = NULL;
-    // sa.bInheritHandle = TRUE;
-
-    // HANDLE h = CreateFileA("out.log",
-    //     GENERIC_WRITE|GENERIC_READ,
-    //     // FILE_APPEND_DATA,
-    //     FILE_SHARE_WRITE | FILE_SHARE_READ,
-    //     &sa,
-    //     // OPEN_ALWAYS,
-    //     CREATE_ALWAYS,
-    //     FILE_ATTRIBUTE_NORMAL,
-    //     NULL );
-
-    // PROCESS_INFORMATION pi; 
-    // STARTUPINFOA si;
-    // BOOL ret = FALSE; 
-    // DWORD flags = CREATE_NO_WINDOW;
-
-    // ZeroMemory( &pi, sizeof(PROCESS_INFORMATION) );
-    // ZeroMemory( &si, sizeof(STARTUPINFO) );
-    // si.cb = sizeof(STARTUPINFOA); 
-    // si.dwFlags |= STARTF_USESTDHANDLES;
-    // si.hStdInput = NULL;
-    // si.hStdError = h;
-    // si.hStdOutput = h;
-
-    // char* cmd = "ml64";
-    // ret = CreateProcessA(NULL, cmd, NULL, NULL, TRUE, flags, NULL, NULL, &si, &pi);
-
-    // if ( ret ) 
-    // {
-    //     CloseHandle(pi.hProcess);
-    //     CloseHandle(pi.hThread);
-    //     return 0;
-    // }
-
-    // return -1;
-
-
-    // auto file = engone::FileOpen("temps.txt", 0, FILE_ALWAYS_CREATE);
-
-    // // auto prev = engone::GetStandardOut();
-    // // engone::SetStandardOut(file);
-
-    // engone::StartProgram("ml64 /c", PROGRAM_WAIT, 0, {}, file);
-    // // log::out << "Hey!\n";
-
-    // engone::FileClose(file);
-
-    // engone::SetStandardOut(prev);
-
-    // u64 u = 0;
-    // i64 s = -23;
-    // bool gus = u > s;
-    // bool gsu = s > u;
-
-    // bool lsu = s < u;
-    // bool lus = u < s;
-
-    // bool gesu = s >= u;
-    // bool geus = u >= s;
-    
-    // bool lesu = s <= u;
-    // bool leus = u <= s;
-    // float l = n;
-    // float l = k;
-
-    // float k = 0.2f;
-    // bool a = 0.1f < k;
-    // bool b = 0.1f <= k;
-    // bool c = 0.1f > k;
-    // bool d = 0.1f >= k;
-    // bool e = 0.1f == k;
-    // bool f = 0.1f != k;
-
-    // TestWindow();
+    // Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
     // return 0;
-    // A a;
-    // const auto& yeah = typeid(a);
-    // log::out << yeah.name()<<"\n";
+
     MeasureInit();
 
     ProfilerInitialize();
 
-    // return 1;
     CompileOptions compileOptions{};
+    int compilerExitCode = EXIT_CODE_NOTHING;
 
     std::string compilerPath = argv[0];
     Path compilerDir = compilerPath;
@@ -193,12 +105,11 @@ int main(int argc, const char** argv){
     #endif
 
     bool onlyPreprocess = false;
-    bool runFile = false;
     bool runTests = false;
 
     if (argc < 2) {
         print_help();
-        return 1;
+        return EXIT_CODE_NOTHING;
     }
 
     bool invalidArguments = false;
@@ -213,9 +124,9 @@ int main(int argc, const char** argv){
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
         if(!strcmp(arg,"--help")||!strcmp(arg,"-help")) {
             print_help();
-            return 1;
+            return EXIT_CODE_NOTHING;
         } else if (ArgIs("-run")) {
-            runFile = true;
+            compileOptions.executeOutput = true;
         } else if (ArgIs("-preproc")) {
             onlyPreprocess = true;
         } else if (ArgIs("-out")) {
@@ -235,6 +146,8 @@ int main(int argc, const char** argv){
             devmode = true;
         } else if (ArgIs("-tests")) {
             runTests = true;
+        } else if (ArgIs("-debug")) {
+            compileOptions.useDebugInformation = true;
         } else if (ArgIs("-target")){
             i++;
             if(i<argc){
@@ -262,10 +175,15 @@ int main(int argc, const char** argv){
         } else {
             if(*arg == '-') {
                 log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
+                invalidArguments = true;
             } else {
                 compileOptions.initialSourceFile = arg;
             }
         }
+    }
+
+    if(invalidArguments) {
+        return EXIT_CODE_NOTHING; // not a compiler failure so we use "NOTHING" instead of "FAILURE"
     }
 
     if(onlyPreprocess){
@@ -283,21 +201,22 @@ int main(int argc, const char** argv){
                 stream2->writeToFile(compileOptions.outputFile.text);
                 TokenStream::Destroy(stream);
                 TokenStream::Destroy(stream2);
+
+                compilerExitCode = compileOptions.compileStats.errors;
             }
         }
     } else if(runTests) {
         // DynamicArray<std::string> tests;
         // tests.add("tests/simple/operations.btb");
-        TestSuite(TEST_ALL);
+        int failures = TestSuite(TEST_ALL);
+        compilerExitCode = failures;
     } else if(!devmode){
         if(compileOptions.outputFile.text.size()==0) {
-            compileOptions.executeOutput = true;
-            CompileSource(&compileOptions);
-            // CompileAndRun(&compileOptions);
+            CompileAll(&compileOptions);
         } else {
-            CompileSource(&compileOptions); // won't execute
-            // CompileAndExport(&compileOptions);
+            CompileAll(&compileOptions);
         }
+        compilerExitCode = compileOptions.compileStats.errors;
     } else if(devmode){
         log::out << log::BLACK<<"[DEVMODE]\n";
         #ifndef DEV_FILE
@@ -316,26 +235,27 @@ int main(int argc, const char** argv){
         #endif
         if(compileOptions.target == BYTECODE){
             compileOptions.executeOutput = true;
-            CompileSource(&compileOptions);
-            // CompileAndRun(&compileOptions);
+            CompileAll(&compileOptions);
         } else {
-            #define OBJ_FILE "bin/dev.obj"
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
             compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
-            CompileSource(&compileOptions);
-            // CompileAndRun(&compileOptions);
+            CompileAll(&compileOptions);
         }
+        compilerExitCode = compileOptions.compileStats.errors;
 
         // DeconstructPDB("bin/dev.pdb");
-        PDBFile::Deconstruct("bin/dev.pdb");
+        // auto pdb = PDBFile::Deconstruct("bin/dev.pdb");
+        // PDBFile::Destroy(pdb);
         // DeconstructPDB("test.pdb");
 
         // Bytecode::Destroy(bytecode);
         
         // PerfTestTokenize("example/build_fast.btb",200);
     }
+    
+    compileOptions.~CompileOptions(); // options has memory which needs to be freed before checking for memory leaks.
     // std::string msg = "I am a rainbow, wahoooo!";
     // for(int i=0;i<(int)msg.size();i++){
     //     char chr = msg[i];
@@ -359,4 +279,5 @@ int main(int argc, const char** argv){
     // system("pause");
     Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
 
+    return compilerExitCode;
 }

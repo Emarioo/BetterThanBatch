@@ -297,7 +297,6 @@ void Instruction::print(){
 }
 
 Bytecode* Bytecode::Create(){
-    // Bytecode* ptr = (Bytecode*)engone::Allocate(sizeof(Bytecode));
     Bytecode* ptr = TRACK_ALLOC(Bytecode);
     new(ptr)Bytecode();
     return ptr;

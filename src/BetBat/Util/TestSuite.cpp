@@ -127,7 +127,7 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
     #undef FINALIZE_TEST
 }
 
-void TestSuite(TestSelection testSelection){
+u32 TestSuite(TestSelection testSelection){
     using namespace engone;
     DynamicArray<std::string> tests;
 
@@ -139,7 +139,7 @@ void TestSuite(TestSelection testSelection){
         // tests.add("tests/flow/defer.btb"); not fixed yet
     }
 
-    VerifyTests(tests);
+    return VerifyTests(tests);
 }
 
 // struct ThreadTestInfo {
@@ -174,8 +174,14 @@ void TestSuite(TestSelection testSelection){
 //     }
 //     return 0;
 // }
-void VerifyTests(DynamicArray<std::string>& filesToTest){
+u32 VerifyTests(DynamicArray<std::string>& filesToTest){
     using namespace engone;
+
+    // We run out of profilers contexts fast and a message about is printed
+    // so we disable profiling to prevent that. When contexts can be reused
+    // we can stop disabling the profiler here.
+    ProfilerEnable(false);
+
     DynamicArray<TestCase> testCases{};
     DynamicArray<TestOrigin> testOrigins{};
     testOrigins.resize(filesToTest.size());
@@ -204,23 +210,29 @@ void VerifyTests(DynamicArray<std::string>& filesToTest){
     u64 finalTotalTests = 0;
     DynamicArray<u16> failedLocations{};
 
+    Interpreter interpreter{};
     for(int i=0;i<testCases.size();i++) {
         auto& testcase = testCases[i];
 
         CompileOptions options{};
         options.silent=true;
         options.target = BYTECODE;
+        options.executeOutput = true;
         if(!useInterp)
             options.target = WINDOWS_x64;
         // options.initialSourceFile = testcase.textBuffer.origin;
         options.initialSourceBuffer = testcase.textBuffer;
-        // options.initialSourceBufferSize = testcase.size;
-        Bytecode* bytecode = CompileSource(&options);
-        options.silent = true;
+        // options.initialSourceBufferSize = testcase.size
+
 
         // TODO: Run bytecode and x64 version by default.
         //   An argument can be passed to this function if you just want one target.
 
+        Bytecode* bytecode = CompileSource(&options);
+        options.silent = true;
+
+        // TODO: Some cases test scenarios that should produce certain errors.
+        //   We have no implementation of testing those. Fix it.
         if(!bytecode)
             continue;
 
@@ -228,8 +240,9 @@ void VerifyTests(DynamicArray<std::string>& filesToTest){
         SetStandardErr(PipeGetWrite(pipe));
 
         if(useInterp) {
-            RunBytecode(&options, bytecode);
-
+            interpreter.reset();
+            interpreter.silent = true;
+            interpreter.execute(bytecode);
         } else {
             options.outputFile = "bin/temp.exe";
             bool yes = ExportTarget(&options, bytecode);
@@ -246,8 +259,10 @@ void VerifyTests(DynamicArray<std::string>& filesToTest){
             int errorCode = 0;
             engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
             // log::out << "Error level: "<<errorCode<<"\n";
-
         }
+        Bytecode::Destroy(bytecode);
+        bytecode = nullptr;
+
         failedLocations.resize(0);
         u64 failedTests = 0;
         u64 totalTests = 0;
@@ -287,7 +302,6 @@ void VerifyTests(DynamicArray<std::string>& filesToTest){
             log::out <<log::RED<< "  "<<loc->file<<":"<<loc->line<<":"<<loc->column<<"\n";
         }
 
-        Bytecode::Destroy(bytecode);
     }
     if(testCases.size()>1){
         if(finalFailedTests == 0)
@@ -304,4 +318,5 @@ void VerifyTests(DynamicArray<std::string>& filesToTest){
     for(auto& origin : testOrigins) {
         engone::Free(origin.buffer, origin.size);
     }
+    return finalFailedTests;
 }

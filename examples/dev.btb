@@ -14,343 +14,104 @@
 // #import "threads"
 // #import "linecounter"
 // #import "graphics/quad.btb"
-#import "graphics/perf.btb"
+// #import "graphics/perf.btb"
 // #import "a"
 // #import "b"
 
-// a: u64 = 9;
-
-// if 1 {
-//     @dump-bc
-// // @dump-asm
-//     a = 0x1000_0000_0000_0000;
-//     a + 2
-// }
-
-// log(intPart)
-// buffer: char[200];
-// // buffer += 
-// swrite_unsafe(buffer.ptr, 29);
-
-// #import "OS"
-
-// // Returns the amount of written bytes
-// // Will put a null termination at the end of the written bytes
-// fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
-//     start = buffer;
-//     if value == 0 {
-//         buffer[0] = '0';
-//         buffer[1] = '\0';
-//         return 1;
-//     }
-//     if value < 0 {
-//         value = -value;
-//         *buffer = '-';
-//         buffer++;
-//     }
-//     str: char[21];
-//     used = 20;
-//     while value > 0 && used > 0 {
-//         num = value % 10;
-//         value = value / 10;
-//         str.ptr[used] = num + '0';
-//         used--;
-//     }
-//     str.ptr += used + 1;
-//     str.len -= used + 1;
-
-//     memcpy(buffer, str.ptr, str.len);
-//     buffer += str.len;
-//     *buffer = '\0'; // not include in written bytes
-
-//     return cast<u64>(buffer - start);
-// }
-// ptr: char[100];
-// hz = 2900_000_000;
-// a = 174135859434487;
-// a = 0;
-// b = 174135928898094;
-// c = 174135928898094 - 174135859434487;
-// log(c);
-
-// time = 1000.0 * cast<f32>(b - a) / hz;
-// time = 
-// 1000.0 * 
-// cast<f32>(c) / hz;
-// cast<f32>(69463607) / 
-// cast<f32> 2900_000_000;
-// sizeof hz
-// cast<f32> 2900_000_000;
-// cast<f32>(0x8000_0000_0000_0001);
-// cast<f32>cast<u64>(0x4000_0000_0000_0013);
-// x = cast<f32>(0x0011);
-// x = 
-// cast<f32>cast<u64>(0x8000_0000_0000_0013);
-// log(999999999.0)
-// log(x);
-
-// fn fun() -> i32 {
-//     return 8
-// }
-// f = fun();
-// fn @native printc(chr: char);
-
-// #define LN printc('L'); printc('N');
-//  _print(#line); _print('\n')
-
-// LM
-// printc('L'); printc('N');
-
-// fn @native prints(str: char[]);
-// fn @native printc(str: char);
-
-// a: f32 = 434278354027236 - 434278267340793;
-// a: f32 = 86686.0;
-// a: f32 = 86686440.0;
-// a
-// log(a);
-
-// a: u64 = 923
-
-// a < 0u
-// log(-32)
-
-// 38 % 10
-// t = -23
-// log("int")
-// signed = false;
-// if t < 0 {
-//     signed = true;
-//     t = 0-t;
-// }
-// t
-
-// -23 < 0
-
-// str: char[20];
-// used = 19;
-// while t > 0 && used > 0 {
-//     num = t % 10;
-//     // log('A','0'+num)
-//     // log(,num)
-//     str.ptr[used] = num + '0';
-//     used--;
-    
-//     t = t / 10;
-// }
-// str.ptr += used + 1;
-// // str.len -= used - 1;
-// str.len -= used - 1;
-// if signed
-//     printc('-');
-// prints(str);
-// t = 9
-
-// 1 && 0
-
-// signed = false;
-// if t < 0 {
-//     signed = true;
-//     t = 0-t;
-// }
-// str: char[20];
-// used = 2;
-// // while t > 0 && used > 0 {
-// while 
-// // t > 0 
-// 0 &&
-//  used > 0 {
-//     // num = t % 10;
-//     // str.ptr[used] = num + '0';
-//     used--;
-//     // printc('a');
-//     // t = t / 10;
-// }
-// str.ptr += used + 1;
-// str.len -= used - 1;
-// str.len -= used + 1;
-// if signed
-//     printc('-');
-// prints(str);
-
-// ptr: ProfiledData* = Allocate(sizeof ProfiledData);
-// memzero(ptr, sizeof ProfiledData);
-// path = "garb.txt"
-// file = FileOpen(&path, true, &fileSize);
-// if(!file)
-//     return null;
-// data: void* = 
-// Allocate(0);
-// FileRead(file, data, fileSize);
-// FileClose(file);
-
-// offset = 0;
-
-// ptr.contextCount = *cast<u32*>data + offset;
-
-// a: i32 = 24.23
-// a = 24.23 + 24.23
-// 0x1000_0000_0000_0000 > 0
-// 0x8000_0000_0000_0000 > 0
-// 0x0000_0001_0000_0000 > 0
-// 0x0000_0000_8000_0000 > 0
-
-// push        rbp
-// mov         rbp,rsp
-// asm {
-//     mov         rax,100000000h
-
-//     push        rax
-//     xor         rcx,rcx
-//     pop         rax
-//     movsxd      rax,eax
-//     cmp         rax,rcx
-//     seta        cl
-//     // movzx       ecx,cl
-//     // and         ecx,0FFFFFFFFh
-//     push        rcx
-//     // xor         rax,rax
-//     pop         rax
-// }
-// pop         rbp
-// ret
-
-// 213123 > 0
-
-// above -> 1
-// signed > unsigned
-// -10 > 200
-
-// !CF && !ZF
-
-// CF (below/above)
-// 0 AE
-// 1 B
-
-// SF != OF (less/greater)
-// 00 GE
-// 01 L
-// 10 L
-// 11 GE
-
-// 128 > 0
-// -128 - 0
-
-
-// signed > unsigned
-// -128  >  255 0
-// 128 > 255 0
-// -128 > -1 0
-
-// -10  > 200 0
-
-// -1 >= 255 0
-
-// 255 255
-
-// signed > signed L/G
-// unsigned > unsigned: A/B
-
-// unsigned < signed
-
-
-
-// unsigned > signed // A/B
-// pos > neg
-// posH > posL
-// posL > posH
-// pos > pos (equal)
-// pos > new (equal)
-
-// signed > unsigned // L/G
-// pos > neg
-// posH > posL
-// posL > posH
-// pos > pos (equal)
-// pos > new (equal)
-
-// SF != OF (less/greater)
-// 00 GE
-// 01 L
-// 10 L
-// 11 GE
-
-
-
-// unsigned - signed
-// u64 > u64
-
-// u64 - u64 > 0
-
-
-// signed > unsigned
-
-// signed < 1 = 0
-
-
-// sub signed, unsigned
-
-// -100 - 1
-// -101
-// -1
-// 5 - 1
-// 4
-// 2
-// 1 + 1
-// 0
-
-
-// if sign bit (negative result)
-//     less
-// else
-//     greater
-
-
-
-
-
-// CF = 1
-// OF = 
-
-// -128 > 0
-// (255 > 0)
-
-// cmp 0, 0x80
-
-// jae, CF = 0
-
-
-// 255 > -1
-// (255 > 255)
-
-// -1 > -1
-// (255 > 255)
-
-// -1 > 250
-// (255 > 250)
-
-// u64 - s64
-
-// cast<f32>(c) / cast<f32>hz;
-// log(time);
-// len = swrite_unsafe(ptr.ptr, time);
-// ptr.len = len;
-// log(99999999999.0)
-// _print(9999999999.0)
-//    aaa(9999999999.0)
-
-// t = 9999999999.0
-// t = 23232.0
-// bits: u32 = *cast<u32*>cast<void*>&t;
-// exp = (bits >> 23) & 0xFF
-// mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
-
-// intPart: u64 = 0;
-// decimalBits: i32 = 23 - (exp-127);
-
-// intPart = 10000000000
-// intPart = 0
-// (mantissa) << (0-decimalBits);
-
+#import "examples/debug_test.btb"
+
+// @TEST-CASE arithmetic
+// test 3; 1+2;
+// test 3; 1- -2;
+// test -1; 2-3;
+// test 6; -2*-3;
+// test 0; 2/3;
+// test 499; cast<i32>((0.5 % 0.15)*10000);
+
+// // TEST OPERATIONS WITH 64-bit numbers like 99999999999999!
+// // TODO: Not just the one below, loads more tests
+// test 1; 120331 < 999999999999999
+// test 0; 95679105467774 < 9999999999999 // very specific test which returned 1 at some point
+
+// test 1; 1.2 < 1.3;
+// test 0; 1.3004 < 1.3;
+// test 1; -4.0 <= -2.;
+// test 1; 9.09 <= 9.09;
+// test 0; -9.0 > 1.3;
+// test 1; 0.1 > -0.001;
+// test 1; 99999.0 >= 99998.99999999;
+// test 1; 99999.0 >= -2.0;
+// test 0; -4.0 >= -2.;
+// test 1; 1.0000009 == 1.0000009;
+// test 0; 1.0000009 == -1.0;
+// test 1; 3.2 != 4.02;
+// test 0; 3.2 != 3.2;
+
+// fn @intrinsic round(v: f32) -> f32;
+// fn @intrinsic sqrt(v: f32) -> f32;
+
+// test 3; cast<i32>round(3.3);
+// test 4; cast<i32>round(3.7);
+// test 1; cast<i32>sqrt(1);
+// test 1; cast<i32>sqrt(2);
+// test 2; cast<i32>sqrt(3.9999999);
+
+// @TEST-CASE many-math-ops
+// The test below is a little scuffed because of issues with precision.
+// Python evaluates the math to this: -2159226 while this compiler gives this result: -2158333.
+// test -2158333; cast<i32>(100000*(5. / 6. - 7. )* 7. / 8. * 4. + (1. / 4. / (1. - 5. + 1. - 4. * 7. - 2. * 3. / 2. - (6. / 3. )/ 2. + (6. / 6. + 8. - 7. )+ 5. )));
+// test 69; 8+1*(5-8%6+4*3%1%7-4-7+7+(8+7))*4+5%(6/2+(6+8/4*1*5*2*6));
+
+// @TEST-CASE special
+// var:u32 = 2
+// varf:f32 = -12415.92913
+// test -2; -var;
+// test 12415.92913; -varf;
+
+// a = 6;
+// pa = &a;
+// ppa = &pa;
+// test 6; *ppa[0]; // test precedence between deref and index operations
+
+// data: u32* = &var;
+// test 2; *cast<u32*>data;
+// // Bug 0: deref was performed before cast (issue in parser)
+
+// test 1; 3-1-1; // tests precedence
+
+// // test 1<<32; 0x0_0000_0000; // shl eax, cl would produce 1 so we must use shl rax, cl instead. ACTUALLY, C/C++ compilers uses eax, cl so 
+// // test 1<<32; 1; // shl eax, cl would produce 1 so we must use shl rax, cl instead. ACTUALLY, C/C++ compilers uses eax, cl so 
+// test cast<i64>1<<32; 0x1_0000_0000; // 64-bit
+
+// ptr: char* = null;
+// ++(*cast<u64*>&ptr);
+// test 0; 0
+// test cast<u64>1; 0;
+// test 1; 0;
+
+// cast<u64>cast<char*>null
+// cast<u64>cast<void*>null
+// cast<u64*>cast<void*>null
+// cast<u64*>cast<char*>null // should fail, system for expecting errors is not implemented yet so this line is commented
+
+// @TEST-CASE conversions
+
+// // unsigned conversion
+// test 1; cast<f32>0x8100_0001 > 0.0;
+// test 1; cast<f32>0x8100_0000_0000_0001 > 0.0;
+// test 1; cast<f32>0x8100_0000_0000_0010 > 0.0;
+// test 1; cast<f32>0x8100_0000_0000_0011 > 0.0;
+
+// test 17.0; cast<f32>cast<u64>0x0000_0000_0000_0011; // A bug at some point produced 18.0 instead of 17.0
+
+// test 1u; cast<u64>0x8000_0000_0000_0000 > 0u
+// test 1u; cast<u64>0x8000_0000_0000_0000 >= 0u
+// test 0u; cast<u64>0x8000_0000_0000_0000 < 0u
+// test 0u; cast<u64>0x8000_0000_0000_0000 <= 0u
+
+// // TODO: Signed conversions of 8,16,32,64-bit integers and floats.
+// // TODO: f64
+
+// // This code caused a crash at one point.
 // t: f32 = 0;
 // t == 0;

@@ -9,7 +9,6 @@
 struct DebugInformation {
     static DebugInformation* Create(AST* ast) {
         auto ptr = TRACK_ALLOC(DebugInformation);
-        // auto ptr = (DebugInformation*)engone::Allocate(sizeof(DebugInformation));
         new(ptr)DebugInformation();
         ptr->ast = ast;
         return ptr;
@@ -17,7 +16,6 @@ struct DebugInformation {
     static void Destroy(DebugInformation* ptr) {
         ptr->~DebugInformation();
         TRACK_FREE(ptr, DebugInformation);
-        // engone::Free(ptr, sizeof(DebugInformation));
     }
 
     struct Line {
@@ -50,6 +48,9 @@ struct DebugInformation {
     };
     DynamicArray<Function> functions;
     DynamicArray<std::string> files;
+
+    // file should be absolute path
+    u32 addOrGetFile(const std::string& file);
 
     AST* ast = nullptr; // make sure you don't destroy the AST while debug information is using it
 };

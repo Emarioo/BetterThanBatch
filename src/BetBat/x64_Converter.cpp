@@ -1595,10 +1595,15 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             break; case BC_BLSHIFT: {
                 Assert(op0 == op2 && DECODE_REG_TYPE(op1)==BC_CX);
                 u8 size = DECODE_REG_SIZE(op2);
-                if(size == 8)
-                    prog->add(PREFIX_REXW);
+                // if(size == 8)
+                prog->add(PREFIX_REXW);
                 prog->add(OPCODE_SHL_RM_CL_SLASH_4);
                 prog->addModRM(MODE_REG, 4, BCToProgramReg(op2,0xF));
+
+                // prog->add(OPCODE_AND_RM_IMM_SLASH_4)
+                // prog->add(OPCODE_2_MOVZX_REG_RM8);
+                // prog->add(OPCODE_2_MOVZX_REG_RM16);
+
                 break;
             }
             break; case BC_BRSHIFT: {
