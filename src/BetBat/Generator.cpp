@@ -3054,9 +3054,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         Assert(di);
         
         info.debugFunctionIndex = di->functions.size();
-        di->functions.add({});
-        DebugInformation::Function* dfun = &di->functions.last();
-        dfun->name = funcImpl->name;
+        DebugInformation::Function* dfun = di->addFunction(funcImpl->name);
         if(function->body->statements.size()>0) {
             dfun->fileIndex = di->addOrGetFile(function->body->statements[0]->tokenRange.tokenStream()->streamName);
         } else {
@@ -3554,7 +3552,6 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 int alignment = 0;
                 if (varname.declaration) {
                     if (varname.arrayLength>0){
-                        Assert(!info.compileInfo->compileOptions->useDebugInformation);
                         Assert(!statement->globalAssignment);
                         // TODO: Fix arrays with static data
                         if(statement->firstExpression) {
@@ -3635,6 +3632,12 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         info.addPush(BC_REG_RBX);
 
                         GeneratePop(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
+
+                        auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
+                        fun.localVariables.add({});
+                        fun.localVariables.last().name = varname.name;
+                        fun.localVariables.last().frameOffset = varinfo->versions_dataOffset[info.currentPolyVersion];
+                        fun.localVariables.last().typeId = varinfo->versions_typeId[info.currentPolyVersion];
                     } else {
                         if(!varinfo->isGlobal()) {
                             // address of global variables is managed in type checker
@@ -4546,12 +4549,10 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     auto di = info.code->debugInformation;
 
     info.debugFunctionIndex = di->functions.size();
-    di->functions.add({});
     // It is dangerous to take a pointer to an element of an array that may reallocate the elements
     // but the array should only reallocate when generating new functions which we have already done.
     // this function is the last function we are adding. Taking the pointer is therefore not dangerous.
-    DebugInformation::Function* dfun = &di->functions.last();
-    dfun->name = "main";
+    DebugInformation::Function* dfun = di->addFunction("main_btb");
     
     if(info.ast->mainBody->statements.size()>0) {
         dfun->fileIndex = di->addOrGetFile(info.ast->mainBody->statements[0]->tokenRange.tokenStream()->streamName);

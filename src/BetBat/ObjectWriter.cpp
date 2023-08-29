@@ -613,6 +613,12 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
     if(program->debugInformation) {
         outSize += program->debugInformation->files.size() * 256;
         outSize += program->debugInformation->functions.size() * 100;
+        for(int i=0;i<program->debugInformation->functions.size();i++) {
+            auto& fun = program->debugInformation->functions[i];
+            outSize += 255; // name
+            outSize += fun.localVariables.size() * 255;
+            outSize += fun.lines.size() * 100;
+        }
         // IMPORTANT: We need to estimate better by checking the contnet of each function
     }
     u8* outData = TRACK_ARRAY_ALLOC(u8,outSize);
@@ -849,7 +855,6 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
                 outOffset += 2;
                 WRITE(LeafType, LF_TYPESERVER2); // leaf type
 
-                // TODO: Does age or guid need to be some special values
                 memcpy(outData + outOffset, typeInformation.guid, sizeof(typeInformation.guid));
                 outOffset += 16;
                 WRITE(u32, typeInformation.age);
@@ -907,10 +912,6 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
                 for(int i=0;i<di->files.size();i++) {
                     auto& file = di->files[i];
                     fileStringIndex[i] = outOffset - sectionStartOffset;
-                    // TODO: Won't work if file path is absolute.
-                    // std::string absPath = engone::GetWorkingDirectory();
-                    // absPath += "\\";
-                    // absPath += file;
                     Path apath = file;
                     std::string absPath = apath.getAbsolute().text;
                     strcpy((char*)outData + outOffset, absPath.c_str());
@@ -955,13 +956,6 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
                     *(u32*)(outData + outOffset) = 0; // signature, usually 0 for some reason.
                     outOffset += 4;
 
-                    // TODO: This won't work if path already is absolute.
-                    //   Operating systems use different ways to indicate absolute paths
-                    //   so you should use a class/struct for it. Like Path in Compiler.h.
-                    // std::string absPath = engone::GetWorkingDirectory();
-                    // absPath += "\\";
-                    // absPath += path;
-
                     strcpy((char*)outData + outOffset, objpath.text.c_str());
                     outOffset += objpath.text.length() + 1;
 
@@ -989,18 +983,9 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
 
                     *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
                 }
-                // Not needed I think?
-                // { // BUILDINFO record
-                //     u16* recordLength = (u16*)(outData + outOffset);
-                //     outOffset += 2;
-                //     *(RecordType*)(outData + outOffset) = RecordType::S_BUILDINFO;
-                //     outOffset += 2;
-
-                //     WRITE(u32, BUILDINFO_id);
-
-                //     *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
-                // }
                 for(int i=0;i<di->functions.size();i++) {
+                    if(i>2)
+                        continue;
                     auto& fun = di->functions[i];
                     {
                         u16* recordLength = (u16*)(outData + outOffset);
@@ -1012,8 +997,10 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
                         WRITE(u32, 0) // end
                         WRITE(u32, 0) // next
                         WRITE(u32, fun.funcEnd - fun.funcStart) // len
-                        WRITE(u32, fun.srcStart) // dbgstart
-                        WRITE(u32, fun.srcEnd) // dbgend
+                        // WRITE(u32, fun.srcStart) // dbgstart
+                        // WRITE(u32, fun.srcEnd) // dbgend
+                        WRITE(u32, fun.srcStart - fun.funcStart) // dbgstart
+                        WRITE(u32, fun.srcEnd - fun.funcStart) // dbgend
                         WRITE(u32, typeInformation.functionTypeIndices[i]) // typeind
 
                         OffSegReloc reloc;
@@ -1031,45 +1018,45 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
 
                         *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
                     }
-                    {
-                        u16* recordLength = (u16*)(outData + outOffset);
-                        outOffset += 2;
-                        *(RecordType*)(outData + outOffset) = RecordType::S_FRAMEPROC;
-                        outOffset += 2;
+                    // {
+                    //     u16* recordLength = (u16*)(outData + outOffset);
+                    //     outOffset += 2;
+                    //     *(RecordType*)(outData + outOffset) = RecordType::S_FRAMEPROC;
+                    //     outOffset += 2;
 
-                        WRITE(u32, 0) // size of frame
-                        WRITE(u32, 0) // padding in frame
-                        WRITE(u32, 0) // padding offset
-                        WRITE(u32, 0) // bytes for saved registers
-                        WRITE(u32, 0) // exception handler offset
-                        WRITE(u16, 0) // excpetion handler id
-                        WRITE(u32, 0) // flags
+                    //     WRITE(u32, 0) // size of frame
+                    //     WRITE(u32, 0) // padding in frame
+                    //     WRITE(u32, 0) // padding offset
+                    //     WRITE(u32, 0) // bytes for saved registers
+                    //     WRITE(u32, 0) // exception handler offset
+                    //     WRITE(u16, 0) // excpetion handler id
+                    //     WRITE(u32, 0) // flags
                         
-                        // These might need to bes in the flags but I am not sure.
-                        // u32 encodedLocalBasePointer : 2;  // record function's local pointer explicitly.
-                        // u32 encodedParamBasePointer : 2;  // record function's parameter pointer explicitly.
+                    //     // These might need to bes in the flags but I am not sure.
+                    //     // u32 encodedLocalBasePointer : 2;  // record function's local pointer explicitly.
+                    //     // u32 encodedParamBasePointer : 2;  // record function's parameter pointer explicitly.
 
-                        *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
-                    }
-                    for(int j=0;j<fun.localVariables.size();j++){
-                        auto& var = fun.localVariables[j];
-                        {
-                            u16* recordLength = (u16*)(outData + outOffset);
-                            outOffset += 2;
-                            *(RecordType*)(outData + outOffset) = RecordType::S_REGREL32;
-                            outOffset += 2;
+                    //     *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                    // }
+                    // for(int j=0;j<fun.localVariables.size();j++){
+                    //     auto& var = fun.localVariables[j];
+                    //     {
+                    //         u16* recordLength = (u16*)(outData + outOffset);
+                    //         outOffset += 2;
+                    //         *(RecordType*)(outData + outOffset) = RecordType::S_REGREL32;
+                    //         outOffset += 2;
 
-                            WRITE(u32, var.frameOffset); // offset in frame
-                            // TODO: Don't always use int as type
-                            WRITE(u32, T_INT4); // type
-                            WRITE(u16, CV_AMD64_RBP); // Object files from C uses AMD64 instead of x64
+                    //         WRITE(u32, var.frameOffset); // offset in frame
+                    //         // TODO: Don't always use int as type
+                    //         WRITE(u32, T_INT4); // type
+                    //         WRITE(u16, CV_AMD64_RBP); // Object files from C uses AMD64 instead of x64
 
-                            strcpy((char*)outData + outOffset, var.name.c_str());
-                            outOffset += var.name.length() + 1;
+                    //         strcpy((char*)outData + outOffset, var.name.c_str());
+                    //         outOffset += var.name.length() + 1;
 
-                            *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
-                        }
-                    }
+                    //         *recordLength = outOffset - sizeof(*recordLength) - ((u64)recordLength - (u64)outData);
+                    //     }
+                    // }
                     {
                         u16* recordLength = (u16*)(outData + outOffset);
                         outOffset += 2;

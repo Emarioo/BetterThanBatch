@@ -27,7 +27,8 @@ struct TokenStream;
 #define BASE_SECTION(CODE) MSG_CODE_LOCATION; info.errors++; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE
 
 #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
-#define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
+// #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
+#define ERR_HEAD(TR,...) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->compileOptions->compileStats.errorTypes.add({__VA_ARGS__});
 #define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";
 #define ERR_MSG_LOG(STR) engone::log::out << STR ;
 // #define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
@@ -68,6 +69,10 @@ void PrintExample(int line, const StringBuilder& stringBuilder);
 #define ERR_DEFAULT_RL(R,NAME,NUM) ERR_CUSTOM(R.tokenStream()?R.tokenStream()->streamName:"", R.firstToken.line, R.firstToken.column + R.firstToken.length,NAME,NUM)
 
 #define WARN_DEFAULT_R(R,NAME,NUM) WARN_CUSTOM(R.tokenStream()?R.tokenStream()->streamName:"", R.firstToken.line, R.firstToken.column,NAME,NUM)
+
+enum CompileError : u32 {
+
+};
 
 void PrintCode(const TokenRange& tokenRange, const char* message = nullptr);
 void PrintCode(int index, TokenStream* stream, const char* message = nullptr);

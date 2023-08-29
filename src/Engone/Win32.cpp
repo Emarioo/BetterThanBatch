@@ -553,7 +553,28 @@ namespace engone {
             return false;
 		}
 		return true;
-	}		
+	}
+	bool FileMove(const std::string& src, const std::string& dst){
+		bool yes = MoveFileA(src.c_str(),dst.c_str());
+		if(!yes){
+			DWORD err = GetLastError();
+            PL_PRINTF("[WinError %lu] MoveFile '%s' '%s'\n",err,src.c_str(),dst.c_str());
+            return false;
+		}
+		return true;
+	}
+	bool FileDelete(const std::string& path){
+		bool yes = DeleteFileA(path.c_str());
+		if(!yes){
+			DWORD err = GetLastError();
+			if(err == ERROR_FILE_NOT_FOUND) {
+				return true;
+			}
+            PL_PRINTF("[WinError %lu] DeleteFile '%s'\n",err,path.c_str());
+            return false;
+		}
+		return true;
+	}
 #define DEBUG_PLATFORM_ERROR(x) x
 	// #define DEBUG_PLATFORM_ERROR(x)
     
@@ -1062,6 +1083,15 @@ namespace engone {
 			}
 			return out;
 		}
+	}
+	bool SetWorkingDirectory(const std::string& path){
+		bool yes = SetCurrentDirectoryA(path.c_str());
+		if(!yes) {
+			DWORD err = GetLastError();
+			printf("[WinError %lu] SetWorkingDirectory '%s'\n",err, path.c_str());
+			return false;
+		}
+		return true;
 	}
 	void* LoadDynamicLibrary(const std::string& path){
 		HMODULE module = LoadLibraryA(path.c_str());

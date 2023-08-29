@@ -5,14 +5,6 @@
 
 #include "BetBat/x64_Converter.h"
 
-/*
-    IF SOMETHING ISN'T WORKING, CHECK "TODO:" IN THIS FILE.
-    I MAY HAVE FORGOT TO ADD SOMETHING OR DIDN'T KNOW WHAT
-    TO DO AT THE TIME AND LEFT IT TO FIX LATER WHEN I KNOW MORE ABOUT THE FORMATS.
-*/
-
-// TODO: uninitialized/initialized sections and flags?
-
 namespace COFF_Format {
     // This information comes from this site:
     // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format

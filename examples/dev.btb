@@ -18,100 +18,44 @@
 // #import "a"
 // #import "b"
 
-#import "examples/debug_test.btb"
+// #import "examples/debug_test.btb"
 
-// @TEST-CASE arithmetic
-// test 3; 1+2;
-// test 3; 1- -2;
-// test -1; 2-3;
-// test 6; -2*-3;
-// test 0; 2/3;
-// test 499; cast<i32>((0.5 % 0.15)*10000);
-
-// // TEST OPERATIONS WITH 64-bit numbers like 99999999999999!
-// // TODO: Not just the one below, loads more tests
-// test 1; 120331 < 999999999999999
-// test 0; 95679105467774 < 9999999999999 // very specific test which returned 1 at some point
-
-// test 1; 1.2 < 1.3;
-// test 0; 1.3004 < 1.3;
-// test 1; -4.0 <= -2.;
-// test 1; 9.09 <= 9.09;
-// test 0; -9.0 > 1.3;
-// test 1; 0.1 > -0.001;
-// test 1; 99999.0 >= 99998.99999999;
-// test 1; 99999.0 >= -2.0;
-// test 0; -4.0 >= -2.;
-// test 1; 1.0000009 == 1.0000009;
-// test 0; 1.0000009 == -1.0;
-// test 1; 3.2 != 4.02;
-// test 0; 3.2 != 3.2;
-
-// fn @intrinsic round(v: f32) -> f32;
-// fn @intrinsic sqrt(v: f32) -> f32;
-
-// test 3; cast<i32>round(3.3);
-// test 4; cast<i32>round(3.7);
-// test 1; cast<i32>sqrt(1);
-// test 1; cast<i32>sqrt(2);
-// test 2; cast<i32>sqrt(3.9999999);
-
-// @TEST-CASE many-math-ops
-// The test below is a little scuffed because of issues with precision.
-// Python evaluates the math to this: -2159226 while this compiler gives this result: -2158333.
-// test -2158333; cast<i32>(100000*(5. / 6. - 7. )* 7. / 8. * 4. + (1. / 4. / (1. - 5. + 1. - 4. * 7. - 2. * 3. / 2. - (6. / 3. )/ 2. + (6. / 6. + 8. - 7. )+ 5. )));
-// test 69; 8+1*(5-8%6+4*3%1%7-4-7+7+(8+7))*4+5%(6/2+(6+8/4*1*5*2*6));
-
-// @TEST-CASE special
-// var:u32 = 2
-// varf:f32 = -12415.92913
-// test -2; -var;
-// test 12415.92913; -varf;
-
-// a = 6;
-// pa = &a;
-// ppa = &pa;
-// test 6; *ppa[0]; // test precedence between deref and index operations
-
-// data: u32* = &var;
-// test 2; *cast<u32*>data;
-// // Bug 0: deref was performed before cast (issue in parser)
-
-// test 1; 3-1-1; // tests precedence
-
-// // test 1<<32; 0x0_0000_0000; // shl eax, cl would produce 1 so we must use shl rax, cl instead. ACTUALLY, C/C++ compilers uses eax, cl so 
-// // test 1<<32; 1; // shl eax, cl would produce 1 so we must use shl rax, cl instead. ACTUALLY, C/C++ compilers uses eax, cl so 
-// test cast<i64>1<<32; 0x1_0000_0000; // 64-bit
-
-// ptr: char* = null;
-// ++(*cast<u64*>&ptr);
-// test 0; 0
-// test cast<u64>1; 0;
-// test 1; 0;
-
-// cast<u64>cast<char*>null
-// cast<u64>cast<void*>null
-// cast<u64*>cast<void*>null
-// cast<u64*>cast<char*>null // should fail, system for expecting errors is not implemented yet so this line is commented
-
-// @TEST-CASE conversions
-
-// // unsigned conversion
-// test 1; cast<f32>0x8100_0001 > 0.0;
-// test 1; cast<f32>0x8100_0000_0000_0001 > 0.0;
-// test 1; cast<f32>0x8100_0000_0000_0010 > 0.0;
-// test 1; cast<f32>0x8100_0000_0000_0011 > 0.0;
-
-// test 17.0; cast<f32>cast<u64>0x0000_0000_0000_0011; // A bug at some point produced 18.0 instead of 17.0
-
-// test 1u; cast<u64>0x8000_0000_0000_0000 > 0u
-// test 1u; cast<u64>0x8000_0000_0000_0000 >= 0u
-// test 0u; cast<u64>0x8000_0000_0000_0000 < 0u
-// test 0u; cast<u64>0x8000_0000_0000_0000 <= 0u
-
-// // TODO: Signed conversions of 8,16,32,64-bit integers and floats.
-// // TODO: f64
-
-// // This code caused a crash at one point.
-// t: f32 = 0;
-// t == 0;
+fn hey(a: i32) {
+    k = a;
+    k1 = a;
+    k2 = a;
+    k3 = a;
+    k4 = a;
+    k5 = a;
+    k6 = a;
+    k7 = a;
+    k8 = a;
+    k9 = a;
+    k11 = a;
+    k12 = a;
+    k13 = a;
+    k14 = a;
+    k15 = a;
+    k16 = a;
+}
+fn hey1() {
+    // a = 9
+}
+fn hey2() { }
+fn hey3() { }
+fn hey4() { }
+fn hey5() { }
+fn hey6() { }
+fn hey7() { }
+fn hey8() { }
+fn hey9() { }
+hey1();
+hey2();
+hey3();
+hey4();
+hey5();
+hey6();
+hey7();
+hey8();
+hey9();
+hey(23);

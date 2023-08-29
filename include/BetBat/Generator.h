@@ -67,7 +67,6 @@ struct GenInfo {
         QuickArray<int> resolveBreaks;
         Identifier counter = {}; // may not be used right now but the size of
         // loop scope collides with std::string when tracking allocations.
-        int _ = 0; // offset memory for tracking again
     };
     QuickArray<LoopScope*> loopScopes;
     

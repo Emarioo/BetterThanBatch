@@ -77,7 +77,6 @@ struct Program_x64 {
 
     void set(u32 index, u8 byte) { Assert(index < head); text[index] = byte; }
 
-    // TODO: Relocations, global data, symbols
     static void Destroy(Program_x64* program);
     static Program_x64* Create();
 

@@ -123,10 +123,13 @@ namespace engone {
     
 	// Not thread safe if you change working directory or if used within shared libraries. (from windows docs)
 	std::string GetWorkingDirectory();
+	bool SetWorkingDirectory(const std::string& path);
 
 	std::string EnvironmentVariable(const std::string& name);
 	
 	bool FileCopy(const std::string& src, const std::string& dst);
+	bool FileMove(const std::string& src, const std::string& dst);
+	bool FileDelete(const std::string& path);
     
 	// 0 is returned on failure (invalid path, empty directory)
 	// result must be valid memory.

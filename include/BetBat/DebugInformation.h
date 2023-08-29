@@ -51,6 +51,9 @@ struct DebugInformation {
 
     // file should be absolute path
     u32 addOrGetFile(const std::string& file);
+    // will rename the function if it already exists.
+    // return pointer may be invalidated if a reallocation occurs
+    Function* addFunction(const std::string name);
 
     AST* ast = nullptr; // make sure you don't destroy the AST while debug information is using it
 };

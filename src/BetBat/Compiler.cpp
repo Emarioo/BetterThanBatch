@@ -1099,9 +1099,12 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 }
                 options->compileStats.end_objectfile = StartMeasure();
 
+                // std::string prevCWD = GetWorkingDirectory();
+                bool outputOtherDirectory = outPath.text.find("/") != std::string::npos;
+
                 std::string cmd = "link /nologo ";
                 if(options->useDebugInformation)
-                    cmd += "/DEBUG ";
+                    cmd += "/DEBUG /INCREMENTAL:NO ";
                 cmd += objPath + " ";
                 #ifndef MINIMAL_DEBUG
                 cmd += "bin/NativeLayer.lib ";
@@ -1115,13 +1118,12 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                     auto& dir = bytecode->linkDirectives[i];
                     cmd += dir + " ";
                 }
-
-                cmd += "/OUT:" + outPath.text+" ";
-
-                if(outPath.text.find("/") != std::string::npos) {
-                    log::out << log::RED << "MSVC Linker must output files to the current working directory!\n";
-                    // TODO: This can be fixed quite easily by moving the file 
-                    //   afterwards or temporarily changing the current working directory
+                #define LINK_TEMP_EXE "temp_382.exe"
+                #define LINK_TEMP_PDB "temp_382.pdb"
+                if(outputOtherDirectory) {
+                    cmd += "/OUT:" LINK_TEMP_EXE;
+                } else {
+                    cmd += "/OUT:" + outPath.text+" ";
                 }
 
                 if(!options->silent)
@@ -1132,7 +1134,21 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
                 options->compileStats.end_linker = StartMeasure();
                 
+                // if(changeCWD) {
+                //     engone::SetWorkingDirectory(prevCWD);
+                //     log::out << "cwd: "<<prevCWD<<"\n";
+                // }
+
                 if(exitCode == 0) { // 0 means success
+                    if(outputOtherDirectory){
+                        FileDelete(outPath.text);
+                        FileMove(LINK_TEMP_EXE, outPath.text);
+                        if(options->useDebugInformation) {
+                            Path p = outPath.getDirectory().text + outPath.getFileName(true).text + ".pdb";
+                            FileDelete(p.text);
+                            FileMove(LINK_TEMP_PDB,p.text);
+                        }
+                    }
                     options->compileStats.generatedFiles.add(outPath.text);
 
                     // TODO: Move the asm dump code to it's own file.
@@ -1160,8 +1176,6 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                             // if(yes) {
                             //     options->compileStats.generatedFiles.add(DUMP_ASM_OBJ);
                             // }
-                            // TODO: You may want to redirect stdout and reformat the
-                            //  text from dumpbin
 
                             auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
 
@@ -1181,6 +1195,8 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
                             engone::FileClose(file);
 
+                            // TODO: You may want to redirect stdout and reformat the
+                            //  text from dumpbin, which we are?
                             ReformatDumpbinAsm(textBuffer, nullptr, true);
 
                             // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM

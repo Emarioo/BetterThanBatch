@@ -140,7 +140,7 @@ if !compileSuccess! == 0 (
     @REM cvdump bin/dev.pdb
     @REM cvdump dev1.pdb
 
-    @REM cvdump dev.obj
+    @REM cvdump bin/dev.obj
     @REM cvdump dev.obj > dev2
     @REM dumpbin dev.obj /ALL > dev
 

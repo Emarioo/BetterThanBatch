@@ -9,6 +9,7 @@
 #include "BetBat/ObjectWriter.h"
 #include "BetBat/x64_Converter.h"
 #include "BetBat/UserProfile.h"
+// #include "BetBat/MessageTool.h"
 
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
@@ -67,6 +68,7 @@ struct CompileStats {
         generatedFiles.cleanup();
     }
     DynamicArray<std::string> generatedFiles;
+    DynamicArray<CompileError> errorTypes;
 
     void printSuccess(CompileOptions* options);
     void printFailed();

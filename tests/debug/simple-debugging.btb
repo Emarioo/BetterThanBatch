@@ -2,13 +2,12 @@
     Debugging is hard to use automatic tests for.
     So we do them manually for now.
 */
-
+@TEST-CASE general
 #define fail (*cast<u8*>null);
 
 ok(3)
 a = 9;
 a *= 2;
-
 
 // fail
 
@@ -17,3 +16,16 @@ fn ok(arg: i32){
 
     fail
 }
+@TEST-CASE overloading
+fn hey(a: i32) {
+    k = a;
+}
+fn hey() {
+    a = 9
+}
+hey();
+hey(23);
+
+@TEST-CASE types
+
+// structs and enums

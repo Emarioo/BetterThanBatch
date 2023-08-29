@@ -17,7 +17,7 @@
             "name": "(btb) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/dev.exe",
+            "program": "${workspaceFolder}/dev.exe",
             "args": [],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

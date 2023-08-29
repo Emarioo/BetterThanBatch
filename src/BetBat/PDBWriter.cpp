@@ -198,6 +198,7 @@ bool PDBFile::write(u32 streamNumber, u32 offset, u32 bytes, void* src) {
         if(newBlock==-1)
             return false;
         stream.blockIndices.add(newBlock);
+        // engone::log::out << "SN "<<streamNumber << " "<<stream.blockIndices.size()<<"\n";
     }
 
     if(offset + bytes > stream.size)
@@ -368,6 +369,7 @@ u8* PDBFile::takePointer(u32 streamNumber, u32 offset, u32 bytes){
         if(newBlock==-1)
             return false;
         stream.blockIndices.add(newBlock);
+        engone::log::out << "SN "<<streamNumber << " "<<stream.blockIndices.size()<<"\n";
     }
 
     u32 block1 = stream.blockIndices[virtual_block1];
@@ -909,23 +911,23 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
         
         DynamicArray<u32> typeOffsets{};
 
-        FORN(di->functions) {
-            ALIGN4
-            inOutInfo->functionTypeIndices[nr] = nextTypeIndex++;
-            typeOffsets.add(offset - typeRecordStart);
-            u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
-            offset += 2;
-            u32 typeOffset = offset;
-            WRITE(LeafType, LF_FUNC_ID);
+        // FORN(di->functions) {
+        //     ALIGN4
+        //     inOutInfo->functionTypeIndices[nr] = nextTypeIndex++;
+        //     typeOffsets.add(offset - typeRecordStart);
+        //     u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
+        //     offset += 2;
+        //     u32 typeOffset = offset;
+        //     WRITE(LeafType, LF_FUNC_ID);
 
-            WRITE(u32, 0); // scope, 0 means global
-            Assert(bareProcedure != -1);
-            WRITE(u32, bareProcedure); // procedure type
-            pdb->write(streamNumber, offset, it->name.length() + 1, (void*)it->name.c_str());
-            offset += it->name.length() + 1;
+        //     WRITE(u32, 0); // scope, 0 means global
+        //     Assert(bareProcedure != -1);
+        //     WRITE(u32, bareProcedure); // procedure type
+        //     pdb->write(streamNumber, offset, it->name.length() + 1, (void*)it->name.c_str());
+        //     offset += it->name.length() + 1;
             
-            *typeLength = offset - typeOffset;
-        }
+        //     *typeLength = offset - typeOffset;
+        // }
 
         u32 PROJECT_FOLDER_id = nextTypeIndex++;
         {

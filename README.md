@@ -38,6 +38,9 @@ made a mistake.
 The compiler is very unstable at the moment. It isn't
 ready to be used by anyone.
 
+It only works on Windows at the moment.
+It will however work on other operating systems.
+
 The documentation is old, minimal and outright lacking.
 This is due to me prioritizing the features and stability
 of the compiler. Once some of the hard features that would
@@ -46,12 +49,19 @@ not done early has been completed, partly at least, then
 I shall spend time on examples, documentation and most
 importantly proper testing.
 
+## Where is the focus
+- Small but useful standard library (graphics, audio, file formats, networking)
+- Fast compiler with a smooth user experience. You don't need to setup a project folder and a build system to compile a single file.
+- Code execution at compile time.
+- Cross platform (not in focus yet but will be)
+
 ## Features
 - #import to divide your code into multiple files
 - #include to tokenize a file and transfer the tokens into another file.
 - Polymorphism in structs, functions and methods (there are some bugs in advances scenarios)
 - Function and operator overloading
 - x64 code generator (object files)
+- Compiling with debug information (Windows only)
 - Linking with C/C++ functions from libraries and object files (symbols and relocations)
 - #define, #multidefine and #undef (macros/defines are recursive)
 - #ifdef (exactly like C)
@@ -61,8 +71,8 @@ importantly proper testing.
 - If, for, while, break, continue, return, defer, using.
 
 ## On the way
-- Shell-like way of calling executables.
-- Thorough documentation.
+- Shell-like way of calling executables
+- Thorough documentation
 - Constant evaluation and compile time execution
 
 ## The processs
