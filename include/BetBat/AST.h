@@ -137,6 +137,7 @@ struct ASTNode {
         NULL_TERMINATED = 0x8, // for AST_STRING
         DUMP_ASM = 0x10,
         DUMP_BC = 0x20,
+        NO_CODE = 0x40,
     };
     u16 flags = 0;
     LinkConventions linkConvention = LinkConventions::NONE;
@@ -146,6 +147,7 @@ struct ASTNode {
     SET_FLAG(Pointer,POINTER)
     SET_FLAG(Reverse,REVERSE)
     SET_FLAG(Hidden,HIDDEN)
+    SET_FLAG(NoCode,NO_CODE)
     #undef SET_FLAG
     // A lot of places need to know whether a function has a body.
     // When function should have a body or not has changed a lot recently

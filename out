@@ -1,0 +1,704 @@
+BTB Compiler, version: 0.1.0/hello-2023.8.29
+ (major.minor.patch.revision/name-year.month.day)
+Test cases (10):
+ arithmetic[908 B]: ...le/operations.btb)
+ many-math-ops[405 B]: ...le/operations.btb)
+ special[1960 B]: ...le/operations.btb)
+ can[6 B]: ...le/operations.btb)
+ conversions[653 B]: ...le/operations.btb)
+ overflow[304 B]: ...le/operations.btb)
+ while[84 B]: ...ts/flow/loops.btb)
+ for[77 B]: ...ts/flow/loops.btb)
+ for-rev[108 B]: ...ts/flow/loops.btb)
+ for-ptr[143 B]: ...ts/flow/loops.btb)
+Tokenize: 
+Tokenize: 
+t-e-s-t
+s-t-r-u-c-t
+3
+S-l-i-c-e
+; : special
+< : special
+1
+T
++ : special
+> : special
+2
+{ : special
+; : special
+p-t-r
+t-e-s-t
+: : special
+3
+T
+; : special
+* : special
+1
+; : special
+- : special
+l-e-n
+- : special
+: : special
+2
+u-6-4
+; : special
+; : special
+t-e-s-t
+} : special
+- : special
+s-t-r-u-c-t
+1
+R-a-n-g-e
+; : special
+{ : special
+2
+b-e-g
+- : special
+: : special
+3
+i-3-2
+; : special
+; : special
+t-e-s-t
+e-n-d
+6
+: : special
+; : special
+i-3-2
+- : special
+; : special
+2
+} : special
+* : special
+# : special
+- : special
+d-e-f-i-n-e
+3
+O-S-_-W-I-N-D-O-W-S
+; : special
+Preprocess (imports): 
+t-e-s-t
+0
+; : special
+2
+/ : special
+3
+; : special
+t-e-s-t
+4-9-9
+; : special
+c-a-s-t
+< : special
+i-3-2
+> : special
+( : special
+( : special
+0-.-5
+% : special
+0-.-1-5
+) : special
+* : special
+1-0-0-0-0
+) : special
+; : special
+// : Begin comment
+// : End comment
+// : Begin comment
+// : End comment
+t-e-s-t
+1
+; : special
+1-2-0-3-3-1
+< : special
+9-9-9-9-9-9-9-9-9-9-9-9-9-9-9
+t-e-s-t
+0
+; : special
+9-5-6-7-9-1-0-5-4-6-7-7-7-4
+< : special
+9-9-9-9-9-9-9-9-9-9-9-9-9
+// : Begin comment
+// : End comment
+t-e-s-t
+1
+; : special
+1-.-2
+< : special
+1-.-3
+; : special
+t-e-s-t
+0
+; : special
+1-.-3-0-0-4
+< : special
+1-.-3
+; : special
+t-e-s-t
+1
+; : special
+- : special
+4-.-0
+<= : special
+- : special
+2-.
+; : special
+t-e-s-t
+1
+; : special
+9-.-0-9
+<= : special
+9-.-0-9
+; : special
+t-e-s-t
+0
+; : special
+- : special
+9-.-0
+> : special
+1-.-3
+; : special
+t-e-s-t
+1
+; : special
+0-.-1
+> : special
+- : special
+0-.-0-0-1
+; : special
+t-e-s-t
+1
+; : special
+9-9-9-9-9-.-0
+>= : special
+9-9-9-9-8-.-9-9-9-9-9-9-9-9
+; : special
+t-e-s-t
+1
+; : special
+9-9-9-9-9-.-0
+>= : special
+- : special
+2-.-0
+; : special
+t-e-s-t
+0
+; : special
+- : special
+4-.-0
+>= : special
+- : special
+2-.
+; : special
+t-e-s-t
+1
+; : special
+1-.-0-0-0-0-0-0-9
+== : special
+1-.-0-0-0-0-0-0-9
+; : special
+t-e-s-t
+0
+; : special
+1-.-0-0-0-0-0-0-9
+== : special
+- : special
+1-.-0
+; : special
+t-e-s-t
+1
+; : special
+3-.-2
+!= : special
+4-.-0-2
+; : special
+t-e-s-t
+0
+; : special
+3-.-2
+!= : special
+3-.-2
+; : special
+f-n
+r-o-u-n-d
+( : special
+v
+: : special
+f-3-2
+) : special
+- : special
+> : special
+f-3-2
+; : special
+f-n
+s-q-r-t
+( : special
+v
+: : special
+f-3-2
+) : special
+- : special
+> : special
+f-3-2
+; : special
+t-e-s-t
+3
+; : special
+c-a-s-t
+< : special
+i-3-2
+> : special
+r-o-u-n-d
+( : special
+3-.-3
+) : special
+; : special
+t-e-s-t
+4
+; : special
+c-a-s-t
+< : special
+i-3-2
+> : special
+r-o-u-n-d
+( : special
+3-.-7
+) : special
+; : special
+t-e-s-t
+1
+; : special
+c-a-s-t
+< : special
+i-3-2
+> : special
+s-q-r-t
+( : special
+1
+) : special
+; : special
+t-e-s-t
+1
+; : special
+c-a-s-t
+< : special
+i-3-2
+> : special
+s-q-r-t
+( : special
+2
+) : special
+; : special
+t-e-s-t
+2
+; : special
+c-a-s-t
+< : special
+i-3-2
+> : special
+s-q-r-t
+( : special
+3-.-9-9-9-9-9-9-9
+) : special
+; : special
+Couldn't find #. Disabling preprocessor.
+Preprocess: <base>
+Parse: tests/simple/operations.btb
+##   Parser   ##
+Parse: <base>
+##   Parser   ##
+Type check:
+Struct Range (size: 8, scope: 0)
+ 0: beg (4 bytes)
+ 4: end (4 bytes)
+Generating code:
+x64 Converter:
+Success 'arithmetic': 100.00% (26/26)
+Tokenize: 
+// : Begin comment
+Tokenize: 
+// : End comment
+s-t-r-u-c-t
+// : Begin comment
+S-l-i-c-e
+// : End comment
+< : special
+t-e-s-t
+T
+- : special
+> : special
+2-1-5-8-3-3-3
+{ : special
+; : special
+p-t-r
+c-a-s-t
+: : special
+< : special
+T
+i-3-2
+* : special
+> : special
+; : special
+( : special
+l-e-n
+1-0-0-0-0-0
+: : special
+* : special
+u-6-4
+( : special
+; : special
+5-.
+} : special
+/ : special
+s-t-r-u-c-t
+6-.
+R-a-n-g-e
+- : special
+{ : special
+7-.
+b-e-g
+) : special
+: : special
+* : special
+i-3-2
+7-.
+; : special
+/ : special
+e-n-d
+8-.
+: : special
+* : special
+i-3-2
+4-.
+; : special
++ : special
+} : special
+( : special
+# : special
+1-.
+d-e-f-i-n-e
+/ : special
+O-S-_-W-I-N-D-O-W-S
+4-.
+Preprocess (imports): 
+/ : special
+( : special
+1-.
+- : special
+5-.
++ : special
+1-.
+- : special
+4-.
+* : special
+7-.
+- : special
+2-.
+* : special
+3-.
+/ : special
+2-.
+- : special
+( : special
+6-.
+/ : special
+3-.
+) : special
+/ : special
+2-.
++ : special
+( : special
+6-.
+/ : special
+6-.
++ : special
+8-.
+- : special
+7-.
+) : special
++ : special
+5-.
+) : special
+) : special
+) : special
+; : special
+t-e-s-t
+6-9
+; : special
+8
++ : special
+1
+* : special
+( : special
+5
+- : special
+8
+% : special
+6
++ : special
+4
+* : special
+3
+% : special
+1
+% : special
+7
+- : special
+4
+- : special
+7
++ : special
+7
++ : special
+( : special
+8
++ : special
+7
+) : special
+) : special
+* : special
+4
++ : special
+5
+% : special
+( : special
+6
+/ : special
+2
++ : special
+( : special
+6
++ : special
+8
+/ : special
+4
+* : special
+1
+* : special
+5
+* : special
+2
+* : special
+6
+) : special
+) : special
+; : special
+Couldn't find #. Disabling preprocessor.
+Preprocess: <base>
+Parse: tests/simple/operations.btb
+##   Parser   ##
+Parse: <base>
+##   Parser   ##
+Type check:
+Struct Range (size: 8, scope: 0)
+ 0: beg (4 bytes)
+ 4: end (4 bytes)
+Generating code:
+x64 Converter:
+Success 'many-math-ops': 100.00% (2/2)
+Tokenize: 
+Tokenize: 
+v-a-r
+s-t-r-u-c-t
+: : special
+S-l-i-c-e
+u-3-2
+< : special
+= : special
+T
+2
+> : special
+v-a-r-f
+{ : special
+: : special
+p-t-r
+f-3-2
+: : special
+= : special
+T
+- : special
+* : special
+1-2-4-1-5-.-9-2-9-1-3
+; : special
+t-e-s-t
+l-e-n
+- : special
+: : special
+2
+u-6-4
+; : special
+; : special
+- : special
+} : special
+v-a-r
+s-t-r-u-c-t
+; : special
+R-a-n-g-e
+t-e-s-t
+{ : special
+1-2-4-1-5-.-9-2-9-1-3
+b-e-g
+; : special
+: : special
+- : special
+i-3-2
+v-a-r-f
+; : special
+; : special
+e-n-d
+a
+: : special
+= : special
+i-3-2
+6
+; : special
+; : special
+} : special
+p-a
+# : special
+= : special
+d-e-f-i-n-e
+& : special
+O-S-_-W-I-N-D-O-W-S
+a
+Preprocess (imports): 
+; : special
+p-p-a
+= : special
+& : special
+p-a
+; : special
+t-e-s-t
+6
+; : special
+* : special
+p-p-a
+[ : special
+0
+] : special
+; : special
+// : Begin comment
+// : End comment
+d-a-t-a
+: : special
+u-3-2
+* : special
+= : special
+& : special
+v-a-r
+; : special
+t-e-s-t
+2
+; : special
+* : special
+c-a-s-t
+< : special
+u-3-2
+* : special
+> : special
+d-a-t-a
+; : special
+// : Begin comment
+// : End comment
+t-e-s-t
+1
+; : special
+3
+- : special
+1
+- : special
+1
+; : special
+// : Begin comment
+// : End comment
+// : Begin comment
+// : End comment
+// : Begin comment
+// : End comment
+t-e-s-t
+c-a-s-t
+< : special
+i-6-4
+> : special
+1
+< : special
+< : special
+3-2
+; : special
+0-x-1-_-0-0-0-0-_-0-0-0-0
+; : special
+// : Begin comment
+// : End comment
+p-t-r
+: : special
+c-h-a-r
+* : special
+= : special
+n-u-l-l
+; : special
+++ : special
+( : special
+* : special
+c-a-s-t
+< : special
+u-6-4
+* : special
+> : special
+& : special
+p-t-r
+) : special
+; : special
+t-e-s-t
+c-a-s-t
+< : special
+u-6-4
+> : special
+1
+; : special
+p-t-r
+; : special
+c-a-s-t
+< : special
+u-6-4
+> : special
+c-a-s-t
+< : special
+c-h-a-r
+* : special
+> : special
+n-u-l-l
+c-a-s-t
+< : special
+u-6-4
+> : special
+c-a-s-t
+< : special
+v-o-i-d
+* : special
+> : special
+n-u-l-l
+c-a-s-t
+< : special
+u-6-4
+* : special
+> : special
+c-a-s-t
+< : special
+v-o-i-d
+* : special
+> : special
+n-u-l-l
+// : Begin comment
+// : End comment
+// : Begin comment
+// : End comment
+// : Begin comment
+// : End comment
+// : Begin comment
+// : End comment
+// : Begin comment
+Couldn't find #. Disabling preprocessor.
+TokenError: Missing end comment for 0:0
+Preprocess: <base>
+Parse: tests/simple/operations.btb
+##   Parser   ##
+D:/Backup/CodeProjects/BetterThanBatch/src/BetBat/Parser.cpp:1928

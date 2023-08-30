@@ -33,7 +33,7 @@ fn many() -> i32, i32, i32 {
 a = many()
 a, b = many()
 a, b, c = many();
-// a, b, c, d = many(); // should fail
+a, b, c, d = many(); // should fail
 
 a: i32 = many()
 a, b: i32 = many()

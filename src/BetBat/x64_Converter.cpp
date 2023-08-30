@@ -60,7 +60,18 @@
 // 2 means that the opcode takes 2 bytes
 // note that the bytes are swapped
 #define OPCODE_2_IMUL_REG_RM (u16)0xAF0F
-#define OPCODE_IDIV_RM_SLASH_7 (u8)0xF7
+
+#define OPCODE_IMUL_AX_RM_SLASH_5 (u8)0xF7
+#define OPCODE_IMUL_AX_RM8_SLASH_5 (u8)0xF6
+
+#define OPCODE_MUL_AX_RM_SLASH_4 (u8)0xF7
+#define OPCODE_MUL_AX_RM8_SLASH_4 (u8)0xF6
+
+#define OPCODE_IDIV_AX_RM_SLASH_7 (u8)0xF7
+#define OPCODE_IDIV_AX_RM8_SLASH_7 (u8)0xF6
+
+#define OPCODE_DIV_AX_RM_SLASH_6 (u8)0xF7
+#define OPCODE_DIV_AX_RM8_SLASH_6 (u8)0xF6
 
 // sign extends EAX into EDX, useful for IDIV
 #define OPCODE_CDQ (u8)0x99
@@ -107,6 +118,8 @@
 // cannot be 64 bit immediate even with REXW
 #define OPCODE_AND_RM_IMM_SLASH_4 (u8)0x81
 #define OPCODE_AND_RM_IMM8_SLASH_4 (u8)0x83
+// not sign extended
+#define OPCODE_AND_RM8_IMM8_SLASH_4 (u8)0x80
 
 // sign extension
 #define OPCODE_2_MOVSX_REG_RM8 (u16)0xBE0F
@@ -202,6 +215,7 @@
 #define PREFIX_REXR (u8)0b01000100
 // 64-bit operands will be used
 #define PREFIX_REXW (u8)0b01001000
+#define PREFIX_REX (u8)0b01000000
 #define PREFIX_16BIT (u8)0x66
 #define PREFIX_LOCK (u8)0xF0
 
@@ -783,17 +797,39 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     // Assert(size0 == size1);
                     // We may be doing a dangerous thing if the operands are
                     // of different sizes.
-
-                    prog->add((u8)(PREFIX_REXW|rex));
-                    prog->add(OPCODE_XOR_REG_RM);
-                    prog->addModRM(MODE_REG, reg1, reg1);
+                    // if(size0 != 8 && size0 != 4){
+                    //     prog->add((u8)(PREFIX_REXW|rex));
+                    //     prog->add(OPCODE_XOR_REG_RM);
+                    //     prog->addModRM(MODE_REG, reg1, reg1);
+                    // }
 
                     if(size0==8)
                         rex |= PREFIX_REXW;
-                    if(rex!=0)
-                        prog->add(rex);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM(MODE_REG, reg1, reg0);
+                    
+                    if(size0 == 1) {
+                        // Assert(!extend_op0 && !extend_op1);
+                        if(rex!=0)
+                            prog->add(rex);
+                        prog->add2(OPCODE_2_MOVZX_REG_RM8);
+                        prog->addModRM(MODE_REG, reg1, reg0);
+                    } else if(size0 == 2){
+                        // Assert(!extend_op0 && !extend_op1);
+                        // prog->add(PREFIX_16BIT);
+                        if(rex!=0)
+                            prog->add(rex);
+                        prog->add2(OPCODE_2_MOVZX_REG_RM16);
+                        prog->addModRM(MODE_REG, reg1, reg0);
+                    } else if(size0 == 4) {
+                        if(rex!=0)
+                            prog->add(rex);
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM(MODE_REG, reg1, reg0);
+                    } else if(size0 == 8) {
+                        if(rex!=0)
+                            prog->add((u8)(rex | PREFIX_REXW));
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM(MODE_REG, reg1, reg0);
+                    }
                 }
                 break;
             }
@@ -1036,119 +1072,202 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 break;
             }
             break; case BC_MULI: {
-                Assert(op0 == op2 || op1 == op2);
-                u8 op01 = op0 == op2 ? op1 : op0;
-                u8 size = DECODE_REG_SIZE(op0) > DECODE_REG_SIZE(op1) ? DECODE_REG_SIZE(op0) : DECODE_REG_SIZE(op1);
-                // TODO: What about overflow? Should we always do signed multiplication?
-                //   Overflow is truncated and no other registers are messed.
+                u8 type = op0;
+                u8 in0 = BCToProgramReg(op1, 0xF);
+                u8 in1 = BCToProgramReg(op2, 0xF);
+                u8 out = in1;
+                u8 size = DECODE_REG_SIZE(op2);
+                
+                Assert(in1 == REG_A && out == REG_A);
+                
+                if(size == 2)
+                    prog->add(PREFIX_16BIT);
                 if(size == 8)
                     prog->add(PREFIX_REXW);
-                prog->add2(OPCODE_2_IMUL_REG_RM);
-                prog->addModRM(MODE_REG, BCToProgramReg(op2,0xC), BCToProgramReg(op01,0xC));
-
+                
+                if(type == ARITHMETIC_SINT){
+                    if(size == 1) {
+                        prog->add(OPCODE_IMUL_AX_RM8_SLASH_5);
+                        prog->addModRM(MODE_REG, 5, in0);
+                    } else {
+                        prog->add(OPCODE_IMUL_AX_RM_SLASH_5);
+                        prog->addModRM(MODE_REG, 4, in0);
+                    }
+                } else if(type == ARITHMETIC_UINT){
+                    if(size == 1) {
+                        prog->add(OPCODE_MUL_AX_RM8_SLASH_4);
+                        prog->addModRM(MODE_REG, 5, in0);
+                    } else {
+                        prog->add(OPCODE_MUL_AX_RM_SLASH_4);
+                        prog->addModRM(MODE_REG, 4, in0);
+                    }
+                }
                 break;
             }
             break; case BC_DIVI: {
-                Assert(DECODE_REG_TYPE(op0) == BC_AX &&
-                    DECODE_REG_TYPE(op1) != BC_AX &&
-                    DECODE_REG_TYPE(op1) != BC_DX);
-
+                u8 type = op0;
+                u8 in0 = BCToProgramReg(op1, 0xF);
+                u8 in1 = BCToProgramReg(op2, 0xF);
+                u8 out = in0;
                 u8 size = DECODE_REG_SIZE(op2);
                 
-                if(DECODE_REG_TYPE(op2) != BC_AX){
-                    prog->add(OPCODE_PUSH_RM_SLASH_6);
-                    prog->addModRM(MODE_REG, 6, REG_A);
-                }
+                Assert(in0 == REG_A && in1 == REG_D && out == REG_A);
+    
+                // TODO: Do same with BC_MOD
                 
-                if(DECODE_REG_TYPE(op2) != BC_DX){
-                    prog->add(OPCODE_PUSH_RM_SLASH_6);
-                    prog->addModRM(MODE_REG, 6, REG_D);
-                }
-
-                // I CANNOT USE EDX, EAX
-                // op0 if eax do nothing, just sign extend, otherwise move op0 into eax
-                // 
-                // op2 can be whatever, move result to it at the end
-
-                if(DECODE_REG_TYPE(op0)!=BC_AX){
-                    // move reg in op0 to eax
-                    if(size == 8)
-                        prog->add(PREFIX_REXW);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM(MODE_REG, REG_A, BCToProgramReg(op0));
-                }
+                prog->add(OPCODE_MOV_REG_RM);
+                prog->addModRM(MODE_REG, REG_SI, in1);
+                in1 = REG_SI;
+                
+                prog->add(PREFIX_REXW);
+                prog->add(OPCODE_XOR_REG_RM);
+                prog->addModRM(MODE_REG, REG_D, REG_D);
+    
+                u8 extra = type == ARITHMETIC_SINT ? 7 : 6;
+                u8 opc = size == 1 ? OPCODE_IDIV_AX_RM8_SLASH_7 : OPCODE_DIV_AX_RM_SLASH_6;
+                
+                if(size == 2)
+                    prog->add(PREFIX_16BIT);
                 if(size == 8)
                     prog->add(PREFIX_REXW);
-                prog->add(OPCODE_CDQ); // sign extend eax into edx
-                if(size == 8)
-                    prog->add(PREFIX_REXW);
-                prog->add(OPCODE_IDIV_RM_SLASH_7);
-                prog->addModRM(MODE_REG, 7, BCToProgramReg(op1,0xF));
+                if(size == 1)
+                    prog->add(PREFIX_REX); // enables usage of low part of SI (SIL)
+                prog->add(opc);
+                prog->addModRM(MODE_REG, extra, in1);
+                if(size == 1) {
+                    prog->add(OPCODE_AND_RM8_IMM8_SLASH_4);
+                    prog->addModRM(MODE_REG, 4, out);
+                }
 
-                if(DECODE_REG_TYPE(op2) != BC_DX){
-                    prog->add(OPCODE_POP_RM_SLASH_0);
-                    prog->addModRM(MODE_REG, 0, REG_D);
-                }
-                if(DECODE_REG_TYPE(op2) != BC_AX){
-                    if(size == 8)
-                        prog->add(PREFIX_REXW);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM(MODE_REG, BCToProgramReg(op2), REG_A);
-                    prog->add(OPCODE_POP_RM_SLASH_0);
-                    prog->addModRM(MODE_REG, 0, REG_A);
-                }
+                // u8 size = DECODE_REG_SIZE(op2);
+                
+                // if(DECODE_REG_TYPE(op2) != BC_AX){
+                //     prog->add(OPCODE_PUSH_RM_SLASH_6);
+                //     prog->addModRM(MODE_REG, 6, REG_A);
+                // }
+                
+                // if(DECODE_REG_TYPE(op2) != BC_DX){
+                //     prog->add(OPCODE_PUSH_RM_SLASH_6);
+                //     prog->addModRM(MODE_REG, 6, REG_D);
+                // }
+
+                // // I CANNOT USE EDX, EAX
+                // // op0 if eax do nothing, just sign extend, otherwise move op0 into eax
+                // // 
+                // // op2 can be whatever, move result to it at the end
+
+                // if(DECODE_REG_TYPE(op0)!=BC_AX){
+                //     // move reg in op0 to eax
+                //     if(size == 8)
+                //         prog->add(PREFIX_REXW);
+                //     prog->add(OPCODE_MOV_REG_RM);
+                //     prog->addModRM(MODE_REG, REG_A, BCToProgramReg(op0));
+                // }
+                // if(size == 8)
+                //     prog->add(PREFIX_REXW);
+                // prog->add(OPCODE_CDQ); // sign extend eax into edx
+                // if(size == 8)
+                //     prog->add(PREFIX_REXW);
+                // prog->add(OPCODE_IDIV_AX_RM_SLASH_7);
+                // prog->addModRM(MODE_REG, 7, BCToProgramReg(op1,0xF));
+
+                // if(DECODE_REG_TYPE(op2) != BC_DX){
+                //     prog->add(OPCODE_POP_RM_SLASH_0);
+                //     prog->addModRM(MODE_REG, 0, REG_D);
+                // }
+                // if(DECODE_REG_TYPE(op2) != BC_AX){
+                //     if(size == 8)
+                //         prog->add(PREFIX_REXW);
+                //     prog->add(OPCODE_MOV_REG_RM);
+                //     prog->addModRM(MODE_REG, BCToProgramReg(op2), REG_A);
+                //     prog->add(OPCODE_POP_RM_SLASH_0);
+                //     prog->addModRM(MODE_REG, 0, REG_A);
+                // }
 
                 break;
             }
             break; case BC_MODI: {
-                Assert(DECODE_REG_TYPE(op0) == BC_AX &&
-                    DECODE_REG_TYPE(op1) != BC_AX &&
-                    DECODE_REG_TYPE(op1) != BC_DX);
-
+                u8 type = op0;
+                u8 in0 = BCToProgramReg(op1, 0xF);
+                u8 in1 = BCToProgramReg(op2, 0xF);
+                u8 out = in1;
                 u8 size = DECODE_REG_SIZE(op2);
-                if(DECODE_REG_TYPE(op2) != BC_AX){
-                    prog->add(OPCODE_PUSH_RM_SLASH_6);
-                    prog->addModRM(MODE_REG, 6, REG_A);
+                
+                Assert(in0 == REG_A && in1 == REG_D && out == REG_D);
+                
+                prog->add(OPCODE_MOV_REG_RM);
+                prog->addModRM(MODE_REG, REG_SI, in1);
+                in1 = REG_SI;
+                
+                prog->add(PREFIX_REXW);
+                prog->add(OPCODE_XOR_REG_RM);
+                prog->addModRM(MODE_REG, REG_D, REG_D);
+    
+                u8 extra = type == ARITHMETIC_SINT ? 7 : 6;
+                u8 opc = size == 1 ? OPCODE_IDIV_AX_RM8_SLASH_7 : OPCODE_DIV_AX_RM_SLASH_6;
+                
+                if(size == 2)
+                    prog->add(PREFIX_16BIT);
+                if(size == 8)
+                    prog->add(PREFIX_REXW);
+                if(size == 1)
+                    prog->add(PREFIX_REX); // enables usage of low part of SI (SIL)
+                
+                prog->add(opc);
+                prog->addModRM(MODE_REG, extra, in1);
+                if(size == 1) {
+                    prog->add(OPCODE_MOV_REG8_RM);
+                    prog->addModRM(MODE_REG, out, 0b100); // mov dl, ah
                 }
                 
-                if(DECODE_REG_TYPE(op2) != BC_DX){
-                    prog->add(OPCODE_PUSH_RM_SLASH_6);
-                    prog->addModRM(MODE_REG, 6, REG_D);
-                }
+                // Assert(DECODE_REG_TYPE(op0) == BC_AX &&
+                //     DECODE_REG_TYPE(op1) != BC_AX &&
+                //     DECODE_REG_TYPE(op1) != BC_DX);
 
-                // I CANNOT USE EDX, EAX
-                // op0 if eax do nothing, just sign extend, otherwise move op0 into eax
-                // 
-                // op2 can be whatever, move result to it at the end
+                // u8 size = DECODE_REG_SIZE(op2);
+                // if(DECODE_REG_TYPE(op2) != BC_AX){
+                //     prog->add(OPCODE_PUSH_RM_SLASH_6);
+                //     prog->addModRM(MODE_REG, 6, REG_A);
+                // }
+                
+                // if(DECODE_REG_TYPE(op2) != BC_DX){
+                //     prog->add(OPCODE_PUSH_RM_SLASH_6);
+                //     prog->addModRM(MODE_REG, 6, REG_D);
+                // }
 
-                if(DECODE_REG_TYPE(op0)!=BC_AX){
-                    // move reg in op0 to eax
-                    if(size == 8)
-                        prog->add(PREFIX_REXW);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM(MODE_REG, REG_A, BCToProgramReg(op0));
-                }
-                if(size == 8)
-                    prog->add(PREFIX_REXW);
-                prog->add(OPCODE_CDQ); // sign extend eax into edx
+                // // I CANNOT USE EDX, EAX
+                // // op0 if eax do nothing, just sign extend, otherwise move op0 into eax
+                // // 
+                // // op2 can be whatever, move result to it at the end
 
-                if(size == 8)
-                    prog->add(PREFIX_REXW);
-                prog->add(OPCODE_IDIV_RM_SLASH_7);
-                prog->addModRM(MODE_REG, 7, BCToProgramReg(op1));
+                // if(DECODE_REG_TYPE(op0)!=BC_AX){
+                //     // move reg in op0 to eax
+                //     if(size == 8)
+                //         prog->add(PREFIX_REXW);
+                //     prog->add(OPCODE_MOV_REG_RM);
+                //     prog->addModRM(MODE_REG, REG_A, BCToProgramReg(op0));
+                // }
+                // if(size == 8)
+                //     prog->add(PREFIX_REXW);
+                // prog->add(OPCODE_CDQ); // sign extend eax into edx
 
-                if(DECODE_REG_TYPE(op2) != BC_DX){
-                    if(size == 8)
-                        prog->add(PREFIX_REXW);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM(MODE_REG, BCToProgramReg(op2), REG_D);
-                    prog->add(OPCODE_POP_RM_SLASH_0);
-                    prog->addModRM(MODE_REG, 0, REG_D);
-                }
-                if(DECODE_REG_TYPE(op2) != BC_AX){
-                    prog->add(OPCODE_POP_RM_SLASH_0);
-                    prog->addModRM(MODE_REG, 0, REG_A);
-                }
+                // if(size == 8)
+                //     prog->add(PREFIX_REXW);
+                // prog->add(OPCODE_IDIV_AX_RM_SLASH_7);
+                // prog->addModRM(MODE_REG, 7, BCToProgramReg(op1));
+
+                // if(DECODE_REG_TYPE(op2) != BC_DX){
+                //     if(size == 8)
+                //         prog->add(PREFIX_REXW);
+                //     prog->add(OPCODE_MOV_REG_RM);
+                //     prog->addModRM(MODE_REG, BCToProgramReg(op2), REG_D);
+                //     prog->add(OPCODE_POP_RM_SLASH_0);
+                //     prog->addModRM(MODE_REG, 0, REG_D);
+                // }
+                // if(DECODE_REG_TYPE(op2) != BC_AX){
+                //     prog->add(OPCODE_POP_RM_SLASH_0);
+                //     prog->addModRM(MODE_REG, 0, REG_A);
+                // }
 
                 break;
             }
@@ -1671,7 +1790,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             //  WITH 64-bit OPERAND! THIS MAY NOT BE WANTED.
                             //  THE BYTECODE INSTRUCTION NEED TO TELL US WHETHER IT IS
                             //  SIGNED OR NOT!
-                            if(size0 != 8){
+                            if(size0 != 8 && size0 != 4){
                                 if(extend_op0)
                                     prog->add((u8)(PREFIX_REXW | PREFIX_REXB | PREFIX_REXR));
                                 else
@@ -1739,26 +1858,27 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     prog->addModRM_SIB(MODE_DEREF, reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                 } else {
                     int size = DECODE_REG_SIZE(op0);
-                    #ifndef ENABLE_FAULTY_X64
-                    if(size == 4){
-                        // prog->add(PREFIX_REXW);
-                        // rexw will sign extend the immediate so we can't actually
-                        // do and here with just one instruction (I think).
-                        // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
-                        // prog->addModRM(MODE_REG, 4, BCToProgramReg(op0,0xF));
-                        // prog->add4((u32)0xFFFFFFFF);
-                    } else if(size == 2) {
-                        prog->add(PREFIX_REXW);
-                        prog->add(OPCODE_AND_RM_IMM_SLASH_4);
-                        prog->addModRM(MODE_REG, 4, BCToProgramReg(op0,0xF));
-                        prog->add4((u32)0xFFFF);
-                    }else if(size == 1) {
-                        prog->add(PREFIX_REXW);
-                        prog->add(OPCODE_AND_RM_IMM_SLASH_4);
-                        prog->addModRM(MODE_REG, 4, BCToProgramReg(op0,0xF));
-                        prog->add4((u32)0xFF);
-                    }
-                    #endif
+                    // Shouldn't need this if the register was properly zero/sign extended to begin with
+                    // #ifndef ENABLE_FAULTY_X64
+                    // if(size == 4){
+                    //     // prog->add(PREFIX_REXW);
+                    //     // rexw will sign extend the immediate so we can't actually
+                    //     // do and here with just one instruction (I think).
+                    //     // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
+                    //     // prog->addModRM(MODE_REG, 4, BCToProgramReg(op0,0xF));
+                    //     // prog->add4((u32)0xFFFFFFFF);
+                    // } else if(size == 2) {
+                    //     prog->add(PREFIX_REXW);
+                    //     prog->add(OPCODE_AND_RM_IMM_SLASH_4);
+                    //     prog->addModRM(MODE_REG, 4, BCToProgramReg(op0,0xF));
+                    //     prog->add4((u32)0xFFFF);
+                    // }else if(size == 1) {
+                    //     prog->add(PREFIX_REXW);
+                    //     prog->add(OPCODE_AND_RM_IMM_SLASH_4);
+                    //     prog->addModRM(MODE_REG, 4, BCToProgramReg(op0,0xF));
+                    //     prog->add4((u32)0xFF);
+                    // }
+                    // #endif
 
                     prog->add(OPCODE_PUSH_RM_SLASH_6);
                     prog->addModRM(MODE_REG, 6,BCToProgramReg(op0,0xF)); // 0xF = 1|2|4|8, meaning all sizes
@@ -1781,7 +1901,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     bool extend_op0 = IS_REG_RX(op0);
                     u8 reg = BCToProgramReg(op0,0xF,false, extend_op0);
                     #ifndef ENABLE_FAULTY_X64
-                    if(size != 8){
+                    if(size != 8 && size != 4){
                         if(extend_op0)
                             prog->add((u8)(PREFIX_REXW|PREFIX_REXB));
                         else
@@ -2125,7 +2245,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add2(OPCODE_2_MOVZX_REG_RM16);
                         prog->addModRM(MODE_REG, treg, freg);
                     } else if(minSize == 4) {
-                        Assert(freg == treg);
+                        // Assert(freg == treg);
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM(MODE_REG, treg, freg);
                         // prog->add(OPCODE_NOP); // this might just work
                         // prog->add(PREFIX_REXW);
                         // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
@@ -2148,7 +2270,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->addModRM(MODE_REG, treg, freg);
                     } else if(minSize == 2) {
                         if(tsize == fsize) {
-                            // do nothing
+                            prog->add(PREFIX_16BIT);
+                            prog->add(OPCODE_MOVSXD_REG_RM);
+                            prog->addModRM(MODE_REG, treg, freg);
                         } else {
                             if(tsize==8)
                                 prog->add(PREFIX_REXW);

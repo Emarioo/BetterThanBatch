@@ -23,7 +23,7 @@ struct CertainMacro {
         cleanup();
     }
     void cleanup() {
-        sortedParameters.cleanup();
+        // sortedParameters.cleanup();
         parameters.cleanup();
     }
     Token name{};
@@ -31,12 +31,12 @@ struct CertainMacro {
     int start=-1;
     int end=-1;
 
-    struct Parameter {
-        Token name{};
-        int index=-1;
-    };
+    // struct Parameter {
+    //     Token name{};
+    //     int index=-1;
+    // };
 
-    DynamicArray<Parameter> sortedParameters{};
+    // DynamicArray<Parameter> sortedParameters{};
 
     // I tested how fast an unordered_map would be and it was slower than a normal array.
     DynamicArray<Token> parameters;
@@ -113,7 +113,7 @@ struct PreprocInfo {
 
     u32 errors = 0;
     u32 warnings = 0;
-
+    bool ignoreErrors = false;
     // int ifdefDepth=0;
     // token range
     // start ... end-1

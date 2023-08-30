@@ -6,7 +6,7 @@ void StringBuilder::append(const TokenRange& tokenRange) {
     u32 length = tokenRange.queryFeedSize();
     ensure(len + length);
 
-    u32 usedLength = tokenRange.feed(_ptr, max);
+    u32 usedLength = tokenRange.feed(_ptr + len, max - len);
     Assert(length == usedLength);
 
     len += length;

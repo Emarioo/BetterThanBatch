@@ -9,11 +9,11 @@
 */
 
 #undef ERR_SECTION
-#define ERR_SECTION(CONTENT) { BASE_SECTION("Type. error, E0000"); CONTENT; }
+#define ERR_SECTION(CONTENT) { BASE_SECTION("Type checker, "); CONTENT; }
 
 
 #ifdef TC_LOG
-#define _TC_LOG_ENTER(X) X
+#define _TC_LOG_ENTER(X) X'
 // #define _TC_LOG_ENTER(X)
 #else
 #define _TC_LOG_ENTER(X)
@@ -1285,7 +1285,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 }
             } else {
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange)
+                    ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
                     ERR_MSG("'"<<expr->name<<"' is not declared.")
                     ERR_LINE(expr->tokenRange,"undeclared")
                 )
@@ -1452,7 +1452,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             
         } else if (expr->left->typeId == AST_ASM) {
             ERR_SECTION(
-                ERR_HEAD(expr->tokenRange)
+                ERR_HEAD(expr->tokenRange, )
                 ERR_MSG("You must use cast_unsafe to cast an inline assembly block. BE VERY careful as you are likely to make mistakes.")
                 ERR_LINE(expr->tokenRange,"use cast_unsafe instead?")
                 ERR_EXAMPLE_TINY("cast_unsafe<i32> asm { mov eax, 23 }")
@@ -1461,7 +1461,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             std::string strleft = info.ast->typeToString(typeArray.last());
             std::string strcast = info.ast->typeToString(ti);
             ERR_SECTION(
-                ERR_HEAD(expr->tokenRange)
+                ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
                 ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?.")
                 ERR_LINE(expr->left->tokenRange,strleft)
                 ERR_LINE(expr->tokenRange,strcast)
@@ -1512,13 +1512,15 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 outTypes->add(expr->typeId);
             } else {
                 if(!rightType.isValid() || rightType == AST_VOID) {
-                    outTypes->add(leftType);
+                    outTypes->add(leftType); // unary operator
                 } else if(leftType.isPointer() && AST::IsInteger(rightType)){
                     outTypes->add(leftType);
                 } else if (AST::IsInteger(rightType) && rightType.isPointer()) {
                     outTypes->add(rightType);
                 } else if ((AST::IsInteger(leftType) || leftType == AST_CHAR) && (AST::IsInteger(rightType) || rightType == AST_CHAR)){
-                    outTypes->add(leftType);
+                    u8 lsize = info.ast->getTypeSize(leftType);
+                    u8 rsize = info.ast->getTypeSize(rightType);
+                    outTypes->add(lsize > rsize ? leftType : rightType);
                 } else if ((AST::IsDecimal(leftType) || AST::IsInteger(leftType)) && (AST::IsDecimal(rightType) || AST::IsInteger(rightType))){
                     if(AST::IsDecimal(leftType))
                         outTypes->add(leftType);
@@ -2129,8 +2131,12 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     // Function bodies/impl to check are added to a list
     // in CheckFunction and CheckFnCall if polymorphic
  
+    bool errorsWasIgnored = info.ignoreErrors;
     info.currentContentOrder.add(CONTENT_ORDER_ZERO);
-    defer { info.currentContentOrder.pop(); };
+    defer {
+        info.currentContentOrder.pop();
+        info.ignoreErrors = errorsWasIgnored;
+    };
 
     // DynamicArray<std::string> vars;
     // for (auto now : scope->statements){
@@ -2145,6 +2151,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
         auto now = scope->statements[scope->content[contentOrder].index];
         typeArray.resize(0);
         
+        info.ignoreErrors = errorsWasIgnored;
+        if(now->isNoCode()) {
+            info.ignoreErrors = true;
+        }
         //-- Check assign types in all varnames. The result is put in version_assignType for
         //   the generator and rest of the code to use.
         for(auto& varname : now->varnames) {

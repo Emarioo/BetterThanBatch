@@ -18,6 +18,7 @@ struct ParseInfo {
 
     ScopeId currentScopeId=0;
     std::string currentNamespace = "";
+    bool ignoreErrors = false;
 
     struct LoopScope {
         DynamicArray<ASTStatement*> defers; // apply these when continue, break or return is encountered

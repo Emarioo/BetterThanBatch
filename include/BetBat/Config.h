@@ -18,11 +18,16 @@
    Major config
 ############### */
 
+#define COMPILER_VERSION "0.1.0/hello-2023.8.29"
+
 // DEV_FILE defaults to dev.btb if none is specified
 // #define DEV_FILE "examples/debug_test.btb"
+// #define DEV_FILE "examples/garb.btb"
+// #define DEV_FILE "tests/simple/garb.btb"
 #define CONFIG_DEFAULT_TARGET WINDOWS_x64
 
 // #define RUN_TEST_SUITE
+// #define RUN_TESTS "tests/simple/garb.btb"
 
 // #define DEBUG
 
@@ -31,7 +36,7 @@
 
 // Tries to produce a smaller object file and executable.
 // for debugging purposes. This is not meant to be a small optimized build.
-#define MINIMAL_DEBUG
+// #define MINIMAL_DEBUG
 // Generates object file and debug information but no executable
 // #define DISABLE_LINKING
 
@@ -88,7 +93,7 @@
 #define VLOG
 
 // will print AST
-// #define AST_LOG
+#define AST_LOG
 
 // #define TLOG
 
@@ -98,15 +103,18 @@
 // newly tokenized includes in preprocessor
 // #define LOG_INCLUDES
 
+
+// #define MLOG_MATCH(X) X
+// #define MLOG_MATCH(X)
 // #define MLOG
 // #define PLOG
 // type checker
 // #define TC_LOG
-// #define GLOG
-// #define ILOG
+#define GLOG
+// #define ILOGf
 // #define ILOG_REGS
 // x64 converter
-#define CLOG
+// #define CLOG
 
 // #define OLOG
 // #define USE_DEBUG_INFO

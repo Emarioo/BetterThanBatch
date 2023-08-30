@@ -1,5 +1,7 @@
 #include "BetBat/Util/TestSuite.h"
 
+#include "Engone/Logger.h"
+
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) { CONTENT }
 
@@ -35,6 +37,8 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
     //   found in one.
     const char* const testKey = "TEST-CASE ";
     const int testKeyLen = strlen(testKey);
+    const char* const testErrKey = "TEST-ERROR ";
+    const int testErrKeyLen = strlen(testErrKey);
     // const char* const textKey = "text ";
     // const int textKeyLen = strlen(textKey);
     TestCase nextTest = {};
@@ -42,16 +46,61 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
         nextTest.textBuffer.size = (u64)buffer + END_INDEX - (u64)nextTest.textBuffer.buffer;\
         outTestCases->add(nextTest);\
         }
+    bool inComment = false;
+    bool inQuotes = false;
+    bool inEnclosedComment = false;
+    bool isSingleQuotes = false;
     int line = 1;
     int column = 1;
     int index = 0;
     while(index<(int)fileSize){
         char chr = buffer[index];
+        char nextChr = 0;
+        if(index + 1 < fileSize)
+            nextChr = buffer[index + 1];
+        const char* _debugStr = buffer + index;
         index++;
         column++;
         if(chr == '\n') {
             line++;
             column = 1;
+        }
+        if(inComment){
+            if(inEnclosedComment){
+                if(chr=='*'&&nextChr=='/'){
+                    index++;
+                    inComment=false;
+                    inEnclosedComment=false;
+                }
+            }else{
+                if(chr=='\n'||index==fileSize){
+                    inComment=false;
+                }
+            }
+            continue;
+        } else if(inQuotes) {
+            if((!isSingleQuotes && chr == '"') || 
+                (isSingleQuotes && chr == '\'')){
+                // Stop reading string token
+                inQuotes=false;
+            } else {
+                if(chr=='\\'){
+                    // index++; // \0 \t \n
+                }
+            }
+            continue;
+        }
+        if(chr == '/' && (nextChr=='/' || nextChr=='*')) {
+            inComment=true;
+            if(chr=='/' && nextChr=='*'){
+                inEnclosedComment=true;
+            }
+            index++; // skip the next slash
+            continue;
+        } else if(chr == '\'' || chr=='"'){
+            inQuotes = true;
+            isSingleQuotes = chr == '\'';
+            continue;
         }
 
         if(chr != '@')
@@ -113,7 +162,35 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
                 nextTest.textBuffer.buffer = buffer + index;
                 nextTest.textBuffer.startLine = line;
                 nextTest.textBuffer.startColumn = column;
+                nextTest.expectedErrors.cleanup();
             }
+        } else if(fileSize - index >= testErrKeyLen && !strncmp(buffer + index, testErrKey, testErrKeyLen)) {
+            if(!nextTest.textBuffer.buffer)
+                continue;
+            index += testErrKeyLen;
+            column += testErrKeyLen;
+            
+            int start = index;
+            int testLine = line;
+            
+            while (index<fileSize){
+                char chr = buffer[index];
+                index++;
+                column++;
+                if(chr == '\n') {
+                    line++;
+                    column = 1;
+                }
+                if(chr == '\n' || chr == ' ')
+                    break;
+            }
+            int len = index - 1 - start;
+            char errBuffer[256];
+            Assert(sizeof(errBuffer) > len);
+            memcpy(errBuffer, buffer + start, len);
+            errBuffer[len] = '\0';
+            CompileError errType = ToCompileError(errBuffer);
+            nextTest.expectedErrors.add({errType, (u32)testLine});
         } else {
             // TODO: text insertion
             // Otherwise the @ is an annotation in the actual code
@@ -231,71 +308,93 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         Bytecode* bytecode = CompileSource(&options);
         options.silent = true;
 
-        // TODO: Some cases test scenarios that should produce certain errors.
-        //   We have no implementation of testing those. Fix it.
-        if(!bytecode)
-            continue;
-
-        APIFile prevStandard = GetStandardErr();
-        SetStandardErr(PipeGetWrite(pipe));
-
-        if(useInterp) {
-            interpreter.reset();
-            interpreter.silent = true;
-            interpreter.execute(bytecode);
-        } else {
-            options.outputFile = "bin/temp.exe";
-            bool yes = ExportTarget(&options, bytecode);
-            if(!yes)
-                continue;
-
-            // IMPORTANT: The program may freeze when testing values if the pipe buffer
-            //  is filled. The fwrite function will freeze untill more bytes can be written.
-            //  You can create a thread here which reads the pipe and stops when the program
-            //  exits.
-            
-            std::string hoho{};
-            hoho += options.outputFile.text;
-            int errorCode = 0;
-            engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
-            // log::out << "Error level: "<<errorCode<<"\n";
-        }
-        Bytecode::Destroy(bytecode);
-        bytecode = nullptr;
-
-        failedLocations.resize(0);
         u64 failedTests = 0;
         u64 totalTests = 0;
-        while(true){
-            u64 readBytes = PipeRead(pipe, buffer, bufferSize);
-
-            Assert(readBytes%4==0);
-
-            totalTests += readBytes/4;
-            int j=0;
-            while(j<readBytes){
-                failedTests += buffer[j] == 'x';
-                if(buffer[j] == 'x'){
-                    u16 index = ((u16)buffer[j+2]<<8) | ((u16)buffer[j+3]);
-                    failedLocations.add(index);
+        
+        totalTests += testcase.expectedErrors.size();            
+        for(int k=0;k<testcase.expectedErrors.size();k++){
+            auto& expectedError = testcase.expectedErrors[k];
+            
+            bool found = false;
+            for(int j=0;j<options.compileStats.errorTypes.size();j++){
+                auto& actualError = options.compileStats.errorTypes[j];
+                if(expectedError.errorType == actualError.errorType
+                && expectedError.line == actualError.line) {
+                    found = true;
+                    break;
                 }
-                j+=4;
             }
+            if(!found)
+                failedTests++;
+        }
+        // if(testcase.expectedErrors.size() < options.compileStats.errorTypes.size()) {
+        //     totalTests += testcase.expectedErrors.size() < options.compileStats.errorTypes.size();
+        //     failedTests += testcase.expectedErrors.size() < options.compileStats.errorTypes.size();
+        // }
+        if(!bytecode) {
+            if(options.compileStats.errorTypes.size() != options.compileStats.errors) {
+                log::out << log::YELLOW << "Error count was "<< options.compileStats.errors << " but the individual types were "<<options.compileStats.errorTypes.size() << "\n";
+            }
+        } else {
+            if(useInterp) {
+                interpreter.reset();
+                interpreter.silent = true;
+                interpreter.execute(bytecode);
+            } else {
+                options.outputFile = "bin/temp.exe";
+                bool yes = ExportTarget(&options, bytecode);
+                if(!yes)
+                    continue;
 
-            if(readBytes != bufferSize) {
-                break;
+                // IMPORTANT: The program will freeze if the pipe buffer is filled since there ise
+                //   no space to write to. You would need a thread which processes the buffer while
+                //   the program runs to prevent this.
+                
+                std::string hoho{};
+                hoho += options.outputFile.text;
+                int errorCode = 0;
+                engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, PipeGetWrite(pipe));
+                // log::out << "Error level: "<<errorCode<<"\n";
+            }
+            Bytecode::Destroy(bytecode);
+            bytecode = nullptr;
+
+            failedLocations.resize(0);
+            while(true){
+                char tinyBuffer[4]{0};
+                PipeWrite(pipe, tinyBuffer, 4); // we must write some data to the pipe to prevent PipeRead from freezing.
+                
+                u64 readBytes = PipeRead(pipe, buffer, bufferSize);
+
+                Assert(readBytes%4==0);
+
+                totalTests += (readBytes-sizeof(tinyBuffer))/4;
+                int j = sizeof(tinyBuffer);
+                while(j<readBytes){
+                    failedTests += buffer[j] == 'x';
+                    if(buffer[j] == 'x'){
+                        u16 index = ((u16)buffer[j+2]<<8) | ((u16)buffer[j+3]);
+                        failedLocations.add(index);
+                    }
+                    j+=4;
+                }
+
+                if(readBytes != bufferSize) {
+                    break;
+                }
             }
         }
         finalTotalTests += totalTests;
         finalFailedTests += failedTests;
-        
-        SetStandardErr(prevStandard);
 
         if(failedTests == 0)
             log::out << log::LIME<<"Success ";
         else
             log::out << log::RED<<"Failure ";
-        log::out << "'"<<testcase.testName << "': "<<(100.0f*(float)(totalTests-failedTests)/(float)totalTests)<<"% ("<<(totalTests-failedTests)<<"/"<<totalTests<<")";
+        if(totalTests == 0)
+            log::out << "'"<<testcase.testName << "': 100.0% (0/0)";
+        else
+            log::out << "'"<<testcase.testName << "': "<<(100.0f*(float)(totalTests-failedTests)/(float)totalTests)<<"% ("<<(totalTests-failedTests)<<"/"<<totalTests<<")";
         log::out << "\n";
         for(auto& ind : failedLocations){
             auto loc = options.getTestLocation(ind);
@@ -308,7 +407,10 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
             log::out << log::LIME<<"Summary: ";
         else
             log::out << log::RED<<"Summary: ";
-        log::out <<(100.0f*(float)(finalTotalTests-finalFailedTests)/(float)finalTotalTests)<<"% ("<<(finalTotalTests-finalFailedTests)<<"/"<<finalTotalTests<<")";
+        if(finalTotalTests == 0)
+            log::out << "100.0% (0/0)";
+        else
+            log::out <<(100.0f*(float)(finalTotalTests-finalFailedTests)/(float)finalTotalTests)<<"% ("<<(finalTotalTests-finalFailedTests)<<"/"<<finalTotalTests<<")";
         log::out << "\n";
     }
     engone::PipeDestroy(pipe);

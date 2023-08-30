@@ -182,12 +182,12 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
             str: char[23];
             used = 22;
             while intPart > 0u && used > 0 {
-                digit: u8 = intPart % 10;
+                digit: u8 = intPart % 10u;
                 // log("i",intPart);
                 // log("d",digit);
                 str.ptr[used] = digit + '0';
                 used--;
-                intPart = intPart / 10;
+                intPart = intPart / 10u;
             }
             str.ptr += used + 1;
             str.len -= used + 1;
@@ -224,8 +224,8 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
         if minBits < 0
             minBits = 0;
         for @rev minBits..decimalBits {
-            mul *= 5;
-            acc = acc*10
+            mul *= 5u;
+            acc = acc*10u
             if nr < 24 {
                 bit = 1 & (mantissa >> nr)
                 if bit {
@@ -245,8 +245,8 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
             limit = decimalBits;
             LN
         for @rev 0..limit {
-            digit = acc % 10;
-            acc = acc / 10;
+            digit = acc % 10u;
+            acc = acc / 10u;
             if !blank || digit != 0 {
                 decimals.ptr[nr] = digit + '0';
                 if blank

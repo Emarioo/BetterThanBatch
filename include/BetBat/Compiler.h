@@ -68,11 +68,44 @@ struct CompileStats {
         generatedFiles.cleanup();
     }
     DynamicArray<std::string> generatedFiles;
-    DynamicArray<CompileError> errorTypes;
+    struct Error {
+        CompileError errorType;
+        u32 line;
+        // TODO: union {CompileError error, u32 line; struct { u64 data; };}
+    };
+    DynamicArray<Error> errorTypes;
+    void addError(const TokenRange& range, CompileError errorType = ERROR_NONE) { if(errorType == ERROR_NONE) return;  errorTypes.add({errorType, (u32)range.firstToken.line}); }
+    void addError(const Token& token, CompileError errorType = ERROR_NONE) { if(errorType == ERROR_NONE) return; errorTypes.add({errorType, (u32)token.line}); }
 
     void printSuccess(CompileOptions* options);
     void printFailed();
     void printWarnings();
+};
+struct CompilerVersion {
+    static const char* global_version;
+    static const int MAX_STRING_VERSION_LENGTH = 4*4 + 19 + 4 + 2 + 2; // integers are limited to 9999 and 99
+    u16 major; // once a year
+    u16 minor; // 1-3 months
+    u16 patch; // 3 - 10 days
+    u16 revision; // 0 - 24 hours (optional)
+    // sublimentary information
+    char name[20];
+    u16 year;
+    u8 month;
+    u8 day;
+    static CompilerVersion Current();
+    void deserialize(const char* str);
+    enum Flags : u32 {
+        INCLUDE_DATE=0x1,
+        EXCLUDE_DATE=0x1, // exclude applies when INCLUDE_AVAILABLE is used
+        INCLUDE_REVISION=0x2,
+        EXCLUDE_REVISION=0x2,
+        INCLUDE_NAME=0x4,
+        EXCLUDE_NAME=0x4,
+        INCLUDE_AVAILABLE=0x10,
+    };
+    // bufferSize should include null termination
+    void serialize(char* outString, int bufferSize, u32 flags = INCLUDE_AVAILABLE|EXCLUDE_REVISION);
 };
 struct CompileOptions {
     CompileOptions() = default;

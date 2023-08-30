@@ -15,6 +15,7 @@ struct CheckInfo {
     QuickArray<CheckImpl> checkImpls{};
 
     int funcDepth=0; // FUNC_ENTER
+    bool ignoreErrors = false; // not thread safe, you need one of these per thread
     
     bool hasErrors();
     bool hasForeignErrors();

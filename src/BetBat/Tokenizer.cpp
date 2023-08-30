@@ -193,9 +193,10 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize) const {
     using namespace engone;
     // assert?
     if(!tokenStream()) return 0;
-    int written = 0;
+    // int written = 0;
+    char* start = outBuffer;
     char* end = outBuffer + bufferSize;
-    #define CHECK_END if (outBuffer == end) return (u64)outBuffer - (u64)end - bufferSize;
+    #define CHECK_END if (outBuffer == end) return (u64)outBuffer - (u64)start;
     for(int i=startIndex();i<endIndex;i++){
         Token& tok = tokenStream()->get(i);
         
@@ -237,7 +238,7 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize) const {
         }
     }
     #undef CHECK_END
-    return (u64)outBuffer - (u64)end - bufferSize;
+    return (u64)outBuffer - (u64)start;
 }
 u32 TokenRange::queryFeedSize() const {
     using namespace engone;
@@ -1182,6 +1183,8 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
             if(chr=='/' && nextChr=='*'){
                 inEnclosedComment=true;
             }
+            token.line = ln;
+            token.column = col;
             outStream->commentCount++;
             index++; // skip the next slash
             _TLOG(log::out << "// : Begin comment\n";)

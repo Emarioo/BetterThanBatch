@@ -8,7 +8,7 @@
 #define WARN_LINE2(I, M) PrintCode(I, info.tokens, M)
 
 #undef ERR_SECTION
-#define ERR_SECTION(CONTENT) { BASE_SECTION("Parse error, E0000"); CONTENT }
+#define ERR_SECTION(CONTENT) { BASE_SECTION("Parser, "); CONTENT }
 
 /*
     Declaration of functions
@@ -3296,6 +3296,19 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             tempStatement->firstBody = body;
             tempStatement->tokenRange = body->tokenRange;
         }
+        Token& token2 = info.get(info.at()+1);
+        bool noCode = false;
+        if(IsAnnotation(token2)) {
+            if(Equal(token2,"@TEST-ERROR")) {
+                noCode = true;
+                info.next();
+                info.next(); // skip error type
+            } else if(Equal(token2, "@no-code")) {
+                noCode = true;
+                info.next();
+            }
+               
+        }
         if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseFunction(info,tempFunction,true, nullptr);
         if(result==SignalAttempt::BAD_ATTEMPT)
@@ -3320,6 +3333,9 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                 tempStatement->firstExpression = expr;
                 tempStatement->tokenRange = expr->tokenRange;
             }
+        }
+        if(noCode && tempStatement) {
+            tempStatement->setNoCode(noCode);
         }
 
         if(result==SignalAttempt::BAD_ATTEMPT){

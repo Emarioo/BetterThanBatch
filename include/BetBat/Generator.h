@@ -49,6 +49,7 @@ struct GenInfo {
     // different from load immediate
     void addImm(i32 value);
     void addCall(LinkConventions linkConvention, CallConventions callConvention);
+    void addExternalRelocation(const std::string name, u32 codeAddress) { if(!disableCodeGeneration) code->addExternalRelocation(name, codeAddress); }
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
     u32 debugFunctionIndex = (u32)-1;
@@ -58,6 +59,20 @@ struct GenInfo {
     ScopeId fromScopeId = 0; // AST_FROM_NAMESPACE
 
     u32 currentPolyVersion=0;
+
+    // won't work with multiple threads
+    bool disableCodeGeneration = false; // used with @no-code
+    bool ignoreErrors = false; // used with @no-code
+
+    // void addError(const TokenRange& range) {
+    //     if(ignoreErrors)
+    //         errors++;
+    //     compileInfo->compileOptions->compileStats.addError(range, errType);
+    // }
+    // void addError(const Token& token, CompileError errType) {
+    //     errors++;
+    //     compileInfo->compileOptions->compileStats.addError(token, errType);
+    // }
 
     int funcDepth=0;
     struct LoopScope {

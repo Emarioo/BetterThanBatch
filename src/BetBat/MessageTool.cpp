@@ -6,13 +6,58 @@ void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const Str
     // , const StringBuilder& stringBuilder) {
     using namespace engone;
     log::out << color;
-    log::out << TrimDir(tokenRange.tokenStream()->streamName)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+    if(tokenRange.tokenStream()) {
+        log::out << TrimDir(tokenRange.tokenStream()->streamName)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+    } else {
+        log::out << "?"<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+    }
     log::out << " ("<<errorCode<<")";
     log::out << ": " <<  MESSAGE_COLOR;
     Assert(prevStream);
     if(prevStream)
         *prevStream = tokenRange.tokenStream();
     //  << stringBuilder;
+}
+CompileError ToCompileError(const char* str){
+    Assert(str);
+    int len = strlen(str);
+    Assert(len > 1);
+    
+    if(*str == 'E' && str[1] >= '0' && str[1] <= '9') {
+        int num = atoi(str + 1);
+        // TODO: Hnadle potential error with atoi
+        return (CompileError)num;   
+    }
+    #define CASE(ERR) if(!strcmp(str, #ERR)) return ERR;
+    CASE(ERROR_CASTING_TYPES)
+    CASE(ERROR_UNDECLARED)
+    CASE(ERROR_NONE)
+    #undef CASE
+    return ERROR_UNKNOWN;
+}
+const char* ToCompileErrorString(temp_compile_error stuff) {
+    // if(stuff.err == ERROR_NONE)
+    //     return "";
+    
+    if(!stuff.shortVersion) {
+        #define CASE(ERR) if(stuff.err == ERR) return #ERR;
+        CASE(ERROR_CASTING_TYPES)
+        CASE(ERROR_UNDECLARED)
+        CASE(ERROR_NONE)
+        CASE(ERROR_UNKNOWN)
+        #undef CASE
+    }
+    
+    static std::unordered_map<CompileError,std::string*> errorStrings;
+    auto pair = errorStrings.find(stuff.err);
+    if(pair != errorStrings.end())
+        return pair->second->c_str();
+        
+    auto str = new std::string();
+    errorStrings[stuff.err] = str;
+    str->append("E");
+    str->append(std::to_string((u32)stuff.err));
+    return str->c_str();
 }
 void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode, TokenStream** prevStream) {
     PrintHead(color, token.operator TokenRange(), errorCode, prevStream);

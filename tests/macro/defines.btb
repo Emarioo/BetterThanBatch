@@ -1,4 +1,11 @@
 
+@TEST-CASE paranthesis-depth
+
+#define add(x,y) x + y
+add(fun(me), 2)
+// the first ) should not end the macro, parenthesis should accumulate
+
+@TEST-CASE other
 // single- and multiline definitions
 #define SINGLE i am SINGLE
 

@@ -12,9 +12,6 @@
 #undef WARN_LINE2
 #define WARN_LINE2(I, M) PrintCode(I, info.inTokens, M)
 
-// #define MLOG_MATCH(X) X
-#define MLOG_MATCH(X)
-
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) { BASE_SECTION("Preproc. error, E0000"); CONTENT; }
 
@@ -43,50 +40,52 @@ void CertainMacro::addParam(const Token& name){
     // if(pair == parameterMap.end()){
     //     parameterMap[name] = parameters.size()-1;
     // }
-    #ifndef SLOW_PREPROCESSOR
-    int index=sortedParameters.size()-1;
-    for(int i=0;i<sortedParameters.size();i++){
-        auto& it = sortedParameters.get(i);
-        if(*it.name.str > *name.str) {
-            index = i;
-            break;
-        }
-    }
-    if(index==sortedParameters.size()-1){
-        sortedParameters.add({name,(int)sortedParameters.size()});
-    } else {
-        sortedParameters._reserve(sortedParameters.size()+1);
-        memmove(sortedParameters._ptr + index + 1, sortedParameters._ptr + index, (sortedParameters.size()-index) * sizeof(Parameter));
-        *(sortedParameters._ptr + index) = {name,(int)sortedParameters.size()-1};
-        sortedParameters.used++;
-    }
-    #endif
+    // #ifndef SLOW_PREPROCESSOR
+    // int index=sortedParameters.size()-1;
+    // for(int i=0;i<sortedParameters.size();i++){
+    //     auto& it = sortedParameters.get(i);
+    //     if(*it.name.str > *name.str) {
+    //         index = i;
+    //         break;
+    //     }
+    // }
+    // if(index==sortedParameters.size()-1){
+    //     sortedParameters.add({name,(int)sortedParameters.size()});
+    // } else {
+    //     sortedParameters._reserve(sortedParameters.size()+1);
+    //     memmove(sortedParameters._ptr + index + 1, sortedParameters._ptr + index, (sortedParameters.size()-index) * sizeof(Parameter));
+    //     *(sortedParameters._ptr + index) = {name,(int)sortedParameters.size()-1};
+    //     sortedParameters.used++;
+    // }
+    // #endif
 }
 int CertainMacro::matchArg(const Token& token){
     // MEASURE;
     if(token.flags&TOKEN_MASK_QUOTED)
         return -1;
-    #ifdef SLOW_PREPROCESSOR
+    // #ifdef SLOW_PREPROCESSOR
     for(int i=0;i<(int)parameters.size();i++){
-        std::string& str = parameters[i];
-        if(token == str.c_str()){
+        Token& tok = parameters[i];
+        if(token == tok){
             _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match tok with arg "<<token<<"\n";))
             return i;
         }
     }
-    #else
-    for(int i=0;i<(int)sortedParameters.size();i++){
-        // std::string& str = parameters[i];
-        if(token.length != sortedParameters[i].name.length || *token.str < *sortedParameters[i].name.str)
-            continue;
-        if(token == sortedParameters[i].name){
-            _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match tok with arg "<<token<<"\n";))
-            return sortedParameters[i].index;
-            // return i;
-            // sortedParameters[i].index;
-        }
-    }
-    #endif
+    // #else
+    // for(int i=0;i<(int)sortedParameters.size();i++){
+    //     // std::string& str = parameters[i];
+    //     if(token.length != sortedParameters[i].name.length || *token.str < *sortedParameters[i].name.str)
+    //         continue;
+    //     this code has a bug with: #define A(a,b,c) c    new line:  A(1,2,3)
+    //     some arguments swap place
+    //     if(token == sortedParameters[i].name){
+    //         _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match tok with arg "<<token<<"\n";))
+    //         return sortedParameters[i].index;
+    //         // return i;
+    //         // sortedParameters[i].index;
+    //     }
+    // }
+    // #endif
     return -1;
 }
 // CertainMacro* RootMacro::matchArgCount(int count, bool includeInf){
@@ -268,6 +267,7 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
             
             if(token=="...") {
                 if(localMacro.indexOfVariadic == -1) {
+                    // log::out << " param: "<<token<<"\n";
                     localMacro.indexOfVariadic = localMacro.parameters.size();
                     localMacro.addParam(token);
                 } else {
@@ -292,6 +292,7 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
                 }
                 hadError=true;
             } else {
+                // log::out << " param: "<<token<<"\n";
                 localMacro.addParam(token);
             }
             token = info.next();
@@ -1286,7 +1287,7 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                         // perhaps do something with unwrap, spread or something to tweak when
                         // this code is off but it's quite nice for the most part.
                         if(i != paramStart) {
-                            argEnv.range.start--;
+                            argEnv.range.start--; // include comma
                         }
 
                         if(env.callIndex==0){
@@ -1403,7 +1404,6 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     info.tempStream->tokens.used = 0;
     info.tempStream->streamName = info.inTokens->streamName;
     info.usingTempStream = true;
-    // info.tempStream->readHead = 0;
     
     info.parsedMacroName = macroName;
 
@@ -1418,16 +1418,15 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
             result = ParsePredefinedMacro(info,*info.outputTokens[i+1], baseToken,buffer, bufferLen);
             if(result == SignalAttempt::SUCCESS){
                 i++;
-                baseToken.flags &= (info.outputTokensFlags[i]&(~TOKEN_MASK_QUOTED))|(TOKEN_MASK_QUOTED);
+                // baseToken.flags &= (info.outputTokensFlags[i]&(~TOKEN_MASK_QUOTED))|(TOKEN_MASK_QUOTED);
+                // baseToken.flags = (info.outputTokensFlags[i] & (~TOKEN_MASK_QUOTED)) | (baseToken.flags & TOKEN_MASK_QUOTED);
             }
         }
         if(result == SignalAttempt::BAD_ATTEMPT){
-            baseToken.flags &= (info.outputTokensFlags[i]&(~TOKEN_MASK_QUOTED))|(TOKEN_MASK_QUOTED);
+            baseToken.flags = (info.outputTokensFlags[i] & (~TOKEN_MASK_QUOTED)) | (baseToken.flags & TOKEN_MASK_QUOTED);
         }
-        // baseToken.flags = evalInfo.output[i].flags; // TODO: WHAT ABOUT EXTRA FLAGS? NEW LINES DISAPPEAR WHEN REPLACING MACRO NAME!
         uint64 offset = info.tempStream->tokenData.used;
         info.tempStream->addData(baseToken);
-        // info.outTokens->addData(baseToken);
         baseToken.str = (char*)offset;
         WHILE_TRUE {
             

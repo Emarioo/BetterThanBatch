@@ -9,7 +9,7 @@ library (abstraction of Vulkan or OpenGL).
 Inspiration from:
 - Jai (by Jonathan Blow)
 - Batch file (not for the reason you think)
-- C
+- C/C++
 - and a bit of Rust
 
 Example of errors with named arguments
@@ -46,8 +46,7 @@ This is due to me prioritizing the features and stability
 of the compiler. Once some of the hard features that would
 require major alterations to the compiler's architecture if
 not done early has been completed, partly at least, then
-I shall spend time on examples, documentation and most
-importantly proper testing.
+I shall spend time on examples, documentation, and proper testing.
 
 ## Where is the focus
 - Small but useful standard library (graphics, audio, file formats, networking)
@@ -108,6 +107,9 @@ You can at least do `compiler yourfile.btb` to compile and run the initial file.
 Here is a short and quick [Guide](docs/guide.md) (also not up to date, sorry).
 
 # Building
+First of all, the project isn't compiled with CMAKE or Visual Studio.
+It uses shell scripts to compile as a unity build. This causes the least amount of headaches.
+(may change in the future)
 ## Windows
 ### Building with vcvars (with Visual Studio installed)
 First you need Visual Studio installed. Then you need to find vcvars64 in

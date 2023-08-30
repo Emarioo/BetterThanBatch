@@ -9,6 +9,8 @@
 #define BC_MOV_MR 4
 #define BC_MOV_MR_DISP32 5
 
+#define ARITHMETIC_UINT 0
+#define ARITHMETIC_SINT 1
 #define BC_MODI 8
 #define BC_FMOD 9
 #define BC_ADDI 10

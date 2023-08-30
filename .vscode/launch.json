@@ -7,7 +7,7 @@
             "request": "launch",
             // "program": "${workspaceFolder}/test.exe",
             "program": "${workspaceFolder}/bin/compiler.exe",
-            "args": ["-debug", "examples/dev.btb", "-out", "bin/dev.exe"],
+            "args": ["-dev"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

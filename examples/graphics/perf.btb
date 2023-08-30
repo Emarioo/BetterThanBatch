@@ -57,7 +57,7 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
     offset += 4;
 
     ptr.zoneCounts = (cast<u32*>data + offset);
-    offset += ptr.contextCount * 4;
+    offset += ptr.contextCount * 4u;
 
     ptr.zoneOffsets = Allocate(ptr.contextCount * sizeof u32);
     for 0..ptr.contextCount {

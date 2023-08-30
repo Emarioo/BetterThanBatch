@@ -108,6 +108,121 @@ Path Path::getDirectory() const {
     return text.substr(0,lastSlash+1);
 }
 
+// You can search for "COMPILER_VERSION:" in the compiler executable to find the
+// version of the compiler. Useful in case it crashes and you can't get the version.
+static const char* str_static_version = "COMPILER_VERSION:" COMPILER_VERSION;
+
+const char* CompilerVersion::global_version = COMPILER_VERSION;
+CompilerVersion CompilerVersion::Current(){
+    CompilerVersion version{};
+    version.deserialize(global_version);
+    return version;
+}
+void CompilerVersion::deserialize(const char* str) {
+    int versionLength = strlen(str);
+    Assert(versionLength <= MAX_STRING_VERSION_LENGTH);
+    if(versionLength > MAX_STRING_VERSION_LENGTH) return; // in case you disable asserts for whatever reason
+    // "0.1.0/0-2023.8.29"
+    // "65535.65535.65535/65535-65535.256.256"
+    // "9999.9999.9999/9999-9999.99.99"
+    
+    // good defaults
+    memset(this, 0, sizeof(CompilerVersion));
+    
+    char buffer[MAX_STRING_VERSION_LENGTH+1];
+    strcpy(buffer, str); // buffer and string length is already checked
+    int slashIndex = -1, dashIndex = -1;
+    int dots[3] = {-1, -1, -1 };
+    int lastDots[2] = { -1, -1 };
+    int dotCount = 0;
+    int lastDotCount = 0;
+    for(int i=0;i<versionLength;i++){
+        if(str[i] == '/') { // indicates state/name
+            Assert(("too many slashes in version string",slashIndex == -1));
+            slashIndex = i + 1;
+            buffer[i] = '\0';
+        }
+        if(str[i] == '-') { // indicates date
+            Assert(("too many dashes in version string",dashIndex == -1));
+            dashIndex = i + 1;
+            buffer[i] = '\0';
+        }
+        if(str[i] == '.') {
+            if (slashIndex == -1 && dashIndex == -1) {
+                if(dotCount < 3) {
+                    dots[dotCount] = i;
+                    buffer[i] = '\0';
+                }
+                dotCount++;
+            }
+            if (dashIndex != -1) {
+                if(lastDotCount < 2) {
+                    lastDots[lastDotCount] = i;
+                    buffer[i] = '\0';
+                }
+                lastDotCount++;
+            }
+        }
+    }
+    Assert(("there must be two or three dots in first part",dotCount==2 || dotCount==3));
+    if(dashIndex != -1){
+        Assert(("there must be 2 dots in date part (when using dash)",lastDotCount==2));
+    }
+    if(slashIndex != -1) {
+        Assert(("missing name string", slashIndex != dashIndex - 1));
+    }
+    
+    int temp=0;
+    #define SET_VER_INT(VAR, OFF) temp = atoi(buffer + OFF); Assert(temp < ((1<<(sizeof(VAR)<<3))-1)); VAR = temp;
+    SET_VER_INT(major, 0)
+    SET_VER_INT(minor, dots[0] + 1)
+    SET_VER_INT(patch, dots[1] + 1)
+    if(dots[2] != -1) {
+        SET_VER_INT(revision, dots[2] + 1)
+    }
+    if(slashIndex != -1) {
+        int nameLen = 0;
+        if(dashIndex == -1){
+            nameLen = versionLength - slashIndex - 1;
+        } else {
+            nameLen = dashIndex - slashIndex - 1;
+        }
+        Assert(nameLen < sizeof(name));
+        if(nameLen>0){
+            strcpy(name, buffer + slashIndex);
+        }
+    }
+    if(dashIndex != -1) {
+        SET_VER_INT(year, dashIndex)
+        SET_VER_INT(month, lastDots[0] + 1)
+        SET_VER_INT(day, lastDots[1] + 1)
+    }
+    #undef SET_VER_INT
+}
+void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
+    Assert(bufferSize > 50); // version is usually, probably, never bigger than this
+    int offset = 0;
+    offset += snprintf(outBuffer + offset, bufferSize - offset, "%d.%d.%d", (int)major, (int)minor, (int)patch);
+    if(flags & INCLUDE_AVAILABLE) {
+        if(0 == (flags & EXCLUDE_REVISION) && revision != 0)
+            offset += snprintf(outBuffer + offset, bufferSize - offset, ".%d", (int)revision);
+        if(0 == (flags & EXCLUDE_NAME) && *name != '\0') {
+            name[sizeof(name)-1] = '\0'; // just in case
+            offset += snprintf(outBuffer + offset, bufferSize - offset, "/%s", name);
+        }
+        if(0==(flags & EXCLUDE_DATE) && year != 0) // year should normally not be zero so if it is we have special stuff going on
+            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d.%d.%d", (int)year, (int)month, (int)day);
+    } else {
+        if(flags & INCLUDE_REVISION)
+            offset += snprintf(outBuffer + offset, bufferSize - offset, ".%d", (int)revision);
+        if(flags & INCLUDE_NAME) {
+            name[sizeof(name)-1] = '\0'; // just in case
+            offset += snprintf(outBuffer + offset, bufferSize - offset, "/%s", name);
+        }
+        if(flags & INCLUDE_DATE)
+            offset += snprintf(outBuffer + offset, bufferSize - offset, "-%d.%d.%d", (int)year, (int)month, (int)day);
+    }
+}
 const char* ToString(TargetPlatform target){
     #define CASE(X,N) case X: return N;
     switch(target){
@@ -303,7 +418,7 @@ RootMacro* CompileInfo::matchMacro(const Token& name){
     if(pair != _rootMacros.end()){
         ptr = pair->second;
     }
-    _MLOG(MLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<token<<"\n";))
+    _MLOG(MLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<name<<"\n";))
     macroLock.unlock();
     
     return ptr;
@@ -646,6 +761,12 @@ u32 ProcessSource(void* ptr) {
         info->waitingThreads++;
         info->sourceLock.unlock();
     }
+    
+    // a: c, b
+    // b: c
+    // c: 
+    // a, c, b
+    
     // TODO: Run Preprocess in multiple threads. This requires a depencency system
     //   since one stream may need another stream's macros so that stream must
     //   be processed first.
@@ -661,6 +782,18 @@ u32 ProcessSource(void* ptr) {
     info->completedDependencyIndex = info->streams.size();
     info->waitingThreads++;
     info->availableThreads++;
+    // log::out << "Cool\n";
+    if(info->streams.size()>0 && info->streams[0]->initialStream && !info->streams[0]->completed) {
+        auto stream = info->streams[0];
+        Assert(stream->initialStream->streamName == "<base>");
+        // log::out << "Pre "<<BriefString(stream->initialStream->streamName)<<"\n";
+        _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
+        stream->finalStream = Preprocess(info, stream->initialStream);
+        stream->completed = true;
+        stream->available = false;
+    }
+    // log::out << "End\n";
+
     // for(int i=0;i<info->streams.size();i++){
     //     StreamToProcess* stream = info->streams[i];
     //     log::out << BriefString(stream->initialStream->streamName,10)<<"\n";
@@ -757,6 +890,9 @@ Bytecode* CompileSource(CompileOptions* options) {
     
     #ifdef SINGLE_THREADED
     options->threadCount = 1;
+    #else
+    // log::out << log::YELLOW << "Multithreading is turned of because there are bugs and there is no point in fixing them since the system will change anyway. It's better to fix them then."
+    // options->threadCount = 1;
     #endif
 
     // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
@@ -807,18 +943,12 @@ Bytecode* CompileSource(CompileOptions* options) {
     essentialBuffer.origin = "<base>";
     essentialBuffer.size = essentialStructs.size();
     essentialBuffer.buffer = essentialStructs.data();
-    // ParseFile(compileInfo, "","",&essentialBuffer);
-    #endif
-    // if(options->initialSourceBuffer.buffer){
-    //     ParseFile(compileInfo, "","",&options->initialSourceBuffer);
-    // } else {
-    //     ParseFile(compileInfo, options->initialSourceFile.getAbsolute());
-    // }
-
+    
     SourceToProcess essentialSource{};
     essentialSource.textBuffer = &essentialBuffer;
     essentialSource.stream = compileInfo.addStream(essentialSource.textBuffer->origin);
     compileInfo.sourcesToProcess.add(essentialSource);
+    #endif
 
     SourceToProcess initialSource{};
     if(options->initialSourceBuffer.buffer){
@@ -828,6 +958,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     }
     initialSource.stream = compileInfo.addStream(initialSource.path);
     compileInfo.sourcesToProcess.add(initialSource);
+    
 
     Assert(!options->singleThreaded); // TODO: Implement not multithreading
 

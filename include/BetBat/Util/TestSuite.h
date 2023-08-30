@@ -8,6 +8,11 @@
 struct TestCase {
     std::string testName;
     TextBuffer textBuffer;
+    struct Error {
+        CompileError errorType;
+        u32 line;
+    };
+    DynamicArray<Error> expectedErrors;
     // char* buffer = nullptr;
     // u64 size = 0;
     // std::string originPath;

@@ -13,6 +13,15 @@
 #undef STB_IMAGE_IMPLEMENTATION
 #undef STB_IMAGE_WRITE_IMPLEMENTATION
 
+void print_version(){
+    using namespace engone;
+    char buffer[100];
+    CompilerVersion version = CompilerVersion::Current();
+    version.serialize(buffer, sizeof(buffer),CompilerVersion::INCLUDE_AVAILABLE);
+    log::out << "BTB Compiler, version: " << log::LIME<< buffer <<"\n";
+    log::out << log::GRAY << " (major.minor.patch.revision/name-year.month.day)\n";
+    // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)";
+}
 void print_help(){
     using namespace engone;
     log::out << log::BLUE << "##   Help (outdated)   ##\n";
@@ -63,12 +72,17 @@ void print_help(){
 #define EXIT_CODE_NOTHING 0
 #define EXIT_CODE_SUCCESS 0
 #define EXIT_CODE_FAILURE 1
+
 int main(int argc, const char** argv){
     using namespace engone;
     
-    u32 a = 1;
-    u32 b = 32;
-    u32 c = a << b;
+    // u32 a = 1;
+    // u32 b = 32;
+    // u32 c = a << b;
+    
+    // #define A(a,...) a + __VA_ARGS__ + __VA_ARGS__
+    
+    // A(a,0,2);
 
 
     // DeconstructPDB("test.pdb");
@@ -108,6 +122,7 @@ int main(int argc, const char** argv){
     bool runTests = false;
 
     if (argc < 2) {
+        print_version();
         print_help();
         return EXIT_CODE_NOTHING;
     }
@@ -228,22 +243,30 @@ int main(int argc, const char** argv){
         #ifdef RUN_TEST_SUITE
         DynamicArray<std::string> tests;
         tests.add("tests/simple/operations.btb");
+        // tests.add("tests/simple/garb.btb");
         // tests.add("tests/flow/loops.btb");
         // tests.add("tests/what/struct.btb");
         VerifyTests(tests);
-        if(true) {} else
-        #endif
+        #elif defined(RUN_TESTS)
+        auto strs = {RUN_TESTS};
+        DynamicArray<std::string> tests;
+        for(auto s : strs) {
+            tests.add(s);
+        }
+        VerifyTests(tests);
+        #else
         if(compileOptions.target == BYTECODE){
             compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         } else {
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
-            compileOptions.useDebugInformation = true;
+            // compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         }
         compilerExitCode = compileOptions.compileStats.errors;
+        #endif
 
         // DeconstructPDB("bin/dev.pdb");
         // auto pdb = PDBFile::Deconstruct("bin/dev.pdb");
