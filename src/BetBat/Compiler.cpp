@@ -1071,7 +1071,7 @@ Bytecode* CompileSource(CompileOptions* options) {
 
     options->compileStats.end_bytecode = StartMeasure();
 
-    if(compileInfo.compileOptions->compileStats.errors!=0){
+    if(compileInfo.compileOptions->compileStats.errors!=0){ 
         if(!options->silent)
             compileInfo.compileOptions->compileStats.printFailed();
         // if(compileInfo.nativeRegistry == bytecode->nativeRegistry) {
@@ -1433,15 +1433,15 @@ bool CompileAll(CompileOptions* options){
 //         return false;
 //     BTBCHeader header{};
 
-//     Assert(bytecode->codeSegment.used*bytecode->codeSegment.getTypeSize() < ((u64)1<<32));
-//     header.codeSize = bytecode->codeSegment.used*bytecode->codeSegment.getTypeSize();
+//     Assert(bytecode->instructionSegment.used*bytecode->instructionSegment.getTypeSize() < ((u64)1<<32));
+//     header.codeSize = bytecode->instructionSegment.used*bytecode->instructionSegment.getTypeSize();
 //     Assert(bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize() < ((u64)1<<32));
 //     header.dataSize = bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize();
 
 //     // TOOD: Check error when writing files
 //     int err = FileWrite(file, &header, sizeof(header));
-//     if(err!=-1 && bytecode->codeSegment.data){
-//         err = FileWrite(file, bytecode->codeSegment.data, header.codeSize);
+//     if(err!=-1 && bytecode->instructionSegment.data){
+//         err = FileWrite(file, bytecode->instructionSegment.data, header.codeSize);
 //     }
 //     if(err!=-1 && bytecode->dataSegment.data) {
 //         err = FileWrite(file, bytecode->dataSegment.data, header.dataSize);
@@ -1472,11 +1472,11 @@ bool CompileAll(CompileOptions* options){
 //         return nullptr; // Corrupt file. Sizes does not match.
     
 //     Bytecode* bc = Bytecode::Create();
-//     bc->codeSegment.resize(header.codeSize/bc->codeSegment.getTypeSize());
-//     bc->codeSegment.used = header.codeSize/bc->codeSegment.getTypeSize();
+//     bc->instructionSegment.resize(header.codeSize/bc->instructionSegment.getTypeSize());
+//     bc->instructionSegment.used = header.codeSize/bc->instructionSegment.getTypeSize();
 //     bc->dataSegment.resize(header.dataSize/bc->dataSegment.getTypeSize());
 //     bc->dataSegment.used = header.dataSize/bc->dataSegment.getTypeSize();
-//     FileRead(file, bc->codeSegment.data, header.codeSize);
+//     FileRead(file, bc->instructionSegment.data, header.codeSize);
 //     FileRead(file, bc->dataSegment.data, header.dataSize);
 
 //     // debugSegment is ignored

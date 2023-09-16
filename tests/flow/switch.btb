@@ -1,0 +1,92 @@
+@TEST-CASE switch-integers
+
+fn @native printc(str: char);
+
+msg = 9
+out = 0
+switch msg {
+    case 1: {
+        out = 1
+    }
+    case 5: {
+        out = 5
+    }
+    case 7: {
+        out = 7
+    }
+    case: {
+        out = 10
+    }
+}
+test 10; out;
+msg = 1
+out = 0
+switch msg {
+    case 1: out = 1
+    case 5: out = 5
+    case 7: out = 7
+    case: out = 10
+}
+test 1; out;
+msg = 5
+out = 0
+switch msg {
+    case 1: out = 1
+    case 5: out = 5
+    case 7: out = 7
+    case: out = 10
+}
+test 5; out;
+msg = 7
+out = 0
+switch msg {
+    case 1: out = 1
+    case 5: out = 5
+    case 7: out = 7
+    case: out = 10
+}
+test 7; out;
+
+@TEST-CASE switch-enums
+
+enum Mouthful { Batter, Bitter, Butter }
+
+msg = Mouthful.Butter
+out = 0
+switch msg {
+    case Batter: { }
+    case Bitter: { }
+    case: { } // switch with default does not require all enum members
+}
+
+msg = Mouthful.Butter
+out = 0
+switch msg {
+    case Batter: { }
+    case Bitter: { }
+    case Butter: { } // no default case require all enum members
+}
+
+@TEST-CASE switch-errors
+
+msg = 9
+switch msg {
+    case 1: { }                                                 
+    case: { }
+    case: { }       @TEST-ERROR ERROR_DUPLICATE_DEFAULT_CASE    
+    default: {}     @TEST-ERROR ERROR_C_STYLED_DEFAULT_CASE     
+}
+
+enum Mouthful {
+    Batter,
+    Bitter,
+    Butter,
+}
+
+msge = Mouthful.Butter
+switch msge { @TEST-ERROR ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH
+    case Batter: { }                                                        
+    case Batter: { }    @TEST-ERROR ERROR_DUPLICATE_CASE                    
+    case Bitter: { }                                                        
+    chicken             @TEST-ERROR ERROR_BAD_TOKEN_IN_SWITCH               
+}

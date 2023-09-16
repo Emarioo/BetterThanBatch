@@ -509,6 +509,7 @@ struct ASTStatement : ASTNode {
         RETURN,
         BREAK,
         CONTINUE,
+        SWITCH,
         USING,
         BODY,
         DEFER,
@@ -571,6 +572,12 @@ struct ASTStatement : ASTNode {
     QuickArray<ASTExpression*> arrayValues; // for array initialized
     // };
     PolyVersions<DynamicArray<TypeId>> versions_expressionTypes; // types from firstExpression
+
+    struct SwitchCase {
+        ASTExpression* caseExpr = nullptr;
+        ASTScope* caseBody = nullptr;
+    };
+    QuickArray<SwitchCase> switchCases; // used with switch statement
 
     bool rangedForLoop=false; // otherwise sliced for loop
     bool globalAssignment=false; // for variables, indicates whether variable refers to global data in data segment

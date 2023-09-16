@@ -64,8 +64,8 @@ bool PDBFile::writeFile(const char* path) {
         tpiHeader->HashKeySize = 4;
         tpiHeader->NumHashBuckets = TPIHeader::MAX_BUCKETS;
         // tpiHeader->TypeRecordBytes = 0;
-        if(tpiHeader->TypeIndexBegin == 0)
-            tpiHeader->TypeIndexBegin = tpiHeader->TypeIndexEnd = 0x1000;
+        // if(tpiHeader->TypeIndexBegin == 0)
+        //     tpiHeader->TypeIndexBegin = tpiHeader->TypeIndexEnd = 0x1000;
     }
         
     streams[DBI_NUMBER].blockIndices.cleanup();
@@ -79,9 +79,130 @@ bool PDBFile::writeFile(const char* path) {
         ipiHeader->HeaderSize = sizeof(TPIHeader);
         ipiHeader->HashKeySize = 4;
         ipiHeader->NumHashBuckets = TPIHeader::MAX_BUCKETS;
+        
+        // u8* buffer = new u8[0x1000];
+        
+        // log::out << log::RED << "WRITE IPI IDS\n";
+        // // DeconstructDebugTypes(takePointer(IPI_NUMBER, sizeof(TPIHeader), ipiHeader->TypeRecordBytes), ipiHeader->TypeRecordBytes, true);
+        // u8* pbuffer = takePointer(IPI_NUMBER, 0, sizeof(TPIHeader) + ipiHeader->TypeRecordBytes);
+        // u32 offset = sizeof(TPIHeader);
+        // u32 poffset = sizeof(TPIHeader);
+        // memcpy(buffer, pbuffer, 0x1000);
+        // memset(pbuffer, 0, 0x1000);
+        // int recordCount = -1;
+        // int typeCount = -1;
+        // while(offset < ipiHeader->TypeRecordBytes) {
+        //     typeCount++;
+
+        //     // Assert(size % 4 == 0);
+            
+        //     u16 length = *(u16*)(buffer + offset);
+        //     offset += 2;
+        //     u32 nextOffset = offset + length;
+        //     LeafType leaf = *(LeafType*)(buffer + offset);
+        //     offset += 2;
+
+            
+        //     const char* name = ToString(leaf, true);
+        //     log::out <<  "Type index "<<typeCount<<", ";
+        //     if(name)
+        //         log::out << log::LIME << name << log::SILVER;
+        //     else
+        //         log::out <<log::RED <<  "{"<<(u32)leaf<<"}" << log::SILVER;
+        //     log::out << ", len: "<<length<<"\n";
+            
+        //     // Assert(nextOffset <= size);
+
+        //     // the leaf formats come from the structs in cvinfo.h
+        //     switch(leaf) {
+        //         case LF_TYPESERVER2: {
+        //             offset += 16; // guid
+        //             u32 age = *(u32*)(buffer + offset);
+        //             offset += 4;
+        //             char* pdbpath = (char*)(buffer + offset);
+        //             u32 pdblen = strlen(pdbpath);
+        //             offset += pdblen + 1;
+        //             log::out << " guid, age: "<<age << ", pdb: "<< pdbpath<<"\n";
+        //             break;
+        //         }
+        //         case LF_STRING_ID: {
+        //             u32 id = *(u32*)(buffer + offset);
+        //             offset += 4;
+        //             char* str = (char*)(buffer + offset);
+        //             u32 len = strlen(str);
+        //             offset += len;
+        //             log::out << " id "<<id << ", "<<str << "\n";
+        //             break;
+        //         }
+        //         case LF_FUNC_ID: {
+        //             u32 scopeId = *(u32*)(buffer + offset);
+        //             offset += 4;
+        //             u32 type = *(u32*)(buffer + offset);
+        //             offset += 4;
+        //             char* str = (char*)(buffer + offset);
+        //             u32 len = strlen(str);
+        //             offset += len;
+        //             log::out << " scopeid "<<scopeId << ", type "<<type << ", "<<str << "\n";
+                    
+        //             u16 length = *(u16*)(buffer + offset);
+        //             offset += 2;
+        //             u32 nextOffset = offset + length;
+        //             LeafType leaf = *(LeafType*)(buffer + offset);
+        //             offset += 2;
+                    
+        //             break;
+        //         }
+        //         case LF_UDT_SRC_LINE: {
+        //             u32 type = *(u32*)(buffer + offset); // UDT's type index
+        //             offset += 4;
+        //             u32 src = *(u32*)(buffer + offset); // index to LF_STRING_ID record where source file name is saved
+        //             offset += 4;
+        //             u16 line = *(u16*)(buffer + offset);
+        //             offset += 2;
+        //             log::out << " type "<< type << ", src "<< src << ", line "<< line << "\n";
+        //             break;
+        //         }
+        //         case LF_BUILDINFO: {
+        //             u16 argCount = *(u16*)(buffer + offset); // UDT's type index
+        //             offset += 2;
+        //             // UNALIGNED! but it should be
+        //             u32* args = (u32*)(buffer + offset); // index to LF_STRING_ID record where source file name is saved
+        //             offset += 4 * argCount;
+        //             log::out << " args["<<argCount<<"]: ";
+        //             for(int i=0;i<argCount;i++){
+        //                 if(i != 0){
+        //                     log::out << ", ";
+        //                 }
+        //                 log::out << args[i];
+        //             }
+        //             log::out << "\n";
+        //             break;
+        //         }
+        //         case LF_SUBSTR_LIST: {
+        //             u32 argCount = *(u32*)(buffer + offset); // UDT's type index
+        //             offset += 4;
+        //             u32* args = (u32*)(buffer + offset); // index to LF_STRING_ID record where source file name is saved
+        //             offset += 4 * argCount;
+        //             log::out << " args["<<argCount<<"]: ";
+        //             for(int i=0;i<argCount;i++){
+        //                 if(i != 0){
+        //                     log::out << ", ";
+        //                 }
+        //                 log::out << args[i];
+        //             }
+        //             log::out << "\n";
+        //             break;
+        //         }
+        //     }
+
+        //     offset = nextOffset;
+        //     // 4-byte alignment if from PDB, debug$T is not supposed to be aligned
+        //     if((offset & 3) != 0)
+        //         offset += 4 - offset & 3;
+        // }
         // ipiHeader->TypeRecordBytes = 0;
-        if(ipiHeader->TypeIndexBegin == 0)
-            ipiHeader->TypeIndexBegin = ipiHeader->TypeIndexEnd = 0x1000;
+        // if(ipiHeader->TypeIndexBegin == 0)
+        //     ipiHeader->TypeIndexBegin = ipiHeader->TypeIndexEnd = 0x1000;
     }
     u32 streamTable_block = requestBlock();
     Assert(streamTable_block != -1);
@@ -829,7 +950,8 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
 
             WRITE(u32, T_VOID); // type index of return value
             // TODO: Change call convention to something proper
-            WRITE(u8, CV_CALL_GENERIC); // call convention (CV_call_e)
+            WRITE(u8, CV_CALL_NEAR_C); // call convention (CV_call_e)
+            // WRITE(u8, CV_CALL_GENERIC); // call convention (CV_call_e)
             WRITE(u8, 0); // attributes (CV_funcattr_t), I think it can be zero.
             // typedef struct CV_funcattr_t {
             //     unsigned char  cxxreturnudt :1;  // true if C++ style ReturnUDT
@@ -929,96 +1051,118 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
             *typeLength = offset - typeOffset;
         }
 
-        u32 PROJECT_FOLDER_id = nextTypeIndex++;
-        {
-            ALIGN4
-            typeOffsets.add(offset - typeRecordStart);
-            u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
-            offset += 2;
-            u32 typeOffset = offset;
-            WRITE(LeafType, LF_STRING_ID); // leaf type
-            WRITE(u32, T_NOTYPE); // sub string
+        // u32 PROJECT_FOLDER_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     typeOffsets.add(offset - typeRecordStart);
+        //     u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
+        //     offset += 2;
+        //     u32 typeOffset = offset;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
 
-            // TOOD: don't use hardcoded string
-            std::string str = "C:\\Users\\datao\\Desktop\\Backup\\CodeProjects\\BetterThanBatch";
-            pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
-            offset += str.length() + 1;
+        //     // TOOD: don't use hardcoded string
+        //     std::string str = "C:\\Users\\datao\\Desktop\\Backup\\CodeProjects\\BetterThanBatch";
+        //     pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
+        //     offset += str.length() + 1;
             
-            *typeLength = offset - typeOffset;
-        }
-        u32 COMPILER_id = nextTypeIndex++;
-        {
-            ALIGN4
-            typeOffsets.add(offset - typeRecordStart);
-            u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
-            offset += 2;
-            u32 typeOffset = offset;
-            WRITE(LeafType, LF_STRING_ID); // leaf type
-            WRITE(u32, T_NOTYPE); // sub string
+        //     *typeLength = offset - typeOffset;
+        // }
+        // u32 COMPILER_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     typeOffsets.add(offset - typeRecordStart);
+        //     u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
+        //     offset += 2;
+        //     u32 typeOffset = offset;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
 
-            // TOOD: don't use hardcoded string
-            std::string str = "C:\\Users\\datao\\Desktop\\Backup\\CodeProjects\\BetterThanBatch\\bin\\compiler.exe";
-            pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
-            offset += str.length() + 1;
+        //     // TOOD: don't use hardcoded string
+        //     std::string str = "C:\\Users\\datao\\Desktop\\Backup\\CodeProjects\\BetterThanBatch\\bin\\compiler.exe";
+        //     pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
+        //     offset += str.length() + 1;
             
-            *typeLength = offset - typeOffset;
-        }
-        u32 SOURCE_id = nextTypeIndex++;
-        {
-            ALIGN4
-            typeOffsets.add(offset - typeRecordStart);
-            u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
-            offset += 2;
-            u32 typeOffset = offset;
-            WRITE(LeafType, LF_STRING_ID); // leaf type
-            WRITE(u32, T_NOTYPE); // sub string
+        //     *typeLength = offset - typeOffset;
+        // }
+        // u32 SOURCE_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     typeOffsets.add(offset - typeRecordStart);
+        //     u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
+        //     offset += 2;
+        //     u32 typeOffset = offset;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
 
-            // TOOD: don't use hardcoded string
-            std::string str = engone::GetWorkingDirectory();
-            str += "\\";
-            str += "examples\\debug-test.btb";
-            pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
-            offset += str.length() + 1;
+        //     // TOOD: don't use hardcoded string
+        //     std::string str = engone::GetWorkingDirectory();
+        //     str += "\\";
+        //     // str += "examples\\debug-test.btb";
+        //     str += "examples\\dev.btb";
+        //     pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
+        //     offset += str.length() + 1;
             
-            *typeLength = offset - typeOffset;
-        }
-        u32 PDB_id = nextTypeIndex++;
-        {
-            ALIGN4
-            typeOffsets.add(offset - typeRecordStart);
-            u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
-            offset += 2;
-            u32 typeOffset = offset;
-            WRITE(LeafType, LF_STRING_ID); // leaf type
-            WRITE(u32, T_NOTYPE); // sub string
+        //     *typeLength = offset - typeOffset;
+        // }
+        // u32 PDB_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     typeOffsets.add(offset - typeRecordStart);
+        //     u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
+        //     offset += 2;
+        //     u32 typeOffset = offset;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
 
-            // TOOD: don't use hardcoded string
-            std::string str = engone::GetWorkingDirectory();
-            str += "\\";
-            str += "bin\\dev.pdb";
-            pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
-            offset += str.length() + 1;
+        //     // TOOD: don't use hardcoded string
+        //     std::string str = engone::GetWorkingDirectory();
+        //     str += "\\";
+        //     str += "bin\\dev.pdb";
+        //     pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
+        //     offset += str.length() + 1;
             
-            *typeLength = offset - typeOffset;
-        }
-        u32 BUILDINFO_id = nextTypeIndex++;
-        {
-            ALIGN4
-           typeOffsets.add(offset - typeRecordStart);
-            u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
-            offset += 2;
-            u32 typeOffset = offset;
-            WRITE(LeafType, LF_BUILDINFO); // leaf type
-            WRITE(u16, 4); // arg count
-            // arguments
-            WRITE(u32, PROJECT_FOLDER_id);
-            WRITE(u32, COMPILER_id);
-            WRITE(u32, SOURCE_id);
-            WRITE(u32, PDB_id);
-            // The final argument is usually arguments that was passed to the compiler
-            // perhaps we can skip it?
-            *typeLength = offset - typeOffset;
-        }
+        //     *typeLength = offset - typeOffset;
+        // }
+        // u32 COMPILER_ARGS_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //     typeOffsets.add(offset - typeRecordStart);
+        //     u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
+        //     offset += 2;
+        //     u32 typeOffset = offset;
+        //     WRITE(LeafType, LF_STRING_ID); // leaf type
+        //     WRITE(u32, T_NOTYPE); // sub string
+
+        //     // TOOD: don't use hardcoded string
+        //     // std::string str = "C:\\Users\\datao\\Desktop\\Backup\\CodeProjects\\BetterThanBatch";
+        //     // pdb->write(streamNumber, offset, str.length() + 1, (void*)str.c_str());
+        //     // offset += str.length() + 1;
+        //     u8 zero = 0;
+        //     pdb->write(streamNumber, offset, 1, &zero);
+        //     offset++;
+            
+        //     *typeLength = offset - typeOffset;
+        // }
+        // u32 BUILDINFO_id = nextTypeIndex++;
+        // {
+        //     ALIGN4
+        //    typeOffsets.add(offset - typeRecordStart);
+        //     u16* typeLength = (u16*)(pdb->takePointer(streamNumber, offset, 2));
+        //     offset += 2;
+        //     u32 typeOffset = offset;
+        //     WRITE(LeafType, LF_BUILDINFO); // leaf type
+        //     WRITE(u16, 5); // arg count
+        //     // arguments
+        //     WRITE(u32, PROJECT_FOLDER_id);
+        //     WRITE(u32, COMPILER_id);
+        //     WRITE(u32, SOURCE_id);
+        //     WRITE(u32, PDB_id);
+        //     WRITE(u32, COMPILER_ARGS_id);
+        //     // The final argument is usually arguments that was passed to the compiler
+        //     // perhaps we can skip it?
+        //     *typeLength = offset - typeOffset;
+        // }
 
         ipiHeader->TypeIndexBegin = 0x1000;
         ipiHeader->TypeRecordBytes = offset - typeRecordStart;

@@ -1951,6 +1951,28 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 relativeRelocations.add(reloc);
                 break;
             }
+            break; case BC_JE: {
+                i16 offset = (i16)((i16)op1| ((i16)op2<<8));
+
+                // TODO: Replace with a better instruction? If there is one.
+                u8 size = DECODE_REG_SIZE(op0);
+
+                if(size==8);
+                    prog->add(PREFIX_REXW);
+                prog->add(OPCODE_CMP_RM_IMM8_SLASH_7);
+                prog->addModRM(MODE_REG, 7, BCToProgramReg(op0,0xF));
+                prog->add((u8)0);
+                
+                prog->add2(OPCODE_2_JNE_IMM32);
+                prog->add4((u32)0);
+                
+                RelativeRelocation reloc{};
+                reloc.currentIP = prog->size();
+                reloc.bcAddress = imm;
+                reloc.immediateToModify = prog->size()-4;
+                relativeRelocations.add(reloc);
+                break;
+            }
             break; case BC_CAST: {
                 u8 type = op0;
 

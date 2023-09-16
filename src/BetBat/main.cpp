@@ -85,7 +85,9 @@ int main(int argc, const char** argv){
     // A(a,0,2);
 
 
-    // DeconstructPDB("test.pdb");
+    // auto f = PDBFile::Deconstruct("test.pdb");
+    // f->writeFile("test.pdb");
+    // PDBFile::Destroy(f);
     // DeconstructDebugSymbols(obj->
     // DeconstructPDB("test.pdb");
     // DeconstructPDB("bin/compiler.pdb");
@@ -242,7 +244,8 @@ int main(int argc, const char** argv){
 
         #ifdef RUN_TEST_SUITE
         DynamicArray<std::string> tests;
-        tests.add("tests/simple/operations.btb");
+        // tests.add("tests/simple/operations.btb");
+        tests.add("tests/flow/switch.btb");
         // tests.add("tests/simple/garb.btb");
         // tests.add("tests/flow/loops.btb");
         // tests.add("tests/what/struct.btb");
@@ -261,7 +264,7 @@ int main(int argc, const char** argv){
         } else {
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
-            // compileOptions.useDebugInformation = true;
+            compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         }

@@ -191,10 +191,10 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
     i64 userAllocatedBytes=0;
     
     u64 executedInstructions = 0;
-    u64 length = bytecode->codeSegment.used;
+    u64 length = bytecode->instructionSegment.used;
     if(length==0)
         log::out << log::YELLOW << "Interpreter ran bytecode with zero instructions. Bug?\n";
-    Instruction* codePtr = (Instruction*)bytecode->codeSegment.data;
+    Instruction* codePtr = (Instruction*)bytecode->instructionSegment.data;
     Bytecode::Location* prevLocation = nullptr;
     u32 stopAt = endInstruction;
     WHILE_TRUE_N(99999999) {

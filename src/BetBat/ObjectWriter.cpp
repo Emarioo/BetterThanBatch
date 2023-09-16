@@ -986,6 +986,8 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
                 for(int i=0;i<di->functions.size();i++) {
                     if(i>2)
                         continue;
+                        
+                    // ALIGN4
                     auto& fun = di->functions[i];
                     {
                         u16* recordLength = (u16*)(outData + outOffset);

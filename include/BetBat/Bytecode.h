@@ -3,6 +3,114 @@
 #include "BetBat/NativeRegistry.h"
 #include "BetBat/DebugInformation.h"
 
+/*
+    New bytecode instructions
+    The purpose of these new instructions is to be less
+    Not implemented yet though because it's a lot of work and not a priority.
+*/
+// opcode
+// enum BytecodeOpcode : u8 {
+//     BCO_NONE = 0,
+//     BCO_MOV_RR = 1,
+//     BCO_MOV_RM = 2,
+//     BCO_MOV_RM_DISP32 = 3,
+//     BCO_MOV_MR = 4,
+//     BCO_MOV_MR_DISP32 = 5,
+    
+//     BCO_MOD = 10, // control, op1, op2
+//     BCO_ADD = 11, // control, op1, op2
+//     BCO_SUB = 12, // control, op1, op2
+//     BCO_MUL = 13, // control, op1, op2
+//     BCO_DIV = 14, // control, op1, op2
+//     BCO_INCR = 18, // control, op1, imm
+    
+//     BCO_JMP = 30,
+//     BCO_CALL = 31,
+//     BCO_RET = 32,
+//     BCO_JE = 33,
+//     BCO_JNE = 34,
+    
+//     BCO_PUSH = 40,
+//     BCO_POP = 41,
+//     BCO_LI = 42,
+//     BCO_DATAPTR = 43,
+//     BCO_CODEPTR = 44,
+    
+//     BCO_EQ =   50,
+//     BCO_NEQ =  51,
+//     BCO_LT =   52,
+//     BCO_LTE =  53,
+//     BCO_GT =   54,
+//     BCO_GTE =  55,
+    
+//     BCO_ANDI =  56,
+//     BCO_ORI =   57,
+//     BCO_NOT =  58,
+
+//     BCO_BXOR =  60,
+//     BCO_BOR =  61,
+//     BCO_BAND =  62,
+//     BCO_BNOT = 63,
+//     BCO_BLSHIFT = 64,
+//     BCO_BRSHIFT = 65,
+    
+//     BCO_CAST = 70,
+//     BCO_ASM = 71,
+// // #define ASM_ENCODE_INDEX(ind) (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)
+// // #define ASM_DECODE_INDEX(op0,op1,op2) (u32)(op0 | (op1<<8) | (op2<<16))
+    
+//     BCO_MEMZERO = 90,
+//     BCO_MEMCPY = 91,
+//     BCO_STRLEN = 92,
+//     BCO_RDTSC = 93,
+//     // BC_RDTSCP = 94,
+//     // compare and swap, atomic
+//     BCO_CMP_SWAP = 95,
+//     BCO_ATOMIC_ADD = 96,
+
+//     BCO_SQRT = 180,
+//     BCO_ROUND = 181,
+    
+//     BCO_TEST_VALUE = 240,
+    
+//     BCO_RESERVED0 = 254, // may be used to extend the opcode to two bytes
+//     BCO_RESERVED1 = 255, // may be used to extend the opcode to three bytes
+// };
+// enum BytecodeControl : u8 {
+//     BCC_NONE = 0,
+//     BCC_CAST_FLOAT_SINT = 1,
+//     // BCC_CAST_FLOAT_UINT = 1, // float to unsigned doesn't work if float is negative but it's the same with signed to unsigned. Same with signed to unsigned so maybe we cast float to signed
+//     BCC_CAST_SINT_FLOAT = 2,
+//     BCC_CAST_UINT_FLOAT = 3,
+//     BCC_CAST_SINT_UINT = 4,
+//     BCC_CAST_UINT_UINT = 4,
+//     BCC_CAST_UINT_SINT = 5,
+//     BCC_CAST_SINT_SINT = 6,
+    
+//     BCC_ARITHMETIC_UINT = 20,
+//     BCC_ARITHMETIC_SINT = 21,
+//     BCC_ARITHMETIC_FLOAT = 22,
+    
+//     BCC_CMP_UINT = 30,
+//     BCC_CMP_SINT = 31,
+//     BCC_CMP_FLOAT = 32,
+    
+//     // bit mask
+//     BCC_MOV_8BIT = 0x00,
+//     BCC_MOV_16BIT = 0x40,
+//     BCC_MOV_32BIT = 0x80,
+//     BCC_MOV_64BIT = 0xC0,
+// };
+// enum BytecodeRegister : u8 {
+//     BCR_NONE = 0,
+//     BCR_SP = 1,
+//     BCR_FP = 2,
+//     BCR_X = 3, // BCR_X + registerNumber
+// };
+
+/*
+    Old bytecode instructions
+*/
 #define BC_MOV_RR 1
 #define BC_MOV_RM 2
 #define BC_MOV_RM_DISP32 3
@@ -240,6 +348,7 @@ struct Instruction {
 };
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction);
 
+
 struct Bytecode {
     static Bytecode* Create();
     static void Destroy(Bytecode*);
@@ -247,7 +356,13 @@ struct Bytecode {
     
     uint32 getMemoryUsage();
     
-    engone::Memory<Instruction> codeSegment{};
+    // struct Register {
+    //     bool inUse = false;
+    // };
+    // Register registers[256];
+    // QuickArray<u8> codeSegment{}; // uses new bytecode instructions
+    
+    engone::Memory<Instruction> instructionSegment{};
     engone::Memory<u8> dataSegment{};
 
     DebugInformation* debugInformation = nullptr;
@@ -333,14 +448,14 @@ struct Bytecode {
     bool add_notabug(Instruction inst);
     bool addIm_notabug(i32 data);
     inline Instruction& get(uint index){
-        return *((Instruction*)codeSegment.data + index);
+        return *((Instruction*)instructionSegment.data + index);
     }
     inline i32& getIm(u32 index){
-        return *((i32*)codeSegment.data + index);
+        return *((i32*)instructionSegment.data + index);
     }
 
     inline int length(){
-        return codeSegment.used;
+        return instructionSegment.used;
     }
     bool removeLast();
 

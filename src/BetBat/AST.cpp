@@ -105,6 +105,7 @@ const char *StateToStr(int type) {
         CASE(ASSIGN, assign)
         CASE(IF, if)
         CASE(WHILE, while)
+        CASE(SWITCH, switch)
         CASE(FOR, for)
         CASE(RETURN, return)
         CASE(BREAK, break)
@@ -1364,6 +1365,10 @@ void AST::destroy(ASTStatement *statement) {
         for(ASTExpression* expr : statement->arrayValues){
             destroy(expr);
         }
+        for(auto& it : statement->switchCases){
+            destroy(it.caseExpr);
+            destroy(it.caseBody);
+        }
         // }
     }
     statement->~ASTStatement();
@@ -2021,6 +2026,14 @@ void ASTStatement::print(AST *ast, int depth) {
         for(ASTExpression* expr : arrayValues){
             if (expr) {
                 expr->print(ast, depth+1);
+            }
+        }
+        for(auto& it : switchCases){
+            if (it.caseExpr) {
+                it.caseExpr->print(ast, depth+1);
+            }
+            if (it.caseBody) {
+                it.caseBody->print(ast, depth+1);
             }
         }
     // }

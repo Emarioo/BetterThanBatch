@@ -111,6 +111,14 @@ struct GenInfo {
     // Extra details
     // FuncImpl* recentFuncImpl=nullptr; // used by fncall
 
+    /*
+        New bytecode instructions
+    */
+//    u8 requestRegister(); // 0 is failure
+//    void relinguishRegister(u8 registerNumber);
+//    void add_push(u8 registerNumber);
+//    void add_pop(u8 registerNumber);
+
 };
 struct NodeScope {
     NodeScope(GenInfo* info) : info(info) {}

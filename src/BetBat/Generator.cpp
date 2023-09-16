@@ -60,11 +60,11 @@ void GenInfo::addCall(LinkConventions linkConvention, CallConventions callConven
 void GenInfo::popInstructions(u32 count){
     Assert(code->length() >= count);
 
-    code->codeSegment.used-=count;
+    code->instructionSegment.used-=count;
     indexOfNonImmediates.used-=count;
 
-    if(code->codeSegment.used>0 && count != 0){
-        for(int i = code->codeSegment.used-1;i>=0;i--){
+    if(code->instructionSegment.used>0 && count != 0){
+        for(int i = code->instructionSegment.used-1;i>=0;i--){
             u32 locIndex = -1;
             auto loc = code->getLocation(i, &locIndex);
             if(loc){
@@ -3970,6 +3970,149 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
                 info.code->getIm(skipElseBodyIndex) = info.code->length();
             }
+        } else if (statement->type == ASTStatement::SWITCH) {
+            _GLOG(SCOPE_LOG("SWITCH"))
+
+            GenInfo::LoopScope* loopScope = info.pushLoop();
+            defer {
+                _GLOG(log::out << "pop loop\n");
+                bool yes = info.popLoop();
+                if(!yes){
+                    log::out << log::RED << "popLoop failed (bug in compiler)\n";
+                }
+            };
+
+            _GLOG(log::out << "push loop\n");
+            loopScope->stackMoment = info.saveStackMoment();
+
+            TypeId exprType{};
+            if(statement->versions_expressionTypes[info.currentPolyVersion].size()!=0)
+                exprType = statement->versions_expressionTypes[info.currentPolyVersion][0];
+            else
+                { Assert(false); }
+                // continue; // error message printed already?
+
+            i32 switchValueOffset = 0; // frame offset
+            FramePush(info, exprType, &switchValueOffset,false, false);
+            
+            TypeId dtype = {};
+            SignalDefault result = GenerateExpression(info, statement->firstExpression, &dtype);
+            if (result != SignalDefault::SUCCESS) {
+                continue;
+            }
+            Assert(exprType == dtype);
+            auto* typeInfo = info.ast->getTypeInfo(dtype);
+            Assert(typeInfo);
+            
+            if(AST::IsInteger(dtype) || typeInfo->astEnum) {
+                
+            } else {
+                ERR_SECTION(
+                    ERR_HEAD(statement->tokenRange)
+                    ERR_MSG("You can only do switch on integers and enums.")
+                    ERR_LINE(statement->tokenRange, "bad")
+                )
+                continue;
+            }
+            u32 switchExprSize = info.ast->getTypeSize(dtype);
+            if (!switchExprSize) {
+                // TODO: Print error? or does generate expression do that since it gives us dtype?
+                continue;
+            }
+            u8 switchValueReg = RegBySize(BC_DX, switchExprSize);
+            
+            // TODO: Optimize instruction generation.
+            
+            info.addPop(switchValueReg);
+            info.addInstruction({BC_MOV_RM_DISP32, switchValueReg, BC_REG_FP, (u8)switchExprSize});
+            info.addImm(switchValueOffset);
+            
+            struct RelocData {
+                u32 caseJumpAddress = 0;
+                u32 caseBreakAddress = 0;
+            };
+            DynamicArray<RelocData> caseData{};
+            caseData.resize(statement->switchCases.size());
+            
+            for(int nr=0;nr<statement->switchCases.size();nr++) {
+                auto it = &statement->switchCases[nr];
+                caseData[nr] = {};
+                
+                TypeId dtype = {};
+                u32 size = 0;
+                u8 caseValueReg = 0;
+                bool wasMember = false;
+                if(typeInfo->astEnum && it->caseExpr->typeId == AST_ID) {
+                    
+                    int index = -1;
+                    bool yes = typeInfo->astEnum->getMember(it->caseExpr->name, &index);
+                    if(yes) {
+                        wasMember = true;
+                        dtype = typeInfo->id;
+                        
+                        size = info.ast->getTypeSize(dtype);
+                        Assert(size == 4); // 64-bit enum not implemented (neither is 8, 16 ), you need to load 64-bit immediate instead of 32-bit
+                        caseValueReg = RegBySize(BC_AX, size);
+                        
+                        info.addLoadIm(caseValueReg, typeInfo->astEnum->members[index].enumValue);
+                    }
+                }
+                if(!wasMember) {
+                    SignalDefault result = GenerateExpression(info, it->caseExpr, &dtype);
+                    if (result != SignalDefault::SUCCESS) {
+                        continue;
+                    }
+                    size = info.ast->getTypeSize(dtype);
+                    caseValueReg = RegBySize(BC_AX, size);
+                    
+                    info.addPop(caseValueReg);
+                }
+                // TODO: Don't generate this instruction if switchValueReg is untouched.
+                info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, switchValueReg, (u8)size});
+                info.addImm(switchValueOffset);
+                
+                info.addInstruction({BC_EQ, switchValueReg, caseValueReg, caseValueReg});
+                info.addInstruction({BC_JE, caseValueReg});
+                caseData[nr].caseJumpAddress = info.code->length();
+                info.addImm(0);
+            }
+            if(statement->firstBody) {
+                result = GenerateBody(info, statement->firstBody);
+                // if (result != SignalDefault::SUCCESS)
+                //     continue;
+            }
+            info.addInstruction({BC_JMP});
+            u32 noCaseJumpAddress = info.code->length();
+            info.addImm(0);
+            auto& list = statement->switchCases;
+            for(int nr=0;nr<statement->switchCases.size();nr++) {
+                auto it = &statement->switchCases[nr];
+                info.code->getIm(caseData[nr].caseJumpAddress) = info.code->length();
+                
+                
+                // TODO: break statements in body should jump to here
+                result = GenerateBody(info, it->caseBody);
+                if (result != SignalDefault::SUCCESS)
+                    continue;
+                
+                
+                // implicit break
+                info.addInstruction({BC_JMP});
+                caseData[nr].caseBreakAddress = info.code->length();
+                info.addImm(0);
+            }
+            
+            info.code->getIm(noCaseJumpAddress) = info.code->length();
+                
+            for(int nr=0;nr<statement->switchCases.size();nr++) {
+                info.code->getIm(caseData[nr].caseBreakAddress) = info.code->length();
+            }
+            
+            for (auto ind : loopScope->resolveBreaks) {
+                info.code->getIm(ind) = info.code->length();
+            }
+            info.restoreStackMoment(loopScope->stackMoment);
+            
         } else if (statement->type == ASTStatement::WHILE) {
             _GLOG(SCOPE_LOG("WHILE"))
 
@@ -4572,6 +4715,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             info.addImm(loc);
             
             info.restoreStackMoment(moment);
+        } else {
+            Assert(("You forgot to implement statement type!",false));
         }
     }
     // Assert(varsToRemove.size()==0);
@@ -4661,7 +4806,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     if(skipIndex == info.code->length() -1) {
         // skip jump instruction if no functions where generated
         // info.popInstructions(2); // pop JMP and immediate
-        info.code->codeSegment.used = 0;
+        info.code->instructionSegment.used = 0;
         _GLOG(log::out << "Delete jump instruction\n";)
     } else {
         info.code->getIm(skipIndex) = info.code->length();

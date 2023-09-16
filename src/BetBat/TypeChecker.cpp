@@ -2608,6 +2608,85 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             typeArray.resize(0);
             CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
             typeArray.resize(0);
+        } else if(now->type == ASTStatement::SWITCH) {
+            // check switch expression
+            CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            
+            ASTEnum* astEnum = nullptr;
+            Assert(typeArray.size() == 1);
+            if(typeArray[0].isValid()) {
+                auto typeInfo = info.ast->getTypeInfo(typeArray[0]);
+                Assert(typeInfo);
+                if(typeInfo->astEnum) {
+                    astEnum = typeInfo->astEnum;
+                    // TODO: What happens if type is virtual or aliased? Will this code work?
+                }
+            }
+            now->versions_expressionTypes[info.currentPolyVersion] = {};
+            now->versions_expressionTypes[info.currentPolyVersion].add(typeArray.last());
+            typeArray.resize(0);
+            
+            int usedMemberCount = 0;
+            QuickArray<ASTExpression*> usedMembers{};
+            if(astEnum) {
+                usedMembers.resize(astEnum->members.size());
+                FOR(usedMembers) {
+                    it = nullptr;   
+                }
+            }
+            
+            // TODO: Enum switch statements should not be limited to just enum members.
+            //  Constant expressions that evaluate to the same value as one of the members should
+            //  count towards having all the members present in the switch. Unless enum members
+            //  aren't forced to exist in the switch.
+            
+            bool allCasesUseEnumType = true;
+            
+            FOR(now->switchCases){
+                bool wasMember = false;
+                if(astEnum && it.caseExpr->typeId == AST_ID) {
+                    int index = -1;
+                    bool yes = astEnum->getMember(it.caseExpr->name, &index);
+                    if(yes) {
+                        wasMember = true;
+                        if(usedMembers[index]) {
+                            ERR_SECTION(
+                                ERR_HEAD(it.caseExpr->tokenRange, ERROR_DUPLICATE_CASE)
+                                ERR_MSG("There is no point in having two expression")   
+                                ERR_LINE(usedMembers[index]->tokenRange, "previous")
+                                ERR_LINE(it.caseExpr->tokenRange, "bad")
+                            )
+                        } else {
+                            usedMembers[index] = it.caseExpr;
+                            usedMemberCount++;
+                        }
+                    } else {
+                        allCasesUseEnumType = false;   
+                    }
+                } else {
+                    allCasesUseEnumType = false;   
+                }
+                if(!wasMember){
+                    CheckExpression(info, scope->scopeId, it.caseExpr, &typeArray, false);
+                    typeArray.resize(0);
+                }
+                
+                CheckRest(info, it.caseBody);
+            }
+            
+            if(now->firstBody) {
+                CheckRest(info, now->firstBody);
+            } else {
+                // You are allowed to skip enum members when using default case but not otherwise.
+                if(allCasesUseEnumType && usedMemberCount != usedMembers.size()) {
+                    ERR_SECTION(
+                        ERR_HEAD(now->tokenRange, ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+                        ERR_MSG("You have forgotten these enum members in the switch statement:")
+                        
+                        ERR_LINE(now->tokenRange, "this switch")
+                    )
+                }
+            }
         } else {
             Assert(("Statement type not handled!",false));
         }

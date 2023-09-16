@@ -118,7 +118,7 @@ lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib l
 @REM dumpbin /ALL test.obj > out
 @REM cvdump test.obj > out2
 
-@REM cl /c src/Other/test.c /I. /Fdtest.pdb /Zi
+cl /nologo /c src/Other/test.c /I. /Fdtest.pdb /Zi
 @REM cl /c src/Other/test.c
 @REM cl /c src/Other/test.c /Z7
 @REM dumpbin /ALL test.obj > out
@@ -135,6 +135,8 @@ if !compileSuccess! == 0 (
 
 
     prog -dev
+    
+    link /nologo /DEBUG test.obj /OUT:test.exe
     
     @REM cvdump test2.pdb
     @REM cvdump bin/dev.pdb

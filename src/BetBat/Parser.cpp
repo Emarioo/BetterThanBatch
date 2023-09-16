@@ -10,6 +10,10 @@
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) { BASE_SECTION("Parser, "); CONTENT }
 
+
+#undef WARN_SECTION
+#define WARN_SECTION(CONTENT) { BASE_WARN_SECTION("Parser, "); CONTENT }
+
 /*
     Declaration of functions
 */
@@ -2238,7 +2242,184 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         statement->tokenRange.firstToken = firstToken;
         statement->tokenRange.endIndex = info.at()+1;
         return SignalAttempt::SUCCESS;
-    } else if(Equal(firstToken,"using")){
+    } else if(Equal(firstToken,"switch")){
+        info.next();
+        ASTExpression* switchExpression=0;
+        SignalAttempt result = ParseExpression(info,switchExpression,false);
+        if(result!=SignalAttempt::SUCCESS){
+            // TODO: should more stuff be done here?
+            return SignalAttempt::FAILURE;
+        }
+        
+        Token tok = info.get(info.at()+1);
+        if(!Equal(tok,"{")) {
+            return SignalAttempt::FAILURE;
+        }
+        info.next(); // {
+        
+        statement = info.ast->createStatement(ASTStatement::SWITCH);
+        statement->firstExpression = switchExpression;
+        statement->tokenRange.firstToken = firstToken;
+        
+        Token defaultCaseToken{};
+        
+        bool errorsWasIgnored = info.ignoreErrors;
+        defer {
+            info.ignoreErrors = errorsWasIgnored;
+        };
+        
+        bool mayRevertError = false;
+        
+        while(!info.end()) {
+            tok = info.get(info.at()+1);
+            if(Equal(tok,"}")) {
+                info.next();
+                break;   
+            }
+            
+            if(IsAnnotation(tok)) {
+                if(Equal(tok,"@TEST-ERROR")) {
+                    info.ignoreErrors = true;
+                    if(mayRevertError)
+                        info.errors--;
+                    statement->setNoCode(true);
+                    info.next();
+                    info.next();
+                    continue;
+                }else {
+                    // TODO: ERR annotation not supported   
+                }
+            }
+            mayRevertError = false;
+            
+            bool badDefault = false;
+            if(Equal(tok,"default")) {
+                badDefault = true;
+                mayRevertError = info.ignoreErrors == 0;
+                ERR_SECTION(
+                    ERR_HEAD(tok,ERROR_C_STYLED_DEFAULT_CASE)
+                    ERR_MSG("Write 'case: { ... }' to specify default case. 'default' is the C/C++ way.")
+                    ERR_LINE(tok,"bad")
+                )
+                // info.next();
+                // return SignalAttempt::FAILURE;
+            } else if(!Equal(tok,"case")) {
+                mayRevertError = info.ignoreErrors == 0;
+                ERR_SECTION(
+                    ERR_HEAD(tok,ERROR_BAD_TOKEN_IN_SWITCH)
+                    ERR_MSG("'"<<tok<<"' is not allowed in switch statement where 'case' is supposed to be.")
+                    ERR_LINE(tok,"bad")
+                )
+                info.next();
+                continue;
+                // return SignalAttempt::FAILURE;
+            }
+            
+            info.next(); // case
+            
+            bool defaultCase = false;
+            Token colonTok = info.get(info.at()+1);
+            if(Equal(colonTok,":")) {
+                if(defaultCaseToken.str && !badDefault){
+                    mayRevertError = info.ignoreErrors == 0;
+                    ERR_SECTION(
+                        ERR_HEAD(tok,ERROR_DUPLICATE_DEFAULT_CASE)
+                        ERR_MSG("You cannot have two default cases in a switch statement.")
+                        ERR_LINE(defaultCaseToken,"previous")
+                        ERR_LINE(tok,"first default case")
+                    )
+                } else {
+                    defaultCaseToken = tok;
+                }
+                
+                defaultCase = true;
+                info.next();
+                
+                // ERR_SECTION(
+                //     ERR_HEAD(tok)
+                //     ERR_MSG("Default case has not been implemented yet.")
+                //     ERR_LINE(tok,"bad")
+                // )
+                // return SignalAttempt::FAILURE;
+            }
+            
+            ASTExpression* caseExpression=nullptr;
+            if(!defaultCase){
+                SignalAttempt result = ParseExpression(info,caseExpression,false);
+                if(result!=SignalAttempt::SUCCESS){
+                    // TODO: should more stuff be done here?
+                    return SignalAttempt::FAILURE;
+                }
+                colonTok = info.get(info.at()+1);
+                if(!Equal(colonTok,":")) {
+                    // info.next();
+                    // continue;
+                    return SignalAttempt::FAILURE;
+                }
+                info.next(); // :
+            }
+            
+            tok = info.get(info.at()+1);
+            if(!Equal(tok,"{")){
+                if((colonTok.flags & TOKEN_SUFFIX_LINE_FEED) != 0){
+                    // We don't print a message if the statement without curly braces are on the same line.
+                    // It can be seen as you want just the one statement. If you put it on a new
+                    // line then you may expect more statments.
+                    
+                    // TODO: Should bracket for body in case be forced
+                    // ERR_SECTION(
+                    //     ERR_HEAD(info.get(info.at()+1))
+                    //     ERR_MSG("No curly-braces will just allow one statement. You must use curly-braces if you want the statement on a new line. ")
+                    //     ERR_LINE(info.get(info.at()+1),"here")
+                    // )
+                    WARN_SECTION(
+                        WARN_HEAD(info.get(info.at()+1))
+                        WARN_MSG("The body of the case is missing curly braces. Only one statement will be parsed. Put statement on one line to suppress this warning.")
+                        WARN_LINE(info.get(info.at()+1),"no curly brace here")
+                        // TODO: should braces for body in case be forced
+                    )
+                }
+            }
+            
+            ASTScope* caseBody=0;
+            SignalDefault resultBody = ParseBody(info,caseBody, info.currentScopeId);
+            if(resultBody!=SignalDefault::SUCCESS){
+                return SignalAttempt::FAILURE;
+            }
+            
+            Token& token2 = info.get(info.at()+1);
+            if(IsAnnotation(token2)) {
+                if(Equal(token2,"@TEST-ERROR")) {
+                    info.ignoreErrors = true;
+                    if(mayRevertError)
+                        info.errors--;
+                    statement->setNoCode(true);
+                    info.next();
+                    info.next(); // skip error type
+                } else {
+                    // TODO: ERR annotation not supported   
+                }
+                //  else if(Equal(token2, "@no-code")) {
+                //     noCode = true;
+                //     info.next();
+                // }
+            }
+            if(defaultCase) {
+                if(statement->firstBody || badDefault) {
+                    // Assert(info.errors);
+                    info.ast->destroy(caseBody);
+                } else {
+                    statement->firstBody = caseBody;
+                }
+            } else {
+                statement->switchCases.add({caseExpression, caseBody});
+            }
+        }
+        
+        statement->tokenRange.endIndex = info.at()+1;
+        
+        return SignalAttempt::SUCCESS;
+    } else  if(Equal(firstToken,"using")){
         info.next();
 
         // variable name
@@ -3057,9 +3238,9 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
             
             Token typeToken{};
             SignalDefault result = ParseTypeId(info,typeToken, nullptr);
-            Assert(result==SignalDefault::SUCCESS);
-            // if(result!=PARSE_SUCCESS)
-            //     return PARSE_ERROR;
+            if(result!=SignalDefault::SUCCESS)
+                return CastSignal(result);
+            // Assert(result==SignalDefault::SUCCESS);
             int arrayLength = -1;
             Token token1 = info.get(info.at()+1);
             Token token2 = info.get(info.at()+2);
@@ -3263,6 +3444,12 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         // Annotation may belong to statement so we don't
         // complain about not recognizing it here.
     }
+    
+    
+    bool errorsWasIgnored = info.ignoreErrors;
+    defer {
+        info.ignoreErrors = errorsWasIgnored;
+    };
 
     DynamicArray<ASTStatement*> nearDefers{};
 
@@ -3276,6 +3463,8 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             info.next();
             continue;
         }
+        info.ignoreErrors = errorsWasIgnored;
+        
         ASTStatement* tempStatement=0;
         ASTStruct* tempStruct=0;
         ASTEnum* tempEnum=0;
@@ -3300,6 +3489,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         bool noCode = false;
         if(IsAnnotation(token2)) {
             if(Equal(token2,"@TEST-ERROR")) {
+                info.ignoreErrors = true;
                 noCode = true;
                 info.next();
                 info.next(); // skip error type
@@ -3335,7 +3525,9 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             }
         }
         if(noCode && tempStatement) {
-            tempStatement->setNoCode(noCode);
+            if(!tempStatement->isNoCode()) {
+                tempStatement->setNoCode(noCode);
+            }
         }
 
         if(result==SignalAttempt::BAD_ATTEMPT){
@@ -3353,7 +3545,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                     ERR_MSG("Did not expect '"<<token<<"' when parsing body. A new statement, struct or function was expected (or enum, namespace, ...).")
                     ERR_LINE(token,"what")
                 )
-                // prevent infinite loop. Loop only occurs when scoped
+                // prevent infinite loop. Loop 'only occurs when scoped
                 info.next();
             }
         }
@@ -3499,11 +3691,11 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
     }
     info.currentScopeId = body->scopeId;
 
-    info.compileInfo->compileOptions->compileStats.errors += info.errors;
-
     info.functionScopes.add({});
     SignalDefault result = ParseBody(info, body, ast->globalScopeId, true);
     info.functionScopes.pop();
+    
+    info.compileInfo->compileOptions->compileStats.errors += info.errors;
     
     return body;
 }

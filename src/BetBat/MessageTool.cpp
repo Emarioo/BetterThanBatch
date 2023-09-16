@@ -31,8 +31,16 @@ CompileError ToCompileError(const char* str){
     #define CASE(ERR) if(!strcmp(str, #ERR)) return ERR;
     CASE(ERROR_CASTING_TYPES)
     CASE(ERROR_UNDECLARED)
+    CASE(ERROR_DUPLICATE_CASE)
+    CASE(ERROR_DUPLICATE_DEFAULT_CASE)
+    CASE(ERROR_C_STYLED_DEFAULT_CASE)
+    CASE(ERROR_BAD_TOKEN_IN_SWITCH)
+    CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
     CASE(ERROR_NONE)
     #undef CASE
+    
+    Assert(false);
+    
     return ERROR_UNKNOWN;
 }
 const char* ToCompileErrorString(temp_compile_error stuff) {
@@ -43,6 +51,11 @@ const char* ToCompileErrorString(temp_compile_error stuff) {
         #define CASE(ERR) if(stuff.err == ERR) return #ERR;
         CASE(ERROR_CASTING_TYPES)
         CASE(ERROR_UNDECLARED)
+        CASE(ERROR_DUPLICATE_CASE)
+        CASE(ERROR_DUPLICATE_DEFAULT_CASE)
+        CASE(ERROR_C_STYLED_DEFAULT_CASE)
+        CASE(ERROR_BAD_TOKEN_IN_SWITCH)
+        CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
         CASE(ERROR_NONE)
         CASE(ERROR_UNKNOWN)
         #undef CASE

@@ -181,7 +181,7 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
                     line++;
                     column = 1;
                 }
-                if(chr == '\n' || chr == ' ')
+                if(chr == '\n' || chr == '\r' || chr == ' ')
                     break;
             }
             int len = index - 1 - start;
@@ -213,6 +213,7 @@ u32 TestSuite(TestSelection testSelection){
     }
     if(testSelection&TEST_FLOW) {
         tests.add("tests/flow/loops.btb");
+        tests.add("tests/flow/switch.btb");
         // tests.add("tests/flow/defer.btb"); not fixed yet
     }
 
@@ -327,10 +328,12 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
             if(!found)
                 failedTests++;
         }
-        // if(testcase.expectedErrors.size() < options.compileStats.errorTypes.size()) {
-        //     totalTests += testcase.expectedErrors.size() < options.compileStats.errorTypes.size();
-        //     failedTests += testcase.expectedErrors.size() < options.compileStats.errorTypes.size();
-        // }
+        
+        if(options.compileStats.errors > testcase.expectedErrors.size()) {
+            totalTests += options.compileStats.errors - testcase.expectedErrors.size();
+            failedTests += options.compileStats.errors - testcase.expectedErrors.size();
+        }
+        
         if(!bytecode) {
             if(options.compileStats.errorTypes.size() != options.compileStats.errors) {
                 log::out << log::YELLOW << "Error count was "<< options.compileStats.errors << " but the individual types were "<<options.compileStats.errorTypes.size() << "\n";

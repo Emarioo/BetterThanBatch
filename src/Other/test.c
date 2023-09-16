@@ -12,13 +12,14 @@
 // int ok1(){
 //     return 24;
 // }
-
-int main() {
-    // struct Pickle pickle = {023,92};
-    int MY_CRAZY_NAME = 932;
-    // int MY_CRAZY_NAME2 = 99;
-    // MY_CRAZY_NAME += ok();
-    // hey(9);
-    return MY_CRAZY_NAME;
+void hey1() {
+    1;   
+}
+void hey2() {
+    2;
+}
+void main() {
+    hey1();
+    hey2();
     // return 0;
 }

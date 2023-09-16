@@ -90,9 +90,9 @@ int RegBySize(u8 regName, int size){
     }
 }
 bool Bytecode::removeLast(){
-    if(codeSegment.used>0)
+    if(instructionSegment.used>0)
         return false;
-    codeSegment.used--;
+    instructionSegment.used--;
     return true;
 }
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
@@ -100,7 +100,7 @@ engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
     return logger;
 }
 uint32 Bytecode::getMemoryUsage(){
-    uint32 sum = codeSegment.max*codeSegment.getTypeSize()
+    uint32 sum = instructionSegment.max*instructionSegment.getTypeSize()
         +debugSegment.max*debugSegment.getTypeSize()
         // debugtext?        
         ;
@@ -113,11 +113,11 @@ void Bytecode::addExternalRelocation(const std::string& name, u32 location){
     externalRelocations.add(tmp);
 }
 bool Bytecode::add_notabug(Instruction instruction){
-    if(codeSegment.max == codeSegment.used){
-        if(!codeSegment.resize(codeSegment.max*2 + 25*sizeof(Instruction)))
+    if(instructionSegment.max == instructionSegment.used){
+        if(!instructionSegment.resize(instructionSegment.max*2 + 25*sizeof(Instruction)))
             return false;   
     }
-    *((Instruction*)codeSegment.data + codeSegment.used++) = instruction;
+    *((Instruction*)instructionSegment.data + instructionSegment.used++) = instruction;
     _GLOG(printInstruction(length()-1, false);)
     return true;
 }
@@ -155,17 +155,17 @@ u32 Bytecode::immediatesOfInstruction(u32 index) {
     return 0;
 }
 bool Bytecode::addIm_notabug(i32 data){
-    if(codeSegment.max == codeSegment.used){
-        if(!codeSegment.resize(codeSegment.max*2 + 25*sizeof(Instruction)))
+    if(instructionSegment.max == instructionSegment.used){
+        if(!instructionSegment.resize(instructionSegment.max*2 + 25*sizeof(Instruction)))
             return false;
     }
     _GLOG(engone::log::out <<length()<< ": "<<data<<"\n";)
     // NOTE: This function works because sizeof Instruction == sizeof u32
-    *((i32*)codeSegment.data + codeSegment.used++) = data;
+    *((i32*)instructionSegment.data + instructionSegment.used++) = data;
     return true;
 }
 void Bytecode::cleanup(){
-    codeSegment.resize(0);
+    instructionSegment.resize(0);
     dataSegment.resize(0);
     debugSegment.resize(0);
     debugLocations.cleanup();
@@ -357,10 +357,10 @@ int Bytecode::appendData(const void* data, int size){
 // void Bytecode::addDebugText(const char* str, int length, u32 instructionIndex){
 //     using namespace engone;
 //     if(instructionIndex==(u32)-1){
-//         instructionIndex = codeSegment.used;
+//         instructionIndex = instructionSegment.used;
 //     }
 //     if(instructionIndex>=debugSegment.max){
-//         int newSize = codeSegment.max*1.5+20;
+//         int newSize = instructionSegment.max*1.5+20;
 //         newSize += (instructionIndex-debugSegment.max)*2;
 //         int oldmax = debugSegment.max;
 //         if(!debugSegment.resize(newSize))
@@ -396,10 +396,10 @@ Bytecode::Location* Bytecode::setLocationInfo(const char* str, u32 instructionIn
 Bytecode::Location* Bytecode::setLocationInfo(u32 locationIndex, u32 instructionIndex){
     using namespace engone;
     if(instructionIndex == (u32)-1){
-        instructionIndex = codeSegment.used;
+        instructionIndex = instructionSegment.used;
     }
     if(instructionIndex>=debugSegment.max) {
-        int newSize = codeSegment.max*1.5+20;
+        int newSize = instructionSegment.max*1.5+20;
         newSize += (instructionIndex-debugSegment.max)*2;
         int oldmax = debugSegment.max;
         bool yes = debugSegment.resize(newSize);
@@ -427,10 +427,10 @@ Bytecode::Location* Bytecode::setLocationInfo(u32 locationIndex, u32 instruction
 Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 instructionIndex, u32* locationIndex){
     using namespace engone;
     if(instructionIndex == (u32)-1){
-        instructionIndex = codeSegment.used;
+        instructionIndex = instructionSegment.used;
     }
     if(instructionIndex>=debugSegment.max) {
-        int newSize = codeSegment.max*1.5+20;
+        int newSize = instructionSegment.max*1.5+20;
         newSize += (instructionIndex-debugSegment.max)*2;
         int oldmax = debugSegment.max;
         bool yes = debugSegment.resize(newSize);

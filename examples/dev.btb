@@ -14,56 +14,26 @@
 // #import "threads"
 // #import "linecounter"
 // #import "graphics/quad.btb"
-#import "graphics/perf.btb"
+// #import "graphics/perf.btb"
 // #import "a"
 // #import "b"
 
 // #import "examples/debug_test.btb"
 
-// t: i32 = 9;
-
-// *cast<u32*>cast<void*>&t;
-
-// asm {
-//     mov ax, r8w
-// }
-
-// fn hey(a: i32) {
-//     k = a;
-//     k1 = a;
-//     k2 = a;
-//     k3 = a;
-//     k4 = a;
-//     k5 = a;
-//     k6 = a;
-//     k7 = a;
-//     k8 = a;
-//     k9 = a;
-//     k11 = a;
-//     k12 = a;
-//     k13 = a;
-//     k14 = a;
-//     k15 = a;
-//     k16 = a;
-// }
 // fn hey1() {
-//     // a = 9
+//     1
 // }
-// fn hey2() { }
-// fn hey3() { }
-// fn hey4() { }
-// fn hey5() { }
-// fn hey6() { }
-// fn hey7() { }
-// fn hey8() { }
-// fn hey9() { }
+// fn hey2() {
+//     2
+// }
 // hey1();
 // hey2();
-// hey3();
-// hey4();
-// hey5();
-// hey6();
-// hey7();
-// hey8();
-// hey9();
-// hey(23);
+
+
+fn @native printc(str: char);
+
+msg = 9
+switch msg {
+    case 1: { printc('1') }                                                 
+    case: { printc('d') }       
+}
