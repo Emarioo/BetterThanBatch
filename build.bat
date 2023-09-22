@@ -118,7 +118,7 @@ lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib l
 @REM dumpbin /ALL test.obj > out
 @REM cvdump test.obj > out2
 
-cl /nologo /c src/Other/test.c /I. /Fdtest.pdb /Zi
+cl /nologo /c src/Other/test.c /I. /INCREMENTAL:NO /Zi /Fdtest.pdb 
 @REM cl /c src/Other/test.c
 @REM cl /c src/Other/test.c /Z7
 @REM dumpbin /ALL test.obj > out

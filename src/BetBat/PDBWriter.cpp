@@ -31,6 +31,14 @@ bool PDBFile::writeFile(const char* path) {
     #define WRITE(TYPE, EXPR) *(TYPE*)(ptr + offset) = (EXPR); offset += sizeof(TYPE);
     // #define ALIGN4 if((outOffset & 3) != 0)  outOffset += 4 - outOffset & 3;
 
+    /*
+        NOTE: PDB writer/reader isn't working. It produces corrupt files with incorrect format.
+            The cvdump works fine. The linker does not like it however.
+            It happens when you have multiple functions.
+            We don't have two version of the data. We only use on FPM. Is that why it's corrupt?
+            The old stream library points to itself instead of a new library with new stuff. Is that bad?
+    */
+
     Assert(streams.size() >= 5); // table, pdb, tpi, dbi, ipi
 
     {
@@ -3132,3 +3140,21 @@ const char * registerNames_AMD64[] = {
     "r14d",         // 366 CV_AMD64_R14D
     "r15d",         // 367 CV_AMD64_R15D
 };
+
+void TestPDBWriter() {
+    /*
+    Test deconstruct with these
+    cl /nologo /c src/Other/test.c /I. /INCREMENTAL:NO /Zi /Fdtest.pdb 
+    pdb = PDBFile::Deconstruct("test.pdb")
+    pdb->writeFile("test.pdb")
+    link /nologo /DEBUG test.obj /OUT:test.exe
+    
+    with this text in test.c:
+    void hey1() { 1; }
+     void hey2() { 2; }
+    void main() {
+        hey1();
+        hey2();
+    }
+    */
+}

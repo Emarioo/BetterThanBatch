@@ -85,16 +85,16 @@ int main(int argc, const char** argv){
     // A(a,0,2);
 
 
-    // auto f = PDBFile::Deconstruct("test.pdb");
-    // f->writeFile("test.pdb");
+    auto f = PDBFile::Deconstruct("test.pdb");
+    f->writeFile("test.pdb");
     // PDBFile::Destroy(f);
     // DeconstructDebugSymbols(obj->
     // DeconstructPDB("test.pdb");
     // DeconstructPDB("bin/compiler.pdb");
     // DeconstructPDB("bin/dev.pdb");
 
-    // Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
-    // return 0;
+    Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+    return 0;
 
     MeasureInit();
 
