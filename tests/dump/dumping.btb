@@ -1,0 +1,13 @@
+@TEST-CASE dump-test
+{ @dump-asm
+    fn hej() {
+        
+    }
+    hej(); // this causes error in compiler, why?
+}
+fn outside() {
+    
+}
+{ @dump-asm
+    outside();
+}

@@ -28,25 +28,25 @@ struct Options {
     }
     threadAmount: u32 = 5;
     rootPath: char[];
-    whitelistedDirectories: DynamicArray<String>;
-    whitelistedFormats: DynamicArray<String>;
-    blacklistedDirectories: DynamicArray<String>;
+    whitelistedDirectories: DynamicArray<StringBuilder>;
+    whitelistedFormats: DynamicArray<StringBuilder>;
+    blacklistedDirectories: DynamicArray<StringBuilder>;
     // blacklistedPaths? sometimes you may want to blacklist names in file names
     // whitelistedFormats can be used to allow specific files
 }
 options: Options;
 defer { options.cleanup(); }
 options.rootPath = ".";
-options.whitelistedDirectories.add(String{}).append("src");
-options.whitelistedDirectories.add(String{}).append("include");
+options.whitelistedDirectories.add(StringBuilder{}).append("src");
+options.whitelistedDirectories.add(StringBuilder{}).append("include");
 
-options.blacklistedDirectories.add(String{}).append("git");
-// options.blacklistedDirectories.add(String{}).append("bin");
-options.blacklistedDirectories.add(String{}).append(".vs");
+options.blacklistedDirectories.add(StringBuilder{}).append("git");
+// options.blacklistedDirectories.add(StringBuilder{}).append("bin");
+options.blacklistedDirectories.add(StringBuilder{}).append(".vs");
 
-// options.whitelistedFormats.add(String{}).append("/out");
-options.whitelistedFormats.add(String{}).append(".cpp");
-options.whitelistedFormats.add(String{}).append(".h");
+// options.whitelistedFormats.add(StringBuilder{}).append("/out");
+options.whitelistedFormats.add(StringBuilder{}).append(".cpp");
+options.whitelistedFormats.add(StringBuilder{}).append(".h");
 
 // if args specify formats then don't add default ones.
 
@@ -72,7 +72,7 @@ fn CalculateFiles(options: Options*) {
         return
     }
 
-    files: DynamicArray<String>;
+    files: DynamicArray<StringBuilder>;
 
     result: DirectoryIteratorData*;
     // iterator.result works too
@@ -116,7 +116,7 @@ fn CalculateFiles(options: Options*) {
 
         // Optimize by using a bucket array of linear allocators for the file names.
         // Currently, each file name is allocated separately which isn't ideal.
-        files.add(String{}).append(result.name);
+        files.add(StringBuilder{}).append(result.name);
     }
 
     // for @ptr files.sliced() {
@@ -179,7 +179,7 @@ struct ThreadInfo {
     masterInfo: MasterInfo*;
 }
 struct MasterInfo {
-    files: DynamicArray<String>;
+    files: DynamicArray<StringBuilder>;
     usedFiles: u32 = 0;
     data: CalcData;
 

@@ -36,7 +36,9 @@ CompileError ToCompileError(const char* str){
     CASE(ERROR_C_STYLED_DEFAULT_CASE)
     CASE(ERROR_BAD_TOKEN_IN_SWITCH)
     CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+    CASE(ERROR_OVERLOAD_MISMATCH)
     CASE(ERROR_NONE)
+    CASE(ERROR_UNSPECIFIED)
     #undef CASE
     
     Assert(false);
@@ -56,7 +58,9 @@ const char* ToCompileErrorString(temp_compile_error stuff) {
         CASE(ERROR_C_STYLED_DEFAULT_CASE)
         CASE(ERROR_BAD_TOKEN_IN_SWITCH)
         CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+        CASE(ERROR_OVERLOAD_MISMATCH)
         CASE(ERROR_NONE)
+        CASE(ERROR_UNSPECIFIED)
         CASE(ERROR_UNKNOWN)
         #undef CASE
     }

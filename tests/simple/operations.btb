@@ -69,7 +69,7 @@ test cast<u64>1; ptr;
 cast<u64>cast<char*>null
 cast<u64>cast<void*>null
 cast<u64*>cast<void*>null
-@TEST-ERROR E1001 cast<u64*>cast<char*>null
+@TEST-ERROR ERROR_CASTING_TYPES cast<u64*>cast<char*>null
 // On error, program and tests won't execute
 // but we want to test errors without having a seperate
 // case for just errors because it's inconvenient
@@ -114,6 +114,7 @@ t == 0;
 #define T(t0,t1,n0,OP,n1) cast<t0> n0 OP cast<t1> n1
 
 test 60000; T(u32, u32, 10000, *, 6);
+{ @dump-bc
 test 70000; T(u16, u8, 10000, *, 7);
-
+}
 test 1; cast<u8>301 % cast<u8>258;

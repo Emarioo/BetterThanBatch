@@ -68,6 +68,7 @@ I shall spend time on examples, documentation, and proper testing.
 - Concatenation with ## in macros.
 - Variables, functions, namespaces, structs, enums.
 - If, for, while, break, continue, return, defer, using.
+- Compiler bugs that waste your time.
 
 ## On the way
 - Shell-like way of calling executables
@@ -94,8 +95,13 @@ Some preprocessing is done after the parser like
 - x64 Generator (bytecode -> object file)
 
 ## Examples
-You can find some examples in the example folder.
-[Random code](examples/ast.btb) (some are broken and not up to date)
+You can find some examples in the examples folder.
+
+[Rendering test](examples/graphics/quad.btb) with GLEW, GLFW, and OpenGL
+
+[Line counter](examples/linecounter.btb) with multiple threads
+
+[Random code](examples/ast.btb)
 
 # Usage
 You may want to read [Building](#building) first.

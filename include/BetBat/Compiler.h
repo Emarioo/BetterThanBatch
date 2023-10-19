@@ -74,8 +74,8 @@ struct CompileStats {
         // TODO: union {CompileError error, u32 line; struct { u64 data; };}
     };
     DynamicArray<Error> errorTypes;
-    void addError(const TokenRange& range, CompileError errorType = ERROR_NONE) { if(errorType == ERROR_NONE) return;  errorTypes.add({errorType, (u32)range.firstToken.line}); }
-    void addError(const Token& token, CompileError errorType = ERROR_NONE) { if(errorType == ERROR_NONE) return; errorTypes.add({errorType, (u32)token.line}); }
+    void addError(const TokenRange& range, CompileError errorType = ERROR_UNSPECIFIED) { errorTypes.add({errorType, (u32)range.firstToken.line}); }
+    void addError(const Token& token, CompileError errorType = ERROR_UNSPECIFIED) { errorTypes.add({errorType, (u32)token.line}); }
 
     void printSuccess(CompileOptions* options);
     void printFailed();

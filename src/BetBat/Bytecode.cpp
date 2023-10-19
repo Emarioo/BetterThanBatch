@@ -38,6 +38,7 @@ const char* InstToString(int type){
 
         CASE(BC_EQ,"eq")
         CASE(BC_NEQ,"neq")
+        
         CASE(BC_LT,"lt") 
         CASE(BC_LTE,"lte")
         CASE(BC_GT,"gt") 
@@ -66,9 +67,15 @@ const char* InstToString(int type){
         CASE(BC_MEMZERO,"memzero")
         CASE(BC_MEMCPY,"memcpy")
         CASE(BC_RDTSC,"rdtsc")
+        CASE(BC_STRLEN,"strlen")
         // CASE(BC_RDTSCP)
         CASE(BC_CMP_SWAP,"cmp_swap")
         CASE(BC_ATOMIC_ADD,"atomic_add")
+        
+        CASE(BC_SQRT,"sqrt")
+        CASE(BC_ROUND,"round")
+        
+        CASE(BC_TEST_VALUE,"test_value")
 
         // CASE(BC_SIN)
         // CASE(BC_COS)
@@ -265,6 +272,9 @@ void Instruction::print(){
         if(op1 == 2)
             log::out << " qword";
          log::out<<log::SILVER;
+    } else if(opcode==BC_TEST_VALUE) {
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<op0<<" " << RegToStr(op1)<< " "<<RegToStr(op2);
+        log::out<<log::SILVER;
     } else
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::SILVER;
     

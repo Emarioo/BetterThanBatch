@@ -135,7 +135,7 @@ fn _print(t: f32){
 // 01011111000000000000000000000000
     intPart: u64 = 0;
     decimalBits: i32 = 23 - (exp-127);
-    log(decimalBits)
+    // log(decimalBits)
     // _print('\n')
     // _print(exp)
     // _print('\n')
@@ -150,12 +150,12 @@ fn _print(t: f32){
             str: char[23];
             used = 22;
             while intPart > 0u && used > 0 {
-                digit: u8 = intPart % 10;
+                digit: u8 = intPart % 10u;
                 // log("i",intPart);
                 // log("d",digit);
                 str.ptr[used] = digit + '0';
                 used--;
-                intPart = intPart / 10;
+                intPart = intPart / 10u;
             }
             str.ptr += used + 1;
             str.len -= used + 1;
@@ -167,7 +167,7 @@ fn _print(t: f32){
     } else {
         if exp > 126u
             intPart = (mantissa) >> decimalBits;
-        _print(intPart);
+        _print(cast<i64>intPart);
         _print('.');
 
         decimals: char[24];
@@ -180,8 +180,8 @@ fn _print(t: f32){
         if minBits < 0
             minBits = 0;
         for @rev minBits..decimalBits {
-            mul *= 5;
-            acc = acc*10
+            mul *= 5u;
+            acc = acc*10u
             // log("nr", nr)
             if nr < 24 {
                 bit = 1 & (mantissa >> nr)
@@ -200,8 +200,8 @@ fn _print(t: f32){
         if decimalBits < precision;
             limit = decimalBits;
         for @rev 0..limit {
-            digit = acc % 10;
-            acc = acc / 10;
+            digit = acc % 10u;
+            acc = acc / 10u;
             if !blank || digit != 0 {
                 decimals.ptr[nr] = digit + '0';
                 if blank

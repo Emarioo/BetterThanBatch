@@ -1,7 +1,7 @@
 #import "OS"
 #import "Logger"
 
-#define LN printc('L'); printc('N'); _print(#line); _print('\n')
+#define LN printc('L'); printc('N'); _print(cast<i64>#line); _print('\n')
 
 // heap allocated for now
 struct StringBuilder {
@@ -107,6 +107,7 @@ fn @intrinsic strlen(str: char*) -> u32;
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
 fn @hide swrite_unsafe(buffer: char*, slice: char[]) -> u32 {
+    // LN;
     memcpy(buffer, slice.ptr, slice.len);
     buffer[slice.len] = '\0';
     return slice.len;
@@ -114,6 +115,7 @@ fn @hide swrite_unsafe(buffer: char*, slice: char[]) -> u32 {
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
 fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> u32 {
+    // LN;
     len = strlen(cstr);
     memcpy(buffer, cstr, len);
     buffer[len] = '\0';
@@ -122,6 +124,7 @@ fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> u32 {
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
 fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
+    // LN
     start = buffer;
     if value == 0 {
         buffer[0] = '0';
@@ -133,6 +136,7 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
         *buffer = '-';
         buffer++;
     }
+    // LN
     str: char[21];
     used = 20;
     while value > 0 && used > 0 {
@@ -141,6 +145,7 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
         str.ptr[used] = num + '0';
         used--;
     }
+    // LN
     str.ptr += used + 1;
     str.len -= used + 1;
 
@@ -153,6 +158,7 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
 fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
+    // LN;
     start = buffer;
     bits: u32 = *cast<u32*>cast<void*>&t;
 
@@ -172,7 +178,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
     if decimalBits < 1 {
         intPart = (mantissa) << (0-decimalBits);
 
-        log("pl");
+        // log("pl");
         if intPart == 0 {
             *buffer = '0';
             buffer++;
@@ -206,15 +212,17 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
     } else {
         // log("ya");
 
-        LN
+        // LN
         if exp > 126u
             intPart = (mantissa) >> decimalBits;
-        LN
-        log(intPart)
-        buffer += swrite_unsafe(buffer, intPart);
+        // LN;
+        // log(intPart)
+        { @dump-bc
+            buffer += swrite_unsafe(buffer, cast<i64>intPart);
+        }
         *buffer = '.';
         buffer++;
-        LN
+        // LN
         decimals: char[24];
 
         acc: u64 = 0;
@@ -233,7 +241,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
                 }
             }
         }
-        LN
+        // LN
         if acc == 0 {
             *buffer = '0';
             buffer++;
@@ -243,7 +251,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
         limit = precision;
         if decimalBits < precision;
             limit = decimalBits;
-            LN
+            // LN
         for @rev 0..limit {
             digit = acc % 10u;
             acc = acc / 10u;
@@ -254,11 +262,11 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
                 blank = false;
             }
         }
-        LN
+        // LN
         decimals.len = lastZero;
         memcpy(buffer, decimals.ptr, decimals.len);
         buffer += decimals.len;
-        LN
+        // LN
     }
     *buffer = '\0'; // not include in written bytes
     return cast<u64>(buffer - start);

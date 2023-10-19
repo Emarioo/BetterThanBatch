@@ -407,10 +407,14 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
     // if(overloads.size()==1)
     //     return &overloads[0];
 
-    FnOverloads::Overload* outOverload = nullptr;
+    FnOverloads::Overload* lastOverload = nullptr;
+    FnOverloads::Overload* intOverload = nullptr;
+    int validOverloads = 0;
+    int intOverloads = 0;
     for(int i=0;i<(int)overloads.size();i++){
         auto& overload = overloads[i];
         bool found = true;
+        bool foundInt = true;
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
         //   unnecessary.
@@ -438,8 +442,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
                     // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
             }
-        } else 
-        {
+        } else {
             if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
                 || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
                 || argTypes.size() > overload.astFunc->arguments.size()
@@ -456,31 +459,45 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
                 }
             } else {
                 for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    // if(Equal(fncall->name,"swrite_unsafe")) {
+                    //     log::out << "swrite_unsafe, overload: "<<i<<", arg: "<<j <<", type check: "<< ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " - " << ast->typeToString(argTypes[j])<<"\n";
+                    // }
                     if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
+                        if(!(AST::IsInteger(overload.funcImpl->argumentTypes[j].typeId) && AST::IsInteger(argTypes[j]))) {
+                            foundInt = false;
+                        }
                         found = false;
-                        break;
+                        // break; // We can't break when using foundInt
                     }
                     // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
             }
         }
+        if(foundInt) {
+            intOverload = &overload;
+            intOverloads++;
+        }
         if(!found)
             continue;
 
-        if(canCast){
-            return &overload;
-        }
         // NOTE: @Optimise You can return here because there should only be one matching overload.
         // But we keep going in case we find more matches which would indicate
         // a bug in the compiler. An optimised build would not do this.
-        if(outOverload) {
+        if(validOverloads > 0) {
+            if(canCast) {
+                return nullptr;
+            }
             // log::out << log::RED << __func__ <<" (COMPILER BUG): More than once match!\n";
             Assert(("More than one match!",false));
-            return outOverload;
+            return lastOverload;
         }
-        outOverload = &overload;
+        lastOverload = &overload;
+        validOverloads++;
     }
-    return outOverload;
+    if(intOverloads == 1 && !lastOverload) {
+        return intOverload;
+    }
+    return lastOverload;
 }
 
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
@@ -1222,6 +1239,7 @@ TypeInfo *AST::getTypeInfo(TypeId id) {
     if(!id.isValid())
         return nullptr;
     if(!id.isNormalType()) {
+        // Assert(id.isNormalType());
         return nullptr;
     }
     // Assert(id.isNormalType());

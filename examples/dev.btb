@@ -12,7 +12,7 @@
 // #import "dir-iterator"
 // #import "random/operator"
 // #import "threads"
-// #import "linecounter"
+#import "linecounter"
 // #import "graphics/quad.btb"
 // #import "graphics/perf.btb"
 // #import "a"
@@ -20,12 +20,23 @@
 
 // #import "examples/debug_test.btb"
 
-fn hey1() {
-    1
-}
-fn hey2() {
-    2
-}
-hey1();
-hey2();
+// fn hey1() {
+//     1
+// }
+// fn hey2() {
+//     2
+// }
+// hey1();
+// hey2();
 
+// fn say(v: i16) {
+//     log("int");
+// }
+// fn say(v: i64) {
+//     log("int64");
+// }
+// fn say(v: char) {
+//     log("chr");
+// }
+
+// say(32)

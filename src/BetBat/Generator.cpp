@@ -361,7 +361,7 @@ int GenInfo::saveStackMoment() {
 
 bool GenInfo::hasErrors() { return errors != 0 || compileInfo->compileOptions->compileStats.errors != 0; }
 bool GenInfo::hasForeignErrors() {
-    // return  compileInfo->compileOptions->compileStats.errors != 0;
+    // return compileInfo->compileOptions->compileStats.errors != 0;
     // compileStats.errors indicates errors that wasn't ignored.
     // errorTypes indicate all errors.
     return compileInfo->compileOptions->compileStats.errorTypes.size() != 0;

@@ -680,6 +680,7 @@ void UIModule::render(float windowWidth, float windowHeight){
     glDisable(GL_DEPTH_TEST);
     glEnable(GL_BLEND);
     
+    // printf("ui %f %f\n", windowWidth, windowHeight);
     glUniform2f(location("uWindow"),windowWidth,windowHeight);
 
     char strbuf[20];

@@ -690,7 +690,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             // Arguments for fname does not match an overload. These were the arguments:
             // These are the valid overloads: 
             ERR_SECTION(
-                ERR_HEAD(expr->tokenRange)
+                ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
                 // custom code for error message
                 log::out << "Arguments for '"<<baseName <<"' does not match an overload.\n";
                 ERR_LINE(expr->tokenRange, "bad");
@@ -710,8 +710,8 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                 log::out << "\n";
                 log::out << "These are the valid overloads: ";
 
-                if(fnOverloads->overloads.size()!=1)
-                    log::out << "\n";
+                // if(fnOverloads->overloads.size()!=1)
+                //     log::out << "\n";
 
                 // TODO: You may not want to print 10 overloads here. Limiting it to 3-5 might
                 //  be a good idea. You could have an option in user profiles.
@@ -724,8 +724,10 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                             log::out << ", ";
                         log::out << log::LIME << info.ast->typeToString(argType.typeId) << log::SILVER;
                     }
-                    log::out << ")\n";
+                    log::out << "), ";
+                    // log::out << ")\n";
                 }
+                log::out << "\n";
 
                 if(fnOverloads->polyOverloads.size()!=0){
                     log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
@@ -753,7 +755,65 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     // match args and poly args with poly impls
     // if match then return that impl
     // if not then try to generate a implementation
-    Assert(!expr->hasImplicitThis());
+    
+    // Assert(!expr->hasImplicitThis());
+    if(expr->hasImplicitThis()) {
+        ERR_SECTION(
+            ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
+            // custom code for error message
+            log::out << "Arguments for '"<<baseName <<"' does not match an overload.\n";
+            ERR_LINE(expr->tokenRange, "bad");
+            log::out << "These were the arguments: ";
+            if(argTypes.size()==0){
+                log::out << "zero arguments";
+            } else {
+                log::out << "(";
+                for(int j=0;j<argTypes.size();j++){
+                    auto& argType = argTypes[j];
+                    if(j!=0)
+                        log::out << ", ";
+                    log::out << log::LIME << info.ast->typeToString(argType) << log::SILVER;
+                }
+                log::out << ")";
+            }
+            log::out << "\n";
+            log::out << "These are the valid overloads: ";
+
+            // if(fnOverloads->overloads.size()!=1)
+            //     log::out << "\n";
+
+            // TODO: You may not want to print 10 overloads here. Limiting it to 3-5 might
+            //  be a good idea. You could have an option in user profiles.
+            for (int i = 0; i < fnOverloads->overloads.size();i++) {
+                auto& overload = fnOverloads->overloads[i];
+                log::out << "(";
+                for(int j=0;j<overload.funcImpl->argumentTypes.size();j++){
+                    auto& argType = overload.funcImpl->argumentTypes[j];
+                    if(j!=0)
+                        log::out << ", ";
+                    log::out << log::LIME << info.ast->typeToString(argType.typeId) << log::SILVER;
+                }
+                log::out << "), ";
+                // log::out << ")\n";
+            }
+            log::out << "\n";
+
+            if(fnOverloads->polyOverloads.size()!=0){
+                log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
+            }
+            if(expr->args.size()!=0 && expr->args.get(0)->namedValue.str){
+                log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
+            }
+            // if(expr->args->size()!=0 && expr->args->get(0)->namedValue.str){
+            //     log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
+            // }
+            log::out <<"\n";
+            // TODO: show list of available overloaded function args
+        ) 
+        FNCALL_FAIL
+        return SignalAttempt::FAILURE;   
+    }
+    
     // TODO: Allow implicit cast. Same as we do with normal functions.
     FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr, implicitPoly);
     if(overload){
@@ -1018,7 +1078,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     }
     if(!polyFunc){
         ERR_SECTION(
-            ERR_HEAD(expr->tokenRange)
+            ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
             ERR_MSG_LOG(
                 "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
                 if(argTypes.size()==0){
@@ -1068,7 +1128,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     Assert(overload == newOverload);
     if(!overload){
         ERR_SECTION(
-            ERR_HEAD(expr->tokenRange)
+            ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
             ERR_MSG_LOG("Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
                 log::out << log::CYAN<<"Generates args: "<<log::SILVER;
                 if(argTypes.size()==0){
@@ -2205,6 +2265,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             poly_typeArray.resize(0);
             if(now->firstExpression){
                 // may not exist, meaning just a declaration, no assignment
+                if(Equal(now->firstExpression->name, "_reserve")) {
+                    // __debugbreak();
+                    log::out << "okay\n";
+                }
                 SignalAttempt result = CheckExpression(info, scope->scopeId,now->firstExpression, &typeArray, false);
                 for(int i=0;i<typeArray.size();i++){
                     if(typeArray[i].isValid() && typeArray[i] != AST_VOID)

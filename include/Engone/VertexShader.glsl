@@ -30,7 +30,7 @@ void main() {
 	fColor=vColor;
 	fTexture=int(vTexture);
 
-	gl_Position = vec4((vPos.x)/uWindow.x*2-1, 1-(vPos.y)/uWindow.y*2, 0, 1);
+	gl_Position = vec4((vPos.x)/uWindow.x*2.0-1.0, 1.0-(vPos.y)/uWindow.y*2.0, 0, 1);
 	// gl_Position = vec4(vPos.x,vPos.y, 0, 1);
 };
 

@@ -3,6 +3,8 @@
 #include "BetBat/Util/TestSuite.h"
 #include "BetBat/PDBWriter.h"
 
+#include "BetBat/Help.h"
+
 #include <math.h>
 // #include "BetBat/glfwtest.h"
 
@@ -13,62 +15,6 @@
 #undef STB_IMAGE_IMPLEMENTATION
 #undef STB_IMAGE_WRITE_IMPLEMENTATION
 
-void print_version(){
-    using namespace engone;
-    char buffer[100];
-    CompilerVersion version = CompilerVersion::Current();
-    version.serialize(buffer, sizeof(buffer),CompilerVersion::INCLUDE_AVAILABLE);
-    log::out << "BTB Compiler, version: " << log::LIME<< buffer <<"\n";
-    log::out << log::GRAY << " (major.minor.patch.revision/name-year.month.day)\n";
-    // log::out << log::GRAY << " released "<<version.year << "-"<<version.month << "-"<<version.day <<" (YYYY-MM-DD)";
-}
-void print_help(){
-    using namespace engone;
-    log::out << log::BLUE << "##   Help (outdated)   ##\n";
-    log::out << log::GRAY << "More information can be found here:\n"
-        "https://github.com/Emarioo/BetterThanBatch/tree/master/docs\n";
-    #define PRINT_USAGE(X) log::out << log::YELLOW << X ": "<<log::SILVER;
-    #define PRINT_DESC(X) log::out << X;
-    #define PRINT_EXAMPLES log::out << log::LIME << " Examples:\n";
-    #define PRINT_EXAMPLE(X) log::out << X;
-    PRINT_USAGE("compiler.exe [file0 file1 ...]")
-    PRINT_DESC("Arguments after the executable specifies source files to compile. "
-             "They will compile and run seperately. Use #import inside the source files for more files in your "
-             "projects. The exit code will be zero if the compilation succeeded; non-zero if something failed.\n")
-    PRINT_EXAMPLES
-    PRINT_EXAMPLE("  compiler.exe file0.btb script.txt\n")
-    log::out << "\n";
-    PRINT_USAGE("compiler.exe [file0 ...] -out [file0 ...]")
-    PRINT_DESC("With the "<<log::WHITE<<"out"<<log::WHITE<<" flag, files to the left will be compiled into "
-             "bytecode and written to the files on the right of the out flag. "
-             "The amount of files on the left and right must match.\n")
-    PRINT_EXAMPLES
-    PRINT_EXAMPLE("  compiler.exe main.btb -out program.btbc\n")
-    log::out << "\n";
-    PRINT_USAGE("compiler.exe -run [file0 ...]")
-    PRINT_DESC("Runs bytecode files generated with the out flag.\n")
-    PRINT_EXAMPLES
-    PRINT_EXAMPLE("  compiler.exe -run program.btbc\n")
-    log::out << "\n";
-    PRINT_USAGE("compiler.exe -target <target-platform>")
-    PRINT_DESC("Compiles source code to the specified target whether that is bytecode, Windows, Linux, x64, object file, or an executable. "
-            "All of those in different combinations may not be supported yet.\n")
-    PRINT_EXAMPLES
-    PRINT_EXAMPLE("  compiler.exe main.btb -out main.exe -target win-x64\n")
-    PRINT_EXAMPLE("  compiler.exe main.btb -out main -target linux-x64\n")
-    PRINT_EXAMPLE("  compiler.exe main.btb -out main.btbc -target bytecode\n")
-    log::out << "\n";
-    PRINT_USAGE("compiler.exe -user-args [arg0 ...]")
-    PRINT_DESC("Only works if you run a program. Any arguments after this flag will be passed to the program that is specified to execute\n")
-    PRINT_EXAMPLES
-    PRINT_EXAMPLE("  compiler.exe main.btb -user-args hello there\n")
-    PRINT_EXAMPLE("  compiler.exe -run main.btbc -user-args -some-flag \"TO PASS\"\n")
-    log::out << "\n";
-    #undef PRINT_USAGE
-    #undef PRINT_DESC
-    #undef PRINT_EXAMPLES
-    #undef PRINT_EXAMPLE
-}
 #define EXIT_CODE_NOTHING 0
 #define EXIT_CODE_SUCCESS 0
 #define EXIT_CODE_FAILURE 1
@@ -85,16 +31,20 @@ int main(int argc, const char** argv){
     // A(a,0,2);
 
 
-    auto f = PDBFile::Deconstruct("test.pdb");
-    f->writeFile("test.pdb");
-    // PDBFile::Destroy(f);
-    // DeconstructDebugSymbols(obj->
-    // DeconstructPDB("test.pdb");
-    // DeconstructPDB("bin/compiler.pdb");
-    // DeconstructPDB("bin/dev.pdb");
+    // auto f = PDBFile::Deconstruct("wa.pdb");
+    // log::out << "---\n";
+    // f->writeFile("wa.pdb");
+    
+    // // PDBFile::Destroy(f);
+    // // DeconstructDebugSymbols(obj->
+    // // DeconstructPDB("test.pdb");
+    // // DeconstructPDB("bin/compiler.pdb");
+    // // DeconstructPDB("bin/dev.pdb");
 
-    Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
-    return 0;
+    // Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+    // return 0;
+    
+    log::out.enableReport(false);
 
     MeasureInit();
 
@@ -202,6 +152,11 @@ int main(int argc, const char** argv){
     if(invalidArguments) {
         return EXIT_CODE_NOTHING; // not a compiler failure so we use "NOTHING" instead of "FAILURE"
     }
+    
+    if(compileOptions.useDebugInformation) {
+        log::out << log::RED << "Debug information is not supported yet\n";
+        return EXIT_CODE_NOTHING;
+    }
 
     if(onlyPreprocess){
         if (compileOptions.initialSourceFile.text.size() == 0) {
@@ -245,7 +200,8 @@ int main(int argc, const char** argv){
         #ifdef RUN_TEST_SUITE
         DynamicArray<std::string> tests;
         // tests.add("tests/simple/operations.btb");
-        tests.add("tests/flow/switch.btb");
+        // tests.add("tests/flow/switch.btb");
+        tests.add("tests/funcs/overloading.btb");
         // tests.add("tests/simple/garb.btb");
         // tests.add("tests/flow/loops.btb");
         // tests.add("tests/what/struct.btb");
@@ -264,7 +220,7 @@ int main(int argc, const char** argv){
         } else {
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
-            compileOptions.useDebugInformation = true;
+            // compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         }

@@ -64,16 +64,6 @@ struct GenInfo {
     bool disableCodeGeneration = false; // used with @no-code
     bool ignoreErrors = false; // used with @no-code
 
-    // void addError(const TokenRange& range) {
-    //     if(ignoreErrors)
-    //         errors++;
-    //     compileInfo->compileOptions->compileStats.addError(range, errType);
-    // }
-    // void addError(const Token& token, CompileError errType) {
-    //     errors++;
-    //     compileInfo->compileOptions->compileStats.addError(token, errType);
-    // }
-
     int funcDepth=0;
     struct LoopScope {
         // Index of instruction where looping starts.h

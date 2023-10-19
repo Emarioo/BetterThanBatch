@@ -5,9 +5,21 @@
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
             "request": "launch",
-            // "program": "${workspaceFolder}/test.exe",
             "program": "${workspaceFolder}/bin/compiler.exe",
             "args": ["-dev"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "(Windows) Test",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/test.exe",
+            "args": [
+                "-dev"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

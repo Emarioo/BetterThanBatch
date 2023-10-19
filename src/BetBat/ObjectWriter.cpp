@@ -842,6 +842,7 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
         pdbpath = pdbpath.getAbsolute();
         bool result = WritePDBFile(pdbpath.text.c_str(), di, &typeInformation);
         if(!result) {
+            Assert(result);
             return false;
         }
         if(debugTSection) {

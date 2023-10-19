@@ -214,6 +214,7 @@ u32 TestSuite(TestSelection testSelection){
     if(testSelection&TEST_FLOW) {
         tests.add("tests/flow/loops.btb");
         tests.add("tests/flow/switch.btb");
+        tests.add("tests/funcs/overloading.btb");
         // tests.add("tests/flow/defer.btb"); not fixed yet
     }
 
@@ -328,15 +329,28 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
             if(!found)
                 failedTests++;
         }
-        
-        if(options.compileStats.errors > testcase.expectedErrors.size()) {
-            totalTests += options.compileStats.errors - testcase.expectedErrors.size();
-            failedTests += options.compileStats.errors - testcase.expectedErrors.size();
+        for(int j=0;j<options.compileStats.errorTypes.size();j++){
+            auto& actualError = options.compileStats.errorTypes[j];
+            
+            bool found = false;
+            for(int k=0;k<testcase.expectedErrors.size();k++){
+            auto& expectedError = testcase.expectedErrors[k];
+                if(expectedError.errorType == actualError.errorType
+                && expectedError.line == actualError.line) {
+                    found = true;
+                    break;
+                }
+            }
+            if(!found) {
+                failedTests++;
+                totalTests++;
+            }
         }
         
         if(!bytecode) {
-            if(options.compileStats.errorTypes.size() != options.compileStats.errors) {
-                log::out << log::YELLOW << "Error count was "<< options.compileStats.errors << " but the individual types were "<<options.compileStats.errorTypes.size() << "\n";
+            // errors will be smaller than errorTypes since errors isn't incremented when doing TEST-ERROR
+            if(options.compileStats.errorTypes.size() < options.compileStats.errors) {
+                log::out << log::YELLOW << "TestSuite: errorTypes: "<< options.compileStats.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
             }
         } else {
             if(useInterp) {

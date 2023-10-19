@@ -1,14 +1,11 @@
 /*
     Debug information for windows
 
-    The code is based on cvdump
+    The code is based on these:
     https://github.com/microsoft/microsoft-pdb
-
     https://llvm.org/docs/PDB/MsfFile.html
+    https://github.com/sgraham/dyibicc/blob/main/src/dyn_basic_pdb.h
 
-    All code in the header and cpp file is very messy.
-    I need to successfully create a PDB before designing a 
-    system around it.
 */
 #pragma once
 
@@ -1901,7 +1898,7 @@ struct MSFHeader {
     char magic[30] = "Microsoft C/C++ MSF 7.00\r\n\x1a\x44\x53";
     u16 _padding2; // 2 byte padding
     u32 blockSize;
-    u32 blockOfValidFPM;
+    u32 blockOfActiveFPM;
     u32 blockCount;
     u32 bytesOfStreamTable;
     u32 _padding4; // 4 byte padding
@@ -1995,7 +1992,7 @@ struct PDBFile {
     u32 _baseSize = 0; // size of data allocation
     u32 _blockCount = 0;
 
-    u32 validFPM = 1; // PDB from disc may use 2
+    u32 activeFPM = 1; // PDB from disc may use 2
 
     struct Stream {
         static const u32 STREAM_AVAILABLE = (u32)-1;
@@ -2008,9 +2005,9 @@ struct PDBFile {
     // Returns -1 on failure
     u32 requestBlock();
 
-    static const u32 MIN_BLOCK_COUNT = 5 + 5;
+    static const u32 MIN_BLOCK_COUNT = 5 + 5 + 5;
     bool reserveTotalBlocks(u32 newBlockCount);
-    bool setFreeBlock(i32 blockIndex, bool beFree);
+    bool setFreeBlock(i32 blockIndex, bool beFree, int fpmToUse=-1);
     bool isBlockFree(i32 blockIndex);
 };
 /*
@@ -2019,29 +2016,29 @@ struct PDBFile {
 
     Other stuff, mostly for testing.
 */
-struct PDBFile_old {
-    // I had a hard time getting the format right. The code in this function
-    // was the first that successfully created a PDB.
-    static bool WriteEmpty(const char* path);
-    static PDBFile_old* Deconstruct(const char* path);
+// struct PDBFile_old {
+//     // I had a hard time getting the format right. The code in this function
+//     // was the first that successfully created a PDB.
+//     static bool WriteEmpty(const char* path);
+//     static PDBFile_old* Deconstruct(const char* path);
 
-    u8* rawData = nullptr;
-    u32 rawSize = 0;
+//     u8* rawData = nullptr;
+//     u32 rawSize = 0;
 
-    u32 block_of_streamTable = -1;
+//     u32 block_of_streamTable = -1;
 
-    MSFHeader* msfHeader = nullptr;
-    PDBHeader* pdbHeader = nullptr;
-    TPIHeader* tpiHeader = nullptr;
-    TPIHeader* ipiHeader = nullptr;
+//     MSFHeader* msfHeader = nullptr;
+//     PDBHeader* pdbHeader = nullptr;
+//     TPIHeader* tpiHeader = nullptr;
+//     TPIHeader* ipiHeader = nullptr;
 
-    struct StreamOld {
-        u32 byteSize;
-        QuickArray<u32> blockIndices;
-    };
-    DynamicArray<StreamOld*> streams2;
-    DynamicArray<StreamOld*> streams_old;
-};
+//     struct StreamOld {
+//         u32 byteSize;
+//         QuickArray<u32> blockIndices;
+//     };
+//     DynamicArray<StreamOld*> streams2;
+//     DynamicArray<StreamOld*> streams_old;
+// };
 
 const char* ToString(LeafType type, bool nullAsUnknown = false);
 const char* ToString(SubSectionType type, bool nullAsUnknown = false);

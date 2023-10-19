@@ -360,6 +360,8 @@ bool Token::operator==(const Token& text) const {
     return true;
 }
 bool Token::operator==(const char* text) const{
+    if(!text) return false;
+    if(!str) return false;
     int len = strlen(text);
     if(len!=length)
         return false;
@@ -771,8 +773,8 @@ void TokenStream::Destroy(TokenStream* stream){
     // engone::Free(stream,sizeof(TokenStream));
     TRACK_FREE(stream,TokenStream);
 }
-bool specialsTable[256]{0};
-bool initializedSpecialsTable = false;
+static bool specialsTable[256]{0};
+static bool initializedSpecialsTable = false;
 void InitSpecialsTable() {
     initializedSpecialsTable = true;
     for(int i=0;i<256;i++) {

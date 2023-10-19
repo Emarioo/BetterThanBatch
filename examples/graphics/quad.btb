@@ -128,10 +128,10 @@ fn main(){
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     GLCHECK
     // glBufferData(GL_ARRAY_BUFFER, 9 * sizeof f32 , vertices.ptr, GL_DYNAMIC_DRAW);
-    glBufferData(GL_ARRAY_BUFFER, 9 * sizeof f32 , null, GL_DYNAMIC_DRAW);
+    glBufferData(GL_ARRAY_BUFFER, 9u * sizeof f32 , null, GL_DYNAMIC_DRAW);
     GLCHECK
 
-    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3 * sizeof f32, cast<void*>cast<u64>0);
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 3u * sizeof f32, cast<void*>cast<u64>0);
     GLCHECK
     glEnableVertexAttribArray(0);
     GLCHECK
@@ -165,7 +165,7 @@ fn main(){
         // TODO: Try element array
         // TODO: Try uniform functions (glUniform4f)
 
-        glBufferSubData(GL_ARRAY_BUFFER, 0, 9 * sizeof f32, vertices.ptr);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, 9u * sizeof f32, vertices.ptr);
         // GLCHECK
         glDrawArrays(GL_TRIANGLES, 0, 3);
         // GLCHECK

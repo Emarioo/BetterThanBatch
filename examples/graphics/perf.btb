@@ -36,7 +36,7 @@ struct ProfiledData {
     rawData: void*;
 }
 
-// #define LN printc('L'); printc('N'); _print(#line); _print('\n')
+// #define LN printc('L'); printc('N'); _print(cast<i64>#line); _print('\n')
 
 fn ReadPerfData(path: char[]) -> ProfiledData* {
     ptr: ProfiledData* = Allocate(sizeof ProfiledData);
@@ -64,7 +64,7 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
         ptr.zoneOffsets[nr] = offset;
         offset += ptr.zoneCounts[nr] * sizeof Zone;
     }
-
+    
     // log(fileSize, offset);
     ptr.rawData = data;
     ptr.rawSize = fileSize;
@@ -88,7 +88,7 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
 
         for 0..zoneC {
             zone = &zones[nr];
-            log(zone.start, zone.end)
+            log(cast<i64>zone.start, cast<i64>zone.end)
         }
     }
     return ptr;
@@ -103,7 +103,7 @@ tempStringData = Allocate(0x10_0000);
 
 // LN
 main();
-// 4
+0 // exit code
 // global offsetX: i32 = 0;
 // global offsetY: i32 = 0;
 fn main(){
@@ -164,6 +164,9 @@ fn main(){
         delta: f32 = cast<f32>(now - lastTime) * invClockSpeed;
         // delta: f32 = cast<f32>(now - lastTime) / clockSpeed;
         lastTime = now;
+        
+        glfwGetWindowSize(window, &winw, &winh);
+        glViewport(0,0,winw,winh);
 
         glClearColor(0.02,0.05,0.08,1);
         glClear(GL_COLOR_BUFFER_BIT);
@@ -182,6 +185,7 @@ fn main(){
 
         RenderProfiledData(module, profiledData);
 
+        // log("win",cast<i64>winw,cast<i64>winh);
         RenderUIModule(module, winw, winh);
 
         // avg += delta;
@@ -227,8 +231,6 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
             box.w = (zone.end - zone.start) * scale;
             box.y = 10 + 60 * depth;
             box.h = 20;
-            // log(zone.start-minx, zone.end-zone.start)
-            // log(box.w)
             // box.color = UIColor{0.5,0.5,0.5,1};
             box.color = UIColor{1,1,1,1};
 
@@ -238,10 +240,10 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
             timeText.h = box.h*0.8;
             timeText.y = box.y + box.h/2 - timeText.h/2;
 
-
             time = 1000.0 * cast<f32>(zone.end - zone.start) / GetClockSpeed();
             len: u32;
             timeText.string = tempStringData + strOffset;
+            // log("data:",(cast<i64>tempStringData)," off:",cast<i64>strOffset," time:",time);
             len = swrite_unsafe(tempStringData + strOffset, time);
             // if len > 8
             //     len = 8;
@@ -252,11 +254,9 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
 
             timeText.x += box.w/2 - textwidth/2;
 
-
             // index = tempBuilder.len;
             // tempBuilder.append(time*1000);
             // tempBuilder.len -= 
-            
 
             // timeText.length = strlen(@cstr "Sup");
             // timeText.string =  @cstr "Sup";

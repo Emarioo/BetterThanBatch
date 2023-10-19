@@ -69,6 +69,7 @@ void PrintExample(int line, const StringBuilder& stringBuilder);
 // IMPORTANT: DO NOT, UNDER ANY CIRCUMSTANCES, CHANGE THE ID/NUMBER OF THE ERRORS. THEY MAY BE USED IN TEST CASES.
 enum CompileError : u32 {
     ERROR_NONE = 0,
+    ERROR_UNSPECIFIED = 1, // This is used for old errors which didn't have error types. New errors should not use this.
     ERROR_CASTING_TYPES = 1001,
     ERROR_UNDECLARED = 1002,
     
@@ -77,6 +78,8 @@ enum CompileError : u32 {
     ERROR_C_STYLED_DEFAULT_CASE = 2103,
     ERROR_BAD_TOKEN_IN_SWITCH = 2104,
     ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH = 2105,
+    
+    ERROR_OVERLOAD_MISMATCH = 3001,
     
     ERROR_UNKNOWN = 99999,
 };
