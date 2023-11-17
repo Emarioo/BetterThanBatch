@@ -52,6 +52,8 @@ is there to give some idea of how slow the intepreter
 is. More thorough testing with consideration to hardware
 specification will be done later.
 
+Note: The measurements may be very inaccurate.
+
 ## Example (Fibonacci)
 ```
 N = 10

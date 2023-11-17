@@ -1,6 +1,8 @@
 # Guide to the language
 A quick guide which doesn't go much into detail since things might change.
 
+![](img/compiler-usage.png)
+
 ## Variables and expressions
 ```
 {name} = {expression}
