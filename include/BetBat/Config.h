@@ -44,7 +44,7 @@
 // when compiling. Push and pop after each other is redundant for example.
 // The consequence is that the logged instructions won't resemble the final
 // output.
-#define OPTIMIZED
+// #define OPTIMIZED
 // #define SINGLE_THREADED
 // #define LOG_MEASURES
 // Silent is not used at the moment.

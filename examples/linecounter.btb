@@ -1,7 +1,7 @@
 #import "OS"
+#import "Basic"
 #import "Logger"
 #import "String"
-#import "Basic"
 #import "Array"
 
 // directory iterator
@@ -19,6 +19,8 @@
 // for *args {
 //     log("Arg",nr,":", it);
 // }
+
+#define LN log(#line)
 
 struct Options {
     fn cleanup() {
@@ -71,22 +73,27 @@ fn CalculateFiles(options: Options*) {
         // error message
         return
     }
-
+    LN
     files: DynamicArray<StringBuilder>;
 
     result: DirectoryIteratorData*;
     // iterator.result works too
     while result = iterator.next() {
         // TODO: blacklist, whitelist
-
+        LN
         if result.isDirectory {
+            LN
             blacklisted = false;
             for @ptr options.blacklistedDirectories.sliced() {
+                // LN
+                log(it.sliced())
                 if findString(result.name,it.sliced()) {
                     blacklisted = true;
                     break;
                 }
+                log("haaha",it.sliced())
             }
+            LN
             if blacklisted {
                 iterator.skip();
                 continue;   
@@ -104,7 +111,7 @@ fn CalculateFiles(options: Options*) {
                 iterator.skip();
             continue;
         }
-        
+        LN
         whitelisted = false
         for @ptr options.whitelistedFormats.sliced() {
             if matchEnd(result.name,it.sliced()) {
@@ -118,7 +125,7 @@ fn CalculateFiles(options: Options*) {
         // Currently, each file name is allocated separately which isn't ideal.
         files.add(StringBuilder{}).append(result.name);
     }
-
+    LN
     // for @ptr files.sliced() {
     //     log(it.sliced())
     // }
@@ -211,7 +218,7 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
     info: ThreadInfo* = _info;
     Assert(info.masterInfo)
     
-    bufferSize = 0;
+    bufferSize = 0u;
     buffer: char* = null;
     defer Free(buffer, bufferSize);
 
@@ -228,7 +235,7 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
 
         if !file
             continue;   
-        if fileSize == 0 {
+        if fileSize == 0u {
             info.data.lines += 1;
             continue;
         }
@@ -236,11 +243,11 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
         if bufferSize < fileSize {
             if buffer {
                 // bufferSize = DEFAULT_BUFFER_SIZE;
-                if bufferSize*2 < fileSize {
+                if bufferSize*2u < fileSize {
                     buffer = Reallocate(buffer, bufferSize, fileSize);
                 } else {
-                    buffer = Reallocate(buffer, bufferSize, bufferSize*2);
-                    bufferSize = bufferSize * 2;
+                    buffer = Reallocate(buffer, bufferSize, bufferSize*2u);
+                    bufferSize = bufferSize * 2u;
                 }
             } else {
                 bufferSize = DEFAULT_BUFFER_SIZE;
@@ -255,9 +262,9 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
         // comments
 
         // TODO: assert if readBytes
-        blanks = 0;
-        lines = 1; // files always have one line
-        index = 0
+        blanks = 0u;
+        lines = 1u; // files always have one line
+        index = 0u
         solelyWhitespace = true;
         while index < readBytes {
             chr = buffer[index];

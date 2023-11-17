@@ -34,7 +34,7 @@ struct StringBuilder {
     }
     fn append(str: char[]) {
         if len + str.len > max {
-            if !_reserve(str.len + max * 2) {
+            if !_reserve(str.len + max * 2u) {
                 return;
             }
         }

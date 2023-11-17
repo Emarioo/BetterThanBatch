@@ -4441,6 +4441,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     if(itemsize>1){
                         info.addLoadIm(BC_REG_RAX,itemsize);
                         info.addInstruction({BC_MULI, ARITHMETIC_SINT, index_reg, BC_REG_RAX});
+                    } else {
+                        info.addInstruction({BC_MOV_RR, index_reg, BC_REG_RAX});
                     }
                     info.addInstruction({BC_ADDI, ptr_reg, BC_REG_RAX, ptr_reg});
 
@@ -4451,6 +4453,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     if(itemsize>1){
                         info.addLoadIm(BC_REG_RAX,itemsize);
                         info.addInstruction({BC_MULI, ARITHMETIC_SINT, index_reg, BC_REG_RAX});
+                    } else {
+                        info.addInstruction({BC_MOV_RR, index_reg, BC_REG_RAX});
                     }
                     info.addInstruction({BC_ADDI, ptr_reg, BC_REG_RAX, ptr_reg});
 

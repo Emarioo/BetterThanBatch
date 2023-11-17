@@ -1233,9 +1233,10 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 // std::string prevCWD = GetWorkingDirectory();
                 bool outputOtherDirectory = outPath.text.find("/") != std::string::npos;
 
-                std::string cmd = "link /nologo ";
+                std::string cmd = "link /nologo /INCREMENTAL:NO ";
                 if(options->useDebugInformation)
-                    cmd += "/DEBUG /INCREMENTAL:NO ";
+                    cmd += "/DEBUG ";
+                else cmd += "/DEBUG "; // force debug info for now
                 cmd += objPath + " ";
                 #ifndef MINIMAL_DEBUG
                 cmd += "bin/NativeLayer.lib ";

@@ -36,4 +36,10 @@ for arr {
     test 2*nr; it;
 }
 
+@TEST-CASE for-str
+// This caused a crash at one point (the generator forgot to add an instruction)
+str = "Yay wee"
+for str {
+
+}
 // TODO: nested loops

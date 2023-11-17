@@ -1,3 +1,5 @@
+#import "Logger"
+
 // Use native functions instead
 fn equal(a: char[], b: char[]) -> i32 {
     if a.len != b.len
@@ -32,12 +34,16 @@ fn findString(str: char[], match: char[]) -> bool {
 // returns -1 if not found
 // returns index of the first character of the first found matched string
 fn findStringAt(str: char[], match: char[]) -> u32 {
+    log(str.ptr, str.len);
     if str.len < match.len || match.len == 0
-        return false;
+        return -1;
     correct = 0;
     foundIndex = -1;
+    log("oi")
     for str {
+        log(nr,it)
         if it == match.ptr[correct] {
+            log(" ",correct)
             correct++;
             if correct == match.len {
                 foundIndex = nr - match.len + 1;

@@ -503,7 +503,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
 FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& argTypes, TinyArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
     using namespace engone;
-    Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
+    // Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
     FnOverloads::Overload* outOverload = nullptr;
     // TODO: Check all overloads in case there are more than one match.
     //  Good way of finding a bug in the compiler.
@@ -516,6 +516,9 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
             continue;
         // The args must match exactly. Otherwise, a new implementation should be generated.
         bool doesPolyArgsMatch = true;
+        bool found = true;
+        bool foundInt = true;
+
         if(!implicitPoly){
             for(int j=0;j<(int)polyArgs.size();j++){
                 if(polyArgs[j] != overload.funcImpl->polyArgs[j]){
@@ -526,28 +529,58 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
             if(!doesPolyArgsMatch)
                 continue;
         }
-         if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
-            || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
-            || argTypes.size() > overload.astFunc->arguments.size()
-            )
-            continue;
+        if (fncall->hasImplicitThis()) {
+            // Implicit this means that the arguments the function call has won't have the this argument (this = the object the method is called from)
+            // But the function implementation uses a this argument so we do -1 and +1 in some places in the code below
+            // to account for this.
+            if(fncall->nonNamedArgs > overload.astFunc->arguments.size()-1 // can't match if the call has more essential args than the total args the overload has
+                || fncall->nonNamedArgs < overload.astFunc->nonDefaults-1 // can't match if the call has less essential args than the overload (excluding defaults)
+                || argTypes.size() > overload.astFunc->arguments.size()-1
+                )
+                continue;
 
-        bool found = true;
-        if(canCast) {
-            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                if(!ast->castable(argTypes[j], overload.funcImpl->argumentTypes[j].typeId)) {
-                    found = false;
-                    break;
+            if(canCast) {
+                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(!ast->castable(argTypes[j], overload.funcImpl->argumentTypes[j+1].typeId)) {
+                        found = false;
+                        break;
+                    }
+                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
                 }
-                // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+            } else {
+                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(argTypes[j] != overload.funcImpl->argumentTypes[j+1].typeId) {
+                        // TODO: foundInt, see non-poly version of getOverload
+                        found = false;
+                        break;
+                    }
+                }
             }
         } else {
-            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                if(argTypes[j] != overload.funcImpl->argumentTypes[j].typeId) {
-                    found = false;
-                    break;
+            if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
+                || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
+                || argTypes.size() > overload.astFunc->arguments.size()
+                )
+                continue;
+
+            if(canCast) {
+                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(!ast->castable(argTypes[j], overload.funcImpl->argumentTypes[j].typeId)) {
+                        found = false;
+                        break;
+                    }
+                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+                }
+            } else {
+                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                    if(argTypes[j] != overload.funcImpl->argumentTypes[j].typeId) {
+                        // TODO: foundInt, see non-poly version of getOverload
+                        found = false;
+                        break;
+                    }
                 }
             }
+
         }
         if(!found)
             continue;

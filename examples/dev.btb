@@ -18,6 +18,25 @@
 // #import "a"
 // #import "b"
 
+// #import "Array"
+
+// arr: DynamicArray<u32>;
+// arr.add(32);
+
+// *arr.getPtr(0)
+// { @dump-bc
+//     str = "Yay wee"
+//     for str {
+//         // log(nr, it);
+//     }
+//     // 0
+// }
+// fn @intrinsic memcpy(dst: void*, src: void*, len: u64);
+
+// s: u64 = 91235;
+// d: u64;
+// memcpy(&d, &s, 8);
+
 // #import "examples/debug_test.btb"
 
 // fn hey1() {

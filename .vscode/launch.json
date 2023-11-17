@@ -31,7 +31,7 @@
             "request": "launch",
             "program": "${workspaceFolder}/dev.exe",
             "args": [],
-            "stopAtEntry": false,
+            "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "console": "integratedTerminal"
