@@ -8,8 +8,10 @@
 
 // included for the Path struct
 #include "BetBat/Compiler.h"
+#include "BetBat/Dwarf.h"
 
 namespace COFF_Format {
+    
     #define SWITCH_START(TYPE) const char* ToString(TYPE flags);\
         engone::Logger& operator<<(engone::Logger& logger, TYPE flags){return logger << ToString(flags);}\
         const char* ToString(TYPE flags){ switch(flags){
@@ -603,36 +605,38 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
         to = program->size();
     }
 
-    #define CHECK Assert(outOffset <= outSize);
-    // TODO: It this estimation correct?
-    u64 outSize = 2000 + program->size()
-        + program->dataRelocations.size() * 30 // 20 for relocations and 10 for symbols, some relocations refer to the same symbols
-        + program->namedRelocations.size() * 45 // a little extra since functions have bigger names
-        + program->globalSize;
-
+    ByteStream* obj_stream = ByteStream::Create(nullptr);
+    defer {
+        if(obj_stream) {
+            ByteStream::Destroy(obj_stream, nullptr);
+            obj_stream = nullptr;
+        }
+    };
+    bool suc = true;
+    #define CHECK Assert(suc);
+    
+    // TODO: Improve the memory estimation
+    u64 estimation = 2000 + program->size() + program->dataRelocations.size() * 18
+        + program->namedRelocations.size() * 30 + program->globalSize;
     if(program->debugInformation) {
-        outSize += program->debugInformation->files.size() * 256;
-        outSize += program->debugInformation->functions.size() * 100;
+        estimation += program->debugInformation->files.size() * 200 + program->debugInformation->functions.size() * 100;
         for(int i=0;i<program->debugInformation->functions.size();i++) {
             auto& fun = program->debugInformation->functions[i];
-            outSize += 255; // name
-            outSize += fun.localVariables.size() * 255;
-            outSize += fun.lines.size() * 100;
+            estimation += 20 + fun.localVariables.size() * 30 + fun.lines.size() * 30;
         }
-        // IMPORTANT: We need to estimate better by checking the contnet of each function
     }
-    u8* outData = TRACK_ARRAY_ALLOC(u8,outSize);
-    defer { TRACK_ARRAY_FREE(outData, u8, outSize); };
-    u64 outOffset = 0;
-
-    /*
+    obj_stream->reserve(estimation);
+    
+    /*#########################################
         We begin with the header and sections
-    */
-
-    COFF_File_Header* header = (COFF_File_Header*)(outData + outOffset);
-    outOffset+=COFF_File_Header::SIZE;
+    ############################################*/
+    COFF_File_Header* header = nullptr;
+    suc = obj_stream->write_late((void**)&header, COFF_File_Header::SIZE);
     CHECK
-
+    
+    DynamicArray<std::string> stringsForTable;
+    u32 stringTableOffset = 4; // 4 because the integer for the string table size is included
+    
     header->Machine = (Machine_Flags)IMAGE_FILE_MACHINE_AMD64;
     header->Characteristics = (COFF_Header_Flags)0;
     header->NumberOfSections = 0; // incremented later
@@ -640,25 +644,14 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
     header->SizeOfOptionalHeader = 0;
     header->TimeDateStamp = time(nullptr);
     
-    const int textSectionNumber = 1;
     Section_Header* textSection = nullptr;
-    const int dataSectionNumber = 2;
-    Section_Header* dataSection = nullptr;
-    
-    const int debugSSectionNumber = 3;
-    Section_Header* debugSSection = nullptr;
-    const int debugTSectionNumber = 4;
-    Section_Header* debugTSection = nullptr;
-
-    header->NumberOfSections++;
-    textSection = (Section_Header*)(outData+outOffset);
-    outOffset+=Section_Header::SIZE;
+    int textSectionNumber = ++header->NumberOfSections;
+    suc = obj_stream->write_late((void**)&textSection, Section_Header::SIZE);
     CHECK
-
+    
     strcpy(textSection->Name,".text");
     textSection->NumberOfLineNumbers = 0;
     textSection->PointerToLineNumbers = 0;
-
     textSection->VirtualAddress = 0;
     textSection->VirtualSize = 0;
     textSection->Characteristics = (Section_Flags)(
@@ -667,19 +660,19 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
         IMAGE_SCN_MEM_EXECUTE |
         IMAGE_SCN_MEM_READ);
       
+    
+    int dataSectionNumber = -1;
+    Section_Header* dataSection = nullptr;
     if (program->globalData && program->globalSize!=0){
-        header->NumberOfSections++;
-        dataSection = (Section_Header*)(outData+outOffset);
-        outOffset+=Section_Header::SIZE;
+        dataSectionNumber = ++header->NumberOfSections;
+        suc = obj_stream->write_late((void**)&dataSection, Section_Header::SIZE);
         CHECK
-
+        
         strcpy(dataSection->Name,".data");
         dataSection->NumberOfLineNumbers = 0;
         dataSection->PointerToLineNumbers = 0;
-
         dataSection->NumberOfRelocations = 0;
         dataSection->PointerToRelocations = 0;
-
         dataSection->VirtualAddress = 0;
         dataSection->VirtualSize = 0;
         dataSection->Characteristics = (Section_Flags)(
@@ -688,19 +681,36 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
             IMAGE_SCN_MEM_WRITE |
             IMAGE_SCN_MEM_READ);
     }
+    
+    // For DWARF debug
+    dwarf::DWARFInfo dwarfInfo{};
+    dwarfInfo.debug = program->debugInformation;
+    dwarfInfo.stringTable = &stringsForTable;
+    dwarfInfo.stringTableOffset = &stringTableOffset;
+    dwarfInfo.header = header;
+    dwarfInfo.stream = obj_stream;
+    
+    // For PDB debug
+    int debugSSectionNumber = -1;
+    int debugTSectionNumber = -1;
+    Section_Header* debugSSection = nullptr;
+    Section_Header* debugTSection = nullptr;
+    
     if(program->debugInformation) {
-        header->NumberOfSections++;
-        debugSSection = (Section_Header*)(outData+outOffset);
-        outOffset+=Section_Header::SIZE;
+        #ifdef USE_DWARF_AS_DEBUG
+        
+        dwarf::ProvideSections(&dwarfInfo);
+        
+        #else
+        debugSSectionNumber = ++header->NumberOfSections;
+        suc = obj_stream->write_late((void**)&debugSSectionNumber, Section_Header::SIZE);
         CHECK
 
         strcpy(debugSSection->Name,".debug$S");
         debugSSection->NumberOfLineNumbers = 0;
         debugSSection->PointerToLineNumbers = 0;
-
         debugSSection->NumberOfRelocations = 0;
         debugSSection->PointerToRelocations = 0;
-
         debugSSection->VirtualAddress = 0;
         debugSSection->VirtualSize = 0;
         debugSSection->Characteristics = (Section_Flags)(
@@ -709,18 +719,15 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
             IMAGE_SCN_MEM_DISCARDABLE |
             IMAGE_SCN_MEM_READ);
 
-        header->NumberOfSections++;
-        debugTSection = (Section_Header*)(outData+outOffset);
-        outOffset+=Section_Header::SIZE;
+        debugTSectionNumber = ++header->NumberOfSections;
+        suc = obj_stream->write_late((void**)&debugTSection, Section_Header::SIZE);
         CHECK
         
         strcpy(debugTSection->Name,".debug$T");
         debugTSection->NumberOfLineNumbers = 0;
         debugTSection->PointerToLineNumbers = 0;
-
         debugTSection->NumberOfRelocations = 0;
         debugTSection->PointerToRelocations = 0;
-
         debugTSection->VirtualAddress = 0;
         debugTSection->VirtualSize = 0;
         debugTSection->Characteristics = (Section_Flags)(
@@ -728,21 +735,20 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
             IMAGE_SCN_ALIGN_1BYTES |
             IMAGE_SCN_MEM_DISCARDABLE |
             IMAGE_SCN_MEM_READ);
-
+        #endif
     }
 
-    /*
-        Here we deal with the data of the sections and
-        other data.
-    */
+    /* #####################
+     WRITE DATA TO SECTIONS
+    ##################### */
     u32 programSize = to - from;
     
     textSection->SizeOfRawData = programSize;
-    textSection->PointerToRawData = outOffset;
+    textSection->PointerToRawData = obj_stream->getWriteHead();
     if(programSize !=0 ){
         Assert(program->text);
-        memcpy(outData + outOffset, program->text + from, textSection->SizeOfRawData);
-        outOffset += textSection->SizeOfRawData;
+        suc = obj_stream->write(program->text + from, textSection->SizeOfRawData);
+        CHECK
     }
 
     u32 totalSymbols = 0;
@@ -753,14 +759,15 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
     DynamicArray<std::string> namedSymbols;
 
     textSection->NumberOfRelocations = 0;
-    textSection->PointerToRelocations = outOffset;
+    textSection->PointerToRelocations = obj_stream->getWriteHead();
     if(program->dataRelocations.size()!=0){
         textSection->NumberOfRelocations += program->dataRelocations.size();
 
         for(int i=0;i<program->dataRelocations.size();i++){
             auto& dataRelocation = program->dataRelocations[i];
-            COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
-            outOffset += COFF_Relocation::SIZE;
+            
+            COFF_Relocation* coffReloc = nullptr;
+            suc = obj_stream->write_late((void**)&debugSSectionNumber, COFF_Relocation::SIZE);
             CHECK
             
             coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
@@ -782,8 +789,9 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
 
         for(int i=0;i<program->namedRelocations.size();i++){
             auto& namedRelocation = program->namedRelocations[i];
-            COFF_Relocation* coffReloc = (COFF_Relocation*)(outData + outOffset);
-            outOffset += COFF_Relocation::SIZE;
+            
+            COFF_Relocation* coffReloc = nullptr;
+            suc = obj_stream->write_late((void**)&debugSSectionNumber, COFF_Relocation::SIZE);
             CHECK
             
             coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
@@ -803,14 +811,13 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
 
     if (dataSection){
         dataSection->SizeOfRawData = program->globalSize;
-        dataSection->PointerToRawData = outOffset;
+        dataSection->PointerToRawData = obj_stream->getWriteHead();
         if(dataSection->SizeOfRawData !=0){
             Assert(program->globalData);
-            memcpy(outData + outOffset, program->globalData, dataSection->SizeOfRawData);
-            outOffset += dataSection->SizeOfRawData;
+            suc = obj_stream->write(program->globalData, dataSection->SizeOfRawData);
+            CHECK
             // log::out << "Global data: "<<program->globalSize<<"\n";
         }
-        CHECK
     }
 
     struct FuncSymbol {
@@ -820,8 +827,14 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
         u32 symbolIndex = 0;
     };
     DynamicArray<FuncSymbol> funcSymbols;
+    
 
     if(program->debugInformation) {
+        #ifdef USE_DWARF_AS_DEBUG
+        
+        dwarf::ProvideSectionData(&dwarfInfo);
+        
+        #else
         DebugInformation* di = program->debugInformation;
         #undef WRITE
         #undef ALIGN4
@@ -1148,13 +1161,19 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
                 }
             }
         }
-
         #undef WRITE
+        #endif
     }
 
     // Assert(false); // fix debug relocations for functions!
-    
-    if((outOffset & 3) != 0)  outOffset += 4 - outOffset & 3;
+    {
+        int writeHead = obj_stream->getWriteHead();
+        // Assert((writeHead & 3) == 0);
+        if((writeHead & 3) != 0) {
+            suc = obj_stream->write_late(nullptr,  4 - (writeHead & 3));
+            CHECK
+        }
+    }
 
     bool hasMain = false;
     FOR (funcSymbols) {
@@ -1172,12 +1191,14 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
         funcSymbols.add(sym);
     }
 
-    header->PointerToSymbolTable = outOffset;
+    header->PointerToSymbolTable = obj_stream->getWriteHead();
+    Assert(dataSymbols.size() == 0 || dataSectionNumber > 0); // ensure that dataSection exists if we have data symbols
     for (int i=0;i<dataSymbols.size();i++) {
         header->NumberOfSymbols++; //incremented when adding relocations
-        Symbol_Record* symbol = (Symbol_Record*)(outData+outOffset);
-        outOffset+=Symbol_Record::SIZE;
+        Symbol_Record* symbol = nullptr;
+        suc = obj_stream->write_late((void**)&symbol, Symbol_Record::SIZE);
         CHECK
+        
         sprintf(symbol->Name.ShortName,"$d%u",i);
         symbol->SectionNumber = dataSectionNumber;
         symbol->Value = dataSymbols[i];
@@ -1186,13 +1207,13 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
         symbol->Type = 0;
         symbol->NumberOfAuxSymbols = 0;
     }
-
-    int stringTableOffset = 4; // 4 because the integer for the string table size is included
+    
     for (int i=0;i<namedSymbols.size();i++) {
         header->NumberOfSymbols++; //incremented when adding relocations
-        Symbol_Record* symbol = (Symbol_Record*)(outData+outOffset);
-        outOffset+=Symbol_Record::SIZE;
+        Symbol_Record* symbol = nullptr;
+        suc = obj_stream->write_late((void**)&symbol, Symbol_Record::SIZE);
         CHECK
+        
         auto& name = namedSymbols[i];
         if(name.length()<=8) {
             strcpy(symbol->Name.ShortName, name.c_str());
@@ -1208,12 +1229,14 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
         // symbol->Type = IMAGE_SYM_DTYPE_FUNCTION;
         symbol->NumberOfAuxSymbols = 0;
     }
+    Assert(funcSymbols.size() == 0 || textSectionNumber > 0); // ensure that text sections exists when using fuunc symbols
     for (int i=0;i<funcSymbols.size();i++){
         auto& fsymbol = funcSymbols[i];
         header->NumberOfSymbols++; // incremented e
-        Symbol_Record* symbol = (Symbol_Record*)(outData+outOffset);
-        outOffset+=Symbol_Record::SIZE;
+        Symbol_Record* symbol = nullptr;
+        suc = obj_stream->write_late((void**)&symbol, Symbol_Record::SIZE);
         CHECK
+        
         strcpy(symbol->Name.ShortName, fsymbol.name.c_str());
         symbol->SectionNumber = textSectionNumber;
         symbol->Value = fsymbol.address; // address of function
@@ -1224,25 +1247,50 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
 
     Assert(totalSymbols == header->NumberOfSymbols);
 
-    *(u32*)(outData + outOffset) = stringTableOffset;
-    outOffset += 4;
+    suc = obj_stream->write(&stringTableOffset, sizeof(u32));
     CHECK
+    
+    for(int i=0;i<stringsForTable.size();i++) {
+        auto& string = stringsForTable[i];
+        log::out << string << "\n";
+        Assert(string.length() > 8); // string does not need to be in string table if it's length is less or equal to 8
+        suc = obj_stream->write(string.c_str(), string.length() + 1);
+        CHECK
+    }
     for (int i=0;i<namedSymbols.size();i++) {
         auto& name = namedSymbols[i];
         if(name.length()<=8) {
             
         } else {
-            strcpy((char*)outData + outOffset, name.c_str());
-            outOffset += name.length()+1;
+            suc = obj_stream->write(name.c_str(), name.length() + 1);
             CHECK
         }
     }
 
-    Assert(outOffset <= outSize); // bad estimation when allocation at beginning of function
+    void* contiguous_ptr = nullptr;
+    u32 total_size = 0;
+    // suc = obj_stream->finalize(&contiguous_ptr, &total_size); CHECK
+    
+    // NOTE: It is possible to finalize the byte stream but that will cause a massive allocation and many dealloactions.
+    //  Iterating through the allocations with obj_stream->iterate but call FileWrite multiple times may be better.
+
     auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
     Assert(file);
-    FileWrite(file,outData,outOffset);
+    
+    if(contiguous_ptr) {
+        FileWrite(file, contiguous_ptr, total_size);
+    } else {
+        ByteStream::Iterator iter{};
+        while(obj_stream->iterate(iter)) {
+            FileWrite(file, iter.ptr, iter.size);
+        }
+    }
+    
     FileClose(file);
+    
+    ByteStream::Destroy(obj_stream, nullptr); // not necessary since we use defer up top
+    obj_stream = nullptr;
+    
     #undef CHECK
     return true;
 }

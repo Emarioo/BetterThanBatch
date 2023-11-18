@@ -135,6 +135,7 @@ if !compileSuccess! == 0 (
 
 
     prog -dev
+    objdump bin/dev.obj -W
     
     @REM link /NOLOGO /DEBUG test.obj /OUT:test.exe
     

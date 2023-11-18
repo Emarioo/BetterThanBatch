@@ -3,10 +3,12 @@
 #include "Engone/PlatformLayer.h"
 // #include "Engone/Logger.h"
 
-#include "BetBat/Util/Perf.h"
+#define MEASURE
+
+// #include "BetBat/Util/Perf.h"
 #include "BetBat/Util/Tracker.h"
 
-#include "BetBat/Asserts.h"
+#include "Engone/Asserts.h"
 
 #define TINY_ARRAY(TYPE,NAME,SIZE) TYPE arr_##NAME[SIZE]; memset(arr_##NAME,0,SIZE*sizeof(TYPE)); TinyArray<TYPE> NAME={}; NAME.initFixedSize(arr_##NAME, SIZE);
 // The purpose of this array is speed.
@@ -59,7 +61,7 @@ struct TinyArray {
     }
     // Shifts all elements to the right one step to the left
     // It isn't recommended to use this function.
-    bool remove(u32 index){
+    bool removeAt(u32 index){
         Assert(index < used);
         T* ptr = _ptr + index;
         // ptr->~T();
@@ -231,7 +233,7 @@ struct DynamicArray {
     }
     // Shifts all elements to the right one step to the left
     // It isn't recommended to use this function.
-    bool remove(u32 index){
+    bool removeAt(u32 index){
         Assert(index < used);
         T* ptr = _ptr + index;
         ptr->~T();
@@ -432,7 +434,7 @@ struct QuickArray {
     }
     // Shifts all elements to the right one step to the left
     // It isn't recommended to use this function.
-    bool remove(u32 index){
+    bool removeAt(u32 index){
         Assert(index < used);
         T* ptr = _ptr + index;
         // ptr->~T();

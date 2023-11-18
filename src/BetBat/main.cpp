@@ -2,6 +2,7 @@
 #include "BetBat/Compiler.h"
 #include "BetBat/Util/TestSuite.h"
 #include "BetBat/PDBWriter.h"
+#include "BetBat/Dwarf.h"
 
 #include "BetBat/Help.h"
 
@@ -21,6 +22,9 @@
 
 int main(int argc, const char** argv){
     using namespace engone;
+    
+    // dwarf::LEB128_test();
+    // ByteStream::Test_iterator();
     
     // u32 a = 1;
     // u32 b = 32;
@@ -220,7 +224,7 @@ int main(int argc, const char** argv){
         } else {
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
-            // compileOptions.useDebugInformation = true;
+            compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         }

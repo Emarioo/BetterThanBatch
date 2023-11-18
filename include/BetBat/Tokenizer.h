@@ -7,7 +7,7 @@
 #include "BetBat/Config.h"
 #include "BetBat/MessageTool.h"
 #include "BetBat/Util/Utility.h"
-#include "BetBat/Util/Array.h"
+#include "Engone/Util/Array.h"
 #include "BetBat/Util/Perf.h"
 #include "BetBat/Util/Profiler.h"
 #include "BetBat/Util/Tracker.h"

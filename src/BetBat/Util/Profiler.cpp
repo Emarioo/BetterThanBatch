@@ -1,7 +1,7 @@
 #include "BetBat/Util/Profiler.h"
 
 #include "Engone/Logger.h"
-#include "BetBat/Asserts.h"
+#include "Engone/Asserts.h"
 
 void ProfilerSession::cleanup() {
     if(contextTLS)

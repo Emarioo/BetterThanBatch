@@ -2,9 +2,6 @@ bin
 logs
 *.exe
 .vs
-vc140.pdb
 *.ilk
 *.obj
 *.pdb
-
-!versions/

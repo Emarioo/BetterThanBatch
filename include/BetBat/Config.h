@@ -31,6 +31,9 @@
 
 // #define DEBUG
 
+// PDB should be used if not defined
+#define USE_DWARF_AS_DEBUG
+
 // should enable optimized options and disable slow ones.
 // #define RELEASE
 
@@ -84,7 +87,7 @@
 // #define DISABLE_ASSERTS
 #endif
 
-#include "BetBat/Asserts.h"
+#include "Engone/Asserts.h"
 
 // Debug config
 #ifdef DEBUG

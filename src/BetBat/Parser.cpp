@@ -3645,7 +3645,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             for(int j=loopScope.defers.size()-1;j>=0;j--) {
                 auto& deferNode = info.functionScopes.last().loopScopes.last().defers[j];
                 if(deferNode == nearDefers[i]){
-                    loopScope.defers.remove(j);
+                    loopScope.defers.removeAt(j);
                     // if(j==loopScope.defers.size()-1){
                     //     loopScope.defers.pop();
                     // } else {

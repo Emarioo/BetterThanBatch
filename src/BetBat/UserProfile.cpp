@@ -440,3 +440,22 @@ void UserProfile::Destroy(UserProfile* ptr){
     TRACK_FREE(ptr, UserProfile);
     // engone::Free(ptr,sizeof(UserProfile));
 }
+#ifdef test_samples
+hello = shit
+// okat
+default-target = "win-x64"
+/*
+waiting
+*/
+" for you!" = "sour thumb "
+neat = "sour thumb"
+
+hello = shit
+// okat
+default-target = win-x64
+/*
+waiting
+*/
+" for you!" = sour thumb
+neat = sour thumb
+#endif

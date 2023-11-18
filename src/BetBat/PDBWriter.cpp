@@ -1,8 +1,8 @@
 #include "BetBat/PDBWriter.h"
 #include "Engone/Logger.h"
 #include "Engone/PlatformLayer.h"
-#include "BetBat/Asserts.h"
-#include "BetBat/Util/Array.h"
+#include "Engone/Asserts.h"
+#include "Engone/Util/Array.h"
 
 extern const char* registerNames_x64[];
 extern const char* registerNames_AMD64[];

@@ -29,7 +29,7 @@
 #include "BetBat/Util/Perf.h"
 #include "Engone/Win32Includes.h"
 
-#include "BetBat/Util/Array.h"
+#include "Engone/Util/Array.h"
 
 #ifdef USE_RDTSC
 // to get cpu clock speed
@@ -108,7 +108,7 @@ namespace engone {
 				// printf("FindFirstFile %s\n",temp.c_str());
 				// TODO: This does a memcpy on the whole array (almost).
 				//  That's gonna be slow!
-				info->second.directories.remove(0);
+				info->second.directories.removeAt(0);
 				// fprintf(stderr, "%s %p\n", temp.c_str(), &data);
 				
 				// DWORD err = GetLastError();

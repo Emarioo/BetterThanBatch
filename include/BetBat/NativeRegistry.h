@@ -1,7 +1,7 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
-#include "BetBat/Util/Array.h"
+#include "Engone/Util/Array.h"
 
 // TODO: Use enum instead? If there is a benefit.
 /*

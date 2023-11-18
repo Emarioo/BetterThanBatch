@@ -33,3 +33,6 @@ if [ "$err" == 0 ]; then
     # echo f | XCOPY /y /q bin/program_linux.exe prog.exe > nul
     ./$output -dev
 fi
+
+# gcc -c src/Other/test.c -gdwarf-3 -o test.o
+# objdump test.o -W > out

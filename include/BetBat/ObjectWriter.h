@@ -1,7 +1,10 @@
 #pragma once
 
 #include "Engone/PlatformLayer.h"
-#include "BetBat/Util/Array.h"
+#include "Engone/Util/Array.h"
+
+#include "Engone/Util/Stream.h"
+// #include "BetBat/PDBWriter.h"
 
 #include "BetBat/x64_Converter.h"
 
@@ -86,7 +89,7 @@ namespace COFF_Format {
     // section table entry
     struct Section_Header {
         static const u32 SIZE = 40;
-        char Name[8]; // null terminated unless name is exactly 8 bytes. Read MSDOCS on how to use longer names.
+        char Name[8]; // null terminated unless name is exactly 8 bytes. Longer names exist in the string table. They are referred to like this "/index\0" (ex, "/23\0")
         u32 VirtualSize=0; // 0 for object files
         u32 VirtualAddress=0; // should be 0 for simplicity, it offsets relocations but isn't necessary.
         u32 SizeOfRawData=0; // size of section data
