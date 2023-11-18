@@ -37,6 +37,7 @@ namespace COFF_Format {
         IMAGE_FILE_UP_SYSTEM_ONLY = 0x4000, // The file should be run only on a uniprocessor machine.
         IMAGE_FILE_BYTES_REVERSED_HI = 0x8000, // Big endian: the MSB precedes the LSB in memory. This flag is deprecated and should be zero.
     };
+    #pragma pack(push, 1)
     struct COFF_File_Header {
         static const u32 SIZE = 20;
         Machine_Flags Machine=MACHINE_ZERO;
@@ -47,6 +48,7 @@ namespace COFF_Format {
         u16 SizeOfOptionalHeader = 0; // always zero for object files (not executables)
         COFF_Header_Flags Characteristics=CHARACTERISTICS_ZERO;
     };
+    #pragma pack(pop)
     enum Section_Flags : u32 {
         SECTION_FLAG_ZERO = 0,
 
@@ -86,6 +88,8 @@ namespace COFF_Format {
         IMAGE_SCN_MEM_READ = 0x40000000, // The section can be read.
         IMAGE_SCN_MEM_WRITE = 0x80000000, // The section can be written to.
     };
+    
+    #pragma pack(push, 1)
     // section table entry
     struct Section_Header {
         static const u32 SIZE = 40;
@@ -100,6 +104,7 @@ namespace COFF_Format {
         u16 NumberOfLineNumbers=0;
         Section_Flags Characteristics=SECTION_FLAG_ZERO;
     };
+    #pragma pack(pop)
     enum Type_Indicator : u16 {
         TYPE_INDICATOR_ZERO = 0,
         IMAGE_REL_AMD64_ABSOLUTE = 0x0000, // The relocation is ignored.
@@ -120,6 +125,8 @@ namespace COFF_Format {
         IMAGE_REL_AMD64_PAIR = 0x000F, // A pair that must immediately follow every span-dependent value.
         IMAGE_REL_AMD64_SSPAN32 = 0x0010, // A 32-bit signed span-dependent value that is applied at link time.
     };
+    
+    #pragma pack(push, 1)
     // relocation entry/record
     struct COFF_Relocation {
         static const u32 SIZE = 10;
@@ -127,6 +134,7 @@ namespace COFF_Format {
         u32 SymbolTableIndex=0;
         Type_Indicator Type=TYPE_INDICATOR_ZERO;
     };
+    #pragma pack(pop)
     enum Storage_Class : u8 {
         IMAGE_SYM_CLASS_END_OF_FUNCTION = (u8)-1, // A special symbol that represents the end of function, for debugging purposes.
         IMAGE_SYM_CLASS_NULL = 0, // No assigned storage class.
@@ -167,6 +175,7 @@ namespace COFF_Format {
         IMAGE_SYM_DTYPE_FUNCTION = 0x20, // The symbol is a function that returns a base type.
         IMAGE_SYM_DTYPE_ARRAY = 0x30, // The symbol is an array of base type.
     };
+    #pragma pack(push,1)
     struct Symbol_Record {
         static const u32 SIZE = 18;
         union {
@@ -196,6 +205,7 @@ namespace COFF_Format {
         u8 Selection=0;
         u8 Unused[3]{0};
     };
+    #pragma pack(pop)
 }
 struct ObjectFile {
     ObjectFile() = default;

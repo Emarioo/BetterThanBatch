@@ -1,5 +1,5 @@
-#pragma once
 #include "BetBat/AST.h"
+#pragma once
 
 // Extensive debug information.
 // The information is converted debug information
@@ -30,7 +30,7 @@ struct DebugInformation {
     struct Function {
         u32 funcStart; // first instruction in the function
         u32 funcEnd; // the byte after the last instruction (also called exclusive)
-        u32 srcStart; // the instruction where actual source code starts
+        u32 srcStart; // the instruction where actual source code starts, funcStart includes setup of frame pointer and stack, srcStart does not include that.
         u32 srcEnd; // exclusive
 
         std::string name;

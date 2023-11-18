@@ -1,4 +1,5 @@
 {
+    "disasexpl.useBinaryParsing":true,
     "files.associations": {
         "vector": "cpp",
         "xstring": "cpp",
@@ -74,5 +75,9 @@
         "array": "cpp",
         "*.glsl": "cpp"
     },
-    "cmake.configureOnOpen": false
+    "cmake.configureOnOpen": false,
+    "lldb.displayFormat": "auto",
+    "lldb.showDisassembly": "auto",
+    "lldb.dereferencePointers": true,
+    "lldb.consoleMode": "commands"
 }

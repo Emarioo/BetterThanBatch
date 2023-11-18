@@ -25,14 +25,15 @@ namespace dwarf {
             section->PointerToRelocations = 0;
             section->VirtualAddress = 0;
             section->VirtualSize = 0;
+            section->SizeOfRawData = 0;
+            section->PointerToRawData = 0;
             section->Characteristics = (Section_Flags)(
                 IMAGE_SCN_CNT_INITIALIZED_DATA |
                 IMAGE_SCN_MEM_DISCARDABLE |
                 IMAGE_SCN_ALIGN_1BYTES |
                 IMAGE_SCN_MEM_READ);
         }
-        
-           {
+        {
             info->number_debug_abbrev = ++info->header->NumberOfSections;
             Section_Header* section = nullptr;
             suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
@@ -48,15 +49,38 @@ namespace dwarf {
             section->PointerToRelocations = 0;
             section->VirtualAddress = 0;
             section->VirtualSize = 0;
+            section->SizeOfRawData = 0;
+            section->PointerToRawData = 0;
             section->Characteristics = (Section_Flags)(
                 IMAGE_SCN_CNT_INITIALIZED_DATA |
                 IMAGE_SCN_MEM_DISCARDABLE |
                 IMAGE_SCN_ALIGN_1BYTES |
                 IMAGE_SCN_MEM_READ);
         }
+        {
+            info->number_debug_line = ++info->header->NumberOfSections;
+            Section_Header* section = nullptr;
+            suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
+            CHECK
         
-        // 1001  1000 0111  0110 0101
-        
+            info->section_debug_line = section;
+            info->stringTable->add(".debug_line");
+            snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
+            *info->stringTableOffset += info->stringTable->last().length() + 1;
+            section->NumberOfLineNumbers = 0;
+            section->PointerToLineNumbers = 0;
+            section->NumberOfRelocations = 0;
+            section->PointerToRelocations = 0;
+            section->VirtualAddress = 0;
+            section->VirtualSize = 0;
+            section->SizeOfRawData = 0;
+            section->PointerToRawData = 0;
+            section->Characteristics = (Section_Flags)(
+                IMAGE_SCN_CNT_INITIALIZED_DATA |
+                IMAGE_SCN_MEM_DISCARDABLE |
+                IMAGE_SCN_ALIGN_1BYTES |
+                IMAGE_SCN_MEM_READ);
+        }
     }
     
     void ProvideSectionData(DWARFInfo* info) {
@@ -67,7 +91,7 @@ namespace dwarf {
         
         #define WRITE_LEB(X) \
             stream->write_unknown((void**)&ptr, 16); \
-            written = ULEB128_encode(ptr, 16, 1); \
+            written = ULEB128_encode(ptr, 16, X); \
             stream->wrote_unknown(written);
             
         
@@ -76,7 +100,7 @@ namespace dwarf {
             section->PointerToRawData = stream->getWriteHead();
             
             CompilationUnitHeader* comp = nullptr;
-            stream->write_late((void**)&comp, CompilationUnitHeader::SIZE);
+            stream->write_late((void**)&comp, sizeof(CompilationUnitHeader));
             // comp->unit_length = don't know yet;
             comp->version = 3;
             comp->address_size = 8;
@@ -131,13 +155,57 @@ namespace dwarf {
             WRITE_FORM(DW_AT_high_pc,   DW_FORM_addr)
             WRITE_FORM(DW_AT_stmt_list, DW_FORM_data4)
             
-            WRITE_LEB(0) WRITE_LEB(0) // end attributes for abbreviation
-            
-            // Zero termination for abbreviation section?
+            WRITE_LEB(0)
+            WRITE_LEB(0) // end attributes for abbreviation
             
             // more abbreviations
+
+            
+            stream->write1(0); // zero terminate abbreviation section
             
             section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
+        }
+        
+         if (section = info->section_debug_line){
+            section->PointerToRawData = stream->getWriteHead();
+            
+            u8* ptr = nullptr;
+            int written = 0;
+            
+            LineNumberProgramHeader* header = nullptr;
+            stream->write_late((void**)&header, sizeof(LineNumberProgramHeader));
+            // comp->unit_length = don't know yet;
+            header->version = 3;
+            // header->header_length = don't know yet;
+            header->minimum_instruction_length = 1;
+            header->default_is_stmt = 1;
+            header->line_base = 0;
+            header->line_range = 1;
+            header->opcode_base = 1; // start at one
+            
+            u8 opcode_lengths[]{ 0, 1, 1, 1, 1, 0, 0, 0, 1, 0, 0, 1 };
+            for(int i=0;i<sizeof(opcode_lengths);i++){
+                header->opcode_base++; // increase when adding standard_opcode_lengths
+                stream->write1(opcode_lengths[i]);
+            }
+            
+            // TODO: Fix these hardcoded strings
+            stream->write("examples");
+            stream->write1(0); // terminate include_directories
+            
+            stream->write("dev.btb");
+            WRITE_LEB(1) // index into include_directories starting from 1
+            WRITE_LEB(0) // file last modified
+            WRITE_LEB(0) // file size
+            stream->write1(0); // terminate file entries
+            
+            header->header_length = (stream->getWriteHead() - section->PointerToRawData) - sizeof(LineNumberProgramHeader::unit_length) - sizeof(LineNumberProgramHeader::version);
+            
+            
+            // TODO: Relocations?
+            
+            section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
+            header->unit_length = section->SizeOfRawData - sizeof(LineNumberProgramHeader::unit_length);
         }
     }
     int ULEB128_encode(u8* buffer, u32 buffer_space, u64 value) {

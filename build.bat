@@ -136,6 +136,10 @@ if !compileSuccess! == 0 (
 
     prog -dev
     objdump bin/dev.obj -W
+    g++ src/Other/test.cpp -g -o test.exe
+    @REM gcc -c src/Other/test.c -g -o test.o
+    @REM gcc test.o -g -o test.exe
+    objdump test.o -W > out
     
     @REM link /NOLOGO /DEBUG test.obj /OUT:test.exe
     

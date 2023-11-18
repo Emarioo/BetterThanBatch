@@ -20,15 +20,28 @@ namespace dwarf {
     // IMPORTANT: All structs assume 32-bit DWARF format
     #pragma pack(push, 1)
     struct CompilationUnitHeader {
-        static const u32 SIZE = 11;
         u32 unit_length;
         u16 version;
         u32 debug_abbrev_offset;
         u8 address_size;
     };
-    struct DebuggingEntry {
-        // LEB128
-        // attribues?
+    struct LineNumberProgramHeader {
+        // PAGE 97
+        
+        // static const u32 SIZE = 11;
+        u32 unit_length;
+        u16 version;
+        u32 header_length;
+        u8 minimum_instruction_length;
+        u8 default_is_stmt;
+        i8 line_base;
+        u8 line_range;
+        u8 opcode_base;
+        // u8 standard_opcode_lengths[];
+        // char include_directories[][];
+        // u8 nuLL_end_of_dirs = 0;
+        // ? file_entry[][];
+        // u8 nuLL_end_of_files = 0;
     };
     #pragma pack(pop)
     
@@ -36,9 +49,11 @@ namespace dwarf {
         // section numbers
         int number_debug_info = -1;
         int number_debug_abbrev = -1;
+        int number_debug_line = -1;
         
         COFF_Format::Section_Header* section_debug_info = nullptr;
         COFF_Format::Section_Header* section_debug_abbrev = nullptr;
+        COFF_Format::Section_Header* section_debug_line = nullptr;
         
         // input/output
         ByteStream* stream = nullptr;
@@ -222,15 +237,6 @@ namespace dwarf {
     /*############################
         ATTRIBUTE FORM ENCODINGS
     ###############################*/
-    #define DW_FORM_strp                        0x0e    // string
-    #define DW_FORM_udata                       0x0f    // constant
-    #define DW_FORM_ref_addr                    0x10    // reference
-    #define DW_FORM_ref1                        0x11    // reference
-    #define DW_FORM_ref2                        0x12    // reference
-    #define DW_FORM_ref4                        0x13    // reference
-    #define DW_FORM_ref8                        0x14    // reference
-    #define DW_FORM_ref_udata                   0x15    // reference
-    #define DW_FORM_indirect_THIS_IS_SPECIAL_PAGE_125    0x16    //
     #define DW_FORM_addr                        0x01    // address
     #define DW_FORM_block2                      0x03    // block
     #define DW_FORM_block4                      0x04    // block
@@ -243,4 +249,38 @@ namespace dwarf {
     #define DW_FORM_data1                       0x0b    // constant
     #define DW_FORM_flag                        0x0c    // flag
     #define DW_FORM_sdata                       0x0d    // constant
+    #define DW_FORM_strp                        0x0e    // string
+    #define DW_FORM_udata                       0x0f    // constant
+    #define DW_FORM_ref_addr                    0x10    // reference
+    #define DW_FORM_ref1                        0x11    // reference
+    #define DW_FORM_ref2                        0x12    // reference
+    #define DW_FORM_ref4                        0x13    // reference
+    #define DW_FORM_ref8                        0x14    // reference
+    #define DW_FORM_ref_udata                   0x15    // reference
+    #define DW_FORM_indirect_THIS_IS_SPECIAL_PAGE_125    0x16    //
+    
+    /*#########################################
+        LINE NUMBER STANDARD OPCODE ENCODINGS
+    ###########################################*/
+    #define DW_LNS_copy                                 0x01 // 0 operand
+    #define DW_LNS_advance_pc                           0x02 // 1 operand
+    #define DW_LNS_advance_line                         0x03 // 1 operand
+    #define DW_LNS_set_file                             0x04 // 1 operand
+    #define DW_LNS_set_column                           0x05 // 1 operand
+    #define DW_LNS_negate_stmt                          0x06 // 0 operand
+    #define DW_LNS_set_basic_block                      0x07 // 0 operand
+    #define DW_LNS_const_add_pc                         0x08 // 0 operand
+    #define DW_LNS_fixed_advance_pc                     0x09 // 1 operand
+    #define DW_LNS_set_prologue_end                     0x0a // 0 operand
+    #define DW_LNS_set_epilogue_begin                   0x0b // 0 operand
+    #define DW_LNS_set_isa                              0x0c // 1 operand
+    
+    /*#########################################
+        LINE NUMBER EXTENDED OPCODE ENCODINGS
+    ###########################################*/
+    #define DW_LNE_end_sequence                         0x01
+    #define DW_LNE_set_address                          0x02
+    #define DW_LNE_define_file                          0x03
+    #define DW_LNE_lo_user                              0x80
+    #define DW_LNE_hi_user                              0xff 
 }
