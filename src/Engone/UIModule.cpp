@@ -1,5 +1,8 @@
+#ifdef OS_WINDOWS
+
 #include "Engone/UIModule.h"
 #include "stb/stb_image.h"
+
 
 // You should define this when compiling
 #define GLEW_STATIC
@@ -400,7 +403,7 @@ void UIFrameArray::Frame::setBool(uint32 index, bool yes) {
 //     }
 //     // 
 // }
-UIBox* UIModule::makeBox(uint64 id){
+UIBox* UIModule::makeBox(u64 id){
      if(id){
         int found=-1;
         for(int i=0;i<internalBoxes.count;i++){
@@ -461,7 +464,7 @@ UIBox* UIModule::makeBox(uint64 id){
         return ptr;
     }
 }
-UIText* UIModule::makeText(uint64 id){
+UIText* UIModule::makeText(u64 id){
     if(id){
         int found=-1;
         for(int i=0;i<internalTexts.count;i++){
@@ -521,7 +524,7 @@ UIText* UIModule::makeText(uint64 id){
         return ptr;
     }
 }
-void UIModule::removeBox(uint64 id){
+void UIModule::removeBox(u64 id){
     int found=-1;
     for(int i=0;i<internalBoxes.count;i++){
         auto t = (UIInternal*)internalBoxes.data + i;
@@ -535,7 +538,7 @@ void UIModule::removeBox(uint64 id){
         maintainedBoxes.remove(found);   
     }
 }
-void UIModule::removeText(uint64 id){
+void UIModule::removeText(u64 id){
     int found=-1;
     for(int i=0;i<internalTexts.count;i++){
         auto t = (UIInternal*)internalTexts.data + i;
@@ -948,3 +951,5 @@ void TestUIMaintain(UIModule& ui){
     }
 }
 }
+
+#endif // OS_WINDOWS

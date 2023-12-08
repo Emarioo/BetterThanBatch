@@ -12,6 +12,10 @@ const char* ToString(SettingType type){
     switch(type){
         CASE(DEFAULT_TARGET, "default-target")
         CASE(EXTRA_FLAGS,"extra-flags")
+
+        default: {
+            Assert(false);
+        }
     }
     return "unknown";
     #undef CASE
@@ -118,63 +122,68 @@ bool UserProfile::serialize(const std::string& path){
         auto& spot = contentOrder[index];
 
         switch(spot.type) {
-        case COMMENT: {
-            Comment& com = comments[spot.index];
-            if(com.enclosed)
-                FileWrite(file, "/*",2);
-            else if (com.hashtag)
-                FileWrite(file, "#",1);
-            else
-                FileWrite(file, "//",2);
+            case COMMENT: {
+                Comment& com = comments[spot.index];
+                if(com.enclosed)
+                    FileWrite(file, "/*",2);
+                else if (com.hashtag)
+                    FileWrite(file, "#",1);
+                else
+                    FileWrite(file, "//",2);
 
-            FileWrite(file, com.str.data(), com.str.length());
-            
-            if(com.enclosed)
-                FileWrite(file, "*/",2);
-        }
-        break; case KNOWN: {
-            auto& setting = knownSettings[spot.index];
-            if(!setting.invalid()) {
-                const char* key = ToString((SettingType)spot.index);
-                int len = strlen(key);
-                std::string& value = setting.value;
-
-                if(key[0] == ' ' || key[len-1] == ' ')
-                    FileWrite(file,"\"",1);
-                FileWrite(file, key, len);
-                if(key[0] == ' ' || key[len-1] == ' ')
-                    FileWrite(file,"\"",1);
-
-                FileWrite(file, " = ", 3);
+                FileWrite(file, com.str.data(), com.str.length());
                 
-                if(value[0] == ' ' || value.back() == ' ')
-                    FileWrite(file,"\"",1);
-                FileWrite(file, value.data(), value.length());
-                if(value[0] == ' ' || value.back() == ' ')
-                    FileWrite(file,"\"",1);
+                if(com.enclosed)
+                    FileWrite(file, "*/",2);
+                break; 
             }
-        }
-        break; case CUSTOM: {
-            auto& setting = customSettings[spot.index];
-            if(!setting.invalid()) {
-                std::string& key = setting.key;
-                std::string& value = setting.value;
+            case KNOWN: {
+                auto& setting = knownSettings[spot.index];
+                if(!setting.invalid()) {
+                    const char* key = ToString((SettingType)spot.index);
+                    int len = strlen(key);
+                    std::string& value = setting.value;
 
-                if(key[0] == ' ' || key.back() == ' ')
-                    FileWrite(file,"\"",1);
-                FileWrite(file, key.data(), key.length());
-                if(key[0] == ' ' || key.back() == ' ')
-                    FileWrite(file,"\"",1);
+                    if(key[0] == ' ' || key[len-1] == ' ')
+                        FileWrite(file,"\"",1);
+                    FileWrite(file, key, len);
+                    if(key[0] == ' ' || key[len-1] == ' ')
+                        FileWrite(file,"\"",1);
 
-                FileWrite(file, " = ", 3);
-                
-                if(value[0] == ' ' || value.back() == ' ')
-                    FileWrite(file,"\"",1);
-                FileWrite(file, value.data(), value.length());
-                if(value[0] == ' ' || value.back() == ' ')
-                    FileWrite(file,"\"",1);
+                    FileWrite(file, " = ", 3);
+                    
+                    if(value[0] == ' ' || value.back() == ' ')
+                        FileWrite(file,"\"",1);
+                    FileWrite(file, value.data(), value.length());
+                    if(value[0] == ' ' || value.back() == ' ')
+                        FileWrite(file,"\"",1);
+                }
+                break;
             }
-        }
+            case CUSTOM: {
+                auto& setting = customSettings[spot.index];
+                if(!setting.invalid()) {
+                    std::string& key = setting.key;
+                    std::string& value = setting.value;
+
+                    if(key[0] == ' ' || key.back() == ' ')
+                        FileWrite(file,"\"",1);
+                    FileWrite(file, key.data(), key.length());
+                    if(key[0] == ' ' || key.back() == ' ')
+                        FileWrite(file,"\"",1);
+
+                    FileWrite(file, " = ", 3);
+                    
+                    if(value[0] == ' ' || value.back() == ' ')
+                        FileWrite(file,"\"",1);
+                    FileWrite(file, value.data(), value.length());
+                    if(value[0] == ' ' || value.back() == ' ')
+                        FileWrite(file,"\"",1);
+                }
+            }
+            default: {
+                Assert(false);
+            }
         }
         for(int j=0;j<spot.newLines;j++){
             FileWrite(file,"\n",1);

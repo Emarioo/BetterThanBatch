@@ -47,8 +47,8 @@ auto WIN_SHARE_WRITE = FILE_SHARE_WRITE;
 namespace engone {
     //-- Platform specific
     
-#define TO_INTERNAL(X) ((uint64)X+1)
-#define TO_HANDLE(X) (HANDLE)((uint64)X-1)
+#define TO_INTERNAL(X) ((u64)X+1)
+#define TO_HANDLE(X) (HANDLE)((u64)X-1)
     
 	// Recursive directory iterator info
 	struct RDIInfo{
@@ -60,7 +60,7 @@ namespace engone {
 		u32 max = 0; // not including \0
 	};
 	static std::unordered_map<DirectoryIterator,RDIInfo> s_rdiInfos;
-	static uint64 s_uniqueRDI=0;
+	static u64 s_uniqueRDI=0;
 	
 	DirectoryIterator DirectoryIteratorCreate(const char* name, int pathlen){
 		DirectoryIterator iterator = (DirectoryIterator)(++s_uniqueRDI);
@@ -72,7 +72,7 @@ namespace engone {
 
 		
 		// DWORD err = GetLastError();
-		// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(uint64)iterator);
+		// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(u64)iterator);
 		
 		// bool success = DirectoryIteratorNext(iterator,result);
 		// if(!success){
@@ -112,7 +112,7 @@ namespace engone {
 				// fprintf(stderr, "%s %p\n", temp.c_str(), &data);
 				
 				// DWORD err = GetLastError();
-				// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(uint64)iterator);
+				// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(u64)iterator);
 				HANDLE handle=INVALID_HANDLE_VALUE;
 				handle = FindFirstFileA(temp.c_str(),&data);
 				// handle = FindFirstFileA("src\\*",&data);
@@ -120,7 +120,7 @@ namespace engone {
 				
 				if(handle==INVALID_HANDLE_VALUE){
 					DWORD err = GetLastError();
-					PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(uint64)iterator);
+					PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
 					continue;
 				}
 				info->second.handle = handle;
@@ -129,15 +129,15 @@ namespace engone {
 				if(!success){
 					DWORD err = GetLastError();
 					if(err == ERROR_NO_MORE_FILES){
-						// PL_PRINTF("[WinError %u] No files '%lu'\n",err,(uint64)iterator);
+						// PL_PRINTF("[WinError %u] No files '%lu'\n",err,(u64)iterator);
 					}else {
-						PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(uint64)iterator);
+						PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
 					}
 					bool success = FindClose(info->second.handle);
 					info->second.handle = INVALID_HANDLE_VALUE;
 					if(!success){
 						err = GetLastError();
-						PL_PRINTF("[WinError %lu] FindClose '%llu'\n",err,(uint64)iterator);
+						PL_PRINTF("[WinError %lu] FindClose '%llu'\n",err,(u64)iterator);
 					}
 					continue;
 				}
@@ -185,8 +185,8 @@ namespace engone {
 		// 		((char*)result->name.data())[i] = '/';
 		// }
 
-		result->fileSize = (uint64)data.nFileSizeLow+(uint64)data.nFileSizeHigh*((uint64)MAXDWORD+1);
-		uint64 time = (uint64)data.ftLastWriteTime.dwLowDateTime+(uint64)data.ftLastWriteTime.dwHighDateTime*((uint64)MAXDWORD+1);
+		result->fileSize = (u64)data.nFileSizeLow+(u64)data.nFileSizeHigh*((u64)MAXDWORD+1);
+		u64 time = (u64)data.ftLastWriteTime.dwLowDateTime+(u64)data.ftLastWriteTime.dwHighDateTime*((u64)MAXDWORD+1);
 		result->lastWriteSeconds = time/10000000.f; // 100-nanosecond intervals
 		result->isDirectory = data.dwFileAttributes&FILE_ATTRIBUTE_DIRECTORY;
 		if(result->isDirectory){
@@ -218,7 +218,7 @@ namespace engone {
 			BOOL success = FindClose(info->second.handle);
 			if(!success){
 				DWORD err = GetLastError();
-				PL_PRINTF("[WinError %lu] Error closing '%llu'\n",err,(uint64)iterator);
+				PL_PRINTF("[WinError %lu] Error closing '%llu'\n",err,(u64)iterator);
 			}
 		}
 		if(info->second.tempPtr) {
@@ -237,7 +237,7 @@ namespace engone {
 		#ifdef USE_RDTSC
 		return (u64)__rdtsc();
 		#else
-		uint64 tp;
+		u64 tp;
 		BOOL success = QueryPerformanceCounter((LARGE_INTEGER*)&tp);
 		// if(!success){
 		// 	PL_PRINTF("time failed\n");	
@@ -247,7 +247,7 @@ namespace engone {
 		#endif
 	}
 	static bool once = false;
-	static uint64 frequency;
+	static u64 frequency;
 	double StopMeasure(TimePoint startPoint){
 		if(!once){
 			once=true;
@@ -336,10 +336,10 @@ namespace engone {
 	void Sleep(double seconds){
         WIN_Sleep((uint32)(seconds*1000));   
     }
-    APIFile FileOpen(const char* path, u32 len, uint64* outFileSize, uint32 flags){
+    APIFile FileOpen(const char* path, u32 len, u64* outFileSize, uint32 flags){
 		return FileOpen(std::string(path,len), outFileSize, flags);
 	}
-    APIFile FileOpen(const std::string& path, uint64* outFileSize, uint32 flags){
+    APIFile FileOpen(const std::string& path, u64* outFileSize, uint32 flags){
         DWORD access = GENERIC_READ|GENERIC_WRITE;
         DWORD sharing = WIN_SHARE_READ|WIN_SHARE_WRITE;
         if(flags&FILE_ONLY_READ){
@@ -406,8 +406,8 @@ namespace engone {
 		}
 		return {TO_INTERNAL(handle)};
 	}
-	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes){
-		// Assert(readBytes!=(uint64)-1); // -1 indicates no bytes read
+	u64 FileRead(APIFile file, void* buffer, u64 readBytes){
+		// Assert(readBytes!=(u64)-1); // -1 indicates no bytes read
 		// Assert(buffer);
 		DWORD bytesRead=0;
 		DWORD success = ReadFile(TO_HANDLE(file.internal),buffer,readBytes,&bytesRead,NULL);
@@ -418,8 +418,8 @@ namespace engone {
 		}
 		return bytesRead;
 	}
-	uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes){
-		// Assert(writeBytes!=(uint64)-1); // -1 indicates no bytes read
+	u64 FileWrite(APIFile file, const void* buffer, u64 writeBytes){
+		// Assert(writeBytes!=(u64)-1); // -1 indicates no bytes read
 		// Assert(buffer);
 		DWORD bytesWritten=0;
 		DWORD success = WriteFile(TO_HANDLE(file.internal),buffer,writeBytes,&bytesWritten,NULL);
@@ -430,9 +430,9 @@ namespace engone {
 		}
 		return bytesWritten;
 	}
-	bool FileSetHead(APIFile file, uint64 position){
+	bool FileSetHead(APIFile file, u64 position){
 		DWORD success = 0;
-		if(position==(uint64)-1){
+		if(position==(u64)-1){
 			success = SetFilePointerEx(TO_HANDLE(file.internal),{0},NULL,FILE_END);
 		}else{
 			success = SetFilePointerEx(TO_HANDLE(file.internal),*(LARGE_INTEGER*)&position,NULL,FILE_BEGIN);
@@ -538,9 +538,9 @@ namespace engone {
             DWORD err = GetLastError();
             PL_PRINTF("[WinError %lu] CloseHandle '%s'\n",err,path.c_str());
         }
-		uint64 t0 = (uint64)creation.dwLowDateTime+(uint64)creation.dwHighDateTime*((uint64)MAXDWORD+1);
-		uint64 t1 = (uint64)access.dwLowDateTime+(uint64)access.dwHighDateTime*((uint64)MAXDWORD+1);
-		uint64 t2 = (uint64)modified.dwLowDateTime+(uint64)modified.dwHighDateTime*((uint64)MAXDWORD+1);
+		u64 t0 = (u64)creation.dwLowDateTime+(u64)creation.dwHighDateTime*((u64)MAXDWORD+1);
+		u64 t1 = (u64)access.dwLowDateTime+(u64)access.dwHighDateTime*((u64)MAXDWORD+1);
+		u64 t2 = (u64)modified.dwLowDateTime+(u64)modified.dwHighDateTime*((u64)MAXDWORD+1);
 		//printf("T: %llu, %llu, %llu\n",t0,t1,t2);
 		*seconds = t2/10000000.; // 100-nanosecond intervals
         return true;
@@ -657,9 +657,9 @@ namespace engone {
 		std::string name;
 		int count;
 	};
-	static std::unordered_map<uint64, AllocInfo> allocTracking;
+	static std::unordered_map<u64, AllocInfo> allocTracking;
 	
-	void TrackType(uint64 bytes, const std::string& name){
+	void TrackType(u64 bytes, const std::string& name){
 		auto pair = allocTracking.find(bytes);
 		if(pair==allocTracking.end()){
 			allocTracking[bytes] = {name,0};	
@@ -672,7 +672,7 @@ namespace engone {
 	#define ENGONE_TRACK_FREE 1
 	#define ENGONE_TRACK_REALLOC 2
 	static bool s_trackerEnabled=true;
-	void PrintTracking(uint64 bytes, int type){
+	void PrintTracking(u64 bytes, int type){
 		if(!s_trackerEnabled)
 			return;
 		auto pair = allocTracking.find(bytes);
@@ -690,10 +690,10 @@ namespace engone {
 	
 	
     // static std::mutex s_allocStatsMutex;
-	static uint64 s_totalAllocatedBytes=0;
-	static uint64 s_totalNumberAllocations=0;
-	static uint64 s_allocatedBytes=0;
-	static uint64 s_numberAllocations=0;
+	static u64 s_totalAllocatedBytes=0;
+	static u64 s_totalNumberAllocations=0;
+	static u64 s_allocatedBytes=0;
+	static u64 s_numberAllocations=0;
 
 	struct Allocation {
 		void* ptr=nullptr;
@@ -704,7 +704,7 @@ namespace engone {
 	void SetTracker(bool on){
 		s_trackerEnabled = on;
 	}
-	void* Allocate(uint64 bytes){
+	void* Allocate(u64 bytes){
 		if(bytes==0) return nullptr;
 		#ifndef NO_PERF
 		MEASURE
@@ -736,7 +736,7 @@ namespace engone {
 		
 		return ptr;
 	}
-    void* Reallocate(void* ptr, uint64 oldBytes, uint64 newBytes){
+    void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes){
 		#ifndef NO_PERF
 		MEASURE
 		#endif
@@ -779,7 +779,7 @@ namespace engone {
             }
         }
     }
-	void Free(void* ptr, uint64 bytes){
+	void Free(void* ptr, u64 bytes){
 		if(!ptr) return;
 		#ifndef NO_PERF
 		MEASURE
@@ -806,16 +806,16 @@ namespace engone {
 		printf("* Free %lld\n",bytes);
 		#endif
 	}
-	uint64 GetTotalAllocatedBytes(){
+	u64 GetTotalAllocatedBytes(){
 		return s_totalAllocatedBytes;
 	}
-	uint64 GetTotalNumberAllocations(){
+	u64 GetTotalNumberAllocations(){
 		return s_totalNumberAllocations;
 	}
-	uint64 GetAllocatedBytes(){
+	u64 GetAllocatedBytes(){
 		return s_allocatedBytes;
 	}
-	uint64 GetNumberAllocations(){
+	u64 GetNumberAllocations(){
 		return s_numberAllocations;
 	}
 	void PrintRemainingTrackTypes(){

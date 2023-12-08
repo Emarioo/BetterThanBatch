@@ -1,7 +1,7 @@
 #include "BetBat/DebugInformation.h"
 
 u32 DebugInformation::addOrGetFile(const std::string& file) {
-    for(int i=0;i<files.size();i++){
+    for(int i=0;i<(int)files.size();i++){
         if(files[i] == file)
             return i;
     }
@@ -11,7 +11,7 @@ u32 DebugInformation::addOrGetFile(const std::string& file) {
 DebugInformation::Function* DebugInformation::addFunction(const std::string name){
     // TODO: Optimize
     int found = 0;
-    for(int i=0;i<functions.size();i++){
+    for(int i=0;i<(int)functions.size();i++){
         if(functions[i].name == name) {
             found++;
         }

@@ -25,7 +25,12 @@ void ProfilerSession::initContextForThread() {
         log::out << log::RED << "Profiler has no more available contexts!\n";
         return;
     }
+    #ifdef OS_WINDOWS
     long res = _InterlockedIncrement(&usedContexts);
+    #elif OS_LINUX
+    Assert(("LINUX impl. for profiling not thread safe",false));
+    long res = usedContexts; // NOT THREAD SAFE
+    #endif
     // log::out << "Good day "<<(res-1)<<"\n";
     ProfilerContext* context = &contexts[res-1];
     new(context)ProfilerContext();

@@ -65,8 +65,8 @@ struct TrackLocation {
 struct Tracker {
     // enabled by default
     static void SetTracking(bool enabled);
-    static void AddTracking(const type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
-    static void DelTracking(const type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
+    static void AddTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
+    static void DelTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
     static void PrintTrackedTypes();
     // how much memory the tracker uses
     static u32 GetMemoryUsage();

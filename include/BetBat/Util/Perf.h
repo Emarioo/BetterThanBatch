@@ -5,6 +5,8 @@
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
+#elif OS_LINUX
+#include <x86intrin.h>
 #endif
 
 #include "Engone/PlatformLayer.h"

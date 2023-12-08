@@ -73,7 +73,10 @@
         "winbase.h": "c",
         "errhandlingapi.h": "c",
         "array": "cpp",
-        "*.glsl": "cpp"
+        "*.glsl": "cpp",
+        "*.tcc": "cpp",
+        "string_view": "cpp",
+        "numeric": "cpp"
     },
     "cmake.configureOnOpen": false,
     "lldb.displayFormat": "auto",

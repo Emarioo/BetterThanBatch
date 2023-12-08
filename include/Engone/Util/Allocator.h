@@ -85,8 +85,8 @@ namespace engone{
 
     private:
         void* data = nullptr;;
-        int used = 0;
-        int max = 0;
+        u64 used = 0;
+        u64 max = 0;
     };
     struct StateAllocator : public Allocator {
         StateAllocator() : Allocator(ALLOCATOR_STATE, (FnAllocate)StateAllocator::static_allocate) { }

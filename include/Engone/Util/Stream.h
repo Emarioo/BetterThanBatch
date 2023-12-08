@@ -28,7 +28,7 @@ struct ByteStream {
         cleanup();
     }
     void cleanup() {
-        for(int i=0;i<allocations.size();i++) {
+        for(int i=0;i<(int)allocations.size();i++) {
             auto& a = allocations[i];
             m_allocator->allocate(0, a.ptr, a.max);
         }
@@ -126,7 +126,7 @@ struct ByteStream {
         Assert(m_allocator == stream->m_allocator);
         // TODO: The last allocation of "this" and the first allocation of "stream" can be combined somewhat
         
-        for(int i=0;i<stream->allocations.size();i++) {
+        for(int i=0;i<(int)stream->allocations.size();i++) {
             auto& all = stream->allocations[i];
             allocations.add(all);
             writtenBytes += all.writtenBytes;
@@ -151,7 +151,7 @@ struct ByteStream {
             
         // combine allocations into one
         int offset = 0;
-        for(int i=0;i<allocations.size();i++) {
+        for(int i=0;i<(int)allocations.size();i++) {
             auto& a = allocations[i];
             Assert(a.writtenBytes != 0 && a.ptr);
             memcpy(ptr + offset, a.ptr, a.writtenBytes);
@@ -176,8 +176,8 @@ struct ByteStream {
         u8* ptr = nullptr;
         u32 size = 0;
     
-        int m_readBytes = 0;
-        int m_index = 0;
+        u32 m_readBytes = 0;
+        u32 m_index = 0;
     };
     // Iterates thorugh all allocations in a contiguous fashion.
     // Do not use a write operation such as write, write_late, finalize

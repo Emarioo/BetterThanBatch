@@ -24,9 +24,9 @@ void ReplaceChar(char* str, int length,char from, char to);
 // not thread safe
 const char* FormatUnit(double number);
 // not thread safe
-const char* FormatUnit(uint64 number);
+const char* FormatUnit(u64 number);
 // not thread safe
-const char* FormatBytes(uint64 bytes);
+const char* FormatBytes(u64 bytes);
 // not thread safe
 const char* FormatTime(double seconds);
 
@@ -68,7 +68,7 @@ struct ScopeDebug {
 #define BROKEN engone::log::out << engone::log::RED<< __FUNCTION__<<":"<<__LINE__<<" is broken\n"
 
 #define FOR(LIST) for(auto& it : LIST)
-#define FORN(LIST) auto it = LIST.data(); for(int nr=0; nr < LIST.size() && (it = &LIST[nr]); nr++)
+#define FORN(LIST) auto it = LIST.data(); for(int nr=0; nr < (int)LIST.size() && (it = &LIST[nr]); nr++)
 
 // #define COMBINE1(X,Y) X##Y
 // #define COMBINE(X,Y) COMBINE1(X,Y)

@@ -2,7 +2,7 @@
 
 engone::Memory<char> ReadFile(const char* path){
     engone::Memory<char> buffer{};
-    uint64 fileSize;
+    u64 fileSize;
     
     if(!engone::FileExist(path)) {
         // buffer.data = (void*)1;
@@ -115,7 +115,7 @@ const char* FormatUnit(double number){
     else sprintf(buf,"%.2lf G",number/1e9);
     return buf;
 }
-const char* FormatUnit(uint64 number){
+const char* FormatUnit(u64 number){
     char* buf = s_formatBuffers[(s_curFormatBuffer = 
         (s_curFormatBuffer+1)%MAX_FORMAT_BUFFERS)];
     if(number<1000) sprintf(buf,FORMAT_64 "u",number);
@@ -124,7 +124,7 @@ const char* FormatUnit(uint64 number){
     else sprintf(buf,"%.2lf G",number/1e9);
     return buf;
 }
-const char* FormatBytes(uint64 bytes){
+const char* FormatBytes(u64 bytes){
     char* buf = s_formatBuffers[(s_curFormatBuffer = 
         (s_curFormatBuffer+1)%MAX_FORMAT_BUFFERS)];
     if(bytes<pow(2,10)) sprintf(buf,FORMAT_64"u B",bytes);
@@ -177,8 +177,8 @@ Some example code with pipes
     // fwrite(file);
     // HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
     // printf("%p\n",h);
-    // FileWrite((APIFile)((uint64)h+1),hm,strlen(hm));
-    // FileWrite((APIFile)((uint64)h+1),hm,strlen(hm));
+    // FileWrite((APIFile)((u64)h+1),hm,strlen(hm));
+    // FileWrite((APIFile)((u64)h+1),hm,strlen(hm));
     // return 0;
     
     // auto pipe = PipeCreate(false,true);

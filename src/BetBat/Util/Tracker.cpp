@@ -17,7 +17,7 @@ void Tracker::SetTracking(bool enabled) {
     s_enabledtracking = enabled;
     s_trackLock.unlock();
 }
-void Tracker::AddTracking(const type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
+void Tracker::AddTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
     auto id = typeInfo.hash_code();
     
     if(!s_enabledtracking)
@@ -49,7 +49,7 @@ void Tracker::AddTracking(const type_info& typeInfo, u32 size, const TrackLocati
     s_enabledtracking = prev;
     s_trackLock.unlock();
 }
-void Tracker::DelTracking(const type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
+void Tracker::DelTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
     auto id = typeInfo.hash_code();
 
     if(!s_enabledtracking)

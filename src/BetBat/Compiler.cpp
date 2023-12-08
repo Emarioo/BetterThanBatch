@@ -2,6 +2,8 @@
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
+#elif OS_LINUX
+#include <x86intrin.h>
 #endif
 
 Path::Path(const char* path) : text(path), _type((Type)0) {
@@ -72,7 +74,7 @@ Path::Path(const std::string& path) : text(path), _type((Type)0) {
 }
 std::string Path::getFormat() const {
     int index = text.find(".");
-    if(index == std::string::npos || index + 1 == text.length()) {
+    if(index == (int)std::string::npos || index + 1 == (int)text.length()) {
         return "";
     }
     return text.substr(index+1);
@@ -82,7 +84,7 @@ Path Path::getFileName(bool withoutFormat) const {
     if(!withoutFormat)
         return name;
     int index = name.find(".");
-    if(index == std::string::npos || index + 1 == text.length()) {
+    if(index == (int)std::string::npos || index + 1 == (int)text.length()) {
         return name;
     }
     return name.substr(0,index);
@@ -187,7 +189,7 @@ void CompilerVersion::deserialize(const char* str) {
         } else {
             nameLen = dashIndex - slashIndex - 1;
         }
-        Assert(nameLen < sizeof(name));
+        Assert(nameLen < (int)sizeof(name));
         if(nameLen>0){
             strcpy(name, buffer + slashIndex);
         }
@@ -229,6 +231,7 @@ const char* ToString(TargetPlatform target){
         CASE(WINDOWS_x64,"win-x64")
         CASE(LINUX_x64,"linux-x64")
         CASE(BYTECODE,"bytecode")
+        default: {}
     }
     return "unknown";
     #undef CASE
@@ -281,16 +284,16 @@ void CompileInfo::addStats(i32 lines, i32 blankLines, i32 commentCount, i32 read
     _interlockedadd(&compileOptions->compileStats.readBytes, readBytes);
     #else
     otherLock.lock();
-    compileOptions->compileStats.lines += tokenStream->lines;
-    compileOptions->compileStats.blankLines += tokenStream->blankLines;
-    compileOptions->compileStats.commentCount += tokenStream->commentCount;
-    compileOptions->compileStats.readBytes += tokenStream->readBytes;
+    compileOptions->compileStats.lines += lines;
+    compileOptions->compileStats.blankLines += blankLines;
+    compileOptions->compileStats.commentCount += commentCount;
+    compileOptions->compileStats.readBytes += readBytes;
     otherLock.unlock();
     #endif
 }
 void CompileInfo::addLinkDirective(const std::string& name){
     otherLock.lock();
-    for(int i=0;i<linkDirectives.size();i++){
+    for(int i=0;i<(int)linkDirectives.size();i++){
         if(name == linkDirectives[i]) {
             otherLock.unlock();
             return;
@@ -662,7 +665,7 @@ u32 ProcessSource(void* ptr) {
         // TODO: How does this work when using textBuffer which isn't a file path
         tempPaths.resize(tokenStream->importList.size());
         Path dir = source.path.getDirectory();
-        for(int i=0;i<tokenStream->importList.size();i++){
+        for(int i=0;i<(int)tokenStream->importList.size();i++){
             auto& item = tokenStream->importList[i];
             Path importName = "";
             int dotindex = item.name.find_last_of(".");
@@ -732,7 +735,7 @@ u32 ProcessSource(void* ptr) {
             }
         }
         info->sourceLock.lock();
-        for(int i=0;i<tokenStream->importList.size();i++){
+        for(int i=0;i<(int)tokenStream->importList.size();i++){
             auto& item = tokenStream->importList[i];
             if(tempPaths[i].text.size()==0)
                 continue;
@@ -911,8 +914,8 @@ Bytecode* CompileSource(CompileOptions* options) {
         compileInfo.ast = nullptr;
     };
     // compileInfo.compilerDir = TrimLastFile(compilerPath);
-    options->resourceDirectory = options->resourceDirectory.getAbsolute();
-    compileInfo.importDirectories.add(options->resourceDirectory.text + "modules/");
+    options->modulesDirectory = options->modulesDirectory.getAbsolute();
+    compileInfo.importDirectories.add(options->modulesDirectory.text);
     for(auto& path : options->importDirectories){
         compileInfo.importDirectories.add(path);
     }
@@ -954,19 +957,18 @@ Bytecode* CompileSource(CompileOptions* options) {
     if(options->initialSourceBuffer.buffer){
         initialSource.textBuffer = &options->initialSourceBuffer;
     } else {
-        initialSource.path = options->initialSourceFile.getAbsolute();
+        initialSource.path = options->sourceFile.getAbsolute();
     }
     initialSource.stream = compileInfo.addStream(initialSource.path);
     compileInfo.sourcesToProcess.add(initialSource);
     
-
-    Assert(!options->singleThreaded); // TODO: Implement not multithreading
+    Assert(options->threadCount == 1); // TODO: Implement not multithreading
 
     compileInfo.sourceWaitLock.init(1, 1);
 
     TINY_ARRAY(ThreadCompileInfo, threadInfos, 4);
     threadInfos.resize(options->threadCount);
-    memset(threadInfos._ptr, 0, sizeof(ThreadCompileInfo)*threadInfos.max);
+    memset((void*)threadInfos._ptr, 0, sizeof(ThreadCompileInfo)*threadInfos.max);
     // ThreadCompileInfo threadInfos[CompileInfo::THREAD_COUNT]{};
     // DynamicArray<ThreadCompileInfo>
     for(int i=1;i<options->threadCount;i++){
@@ -1107,13 +1109,13 @@ void CompileStats::printSuccess(CompileOptions* opts){
             log::out << " text buffer: "<<opts->initialSourceBuffer.origin<<"\n";
         } else {
             // log::out << " initial file: "<< opts->initialSourceFile.getFileName().text<<"\n";
-            log::out << " initial file: "<< BriefString(opts->initialSourceFile.getAbsolute().text,30)<<"\n";
+            log::out << " initial file: "<< BriefString(opts->sourceFile.getAbsolute().text,30)<<"\n";
         }
         log::out << " target: "<<opts->target<<", output: ";
         if(opts->compileStats.generatedFiles.size() == 0) {
             log::out << "nothing";
         }
-        for(int i=0;i<opts->compileStats.generatedFiles.size();i++){
+        for(int i=0;i<(int)opts->compileStats.generatedFiles.size();i++){
             if(i!=0)
                 log::out << ", ";
             log::out << opts->compileStats.generatedFiles[i];
@@ -1239,14 +1241,14 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 else cmd += "/DEBUG "; // force debug info for now
                 cmd += objPath + " ";
                 #ifndef MINIMAL_DEBUG
-                cmd += "bin/NativeLayer.lib ";
+                // cmd += "bin/NativeLayer.lib ";
                 cmd += "uuid.lib ";
                 cmd += "shell32.lib ";
                 #endif
                 cmd += "/DEFAULTLIB:MSVCRT ";
                 // cmd += "/DEFAULTLIB:LIBCMT ";
                 
-                for (int i = 0;i<bytecode->linkDirectives.size();i++) {
+                for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
                     auto& dir = bytecode->linkDirectives[i];
                     cmd += dir + " ";
                 }
@@ -1285,7 +1287,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
                     // TODO: Move the asm dump code to it's own file.
                     QuickArray<char> textBuffer{};
-                    for(int i=0;i<bytecode->debugDumps.size();i++) {
+                    for(int i=0;i<(int)bytecode->debugDumps.size();i++) {
                         auto& dump = bytecode->debugDumps[i];
                         if(dump.description.empty()) {
                             log::out << "Dump: "<<log::GOLD<<"unnamed\n";
@@ -1366,7 +1368,7 @@ bool ExecuteTarget(CompileOptions* options, Bytecode* bytecode) {
         case BYTECODE: {
             Assert(bytecode);
             Interpreter interpreter{};
-            interpreter.setCmdArgs(options->userArgs);
+            interpreter.setCmdArgs(options->userArguments);
             interpreter.silent = options->silent;
             interpreter.execute(bytecode);
             interpreter.cleanup();
@@ -1378,7 +1380,7 @@ bool ExecuteTarget(CompileOptions* options, Bytecode* bytecode) {
             } else {
                 std::string hoho{};
                 hoho += options->outputFile.text;
-                for(auto& arg : options->userArgs){
+                for(auto& arg : options->userArguments){
                     hoho += " ";
                     hoho += arg;
                 }

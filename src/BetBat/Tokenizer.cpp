@@ -465,7 +465,7 @@ bool TokenStream::copy(TokenStream& out){
     for(int i=0;i<(int)tokens.used;i++){
         Token& tok = *((Token*)tokens.data+i);
         Token& outTok = *((Token*)out.tokens.data+i);
-        uint64 offset = (uint64)tok.str-(uint64)tokenData.data;
+        u64 offset = (u64)tok.str-(u64)tokenData.data;
         outTok.str = (char*)out.tokenData.data + offset;
     }
     copyInfo(out);
@@ -491,7 +491,7 @@ TokenStream* TokenStream::copy(){
     // for(int i=0;i<(int)tokens.used;i++){
     //     Token& tok = *((Token*)tokens.data+i);
     //     Token& outTok = *((Token*)out.tokens.data+i);
-    //     uint64 offset = (uint64)tok.str-(uint64)tokenData.data;
+    //     u64 offset = (u64)tok.str-(u64)tokenData.data;
     //     outTok.str = (char*)out.tokenData.data + offset;
     // }
     // copyInfo(out);
@@ -505,7 +505,7 @@ void TokenStream::finalizePointers(){
 
     for(int i=0;i<(int)tokens.used;i++){
         Token* tok = (Token*)tokens.data+i;
-        tok->str = (char*)tokenData.data + (uint64)tok->str;
+        tok->str = (char*)tokenData.data + (u64)tok->str;
         tok->tokenIndex = i;
         tok->tokenStream = this;
     }
@@ -552,7 +552,7 @@ bool TokenStream::addTokenAndData(const char* str){
         if(!tokenData.resize(tokenData.max*2 + 2*length))
             return false;
     }
-    uint64 offset = tokenData.used;
+    u64 offset = tokenData.used;
     char* ptr = (char*)tokenData.data+tokenData.used;
     memcpy(ptr,str,length);
     
@@ -1067,7 +1067,7 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
             // the if above checks ensures that we only do this if we char isn't
             // quote, comment or delim but are there other cases?
 
-            isSpecial = specialsTable[chr];
+            isSpecial = specialsTable[(int)chr];
             // is a table faster than below?
             // test with optimized build
             // char tmp = chr & ~32;
@@ -1316,7 +1316,7 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
         log::out << log::LIME<<" @import '"<<str<<"'\n";
     }   
     #endif
-    token.str = (char*)outStream->tokenData.data + (uint64)token.str;
+    token.str = (char*)outStream->tokenData.data + (u64)token.str;
     token.tokenIndex = outStream->length()-1;
     token.tokenStream = outStream;
     outStream->finalizePointers();

@@ -13,6 +13,7 @@
 
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
+// The Unix way is the standard
 struct Path {
     Path() = default;
     Path(const std::string& path);
@@ -109,28 +110,23 @@ struct CompilerVersion {
 };
 struct CompileOptions {
     CompileOptions() = default;
-    // CompileOptions(engone::Memory<char> source) : rawSource(source) {}
-    // CompileOptions(const std::string& sourceFile) : initialSourceFile(sourceFile) {}
-    // CompileOptions(const std::string& sourceFile, const std::string& compilerDirectory) 
-    // : initialSourceFile(sourceFile), compilerDirectory(
-    //     compilerDirectory.empty() ? "" : 
-    //         (compilerDirectory.back() == '/' ? compilerDirectory : 
-    //             (compilerDirectory + "/"))
-    // ), silent(false) {}
 
-    // engone::Memory<char> rawSource{}; // Path
-    Path initialSourceFile; // Path
-    TextBuffer initialSourceBuffer;
-    Path resourceDirectory{"/"}; // Where resources for the compiler are located. Typically modules.
-    DynamicArray<Path> importDirectories; // Additional directories where imports can be found.
+    Path sourceFile;
+    Path outputFile;
     TargetPlatform target = BYTECODE;
-    Path outputFile{};
-    DynamicArray<std::string> userArgs; // arguments to pass to the interpreter or executable
-    bool silent=false;
-    bool singleThreaded = false;
+
     bool useDebugInformation = false;
+    bool silent=false;
+    bool verbose=false;
+
+    Path modulesDirectory{"."}; // Where the standard library can be found. Typically "modules"
+
     bool executeOutput = false;
-    u32 threadCount=3;
+    DynamicArray<std::string> userArguments; // Ignored if output isn't executed. Arguments to pass to the interpreter or executable
+
+    TextBuffer initialSourceBuffer;
+    DynamicArray<Path> importDirectories; // Directories to look for imports (source files)
+    int threadCount=3;
 
     struct TestLocation {
         // TODO: store file name elsewhere, duplicated data

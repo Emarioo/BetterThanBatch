@@ -482,8 +482,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                 from = (void*)((u64)from + disp);
             }
             
-            if(((uint64)from % operandSize) != 0){
-                log::out << log::RED<<"r0 (pointer: "<<(uint64)from<<") not aligned by "<<operandSize<<" bytes\n";
+            if(((u64)from % operandSize) != 0){
+                log::out << log::RED<<"r0 (pointer: "<<(u64)from<<") not aligned by "<<operandSize<<" bytes\n";
                 continue;
             }
             u64 value = 0;
@@ -534,8 +534,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                 to = (void*)((u64)to + disp);
             }
 
-            if(((uint64)to % operandSize) != 0){
-                log::out << log::RED<<"r1 (pointer: "<<(uint64)to<<") not aligned by "<<operandSize<<" bytes\n";
+            if(((u64)to % operandSize) != 0){
+                log::out << log::RED<<"r1 (pointer: "<<(u64)to<<") not aligned by "<<operandSize<<" bytes\n";
                 continue;
             }
             u64 value = 0;
@@ -657,8 +657,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
             void* to = (void*)sp;
             volatile void* from = getReg(r0);
 
-            if(((uint64)to % rsize) != 0){
-                log::out << log::RED<<"sp (pointer: "<<(uint64)to<<") not aligned by "<<rsize<<" bytes\n";
+            if(((u64)to % rsize) != 0){
+                log::out << log::RED<<"sp (pointer: "<<(u64)to<<") not aligned by "<<rsize<<" bytes\n";
                 continue;
             }
             moveMemory(r0,from,to);
@@ -689,8 +689,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
 
             volatile void* to = getReg(r0);
             void* from = (void*)sp;
-            if(((uint64)from % rsize) != 0){
-                log::out << log::RED<<"sp (pointer: "<<(uint64)from<<") not aligned by "<<rsize<<" bytes\n";
+            if(((u64)from % rsize) != 0){
+                log::out << log::RED<<"sp (pointer: "<<(u64)from<<") not aligned by "<<rsize<<" bytes\n";
                 continue;
             }
             moveMemory(r0,from,to);

@@ -1,5 +1,7 @@
 #include "Engone/PlatformLayer.h"
 
+#include "Engone/Asserts.h"
+
 // Todo: Compile for Linux and test the functions
 #ifdef OS_LINUX
 
@@ -23,8 +25,8 @@
 
 namespace engone {
     
-#define TO_INTERNAL(X) (APIFile)((uint64)X+1)
-#define TO_HANDLE(X) (int)((uint64)X-1)
+#define TO_INTERNAL(X) ((u64)X+1)
+#define TO_HANDLE(X) (int)((u64)X-1)
 
 #define NS 1000000000
 	TimePoint MeasureTime() {
@@ -33,7 +35,7 @@ namespace engone {
 		if (res == -1) {
 			// err
 		}
-		return ((uint64)ts.tv_sec*NS + (uint64)ts.tv_nsec);
+		return ((u64)ts.tv_sec*NS + (u64)ts.tv_nsec);
 	}
 	double StopMeasure(TimePoint startPoint) {
 		timespec ts;
@@ -41,18 +43,18 @@ namespace engone {
 		if (res == -1) {
 			// err
 		}
-		return (double)(((uint64)ts.tv_sec * NS + (uint64)ts.tv_nsec) - startPoint)/(double)NS;
+		return (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec) - startPoint)/(double)NS;
 	}
-	APIFile FileOpen(const std::string& path, uint64* outFileSize, uint32 flags) {
+	APIFile FileOpen(const std::string& path, u64* outFileSize, uint32 flags) {
         int fileFlags = O_RDWR;
         int mode = 0;
         if(flags&FILE_ONLY_READ){
             fileFlags = O_RDONLY;
 		}
-		if(flags&FILE_CAN_CREATE) {
-			fileFlags = O_CREAT | O_RDWR;
-            mode = S_IRUSR | S_IWUSR;
-        }
+		// if(flags&FILE_CAN_CREATE) {
+		// 	fileFlags = O_CREAT | O_RDWR;
+        //     mode = S_IRUSR | S_IWUSR;
+        // }
 		if(flags&FILE_ALWAYS_CREATE){
 			fileFlags = O_CREAT | O_TRUNC | O_RDWR;
 			mode = S_IRUSR | S_IWUSR;
@@ -85,7 +87,7 @@ namespace engone {
         int fd = open(path.c_str(), fileFlags, mode);
 		if (fd == -1) {
 			printf("[LinuxError %d]\n", errno);
-			return 0;
+			return {};
 		}
         if(outFileSize) {
             off_t size = lseek(fd,0,SEEK_END);
@@ -94,25 +96,25 @@ namespace engone {
                 size = 0;
             }
 			lseek(fd,0,SEEK_SET);
-            *outFileSize = (uint64)size;
+            *outFileSize = (u64)size;
         }
-		return TO_INTERNAL(fd);
+		return {TO_INTERNAL(fd)};
 	}
-    uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes){
-		Assert(writeBytes!=(uint64)-1); // -1 indicates no bytes read
+    u64 FileWrite(APIFile file, const void* buffer, u64 writeBytes){
+		Assert(writeBytes!=(u64)-1); // -1 indicates no bytes read
 		
-		int bytesWritten = write(TO_HANDLE(file),buffer,writeBytes);
+		int bytesWritten = write(TO_HANDLE(file.internal),buffer,writeBytes);
 		if(bytesWritten == -1){
 			// DWORD err = GetLastError();
             int err = 0;
-			PL_PRINTF("[WinError %d] FileWrite '%lu'\n",err,(uint64)file);
+			PL_PRINTF("[WinError %d] FileWrite '%lu'\n",err,file.internal);
 			return -1;
 		}
 		return bytesWritten;
 	}
-	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes) {
+	u64 FileRead(APIFile file, void* buffer, u64 readBytes) {
         // printf("REDAING\n");
-        ssize_t size = read(TO_HANDLE(file), buffer, readBytes);
+        ssize_t size = read(TO_HANDLE(file.internal), buffer, readBytes);
 		// printf("fr size: %lu\n",size);
         if (size == -1) {
 			printf("[LinuxError %d]\n", errno);
@@ -122,7 +124,7 @@ namespace engone {
 	}
 	void FileClose(APIFile file) {
 		if (file)
-			close(TO_HANDLE(file));
+			close(TO_HANDLE(file.internal));
 	}
     bool FileExist(const std::string& path){
         struct stat buffer;   
@@ -144,13 +146,13 @@ namespace engone {
 		std::string name;
 		int count;
 	};
-	static std::unordered_map<uint64, AllocInfo> allocTracking;
+	static std::unordered_map<u64, AllocInfo> allocTracking;
     // TODO: TrackType and PrintTracking is the same on Linux and Windows.
     // This will be a problem if code is changed in one file but not in the other.
 	#define ENGONE_TRACK_ALLOC 0
 	#define ENGONE_TRACK_FREE 1
 	#define ENGONE_TRACK_REALLOC 2
-    void TrackType(uint64 bytes, const std::string& name){
+    void TrackType(u64 bytes, const std::string& name){
 		auto pair = allocTracking.find(bytes);
 		if(pair==allocTracking.end()){
 			allocTracking[bytes] = {name,0};	
@@ -159,7 +161,7 @@ namespace engone {
 			pair->second.name += name;
 		}
 	}
-    void PrintTracking(uint64 bytes, int type){
+    void PrintTracking(u64 bytes, int type){
 		auto pair = allocTracking.find(bytes);
 			
 		if(pair!=allocTracking.end()){
@@ -179,11 +181,11 @@ namespace engone {
 		}
 	}
 	// static std::mutex s_allocStatsMutex;
-	static uint64 s_totalAllocatedBytes=0;
-	static uint64 s_totalNumberAllocations=0;
-	static uint64 s_allocatedBytes=0;
-	static uint64 s_numberAllocations=0;
-	void* Allocate(uint64 bytes){
+	static u64 s_totalAllocatedBytes=0;
+	static u64 s_totalNumberAllocations=0;
+	static u64 s_allocatedBytes=0;
+	static u64 s_numberAllocations=0;
+	void* Allocate(u64 bytes){
 		if(bytes==0) return nullptr;
 		MEASURE;
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
@@ -204,7 +206,7 @@ namespace engone {
 		
 		return ptr;
 	}
-    void* Reallocate(void* ptr, uint64 oldBytes, uint64 newBytes){
+    void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes){
 		MEASURE;
         if(newBytes==0){
             Free(ptr,oldBytes);
@@ -237,7 +239,7 @@ namespace engone {
             }
         }
     }
-	void Free(void* ptr, uint64 bytes){
+	void Free(void* ptr, u64 bytes){
 		if(!ptr) return;
 		MEASURE;
 		free(ptr);
@@ -253,16 +255,16 @@ namespace engone {
 		printf("* Free %ld\n",bytes);
 		#endif
 	}
-	uint64 GetTotalAllocatedBytes() {
+	u64 GetTotalAllocatedBytes() {
 		return s_totalAllocatedBytes;
 	}
-	uint64 GetTotalNumberAllocations() {
+	u64 GetTotalNumberAllocations() {
 		return s_totalNumberAllocations;
 	}
-	uint64 GetAllocatedBytes() {
+	u64 GetAllocatedBytes() {
 		return s_allocatedBytes;
 	}
-	uint64 GetNumberAllocations() {
+	u64 GetNumberAllocations() {
 		return s_numberAllocations;
 	}
     void SetConsoleColor(uint16 color){

@@ -85,7 +85,7 @@ namespace engone {
 		
 		void flush();
 
-		uint64 getMemoryUsage();
+		u64 getMemoryUsage();
 
 		// Returns master color if it is set otherwise normal color.
 		log::Color getColor();
@@ -103,7 +103,7 @@ namespace engone {
 		Logger& operator<<(int16 value);
 		//Logger& operator<<(int8 value); // interpreted as a character not a number.
 		
-		Logger& operator<<(uint64 value);
+		Logger& operator<<(u64 value);
 		Logger& operator<<(uint32 value);
 		Logger& operator<<(uint16 value);
 		Logger& operator<<(uint8 value);

@@ -55,28 +55,28 @@ namespace engone {
 			char* name = nullptr;
 			u64 namelen = 0;
 		};
-		uint64 fileSize = 0;
+		u64 fileSize = 0;
 		float lastWriteSeconds = 0.0;
 		bool isDirectory = false;
 	};
-	typedef uint64 TimePoint;
+	typedef u64 TimePoint;
 	
 	// For debugging memory leaks
-	void TrackType(uint64 bytes, const std::string& name);
+	void TrackType(u64 bytes, const std::string& name);
 	void SetTracker(bool on);
 
-	void* Allocate(uint64 bytes);
-    void* Reallocate(void* ptr, uint64 oldBytes, uint64 newBytes);
-	void Free(void* ptr, uint64 bytes);
+	void* Allocate(u64 bytes);
+    void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes);
+	void Free(void* ptr, u64 bytes);
 	// These are thread safe
 	// Successful calls to Allocate
-	uint64 GetTotalNumberAllocations();
+	u64 GetTotalNumberAllocations();
 	// Bytes from successful calls to Allocate
-	uint64 GetTotalAllocatedBytes();
+	u64 GetTotalAllocatedBytes();
 	// Currently allocated bytes
-	uint64 GetAllocatedBytes();
+	u64 GetAllocatedBytes();
 	// Current allocations
-	uint64 GetNumberAllocations();
+	u64 GetNumberAllocations();
 	
 	void PrintRemainingTrackTypes();
 	
@@ -101,13 +101,13 @@ namespace engone {
 
 	// Returns 0 if function failed
     // canWrite = true -> WRITE and READ. False only READ.
-	APIFile FileOpen(const std::string& path, uint64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
-	APIFile FileOpen(const char* path, u32 pathlen, uint64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
+	APIFile FileOpen(const std::string& path, u64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
+	APIFile FileOpen(const char* path, u32 pathlen, u64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
 	// Returns number of bytes read
 	// -1 means error with read
-	uint64 FileRead(APIFile file, void* buffer, uint64 readBytes);
+	u64 FileRead(APIFile file, void* buffer, u64 readBytes);
 	// @return Number of bytes written. -1 indicates an error
-	uint64 FileWrite(APIFile file, const void* buffer, uint64 writeBytes);
+	u64 FileWrite(APIFile file, const void* buffer, u64 writeBytes);
 	// @return True if successful, false if not.
 	// @param position as -1 will move the head to end of file.
 	bool FileSetHead(APIFile file, u64 position);

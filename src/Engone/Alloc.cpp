@@ -5,7 +5,7 @@
 
 namespace engone {
 
-	// bool Memory::resize(uint64 count){
+	// bool Memory::resize(u64 count){
 	// 	#ifdef DEBUG_RESIZE
 	// 	printf("## Resize %lld -> %lld\n",max*getTypeSize(),count*getTypeSize());
 	// 	#endif

@@ -128,6 +128,8 @@ lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib l
 if !compileSuccess! == 0 (
     echo f | XCOPY /y /q !output! prog.exe > nul
 
+    cl /c /TP src/Other/test.cpp /Fo: bin/test2.obj /nologo
+
     @REM cl /c /std:c11 /Tc src/BetBat/obj_test.c /Fo: bin/obj_test.obj /nologo
     @REM dumpbin bin/obj_test.obj /ALL > dump.out
 

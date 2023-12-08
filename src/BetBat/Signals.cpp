@@ -10,6 +10,7 @@ SignalDefault CastSignal(SignalAttempt signal){
         CASE(SUCCESS)
         CASE(FAILURE)
         CASE(COMPLETE_FAILURE)
+        default: {}
     }
     Assert(("Cannot cast signal",false));
     return SignalDefault::COMPLETE_FAILURE;
@@ -21,6 +22,7 @@ SignalAttempt CastSignal(SignalDefault signal){
         CASE(SUCCESS)
         CASE(FAILURE)
         CASE(COMPLETE_FAILURE)
+        default: {}
     }
     Assert(("Cannot cast signal",false));
     return SignalAttempt::COMPLETE_FAILURE;

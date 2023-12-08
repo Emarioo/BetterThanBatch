@@ -35,12 +35,12 @@ void print_help(){
     PRINT_EXAMPLES
     PRINT_EXAMPLE("  compiler.exe main.btb -out program.btbc\n")
     log::out << "\n";
-    PRINT_USAGE("compiler.exe -run [file0 ...]")
+    PRINT_USAGE("compiler.exe --run [file0 ...]")
     PRINT_DESC("Runs bytecode files generated with the out flag.\n")
     PRINT_EXAMPLES
     PRINT_EXAMPLE("  compiler.exe -run program.btbc\n")
     log::out << "\n";
-    PRINT_USAGE("compiler.exe -target <target-platform>")
+    PRINT_USAGE("compiler.exe --target <target-platform>")
     PRINT_DESC("Compiles source code to the specified target whether that is bytecode, Windows, Linux, x64, object file, or an executable. "
             "All of those in different combinations may not be supported yet.\n")
     PRINT_EXAMPLES

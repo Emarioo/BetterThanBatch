@@ -7,16 +7,19 @@
 
 GCC_COMPILE_OPTIONS="-std=c++14"
 # GCC_COMPILE_OPTIONS="-std=c++14 -O3"
-GCC_INCLUDE_DIRS="-Iinclude"
+GCC_INCLUDE_DIRS="-Iinclude -Ilibs/stb/include -Ilibs/glfw-3.3.8/include -Ilibs/glew-2.1.0/include -include include/pch.h "
 GCC_DEFINITIONS="-DOS_LINUX"
-GCC_WARN="-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable"
+GCC_WARN="-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-unused-but-set-variable -Wno-nonnull-compare"
+GCC_WARN="$GCC_WARN -Wno-sign-compare"
 
 # if $USE_DEBUG; then
 #     GCC_COMPILE_OPTIONS="$GCC_COMPILE_OPTIONS -g"
 # fi
 
-srcfiles=`find . -regex './src/.*/.*\.cpp$'`
+srcfiles=`find . -regex './src/BetBat/.*.cpp$'; find . -regex './src/Engone/.*.cpp$'; echo src/Native/NativeLayer.cpp`
 output=bin/compiler
+
+# echo $srcfiles
 
 echo -n "Compiling..."
 

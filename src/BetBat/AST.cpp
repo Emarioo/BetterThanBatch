@@ -91,6 +91,8 @@ const char *OpToStr(OperationType optype, bool null) {
         CASE(REFER, & (reference))
         CASE(DEREF, * (dereference))
         // default: return "?";
+
+        case AST_OPERATION_COUNT: { break; }
     }
 #undef CASE
     if(null)
@@ -872,7 +874,7 @@ void AST::cleanup() {
     _scopeInfos.cleanup();
 
     // for(auto& ti : _typeInfos){
-    for(int i=0;i<_typeInfos.size();i++){
+    for(int i=0;i<(int)_typeInfos.size();i++){
         auto ti = _typeInfos[i];
         // typeInfos is resized and filled with nullptrs
         // when types are created

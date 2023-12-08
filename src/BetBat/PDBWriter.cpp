@@ -540,7 +540,7 @@ u8* PDBFile::takePointer(u32 streamNumber, u32 offset, u32 bytes){
         u32 newBlock = requestBlock();
         Assert(newBlock!=-1);
         if(newBlock==-1)
-            return false;
+            return nullptr;
         stream.blockIndices.add(newBlock);
         // engone::log::out << "SN "<<streamNumber << " "<<stream.blockIndices.size()<<"\n";
     }
@@ -927,7 +927,7 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
     #undef ALIGN4
     // #define WRITE(TYPE, EXPR) *(TYPE*)(outData + offset) = (EXPR); offset += sizeof(TYPE);
     #define WRITE(TYPE, EXPR) pdb->writeValue(streamNumber, offset, static_cast<TYPE>(EXPR)); offset += sizeof(TYPE);
-    #define ALIGN4 if((offset & 3) != 0)  offset += 4 - offset & 3;
+    #define ALIGN4 if((offset & 3) != 0)  offset += 4 - (offset & 3);
     
     inOutInfo->functionTypeIndices.resize(di->functions.size());
     
@@ -1524,7 +1524,7 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
         offset = nextOffset;
         // 4-byte alignment
         if((offset & 3) != 0)
-            offset += 4 - offset & 3;
+            offset += 4 - (offset & 3);
     }
 }
 void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
@@ -1640,12 +1640,15 @@ void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
                 log::out << "\n";
                 break;
             }
+            default: {
+                Assert(false);
+            }
         }
 
         offset = nextOffset;
         // 4-byte alignment if from PDB, debug$T is not supposed to be aligned
         if(fromPDB && (offset & 3) != 0)
-            offset += 4 - offset & 3;
+            offset += 4 - (offset & 3);
     }
 }
 // PDBFile_old* PDBFile_old::Deconstruct(const char* path) {
@@ -2245,6 +2248,10 @@ const char* ToString(SubSectionType type, bool nullAsUnknown) {
         CASE(DEBUG_S_MERGED_ASSEMBLYINPUT)
 
         CASE(DEBUG_S_COFF_SYMBOL_RVA)
+
+        default: {
+            Assert(false);
+        }
     }
     if(nullAsUnknown)
         return nullptr;
@@ -2458,6 +2465,9 @@ const char* ToString(RecordType type, bool nullAsUnknown) {
 
         CASE(S_GDATA_HLSL32_EX) // = 0x1164,
         CASE(S_LDATA_HLSL32_EX) // = 0x1165,
+        default: {
+            Assert(false);
+        }
     }
     if(nullAsUnknown)
         return nullptr;
@@ -2660,6 +2670,9 @@ const char* ToString(LeafType type, bool nullAsUnknown){
         CASE(LF_PAD13          )
         CASE(LF_PAD14          )
         CASE(LF_PAD15          )
+        default: {
+            Assert(false);
+        }
     }
     if(nullAsUnknown)
         return nullptr;

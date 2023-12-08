@@ -10,7 +10,7 @@
 
 #include "Engone/Asserts.h"
 
-#define TINY_ARRAY(TYPE,NAME,SIZE) TYPE arr_##NAME[SIZE]; memset(arr_##NAME,0,SIZE*sizeof(TYPE)); TinyArray<TYPE> NAME={}; NAME.initFixedSize(arr_##NAME, SIZE);
+#define TINY_ARRAY(TYPE,NAME,SIZE) TYPE arr_##NAME[SIZE]; memset((void*)arr_##NAME,0,SIZE*sizeof(TYPE)); TinyArray<TYPE> NAME={}; NAME.initFixedSize(arr_##NAME, SIZE);
 // The purpose of this array is speed.
 // It will not call constructors or destructors
 // Few allocations
@@ -132,7 +132,8 @@ struct TinyArray {
                 T* newPtr = TRACK_ARRAY_ALLOC(T, newMax);
                 // T* newPtr = (T*)engone::Allocate(sizeof(T) * newMax);
                 Assert(newPtr);
-                memcpy(newPtr, _ptr, used * sizeof(T));
+                memcpy((void*)newPtr, (void*)_ptr, used * sizeof(T));
+                
                 // initialization of elements is done when adding them
                 // if(!_ptr)
                 //     return false;
@@ -186,7 +187,7 @@ struct DynamicArray {
         // Assert(yes);
         bool yes = resize(arr.used);
         Assert(yes);
-        for(int i=0;i<used;i++){
+        for(u32 i=0;i<used;i++){
             _ptr[i] = arr._ptr[i];
         }
         return *this;
@@ -201,7 +202,7 @@ struct DynamicArray {
         // Assert(yes);
         bool yes = resize(arr.used);
         Assert(yes);
-        for(int i=0;i<used;i++){
+        for(u32 i=0;i<used;i++){
             _ptr[i] = arr._ptr[i];
         }
     }
@@ -520,7 +521,7 @@ struct QuickArray {
                 return false;
         }
         if(newSize > used) {
-            memset(_ptr+used,0,(newSize-used) * sizeof(T));
+            memset((void*)(_ptr+used),0,(newSize-used) * sizeof(T));
         }
         // if(newSize > used) {
         //     for(u32 i = used; i<newSize;i++){

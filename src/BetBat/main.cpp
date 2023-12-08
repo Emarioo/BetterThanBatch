@@ -20,43 +20,58 @@
 #define EXIT_CODE_SUCCESS 0
 #define EXIT_CODE_FAILURE 1
 
-int main(int argc, const char** argv){
+void test_garbage() {
     using namespace engone;
+    dwarf::LEB128_test();
+    ByteStream::Test_iterator();
     
-    // dwarf::LEB128_test();
-    // ByteStream::Test_iterator();
+    u32 a = 1;
+    u32 b = 32;
+    u32 c = a << b;
     
-    // u32 a = 1;
-    // u32 b = 32;
-    // u32 c = a << b;
+    #define A(a,...) a + __VA_ARGS__ + __VA_ARGS__
     
-    // #define A(a,...) a + __VA_ARGS__ + __VA_ARGS__
-    
-    // A(a,0,2);
+    A(a,0,2);
 
 
     // auto f = PDBFile::Deconstruct("wa.pdb");
     // log::out << "---\n";
     // f->writeFile("wa.pdb");
     
-    // // PDBFile::Destroy(f);
-    // // DeconstructDebugSymbols(obj->
-    // // DeconstructPDB("test.pdb");
-    // // DeconstructPDB("bin/compiler.pdb");
-    // // DeconstructPDB("bin/dev.pdb");
+    // PDBFile::Destroy(f);
+    // DeconstructDebugSymbols(obj->
+    // DeconstructPDB("test.pdb");
+    // DeconstructPDB("bin/compiler.pdb");
+    // DeconstructPDB("bin/dev.pdb");
 
-    // Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+    Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+}
+bool streq(const char* a, const char* b) {
+    int len_a = strlen(a);
+    int len_b = strlen(b);
+    if(len_a != len_b)
+        return false;
+    for(int i=0;i<len_a;i++) {
+        if(a[i] != b[i])
+            return false;
+    }
+    return true;
+}
+int main(int argc, const char** argv){
+    using namespace engone;
+    
+    // test_garbage();
     // return 0;
     
+    /*
+        INITIALIZE
+    */
     log::out.enableReport(false);
-
     MeasureInit();
-
     ProfilerInitialize();
 
     CompileOptions compileOptions{};
     int compilerExitCode = EXIT_CODE_NOTHING;
-
     std::string compilerPath = argv[0];
     Path compilerDir = compilerPath;
     compilerDir = compilerDir.getAbsolute().getDirectory();
@@ -64,8 +79,7 @@ int main(int argc, const char** argv){
         if(compilerDir.text.substr(compilerDir.text.length()-5,5) == "/bin/")
             compilerDir = compilerDir.text.substr(0,compilerDir.text.length() - 4);
     }
-    compileOptions.resourceDirectory = compilerDir.text;
-    
+    compileOptions.modulesDirectory = compilerDir.text + "/modules";
     bool devmode=false;
     
     // UserProfile* userProfile = UserProfile::CreateDefault();
@@ -84,23 +98,18 @@ int main(int argc, const char** argv){
     }
 
     bool invalidArguments = false;
-    #define ArgIs(X) !strcmp(arg,X)
-    #define MODE_COMPILE 1
-    #define MODE_OUT 2
-    #define MODE_RUN 4
-    int mode = MODE_COMPILE; // and run unless out files
     for(int i=1;i<argc;i++){
         const char* arg = argv[i];
         int len = strlen(argv[i]);
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
-        if(!strcmp(arg,"--help")||!strcmp(arg,"-help")) {
+        if(streq(arg,"--help")||streq(arg,"-help")) {
             print_help();
             return EXIT_CODE_NOTHING;
-        } else if (ArgIs("-run")) {
+        } else if (streq(arg,"--run")) {
             compileOptions.executeOutput = true;
-        } else if (ArgIs("-preproc")) {
+        } else if (streq(arg,"--preproc")) {
             onlyPreprocess = true;
-        } else if (ArgIs("-out")) {
+        } else if (streq(arg,"--out") || streq(arg,"-o")) {
             i++;
             if(i<argc){
                 arg = argv[i];
@@ -113,13 +122,18 @@ int main(int argc, const char** argv){
                 // for(int j=0;j<){
                 // }
             }
-        } else if (ArgIs("-dev")) {
+        } else if (streq(arg,"-dev")) {
             devmode = true;
-        } else if (ArgIs("-tests")) {
+        } else if (streq(arg,"--tests")) {
             runTests = true;
-        } else if (ArgIs("-debug")) {
+        } else if (streq(arg,"--debug") || streq(arg, "-g")) {
             compileOptions.useDebugInformation = true;
-        } else if (ArgIs("-target")){
+        } else if (streq(arg,"--silent")) {
+            compileOptions.silent = true;
+        } else if (streq(arg,"--verbose")) {
+            compileOptions.verbose = true;
+            log::out << log::RED << "Verbose option (--verbose) is not implemented\n";
+        } else if (streq(arg,"--target") || streq(arg, "-t")){
             i++;
             if(i<argc){
                 arg = argv[i];
@@ -136,19 +150,19 @@ int main(int argc, const char** argv){
                 // for(int j=0;j<){
                 // }
             }
-        } else if(ArgIs("-user-args")) {
+        } else if(streq(arg,"--user-args")) {
             i++;
             for(;i<argc;i++) {
                 const char* arg = argv[i];
                 int len = strlen(argv[i]);
-                compileOptions.userArgs.add(arg);
+                compileOptions.userArguments.add(arg);
             }
         } else {
             if(*arg == '-') {
                 log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
                 invalidArguments = true;
             } else {
-                compileOptions.initialSourceFile = arg;
+                compileOptions.sourceFile = arg;
             }
         }
     }
@@ -163,14 +177,14 @@ int main(int argc, const char** argv){
     }
 
     if(onlyPreprocess){
-        if (compileOptions.initialSourceFile.text.size() == 0) {
+        if (compileOptions.sourceFile.text.size() == 0) {
             log::out << log::RED << "You must specify a file when using -preproc\n";
         } else {
             if(compileOptions.outputFile.text.size() == 0) {
                 // TODO: Output to a default file like preproc.btb
                 log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
             } else{
-                auto stream = TokenStream::Tokenize(compileOptions.initialSourceFile.text);
+                auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
                 CompileInfo compileInfo{};
                 compileInfo.compileOptions = &compileOptions;
                 auto stream2 = Preprocess(&compileInfo, stream);
@@ -196,9 +210,9 @@ int main(int argc, const char** argv){
     } else if(devmode){
         log::out << log::BLACK<<"[DEVMODE]\n";
         #ifndef DEV_FILE
-        compileOptions.initialSourceFile = "examples/dev.btb";
+        compileOptions.sourceFile = "examples/dev.btb";
         #else
-        compileOptions.initialSourceFile = DEV_FILE;
+        compileOptions.sourceFile = DEV_FILE;
         #endif
 
         #ifdef RUN_TEST_SUITE
@@ -224,7 +238,7 @@ int main(int argc, const char** argv){
         } else {
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
-            compileOptions.useDebugInformation = true;
+            // compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         }

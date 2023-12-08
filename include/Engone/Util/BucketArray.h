@@ -271,7 +271,7 @@ struct BucketArray {
     // in bytes
     u32 getMemoryUsage() {
 		u32 bytes = m_buckets_max * sizeof(Bucket);
-		for (int i = 0; i < m_buckets_max.max; i++) {
+		for (int i = 0; i < m_buckets_max; i++) {
 			bytes += m_buckets[i].m_max;
 		}
 		return bytes;

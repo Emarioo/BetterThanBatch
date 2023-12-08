@@ -13,7 +13,7 @@
 
 
 #ifdef TC_LOG
-#define _TC_LOG_ENTER(X) X'
+#define _TC_LOG_ENTER(X) X
 // #define _TC_LOG_ENTER(X)
 #else
 #define _TC_LOG_ENTER(X)
@@ -2409,7 +2409,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         ERR_LINE(varname.name, "bad")
                     )
                 }
-                if(vi < poly_typeArray.size()){
+                if(vi < (int)poly_typeArray.size()){
                     if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
                         ERR_SECTION(
                             ERR_HEAD(now->firstExpression->tokenRange)
@@ -2754,7 +2754,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 CheckRest(info, now->firstBody);
             } else {
                 // You are allowed to skip enum members when using default case but not otherwise.
-                if(allCasesUseEnumType && usedMemberCount != usedMembers.size()) {
+                if(allCasesUseEnumType && usedMemberCount != (int)usedMembers.size()) {
                     ERR_SECTION(
                         ERR_HEAD(now->tokenRange, ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
                         ERR_MSG("You have forgotten these enum members in the switch statement:")

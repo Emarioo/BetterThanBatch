@@ -12,11 +12,22 @@
 #else
 #endif
 
-#include "Engone/PlatformLayer.h"
-#include "Engone/UIModule.h"
-#include <stdio.h>
+#ifdef OS_WINDOWS
+#else
+// skip ui module on linux for now
+#define NO_UIMODULE
+#endif
 
+#include "Engone/PlatformLayer.h"
+#include <stdio.h>
+#ifndef NO_UIMODULE
+#include "Engone/UIModule.h"
+#endif
+
+#ifdef OS_WINDOWS
 #include "Engone/Win32Includes.h"
+#endif
+
 // #include "BetBat/Config.h"
 // #define GLEW_STATIC
 // #include "GL/glew.h"
@@ -24,35 +35,36 @@
 
 static Language::Slice<Language::Slice<char>> commandLineArgs{};
 extern "C" {
-    
-    engone::UIModule* __stdcall CreateUIModule() {
+    #ifndef NO_UIMODULE
+    engone::UIModule* attr_stdcall CreateUIModule() {
         auto* ptr = (engone::UIModule*)engone::Allocate(sizeof(engone::UIModule));
         new(ptr)engone::UIModule();
         ptr->init();
         return ptr;
     }
-    void __stdcall DestroyUIModule(engone::UIModule* ptr) {
+    void attr_stdcall DestroyUIModule(engone::UIModule* ptr) {
         ptr->~UIModule();
         engone::Free(ptr,sizeof(engone::UIModule));
     }
-    void __stdcall RenderUIModule(engone::UIModule* ptr, float w, float h) {
+    void attr_stdcall RenderUIModule(engone::UIModule* ptr, float w, float h) {
         ptr->render(w,h);
     }
-    engone::UIBox* __stdcall MakeBox(engone::UIModule* ptr, u64 id) {
+    engone::UIBox* attr_stdcall MakeBox(engone::UIModule* ptr, u64 id) {
         return ptr->makeBox(id);
     }
-    engone::UIText* __stdcall MakeText(engone::UIModule* ptr, u64 id) {
+    engone::UIText* attr_stdcall MakeText(engone::UIModule* ptr, u64 id) {
         return ptr->makeText(id);
     }
     float GetWidthOfText(engone::UIModule* ptr, engone::UIText* text) {
         return ptr->getWidthOfText(text);
     }
+    #endif // NO_UIMODULE
 
-    bool __stdcall ExecuteCommand(Language::Slice<char>* path, bool asynchronous, int* exitCode){
+    bool attr_stdcall ExecuteCommand(Language::Slice<char>* path, bool asynchronous, int* exitCode){
         std::string str = std::string(path->ptr, path->len);
         return engone::ExecuteCommand(str, asynchronous, exitCode);
     }
-    Language::Slice<Language::Slice<char>>* __stdcall CmdLineArgs() {
+    Language::Slice<Language::Slice<char>>* attr_stdcall CmdLineArgs() {
         if(commandLineArgs.ptr) // already calculated once
             return &commandLineArgs;
 
@@ -60,7 +72,7 @@ extern "C" {
         //   \\\\"hej" should become \\hej but doesn't.
         //  The standard: https://learn.microsoft.com/en-us/cpp/c-language/parsing-c-command-line-arguments?view=msvc-170
 
-        
+        #ifdef OS_WINDOWS
         char* cmdLine = GetCommandLineA();
         int cmdLineSize = strlen(cmdLine);
 
@@ -199,46 +211,50 @@ extern "C" {
         }
         #undef FINISH_ARG
         #undef ADD_CHAR
-
         commandLineArgs.ptr = argPtr;
         commandLineArgs.len = argCount;
+        #elif OS_LINUX
+        commandLineArgs.ptr = nullptr;
+        commandLineArgs.len = 0;
+        #endif
+
         return &commandLineArgs;
     }
-    u64 __stdcall StartMeasure() {
+    u64 attr_stdcall StartMeasure() {
         return engone::StartMeasure();
     }
-    float __stdcall StopMeasure(u64 timePoint) {
+    float attr_stdcall StopMeasure(u64 timePoint) {
         return engone::StopMeasure(timePoint);
     }
-    float __stdcall DiffMeasure(u64 endSubStart) {
+    float attr_stdcall DiffMeasure(u64 endSubStart) {
         return engone::DiffMeasure(endSubStart);
     }
-    u64 __stdcall GetClockSpeed() {
+    u64 attr_stdcall GetClockSpeed() {
         return engone::GetClockSpeed();
     }
 
-    void* __stdcall Allocate(u64 size) {
+    void* attr_stdcall Allocate(u64 size) {
         return engone::Allocate(size);
     }
-    void* __stdcall Reallocate(void* ptr, u64 oldSize, u64 newSize) {
+    void* attr_stdcall Reallocate(void* ptr, u64 oldSize, u64 newSize) {
         return engone::Reallocate(ptr, oldSize, newSize);
     }
-    void __stdcall Free(void* ptr, u64 size) {
+    void attr_stdcall Free(void* ptr, u64 size) {
         engone::Free(ptr,size);
     }
-    u64 __stdcall FileOpen(Language::Slice<char>* path, bool readOnly, u64* outFileSize) {
+    u64 attr_stdcall FileOpen(Language::Slice<char>* path, bool readOnly, u64* outFileSize) {
         return engone::FileOpen(path->ptr, path->len, outFileSize, readOnly ? engone::FILE_ONLY_READ : engone::FILE_ALWAYS_CREATE).internal;
     }
-    u64 __stdcall FileRead(u64 file, void* buffer, u64 length) {
+    u64 attr_stdcall FileRead(u64 file, void* buffer, u64 length) {
         return engone::FileRead({file}, buffer, length);
     }
-    u64 __stdcall FileWrite(u64 file, void* buffer, u64 length) {
+    u64 attr_stdcall FileWrite(u64 file, void* buffer, u64 length) {
         return engone::FileWrite({file}, buffer, length);
     }
-    void __stdcall FileClose(u64 file) {
+    void attr_stdcall FileClose(u64 file) {
         engone::FileClose({file});
     }
-    Language::DirectoryIterator* __stdcall DirectoryIteratorCreate(Language::Slice<char>* rootPath) {
+    Language::DirectoryIterator* attr_stdcall DirectoryIteratorCreate(Language::Slice<char>* rootPath) {
         void* iteratorHandle = engone::DirectoryIteratorCreate(rootPath->ptr, rootPath->len);
         
         auto iterator = (Language::DirectoryIterator*)engone::Allocate(sizeof(Language::DirectoryIterator));
@@ -249,7 +265,7 @@ extern "C" {
         memcpy(iterator->rootPath.ptr, rootPath->ptr, rootPath->len);
         return iterator;
     }
-    void __stdcall DirectoryIteratorDestroy(Language::DirectoryIterator* iterator) {
+    void attr_stdcall DirectoryIteratorDestroy(Language::DirectoryIterator* iterator) {
         engone::DirectoryIteratorDestroy((void*)iterator->_handle, (engone::DirectoryIteratorData*)&iterator->result);
         // Assert(!iterator->result.name.ptr);
         #ifdef VLOG
@@ -259,7 +275,7 @@ extern "C" {
         iterator->~DirectoryIterator();
         engone::Free(iterator,sizeof(Language::DirectoryIterator));
     }
-    Language::DirectoryIteratorData* __stdcall DirectoryIteratorNext(Language::DirectoryIterator* iterator) {
+    Language::DirectoryIteratorData* attr_stdcall DirectoryIteratorNext(Language::DirectoryIterator* iterator) {
         // return nullptr;
 //         WIN32_FIND_DATAW someData;
 //         WIN32_FIND_DATAA someDataa;
@@ -274,7 +290,7 @@ extern "C" {
         if(!yes) return nullptr;
         return &iterator->result;
     }
-    void __stdcall DirectoryIteratorSkip(Language::DirectoryIterator* iterator) {
+    void attr_stdcall DirectoryIteratorSkip(Language::DirectoryIterator* iterator) {
         engone::DirectoryIteratorSkip((void*)iterator->_handle);
     }
     
@@ -312,7 +328,7 @@ extern "C" {
     // void FileClose(u64 file);
     // #else
     // #endif
-    // float __stdcall sine(float x) {
+    // float attr_stdcall sine(float x) {
     //     const float RAD = 1.57079632679f;
     //     int inv = (x<0)<<1;
     //     if(inv)
@@ -328,7 +344,7 @@ extern "C" {
     //         taylor = -taylor;
     //     return taylor;
     // }
-    void __stdcall NativeSleep(float seconds) {
+    void attr_stdcall NativeSleep(float seconds) {
         engone::Sleep(seconds);
     }
     // void NativeThreadCreate()

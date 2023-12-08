@@ -29,7 +29,11 @@ struct TokenStream;
 
 // #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
 // #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
+#ifdef OS_WINDOWS
 #define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true, __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->compileOptions->compileStats.addError(TR, __VA_ARGS__);
+#else // if OS_LINUX
+#define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true __VA_OPT__(,) __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->compileOptions->compileStats.addError(TR __VA_OPT__(,) __VA_ARGS__);
+#endif
 #define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";
 #define ERR_MSG_LOG(STR) engone::log::out << STR ;
 // #define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
@@ -38,6 +42,7 @@ struct TokenStream;
 #define ERR_EXAMPLE(LN, STR) engone::log::out << engone::log::LIME << "Example:"; PrintExample(LN, StringBuilder{} + STR);
 
 #define WARN_HEAD(TR,...) PrintHead(WARN_HEADER_COLOR, TR, warn_type, &prevStream);
+
 #define WARN_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";
 #define WARN_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream);
 

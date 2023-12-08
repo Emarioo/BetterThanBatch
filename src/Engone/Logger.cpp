@@ -175,7 +175,7 @@ namespace engone {
 				if(file){
 					if(printExtra)
 						FileWrite(file,extraBuffer,strlen(extraBuffer));
-					uint64 bytes = FileWrite(file,str,len);
+					u64 bytes = FileWrite(file,str,len);
 					// TODO: check for failure
 				}
 			}
@@ -194,7 +194,7 @@ namespace engone {
 				if(file){
 					if(printExtra)
 						FileWrite(file,extraBuffer,strlen(extraBuffer));
-					uint64 bytes = FileWrite(file,str,len);
+					u64 bytes = FileWrite(file,str,len);
 					// TODO: check for failure
 				}
 			}
@@ -214,7 +214,7 @@ namespace engone {
 				if(file){
 					if(printExtra)
 						FileWrite(file,extraBuffer,strlen(extraBuffer));
-					uint64 bytes = FileWrite(file,str,len);
+					u64 bytes = FileWrite(file,str,len);
 					// TODO: check for failure
 				}
 			}
@@ -229,8 +229,8 @@ namespace engone {
 
 		info.lineBuffer.used = 0; // flush buffer
 	}
-	uint64 Logger::getMemoryUsage(){
-		uint64 sum=0;
+	u64 Logger::getMemoryUsage(){
+		u64 sum=0;
 		for(auto& pair : m_threadInfos){
 			sum+=pair.second.lineBuffer.max;
 		}
@@ -302,7 +302,7 @@ namespace engone {
 		// 	info.use(len);
 		// 	onEmptyLine=false;
 		// } else {
-		// 	printf("[Logger] : Failed ensuring %u bytes\n", len); \
+		// 	printf("[Logger] : Failed ensuring %u bytes\n", len);
 		// }
 		// if (value[len - 1] == '\n') {
 		// 	flush();
@@ -338,7 +338,7 @@ namespace engone {
 
 	GEN_LOG_NUM(void*, 18, "%p")
 	GEN_LOG_NUM(int64, 21, FORMAT_64"d")
-	GEN_LOG_NUM(uint64, 20, FORMAT_64"u")
+	GEN_LOG_NUM(u64, 20, FORMAT_64"u")
 	GEN_LOG_NUM(int32, 11, "%d")
 	GEN_LOG_NUM(uint32, 10, "%u")
 	GEN_LOG_NUM(int16, 6, "%hd")

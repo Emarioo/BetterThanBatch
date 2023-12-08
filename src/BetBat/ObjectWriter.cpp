@@ -16,7 +16,7 @@ namespace COFF_Format {
         engone::Logger& operator<<(engone::Logger& logger, TYPE flags){return logger << ToString(flags);}\
         const char* ToString(TYPE flags){ switch(flags){
     #define CASE(X) case X: return #X;
-    #define SWITCH_END } return "Undefined machine"; }
+    #define SWITCH_END default: {Assert(false);}} return "Undefined machine"; }
     
     #define LOG_START(TYPE) engone::Logger& operator<<(engone::Logger& logger, TYPE flags){ std::string out="";
     #define IFOR(X) if(flags&X) out += #X ", ";
@@ -1282,7 +1282,7 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
     } else {
         ByteStream::Iterator iter{};
         while(obj_stream->iterate(iter)) {
-            FileWrite(file, iter.ptr, iter.size);
+            FileWrite(file, (void*)iter.ptr, iter.size);
         }
     }
     

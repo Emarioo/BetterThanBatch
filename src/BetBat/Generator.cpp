@@ -947,6 +947,9 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                     info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
                 }
+                default: {
+                    Assert(false);
+                }
             }
             info.addPush(BC_REG_RBX);
 
@@ -1249,8 +1252,9 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
             int stackSpace = funcImpl->argSize;
             stackSpace += MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
             info.addIncrSp(-stackSpace);
+            break;
         }
-        break; case STDCALL: {
+        case STDCALL: {
             for(int i=0;i<astFunc->arguments.size();i++){
                 int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
                 if(size>8){
@@ -1272,9 +1276,13 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
             info.addIncrSp(-stackSpace);
             // int misalign = MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
             // info.addIncrSp(-misalign);
+            break;
         }
-        break; case CDECL_CONVENTION: {
+        case CDECL_CONVENTION: {
             Assert(false); // @Incomplete
+        }
+        default: {
+            Assert(false);
         }
     }
 
@@ -1580,6 +1588,9 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 outTypeIds->add(ret.typeId);
             }
         }
+        default: {
+            Assert(false);
+        }
     }
     return SignalDefault::SUCCESS;
 }
@@ -1641,7 +1652,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 int offset = info.code->appendData(pushedValues, pushedSize);
                 info.addInstruction({BC_DATAPTR, BC_REG_RBX});
                 info.addImm(offset);
-                for(int i=0;i<outTypeIds->size();i++){
+                for(int i=0;i<(int)outTypeIds->size();i++){
                     SignalDefault result = GeneratePushFromValues(info, BC_REG_RBX, 0, outTypeIds->get(i));
                 }
             }
@@ -1772,6 +1783,9 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                             GeneratePush(info, BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
                         }
+                        default: {
+                            Assert(false);
+                        }
                     }
 
                     outTypeIds->add(varinfo->versions_typeId[info.currentPolyVersion]);
@@ -1883,7 +1897,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 u32 endT = expression->tokenRange.endIndex-1;
                 TokenStream* stream = expression->tokenRange.tokenStream();
                 /// We can assume that all tokens come from the same stream for now.
-                for (int i=startT; i < endT; i++) {
+                for (int i=startT; i < (int)endT; i++) {
                     Token& tok = stream->get(i);
                     // OPTIMIZE: TODO: You can compute the character length of the inline assembly in the parser and
                     //  resize in advance instead of resizing per token.
@@ -3169,7 +3183,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         if(function->body->statements.size()>0) {
             dfun->fileIndex = di->addOrGetFile(function->body->statements[0]->tokenRange.tokenStream()->streamName);
         } else {
-            dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->initialSourceFile.text);
+            dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->sourceFile.text);
         }
         dfun->funcImpl = nullptr; // func with no args or return types
 
@@ -3721,7 +3735,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             info.currentFrameOffset -= arraySize;
                             arrayFrameOffset = info.currentFrameOffset;
                             info.addIncrSp(-arraySize);
-                            if(i == statement->varnames.size()-1){
+                            if(i == (int)statement->varnames.size()-1){
                                 frameOffsetOfLastVarname = arrayFrameOffset;
                             }
 
@@ -3789,7 +3803,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 TypeInfo* sometypeInfo = info.ast->getTypeInfo(varname.versions_assignType[info.currentPolyVersion].baseType());
                 TypeId elementType = sometypeInfo->structImpl->polyArgs[0];
                 int elementSize = info.ast->getTypeSize(elementType);
-                for(int j=0;j<statement->arrayValues.size();j++){
+                for(int j=0;j<(int)statement->arrayValues.size();j++){
                     ASTExpression* value = statement->arrayValues[j];
 
                     rightTypes.resize(0);
@@ -3839,6 +3853,9 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             // // info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
                             // GeneratePop(info, BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                         }
+                        default: {
+                            Assert(false);
+                        }
                     }
                 }
             }
@@ -3853,7 +3870,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
                 // Type checker or generator has a bug if they check/generate different types
                 Assert(typesFromExpr.size()==rightTypes.size());
-                for(int i=0;i<typesFromExpr.size();i++){
+                for(int i=0;i<(int)typesFromExpr.size();i++){
                     std::string a0 = info.ast->typeToString(typesFromExpr[i]);
                     std::string a1 = info.ast->typeToString(rightTypes[i]);
                     Assert(typesFromExpr[i] == rightTypes[i]);
@@ -3916,6 +3933,9 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             // info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
                             GeneratePop(info, BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
+                        }
+                        default: {
+                            Assert(false);
                         }
                     }
                 }
@@ -4034,7 +4054,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             DynamicArray<RelocData> caseData{};
             caseData.resize(statement->switchCases.size());
             
-            for(int nr=0;nr<statement->switchCases.size();nr++) {
+            for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
                 auto it = &statement->switchCases[nr];
                 caseData[nr] = {};
                 
@@ -4085,7 +4105,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             u32 noCaseJumpAddress = info.code->length();
             info.addImm(0);
             auto& list = statement->switchCases;
-            for(int nr=0;nr<statement->switchCases.size();nr++) {
+            for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
                 auto it = &statement->switchCases[nr];
                 info.code->getIm(caseData[nr].caseJumpAddress) = info.code->length();
                 
@@ -4104,7 +4124,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             
             info.code->getIm(noCaseJumpAddress) = info.code->length();
                 
-            for(int nr=0;nr<statement->switchCases.size();nr++) {
+            for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
                 info.code->getIm(caseData[nr].caseBreakAddress) = info.code->length();
             }
             
@@ -4630,7 +4650,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 continue;
             }
             if(exprTypes.size() > 0 && exprTypes[0] != AST_VOID){
-                for(int i =0;i < exprTypes.size();i++) {
+                for(int i = 0; i < (int) exprTypes.size();i++) {
                     TypeId dtype = exprTypes[i];
                     GeneratePop(info, 0, 0, dtype);
                 }
@@ -4830,7 +4850,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     if(info.ast->mainBody->statements.size()>0) {
         dfun->fileIndex = di->addOrGetFile(info.ast->mainBody->statements[0]->tokenRange.tokenStream()->streamName);
     } else {
-        dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->initialSourceFile.text);
+        dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->sourceFile.text);
     }
 
     dfun->funcImpl = nullptr; // func with no args or return types

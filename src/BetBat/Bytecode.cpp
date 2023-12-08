@@ -80,6 +80,9 @@ const char* InstToString(int type){
         // CASE(BC_SIN)
         // CASE(BC_COS)
         // CASE(BC_TAN)
+        default: {
+            Assert(false);
+        }
     }
     #undef CASE
     return "BC_?";
@@ -131,7 +134,7 @@ bool Bytecode::add_notabug(Instruction instruction){
 
 void Bytecode::printInstruction(u32 index, bool printImmediates){
     using namespace engone;
-    Assert(index < length());
+    Assert(index < (u32)length());
 
     u8 opcode = get(index).opcode;
     log::out << index<< ": "<<get(index)<<" ";
@@ -150,8 +153,8 @@ void Bytecode::printInstruction(u32 index, bool printImmediates){
 }
 u32 Bytecode::immediatesOfInstruction(u32 index) {
     u8 opcode = get(index).opcode;
-    if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JE || opcode==BC_JNE || opcode==BC_CALL || opcode==BC_DATAPTR|
-        opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR||opcode==BC_TEST_VALUE){
+    if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JE || opcode==BC_JNE || opcode==BC_CALL || opcode==BC_DATAPTR||
+        opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR || opcode==BC_TEST_VALUE){
         
         if(opcode == BC_LI && get(index).op1 == 2){
             return 2;
@@ -451,7 +454,7 @@ Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 
     if(debugSegment.used <= instructionIndex) {
         debugSegment.used = instructionIndex + 1;
     }
-    if(index == -1){
+    if((int)index == -1){
         bool yes = debugLocations.add({});
         Assert(yes);
         index = debugLocations.size()-1;

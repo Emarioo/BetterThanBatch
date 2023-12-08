@@ -96,7 +96,8 @@ namespace dwarf {
             
         
         Section_Header* section = nullptr;
-        if (section = info->section_debug_info){
+        section = info->section_debug_info;
+        if (section){
             section->PointerToRawData = stream->getWriteHead();
             
             CompilationUnitHeader* comp = nullptr;
@@ -133,8 +134,9 @@ namespace dwarf {
             stream->write_unknown((void**)&ptr, 16); \
             written = ULEB128_encode(ptr, 16, FORM); \
             stream->wrote_unknown(written);
-            
-        if (section = info->section_debug_abbrev){
+
+        section = info->section_debug_abbrev;
+        if (section){
             section->PointerToRawData = stream->getWriteHead();
             
             u8* ptr = nullptr;
@@ -165,8 +167,8 @@ namespace dwarf {
             
             section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
         }
-        
-         if (section = info->section_debug_line){
+        section = info->section_debug_line;
+        if (section){
             section->PointerToRawData = stream->getWriteHead();
             
             u8* ptr = nullptr;
@@ -252,10 +254,10 @@ namespace dwarf {
                 errors++; \
                 engone::log::out << engone::log::RED << "FAILED: "<< X << " -> "<<fin<<"\n"; \
             }
-            // log::out << X <<" -> "<<fin<<"\n"; \
-            // for(int i=0;i<written;i++) {\
-            //     log::out << " "<<i<<": "<<buffer[i]<<"\n";\
-            // }\
+            // log::out << X <<" -> "<<fin<<"\n"; 
+            // for(int i=0;i<written;i++) {
+            //     log::out << " "<<i<<": "<<buffer[i]<<"\n";
+            // }
         
         TEST(2)
         TEST(127)

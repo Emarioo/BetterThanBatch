@@ -17,13 +17,13 @@ namespace engone {
 		Memory() {}
 
 		T* data = nullptr;
-		uint64 max = 0;
-		uint64 used = 0; // may be useful to you.
+		u64 max = 0;
+		u64 used = 0; // may be useful to you.
 
 		// count is not in bytes.
 		// Rename to reserve?
 		// will only return false if typeSize is 0
-		bool resize(uint64 count){
+		bool resize(u64 count){
 			#ifdef DEBUG_RESIZE
 			printf("## Resize %lld -> %lld\n",max*getTypeSize(),count*getTypeSize());
 			#endif

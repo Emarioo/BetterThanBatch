@@ -15,7 +15,7 @@
 
 // don't mind these (;
 typedef uint32_t uint32;
-typedef uint64_t uint64;
+typedef uint64_t u64;
 
 namespace engone {
     struct UIColor{
@@ -125,10 +125,10 @@ namespace engone {
         // id as 0 will create a temporary element for the current frame.
         // Elements with non-zero ids will be maintained across frames untill removed. 
         
-        UIBox* makeBox(uint64 id=0);
-        UIText* makeText(uint64 id=0);
-        void removeBox(uint64 id);
-        void removeText(uint64 id);
+        UIBox* makeBox(u64 id=0);
+        UIText* makeText(u64 id=0);
+        void removeBox(u64 id);
+        void removeText(u64 id);
         
         bool inside(UIBox* box, float x, float y);
         bool inside(UIText* box, float x, float y);
@@ -150,7 +150,7 @@ namespace engone {
             int index;
         };
         struct UIInternal{
-            uint64 id;
+            u64 id;
         };
         // switch to C arrays
         std::vector<UIElement> tempElements;

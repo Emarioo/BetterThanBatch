@@ -645,7 +645,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         int sectionIndex = -1;
         for(int j=0;j<objfile->sections.size();j++){
             std::string name = objfile->getSectionName(j);
-            if(name == ".text" || (name.length()>=6) && !strncmp(name.c_str(), ".text$",6)) {
+            if(name == ".text" || (name.length()>=6 && !strncmp(name.c_str(), ".text$",6))) {
                 // auto section = objfile->sections[j];
                 // Assert(section->NumberOfRelocations == 0); // not handled at the moment
                 sectionIndex = j;
@@ -724,7 +724,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         i32 imm2 = 0;
         
         _CLOG(log::out << bcIndex << ": "<< inst;)
-        if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JE || opcode==BC_JNE || opcode==BC_CALL || opcode==BC_DATAPTR|
+        if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JE || opcode==BC_JNE || opcode==BC_CALL || opcode==BC_DATAPTR||
             opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR||opcode==BC_TEST_VALUE){
             bcIndex++;
             imm = bytecode->getIm(bcIndex);
@@ -1934,7 +1934,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // TODO: Replace with a better instruction? If there is one.
                 u8 size = DECODE_REG_SIZE(op0);
 
-                if(size==8);
+                if(size==8)
                     prog->add(PREFIX_REXW);
                 prog->add(OPCODE_CMP_RM_IMM8_SLASH_7);
                 prog->addModRM(MODE_REG, 7, BCToProgramReg(op0,0xF));
@@ -1957,7 +1957,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // TODO: Replace with a better instruction? If there is one.
                 u8 size = DECODE_REG_SIZE(op0);
 
-                if(size==8);
+                if(size==8)
                     prog->add(PREFIX_REXW);
                 prog->add(OPCODE_CMP_RM_IMM8_SLASH_7);
                 prog->addModRM(MODE_REG, 7, BCToProgramReg(op0,0xF));
