@@ -244,7 +244,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
         }
         polys+=">";
     }
-    _VLOG(log::out << "Struct "<<log::LIME << astStruct->name<<polys<<log::SILVER<<" (size: "<<structImpl->size <<(astStruct->isPolymorphic()?", poly. impl.":"")<<", scope: "<<info.ast->getScope(astStruct->scopeId)->parent<<")\n";)
+    _VLOG(log::out << "Struct "<<log::LIME << astStruct->name<<polys<<log::NO_COLOR<<" (size: "<<structImpl->size <<(astStruct->isPolymorphic()?", poly. impl.":"")<<", scope: "<<info.ast->getScope(astStruct->scopeId)->parent<<")\n";)
     for(int i=0;i<(int)structImpl->members.size();i++){
         auto& name = astStruct->members[i].name;
         auto& mem = structImpl->members[i];
@@ -705,7 +705,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                         auto& argType = argTypes[j];
                         if(j!=0)
                             log::out << ", ";
-                        log::out << log::LIME << info.ast->typeToString(argType) << log::SILVER;
+                        log::out << log::LIME << info.ast->typeToString(argType) << log::NO_COLOR;
                     }
                     log::out << ")";
                 }
@@ -724,7 +724,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                         auto& argType = overload.funcImpl->argumentTypes[j];
                         if(j!=0)
                             log::out << ", ";
-                        log::out << log::LIME << info.ast->typeToString(argType.typeId) << log::SILVER;
+                        log::out << log::LIME << info.ast->typeToString(argType.typeId) << log::NO_COLOR;
                     }
                     log::out << "), ";
                     // log::out << ")\n";
@@ -775,7 +775,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     //                 auto& argType = argTypes[j];
     //                 if(j!=0)
     //                     log::out << ", ";
-    //                 log::out << log::LIME << info.ast->typeToString(argType) << log::SILVER;
+    //                 log::out << log::LIME << info.ast->typeToString(argType) << log::NO_COLOR;
     //             }
     //             log::out << ")";
     //         }
@@ -794,7 +794,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     //                 auto& argType = overload.funcImpl->argumentTypes[j];
     //                 if(j!=0)
     //                     log::out << ", ";
-    //                 log::out << log::LIME << info.ast->typeToString(argType.typeId) << log::SILVER;
+    //                 log::out << log::LIME << info.ast->typeToString(argType.typeId) << log::NO_COLOR;
     //             }
     //             log::out << "), ";
     //             // log::out << ")\n";
@@ -1142,7 +1142,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         ERR_SECTION(
             ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
             ERR_MSG_LOG("Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
-                log::out << log::CYAN<<"Generates args: "<<log::SILVER;
+                log::out << log::CYAN<<"Generates args: "<<log::NO_COLOR;
                 if(argTypes.size()==0){
                     log::out << "zero arguments";
                 }
@@ -1249,7 +1249,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                         for(int i=0;i<(int)ti->astStruct->members.size();i++){
                             if(i!=0)
                                 log::out << ", ";
-                            log::out << log::LIME << ti->astStruct->members[i].name<<log::SILVER<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
+                            log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
                         }
                         log::out <<"\n";
                         log::out << "\n"
@@ -2338,7 +2338,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         if(!hadError){
                             ERR_SECTION(
                                 ERR_HEAD(varname.name)
-                                ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::SILVER<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
+                                ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
                                 ERR_LINE(varname.name, "type-less");
                             )
                         }

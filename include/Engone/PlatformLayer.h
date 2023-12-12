@@ -153,7 +153,7 @@ namespace engone {
 	bool PollError(PlatformError* out);
 	void TestPlatformErrors();
 
-    typedef u32 ThreadId;
+    typedef u64 ThreadId;
     typedef u32 TLSIndex;
 	class Thread {
 	public:
@@ -170,9 +170,11 @@ namespace engone {
         // False: Thread is not linked to an os thread. Call init to start the thread.
 		bool isActive();
 		bool joinable();
+		ThreadId getId();
 
 		static ThreadId GetThisThreadId();
 
+		// Thread local storage (or thread specific data)
 		// 0 indicates failure
 		static TLSIndex CreateTLSIndex();
 		static bool DestroyTLSIndex(TLSIndex index);
@@ -180,10 +182,17 @@ namespace engone {
 		static void* GetTLSValue(TLSIndex index);
 		static bool SetTLSValue(TLSIndex index, void* ptr);
 
-		ThreadId getId();
 
 	private:
-		u64 m_internalHandle = 0;
+		static const int THREAD_SIZE = 8;
+		union {
+			struct { // Windows
+				u64 m_internalHandle = 0;
+			};
+			struct { // Unix
+				u64 m_data;
+			};
+		};
 		ThreadId m_threadId=0;
 		
 		friend class FileMonitor;
@@ -202,9 +211,18 @@ namespace engone {
 		void signal(int count=1);
 
 	private:
-		u64 m_internalHandle = 0;
-		uint32 m_initial = 1;
-		uint32 m_max = 1;
+		u32 m_initial = 1;
+		u32 m_max = 1;
+		static const int SEM_SIZE = 32;
+		union {
+			struct { // Windows
+				u64 m_internalHandle;
+			};
+			struct { // Unix
+				u8 m_data[SEM_SIZE]{0}; // sem_t
+				bool m_initialized = false;
+			};
+		};
 	};
 	class Mutex {
 	public:

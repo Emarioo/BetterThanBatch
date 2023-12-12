@@ -233,9 +233,9 @@ void Instruction::print(){
 
     if(opcode==BC_INCR){
         i16 offset = (i16)((i16)op1 | ((i16)op2<<8));
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< offset  << log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< offset  << log::NO_COLOR;
     // else if(opcode==BC_MEMZERO)
-    //     log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::SILVER;
+    //     log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::NO_COLOR;
     } else if(opcode==BC_CAST) {
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ";
         switch(op0){
@@ -246,7 +246,7 @@ void Instruction::print(){
             case CAST_UINT_SINT: log::out << "u->s"; break;
             case CAST_SINT_UINT: log::out << "s->u"; break;
         }
-        log::out<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::SILVER;
+        log::out<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::NO_COLOR;
     } else if(opcode==BC_LT || opcode==BC_LTE ||opcode==BC_GT ||opcode==BC_GTE) {
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ";
         switch(op0){
@@ -255,31 +255,31 @@ void Instruction::print(){
             case CMP_SINT_UINT: log::out << "s-u"; break;
             case CMP_SINT_SINT: log::out << "s-s"; break;
         }
-        log::out<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::SILVER;
+        log::out<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::NO_COLOR;
     }
     else if(opcode==BC_MOV_MR) {
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "] "<<RegToStr(op1)<< " "<<op2<<log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "] "<<RegToStr(op1)<< " "<<op2<<log::NO_COLOR;
     } else if(opcode==BC_MOV_MR_DISP32) {
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "+disp] "<<RegToStr(op1)<< " "<<op2<<log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "+disp] "<<RegToStr(op1)<< " "<<op2<<log::NO_COLOR;
     } else if(opcode==BC_MOV_RM) {
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "] "<<op2<<log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "] "<<op2<<log::NO_COLOR;
     } else if(opcode==BC_MOV_RM_DISP32){
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "+disp] "<<op2<<log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "+disp] "<<op2<<log::NO_COLOR;
     } else if(opcode==BC_CALL) {
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY <<" "<< (LinkConventions)op0 << " "<< (CallConventions)op1 <<log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY <<" "<< (LinkConventions)op0 << " "<< (CallConventions)op1 <<log::NO_COLOR;
     } else if(opcode==BC_ASM) {
         int index = ASM_DECODE_INDEX(op0,op1,op2);
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY <<" "<< index <<log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY <<" "<< index <<log::NO_COLOR;
     } else if(opcode==BC_LI) {
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0);
         if(op1 == 2)
             log::out << " qword";
-         log::out<<log::SILVER;
+         log::out<<log::NO_COLOR;
     } else if(opcode==BC_TEST_VALUE) {
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<op0<<" " << RegToStr(op1)<< " "<<RegToStr(op2);
-        log::out<<log::SILVER;
+        log::out<<log::NO_COLOR;
     } else
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::SILVER;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::NO_COLOR;
     
     // auto color = log::out.getColor();
     // if(type==BC_NUM||type==BC_STR||type==BC_SUBSTR||type==BC_COPY)
@@ -394,7 +394,7 @@ int Bytecode::appendData(const void* data, int size){
 //         debugText[oldIndex-1] += std::string(str,length);
 //     }
 // }
-Bytecode::Location* Bytecode::getLocation(u32 instructionIndex, u32* locationIndex){
+const Bytecode::Location* Bytecode::getLocation(u32 instructionIndex, u32* locationIndex){
     using namespace engone;
     if(instructionIndex>=debugSegment.used)
         return nullptr;
@@ -464,11 +464,12 @@ Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 
         if(locationIndex)
             *locationIndex = index;
         if(tokenRange.tokenStream()) {
-            ptr->file = TrimDir(tokenRange.tokenStream()->streamName);
-            ptr->line = tokenRange.firstToken.line;
-            ptr->column = tokenRange.firstToken.column;
-        } else
-            ptr->preDesc = tokenRange.firstToken; // TODO: Don't just use the first token.
+            // ptr->file = TrimDir(tokenRange.tokenStream()->streamName);
+            // ptr->line = tokenRange.firstToken.line;
+            // ptr->column = tokenRange.firstToken.column;
+        } else {
+            // ptr->preDesc = tokenRange.firstToken; // TODO: Don't just use the first token.
+        }
     }
     return ptr;
 }

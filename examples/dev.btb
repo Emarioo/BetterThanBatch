@@ -19,8 +19,8 @@
 // #import "Array"
 
 ok = 'A';
-s = "ada";
-
+// s = "ada";
+// 5
 printc(ok);
 // prints(s);
 

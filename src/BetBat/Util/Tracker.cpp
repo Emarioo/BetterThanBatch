@@ -108,9 +108,9 @@ void Tracker::PrintTrackedTypes(){
         if(trackType->count == 0)
             continue;
         if(strcmp(trackType->name.c_str(),"struct "))
-            log::out <<" "<<log::LIME<< (trackType->name.c_str()+strlen("struct "))<<log::SILVER <<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
+            log::out <<" "<<log::LIME<< (trackType->name.c_str()+strlen("struct "))<<log::NO_COLOR <<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
         else
-            log::out <<" "<<log::LIME<< trackType->name <<log::SILVER<<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
+            log::out <<" "<<log::LIME<< trackType->name <<log::NO_COLOR<<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
         s_uniqueTrackLocations.resize(0);
         for(int j=0;j<trackType->locations.size();j++){
             auto& loc = trackType->locations[j];

@@ -119,7 +119,7 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
         
         // log::out << "end "<<end<<"\n";
     }
-    const log::Color codeColor = log::SILVER;
+    const log::Color codeColor = log::NO_COLOR;
     const log::Color markColor = log::CYAN;
 
     int lineDigits = 0;
@@ -227,9 +227,8 @@ void PrintCode(int index, TokenStream* stream, const char* message){
 void PrintExample(int line, const StringBuilder& stringBuilder){
     using namespace engone;
 
-    const log::Color codeColor = log::SILVER;
+    const log::Color codeColor = log::NO_COLOR;
     const log::Color markColor = log::CYAN;
-
 
     int lastLine = line;
     for(int i=0;i<stringBuilder.size();i++){

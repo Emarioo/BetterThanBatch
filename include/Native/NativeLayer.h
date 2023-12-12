@@ -27,7 +27,7 @@ namespace Language {
 
 #ifdef OS_WINDOWS
 #define attr_stdcall __stdcall
-#elif OS_LINUX
+#elif defined(OS_LINUX)
 #define attr_stdcall __attribute__((stdcall))
 #endif
 

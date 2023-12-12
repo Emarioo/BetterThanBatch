@@ -20,7 +20,9 @@ NativeRegistry* NativeRegistry::GetGlobal(){
     return &s_globalRegistry;
 }
 void NativeRegistry::DestroyGlobal(){
-    s_globalRegistry.nativeFunctions._reserve(0);
+    s_globalRegistry.nativeFunctions.cleanup();
+    // s_globalRegistry.nativeFunctions.clear();
+    // s_globalRegistry.nativeFunctions.shrink_to_fit();
     // if(s_globalRegistry)
         // NativeRegistry::Destroy(s_globalRegistry);
 }
@@ -31,7 +33,8 @@ NativeRegistry::NativeFunction* NativeRegistry::findFunction(const Token& name){
     if(pair == nativeFunctionMap.end()){
         return nullptr;
     }
-    return nativeFunctions.getPtr(pair->second);
+    // return nativeFunctions.getPtr(pair->second);
+    return &nativeFunctions[pair->second];
 }
 NativeRegistry::NativeFunction* NativeRegistry::findFunction(i64 jumpAddress){
     Assert(initialized);
@@ -39,7 +42,8 @@ NativeRegistry::NativeFunction* NativeRegistry::findFunction(i64 jumpAddress){
     if(pair == nativeFunctionMap2.end()){
         return nullptr;
     }
-    return nativeFunctions.getPtr(pair->second);
+    // return nativeFunctions.getPtr(pair->second);
+    return &nativeFunctions[pair->second];
 }
 void NativeRegistry::initNativeContent(){
     Assert(!initialized);
@@ -92,6 +96,8 @@ void NativeRegistry::initNativeContent(){
     #undef ADD
 }
 void NativeRegistry::_addFunction(const std::string& name, const NativeFunction& func){
+    // nativeFunctions.push_back(func);
+    // nativeFunctions.back().name = name;
     nativeFunctions.add(func);
     nativeFunctions.last().name = name;
     // nativeFunctions.last().jumpAddress; // func contains this 

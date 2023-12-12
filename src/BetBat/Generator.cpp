@@ -1023,7 +1023,7 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 //     for(int i=0;i<(int)typeInfo->astStruct->members.size();i++){
                 //         if(i!=0)
                 //             log::out << ", ";
-                //         log::out << log::LIME << typeInfo->astStruct->members[i].name<<log::SILVER<<": "<<info.ast->typeToString(typeInfo->getMember(i).typeId);
+                //         log::out << log::LIME << typeInfo->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(typeInfo->getMember(i).typeId);
                 //     }
                 //     log::out <<"\n";
                 //     log::out <<"\n";

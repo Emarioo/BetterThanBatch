@@ -130,7 +130,11 @@ namespace engone {
 		Mutex m_printMutex;
 		
 		struct ThreadInfo {
+			#ifdef OS_WINDOWS
 			log::Color color = log::SILVER;
+			#else
+			log::Color color = log::NO_COLOR;
+			#endif
 			log::Filter filter = log::FilterAll;
 
 			std::string logReport;

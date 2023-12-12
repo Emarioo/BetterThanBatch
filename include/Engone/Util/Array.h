@@ -213,7 +213,7 @@ struct DynamicArray {
 
     bool add(const T& t){
         if(used + 1 > max){
-            if(!_reserve(5 + max * 1.5)){
+            if(!_reserve(50 + max * 1.5)){
                 return false;
             }
         }
@@ -240,7 +240,7 @@ struct DynamicArray {
         ptr->~T();
         --used;
         if(index != used){
-            memcpy(_ptr + index, _ptr + index + 1, (used-index) * sizeof(T));
+            memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
         }
         return true;
     }
@@ -292,15 +292,28 @@ struct DynamicArray {
             max = newMax;
             return true;
         } else {
-            if(newMax < max) {
-                for(u32 i = newMax; i < used; i++){
-                    (_ptr + i)->~T();
-                }
-            }
+            
+            // destruct if we down-scale
+            // if(newMax < max) {
+            //     for(u32 i = newMax; i < used; i++){
+            //         (_ptr + i)->~T();
+            //     }
+            //     used = newMax;
+            // }
+
             TRACK_DELS(T, max);
-            T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
-            TRACK_ADDS(T, newMax);
+            // T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
+            T* newPtr = (T*)engone::Allocate(sizeof(T) * newMax);
             Assert(newPtr);
+            
+            for(u32 i = 0; i < used; i++){
+                *(newPtr + i) = std::move(*(_ptr + i));
+                // (_ptr + i)->~T();
+            }
+            
+            engone::Free(_ptr, sizeof(T) * max);
+
+            TRACK_ADDS(T, newMax);
             if(!newPtr)
                 return false;
             _ptr = newPtr;

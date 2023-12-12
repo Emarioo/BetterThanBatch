@@ -5,9 +5,9 @@
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) { CONTENT }
 
-#define ERR_HEAD_SUITE() log::out << log::RED << "TestSuite: "<<log::SILVER;
-#define ERR_HEAD_SUITE_L() log::out << log::RED << "TestSuite "<<line <<":"<<column<<": "<<log::SILVER;
-#define ERR_MSG_SUITE(MSG) log::out << log::SILVER << MSG << "\n";
+#define ERR_HEAD_SUITE() log::out << log::RED << "TestSuite: "<<log::NO_COLOR;
+#define ERR_HEAD_SUITE_L() log::out << log::RED << "TestSuite "<<line <<":"<<column<<": "<<log::NO_COLOR;
+#define ERR_MSG_SUITE(MSG) log::out << log::NO_COLOR << MSG << "\n";
 
 void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins, DynamicArray<TestCase>* outTestCases){
     using namespace engone;

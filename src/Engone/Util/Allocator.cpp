@@ -1,9 +1,12 @@
 
 // #define WIN32
-#ifdef OS_WINDOWS
 
 #include "Engone/Util/Allocator.h"
+#ifdef OS_WINDOWS
 #include "Engone/Win32Includes.h"
+#else
+#include "sys/mman.h"
+#endif
 
 #include "Engone/Logger.h"
 
@@ -38,6 +41,7 @@ namespace engone {
         // maxSize = 500;
         maxSize = bytes;
         // GigaBytes(1);
+        #ifdef OS_WINDOWS
         baseAllocation = VirtualAlloc(baseAddress,maxSize,MEM_COMMIT|MEM_RESERVE,PAGE_READWRITE);
         if(!baseAllocation){
             int err = GetLastError();
@@ -45,6 +49,14 @@ namespace engone {
             mutex.unlock();
             return false;
         }
+        #else
+        baseAllocation = mmap(baseAddress, bytes, PROT_READ | PROT_WRITE, MAP_FIXED, 0, 0);
+        if(!baseAllocation){
+            printf("StateAllocator : Virtual alloc failed!\n");
+            mutex.unlock();
+            return false;
+        }
+        #endif
         freeBlocks.push_back({0,maxSize});
         
         mutex.unlock();
@@ -558,4 +570,3 @@ namespace engone {
     }
     #endif
 }
-#endif

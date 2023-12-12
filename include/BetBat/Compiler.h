@@ -18,6 +18,9 @@ struct Path {
     Path() = default;
     Path(const std::string& path);
     Path(const char* path);
+    // ~Path() {
+    //     // text.~basic_string();
+    // }
     enum Type : u32 {
         DIR = 0x1,
         ABSOLUTE = 0x2,
@@ -38,8 +41,9 @@ struct Path {
 enum TargetPlatform : u32 {
     UNKNOWN_TARGET,
     BYTECODE,
+    // TODO: Add some option for COFF or ELF format? Probably not here.
     WINDOWS_x64,
-    LINUX_x64,
+    UNIX_x64,
 };
 const char* ToString(TargetPlatform target);
 engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target);
@@ -110,9 +114,19 @@ struct CompilerVersion {
 };
 struct CompileOptions {
     CompileOptions() = default;
+    ~CompileOptions() {
+        
+    }
+    void cleanup() {
+        userArguments.cleanup();
+        importDirectories.cleanup();
+        testLocations.cleanup();
+        compileStats.generatedFiles.cleanup();
+        compileStats.errorTypes.cleanup();
+    }
 
-    Path sourceFile;
-    Path outputFile;
+    Path sourceFile{};
+    Path outputFile{};
     TargetPlatform target = BYTECODE;
 
     bool useDebugInformation = false;
@@ -139,7 +153,7 @@ struct CompileOptions {
     TestLocation* getTestLocation(int index);
     int addTestLocation(TokenRange& range);
 
-    CompileStats compileStats;
+    CompileStats compileStats{};
 };
 // NOTE: struct since more info may be added to each import name
 struct StreamToProcess {

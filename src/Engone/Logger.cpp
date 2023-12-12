@@ -9,6 +9,8 @@
 #include <time.h>
 #include <string.h>
 
+#include <unistd.h>
+
 namespace engone {
 	namespace log {
 		Logger out;
@@ -121,6 +123,17 @@ namespace engone {
 		else
 			SetConsoleColor(m_masterColor);
 
+		// fprintf(stdout,"\033[1;32m{YA}");
+		// fflush(stdout);
+		// int fdad = STDOUT_FILENO;
+		// const char* strar = "\033[1;32mEyo!\n";
+		// write(fdad,strar,strlen(strar));
+		// printf("%s",str);
+
+		// printf("\033[1,10m{yo}");
+		// write()
+		// engone::FileWrite(outFile, "\033[1;32m{10}",7+4);
+
 		if(m_enabledConsole){
 			if(lastPrintedChar=='\n'){
 			// 	preIndent=false;
@@ -159,14 +172,14 @@ namespace engone {
 				extraBuffer[9]=']';
 				extraBuffer[10]=' ';
 				_GetClock(extraBuffer+1);
-				sprintf(extraBuffer+11,"[Thread %u] ",Thread::GetThisThreadId());
+				sprintf(extraBuffer+11,"[Thread %lu] ",Thread::GetThisThreadId());
 			}
 			if(!m_masterReportPath.empty()){
 				std::string path = m_rootDirectory+"/"+m_masterReportPath;
 				auto find = m_logFiles.find(path);
 				APIFile file={};
 				if(find==m_logFiles.end()){
-					file = FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
+					file = engone::FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
@@ -174,8 +187,8 @@ namespace engone {
 				}
 				if(file){
 					if(printExtra)
-						FileWrite(file,extraBuffer,strlen(extraBuffer));
-					u64 bytes = FileWrite(file,str,len);
+						engone::FileWrite(file,extraBuffer,strlen(extraBuffer));
+					u64 bytes = engone::FileWrite(file,str,len);
 					// TODO: check for failure
 				}
 			}
@@ -185,7 +198,7 @@ namespace engone {
 				APIFile file={};
 				if(find==m_logFiles.end()){
 					// file = FileOpen(path,0,FILE_CAN_CREATE);
-					file = FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
+					file = engone::FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
@@ -193,8 +206,8 @@ namespace engone {
 				}
 				if(file){
 					if(printExtra)
-						FileWrite(file,extraBuffer,strlen(extraBuffer));
-					u64 bytes = FileWrite(file,str,len);
+						engone::FileWrite(file,extraBuffer,strlen(extraBuffer));
+					u64 bytes = engone::FileWrite(file,str,len);
 					// TODO: check for failure
 				}
 			}
@@ -205,7 +218,7 @@ namespace engone {
 				APIFile file={};
 				if(find==m_logFiles.end()){
 					// file = FileOpen(path,0,FILE_CAN_CREATE);
-					file = FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
+					file = engone::FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
@@ -213,18 +226,22 @@ namespace engone {
 				}
 				if(file){
 					if(printExtra)
-						FileWrite(file,extraBuffer,strlen(extraBuffer));
-					u64 bytes = FileWrite(file,str,len);
+						engone::FileWrite(file,extraBuffer,strlen(extraBuffer));
+					u64 bytes = engone::FileWrite(file,str,len);
 					// TODO: check for failure
 				}
 			}
 		}
 		m_printMutex.unlock();
-
+		#ifdef OS_WINDOWS
 		info.color = log::SILVER; // reset color after new line
 		if (m_masterColor == log::NO_COLOR)
 			SetConsoleColor(log::SILVER);
-
+		#else
+		info.color = log::NO_COLOR; // reset color after new line
+		if (m_masterColor == log::NO_COLOR)
+			SetConsoleColor(log::NO_COLOR);
+		#endif
 		// TODO: write to report
 
 		info.lineBuffer.used = 0; // flush buffer

@@ -422,7 +422,7 @@ struct Bytecode {
     // DynamicArray<Symbol> exportedSymbols; // usually function names
     // bool exportSymbol(const std::string& name, u32 instructionIndex);
 
-    Location* getLocation(u32 instructionIndex, u32* locationIndex = nullptr);
+    const Location* getLocation(u32 instructionIndex, u32* locationIndex = nullptr);
     Location* setLocationInfo(const TokenRange& token, u32 InstructionIndex=-1, u32* locationIndex = nullptr);
     Location* setLocationInfo(const char* preText, u32 InstructionIndex=-1);
     // use same location as said register

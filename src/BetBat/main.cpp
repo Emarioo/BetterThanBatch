@@ -168,6 +168,8 @@ int main(int argc, const char** argv){
         }
     }
 
+    compileOptions.threadCount = 1;
+
     if(invalidArguments) {
         return EXIT_CODE_NOTHING; // not a compiler failure so we use "NOTHING" instead of "FAILURE"
     }
@@ -176,7 +178,7 @@ int main(int argc, const char** argv){
         log::out << log::RED << "Debug information is not supported yet\n";
         return EXIT_CODE_NOTHING;
     }
-
+    // #ifdef gone
     if(onlyPreprocess){
         if (compileOptions.sourceFile.text.size() == 0) {
             log::out << log::RED << "You must specify a file when using -preproc\n";
@@ -255,8 +257,14 @@ int main(int argc, const char** argv){
         
         // PerfTestTokenize("example/build_fast.btb",200);
     }
-    
-    compileOptions.~CompileOptions(); // options has memory which needs to be freed before checking for memory leaks.
+    // #endif
+    // compileOptions.compileStats.generatedFiles.add("Yoo!");
+    // {
+    //     Path yoo = "haha";
+    //     yoo.~Path();
+    // }
+    compileOptions.cleanup();
+    // compileOptions.~CompileOptions(); // options has memory which needs to be freed before checking for memory leaks.
     // std::string msg = "I am a rainbow, wahoooo!";
     // for(int i=0;i<(int)msg.size();i++){
     //     char chr = msg[i];
@@ -265,6 +273,7 @@ int main(int argc, const char** argv){
     // }
     // ProfilerPrint();
     // ProfilerExport("profiled.dat");
+
     ProfilerCleanup();
 
     NativeRegistry::DestroyGlobal();

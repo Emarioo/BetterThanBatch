@@ -12,7 +12,7 @@ struct TokenStream;
 #define ERR_HEADER_COLOR engone::log::BLOOD
 #define WARN_HEADER_COLOR engone::log::YELLOW
 // #define INFO_HEADER_COLOR engone::log::LIME
-#define MESSAGE_COLOR engone::log::SILVER
+#define MESSAGE_COLOR engone::log::NO_COLOR
 
 /*
     Latest code for message handling

@@ -130,7 +130,7 @@ void PrintMeasures(u32 filters, u32 limit){
         SPACING(maxTotalTime - len)
 
 
-        log::out << log::SILVER<<(const char*)stat.fname;
+        log::out << log::NO_COLOR<<(const char*)stat.fname;
         len = strlen(stat.fname);
         // SPACING(maxName - len)
         log::out << "\n";

@@ -586,14 +586,14 @@ void ObjectFile::writeFile(const std::string& path) {
     // header->PointerToSymbolTable = fileOffset;
     fileOffset += stringTableSize;
 
-    auto file = FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
+    auto file = engone::FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
     if(!file) {
         log::out << "failed creating\n";
         return;
     }
-    FileWrite(file, outData, fileOffset);
+    engone::FileWrite(file, outData, fileOffset);
     // FileWrite(file, _rawFileData, fileSize);
-    FileClose(file);
+    engone::FileClose(file);
 }
 
 bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u32 to){
@@ -1274,19 +1274,19 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
     // NOTE: It is possible to finalize the byte stream but that will cause a massive allocation and many dealloactions.
     //  Iterating through the allocations with obj_stream->iterate but call FileWrite multiple times may be better.
 
-    auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
+    auto file = engone::FileOpen(path, 0, FILE_ALWAYS_CREATE);
     Assert(file);
     
     if(contiguous_ptr) {
-        FileWrite(file, contiguous_ptr, total_size);
+        engone::FileWrite(file, contiguous_ptr, total_size);
     } else {
         ByteStream::Iterator iter{};
         while(obj_stream->iterate(iter)) {
-            FileWrite(file, (void*)iter.ptr, iter.size);
+            engone::FileWrite(file, (void*)iter.ptr, iter.size);
         }
     }
     
-    FileClose(file);
+    engone::FileClose(file);
     
     ByteStream::Destroy(obj_stream, nullptr); // not necessary since we use defer up top
     obj_stream = nullptr;

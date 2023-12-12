@@ -24,7 +24,11 @@
 // #define DEV_FILE "examples/debug_test.btb"
 // #define DEV_FILE "examples/garb.btb"
 // #define DEV_FILE "tests/simple/garb.btb"
+#ifdef OS_WINDOWS
 #define CONFIG_DEFAULT_TARGET WINDOWS_x64
+#else
+#define CONFIG_DEFAULT_TARGET UNIX_x64
+#endif
 
 // #define RUN_TEST_SUITE
 // #define RUN_TESTS "tests/simple/garb.btb"

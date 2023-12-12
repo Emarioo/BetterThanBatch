@@ -580,7 +580,7 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
         }
     }
     astStruct->tokenRange.endIndex = info.at()+1;
-    _GLOG(log::out << "Parsed struct "<<log::LIME<< name <<log::SILVER << " with "<<astStruct->members.size()<<" members\n";)
+    _GLOG(log::out << "Parsed struct "<<log::LIME<< name <<log::NO_COLOR << " with "<<astStruct->members.size()<<" members\n";)
     return errorParsingMembers;
 }
 SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
@@ -846,7 +846,7 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     // }
     // typeInfo->astEnum = astEnum;
     // typeInfo->_size = 4; // i32
-    _PLOG(log::out << "Parsed enum "<<log::LIME<< name <<log::SILVER <<" with "<<astEnum->members.size()<<" members\n";)
+    _PLOG(log::out << "Parsed enum "<<log::LIME<< name <<log::NO_COLOR <<" with "<<astEnum->members.size()<<" members\n";)
     return error;
 }
 SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){

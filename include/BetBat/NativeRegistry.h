@@ -110,10 +110,15 @@ struct NativeRegistry {
     
     struct NativeFunction {
         NativeFunction(i64 jumpAddress) : jumpAddress(jumpAddress) {}
+        // ~NativeFunction() {
+        //     engone::log::out << "yoo\n";
+        // }
         i64 jumpAddress=0;
-        std::string name;
+        std::string name{};
     };
     DynamicArray<NativeFunction> nativeFunctions{};
+
+    // std::vector<NativeFunction> nativeFunctions{};
 
     bool initialized=false;
     void initNativeContent();

@@ -213,7 +213,7 @@ extern "C" {
         #undef ADD_CHAR
         commandLineArgs.ptr = argPtr;
         commandLineArgs.len = argCount;
-        #elif OS_LINUX
+        #elif defined(OS_LINUX)
         commandLineArgs.ptr = nullptr;
         commandLineArgs.len = 0;
         #endif
@@ -232,7 +232,6 @@ extern "C" {
     u64 attr_stdcall GetClockSpeed() {
         return engone::GetClockSpeed();
     }
-
     void* attr_stdcall Allocate(u64 size) {
         return engone::Allocate(size);
     }

@@ -5,7 +5,7 @@
 
 # USE_DEBUG=1
 
-GCC_COMPILE_OPTIONS="-std=c++14"
+GCC_COMPILE_OPTIONS="-std=c++14 -g"
 # GCC_COMPILE_OPTIONS="-std=c++14 -O3"
 GCC_INCLUDE_DIRS="-Iinclude -Ilibs/stb/include -Ilibs/glfw-3.3.8/include -Ilibs/glew-2.1.0/include -include include/pch.h "
 GCC_DEFINITIONS="-DOS_LINUX"
@@ -21,7 +21,10 @@ output=bin/compiler
 
 # echo $srcfiles
 
-echo -n "Compiling..."
+mkdir bin 2> /dev/null
+
+# echo "Compiling..."
+echo "Compiling..."
 
 startTime=$(($(date +%s%N)))
 

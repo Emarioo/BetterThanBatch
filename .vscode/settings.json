@@ -76,7 +76,13 @@
         "*.glsl": "cpp",
         "*.tcc": "cpp",
         "string_view": "cpp",
-        "numeric": "cpp"
+        "numeric": "cpp",
+        "cstdarg": "cpp",
+        "cwctype": "cpp",
+        "deque": "cpp",
+        "memory_resource": "cpp",
+        "numbers": "cpp",
+        "cinttypes": "cpp"
     },
     "cmake.configureOnOpen": false,
     "lldb.displayFormat": "auto",

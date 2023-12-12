@@ -5,7 +5,7 @@
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
-#elif OS_LINUX
+#elif defined(OS_LINUX)
 #include <x86intrin.h>
 #endif
 

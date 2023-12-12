@@ -2,7 +2,7 @@
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
-#elif OS_LINUX
+#elif defined(OS_LINUX)
 #include <x86intrin.h>
 #endif
 
@@ -229,7 +229,7 @@ const char* ToString(TargetPlatform target){
     #define CASE(X,N) case X: return N;
     switch(target){
         CASE(WINDOWS_x64,"win-x64")
-        CASE(LINUX_x64,"linux-x64")
+        CASE(UNIX_x64,"unix-x64")
         CASE(BYTECODE,"bytecode")
         default: {}
     }
@@ -242,7 +242,7 @@ engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
 TargetPlatform ToTarget(const std::string& str){
     #define CASE(N,X) if (str==X) return N;
     CASE(WINDOWS_x64,"win-x64")
-    CASE(LINUX_x64,"linux-x64")
+    CASE(UNIX_x64,"unix-x64")
     CASE(BYTECODE,"bytecode")
     return UNKNOWN_TARGET;
     #undef CASE
@@ -895,7 +895,6 @@ Bytecode* CompileSource(CompileOptions* options) {
     options->threadCount = 1;
     #else
     // log::out << log::YELLOW << "Multithreading is turned of because there are bugs and there is no point in fixing them since the system will change anyway. It's better to fix them then."
-    // options->threadCount = 1;
     #endif
 
     // NOTE: Parser and generator uses tokens. Do not free tokens before compilation is complete.
@@ -962,7 +961,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     initialSource.stream = compileInfo.addStream(initialSource.path);
     compileInfo.sourcesToProcess.add(initialSource);
     
-    Assert(options->threadCount == 1); // TODO: Implement not multithreading
+    // Assert(options->threadCount == 1); // TODO: Implement not multithreading
 
     compileInfo.sourceWaitLock.init(1, 1);
 
@@ -1126,16 +1125,16 @@ void CompileStats::printSuccess(CompileOptions* opts){
     bool withoutLinker = end_linker == 0;
     if(onlyBytecode) {
         double time_bytecode = DiffMeasure(end_bytecode - start_bytecode);
-        log::out << " source->bytecode (total): " <<log::LIME<< FormatTime(time_bytecode)<<log::SILVER << " (" << FormatUnit(lines / time_bytecode) << " lines/s)\n";
+        log::out << " source->bytecode (total): " <<log::LIME<< FormatTime(time_bytecode)<<log::NO_COLOR << " (" << FormatUnit(lines / time_bytecode) << " lines/s)\n";
     } else if(withoutLinker) {
         double time_compiler = DiffMeasure(end_objectfile - start_bytecode);
         double time_bytecode = DiffMeasure(end_bytecode - start_bytecode);
         double time_converter = DiffMeasure(end_convertx64 - start_convertx64);
         double time_objwriter = DiffMeasure(end_objectfile - start_objectfile);
         double time_total = DiffMeasure(end_objectfile - start_bytecode);
-        log::out << " compiler: " <<log::LIME<< FormatTime(time_compiler)<<log::SILVER << " (" << FormatUnit(lines / time_compiler) << " lines/s)\n";
-        log::out << "  (bc: "<<log::LIME<< FormatTime(time_bytecode)<<log::SILVER <<", x64: " <<log::LIME<< FormatTime(time_converter)<<log::SILVER << ", obj: " <<log::LIME<< FormatTime(time_objwriter)<<log::SILVER << ")\n";
-        log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::SILVER<<" (" << FormatUnit(lines / time_total) << " lines/s)\n"; 
+        log::out << " compiler: " <<log::LIME<< FormatTime(time_compiler)<<log::NO_COLOR << " (" << FormatUnit(lines / time_compiler) << " lines/s)\n";
+        log::out << "  (bc: "<<log::LIME<< FormatTime(time_bytecode)<<log::NO_COLOR <<", x64: " <<log::LIME<< FormatTime(time_converter)<<log::NO_COLOR << ", obj: " <<log::LIME<< FormatTime(time_objwriter)<<log::NO_COLOR << ")\n";
+        log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::NO_COLOR<<" (" << FormatUnit(lines / time_total) << " lines/s)\n"; 
     } else {
         double time_compiler = DiffMeasure(end_objectfile - start_bytecode);
         double time_bytecode = DiffMeasure(end_bytecode - start_bytecode);
@@ -1143,11 +1142,11 @@ void CompileStats::printSuccess(CompileOptions* opts){
         double time_objwriter = DiffMeasure(end_objectfile - start_objectfile);
         double time_linker = DiffMeasure(end_linker - start_linker);
         double time_total = DiffMeasure(end_linker - start_bytecode);
-        log::out << " compiler: " <<log::LIME<< FormatTime(time_compiler)<<log::SILVER << " (" << FormatUnit(lines / time_compiler) << " lines/s)\n";
-        log::out << "  (bc: "<<log::LIME<< FormatTime(time_bytecode)<<log::SILVER <<", x64: " <<log::LIME<< FormatTime(time_converter)<<log::SILVER << ", obj: " <<log::LIME<< FormatTime(time_objwriter)<<log::SILVER << ")\n";
-        log::out << " linker: " <<log::LIME<< FormatTime(time_linker)<<log::SILVER << "\n";
-        log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::SILVER<<" (" << FormatUnit(lines / time_total) << " lines/s)\n"; 
-        // log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::SILVER<<" (" <<log::LIME<< FormatUnit(lines / time_total) << " lines/s"<<log::SILVER<<")\n"; 
+        log::out << " compiler: " <<log::LIME<< FormatTime(time_compiler)<<log::NO_COLOR << " (" << FormatUnit(lines / time_compiler) << " lines/s)\n";
+        log::out << "  (bc: "<<log::LIME<< FormatTime(time_bytecode)<<log::NO_COLOR <<", x64: " <<log::LIME<< FormatTime(time_converter)<<log::NO_COLOR << ", obj: " <<log::LIME<< FormatTime(time_objwriter)<<log::NO_COLOR << ")\n";
+        log::out << " linker: " <<log::LIME<< FormatTime(time_linker)<<log::NO_COLOR << "\n";
+        log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::NO_COLOR<<" (" << FormatUnit(lines / time_total) << " lines/s)\n"; 
+        // log::out << " total: "<<log::LIME<<FormatTime(time_total)<<log::NO_COLOR<<" (" <<log::LIME<< FormatUnit(lines / time_total) << " lines/s"<<log::NO_COLOR<<")\n"; 
     }
 }
 void CompileStats::printFailed(){
@@ -1255,6 +1254,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 #define LINK_TEMP_EXE "temp_382.exe"
                 #define LINK_TEMP_PDB "temp_382.pdb"
                 if(outputOtherDirectory) {
+                    // MSVC linker cannot output to another directory than the current.
                     cmd += "/OUT:" LINK_TEMP_EXE;
                 } else {
                     cmd += "/OUT:" + outPath.text+" ";
@@ -1275,6 +1275,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
                 if(exitCode == 0) { // 0 means success
                     if(outputOtherDirectory){
+                        // Since MSVC linker can only output to CWD we have to move the file ourself.
                         FileDelete(outPath.text);
                         FileMove(LINK_TEMP_EXE, outPath.text);
                         if(options->useDebugInformation) {
@@ -1283,6 +1284,160 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                             FileMove(LINK_TEMP_PDB,p.text);
                         }
                     }
+                    options->compileStats.generatedFiles.add(outPath.text);
+
+                    // TODO: Move the asm dump code to it's own file.
+                    QuickArray<char> textBuffer{};
+                    for(int i=0;i<(int)bytecode->debugDumps.size();i++) {
+                        auto& dump = bytecode->debugDumps[i];
+                        if(dump.description.empty()) {
+                            log::out << "Dump: "<<log::GOLD<<"unnamed\n";
+                        } else {
+                            log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
+                        }
+                        if(dump.dumpBytecode) {
+                            for(int j=dump.startIndex;j<dump.endIndex;j++){
+                                log::out << " ";
+                                bytecode->printInstruction(j, true);
+                                u8 immCount = bytecode->immediatesOfInstruction(j);
+                                j += immCount;
+                            }
+                        }
+                        if(dump.dumpAsm) {
+                            #define DUMP_ASM_OBJ "bin/dump_asm.obj"
+                            #define DUMP_ASM_ASM "bin/dump_asm.asm"
+
+                            bool yes = WriteObjectFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                            // if(yes) {
+                            //     options->compileStats.generatedFiles.add(DUMP_ASM_OBJ);
+                            // }
+
+                            auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
+
+                            #ifdef OS_WINDOWS
+                            std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
+                            cmd += DUMP_ASM_OBJ;
+                            #else
+                            std::string cmd = "objdump -d ";
+                            cmd += DUMP_ASM_OBJ;
+                            #endif
+                            
+                            int exitCode = 0;
+                            engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, file);
+                            // if(exitCode == 0) {
+                            //     options->compileStats.generatedFiles.add(DUMP_ASM_ASM);
+                            // }
+                            u32 fileSize = engone::FileGetHead(file);
+                            engone::FileSetHead(file, 0);
+
+                            textBuffer.resize(fileSize);
+                            engone::FileRead(file, textBuffer._ptr, fileSize);
+
+                            engone::FileClose(file);
+
+                            // TODO: You may want to redirect stdout and reformat the
+                            //  text from dumpbin, which we are?
+                            ReformatDumpbinAsm(textBuffer, nullptr, true);
+
+                            // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM
+                        }
+                    }
+                } else {
+                    failure = true;
+                }
+            }
+            #ifdef DUMP_ALL_ASM
+            // program->printHex("bin/temphex.txt");
+            program->printAsm("bin/temp.asm", objPath.data());
+            #endif
+            Program_x64::Destroy(program);
+            break; 
+        }
+        case UNIX_x64: {
+            Path& outPath = options->outputFile;
+
+            options->compileStats.start_convertx64 = StartMeasure();
+            Program_x64* program = ConvertTox64(bytecode);
+            options->compileStats.end_convertx64 = StartMeasure();
+
+            if(!program){
+                failure = true;
+                break;
+            }
+            auto format = options->outputFile.getFormat();
+            bool outputIsObject = format == "o" || format == "obj";
+
+            // TODO: WriteObjectFile uses COFF format. Use ELF format for UNIX systems.
+            std::string objPath = "";
+            if(outputIsObject){
+                options->compileStats.start_objectfile = StartMeasure();
+                bool yes = WriteObjectFile(outPath.text,program);
+                if(yes) {
+                    options->compileStats.generatedFiles.add(outPath.text);
+                }
+                options->compileStats.end_objectfile = StartMeasure();
+                objPath = outPath.text;
+                // log::out << log::LIME<<"Exported "<<options->initialSourceFile.text << " into an object file: "<<outPath.text<<".\n";
+            } else {
+                objPath = "bin/" + outPath.getFileName(true).text + ".o";
+                options->compileStats.start_objectfile = StartMeasure();
+                bool yes = WriteObjectFile(objPath,program);
+                if(yes) {
+                    options->compileStats.generatedFiles.add(objPath);
+                }
+                options->compileStats.end_objectfile = StartMeasure();
+
+                // std::string prevCWD = GetWorkingDirectory();
+                // bool outputOtherDirectory = outPath.text.find("/") != std::string::npos;
+
+                // link command
+                std::string cmd = "gcc ";
+                // force debug info for now
+                // if(options->useDebugInformation)
+                    cmd += "-g ";
+
+                cmd += objPath + " ";
+                #ifndef MINIMAL_DEBUG
+                // cmd += "bin/NativeLayer.lib ";
+                // cmd += "uuid.lib ";
+                // cmd += "shell32.lib ";
+                #endif
+                // cmd += "/DEFAULTLIB:MSVCRT ";
+                // cmd += "/DEFAULTLIB:LIBCMT ";
+                
+                for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
+                    auto& dir = bytecode->linkDirectives[i];
+                    cmd += dir + " ";
+                }
+                // if(outputOtherDirectory) {
+                cmd += "-o " + outPath.text;
+                // } else {
+                    // cmd += "/OUT:" + outPath.text+" ";
+                // }
+
+                if(!options->silent)
+                    log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
+                
+                options->compileStats.start_linker = StartMeasure();
+                int exitCode = 0;
+                engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                options->compileStats.end_linker = StartMeasure();
+                
+                // if(changeCWD) {
+                //     engone::SetWorkingDirectory(prevCWD);
+                //     log::out << "cwd: "<<prevCWD<<"\n";
+                // }
+
+                if(exitCode == 0) { // 0 means success
+                    // if(outputOtherDirectory){
+                    //     FileDelete(outPath.text);
+                    //     FileMove(LINK_TEMP_EXE, outPath.text);
+                    //     if(options->useDebugInformation) {
+                    //         Path p = outPath.getDirectory().text + outPath.getFileName(true).text + ".pdb";
+                    //         FileDelete(p.text);
+                    //         FileMove(LINK_TEMP_PDB,p.text);
+                    //     }
+                    // }
                     options->compileStats.generatedFiles.add(outPath.text);
 
                     // TODO: Move the asm dump code to it's own file.
@@ -1345,6 +1500,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             program->printAsm("bin/temp.asm", objPath.data());
             #endif
             Program_x64::Destroy(program);
+
             break; 
         }
         // Bytecode exporting has been disabled because you rarely use it.
@@ -1384,10 +1540,26 @@ bool ExecuteTarget(CompileOptions* options, Bytecode* bytecode) {
                     hoho += " ";
                     hoho += arg;
                 }
-                int errorCode = 0;
-                engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode);
-                log::out << "Error level: "<<errorCode<<"\n";
+                int exitCode = 0;
+                engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&exitCode);
+                log::out << "Exit code: "<<exitCode<<"\n";
             }
+            break;
+        }
+        case UNIX_x64: {
+            // if(options->outputFile.getFormat() != "exe") {
+            //     log::out << log::RED << "Cannot execute '" << options->outputFile.getFileName().text <<"'. The file format must be '.exe'.\n";
+            // } else {
+            std::string hoho{};
+            hoho += "./"+options->outputFile.text;
+            for(auto& arg : options->userArguments){
+                hoho += " ";
+                hoho += arg;
+            }
+            int exitCode = 0;
+            engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&exitCode);
+            log::out << "Exit code: "<<exitCode<<"\n";
+            // }
             break;
         }
         default: {

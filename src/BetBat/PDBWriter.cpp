@@ -113,9 +113,9 @@ bool PDBFile::writeFile(const char* path) {
         //     const char* name = ToString(leaf, true);
         //     log::out <<  "Type index "<<typeCount<<", ";
         //     if(name)
-        //         log::out << log::LIME << name << log::SILVER;
+        //         log::out << log::LIME << name << log::NO_COLOR;
         //     else
-        //         log::out <<log::RED <<  "{"<<(u32)leaf<<"}" << log::SILVER;
+        //         log::out <<log::RED <<  "{"<<(u32)leaf<<"}" << log::NO_COLOR;
         //     log::out << ", len: "<<length<<"\n";
             
         //     // Assert(nextOffset <= size);
@@ -1285,9 +1285,9 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
         const char* subName = ToString(subSectionType, true);
         log::out <<  "Sub section "<<subSectionCount<<", ";
         if(subName)
-            log::out << log::LIME << subName << log::SILVER;
+            log::out << log::LIME << subName << log::NO_COLOR;
         else
-            log::out <<log::RED <<  "{"<<(u32)subSectionType<<"}" << log::SILVER;
+            log::out <<log::RED <<  "{"<<(u32)subSectionType<<"}" << log::NO_COLOR;
         log::out << ", len: "<<sectionLength<<"\n";
         
         Assert(nextOffset <= size);
@@ -1306,9 +1306,9 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                     const char* recordName = ToString(recordType, true);
                     log::out << "record "<<recordCount<<", ";
                     if(recordName)
-                        log:: out << log::LIME <<  recordName << log::SILVER;
+                        log:: out << log::LIME <<  recordName << log::NO_COLOR;
                     else
-                        log::out << log::RED << "{"<<(u16)recordType<<"}" << log::SILVER;
+                        log::out << log::RED << "{"<<(u16)recordType<<"}" << log::NO_COLOR;
                     log::out << ", len: "<<length<<"\n";
 
                     Assert(nextOffset <= size);
@@ -1560,9 +1560,9 @@ void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
         const char* name = ToString(leaf, true);
         log::out <<  "Type index "<<typeCount<<", ";
         if(name)
-            log::out << log::LIME << name << log::SILVER;
+            log::out << log::LIME << name << log::NO_COLOR;
         else
-            log::out <<log::RED <<  "{"<<(u32)leaf<<"}" << log::SILVER;
+            log::out <<log::RED <<  "{"<<(u32)leaf<<"}" << log::NO_COLOR;
         log::out << ", len: "<<length<<"\n";
         
         Assert(nextOffset <= size);

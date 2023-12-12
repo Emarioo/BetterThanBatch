@@ -1183,10 +1183,11 @@ namespace engone {
 					dataSize++;
 				}
 			}
-			int index = argc * sizeof(char*);
+			int index = (argc + 1) * sizeof(char*);
 			int totalSize = index + dataSize;
 			//printf("size: %d index: %d\n", totalSize,index);
 			argv = (char**)Allocate(totalSize);
+			argv[argc] = nullptr; // terminate pointer array with a nullptr, this is an optional way apart from "argc" to find the end of the array.
 			char* argData = (char*)argv + index;
 			if (!argv) {
 				printf("ConverArguments : Allocation failed!\n");
@@ -1216,7 +1217,7 @@ namespace engone {
 		}
 	}
 	void FreeArguments(int argc, char** argv) {
-		int totalSize = argc * sizeof(char*);
+		int totalSize = (argc +1) * sizeof(char*);  // argc +1 because the array is terminated with a nullptr (Unix execv needs it). Not needed in Windows implementation but it's good to be consistent.
 		int index = totalSize;
 		for (int i = 0; i < argc; i++) {
 			int length = strlen(argv[i]);

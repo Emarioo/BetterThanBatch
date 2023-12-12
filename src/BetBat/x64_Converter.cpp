@@ -391,12 +391,21 @@ void Program_x64::printHex(const char* path){
 void Program_x64::printAsm(const char* path, const char* objpath){
     using namespace engone;
     Assert(this);
-    if(!objpath)
+    if(!objpath) {
+        #ifdef OS_WINDOWS
         WriteObjectFile("bin/garb.obj", this);
+        #else
+        WriteObjectFile("bin/garb.o", this);
+        #endif
+    }
 
     auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
 
+    #ifdef OS_WINDOWS
     std::string cmd = "dumpbin /NOLOGO /DISASM:BYTES ";
+    #else
+    std::string cmd = "objdump -d ";
+    #endif
     if(!objpath)
         cmd += "bin/garb.obj";
     else
@@ -2358,12 +2367,12 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     switch(imm) {
                     // You could perhaps implement a platform layer which the language always links too.
                     // That way, you don't need to write different code for each platform.
-                    #ifdef OS_WINDOWS
                     // case NATIVE_malloc: {
                         
                     // }
                     // break;
                         case NATIVE_prints: {
+                        #ifdef OS_WINDOWS
                         // ptr = [rsp + 0]
                         // len = [rsp + 8]
                         // char* ptr = *(char**)(fp+argoffset);
@@ -2405,10 +2414,13 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
                         prog->namedRelocations.add(reloc0);
                         prog->namedRelocations.add(reloc1);
-
+                    #else
+                        Assert(("prints not implemented for unix",false));
+                    #endif
                         break;
                     }
-                    break; case NATIVE_printc: {
+                    case NATIVE_printc: {
+                    #ifdef OS_WINDOWS
                         // char = [rsp + 7]
                         prog->add(PREFIX_REXW);
                         prog->add(OPCODE_MOV_REG_RM);
@@ -2433,7 +2445,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         call   QWORD PTR [rip+0x0]          # GetStdHandle(-11)
                         mov    QWORD PTR [rsp+0x20],0x0
                         xor    r9,r9
-                        mov    r8,rbx                       # rbx = buffer
+                        mov    r8,rbx                       # rbx = buffer (this might be wrong)
                         mov    rdx,rsi                      # rsi = length
                         mov    rcx,rax
                         call   QWORD PTR [rip+0x0]          # WriteFile(...)
@@ -2451,10 +2463,45 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->namedRelocations.add(reloc0);
                         prog->namedRelocations.add(reloc1);
 
+                    #else
+                        // char = [rsp + 7]
+                        prog->add(PREFIX_REXW);
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM(MODE_REG, REG_SI, REG_SP);
+
+                        // add an offset, but not needed?
+                        // prog->add(PREFIX_REXW);
+                        // prog->add(OPCODE_ADD_RM_IMM_SLASH_0);
+                        // prog->addModRM(MODE_REG, 0, REG_SI);
+                        // prog->add4((u32)8);
+
+                        // TODO: You may want to save registers. This is not needed right
+                        //   now since we basically handle everything through push and pop.
+
+                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        prog->addModRM(MODE_REG, 0, REG_D);
+                        prog->add4((u32)1); // 1 byte/char length
+
+                        // prog->add(OPCODE_MOV_RM_REG);
+                        // prog->addModRM(MODE_REG, REG_SI, REG_SI); // pointer to buffer
+
+                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        prog->addModRM(MODE_REG, 0, REG_DI);
+                        prog->add4((u32)1); // stdout
+
+                        prog->add(OPCODE_CALL_IMM);
+                        int reloc_pos = prog->size();
+                        prog->add4((u32)0);
+
+                        // We call the Unix write system call, altough not directly
+                        NamedRelocation reloc0{};
+                        reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
+                        reloc0.textOffset = reloc_pos;
+                        prog->namedRelocations.add(reloc0);
+                    #endif
                         break;
                     }
-                    #endif
-                    break; default: {
+                    default: {
                         failure = true;
                         // Assert(bytecode->nativeRegistry);
                         auto nativeRegistry = NativeRegistry::GetGlobal();
@@ -2594,7 +2641,10 @@ add    rsp,0x30
 
                 prog->namedRelocations.add(reloc0);
                 prog->namedRelocations.add(reloc1);
+                #else
+                Assert(("Bytecode instruction TEST_VALUE not implemented for UNIX",false));
                 #endif
+                break;
             }
             break; case BC_MEMZERO: {
                 // Assert(op0 == BC_REG_RDI && op1 == BC_REG_RBX);

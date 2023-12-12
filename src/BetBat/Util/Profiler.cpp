@@ -27,9 +27,10 @@ void ProfilerSession::initContextForThread() {
     }
     #ifdef OS_WINDOWS
     long res = _InterlockedIncrement(&usedContexts);
-    #elif OS_LINUX
-    Assert(("LINUX impl. for profiling not thread safe",false));
-    long res = usedContexts; // NOT THREAD SAFE
+    #elif defined(OS_LINUX)
+    // Assert(("LINUX impl. for profiling not thread safe",false));
+    long res = 1 + __atomic_fetch_add(&usedContexts, 1, __ATOMIC_SEQ_CST);
+    // long res = usedContexts++; // NOT THREAD SAFE
     #endif
     // log::out << "Good day "<<(res-1)<<"\n";
     ProfilerContext* context = &contexts[res-1];

@@ -9,18 +9,25 @@
 #include <fcntl.h>
 #include <errno.h>
 #include <sys/stat.h>
+#include <sys/wait.h>
 #include <time.h>
+#include <semaphore.h>
+#include <pthread.h>
+#include <time.h>
+#include <dirent.h>
 
 #include <unordered_map>
 #include <vector>
 #include <string>
 
+
 #ifdef PL_PRINT_ERRORS
-#define PL_PRINTF printf
+#define PL_PRINTF(...) printf("[UnixError %d] %s, ", errno, strerror(errno)); printf(__VA_ARGS__);
 #else
-#define PL_PRINTF
+#define PL_PRINTF(...)
 #endif
 
+#include "Engone/Util/Array.h"
 #include "BetBat/Util/Perf.h"
 
 namespace engone {
@@ -28,8 +35,200 @@ namespace engone {
 #define TO_INTERNAL(X) ((u64)X+1)
 #define TO_HANDLE(X) (int)((u64)X-1)
 
+	// Recursive directory iterator info
+	struct RDIInfo{
+		std::string root;
+		std::string dir;
+		DIR* dirIter = nullptr;
+		// HANDLE handle;
+		DynamicArray<std::string> directories;
+		char* tempPtr = nullptr; // used in result
+		u32 max = 0; // not including \0
+	};
+	static std::unordered_map<DirectoryIterator,RDIInfo> s_rdiInfos;
+	static u64 s_uniqueRDI=0;
+	
+	DirectoryIterator DirectoryIteratorCreate(const char* name, int pathlen){
+		DirectoryIterator iterator = (DirectoryIterator)(++s_uniqueRDI);
+		auto& info = s_rdiInfos[iterator] = {};
+		info.root.resize(pathlen);
+		memcpy((char*)info.root.data(), name, pathlen);
+		// info.handle=INVALID_HANDLE_VALUE;
+		info.directories.add(info.root);
+
+		
+		// DWORD err = GetLastError();
+		// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(u64)iterator);
+		
+		// bool success = DirectoryIteratorNext(iterator,result);
+		// if(!success){
+		// 	DirectoryIteratorDestroy(iterator);
+		// 	return 0;
+		// }
+		return iterator;
+	}
+	bool DirectoryIteratorNext(DirectoryIterator iterator, DirectoryIteratorData* result){
+		auto info = s_rdiInfos.find(iterator);
+		if(info==s_rdiInfos.end()){
+			return false;
+		}
+        // printf("NEXT\n");
+
+		struct stat statBuffer{};
+		char filepath[256];
+		int filepath_len = 0;
+
+		while(true) {
+			if(!info->second.dirIter){
+				if(info->second.directories.size()==0){
+					return false;
+				}
+
+                info->second.dir.clear();
+				if(info->second.directories[0].size()!=0){
+                    info->second.dir += info->second.directories[0];
+				}
+				info->second.directories.removeAt(0);
+                
+                // std::string temp = info->second.dir;
+                // if(!temp.empty())
+                //     temp += "\\";
+                // temp+="*";
+				// printf("FindFirstFile %s\n",temp.c_str());
+				// TODO: This does a memcpy on the whole array (almost).
+				//  That's gonna be slow!
+				// fprintf(stderr, "%s %p\n", temp.c_str(), &data);
+				
+				// DWORD err = GetLastError();
+				// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(u64)iterator);
+
+				info->second.dirIter = opendir(info->second.dir.c_str());
+
+				// HANDLE handle=INVALID_HANDLE_VALUE;
+				// handle = FindFirstFileA(temp.c_str(),&data);
+				// handle = FindFirstFileA("src\\*",&data);
+				// fprintf(stderr, "WHY%s %p\n", temp.c_str(), &data);
+				
+				if(!info->second.dirIter){
+					// DWORD err = GetLastError();
+					// PL_PRINTF("[WinError %lu] FindNextFileA '%llu'\n",err,(u64)iterator);
+					continue;
+				}
+			}
+			dirent* entry = readdir(info->second.dirIter);
+			if(!entry) {
+				closedir(info->second.dirIter);
+				info->second.dirIter = nullptr;
+				continue;
+			}
+			if(!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
+				continue;
+			
+			// if(info->second.dir == ".")
+			// 	filepath_len = snprintf(filepath, sizeof(filepath), "%s", entry->d_name);
+			// else
+				filepath_len = snprintf(filepath, sizeof(filepath), "%s/%s", info->second.dir.c_str(), entry->d_name);
+
+			int err = stat(filepath, &statBuffer);
+			if(err == -1) {
+				// printf("err: %d\n",errno);
+				continue;
+			} else {
+				// if(buf.st_mode & S_IFDIR) {
+				// 	dirs.push_back(filepath);
+				// } else {
+				// 	printf("%s, %d\n",entry->d_name, buf.st_mode);
+				// }
+			}
+
+
+
+			break;
+		}
+
+		int newLength = filepath_len;
+		// if(!info->second.dir.empty())
+		// 	newLength += info->second.dir.length()+1;
+
+		if(!info->second.tempPtr) {
+			info->second.max = 256;
+			info->second.tempPtr = (char*)Allocate(info->second.max + 1);
+		} else if(info->second.max < newLength) {
+			u32 old = info->second.max;
+			info->second.max = info->second.max + newLength;
+			info->second.tempPtr = (char*)Reallocate(info->second.tempPtr, old + 1, info->second.max + 1);
+		}
+		result->name = info->second.tempPtr;
+		result->namelen = newLength;
+        // printf("np: %p\n",result->name);
+
+		// if(!info->second.dir.empty()) {
+		// 	memcpy(result->name, info->second.dir.c_str(), info->second.dir.length());
+		// 	result->name[info->second.dir.length()] = '/';
+		// 	memcpy(result->name + info->second.dir.length() + 1, data.cFileName, cFileNameLen);
+		// } else {
+			memcpy(result->name, filepath, newLength);
+		// }
+		result->name[result->namelen] = '\0';
+		// result->name.clear();
+		// if(!info->second.dir.empty())
+		// 	result->name += info->second.dir+"/";
+		// result->name += data.cFileName;
+		
+        // printf("f: %s\n",result->name);
+		// for(int i=0;i<result->namelen.size();i++){
+		// 	if(result->name[i]=='\\')
+		// 		((char*)result->name.data())[i] = '/';
+		// }
+
+		result->fileSize = statBuffer.st_size;
+		u64 time = statBuffer.st_mtime;
+		result->lastWriteSeconds = time/10000000.f; // 100-nanosecond intervals
+		result->isDirectory = statBuffer.st_mode & S_IFDIR;
+		if(result->isDirectory){
+            info->second.directories.add(result->name);
+        }
+
+		for(int i=0;i<result->namelen;i++){
+			if(result->name[i]=='\\')
+				result->name[i] = '/';
+		}
+
+		return true;
+	}
+	void DirectoryIteratorSkip(DirectoryIterator iterator){
+		auto info = s_rdiInfos.find(iterator);
+		if(info==s_rdiInfos.end()){
+			return;
+		}
+		if(info->second.directories.size()!=0)
+			info->second.directories.pop();
+	}
+	void DirectoryIteratorDestroy(DirectoryIterator iterator, DirectoryIteratorData* dataToDestroy){
+		auto info = s_rdiInfos.find(iterator);
+		if(info==s_rdiInfos.end()){
+			return;
+		}
+		
+		if(!info->second.dirIter){
+			closedir(info->second.dirIter);;
+			info->second.dirIter = nullptr;
+		}
+		if(info->second.tempPtr) {
+			Free(info->second.tempPtr, info->second.max);
+			info->second.tempPtr = nullptr;
+			info->second.max = 0;
+		}
+		if(dataToDestroy && dataToDestroy->name) {
+			// Free(dataToDestroy->name, dataToDestroy->namelen + 1);
+			dataToDestroy->name = nullptr;
+			dataToDestroy->namelen = 0;
+		}
+		s_rdiInfos.erase(iterator);
+	}
+
 #define NS 1000000000
-	TimePoint MeasureTime() {
+	TimePoint StartMeasure() {
 		timespec ts;
 		int res = clock_gettime(CLOCK_MONOTONIC,&ts);
 		if (res == -1) {
@@ -45,7 +244,24 @@ namespace engone {
 		}
 		return (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec) - startPoint)/(double)NS;
 	}
-	APIFile FileOpen(const std::string& path, u64* outFileSize, uint32 flags) {
+	double DiffMeasure(TimePoint endSubStart) {
+		return (double)(endSubStart)/(double)NS;
+	}
+	void Sleep(double seconds){
+		timespec tim = {};
+		u64 ns = seconds * 1.0e9;
+		tim.tv_sec = (u64)seconds;
+		tim.tv_nsec = ns - (u64)(((u64)seconds) * 1.0e9);
+		nanosleep(&tim, nullptr);
+    }
+	u64 GetClockSpeed(){
+		// TODO: Don't hardcode the processors' frequency
+		return 2800 * 1e6;
+	}
+	APIFile FileOpen(const char* path, u32 len, u64* outFileSize, u32 flags){
+		return FileOpen(std::string(path,len), outFileSize, flags);
+	}
+	APIFile FileOpen(const std::string& path, u64* outFileSize, u32 flags) {
         int fileFlags = O_RDWR;
         int mode = 0;
         if(flags&FILE_ONLY_READ){
@@ -107,7 +323,7 @@ namespace engone {
 		if(bytesWritten == -1){
 			// DWORD err = GetLastError();
             int err = 0;
-			PL_PRINTF("[WinError %d] FileWrite '%lu'\n",err,file.internal);
+			PL_PRINTF("write '%lu'\n",file.internal);
 			return -1;
 		}
 		return bytesWritten;
@@ -117,7 +333,7 @@ namespace engone {
         ssize_t size = read(TO_HANDLE(file.internal), buffer, readBytes);
 		// printf("fr size: %lu\n",size);
         if (size == -1) {
-			printf("[LinuxError %d]\n", errno);
+			PL_PRINTF("read\n");
 			return -1;
 		}
 		return size;
@@ -126,10 +342,63 @@ namespace engone {
 		if (file)
 			close(TO_HANDLE(file.internal));
 	}
+	bool FileSetHead(APIFile file, u64 position){
+		int err;
+		if(position==(u64)-1){
+			err = lseek(TO_HANDLE(file.internal), 0, SEEK_END);
+		}else{
+			err = lseek(TO_HANDLE(file.internal), position, SEEK_SET);
+		}
+		if(err != -1) return true;
+		
+		// PL_PRINTF("[WinError %lu] lseek '%llu'\n",err,file.internal);
+		return false;
+	}
+	u64 FileGetSize(APIFile file){
+		struct stat buffer;   
+        if(fstat(TO_HANDLE(file.internal), &buffer) == 0) {
+			return buffer.st_size;
+		}
+		PL_PRINTF("fstat '%lu'\n",file.internal);
+		return buffer.st_size;
+	}
+	bool FileFlushBuffers(APIFile file){
+		PL_PRINTF("FileFlushBuffers not implemented\n");
+		return false;
+	}
     bool FileExist(const std::string& path){
         struct stat buffer;   
-        return (stat(path.c_str(), &buffer) == 0); 
+        return (stat(path.c_str(), &buffer) == 0);
     }
+	u64 FileGetHead(APIFile file){
+		off_t position = lseek(TO_HANDLE(file.internal), 0, SEEK_CUR);
+		if(position == -1) {
+			// PL_PRINTF("[WinError %lu] lseek '%llu'\n",err,file.internal);
+			return 0;
+		}
+		return position;
+	}
+	bool FileCopy(const std::string& src, const std::string& dst){
+		Assert(("FileCopy function not implemented",false));
+		return false;
+	}
+	bool FileMove(const std::string& src, const std::string& dst){
+		int err = rename(src.c_str(),dst.c_str());
+		if(err == -1){
+            PL_PRINTF("rename '%s' '%s'\n",src.c_str(),dst.c_str());
+            return false;
+		}
+		return true;
+	}
+	bool FileDelete(const std::string& path){
+		int err = remove(path.c_str());
+		if(err == -1) {
+            PL_PRINTF("remove '%s'\n",path.c_str());
+            return false;
+		}
+		return true;
+	}
+
     std::string GetWorkingDirectory(){
         std::string path{};
         path.resize(256);
@@ -152,6 +421,7 @@ namespace engone {
 	#define ENGONE_TRACK_ALLOC 0
 	#define ENGONE_TRACK_FREE 1
 	#define ENGONE_TRACK_REALLOC 2
+	static bool s_trackerEnabled=true;
     void TrackType(u64 bytes, const std::string& name){
 		auto pair = allocTracking.find(bytes);
 		if(pair==allocTracking.end()){
@@ -162,8 +432,10 @@ namespace engone {
 		}
 	}
     void PrintTracking(u64 bytes, int type){
+		if(!s_trackerEnabled)
+			return;
+
 		auto pair = allocTracking.find(bytes);
-			
 		if(pair!=allocTracking.end()){
 			if(type==ENGONE_TRACK_ALLOC)
 				pair->second.count++;
@@ -173,6 +445,9 @@ namespace engone {
 			// 	pair->second.count--;
 			printf("%s %s (%d left)\n",type==ENGONE_TRACK_ALLOC?"alloc":(type==ENGONE_TRACK_FREE?"free" : "realloc"), pair->second.name.c_str(),pair->second.count);
 		}
+	}
+	void SetTracker(bool on){
+		s_trackerEnabled = on;
 	}
     void PrintRemainingTrackTypes(){
 		for(auto& pair : allocTracking){
@@ -201,7 +476,7 @@ namespace engone {
 		s_totalNumberAllocations++;			
 		// s_allocStatsMutex.unlock();
 		#ifdef LOG_ALLOCATIONS
-		printf("* Allocate %ld\n",bytes);
+		printf("* Allocate %lu\n",bytes);
 		#endif
 		
 		return ptr;
@@ -210,7 +485,7 @@ namespace engone {
 		MEASURE;
         if(newBytes==0){
             Free(ptr,oldBytes);
-            return nullptr;   
+            return nullptr;
         }else{
             if(ptr==0){
                 return Allocate(newBytes);   
@@ -233,7 +508,7 @@ namespace engone {
                 s_totalNumberAllocations++;			
                 // s_allocStatsMutex.unlock();
 				#ifdef LOG_ALLOCATIONS
-				printf("* Reallocate %ld -> %ld\n",oldBytes, newBytes);
+				printf("* Reallocate %lu -> %lu\n",oldBytes, newBytes);
 				#endif
                 return newPtr;
             }
@@ -252,7 +527,7 @@ namespace engone {
 		Assert(s_numberAllocations>=0);
 		// s_allocStatsMutex.unlock();
 		#ifdef LOG_ALLOCATIONS
-		printf("* Free %ld\n",bytes);
+		printf("* Free %lu\n",bytes);
 		#endif
 	}
 	u64 GetTotalAllocatedBytes() {
@@ -268,40 +543,45 @@ namespace engone {
 		return s_numberAllocations;
 	}
     void SetConsoleColor(uint16 color){
+		// ANSI/bash colors: https://gist.github.com/JBlond/2fea43a3049b38287e5e9cefc87b2124
         u32 fore = color&0x0F;
 		u32 foreExtra = 0;
         u32 back = color&0xF0;
-        switch (fore){
-            #undef CASE
-            #define CASE(A,B) case 0x##A: fore = B; break;
-            #define CASE2(A,B) case 0x##A: fore = B; foreExtra = 1; break;
-            CASE(00,30) /* BLACK    = 0x00, */ 
-                CASE2(01,34) /* NAVY     = 0x01, */
-            CASE(02,32) /* GREEN    = 0x02, */
-            CASE(03,36) /* CYAN     = 0x03, */
-                CASE2(04,31) /* BLOOD    = 0x04, */
-                CASE(05,35) /* PURPLE   = 0x05, */
-                CASE2(06,33) /* GOLD     = 0x06, */
-                CASE(07,37) /* SILVER   = 0x07, */
-                CASE2(08,30) /* GRAY     = 0x08, */
-            CASE(09,34) /* BLUE     = 0x09, */
-                CASE2(0A,32) /* LIME     = 0x0A, */
-                CASE2(0B,36) /* AQUA     = 0x0B, */
-            CASE(0C,31) /* RED      = 0x0C, */
-            CASE2(0D,35) /* MAGENTA  = 0x0D, */
-            CASE(0E,33) /* YELLOW   = 0x0E, */
-            CASE2(0F,37) /* WHITE    = 0x0F, */
-        /*
-            black        30         40
-            red          31         41
-            green        32         42
-            yellow       33         43
-            blue         34         44
-            magenta      35         45
-            cyan         36         46
-            white        37         47
-        */
-	    /*
+		switch (fore){
+			#undef CASE
+			#define CASE(A,B) case 0x##A: fore = B; break;
+			#define CASE2(A,B) case 0x##A: fore = B; foreExtra = 1; break;
+			CASE(00,30) /* BLACK    = 0x00, */ 
+				CASE2(01,34) /* NAVY     = 0x01, */
+			CASE(02,32) /* GREEN    = 0x02, */
+			CASE(03,36) /* CYAN     = 0x03, */
+				CASE2(04,31) /* BLOOD    = 0x04, */
+				CASE(05,35) /* PURPLE   = 0x05, */
+				CASE2(06,33) /* GOLD     = 0x06, */
+				CASE(07,37) /* SILVER   = 0x07, */
+				CASE2(08,30) /* GRAY     = 0x08, */
+			CASE(09,34) /* BLUE     = 0x09, */
+				CASE2(0A,32) /* LIME     = 0x0A, */
+				CASE2(0B,36) /* AQUA     = 0x0B, */
+			CASE(0C,31) /* RED      = 0x0C, */
+			CASE2(0D,35) /* MAGENTA  = 0x0D, */
+			CASE(0E,33) /* YELLOW   = 0x0E, */
+			CASE2(0F,37) /* WHITE    = 0x0F, */
+			default: {
+				// printf("{MIS}");
+			}
+		/*
+					   color  background   bright (not very bright, depends on your terminal I suppose)
+			black        30		40			90
+			red          31		41			91
+			green        32		42			92
+			yellow       33		43			93
+			blue         34		44			94
+			magenta      35		45			95
+			cyan         36		46			96
+			white        37		47			97
+		*/
+		/*
 			reset             0  (everything back to normal)
 			bold/bright       1  (often a brighter shade of the same colour)
 			underline         4
@@ -309,9 +589,9 @@ namespace engone {
 			bold/bright off  21
 			underline off    24
 			inverse off      27
-	    */
-            #undef CASE
-        }
+		*/
+			#undef CASE
+		}
 		/*	
 		#define PCOLOR(X) log::out << log::X << #X "\n";
 		PCOLOR(WHITE)
@@ -331,8 +611,81 @@ namespace engone {
 		PCOLOR(MAGENTA)
 		PCOLOR(PURPLE)
 		*/
+		if(color == 0) {
+        	fprintf(stdout,"\033[0m");
+			fflush(stdout);
+        	// printf("\033[0m");
+		} else {
+        	fprintf(stdout,"\033[%u;%um",foreExtra, fore);
+			fflush(stdout);
+			// write(STDOUT_FILENO, );
+        	// printf("\033[%u;%um",foreExtra, fore);
+		}
+		// fprintf(stdout,"{%d}",(int)color);
+		// fflush(stdout);
+	}
 
-        printf("\033[%u;%um",foreExtra, fore);
+	Semaphore::Semaphore(u32 initial, u32 max) {
+		Assert(!m_initialized);
+		m_initial = initial;
+		m_max = max;
+	}
+	void Semaphore::init(u32 initial, u32 max) {
+		Assert(!m_initialized);
+		m_initial = initial;
+		m_max = max;
+
+		Assert(sizeof(sem_t) == SEM_SIZE);
+
+		if(!m_initialized) {
+			memset(m_data, 0, 32);
+			int err = sem_init((sem_t*)m_data,0,initial);
+			if(err == -1) {
+				PL_PRINTF("sem_init\n");
+			} else {
+				m_initialized = true;
+			}
+		}
+	}
+	void Semaphore::cleanup() {
+		if(m_initialized) {
+			int err = sem_destroy((sem_t*)m_data);
+			if(err == -1) {
+				PL_PRINTF("sem_destroy\n");
+			}
+			m_initialized = false;
+		}
+	}
+	void Semaphore::wait() {
+		MEASURE
+
+		Assert(sizeof(sem_t) == SEM_SIZE);
+		if(m_initialized) {
+			memset(m_data, 0, 32);
+			int err = sem_init((sem_t*)m_data,0,m_initial);
+			if(err == -1) {
+				PL_PRINTF("sem_init\n");
+			}
+		}
+
+		int err = sem_wait((sem_t*)m_data);
+		if(err != 0) {
+			PL_PRINTF("sem_wait\n");
+		}
+	}
+	void Semaphore::signal(int count) {
+		MEASURE
+
+		if(m_initialized) {
+			while(count>0){
+				--count;
+				int err = sem_post((sem_t*)m_data);
+				if(err == -1) {
+					PL_PRINTF("sem_init\n");
+					break;
+				}
+			}
+		}
 	}
     void Mutex::cleanup() {
         // if (m_internalHandle != 0){
@@ -377,8 +730,30 @@ namespace engone {
 		// 	}
 		// }
 	}
-	uint32_t Mutex::getOwner() {
+	ThreadId Mutex::getOwner() {
 		return m_ownerThread;
+	}
+	struct DataForThread {
+		uint32(*func)(void*) = nullptr;
+		void* userData = nullptr;
+		static DataForThread* Create(){
+			// Heap allocated at the moment but you could create a bucket array
+			// instead. Or store 40 of these as global data and then use heap
+			// allocation if it fills up.
+			auto ptr = (DataForThread*)Allocate(sizeof(DataForThread));
+			new(ptr)DataForThread();
+			return ptr;
+		}
+		static void Destroy(DataForThread* ptr){
+			ptr->~DataForThread();
+			Free(ptr,sizeof(DataForThread));
+		}
+	};
+	void* SomeThreadProc(void* ptr){
+		DataForThread* data = (DataForThread*)ptr;
+		uint32 ret = data->func(data->userData);
+		DataForThread::Destroy(data);
+		return (void*)(u64)ret;
 	}
     void Thread::cleanup() {
 		// if (m_internalHandle) {
@@ -395,46 +770,363 @@ namespace engone {
 		// }
 	}
 	void Thread::init(uint32(*func)(void*), void* arg) {
-		// if (!m_internalHandle) {
-		// 	// const uint32 stackSize = 1024*1024;
-		// 	HANDLE handle = CreateThread(NULL, 0, (DWORD(*)(void*))func, arg, 0,(DWORD*)&m_threadId);
-		// 	if (handle==INVALID_HANDLE_VALUE) {
-		// 		DWORD err = GetLastError();
-        //         PL_PRINTF("[WinError %lu] CreateThread\n",err);
-		// 	}else
-        //         m_internalHandle = TO_INTERNAL(handle);
-		// }
+		Assert(sizeof(pthread_t) == THREAD_SIZE);
+
+		if(m_threadId == 0) {
+			auto ptr = DataForThread::Create();
+			ptr->func = func;
+			ptr->userData = arg;
+
+			int err = pthread_create((pthread_t*)&m_data, nullptr, SomeThreadProc, ptr);
+			if(err == -1) {
+				PL_PRINTF("pthread_create\n");
+			} else {
+				// Assert((m_data & 0xFFFFFFFF00000000) == 0);
+				Assert(sizeof(m_threadId) == sizeof(pthread_t));
+				m_threadId = m_data;
+			}
+		}
 	}
 	void Thread::join() {
+		if(m_threadId != 0) {
+			int err = pthread_join(*(pthread_t*)&m_data, 0);
+			if(err == -1) {
+	            PL_PRINTF("pthread_join\n");
+			} else {
+				m_threadId = 0;
+			}
+		}
 		// if (!m_internalHandle)
 		// 	return;
 		// DWORD res = WaitForSingleObject(TO_HANDLE(m_internalHandle), INFINITE);
 		// if (res==WAIT_FAILED) {
 		// 	DWORD err = GetLastError();
-        //     PL_PRINTF("[WinError %lu] WaitForSingleObject\n",err);
 		// }
 		// BOOL yes = CloseHandle(TO_HANDLE(m_internalHandle));
         // if(!yes){
         //     DWORD err = GetLastError();
         //     PL_PRINTF("[WinError %lu] CloseHandle\n",err);
         // }
-		m_threadId = 0;
-		m_internalHandle = 0;
 	}
 	bool Thread::isActive() {
-		return m_internalHandle!=0;
+		return m_threadId!=0;
 	}
 	bool Thread::joinable() {
-        return false;
-		// return m_threadId!=0 && m_threadId != GetCurrentThreadId();
+        return m_threadId != 0 && m_threadId != GetThisThreadId();
 	}
 	ThreadId Thread::getId() {
 		return m_threadId;
 	}
 	ThreadId Thread::GetThisThreadId() {
-        return 0;
-		// return GetCurrentThreadId();
+		pthread_t id = pthread_self();
+		// fprintf(stderr,"id %lu",(u64)id);
+		// Assert(((u64)id & 0xFFFFFFFF00000000) == 0);
+        return id;
 	}
 	
+	u32 Thread::CreateTLSIndex() {
+		pthread_key_t key = 0;
+		int err = pthread_key_create(&key, nullptr);
+		if(err == -1) {
+			PL_PRINTF("pthread_key_create\n");
+		}
+		Assert(sizeof(pthread_key_t) <= 4);
+		return (u32)key+1;
+	}
+	bool Thread::DestroyTLSIndex(u32 index) {
+		pthread_key_t key = (pthread_key_t)(index-1);
+		int err = pthread_key_delete(key);
+		if(err == -1) {
+			PL_PRINTF("pthread_key_delete\n");
+		}
+		return err != -1;
+	}
+	void* Thread::GetTLSValue(u32 index){
+		pthread_key_t key = (pthread_key_t)(index-1);
+		void* ptr = pthread_getspecific(key);
+		return ptr;
+	}
+	bool Thread::SetTLSValue(u32 index, void* ptr){
+		pthread_key_t key = (pthread_key_t)(index-1);
+		int err = pthread_setspecific(key, ptr);
+		if(err == -1) {
+			PL_PRINTF("pthread_setspecific, invalid index\n");
+		}
+		return err != -1;
+	}
+	struct PipeInfo{
+		int readFD=0;	
+		int writeFD=0;	
+	};
+	std::unordered_map<u64,PipeInfo> pipes;
+	u64 pipeIndex=0x500000;
+	APIPipe PipeCreate(u64 pipeBuffer, bool inheritRead,bool inheritWrite){
+		PipeInfo info{};
+
+		// TODO: pipeBuffer and inherit arguments are ignored
+
+		int fds[2];
+
+		int err = pipe(fds);
+		if(err == -1) {
+			return {0};
+		}
+
+		info.readFD = fds[0];
+		info.writeFD = fds[1];
+		Assert(info.readFD != 0 || info.writeFD != 0); // we assume 0 means invalid/no descriptor, is this the case though?
+
+		pipes[pipeIndex] = info;
+		return {pipeIndex++};
+	}
+	void PipeDestroy(APIPipe pipe){
+		auto& info = pipes[pipe.internal];
+		if(info.readFD)
+			close(info.readFD);
+		if(info.writeFD)
+			close(info.writeFD);
+		pipes.erase(pipe.internal);
+	}
+	u64 PipeRead(APIPipe pipe, void* buffer, u64 size){
+		auto& info = pipes[pipe.internal];
+
+		u64 readBytes = read(info.readFD, buffer, size);
+		if(readBytes == (u64)-1) {
+			PL_PRINTF("Pipe read failed\n");
+			return -1;
+		}
+		return readBytes;
+	}
+	u64 PipeWrite(APIPipe pipe,void* buffer, u64 size){
+		auto& info = pipes[pipe.internal];
+		u64 written = write(info.writeFD, buffer, size);
+		if(written == (u64)-1) {
+			PL_PRINTF("Pipe write failed\n");
+			return -1;
+		}
+		return written;
+	}
+	APIFile PipeGetRead(APIPipe pipe){
+		auto& info = pipes[pipe.internal];
+		return {TO_INTERNAL(info.readFD)};
+	}
+	APIFile PipeGetWrite(APIPipe pipe){
+		auto& info = pipes[pipe.internal];
+		return {TO_INTERNAL(info.writeFD)};
+	}
+	bool SetStandardOut(APIFile file){
+		int fd = TO_HANDLE(file.internal);
+		int err = dup2(fd, STDOUT_FILENO);
+		return err != -1;
+	}
+	APIFile GetStandardOut(){
+		return {TO_INTERNAL(STDOUT_FILENO)};
+	}
+	bool SetStandardErr(APIFile file){
+		int fd = TO_HANDLE(file.internal);
+		int err = dup2(fd, STDERR_FILENO);
+		return err != -1;
+	}
+	APIFile GetStandardErr(){
+		return {TO_INTERNAL(STDERR_FILENO)};
+	}
+	bool SetStandardIn(APIFile file){
+		int fd = TO_HANDLE(file.internal);
+		int err = dup2(fd, STDIN_FILENO);
+		return err != -1;
+	}
+	APIFile GetStandardIn(){
+		return {TO_INTERNAL(STDIN_FILENO)};
+	}
+	bool ExecuteCommand(const std::string& cmd, bool asynchonous, int* exitCode){
+		return false;
+		
+		// TODO: This whole function
+		// if(cmd.length() == 0) return false;
+
+		// auto pipe = PipeCreate(100 + cmd.length(), true, true);
+
+		// // additional information
+		// STARTUPINFOA si;
+		// PROCESS_INFORMATION pi;
+		// // set the size of the structures
+		// ZeroMemory(&si, sizeof(si));
+		// si.cb = sizeof(si);
+		// ZeroMemory(&pi, sizeof(pi));
+        
+		// bool inheritHandles=true;
+		 
+		// DWORD createFlags = 0;
+
+		// HANDLE prev = GetStdHandle(STD_INPUT_HANDLE);
+		// SetStdHandle(STD_INPUT_HANDLE, TO_HANDLE(PipeGetRead(pipe).internal));
+			
+		// PipeWrite(pipe, (void*)cmd.data(), cmd.length());
+
+		// BOOL yes = CreateProcessA(NULL,   // the path
+		// 	(char*)cmd.data(),        // Command line
+		// 	NULL,           // Process handle not inheritable
+		// 	NULL,           // Thread handle not inheritable
+		// 	inheritHandles,          // Set handle inheritance
+		// 	createFlags,              // creation flags
+		// 	NULL,           // Use parent's environment block
+		// 	NULL,   // starting directory 
+		// 	&si,            // Pointer to STARTUPINFO structure
+		// 	&pi             // Pointer to PROCESS_INFORMATION structure (removed extra parentheses)
+		// 	);
+		
+		// SetStdHandle(STD_INPUT_HANDLE, prev);
+
+		// if(!asynchonous){
+		// 	WaitForSingleObject(pi.hProcess,INFINITE);
+		// 	if(exitCode){
+		// 		BOOL success = GetExitCodeProcess(pi.hProcess, (DWORD*)exitCode);
+		// 		if(!success){
+		// 			DWORD err = GetLastError();
+		// 			printf("[WinError %lu] ExecuteCommand, failed aquring exit code (path: %s)\n",err,cmd.c_str());	
+		// 		}else{
+		// 			if(success==STILL_ACTIVE){
+		// 				printf("[WinWarning] ExecuteCommand, cannot get exit code, process is active (path: %s)\n",cmd.c_str());	
+		// 			}else{
+						
+		// 			}
+		// 		}
+		// 	}
+		// }
+
+		// PipeDestroy(pipe);
+		
+		// CloseHandle(pi.hProcess);
+		// CloseHandle(pi.hThread);
+
+		// return true;
+	}
+	bool StartProgram(char* commandLine, u32 flags, int* exitCode, APIFile fStdin, APIFile fStdout, APIFile fStderr) {
+		// if (!FileExist(path)) {
+		// 	return false;
+		// }
+		int cmdlen = strlen(commandLine);
+		if(!commandLine || cmdlen == 0){
+			return false;
+		}
+
+		// TODO: Do something with standard handles?
+
+		int pid = fork();
+		if(pid == -1) {
+			PL_PRINTF("fork failed\n");
+			return false;
+		}
+		if(pid == 0) {
+			char** argv = nullptr;
+			int argc = 0;
+			ConvertArguments(commandLine, argc, argv);
+
+			// for(int i=0;i<argc+1;i++){
+			// 	printf("%d: %p\n",i, argv[i]);
+			// }
+
+			// char* a = nullptr;
+			// int ind = 0;
+			// while((a = argv[ind++])){
+			// 	printf("%d: %d, %s\n", ind-1,strlen(a), a);
+			// }
+			// printf("%s\n", commandLine);
+
+			if(fStdin)
+				engone::SetStandardIn(fStdin);
+			if(fStdout)
+				engone::SetStandardOut(fStdout);
+			if(fStderr)
+				engone::SetStandardErr(fStderr);
+			
+			int err = execvp(argv[0], argv);
+			// char* argsm[1]{nullptr};
+			// int err = execvp("gcc", argsm);
+			if(err==-1) {
+				PL_PRINTF("execv\n");
+			}
+			FreeArguments(argc, argv);
+
+			exit(0);
+			return false;
+		}
+		
+		if(flags&PROGRAM_WAIT){
+			int err = waitpid(pid, exitCode, 0);
+			if(err == -1) {
+				PL_PRINTF("waitpid\n");
+			}
+		}
+		
+		return true;
+	}
+	void ConvertArguments(const char* args, int& argc, char**& argv) {
+		if (args == nullptr) {
+			printf("ConvertArguments : Args was null\n");
+		} else {
+			argc = 0;
+			// argv will become a pointer to contigous memory which contain arguments.
+			int dataSize = 0;
+			int argsLength = strlen(args);
+			int argLength = 0;
+			for (int i = 0; i < argsLength + 1; i++) {
+				char chr = args[i];
+				if (chr == 0 || chr == ' ') {
+					if (argLength != 0) {
+						dataSize++; // null terminated character
+						argc++;
+					}
+					argLength = 0;
+					if (chr == 0)
+						break;
+				} else {
+					argLength++;
+					dataSize++;
+				}
+			}
+			int index = (argc + 1) * sizeof(char*);
+			int totalSize = index + dataSize;
+			//printf("size: %d index: %d\n", totalSize,index);
+			argv = (char**)Allocate(totalSize);
+			argv[argc] = nullptr;
+			char* argData = (char*)argv + index;
+			if (!argv) {
+				printf("ConverArguments : Allocation failed!\n");
+			} else {
+				int strIndex = 0; // index of char*
+				for (int i = 0; i < argsLength + 1; i++) {
+					char chr = args[i];
+                    
+					if (chr == 0 || chr == ' ') {
+						if (argLength != 0) {
+							argData[i] = 0;
+							dataSize++; // null terminated character
+						}
+						argLength = 0;
+						if (chr == 0)
+							break;
+					} else {
+						if (argLength == 0) {
+							argv[strIndex] = argData + i;
+							strIndex++;
+						}
+						argData[i] = chr;
+						argLength++;
+					}
+				}
+			}
+		}
+	}
+	void FreeArguments(int argc, char** argv) {
+		int totalSize = (argc + 1) * sizeof(char*); // argc +1 because the array is terminated with a nullptr (Unix execv needs it)
+		int index = totalSize;
+		for (int i = 0; i < argc; i++) {
+			int length = strlen(argv[i]);
+			//printf("len: %d\n", length);
+			totalSize += length + 1;
+		}
+		Free(argv, totalSize);
+	}
 }
 #endif
