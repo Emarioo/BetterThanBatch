@@ -1,6 +1,6 @@
 // @macro-benchmark
 // #import "OS"
-// #import "Logger"
+#import "Logger"
 // #import "Basic"
 // #import "String"
 // #import "Math"
@@ -18,11 +18,17 @@
 
 // #import "Array"
 
-fn hey1() {
-    1
-}
-fn hey2() {
-    2
-}
-hey1();
-hey2();
+ok = 'A';
+s = "ada";
+
+printc(ok);
+// prints(s);
+
+// fn hey1() {
+//     1
+// }
+// fn hey2() {
+//     2
+// }
+// hey1();
+// hey2();

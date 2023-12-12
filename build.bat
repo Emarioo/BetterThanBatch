@@ -128,7 +128,7 @@ lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib l
 if !compileSuccess! == 0 (
     echo f | XCOPY /y /q !output! prog.exe > nul
 
-    cl /c /TP src/Other/test.cpp /Fo: bin/test2.obj /nologo
+    @REM cl /c /TP src/Other/test.cpp /Fo: bin/test2.obj /nologo
 
     @REM cl /c /std:c11 /Tc src/BetBat/obj_test.c /Fo: bin/obj_test.obj /nologo
     @REM dumpbin bin/obj_test.obj /ALL > dump.out
@@ -137,11 +137,11 @@ if !compileSuccess! == 0 (
 
 
     prog -dev
-    objdump bin/dev.obj -W
-    g++ src/Other/test.cpp -g -o test.exe
+    @REM objdump bin/dev.obj -W
+    @REM g++ src/Other/test.cpp -g -o test.exe
     @REM gcc -c src/Other/test.c -g -o test.o
     @REM gcc test.o -g -o test.exe
-    objdump test.o -W > out
+    @REM objdump test.o -W > out
     
     @REM link /NOLOGO /DEBUG test.obj /OUT:test.exe
     

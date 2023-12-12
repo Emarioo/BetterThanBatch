@@ -767,7 +767,7 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
             auto& dataRelocation = program->dataRelocations[i];
             
             COFF_Relocation* coffReloc = nullptr;
-            suc = obj_stream->write_late((void**)&debugSSectionNumber, COFF_Relocation::SIZE);
+            suc = obj_stream->write_late((void**)&coffReloc, COFF_Relocation::SIZE);
             CHECK
             
             coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
@@ -791,7 +791,7 @@ bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u3
             auto& namedRelocation = program->namedRelocations[i];
             
             COFF_Relocation* coffReloc = nullptr;
-            suc = obj_stream->write_late((void**)&debugSSectionNumber, COFF_Relocation::SIZE);
+            suc = obj_stream->write_late((void**)&coffReloc, COFF_Relocation::SIZE);
             CHECK
             
             coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;

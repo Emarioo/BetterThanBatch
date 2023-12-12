@@ -71,6 +71,7 @@ int main(int argc, const char** argv){
     ProfilerInitialize();
 
     CompileOptions compileOptions{};
+    compileOptions.threadCount = 1;
     int compilerExitCode = EXIT_CODE_NOTHING;
     std::string compilerPath = argv[0];
     Path compilerDir = compilerPath;
@@ -79,7 +80,7 @@ int main(int argc, const char** argv){
         if(compilerDir.text.substr(compilerDir.text.length()-5,5) == "/bin/")
             compilerDir = compilerDir.text.substr(0,compilerDir.text.length() - 4);
     }
-    compileOptions.modulesDirectory = compilerDir.text + "/modules";
+    compileOptions.modulesDirectory = compilerDir.text + "modules/";
     bool devmode=false;
     
     // UserProfile* userProfile = UserProfile::CreateDefault();

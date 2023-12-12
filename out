@@ -1,168 +1,299 @@
-./src/BetBat/ObjectWriter.cpp: In member function ‘void ObjectFile::writeFile(const string&)’:
-./src/BetBat/ObjectWriter.cpp:594:14: warning: ISO C++ says that these are ambiguous, even though the worst conversion for the first is better than the worst conversion for the second:
-  594 |     FileWrite(file, outData, fileOffset);
-      |     ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~
-In file included from include/BetBat/ObjectWriter.h:3,
-                 from ./src/BetBat/ObjectWriter.cpp:1:
-include/Engone/PlatformLayer.h:110:13: note: candidate 1: ‘u64 engone::FileWrite(engone::APIFile, const void*, u64)’
-  110 |         u64 FileWrite(APIFile file, const void* buffer, u64 writeBytes);
-      |             ^~~~~~~~~
-In file included from include/BetBat/Interpreter.h:5,
-                 from include/BetBat/Compiler.h:7,
-                 from ./src/BetBat/ObjectWriter.cpp:10:
-include/Native/NativeLayer.h:49:22: note: candidate 2: ‘u64 FileWrite(u64, void*, u64)’
-   49 |     u64 attr_stdcall FileWrite(u64 file, void* buffer, u64 length);
-      |                      ^~~~~~~~~
-./src/BetBat/ObjectWriter.cpp: In function ‘bool WriteObjectFile(const string&, Program_x64*, u32, u32)’:
-./src/BetBat/ObjectWriter.cpp:1281:18: warning: ISO C++ says that these are ambiguous, even though the worst conversion for the first is better than the worst conversion for the second:
- 1281 |         FileWrite(file, contiguous_ptr, total_size);
-      |         ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In file included from include/BetBat/ObjectWriter.h:3,
-                 from ./src/BetBat/ObjectWriter.cpp:1:
-include/Engone/PlatformLayer.h:110:13: note: candidate 1: ‘u64 engone::FileWrite(engone::APIFile, const void*, u64)’
-  110 |         u64 FileWrite(APIFile file, const void* buffer, u64 writeBytes);
-      |             ^~~~~~~~~
-In file included from include/BetBat/Interpreter.h:5,
-                 from include/BetBat/Compiler.h:7,
-                 from ./src/BetBat/ObjectWriter.cpp:10:
-include/Native/NativeLayer.h:49:22: note: candidate 2: ‘u64 FileWrite(u64, void*, u64)’
-   49 |     u64 attr_stdcall FileWrite(u64 file, void* buffer, u64 length);
-      |                      ^~~~~~~~~
-./src/BetBat/ObjectWriter.cpp:1285:22: warning: ISO C++ says that these are ambiguous, even though the worst conversion for the first is better than the worst conversion for the second:
- 1285 |             FileWrite(file, (void*)iter.ptr, iter.size);
-      |             ~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-In file included from include/BetBat/ObjectWriter.h:3,
-                 from ./src/BetBat/ObjectWriter.cpp:1:
-include/Engone/PlatformLayer.h:110:13: note: candidate 1: ‘u64 engone::FileWrite(engone::APIFile, const void*, u64)’
-  110 |         u64 FileWrite(APIFile file, const void* buffer, u64 writeBytes);
-      |             ^~~~~~~~~
-In file included from include/BetBat/Interpreter.h:5,
-                 from include/BetBat/Compiler.h:7,
-                 from ./src/BetBat/ObjectWriter.cpp:10:
-include/Native/NativeLayer.h:49:22: note: candidate 2: ‘u64 FileWrite(u64, void*, u64)’
-   49 |     u64 attr_stdcall FileWrite(u64 file, void* buffer, u64 length);
-      |                      ^~~~~~~~~
-/usr/bin/ld: /tmp/ccI6agXf.o: in function `engone::Memory<Instruction>::resize(unsigned long)':
-Bytecode.cpp:(.text._ZN6engone6MemoryI11InstructionE6resizeEm[_ZN6engone6MemoryI11InstructionE6resizeEm]+0x4f): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Bytecode.cpp:(.text._ZN6engone6MemoryI11InstructionE6resizeEm[_ZN6engone6MemoryI11InstructionE6resizeEm]+0x88): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Bytecode.cpp:(.text._ZN6engone6MemoryI11InstructionE6resizeEm[_ZN6engone6MemoryI11InstructionE6resizeEm]+0xc6): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Bytecode.cpp:(.text._ZN6engone6MemoryI11InstructionE6resizeEm[_ZN6engone6MemoryI11InstructionE6resizeEm]+0xf2): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Bytecode.cpp:(.text._ZN6engone6MemoryI11InstructionE6resizeEm[_ZN6engone6MemoryI11InstructionE6resizeEm]+0x131): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: /tmp/ccI6agXf.o:Bytecode.cpp:(.text._ZN6engone6MemoryI11InstructionE6resizeEm[_ZN6engone6MemoryI11InstructionE6resizeEm]+0x187): more undefined references to `engone::SetTracker(bool)' follow
-/usr/bin/ld: /tmp/ccuSy9d5.o: in function `ProcessSource(void*)':
-Compiler.cpp:(.text+0x2bad): undefined reference to `engone::Semaphore::wait()'
-/usr/bin/ld: Compiler.cpp:(.text+0x2c57): undefined reference to `engone::Semaphore::signal(int)'
-/usr/bin/ld: Compiler.cpp:(.text+0x2d0b): undefined reference to `engone::Semaphore::signal(int)'
-/usr/bin/ld: Compiler.cpp:(.text+0x2ef8): undefined reference to `engone::Semaphore::signal(int)'
-/usr/bin/ld: Compiler.cpp:(.text+0x3861): undefined reference to `engone::Semaphore::signal(int)'
-/usr/bin/ld: Compiler.cpp:(.text+0x3b0f): undefined reference to `engone::Semaphore::wait()'
-/usr/bin/ld: Compiler.cpp:(.text+0x3b8f): undefined reference to `engone::Semaphore::signal(int)'
-/usr/bin/ld: Compiler.cpp:(.text+0x3caf): undefined reference to `engone::Semaphore::signal(int)'
-/usr/bin/ld: Compiler.cpp:(.text+0x3d3d): undefined reference to `engone::Semaphore::signal(int)'
-/usr/bin/ld: Compiler.cpp:(.text+0x3e6f): undefined reference to `engone::Semaphore::signal(int)'
-/usr/bin/ld: /tmp/ccuSy9d5.o: in function `CompileSource(CompileOptions*)':
-Compiler.cpp:(.text+0x415a): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Compiler.cpp:(.text+0x489e): undefined reference to `engone::Semaphore::init(unsigned int, unsigned int)'
-/usr/bin/ld: Compiler.cpp:(.text+0x4df7): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: /tmp/ccuSy9d5.o: in function `CompileStats::printSuccess(CompileOptions*)':
-Compiler.cpp:(.text+0x5612): undefined reference to `engone::DiffMeasure(unsigned long)'
-/usr/bin/ld: Compiler.cpp:(.text+0x5700): undefined reference to `engone::DiffMeasure(unsigned long)'
-/usr/bin/ld: Compiler.cpp:(.text+0x5730): undefined reference to `engone::DiffMeasure(unsigned long)'
-/usr/bin/ld: Compiler.cpp:(.text+0x5760): undefined reference to `engone::DiffMeasure(unsigned long)'
-/usr/bin/ld: Compiler.cpp:(.text+0x578d): undefined reference to `engone::DiffMeasure(unsigned long)'
-/usr/bin/ld: /tmp/ccuSy9d5.o:Compiler.cpp:(.text+0x57ba): more undefined references to `engone::DiffMeasure(unsigned long)' follow
-/usr/bin/ld: /tmp/ccuSy9d5.o: in function `ExportTarget(CompileOptions*, Bytecode*)':
-Compiler.cpp:(.text+0x6167): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Compiler.cpp:(.text+0x6190): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Compiler.cpp:(.text+0x626d): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Compiler.cpp:(.text+0x62cf): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Compiler.cpp:(.text+0x6392): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: /tmp/ccuSy9d5.o:Compiler.cpp:(.text+0x63f4): more undefined references to `engone::StartMeasure()' follow
-/usr/bin/ld: /tmp/ccuSy9d5.o: in function `ExportTarget(CompileOptions*, Bytecode*)':
-Compiler.cpp:(.text+0x671b): undefined reference to `engone::StartProgram(char*, unsigned int, int*, engone::APIFile, engone::APIFile, engone::APIFile)'
-/usr/bin/ld: Compiler.cpp:(.text+0x6720): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Compiler.cpp:(.text+0x6758): undefined reference to `engone::FileDelete(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)'
-/usr/bin/ld: Compiler.cpp:(.text+0x679a): undefined reference to `engone::FileMove(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)'
-/usr/bin/ld: Compiler.cpp:(.text+0x6891): undefined reference to `engone::FileDelete(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)'
-/usr/bin/ld: Compiler.cpp:(.text+0x68d3): undefined reference to `engone::FileMove(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&)'
-/usr/bin/ld: Compiler.cpp:(.text+0x6c3f): undefined reference to `engone::StartProgram(char*, unsigned int, int*, engone::APIFile, engone::APIFile, engone::APIFile)'
-/usr/bin/ld: Compiler.cpp:(.text+0x6c4e): undefined reference to `engone::FileGetHead(engone::APIFile)'
-/usr/bin/ld: Compiler.cpp:(.text+0x6c68): undefined reference to `engone::FileSetHead(engone::APIFile, unsigned long)'
-/usr/bin/ld: /tmp/ccuSy9d5.o: in function `ExecuteTarget(CompileOptions*, Bytecode*)':
-Compiler.cpp:(.text+0x73ab): undefined reference to `engone::StartProgram(char*, unsigned int, int*, engone::APIFile, engone::APIFile, engone::APIFile)'
-/usr/bin/ld: /tmp/ccuSy9d5.o: in function `engone::Semaphore::~Semaphore()':
-Compiler.cpp:(.text._ZN6engone9SemaphoreD2Ev[_ZN6engone9SemaphoreD5Ev]+0x18): undefined reference to `engone::Semaphore::cleanup()'
-/usr/bin/ld: /tmp/ccuSy9d5.o: in function `ProfilerZone::~ProfilerZone()':
-Compiler.cpp:(.text._ZN12ProfilerZoneD2Ev[_ZN12ProfilerZoneD5Ev]+0x2e): undefined reference to `engone::Thread::GetTLSValue(unsigned int)'
-/usr/bin/ld: /tmp/ccQot15M.o: in function `Interpreter::executePart(Bytecode*, unsigned int, unsigned int)':
-Interpreter.cpp:(.text+0xb7b): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Interpreter.cpp:(.text+0x32e7): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Interpreter.cpp:(.text+0x33de): undefined reference to `engone::Sleep(double)'
-/usr/bin/ld: Interpreter.cpp:(.text+0x478b): undefined reference to `engone::GetStandardErr()'
-/usr/bin/ld: /tmp/ccQot15M.o: in function `engone::Memory<char>::resize(unsigned long)':
-Interpreter.cpp:(.text._ZN6engone6MemoryIcE6resizeEm[_ZN6engone6MemoryIcE6resizeEm]+0x4f): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Interpreter.cpp:(.text._ZN6engone6MemoryIcE6resizeEm[_ZN6engone6MemoryIcE6resizeEm]+0x88): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Interpreter.cpp:(.text._ZN6engone6MemoryIcE6resizeEm[_ZN6engone6MemoryIcE6resizeEm]+0xc6): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Interpreter.cpp:(.text._ZN6engone6MemoryIcE6resizeEm[_ZN6engone6MemoryIcE6resizeEm]+0xf2): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Interpreter.cpp:(.text._ZN6engone6MemoryIcE6resizeEm[_ZN6engone6MemoryIcE6resizeEm]+0x131): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: /tmp/ccQot15M.o:Interpreter.cpp:(.text._ZN6engone6MemoryIcE6resizeEm[_ZN6engone6MemoryIcE6resizeEm]+0x187): more undefined references to `engone::SetTracker(bool)' follow
-/usr/bin/ld: /tmp/ccL7DX5i.o: in function `ByteStream::Create(engone::Allocator*)':
-main.cpp:(.text._ZN10ByteStream6CreateEPN6engone9AllocatorE[_ZN10ByteStream6CreateEPN6engone9AllocatorE]+0x18): undefined reference to `engone::GlobalHeapAllocator()'
-/usr/bin/ld: /tmp/ccCVS0Xx.o: in function `ByteStream::Destroy(ByteStream*, engone::Allocator*)':
-ObjectWriter.cpp:(.text._ZN10ByteStream7DestroyEPS_PN6engone9AllocatorE[_ZN10ByteStream7DestroyEPS_PN6engone9AllocatorE]+0x28): undefined reference to `engone::GlobalHeapAllocator()'
-/usr/bin/ld: /tmp/ccwMqnGP.o: in function `PerfTestTokenize(engone::Memory<char> const&, int)':
-Tokenizer.cpp:(.text+0x436a): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: Tokenizer.cpp:(.text+0x4382): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: /tmp/ccwMqnGP.o: in function `engone::Memory<Token>::resize(unsigned long)':
-Tokenizer.cpp:(.text._ZN6engone6MemoryI5TokenE6resizeEm[_ZN6engone6MemoryI5TokenE6resizeEm]+0x4f): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Tokenizer.cpp:(.text._ZN6engone6MemoryI5TokenE6resizeEm[_ZN6engone6MemoryI5TokenE6resizeEm]+0x88): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Tokenizer.cpp:(.text._ZN6engone6MemoryI5TokenE6resizeEm[_ZN6engone6MemoryI5TokenE6resizeEm]+0xc6): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Tokenizer.cpp:(.text._ZN6engone6MemoryI5TokenE6resizeEm[_ZN6engone6MemoryI5TokenE6resizeEm]+0xf2): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: Tokenizer.cpp:(.text._ZN6engone6MemoryI5TokenE6resizeEm[_ZN6engone6MemoryI5TokenE6resizeEm]+0x131): undefined reference to `engone::SetTracker(bool)'
-/usr/bin/ld: /tmp/ccwMqnGP.o:Tokenizer.cpp:(.text._ZN6engone6MemoryI5TokenE6resizeEm[_ZN6engone6MemoryI5TokenE6resizeEm]+0x187): more undefined references to `engone::SetTracker(bool)' follow
-/usr/bin/ld: /tmp/ccC4AV9F.o: in function `ProfilerSession::cleanup()':
-Profiler.cpp:(.text+0x3a): undefined reference to `engone::Thread::DestroyTLSIndex(unsigned int)'
-/usr/bin/ld: /tmp/ccC4AV9F.o: in function `ProfilerSession::initContextForThread()':
-Profiler.cpp:(.text+0x217): undefined reference to `engone::Thread::SetTLSValue(unsigned int, void*)'
-/usr/bin/ld: /tmp/ccC4AV9F.o: in function `ProfilerInitialize()':
-Profiler.cpp:(.text+0x28e): undefined reference to `engone::Thread::CreateTLSIndex()'
-/usr/bin/ld: /tmp/cc3RwxX7.o: in function `VerifyTests(DynamicArray<std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > >&)':
-TestSuite.cpp:(.text+0x1154): undefined reference to `engone::PipeCreate(unsigned long, bool, bool)'
-/usr/bin/ld: TestSuite.cpp:(.text+0x178e): undefined reference to `engone::PipeGetWrite(engone::APIPipe)'
-/usr/bin/ld: TestSuite.cpp:(.text+0x17cc): undefined reference to `engone::StartProgram(char*, unsigned int, int*, engone::APIFile, engone::APIFile, engone::APIFile)'
-/usr/bin/ld: TestSuite.cpp:(.text+0x182b): undefined reference to `engone::PipeWrite(engone::APIPipe, void*, unsigned long)'
-/usr/bin/ld: TestSuite.cpp:(.text+0x184b): undefined reference to `engone::PipeRead(engone::APIPipe, void*, unsigned long)'
-/usr/bin/ld: TestSuite.cpp:(.text+0x1ef5): undefined reference to `engone::PipeDestroy(engone::APIPipe)'
-/usr/bin/ld: /tmp/cclY8epk.o: in function `Program_x64::printAsm(char const*, char const*)':
-x64_Converter.cpp:(.text+0xf6d): undefined reference to `engone::StartProgram(char*, unsigned int, int*, engone::APIFile, engone::APIFile, engone::APIFile)'
-/usr/bin/ld: /tmp/cclY8epk.o: in function `ConvertTox64(Bytecode*)':
-x64_Converter.cpp:(.text+0x1af7): undefined reference to `engone::StartProgram(char*, unsigned int, int*, engone::APIFile, engone::APIFile, engone::APIFile)'
-/usr/bin/ld: x64_Converter.cpp:(.text+0x1bb9): undefined reference to `engone::FileGetSize(engone::APIFile)'
-/usr/bin/ld: x64_Converter.cpp:(.text+0x1bd4): undefined reference to `engone::FileSetHead(engone::APIFile, unsigned long)'
-/usr/bin/ld: /tmp/ccJbQQN7.o: in function `engone::Logger::flush()':
-Logger.cpp:(.text+0x66e): undefined reference to `engone::GetStandardOut()'
-/usr/bin/ld: /tmp/ccJbQQN7.o: in function `engone::Logger::flushInternal()':
-Logger.cpp:(.text+0x10bd): undefined reference to `engone::FileFlushBuffers(engone::APIFile)'
-/usr/bin/ld: Logger.cpp:(.text+0x10f1): undefined reference to `engone::GetStandardOut()'
-/usr/bin/ld: Logger.cpp:(.text+0x10f9): undefined reference to `engone::FileFlushBuffers(engone::APIFile)'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `ExecuteCommand':
-NativeLayer.cpp:(.text+0x72): undefined reference to `engone::ExecuteCommand(std::__cxx11::basic_string<char, std::char_traits<char>, std::allocator<char> > const&, bool, int*)'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `StartMeasure':
-NativeLayer.cpp:(.text+0x124): undefined reference to `engone::StartMeasure()'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `DiffMeasure':
-NativeLayer.cpp:(.text+0x164): undefined reference to `engone::DiffMeasure(unsigned long)'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `GetClockSpeed':
-NativeLayer.cpp:(.text+0x177): undefined reference to `engone::GetClockSpeed()'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `FileOpen':
-NativeLayer.cpp:(.text+0x23a): undefined reference to `engone::FileOpen(char const*, unsigned int, unsigned long*, unsigned int)'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `DirectoryIteratorCreate':
-NativeLayer.cpp:(.text+0x2e8): undefined reference to `engone::DirectoryIteratorCreate(char const*, int)'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `DirectoryIteratorDestroy':
-NativeLayer.cpp:(.text+0x3cf): undefined reference to `engone::DirectoryIteratorDestroy(void*, engone::DirectoryIteratorData*)'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `DirectoryIteratorNext':
-NativeLayer.cpp:(.text+0x428): undefined reference to `engone::DirectoryIteratorNext(void*, engone::DirectoryIteratorData*)'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `DirectoryIteratorSkip':
-NativeLayer.cpp:(.text+0x466): undefined reference to `engone::DirectoryIteratorSkip(void*)'
-/usr/bin/ld: /tmp/ccyeeWmr.o: in function `NativeSleep':
-NativeLayer.cpp:(.text+0x492): undefined reference to `engone::Sleep(double)'
-collect2: error: ld returned 1 exit status
+
+test.o:     file format pe-x86-64
+
+Contents of the .debug_frame section:
+
+
+00000000 0000000000000014 ffffffff CIE
+  Version:               3
+  Augmentation:          ""
+  Code alignment factor: 1
+  Data alignment factor: -8
+  Return address column: 16
+
+  DW_CFA_def_cfa: r7 (rsp) ofs 8
+  DW_CFA_offset: r16 (rip) at cfa-8
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+
+00000018 0000000000000034 00000000 FDE cie=00000000 pc=0000000000000000..0000000000000007
+  DW_CFA_advance_loc4: 1 to 0000000000000001
+  DW_CFA_def_cfa_offset: 16
+  DW_CFA_offset: r6 (rbp) at cfa-16
+  DW_CFA_advance_loc4: 3 to 0000000000000004
+  DW_CFA_def_cfa_register: r6 (rbp)
+  DW_CFA_advance_loc4: 2 to 0000000000000006
+  DW_CFA_restore: r6 (rbp)
+  DW_CFA_def_cfa: r7 (rsp) ofs 8
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+
+00000050 0000000000000034 00000000 FDE cie=00000000 pc=0000000000000007..000000000000000e
+  DW_CFA_advance_loc4: 1 to 0000000000000008
+  DW_CFA_def_cfa_offset: 16
+  DW_CFA_offset: r6 (rbp) at cfa-16
+  DW_CFA_advance_loc4: 3 to 000000000000000b
+  DW_CFA_def_cfa_register: r6 (rbp)
+  DW_CFA_advance_loc4: 2 to 000000000000000d
+  DW_CFA_restore: r6 (rbp)
+  DW_CFA_def_cfa: r7 (rsp) ofs 8
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+
+00000088 0000000000000034 00000000 FDE cie=00000000 pc=000000000000000e..0000000000000037
+  DW_CFA_advance_loc4: 1 to 000000000000000f
+  DW_CFA_def_cfa_offset: 16
+  DW_CFA_offset: r6 (rbp) at cfa-16
+  DW_CFA_advance_loc4: 3 to 0000000000000012
+  DW_CFA_def_cfa_register: r6 (rbp)
+  DW_CFA_advance_loc4: 36 to 0000000000000036
+  DW_CFA_restore: r6 (rbp)
+  DW_CFA_def_cfa: r7 (rsp) ofs 8
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+  DW_CFA_nop
+
+Contents of the .debug_info section:
+
+  Compilation Unit @ offset 0x0:
+   Length:        0xe4 (32-bit)
+   Version:       5
+   Unit Type:     DW_UT_compile (1)
+   Abbrev Offset: 0x0
+   Pointer Size:  8
+ <0><c>: Abbrev Number: 5 (DW_TAG_compile_unit)
+    <d>   DW_AT_producer    : GNU C17 12.2.0 -mtune=core2 -march=nocona -g
+    <3a>   DW_AT_language    : 29	(C11)
+    <3b>   DW_AT_name        : (indirect line string, offset: 0x0): src/Other/test.c
+    <3f>   DW_AT_comp_dir    : (indirect line string, offset: 0x11): D:\Backup\CodeProjects\BetterThanBatch
+    <43>   DW_AT_low_pc      : 0x0
+    <4b>   DW_AT_high_pc     : 0x37
+    <53>   DW_AT_stmt_list   : 0x0
+ <1><57>: Abbrev Number: 6 (DW_TAG_subprogram)
+    <58>   DW_AT_external    : 1
+    <58>   DW_AT_name        : main
+    <5d>   DW_AT_decl_file   : 1
+    <5e>   DW_AT_decl_line   : 7
+    <5f>   DW_AT_decl_column : 5
+    <60>   DW_AT_prototyped  : 1
+    <60>   DW_AT_type        : <0x97>
+    <64>   DW_AT_low_pc      : 0xe
+    <6c>   DW_AT_high_pc     : 0x29
+    <74>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
+    <76>   DW_AT_call_all_tail_calls: 1
+    <76>   DW_AT_sibling     : <0x97>
+ <2><7a>: Abbrev Number: 1 (DW_TAG_formal_parameter)
+    <7b>   DW_AT_name        : argc
+    <80>   DW_AT_decl_file   : 1
+    <80>   DW_AT_decl_line   : 7
+    <80>   DW_AT_decl_column : 14
+    <81>   DW_AT_type        : <0x97>
+    <85>   DW_AT_location    : 2 byte block: 91 0 	(DW_OP_fbreg: 0)
+ <2><88>: Abbrev Number: 1 (DW_TAG_formal_parameter)
+    <89>   DW_AT_name        : argv
+    <8e>   DW_AT_decl_file   : 1
+    <8e>   DW_AT_decl_line   : 7
+    <8e>   DW_AT_decl_column : 33
+    <8f>   DW_AT_type        : <0x9e>
+    <93>   DW_AT_location    : 2 byte block: 91 8 	(DW_OP_fbreg: 8)
+ <2><96>: Abbrev Number: 0
+ <1><97>: Abbrev Number: 2 (DW_TAG_base_type)
+    <98>   DW_AT_byte_size   : 4
+    <99>   DW_AT_encoding    : 5	(signed)
+    <9a>   DW_AT_name        : int
+ <1><9e>: Abbrev Number: 3 (DW_TAG_pointer_type)
+    <9f>   DW_AT_byte_size   : 8
+    <9f>   DW_AT_type        : <0xa3>
+ <1><a3>: Abbrev Number: 3 (DW_TAG_pointer_type)
+    <a4>   DW_AT_byte_size   : 8
+    <a4>   DW_AT_type        : <0xb0>
+ <1><a8>: Abbrev Number: 2 (DW_TAG_base_type)
+    <a9>   DW_AT_byte_size   : 1
+    <aa>   DW_AT_encoding    : 6	(signed char)
+    <ab>   DW_AT_name        : char
+ <1><b0>: Abbrev Number: 7 (DW_TAG_const_type)
+    <b1>   DW_AT_type        : <0xa8>
+ <1><b5>: Abbrev Number: 4 (DW_TAG_subprogram)
+    <b6>   DW_AT_external    : 1
+    <b6>   DW_AT_name        : hey2
+    <bb>   DW_AT_decl_file   : 1
+    <bb>   DW_AT_decl_line   : 4
+    <bc>   DW_AT_decl_column : 6
+    <bc>   DW_AT_low_pc      : 0x7
+    <c4>   DW_AT_high_pc     : 0x7
+    <cc>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
+    <ce>   DW_AT_call_all_calls: 1
+ <1><ce>: Abbrev Number: 4 (DW_TAG_subprogram)
+    <cf>   DW_AT_external    : 1
+    <cf>   DW_AT_name        : hey1
+    <d4>   DW_AT_decl_file   : 1
+    <d4>   DW_AT_decl_line   : 1
+    <d5>   DW_AT_decl_column : 6
+    <d5>   DW_AT_low_pc      : 0x0
+    <dd>   DW_AT_high_pc     : 0x7
+    <e5>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
+    <e7>   DW_AT_call_all_calls: 1
+ <1><e7>: Abbrev Number: 0
+
+Contents of the .debug_abbrev section:
+
+  Number TAG (0x0)
+   1      DW_TAG_formal_parameter    [no children]
+    DW_AT_name         DW_FORM_string
+    DW_AT_decl_file    DW_FORM_implicit_const: 1
+    DW_AT_decl_line    DW_FORM_implicit_const: 7
+    DW_AT_decl_column  DW_FORM_data1
+    DW_AT_type         DW_FORM_ref4
+    DW_AT_location     DW_FORM_exprloc
+    DW_AT value: 0     DW_FORM value: 0
+   2      DW_TAG_base_type    [no children]
+    DW_AT_byte_size    DW_FORM_data1
+    DW_AT_encoding     DW_FORM_data1
+    DW_AT_name         DW_FORM_string
+    DW_AT value: 0     DW_FORM value: 0
+   3      DW_TAG_pointer_type    [no children]
+    DW_AT_byte_size    DW_FORM_implicit_const: 8
+    DW_AT_type         DW_FORM_ref4
+    DW_AT value: 0     DW_FORM value: 0
+   4      DW_TAG_subprogram    [no children]
+    DW_AT_external     DW_FORM_flag_present
+    DW_AT_name         DW_FORM_string
+    DW_AT_decl_file    DW_FORM_implicit_const: 1
+    DW_AT_decl_line    DW_FORM_data1
+    DW_AT_decl_column  DW_FORM_implicit_const: 6
+    DW_AT_low_pc       DW_FORM_addr
+    DW_AT_high_pc      DW_FORM_data8
+    DW_AT_frame_base   DW_FORM_exprloc
+    DW_AT_call_all_calls DW_FORM_flag_present
+    DW_AT value: 0     DW_FORM value: 0
+   5      DW_TAG_compile_unit    [has children]
+    DW_AT_producer     DW_FORM_string
+    DW_AT_language     DW_FORM_data1
+    DW_AT_name         DW_FORM_line_strp
+    DW_AT_comp_dir     DW_FORM_line_strp
+    DW_AT_low_pc       DW_FORM_addr
+    DW_AT_high_pc      DW_FORM_data8
+    DW_AT_stmt_list    DW_FORM_sec_offset
+    DW_AT value: 0     DW_FORM value: 0
+   6      DW_TAG_subprogram    [has children]
+    DW_AT_external     DW_FORM_flag_present
+    DW_AT_name         DW_FORM_string
+    DW_AT_decl_file    DW_FORM_data1
+    DW_AT_decl_line    DW_FORM_data1
+    DW_AT_decl_column  DW_FORM_data1
+    DW_AT_prototyped   DW_FORM_flag_present
+    DW_AT_type         DW_FORM_ref4
+    DW_AT_low_pc       DW_FORM_addr
+    DW_AT_high_pc      DW_FORM_data8
+    DW_AT_frame_base   DW_FORM_exprloc
+    DW_AT_call_all_tail_calls DW_FORM_flag_present
+    DW_AT_sibling      DW_FORM_ref4
+    DW_AT value: 0     DW_FORM value: 0
+   7      DW_TAG_const_type    [no children]
+    DW_AT_type         DW_FORM_ref4
+    DW_AT value: 0     DW_FORM value: 0
+
+Contents of the .debug_aranges section:
+
+  Length:                   44
+  Version:                  2
+  Offset into .debug_info:  0x0
+  Pointer Size:             8
+  Segment Size:             0
+
+    Address            Length
+    0000000000000000 0000000000000037 
+    0000000000000000 0000000000000000 
+
+Raw dump of debug contents of section .debug_line:
+
+  Offset:                      0x0
+  Length:                      93
+  DWARF Version:               5
+  Address size (bytes):        8
+  Segment selector (bytes):    0
+  Prologue Length:             46
+  Minimum Instruction Length:  1
+  Maximum Ops per Instruction: 1
+  Initial value of 'is_stmt':  1
+  Line Base:                   -5
+  Line Range:                  14
+  Opcode Base:                 13
+
+ Opcodes:
+  Opcode 1 has 0 args
+  Opcode 2 has 1 arg
+  Opcode 3 has 1 arg
+  Opcode 4 has 1 arg
+  Opcode 5 has 1 arg
+  Opcode 6 has 0 args
+  Opcode 7 has 0 args
+  Opcode 8 has 0 args
+  Opcode 9 has 1 arg
+  Opcode 10 has 0 args
+  Opcode 11 has 0 args
+  Opcode 12 has 1 arg
+
+ The Directory Table (offset 0x22, lines 2, columns 1):
+  Entry	Name
+  0	(indirect line string, offset: 0x38): D:/Backup/CodeProjects/BetterThanBatch
+  1	(indirect line string, offset: 0x5f): src/Other
+
+ The File Name Table (offset 0x30, lines 2, columns 2):
+  Entry	Dir	Name
+  0	1	(indirect line string, offset: 0x69): test.c
+  1	1	(indirect line string, offset: 0x70): test.c
+
+ Line Number Statements:
+  [0x0000003a]  Set column to 13
+  [0x0000003c]  Extended opcode 2: set Address to 0x0
+  [0x00000047]  Copy
+  [0x00000048]  Set column to 1
+  [0x0000004a]  Special opcode 63: advance Address by 4 to 0x4 and Line by 2 to 3
+  [0x0000004b]  Set column to 13
+  [0x0000004d]  Special opcode 48: advance Address by 3 to 0x7 and Line by 1 to 4
+  [0x0000004e]  Set column to 1
+  [0x00000050]  Special opcode 63: advance Address by 4 to 0xb and Line by 2 to 6
+  [0x00000051]  Set column to 39
+  [0x00000053]  Special opcode 48: advance Address by 3 to 0xe and Line by 1 to 7
+  [0x00000054]  Special opcode 215: advance Address by 15 to 0x1d and Line by 0 to 7
+  [0x00000055]  Set column to 5
+  [0x00000057]  Special opcode 76: advance Address by 5 to 0x22 and Line by 1 to 8
+  [0x00000058]  Special opcode 76: advance Address by 5 to 0x27 and Line by 1 to 9
+  [0x00000059]  Set column to 1
+  [0x0000005b]  Special opcode 147: advance Address by 10 to 0x31 and Line by 2 to 11
+  [0x0000005c]  Advance PC by 6 to 0x37
+  [0x0000005e]  Extended opcode 1: End of Sequence
+
+
+
+The .debug_str section is empty.
+Contents of the .debug_line_str section:
+
+  0x00000000 7372632f 4f746865 722f7465 73742e63 src/Other/test.c
+  0x00000010 00443a5c 4261636b 75705c43 6f646550 .D:\Backup\CodeP
+  0x00000020 726f6a65 6374735c 42657474 65725468 rojects\BetterTh
+  0x00000030 616e4261 74636800 443a2f42 61636b75 anBatch.D:/Backu
+  0x00000040 702f436f 64655072 6f6a6563 74732f42 p/CodeProjects/B
+  0x00000050 65747465 72546861 6e426174 63680073 etterThanBatch.s
+  0x00000060 72632f4f 74686572 00746573 742e6300 rc/Other.test.c.
+  0x00000070 74657374 2e6300                     test.c.
+
