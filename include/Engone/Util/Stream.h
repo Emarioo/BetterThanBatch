@@ -6,6 +6,7 @@
 #include "Engone/Util/Array.h"
 #include "Engone/Util/Allocator.h"
 
+// An artificial array of bytes. The allocations is handled within.
 // Most functions return bool which indicates whether the function succeded or not.
 struct ByteStream {
     static ByteStream* Create(engone::Allocator* allocator) {
@@ -49,6 +50,7 @@ struct ByteStream {
     }
     bool write_late(void** out_ptr, u32 size) {
         Assert(size != 0);
+        Assert(!unknown_state);
         if(out_ptr)
             *out_ptr = nullptr;
         
@@ -77,7 +79,7 @@ struct ByteStream {
         return true;
     }
     // ALWAYS call wrote_unknown after calling this
-    bool write_unknown(void** out_ptr, u32 size) {
+    bool write_unknown(void** out_ptr, u32 max_size) {
         Assert(size != 0);
         if(out_ptr)
             *out_ptr = nullptr;
@@ -86,13 +88,13 @@ struct ByteStream {
         if(allocations.size() > 0)
             allocation = &allocations.last();
         
-        if(!allocation || allocation->writtenBytes + size > allocation->max) {
+        if(!allocation || allocation->writtenBytes + max_size > allocation->max) {
             bool suc = allocations.add({});
             if(!suc)
                 return false;
             
             allocation = &allocations.last();
-            allocation->max = size*2 + writtenBytes * 1.5; // MEMORY GROWTH
+            allocation->max = max_size*2 + writtenBytes * 1.5; // MEMORY GROWTH
             allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
             if(!allocation->ptr) {
                 allocations.removeAt(allocations.size()-1);
@@ -119,6 +121,33 @@ struct ByteStream {
         allocation->writtenBytes += size;
         writtenBytes += size;
         unknown_state = false;
+    }
+    bool read(u32 offset, void* ptr, u32 size) {
+        int head = 0;
+        for(int i=0;i<allocations.size();i++) {
+            Allocation* all = allocations[i];
+            
+            int rel_off = offset - head; // relative offset in the allocation
+            int rem_size = all->writtenBytes - rel_off; // remaining size of the allocation from the relative offset
+            
+            if(rem_size <= 0) {
+                head += all->writtenBytes;
+                continue;
+            }
+            
+            int real_size = size;
+            if(real_size > rem_size) {
+                real_size = rem_size;   
+            }
+            
+            memcpy(ptr + head - offset, all->ptr + rel_off, real_size);
+            offset += real_size;
+            size -= real_size;
+            
+            head += all->writtenBytes;
+        }
+        
+        return size == 0;
     }
     u32 getWriteHead() const { return writtenBytes; }
     bool steal_from(ByteStream* stream) {
@@ -301,6 +330,34 @@ struct ByteStream {
             return false;
         memcpy(reserved_ptr, ptr, size);
         return true;
+    }
+    u64 read8(u32 offset, bool* success = nullptr) {
+        u64 val = 0;
+        bool suc = read(offset, &val, 8);
+        if(success)
+            *success = suc;
+        return val;
+    }
+    u32 read4(u32 offset, bool* success = nullptr) {
+        u32 val = 0;
+        bool suc = read(offset, &val, 4);
+        if(success)
+            *success = suc;
+        return val;
+    }
+    u16 read2(u32 offset, bool* success = nullptr) {
+        u16 val = 0;
+        bool suc = read(offset, &val, 2);
+        if(success)
+            *success = suc;
+        return val;
+    }
+    u8 read1(u32 offset, bool* success = nullptr) {
+        u8 val = 0;
+        bool suc = read(offset, &val, 1);
+        if(success)
+            *success = suc;
+        return val;
     }
     
 private:

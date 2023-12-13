@@ -10,11 +10,10 @@
     What the ObjectWriter wants is sections and the data of those sections separately.
     Additionaly, DWARF may need to provide symbols
 */
+#pragma once
 
 #include "Engone/Util/Stream.h"
 #include "BetBat/ObjectWriter.h"
-
-#pragma once
 
 namespace dwarf {
     // IMPORTANT: All structs assume 32-bit DWARF format
