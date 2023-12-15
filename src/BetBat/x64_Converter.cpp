@@ -393,9 +393,9 @@ void Program_x64::printAsm(const char* path, const char* objpath){
     Assert(this);
     if(!objpath) {
         #ifdef OS_WINDOWS
-        WriteObjectFile("bin/garb.obj", this);
+        WriteObjectFile_coff("bin/garb.obj", this);
         #else
-        WriteObjectFile("bin/garb.o", this);
+        WriteObjectFile_coff("bin/garb.o", this);
         #endif
     }
 

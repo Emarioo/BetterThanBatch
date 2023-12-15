@@ -27,7 +27,7 @@ void ProfilerSession::initContextForThread() {
     }
     #ifdef OS_WINDOWS
     long res = _InterlockedIncrement(&usedContexts);
-    #elif defined(OS_LINUX)
+    #else
     // Assert(("LINUX impl. for profiling not thread safe",false));
     long res = 1 + __atomic_fetch_add(&usedContexts, 1, __ATOMIC_SEQ_CST);
     // long res = usedContexts++; // NOT THREAD SAFE

@@ -27,10 +27,10 @@ SET USE_MSVC=1
 @REM to get cpu clock frequency which is used with rdtsc.
 @REM I have not found an easier way to get the frequency.
 
-SET GCC_INCLUDE_DIRS=-Iinclude -lAdvapi32
-SET GCC_DEFINITIONS=-DOS_WINDOWS
-SET GCC_COMPILE_OPTIONS=-std=c++14
-SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
+@REM SET GCC_INCLUDE_DIRS=-Iinclude -lAdvapi32
+@REM SET GCC_DEFINITIONS=-DOS_WINDOWS
+@REM SET GCC_COMPILE_OPTIONS=-std=c++14
+@REM SET GCC_WARN=-Wall -Werror -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
 if !USE_OPTIMIZATIONS!==1 (
     SET MSVC_COMPILE_OPTIONS=/std:c++14 /nologo /TP /EHsc /O2

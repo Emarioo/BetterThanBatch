@@ -3,13 +3,13 @@
 #ifdef WIN32
 #define OS_WINDOWS
 #elif defined(_linux_)
-#define OS_LINUX
+#define OS_UNIX
 #endif
 
 #ifdef OS_WINDOWS
 #define OS_NAME "Windows"
-#elif defined(OS_LINUX)
-#define OS_NAME "Linux"
+#elif defined(OS_UNIX)
+#define OS_NAME "Unix"
 #else
 #define OS_NAME "<os-none>"
 #endif
@@ -59,7 +59,7 @@
 #define ENABLE_TRACKER
 // #define LOG_TRACKER
 #define LOG_MSG_LOCATION
-#define DUMP_ALL_ASM
+// #define DUMP_ALL_ASM
 #endif
 
 // #define LOG_ALLOCATIONS

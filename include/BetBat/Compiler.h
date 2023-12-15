@@ -7,6 +7,7 @@
 #include "BetBat/Interpreter.h"
 #include "BetBat/NativeRegistry.h"
 #include "BetBat/ObjectWriter.h"
+#include "BetBat/Elf.h"
 #include "BetBat/x64_Converter.h"
 #include "BetBat/UserProfile.h"
 // #include "BetBat/MessageTool.h"

@@ -31,7 +31,7 @@ struct TokenStream;
 // #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
 #ifdef OS_WINDOWS
 #define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true, __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->compileOptions->compileStats.addError(TR, __VA_ARGS__);
-#else // if OS_LINUX
+#else
 #define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true __VA_OPT__(,) __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->compileOptions->compileStats.addError(TR __VA_OPT__(,) __VA_ARGS__);
 #endif
 #define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";

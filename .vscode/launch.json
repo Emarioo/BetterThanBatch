@@ -5,7 +5,7 @@
             "name": "(gdb) Launch",
             "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/bin/compiler",
+            "program": "${workspaceFolder}/bin/btb",
             "args": ["-dev"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

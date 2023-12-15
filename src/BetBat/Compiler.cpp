@@ -2,7 +2,7 @@
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
-#elif defined(OS_LINUX)
+#else
 #include <x86intrin.h>
 #endif
 
@@ -27,7 +27,7 @@ Path::Path(const char* path) : text(path), _type((Type)0) {
             }
         }
     }
-#elif defined(OS_LINUX)
+#else
      size_t lastSlash = text.find_last_of("/");
 
     if(lastSlash + 1 == text.length()){
@@ -60,7 +60,7 @@ Path::Path(const std::string& path) : text(path), _type((Type)0) {
             }
         }
     }
-#elif defined(OS_LINUX)
+#elif defined(OS_UNIX)
      size_t lastSlash = text.find_last_of("/");
 
     if(lastSlash + 1 == text.length()){
@@ -936,8 +936,8 @@ Bytecode* CompileSource(CompileOptions* options) {
     "}\n"
     #ifdef OS_WINDOWS
     "#define OS_WINDOWS\n"
-    #elif defined(OS_LINUX)
-    "#define OS_LINUX\n"
+    #elif defined(OS_UNIX)
+    "#define OS_UNIX\n"
     #endif
     ;
     essentialStructs += (options->target == BYTECODE ? "#define LINK_BYTECODE\n" : "");
@@ -1215,7 +1215,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             std::string objPath = "";
             if(outputIsObject){
                 options->compileStats.start_objectfile = StartMeasure();
-                bool yes = WriteObjectFile(outPath.text,program);
+                bool yes = WriteObjectFile_coff(outPath.text,program);
                 if(yes) {
                     options->compileStats.generatedFiles.add(outPath.text);
                 }
@@ -1225,7 +1225,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             } else {
                 objPath = "bin/" + outPath.getFileName(true).text + ".obj";
                 options->compileStats.start_objectfile = StartMeasure();
-                bool yes = WriteObjectFile(objPath,program);
+                bool yes = WriteObjectFile_coff(objPath,program);
                 if(yes) {
                     options->compileStats.generatedFiles.add(objPath);
                 }
@@ -1307,7 +1307,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                             #define DUMP_ASM_OBJ "bin/dump_asm.obj"
                             #define DUMP_ASM_ASM "bin/dump_asm.asm"
 
-                            bool yes = WriteObjectFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                            bool yes = WriteObjectFile_coff(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
                             // if(yes) {
                             //     options->compileStats.generatedFiles.add(DUMP_ASM_OBJ);
                             // }
@@ -1367,11 +1367,12 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             auto format = options->outputFile.getFormat();
             bool outputIsObject = format == "o" || format == "obj";
 
-            // TODO: WriteObjectFile uses COFF format. Use ELF format for UNIX systems.
+            // TODO: WriteObjectFile_coff uses COFF format. Use ELF format for UNIX systems.
             std::string objPath = "";
             if(outputIsObject){
                 options->compileStats.start_objectfile = StartMeasure();
-                bool yes = WriteObjectFile(outPath.text,program);
+                bool yes = WriteObjectFile_elf(outPath.text, program);
+                // bool yes = WriteObjectFile_coff(outPath.text,program);
                 if(yes) {
                     options->compileStats.generatedFiles.add(outPath.text);
                 }
@@ -1381,7 +1382,8 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             } else {
                 objPath = "bin/" + outPath.getFileName(true).text + ".o";
                 options->compileStats.start_objectfile = StartMeasure();
-                bool yes = WriteObjectFile(objPath,program);
+                bool yes = WriteObjectFile_elf(objPath, program);
+                // bool yes = WriteObjectFile_coff(objPath,program);
                 if(yes) {
                     options->compileStats.generatedFiles.add(objPath);
                 }
@@ -1394,7 +1396,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 std::string cmd = "gcc ";
                 // force debug info for now
                 // if(options->useDebugInformation)
-                    cmd += "-g ";
+                    // cmd += "-g ";
 
                 cmd += objPath + " ";
                 #ifndef MINIMAL_DEBUG
@@ -1428,7 +1430,9 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 //     log::out << "cwd: "<<prevCWD<<"\n";
                 // }
 
-                if(exitCode == 0) { // 0 means success
+                if(exitCode != 0) { // 0 means success
+                    failure = true;
+                } else {
                     // if(outputOtherDirectory){
                     //     FileDelete(outPath.text);
                     //     FileMove(LINK_TEMP_EXE, outPath.text);
@@ -1460,8 +1464,8 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                         if(dump.dumpAsm) {
                             #define DUMP_ASM_OBJ "bin/dump_asm.obj"
                             #define DUMP_ASM_ASM "bin/dump_asm.asm"
-
-                            bool yes = WriteObjectFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                            Assert(("Dump asm not implemented for UNIX (COFF is used instead of ELF)",false));
+                            bool yes = WriteObjectFile_coff(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
                             // if(yes) {
                             //     options->compileStats.generatedFiles.add(DUMP_ASM_OBJ);
                             // }
@@ -1491,8 +1495,6 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                             // memcpy x64 instructions into a buffer, then into a file, then use dumpbin /DISASM
                         }
                     }
-                } else {
-                    failure = true;
                 }
             }
             #ifdef DUMP_ALL_ASM
@@ -1501,7 +1503,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             #endif
             Program_x64::Destroy(program);
 
-            break; 
+            break;
         }
         // Bytecode exporting has been disabled because you rarely use it.
         // You usually want to execute it right away or at compile time.

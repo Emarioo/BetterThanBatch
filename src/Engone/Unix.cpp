@@ -3,7 +3,7 @@
 #include "Engone/Asserts.h"
 
 // Todo: Compile for Linux and test the functions
-#ifdef OS_LINUX
+#ifdef OS_UNIX
 
 #include <unistd.h>
 #include <fcntl.h>
@@ -1047,7 +1047,7 @@ namespace engone {
 				PL_PRINTF("execv\n");
 			}
 			FreeArguments(argc, argv);
-
+            Assert(("Unreachable point",false));
 			exit(0);
 			return false;
 		}

@@ -2,10 +2,13 @@
     ELF format used by Unix systems (COFF doesn't work so well)
 
     https://refspecs.linuxfoundation.org/elf/elf.pdf
+    https://uclibc.org/docs/elf-64-gen.pdf
     
     Credit:
     https://gist.github.com/x0nu11byt3/bcb35c3de461e5fb66173071a2379779
     
+    Might be useful:
+    https://gist.github.com/DhavalKapil/2243db1b732b211d0c16fd5d9140ab0b
 */
 #pragma once
 
@@ -16,15 +19,23 @@
 
 namespace elf {
     
-    typedef u16 Elf64_Half
-    typedef u32 Elf64_Word
-    typedef u32 Elf64_Xword // IMPORTANT: Should this be signed?
-    typedef u64 Elf64_Addr
-    typedef u64 Elf64_Off
+    typedef u16 Elf64_Half;
+    typedef u32 Elf64_Word;
+    typedef i32 Elf64_Sword;
+    typedef u64 Elf64_Xword;
+    typedef i64 Elf64_Sxword;
+    typedef u64 Elf64_Addr;
+    typedef u64 Elf64_Off;
     
     #define EI_CLASS 4
     #define EI_DATA 5
     #define EI_VERSION 6
+    // OS/ABI identification
+    #define EI_OSABI 7
+    // ABI version
+    #define EI_ABIVERSION 8
+    // Start of padding bytes
+    #define EI_PAD 9
     #define EI_NIDENT (16)
 
     #define ET_NONE		0		/* No file type */
@@ -137,44 +148,6 @@ namespace elf {
         Elf64_Xword	sh_entsize;		/* Entry size if section holds table */
     } Elf64_Shdr;
     
-    #define	PT_NULL		0		/* Program header table entry unused */
-    #define PT_LOAD		1		/* Loadable program segment */
-    #define PT_DYNAMIC	2		/* Dynamic linking information */
-    #define PT_INTERP	3		/* Program interpreter */
-    #define PT_NOTE		4		/* Auxiliary information */
-    #define PT_SHLIB	5		/* Reserved */
-    #define PT_PHDR		6		/* Entry for header table itself */
-    #define PT_TLS		7		/* Thread-local storage segment */
-    #define	PT_NUM		8		/* Number of defined types */
-    #define PT_LOOS		0x60000000	/* Start of OS-specific */
-    #define PT_GNU_EH_FRAME	0x6474e550	/* GCC .eh_frame_hdr segment */
-    #define PT_GNU_STACK	0x6474e551	/* Indicates stack executability */
-    #define PT_GNU_RELRO	0x6474e552	/* Read-only after relocation */
-    #define PT_LOSUNW	0x6ffffffa
-    #define PT_SUNWBSS	0x6ffffffa	/* Sun Specific segment */
-    #define PT_SUNWSTACK	0x6ffffffb	/* Stack segment */
-    #define PT_HISUNW	0x6fffffff
-    #define PT_HIOS		0x6fffffff	/* End of OS-specific */
-    #define PT_LOPROC	0x70000000	/* Start of processor-specific */
-    #define PT_HIPROC	0x7fffffff	/* End of processor-specific */
-    
-    #define PF_X		(1 << 0)	/* Segment is executable */
-    #define PF_W		(1 << 1)	/* Segment is writable */
-    #define PF_R		(1 << 2)	/* Segment is readable */
-    #define PF_MASKOS	0x0ff00000	/* OS-specific */
-    #define PF_MASKPROC	0xf0000000	/* Processor-specific */
-    
-    typedef struct {
-        Elf64_Word	p_type;			/* Segment type */
-        Elf64_Word	p_flags;		/* Segment flags */
-        Elf64_Off	p_offset;		/* Segment file offset */
-        Elf64_Addr	p_vaddr;		/* Segment virtual address */
-        Elf64_Addr	p_paddr;		/* Segment physical address */
-        Elf64_Xword	p_filesz;		/* Segment size in file */
-        Elf64_Xword	p_memsz;		/* Segment size in memory */
-        Elf64_Xword	p_align;		/* Segment alignment */
-    } Elf64_Phdr;
-    
     #define ELF32_ST_BIND(val)		(((unsigned char) (val)) >> 4)
     #define ELF32_ST_TYPE(val)		((val) & 0xf)
     #define ELF32_ST_INFO(bind, type)	(((bind) << 4) + ((type) & 0xf))
@@ -211,12 +184,16 @@ namespace elf {
         Elf64_Word	st_name;		/* Symbol name (string tbl index) */
         unsigned char	st_info;		/* Symbol type and binding */
         unsigned char st_other;		/* Symbol visibility */
-        Elf64_Section	st_shndx;		/* Section index */
+        Elf64_Half	st_shndx;		/* Section index */
         Elf64_Addr	st_value;		/* Symbol value */
         Elf64_Xword	st_size;		/* Symbol size */
     } Elf64_Sym;
     
     #define R_X86_64_PLT32 4 // field: dword, calc: L + A - P
+
+    #define ELF64_R_SYM(i) ((i)>>8)
+    #define ELF64_R_TYPE(i) ((unsigned char)(i))
+    #define ELF64_R_INFO(s,t) (((s)<<8)+(unsigned char)(t))
     
     typedef struct {
         Elf64_Addr	r_offset;		/* Address */
@@ -228,6 +205,44 @@ namespace elf {
         Elf64_Xword	r_info;			/* Relocation type and symbol index */
         Elf64_Sxword	r_addend;		/* Addend */
     } Elf64_Rela;
+
+    // #define	PT_NULL		0		/* Program header table entry unused */
+    // #define PT_LOAD		1		/* Loadable program segment */
+    // #define PT_DYNAMIC	2		/* Dynamic linking information */
+    // #define PT_INTERP	3		/* Program interpreter */
+    // #define PT_NOTE		4		/* Auxiliary information */
+    // #define PT_SHLIB	5		/* Reserved */
+    // #define PT_PHDR		6		/* Entry for header table itself */
+    // #define PT_TLS		7		/* Thread-local storage segment */
+    // #define	PT_NUM		8		/* Number of defined types */
+    // #define PT_LOOS		0x60000000	/* Start of OS-specific */
+    // #define PT_GNU_EH_FRAME	0x6474e550	/* GCC .eh_frame_hdr segment */
+    // #define PT_GNU_STACK	0x6474e551	/* Indicates stack executability */
+    // #define PT_GNU_RELRO	0x6474e552	/* Read-only after relocation */
+    // #define PT_LOSUNW	0x6ffffffa
+    // #define PT_SUNWBSS	0x6ffffffa	/* Sun Specific segment */
+    // #define PT_SUNWSTACK	0x6ffffffb	/* Stack segment */
+    // #define PT_HISUNW	0x6fffffff
+    // #define PT_HIOS		0x6fffffff	/* End of OS-specific */
+    // #define PT_LOPROC	0x70000000	/* Start of processor-specific */
+    // #define PT_HIPROC	0x7fffffff	/* End of processor-specific */
+    
+    // #define PF_X		(1 << 0)	/* Segment is executable */
+    // #define PF_W		(1 << 1)	/* Segment is writable */
+    // #define PF_R		(1 << 2)	/* Segment is readable */
+    // #define PF_MASKOS	0x0ff00000	/* OS-specific */
+    // #define PF_MASKPROC	0xf0000000	/* Processor-specific */
+    
+    // typedef struct {
+    //     Elf64_Word	p_type;			/* Segment type */
+    //     Elf64_Word	p_flags;		/* Segment flags */
+    //     Elf64_Off	p_offset;		/* Segment file offset */
+    //     Elf64_Addr	p_vaddr;		/* Segment virtual address */
+    //     Elf64_Addr	p_paddr;		/* Segment physical address */
+    //     Elf64_Xword	p_filesz;		/* Segment size in file */
+    //     Elf64_Xword	p_memsz;		/* Segment size in memory */
+    //     Elf64_Xword	p_align;		/* Segment alignment */
+    // } Elf64_Phdr;
 }
 
 bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from = 0, u32 to = (u32)-1);

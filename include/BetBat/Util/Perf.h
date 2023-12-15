@@ -5,7 +5,7 @@
 
 #ifdef OS_WINDOWS
 #include <intrin.h>
-#elif defined(OS_LINUX)
+#else
 #include <x86intrin.h>
 #endif
 
@@ -137,7 +137,7 @@ struct MeasureScope {
         _interlockedadd64(&scopeStat->totalCycles, diff);
         _interlockedadd64(&scopeStat->uniqueCycles, diff-outsideCycles);
         _InterlockedIncrement(&scopeStat->hits);
-        #else
+        #elif defined(OS_UNIX)
         scopeStatLock.lock();
         if(parent) {
             parent->outsideCycles += diff;

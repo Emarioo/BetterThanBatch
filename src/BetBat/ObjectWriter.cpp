@@ -596,7 +596,7 @@ void ObjectFile::writeFile(const std::string& path) {
     engone::FileClose(file);
 }
 
-bool WriteObjectFile(const std::string& path, Program_x64* program, u32 from, u32 to){
+bool WriteObjectFile_coff(const std::string& path, Program_x64* program, u32 from, u32 to){
     using namespace engone;
     using namespace COFF_Format;
     Assert(program);

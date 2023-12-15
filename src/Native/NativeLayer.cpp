@@ -213,7 +213,7 @@ extern "C" {
         #undef ADD_CHAR
         commandLineArgs.ptr = argPtr;
         commandLineArgs.len = argCount;
-        #elif defined(OS_LINUX)
+        #else
         commandLineArgs.ptr = nullptr;
         commandLineArgs.len = 0;
         #endif

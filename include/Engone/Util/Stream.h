@@ -80,7 +80,7 @@ struct ByteStream {
     }
     // ALWAYS call wrote_unknown after calling this
     bool write_unknown(void** out_ptr, u32 max_size) {
-        Assert(size != 0);
+        Assert(max_size != 0);
         if(out_ptr)
             *out_ptr = nullptr;
         
@@ -125,7 +125,7 @@ struct ByteStream {
     bool read(u32 offset, void* ptr, u32 size) {
         int head = 0;
         for(int i=0;i<allocations.size();i++) {
-            Allocation* all = allocations[i];
+            Allocation* all = &allocations[i];
             
             int rel_off = offset - head; // relative offset in the allocation
             int rem_size = all->writtenBytes - rel_off; // remaining size of the allocation from the relative offset
@@ -140,7 +140,7 @@ struct ByteStream {
                 real_size = rem_size;   
             }
             
-            memcpy(ptr + head - offset, all->ptr + rel_off, real_size);
+            memcpy((char*)ptr + head - offset, all->ptr + rel_off, real_size);
             offset += real_size;
             size -= real_size;
             

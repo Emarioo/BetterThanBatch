@@ -20,7 +20,7 @@ namespace engone {
 	static void _GetClock(char* str) {
 		time_t t;
 		time(&t);
-		#ifdef OS_LINUX
+		#ifdef OS_UNIX
 		tm* tmp = localtime(&t);
 		#else
 		tm _tm;

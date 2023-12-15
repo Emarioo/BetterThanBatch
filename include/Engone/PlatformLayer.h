@@ -22,7 +22,7 @@
 #define MegaBytes(x) (x*1024llu*1024llu)
 #define GigaBytes(x) (x*1024llu*1024llu*1024llu)
 
-#ifdef OS_LINUX
+#ifdef OS_UNIX
 #define FORMAT_64 "%l"
 #else
 #define FORMAT_64 "%ll"

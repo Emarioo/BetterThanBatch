@@ -1,6 +1,6 @@
 // @macro-benchmark
 // #import "OS"
-#import "Logger"
+// #import "Logger"
 // #import "Basic"
 // #import "String"
 // #import "Math"
@@ -18,10 +18,11 @@
 
 // #import "Array"
 
+// fn @native printc(str: char);
 ok = 'A';
 // s = "ada";
 // 5
-printc(ok);
+// printc(ok);
 // prints(s);
 
 // fn hey1() {
