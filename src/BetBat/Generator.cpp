@@ -1278,6 +1278,30 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
             // info.addIncrSp(-misalign);
             break;
         }
+        case UNIXCALL: {
+            for(int i=0;i<astFunc->arguments.size();i++){
+                int size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
+                if(size>8){
+                    // TODO: This should be moved to the type checker.
+                    ERR_SECTION(
+                        ERR_HEAD(expression->tokenRange)
+                        ERR_MSG("Argument types cannot be larger than 8 bytes when using unixcall.")
+                        ERR_LINE(expression->tokenRange, "argument type is to large")
+                    )
+                    return SignalDefault::FAILURE;
+                }
+            }
+
+            // TODO: I DON'T THINK UNIX CALL NEEDS 32-BYTE STACK SPACE
+            // MAY NOT NEED TO BE ALIGNED TO 16 BYTES EITHER
+            int alignment = 16;
+            int stackSpace = 0;
+            stackSpace += MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
+            info.addIncrSp(-stackSpace);
+            // int misalign = MISALIGNMENT(-info.virtualStackPointer + stackSpace,alignment);
+            // info.addIncrSp(-misalign);
+            break;
+        }
         case CDECL_CONVENTION: {
             Assert(false); // @Incomplete
         }
@@ -1440,8 +1464,9 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 )
             }
             return SignalDefault::SUCCESS;
+            break; 
         }
-        break; case BETCALL: {
+        case BETCALL: {
             // I have not implemented linkConvention because it's rare
             // that you need it for BETCALL.
             if(info.compileInfo->compileOptions->target != BYTECODE) {
@@ -1508,8 +1533,9 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                     outTypeIds->add(ret.typeId);
                 }
             }
+            break; 
         }
-        break; case STDCALL: {
+        case STDCALL: {
             if(fullArgs.size() > 4) {
                 Assert(virtualArgumentSpace - info.virtualStackPointer == fullArgs.size()*8);
                 int argOffset = fullArgs.size()*8;
@@ -1523,6 +1549,11 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                     GeneratePop(info,BC_REG_RBX, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
                 }
             }
+            // TODO: Is it correct to assume that a function with like this:
+            //   (int a, float b, int c)
+            //   will use the registers rcx, xmm1, r8
+            //   OR should it be rcx, xmm0, rdx
+            // See UNIXCALL for how you would do it otherwise
             auto& argTypes = funcImpl->argumentTypes;
             if(fullArgs.size() > 3){
                 if(argTypes[3].typeId == AST_FLOAT32)
@@ -1587,6 +1618,105 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 }
                 outTypeIds->add(ret.typeId);
             }
+            break;
+        }
+        case UNIXCALL: {
+            // if(fullArgs.size() > 4) {
+            //     Assert(virtualArgumentSpace - info.virtualStackPointer == fullArgs.size()*8);
+            //     int argOffset = fullArgs.size()*8;
+            //     info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RBX});
+            //     for(int i=fullArgs.size()-1;i>=4;i--){
+            //         auto arg = fullArgs[i];
+                    
+            //         // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
+            //         // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
+            //         u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
+            //         GeneratePop(info,BC_REG_RBX, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
+            //     }
+            // }
+            // TODO IMPORTANT: Do we need to do something about the "red zone" (128 bytes below stack pointer).
+            //   What does the red zone imply? No pushing, popping?
+            auto& argTypes = funcImpl->argumentTypes;
+            const int normal_regs[6]{
+                BC_REG_RDI,
+                BC_REG_RSI,
+                BC_REG_RDX,
+                BC_REG_RCX,
+                BC_REG_R8,
+                BC_REG_R9,
+            };
+            const int float_regs[8] {
+                BC_REG_XMM0f,
+                BC_REG_XMM1f,
+                BC_REG_XMM2f,
+                BC_REG_XMM3f,
+                BC_REG_XMM4f,
+                BC_REG_XMM5f,
+                BC_REG_XMM6f,
+                BC_REG_XMM7f,
+            };
+            int used_normals = 0;
+            int used_floats = 0;
+            // Because we need to pop arguments in reverse, we must first know how many
+            // integer/pointer and float type arguments we have.
+            for(int i=fullArgs.size()-1;i>=0;i--) {
+                if(AST::IsDecimal(argTypes[i].typeId)) {
+                    used_floats++;
+                } else {
+                    used_normals++;
+                }
+            }
+            // Then, from the back, we can pop and place arguments in the right register.
+            for(int i=fullArgs.size()-1;i>=0;i--) {
+                if(AST::IsDecimal(argTypes[i].typeId)) {
+                    // I am not sure if doubles work so we should test and not assume.
+                    // This assert will prevent incorrect assumptions from causing trouble.
+                    Assert(argTypes[i].typeId == AST_FLOAT32);
+                    info.addPop(float_regs[--used_floats]);
+                } else {
+                    info.addPop(normal_regs[--used_normals]);
+                }
+            }
+            info.addCall(astFunc->linkConvention, astFunc->callConvention);
+            if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
+                || astFunc->linkConvention == LinkConventions::VARIMPORT){
+                if(astFunc->linkConvention == DLLIMPORT){
+                    info.addExternalRelocation(funcImpl->name, info.code->length());
+                    // info.addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
+                } else if(astFunc->linkConvention == VARIMPORT){
+                    info.addExternalRelocation(funcImpl->name, info.code->length());
+                } else {
+                    info.addExternalRelocation(funcImpl->name, info.code->length());
+                }
+                info.addImm(info.code->externalRelocations.size()-1);
+            } else {
+                // linkin == native, none or export should be fine
+                info.addCallToResolve(info.code->length(), funcImpl);
+                info.addImm(999999);
+            }
+
+            Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
+
+            if (funcImpl->returnTypes.size()==0) {
+                info.restoreStackMoment(startSP);
+                outTypeIds->add(AST_VOID);
+            } else {
+                // return type must fit in RAX
+                Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
+                
+                info.restoreStackMoment(startSP);
+                
+                auto &ret = funcImpl->returnTypes[0];
+                if(ret.typeId == AST_FLOAT32) {
+                    // 
+                    info.addPush(BC_REG_XMM0f);
+                } else {
+                    u8 reg = RegBySize(BC_AX, info.ast->getTypeSize(ret.typeId));
+                    info.addPush(reg);
+                }
+                outTypeIds->add(ret.typeId);
+            }
+            break;
         }
         default: {
             Assert(false);
@@ -3167,6 +3297,15 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         //     )
         //     continue;
         // }
+        if(function->callConvention == UNIXCALL) {
+            ERR_SECTION(
+                ERR_HEAD(function->tokenRange)
+                ERR_MSG("Unix calling convention is not implemented for user defined functions. You can however declare functions with unix convention and call them if they come from an external library.")
+                ERR_LINE(function->tokenRange,"unixcall not implemented")
+            )
+            continue;
+        }
+        // Assert(("Unix calling convention not implemented for user defined functions.",false));
 
         // Assert(!info.compileInfo->compileOptions->useDebugInformation);
         // IMPORTANT: How to deal with overloading and polymorphism?
@@ -3308,7 +3447,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             //  Generating them multiple times for each function is bad.
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
-        }  else if(function->callConvention == STDCALL) {
+        } else if(function->callConvention == STDCALL) {
             if (function->arguments.size() != 0) {
                 _GLOG(log::out << "set " << function->arguments.size() << " args\n");
                 // int offset = 0;
@@ -3412,6 +3551,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             //  Generating them multiple times for each function is bad.
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
+        } else if(function->callConvention == UNIXCALL) {
+            Assert(false);
+        } else {
+            Assert(false);
         }
         
         dfun->srcStart = info.code->length();
@@ -3504,6 +3647,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 info.addPop(BC_REG_FP);
                 info.addInstruction({BC_RET});
             }
+        } else {
+            Assert(false);
         }
         
         dfun->funcEnd = info.code->length() - 1;
@@ -3687,7 +3832,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 int alignment = 0;
                 if (varname.declaration) {
                     if (varname.arrayLength>0){
-                        Assert(!statement->globalAssignment);
+                        Assert(("global arrays not implemented",!statement->globalAssignment));
                         // TODO: Fix arrays with static data
                         if(statement->firstExpression) {
                             ERR_SECTION(

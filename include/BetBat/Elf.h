@@ -189,11 +189,16 @@ namespace elf {
         Elf64_Xword	st_size;		/* Symbol size */
     } Elf64_Sym;
     
+    #define R_X86_64_PC32 2 // field: dword, calc: S + A - P
     #define R_X86_64_PLT32 4 // field: dword, calc: L + A - P
 
-    #define ELF64_R_SYM(i) ((i)>>8)
-    #define ELF64_R_TYPE(i) ((unsigned char)(i))
-    #define ELF64_R_INFO(s,t) (((s)<<8)+(unsigned char)(t))
+    #define ELF32_R_SYM(i)	((i)>>8)
+	#define ELF32_R_TYPE(i)   ((unsigned char)(i))
+	#define ELF32_R_INFO(s,t) (((s)<<8)+(unsigned char)(t))
+
+	#define ELF64_R_SYM(i)    ((i)>>32)
+	#define ELF64_R_TYPE(i)   ((i)&0xffffffffL)
+	#define ELF64_R_INFO(s,t) (((u64)(s)<<32)+((u64)(t)&0xffffffffL))
     
     typedef struct {
         Elf64_Addr	r_offset;		/* Address */

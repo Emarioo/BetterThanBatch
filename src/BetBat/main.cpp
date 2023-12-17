@@ -106,9 +106,9 @@ int main(int argc, const char** argv){
         if(streq(arg,"--help")||streq(arg,"-help")) {
             print_help();
             return EXIT_CODE_NOTHING;
-        } else if (streq(arg,"--run")) {
+        } else if (streq(arg,"--run") || streq(arg,"-r")) {
             compileOptions.executeOutput = true;
-        } else if (streq(arg,"--preproc")) {
+        } else if (streq(arg,"--preproc") || streq(arg,"-p")) {
             onlyPreprocess = true;
         } else if (streq(arg,"--out") || streq(arg,"-o")) {
             i++;
@@ -181,21 +181,29 @@ int main(int argc, const char** argv){
     // #ifdef gone
     if(onlyPreprocess){
         if (compileOptions.sourceFile.text.size() == 0) {
-            log::out << log::RED << "You must specify a file when using -preproc\n";
+            log::out << log::RED << "You must specify a file when using --preproc\n";
         } else {
-            if(compileOptions.outputFile.text.size() == 0) {
-                // TODO: Output to a default file like preproc.btb
-                log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
-            } else{
-                auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
+            auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
+            if(!stream) {
+                log::out << log::RED << "Cannot read file '"<< compileOptions.sourceFile.text<<"'\n";
+            } else {
                 CompileInfo compileInfo{};
                 compileInfo.compileOptions = &compileOptions;
                 auto stream2 = Preprocess(&compileInfo, stream);
-                stream2->writeToFile(compileOptions.outputFile.text);
+                Assert(stream2);
+                if(compileOptions.outputFile.text.size() == 0) {
+                    log::out << log::AQUA << "## "<<compileOptions.sourceFile.text<<" ##\n";
+                    stream2->print();
+                    // TODO: Output to a default file like preproc.btb
+                    // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
+                    compilerExitCode = compileOptions.compileStats.errors;
+                } else{
+                    log::out << "Preprocessor output written to '"<<compileOptions.outputFile.text<<"'\n";
+                    stream2->writeToFile(compileOptions.outputFile.text);
+                    compilerExitCode = compileOptions.compileStats.errors;
+                }
                 TokenStream::Destroy(stream);
                 TokenStream::Destroy(stream2);
-
-                compilerExitCode = compileOptions.compileStats.errors;
             }
         }
     } else if(runTests) {

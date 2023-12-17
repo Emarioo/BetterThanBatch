@@ -302,8 +302,8 @@ namespace engone {
         // printf("OPENING\n");
         int fd = open(path.c_str(), fileFlags, mode);
 		if (fd == -1) {
-			printf("[LinuxError %d]\n", errno);
-			return {};
+			printf("[LinuxError %d] open, %s\n", errno, path.c_str());
+			return {0};
 		}
         if(outFileSize) {
             off_t size = lseek(fd,0,SEEK_END);
@@ -1053,9 +1053,15 @@ namespace engone {
 		}
 		
 		if(flags&PROGRAM_WAIT){
-			int err = waitpid(pid, exitCode, 0);
+			int status = 0;
+			int err = waitpid(pid, &status, 0);
 			if(err == -1) {
 				PL_PRINTF("waitpid\n");
+			} else {
+				if(WIFEXITED(status)) {
+					if(exitCode)
+						*exitCode = WEXITSTATUS(status);
+				}
 			}
 		}
 		

@@ -24,7 +24,8 @@ echo "Compiled in $((($runtime) / 1000)).$((($endTime - $startTime) % 1000)) sec
 
 if [ "$err" = 0 ]; then
     # cp bin/btb btb
-    ./bin/btb -dev
+    # ./bin/btb -dev
+    ./bin/btb -r ma.btb
 fi 
 
 exit

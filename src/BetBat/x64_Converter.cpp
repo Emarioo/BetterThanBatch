@@ -1,6 +1,7 @@
 #include "BetBat/x64_Converter.h"
 
 #include "BetBat/ObjectWriter.h"
+#include "BetBat/Elf.h"
 
 
 /*
@@ -395,7 +396,7 @@ void Program_x64::printAsm(const char* path, const char* objpath){
         #ifdef OS_WINDOWS
         WriteObjectFile_coff("bin/garb.obj", this);
         #else
-        WriteObjectFile_coff("bin/garb.o", this);
+        WriteObjectFile_elf("bin/garb.o", this);
         #endif
     }
 
@@ -2415,7 +2416,32 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->namedRelocations.add(reloc0);
                         prog->namedRelocations.add(reloc1);
                     #else
-                        Assert(("prints not implemented for unix",false));
+                        // ptr = [rsp + 0]
+                        // len = [rsp + 8]
+                        // char* ptr = *(char**)(fp+argoffset);
+                        // u64 len = *(u64*)(fp+argoffset+8);
+                        prog->add(PREFIX_REXW);
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF, REG_SI, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        
+                        prog->add((u8)(PREFIX_REXW));
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, REG_D, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)8);
+
+                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        prog->addModRM(MODE_REG, 0, REG_DI);
+                        prog->add4((u32)1); // stdout
+
+                        prog->add(OPCODE_CALL_IMM);
+                        int reloc_pos = prog->size();
+                        prog->add4((u32)0);
+
+                        // We call the Unix write system call, altough not directly
+                        NamedRelocation reloc0{};
+                        reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
+                        reloc0.textOffset = reloc_pos;
+                        prog->namedRelocations.add(reloc0);
                     #endif
                         break;
                     }

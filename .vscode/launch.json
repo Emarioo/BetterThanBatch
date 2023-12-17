@@ -6,7 +6,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb",
-            "args": ["-dev"],
+            "args": ["-r","ma.btb"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

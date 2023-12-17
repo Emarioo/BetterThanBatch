@@ -158,7 +158,7 @@ namespace engone {
 	class Thread {
 	public:
 		Thread() = default;
-		~Thread(){cleanup();}
+		~Thread(){ cleanup(); }
 		// The thread itself should not call this function
 		void cleanup();
 		

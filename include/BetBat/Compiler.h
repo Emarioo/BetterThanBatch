@@ -183,6 +183,7 @@ struct ThreadCompileInfo {
     engone::Thread _thread{}; // should not be touched by the thread itself
 };
 struct CompileInfo {
+    ~CompileInfo() { cleanup(); }
     void cleanup();
     
     // TODO: allocator for streams

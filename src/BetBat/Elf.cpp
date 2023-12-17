@@ -14,7 +14,7 @@ bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from
     #define CHECK Assert(suc);
     
     // data relocations not implemented
-    Assert(program->dataRelocations.size() == 0);
+    // Assert(program->dataRelocations.size() == 0);
     
     ByteStream* obj_stream = ByteStream::Create(nullptr);
     defer {
@@ -30,6 +30,10 @@ bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from
     
     // IMPORTANT TODO: Check alignment of sections and data of sections
     // TODO: Remove unecessary 'section->propery = 0'. sh_name, sh_addr should always be zero at first so there's no need to set them to 0 since we use memset to zero the whole section
+
+    // It can be useful to change the name of the data change sometimes.
+    // That way, it won't collide with other .data section when linking.
+    #define SECTION_NAME_DATA ".data"
     
     /*##############
         HEADER
@@ -219,7 +223,7 @@ bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from
         s_sectionStringTable->sh_name = ADD(".shstrtab")
         s_stringTable->sh_name = ADD(".strtab")
         s_text->sh_name = ADD(".text")
-        s_data->sh_name = ADD(".data")
+        s_data->sh_name = ADD(SECTION_NAME_DATA)
         s_symtab->sh_name = ADD(".symtab")
         s_textrela->sh_name = ADD(".rela.text")
         
@@ -232,7 +236,61 @@ bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from
     
     int stringTable_offset = 1;
     DynamicArray<std::string> stringTable_strings{};
+
+    struct Symbol {
+        int nameIndex; // index into string table
+        int nameArrayIndex; // index into string array
+        int sectionIndex;
+        int value;
+        int type;
+        int bind;
+    };
+    DynamicArray<Symbol> symbols{};
+    bool symbols_addedNonLocal = false;
+    auto addSymbol = [&](const std::string& name, int section, int value, int bind, int type) {
+        
+        for(int i=0;i<symbols.size();i++) {
+            Symbol& sym = symbols[i];
+            if(((sym.nameArrayIndex == -1 && name.length() == 0) || (sym.nameArrayIndex != -1 && stringTable_strings[sym.nameArrayIndex] == name))
+            && sym.sectionIndex == section
+            && sym.value == value
+            && sym.bind == bind
+            && sym.type == type)
+                return i;
+        }
+
+        // can't add locals after non-globals.
+        // locals must be first. we can't sort because the index we return would become incorrect.
+        if(bind != STB_LOCAL)
+            symbols_addedNonLocal = true;
+        Assert(bind != STB_LOCAL || !symbols_addedNonLocal);
+
+        symbols.add({});
+        Symbol& sym = symbols.last();
+        if(name.empty()) {
+            sym.nameIndex = 0;
+            sym.nameArrayIndex = -1;
+        } else {
+            sym.nameIndex = stringTable_offset;
+            sym.nameArrayIndex = stringTable_strings.size()-1;
+            stringTable_strings.add(name);
+            stringTable_offset += name.length() + 1;
+        }
+        
+        sym.sectionIndex = section;
+        sym.value = value;
+        sym.bind = bind;
+        sym.type = type;
+
+        return (int)(symbols.size() - 1);
+    };
+
+    // TODO: Add .text symbol
+    // int sym_data = addSymbol(".text", ind_data, 0, STB_LOCAL, STT_SECTION);
+    addSymbol("", 0, 0, 0, 0); // null symbol
     
+    int sym_data = addSymbol(SECTION_NAME_DATA, ind_data, 0, STB_LOCAL, STT_SECTION);
+
     {
         auto section = s_text;
         ALIGN(section->sh_addralign)
@@ -266,15 +324,31 @@ bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from
             suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
             CHECK
             memset(rel, 0, sizeof(*rel));
-            
-            // Mote that the first symbol is main. Hence +1.
-            int symindex = i + 1; // IMPORTANT: This only works because we add all namedRelocations as symbols in symtab in the right order. This may not be true in the future.
+
+            // int symindex = addSymbol(nrel->name, ind_text, nrel->textOffset, STB_LOCAL, STT_FUNC);
+            int symindex = addSymbol(nrel->name, 0, 0, STB_GLOBAL, STT_NOTYPE);
             
             rel->r_offset = nrel->textOffset;
             rel->r_info = ELF64_R_INFO(symindex,R_X86_64_PLT32);
-            rel->r_addend = 0;
+            rel->r_addend = -4;
         }
-        
+
+        for(int i=0;i<program->dataRelocations.size();i++) {
+            DataRelocation* drel = &program->dataRelocations[i];
+            
+            Elf64_Rela* rel = nullptr;
+            suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
+            CHECK
+            memset(rel, 0, sizeof(*rel));
+            
+            rel->r_offset = drel->textOffset;
+            rel->r_info = ELF64_R_INFO(sym_data, R_X86_64_PC32);
+            rel->r_addend = drel->dataOffset;
+            // NOYE: For some reason our relocation to the data section is 4
+            // bytes off. This does not happen with COFF. My solution
+            // is to offset it by 4 bytes and not worry about it. (couldn't find any good explanation on the internet)
+            rel->r_addend -= 4;
+        }
         section->sh_size = obj_stream->getWriteHead() - section->sh_offset;
     }
     
@@ -284,51 +358,57 @@ bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from
         section->sh_offset = obj_stream->getWriteHead();
         
         // first symbol consists of only zeros
+        // I THOUGHT BUT I GUESS NOT?
         // Elf64_Sym* sym = nullptr;
         // suc = obj_stream->write_late((void**)&sym, sizeof(*sym));
         // CHECK
         // memset(sym, 0, sizeof(*sym));
-        
-        {
-            Elf64_Sym* sym = nullptr;
-            suc = obj_stream->write_late((void**)&sym, sizeof(*sym));
-            CHECK
-            memset(sym, 0, sizeof(*sym));
-            
-            sym->st_name = stringTable_offset;
-            std::string name = "main";
-            stringTable_strings.add(name);
-            stringTable_offset += name.length() + 1;
-            
-            // engone::log::out << "index "<<ind_text<<"\n";
-            sym->st_other = 0; // always zero
-            sym->st_shndx = ind_text;
-            sym->st_size = 0;
-            sym->st_value = 0; // 0 address meaning start of text section
-            sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC);
-        }
-        
+
+        // int sym_main = addSymbol("main", ind_text, 0, STB_LOCAL, STT_FUNC);
+        int sym_main = addSymbol("main", ind_text, 0, STB_GLOBAL, STT_FUNC);
+
         section->sh_info = 0; // number of local symbols
-        
-        for(int i=0;i<program->namedRelocations.size();i++) {
-            NamedRelocation* rel = &program->namedRelocations[i];
-            
+        // Local symbols should be added first
+        for(int i=0;i<symbols.size();i++){
+            Symbol& symbol = symbols[i];
+            if(symbol.bind != STB_LOCAL)
+                continue;
+
             Elf64_Sym* sym = nullptr;
             suc = obj_stream->write_late((void**)&sym, sizeof(*sym));
             CHECK
             memset(sym, 0, sizeof(*sym));
             
-            sym->st_name = stringTable_offset;
-            stringTable_strings.add(rel->name);
-            stringTable_offset += rel->name.length() + 1;
-            
+            sym->st_name = symbol.nameIndex;
             sym->st_other = 0; // always zero
-            sym->st_shndx = ind_text;
+            sym->st_shndx = symbol.sectionIndex;
             sym->st_size = 0;
-            sym->st_value = rel->textOffset;
-            sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC); // IMPORTANT: ALL SYMBOLS SHOULD NOT BE GLOBAL NOR FUNCTIONS!
-            // sym->st_info = ELF64_ST_INFO(STB_GLOBAL, ); // IMPORTANT: ALL SYMBOLS SHOULD NOT BE GLOBAL!
+            sym->st_value = symbol.value;
+            
+            sym->st_info = ELF64_ST_INFO(symbol.bind, symbol.type);
+
+            section->sh_info++; // increment number of local symbols
         }
+        // Continue with non-local symbols
+        for(int i=0;i<symbols.size();i++){
+            Symbol& symbol = symbols[i];
+            if(symbol.bind == STB_LOCAL)
+                continue;
+
+            Elf64_Sym* sym = nullptr;
+            suc = obj_stream->write_late((void**)&sym, sizeof(*sym));
+            CHECK
+            memset(sym, 0, sizeof(*sym));
+            
+            sym->st_name = symbol.nameIndex;
+            sym->st_other = 0; // always zero
+            sym->st_shndx = symbol.sectionIndex;
+            sym->st_size = 0;
+            sym->st_value = symbol.value;
+            
+            sym->st_info = ELF64_ST_INFO(symbol.bind, symbol.type);
+        }
+        
         section->sh_size = obj_stream->getWriteHead() - section->sh_offset;
     }
     

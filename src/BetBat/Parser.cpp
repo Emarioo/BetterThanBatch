@@ -2872,9 +2872,9 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         } else if (Equal(name,"@stdcall")){
             function->callConvention = CallConventions::STDCALL;
             specifiedConvention = true;
+        // } else if (Equal(name,"@cdecl")){
         // cdecl has not been implemented. It doesn't seem important.
         // default x64 calling convention is used.
-        // } else if (Equal(name,"@cdecl")){
         //     Assert(false); // not implemented in type checker and generator. type checker might work as is.
         //     function->callConvention = CallConventions::CDECL_CONVENTION;
         //     specifiedConvention = true;
@@ -2883,6 +2883,9 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
             function->linkConvention = LinkConventions::NONE;
             specifiedConvention = true;
         // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
+        } else if (Equal(name,"@unixcall")){
+            function->callConvention = CallConventions::UNIXCALL;
+            specifiedConvention = true;
         } else if (Equal(name,"@native")){
             function->linkConvention = NATIVE;
         } else if (Equal(name,"@intrinsic")){

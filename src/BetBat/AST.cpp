@@ -7,6 +7,7 @@ const char* ToString(CallConventions stuff){
         CASE(STDCALL,"stdcall")
         CASE(INTRINSIC,"intrinsic")
         CASE(CDECL_CONVENTION,"cdecl")
+        CASE(UNIXCALL,"unixcall")
     }
     return "<unknown-call>";
     #undef CASE

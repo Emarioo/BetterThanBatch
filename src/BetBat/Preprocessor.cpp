@@ -1618,6 +1618,8 @@ SignalDefault ParseToken(PreprocInfo& info){
 }
 TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
     using namespace engone;
+    Assert(compileInfo);
+    Assert(inTokens);
     MEASURE;
     
     PreprocInfo info{};

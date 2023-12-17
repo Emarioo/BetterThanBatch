@@ -19,7 +19,7 @@
 // #import "Array"
 
 // fn @native printc(str: char);
-ok = 'A';
+// ok = 'A';
 // s = "ada";
 // 5
 // printc(ok);

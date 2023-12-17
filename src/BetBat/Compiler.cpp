@@ -332,6 +332,7 @@ void CompileInfo::cleanup(){
         TRACK_FREE(pair.second, RootMacro);
         // engone::Free(pair.second, sizeof(RootMacro));
     }
+    _rootMacros.clear();
     // for(auto& stream : streamsToClean){
     //     TokenStream::Destroy(stream);
     // }
@@ -1086,7 +1087,7 @@ Bytecode* CompileSource(CompileOptions* options) {
             compileInfo.compileOptions->compileStats.printWarnings();
     }
 
-    compileInfo.cleanup();
+    // compileInfo.cleanup(); // descrutor
     return bytecode;
 }
 
@@ -1189,6 +1190,10 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             }
             case BYTECODE: {
                 // nothing
+                break;
+            }
+            case UNIX_x64: {
+                options->outputFile = "bin/temp";
                 break;
             }
             default: {

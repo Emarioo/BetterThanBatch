@@ -82,7 +82,8 @@
         "deque": "cpp",
         "memory_resource": "cpp",
         "numbers": "cpp",
-        "cinttypes": "cpp"
+        "cinttypes": "cpp",
+        "ya": "c"
     },
     "cmake.configureOnOpen": false,
     "lldb.displayFormat": "auto",
