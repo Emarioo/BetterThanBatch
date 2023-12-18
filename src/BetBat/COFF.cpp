@@ -1,14 +1,14 @@
-#include "BetBat/ObjectWriter.h"
+#include "BetBat/COFF.h"
 #include "Engone/Logger.h"
 #include "BetBat/Util/Utility.h"
 
-#include "BetBat/PDBWriter.h"
+#include "BetBat/PDB.h"
 
 #include <time.h>
 
 // included for the Path struct
 #include "BetBat/Compiler.h"
-#include "BetBat/Dwarf.h"
+#include "BetBat/DWARF.h"
 
 namespace COFF_Format {
     

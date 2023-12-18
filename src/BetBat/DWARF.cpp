@@ -1,4 +1,4 @@
-#include "BetBat/Dwarf.h"
+#include "BetBat/DWARF.h"
 
 namespace dwarf {
     void ProvideSections(DWARFInfo* info) {

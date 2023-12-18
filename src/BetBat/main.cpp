@@ -1,8 +1,8 @@
 
 #include "BetBat/Compiler.h"
 #include "BetBat/Util/TestSuite.h"
-#include "BetBat/PDBWriter.h"
-#include "BetBat/Dwarf.h"
+#include "BetBat/PDB.h"
+#include "BetBat/DWARF.h"
 
 #include "BetBat/Help.h"
 
@@ -60,12 +60,42 @@ bool streq(const char* a, const char* b) {
 int main(int argc, const char** argv){
     using namespace engone;
     
+    // struct Bug {
+    //     u32 line=0;
+    //     u32 column=0;
+    //     std::string file{};
+    //     std::string desc{};
+    //     std::string preDesc{};
+    //     void* stream = nullptr;
+    // };
+    // DynamicArray<Bug> ya{};
+
+    // for(int i=0;i<3;i++) {
+    //     ya.add({});
+    // }
+
+    // std::string* a = (std::string*)Allocate(sizeof(std::string));
+    // std::string* b = (std::string*)Allocate(sizeof(std::string));
+
+    // new(a)std::string();
+    // new(b)std::string();
+    // *a = std::move(*b);
+
     // test_garbage();
     // return 0;
     
     /*
         INITIALIZE
     */
+
+//    FileOpen()
+
+    // auto file = FileOpen("ya",nullptr, engone::FILE_ALWAYS_CREATE);
+
+    // StartProgram("echo hello", PROGRAM_WAIT, nullptr, {}, file, {});
+
+    // return 0;
+
     log::out.enableReport(false);
     MeasureInit();
     ProfilerInitialize();
@@ -90,7 +120,7 @@ int main(int argc, const char** argv){
     #endif
 
     bool onlyPreprocess = false;
-    bool runTests = false;
+    bool performTests = false; // could be one or more
 
     if (argc < 2) {
         print_version();
@@ -125,8 +155,8 @@ int main(int argc, const char** argv){
             }
         } else if (streq(arg,"-dev")) {
             devmode = true;
-        } else if (streq(arg,"--tests")) {
-            runTests = true;
+        } else if (streq(arg,"--test")) {
+            performTests = true;
         } else if (streq(arg,"--debug") || streq(arg, "-g")) {
             compileOptions.useDebugInformation = true;
         } else if (streq(arg,"--silent")) {
@@ -206,11 +236,19 @@ int main(int argc, const char** argv){
                 TokenStream::Destroy(stream2);
             }
         }
-    } else if(runTests) {
-        // DynamicArray<std::string> tests;
-        // tests.add("tests/simple/operations.btb");
-        int failures = TestSuite(TEST_ALL);
-        compilerExitCode = failures;
+    } else if(performTests) {
+        if(compileOptions.sourceFile.text.length() != 0) {
+            DynamicArray<std::string> tests;
+            tests.add(compileOptions.sourceFile.text);
+            int failures = VerifyTests(tests);
+            compilerExitCode = failures;
+        } else {
+            DynamicArray<std::string> tests;
+            tests.add("tests/simple/operations.btb");
+            // int failures = TestSuite(TEST_ALL);
+            int failures = VerifyTests(tests);
+            compilerExitCode = failures;
+        }
     } else if(!devmode){
         if(compileOptions.outputFile.text.size()==0) {
             CompileAll(&compileOptions);
@@ -225,6 +263,8 @@ int main(int argc, const char** argv){
         #else
         compileOptions.sourceFile = DEV_FILE;
         #endif
+
+        #define RUN_TESTS "tests/simple/operations.btb"
 
         #ifdef RUN_TEST_SUITE
         DynamicArray<std::string> tests;

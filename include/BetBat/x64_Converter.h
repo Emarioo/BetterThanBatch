@@ -19,7 +19,7 @@ x64 operands
 */
 struct DataRelocation {
     u32 dataOffset; // offset in data segment
-    u32 textOffset; // wHere to modify        
+    u32 textOffset; // where to modify        
 };
 struct NamedRelocation {
     std::string name;

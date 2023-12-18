@@ -97,10 +97,10 @@
 #ifdef DEBUG
 
 
-#define VLOG
+// #define VLOG
 
 // will print AST
-#define AST_LOG
+// #define AST_LOG
 
 // #define TLOG
 

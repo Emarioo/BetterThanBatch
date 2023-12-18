@@ -6,8 +6,8 @@
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
 #include "BetBat/NativeRegistry.h"
-#include "BetBat/ObjectWriter.h"
-#include "BetBat/Elf.h"
+#include "BetBat/COFF.h"
+#include "BetBat/ELF.h"
 #include "BetBat/x64_Converter.h"
 #include "BetBat/UserProfile.h"
 // #include "BetBat/MessageTool.h"
@@ -128,7 +128,7 @@ struct CompileOptions {
 
     Path sourceFile{};
     Path outputFile{};
-    TargetPlatform target = BYTECODE;
+    TargetPlatform target = CONFIG_DEFAULT_TARGET;
 
     bool useDebugInformation = false;
     bool silent=false;

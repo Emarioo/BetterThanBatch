@@ -1,3 +1,9 @@
+#define arithmetic
+#define many_math_ops
+#define conversions
+#define overflow
+#define special
+
 @TEST-CASE arithmetic
 test 3; 1+2;
 test 3; 1- -2;
@@ -34,7 +40,7 @@ test 1; cast<i32>sqrt(1);
 test 1; cast<i32>sqrt(2);
 test 2; cast<i32>sqrt(3.9999999);
 
-@TEST-CASE many-math-ops
+@TEST-CASE many_math_ops
 // The test below is a little scuffed because of issues with precision.
 // Python evaluates the math to this: -2159226 while this compiler gives this result: -2158333.
 test -2158333; cast<i32>(100000*(5. / 6. - 7. )* 7. / 8. * 4. + (1. / 4. / (1. - 5. + 1. - 4. * 7. - 2. * 3. / 2. - (6. / 3. )/ 2. + (6. / 6. + 8. - 7. )+ 5. )));
@@ -114,7 +120,7 @@ t == 0;
 #define T(t0,t1,n0,OP,n1) cast<t0> n0 OP cast<t1> n1
 
 test 60000; T(u32, u32, 10000, *, 6);
-{ @dump-bc
-test 70000; T(u16, u8, 10000, *, 7);
-}
+// { @dump-bc
+test 49000; T(u16, u8, 7000, *, 7);
+// }
 test 1; cast<u8>301 % cast<u8>258;

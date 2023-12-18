@@ -1,4 +1,4 @@
-#include "BetBat/Elf.h"
+#include "BetBat/ELF.h"
 
 namespace elf {
     
@@ -317,6 +317,8 @@ bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from
         ALIGN(section->sh_addralign)
         section->sh_offset = obj_stream->getWriteHead();
         
+        // IMPORTANT: THIS TYPE OF RELOCATION IS USED FOR call rel32!
+        //  IT WON'T WORK WITH call FAR or ABSOLUTE.
         for(int i=0;i<program->namedRelocations.size();i++) {
             NamedRelocation* nrel = &program->namedRelocations[i];
             

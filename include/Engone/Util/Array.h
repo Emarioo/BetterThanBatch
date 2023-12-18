@@ -213,7 +213,7 @@ struct DynamicArray {
 
     bool add(const T& t){
         if(used + 1 > max){
-            if(!_reserve(50 + max * 1.5)){
+            if(!_reserve(1 + max * 1.5)){
                 return false;
             }
         }
@@ -301,19 +301,24 @@ struct DynamicArray {
             //     used = newMax;
             // }
 
-            TRACK_DELS(T, max);
             // T* newPtr = (T*)engone::Reallocate(_ptr, sizeof(T) * max, sizeof(T) * newMax);
             T* newPtr = (T*)engone::Allocate(sizeof(T) * newMax);
             Assert(newPtr);
             
             for(u32 i = 0; i < used; i++){
+                new(newPtr + i)T();
                 *(newPtr + i) = std::move(*(_ptr + i));
-                // (_ptr + i)->~T();
+                (_ptr + i)->~T();
             }
             
             engone::Free(_ptr, sizeof(T) * max);
 
-            TRACK_ADDS(T, newMax);
+            if (newMax > max) {
+                TRACK_ADDS(T, newMax - max);
+            } else if(newMax < max) {
+                TRACK_DELS(T, max - newMax);
+            }
+
             if(!newPtr)
                 return false;
             _ptr = newPtr;

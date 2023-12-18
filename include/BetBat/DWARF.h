@@ -13,7 +13,7 @@
 #pragma once
 
 #include "Engone/Util/Stream.h"
-#include "BetBat/ObjectWriter.h"
+#include "BetBat/COFF.h"
 
 namespace dwarf {
     // IMPORTANT: All structs assume 32-bit DWARF format

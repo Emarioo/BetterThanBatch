@@ -40,7 +40,7 @@ void Tracker::AddTracking(const std::type_info& typeInfo, u32 size, const TrackL
     }
     ptr->count+=count;
     #ifdef LOG_TRACKER
-    engone::log::out << "Track "<<count<<": "<<typeInfo.name() <<" (left: "<<ptr->count<<")\n";
+    engone::log::out << engone::log::GREEN << "Track "<<count<<": "<<typeInfo.name() <<" (left: "<<ptr->count<<")\n";
     #endif
     if(loc.fname){
         ptr->locations.add(loc);
@@ -73,7 +73,7 @@ void Tracker::DelTracking(const std::type_info& typeInfo, u32 size, const TrackL
     }
     ptr->count-=count;
     #ifdef LOG_TRACKER
-    engone::log::out << "Unrack "<<count<<": "<<typeInfo.name() <<" (left: "<<ptr->count<<")\n";
+    engone::log::out << engone::log::CYAN << "Unrack "<<count<<": "<<typeInfo.name() <<" (left: "<<ptr->count<<")\n";
     #endif
     if(loc.fname) {
         bool removed = false;
@@ -107,7 +107,8 @@ void Tracker::PrintTrackedTypes(){
         TrackerType* trackType = &pair.second;
         if(trackType->count == 0)
             continue;
-        if(strcmp(trackType->name.c_str(),"struct "))
+        
+        if(trackType->name.find("struct ") == 0) // Naming on Windows?
             log::out <<" "<<log::LIME<< (trackType->name.c_str()+strlen("struct "))<<log::NO_COLOR <<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
         else
             log::out <<" "<<log::LIME<< trackType->name <<log::NO_COLOR<<"["<<trackType->size<<"]: "<<trackType->count<<"\n";

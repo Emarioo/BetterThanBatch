@@ -6,6 +6,9 @@
 #include "BetBat/Compiler.h"
 
 struct TestCase {
+    ~TestCase() {
+        expectedErrors.cleanup();
+    }
     std::string testName;
     TextBuffer textBuffer;
     struct Error {

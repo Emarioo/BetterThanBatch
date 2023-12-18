@@ -177,8 +177,7 @@ bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
         if(nodeStack.last()->tokenRange.tokenStream())
             location->desc = nodeStack.last()->tokenRange.firstToken.getLine();
     }
-    return true;
-}
+    return true;}
 void GenInfo::addLoadIm(u8 reg, i32 value){
     addInstruction({BC_LI, reg}, true);
     if(disableCodeGeneration) return;
@@ -1304,6 +1303,10 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
         }
         case CDECL_CONVENTION: {
             Assert(false); // @Incomplete
+        }
+        case INTRINSIC: {
+            // do nothing
+            break;
         }
         default: {
             Assert(false);
@@ -2914,15 +2917,15 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     u8 regOut = RegBySize(OUT_REG, outSize); // TODO: Use the biggest size?
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
-                    if(lsize < rsize) {
-                        u8 reg1_big = RegBySize(FIRST_REG, rsize); // get the appropriate registers
+                    if(lsize != outSize) {
+                        u8 reg1_big = RegBySize(FIRST_REG, outSize); // get the appropriate registers
                         if(arithmeticType == ARITHMETIC_SINT)
                             info.addInstruction({BC_CAST, CAST_SINT_SINT, reg1, reg1_big});
                         if(arithmeticType == ARITHMETIC_UINT)
                             info.addInstruction({BC_CAST, CAST_SINT_UINT, reg1, reg1_big});
                         reg1 = reg1_big;
-                    } else if(rsize < lsize) {
-                        u8 reg2_big = RegBySize(SECOND_REG, rsize); // get the appropriate registers
+                    } else if(rsize != outSize) {
+                        u8 reg2_big = RegBySize(SECOND_REG, outSize); // get the appropriate registers
                         if(arithmeticType == ARITHMETIC_SINT)
                             info.addInstruction({BC_CAST, CAST_SINT_SINT, reg2, reg2_big});
                         if(arithmeticType == ARITHMETIC_UINT)

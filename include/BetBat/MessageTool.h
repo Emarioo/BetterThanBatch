@@ -18,8 +18,8 @@ struct TokenStream;
     Latest code for message handling
 */
 #ifdef LOG_MSG_LOCATION
-#define MSG_CODE_LOCATION2 engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n" <<
-#define MSG_CODE_LOCATION engone::log::out << engone::log::GRAY << __FILE__ << ":"<< __LINE__ << "\n"
+#define MSG_CODE_LOCATION2 engone::log::GRAY << "./"<< __FILE__ << ":"<< __LINE__ << "\n" <<
+#define MSG_CODE_LOCATION engone::log::out << engone::log::GRAY <<"./"<< __FILE__ << ":"<< __LINE__ << "\n"
 #else
 #define MSG_CODE_LOCATION2
 #define MSG_CODE_LOCATION

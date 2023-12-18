@@ -1,7 +1,7 @@
 #include "BetBat/x64_Converter.h"
 
-#include "BetBat/ObjectWriter.h"
-#include "BetBat/Elf.h"
+#include "BetBat/COFF.h"
+#include "BetBat/ELF.h"
 
 
 /*
@@ -405,7 +405,8 @@ void Program_x64::printAsm(const char* path, const char* objpath){
     #ifdef OS_WINDOWS
     std::string cmd = "dumpbin /NOLOGO /DISASM:BYTES ";
     #else
-    std::string cmd = "objdump -d ";
+    // -M intel for intel syntax
+    std::string cmd = "objdump -M intel -d ";
     #endif
     if(!objpath)
         cmd += "bin/garb.obj";
@@ -2611,23 +2612,23 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // IMPORTANT: stack must be aligned when calling functions
                 #ifdef OS_WINDOWS
                 /*
-mov    rbx,rsp
-sub    rbx,0x8
-sub    rsp,0x30
-mov    DWORD PTR [rbx],0x99993057
-cmp    rdx,rax
-je     hop
-mov    BYTE PTR [rbx],0x78
-hop:
-mov    ecx,0xfffffff4
-call   QWORD PTR [rip+0x0]    
-mov    QWORD PTR [rsp+0x20],0x0
-xor    r9,r9
-mov    r8,0x4
-mov    rdx,rbx
-mov    rcx,rax
-call   QWORD PTR [rip+0x0]    
-add    rsp,0x30
+                mov    rbx,rsp
+                sub    rbx,0x8
+                sub    rsp,0x30
+                mov    DWORD PTR [rbx],0x99993057
+                cmp    rdx,rax
+                je     hop
+                mov    BYTE PTR [rbx],0x78
+                hop:
+                mov    ecx,0xfffffff4
+                call   QWORD PTR [rip+0x0]    
+                mov    QWORD PTR [rsp+0x20],0x0
+                xor    r9,r9
+                mov    r8,0x4
+                mov    rdx,rbx
+                mov    rcx,rax
+                call   QWORD PTR [rip+0x0]    
+                add    rsp,0x30
 
                 0x00:  48 89 e3                mov    rbx,rsp
                 0x03:  48 83 c3 08             add    rbx,0x8
@@ -2637,7 +2638,7 @@ add    rsp,0x30
                 0x14: 74 03                   je     19 <hop>
                 0x16: c6 03 78                mov    BYTE PTR [rbx],0x78
                 0x0000000000000019 <hop>:
-                0x19: b9 f4 ff ff ff          mov    ecx,0xfffffff4
+                0x19: b9 f4 ff ff ff          mov    ecx,0xfffffff4     # stderr handle
                 0x1e: ff 15 00 00 00 00       call   QWORD PTR [rip+0x0]        # 24 <hop+0xb>
                 0x24: 48 c7 44 24 20 00 00    mov    QWORD PTR [rsp+0x20],0x0
                 0x2b: 00 00
@@ -2659,8 +2660,16 @@ add    rsp,0x30
                 NamedRelocation reloc1{};
                 reloc1.name = "__imp_WriteFile";
                 reloc1.textOffset = prog->size() + 0x3F;
-                u8 arr[]=
-                { 0x48, 0x89, 0xE3, 0x48, 0x83, 0xEB, 0x08, 0x48, 0x83, 0xEC, 0x30, 0xC7, 0x03, 0x57, 0x30, 0x99, 0x99, 0x48, 0x39, 0xC2, 0x74, 0x03, 0xC6, 0x03, 0x78, 0xB9, 0xF4, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0xC7, 0xC0, 0x04, 0x00, 0x00, 0x00, 0x48, 0x89, 0xDA, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x30 };
+                u8 arr[]= {
+                    0x48, 0x89, 0xE3, 0x48, 0x83, 0xEB, 0x08, 0x48, 
+                    0x83, 0xEC, 0x30, 0xC7, 0x03, 0x57, 0x30, 0x99,
+                    0x99, 0x48, 0x39, 0xC2, 0x74, 0x03, 0xC6, 0x03,
+                    0x78, 0xB9, 0xF4, 0xFF, 0xFF, 0xFF, 0xFF, 0x15,
+                    0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24,
+                    0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9,
+                    0x49, 0xC7, 0xC0, 0x04, 0x00, 0x00, 0x00, 0x48,
+                    0x89, 0xDA, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00,
+                    0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x30 };
                 arr[0x0F] = (imm>>8)&0xFF;
                 arr[0x10] = imm&0xFF;
                 prog->addRaw(arr,sizeof(arr));
@@ -2668,7 +2677,38 @@ add    rsp,0x30
                 prog->namedRelocations.add(reloc0);
                 prog->namedRelocations.add(reloc1);
                 #else
-                Assert(("Bytecode instruction TEST_VALUE not implemented for UNIX",false));
+                /*
+                sub    rsp,0x10  # must be 16-byte aligned when calling unix write
+                mov    rbx,rsp
+                mov    DWORD PTR [rbx],0x99993a57 # temporary data
+                cmp    rdx,rax
+                je     hop
+                mov    BYTE PTR [rbx],0x78 # err character
+                hop:
+                mov    rdx,0x4 # buffer size
+                mov    rsi,rbx # buffer ptr
+                mov    rdi,0x2 # stderr
+                call   0
+                add    rsp,0x10
+                */
+
+                u8 arr[]={
+                    0x48, 0x83, 0xEC, 0x10, 0x48, 0x89, 0xE3, 0xC7,
+                    0x03, 0x57, 0x3A, 0x99, 0x99, 0x48, 0x39, 0xC2,
+                    0x74, 0x03, 0xC6, 0x03, 0x78, 0x48, 0xC7, 0xC2, 
+                    0x04, 0x00, 0x00, 0x00, 0x48, 0x89, 0xDE, 0x48, 
+                    0xC7, 0xC7, 0x02, 0x00, 0x00, 0x00, 0xE8, 0x00, 
+                    0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x10 
+                };
+
+                NamedRelocation reloc0{};
+                reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
+                reloc0.textOffset = prog->size() + 0x27;
+                prog->namedRelocations.add(reloc0);
+                arr[0x0B] = (imm>>8)&0xFF; // set location info
+                arr[0x0C] = imm&0xFF;
+                prog->addRaw(arr,sizeof(arr));
+
                 #endif
                 break;
             }

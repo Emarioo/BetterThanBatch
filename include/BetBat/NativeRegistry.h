@@ -109,6 +109,7 @@ struct NativeRegistry {
     // static void Destroy(NativeRegistry*);
     
     struct NativeFunction {
+        NativeFunction() {}
         NativeFunction(i64 jumpAddress) : jumpAddress(jumpAddress) {}
         // ~NativeFunction() {
         //     engone::log::out << "yoo\n";

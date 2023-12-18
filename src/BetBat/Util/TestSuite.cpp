@@ -33,14 +33,11 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
     origin.size = fileSize;
     outTestOrigins->add(origin);
 
-    // TODO: Not handling comments or quotes. Expect wierd things if @ is
-    //   found in one.
     const char* const testKey = "TEST-CASE ";
     const int testKeyLen = strlen(testKey);
     const char* const testErrKey = "TEST-ERROR ";
     const int testErrKeyLen = strlen(testErrKey);
-    // const char* const textKey = "text ";
-    // const int textKeyLen = strlen(textKey);
+    
     TestCase nextTest = {};
     #define FINALIZE_TEST(END_INDEX) if(nextTest.textBuffer.buffer) {\
         nextTest.textBuffer.size = (u64)buffer + END_INDEX - (u64)nextTest.textBuffer.buffer;\
@@ -265,9 +262,16 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
     DynamicArray<TestOrigin> testOrigins{};
     testOrigins.resize(filesToTest.size());
 
+    defer {
+        for(auto& origin : testOrigins) {
+            engone::Free(origin.buffer, origin.size);
+        }
+    };
+
     for (auto& file : filesToTest) {
         ParseTestCases(file, &testOrigins, &testCases);
     }
+
     log::out << log::GOLD << "Test cases ("<<testCases.size()<<"):\n";
     for(auto& testCase : testCases){
         log::out << " "<<testCase.testName << "["<<testCase.textBuffer.size<<" B]: "<<BriefString(testCase.textBuffer.origin,17)<<")\n";
@@ -281,9 +285,11 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
 
     u64 bufferSize = 0x10000;
     char* buffer = (char*)engone::Allocate(bufferSize);
-    
     auto pipe = engone::PipeCreate(bufferSize, true, true);
-    
+    defer {
+        engone::PipeDestroy(pipe);
+        engone::Free(buffer,bufferSize);
+    };
     
     u64 finalFailedTests = 0;
     u64 finalTotalTests = 0;
@@ -298,7 +304,7 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         options.target = BYTECODE;
         options.executeOutput = true;
         if(!useInterp)
-            options.target = WINDOWS_x64;
+            options.target = CONFIG_DEFAULT_TARGET;
         // options.initialSourceFile = testcase.textBuffer.origin;
         options.initialSourceBuffer = testcase.textBuffer;
         // options.initialSourceBufferSize = testcase.size
@@ -334,7 +340,7 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
             
             bool found = false;
             for(int k=0;k<testcase.expectedErrors.size();k++){
-            auto& expectedError = testcase.expectedErrors[k];
+                auto& expectedError = testcase.expectedErrors[k];
                 if(expectedError.errorType == actualError.errorType
                 && expectedError.line == actualError.line) {
                     found = true;
@@ -370,7 +376,12 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
                 std::string hoho{};
                 hoho += options.outputFile.text;
                 int errorCode = 0;
+                // auto file = engone::FileOpen("ya",nullptr, engone::FILE_ALWAYS_CREATE);
+                
                 engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, PipeGetWrite(pipe));
+                // engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, file);
+                // engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, file);
+                // engone::FileClose(file);
                 // log::out << "Error level: "<<errorCode<<"\n";
             }
             Bytecode::Destroy(bytecode);
@@ -430,12 +441,6 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
             log::out <<(100.0f*(float)(finalTotalTests-finalFailedTests)/(float)finalTotalTests)<<"% ("<<(finalTotalTests-finalFailedTests)<<"/"<<finalTotalTests<<")";
         log::out << "\n";
     }
-    engone::PipeDestroy(pipe);
 
-    engone::Free(buffer,bufferSize);
-
-    for(auto& origin : testOrigins) {
-        engone::Free(origin.buffer, origin.size);
-    }
     return finalFailedTests;
 }

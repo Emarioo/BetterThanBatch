@@ -7,7 +7,8 @@ void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const Str
     using namespace engone;
     log::out << color;
     if(tokenRange.tokenStream()) {
-        log::out << TrimDir(tokenRange.tokenStream()->streamName)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+        // log::out << "./"+ TrimDir(tokenRange.tokenStream()->streamName)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+        log::out << "./"+ tokenRange.tokenStream()->streamName<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
     } else {
         log::out << "?"<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
     }

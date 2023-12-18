@@ -1182,6 +1182,14 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     }
     #endif
 
+    if(options->target != BYTECODE) {
+        #ifdef OS_WINDOWS
+        Assert(options->target == WINDOWS_x64);
+        #else
+        Assert(options->target == UNIX_x64);
+        #endif
+    }
+
     if(options->outputFile.text.empty()) {
         switch (options->target) {
             case WINDOWS_x64: {
@@ -1323,7 +1331,8 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                             std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
                             cmd += DUMP_ASM_OBJ;
                             #else
-                            std::string cmd = "objdump -d ";
+                            // -M intel for intel syntax
+                            std::string cmd = "objdump -M intel -d ";
                             cmd += DUMP_ASM_OBJ;
                             #endif
                             
