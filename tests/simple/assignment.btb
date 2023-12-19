@@ -4,8 +4,8 @@
 // TODO: Test assignment in expressions (not just statements)
 
 @TEST-CASE globals
+#import "OS"
 
-    "A"
 global num: i32;
 main();
 fn main() -> i32{
@@ -21,7 +21,7 @@ str = Allocate(16);
 @TEST-CASE other
 
 fn fvoid() {}
-a = fvoid(); // should fail
+@TEST-ERROR ERROR_INVALID_TYPE wawa = fvoid(); // should fail
 
 // standard
 a = 1
@@ -38,13 +38,22 @@ fn many() -> i32, i32, i32 {
 a = many()
 a, b = many()
 a, b, c = many();
-a, b, c, d = many(); // should fail
+@TEST-ERROR ERROR_TOO_MANY_VARIABLES @TEST-ERROR ERROR_TYPE_MISMATCH a, b, c, d = many(); // should fail
 
-a: i32 = many()
-a, b: i32 = many()
-a, b: i32, c = many()
-a, b, c: i32 = many();
-
-
-a: i64, b: i32 = many() // does this fail or does it cast?
+// shadowing is not implemented yet so we need to scope the assignments
+{
+    a: i32 = many()
+}
+{
+    a, b: i32 = many()
+}
+{
+    a, b: i32, c = many()
+}
+{
+    a, b, c: i32 = many();
+}
+{
+    a: i64, b: i32 = many() // does this fail or does it cast?
+}
 

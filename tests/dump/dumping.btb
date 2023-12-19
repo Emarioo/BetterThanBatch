@@ -1,4 +1,4 @@
-@TEST-CASE dump-test
+@TEST-CASE dump_test
 { @dump-asm
     fn hej() {
         

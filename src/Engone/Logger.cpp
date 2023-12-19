@@ -6,6 +6,8 @@
 #include "Engone/PlatformLayer.h"
 #include "Engone/Asserts.h"
 
+#include "Engone/Util/Stream.h"
+
 #include <time.h>
 #include <string.h>
 
@@ -133,16 +135,19 @@ namespace engone {
 		// printf("\033[1,10m{yo}");
 		// write()
 		// engone::FileWrite(outFile, "\033[1;32m{10}",7+4);
-
+        if(m_streamInput) {
+            m_streamInput->write(str, len);
+        }
 		if(m_enabledConsole){
-			if(lastPrintedChar=='\n'){
-			// 	preIndent=false;
-				for(int j=0;j<m_nextIndent;j++) {
-					engone::FileWrite(outFile, " ", 1);
-					// fwrite(" ",1, 1, stdout);
-				}
-				m_nextIndent = m_indent;
-			}
+            // Do we use the indent feature?
+			// if(lastPrintedChar=='\n'){
+			// // 	preIndent=false;
+			// 	for(int j=0;j<m_nextIndent;j++) {
+			// 		engone::FileWrite(outFile, " ", 1);
+			// 		// fwrite(" ",1, 1, stdout);
+			// 	}
+			// 	m_nextIndent = m_indent;
+			// }
 			int last = 0;
 			for(int i=0;i<len;i++){
 				if(str[i]=='\n'||i+1==len){
@@ -150,12 +155,12 @@ namespace engone {
 
 					// fwrite(str+last,1,i+1-last,stdout);
 					last = i+1;
-					if(str[i]=='\n' && i+1!=len){
-						for(int j=0;j<m_indent;j++) {
-							engone::FileWrite(outFile, " ", 1);
-							// fwrite(" ",1, 1, stdout);
-						}
-					}
+					// if(str[i]=='\n' && i+1!=len){
+					// 	for(int j=0;j<m_indent;j++) {
+					// 		engone::FileWrite(outFile, " ", 1);
+					// 		// fwrite(" ",1, 1, stdout);
+					// 	}
+					// }
 				}
 			}
 			lastPrintedChar = str[len-1];

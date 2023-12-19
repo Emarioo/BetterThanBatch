@@ -264,7 +264,14 @@ int main(int argc, const char** argv){
         compileOptions.sourceFile = DEV_FILE;
         #endif
 
-        #define RUN_TESTS "tests/simple/operations.btb"
+        // #define RUN_TESTS "tests/simple/operations.btb"
+        // #define RUN_TESTS "tests/simple/assignment.btb"
+        // #define RUN_TESTS "tests/flow/defer.btb"
+        // #define RUN_TESTS "tests/flow/loops.btb"
+        // #define RUN_TESTS "tests/flow/switch.btb"
+        // #define RUN_TESTS "tests/funcs/overloading.btb"
+        // #define RUN_TESTS "tests/macro/defines.btb"
+        #define RUN_TESTS "tests/macro/recur.btb"
 
         #ifdef RUN_TEST_SUITE
         DynamicArray<std::string> tests;

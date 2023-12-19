@@ -219,9 +219,10 @@ namespace engone {
 				u64 m_internalHandle;
 			};
 			struct { // Unix
-				u8 m_data[SEM_SIZE]{0}; // sem_t
-				bool m_initialized = false;
+				u8 m_data[SEM_SIZE]; // sem_t
+				bool m_initialized;
 			};
+            u8 _zeros[SEM_SIZE+1]{0}; // intelisense doesn't like multiple initialized fields even though they are in anonmymous struct, sigh. So we use one field here.
 		};
 	};
 	class Mutex {

@@ -1,27 +1,93 @@
-@TEST-CASE yeet
+@TEST-CASE quick_defer
+
+n = 0;
+for 0..1 {
+    defer { test n; 1; n++; }
+    {
+        defer { test n; 0; n++; }
+        continue;
+    }
+}
+
+@TEST-CASE advanced_defer
+
+#import "Logger"
+
+global fun_step: i32 = 0;
+global while_step: i32 = 0;
+
+// turn on/off printing
+// #define step(V, N, ...) { test V; N; V = N + 1; prints(...); }
+#define step(V, N, ...) { test V; N; V = N + 1; }
+
 fn fun(i: i32){
-    defer prints("fun1 defer\n")
-    defer prints("fun2 defer\n")
+    fun_step = 0;
+    
+    defer step(fun_step, 2, "fun1 defer\n")
+    defer step(fun_step, 1, "fun2 defer\n")
     if(i >1){
-        prints("before return\n");
+        step(fun_step, 0, "before return\n")
         return
     }
-    prints("end of fun\n")
+    step(fun_step, 0, "end of fun\n")
 }
+
 i = -1;
 while i < 10; {
     i++;
-    printi(i);
-    printc("\n");
-    defer prints("while defer\n")
+    base = while_step;
+    // printi(i);
+    // printc('\n');
+    
+    // printi(i);
+    // prints(" - ");
+    // printi(while_step);
+    // printc('\n');
+    
+    defer step(while_step, base + 2,"while defer\n")
     if(i>5){
-        prints("before break\n")
+        step(while_step, base + 0, "before break\n")
         if(i==8){
+            while_step += 1; // steps in if won't run so we add the steps here since "while defer"" expects 2 steps
             continue;
         }
-        defer prints("if defer\n");
+        defer step(while_step, base + 1, "if defer\n");
         continue;
     }
+    while_step += 2; // steps in if won't run so we add the steps here since "while defer"" expects 2 steps
     fun(i);
+    // printi(base + 1);
+    // prints(" - ");
+    // printi(while_step);
+    // printc('\n');
 }
-prints("END\n")
+
+/*#################
+    Old text version of defer test
+###################*/
+// fn fun(i: i32){
+//     defer prints("fun1 defer\n")
+//     defer prints("fun2 defer\n")
+//     if(i >1){
+//         prints("before return\n");
+//         return
+//     }
+//     prints("end of fun\n")
+// }
+// i = -1;
+// while i < 10; {
+//     i++;
+//     printi(i);
+//     printc('\n');
+//     defer prints("while defer\n")
+//     if(i>5){
+//         prints("before break\n")
+//         if(i==8){
+//             continue;
+//         }
+//         defer prints("if defer\n");
+//         continue;
+//     }
+//     fun(i);
+// }
+// prints("END\n")

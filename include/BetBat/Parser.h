@@ -1,17 +1,15 @@
 #pragma once
 
 #include "BetBat/AST.h"
+#include "BetBat/PhaseContext.h"
 
 struct CompileInfo;
-struct ParseInfo {
+struct ParseInfo : public PhaseContext {
     ParseInfo(TokenStream* tokens) : tokens(tokens){}
     int index=0;
     TokenStream* tokens;
     int funcDepth=0;
     AST* ast=nullptr;
-    CompileInfo* compileInfo=nullptr;
-
-    int errors = 0;
 
     QuickArray<ContentOrder> nextContentOrder;
     ContentOrder getNextOrder() { Assert(nextContentOrder.size()>0); return nextContentOrder.last(); }

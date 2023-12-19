@@ -28,7 +28,8 @@ namespace Language {
 #ifdef OS_WINDOWS
 #define attr_stdcall __stdcall
 #else
-#define attr_stdcall __attribute__((stdcall))
+// #define attr_stdcall __attribute__((stdcall))
+#define attr_stdcall
 #endif
 
 extern "C" {

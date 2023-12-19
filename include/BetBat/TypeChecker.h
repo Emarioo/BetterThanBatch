@@ -1,11 +1,11 @@
 #pragma once
+
 #include "BetBat/AST.h"
+#include "BetBat/PhaseContext.h"
 
 struct CompileInfo;
-struct CheckInfo {
+struct CheckInfo : public PhaseContext {
     AST* ast = nullptr;
-    CompileInfo* compileInfo=nullptr;
-    int errors=0;
     
     struct CheckImpl {
         ASTFunction* astFunc=nullptr;
@@ -17,9 +17,6 @@ struct CheckInfo {
     int funcDepth=0; // FUNC_ENTER
     bool ignoreErrors = false; // not thread safe, you need one of these per thread
     
-    bool hasErrors();
-    bool hasForeignErrors();
-
     FuncImpl* currentFuncImpl = nullptr;
     ASTFunction* currentAstFunc = nullptr;
     

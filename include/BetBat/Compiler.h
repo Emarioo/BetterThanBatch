@@ -133,15 +133,16 @@ struct CompileOptions {
     bool useDebugInformation = false;
     bool silent=false;
     bool verbose=false;
+    bool instant_report = true;
 
-    Path modulesDirectory{"."}; // Where the standard library can be found. Typically "modules"
+    Path modulesDirectory{"./modules/"}; // Where the standard library can be found. Typically "modules"
 
     bool executeOutput = false;
     DynamicArray<std::string> userArguments; // Ignored if output isn't executed. Arguments to pass to the interpreter or executable
 
     TextBuffer initialSourceBuffer;
     DynamicArray<Path> importDirectories; // Directories to look for imports (source files)
-    int threadCount=3;
+    int threadCount=1;
 
     struct TestLocation {
         // TODO: store file name elsewhere, duplicated data
@@ -233,8 +234,10 @@ struct CompileInfo {
     void addStats(i32 lines, i32 blankLines, i32 commentCount, i32 readBytes);
 
     CompileOptions* compileOptions = nullptr;
+    
+    Reporter reporter{};
 
-    AST* ast=0;
+    AST* ast = nullptr;
     // std::string compilerDir="";
 
     // It's a bit unfortunate that macros have moved into this struct when they belong to the preprocessor

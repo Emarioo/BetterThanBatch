@@ -1,25 +1,44 @@
+@TEST-CASE macro_recursion
+
 #define ADD(X,...) X + ADD(...)
 #define ADD(X) X
 
-ADD(1,2)
-ADD(1,2,)
-ADD()
+test 1+2; ADD(1,2);
+test 4+9; ADD(4,9,);
+ADD() // should not cause an error
 
 #define REV(F,...) REV(...), F
 #define REV(F) F
 
-#define CHAOS(F,S,...) S CHAOS(...) F
-#define CHAOS
+arr: i32[] { REV(0,1,2) }
+test arr.ptr[0]; 2;
+test arr.ptr[1]; 1;
+test arr.ptr[2]; 0;
 
-#define NAND(X,...) !X || NAND(...)
-#define NAND(X) !X
+// #define CHAOS(F,S,...) S CHAOS(...) F
+// #define CHAOS
 
-#define ORS(T,X,...) T==X || ORS(T,...)
-#define ORS(T,X) T==X
+#define NOR(X,...) !X || NOR(...)
+#define NOR(X) !X
 
-#define PART0 a,b
-#define PART1 1,2
+test 1; NOR(0);
+test 1; NOR(1,0,1,0);
 
-NAND(v0,v1,v2,v3,v4)
-ORS(t,b,c,d,e,f)
-ORS(type,#unwrap PART0,#unwrap PART1)
+// IMPORTANT: THERE IS A BUG IN THE TYPE CHECKER WHICH CAUSES THIS LINE TO COMPILE REALLY SLOWLY AND IT GROWS EXPONENTIALLY
+//   It is because we check for potential operator overloading and if we fail we do the normal check.
+//   This is recursive for each operator and it has 2**n growth (i think)
+test 1; NOR(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+// test 1; NOR(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1);
+test 1; NOR(1);
+// test 0; NOR(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
+
+// TODO: More and better tests
+
+// #define ORS(T,X,...) T==X || ORS(T,...)
+// #define ORS(T,X) T==X
+
+// #define PART0 a,b
+// #define PART1 1,2
+
+// ORS(t,b,c,d,e,f)
+// ORS(type,#unwrap PART0,#unwrap PART1)

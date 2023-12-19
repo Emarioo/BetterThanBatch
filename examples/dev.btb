@@ -18,6 +18,39 @@
 
 // #import "Array"
 
+#define ORS(T,X,...) T==X || ORS(T,...)
+#define ORS(T,X) T==X
+
+#define PART0 a,b
+#define PART1 1,2
+
+#quote ORS(t,b,"c",d,e,f)
+ 
+// #define yoo hallu sup
+
+// #quote yoo
+
+
+// flag0.x | flag1.x
+// flag0.x | flag1.x
+
+
+// a: u32* = Allocate(8);
+
+// a[0] = 13;
+// a[1] = 31;
+
+// a[0] + a[1]
+
+// fn @native prints(str: char[]);
+
+// for 0..1 {
+//     defer prints("second\n")
+//     {
+//         defer prints("first\n")
+//         continue;
+//     }
+// }
 // a = cast<u16>10000 * cast<u8>7
 // a = cast<u16>1000 * cast<u8>7
 // a = cast<u16>1000 * cast<u16>7

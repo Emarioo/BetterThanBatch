@@ -9,11 +9,13 @@
 #include "Engone/Alloc.h"
 #include "Engone/Typedefs.h"
 
+// #include "Engone/Util/Stream.h"
+
 #include <unordered_map>
 #include <vector>
 
+struct ByteStream;
 namespace engone {
-	#pragma once
 
 	namespace log {
 		enum Color : uint8 {
@@ -77,6 +79,8 @@ namespace engone {
 		// extra report, each thread, set empty path for no report which is default.
 		void setReport(const std::string path);
 		void setIndent(int indent);
+        
+        void setInput(ByteStream* stream) { m_streamInput = stream; }
 
 		// extra report which is individual for each thread
 		void useThreadReports(bool yes);
@@ -158,6 +162,8 @@ namespace engone {
 		bool skipIndent=false;
 		char lastPrintedChar=0;
 		bool onEmptyLine=false;
+        
+        ByteStream* m_streamInput = nullptr;
 
 		std::string m_rootDirectory = "logs";
 

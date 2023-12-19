@@ -8,7 +8,8 @@ void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const Str
     log::out << color;
     if(tokenRange.tokenStream()) {
         // log::out << "./"+ TrimDir(tokenRange.tokenStream()->streamName)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
-        log::out << "./"+ tokenRange.tokenStream()->streamName<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+        // log::out << "."+ tokenRange.tokenStream()->streamName<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+        log::out << tokenRange.tokenStream()->streamName<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
     } else {
         log::out << "?"<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
     }
@@ -30,16 +31,20 @@ CompileError ToCompileError(const char* str){
         return (CompileError)num;   
     }
     #define CASE(ERR) if(!strcmp(str, #ERR)) return ERR;
+    CASE(ERROR_NONE)
+    CASE(ERROR_UNSPECIFIED)
     CASE(ERROR_CASTING_TYPES)
     CASE(ERROR_UNDECLARED)
+    CASE(ERROR_TYPE_MISMATCH)
+    CASE(ERROR_INVALID_TYPE)
+    CASE(ERROR_TOO_MANY_VARIABLES)
+    
     CASE(ERROR_DUPLICATE_CASE)
     CASE(ERROR_DUPLICATE_DEFAULT_CASE)
     CASE(ERROR_C_STYLED_DEFAULT_CASE)
     CASE(ERROR_BAD_TOKEN_IN_SWITCH)
     CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
     CASE(ERROR_OVERLOAD_MISMATCH)
-    CASE(ERROR_NONE)
-    CASE(ERROR_UNSPECIFIED)
     #undef CASE
     
     Assert(false);
@@ -52,16 +57,22 @@ const char* ToCompileErrorString(temp_compile_error stuff) {
     
     if(!stuff.shortVersion) {
         #define CASE(ERR) if(stuff.err == ERR) return #ERR;
+        CASE(ERROR_NONE)
+        CASE(ERROR_UNSPECIFIED)
+        
         CASE(ERROR_CASTING_TYPES)
         CASE(ERROR_UNDECLARED)
+        CASE(ERROR_TYPE_MISMATCH)
+        CASE(ERROR_INVALID_TYPE)
+        CASE(ERROR_TOO_MANY_VARIABLES)
+    
         CASE(ERROR_DUPLICATE_CASE)
         CASE(ERROR_DUPLICATE_DEFAULT_CASE)
         CASE(ERROR_C_STYLED_DEFAULT_CASE)
         CASE(ERROR_BAD_TOKEN_IN_SWITCH)
         CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
         CASE(ERROR_OVERLOAD_MISMATCH)
-        CASE(ERROR_NONE)
-        CASE(ERROR_UNSPECIFIED)
+        
         CASE(ERROR_UNKNOWN)
         #undef CASE
     }
@@ -258,4 +269,17 @@ void PrintExample(int line, const StringBuilder& stringBuilder){
         log::out << chr;
     }
     log::out << "\n";
+}
+
+void Reporter::start_report() {
+    if(!instant_report) {
+        engone::log::out.setInput(&stream);
+        engone::log::out.enableConsole(false);
+    }
+}
+void Reporter::end_report() {
+    if(!instant_report) {
+        engone::log::out.setInput(nullptr);
+        engone::log::out.enableConsole(true);
+    }
 }

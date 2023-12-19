@@ -8,11 +8,11 @@
 #define WARN_LINE2(I, M) PrintCode(I, info.tokens, M)
 
 #undef ERR_SECTION
-#define ERR_SECTION(CONTENT) { BASE_SECTION("Parser, "); CONTENT }
+#define ERR_SECTION(CONTENT) BASE_SECTION("Parser, ", CONTENT)
 
 
 #undef WARN_SECTION
-#define WARN_SECTION(CONTENT) { BASE_WARN_SECTION("Parser, "); CONTENT }
+#define WARN_SECTION(CONTENT) BASE_WARN_SECTION("Parser, ", CONTENT)
 
 /*
     Declaration of functions
@@ -3488,19 +3488,27 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             tempStatement->firstBody = body;
             tempStatement->tokenRange = body->tokenRange;
         }
-        Token& token2 = info.get(info.at()+1);
         bool noCode = false;
-        if(IsAnnotation(token2)) {
-            if(Equal(token2,"@TEST-ERROR")) {
-                info.ignoreErrors = true;
-                noCode = true;
-                info.next();
-                info.next(); // skip error type
-            } else if(Equal(token2, "@no-code")) {
-                noCode = true;
-                info.next();
+        while(true) {
+            Token& token2 = info.get(info.at()+1);
+            if(IsAnnotation(token2)) {
+                if(Equal(token2,"@TEST-ERROR")) {
+                    info.ignoreErrors = true;
+                    noCode = true;
+                    info.next();
+                    info.next(); // skip error type
+                    continue;
+                } else if(Equal(token2,"@TEST-CASE")) {
+                    info.next();
+                    info.next(); // skip case name
+                    continue;
+                } else if(Equal(token2, "@no-code")) {
+                    noCode = true;
+                    info.next();
+                    continue;
+                }
             }
-               
+            break;
         }
         if(result==SignalAttempt::BAD_ATTEMPT)
             result = ParseFunction(info,tempFunction,true, nullptr);
@@ -3566,22 +3574,9 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                     info.functionScopes.last().loopScopes.last().defers.add(tempStatement);
                 }
             } else {
-                if(tempStatement->type == ASTStatement::RETURN) {
-                    for(int j=info.functionScopes.last().loopScopes.size()-1;j>=0;j--){
-                        auto& loopScope = info.functionScopes.last().loopScopes[j];
-                        for(int k=0;k<loopScope.defers.size();k++){
-                            auto myDefer = loopScope.defers[k];  // my defer, not yours, get your own
-                            ASTStatement* deferCopy = info.ast->createStatement(ASTStatement::DEFER);
-                            deferCopy->tokenRange = myDefer->tokenRange;
-                            deferCopy->firstBody = myDefer->firstBody;
-                            deferCopy->sharedContents = true;
-
-                            bodyLoc->add(info.ast, deferCopy);
-                            info.nextContentOrder.last()++;
-                        }
-                    }
-                    for(int j=info.functionScopes.last().defers.size()-1;j>=0;j--){
-                        auto myDefer = info.functionScopes.last().defers[j];  // my defer, not yours, get your own
+                auto add_defers = [&](DynamicArray<ASTStatement*>& defers) {
+                    for(int k=defers.size()-1;k>=0;k--){
+                        auto myDefer = defers[k];  // my defer, not yours, get your own
                         ASTStatement* deferCopy = info.ast->createStatement(ASTStatement::DEFER);
                         deferCopy->tokenRange = myDefer->tokenRange;
                         deferCopy->firstBody = myDefer->firstBody;
@@ -3590,19 +3585,50 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                         bodyLoc->add(info.ast, deferCopy);
                         info.nextContentOrder.last()++;
                     }
+                };
+                if(tempStatement->type == ASTStatement::RETURN) {
+                    for(int j=info.functionScopes.last().loopScopes.size()-1;j>=0;j--){
+                        auto& loopScope = info.functionScopes.last().loopScopes[j];
+                        add_defers(loopScope.defers);
+                        // for(int k=loopScope.defers.size()-1;k>=0;k--){
+                        //     auto myDefer = info.functionScopes.last().defers[k];  // my defer, not yours, get your own
+                        //     ASTStatement* deferCopy = info.ast->createStatement(ASTStatement::DEFER);
+                        //     deferCopy->tokenRange = myDefer->tokenRange;
+                        //     deferCopy->firstBody = myDefer->firstBody;
+                        //     deferCopy->sharedContents = true;
+
+                        //     bodyLoc->add(info.ast, deferCopy);
+                        //     info.nextContentOrder.last()++;
+                        // }
+                    }
+                    add_defers(info.functionScopes.last().defers);
+                    // for(int k=info.functionScopes.last().defers.size()-1;k>=0;k--){
+                    //     auto myDefer = info.functionScopes.last().defers[k];  // my defer, not yours, get your own
+                    //     ASTStatement* deferCopy = info.ast->createStatement(ASTStatement::DEFER);
+                    //     deferCopy->tokenRange = myDefer->tokenRange;
+                    //     deferCopy->firstBody = myDefer->firstBody;
+                    //     deferCopy->sharedContents = true;
+
+                    //     bodyLoc->add(info.ast, deferCopy);
+                    //     info.nextContentOrder.last()++;
+                    // }
                 } else if(tempStatement->type == ASTStatement::CONTINUE || tempStatement->type == ASTStatement::BREAK){
                     if(info.functionScopes.last().loopScopes.size()!=0){
                         auto& loopScope = info.functionScopes.last().loopScopes.last();
-                        for(int k=0;k<loopScope.defers.size();k++){
-                            auto myDefer = loopScope.defers[k];  // my defer, not yours, get your own
-                            ASTStatement* deferCopy = info.ast->createStatement(ASTStatement::DEFER);
-                            deferCopy->tokenRange = myDefer->tokenRange;
-                            deferCopy->firstBody = myDefer->firstBody;
-                            deferCopy->sharedContents = true;
+                        add_defers(loopScope.defers);
+                        // for(int k=loopScope.defers.size()-1;k>=0;k--){
+                        //     auto myDefer = info.functionScopes.last().defers[k];  // my defer, not yours, get your own
+                        //     ASTStatement* deferCopy = info.ast->createStatement(ASTStatement::DEFER);
+                        //     deferCopy->tokenRange = myDefer->tokenRange;
+                        //     deferCopy->firstBody = myDefer->firstBody;
+                        //     deferCopy->sharedContents = true;
 
-                            bodyLoc->add(info.ast, deferCopy);
-                            info.nextContentOrder.last()++;
-                        }
+                        //     bodyLoc->add(info.ast, deferCopy);
+                        //     info.nextContentOrder.last()++;
+                        // }
+                    } else {
+                        // Error should have been printed already
+                        // Assert(false);
                     }
                 }
                 bodyLoc->add(info.ast, tempStatement);

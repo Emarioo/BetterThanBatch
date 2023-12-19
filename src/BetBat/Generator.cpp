@@ -3,14 +3,14 @@
 
 #undef ERRTYPE
 #undef ERRTYPE1
-#define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD(L) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(L,info.ast->typeToString(LT)) ERR_LINE(R,info.ast->typeToString(RT)))
-#define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD(R) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(R,info.ast->typeToString(RT)))
+#define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD(L, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(L,info.ast->typeToString(LT)) ERR_LINE(R,info.ast->typeToString(RT)))
+#define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD(R, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(R,info.ast->typeToString(RT)))
 
 #undef WARN_HEAD3
 #define WARN_HEAD3(R, M) info.compileInfo->warnings++;engone::log::out << WARN_DEFAULT_R(R,"Gen. warning","W0000") << M
 
 #undef ERR_SECTION
-#define ERR_SECTION(CONTENT) { BASE_SECTION("Generator, "); CONTENT; }
+#define ERR_SECTION(CONTENT) BASE_SECTION("Generator, ", CONTENT)
 
 #undef LOGAT
 #define LOGAT(R) R.firstToken.line << ":" << R.firstToken.column
@@ -358,13 +358,6 @@ int GenInfo::saveStackMoment() {
     return virtualStackPointer;
 }
 
-bool GenInfo::hasErrors() { return errors != 0 || compileInfo->compileOptions->compileStats.errors != 0; }
-bool GenInfo::hasForeignErrors() {
-    // return compileInfo->compileOptions->compileStats.errors != 0;
-    // compileStats.errors indicates errors that wasn't ignored.
-    // errorTypes indicate all errors.
-    return compileInfo->compileOptions->compileStats.errorTypes.size() != 0;
-}
 void GenInfo::restoreStackMoment(int moment, bool withoutModification, bool withoutInstruction) {
     using namespace engone;
     int offset = moment - virtualStackPointer;
@@ -1012,7 +1005,7 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
 
             auto memberData = typeInfo->getMember(now->name);
             if(memberData.index==-1){
-                Assert(!info.hasForeignErrors());
+                Assert(info.hasForeignErrors());
                 // error should have been caught by type checker.
                 // if it was then we just return error here.
                 // don't want message printed twice.
@@ -1079,6 +1072,11 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
             }
             endType.setPointerLevel(endType.getPointerLevel()-1);
         } else if(now->typeId == AST_INDEX) {
+            FuncImpl* operatorImpl = nullptr;
+            if(now->versions_overload._array.size()>0)
+                operatorImpl = now->versions_overload[info.currentPolyVersion].funcImpl;
+            Assert(("operator overloading when referencing not implemented",!operatorImpl));
+            
             tempTypes.resize(0);
             SignalDefault result = GenerateExpression(info, now->right, &tempTypes);
             if (result != SignalDefault::SUCCESS && tempTypes.size() != 1)
@@ -1359,8 +1357,9 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 bool wasSafelyCasted = PerformSafeCast(info,argType, funcImpl->argumentTypes[i].typeId);
                 if(!wasSafelyCasted && !info.hasErrors()){
                     ERR_SECTION(
-                        ERR_HEAD(expression->tokenRange)
-                        ERR_MSG("Cannot cast " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(funcImpl->argumentTypes[i].typeId))
+                        ERR_HEAD(arg->tokenRange)
+                        ERR_MSG("Cannot cast argument of type " << info.ast->typeToString(argType) << " to " << info.ast->typeToString(funcImpl->argumentTypes[i].typeId) << ". This is the function: '"<<astFunc->name<<"'. (function may be an overloaded operator)")
+                        ERR_LINE(arg->tokenRange,"bad argument")
                     )
                 }
                 // Assert(wasSafelyCasted);
@@ -4763,8 +4762,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         auto& retType = info.currentFuncImpl->returnTypes[argi];
                         if (!PerformSafeCast(info, dtype, retType.typeId)) {
                             // if(info.currentFunction->returnTypes[argi]!=dtype){
-
-                            ERRTYPE1(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)\n");
+                            ERRTYPE1(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)");
                             
                             GeneratePop(info, 0, 0, dtype);
                         } else {

@@ -189,7 +189,7 @@ std::string Token::getLine(){
     // }
     return out;
 }
-u32 TokenRange::feed(char* outBuffer, u32 bufferSize) const {
+u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment) const {
     using namespace engone;
     // assert?
     if(!tokenStream()) return 0;
@@ -204,11 +204,19 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize) const {
             continue;
         
         if(tok.flags&TOKEN_DOUBLE_QUOTED){
+            if(quoted_environment) {
+                *(outBuffer++) = '\\';
+                CHECK_END    
+            }
             *(outBuffer++) = '"';
             CHECK_END
         }
         
         else if(tok.flags&TOKEN_SINGLE_QUOTED){
+            if(quoted_environment) {
+                *(outBuffer++) = '\\';
+                CHECK_END    
+            }
             *(outBuffer++) = '\'';
             CHECK_END
         }
@@ -226,9 +234,17 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize) const {
             }
         }
         if(tok.flags&TOKEN_DOUBLE_QUOTED){
+            if(quoted_environment) {
+                *(outBuffer++) = '\\';
+                CHECK_END    
+            }
             *(outBuffer++) = '"';
             CHECK_END
         } else if(tok.flags&TOKEN_SINGLE_QUOTED){
+            if(quoted_environment) {
+                *(outBuffer++) = '\\';
+                CHECK_END    
+            }
             *(outBuffer++) = '\'';
             CHECK_END
         }
@@ -240,7 +256,7 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize) const {
     #undef CHECK_END
     return (u64)outBuffer - (u64)start;
 }
-u32 TokenRange::queryFeedSize() const {
+u32 TokenRange::queryFeedSize(bool quoted_environment) const {
     using namespace engone;
     // assert?
     if(!tokenStream()) return 0;
@@ -251,25 +267,38 @@ u32 TokenRange::queryFeedSize() const {
         if(!tok.str)
             continue;
         
-        if(tok.flags&TOKEN_DOUBLE_QUOTED)
+        if(tok.flags&TOKEN_DOUBLE_QUOTED) {
+            if(quoted_environment) {
+                size++;
+            }
             size++;
-        else if(tok.flags&TOKEN_SINGLE_QUOTED)
+        } else if(tok.flags&TOKEN_SINGLE_QUOTED) {
+            if(quoted_environment) {
+                size++;
+            }
             size++;
-
+        }
+        
         for(int j=0;j<tok.length;j++){
             char chr = *(tok.str+j);
             if(chr=='\n'){
                 size+=2;
             }else
-                size+=1;
+                size++;
         }
-        if(tok.flags&TOKEN_DOUBLE_QUOTED)
-            size+=1;
-        else if(tok.flags&TOKEN_SINGLE_QUOTED)
-            size+=1;
-            
+        if(tok.flags&TOKEN_DOUBLE_QUOTED) {
+            if(quoted_environment) {
+                size++;
+            }
+            size++;
+        } else if(tok.flags&TOKEN_SINGLE_QUOTED) {
+            if(quoted_environment) {
+                size++;
+            }
+            size++;
+        }
         if(tok.flags&TOKEN_SUFFIX_SPACE && i!=endIndex){
-            size+=1;
+            size++;
         }
     }
     return size;
@@ -616,6 +645,19 @@ bool TokenStream::addData(const char* data){
     }
     tokenData.used += len;
     return true;
+}
+char* TokenStream::addData_late(u32 size){
+    if(tokenData.max < tokenData.used + size){
+        if(!tokenData.resize(tokenData.max*2 + 2*size))
+            return nullptr;
+    }
+    // for(int i=0;i<len;i++){
+    //     *((char*)tokenData.data+tokenData.used+i) = data[i];
+    // }
+    char* ptr = tokenData.data + tokenData.used;
+    memset(ptr, '_', size);
+    tokenData.used += size;
+    return ptr;
 }
 int TokenStream::length() const {
     return tokens.used;

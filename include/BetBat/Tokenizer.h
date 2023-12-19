@@ -18,8 +18,8 @@
 #define TOKEN_DOUBLE_QUOTED 0x4
 #define TOKEN_SINGLE_QUOTED 0x8
 #define TOKEN_MASK_QUOTED 0x0C
-#define TOKEN_ALPHANUM 0x10
-#define TOKEN_NUMERIC 0x20
+#define TOKEN_ALPHANUM 0x10 // token has only characters for names like a-Z 0-9 _ NOTE THAT A QUOTED STRING IS NOT ALPHANUM, its quoted
+#define TOKEN_NUMERIC 0x20 // token consists of numbers maybe hex or decimal
 
 struct TextBuffer {
     std::string origin;
@@ -40,7 +40,17 @@ struct Token {
     char* str=0; // NOT null terminated
     int length=0; // lengt of text data. Not including quotes or other things.
     int line=0;
-    i16 flags=0; // bit mask representing line feed, space and quotation
+    union {
+        i16 flags=0; // bit mask representing line feed, space and quotation
+        struct {
+            bool _line_feed : 1;
+            bool _space : 1;
+            bool _dquote : 1;
+            bool _squote : 1;
+            bool _alphanum : 1;
+            bool _numeric : 1;
+        };
+    };
     i16 column=0;
     int tokenIndex=0;
     TokenStream* tokenStream = nullptr; // don't keep this here
@@ -112,8 +122,8 @@ struct TokenRange {
     void print();
     void feed(std::string& outBuffer) const;
     // does not null terminate
-    u32 feed(char* outBuffer, u32 bufferSize) const ;
-    u32 queryFeedSize() const;
+    u32 feed(char* outBuffer, u32 bufferSize, bool quoted_environment = false) const;
+    u32 queryFeedSize(bool quoted_environment = false) const;
 };
 engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange);
 struct TokenStream {
@@ -146,6 +156,7 @@ struct TokenStream {
     bool addData(char chr);
     bool addData(const char* data);
     bool addData(Token token);
+    char* addData_late(u32 size);
     
     // Only adds tokens not data
     bool addToken(Token token);

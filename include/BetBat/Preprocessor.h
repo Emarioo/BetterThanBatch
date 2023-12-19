@@ -2,6 +2,8 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
+#include "BetBat/PhaseContext.h"
+#include "Engone/Util/BucketArray.h"
 
 struct TokenRef{
     uint16 index=0;
@@ -101,7 +103,7 @@ struct MacroCall {
     DynamicArray<DynamicArray<const Token*>> detailedArguments{};
 };
 struct CompileInfo;
-struct PreprocInfo {
+struct PreprocInfo : public PhaseContext {
     // TokenStream inTokens{};
     // TokenStream tokens{};
     TokenStream* inTokens = 0;
@@ -109,9 +111,7 @@ struct PreprocInfo {
     TokenStream* tempStream = 0; // Used when parsing final contents of a macro.
     bool usingTempStream = false; // used to find recursion bugs
 
-    CompileInfo* compileInfo = 0; // for caching includes
 
-    u32 errors = 0;
     u32 warnings = 0;
     bool ignoreErrors = false;
     // int ifdefDepth=0;
@@ -150,9 +150,9 @@ struct PreprocInfo {
     DynamicArray<const Token*> outputTokens{};
     DynamicArray<i16> outputTokensFlags{};
     // outputTokens._reserve(15000);
-    DynamicArray<MacroCall> calls{};
+    DynamicArray<MacroCall*> calls{};
     // calls._reserve(30);
-    DynamicArray<Env> environments{};
+    DynamicArray<Env*> environments{};
     // environments._reserve(50);
     DynamicArray<bool> unwrappedArgs{};
 };

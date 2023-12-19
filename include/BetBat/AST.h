@@ -43,7 +43,7 @@ StringBuilder& operator<<(StringBuilder& builder, CallConventions convention);
 StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention);
 
 
-enum PrimitiveType : u32 {
+enum PrimitiveType : u16 {
     AST_VOID=0,
     AST_UINT8,
     AST_UINT16,
@@ -79,7 +79,7 @@ enum PrimitiveType : u32 {
     
     AST_PRIMITIVE_COUNT, // above types are true with isValue
 };
-enum OperationType : u32 {
+enum OperationType : u16 {
     // TODO: Add BINOP (binary) and UNOP (unary) in the enum names.
     //  If you could arrange binary and unary ops so that you can determine the difference
     //  using a bitmask (op & BINARY_UNARY_MASK), that would signifcantly speed up code which currently has
@@ -182,8 +182,8 @@ struct PolyVersions {
 };
 struct TypeId {
     TypeId() = default;
-    TypeId(PrimitiveType type) : _infoIndex0((u32)type), _flags(VALID_MASK | PRIMITIVE) {}
-    TypeId(OperationType type) : _infoIndex0((u32)type), _flags(VALID_MASK | PRIMITIVE) {}
+    TypeId(PrimitiveType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK | PRIMITIVE) {}
+    TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK | PRIMITIVE) {}
     static TypeId Create(u32 id) {
         TypeId out={}; 
         out._flags = VALID_MASK; // TODO: ENUM or STRUCT?
@@ -209,9 +209,20 @@ struct TypeId {
         POINTER_SHIFT = 3,
         VALID_MASK = 0x80,
     };
-    u16 _infoIndex0 = 0;
-    u8 _infoIndex1 = 0;
-    u8 _flags = 0;
+    union {
+        struct { // actual data
+            u16 _infoIndex0;
+            u8 _infoIndex1; // not used
+            u8 _flags;
+        };
+        struct { // for debugging
+            PrimitiveType union_primtive;
+        };
+        struct { // for debugging
+            OperationType union_op;
+        };
+        u32 _zero = 0; // vscode intelisense doesn't like multiple initialized fields in anonymous struct in union, sigh. So we use one here.
+    };
 
     bool operator!=(TypeId type) const {
         return !(*this == type);

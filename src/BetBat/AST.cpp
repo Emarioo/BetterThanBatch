@@ -421,61 +421,70 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
         //   unnecessary.
+        
+        int startOfRealArguments = 0;
         if (fncall->hasImplicitThis()) {
-            if(fncall->nonNamedArgs > overload.astFunc->arguments.size()-1 // can't match if the call has more essential args than the total args the overload has
-                || fncall->nonNamedArgs < overload.astFunc->nonDefaults-1 // can't match if the call has less essential args than the overload (excluding defaults)
-                || argTypes.size() > overload.astFunc->arguments.size()-1
-                )
-                continue;
-
-            if(canCast){
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(!ast->castable(argTypes[j],overload.funcImpl->argumentTypes[j+1].typeId)) {
-                        found = false;
-                        break;
-                    }
-                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+            startOfRealArguments = 1;   
+        }
+        // NOTE: I refactored here to have less duplicated code. 'this' require special behaviour which is no done cleanly.
+        //   BUT, did I break something? - Emarioo, 2023-12-19
+            
+        if(fncall->nonNamedArgs > overload.astFunc->arguments.size() - startOfRealArguments // can't match if the call has more essential args than the total args the overload has
+        || fncall->nonNamedArgs < overload.astFunc->nonDefaults - startOfRealArguments // can't match if the call has less essential args than the overload (excluding defaults)
+        || argTypes.size() > overload.astFunc->arguments.size() - startOfRealArguments)
+            continue;
+            
+        // if (fncall->hasImplicitThis()) {
+        if(canCast){
+            foundInt = false; // we don't use int
+            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                TypeId implArgType = overload.funcImpl->argumentTypes[j+startOfRealArguments].typeId;
+                if(!ast->castable(argTypes[j], implArgType)) {
+                    found = false;
+                    break;
                 }
-            } else {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(overload.funcImpl->argumentTypes[j+1].typeId != argTypes[j]) {
-                        found = false;
-                        break;
-                    }
-                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
-                }
+                // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
         } else {
-            if(fncall->nonNamedArgs > overload.astFunc->arguments.size() // can't match if the call has more essential args than the total args the overload has
-                || fncall->nonNamedArgs < overload.astFunc->nonDefaults // can't match if the call has less essential args than the overload (excluding defaults)
-                || argTypes.size() > overload.astFunc->arguments.size()
-                )
-                continue;
-
-            if(canCast){
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    if(!ast->castable(argTypes[j],overload.funcImpl->argumentTypes[j].typeId)) {
-                        found = false;
-                        break;
+            for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+                TypeId implArgType = overload.funcImpl->argumentTypes[j+startOfRealArguments].typeId;
+                if(argTypes[j] != implArgType) {
+                    found = false;
+                    if(!(AST::IsInteger(implArgType) && AST::IsInteger(argTypes[j]))) {
+                        foundInt = false;
                     }
-                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+                    // break; // We can't break when using foundInt
                 }
-            } else {
-                for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-                    // if(Equal(fncall->name,"swrite_unsafe")) {
-                    //     log::out << "swrite_unsafe, overload: "<<i<<", arg: "<<j <<", type check: "<< ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " - " << ast->typeToString(argTypes[j])<<"\n";
-                    // }
-                    if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
-                        if(!(AST::IsInteger(overload.funcImpl->argumentTypes[j].typeId) && AST::IsInteger(argTypes[j]))) {
-                            foundInt = false;
-                        }
-                        found = false;
-                        // break; // We can't break when using foundInt
-                    }
-                    // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
-                }
+                // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
         }
+        // }
+        //  else {
+        //     if(canCast){
+        //         foundInt = false;
+        //         for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+        //             if(!ast->castable(argTypes[j],overload.funcImpl->argumentTypes[j].typeId)) {
+        //                 found = false;
+        //                 break;
+        //             }
+        //             // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+        //         }
+        //     } else {
+        //         for(int j=0;j<(int)fncall->nonNamedArgs;j++){
+        //             // if(Equal(fncall->name,"swrite_unsafe")) {
+        //             //     log::out << "swrite_unsafe, overload: "<<i<<", arg: "<<j <<", type check: "<< ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " - " << ast->typeToString(argTypes[j])<<"\n";
+        //             // }
+        //             if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
+        //                 found = false;
+        //                 if(!(AST::IsInteger(overload.funcImpl->argumentTypes[j].typeId) && AST::IsInteger(argTypes[j]))) {
+        //                     foundInt = false;
+        //                 }
+        //                 // break; // We can't break when using foundInt
+        //             }
+        //             // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
+        //         }
+        //     }
+        // }
         if(foundInt) {
             intOverload = &overload;
             intOverloads++;

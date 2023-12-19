@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BetBat/Util/StringBuilder.h"
+#include "Engone/Util/Stream.h"
 
 struct TokenRange;
 struct TokenStream;
@@ -24,8 +25,8 @@ struct TokenStream;
 #define MSG_CODE_LOCATION2
 #define MSG_CODE_LOCATION
 #endif
-#define BASE_SECTION(CODE) MSG_CODE_LOCATION; if(!info.ignoreErrors) info.errors++; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE
-#define BASE_WARN_SECTION(CODE) MSG_CODE_LOCATION; info.compileInfo->compileOptions->compileStats.warnings++; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE
+#define BASE_SECTION(CODE, CONTENT) { if(!info.ignoreErrors) info.errors++; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
+#define BASE_WARN_SECTION(CODE, CONTENT) { info.compileInfo->compileOptions->compileStats.warnings++; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
 
 // #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
 // #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
@@ -77,6 +78,10 @@ enum CompileError : u32 {
     ERROR_UNSPECIFIED = 1, // This is used for old errors which didn't have error types. New errors should not use this.
     ERROR_CASTING_TYPES = 1001,
     ERROR_UNDECLARED = 1002,
+    ERROR_TYPE_MISMATCH = 1003, // generic type mismatch
+    ERROR_INVALID_TYPE = 1004, // generic invalid type, usually void being used when it can't
+    ERROR_TOO_MANY_VARIABLES = 1005, // usually with more assignment variables than return values resulting in some variables missing a type
+    
     
     ERROR_DUPLICATE_CASE = 2101,
     ERROR_DUPLICATE_DEFAULT_CASE = 2102,
@@ -98,3 +103,12 @@ const char* ToCompileErrorString(temp_compile_error stuff);
 void PrintCode(const TokenRange& tokenRange, const char* message = nullptr);
 void PrintCode(int index, TokenStream* stream, const char* message = nullptr);
 
+struct Reporter {
+    
+    bool instant_report = true;
+    
+    void start_report();
+    void end_report();
+    
+    ByteStream stream{new engone::HeapAllocator()};
+};

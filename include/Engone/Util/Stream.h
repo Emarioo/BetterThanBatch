@@ -14,9 +14,9 @@ struct ByteStream {
             allocator = engone::GlobalHeapAllocator();
         
         auto ptr = (ByteStream*)allocator->allocate(sizeof(ByteStream));
-        new(ptr)ByteStream();
+        new(ptr)ByteStream(allocator);
         
-        ptr->m_allocator = allocator;
+        // ptr->m_allocator = allocator;
         return ptr;
     }
     static void Destroy(ByteStream* stream, engone::Allocator* allocator) {
@@ -25,6 +25,7 @@ struct ByteStream {
             allocator = engone::GlobalHeapAllocator();
         allocator->allocate(0, stream, sizeof(ByteStream));
     }
+    ByteStream(engone::Allocator* allocator) : m_allocator(allocator) { }
     ~ByteStream() {
         cleanup();
     }

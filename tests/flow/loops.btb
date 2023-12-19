@@ -15,7 +15,7 @@ for 0..5 {
     i++
 }
 test 5; i;
-@TEST-CASE for-rev
+@TEST-CASE for_rev
 i = 0
 N = 5
 for @rev (-2)..N {
@@ -24,7 +24,7 @@ for @rev (-2)..N {
     i++
 }
 test 7; i;
-@TEST-CASE for-ptr
+@TEST-CASE for_ptr
 arr: i32[] {
     0,1,2,3,4
 }
@@ -36,7 +36,7 @@ for arr {
     test 2*nr; it;
 }
 
-@TEST-CASE for-str
+@TEST-CASE for_str
 // This caused a crash at one point (the generator forgot to add an instruction)
 str = "Yay wee"
 for str {

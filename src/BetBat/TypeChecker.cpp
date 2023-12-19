@@ -9,8 +9,7 @@
 */
 
 #undef ERR_SECTION
-#define ERR_SECTION(CONTENT) { BASE_SECTION("Type checker, "); CONTENT; }
-
+#define ERR_SECTION(CONTENT) BASE_SECTION("Type checker, ", CONTENT)
 
 #ifdef TC_LOG
 #define _TC_LOG_ENTER(X) X
@@ -71,8 +70,6 @@ SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
     return error;
 }
 
-bool CheckInfo::hasErrors() { return errors != 0 || compileInfo->compileOptions->compileStats.errors != 0; }
-bool CheckInfo::hasForeignErrors() { return compileInfo->compileOptions->compileStats.errors != 0; }
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError);
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);
 SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
@@ -560,8 +557,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         }
         tempTypes.resize(0);
         if(resultLeft != SignalAttempt::SUCCESS || resultRight != SignalAttempt::SUCCESS)
-            return SignalAttempt::FAILURE;
-            // return SignalAttempt::BAD_ATTEMPT;
+            return SignalAttempt::FAILURE; // should be a failure since the expressions actually failed
         Assert(argTypes.size() == 2);
 
     } else {
@@ -673,7 +669,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         if(!overload)
             overload = fnOverloads->getOverload(info.ast, argTypes, expr, true);
         if(operatorOverloadAttempt && !overload)
-            return SignalAttempt::FAILURE;
+            return SignalAttempt::BAD_ATTEMPT;
         if(overload){
             if(overload->astFunc->body && overload->funcImpl->usages == 0){
                 CheckInfo::CheckImpl checkImpl{};
@@ -1271,8 +1267,6 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             return SignalAttempt::FAILURE;
         }
     } else if(expr->typeId == AST_INDEX) {
-        // TODO: You should not be allowed to overload all operators.
-        //  Fix some sort of way to limit which ones you can.
         if(expr->left && expr->right) {
             expr->nonNamedArgs = 2; // unless operator overloading
             SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true);
@@ -1534,7 +1528,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             std::string strcast = info.ast->typeToString(ti);
             ERR_SECTION(
                 ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
-                ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?.")
+                ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?")
                 ERR_LINE(expr->left->tokenRange,strleft)
                 ERR_LINE(expr->tokenRange,strcast)
                 ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
@@ -1551,7 +1545,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         //  Fix some sort of way to limit which ones you can.
         const char* str = OpToStr((OperationType)expr->typeId.getId(), true);
         if(str && expr->left && expr->right) {
-            expr->nonNamedArgs = 2; // unless operator overloading
+            expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
             SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true);
             
             if(result == SignalAttempt::SUCCESS)
@@ -2286,7 +2280,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     if(typeArray[i].isValid() && typeArray[i] != AST_VOID)
                         continue;
                     ERR_SECTION(
-                        ERR_HEAD(now->firstExpression->tokenRange)
+                        ERR_HEAD(now->firstExpression->tokenRange, ERROR_INVALID_TYPE)
                         ERR_MSG("Expression must produce valid types for the assignment.")
                         ERR_LINE(now->tokenRange, "this assignment")
                         if(typeArray[i].isValid()) {
@@ -2304,10 +2298,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             if(now->firstExpression && poly_typeArray.size() < now->varnames.size()){
                 if(info.errors==0) {
                     ERR_SECTION(
-                        ERR_HEAD(now->tokenRange)
+                        ERR_HEAD(now->tokenRange, ERROR_TOO_MANY_VARIABLES)
                         ERR_MSG("Too many variables were declared.")
                         ERR_LINE(now->tokenRange, now->varnames.size() + " variables")
-                        ERR_LINE(now->tokenRange, poly_typeArray.size() + " return values")
+                        ERR_LINE(now->firstExpression->tokenRange, poly_typeArray.size() + " return values")
                     )
                     hadError = true;
                 }
@@ -2339,7 +2333,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             ERR_SECTION(
                                 ERR_HEAD(varname.name)
                                 ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
-                                ERR_LINE(varname.name, "type-less");
+                                ERR_LINE(varname.name, "typeless");
                             )
                         }
                     }
@@ -2395,7 +2389,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             std::string leftstr = info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]);
                             std::string rightstr = info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]);
                             ERR_SECTION(
-                                ERR_HEAD(now->tokenRange)
+                                ERR_HEAD(now->tokenRange, ERROR_TYPE_MISMATCH)
                                 ERR_MSG("Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.")
                                 ERR_LINE(varname.name, leftstr.c_str())
                                 ERR_LINE(now->firstExpression->tokenRange,rightstr.c_str())
@@ -2412,7 +2406,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 if(vi < (int)poly_typeArray.size()){
                     if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
                         ERR_SECTION(
-                            ERR_HEAD(now->firstExpression->tokenRange)
+                            ERR_HEAD(now->firstExpression->tokenRange, ERROR_TYPE_MISMATCH)
                             ERR_MSG("Type mismatch " << info.ast->typeToString(poly_typeArray[vi]) << " - " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << ".")
                             ERR_LINE(varname.name, info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]))
                             ERR_LINE(now->firstExpression->tokenRange, info.ast->typeToString(poly_typeArray[vi]))

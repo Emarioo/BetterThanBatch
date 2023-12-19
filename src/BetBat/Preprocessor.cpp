@@ -15,7 +15,7 @@
 #define WARN_LINE2(I, M) PrintCode(I, info.inTokens, M)
 
 #undef ERR_SECTION
-#define ERR_SECTION(CONTENT) { BASE_SECTION("Preproc. error, E0000"); CONTENT; }
+#define ERR_SECTION(CONTENT) BASE_SECTION("Preproc. error, E0000", CONTENT)
 
 bool PreprocInfo::end(){
     return index>=length();
@@ -1083,8 +1083,15 @@ SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall
 SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     using namespace engone;
     MEASURE;
+    
+    bool quote_tokens = false;
+    int extra_off = 0;
+    if(Equal(info.get(info.at() + 1), "#") && Equal(info.get(info.at() + 2), "quote")) {
+        extra_off += 2;
+        quote_tokens = true;
+    }
 
-    Token macroName = info.get(info.at()+1);
+    Token macroName = info.get(info.at() + extra_off + 1);
     RootMacro* rootMacro = info.compileInfo->matchMacro(macroName);
     if(!rootMacro){
         if(attempt){
@@ -1096,6 +1103,7 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
         )
         return SignalAttempt::FAILURE;
     }
+    for(int i=0;i<extra_off;i++) info.next();
     info.next();
     attempt=false;
     
@@ -1111,6 +1119,11 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     info.calls.resize(0);
     info.environments.resize(0);
     // info.unwrappedArgs.resize(0);
+    
+    defer {
+        FOR(info.calls) delete it;
+        FOR(info.environments) delete it;
+    };
 
     // TODO: Use bucket arrays instead
     // DynamicArray<const Token*> outputTokens{}; // TODO: Reuse a temporary array instead of doing a new allocation
@@ -1121,17 +1134,21 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     // DynamicArray<Env> environments{};
     // // environments._reserve(50);
     // DynamicArray<bool> unwrappedArgs{};
-    info.calls.add({});
-    info.environments.add({});
+    
+    // TODO: Use a bucket array when allocating macros calls and environments.
+    //   Perhaps you could do MacroCall calls[100]; with a fixed size since we will have a limit for the macro recursion.
+    //   Or maybe don't since the limit might be really big? like 1000 is a lot to have.
+    info.calls.add(new MacroCall());
+    info.environments.add(new Env());
     u32 finalFlags = 0;
     {
-        MacroCall& initialCall = info.calls.last();
-        Env& initialEnv = info.environments.last();
-        initialEnv.outputToCall = -1;
-        initialEnv.unwrapOutput = false;
-        initialCall.rootMacro = rootMacro;
-        initialEnv.callIndex = 0;
-        initialEnv.ownsCall = 0;
+        MacroCall* initialCall = info.calls.last();
+        Env* initialEnv = info.environments.last();
+        initialEnv->outputToCall = -1;
+        initialEnv->unwrapOutput = false;
+        initialCall->rootMacro = rootMacro;
+        initialEnv->callIndex = 0;
+        initialEnv->ownsCall = 0;
 
         int argCount=0;
         if(!info.end()){
@@ -1141,19 +1158,21 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
             argRange.end = info.length();
 
             info.unwrappedArgs.resize(0);
-            FetchArguments(info,argRange, nullptr, &initialCall, info.unwrappedArgs);
+            FetchArguments(info,argRange, nullptr, initialCall, info.unwrappedArgs);
             while(info.at() + 1 < argRange.start){
                 info.next();
             }
-            argCount = initialCall.useDetailedArgs ? initialCall.detailedArguments.size() : initialCall.argumentRanges.size();
-            initialEnv.finalFlags = argRange.stream->get(argRange.start - 1).flags;
-            finalFlags = initialEnv.finalFlags;
+            argCount = initialCall->useDetailedArgs ? initialCall->detailedArguments.size() : initialCall->argumentRanges.size();
+            initialEnv->finalFlags = argRange.stream->get(argRange.start - 1).flags;
+            finalFlags = initialEnv->finalFlags;
+        } else {
+            finalFlags = macroName.flags & (TOKEN_SUFFIX_LINE_FEED | TOKEN_SUFFIX_SPACE);
         }
-        if(!initialCall.unwrapped || initialCall.useDetailedArgs){
-            Assert(!initialCall.unwrapped); // how does unwrap work here?
-            // initialCall.certainMacro = rootMacro->matchArgCount(argCount);
-            initialCall.certainMacro = info.compileInfo->matchArgCount(rootMacro, argCount, true);
-            if(!initialCall.certainMacro){
+        if(!initialCall->unwrapped || initialCall->useDetailedArgs){
+            Assert(!initialCall->unwrapped); // how does unwrap work here?
+            // initialCall->certainMacro = rootMacro->matchArgCount(argCount);
+            initialCall->certainMacro = info.compileInfo->matchArgCount(rootMacro, argCount, true);
+            if(!initialCall->certainMacro){
                 ERR_SECTION(
                     ERR_HEAD(macroName)
                     ERR_MSG("Macro '"<<macroName<<"' cannot have "<<(argCount)<<" arguments.")
@@ -1162,18 +1181,18 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                 return SignalAttempt::FAILURE;
             }
             _MLOG(log::out << "CertainMacro "<<argCount<<"\n";)
-            initialEnv.range = initialCall.certainMacro->contentRange;
+            initialEnv->range = initialCall->certainMacro->contentRange;
         } else {
-            initialCall.useDetailedArgs = true;
+            initialCall->useDetailedArgs = true;
             _MLOG(log::out << "Unwrapped args\n";)
-            for(int i = (int)initialCall.argumentRanges.size()-1; i >= 0;i--){
-                info.environments.add({});
-                Env& argEnv = info.environments.last();
-                argEnv.range = initialCall.argumentRanges[i];
-                argEnv.callIndex = info.calls.size()-1;
+            for(int i = (int)initialCall->argumentRanges.size()-1; i >= 0;i--){
+                info.environments.add(new Env());
+                Env* argEnv = info.environments.last();
+                argEnv->range = initialCall->argumentRanges[i];
+                argEnv->callIndex = info.calls.size()-1;
                 if(i<(int)info.unwrappedArgs.size())
-                    argEnv.unwrapOutput = info.unwrappedArgs[i];
-                argEnv.outputToCall = info.calls.size()-1;
+                    argEnv->unwrapOutput = info.unwrappedArgs[i];
+                argEnv->outputToCall = info.calls.size()-1;
             }
         }
     }
@@ -1185,15 +1204,17 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     // int limit = 40;
     // while (limit-->0){
     while (info.calls.size()<PREPROC_REC_LIMIT){
-        Env& env = info.environments.last();
+        Env* env = info.environments.last();
         MacroCall* call = nullptr;
-        if(env.callIndex!=-1) {
-            call = &info.calls.get(env.callIndex);
-            if(!call->certainMacro && env.ownsCall==env.callIndex){
+        if(env->callIndex!=-1) {
+            call = info.calls.get(env->callIndex);
+            if(!call->certainMacro && env->ownsCall==env->callIndex){
                 Assert(call->rootMacro && call->unwrapped);
                 int argCount = call->detailedArguments.size();
-                // if(call->unwrapped){
+                // if(call->unwrapped){ 
                     call->certainMacro = info.compileInfo->matchArgCount(call->rootMacro, argCount, true);
+                    
+                Assert(!call ||  ((u64)call->certainMacro & 0xFF000000000000) == 0);
                 // }else{
                     // call->certainMacro = call->rootMacro->matchArgCount(call->argumentRanges.size());
                 // }
@@ -1206,14 +1227,16 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                     continue;
                 }
                 _MLOG(log::out << "CertainMacro special "<<argCount<<"\n";)
-                env.range = call->certainMacro->contentRange; 
+                env->range = call->certainMacro->contentRange; 
             }
         }
-        if(env.range.end == env.range.start) {
-            _MLOG(log::out << "Env["<<(info.environments.size()-1)<<"] pop "<<(env.callIndex==-1 ? "-1" : info.calls[env.callIndex].rootMacro->name)<<"\n";)
+        if(env->range.end == env->range.start) {
+            _MLOG(log::out << "Env["<<(info.environments.size()-1)<<"] pop "<<(env->callIndex==-1 ? "-1" : info.calls[env->callIndex].rootMacro->name)<<"\n";)
+            delete info.environments.last();
             info.environments.pop();
-            if(env.ownsCall!=-1){
-                Assert(env.ownsCall==(int)info.calls.size()-1);
+            if(env->ownsCall!=-1){
+                Assert(env->ownsCall==(int)info.calls.size()-1);
+                delete info.calls.last();
                 info.calls.pop();
             }
 
@@ -1221,18 +1244,19 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                 break;
             continue;
         }
-        _MLOG(log::out << "Env["<<(info.environments.size()-1)<<"] callref: "<<(env.callIndex==-1 ? "-1" : info.calls[env.callIndex].rootMacro->name) << " own: "<<(env.ownsCall==-1 ? "-1" : info.calls[env.ownsCall].rootMacro->name)<<"\n";)
-        bool initialEnv = env.firstTime;
-        if(env.firstTime){
-            env.firstTime=false;
+        _MLOG(log::out << "Env["<<(info.environments.size()-1)<<"] callref: "<<(env->callIndex==-1 ? "-1" : info.calls[env->callIndex].rootMacro->name) << " own: "<<(env->ownsCall==-1 ? "-1" : info.calls[env->ownsCall].rootMacro->name)<<"\n";)
+        bool initialEnv = env->firstTime;
+        if(env->firstTime){
+            env->firstTime=false;
         }
-        Assert(env.range.start < env.range.stream->length());
-        const Token& token = env.range.stream->get(env.range.start++);
+        Assert(env->range.start < env->range.stream->length());
+        const Token& token = env->range.stream->get(env->range.start++);
 
         int parameterIndex = -1;
         RootMacro* deeperMacro = nullptr;
 
-        if(env.callIndex!=-1) {
+        Assert(!call || ((u64)call->certainMacro & 0xFF000000000000) == 0);
+        if(env->callIndex!=-1) {
             if(call->certainMacro && -1!=(parameterIndex = call->certainMacro->matchArg(token))){ // TOOD: rename matchArg to matchParameter
                 // @optimize TODO: Parameters are evaluated in full each time they occur.
                 //   This is inefficient with many parameters but a parameter will
@@ -1256,21 +1280,21 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                     for(int i = paramStart + paramCount -1;i>=paramStart;i--){
                         for(int j=0;j<(int)call->detailedArguments[i].size();j++){
                             const Token* argToken = call->detailedArguments[i][j];
-                            if(env.outputToCall==-1){
+                            if(env->outputToCall==-1){
                                 _MLOG(log::out << " output " << *argToken<<"\n";)
                                 info.outputTokens.add(argToken);
                                 info.outputTokensFlags.add(argToken->flags);
                             } else {
-                                Assert(env.outputToCall>=0&&env.outputToCall<(int)info.calls.size());
-                                MacroCall& outputCall = info.calls[env.outputToCall];
+                                Assert(env->outputToCall>=0&&env->outputToCall<(int)info.calls.size());
+                                MacroCall* outputCall = info.calls[env->outputToCall];
                                 if(initialEnv)
-                                    outputCall.detailedArguments.add({});
-                                if(env.unwrapOutput && Equal(*argToken,",")){
+                                    outputCall->detailedArguments.add({});
+                                if(env->unwrapOutput && Equal(*argToken,",")){
                                     _MLOG(log::out << " output arg comma\n";)
-                                    outputCall.detailedArguments.add({});
+                                    outputCall->detailedArguments.add({});
                                 } else {
-                                    _MLOG(log::out << " output arg["<<(outputCall.detailedArguments.size()-1)<<"] "<<*argToken<<"\n";)
-                                    outputCall.detailedArguments.last().add(argToken);
+                                    _MLOG(log::out << " output arg["<<(outputCall->detailedArguments.size()-1)<<"] "<<*argToken<<"\n";)
+                                    outputCall->detailedArguments.last().add(argToken);
                                 }
                                 // TOOD: What about final flags?
                             }
@@ -1279,8 +1303,8 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                 } else {
                     for(int i = paramStart + paramCount -1;i>=paramStart;i--){
                         Assert(i<(int)call->argumentRanges.size());
-                        Env argEnv{};
-                        argEnv.range = call->argumentRanges[i];
+                        Env* argEnv = new Env();
+                        argEnv->range = call->argumentRanges[i];
 
                         // The code that decrements the range makes this happen:
                         // #define Hey(...) PrintMessage(...)
@@ -1289,52 +1313,57 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                         // perhaps do something with unwrap, spread or something to tweak when
                         // this code is off but it's quite nice for the most part.
                         if(i != paramStart) {
-                            argEnv.range.start--; // include comma
+                            argEnv->range.start--; // include comma
                         }
 
-                        if(env.callIndex==0){
+                        if(env->callIndex==0){
                             // log::out << "Saw param, global env\n";
-                            argEnv.callIndex = -1;
+                            argEnv->callIndex = -1;
                         } else {
                             // log::out << "Saw param, local env\n";
-                            argEnv.callIndex = env.callIndex-1;
+                            argEnv->callIndex = env->callIndex-1;
                         }
                         if(i == paramStart + paramCount - 1)
-                            argEnv.finalFlags = token.flags;
-                        if(env.range.start == env.range.end)
-                            argEnv.finalFlags &= ~(TOKEN_SUFFIX_LINE_FEED); 
+                            argEnv->finalFlags = token.flags;
+                        if(env->range.start == env->range.end)
+                            argEnv->finalFlags &= ~(TOKEN_SUFFIX_LINE_FEED); 
                         info.environments.add(argEnv);
                     }
                 }
                 continue;
             }
         }
+        Assert(!call || ((u64)call->certainMacro & 0xFF000000000000) == 0);
         if((deeperMacro = info.compileInfo->matchMacro(token))){
             _MLOG(log::out << "Macro "<<token<<"\n";)
+            
+            Assert(!call || ((u64)call->certainMacro & 0xFF000000000000) == 0);
 
-            info.environments.add({});
-            info.calls.add({});
-            Env& innerEnv = info.environments.last();
-            MacroCall& innerCall = info.calls.last();
-            innerEnv.outputToCall = env.outputToCall;
-            innerEnv.unwrapOutput = env.unwrapOutput;
-            innerEnv.callIndex = info.calls.size()-1;
-            innerEnv.ownsCall = info.calls.size()-1;
-            innerCall.rootMacro = deeperMacro;
+            info.environments.add(new Env());
+            info.calls.add(new MacroCall());
+            Env* innerEnv = info.environments.last();
+            MacroCall* innerCall = info.calls.last();
+            innerEnv->outputToCall = env->outputToCall;
+            innerEnv->unwrapOutput = env->unwrapOutput;
+            innerEnv->callIndex = info.calls.size()-1;
+            innerEnv->ownsCall = info.calls.size()-1;
+            innerCall->rootMacro = deeperMacro;
 
             int argCount=0;
             // DynamicArray<bool> unwrappedArgs{};
             info.unwrappedArgs.resize(0);
-            if(env.range.start < env.range.end){
-                FetchArguments(info,env.range, call, &innerCall, info.unwrappedArgs);
-                argCount = innerCall.useDetailedArgs ? innerCall.detailedArguments.size() : innerCall.argumentRanges.size();
+            if(env->range.start < env->range.end){
+                
+                Assert(!call ||  ((u64)call->certainMacro & 0xFF000000000000) == 0);
+                FetchArguments(info,env->range, call, innerCall, info.unwrappedArgs);
+                argCount = innerCall->useDetailedArgs ? innerCall->detailedArguments.size() : innerCall->argumentRanges.size();
             }
-            innerEnv.finalFlags = env.range.stream->get(env.range.start - 1).flags;
+            innerEnv->finalFlags = env->range.stream->get(env->range.start - 1).flags;
 
-            if(!innerCall.unwrapped || innerCall.useDetailedArgs){
-                Assert(!innerCall.unwrapped); // how does unwrap work here?
-                innerCall.certainMacro = info.compileInfo->matchArgCount(deeperMacro, argCount, true);
-                if(!innerCall.certainMacro){
+            if(!innerCall->unwrapped || innerCall->useDetailedArgs){
+                Assert(!innerCall->unwrapped); // how does unwrap work here?
+                innerCall->certainMacro = info.compileInfo->matchArgCount(deeperMacro, argCount, true);
+                if(!innerCall->certainMacro){
                     ERR_SECTION(
                         ERR_HEAD(token)
                         ERR_MSG("Macro '"<<token<<"' cannot have "<<(argCount)<<" arguments.")
@@ -1343,47 +1372,47 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                     continue;
                 }
                 _MLOG(log::out << "CertainMacro "<<argCount<<"\n";)
-                innerEnv.range = innerCall.certainMacro->contentRange;
+                innerEnv->range = innerCall->certainMacro->contentRange;
             } else {
-                innerCall.useDetailedArgs = true;
+                innerCall->useDetailedArgs = true;
                 _MLOG(log::out << "Unwrapped args\n";)
-                for(u32 i = innerCall.argumentRanges.size()-1; i >= 0;i--){
-                    info.environments.add({});
-                    Env& argEnv = info.environments.last();
-                    argEnv.range = innerCall.argumentRanges[i];
-                    argEnv.callIndex = info.calls.size()-1;
+                for(u32 i = innerCall->argumentRanges.size()-1; i >= 0;i--){
+                    info.environments.add(new Env());
+                    Env* argEnv = info.environments.last();
+                    argEnv->range = innerCall->argumentRanges[i];
+                    argEnv->callIndex = info.calls.size()-1;
                     if(i<info.unwrappedArgs.size())
-                        argEnv.unwrapOutput = info.unwrappedArgs[i];
-                    argEnv.outputToCall = info.calls.size()-1;
+                        argEnv->unwrapOutput = info.unwrappedArgs[i];
+                    argEnv->outputToCall = info.calls.size()-1;
                 }
             }
             continue;
         }
-        if(env.outputToCall==-1){
+        if(env->outputToCall==-1){
             _MLOG(log::out << " output " << token<<"\n";)
             info.outputTokens.add(&token);
-            if(env.range.start == env.range.end){
-                info.outputTokensFlags.add(env.finalFlags|(token.flags&(TOKEN_MASK_QUOTED)));
+            if(env->range.start == env->range.end){
+                info.outputTokensFlags.add(env->finalFlags|(token.flags&(TOKEN_MASK_QUOTED)));
             } else
                 info.outputTokensFlags.add(token.flags);
         } else {
-            Assert(env.outputToCall>=0&&env.outputToCall<(int)info.calls.size());
-            MacroCall& outputCall = info.calls[env.outputToCall];
-            Assert(outputCall.useDetailedArgs);
+            Assert(env->outputToCall>=0&&env->outputToCall<(int)info.calls.size());
+            MacroCall* outputCall = info.calls[env->outputToCall];
+            Assert(outputCall->useDetailedArgs);
             if(initialEnv)
-                outputCall.detailedArguments.add({});
-            if(env.unwrapOutput && Equal(token,",")){
+                outputCall->detailedArguments.add({});
+            if(env->unwrapOutput && Equal(token,",")){
                 _MLOG(log::out << " output arg comma\n";)
-                outputCall.detailedArguments.add({});
+                outputCall->detailedArguments.add({});
             } else {
                 _MLOG(log::out << " output arg["<<(outputCall.detailedArguments.size()-1)<<"] "<<token<<"\n";)
-                outputCall.detailedArguments.last().add(&token);
+                outputCall->detailedArguments.last().add(&token);
             }
         }
     }
     if(info.calls.size()>=PREPROC_REC_LIMIT){
-        Env& env = info.environments.last();
-        MacroCall* call = env.callIndex!=-1 ? &info.calls[env.callIndex] : nullptr;
+        Env* env = info.environments.last();
+        MacroCall* call = env->callIndex!=-1 ? info.calls[env->callIndex] : nullptr;
         Token& tok = call ? call->certainMacro->name : info.now();
         ERR_SECTION(
             ERR_HEAD(tok)
@@ -1432,10 +1461,11 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
         baseToken.str = (char*)offset;
         WHILE_TRUE {
             
-            if(!Equal(*info.outputTokens[i],"#") && 0==(baseToken.flags&TOKEN_MASK_QUOTED) && i+3<(int)info.outputTokens.size() && Equal(*info.outputTokens[i+1],"#") && Equal(*info.outputTokens[i+2],"#")){
+            if(!Equal(*info.outputTokens[i],"#") && 0==(baseToken.flags&TOKEN_MASK_QUOTED) && i+3<(int)info.outputTokens.size()
+            && Equal(*info.outputTokens[i+1],"#") && Equal(*info.outputTokens[i+2],"#")){
                 // Assert(false);
                 Token token2 = *info.outputTokens[i+3];
-                if(Equal(token2,"#")){
+                if(Equal(token2,"#") && i+4 < info.outputTokens.size()){
                     SignalAttempt result = ParsePredefinedMacro(info,*info.outputTokens[i+4], token2,buffer,bufferLen);
                     if(result==SignalAttempt::SUCCESS){
                         i++;
@@ -1484,49 +1514,79 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     // info.tempStream->print();
     // log::out<<"\n";
 
-    // TODO: A function to load and unload token stream. The index
-    //  must be saved and restored which you may forget when swithing token stream.
-    TokenStream* originalStream = info.inTokens;
-    info.inTokens = info.tempStream; // Note: don't modify inTokens
-    
-    int savedIndex = info.index;
-    info.index = 0;
-    // TODO: Don't parse defines in macro evaluation. A flag in PreprocInfo would do.
-    // TODO: If you define a new macro and then evaluate it you might be able to achieve infinite recursion.
-    // There is an assert above which "locks" tempStream so it will be fine right now.
-    while(!info.end()){
-        // #ifndef SLOW_PREPROCESSOR
-        // // Quick check, doesn't matter if it's quoted.
-        // // ParseToken will not need to parse macros which is why we can do these
-        // // checks
-        // // This broke because of concatenation with ##, revisit this code
-        // Token& token = info.get(info.at()+1);
-        // if(*token.str != '#' && *token.str != '_'){
-        //     info.next();
-        //     info.addToken(token);
-        //     continue;
-        // }
-        // if(*token.str == '#' && !(token.flags & TOKEN_MASK_QUOTED) &&
-        //     !(token.flags & TOKEN_SUFFIX_SPACE) && !(token.flags & TOKEN_SUFFIX_LINE_FEED)){
-        //     // ParseDefine also makes sure that #define doesn't occur but we have to 
-        //     // do it here to in case tokens were merged resulting in #define.
-        //     if(Equal(info.get(info.at()+2),"define") || Equal(info.get(info.at()+2),"multidefine")) {
-        //         ERR_SECTION(
-    // ERR_HEAD(info.get(info.at()+2), "Macro definitions inside macros are not allowed.\n\n";
-        //             ERR_LINE2(info.at()+2,"not allowed");
-        //         )
-        //         info.next();
-        //         info.addToken(token);
-        //         continue;
-        //     }
-        // }
-        // #endif
-        SignalDefault result = ParseToken(info);
+    if(quote_tokens) {
+        Assert(info.tempStream->length() > 0);
+        
+        
+        TokenRange range{};
+        range.firstToken = info.tempStream->get(0);
+        range.endIndex = info.tempStream->length();
+        
+        // TODO: This could use a nice refactor. We do a lot of tricky stuff which is easy to do wrong.
+        //   Making some functions which does the tricky stuff so we can just use them without issues would be nice.
+        
+        int size = range.queryFeedSize(true);
+        
+        u64 offset = info.outTokens->tokenData.used;
+        char* buf = info.outTokens->addData_late(size);
+        int readSize = range.feed(buf, size, true);
+        Assert(readSize == size);
+        
+        Token quotedToken{};
+        quotedToken.flags |= TOKEN_DOUBLE_QUOTED;
+        Token last = info.tempStream->get(range.endIndex - 1);
+        quotedToken.flags |= info.tempStream->get(range.endIndex-1).flags & (TOKEN_SUFFIX_LINE_FEED | TOKEN_SUFFIX_SPACE);
+        quotedToken.column = range.firstToken.column;
+        quotedToken.line = range.firstToken.line;
+        quotedToken.length = size;
+        quotedToken.str = (char*)offset;
+        
+        info.outTokens->addToken(quotedToken);
+    } else {
+        // TODO: A function to load and unload token stream. The index
+        //  must be saved and restored which you may forget when swithing token stream.
+        TokenStream* originalStream = info.inTokens;
+        info.inTokens = info.tempStream; // Note: don't modify inTokens
+        
+        int savedIndex = info.index;
+        info.index = 0;
+        // TODO: Don't parse defines in macro evaluation. A flag in PreprocInfo would do.
+        // TODO: If you define a new macro and then evaluate it you might be able to achieve infinite recursion.
+        // There is an assert above which "locks" tempStream so it will be fine right now.
+        while(!info.end()){
+            // #ifndef SLOW_PREPROCESSOR
+            // // Quick check, doesn't matter if it's quoted.
+            // // ParseToken will not need to parse macros which is why we can do these
+            // // checks
+            // // This broke because of concatenation with ##, revisit this code
+            // Token& token = info.get(info.at()+1);
+            // if(*token.str != '#' && *token.str != '_'){
+            //     info.next();
+            //     info.addToken(token);
+            //     continue;
+            // }
+            // if(*token.str == '#' && !(token.flags & TOKEN_MASK_QUOTED) &&
+            //     !(token.flags & TOKEN_SUFFIX_SPACE) && !(token.flags & TOKEN_SUFFIX_LINE_FEED)){
+            //     // ParseDefine also makes sure that #define doesn't occur but we have to 
+            //     // do it here to in case tokens were merged resulting in #define.
+            //     if(Equal(info.get(info.at()+2),"define") || Equal(info.get(info.at()+2),"multidefine")) {
+            //         ERR_SECTION(
+        // ERR_HEAD(info.get(info.at()+2), "Macro definitions inside macros are not allowed.\n\n";
+            //             ERR_LINE2(info.at()+2,"not allowed");
+            //         )
+            //         info.next();
+            //         info.addToken(token);
+            //         continue;
+            //     }
+            // }
+            // #endif
+            SignalDefault result = ParseToken(info);
+        }
+        info.parsedMacroName = {};
+        info.index = savedIndex;
+        info.inTokens = originalStream;
+        info.usingTempStream = false;
     }
-    info.parsedMacroName = {};
-    info.index = savedIndex;
-    info.inTokens = originalStream;
-    info.usingTempStream = false;
 
     // log::out << "####\n";
     // info.outTokens->finalizePointers();
@@ -1599,6 +1659,21 @@ SignalDefault ParseToken(PreprocInfo& info){
         // if(result == SignalAttempt::BAD_ATTEMPT)
             result = ParseLink(info,true);
         if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
+        
+        if(Equal(token,"quote")) {
+            // we do info.next in the function, it needs to know if we #quote or not
+            result = ParseMacro_fast(info,true);
+            if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
+            
+            info.next(); // hashtag
+            info.next(); // quote
+            Token token = info.next();
+            token.flags |= TOKEN_DOUBLE_QUOTED;
+            
+            _MLOG(log::out << "Append "<<token<<"\n";)
+            info.addToken(token);
+            return SignalDefault::SUCCESS;
+        }
     }
 
     if(info.get(info.at()+1).flags&TOKEN_ALPHANUM)

@@ -1,6 +1,10 @@
 #include "Native/NativeLayer.h"
 #ifdef NATIVE_BUILD
+#ifdef OS_WINDOWS
 #include "../src/Engone/Win32.cpp"
+#else
+#include "../src/Engone/Unix.cpp"
+#endif
 #include "../src/Engone/UIModule.cpp"
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -19,7 +23,6 @@
 #endif
 
 #include "Engone/PlatformLayer.h"
-#include <stdio.h>
 #ifndef NO_UIMODULE
 #include "Engone/UIModule.h"
 #endif
@@ -27,6 +30,10 @@
 #ifdef OS_WINDOWS
 #include "Engone/Win32Includes.h"
 #endif
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // #include "BetBat/Config.h"
 // #define GLEW_STATIC

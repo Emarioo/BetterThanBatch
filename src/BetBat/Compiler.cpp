@@ -28,7 +28,7 @@ Path::Path(const char* path) : text(path), _type((Type)0) {
         }
     }
 #else
-     size_t lastSlash = text.find_last_of("/");
+    size_t lastSlash = text.find_last_of("/");
 
     if(lastSlash + 1 == text.length()){
         _type |= (u32)DIR;
@@ -61,7 +61,7 @@ Path::Path(const std::string& path) : text(path), _type((Type)0) {
         }
     }
 #elif defined(OS_UNIX)
-     size_t lastSlash = text.find_last_of("/");
+    size_t lastSlash = text.find_last_of("/");
 
     if(lastSlash + 1 == text.length()){
         _type |= (u32)DIR;
@@ -94,10 +94,24 @@ Path Path::getAbsolute() const {
 
     std::string cwd = engone::GetWorkingDirectory();
     if(cwd.empty()) return {}; // error?
-    if(cwd.back() == '/')
-        return Path(cwd + text);
-    else
-        return Path(cwd + "/" + text);
+    if(text.length() > 0 && text[0] == '.') {
+        if(text.length() > 1 && text[1] == '/') {
+            if(cwd.back() == '/')
+                return Path(cwd + text.substr(2));
+            else
+                return Path(cwd + text.substr(1));
+        } else {
+            if(cwd.back() == '/')
+                return Path(cwd + text.substr(1));
+            else
+                return Path(cwd + "/" + text.substr(1));
+        }
+    } else {
+        if(cwd.back() == '/')
+            return Path(cwd + text);
+        else
+            return Path(cwd + "/" + text);
+    }
 }
 Path Path::getDirectory() const {
     if(isDir()) return *this;
@@ -545,6 +559,7 @@ CertainMacro* CompileInfo::matchArgCount(RootMacro* rootMacro, int count, bool i
         macro = pair->second;
         _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< macro->parameters.size()<<"\n";))
     }
+    // Assert(((u64)macro & 0xFF000000000000) == 0);
     macroLock.unlock();
     return macro;
 }
@@ -907,6 +922,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     // compileInfo.nativeRegistry->initNativeContent();
     // compileInfo.targetPlatform = options->target;
     compileInfo.compileOptions = options;
+    compileInfo.reporter.instant_report = options->instant_report;
     
     compileInfo.ast = AST::Create();
     defer { 
@@ -1407,14 +1423,14 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 // bool outputOtherDirectory = outPath.text.find("/") != std::string::npos;
 
                 // link command
-                std::string cmd = "gcc ";
+                std::string cmd = "g++ ";
                 // force debug info for now
                 // if(options->useDebugInformation)
                     // cmd += "-g ";
 
                 cmd += objPath + " ";
                 #ifndef MINIMAL_DEBUG
-                // cmd += "bin/NativeLayer.lib ";
+                cmd += "bin/NativeLayer.lib ";
                 // cmd += "uuid.lib ";
                 // cmd += "shell32.lib ";
                 #endif

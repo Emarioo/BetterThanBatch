@@ -76,6 +76,7 @@ cast<u64>cast<char*>null
 cast<u64>cast<void*>null
 cast<u64*>cast<void*>null
 @TEST-ERROR ERROR_CASTING_TYPES cast<u64*>cast<char*>null
+
 // On error, program and tests won't execute
 // but we want to test errors without having a seperate
 // case for just errors because it's inconvenient

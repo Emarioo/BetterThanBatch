@@ -1,11 +1,4 @@
-@TEST-CASE index-operator
-operator [](slice: Slice<char>, index: i64) -> i32 {
-    return slice.ptr[index];
-}
-str = "Hello";
-test 'H'; str[0];
-
-@TEST-CASE overload-with-casting
+@TEST-CASE overload_with_casting
 
 fn say(v: i16) {
     // log("int");
@@ -25,3 +18,30 @@ fn say2(v: char) {
     // log("chr");
 }
 say2(32) // should be fine, i32 is casted to i16
+
+@TEST-CASE add_operator
+operator +(a: i32, b: i32) -> i32 {
+    return a * b;
+}
+test 20; 4 + 5;
+
+struct i128 {
+    x: i64;
+    y: i64;
+}
+operator |(a: i128, b: i128) -> i128 {
+    return i128{a.x|b.x, a.y|b.y};
+}
+
+flag0 = i128{5,8}
+flag1 = i128{3,9}
+result = i128{5,8} | i128{3,9}
+test flag0.x | flag1.x; result.x;
+test flag0.y | flag1.y; result.y;
+
+@TEST-CASE index_operator
+operator [](slice: Slice<char>, index: i64) -> i32 {
+    return slice.ptr[index];
+}
+str = "Hello";
+test 'H'; str[0];

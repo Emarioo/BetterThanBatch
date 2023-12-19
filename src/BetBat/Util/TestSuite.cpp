@@ -272,10 +272,10 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         ParseTestCases(file, &testOrigins, &testCases);
     }
 
-    log::out << log::GOLD << "Test cases ("<<testCases.size()<<"):\n";
-    for(auto& testCase : testCases){
-        log::out << " "<<testCase.testName << "["<<testCase.textBuffer.size<<" B]: "<<BriefString(testCase.textBuffer.origin,17)<<")\n";
-    }
+    // log::out << log::GOLD << "Test cases ("<<testCases.size()<<"):\n";
+    // for(auto& testCase : testCases){
+    //     log::out << " "<<testCase.testName << "["<<testCase.textBuffer.size<<" B]: "<<BriefString(testCase.textBuffer.origin,17)<<")\n";
+    // }
 
     bool useInterp = false;
     // bool useInterp = true;
@@ -291,18 +291,30 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         engone::Free(buffer,bufferSize);
     };
     
+    struct TestResult {
+        int totalTests;
+        int failedTests;
+        DynamicArray<u16> failedLocations;
+        DynamicArray<CompileOptions::TestLocation> testLocations;
+    };
+    DynamicArray<TestResult> results;
+
     u64 finalFailedTests = 0;
     u64 finalTotalTests = 0;
-    DynamicArray<u16> failedLocations{};
 
     Interpreter interpreter{};
     for(int i=0;i<testCases.size();i++) {
         auto& testcase = testCases[i];
+        results.add({});
+        auto& result = results.last();
 
         CompileOptions options{};
-        options.silent=true;
+        options.silent = true;
         options.target = BYTECODE;
         options.executeOutput = true;
+        options.threadCount = 1;
+        // options.instant_report = false;
+        
         if(!useInterp)
             options.target = CONFIG_DEFAULT_TARGET;
         // options.initialSourceFile = testcase.textBuffer.origin;
@@ -314,7 +326,6 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         //   An argument can be passed to this function if you just want one target.
 
         Bytecode* bytecode = CompileSource(&options);
-        options.silent = true;
 
         u64 failedTests = 0;
         u64 totalTests = 0;
@@ -387,7 +398,7 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
             Bytecode::Destroy(bytecode);
             bytecode = nullptr;
 
-            failedLocations.resize(0);
+            result.failedLocations.resize(0);
             while(true){
                 char tinyBuffer[4]{0};
                 PipeWrite(pipe, tinyBuffer, 4); // we must write some data to the pipe to prevent PipeRead from freezing.
@@ -402,7 +413,7 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
                     failedTests += buffer[j] == 'x';
                     if(buffer[j] == 'x'){
                         u16 index = ((u16)buffer[j+2]<<8) | ((u16)buffer[j+3]);
-                        failedLocations.add(index);
+                        result.failedLocations.add(index);
                     }
                     j+=4;
                 }
@@ -415,21 +426,67 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         finalTotalTests += totalTests;
         finalFailedTests += failedTests;
 
-        if(failedTests == 0)
-            log::out << log::LIME<<"Success ";
-        else
-            log::out << log::RED<<"Failure ";
-        if(totalTests == 0)
-            log::out << "'"<<testcase.testName << "': 100.0% (0/0)";
-        else
-            log::out << "'"<<testcase.testName << "': "<<(100.0f*(float)(totalTests-failedTests)/(float)totalTests)<<"% ("<<(totalTests-failedTests)<<"/"<<totalTests<<")";
-        log::out << "\n";
-        for(auto& ind : failedLocations){
-            auto loc = options.getTestLocation(ind);
-            log::out <<log::RED<< "  "<<loc->file<<":"<<loc->line<<":"<<loc->column<<"\n";
-        }
+        result.totalTests = totalTests;
+        result.failedTests = failedTests;
+        result.testLocations.stealFrom(options.testLocations);
 
+        // print_test(testcase, totalTests, failedTests, failedLocations);
+
+        // if(failedTests == 0)
+        //     log::out << log::LIME<<"Success ";
+        // else
+        //     log::out << log::RED<<"Failure ";
+        // if(totalTests == 0)
+        //     log::out << "'"<<testcase.testName << "': 100.0% (0/0)";
+        // else
+        //     log::out << "'"<<testcase.testName << "': "<<(100.0f*(float)(totalTests-failedTests)/(float)totalTests)<<"% ("<<(totalTests-failedTests)<<"/"<<totalTests<<")";
+        // log::out << "\n";
+        // for(auto& ind : failedLocations){
+        //     auto loc = options.getTestLocation(ind);
+        //     log::out <<log::RED<< "  "<<loc->file<<":"<<loc->line<<":"<<loc->column<<"\n";
+        // }
     }
+    
+    log::out << log::GOLD << "Test cases ("<< testCases.size() <<")\n";
+    std::string lastFile = "";
+    for(int i=0;i<results.size();i++) {
+        auto& testCase = testCases[i];
+        auto& result = results[i];
+        
+        if(testCase.textBuffer.origin != lastFile) {
+            log::out << " "<< testCase.textBuffer.origin<<"\n";
+            lastFile = testCase.textBuffer.origin;
+        }
+        
+        log::out << "  ";
+        
+        if(result.failedTests == 0) {
+            log::out << log::LIME << "OK ";
+            log::out << log::GRAY;
+        } else {
+            log::out << log::RED << "NO ";
+        }
+        log::out << log::NO_COLOR << testCase.testName << " ";
+        if(result.failedTests != 0) {
+            log::out << log::RED;
+        } else {
+            log::out << log::GRAY;
+        }
+        if(result.totalTests == 0)
+            log::out << "100.0% (0/0): ";
+        else {
+            if(result.failedTests != 0)
+                log::out << (100.0f*(float)(result.totalTests-result.failedTests)/(float)result.totalTests)<<"% ";
+            log::out << "("<<(result.totalTests-result.failedTests)<<"/"<<result.totalTests<<")";
+        }
+        log::out << "\n";
+        
+        for(auto& ind : result.failedLocations){
+            auto loc = result.testLocations.getPtr(ind);
+            log::out <<log::RED<< "   "<<loc->file<<":"<<loc->line<<":"<<loc->column<<"\n";
+        }
+    }
+    
     if(testCases.size()>1){
         if(finalFailedTests == 0)
             log::out << log::LIME<<"Summary: ";

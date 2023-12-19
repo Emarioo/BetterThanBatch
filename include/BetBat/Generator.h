@@ -2,18 +2,14 @@
 
 #include "BetBat/AST.h"
 #include "BetBat/Bytecode.h"
+#include "BetBat/PhaseContext.h"
+
 struct CompileInfo;
 struct GenInfo;
-struct GenInfo {
+struct GenInfo : public PhaseContext {
     Bytecode* code=nullptr;
     AST* ast=nullptr;
-    CompileInfo* compileInfo=nullptr;
-    int errors=0;
-    int warnings=0;
 
-    bool hasErrors();
-    bool hasForeignErrors();
-    
     struct AlignInfo {
         int diff=0;
         int size=0;

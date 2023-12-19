@@ -1,4 +1,4 @@
-@TEST-CASE stack-stuff
+@TEST-CASE stack_stuff
 a =
 cast_unsafe<i32>
 asm {
