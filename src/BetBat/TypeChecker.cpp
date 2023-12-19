@@ -483,7 +483,7 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
     return SignalDefault::SUCCESS;
 }
 SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, TinyArray<TypeId>* outTypes);
-SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, TinyArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt) {
+SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, TinyArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, TinyArray<TypeId>* operatorArgs = nullptr) {
     using namespace engone;
     Assert(!outTypes || outTypes->size()==0);
     #define FNCALL_SUCCESS \
@@ -534,31 +534,39 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
 
     // TinyArray<TypeId> tempTypes{};
     // TINY_ARRAY(TypeId, tempTypes, 2);
-
+    // SAVEPOINT
     if(operatorOverloadAttempt){
+        Assert(operatorArgs);
+        if(operatorArgs->size() != 2) {
+            return SignalAttempt::FAILURE;   
+        }
+        argTypes.resize(operatorArgs->size());
+        memcpy(argTypes.data(), operatorArgs->data(), operatorArgs->size()); // TODO: Use TintArray::copyFrom() instead (function not implemented yet)
+        
+        
         // DynamicArray<TypeId> tempTypes{};
         // tempTypes.resize(0);
         // NOTE: We pour out types into tempTypes instead of argTypes because
         //   we want to separate how many types we get from each expression.
         //   If an expression gives us more than one type then we throw away the other ones.
         //   We might throw an error instead haven't decided yet.
-        SignalAttempt resultLeft = CheckExpression(info,scopeId,expr->left,&tempTypes, true);
-        if(tempTypes.size()==0){
-            argTypes.add(AST_VOID);
-        } else {
-            argTypes.add(tempTypes[0]);
-        }
-        tempTypes.resize(0);
-        SignalAttempt resultRight = CheckExpression(info,scopeId,expr->right,&tempTypes, true);
-        if(tempTypes.size()==0){
-            argTypes.add(AST_VOID);
-        } else {
-            argTypes.add(tempTypes[0]);
-        }
-        tempTypes.resize(0);
-        if(resultLeft != SignalAttempt::SUCCESS || resultRight != SignalAttempt::SUCCESS)
-            return SignalAttempt::FAILURE; // should be a failure since the expressions actually failed
-        Assert(argTypes.size() == 2);
+        // SignalAttempt resultLeft = CheckExpression(info,scopeId,expr->left,&tempTypes, true);
+        // if(tempTypes.size()==0){
+        //     argTypes.add(AST_VOID);
+        // } else {
+        //     argTypes.add(tempTypes[0]);
+        // }
+        // tempTypes.resize(0);
+        // SignalAttempt resultRight = CheckExpression(info,scopeId,expr->right,&tempTypes, true);
+        // if(tempTypes.size()==0){
+        //     argTypes.add(AST_VOID);
+        // } else {
+        //     argTypes.add(tempTypes[0]);
+        // }
+        // tempTypes.resize(0);
+        // if(resultLeft != SignalAttempt::SUCCESS || resultRight != SignalAttempt::SUCCESS)
+        //     return SignalAttempt::FAILURE; // should be a failure since the expressions actually failed
+        // Assert(argTypes.size() == 2);
 
     } else {
         bool thisFailed=false;
@@ -1267,9 +1275,41 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             return SignalAttempt::FAILURE;
         }
     } else if(expr->typeId == AST_INDEX) {
+        // SAVEPOINT
+        TINY_ARRAY(TypeId, operatorArgs, 2);
+        
+        TypeId leftType = {}, rightType = {};
+        if(expr->left) {
+            typeArray.resize(0);
+            CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+            Assert(typeArray.size()<2); // error message
+            if(typeArray.size()>0) {
+                leftType = typeArray.last();
+                operatorArgs.add(typeArray.last());
+            }
+        }
+        if(expr->right) {
+            typeArray.resize(0);
+            CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
+            Assert(typeArray.size()<2); // error message
+            if(typeArray.size()>0) {
+                rightType = typeArray.last();
+                operatorArgs.add(typeArray.last());
+            }
+        }
+        // if(expr->left) {
+        //     CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+        //     if(typeArray.)
+        //     // if(typeArray.size()==0){
+        //     //     typeArray.add(AST_VOID);
+        //     // }
+        // }
+        // if(expr->right) {
+        //     CheckExpression(info,scopeId, expr->right, nullptr, attempt);
+        // }
         if(expr->left && expr->right) {
             expr->nonNamedArgs = 2; // unless operator overloading
-            SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true);
+            SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
             
             if(result == SignalAttempt::SUCCESS)
                 return SignalAttempt::SUCCESS;
@@ -1278,31 +1318,22 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 return result;
         }
         // DynamicArray<TypeId> typeArray{};
-        if(expr->left) {
-            CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
-            // if(typeArray.size()==0){
-            //     typeArray.add(AST_VOID);
-            // }
-        }
         
         // if(outTypes) outTypes->add(AST_VOID);
         // DynamicArray<TypeId> temp{};
-        if(expr->right) {
-            CheckExpression(info,scopeId, expr->right, nullptr, attempt);
-        }
-        if(typeArray.last().getPointerLevel()==0){
+        if(leftType.getPointerLevel()==0){
             if(!attempt) {
                 ERR_SECTION(
                     ERR_HEAD(expr->left->tokenRange)
                     ERR_MSG("Cannot index non-pointer.")
-                    ERR_LINE(expr->left->tokenRange,info.ast->typeToString(typeArray.last()))
+                    ERR_LINE(expr->left->tokenRange,info.ast->typeToString(leftType))
                 )
                 return SignalAttempt::FAILURE;
             }
             return SignalAttempt::BAD_ATTEMPT;
         }else{
             if(outTypes){
-                outTypes->add(typeArray.last());
+                outTypes->add(leftType);
                 outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
             }
         }
@@ -1541,12 +1572,37 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         if(outTypes)
             outTypes->add(AST_VOID);
     } else {
+        // TODO: This code is buggy and doesn't behave as it should for all types.
+        //   Not sure what to do about it.
+        TypeId leftType{};
+        TypeId rightType{};
+        TINY_ARRAY(TypeId, operatorArgs, 2);
+        if(expr->left) {
+            typeArray.resize(0);
+            CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+            Assert(typeArray.size()<2); // error message
+            if(typeArray.size()>0) {
+                leftType = typeArray.last();
+                operatorArgs.add(typeArray.last());
+            }
+        }
+        if(expr->right) {
+            typeArray.resize(0);
+            CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
+            Assert(typeArray.size()<2); // error message
+            if(typeArray.size()>0) {
+                rightType = typeArray.last();
+                operatorArgs.add(typeArray.last());
+            }
+        }
+        // SAVEPOINT
         // TODO: You should not be allowed to overload all operators.
         //  Fix some sort of way to limit which ones you can.
         const char* str = OpToStr((OperationType)expr->typeId.getId(), true);
-        if(str && expr->left && expr->right) {
+        if(str && operatorArgs.size() == 2) {
+            
             expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
-            SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true);
+            SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
             
             if(result == SignalAttempt::SUCCESS)
                 return SignalAttempt::SUCCESS;
@@ -1555,24 +1611,6 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 return result;
         }
 
-        // TODO: This code is buggy and doesn't behave as it should for all types.
-        //   Not sure what to do about it.
-        TypeId leftType{};
-        TypeId rightType{};
-        if(expr->left) {
-            typeArray.resize(0);
-            CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
-            Assert(typeArray.size()<2); // error message
-            if(typeArray.size()>0)
-                leftType = typeArray.last();
-        }
-        if(expr->right) {
-            typeArray.resize(0);
-            CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
-            Assert(typeArray.size()<2); // error message
-            if(typeArray.size()>0)
-                rightType = typeArray.last();
-        }
         if(outTypes) {
             if(expr->typeId.getId() < AST_TRUE_PRIMITIVES){
                 outTypes->add(expr->typeId);

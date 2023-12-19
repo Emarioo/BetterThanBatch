@@ -111,107 +111,108 @@
 /*
     Old bytecode instructions
 */
-#define BC_MOV_RR 1
-#define BC_MOV_RM 2
-#define BC_MOV_RM_DISP32 3
-#define BC_MOV_MR 4
-#define BC_MOV_MR_DISP32 5
+enum BCInstruction : u8{
+    BC_MOV_RR = 1,
+    BC_MOV_RM = 2,
+    BC_MOV_RM_DISP32 = 3,
+    BC_MOV_MR = 4,
+    BC_MOV_MR_DISP32 = 5,
 
-#define ARITHMETIC_UINT 0
-#define ARITHMETIC_SINT 1
-#define BC_MODI 8
-#define BC_FMOD 9
-#define BC_ADDI 10
-#define BC_FADD 11
-#define BC_SUBI 12
-#define BC_FSUB 13
-#define BC_MULI 14
-#define BC_FMUL 15
-#define BC_DIVI 16
-#define BC_FDIV 17
+    #define ARITHMETIC_UINT 0
+    #define ARITHMETIC_SINT 1
+    BC_MODI = 8,
+    BC_FMOD = 9,
+    BC_ADDI = 10,
+    BC_FADD = 11,
+    BC_SUBI = 12,
+    BC_FSUB = 13,
+    BC_MULI = 14,
+    BC_FMUL = 15,
+    BC_DIVI = 16,
+    BC_FDIV = 17,
 
-#define BC_INCR 18
+    BC_INCR = 18,
 
-#define BC_JMP 20
-#define BC_CALL 21
-#define BC_RET 22
-// jump if not zero
-#define BC_JE 23
-// jump if zero
-#define BC_JNE 24
+    BC_JMP = 20,
+    BC_CALL = 21,
+    BC_RET = 22,
+    // jump if not zero
+    BC_JE = 23,
+    // jump if zero
+    BC_JNE = 24,
 
-#define BC_PUSH 30
-#define BC_POP 31
-#define BC_LI 32
+    BC_PUSH = 30,
+    BC_POP = 31,
+    BC_LI = 32,
 
-#define BC_DATAPTR 40
-#define BC_CODEPTR 41
+    BC_DATAPTR = 40,
+    BC_CODEPTR = 41,
 
-#define BC_EQ 50
-#define BC_NEQ  51
+    BC_EQ = 50,
+    BC_NEQ = 51,
 
-#define BC_LT   52
-#define BC_LTE  53
-#define BC_GT   54
-#define BC_GTE  55
+    BC_LT =   52,
+    BC_LTE =  53,
+    BC_GT =   54,
+    BC_GTE =  55,
 
-// Don't rearrange these. You can use the bits to tell
-// whether the left or right type is signed/unsigned.
-#define CMP_UINT_UINT 0
-#define CMP_UINT_SINT 1
-#define CMP_SINT_UINT 2
-#define CMP_SINT_SINT 3
-#define CMP_DECODE(L,R,...) (u8)(((u8)__VA_ARGS__(ltype)<<1) | (u8)__VA_ARGS__(rtype)) 
+    // Don't rearrange these. You can use the bits to tell
+    // whether the left or right type is signed/unsigned.
+    #define CMP_UINT_UINT 0
+    #define CMP_UINT_SINT 1
+    #define CMP_SINT_UINT 2
+    #define CMP_SINT_SINT 3
+    #define CMP_DECODE(L,R,...) (u8)(((u8)__VA_ARGS__(ltype)<<1) | (u8)__VA_ARGS__(rtype)) 
 
-#define BC_ANDI  56
-#define BC_ORI   57
-#define BC_NOT  58
+    BC_ANDI =  56,
+    BC_ORI =   57,
+    BC_NOT =  58,
 
-#define BC_BXOR  60
-#define BC_BOR  61
-#define BC_BAND  62
-#define BC_BNOT 63
-#define BC_BLSHIFT 64
-#define BC_BRSHIFT 65
+    BC_BXOR =  60,
+    BC_BOR =  61,
+    BC_BAND =  62,
+    BC_BNOT = 63,
+    BC_BLSHIFT = 64,
+    BC_BRSHIFT = 65,
 
-#define BC_CAST 90
-// flags for first operand
-#define CAST_FLOAT_SINT 0
-// #define CAST_FLOAT_UINT 1
-#define CAST_SINT_FLOAT 2
-#define CAST_UINT_FLOAT 3
-#define CAST_SINT_UINT 4
-#define CAST_UINT_SINT 5
-#define CAST_SINT_SINT 6
+    BC_CAST = 90,
+    // flags for first operand
+    #define CAST_FLOAT_SINT 0
+    // #define CAST_FLOAT_UINT 1
+    #define CAST_SINT_FLOAT 2
+    #define CAST_UINT_FLOAT 3
+    #define CAST_SINT_UINT 4
+    #define CAST_UINT_SINT 5
+    #define CAST_SINT_SINT 6
 
-#define BC_FEQ   91
-#define BC_FNEQ  92
-#define BC_FLT   93
-#define BC_FLTE  94
-#define BC_FGT   95
-#define BC_FGTE  96
+    BC_FEQ =   91,
+    BC_FNEQ =  92,
+    BC_FLT =   93,
+    BC_FLTE =  94,
+    BC_FGT =   95,
+    BC_FGTE =  96,
 
-#define BC_MEMZERO 100
-#define BC_MEMCPY 101
-#define BC_STRLEN 102
-#define BC_RDTSC 103
-// #define BC_RDTSCP 109
-// compare and swap, atomic
-#define BC_CMP_SWAP 104
-#define BC_ATOMIC_ADD 105
+    BC_MEMZERO = 100,
+    BC_MEMCPY = 101,
+    BC_STRLEN = 102,
+    BC_RDTSC = 103,
+    // #define BC_RDTSCP 109
+    // compare and swap, atomic
+    BC_CMP_SWAP = 104,
+    BC_ATOMIC_ADD = 105,
 
-#define BC_SQRT 120
-#define BC_ROUND 121
+    BC_SQRT = 120,
+    BC_ROUND = 121,
 
-#define BC_ASM 130
-#define ASM_ENCODE_INDEX(ind) (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)
-#define ASM_DECODE_INDEX(op0,op1,op2) (u32)(op0 | (op1<<8) | (op2<<16))
+    BC_ASM = 130,
+    #define ASM_ENCODE_INDEX(ind) (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)
+    #define ASM_DECODE_INDEX(op0,op1,op2) (u32)(op0 | (op1<<8) | (op2<<16))
 
-// used when running test cases
-// The stack must be aligned to 16 bytes because
-// there are some functions being called inside which reguire it.
-#define BC_TEST_VALUE 200
-
+    // used when running test cases
+    // The stack must be aligned to 16 bytes because
+    // there are some functions being called inside which reguire it.
+    BC_TEST_VALUE = 200,
+};
 // #define BC_SIN 110
 // #define BC_COS 111
 // #define BC_TAN 112
@@ -346,13 +347,13 @@ const char* RegToStr(u8 reg);
 int RegBySize(u8 regName, int size);
 
 struct Instruction {
-    uint8 opcode=0;
+    BCInstruction opcode=(BCInstruction)0;
     union {
-        uint8 operands[3]{0};
+        u8 operands[3]{0};
         struct{
-            uint8 op0;
-            uint8 op1;
-            uint8 op2;
+            u8 op0;
+            u8 op1;
+            u8 op2;
         };
     };
 

@@ -3500,7 +3500,12 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                     continue;
                 } else if(Equal(token2,"@TEST-CASE")) {
                     info.next();
-                    info.next(); // skip case name
+                    while(true) {
+                        token2 = info.next(); // skip case name
+                        if(token2.flags & (TOKEN_SUFFIX_SPACE | TOKEN_SUFFIX_LINE_FEED)) {
+                            break;   
+                        }
+                    }
                     continue;
                 } else if(Equal(token2, "@no-code")) {
                     noCode = true;

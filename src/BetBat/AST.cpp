@@ -434,7 +434,6 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
         || argTypes.size() > overload.astFunc->arguments.size() - startOfRealArguments)
             continue;
             
-        // if (fncall->hasImplicitThis()) {
         if(canCast){
             foundInt = false; // we don't use int
             for(int j=0;j<(int)fncall->nonNamedArgs;j++){
@@ -458,33 +457,6 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
                 // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
         }
-        // }
-        //  else {
-        //     if(canCast){
-        //         foundInt = false;
-        //         for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-        //             if(!ast->castable(argTypes[j],overload.funcImpl->argumentTypes[j].typeId)) {
-        //                 found = false;
-        //                 break;
-        //             }
-        //             // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
-        //         }
-        //     } else {
-        //         for(int j=0;j<(int)fncall->nonNamedArgs;j++){
-        //             // if(Equal(fncall->name,"swrite_unsafe")) {
-        //             //     log::out << "swrite_unsafe, overload: "<<i<<", arg: "<<j <<", type check: "<< ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " - " << ast->typeToString(argTypes[j])<<"\n";
-        //             // }
-        //             if(overload.funcImpl->argumentTypes[j].typeId != argTypes[j]) {
-        //                 found = false;
-        //                 if(!(AST::IsInteger(overload.funcImpl->argumentTypes[j].typeId) && AST::IsInteger(argTypes[j]))) {
-        //                     foundInt = false;
-        //                 }
-        //                 // break; // We can't break when using foundInt
-        //             }
-        //             // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
-        //         }
-        //     }
-        // }
         if(foundInt) {
             intOverload = &overload;
             intOverloads++;
@@ -492,7 +464,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
         if(!found)
             continue;
 
-        // NOTE: @Optimise You can return here because there should only be one matching overload.
+        // NOTE: @Optimize You can return here because there should only be one matching overload.
         // But we keep going in case we find more matches which would indicate
         // a bug in the compiler. An optimised build would not do this.
         if(validOverloads > 0) {

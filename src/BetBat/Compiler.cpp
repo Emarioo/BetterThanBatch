@@ -633,6 +633,15 @@ u32 ProcessSource(void* ptr) {
         //     log::out << "Proc source "<<source.path.text<<"\n";
         info->sourceLock.unlock();
         
+        bool yes = FileExist(source.path.text);
+        if(!yes) {
+            int dotindex = source.path.text.find_last_of(".");
+            int slashindex = source.path.text.find_last_of("/");
+            if(dotindex==-1 || dotindex<slashindex){
+                source.path = source.path.text + ".btb";
+            }
+        }
+        
         _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefString(source.path.text)<<"\n";)
         TokenStream* tokenStream = nullptr;
         if(source.textBuffer) {
@@ -1244,7 +1253,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             std::string objPath = "";
             if(outputIsObject){
                 options->compileStats.start_objectfile = StartMeasure();
-                bool yes = WriteObjectFile_coff(outPath.text,program);
+                bool yes = FileCOFF::WriteFile(outPath.text,program);
                 if(yes) {
                     options->compileStats.generatedFiles.add(outPath.text);
                 }
@@ -1254,7 +1263,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             } else {
                 objPath = "bin/" + outPath.getFileName(true).text + ".obj";
                 options->compileStats.start_objectfile = StartMeasure();
-                bool yes = WriteObjectFile_coff(objPath,program);
+                bool yes = FileCOFF::WriteFile(objPath,program);
                 if(yes) {
                     options->compileStats.generatedFiles.add(objPath);
                 }
@@ -1333,10 +1342,10 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                             }
                         }
                         if(dump.dumpAsm) {
-                            #define DUMP_ASM_OBJ "bin/dump_asm.obj"
-                            #define DUMP_ASM_ASM "bin/dump_asm.asm"
+                            const char* DUMP_ASM_OBJ = "bin/dump_asm.o";
+                            const char* DUMP_ASM_ASM = "bin/dump_asm.asm";
 
-                            bool yes = WriteObjectFile_coff(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                            bool yes = FileCOFF::WriteFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
                             // if(yes) {
                             //     options->compileStats.generatedFiles.add(DUMP_ASM_OBJ);
                             // }
@@ -1397,12 +1406,11 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             auto format = options->outputFile.getFormat();
             bool outputIsObject = format == "o" || format == "obj";
 
-            // TODO: WriteObjectFile_coff uses COFF format. Use ELF format for UNIX systems.
+            // TODO: FileCOFF::WriteFile uses COFF format. Use ELF format for UNIX systems.
             std::string objPath = "";
             if(outputIsObject){
                 options->compileStats.start_objectfile = StartMeasure();
-                bool yes = WriteObjectFile_elf(outPath.text, program);
-                // bool yes = WriteObjectFile_coff(outPath.text,program);
+                bool yes = FileELF::WriteFile(outPath.text, program);
                 if(yes) {
                     options->compileStats.generatedFiles.add(outPath.text);
                 }
@@ -1412,8 +1420,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             } else {
                 objPath = "bin/" + outPath.getFileName(true).text + ".o";
                 options->compileStats.start_objectfile = StartMeasure();
-                bool yes = WriteObjectFile_elf(objPath, program);
-                // bool yes = WriteObjectFile_coff(objPath,program);
+                bool yes = FileELF::WriteFile(objPath, program);
                 if(yes) {
                     options->compileStats.generatedFiles.add(objPath);
                 }
@@ -1492,17 +1499,18 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                             }
                         }
                         if(dump.dumpAsm) {
-                            #define DUMP_ASM_OBJ "bin/dump_asm.obj"
-                            #define DUMP_ASM_ASM "bin/dump_asm.asm"
-                            Assert(("Dump asm not implemented for UNIX (COFF is used instead of ELF)",false));
-                            bool yes = WriteObjectFile_coff(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                            const char* DUMP_ASM_OBJ = "bin/dump_asm.o";
+                            const char* DUMP_ASM_ASM = "bin/dump_asm.asm";
+                            // Assert(("Dump asm not implemented for UNIX (COFF is used instead of ELF)",false));
+                            bool yes = FileELF::WriteFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
                             // if(yes) {
                             //     options->compileStats.generatedFiles.add(DUMP_ASM_OBJ);
                             // }
 
-                            auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
+                            // TODO: OPTIMIZE by not opening and closing file for each debug dump
+                            auto file = engone::FileOpen(DUMP_ASM_ASM, nullptr, FILE_ALWAYS_CREATE);
 
-                            std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
+                            std::string cmd = "objdump -d ";
                             cmd += DUMP_ASM_OBJ;
                             
                             int exitCode = 0;

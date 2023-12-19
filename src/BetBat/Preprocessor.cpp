@@ -1080,6 +1080,7 @@ SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall
     }
     return SignalDefault::SUCCESS;
 }
+// A warning: the code in this function is complex and can be hard to understand.
 SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     using namespace engone;
     MEASURE;
@@ -1392,9 +1393,10 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
             _MLOG(log::out << " output " << token<<"\n";)
             info.outputTokens.add(&token);
             if(env->range.start == env->range.end){
-                info.outputTokensFlags.add(env->finalFlags|(token.flags&(TOKEN_MASK_QUOTED)));
-            } else
+                info.outputTokensFlags.add(env->finalFlags|((token.flags & ~(TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE)) &(TOKEN_MASK_QUOTED)));
+            } else {
                 info.outputTokensFlags.add(token.flags);
+            }
         } else {
             Assert(env->outputToCall>=0&&env->outputToCall<(int)info.calls.size());
             MacroCall* outputCall = info.calls[env->outputToCall];
@@ -1624,7 +1626,8 @@ SignalDefault ParseToken(PreprocInfo& info){
     //     return SignalAttempt::SUCCESS;
     // }
     SignalAttempt result = SignalAttempt::BAD_ATTEMPT;
-    if(Equal(info.get(info.at()+1),"#")){
+    const Token& hashtag = info.get(info.at()+1);
+    if(Equal(hashtag,"#") && 0 == (hashtag.flags & (TOKEN_SUFFIX_LINE_FEED|TOKEN_SUFFIX_SPACE))){
         // if(result == SignalAttempt::BAD_ATTEMPT) {
             // if(Equal(info.get(info.at()+1),"#")){
         Token token = info.get(info.at()+2);

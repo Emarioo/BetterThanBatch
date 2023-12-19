@@ -326,6 +326,13 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         //   An argument can be passed to this function if you just want one target.
 
         Bytecode* bytecode = CompileSource(&options);
+        defer {
+            if(bytecode) {
+                Bytecode::Destroy(bytecode);
+                bytecode = nullptr;
+            }
+        };
+        
 
         u64 failedTests = 0;
         u64 totalTests = 0;
@@ -395,8 +402,6 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
                 // engone::FileClose(file);
                 // log::out << "Error level: "<<errorCode<<"\n";
             }
-            Bytecode::Destroy(bytecode);
-            bytecode = nullptr;
 
             result.failedLocations.resize(0);
             while(true){

@@ -4,7 +4,7 @@ namespace elf {
     
 }
 
-bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from, u32 to) {
+bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from, u32 to) {
     using namespace elf;
     Assert(program);
     if(to==-1){
@@ -447,4 +447,94 @@ bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from
     engone::FileClose(file);
     
     return true;
+}
+
+
+void FileELF::Destroy(FileELF* objectFile){
+    objectFile->~FileELF();
+    // engone::Free(objectFile,sizeof(FileCOFF));
+    TRACK_FREE(objectFile,FileELF);
+}
+FileELF* FileELF::DeconstructFile(const std::string& path, bool silent) {
+    using namespace engone;
+    using namespace elf;
+    
+    u64 fileSize=0;
+    auto file = FileOpen(path,&fileSize,FILE_ONLY_READ);
+    if(!file)
+        return nullptr;
+    u8* filedata = TRACK_ARRAY_ALLOC(u8, fileSize);
+    FileRead(file,filedata,fileSize);
+    FileClose(file);
+
+    FileELF* objfile = TRACK_ALLOC(FileELF);
+    new(objfile)FileELF();
+    objfile->_rawFileData = filedata;
+    objfile->fileSize = fileSize;
+
+    // u64 fileOffset = 0;
+    
+    // #define CHECK Assert(fileOffset <= fileSize);
+    
+    objfile->header = (Elf64_Ehdr*)(filedata);
+    objfile->sections = (Elf64_Shdr*)(filedata + objfile->header->e_shoff);
+    objfile->sections_count = objfile->header->e_shnum;
+    
+    Elf64_Shdr* sectionStringTable = objfile->sections + objfile->header->e_shstrndx;
+    objfile->section_names = (char*)(filedata + sectionStringTable->sh_offset);
+    objfile->section_names_size = sectionStringTable->sh_size;
+    
+    return objfile;
+}
+int FileELF::sectionIndexByName(const std::string& name) const {
+    using namespace elf;
+    for(int i=1;i<sections_count;i++) { // first section is empty
+        Elf64_Shdr* section = sections + i;
+        Assert(section->sh_name < section_names_size);
+        const char* str = section_names + section->sh_name;
+        if(!strcmp(str, name.c_str()))
+            return i;
+    }
+    return 0;
+}
+const char* FileELF::nameOfSection(int sectionIndex) const {
+    using namespace elf;
+    Assert(sectionIndex < sections_count);
+    
+    Elf64_Shdr* section = sections + sectionIndex;
+    Assert(section->sh_name < section_names_size);
+    const char* str = section_names + section->sh_name;
+    return str;
+}
+const u8* FileELF::dataOfSection(int sectionIndex, int* out_size) const {
+    using namespace elf;
+    Assert(sectionIndex < sections_count);
+    Assert(out_size);
+    
+    Elf64_Shdr* section = sections + sectionIndex;
+    *out_size = section->sh_size;
+    return _rawFileData + section->sh_offset;
+}
+const elf::Elf64_Rela* FileELF::relaOfSection(int sectionIndex, int* out_count) const {
+    using namespace elf;
+    Assert(sectionIndex < sections_count);
+    Assert(out_count);
+    
+    Elf64_Shdr* section = sections + sectionIndex;
+    const char* str = nameOfSection(sectionIndex);
+    char rela_name[100]{0};
+    strcpy(rela_name, ".rela");
+    Assert(strlen(str) < sizeof(rela_name) - 10); // -10 to prevent "off by one" error
+    strcpy(rela_name + 5, str);
+    
+    for(int i=1;i<sections_count;i++) { // first section is empty
+        Elf64_Shdr* rela_section = sections + i;
+        const char* str = nameOfSection(i);
+        if(!strcmp(rela_name, str)) {
+            *out_count = section->sh_size;
+            return (Elf64_Rela*)(_rawFileData + rela_section->sh_offset);
+        }
+    }
+    *out_count = 0;
+    return nullptr;
 }

@@ -1,21 +1,26 @@
-// this produces wrong spacing
+@TEST-CASE macro_spacing
+/*
+    I don't know how to test this
+*/
 
 #define Nom(a,b,c) a + b + c
 #define Grub 1,2,3
 Nom(#unwrap Grub)
 #define Grub2 1,2
 Nom(9,#unwrap Grub2)
-/*
+/* THIS IS NOT RIGHT
 1+ 2+ 3
 9+ 1+ 2
 */
-
 
 #define RValues sugar,sand,snow,wood
 #define Rev(x,...) Rev(...), x
 #define Rev(x) x
 Rev(#unwrap RValues)
 /*
+The macro preprocessor needs to be able to modify flags of arguments.
+This is a bit tedious to implement and I can't be bothered at the moment. - Emarioo 2023-12-19
+
 wood
 , snow, sand, sugar
 */

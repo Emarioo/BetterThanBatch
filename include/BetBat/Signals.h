@@ -12,6 +12,7 @@
 
 #include "Engone/Typedefs.h"
 
+// This is stupid. Use one enum. It's really annoying otherwise
 enum class SignalDefault : u32 {
     SUCCESS = 0,
     FAILURE, // general failure

@@ -302,13 +302,13 @@ namespace engone {
         // printf("OPENING\n");
         int fd = open(path.c_str(), fileFlags, mode);
 		if (fd == -1) {
-			printf("[LinuxError %d] open, %s\n", errno, path.c_str());
+            PL_PRINTF("open %s\n", path.c_str())
 			return {0};
 		}
         if(outFileSize) {
             off_t size = lseek(fd,0,SEEK_END);
             if (size == -1) {
-                printf("[LinuxError %d]\n", errno);
+                PL_PRINTF("lseek\n")
                 size = 0;
             }
 			lseek(fd,0,SEEK_SET);
@@ -1012,15 +1012,23 @@ namespace engone {
 
 		// TODO: Do something with standard handles?
 
+        char** argv = nullptr;
+        int argc = 0;
+        ConvertArguments(commandLine, argc, argv);
+        
+        // FileExist does not work for programs in PATH
+        // bool yes = FileExist(argv[0]);
+        // if(!yes) {
+        //     printf("[UnixError] StartProgram, '%s' does not exist\n", argv[0]);
+        // }
+        
 		int pid = fork();
 		if(pid == -1) {
+			FreeArguments(argc, argv);
 			PL_PRINTF("fork failed\n");
 			return false;
 		}
 		if(pid == 0) {
-			char** argv = nullptr;
-			int argc = 0;
-			ConvertArguments(commandLine, argc, argv);
 
 			// for(int i=0;i<argc+1;i++){
 			// 	printf("%d: %p\n",i, argv[i]);
@@ -1032,6 +1040,10 @@ namespace engone {
 			// 	printf("%d: %d, %s\n", ind-1,strlen(a), a);
 			// }
 			// printf("%s\n", commandLine);
+            
+            auto old_in = engone::GetStandardIn();
+            auto old_out = engone::GetStandardOut();
+            auto old_err = engone::GetStandardErr();
 
 			if(fStdin)
 				engone::SetStandardIn(fStdin);
@@ -1041,13 +1053,17 @@ namespace engone {
 				engone::SetStandardErr(fStderr);
 			
 			int err = execvp(argv[0], argv);
-			// char* argsm[1]{nullptr};
-			// int err = execvp("gcc", argsm);
-			if(err==-1) {
-				PL_PRINTF("execv\n");
-			}
+            
+            if(old_in)
+				engone::SetStandardIn(old_in);
+			if(old_out)
+				engone::SetStandardOut(old_out);
+			if(old_err)
+				engone::SetStandardErr(old_err);
+            
+            Assert(err == -1);
+            PL_PRINTF("execv\n");
 			FreeArguments(argc, argv);
-            Assert(("Unreachable point",false));
 			exit(0);
 			return false;
 		}
@@ -1064,7 +1080,7 @@ namespace engone {
 				}
 			}
 		}
-		
+        FreeArguments(argc, argv);
 		return true;
 	}
 	void ConvertArguments(const char* args, int& argc, char**& argv) {

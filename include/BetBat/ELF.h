@@ -250,4 +250,40 @@ namespace elf {
     // } Elf64_Phdr;
 }
 
-bool WriteObjectFile_elf(const std::string& name, Program_x64* program, u32 from = 0, u32 to = (u32)-1);
+struct FileELF {
+    FileELF() = default;
+    ~FileELF() {
+        TRACK_ARRAY_FREE(_rawFileData, u8, fileSize);
+        // engone::Free(_rawFileData,fileSize);
+        _rawFileData=nullptr;
+        fileSize=0;
+    }
+    u8* _rawFileData = nullptr;
+    u64 fileSize = 0;
+
+    elf::Elf64_Ehdr* header = nullptr;
+    elf::Elf64_Shdr* sections = nullptr;
+    int sections_count = 0;
+    char* section_names = nullptr;
+    int section_names_size = 0;
+    
+    // returns 0 if not found or invalid section
+    int sectionIndexByName(const std::string& name) const;
+    const char* nameOfSection(int sectionIndex) const;
+    const u8* dataOfSection(int sectionIndex, int* out_size) const;
+    
+    const elf::Elf64_Rela* relaOfSection(int sectionIndex, int* out_count) const;
+
+    // QuickArray<elf::Elf64_Shdr*> sections{};
+    // QuickArray<elf::Elf64_Sym*> symbols{};
+
+    // u32 stringTableSize = 0;
+    // char* stringTableData = nullptr;
+
+    void writeFile(const std::string& path);
+
+    static FileELF* DeconstructFile(const std::string& path, bool silent = true);
+    static void Destroy(FileELF* elfFile);
+
+    static bool WriteFile(const std::string& name, Program_x64* program, u32 from = 0, u32 to = (u32)-1);
+};

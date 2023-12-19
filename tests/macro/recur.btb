@@ -24,13 +24,10 @@ test arr.ptr[2]; 0;
 test 1; NOR(0);
 test 1; NOR(1,0,1,0);
 
-// IMPORTANT: THERE IS A BUG IN THE TYPE CHECKER WHICH CAUSES THIS LINE TO COMPILE REALLY SLOWLY AND IT GROWS EXPONENTIALLY
-//   It is because we check for potential operator overloading and if we fail we do the normal check.
-//   This is recursive for each operator and it has 2**n growth (i think)
 test 1; NOR(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-// test 1; NOR(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1);
-test 1; NOR(1);
-// test 0; NOR(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
+test 1; NOR(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1);
+test 0; NOR(1);
+test 0; NOR(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
 
 // TODO: More and better tests
 

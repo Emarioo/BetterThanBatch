@@ -122,12 +122,12 @@ namespace COFF_Format {
     #undef LOG_END 
 }
 
-void ObjectFile::Destroy(ObjectFile* objectFile){
-    objectFile->~ObjectFile();
-    // engone::Free(objectFile,sizeof(ObjectFile));
-    TRACK_FREE(objectFile,ObjectFile);
+void FileCOFF::Destroy(FileCOFF* objectFile){
+    objectFile->~FileCOFF();
+    // engone::Free(objectFile,sizeof(FileCOFF));
+    TRACK_FREE(objectFile,FileCOFF);
 }
-ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
+FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
     using namespace engone;
     using namespace COFF_Format;
     u64 fileSize=0;
@@ -143,8 +143,8 @@ ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
     if(!silent)
         log::out << "Read file "<<path << ", size: "<<fileSize<<"\n";
 
-    ObjectFile* objectFile = TRACK_ALLOC(ObjectFile);
-    new(objectFile)ObjectFile();
+    FileCOFF* objectFile = TRACK_ALLOC(FileCOFF);
+    new(objectFile)FileCOFF();
     objectFile->_rawFileData = filedata;
     objectFile->fileSize = fileSize;
 
@@ -318,7 +318,7 @@ ObjectFile* ObjectFile::DeconstructFile(const std::string& path, bool silent) {
     return objectFile;
 }
 
-std::string ObjectFile::getSectionName(int sectionIndex){
+std::string FileCOFF::getSectionName(int sectionIndex){
     Assert(sections.size()>sectionIndex);
     auto* section = sections[sectionIndex];
 
@@ -351,7 +351,7 @@ u64 AlignOffset(u64 offset, u64 alignment){
     engone::log::out << "align "<<offset << "->"<<newOffset<<"\n";
     return newOffset;
 }
-void ObjectFile::writeFile(const std::string& path) {
+void FileCOFF::writeFile(const std::string& path) {
     using namespace engone;
     using namespace COFF_Format;
 
@@ -596,7 +596,7 @@ void ObjectFile::writeFile(const std::string& path) {
     engone::FileClose(file);
 }
 
-bool WriteObjectFile_coff(const std::string& path, Program_x64* program, u32 from, u32 to){
+bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from, u32 to){
     using namespace engone;
     using namespace COFF_Format;
     Assert(program);

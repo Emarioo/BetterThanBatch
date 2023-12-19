@@ -271,7 +271,9 @@ int main(int argc, const char** argv){
         // #define RUN_TESTS "tests/flow/switch.btb"
         // #define RUN_TESTS "tests/funcs/overloading.btb"
         // #define RUN_TESTS "tests/macro/defines.btb"
-        #define RUN_TESTS "tests/macro/recur.btb"
+        // #define RUN_TESTS "tests/macro/recur.btb"
+        // #define RUN_TESTS "tests/macro/spacing.btb"
+        // #define RUN_TESTS "tests/inline-asm/simple.btb"
 
         #ifdef RUN_TEST_SUITE
         DynamicArray<std::string> tests;

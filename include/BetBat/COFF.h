@@ -207,9 +207,9 @@ namespace COFF_Format {
     };
     #pragma pack(pop)
 }
-struct ObjectFile {
-    ObjectFile() = default;
-    ~ObjectFile() {
+struct FileCOFF {
+    FileCOFF() = default;
+    ~FileCOFF() {
         TRACK_ARRAY_FREE(_rawFileData, u8, fileSize);
         // engone::Free(_rawFileData,fileSize);
         _rawFileData=nullptr;
@@ -230,9 +230,8 @@ struct ObjectFile {
 
     void writeFile(const std::string& path);
 
-    static ObjectFile* DeconstructFile(const std::string& path, bool silent = true);
+    static FileCOFF* DeconstructFile(const std::string& path, bool silent = true);
 
-    static void Destroy(ObjectFile* objectFile);
+    static void Destroy(FileCOFF* objectFile);
+    static bool WriteFile(const std::string& name, Program_x64* program, u32 from = 0, u32 to = (u32)-1);
 };
-
-bool WriteObjectFile_coff(const std::string& name, Program_x64* program, u32 from = 0, u32 to = (u32)-1);

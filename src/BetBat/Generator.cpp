@@ -60,9 +60,60 @@ void GenInfo::addCall(LinkConventions linkConvention, CallConventions callConven
 void GenInfo::popInstructions(u32 count){
     Assert(code->length() >= count);
 
+    for(int i=0;i<count;i++) {
+        u32 index = indexOfNonImmediates.last();
+        Assert(index == code->instructionSegment.used-1); // We can't pop instructions with immediates. We need more complexity here to do that.
+        Instruction inst = code->instructionSegment.data[index];
+        
+        // IMPORTANT: THERE IS A HIGH CHANCE OF A BUG HERE WITH VIRTUAL STACK POINTER.
+        switch(inst.opcode) {
+            case BCInstruction::BC_PUSH: {
+                int size = 8; // fixed size
+                WHILE_TRUE {
+                    if(!hasErrors()){
+                        Assert(("bug in compiler!", stackAlignment.size()!=0));
+                    }
+                    if(stackAlignment.size()!=0){
+                        auto align = stackAlignment.last();
+                        if(!hasErrors() && align.size!=0){
+                            // size of 0 could mean extra alignment for between structs
+                            Assert(("bug in compiler!", align.size == size));
+                        }
+                        // You pushed some size and tried to pop a different size.
+                        // Did you copy paste some code involving addPop/addPush recently?
+                        stackAlignment.pop();
+                        if (align.diff != 0) {
+                            virtualStackPointer += align.diff;
+                            // code->addDebugText("align sp\n");
+                            i16 offset = align.diff;
+                            // addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
+                        }
+                        if(align.size == 0)
+                            continue;
+                    }
+                    virtualStackPointer += size;
+                    break;
+                }
+                break;   
+            }
+            // case BCInstruction::BC_POP: {
+                
+            //     break;
+            // }
+            default: {
+                // We can't pop instructions that modify stack or base pointer because we need to revert virtualStackPointer and such.
+                // That can get quite complex.
+                Assert(false);
+                break;   
+            }
+        }
+        
+        code->instructionSegment.used-=count;
+        indexOfNonImmediates.used-=count;
+    }
+
     code->instructionSegment.used-=count;
     indexOfNonImmediates.used-=count;
-
     if(code->instructionSegment.used>0 && count != 0){
         for(int i = code->instructionSegment.used-1;i>=0;i--){
             u32 locIndex = -1;
@@ -109,15 +160,16 @@ bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
     //  I have disabled some optimizations to prevent this bug from happening untill I fix it..
     if(indexOfNonImmediates.size()>0){
         int index = indexOfNonImmediates.last();
-        if(inst.opcode == BC_POP && code->get(index).opcode == BC_PUSH
-        && inst.op0 == code->get(index).op0) {
+        Instruction instLast = code->get(index);
+        if(inst.opcode == BC_POP && instLast.opcode == BC_PUSH
+        && inst.op0 == instLast.op0) {
             popInstructions(1);
             _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
             return false;
         }
-        if(inst.opcode == BC_POP && code->get(index).opcode == BC_PUSH
-        && DECODE_REG_SIZE(inst.op0) == DECODE_REG_SIZE(code->get(index).op0)) {
-            u8 op = code->get(index).op0;
+        if(inst.opcode == BC_POP && instLast.opcode == BC_PUSH
+        && DECODE_REG_SIZE(inst.op0) == DECODE_REG_SIZE(instLast.op0)) {
+            u8 op = instLast.op0;
             popInstructions(1);
             _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
             bool yes = addInstruction({BC_MOV_RR, op, inst.op0});
@@ -126,31 +178,31 @@ bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
             }
             return false;
         }
-        if(inst.opcode == BC_MOV_RR && inst.op0 == code->get(index).op0) {
-            u8 opcode = code->get(index).opcode;
-            u8* outOp = nullptr;
-            switch(opcode) {
-                // add, mul and other instructions don't work
-                // because output registers are also input registers
-                case BC_DATAPTR:
-                case BC_CODEPTR:
-                case BC_LI: {
-                    outOp = &code->get(index).op0;
-                    break;
-                }
-                case BC_MOV_MR:
-                case BC_MOV_MR_DISP32: {
-                    outOp = &code->get(index).op1;
-                    break;
-                }
-            }
-            if(outOp) {
-                *outOp = inst.op1;
-                _GLOG(log::out << log::GRAY << "(modified instruction)\n";)
-                _GLOG(code->printInstruction(index,true);)
-                return false;
-            }
-        }
+        // if(inst.opcode == BC_MOV_RR && inst.op0 == instLast.op0) {
+        //     u8 opcode = instLast.opcode;
+        //     u8* outOp = nullptr;
+        //     switch(opcode) {
+        //         // add, mul and other instructions don't work
+        //         // because output registers are also input registers
+        //         case BC_DATAPTR:
+        //         case BC_CODEPTR:
+        //         case BC_LI: {
+        //             outOp = &instLast.op0;
+        //             break;
+        //         }
+        //         case BC_MOV_MR:
+        //         case BC_MOV_MR_DISP32: {
+        //             outOp = &instLast.op1;
+        //             break;
+        //         }
+        //     }
+        //     if(outOp) {
+        //         *outOp = inst.op1;
+        //         _GLOG(log::out << log::GRAY << "(modified instruction)\n";)
+        //         _GLOG(code->printInstruction(index,true);)
+        //         return false;
+        //     }
+        // }
     }
     #endif
 
@@ -177,7 +229,8 @@ bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
         if(nodeStack.last()->tokenRange.tokenStream())
             location->desc = nodeStack.last()->tokenRange.firstToken.getLine();
     }
-    return true;}
+    return true;
+}
 void GenInfo::addLoadIm(u8 reg, i32 value){
     addInstruction({BC_LI, reg}, true);
     if(disableCodeGeneration) return;
@@ -203,7 +256,8 @@ void GenInfo::addPop(int reg) {
         }
         return;
     }
-    size = 8;
+    size = 8; // NOTE: function popInstructions assume 8 in size
+    reg = RegBySize(DECODE_REG_TYPE(reg), size); // force 8 bytes
 
     addInstruction({BC_POP, (u8)reg}, true);
     // if errors != 0 then don't assert and just return since the stack
@@ -238,6 +292,10 @@ void GenInfo::addPop(int reg) {
 }
 void GenInfo::addPush(int reg, bool withoutInstruction) {
     using namespace engone;
+    // Assert(!withoutInstruction);
+    // NOTE: When optimizing, we mess with the virtual stack pointer because we remove unnecessary pop/push instructions.
+    // I Don't know if withoutInstruction would cause bugs. - Emarioo, 2023-12-19
+    
     int size = DECODE_REG_SIZE(reg);
     if (size == 0 ) { // we don't print if we had errors since they probably caused size of 0
         if(errors == 0){
@@ -245,7 +303,8 @@ void GenInfo::addPush(int reg, bool withoutInstruction) {
         }
         return;
     }
-    size = 8; // force 8 bytes
+    size = 8;
+    reg = RegBySize(DECODE_REG_TYPE(reg), 8); // force 8 bytes
 
     int diff = (size - (-virtualStackPointer) % size) % size; // how much to increment sp by to align it
     // TODO: Instructions are generated from top-down and the stackAlignment
@@ -526,7 +585,7 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
 //     // Assert(("IsSafeCast not handled case",0));
 //     // return false;
 // }
-u8 ASTOpToBytecode(TypeId astOp, bool floatVersion){
+BCInstruction ASTOpToBytecode(TypeId astOp, bool floatVersion){
     
 // #define CASE(X, Y) case X: return Y;
 #define CASE(X, Y) else if(op == X) return Y;
@@ -573,7 +632,7 @@ u8 ASTOpToBytecode(TypeId astOp, bool floatVersion){
         // }
     }
 #undef CASE
-    return 0;
+    return (BCInstruction)0;
 }
 SignalDefault GeneratePushFromValues(GenInfo& info, u8 baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr){
     using namespace engone;
@@ -612,6 +671,50 @@ SignalDefault GeneratePushFromValues(GenInfo& info, u8 baseReg, int baseOffset, 
             _GLOG(log::out << "push " << member.name << "\n";)
             GeneratePushFromValues(info, baseReg, baseOffset, memdata.typeId, movingOffset);
             *movingOffset += size;
+        }
+    }
+    return SignalDefault::SUCCESS;
+}
+SignalDefault GenerateArtificialPush(GenInfo& info, TypeId typeId) {
+    using namespace engone;
+    if(typeId == AST_VOID) {
+        return SignalDefault::FAILURE;
+    }
+    // if(baseReg!=0) {
+    //     Assert(DECODE_REG_SIZE(baseReg) == 8 && DECODE_REG_TYPE(baseReg) != BC_AX);
+    // }
+    TypeInfo *typeInfo = 0;
+    if(typeId.isNormalType())
+        typeInfo = info.ast->getTypeInfo(typeId);
+    u32 size = info.ast->getTypeSize(typeId);
+    if(!typeInfo || !typeInfo->astStruct) {
+        // enum works here too
+        u8 reg = RegBySize(BC_AX, size);
+        // if(offset == 0){
+        //     // If you are here to optimize some instructions then you are out of luck.
+        //     // I checked where GeneratePush is used whether ADDI can LI can be removed and
+        //     // replaced with a MOV_MR_DISP32 but those instructions come from GenerateReference.
+        //     // What you need is a system to optimise away instructions while adding them (like pop after push)
+        //     // or an optimizer which runs after the generator.
+        //     // You need something more sophisticated to optimize further basically.
+        //     info.addInstruction({BC_MOV_MR, baseReg, reg, (u8)size});
+        // }else{
+        //     // IMPORTANT: Understand the issue before changing code here. We always use
+        //     // disp32 because the converter asserts when using frame pointer.
+        //     // "Use addModRM_disp32 instead". We always use disp32 to avoid the assert.
+        //     // Well, the assert occurs anyway.
+        //     info.addInstruction({BC_MOV_MR_DISP32, baseReg, reg, (u8)size});
+        //     info.addImm(offset);
+        //     }
+        // }
+        info.addPush(reg, true);
+    } else {
+        for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
+            auto& member = typeInfo->astStruct->members[i];
+            auto memdata = typeInfo->getMember(i);
+            
+            _GLOG(log::out << "push " << member.name << "\n";)
+            GenerateArtificialPush(info, memdata.typeId);
         }
     }
     return SignalDefault::SUCCESS;
@@ -1773,6 +1876,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             interpreter.executePart(info.code, startInstruction, endInstruction);
             log::out.flush();
             // interpreter.printRegisters();
+            // this won't work with the stack
             info.popInstructions(endInstruction-startInstruction);
 
             if(!info.disableCodeGeneration) {
@@ -2025,27 +2129,39 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 u32 start = info.code->rawInlineAssembly.used;
 
                 // +2 and -1 to avoid adding "asm { }"
-                u32 startT = expression->tokenRange.startIndex()+2;
-                u32 endT = expression->tokenRange.endIndex-1;
-                TokenStream* stream = expression->tokenRange.tokenStream();
-                /// We can assume that all tokens come from the same stream for now.
-                for (int i=startT; i < (int)endT; i++) {
-                    Token& tok = stream->get(i);
-                    // OPTIMIZE: TODO: You can compute the character length of the inline assembly in the parser and
-                    //  resize in advance instead of resizing per token.
-                    info.code->rawInlineAssembly._reserve(info.code->rawInlineAssembly.used + tok.length + 2); // +2 for space or line feed
-                    memcpy(info.code->rawInlineAssembly._ptr + info.code->rawInlineAssembly.used,
-                        tok.str, tok.length);
-                    info.code->rawInlineAssembly.used += tok.length;
-                    if(tok.flags&TOKEN_SUFFIX_LINE_FEED) {
-                        info.code->rawInlineAssembly._ptr[info.code->rawInlineAssembly.used] = '\n';
-                        info.code->rawInlineAssembly.used += 1;
-                    } else if(tok.flags&TOKEN_SUFFIX_SPACE) {
-                        info.code->rawInlineAssembly._ptr[info.code->rawInlineAssembly.used] = ' ';
-                        info.code->rawInlineAssembly.used += 1;
-                    }
-                    Assert(0==(tok.flags&TOKEN_MASK_QUOTED));
-                }
+                TokenRange range{};
+                range.firstToken = expression->tokenRange.tokenStream()->get(expression->tokenRange.startIndex()+2);
+                range.endIndex = expression->tokenRange.endIndex-1;
+                
+                int size = range.queryFeedSize();
+                info.code->rawInlineAssembly._reserve(info.code->rawInlineAssembly.used + size);
+                int feed_size = range.feed(info.code->rawInlineAssembly.data() + info.code->rawInlineAssembly.size(), size);
+                Assert(feed_size == size);
+                info.code->rawInlineAssembly.used+=size;
+                
+                // This doesn't output the tokens correctly. feed is built to accurately output the tokens
+                // to their original form (except contiguous spacing)
+                // u32 startT = expression->tokenRange.startIndex()+2;
+                // u32 endT = expression->tokenRange.endIndex-1;
+                // TokenStream* stream = expression->tokenRange.tokenStream();
+                // /// We can assume that all tokens come from the same stream for now.
+                // for (int i=startT; i < (int)endT; i++) {
+                //     Token& tok = stream->get(i);
+                //     // OPTIMIZE: TODO: You can compute the character length of the inline assembly in the parser and
+                //     //  resize in advance instead of resizing per token.
+                //     info.code->rawInlineAssembly._reserve(info.code->rawInlineAssembly.used + tok.length + 2); // +2 for space or line feed
+                //     memcpy(info.code->rawInlineAssembly._ptr + info.code->rawInlineAssembly.used,
+                //         tok.str, tok.length);
+                //     info.code->rawInlineAssembly.used += tok.length;
+                //     if(tok.flags&TOKEN_SUFFIX_LINE_FEED) {
+                //         info.code->rawInlineAssembly._ptr[info.code->rawInlineAssembly.used] = '\n';
+                //         info.code->rawInlineAssembly.used += 1;
+                //     } else if(tok.flags&TOKEN_SUFFIX_SPACE) {
+                //         info.code->rawInlineAssembly._ptr[info.code->rawInlineAssembly.used] = ' ';
+                //         info.code->rawInlineAssembly.used += 1;
+                //     }
+                //     Assert(0==(tok.flags&TOKEN_MASK_QUOTED));
+                // }
 
                 u32 end = info.code->rawInlineAssembly.used;
 
@@ -2251,14 +2367,15 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             u8 creg = RegBySize(BC_AX, castSize);
             if(expression->isUnsafeCast()) {
                 if(expression->left->typeId == AST_ASM) {
-                    // TODO: Deprecate this and use asm<i32> {} instead of cast_unsafe<i32> asm {}
+                    // TODO: Deprecate this and use asm<i32> {} instead of cast_unsafe<i32> asm {}. asm -> i32 {} is an alternative syntax
                     //  asm<i32> makes more since because the casting is a little special since
                     //  we don't know what type the inline assembly produces. Maybe it does 2 pushes
                     //  or none. With unsafe cast we assume a type which isn't ideal.
                     //  Unfortunately, it's difficult to know what type is pushed in the inline assembly.
                     //  It might ruin the stack and frame pointers.
-                    info.addPush(creg, true);
+                    
                     // The unsafe cast implies that the asm block did this. hopefully it did.
+                    SignalDefault result = GenerateArtificialPush(info, castType);
                 } else {
                     info.addPop(lreg);
                     info.addPush(creg);
@@ -2816,7 +2933,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
 
-                    u8 bytecodeOp = ASTOpToBytecode(operationType,false);
+                    BCInstruction bytecodeOp = ASTOpToBytecode(operationType,false);
                     if(bytecodeOp==0){
                         ERR_SECTION(
                             ERR_HEAD(expression->tokenRange)
@@ -2842,7 +2959,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     }
                 } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR) && (AST::IsInteger(rtype) || rtype == AST_CHAR)){
                     
-                    u8 bytecodeOp = ASTOpToBytecode(operationType,false);
+                    BCInstruction bytecodeOp = ASTOpToBytecode(operationType,false);
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
                     // We do a little switchero on the registers to better
@@ -2961,7 +3078,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 } else if ((AST::IsDecimal(ltype) || AST::IsInteger(ltype)) && (AST::IsDecimal(rtype) || AST::IsInteger(rtype))){
                     Assert(ltype != AST_FLOAT64 && rtype != AST_FLOAT64);
 
-                    u8 bytecodeOp = ASTOpToBytecode(operationType,true);
+                    BCInstruction bytecodeOp = ASTOpToBytecode(operationType,true);
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
 
@@ -3044,7 +3161,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
 
-                    u8 bytecodeOp = ASTOpToBytecode(operationType,false);
+                    BCInstruction bytecodeOp = ASTOpToBytecode(operationType,false);
                     if(bytecodeOp==0){
                         ERR_SECTION(
                             ERR_HEAD(expression->tokenRange)
@@ -3126,7 +3243,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
 
-                    u8 bytecodeOp = ASTOpToBytecode(operationType,false);
+                    BCInstruction bytecodeOp = ASTOpToBytecode(operationType,false);
                     if(bytecodeOp==0){
                         ERR_SECTION(
                             ERR_HEAD(expression->tokenRange)
@@ -3721,7 +3838,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
         info.disableCodeGeneration = codeWasDisabled;
         info.ignoreErrors = errorsWasIgnored;
         if(debugDump.dumpAsm || debugDump.dumpBytecode) {
-            debugDump.description = TrimDir(body->tokenRange.tokenStream()->streamName) + ":"+std::to_string(body->tokenRange.firstToken.line);
+            debugDump.description = body->tokenRange.tokenStream()->streamName + ":"+std::to_string(body->tokenRange.firstToken.line);
+            // debugDump.description = TrimDir(body->tokenRange.tokenStream()->streamName) + ":"+std::to_string(body->tokenRange.firstToken.line);
             debugDump.endIndex = info.code->length();
             Assert(debugDump.startIndex <= debugDump.endIndex);
             info.code->debugDumps.add(debugDump);

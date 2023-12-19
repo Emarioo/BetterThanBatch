@@ -248,8 +248,12 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment) c
             *(outBuffer++) = '\'';
             CHECK_END
         }
-        if(tok.flags&TOKEN_SUFFIX_SPACE && i!=endIndex){
+        if((tok.flags&TOKEN_SUFFIX_SPACE) && i!=endIndex){
             *(outBuffer++) = ' ';
+            CHECK_END
+        }
+        if((tok.flags&TOKEN_SUFFIX_LINE_FEED) && i!=endIndex){
+            *(outBuffer++) = '\n';
             CHECK_END
         }
     }
@@ -297,7 +301,10 @@ u32 TokenRange::queryFeedSize(bool quoted_environment) const {
             }
             size++;
         }
-        if(tok.flags&TOKEN_SUFFIX_SPACE && i!=endIndex){
+        if((tok.flags&TOKEN_SUFFIX_SPACE) && i!=endIndex){
+            size++;
+        }
+        if((tok.flags&TOKEN_SUFFIX_LINE_FEED) && i!=endIndex){
             size++;
         }
     }

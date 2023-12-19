@@ -394,9 +394,9 @@ void Program_x64::printAsm(const char* path, const char* objpath){
     Assert(this);
     if(!objpath) {
         #ifdef OS_WINDOWS
-        WriteObjectFile_coff("bin/garb.obj", this);
+        FileCOFF::WriteFile("bin/garb.obj", this);
         #else
-        WriteObjectFile_elf("bin/garb.o", this);
+        FileELF::WriteFile("bin/garb.o", this);
         #endif
     }
 
@@ -417,9 +417,74 @@ void Program_x64::printAsm(const char* path, const char* objpath){
 
     engone::FileClose(file);
 }
+/* dumpbin
+Dump of file bin\dev.obj
+
+File Type: COFF OBJECT
+
+main:
+  0000000000000000: FF F5              push        rbp
+  0000000000000002: 48 8B EC           mov         rbp,rsp
+  0000000000000005: 48 81 EC 08 00 00  sub         rsp,8
+                    00
+  000000000000000C: 33 C0              xor         eax,eax
+  000000000000000E: FF F0              push        rax
+  0000000000000010: 8F C0              pop         rax
+  0000000000000012: 89 45 F8           mov         dword ptr [rbp-8],eax
+  0000000000000015: 48 81 EC 08 00 00  sub         rsp,8
+                    00
+  000000000000001C: 48 33 C0           xor         rax,rax
+  000000000000001F: C7 C0 41 00 00 00  mov         eax,41h
+  0000000000000025: FF F0              push        rax
+  0000000000000027: 48 33 C0           xor         rax,rax
+  000000000000002A: 8F C0              pop         rax
+  000000000000002C: 88 45 F0           mov         byte ptr [rbp-10h],al
+  000000000000002F: 48 81 C4 10 00 00  add         rsp,10h
+                    00
+  0000000000000036: 8F C5              pop         rbp
+  0000000000000038: C3                 ret
+
+  Summary
+
+          12 .debug_abbrev
+          4B .debug_info
+          31 .debug_line
+          39 .text
+*/
+/* objdump
+wa.o:     file format elf64-x86-64
+
+
+Disassembly of section .text:
+
+0000000000000000 <_Z3heyii>:
+   0:   f3 0f 1e fa             endbr64 
+   4:   55                      push   %rbp
+   5:   48 89 e5                mov    %rsp,%rbp
+   8:   89 7d fc                mov    %edi,-0x4(%rbp)
+   b:   89 75 f8                mov    %esi,-0x8(%rbp)
+   e:   8b 55 fc                mov    -0x4(%rbp),%edx
+  11:   8b 45 f8                mov    -0x8(%rbp),%eax
+  14:   01 d0                   add    %edx,%eax
+  16:   5d                      pop    %rbp
+  17:   c3                      ret    
+
+0000000000000018 <main>:
+  18:   f3 0f 1e fa             endbr64 
+  1c:   55                      push   %rbp
+  1d:   48 89 e5                mov    %rsp,%rbp
+  20:   be 05 00 00 00          mov    $0x5,%esi
+  25:   bf 02 00 00 00          mov    $0x2,%edi
+  2a:   e8 00 00 00 00          call   2f <main+0x17>
+  2f:   b8 00 00 00 00          mov    $0x0,%eax
+  34:   5d                      pop    %rbp
+  35:   c3                      ret   
+*/
 void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes) {
     using namespace engone;
-
+    Assert(!outBuffer); // not implemented
+    #ifdef OS_WINDOWS
+    Assert(("fix dumpbin formatting on Windows",false));
     int maxAddressChars = 0;
     int addressChars = 0; 
     int index = 0;
@@ -523,6 +588,28 @@ void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer,
             skipLine = true;
         }
     }
+    #else
+    // Skip heading
+    int index = 0;
+    int lineCount = 0;
+    while(index < inBuffer.size()) {
+        char chr = inBuffer[index];
+        index++;
+        if(chr == '\n') {
+            lineCount++;   
+        }
+        if(lineCount == 6)
+            break;
+    }
+    // Print disassembly
+    int len = inBuffer.size() - index;
+    if(outBuffer) {
+        outBuffer->resize(len);
+        memcpy(outBuffer->data(), inBuffer.data() + index, len);
+    } else {
+        log::out.print(inBuffer.data() + index, len);
+    }
+    #endif
 }
 u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool allowRX = false){
     u8 size = DECODE_REG_SIZE(bcreg);
@@ -591,22 +678,32 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         // TODO: This code is specific to the COFF format and the ".code" and "END" is specific (I think) to
         //  MASM (Microsoft Macro Assembler). This won't do on Unix systems.
         #define TEMP_ASM_FILE "bin/inline_asm.asm"
-        #define TEMP_ASM_OBJ_FILE "bin/inline_asm.obj"
+        #define TEMP_ASM_OBJ_FILE "bin/inline_asm.o"
         auto file = engone::FileOpen(TEMP_ASM_FILE,nullptr,FILE_ALWAYS_CREATE);
         if(!file) {
             log::out << log::RED << "Could not create " TEMP_ASM_FILE "!\n";
             continue;
         }
+        #ifdef OS_WINDOWS
         const char* pretext = ".code\n";
+        #else
+        const char* pretext = ".intel_syntax noprefix\n.text\n";
+        #endif
         bool yes = engone::FileWrite(file, pretext, strlen(pretext));
         Assert(yes);
         char* asmText = bytecode->rawInlineAssembly._ptr + asmInst.start;
         u32 asmLen = asmInst.end - asmInst.start;
         yes = engone::FileWrite(file, asmText, asmLen);
         Assert(yes);
+        #ifdef OS_WINDOWS
         const char* posttext = "END\n";
         yes = engone::FileWrite(file, posttext, strlen(posttext));
         Assert(yes);
+        #else
+        const char* posttext = "\n"; // assembler complains about not having a newline so we add one here
+        yes = engone::FileWrite(file, posttext, strlen(posttext));
+        Assert(yes);
+        #endif
 
         engone::FileClose(file);
 
@@ -616,15 +713,19 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         //  If ml64 failed then we do want the error messages.
         // TODO: ml64 can compile multiple assembly files into multiple object files.
         //  This is probably faster than doing one by one. Altough, be wary of command line character limit.
+        #ifdef OS_WINDOWS
         std::string cmd = "ml64 /nologo /Fo " TEMP_ASM_OBJ_FILE " /c ";
+        #else
+        std::string cmd = "as -o " TEMP_ASM_OBJ_FILE " ";
+        #endif
         cmd += TEMP_ASM_FILE;
         int exitCode = 0;
-        yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, {}, masmLog);
+        yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, {}, masmLog, masmLog);
         Assert(yes);
         if(exitCode != 0) {
             if(exitCode != 1) {
                 // TODO: Remove this log at some point.
-                log::out << log::YELLOW << "WOAH, exit code from MASM was "<<exitCode<<". Does it have special meaning other than failure?\n";
+                log::out << log::YELLOW << "WOAH, exit code from assembler was "<<exitCode<<". What does it mean?\n";
             }
             u64 fileSize = engone::FileGetSize(masmLog);
             engone::FileSetHead(masmLog, 0);
@@ -648,7 +749,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
         // TODO: DeconstructFile isn't optimized and we deconstruct symbols and segments we don't care about.
         //  Write a specific function for just the text segment.
-        auto objfile = ObjectFile::DeconstructFile(TEMP_ASM_OBJ_FILE);
+        #ifdef OS_WINDOWS
+        auto objfile = FileCOFF::DeconstructFile(TEMP_ASM_OBJ_FILE);
+        defer { FileCOFF::Destroy(objfile); };
         if(!objfile) {
             log::out << log::RED << "Could not find " TEMP_ASM_OBJ_FILE "!\n";
             continue;
@@ -682,9 +785,39 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, ptr, len);
         bytecode->rawInstructions.used += len;
         asmInst.iEnd = bytecode->rawInstructions.used;
-
-        ObjectFile::Destroy(objfile);
-
+        #else
+        auto objfile = FileELF::DeconstructFile(TEMP_ASM_OBJ_FILE);
+        defer { FileELF::Destroy(objfile); };
+        if(!objfile) {
+            log::out << log::RED << "Could not find " TEMP_ASM_OBJ_FILE "!\n";
+            continue;
+        }
+        int textSection_index = objfile->sectionIndexByName(".text");
+        if(textSection_index == 0) {
+            log::out << log::RED << "Text section could not be found for the compiled inline assembly. Compiler bug?\n";
+            continue;
+        }
+        
+        int relocations_count=0;
+        auto relocations = objfile->relaOfSection(textSection_index, &relocations_count);
+        if(relocations_count!=0){
+            log::out << log::RED << "Relocations is not supported in inline assembly.\n";
+            continue;
+        }
+        
+        int textSize = 0;
+        const u8* textData = objfile->dataOfSection(textSection_index, &textSize);
+        Assert(textData);
+        
+        // u8* ptr = objfile->_rawFileData + section->PointerToRawData;
+        // u32 len = section->SizeOfRawData;
+        // log::out << "Inline assembly "<<i << " size: "<<len<<"\n";
+        asmInst.iStart = bytecode->rawInstructions.used;
+        bytecode->rawInstructions._reserve(bytecode->rawInstructions.used + textSize);
+        memcpy(bytecode->rawInstructions._ptr + bytecode->rawInstructions.used, textData, textSize);
+        bytecode->rawInstructions.used += textSize;
+        asmInst.iEnd = bytecode->rawInstructions.used;
+        #endif
     }
     engone::Free(tempBuffer,tempBufferSize);
     // TODO: Optionally delete obj and asm files from inline assembly.
@@ -2554,9 +2687,13 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 u32 asmIndex = ASM_DECODE_INDEX(op0,op1,op2);
                 Bytecode::ASM asmInstance = bytecode->asmInstances.get(asmIndex);
                 u32 len = asmInstance.iEnd - asmInstance.iStart;
-                u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
-                // log::out << "InlineASM "<<len<<" machine code bytes\n";
-                prog->addRaw(ptr, len);
+                if(len != 0) {
+                    u8* ptr = bytecode->rawInstructions._ptr + asmInstance.iStart;
+                    // log::out << "InlineASM "<<len<<" machine code bytes\n";
+                    prog->addRaw(ptr, len);
+                } else {
+                    // print error or has that been done already?
+                }
                 break;
             }
             break; case BC_TEST_VALUE: {
