@@ -187,11 +187,12 @@ namespace engone {
 		static const int THREAD_SIZE = 8;
 		union {
 			struct { // Windows
-				u64 m_internalHandle = 0;
+				u64 m_internalHandle;
 			};
 			struct { // Unix
 				u64 m_data;
 			};
+            u64 _zeros = 0;
 		};
 		ThreadId m_threadId=0;
 		

@@ -21,9 +21,8 @@
 
 #ifdef LOG_MEASURES
 
-
 #define MEASURE MeasureScope scopeMeasure = {__FUNCTION__, __COUNTER__};
-#define MEASUREN(CSTR) MeasureScope scopeMeasure = {CSTR, __COUNTER__};
+#define MEASURE_WHO(CSTR) MeasureScope scopeMeasure = {CSTR, __COUNTER__};
 
 // #define MEASURE_THREAD() 
 // #define MEASURE_SCOPE PerfZone perfZone = {__FUNCTION__, __COUNTER__};
@@ -124,6 +123,7 @@ struct MeasureScope {
         }
         scopeStatLock.unlock();
         #else
+        // Assert(statId < SCOPE_START_ARRAY);
         scopeStat = scopeStatArray + statId;
         #endif
         

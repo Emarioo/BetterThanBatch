@@ -1254,6 +1254,78 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
         if(isSpecial){
             if(chr=='#'){
                 foundHashtag=true; // if not found then preprocessor isn't necessary
+                
+                static const char* const str_import = "import";
+                static const int str_import_len = strlen(str_import);
+                int correct = 0;
+                int originalIndex = index;
+                bool readingQuote = false;
+                bool readingPath = false;
+                int startOfPath = 0;
+                while(index < length) {
+                    char prevChr = 0;
+                    char nextChr = 0;
+                    if(index>0)
+                        prevChr = text[index-1];
+                    if(index+1<length)
+                        nextChr = text[index+1];
+                    char chr = text[index];
+                    index++;
+                    
+                    if(chr=='\t')
+                        column+=4;
+                    else
+                        column++;
+                    if(chr == '\n'){
+                        line++;
+                        column=1;
+                    }
+                    
+                    if(readingPath) {
+                        if(chr == '"') {
+                            const char* str = text + startOfPath;
+                            char prev = text[index-1];
+                            text[index-1] = '\0';
+                            outStream->addImport(str,"");
+                            text[index-1] = prev;
+                            break;
+                        }
+                        if(chr == '\n') {
+                            // TODO: Print error
+                            break;
+                        }
+                    } else if(readingQuote) {
+                        if (chr == '"') {
+                            readingQuote = false;
+                            readingPath = true;   
+                            startOfPath = index;
+                        } else if(chr == ' ' || chr== '\t' || chr == '\n') {
+                            // whitespace is okay
+                        } else {
+                            break;   
+                        }
+                    } else {
+                        if(str_import[correct] == chr) {
+                            correct++;
+                            if(correct == str_import_len) {
+                                readingQuote = true;
+                            }
+                        } else {
+                            correct=0;
+                            break;
+                        }
+                    }
+                    
+                    if(chr=='\r'&&(nextChr=='\n'||prevChr=='\n')){
+                        continue;// skip \r and process \n next time
+                    }
+                }
+                if(!readingPath) {
+                    // revert reading
+                    index = originalIndex;
+                } else {
+                    continue;
+                }
             }
             if(chr=='@'){
                 Token anot = {};

@@ -483,111 +483,43 @@ Disassembly of section .text:
 void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes) {
     using namespace engone;
     Assert(!outBuffer); // not implemented
+    
+    int startIndex = 0;
+    int endIndex = 0;
     #ifdef OS_WINDOWS
-    Assert(("fix dumpbin formatting on Windows",false));
-    int maxAddressChars = 0;
-    int addressChars = 0; 
+     // Skip heading
     int index = 0;
-    bool skipLine = false;
-    bool processContent = false;
-    int wasZero = true;
-    while(true) {
-        if(index >= inBuffer.size())
-            break;
-        char chr = inBuffer.get(index);
-        char nextChr = 0;
-        if(index + 1 < inBuffer.size())
-            nextChr = inBuffer.get(index+1);
-        char nextChr2 = 0;
-        if(index + 2 < inBuffer.size())
-            nextChr2 = inBuffer.get(index+2);
+    int lineCount = 0;
+    while(index < inBuffer.size()) {
+        char chr = inBuffer[index];
         index++;
-        
-        if(skipLine) {
-            if(chr == '\n') {
-                skipLine = false;
-            }
-            continue;
+        if(chr == '\n') {
+            lineCount++;   
         }
-
-        if(processContent) {
-            if(addressChars != 0 || chr != '0' || nextChr == ':') {
-                addressChars++;
-            }
-            if(nextChr == ':') {
-                skipLine = true;
-                processContent = false;
-                if(maxAddressChars < addressChars) {
-                    maxAddressChars = addressChars;
-                    addressChars = 0;
-                }
-            }
-            continue;
-        }
-        if(chr == ' ' && nextChr == ' ' && nextChr2 == '0') {
-            index++;
-            processContent = true;
-            addressChars = 0;
-        } else if(chr == ' ' && nextChr == ' ' && nextChr2 == 'S') {
-            break; // "  Summary"
-        } else {
-            skipLine = true;
-        }
+        if(lineCount == 5)
+            break;
     }
-
+    startIndex = index;
     index = 0;
-    processContent = false;
-    int atAddressChar = 0;
-    skipLine = false;
-    bool procAddress = false;
-    while(true) {
-        if(index >= inBuffer.size())
-            break;
-        char chr = inBuffer.get(index);
-        char nextChr = 0;
-        if(index + 1 < inBuffer.size())
-            nextChr = inBuffer.get(index+1);
-        char nextChr2 = 0;
-        if(index + 2 < inBuffer.size())
-            nextChr2 = inBuffer.get(index+2);
+    // Find summary
+    const char* summary_str = "Summary";
+    int summary_len = strlen(summary_str);
+    int summary_correct = 0;
+    while(index < inBuffer.size()) {
+        char chr = inBuffer[index];
         index++;
         
-        if(skipLine) {
-            if(chr == '\n') {
-                skipLine = false;
+        if(summary_str[summary_correct] == chr) {
+            summary_correct++;
+            if(summary_correct == summary_len) {
+                endIndex = index - summary_len - 1 + 1; // -1 to skip newline before Summary, +1 for exclusive index
+                break;
             }
-            continue;
-        }
-
-        if(processContent) {
-            if(procAddress) {
-                if(16-maxAddressChars <= atAddressChar) {
-                    log::out << chr;
-                }
-                if(atAddressChar == 17) { // nextChr == ':'
-                    procAddress = false;
-                    continue;
-                }
-                atAddressChar++;
-                continue;
-            }
-            log::out << chr;
-            if(chr == '\n') {
-                processContent = false;
-            }
-            continue;
-        }
-        if(chr == ' ' && nextChr == ' ' && (nextChr2 == '0' || nextChr2 == ' ')) {
-            index++;
-            processContent = true;
-            procAddress = true;
-            atAddressChar = 0;
-        } else if(chr == ' ' && nextChr == ' ' && nextChr2 == 'S') {
-            break; // "  Summary"
         } else {
-            skipLine = true;
+            summary_correct = 0;
         }
     }
+    // endIndex = index; endIndex is set in while loop
     #else
     // Skip heading
     int index = 0;
@@ -601,14 +533,114 @@ void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer,
         if(lineCount == 6)
             break;
     }
+    startIndex = index;
+    index = 0;
+    endIndex = inBuffer.size();
+    #endif
     // Print disassembly
-    int len = inBuffer.size() - index;
+    int len = endIndex - startIndex;
     if(outBuffer) {
         outBuffer->resize(len);
-        memcpy(outBuffer->data(), inBuffer.data() + index, len);
+        memcpy(outBuffer->data(), inBuffer.data() + startIndex, len);
     } else {
-        log::out.print(inBuffer.data() + index, len);
+        log::out.print(inBuffer.data() + startIndex, len, true);
     }
+}
+void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuffer, int line_offset) {
+    using namespace engone;
+    // Assert(!outBuffer); // not implemented
+    
+    int startIndex = 0;
+    int endIndex = 0;
+    #ifdef OS_WINDOWS
+     // Skip heading
+    int index = 0;
+    int lineCount = 0;
+    while(index < inBuffer.size()) {
+        char chr = inBuffer[index];
+        index++;
+        if(chr == '\n') {
+            lineCount++;   
+        }
+        if(lineCount == 1)
+            break;
+    }
+    
+    struct ASMError {
+        std::string file;
+        int line;
+        std::string message;
+    };
+    
+    DynamicArray<ASMError> errors{};
+    
+    // NOTE: We assume that each line is an error. As far as I have seen, this seems to be the case.
+    ASMError asmError{};
+    bool parseFileAndLine = true;
+    int startOfFile = 0;
+    int endOfFile = 0; // exclusive
+    int startOfLineNumber = 0; // index where we suspect it to be
+    int endOfLineNumber = 0; // exclusive
+    while(index < inBuffer.size()) {
+        char chr = inBuffer[index];
+        index++;
+        
+        if(chr == '\n' || inBuffer.size() == index) {
+            Assert(!parseFileAndLine);
+            errors.add(asmError);
+            asmError = {};
+            parseFileAndLine = true;
+            startOfFile = index;
+            continue;
+        }
+        
+        if(parseFileAndLine) {
+            if(chr == '(') {
+                endOfFile = index - 1;
+                startOfLineNumber = index;
+            }
+            if(chr == ')')
+                endOfLineNumber = index-1;
+            
+            if(chr == ':') {
+                // parse number
+                char* str = inBuffer.data() + startOfLineNumber;
+                inBuffer[endOfLineNumber] = 0;
+                asmError.line = atoi(str);
+                
+                asmError.file.resize(endOfFile - startOfFile);
+                memcpy((char*)asmError.file.data(), inBuffer.data() + startOfFile, endOfFile - startOfFile);
+                
+                parseFileAndLine = false;
+                continue;
+            }
+            endOfFile = index;
+        } else { // parse message
+            asmError.message += chr;
+        }
+    }
+    
+    FOR(errors) {
+        log::out << log::RED << asmInstance.file << ":" << (asmInstance.lineStart-1 + it.line + line_offset);
+        log::out << log::NO_COLOR << it.message << "\n";
+    }
+    #else
+    Assert(("TODO: Implement assembler error reformatting for Unix",false));
+    // // Skip heading
+    // int index = 0;
+    // int lineCount = 0;
+    // while(index < inBuffer.size()) {
+    //     char chr = inBuffer[index];
+    //     index++;
+    //     if(chr == '\n') {
+    //         lineCount++;   
+    //     }
+    //     if(lineCount == 6)
+    //         break;
+    // }
+    // startIndex = index;
+    // index = 0;
+    // endIndex = inBuffer.size();
     #endif
 }
 u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool allowRX = false){
@@ -663,15 +695,15 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         prog->globalSize = bytecode->dataSegment.used;
         memcpy(prog->globalData, bytecode->dataSegment.data, prog->globalSize);
 
-        OutputAsHex("data.txt", (char*)prog->globalData, prog->globalSize);
+        // OutputAsHex("data.txt", (char*)prog->globalData, prog->globalSize);
     }
     bool failure = false;
 
     // TODO: Inline assembly can be computed on multiple threads but probably not worth
     //   because you usually have very instances of inline assembly and on top of that very few instructions in them.
 
-    u32 tempBufferSize = 0x10000;
-    char* tempBuffer = (char*)engone::Allocate(tempBufferSize);
+    // u32 tempBufferSize = 0x10000;
+    // char* tempBuffer = (char*)engone::Allocate(tempBufferSize);
     for (int i=0;i<bytecode->asmInstances.size();i++){
         Bytecode::ASM& asmInst = bytecode->asmInstances.get(i);
         
@@ -686,8 +718,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         }
         #ifdef OS_WINDOWS
         const char* pretext = ".code\n";
+        int asm_line_offset = 1;
         #else
         const char* pretext = ".intel_syntax noprefix\n.text\n";
+        int asm_line_offset = 2;
         #endif
         bool yes = engone::FileWrite(file, pretext, strlen(pretext));
         Assert(yes);
@@ -708,6 +742,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         engone::FileClose(file);
 
         auto masmLog = engone::FileOpen("bin/masm.log",0,FILE_ALWAYS_CREATE);
+        defer { engone::FileClose(masmLog); };
 
         // TODO: Turn off logging from ml64? or at least pipe into somewhere other than stdout.
         //  If ml64 failed then we do want the error messages.
@@ -723,29 +758,35 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, {}, masmLog, masmLog);
         Assert(yes);
         if(exitCode != 0) {
-            if(exitCode != 1) {
-                // TODO: Remove this log at some point.
-                log::out << log::YELLOW << "WOAH, exit code from assembler was "<<exitCode<<". What does it mean?\n";
-            }
             u64 fileSize = engone::FileGetSize(masmLog);
             engone::FileSetHead(masmLog, 0);
-            u64 readBytes = 0;
-            log::out.setMasterColor(log::RED);
-            while(readBytes < fileSize) {
-                u64 bytes = FileRead(masmLog, tempBuffer, tempBufferSize);
-                if(bytes == -1) break;
-                readBytes += bytes;
-                // TODO: Reformat error messages? It shows the file bin/inline_asm.asm which
-                //  doesn't mean anything to the user.
-                log::out.print(tempBuffer, bytes);
-            }
-            log::out.setMasterColor(log::NO_COLOR);
             
-            engone::FileClose(masmLog);
+            QuickArray<char> errorMessages{};
+            errorMessages.resize(fileSize);
+            
+            yes = engone::FileRead(masmLog, errorMessages.data(), errorMessages.size());
+            Assert(yes);
+            
+            ReformatAssemblerError(asmInst, errorMessages, -asm_line_offset);
+            
+            // u64 readBytes = 0;
+            // log::out.setMasterColor(log::RED);
+            // while(readBytes < fileSize) {
+            //     u64 bytes = FileRead(masmLog, tempBuffer, tempBufferSize);
+            //     if(bytes == -1) break;
+            //     readBytes += bytes;
+            //     // TODO: Reformat error messages? It shows the file bin/inline_asm.asm which
+            //     //  doesn't mean anything to the user.
+            //     log::out.print(tempBuffer, bytes);
+            // }
+            // log::out.setMasterColor(log::NO_COLOR);
+            
+            // engone::FileClose(masmLog);
             failure = true;
             continue;
         }
-        engone::FileClose(masmLog);
+        
+        // engone::FileClose(masmLog);
 
         // TODO: DeconstructFile isn't optimized and we deconstruct symbols and segments we don't care about.
         //  Write a specific function for just the text segment.
@@ -819,7 +860,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         asmInst.iEnd = bytecode->rawInstructions.used;
         #endif
     }
-    engone::Free(tempBuffer,tempBufferSize);
+    // engone::Free(tempBuffer,tempBufferSize);
     // TODO: Optionally delete obj and asm files from inline assembly.
 
     // prog->add(OPCODE_XOR_REG_RM);

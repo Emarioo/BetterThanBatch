@@ -541,8 +541,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             return SignalAttempt::FAILURE;   
         }
         argTypes.resize(operatorArgs->size());
-        memcpy(argTypes.data(), operatorArgs->data(), operatorArgs->size()); // TODO: Use TintArray::copyFrom() instead (function not implemented yet)
-        
+        memcpy(argTypes.data(), operatorArgs->data(), operatorArgs->size() * sizeof(TypeId)); // TODO: Use TintArray::copyFrom() instead (function not implemented yet)
         
         // DynamicArray<TypeId> tempTypes{};
         // tempTypes.resize(0);

@@ -18,26 +18,20 @@
 
 // #import "Array"
 
-fn @native printc(v: char);
-fn @native prints(v: char[]);
 
-{
-    for 0..5 {
-        printc('A' + it);
-    }
-    printc('\n');
-}
+#quote #date
 
+// fn @native printc(v: char);
+// fn @native prints(v: char[]);
 
-// cast_unsafe<i32> asm {
-//     mov ecx, 0
-//     mov eax, 0
-// loop:
-//     cmp ecx, 5
-//     je loop_end
-//     add ecx, 1
-//     add eax, ecx
-//     jmp loop
-// loop_end:
-//     push rax // Hello!
+// struct i128 {
+//     x: i64;
+//     y: i64;
 // }
+// operator |(a: i128, b: i128) -> i128 {
+//     return i128{a.x|b.x, a.y|b.y};
+// }
+
+// flag0 = i128{5,8}
+// flag1 = i128{3,9}
+// result = i128{5,8} | i128{3,9}

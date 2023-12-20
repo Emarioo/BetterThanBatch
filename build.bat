@@ -52,7 +52,7 @@ if !USE_DEBUG!==1 (
 mkdir bin 2> nul
 SET srcfile=bin\all.cpp
 SET srcfiles=
-SET output=bin\compiler.exe
+SET output=bin\btb.exe
 
 @REM ############################
 @REM       Retrieve files
@@ -126,7 +126,7 @@ lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib l
 @REM cvdump test.pdb > out3
 
 if !compileSuccess! == 0 (
-    echo f | XCOPY /y /q !output! prog.exe > nul
+    echo f | XCOPY /y /q !output! btb.exe > nul
 
     @REM cl /c /TP src/Other/test.cpp /Fo: bin/test2.obj /nologo
 
@@ -135,8 +135,9 @@ if !compileSuccess! == 0 (
 
     @REM link bin/obj_test.obj bin/NativeLayer.obj
 
-
-    prog -dev
+    btb -dev
+    @REM btb --test
+    @REM btb -sfs dev.btb
     @REM objdump bin/dev.obj -W
     @REM g++ src/Other/test.cpp -g -o test.exe
     @REM gcc -c src/Other/test.c -g -o test.o

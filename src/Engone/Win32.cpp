@@ -157,10 +157,12 @@ namespace engone {
 		if(!info->second.tempPtr) {
 			info->second.max = 256;
 			info->second.tempPtr = (char*)Allocate(info->second.max + 1);
+            Assert(info->second.tempPtr);
 		} else if(info->second.max < newLength) {
 			u32 old = info->second.max;
 			info->second.max = info->second.max + newLength;
 			info->second.tempPtr = (char*)Reallocate(info->second.tempPtr, old + 1, info->second.max + 1);
+            Assert(info->second.tempPtr);
 		}
 		result->name = info->second.tempPtr;
 		result->namelen = newLength;
@@ -222,7 +224,7 @@ namespace engone {
 			}
 		}
 		if(info->second.tempPtr) {
-			Free(info->second.tempPtr, info->second.max);
+			Free(info->second.tempPtr, info->second.max + 1);
 			info->second.tempPtr = nullptr;
 			info->second.max = 0;
 		}
@@ -925,7 +927,7 @@ namespace engone {
 			auto owner = m_ownerThread;
 			// printf("Lock %d %d\n",newId, (int)m_internalHandle);
 			if (owner != 0) {
-				PL_PRINTF("Mutex : Locking twice, old owner: %u, new owner: %u\n",owner,newId);
+				PL_PRINTF("Mutex : Locking twice, old owner: %llu, new owner: %u\n",owner,newId);
 			}
 			m_ownerThread = newId;
 			if (res == WAIT_FAILED) {
@@ -947,7 +949,7 @@ namespace engone {
 			}
 		}
 	}
-	uint32_t Mutex::getOwner() {
+	ThreadId Mutex::getOwner() {
 		return m_ownerThread;
 	}
 	void Thread::cleanup() {

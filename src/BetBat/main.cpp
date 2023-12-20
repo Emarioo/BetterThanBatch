@@ -121,6 +121,8 @@ int main(int argc, const char** argv){
 
     bool onlyPreprocess = false;
     bool performTests = false; // could be one or more
+    bool show_profiling = false;
+    bool search_for_source = false;
 
     if (argc < 2) {
         print_version();
@@ -157,6 +159,10 @@ int main(int argc, const char** argv){
             devmode = true;
         } else if (streq(arg,"--test")) {
             performTests = true;
+            compileOptions.instant_report = false;
+        } else if (streq(arg,"--test-with-errors")) {
+            performTests = true;
+            compileOptions.instant_report = true;
         } else if (streq(arg,"--debug") || streq(arg, "-g")) {
             compileOptions.useDebugInformation = true;
         } else if (streq(arg,"--silent")) {
@@ -164,6 +170,8 @@ int main(int argc, const char** argv){
         } else if (streq(arg,"--verbose")) {
             compileOptions.verbose = true;
             log::out << log::RED << "Verbose option (--verbose) is not implemented\n";
+        } else if (streq(arg,"--profiling")) {
+            show_profiling = true;
         } else if (streq(arg,"--target") || streq(arg, "-t")){
             i++;
             if(i<argc){
@@ -176,11 +184,39 @@ int main(int argc, const char** argv){
                 }
             } else {
                 invalidArguments = true;
-                log::out << log::RED << "You must specify a target after '-target'.\n";
+                log::out << log::RED << "You must specify a target after '"<<arg<<"'.\n";
                 // TODO: print list of targets
                 // for(int j=0;j<){
                 // }
             }
+        } else if (streq(arg,"--linker") || streq(arg, "-l")){
+            i++;
+            if(i<argc){
+                arg = argv[i];
+                compileOptions.linker = ToLinker(arg);
+                if(compileOptions.linker == UNKNOWN_LINKER) {
+                    invalidArguments = true;
+                    log::out << log::RED << arg << " is not a valid linker.\n";
+                    // TODO: print list of targets
+                }
+            } else {
+                invalidArguments = true;
+                log::out << log::RED << "You must specify a linker after '"<<arg<<"'.\n";
+                // TODO: print list of targets
+            }
+        // } else if (streq(arg,"--linker-cmd")){
+        //     CUSTOM LINKER is not possible because we don't know what flags to pass to the linker.
+        //     Is -o the flag for output or is it -output, /out perhaps /OUT or /Fo:
+        //     i++;
+        //     if(i<argc){
+        //         arg = argv[i];
+        //         compileOptions.linker_cmd = arg;
+        //     } else {
+        //         invalidArguments = true;
+        //         log::out << log::RED << "You must specify a command line linker after '"<<arg<<"'.\n";
+        //     }
+        }else if (streq(arg,"--search-for-source") || streq(arg, "-ss")){
+            search_for_source = true;
         } else if(streq(arg,"--user-args")) {
             i++;
             for(;i<argc;i++) {
@@ -197,6 +233,11 @@ int main(int argc, const char** argv){
             }
         }
     }
+    
+    if(!devmode && !performTests && compileOptions.sourceFile.text.empty()) {
+        log::out << log::RED << "Specify a source file\n";
+        return EXIT_CODE_NOTHING;
+    }
 
     compileOptions.threadCount = 1;
 
@@ -208,6 +249,34 @@ int main(int argc, const char** argv){
         log::out << log::RED << "Debug information is not supported yet\n";
         return EXIT_CODE_NOTHING;
     }
+    if(search_for_source) {
+        if(!compileOptions.sourceFile.isAbsolute()) {
+            const char* path = compileOptions.sourceFile.text.c_str();
+            int pathlen = compileOptions.sourceFile.text.length();
+            Assert(pathlen != 0);
+            auto iter = engone::DirectoryIteratorCreate(".",1);
+            engone::DirectoryIteratorData data{};
+            defer { engone::DirectoryIteratorDestroy(iter, &data); };
+            while(engone::DirectoryIteratorNext(iter, &data)) {
+                // log::out << data.name<< "\n";
+                if(data.isDirectory) {
+                    if(data.namelen >= 3 && !strncmp(data.name, "./.", 3)) { // ignore folders like .git, .vscode, .vs
+                        engone::DirectoryIteratorSkip(iter);
+                    }
+                    continue;
+                }
+                if(data.namelen >= pathlen && !strcmp(data.name + data.namelen - pathlen, path)) {
+                    Assert(data.namelen >= 2);
+                    if(data.name[0] == '.' && data.name[1] == '/')
+                        compileOptions.sourceFile.text = data.name + 2;
+                    else
+                        compileOptions.sourceFile.text = data.name;
+                    break;
+                }
+            }
+        }
+    }
+    
     // #ifdef gone
     if(onlyPreprocess){
         if (compileOptions.sourceFile.text.size() == 0) {
@@ -240,13 +309,13 @@ int main(int argc, const char** argv){
         if(compileOptions.sourceFile.text.length() != 0) {
             DynamicArray<std::string> tests;
             tests.add(compileOptions.sourceFile.text);
-            int failures = VerifyTests(tests);
+            int failures = VerifyTests(&compileOptions, tests);
             compilerExitCode = failures;
         } else {
-            DynamicArray<std::string> tests;
-            tests.add("tests/simple/operations.btb");
-            // int failures = TestSuite(TEST_ALL);
-            int failures = VerifyTests(tests);
+            // DynamicArray<std::string> tests;
+            // tests.add("tests/simple/operations.btb");
+            int failures = TestSuite(&compileOptions, TEST_ALL);
+            // int failures = VerifyTests(tests);
             compilerExitCode = failures;
         }
     } else if(!devmode){
@@ -292,7 +361,7 @@ int main(int argc, const char** argv){
         }
         VerifyTests(tests);
         #else
-        if(compileOptions.target == BYTECODE){
+        if(compileOptions.target == TARGET_BYTECODE){
             compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         } else {
@@ -328,6 +397,9 @@ int main(int argc, const char** argv){
     //     log::out << (log::Color)(i%16);
     //     log::out << chr;
     // }
+    if(show_profiling)
+        PrintMeasures();
+    MeasureCleanup();
     // ProfilerPrint();
     // ProfilerExport("profiled.dat");
 

@@ -219,7 +219,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         #define ADD(X) obj_stream->getWriteHead() - section->sh_offset; suc = obj_stream->write(X); CHECK
         
         // table begins with null string
-        ADD("")
+        int bad = ADD("")
         s_sectionStringTable->sh_name = ADD(".shstrtab")
         s_stringTable->sh_name = ADD(".strtab")
         s_text->sh_name = ADD(".text")

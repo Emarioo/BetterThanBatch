@@ -201,21 +201,27 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
     #undef FINALIZE_TEST
 }
 
-u32 TestSuite(TestSelection testSelection){
+u32 TestSuite(CompileOptions* options, TestSelection testSelection){
     using namespace engone;
     DynamicArray<std::string> tests;
 
     if(testSelection&TEST_ARITHMETIC) {
         tests.add("tests/simple/operations.btb");
+        tests.add("tests/simple/assignment.btb");
     }
     if(testSelection&TEST_FLOW) {
         tests.add("tests/flow/loops.btb");
         tests.add("tests/flow/switch.btb");
+        tests.add("tests/flow/defer.btb");
+    }
+    if(testSelection&TEST_FUNCTION) {
         tests.add("tests/funcs/overloading.btb");
-        // tests.add("tests/flow/defer.btb"); not fixed yet
+    }
+    if(testSelection&TEST_ASSEMBLY) {
+        tests.add("tests/inline-asm/simple.btb");
     }
 
-    return VerifyTests(tests);
+    return VerifyTests(options, tests);
 }
 
 // struct ThreadTestInfo {
@@ -250,7 +256,7 @@ u32 TestSuite(TestSelection testSelection){
 //     }
 //     return 0;
 // }
-u32 VerifyTests(DynamicArray<std::string>& filesToTest){
+u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesToTest){
     using namespace engone;
 
     // We run out of profilers contexts fast and a message about is printed
@@ -280,8 +286,8 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
     bool useInterp = false;
     // bool useInterp = true;
 
-    // TODO: Use multithreading. Each compilation can use two threads (to trigger thread bugs) while
-    //  4-8 threads are used to compile and run multiple test cases.
+    // TODO: Use multithreading. Some threads compile test cases while others start programs and test them.
+    //   One thread can test multiple programs and redirect stdout to some file.
 
     u64 bufferSize = 0x10000;
     char* buffer = (char*)engone::Allocate(bufferSize);
@@ -302,6 +308,8 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
     u64 finalFailedTests = 0;
     u64 finalTotalTests = 0;
 
+    auto test_startTime = engone::StartMeasure();
+
     Interpreter interpreter{};
     for(int i=0;i<testCases.size();i++) {
         auto& testcase = testCases[i];
@@ -310,17 +318,24 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
 
         CompileOptions options{};
         options.silent = true;
-        options.target = BYTECODE;
+        options.target = TARGET_BYTECODE;
         options.executeOutput = true;
         options.threadCount = 1;
-        // options.instant_report = false;
-        
+        options.instant_report = user_options->instant_report;
+        options.linker = user_options->linker;
+        options.verbose = user_options->verbose;
+        options.modulesDirectory = user_options->modulesDirectory;
         if(!useInterp)
-            options.target = CONFIG_DEFAULT_TARGET;
+            options.target = user_options->target;
         // options.initialSourceFile = testcase.textBuffer.origin;
         options.initialSourceBuffer = testcase.textBuffer;
         // options.initialSourceBufferSize = testcase.size
-
+        
+        
+        if(!options.instant_report) {
+            log::out << log::GOLD << "Remaining tests: "<<(testCases.size()-i)<<" " << log::LIME << BriefString(testcase.testName,20) <<"                               \r"; // <- extra space to cover over previous large numbers
+            log::out.flush();
+        }
 
         // TODO: Run bytecode and x64 version by default.
         //   An argument can be passed to this function if you just want one target.
@@ -332,7 +347,6 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
                 bytecode = nullptr;
             }
         };
-        
 
         u64 failedTests = 0;
         u64 totalTests = 0;
@@ -395,36 +409,40 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
                 hoho += options.outputFile.text;
                 int errorCode = 0;
                 // auto file = engone::FileOpen("ya",nullptr, engone::FILE_ALWAYS_CREATE);
-                
-                engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, PipeGetWrite(pipe));
+                {
+                    MEASURE_WHO("Test: StartProgram")
+                    engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, PipeGetWrite(pipe));
+                }
                 // engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, file);
                 // engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, file);
                 // engone::FileClose(file);
                 // log::out << "Error level: "<<errorCode<<"\n";
             }
+            {
+                MEASURE_WHO("Test: Pipe reading")
+                result.failedLocations.resize(0);
+                while(true){
+                    char tinyBuffer[4]{0};
+                    PipeWrite(pipe, tinyBuffer, 4); // we must write some data to the pipe to prevent PipeRead from freezing.
+                    
+                    u64 readBytes = PipeRead(pipe, buffer, bufferSize);
 
-            result.failedLocations.resize(0);
-            while(true){
-                char tinyBuffer[4]{0};
-                PipeWrite(pipe, tinyBuffer, 4); // we must write some data to the pipe to prevent PipeRead from freezing.
-                
-                u64 readBytes = PipeRead(pipe, buffer, bufferSize);
+                    Assert(readBytes%4==0);
 
-                Assert(readBytes%4==0);
-
-                totalTests += (readBytes-sizeof(tinyBuffer))/4;
-                int j = sizeof(tinyBuffer);
-                while(j<readBytes){
-                    failedTests += buffer[j] == 'x';
-                    if(buffer[j] == 'x'){
-                        u16 index = ((u16)buffer[j+2]<<8) | ((u16)buffer[j+3]);
-                        result.failedLocations.add(index);
+                    totalTests += (readBytes-sizeof(tinyBuffer))/4;
+                    int j = sizeof(tinyBuffer);
+                    while(j<readBytes){
+                        failedTests += buffer[j] == 'x';
+                        if(buffer[j] == 'x'){
+                            u16 index = ((u16)buffer[j+2]<<8) | ((u16)buffer[j+3]);
+                            result.failedLocations.add(index);
+                        }
+                        j+=4;
                     }
-                    j+=4;
-                }
 
-                if(readBytes != bufferSize) {
-                    break;
+                    if(readBytes != bufferSize) {
+                        break;
+                    }
                 }
             }
         }
@@ -434,23 +452,9 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         result.totalTests = totalTests;
         result.failedTests = failedTests;
         result.testLocations.stealFrom(options.testLocations);
-
-        // print_test(testcase, totalTests, failedTests, failedLocations);
-
-        // if(failedTests == 0)
-        //     log::out << log::LIME<<"Success ";
-        // else
-        //     log::out << log::RED<<"Failure ";
-        // if(totalTests == 0)
-        //     log::out << "'"<<testcase.testName << "': 100.0% (0/0)";
-        // else
-        //     log::out << "'"<<testcase.testName << "': "<<(100.0f*(float)(totalTests-failedTests)/(float)totalTests)<<"% ("<<(totalTests-failedTests)<<"/"<<totalTests<<")";
-        // log::out << "\n";
-        // for(auto& ind : failedLocations){
-        //     auto loc = options.getTestLocation(ind);
-        //     log::out <<log::RED<< "  "<<loc->file<<":"<<loc->line<<":"<<loc->column<<"\n";
-        // }
     }
+    
+    auto test_endTime = engone::StopMeasure(test_startTime);
     
     log::out << log::GOLD << "Test cases ("<< testCases.size() <<")\n";
     std::string lastFile = "";
@@ -478,7 +482,8 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
             log::out << log::GRAY;
         }
         if(result.totalTests == 0)
-            log::out << "100.0% (0/0): ";
+            // log::out << "100.0% (0/0): ";
+            log::out << "(0/0): ";
         else {
             if(result.failedTests != 0)
                 log::out << (100.0f*(float)(result.totalTests-result.failedTests)/(float)result.totalTests)<<"% ";
@@ -502,6 +507,7 @@ u32 VerifyTests(DynamicArray<std::string>& filesToTest){
         else
             log::out <<(100.0f*(float)(finalTotalTests-finalFailedTests)/(float)finalTotalTests)<<"% ("<<(finalTotalTests-finalFailedTests)<<"/"<<finalTotalTests<<")";
         log::out << "\n";
+        log::out << log::GRAY << "  Time: "<< FormatTime(test_endTime) << "\n";
     }
 
     return finalFailedTests;

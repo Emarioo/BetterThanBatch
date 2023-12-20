@@ -40,15 +40,25 @@ struct Path {
     u32 _type = 0;
 };
 enum TargetPlatform : u32 {
-    UNKNOWN_TARGET,
-    BYTECODE,
+    UNKNOWN_TARGET = 0,
+    TARGET_BYTECODE,
     // TODO: Add some option for COFF or ELF format? Probably not here.
-    WINDOWS_x64,
-    UNIX_x64,
+    TARGET_WINDOWS_x64,
+    TARGET_UNIX_x64,
 };
 const char* ToString(TargetPlatform target);
 engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target);
 TargetPlatform ToTarget(const std::string& str);
+enum LinkerChoice : u32 {
+    UNKNOWN_LINKER = 0,
+    LINKER_GCC,
+    LINKER_MSVC,
+    LINKER_CLANG,
+};
+const char* ToString(LinkerChoice v);
+engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v);
+LinkerChoice ToLinker(const std::string& str);
+
 struct CompileOptions;
 struct CompileStats {
     volatile long errors=0;
@@ -129,6 +139,8 @@ struct CompileOptions {
     Path sourceFile{};
     Path outputFile{};
     TargetPlatform target = CONFIG_DEFAULT_TARGET;
+    LinkerChoice linker = CONFIG_DEFAULT_LINKER;
+    std::string linker_cmd = "";
 
     bool useDebugInformation = false;
     bool silent=false;

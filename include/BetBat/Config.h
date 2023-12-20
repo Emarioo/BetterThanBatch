@@ -18,16 +18,18 @@
    Major config
 ############### */
 
-#define COMPILER_VERSION "0.1.0/hello-2023.8.29"
+#define COMPILER_VERSION "0.2.0/unix-2023.12.20"
 
 // DEV_FILE defaults to dev.btb if none is specified
 // #define DEV_FILE "examples/debug_test.btb"
 // #define DEV_FILE "examples/garb.btb"
 // #define DEV_FILE "tests/simple/garb.btb"
 #ifdef OS_WINDOWS
-#define CONFIG_DEFAULT_TARGET WINDOWS_x64
+#define CONFIG_DEFAULT_TARGET TARGET_WINDOWS_x64
+#define CONFIG_DEFAULT_LINKER LINKER_MSVC
 #else
-#define CONFIG_DEFAULT_TARGET UNIX_x64
+#define CONFIG_DEFAULT_TARGET TARGET_UNIX_x64
+#define CONFIG_DEFAULT_LINKER LINKER_GCC
 #endif
 
 // #define RUN_TEST_SUITE
@@ -53,7 +55,7 @@
 // output.
 // #define OPTIMIZED
 // #define SINGLE_THREADED
-// #define LOG_MEASURES
+#define LOG_MEASURES
 // Silent is not used at the moment.
 #ifndef RELEASE
 #define ENABLE_TRACKER

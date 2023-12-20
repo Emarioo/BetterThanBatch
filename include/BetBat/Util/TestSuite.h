@@ -28,10 +28,12 @@ struct TestOrigin {
 // TODO: Add more selections of tests
 enum TestSelection : u64 {
     TEST_ALL = (u64)-1,
-    TEST_ARITHMETIC = 0x1,
-    TEST_FLOW       = 0x2,
+    TEST_ARITHMETIC = 0x1, // add, multiply, subtract, integers, floats, conversions
+    TEST_FLOW       = 0x2, // for, switch, defer
+    TEST_FUNCTION   = 0x4, // local variables, inline assembly, calling conventions
+    TEST_ASSEMBLY   = 0x8, // inline assembly
 };
 
-u32 TestSuite(TestSelection testSelection);
+u32 TestSuite(CompileOptions* options, TestSelection testSelection);
 
-u32 VerifyTests(DynamicArray<std::string>& filesToTest);
+u32 VerifyTests(CompileOptions* options, DynamicArray<std::string>& filesToTest);

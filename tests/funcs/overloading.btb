@@ -19,7 +19,7 @@ fn say2(v: char) {
 }
 say2(32) // should be fine, i32 is casted to i16
 
-@TEST-CASE add_operator
+@TEST-CASE add_or_operator
 operator +(a: i32, b: i32) -> i32 {
     return a * b;
 }

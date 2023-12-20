@@ -1482,7 +1482,7 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
         }
     }
     auto callConvention = astFunc->callConvention;
-    if(info.compileInfo->compileOptions->target == BYTECODE &&
+    if(info.compileInfo->compileOptions->target == TARGET_BYTECODE &&
         (IS_IMPORT(astFunc->linkConvention))) {
         callConvention = BETCALL;
     }
@@ -1574,7 +1574,7 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
         case BETCALL: {
             // I have not implemented linkConvention because it's rare
             // that you need it for BETCALL.
-            if(info.compileInfo->compileOptions->target != BYTECODE) {
+            if(info.compileInfo->compileOptions->target != TARGET_BYTECODE) {
                 Assert(astFunc->linkConvention == LinkConventions::NONE || astFunc->linkConvention == NATIVE);
             }
             // TODO: It would be more efficient to do GeneratePop right after the argument expressions are generated instead
@@ -1597,7 +1597,7 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 }
             }
             
-            if(info.compileInfo->compileOptions->target == BYTECODE &&
+            if(info.compileInfo->compileOptions->target == TARGET_BYTECODE &&
                 (astFunc->linkConvention == IMPORT || astFunc->linkConvention == DLLIMPORT)) {
                 info.addCall(NATIVE, astFunc->callConvention);
             } else {
@@ -2167,9 +2167,13 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
                 int asmInstanceIndex = info.code->asmInstances.size();
                 info.code->asmInstances.add({start, end});
+                auto& inst = info.code->asmInstances.last();
+                inst.lineStart = range.firstToken.line;
+                inst.lineEnd = range.tokenStream()->get(range.endIndex-1).line;
+                inst.file = range.tokenStream()->streamName;
 
                 // NOTE: ASM_ENCODE_INDEX result in 3 expression separated by comma
-                info.addInstruction({BC_ASM, ASM_ENCODE_INDEX(asmInstanceIndex)});
+                info.addInstruction({BC_ASM, ASM_ENCODE_INDEX(asmInstanceIndex)}); // ASM_ENCODE_INDEX results in bytes separated by commas
                 // info.addInstruction({BC_ASM, (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)});
             }
             outTypeIds->add(AST_VOID);
@@ -3193,20 +3197,21 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         bad=true;
                         std::string msg = info.ast->typeToString(ltype);
                         ERR_SECTION(
-                            ERR_HEAD(expression->left->tokenRange)
+                            ERR_HEAD(expression->tokenRange)
                             ERR_MSG("Cannot do operation on struct.")
                             ERR_LINE(expression->left->tokenRange,msg.c_str());
-                        )
-                    }
-                    if(rtype.getId()>=AST_TRUE_PRIMITIVES){
-                        bad=true;
-                        std::string msg = info.ast->typeToString(rtype);
-                        ERR_SECTION(
-                            ERR_HEAD(expression->right->tokenRange)
-                            ERR_MSG("Cannot do operation on struct.")
                             ERR_LINE(expression->right->tokenRange,msg.c_str());
                         )
                     }
+                    // if(rtype.getId()>=AST_TRUE_PRIMITIVES){
+                    //     bad=true;
+                    //     std::string msg = info.ast->typeToString(rtype);
+                    //     ERR_SECTION(
+                    //         ERR_HEAD(expression->right->tokenRange)
+                    //         ERR_MSG("Cannot do operation on struct.")
+                    //         ERR_LINE(expression->right->tokenRange,msg.c_str());
+                    //     )
+                    // }
                     if(bad){
                         return SignalDefault::FAILURE;
                     } 
@@ -3354,7 +3359,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         //     Assert(function->_impls.size()==1);
         // }
         if(function->linkConvention == NATIVE ||
-            info.compileInfo->compileOptions->target == BYTECODE
+            info.compileInfo->compileOptions->target == TARGET_BYTECODE
         ){
             // Assert(info.compileInfo->nativeRegistry);
             auto nativeRegistry = NativeRegistry::GetGlobal();

@@ -11,7 +11,9 @@
 #include <time.h>
 #include <string.h>
 
+#ifdef OS_UNIX
 #include <unistd.h>
+#endif
 
 namespace engone {
 	namespace log {
@@ -80,6 +82,12 @@ namespace engone {
 	void Logger::enableConsole(bool yes){
 		m_enabledConsole = yes;
 	}
+    bool Logger::isEnabledReport(){
+		return m_enabledReports;
+	}
+	bool Logger::isEnabledConsole(){
+		return m_enabledConsole;
+	}
 	void Logger::setMasterColor(log::Color color){
 		m_masterColor = color;
 	}
@@ -120,9 +128,17 @@ namespace engone {
 		auto outFile = engone::GetStandardOut();
 
 		m_printMutex.lock();
-		if (m_masterColor == log::NO_COLOR)
+		if (m_masterColor == log::NO_COLOR) {
+            #ifdef OS_WINDOWS
+            if(info.color == log::NO_COLOR) {
+			    SetConsoleColor(log::SILVER);
+            } else {
+			    SetConsoleColor(info.color);
+            }
+            #else
 			SetConsoleColor(info.color);
-		else
+            #endif
+        } else
 			SetConsoleColor(m_masterColor);
 
 		// fprintf(stdout,"\033[1;32m{YA}");
@@ -177,7 +193,7 @@ namespace engone {
 				extraBuffer[9]=']';
 				extraBuffer[10]=' ';
 				_GetClock(extraBuffer+1);
-				sprintf(extraBuffer+11,"[Thread %lu] ",Thread::GetThisThreadId());
+				sprintf(extraBuffer+11,"[Thread %llu] ",Thread::GetThisThreadId());
 			}
 			if(!m_masterReportPath.empty()){
 				std::string path = m_rootDirectory+"/"+m_masterReportPath;
@@ -266,12 +282,12 @@ namespace engone {
 		m_printMutex.unlock();
 		engone::FileFlushBuffers(engone::GetStandardOut());
 	}
-	void Logger::print(char* str, int len) {
+	void Logger::print(char* str, int len, bool no_warning) {
 		Assert(str);
 		if (len == 0) return;
 		
 		auto& info = getThreadInfo();
-		if(len > 0x1000) {
+		if(len > 0x1000 && !no_warning) {
 			log::out << log::YELLOW << "Logger: Printing and ensuring a lot of bytes ("<<len<<"). You flush the bytes multiple times!\n";
 		}
 		// large

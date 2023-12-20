@@ -1256,14 +1256,17 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
 void DeconstructDebugSymbols(u8* buffer, u32 size) {
     using namespace engone;
     // return;
-    log::out << "Debug symbols["<<size<<"]:\n";
+    bool silent = true;
+    if(!silent)
+        log::out << "Debug symbols["<<size<<"]:\n";
 
     // TODO: Assert if offset is more than size
     // #define READ(T)
     u32 offset = 0;
 
     u32 signature = *(u32*)(buffer + offset);
-    log::out << "Signature: "<<signature << "\n";
+    if(!silent)
+        log::out << "Signature: "<<signature << "\n";
     offset += 4;
 
     Assert(signature == CV_SIGNATURE_C13);
@@ -1283,12 +1286,14 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
         u32 nextOffset = offset + sectionLength;
         
         const char* subName = ToString(subSectionType, true);
-        log::out <<  "Sub section "<<subSectionCount<<", ";
-        if(subName)
-            log::out << log::LIME << subName << log::NO_COLOR;
-        else
-            log::out <<log::RED <<  "{"<<(u32)subSectionType<<"}" << log::NO_COLOR;
-        log::out << ", len: "<<sectionLength<<"\n";
+        if(!silent) {
+            log::out <<  "Sub section "<<subSectionCount<<", ";
+            if(subName)
+                log::out << log::LIME << subName << log::NO_COLOR;
+            else
+                log::out <<log::RED <<  "{"<<(u32)subSectionType<<"}" << log::NO_COLOR;
+            log::out << ", len: "<<sectionLength<<"\n";
+            }
         
         Assert(nextOffset <= size);
 
@@ -1304,26 +1309,30 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                     offset += 2;
 
                     const char* recordName = ToString(recordType, true);
-                    log::out << "record "<<recordCount<<", ";
-                    if(recordName)
-                        log:: out << log::LIME <<  recordName << log::NO_COLOR;
-                    else
-                        log::out << log::RED << "{"<<(u16)recordType<<"}" << log::NO_COLOR;
-                    log::out << ", len: "<<length<<"\n";
-
+                    if(!silent) {
+                        log::out << "record "<<recordCount<<", ";
+                        if(recordName)
+                            log:: out << log::LIME <<  recordName << log::NO_COLOR;
+                        else
+                            log::out << log::RED << "{"<<(u16)recordType<<"}" << log::NO_COLOR;
+                        log::out << ", len: "<<length<<"\n";
+                    }
                     Assert(nextOffset <= size);
 
                     switch(recordType) {
                         case S_OBJNAME: {
                             u32 signature = *(u32*)(buffer + offset);
                             offset += 4;
-                            log::out << " signature: "<<signature<<"\n";
+                                        
 
                             char* name = (char*)(buffer + offset);
                             u8 nameLength = strlen(name);
                             offset += nameLength + 1;
 
-                            log::out << " " << name << "\n";
+                            if(!silent) {
+                                log::out << " signature: "<<signature<<"\n";
+                                log::out << " " << name << "\n";
+                            }
                             break;
                         }
                         // case S_COMPILE3: {
@@ -1334,7 +1343,9 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                         case S_BUILDINFO: {
                             u32 id = *(u32*)(buffer + offset);
                             offset += 4;
-                            log::out << " "<<id <<"\n";
+                            if(!silent) {
+                                log::out << " "<<id <<"\n";
+                            }
                             break;
                         }
                         case S_GPROC32_ID: {
@@ -1358,10 +1369,11 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                             char* name = (char*)(buffer + offset);
                             int namelen = strlen(name);
                             offset += namelen + 1;
-                            log::out << " "<<name<<", ["<<proc.seg<<":"<<proc.off<<"], len "<<proc.len << ", typeindex "<<proc.typind<<"\n";
-                            log::out << " parent "<<proc.pParent<<", end "<<proc.pEnd<<", next "<<proc.pNext<<"\n";
-                            log::out << " debug start-end: "<<proc.DbgStart<<"-"<<proc.DbgEnd<<", flags "<<proc.flags<<"\n";
-
+                            if(!silent) {
+                                log::out << " "<<name<<", ["<<proc.seg<<":"<<proc.off<<"], len "<<proc.len << ", typeindex "<<proc.typind<<"\n";
+                                log::out << " parent "<<proc.pParent<<", end "<<proc.pEnd<<", next "<<proc.pNext<<"\n";
+                                log::out << " debug start-end: "<<proc.DbgStart<<"-"<<proc.DbgEnd<<", flags "<<proc.flags<<"\n";
+                            }
                             break;
                         }
                         case S_FRAMEPROC: {
@@ -1369,11 +1381,12 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                             // THIS IS BROKEN WITH FLAGS BECAUSE OF PADDING IN STRUCT
                             frame = *(FRAMEPROCSYM*)(buffer + offset);
                             offset += sizeof(FRAMEPROCSYM);
-
-                            log::out << " frame size " <<frame.cbFrame<<", pad size " << frame.cbPad << ", offset pad " << frame.offPad << "\n";
-                            log::out << " size of callee save registers " << frame.cbSaveRegs << "\n";
-                            log::out << " Address of exception handler " << frame.sectExHdlr<< ":"<<frame.offExHdlr<<"\n";
-                            log::out << " flags "<<*(u32*)&frame.flags<<"\n";
+                            if(!silent) {
+                                log::out << " frame size " <<frame.cbFrame<<", pad size " << frame.cbPad << ", offset pad " << frame.offPad << "\n";
+                                log::out << " size of callee save registers " << frame.cbSaveRegs << "\n";
+                                log::out << " Address of exception handler " << frame.sectExHdlr<< ":"<<frame.offExHdlr<<"\n";
+                                log::out << " flags "<<*(u32*)&frame.flags<<"\n";
+                            }
                             break;
                         }
                         case S_REGREL32: {
@@ -1387,7 +1400,9 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                             u32 len = strlen(name);
                             offset += len + 1;
                             // Even though I compiled with x64, it seems to use AMD64.
-                            log::out << " "<<name << ", off " << registerNames_AMD64[reg]<<"+"<< off << ", typeind " << typind << "\n";
+                            if(!silent) {    
+                                log::out << " "<<name << ", off " << registerNames_AMD64[reg]<<"+"<< off << ", typeind " << typind << "\n";
+                            }
                             // log::out << " "<<name << ", off " << registerNames_x64[reg]<<"+"<< off << ", typeind " << typind << "\n";
                             break;
                         }
@@ -1396,7 +1411,9 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                             break;
                         }
                         default: {
-                            log::out <<log::GRAY<< " (record format not implemented)\n";
+                            if(!silent) {
+                                log::out <<log::GRAY<< " (record format not implemented)\n";
+                            }
                             break;
                         }
                     }
@@ -1420,8 +1437,9 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                 offset += 4;
                 #define CV_LINES_HAVE_COLUMNS 1
                 bool hasColumns = (flags & CV_LINES_HAVE_COLUMNS);
-
-                log::out << " Header "<<segCon <<":"<<offCon << "-"<<(offCon + cbCon)<<", flags: "<<flags <<"\n";
+                if(!silent) {
+                    log::out << " Header "<<segCon <<":"<<offCon << "-"<<(offCon + cbCon)<<", flags: "<<flags <<"\n";
+                }
 
                 while(offset < nextOffset) {
                     u32 fileid = *(u32*)(buffer + offset);
@@ -1430,8 +1448,9 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                     offset += 4;
                     u32 cbFileBlock = *(u32*)(buffer + offset);
                     offset += 4;
-
-                    log::out << " fileid "<<fileid <<"\n";
+                    if(!silent) {
+                        log::out << " fileid "<<fileid <<"\n";
+                    }
 
                     CV_Line_t* lines = (CV_Line_t*)(buffer + offset);
                     offset += nLines * sizeof(CV_Line_t);
@@ -1445,11 +1464,13 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                     for(int i=0;i<nLines;i++) {
                         CV_Line_t line = lines[i];
 
-                        if(hasColumns) {
-                            log::out << "  column special? ";
-                        } else {
+                        if(!silent) {
+                            if(hasColumns) {
+                                log::out << "  column special? ";
+                            } else {
+                            }
+                            log::out << "  LN:"<<line.linenumStart<<" -> code:"<<(line.offset + offCon)<<"\n";
                         }
-                        log::out << "  LN:"<<line.linenumStart<<" -> code:"<<(line.offset + offCon)<<"\n";
                     }
                 }
 
@@ -1469,32 +1490,32 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                     offset += 1;
                     ChecksumType = *(u8*)(buffer + offset);
                     offset += 1;
-
-                    log::out << "fileid "<<fileid<<", stfile " << offstFileName << ", checksum size "<<cbChecksum<<", chktype ";
-
-                    switch(ChecksumType) {
-                        case CHKSUM_TYPE_NONE :
-                            log::out << "None";
+                    if(!silent) {
+                        log::out << "fileid "<<fileid<<", stfile " << offstFileName << ", checksum size "<<cbChecksum<<", chktype ";
+                        switch(ChecksumType) {
+                            case CHKSUM_TYPE_NONE :
+                                log::out << "None";
+                                break;
+                            case CHKSUM_TYPE_MD5 :
+                                log::out << "MD5";
+                                break;
+                            case CHKSUM_TYPE_SHA1 :
+                                log::out << "SHA1";
+                                break;
+                            case CHKSUM_TYPE_SHA_256:
+                            log::out << "SHA_256";
                             break;
-                        case CHKSUM_TYPE_MD5 :
-                            log::out << "MD5";
-                            break;
-                        case CHKSUM_TYPE_SHA1 :
-                            log::out << "SHA1";
-                            break;
-                        case CHKSUM_TYPE_SHA_256:
-                           log::out << "SHA_256";
-                           break;
-                        default:
-                            log::out << ChecksumType;
-                            break;
+                            default:
+                                log::out << ChecksumType;
+                                break;
+                        }
+                        log::out<<"\n" << " ";
+                        for(int j=0;j<cbChecksum;j++){
+                            u8 chr = *(buffer + offset + j);
+                            log::out << (char)((chr>>4) < 10 ? (chr>>4) + '0' : (chr>>4) - 10 + 'A')<< (char)((chr&0x0F) < 10 ? (chr&0x0F) + '0' : (chr&0x0F) - 10 + 'A');
+                        }
+                        log::out << "\n";
                     }
-                    log::out<<"\n" << " ";
-                    for(int j=0;j<cbChecksum;j++){
-                        u8 chr = *(buffer + offset + j);
-                        log::out << (char)((chr>>4) < 10 ? (chr>>4) + '0' : (chr>>4) - 10 + 'A')<< (char)((chr&0x0F) < 10 ? (chr&0x0F) + '0' : (chr&0x0F) - 10 + 'A');
-                    }
-                    log::out << "\n";
 
                     Assert(cbChecksum < 256);
                     offset += cbChecksum;
@@ -1509,14 +1530,17 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                 while(offset < nextOffset){
                     char* str = (char*)(buffer + offset);
                     int len = strlen(str);
-                    log::out << (offset - offsetStart) << ": "<<str << "\n";
-
+                    if(!silent) {
+                        log::out << (offset - offsetStart) << ": "<<str << "\n";
+                    }
                     offset += len + 1;
                 }
                 break;
             }
             default: {
-                log::out <<log::GRAY<< " (sub section not implemented)\n";
+                if(!silent) {
+                    log::out <<log::GRAY<< " (sub section not implemented)\n";
+                }
                 break;
             }
         }
@@ -1529,6 +1553,12 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
 }
 void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
     using namespace engone;
+    bool silent = true;
+    
+    bool console_enabled = log::out.isEnabledConsole();
+    log::out.enableConsole(silent);
+    defer { log::out.enableConsole(console_enabled); };
+    
     log::out << "Debug types["<<size<<"]:\n";
 
     // TODO: Assert if offset is more than size

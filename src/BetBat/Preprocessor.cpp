@@ -23,6 +23,9 @@ bool PreprocInfo::end(){
 Token& PreprocInfo::next(){
     return inTokens->get(index++);
 }
+void PreprocInfo::reverse() {
+    index--;
+}
 int PreprocInfo::at(){
     return index-1;
 }
@@ -528,44 +531,44 @@ SignalAttempt ParseUndef(PreprocInfo& info, bool attempt){
     return SignalAttempt::SUCCESS;
 }
 
-SignalAttempt ParseImport(PreprocInfo& info, bool attempt){
-    using namespace engone;
-    MEASURE;
-    Token token = info.get(info.at()+1);
-    SignalAttempt result = ParseDirective(info, attempt, "import");
-    if(result==SignalAttempt::BAD_ATTEMPT)
-        return SignalAttempt::BAD_ATTEMPT;
+// SignalAttempt ParseImport(PreprocInfo& info, bool attempt){
+//     using namespace engone;
+//     MEASURE;
+//     Token token = info.get(info.at()+1);
+//     SignalAttempt result = ParseDirective(info, attempt, "import");
+//     if(result==SignalAttempt::BAD_ATTEMPT)
+//         return SignalAttempt::BAD_ATTEMPT;
 
-    Token name = info.get(info.at()+1);
-    if(!(name.flags&TOKEN_MASK_QUOTED)){
-        ERR_SECTION(
-            ERR_HEAD(name)
-            ERR_MSG("expected a string not "<<name<<".")
-        )
-        return SignalAttempt::FAILURE;
-    }
-    info.next();
+//     Token name = info.get(info.at()+1);
+//     if(!(name.flags&TOKEN_MASK_QUOTED)){
+//         ERR_SECTION(
+//             ERR_HEAD(name)
+//             ERR_MSG("expected a string not "<<name<<".")
+//         )
+//         return SignalAttempt::FAILURE;
+//     }
+//     info.next();
     
-    token = info.get(info.at()+1);
-    if(Equal(token,"as")){
-        info.next();
-        token = info.get(info.at()+1);
-        if(token.flags & TOKEN_MASK_QUOTED){
-            ERR_SECTION(
-                ERR_HEAD(token)
-                ERR_MSG("Don't use quotes with "<<log::YELLOW<<"as.");
-            )
-            return SignalAttempt::FAILURE;
-        }
-        info.next();
-        // handled by PreprocessImports
-        // info.inTokens->addImport(name,token);
-    } else {
-        // info.inTokens->addImport(name,"");
-    }
+//     token = info.get(info.at()+1);
+//     if(Equal(token,"as")){
+//         info.next();
+//         token = info.get(info.at()+1);
+//         if(token.flags & TOKEN_MASK_QUOTED){
+//             ERR_SECTION(
+//                 ERR_HEAD(token)
+//                 ERR_MSG("Don't use quotes with "<<log::YELLOW<<"as.");
+//             )
+//             return SignalAttempt::FAILURE;
+//         }
+//         info.next();
+//         // handled by PreprocessImports
+//         // info.inTokens->addImport(name,token);
+//     } else {
+//         // info.inTokens->addImport(name,"");
+//     }
     
-    return SignalAttempt::SUCCESS;
-}
+//     return SignalAttempt::SUCCESS;
+// }
 SignalAttempt ParseLink(PreprocInfo& info, bool attempt){
     using namespace engone;
     MEASURE;
@@ -935,6 +938,21 @@ SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, T
         outToken = parseToken;
         outToken.str = (char*)buffer;
         outToken.length = temp.length();
+        
+        // _MLOG(log::out << "Append "<<outToken<<"\n";)
+        // info.addToken(token);
+        return SignalAttempt::SUCCESS;
+    } else if(Equal(parseToken,"date")) {
+        // info.next();
+        time_t timer;
+        time(&timer);
+        auto date = localtime(&timer);
+        
+        int len = snprintf(buffer, bufferLen, "%d.%d.%d",date->tm_mday, 1 + date->tm_mon, 1900 + date->tm_year);
+        Assert(len != 0);
+        outToken = parseToken;
+        outToken.str = (char*)buffer;
+        outToken.length = len;
         
         // _MLOG(log::out << "Append "<<outToken<<"\n";)
         // info.addToken(token);
@@ -1634,16 +1652,44 @@ SignalDefault ParseToken(PreprocInfo& info){
         Token outToken{};
         const int bufferLen = 256;
         char buffer[bufferLen]; // not ideal
-        result = ParsePredefinedMacro(info,token,outToken,buffer,bufferLen);
-        if(result==SignalAttempt::SUCCESS){
-            info.next();
-            info.next();
-            info.addToken(outToken);
-            _MLOG(log::out << "Append "<<outToken<<"\n";)
+        
+        if(Equal(token,"quote")) {
+            if(Equal(info.get(info.at() + 3), "#")) {
+                token = info.get(info.at()+4);
+                result = ParsePredefinedMacro(info,token,outToken,buffer,bufferLen);
+                if(result==SignalAttempt::SUCCESS){
+                    info.next();
+                    info.next();
+                    info.next();
+                    info.next();
+                    outToken.flags |= TOKEN_DOUBLE_QUOTED;   
+                    info.addToken(outToken);
+                    _MLOG(log::out << "Append "<<outToken<<"\n";)
+                    return SignalDefault::SUCCESS;
+                }
+            }
+            result = ParseMacro_fast(info,true);
+            if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
+            
+            info.next(); // hashtag
+            info.next(); // quote
+            token = info.next();
+            token.flags |= TOKEN_DOUBLE_QUOTED;
+            
+            _MLOG(log::out << "Append "<<token<<"\n";)
+            info.addToken(token);
             return SignalDefault::SUCCESS;
+        } else {
+            result = ParsePredefinedMacro(info,token,outToken,buffer,bufferLen);
+            if(result==SignalAttempt::SUCCESS){
+                info.next();
+                info.next();
+                info.addToken(outToken);
+                _MLOG(log::out << "Append "<<outToken<<"\n";)
+                return SignalDefault::SUCCESS;
+            }
         }
-            // }
-        // }
+        
         // if(result == SignalAttempt::BAD_ATTEMPT)
             result = ParseDefine(info,true);
         if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
@@ -1657,26 +1703,26 @@ SignalDefault ParseToken(PreprocInfo& info){
             result = ParseInclude(info,true);
         if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
         // if(result == SignalAttempt::BAD_ATTEMPT)
-            result = ParseImport(info,true);
-        if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
+        //     result = ParseImport(info,true);
+        // if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
         // if(result == SignalAttempt::BAD_ATTEMPT)
             result = ParseLink(info,true);
         if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
         
-        if(Equal(token,"quote")) {
-            // we do info.next in the function, it needs to know if we #quote or not
-            result = ParseMacro_fast(info,true);
-            if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
+        // if(Equal(token,"quote")) {
+        //     // we do info.next in the function, it needs to know if we #quote or not
+        //     result = ParseMacro_fast(info,true);
+        //     if(result!=SignalAttempt::BAD_ATTEMPT) return CastSignal(result);
             
-            info.next(); // hashtag
-            info.next(); // quote
-            Token token = info.next();
-            token.flags |= TOKEN_DOUBLE_QUOTED;
+        //     info.next(); // hashtag
+        //     info.next(); // quote
+        //     Token token = info.next();
+        //     token.flags |= TOKEN_DOUBLE_QUOTED;
             
-            _MLOG(log::out << "Append "<<token<<"\n";)
-            info.addToken(token);
-            return SignalDefault::SUCCESS;
-        }
+        //     _MLOG(log::out << "Append "<<token<<"\n";)
+        //     info.addToken(token);
+        //     return SignalDefault::SUCCESS;
+        // }
     }
 
     if(info.get(info.at()+1).flags&TOKEN_ALPHANUM)
@@ -1737,52 +1783,52 @@ TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
 
     return info.outTokens;
 }
-void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
-    using namespace engone;
-    MEASURE;
+// void PreprocessImports(CompileInfo* compileInfo, TokenStream* inTokens){
+//     using namespace engone;
+//     MEASURE;
     
-    PreprocInfo info{};
-    info.compileInfo = compileInfo;
-    info.inTokens = inTokens; // Note: don't modify inTokens
-    int savedIndex = info.index;
-    info.index = 0;
-    // info.inTokens->readHead = 0;
+//     PreprocInfo info{};
+//     info.compileInfo = compileInfo;
+//     info.inTokens = inTokens; // Note: don't modify inTokens
+//     int savedIndex = info.index;
+//     info.index = 0;
+//     // info.inTokens->readHead = 0;
 
-    while(!info.end()){
-        Token token = info.get(info.at()+1);
-        SignalAttempt result = ParseDirective(info, true, "import");
-        if(result!=SignalAttempt::SUCCESS){
-            info.next();
-            continue;
-        }
+//     while(!info.end()){
+//         Token token = info.get(info.at()+1);
+//         SignalAttempt result = ParseDirective(info, true, "import");
+//         if(result!=SignalAttempt::SUCCESS){
+//             info.next();
+//             continue;
+//         }
 
-        Token name = info.get(info.at()+1);
-        if(!(name.flags&TOKEN_MASK_QUOTED)){
-            ERR_SECTION(
-                ERR_HEAD(name)
-                ERR_MSG("expected a string not "<<name<<".")
-            )
-            continue;
-        }
-        info.next();
+//         Token name = info.get(info.at()+1);
+//         if(!(name.flags&TOKEN_MASK_QUOTED)){
+//             ERR_SECTION(
+//                 ERR_HEAD(name)
+//                 ERR_MSG("expected a string not "<<name<<".")
+//             )
+//             continue;
+//         }
+//         info.next();
         
-        token = info.get(info.at()+1);
-        if(Equal(token,"as")){
-            info.next();
-            token = info.get(info.at()+1);
-            if(token.flags & TOKEN_MASK_QUOTED){
-                ERR_SECTION(
-                    ERR_HEAD(token)
-                    ERR_MSG("Don't use quotes with "<<log::YELLOW<<"as.")
-                )
-                continue;
-            }
-            info.next();
-            info.inTokens->addImport(name,token);
-        } else {
-            info.inTokens->addImport(name,"");
-        }
-    }
-    info.index = savedIndex;
-    info.compileInfo->addStats(info.errors, info.warnings);
-}
+//         token = info.get(info.at()+1);
+//         if(Equal(token,"as")){
+//             info.next();
+//             token = info.get(info.at()+1);
+//             if(token.flags & TOKEN_MASK_QUOTED){
+//                 ERR_SECTION(
+//                     ERR_HEAD(token)
+//                     ERR_MSG("Don't use quotes with "<<log::YELLOW<<"as.")
+//                 )
+//                 continue;
+//             }
+//             info.next();
+//             info.inTokens->addImport(name,token);
+//         } else {
+//             info.inTokens->addImport(name,"");
+//         }
+//     }
+//     info.index = savedIndex;
+//     info.compileInfo->addStats(info.errors, info.warnings);
+// }

@@ -141,6 +141,7 @@ struct PreprocInfo : public PhaseContext {
     bool end();
     Token& now();
     Token& next();
+    void reverse();
     int length();
     Token& get(int index);
     // void nextline();
@@ -157,4 +158,4 @@ struct PreprocInfo : public PhaseContext {
     DynamicArray<bool> unwrappedArgs{};
 };
 TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* tokens);
-void PreprocessImports(CompileInfo* compileInfo, TokenStream* tokens);
+// void PreprocessImports(CompileInfo* compileInfo, TokenStream* tokens); deprecated

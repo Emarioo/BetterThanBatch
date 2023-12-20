@@ -3,7 +3,9 @@
 #include "Engone/PlatformLayer.h"
 // #include "Engone/Logger.h"
 
-#define MEASURE
+// #ifndef MEASURE
+// #define MEASURE
+// #endif
 
 // #include "BetBat/Util/Perf.h"
 #include "BetBat/Util/Tracker.h"
@@ -95,7 +97,7 @@ struct TinyArray {
         return _ptr;
     }
     bool _reserve(u32 newMax){
-        MEASURE
+        // MEASURE
         if(newMax==0){
             if(owner){
                 if(max!=0){
@@ -268,7 +270,7 @@ struct DynamicArray {
         return _ptr;
     }
     bool _reserve(u32 newMax){
-        MEASURE
+        // MEASURE
         if(newMax==0){
             if(max!=0){
                 for(u32 i = 0; i < used; i++){
@@ -487,7 +489,7 @@ struct QuickArray {
         return _ptr;
     }
     bool _reserve(u32 newMax){
-        MEASURE
+        // MEASURE
         if(newMax==0){
             if(max!=0){
                 // for(u32 i = 0; i < used; i++){

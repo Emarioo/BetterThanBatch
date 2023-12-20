@@ -242,25 +242,50 @@ void CompilerVersion::serialize(char* outBuffer, int bufferSize, u32 flags) {
 const char* ToString(TargetPlatform target){
     #define CASE(X,N) case X: return N;
     switch(target){
-        CASE(WINDOWS_x64,"win-x64")
-        CASE(UNIX_x64,"unix-x64")
-        CASE(BYTECODE,"bytecode")
-        default: {}
+        CASE(TARGET_WINDOWS_x64,"win-x64")
+        CASE(TARGET_UNIX_x64,"unix-x64")
+        CASE(TARGET_BYTECODE,"bytecode")
+        CASE(UNKNOWN_TARGET,"unknown-target")
     }
     return "unknown";
+    #undef CASE
+}
+TargetPlatform ToTarget(const std::string& str){
+    #define CASE(N,X) if (str==X) return N;
+    CASE(TARGET_WINDOWS_x64,"win-x64")
+    CASE(TARGET_UNIX_x64,"unix-x64")
+    CASE(TARGET_BYTECODE,"bytecode")
+    return UNKNOWN_TARGET;
     #undef CASE
 }
 engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
     return logger << ToString(target);
 }
-TargetPlatform ToTarget(const std::string& str){
-    #define CASE(N,X) if (str==X) return N;
-    CASE(WINDOWS_x64,"win-x64")
-    CASE(UNIX_x64,"unix-x64")
-    CASE(BYTECODE,"bytecode")
-    return UNKNOWN_TARGET;
+const char* ToString(LinkerChoice v) {
+    #define CASE(X,N) case X: return N;
+    switch(v){
+        CASE(LINKER_GCC,"gcc")
+        CASE(LINKER_MSVC,"msvc")
+        CASE(LINKER_CLANG,"clang")
+        CASE(UNKNOWN_LINKER,"unknown-linker")
+        default: {}
+    }
+    return "unknown";
     #undef CASE
 }
+LinkerChoice ToLinker(const std::string& str) {
+    #define CASE(N,X) if (str==X) return N;
+    CASE(LINKER_GCC,"gcc")
+    CASE(LINKER_MSVC,"msvc")
+    CASE(LINKER_CLANG,"clang")
+    CASE(UNKNOWN_LINKER,"unknown-linker")
+    return UNKNOWN_LINKER;
+    #undef CASE
+}
+engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v) {
+    return logger << ToString(v);
+}
+
 bool CompileInfo::removeRootMacro(const Token& name) {
     macroLock.lock();
     auto pair = _rootMacros.find(name);
@@ -587,7 +612,7 @@ u32 ProcessSource(void* ptr) {
     info->waitingThreads++;
     info->sourceLock.unlock();
     WHILE_TRUE {
-        MEASUREN("Process Source")
+        MEASURE_WHO("Process Source")
         // info->sourceLock.lock();
         // info->waitingThreads++;
         // // If the last thread finished and there are no sources we are done.
@@ -669,11 +694,11 @@ u32 ProcessSource(void* ptr) {
         info->addStats(tokenStream->lines, tokenStream->blankLines, tokenStream->commentCount, tokenStream->readBytes);
         // tokenStream->printData();
         
-        if (tokenStream->enabled & LAYER_PREPROCESSOR) {
+        // if (tokenStream->enabled & LAYER_PREPROCESSOR) {
             
-            _VLOG(log::out <<log::BLUE<< "Preprocess (imports): "<<BriefString(source.path.text)<<"\n";)
-            PreprocessImports(info, tokenStream);
-        }
+        //     _VLOG(log::out <<log::BLUE<< "Preprocess (imports): "<<BriefString(source.path.text)<<"\n";)
+        //     PreprocessImports(info, tokenStream);
+        // }
 
         // Assert(("can't add stream until it's completly processed, other threads would have access to it otherwise which may cause strange behaviour",false));
         // IMPORTANT: If you decide to multithread preprocessor then you need to 
@@ -834,7 +859,7 @@ u32 ProcessSource(void* ptr) {
     // info->dependencyIndex = info->streams.size()-1;
     // return 0;
     WHILE_TRUE {
-        MEASUREN("Process macro")
+        MEASURE_WHO("Process macro")
         info->sourceWaitLock.wait();
 
         // TODO: Is it possible to skip some locks and use atomic intrinsics instead?
@@ -915,6 +940,7 @@ u32 ProcessSource(void* ptr) {
 
 Bytecode* CompileSource(CompileOptions* options) {
     using namespace engone;
+    MEASURE
     
     #ifdef SINGLE_THREADED
     options->threadCount = 1;
@@ -966,7 +992,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     "#define OS_UNIX\n"
     #endif
     ;
-    essentialStructs += (options->target == BYTECODE ? "#define LINK_BYTECODE\n" : "");
+    essentialStructs += (options->target == TARGET_BYTECODE ? "#define LINK_BYTECODE\n" : "");
     TextBuffer essentialBuffer{};
     essentialBuffer.origin = "<base>";
     essentialBuffer.size = essentialStructs.size();
@@ -1194,6 +1220,8 @@ void CompileStats::printWarnings(){
 }
 bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     using namespace engone;
+    MEASURE
+    
     bool failure = false;
     #ifdef DISABLE_LINKING
     log::out << log::YELLOW << "Linker is disabled in Config.h\n";
@@ -1207,25 +1235,37 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     }
     #endif
 
-    if(options->target != BYTECODE) {
+    if(options->target != TARGET_BYTECODE) {
         #ifdef OS_WINDOWS
-        Assert(options->target == WINDOWS_x64);
+        if(options->target != TARGET_WINDOWS_x64) {
+            log::out << log::RED << "Cannot compile target '"<<ToString(options->target)<<"' on Windows\n";
+            return false;
+        }
+        if(options->target != TARGET_WINDOWS_x64) {
+            log::out << log::RED << "Cannot compile target '"<<ToString(options->target)<<"' on Windows\n";
+            return false;
+        }
+        Assert(options->target == TARGET_WINDOWS_x64);
         #else
-        Assert(options->target == UNIX_x64);
+        if(options->target != TARGET_UNIX_x64) {
+            log::out << log::RED << "Cannot compile target '"<<ToString(options->target)<<"' on Unix\n";
+            return false;
+        }
+        Assert(options->target == TARGET_UNIX_x64);
         #endif
     }
 
     if(options->outputFile.text.empty()) {
         switch (options->target) {
-            case WINDOWS_x64: {
+            case TARGET_WINDOWS_x64: {
                 options->outputFile = "bin/temp.exe";
                 break;
             }
-            case BYTECODE: {
+            case TARGET_BYTECODE: {
                 // nothing
                 break;
             }
-            case UNIX_x64: {
+            case TARGET_UNIX_x64: {
                 options->outputFile = "bin/temp";
                 break;
             }
@@ -1236,7 +1276,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     }
 
     switch(options->target){
-        case WINDOWS_x64: {
+        case TARGET_WINDOWS_x64: {
             Path& outPath = options->outputFile;
 
             options->compileStats.start_convertx64 = StartMeasure();
@@ -1271,19 +1311,23 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
                 // std::string prevCWD = GetWorkingDirectory();
                 bool outputOtherDirectory = outPath.text.find("/") != std::string::npos;
-
+                
+                Assert(options->linker == LINKER_MSVC);
                 std::string cmd = "link /nologo /INCREMENTAL:NO ";
                 if(options->useDebugInformation)
                     cmd += "/DEBUG ";
-                else cmd += "/DEBUG "; // force debug info for now
+                // else cmd += "/DEBUG "; // force debug info for now
                 cmd += objPath + " ";
                 #ifndef MINIMAL_DEBUG
-                // cmd += "bin/NativeLayer.lib ";
+                cmd += "bin/NativeLayer.lib ";
                 cmd += "uuid.lib ";
                 cmd += "shell32.lib ";
                 #endif
-                cmd += "/DEFAULTLIB:MSVCRT ";
-                // cmd += "/DEFAULTLIB:LIBCMT ";
+                // I don't know which of these we should use when. Sometimes the linker complains about 
+                // a certain default lib.
+                // cmd += "/NODEFAULTLIB:library";
+                // cmd += "/DEFAULTLIB:MSVCRT ";
+                cmd += "/DEFAULTLIB:LIBCMT ";
                 
                 for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
                     auto& dir = bytecode->linkDirectives[i];
@@ -1352,17 +1396,12 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
                             auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
 
-                            #ifdef OS_WINDOWS
                             std::string cmd = "dumpbin /nologo /DISASM:BYTES ";
                             cmd += DUMP_ASM_OBJ;
-                            #else
-                            // -M intel for intel syntax
-                            std::string cmd = "objdump -M intel -d ";
-                            cmd += DUMP_ASM_OBJ;
-                            #endif
                             
                             int exitCode = 0;
                             engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, file);
+                            Assert(("dumpbin failed",exitCode == 0));
                             // if(exitCode == 0) {
                             //     options->compileStats.generatedFiles.add(DUMP_ASM_ASM);
                             // }
@@ -1392,7 +1431,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             Program_x64::Destroy(program);
             break; 
         }
-        case UNIX_x64: {
+        case TARGET_UNIX_x64: {
             Path& outPath = options->outputFile;
 
             options->compileStats.start_convertx64 = StartMeasure();
@@ -1430,10 +1469,15 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 // bool outputOtherDirectory = outPath.text.find("/") != std::string::npos;
 
                 // link command
-                std::string cmd = "g++ ";
-                // force debug info for now
-                // if(options->useDebugInformation)
-                    // cmd += "-g ";
+                std::string cmd = "";
+                switch(options->linker) {
+                    case LINKER_GCC: cmd += "g++ "; break;
+                    case LINKER_CLANG: cmd += "clang++ "; break;
+                    default: Assert(options->linker == LINKER_GCC || options->linker == LINKER_CLANG); break;
+                }
+                
+                if(options->useDebugInformation)
+                    cmd += "-g ";
 
                 cmd += objPath + " ";
                 #ifndef MINIMAL_DEBUG
@@ -1510,7 +1554,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                             // TODO: OPTIMIZE by not opening and closing file for each debug dump
                             auto file = engone::FileOpen(DUMP_ASM_ASM, nullptr, FILE_ALWAYS_CREATE);
 
-                            std::string cmd = "objdump -d ";
+                            std::string cmd = "objdump -M intel -d ";
                             cmd += DUMP_ASM_OBJ;
                             
                             int exitCode = 0;
@@ -1548,7 +1592,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
         // If you want to save time by compiling the bytecode in advance then
         // you probably want to save even more time by compiling into machine instructions
         // instead of bytecode which runs in an interpreter.
-        // case BYTECODE: {
+        // case TARGET_BYTECODE: {
         //     return ExportBytecode(options, bytecode);
         //     break;
         // }
@@ -1561,7 +1605,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 bool ExecuteTarget(CompileOptions* options, Bytecode* bytecode) {
     using namespace engone;
     switch (options->target) {
-        case BYTECODE: {
+        case TARGET_BYTECODE: {
             Assert(bytecode);
             Interpreter interpreter{};
             interpreter.setCmdArgs(options->userArguments);
@@ -1570,10 +1614,10 @@ bool ExecuteTarget(CompileOptions* options, Bytecode* bytecode) {
             interpreter.cleanup();
             break; 
         }
-        case WINDOWS_x64: {
-            if(options->outputFile.getFormat() != "exe") {
-                log::out << log::RED << "Cannot execute '" << options->outputFile.getFileName().text <<"'. The file format must be '.exe'.\n";
-            } else {
+        case TARGET_WINDOWS_x64: {
+            // if(options->outputFile.getFormat() != "exe") {
+            //     log::out << log::RED << "Cannot execute '" << options->outputFile.getFileName().text <<"'. The file format must be '.exe'.\n";
+            // } else {
                 std::string hoho{};
                 hoho += options->outputFile.text;
                 for(auto& arg : options->userArguments){
@@ -1583,10 +1627,10 @@ bool ExecuteTarget(CompileOptions* options, Bytecode* bytecode) {
                 int exitCode = 0;
                 engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&exitCode);
                 log::out << "Exit code: "<<exitCode<<"\n";
-            }
+            // }
             break;
         }
-        case UNIX_x64: {
+        case TARGET_UNIX_x64: {
             // if(options->outputFile.getFormat() != "exe") {
             //     log::out << log::RED << "Cannot execute '" << options->outputFile.getFileName().text <<"'. The file format must be '.exe'.\n";
             // } else {

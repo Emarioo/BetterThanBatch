@@ -71,7 +71,9 @@ namespace engone {
 
 		// master report is always written to
 		void enableReport(bool yes = true);
+		bool isEnabledReport();
 		void enableConsole(bool yes = true);
+		bool isEnabledConsole();
 		// individual for each thread
 		void setMasterColor(log::Color color);
 		// all threads write to this report
@@ -126,7 +128,7 @@ namespace engone {
 		Logger& operator<<(const rp3d::Quaternion& value);
 #endif
 
-		void print(char* str, int length);
+		void print(char* str, int length, bool no_warning = false);
 		
 		Logger& TIME();
 

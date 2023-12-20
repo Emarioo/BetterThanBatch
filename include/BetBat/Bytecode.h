@@ -412,12 +412,16 @@ struct Bytecode {
     QuickArray<char> rawInlineAssembly;
     QuickArray<u8> rawInstructions; // modified when passed converter
     struct ASM {
-        u32 start; // points to raw inline assembly
-        u32 end; // exclusive
-        u32 iStart=0; // points to raw instructions
-        u32 iEnd=0; // exclusive
+        u32 start = 0; // points to raw inline assembly
+        u32 end = 0; // exclusive
+        u32 iStart = 0; // points to raw instructions
+        u32 iEnd = 0; // exclusive
+        
+        u32 lineStart = 0;
+        u32 lineEnd = 0;
+        std::string file;
     };
-    QuickArray<ASM> asmInstances;
+    DynamicArray<ASM> asmInstances;
     // NativeRegistry* nativeRegistry = nullptr;
 
     struct ExternalRelocation {
