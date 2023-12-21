@@ -546,12 +546,25 @@ void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer,
         log::out.print(inBuffer.data() + startIndex, len, true);
     }
 }
+/*
+bin/inline_asm.asm: Assembler messages:
+bin/inline_asm.asm:3: Error: no such instruction: `eae'
+bin/inline_asm.asm:5: Error: no such instruction: `hoiho eax,9'
+
+*/
 void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuffer, int line_offset) {
     using namespace engone;
     // Assert(!outBuffer); // not implemented
     
     int startIndex = 0;
     int endIndex = 0;
+    struct ASMError {
+        std::string file;
+        int line;
+        std::string message;
+    };
+    DynamicArray<ASMError> errors{};
+    
     #ifdef OS_WINDOWS
      // Skip heading
     int index = 0;
@@ -566,13 +579,7 @@ void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuff
             break;
     }
     
-    struct ASMError {
-        std::string file;
-        int line;
-        std::string message;
-    };
     
-    DynamicArray<ASMError> errors{};
     
     // NOTE: We assume that each line is an error. As far as I have seen, this seems to be the case.
     ASMError asmError{};
@@ -619,29 +626,73 @@ void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuff
             asmError.message += chr;
         }
     }
+    #else
+     // Skip heading
+    int index = 0;
+    int lineCount = 0;
+    while(index < inBuffer.size()) {
+        char chr = inBuffer[index];
+        index++;
+        if(chr == '\n') {
+            lineCount++;   
+        }
+        if(lineCount == 1)
+            break;
+    }
+    
+    // NOTE: We assume that each line is an error. As far as I have seen, this seems to be the case.
+    ASMError asmError{};
+    bool parseFileAndLine = true;
+    bool parseFindFinalColon = false;
+    int startOfFile = 0;
+    int endOfFile = 0; // exclusive
+    int startOfLineNumber = 0; // index where we suspect it to be
+    int endOfLineNumber = 0; // exclusive
+    while(index < inBuffer.size()) {
+        char chr = inBuffer[index];
+        index++;
+        
+        if(chr == '\n' || inBuffer.size() == index) {
+            Assert(!parseFileAndLine);
+            errors.add(asmError);
+            asmError = {};
+            parseFileAndLine = true;
+            startOfFile = index;
+            continue;
+        }
+        
+        if(parseFileAndLine) {
+            if(chr == ':') {
+                if(!parseFindFinalColon) {
+                    endOfFile = index - 1;
+                    startOfLineNumber = index;
+                    parseFindFinalColon = true;
+                } else {
+                    parseFindFinalColon = false;
+                    endOfLineNumber = index-1;
+                    // parse number
+                    char* str = inBuffer.data() + startOfLineNumber;
+                    inBuffer[endOfLineNumber] = 0;
+                    asmError.line = atoi(str);
+                    
+                    asmError.file.resize(endOfFile - startOfFile);
+                    memcpy((char*)asmError.file.data(), inBuffer.data() + startOfFile, endOfFile - startOfFile);
+                    
+                    parseFileAndLine = false;
+                    continue;
+                }
+            }
+            endOfFile = index;
+        } else { // parse message
+            asmError.message += chr;
+        }
+    }
+    #endif
     
     FOR(errors) {
         log::out << log::RED << asmInstance.file << ":" << (asmInstance.lineStart-1 + it.line + line_offset);
         log::out << log::NO_COLOR << it.message << "\n";
     }
-    #else
-    Assert(("TODO: Implement assembler error reformatting for Unix",false));
-    // // Skip heading
-    // int index = 0;
-    // int lineCount = 0;
-    // while(index < inBuffer.size()) {
-    //     char chr = inBuffer[index];
-    //     index++;
-    //     if(chr == '\n') {
-    //         lineCount++;   
-    //     }
-    //     if(lineCount == 6)
-    //         break;
-    // }
-    // startIndex = index;
-    // index = 0;
-    // endIndex = inBuffer.size();
-    #endif
 }
 u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool allowRX = false){
     u8 size = DECODE_REG_SIZE(bcreg);
@@ -1964,7 +2015,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                                 case BC_REG_RDI: regField = 7;  break;
                                 // TODO: r8, r9, ...
                             }
-                            Assert(regField!=-1);
+                            Assert(regField!=(u8)-1);
 
                             prog->add(PREFIX_REXW);
                             prog->add((u8)(OPCODE_MOV_REG_IMM_RD_IO | regField));

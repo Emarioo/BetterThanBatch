@@ -1,6 +1,5 @@
 // @macro-benchmark
 // #import "OS"
-// #import "Logger"
 // #import "Basic"
 // #import "String"
 // #import "Math"
@@ -18,20 +17,107 @@
 
 // #import "Array"
 
+// #import "Thread"
+// #import "OS"
 
-#quote #date
+// #define l0(a0) a0
+// #define l1(a1) l0(a1)
+// #define l2(a2) l1(a2)
 
-// fn @native printc(v: char);
-// fn @native prints(v: char[]);
+// l2(yes)
 
-// struct i128 {
-//     x: i64;
-//     y: i64;
+
+// #define c 1 2 3 4 5 6
+
+// #import "out" as cool
+
+// cool::hey()
+// hey()
+
+// #define l2(a2) l1(a2)
+
+// #define l0(a0,...) a0
+// #define l1(...) l0(...)
+
+// a l2(9)
+// a l1(1,2)
+
+// HELLO, THOUGH BUG HERE FIX IT NOW (preprocessor bug)
+
+#define A1 3
+#define A2 3 4
+#define A3 3 4 5
+
+#define k0(X,...) X.. k0(...)
+a k0(#unwrap A1)
+
+// #import "Logger"
+
+// #define base(x,y,F) if(flags & F) { x - y }
+// #define log(x,y) base(x,y, LOG_TYPE)
+// #define ENTER yoo, hi
+// log(ENTER,AND SO I)
+
+
+// #define k1(...) [ k0(...) ]
+
+// #define k2(a,b) k1(A,a,b,B)
+
+// #define print(...) { print_inner(...) }
+// #define print_inner(X,...) _print(X); print_inner(...)
+
+// // #define clear() print("\033[H\033[J")
+// #define gotoxy(x,y) print("\033[",(x),";",(y),"H")
+
+// gotoxy(0,0)
+// print("Hello")
+// print("Sup")
+
+// struct ThreadContext {
+//     sum: i32;
+//     running: bool = false;
+//     thread: Thread;
 // }
-// operator |(a: i128, b: i128) -> i128 {
-//     return i128{a.x|b.x, a.y|b.y};
+// contexts: ThreadContext[4];
+
+// #define ADD(I) contexts.ptr[I].running=true; contexts.ptr[I].thread = ThreadCreate(ThreadWork, &contexts.ptr[I]);
+// ADD(0)
+// #undef ADD
+
+// i = 0;
+// running_any = false;
+// while true {
+//     if i == 0 {
+//         running_any = false;
+//     }
+//     if contexts.ptr[i].running {
+//         running_any = true;
+//         print("T",i,": ", contexts.ptr[i].sum,"\r");
+//         NativeSleep(0.1);
+//     }
+        
+//     i = (i + 1) % cast<i32>contexts.len;
+//     if i == 0 && !running_any {
+//         break;
+//     }
 // }
 
-// flag0 = i128{5,8}
-// flag1 = i128{3,9}
-// result = i128{5,8} | i128{3,9}
+// for @ptr contexts {
+//     ThreadJoin(it.thread);
+// }
+// log("Finished")
+// for @ptr contexts {
+//     log(" T",nr,":", contexts.ptr[nr].sum);
+// }
+
+
+
+// fn @unixcall ThreadWork(param: ThreadContext*) -> void* {
+//     for 0..1000000000 {
+//         param.sum++;
+//     }
+//     // param.sum += 5;
+//     // log("T done: ",param.thread.id);
+//     param.running = false;
+//     return null;
+// }

@@ -534,6 +534,9 @@ TokenStream* TokenStream::copy(){
     return 0;
 }
 void TokenStream::finalizePointers(){
+    if(tokens.used == 0) // nothing to finalize
+        return;
+        
     Assert(!isFinialized());
     // TODO: Used buckets for tokenData so that this step isn't necessary
     //   for the string pointers. tokenIndex and tokenStream is till
@@ -1261,7 +1264,13 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                 int originalIndex = index;
                 bool readingQuote = false;
                 bool readingPath = false;
+                bool readingAs = false;
+                bool readingAsName = false;
                 int startOfPath = 0;
+                int endOfPath = 0;
+                int startOfAsName = 0;
+                int endOfAsName = 0;
+                int prev_import_count = outStream->importList.size();
                 while(index < length) {
                     char prevChr = 0;
                     char nextChr = 0;
@@ -1281,14 +1290,82 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                         column=1;
                     }
                     
-                    if(readingPath) {
-                        if(chr == '"') {
+                    if(readingAsName) {
+                        if(startOfAsName == 0) { // the name after as can never be at 0, we can therefore use it for another meaning
+                            if(chr == ' ' || chr== '\t') {
+                                // whitespace is okay
+                            } else if(chr == '\n') {
+                                const char* str = text + startOfPath;
+                                char prev = text[endOfPath];
+                                text[endOfPath] = '\0';
+                                outStream->addImport(str,"");
+                                text[endOfPath] = prev;
+                                break;
+                            } else {
+                                if(((chr|32) >= 'a' && (chr|32) <= 'z') || chr == '_') {
+                                    startOfAsName = index-1;
+                                } else {
+                                    Assert(("bad as name, fix proper error",false));
+                                    break;  
+                                }
+                            }
+                        } else {
+                            if(((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' && chr <= '9') || chr == '_') {
+                                // continue parsing
+                            } else {
+                                // We are finally done
+                                const char* str = text + startOfPath;
+                                char prev = text[endOfPath];
+                                text[endOfPath] = '\0';
+                                
+                                endOfAsName = index-1;
+                                const char* str_as = text + startOfAsName;
+                                char prev2 = text[endOfAsName];
+                                text[endOfAsName] = '\0';
+                                
+                                outStream->addImport(str,str_as);
+                                text[endOfPath] = prev;
+                                text[endOfAsName] = prev2;
+                                break;
+                            }
+                        }
+                    } else if (readingAs) {
+                        if(chr == 'a') {
+                            if(nextChr == 's') {
+                                index++;
+                                readingAsName = true;
+                                readingAs = false;
+                                continue;
+                            }
                             const char* str = text + startOfPath;
-                            char prev = text[index-1];
-                            text[index-1] = '\0';
+                            char prev = text[endOfPath];
+                            text[endOfPath] = '\0';
                             outStream->addImport(str,"");
-                            text[index-1] = prev;
+                            text[endOfPath] = prev;
                             break;
+                        } else if(chr == ' ' || chr== '\t') {
+                            // whitespace is okay
+                        } else if(chr == '\n') {
+                            const char* str = text + startOfPath;
+                            char prev = text[endOfPath];
+                            text[endOfPath] = '\0';
+                            outStream->addImport(str,"");
+                            text[endOfPath] = prev;
+                            break;
+                        }
+                    } else if(readingPath) {
+                        if(chr == '"') {
+                            endOfPath = index - 1;
+                            readingAs = true;
+                            readingPath = false;
+                            if(index == length) {
+                                const char* str = text + startOfPath;
+                                char prev = text[endOfPath];
+                                text[endOfPath] = '\0';
+                                outStream->addImport(str,"");
+                                text[endOfPath] = prev;
+                                break;
+                            }
                         }
                         if(chr == '\n') {
                             // TODO: Print error
@@ -1320,7 +1397,7 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                         continue;// skip \r and process \n next time
                     }
                 }
-                if(!readingPath) {
+                if(prev_import_count == outStream->importList.size()) {
                     // revert reading
                     index = originalIndex;
                 } else {

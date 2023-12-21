@@ -15,9 +15,12 @@
 #define TOKEN_SUFFIX_LINE_FEED 0x1
 // SPACE suffic is remove if LINE_FEED is present in mask/flag 
 #define TOKEN_SUFFIX_SPACE 0x2
+#define TOKEN_MASK_SUFFIX 0x3
+
 #define TOKEN_DOUBLE_QUOTED 0x4
 #define TOKEN_SINGLE_QUOTED 0x8
 #define TOKEN_MASK_QUOTED 0x0C
+
 #define TOKEN_ALPHANUM 0x10 // token has only characters for names like a-Z 0-9 _ NOTE THAT A QUOTED STRING IS NOT ALPHANUM, its quoted
 #define TOKEN_NUMERIC 0x20 // token consists of numbers maybe hex or decimal
 
@@ -200,7 +203,8 @@ struct TokenStream {
 
     void finalizePointers();
     bool isFinialized(){
-        if(tokens.used==0) return false;
+        if(tokens.used==0)
+            return true;
         return (u64)((Token*)tokens.data)->str >= (u64)tokenData.data;
     }
 

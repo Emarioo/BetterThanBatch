@@ -41,7 +41,7 @@ namespace engone {
 		std::string dir;
 		DIR* dirIter = nullptr;
 		// HANDLE handle;
-		DynamicArray<std::string> directories;
+		DynamicArray<std::string> directories{};
 		char* tempPtr = nullptr; // used in result
 		u32 max = 0; // not including \0
 	};
@@ -127,7 +127,7 @@ namespace engone {
 			// if(info->second.dir == ".")
 			// 	filepath_len = snprintf(filepath, sizeof(filepath), "%s", entry->d_name);
 			// else
-				filepath_len = snprintf(filepath, sizeof(filepath), "%s/%s", info->second.dir.c_str(), entry->d_name);
+            filepath_len = snprintf(filepath, sizeof(filepath), "%s/%s", info->second.dir.c_str(), entry->d_name);
 
 			int err = stat(filepath, &statBuffer);
 			if(err == -1) {
@@ -215,7 +215,7 @@ namespace engone {
 			info->second.dirIter = nullptr;
 		}
 		if(info->second.tempPtr) {
-			Free(info->second.tempPtr, info->second.max);
+			Free(info->second.tempPtr, info->second.max + 1);
 			info->second.tempPtr = nullptr;
 			info->second.max = 0;
 		}

@@ -1,0 +1,22 @@
+@TEST-CASE variadic_macro
+
+#define l0(a0,...) a0
+#define l1(...) l0(...)
+#define l2(a2) l1(a2)
+l2(9) // should produce 9  (a bug at one point produced a2)
+l1(1,2) // should produce 1 (a bug at one point produced 1,2)
+
+#define k0(X,...) X.. k0(...)
+k0(0,1) // produces 0.. 1..
+
+#define AA 3
+#define AB 3 4
+l2(#unwrap AA)
+l1(#unwrap AB)
+
+
+
+#define base(x,y,F) if(flags & F) { x - y }
+#define log(x,y) base(x,y, LOG_TYPE)
+#define ENTER yoo, hi
+log(ENTER,other) // should produce   if(flags & LOG_TYPE) { yoo, hi - other }

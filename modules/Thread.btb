@@ -1,0 +1,80 @@
+/*
+    Standard API for threads
+    
+    IMPORTANT: THREADS ARE NOT SUPPORTED IN THE INTERPRETER! yet?
+*/
+
+/*
+    PUBLIC INTERFACE
+*/
+struct Thread {
+    os_handle: u64 = 0;
+    id: u64 = 0;
+}
+#define ThreadId u64
+// func should be fn @unixcall/@stdcall (void*) -> void*
+fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
+    // TODO: Handle error
+    thread: Thread;
+    #ifdef OS_WINDOWS
+        threadId: u32 = 0;
+        thread.os_handle = cast_unsafe<u64>CreateThread(null, 0, func, param, null, &threadId);
+        thread.id = threadId;
+    #else
+        threadId: u32 = 0;
+        temp: pthread_t;
+        err = pthread_create(&temp, null, func, param);
+        thread.os_handle = cast_unsafe<u64>temp;
+        thread.id = cast_unsafe<u64>temp;
+    #endif
+    return thread;
+}
+fn ThreadDestroy(thread: Thread) {
+    // TODO: Handle error
+    #ifdef OS_WINDOWS
+        CloseHandle(thread.os_handle);
+    #else
+        ThreadJoin(thread); // temporary
+    #endif
+}
+fn ThreadJoin(thread: Thread) {
+    // TODO: Handle error
+    #ifdef OS_WINDOWS
+        WaitForSingleObject(thread.os_handle, 0xFFFFFFFF); // 0xFFFFFFFF wait indefinitely
+    #else
+        // Assert(sizeof(pthread) == sizeof(thread.os_handle));
+        err = pthread_join(cast_unsafe<pthread_t>thread.os_handle, cast_unsafe<void**>null);
+    #endif
+}
+fn ThreadSelfId() -> ThreadId {
+    #ifdef OS_WINDOWS
+        return cast_unsafe<u64>pthread_self();
+    #else
+        return GetCurrentThreadId();
+    #endif
+}
+
+/*
+    OS SPECIFIC
+*/
+#ifdef OS_WINDOWS
+    fn @dllimport CreateThread(
+    /* [in, optional]  LPSECURITY_ATTRIBUTES   */ lpThreadAttributes: void*,
+    /* [in]            SIZE_T                  */ dwStackSize: u64,
+    /* [in]            LPTHREAD_START_ROUTINE  */ lpStartAddress: fn_ref, // fn (void*) -> i32
+    /* [in, optional]  __drv_aliasesMem LPVOID */ lpParameter: void*,
+    /* [in]            DWORD                   */ dwCreationFlags: void*,
+    /* [out, optional] LPDWORD                 */ lpThreadId: u32*
+    ) -> void* /* HANDLE */;
+    fn @dllimport CloseHandle(handle: void*) -> bool;
+    fn @dllimport WaitForSingleObject(handle: void*, ms: u32) -> u32;
+    fn @dllimport GetCurrentThreadId() -> u32;
+    fn @dllimport GetLastError() -> u32;
+#else
+    struct pthread_t {
+        _data: u64;
+    }
+    fn @import @unixcall pthread_create(thread: pthread_t*, attr: void*, start_routine: fn_ref, arg: void*) -> i32;
+    fn @import @unixcall pthread_join(thread: pthread_t, retval: void**) -> i32;
+    fn @import @unixcall pthread_self() -> pthread_t;
+#endif

@@ -11,11 +11,11 @@
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION("Type checker, ", CONTENT)
 
-#ifdef TC_LOG
-#define _TC_LOG_ENTER(X) X
-// #define _TC_LOG_ENTER(X)
+#ifdef TCLOG
+#define _TCLOG_ENTER(X) X
+// #define _TCLOG_ENTER(X)
 #else
-#define _TC_LOG_ENTER(X)
+#define _TCLOG_ENTER(X)
 #endif
 
 SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, TinyArray<TypeId>* outTypes, bool attempt);
@@ -24,13 +24,13 @@ SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     Assert(scope);
     MEASURE;
-    _TC_LOG_ENTER(FUNC_ENTER)
+    _TCLOG_ENTER(FUNC_ENTER)
 
     SignalDefault error = SignalDefault::SUCCESS;
     for(auto aenum : scope->enums){
         TypeInfo* typeInfo = info.ast->createType(aenum->name, scope->scopeId);
         if(typeInfo){
-            _TC_LOG(log::out << "Defined enum "<<info.ast->typeToString(typeInfo->id)<<"\n";)
+            _TCLOG(log::out << "Defined enum "<<info.ast->typeToString(typeInfo->id)<<"\n";)
             typeInfo->_size = 4; // i32
             typeInfo->astEnum = aenum;
         } else {
@@ -74,7 +74,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const Toke
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);
 SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
     using namespace engone;
-    _TC_LOG_ENTER(FUNC_ENTER)
+    _TCLOG_ENTER(FUNC_ENTER)
     int offset=0;
     int alignedSize=0; // offset will be aligned to match this at the end
 
@@ -101,7 +101,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
 
     TINY_ARRAY(TypeId, tempTypes, 4)
     bool success = true;
-    _TC_LOG(log::out << "Check struct impl "<<info.ast->typeToString(structInfo->id)<<"\n";)
+    _TCLOG(log::out << "Check struct impl "<<info.ast->typeToString(structInfo->id)<<"\n";)
     //-- Check members
     for (int i = 0;i<(int)astStruct->members.size();i++) {
         auto& member = astStruct->members[i];
@@ -140,7 +140,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
                 continue; // continue when failing
             }
         }
-        _TC_LOG(log::out << " checked member["<<i<<"] "<<info.ast->typeToString(tid)<<"\n";)
+        _TCLOG(log::out << " checked member["<<i<<"] "<<info.ast->typeToString(tid)<<"\n";)
     }
     if(!success){
         return SignalDefault::FAILURE;
@@ -249,7 +249,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
         i32 size = info.ast->getTypeSize(mem.typeId);
         _VLOG(log::out << " "<<mem.offset<<": "<<name<<" ("<<size<<" bytes)\n";)
     }
-    // _TC_LOG(log::out << info.ast->typeToString << " was evaluated to "<<offset<<" bytes\n";)
+    // _TCLOG(log::out << info.ast->typeToString << " was evaluated to "<<offset<<" bytes\n";)
     // }
     if(success)
         return SignalDefault::SUCCESS;
@@ -259,7 +259,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const Toke
     using namespace engone;
     Assert(typeString.isString());
     // if(!typeString.isString()) {
-    //     _TC_LOG(log::out << "check type typeid wasn't string type\n";)
+    //     _TCLOG(log::out << "check type typeid wasn't string type\n";)
     //     return typeString;
     // }
     Token token = info.ast->getTokenFromTypeString(typeString);
@@ -268,8 +268,8 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const Toke
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError){
     using namespace engone;
     MEASURE;
-    _TC_LOG_ENTER(FUNC_ENTER)
-    _TC_LOG(log::out << "check "<<typeString<<"\n";)
+    _TCLOG_ENTER(FUNC_ENTER)
+    _TCLOG(log::out << "check "<<typeString<<"\n";)
 
     TypeId typeId = {};
 
@@ -377,7 +377,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             ERR_MSG(__FUNCTION__ <<": structImpl for type "<<typeString << " failed.")
         )
     } else {
-        _TC_LOG(log::out << typeString << " was evaluated to "<<typeInfo->structImpl->size<<" bytes\n";)
+        _TCLOG(log::out << typeString << " was evaluated to "<<typeInfo->structImpl->size<<" bytes\n";)
     }
     TypeId outId = typeInfo->id;
     outId.setPointerLevel(plevel);
@@ -386,7 +386,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
 SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
     using namespace engone;
     MEASURE;
-    _TC_LOG_ENTER(FUNC_ENTER)
+    _TCLOG_ENTER(FUNC_ENTER)
     //-- complete structs
 
     for(auto it : scope->namespaces) {
@@ -413,7 +413,7 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
                 // We don't care about another turn. We failed but we don't set
                 // completedStructs to false since this will always fail.
             } else {
-                _TC_LOG(log::out << "Created struct type "<<info.ast->typeToString(structInfo->id)<<" in scope "<<scope->scopeId<<"\n";)
+                _TCLOG(log::out << "Created struct type "<<info.ast->typeToString(structInfo->id)<<" in scope "<<scope->scopeId<<"\n";)
                 astStruct->state = ASTStruct::TYPE_CREATED;
                 structInfo->astStruct = astStruct;
                 for(int i=0;i<(int)astStruct->polyArgs.size();i++){
@@ -441,7 +441,7 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
                     astStruct->state = ASTStruct::TYPE_CREATED;
                     info.completedStructs = false;
                 } else {
-                    // _TC_LOG(log::out << astStruct->name << " was evaluated to "<<astStruct->baseImpl.size<<" bytes\n";)
+                    // _TCLOG(log::out << astStruct->name << " was evaluated to "<<astStruct->baseImpl.size<<" bytes\n";)
                 }
             }
             if(yes){
@@ -1174,7 +1174,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
     using namespace engone;
     MEASURE;
     Assert(expr);
-    _TC_LOG_ENTER(FUNC_ENTER)
+    _TCLOG_ENTER(FUNC_ENTER)
     
     defer {
         if(outTypes && outTypes->size()==0){
@@ -1351,10 +1351,15 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 } else if(iden->type == Identifier::FUNCTION) {
                     if(iden->funcOverloads.overloads.size() == 1) {
                         auto overload = &iden->funcOverloads.overloads[0];
-                        if(overload->astFunc->callConvention != CallConventions::STDCALL) {
+                        CallConventions expected_convention = CallConventions::UNIXCALL;
+                        if(info.compileInfo->compileOptions->target == TARGET_WINDOWS_x64)
+                            expected_convention = CallConventions::STDCALL;
+                        if(info.compileInfo->compileOptions->target == TARGET_UNIX_x64)
+                            expected_convention = CallConventions::UNIXCALL;
+                        if (overload->astFunc->callConvention != expected_convention) {
                             ERR_SECTION(
                                 ERR_HEAD(expr->tokenRange)
-                                ERR_MSG("You can only take a reference from functions that use stdcall (calling convention). The system for function pointers is a temporary solution and can't support anything else. But it exists at least; making threads possible.")
+                                ERR_MSG("You can only take a reference from functions that use "<<ToString(expected_convention)<<" (calling convention). The system for function pointers is a temporary solution and can't support anything else. But it exists at least; making threads possible.")
                                 ERR_LINE(expr->tokenRange, "function must use stdcall")
                             )
                             if(outTypes) outTypes->add(AST_VOID);
@@ -1644,7 +1649,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope);
 SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, TinyArray<TypeId>* outTypes){
     using namespace engone;
     MEASURE;
-    _TC_LOG_ENTER(FUNC_ENTER)
+    _TCLOG_ENTER(FUNC_ENTER)
 
     Assert(funcImpl->polyArgs.size() == func->polyArgs.size());
     for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
@@ -1674,7 +1679,7 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncIm
         }
     };
 
-    _TC_LOG(log::out << "FUNC IMPL "<< funcImpl->name<<"\n";)
+    _TCLOG(log::out << "FUNC IMPL "<< funcImpl->name<<"\n";)
 
     // TODO: parentStruct argument may not be necessary since this function only calculates
     //  offsets of arguments and return values.
@@ -1845,7 +1850,7 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncIm
 // Checks if an existing overload would collide with the new overload.
 SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope){
     using namespace engone;
-    _TC_LOG_ENTER(FUNC_ENTER)
+    _TCLOG_ENTER(FUNC_ENTER)
     
     // log::out << "CheckFunction "<<function->name<<"\n";
     if(parentStruct){
@@ -1867,7 +1872,7 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
     for(int i=0;i<(int)function->polyArgs.size();i++){
         auto& arg = function->polyArgs[i];
         arg.virtualType = info.ast->createType(arg.name, function->scopeId);
-        // _TC_LOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
+        // _TCLOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
         // arg.virtualType->id = AST_POLY;
     }
     // defer {
@@ -1876,7 +1881,7 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
     //         arg.virtualType->id = {};
     //     }
     // };
-    // _TC_LOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
+    // _TCLOG(log::out << "Method/function has polymorphic properties: "<<function->name<<"\n";)
     FnOverloads* fnOverloads = nullptr;
     Identifier* iden = nullptr;
     if(parentStruct){
@@ -2026,7 +2031,7 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
                 //     // checkImpl.scope = scope;
                 //     info.checkImpls.add(checkImpl);
                 // }
-                _TC_LOG(log::out << "ADD OVERLOAD ";funcImpl->print(info.ast, function);log::out<<"\n";)
+                _TCLOG(log::out << "ADD OVERLOAD ";funcImpl->print(info.ast, function);log::out<<"\n";)
             }
         }
     } else {
@@ -2041,7 +2046,7 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
 SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
-    _TC_LOG_ENTER(FUNC_ENTER)
+    _TCLOG_ENTER(FUNC_ENTER)
     Assert(scope||info.errors!=0);
     if(!scope) return SignalDefault::FAILURE;
 
@@ -2122,7 +2127,7 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
 
 SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
     using namespace engone;
-    _TC_LOG(FUNC_ENTER) // if(func->body->nativeCode)
+    _TCLOG(FUNC_ENTER) // if(func->body->nativeCode)
     //     return true;
 
     funcImpl->polyVersion = func->polyVersionCount++; // New poly version
@@ -2161,11 +2166,11 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
     // This shouldn't be necessary since variables are added once in the new
     // system and will remain to the end.
     // DynamicArray<std::string> vars;
-    _TC_LOG(log::out << "arg:\n";)
+    _TCLOG(log::out << "arg:\n";)
     for (int i=0;i<(int)func->arguments.size();i++) {
         auto& arg = func->arguments[i];
         auto& argImpl = funcImpl->argumentTypes[i];
-        _TC_LOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
+        _TCLOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
         // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
         auto varinfo = info.ast->identifierToVariable(arg.identifier);
         if(varinfo){
@@ -2174,11 +2179,11 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
             // vars.add(std::string(arg.name));
         }   
     }
-    // _TC_LOG(log::out << "ret:\n";)
+    // _TCLOG(log::out << "ret:\n";)
     // for (int i=0;i<(int)func->returnValues.size();i++) {
     //     auto& ret = func->returnValues[i];
     //     auto& retImpl = funcImpl->returnTypes[i];
-    //     _TC_LOG(log::out << " [" <<i <<"] : "<< info.ast->typeToString(retImpl.typeId) <<"\n";)
+    //     _TCLOG(log::out << " [" <<i <<"] : "<< info.ast->typeToString(retImpl.typeId) <<"\n";)
     //     // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
     //     // auto varinfo = info.ast->identifierToVariable(arg.identifier);
     //     // if(varinfo){
@@ -2192,7 +2197,7 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
             auto iden = func->memberIdentifiers[i];
             if(!iden) continue; // happens if an argument has the same name as the member. If so the arg is prioritised and the member ignored.
             auto& memImpl = funcImpl->structImpl->members[i];
-            _TC_LOG(log::out << " " << iden->name<<": "<< info.ast->typeToString(memImpl.typeId) <<"\n";)
+            _TCLOG(log::out << " " << iden->name<<": "<< info.ast->typeToString(memImpl.typeId) <<"\n";)
             // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
             auto varinfo = info.ast->identifierToVariable(iden);
             if(varinfo){
@@ -2202,7 +2207,7 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
             }   
         }
     }
-    _TC_LOG(log::out << "\n";)
+    _TCLOG(log::out << "\n";)
 
     CheckRest(info, func->body);
     
@@ -2215,7 +2220,7 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
 SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
-    _TC_LOG_ENTER(FUNC_ENTER)
+    _TCLOG_ENTER(FUNC_ENTER)
 
     // Hello me in the future!
     //  I have disrespectfully left a complex and troublesome problem to you.
@@ -2344,7 +2349,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 }
                 // don't return here, we can still evaluate some things
             }
-            _TC_LOG(log::out << "assign ";)
+            _TCLOG(log::out << "assign ";)
             for (int vi=0;vi<(int)now->varnames.size();vi++) {
                 auto& varname = now->varnames[vi];
                 // possible implicit type
@@ -2376,7 +2381,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     }
                 }
                 // TODO: Do you need to do something about global data here?
-                _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
+                _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
                 if(!varname.identifier) {
                     varname.identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
                 }
@@ -2502,7 +2507,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     }
                 }
             }
-            _TC_LOG(log::out << "\n";)
+            _TCLOG(log::out << "\n";)
         } else if(now->type == ASTStatement::WHILE){
             SignalAttempt result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
             SignalDefault result = CheckRest(info, now->firstBody);
@@ -2542,7 +2547,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     //     )
                     // }
 
-                    // _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
+                    // _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
                     // if(varinfo_item){
                         auto memdata = iterinfo->getMember("ptr");
                         auto itemtype = memdata.typeId;
@@ -2591,7 +2596,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         //     )
                         // }
 
-                        // _TC_LOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
+                        // _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.assignType) <<"\n";)
                         // auto varinfo_item = info.ast->addVariable(varScope, varnameIt.name, contentOrder, &varnameIt.identifier);
                         // if(varinfo_item){
                         varnameIt.versions_assignType[info.currentPolyVersion] = inttype;

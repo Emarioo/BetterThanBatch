@@ -87,6 +87,9 @@ struct Env {
     int callIndex=0;
     int ownsCall=-1; // env will pop the call when popped
 
+    int arg_start = 0;
+    int arg_end = 0;
+
     bool firstTime=true;
     bool unwrapOutput=false;
     int outputToCall=-1; // index of call
@@ -97,9 +100,10 @@ struct Env {
 struct MacroCall {
     RootMacro* rootMacro = nullptr;
     CertainMacro* certainMacro = nullptr;
-    DynamicArray<TokenSpan> argumentRanges{}; // input to current range
+    DynamicArray<TokenSpan> inputArgumentRanges{}; // fetched arguments for the macro call, the input arguments to the macro call
+    int realArgumentCount = 0; // inputArguments may contain ... which doesn't tell you how many actual arguments are there
     bool unwrapped=false;
-    bool useDetailedArgs=false;
+    bool useDetailedArgs=false; // caused by #unwrap
     DynamicArray<DynamicArray<const Token*>> detailedArguments{};
 };
 struct CompileInfo;

@@ -1,3 +1,0 @@
- Assembling: sa.s
-sa.s(5) : error A2081:missing operand after unary operator
-sa.s(10) : error A2006:undefined symbol : hak

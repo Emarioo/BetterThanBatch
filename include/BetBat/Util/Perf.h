@@ -96,7 +96,15 @@ extern engone::Mutex scopeStatLock;
 extern engone::TLSIndex measureParentTLSIndex;
 
 struct MeasureScope {
-    MeasureScope(const char* str, u32 id) : fname(str), statId(id), startPoint(__rdtsc()), outsideCycles(0)
+    const char* fname;
+    // volatile long statId;
+    volatile long outsideCycles;
+    // volatile long long startPoint;
+    u32 statId;
+    // u32 outsideCycles;
+    u64 startPoint;
+    MeasureScope* parent;
+    MeasureScope(const char* str, u32 id) : fname(str), outsideCycles(0), statId(id), startPoint(__rdtsc())
         // ,parent((MeasureScope*)engone::Thread::GetTLSValue(measureParentTLSIndex))
         // ,parent(parentMeasureScope)
     {
@@ -151,14 +159,6 @@ struct MeasureScope {
         engone::Thread::SetTLSValue(measureParentTLSIndex,parent);
         // parentMeasureScope = parent;
     }
-    const char* fname;
-    // volatile long statId;
-    volatile long outsideCycles;
-    // volatile long long startPoint;
-    u32 statId;
-    // u32 outsideCycles;
-    u64 startPoint;
-    MeasureScope* parent;
 };
 enum PrintFilters : u32 {
     NO_FILTER = 0,

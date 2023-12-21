@@ -1517,7 +1517,7 @@ void DeconstructDebugSymbols(u8* buffer, u32 size) {
                         log::out << "\n";
                     }
 
-                    Assert(cbChecksum < 256);
+                    // Assert(cbChecksum < 256);
                     offset += cbChecksum;
 
                     // align for next record

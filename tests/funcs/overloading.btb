@@ -45,3 +45,5 @@ operator [](slice: Slice<char>, index: i64) -> i32 {
 }
 str = "Hello";
 test 'H'; str[0];
+
+// str[2] = 'S'; // Not possible at the moment, how do we make it possible?

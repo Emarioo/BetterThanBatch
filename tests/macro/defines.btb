@@ -2,7 +2,7 @@
     
 */
 
-@TEST-CASE paranthesis_depth
+@TEST-CASE parenthesis_depth
 
 #define add(x,y) x + y
 add(fun(me), 2)

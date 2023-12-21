@@ -193,7 +193,11 @@ namespace engone {
 				extraBuffer[9]=']';
 				extraBuffer[10]=' ';
 				_GetClock(extraBuffer+1);
-				sprintf(extraBuffer+11,"[Thread %llu] ",Thread::GetThisThreadId());
+                #ifdef OS_WINDOWS
+				sprintf(extraBuffer+11,"[Thread %lu] ",(u64)Thread::GetThisThreadId());
+                #else
+				sprintf(extraBuffer+11,"[Thread %lu] ",(u64)Thread::GetThisThreadId());
+                #endif
 			}
 			if(!m_masterReportPath.empty()){
 				std::string path = m_rootDirectory+"/"+m_masterReportPath;

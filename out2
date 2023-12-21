@@ -1,37 +1,51 @@
-
-bin/dev.o:     file format elf64-x86-64
-
-
-Disassembly of section .text:
-
-0000000000000000 <main>:
-   0:	ff f5                	push   %rbp
-   2:	48 8b ec             	mov    %rsp,%rbp
-   5:	48 81 ec 08 00 00 00 	sub    $0x8,%rsp
-   c:	48 33 c0             	xor    %rax,%rax
-   f:	ff f0                	push   %rax
-  11:	48 33 c0             	xor    %rax,%rax
-  14:	ff f0                	push   %rax
-  16:	8f c0                	pop    %rax
-  18:	89 45 f8             	mov    %eax,-0x8(%rbp)
-  1b:	48 33 c0             	xor    %rax,%rax
-  1e:	8f c0                	pop    %rax
-  20:	88 45 fc             	mov    %al,-0x4(%rbp)
-  23:	48 c7 c3 f8 ff ff ff 	mov    $0xfffffffffffffff8,%rbx
-  2a:	48 01 eb             	add    %rbp,%rbx
-  2d:	8b 03                	mov    (%rbx),%eax
-  2f:	ff f0                	push   %rax
-  31:	48 c7 c3 f8 ff ff ff 	mov    $0xfffffffffffffff8,%rbx
-  38:	48 01 eb             	add    %rbp,%rbx
-  3b:	c7 c0 04 00 00 00    	mov    $0x4,%eax
-  41:	48 01 c3             	add    %rax,%rbx
-  44:	48 33 c0             	xor    %rax,%rax
-  47:	8a 03                	mov    (%rbx),%al
-  49:	8f c1                	pop    %rcx
-  4b:	0f be c0             	movsbl %al,%eax
-  4e:	01 c1                	add    %eax,%ecx
-  50:	8b c1                	mov    %ecx,%eax
-  52:	c7 c0 05 00 00 00    	mov    $0x5,%eax
-  58:	48 81 c4 08 00 00 00 	add    $0x8,%rsp
-  5f:	8f c5                	pop    %rbp
-  61:	c3                   	ret    
+[0m[DEVMODE]
+[0m[1;32m#define 'OS_UNIX' 0 tokens
+[0m[0mloaded 1 arg names
+[0m[1;32m#define 'l0' 1 arg, 1 token
+[0m[0mloaded 1 arg names
+[0m[1;32m#define 'l1' 1 arg, 4 tokens
+[0m[0mloaded 2 arg names
+[0m[1;32m#define 'l2' 2 args, 5 tokens
+[0m[0mFetch args:
+[0m[0m arg[0] yes
+[0m[0m arg[1] cool
+[0m[0mCertainMacro 2
+[0m[0mEnv[0] callref: l2, own: l2
+[0m[0mMacro l1
+[0m[0mFetch args:
+[0m[0m arg[0] X Y
+[0m[0mCertainMacro 1
+[0m[0mEnv[1] callref: l1, own: l1
+[0m[0mMacro l0
+[0m[0mFetch args:
+[0m[0m arg[0] X
+[0m[0mCertainMacro 1
+[0m[0mEnv[2] callref: l0, own: l0
+[0m[0mParam X Inf[0-1]
+[0m[0mEnv[3] callref: l1, own: -1
+[0m[0mParam X Inf[0-1]
+[0m[0mEnv[4] callref: l2, own: -1
+[0m[0mParam X Inf[0-1]
+[0m[0mEnv[5] callref: -1, own: -1
+[0m[0m output yes
+[0m[0mEnv[5] pop -1
+[0m[0mEnv[4] callref: l2, own: -1
+[0m[0mParam Y Inf[1-2]
+[0m[0mEnv[5] callref: -1, own: -1
+[0m[0m output cool
+[0m[0mEnv[5] pop -1
+[0m[0mEnv[4] pop l2
+[0m[0mEnv[3] pop l1
+[0m[0mEnv[2] pop l0
+[0m[0mEnv[1] pop l1
+[0m[0mEnv[0] pop l2
+[0m[1;30m./src/BetBat/TypeChecker.cpp:1388
+[0m[1;31m/home/emarioo/BetterThanBatch/examples/dev.btb:27:1 (Type checker, E1002): [0m[0m'yes' is not declared.
+[0m[0m27 | [0m[0;36myes [0m[0mcool
+[0m[0;36m     ^~~ undeclared
+[0m[1;30m./src/BetBat/TypeChecker.cpp:1388
+[0m[1;31m/home/emarioo/BetterThanBatch/examples/dev.btb:27:1 (Type checker, E1002): [0m[0m'cool' is not declared.
+[0m[0m27 | yes [0m[0;36mcool
+[0m[0;36m         ^~~~ undeclared
+[0m[0;31mCompiler failed with 2 error(s) (4.03 ms, 7 line(s), 1.74 K lines/s)
+[0m

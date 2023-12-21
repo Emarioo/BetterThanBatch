@@ -60,6 +60,8 @@ bool streq(const char* a, const char* b) {
 int main(int argc, const char** argv){
     using namespace engone;
     
+    // log::out << "a "<< sizeof(pthread_t)<<"\n";
+    
     // struct Bug {
     //     u32 line=0;
     //     u32 column=0;
@@ -283,6 +285,15 @@ int main(int argc, const char** argv){
             log::out << log::RED << "You must specify a file when using --preproc\n";
         } else {
             auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
+            
+            // TODO: Don't skip imports.
+            log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
+            log::out << log::GRAY << "Imports: ";
+            for(int i=0;i<stream->importList.size();i++) {
+                if(i!=0) log::out << ", ";
+                log::out << stream->importList[i].name;
+            }
+            log::out<<"\n";
             if(!stream) {
                 log::out << log::RED << "Cannot read file '"<< compileOptions.sourceFile.text<<"'\n";
             } else {

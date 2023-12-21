@@ -461,7 +461,7 @@ RootMacro* CompileInfo::matchMacro(const Token& name){
     if(pair != _rootMacros.end()){
         ptr = pair->second;
     }
-    _MLOG(MLOG_MATCH(engone::log::out << engone::log::CYAN << "match root "<<name<<"\n";))
+    _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<"\n")
     macroLock.unlock();
     
     return ptr;
@@ -578,11 +578,11 @@ CertainMacro* CompileInfo::matchArgCount(RootMacro* rootMacro, int count, bool i
     if(pair==rootMacro->certainMacros.end()){
         if(includeInf && rootMacro->hasVariadic && (int)rootMacro->variadicMacro.parameters.size()-1<=count) {
             macro = &rootMacro->variadicMacro;
-            _MLOG(MLOG_MATCH(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< rootMacro->variadicMacro.parameters.size()<<" (inf)\n";))
+            _MMLOG(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< rootMacro->variadicMacro.parameters.size()<<" (inf)\n")
         }
     }else{
         macro = pair->second;
-        _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< macro->parameters.size()<<"\n";))
+        _MMLOG(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< macro->parameters.size()<<"\n")
     }
     // Assert(((u64)macro & 0xFF000000000000) == 0);
     macroLock.unlock();
@@ -677,7 +677,7 @@ u32 ProcessSource(void* ptr) {
             tokenStream = TokenStream::Tokenize(source.path.text);
         }
         if(!tokenStream){
-            log::out << log::RED << "Failed tokenization: " << BriefString(source.path.text) <<"\n";
+            log::out << log::RED << "Failed tokenization: " << BriefString(source.path.text) <<" (probably not found)\n";
             info->compileOptions->compileStats.errors++;
             
             info->sourceLock.lock();
@@ -988,7 +988,8 @@ Bytecode* CompileSource(CompileOptions* options) {
     "}\n"
     #ifdef OS_WINDOWS
     "#define OS_WINDOWS\n"
-    #elif defined(OS_UNIX)
+    #else
+    // #elif defined(OS_UNIX)
     "#define OS_UNIX\n"
     #endif
     ;

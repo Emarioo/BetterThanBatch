@@ -11,6 +11,8 @@
 #     echo Set PATH: $PATH
 # fi
 
+# clear
+
 echo -ne "Compiling...\r"
 startTime=$(($(date +%s%N)))
 
@@ -24,9 +26,14 @@ echo "Compiled in $((($runtime) / 1000)).$((($endTime - $startTime) % 1000)) sec
 
 if [ "$err" = 0 ]; then
     # cp bin/btb btb
-    ./bin/btb -dev
-    # ./bin/btb -p examples/dev.btb
-    # ./bin/btb -r ma.btb
+    if [ $# = 0 ]; then
+        ./bin/btb -dev
+        # ./bin/btb -ss dev.btb 
+        # ./bin/btb -p examples/dev.btb
+        # ./bin/btb -r ma.btb
+    else
+        ./bin/btb $@
+    fi
 fi 
 
 exit

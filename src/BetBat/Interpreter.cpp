@@ -127,7 +127,7 @@ void Interpreter::moveMemory(u8 reg, volatile void* from, volatile void* to){
         
     // _ILOG(log::out << (*(i64*)to)<<"\n";)
 }
-void PrintPointer(void* ptr){
+void PrintPointer(volatile void* ptr){
     u64 v = (u64)ptr;
     engone::log::out << "0x";
     bool zeros = true;

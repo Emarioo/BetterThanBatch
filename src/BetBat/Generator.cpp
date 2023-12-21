@@ -3421,14 +3421,14 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         //     )
         //     continue;
         // }
-        if(function->callConvention == UNIXCALL) {
-            ERR_SECTION(
-                ERR_HEAD(function->tokenRange)
-                ERR_MSG("Unix calling convention is not implemented for user defined functions. You can however declare functions with unix convention and call them if they come from an external library.")
-                ERR_LINE(function->tokenRange,"unixcall not implemented")
-            )
-            continue;
-        }
+        // if(function->callConvention == UNIXCALL) {
+        //     ERR_SECTION(
+        //         ERR_HEAD(function->tokenRange)
+        //         ERR_MSG("Unix calling convention is not implemented for user defined functions. You can however declare functions with unix convention and call them if they come from an external library.")
+        //         ERR_LINE(function->tokenRange,"unixcall not implemented")
+        //     )
+        //     continue;
+        // }
         // Assert(("Unix calling convention not implemented for user defined functions.",false));
 
         // Assert(!info.compileInfo->compileOptions->useDebugInformation);
@@ -3594,7 +3594,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     if(size>8) {
                         ERR_SECTION(
                             ERR_HEAD(arg.name)
-                            ERR_MSG("STDCALL does not allow arguments larger than 8 bytes. Pass by pointer if arguments are larger.")
+                            ERR_MSG(ToString(function->callConvention) << " does not allow arguments larger than 8 bytes. Pass by pointer if arguments are larger.")
                             ERR_LINE(arg.name, "bad")
                         )
                     }
@@ -3607,7 +3607,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 }
                 _GLOG(log::out << "\n";)
             }
-            // Fix member variables for stdcall.
+            // todo: Member variables for stdcall.
             Assert(!function->parentStruct);
             
             // HELLO READ THIS!
@@ -3624,10 +3624,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             info.addPush(BC_REG_FP);
             info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
 
-            if (funcImpl->returnTypes.size() > 2) {
+            if (funcImpl->returnTypes.size() > 1) {
                 ERR_SECTION(
                     ERR_HEAD(function->tokenRange)
-                    ERR_MSG("STDCALL only allows one return value. BETCALL (the default calling convention in this language) supports multiple return values.")
+                    ERR_MSG(ToString(function->callConvention) << " only allows one return value. BETCALL (the default calling convention in this language) supports multiple return values.")
                     ERR_LINE(function->tokenRange, "bad")
                 )
             }
@@ -3676,7 +3676,153 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
         } else if(function->callConvention == UNIXCALL) {
-            Assert(false);
+            if (function->arguments.size() != 0) {
+                _GLOG(log::out << "set " << function->arguments.size() << " args\n");
+                // int offset = 0;
+                for (int i = 0; i < (int)function->arguments.size(); i++) {
+                    // for(int i = function->arguments.size()-1;i>=0;i--){
+                    auto &arg = function->arguments[i];
+                    auto &argImpl = funcImpl->argumentTypes[i];
+                    Assert(arg.identifier); // bug in compiler?
+                    auto varinfo = info.ast->identifierToVariable(arg.identifier);
+                    // auto varinfo = info.ast->addVariable(info.currentScopeId, arg.name);
+                    if (!varinfo) {
+                        ERR_SECTION(
+                            ERR_HEAD(arg.name.range())
+                            ERR_MSG(arg.name << " is already defined.")
+                            ERR_LINE(arg.name.range(),"cannot use again")
+                        )
+                    }
+                    // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
+                    u8 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
+                    if(size>8) {
+                        ERR_SECTION(
+                            ERR_HEAD(arg.name)
+                            ERR_MSG(ToString(function->callConvention) << " does not allow arguments larger than 8 bytes. Pass by pointer if arguments are larger.")
+                            ERR_LINE(arg.name, "bad")
+                        )
+                    }
+                    // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
+                    // stdcall should put first 4 args in registers but the function will put
+                    // the arguments onto the stack automatically so in the end 8*i will work fine.
+                    varinfo->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + 8 * i;
+                    _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
+                    DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
+                }
+                _GLOG(log::out << "\n";)
+            }
+            // Fix member variables for stdcall.
+            Assert(!function->parentStruct);
+            
+            // HELLO READ THIS!
+            // Before changing this code to make the caller make space for return values instead of
+            // the calle, you have to realise that the return values must have the same offset everytime
+            // you call the function. Meaning, return values must be aligned to 8 bytes even if they are
+            // 4 byte integers. If not then the function will put the return values in the wrong place.
+            // 4-6 days later...
+            // Since stack management (push and pop) always work on 8 bytes, this won't be a problem anymore
+            // Caller can make space for return values. The return values should be made poppable.
+
+            // x64's call instruction does ignores the base pointer (frame pointer).
+            // The interpreter does can do either.
+            info.addPush(BC_REG_FP);
+            info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
+
+            if (funcImpl->returnTypes.size() > 1) {
+                ERR_SECTION(
+                    ERR_HEAD(function->tokenRange)
+                    ERR_MSG(ToString(function->callConvention) << " only allows one return value. BETCALL (the default calling convention in this language) supports multiple return values.")
+                    ERR_LINE(function->tokenRange, "bad")
+                )
+            }
+            if(astStruct){
+                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
+                    auto& arg = astStruct->polyArgs[i];
+                    arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
+                }
+            }
+            for(int i=0;i<(int)function->polyArgs.size();i++){
+                auto& arg = function->polyArgs[i];
+                arg.virtualType->id = funcImpl->polyArgs[i];
+            }
+
+            auto& argTypes = funcImpl->argumentTypes;
+            const int normal_regs[6]{
+                BC_REG_RDI,
+                BC_REG_RSI,
+                BC_REG_RDX,
+                BC_REG_RCX,
+                BC_REG_R8,
+                BC_REG_R9,
+            };
+            const int float_regs[8] {
+                BC_REG_XMM0f,
+                BC_REG_XMM1f,
+                BC_REG_XMM2f,
+                BC_REG_XMM3f,
+                BC_REG_XMM4f,
+                BC_REG_XMM5f,
+                BC_REG_XMM6f,
+                BC_REG_XMM7f,
+            };
+            int used_normals = 0;
+            int used_floats = 0;
+            // Because we need to pop arguments in reverse, we must first know how many
+            // integer/pointer and float type arguments we have.
+            for(int i=argTypes.size()-1;i>=0;i--) {
+                if(AST::IsDecimal(argTypes[i].typeId)) {
+                    used_floats++;
+                } else {
+                    used_normals++;
+                }
+            }
+            // NOTE: We don't need to reverse, the order we put the args on the stack doesn't matter.
+            //   They will be placed in the right location no matter what.
+            //   Code was copied from GenerateFncall which is why the loop is reversed.
+            for(int i=argTypes.size()-1;i>=0;i--) {
+                u8 size = info.ast->getTypeSize(argTypes[i].typeId);
+                if(AST::IsDecimal(argTypes[i].typeId)) {
+                    // I am not sure if doubles work so we should test and not assume.
+                    // This assert will prevent incorrect assumptions from causing trouble.
+                    Assert(argTypes[i].typeId == AST_FLOAT32);
+                     info.addInstruction({BC_MOV_RM_DISP32, (u8)float_regs[--used_floats], BC_REG_FP, size});\
+                } else {
+                    info.addInstruction({BC_MOV_RM_DISP32, (u8)normal_regs[--used_normals], BC_REG_FP, size});\
+                }
+                info.addImm(GenInfo::FRAME_SIZE + i * 8);
+            }
+            // #define MOV_ARG(I,R,R2) u8 size = info.ast->getTypeSize(argTypes[I].typeId); if(argTypes[I].typeId == AST_FLOAT32) backslash
+            //         info.addInstruction({BC_MOV_RM_DISP32, R2, BC_REG_FP, size});backslash
+            //     else backslash
+            //         info.addInstruction({BC_MOV_RM_DISP32, R, BC_REG_FP, size});backslash
+            //     info.addImm(GenInfo::FRAME_SIZE + I * 8); 
+                    
+            // if(argTypes.size() > 3){
+            //     // MOV_ARG(3, BC_REG_R9, BC_REG_XMM3)
+            //     MOV_ARG(3, (ENCODE_REG_BITS(BC_R9, SIZE_TO_BITS(size))), BC_REG_XMM3f)
+            // }
+            // if(argTypes.size() > 2){
+            //     // MOV_ARG(2, BC_REG_R8, BC_REG_XMM2)
+            //     MOV_ARG(2, (ENCODE_REG_BITS(BC_R8, SIZE_TO_BITS(size))), BC_REG_XMM2f)
+            // }
+            // if(argTypes.size() > 1){
+            //     MOV_ARG(1, (ENCODE_REG_BITS(BC_DX, SIZE_TO_BITS(size))), BC_REG_XMM1f)
+            // }
+            // // BC_REG
+            // if(argTypes.size() > 0){
+            //     MOV_ARG(0, (ENCODE_REG_BITS(BC_CX, SIZE_TO_BITS(size))), BC_REG_XMM0f)
+            //     // MOV_ARG(0, BC_REG_RCX, BC_REG_XMM0)
+            // }
+
+            // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES
+            // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
+            // ALSO DO IT BEFORE CALLING FUNCTION (FNCALL)
+            //
+            // TODO: GenerateBody may be called multiple times for the same body with
+            //  polymorphic functions. This is a problem since GenerateBody generates functions.
+            //  Generating them multiple times for each function is bad.
+            // NOTE: virtualTypes from this function may be accessed from a function within it's body.
+            //  This could be bad.
         } else {
             Assert(false);
         }
@@ -3740,8 +3886,51 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     arg.virtualType->id = {}; // disable types
                 }
             }
+            Assert(funcImpl->returnTypes.size() < 2);
+            // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
+            if (funcImpl->returnTypes.size() != 0) {
+                // check last statement for a return and "exit" early
+                bool foundReturn = function->body->statements.size()>0
+                    && function->body->statements.get(function->body->statements.size()-1)
+                    ->type == ASTStatement::RETURN;
+                // TODO: A return statement might be okay in an inner scope and not necessarily the
+                //  top scope. If else for example.
+                if(!foundReturn){
+                    for(auto it : function->body->statements){
+                        if (it->type == ASTStatement::RETURN) {
+                            foundReturn = true;
+                            break;
+                        }
+                    }
+                    if (!foundReturn) {
+                        ERR_SECTION(
+                            ERR_HEAD(function->tokenRange)
+                            ERR_MSG("Missing return statement in '" << function->name << "'.")
+                            ERR_LINE(function->tokenRange,"put a return in the body")
+                        )
+                    }
+                }
+            }
+            if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
+                // add return if it doesn't exist
+                info.addInstruction({BC_BXOR, BC_REG_RAX, BC_REG_RAX, BC_REG_RAX});
+                info.addPop(BC_REG_FP);
+                info.addInstruction({BC_RET});
+            }
+        } else if(function->callConvention == UNIXCALL) {
+            for(int i=0;i<(int)function->polyArgs.size();i++){
+                auto& arg = function->polyArgs[i];
+                arg.virtualType->id = {}; // disable types
+            }
+            if(astStruct){
+                for(int i=0;i<(int)astStruct->polyArgs.size();i++){
+                    auto& arg = astStruct->polyArgs[i];
+                    arg.virtualType->id = {}; // disable types
+                }
+            }
 
             // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
+            Assert(funcImpl->returnTypes.size() < 2);
             if (funcImpl->returnTypes.size() != 0) {
                 // check last statement for a return and "exit" early
                 bool foundReturn = function->body->statements.size()>0
@@ -3978,20 +4167,20 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         int arrayFrameOffset = 0;
                         {
                             TypeInfo *typeInfo = info.ast->getTypeInfo(varinfo->versions_typeId[info.currentPolyVersion].baseType());
-                            TypeId innerType = typeInfo->structImpl->polyArgs[0];
-                            if(!innerType.isValid())
+                            TypeId elementType = typeInfo->structImpl->polyArgs[0];
+                            if(!elementType.isValid())
                                 continue; // error message should have been printed in type checker
-                            i32 size2 = info.ast->getTypeSize(innerType);
-                            // i32 asize2 = info.ast->getTypeAlignedSize(innerType);
-                            int arraySize = size2 * varname.arrayLength;
+                            i32 elementSize = info.ast->getTypeSize(elementType);
+                            // i32 asize2 = info.ast->getTypeAlignedSize(elementType);
+                            int arraySize = elementSize * varname.arrayLength;
                             
                             // Assert(size2 * varname.arrayLength <= pow(2,16)/2);
                             if(arraySize > pow(2,16)/2) {
                                 // std::string msg = std::to_string(size2) + " * "+ std::to_string(varname.arrayLength) +" = "+std::to_string(arraySize);
                                 ERR_SECTION(
                                     ERR_HEAD(statement->tokenRange)
-                                    ERR_MSG((int)(pow(2,16)/2) << " is the maximum size of arrays on the stack. "<<(arraySize)<<" was used which exceeds that. The limit comes from the instruction BC_INCR which uses a signed 16-bit integer.")
-                                    ERR_LINE(statement->tokenRange, size2 << " * " << std::to_string(varname.arrayLength) << " = " << std::to_string(arraySize))
+                                    ERR_MSG((int)(pow(2,16)/2-1) << " is the maximum size of arrays on the stack. "<<(arraySize)<<" was used which exceeds that. The limit comes from the instruction BC_INCR which uses a signed 16-bit integer.")
+                                    ERR_LINE(statement->tokenRange, elementSize << " * " << std::to_string(varname.arrayLength) << " = " << std::to_string(arraySize))
                                 )
                                 continue;
                             }
@@ -4013,6 +4202,13 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             info.addLoadIm(BC_REG_RDX,arraySize);
                             info.addInstruction({BC_MEMZERO, BC_REG_SP, BC_REG_RDX});
                             #endif
+                            
+                            // TODO: Annotation to disable this
+                            for(int j = 0;j<varname.arrayLength;j++) {
+                                SignalDefault result = GenerateDefaultValue(info, BC_REG_FP, arrayFrameOffset + elementSize * j, elementType);
+                                if(result!=SignalDefault::SUCCESS)
+                                    return SignalDefault::FAILURE;
+                            }
                         }
                         // data type may be zero if it wasn't specified during initial assignment
                         // a = 9  <-  implicit / explicit  ->  a : i32 = 9
@@ -4833,7 +5029,37 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             }
 
             //-- Evaluate return values
-            if (info.currentFunction->callConvention == STDCALL) {
+            if(info.currentFunction->callConvention == BETCALL){
+                for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
+                    ASTExpression *expr = statement->arrayValues.get(argi);
+                    // nextExpr = nextExpr->next;
+                    // argi++;
+
+                    TypeId dtype = {};
+                    SignalDefault result = GenerateExpression(info, expr, &dtype);
+                    if (result != SignalDefault::SUCCESS) {
+                        continue;
+                    }
+                    if (argi < (int)info.currentFuncImpl->returnTypes.size()) {
+                        // auto a = info.ast->typeToString(dtype);
+                        // auto b = info.ast->typeToString(info.currentFuncImpl->returnTypes[argi].typeId);
+                        auto& retType = info.currentFuncImpl->returnTypes[argi];
+                        if (!PerformSafeCast(info, dtype, retType.typeId)) {
+                            // if(info.currentFunction->returnTypes[argi]!=dtype){
+                            ERRTYPE1(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)");
+                            
+                            GeneratePop(info, 0, 0, dtype);
+                        } else {
+                            GeneratePop(info, BC_REG_FP, retType.offset - info.currentFuncImpl->returnSize, retType.typeId);
+                        }
+                    } else {
+                        // error here which has been printed somewhere
+                        // but we should throw away values on stack so that
+                        // we don't become desyncrhonized.
+                        GeneratePop(info, 0, 0, dtype);
+                    }
+                }
+            } else if (info.currentFunction->callConvention == STDCALL) {
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
                     ASTExpression *expr = statement->arrayValues.get(argi);
                     // nextExpr = nextExpr->next;
@@ -4868,7 +5094,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 if(statement->arrayValues.size()==0){
                     info.addInstruction({BC_BXOR, BC_REG_RAX,BC_REG_RAX,BC_REG_RAX});
                 }
-            } else if(info.currentFunction->callConvention == BETCALL){
+            } else if (info.currentFunction->callConvention == UNIXCALL) {
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
                     ASTExpression *expr = statement->arrayValues.get(argi);
                     // nextExpr = nextExpr->next;
@@ -4885,18 +5111,23 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         auto& retType = info.currentFuncImpl->returnTypes[argi];
                         if (!PerformSafeCast(info, dtype, retType.typeId)) {
                             // if(info.currentFunction->returnTypes[argi]!=dtype){
+
                             ERRTYPE1(expr->tokenRange, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)");
-                            
-                            GeneratePop(info, 0, 0, dtype);
+
+                            GeneratePop(info, 0, 0, dtype); // throw away value to prevent cascading bugs
+                        }
+                        u8 size = info.ast->getTypeSize(retType.typeId);
+                        if(size<=8){
+                            info.addPop(BC_REG_RAX);
                         } else {
-                            GeneratePop(info, BC_REG_FP, retType.offset - info.currentFuncImpl->returnSize, retType.typeId);
+                            GeneratePop(info, 0, 0, retType.typeId); // throw away value to prevent cascading bugs
                         }
                     } else {
-                        // error here which has been printed somewhere
-                        // but we should throw away values on stack so that
-                        // we don't become desyncrhonized.
-                        GeneratePop(info, 0, 0, dtype);
+                        GeneratePop(info, 0, 0, dtype); // throw away value to prevent cascading bugs
                     }
+                }
+                if(statement->arrayValues.size()==0){
+                    info.addInstruction({BC_BXOR, BC_REG_RAX,BC_REG_RAX,BC_REG_RAX});
                 }
             } else {
                 INCOMPLETE

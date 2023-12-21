@@ -21,14 +21,15 @@ fn @native printd(str: f32);
     if the language took that name from you.
 */
 
-#define log(X, ...) _print(X); _print(' '); log(...)
-#define log(X) _print(X); _print('\n')
+#define log(...) { log_inner(...) }
+#define log_inner(X, ...) _print(X); _print(' '); log_inner(...)
+#define log_inner(X) _print(X); _print('\n')
 
 // macros does not travel across imports yet ):
 // Now they do haha!
-#define print(X,...) _print(X); print(...);
-#define print()
-#define println(...) print(...); _print("\n");
+#define println(...) { print_inner(...) _print("\n"); }
+#define print(...) { print_inner(...) }
+#define print_inner(X,...) _print(X); print_inner(...)
 
 // IMPORTANT: SAFE_CONVERSIONS in x64_Converter must be defined for this function to work properly.
 //  There will be some unexpected bits otherwise.

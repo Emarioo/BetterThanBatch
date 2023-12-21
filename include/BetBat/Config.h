@@ -14,9 +14,15 @@
 #define OS_NAME "<os-none>"
 #endif
 
-/* ###############
+#include "Engone/Asserts.h"
+
+/*
+###############
    Major config
-############### */
+#################
+
+Try to edit Config.cpp instead of this file because you will have to compile all headers and translation units otherwise.
+*/
 
 #define COMPILER_VERSION "0.2.0/unix-2023.12.20"
 
@@ -35,7 +41,7 @@
 // #define RUN_TEST_SUITE
 // #define RUN_TESTS "tests/simple/garb.btb"
 
-// #define DEBUG
+#define DEBUG
 
 // PDB should be used if not defined
 #define USE_DWARF_AS_DEBUG
@@ -70,11 +76,7 @@
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
 
-#define PREPROC_REC_LIMIT 100
-// You could enforce hashtag (replace macro with hashtag)
-// Hashtag will always be used. @ is taken, $ feels wrong, # makes you feel at home.
-#define PREPROC_TERM "#"
-
+#define PREPROC_REC_LIMIT 30
 
 // THESE SHOULD BE OFF FOR THE COMPILER TO WORK PROPERLY
 // #define DISABLE_BASE_IMPORT
@@ -112,119 +114,61 @@
 // newly tokenized includes in preprocessor
 // #define LOG_INCLUDES
 
-
-// #define MLOG_MATCH(X) X
-// #define MLOG_MATCH(X)
 // #define MLOG
 // #define PLOG
 // type checker
-// #define TC_LOG
-#define GLOG
+// #define TCLOG
+// #define GLOG
 // #define ILOGf
 // #define ILOG_REGS
 // x64 converter
 // #define CLOG
-
 // #define OLOG
-// #define USE_DEBUG_INFO
 #endif
 
 /*
    Don't touch these
 */
 
-#ifdef PLOG
-#define USE_DEBUG_INFO
-#endif
-
-#ifdef ILOG
-#ifndef USE_DEBUG_INFO
-#define USE_DEBUG_INFO
-#endif
-#endif
-
-#define LOG_TOKENIZER 1
-#define LOG_PREPROCESSOR 2
-#define LOG_PARSER 4
-#define LOG_GENERATOR 4
-#define LOG_OPTIMIZER 8
-#define LOG_INTERPRETER 16
-#define LOG_OVERVIEW 64
-#define LOG_ANY -1
-
-void SetLog(int type, bool active);
-bool GetLog(int type);
-
 #define INCOMPLETE Assert(("Incomplete",false));
 
-#ifdef TLOG
-#define _TLOG(x) x
-// #elif defined(DEBUG)
-// #define _TLOG(x) if(GetLog(LOG_TOKENIZER)){x}
-#else
-#define _TLOG(x)
-#endif
+enum LoggingSection : u32 {
+    LOG_TOKENIZER       = 0x1,
+    LOG_PREPROCESSOR    = 0x2,
+    LOG_PARSER          = 0x4,
+    LOG_TYPECHECKER     = 0x8,
+    LOG_GENERATOR       = 0x10,
+    LOG_OPTIMIZER       = 0x20,
+    LOG_CONVERTER       = 0x40,
+    LOG_INTERPRETER     = 0x80,
+    LOG_OVERVIEW        = 0x100,
+    LOG_MACRO_MATCH     = 0x200,
+};
+extern LoggingSection global_loggingSection;
 
-#ifdef MLOG
-#define _MLOG(x) x
-// #elif defined(DEBUG)
-// #define _MLOG(x) if(GetLog(LOG_PREPROCESSOR)){x}
-#else
-#define _MLOG(x)
-#endif
+#ifdef DEBUG
+#define _BASE_LOG(F,...) { if(global_loggingSection & F) { __VA_ARGS__; } }
+#define _TLOG(x)    _BASE_LOG(LOG_TOKENIZER,x)
+#define _MLOG(x)    _BASE_LOG(LOG_PREPROCESSOR,x)
+#define _PLOG(x)    _BASE_LOG(LOG_PARSER,x)
+#define _TCLOG(x)   _BASE_LOG(LOG_TYPECHECKER,x)
+#define _GLOG(x)    _BASE_LOG(LOG_GENERATOR,x)
+#define _OLOG(x)    _BASE_LOG(LOG_OPTIMIZER,x)
+#define _CLOG(x)    _BASE_LOG(LOG_CONVERTER,x)
+#define _ILOG(x)    _BASE_LOG(LOG_INTERPRETER,x)
+#define _VLOG(x)    _BASE_LOG(LOG_OVERVIEW,x)
 
-#ifdef PLOG
-#define _PLOG(x) x
-// #elif defined(DEBUG)
-// #define _PLOG(x) if(GetLog(LOG_PARSER)){x}
+#define _MMLOG(x)   _BASE_LOG(LOG_MACRO_MATCH,x)
 #else
-#define _PLOG(x)
-#endif
+#define _TLOG(x) 
+#define _MLOG(x) 
+#define _PLOG(x) 
+#define _TCLOG(x)
+#define _GLOG(x) 
+#define _OLOG(x) 
+#define _CLOG(x) 
+#define _ILOG(x) 
+#define _VLOG(x) 
 
-#ifdef TC_LOG
-#define _TC_LOG(x) x
-// #elif defined(DEBUG)
-// #define _TC_LOG(x) if(GetLog()){x;}
-#else
-#define _TC_LOG(x)
-#endif
-
-#ifdef GLOG
-#define _GLOG(x) x
-// #elif defined(DEBUG)
-// #define _GLOG(x) if(GetLog(LOG_INTERPRETER)){x;}
-#else
-#define _GLOG(x)
-#endif
-
-#ifdef OLOG
-#define _OLOG(x) x
-// #elif defined(DEBUG)
-// #define _OLOG(x) if(GetLog(LOG_OPTIMIZER)){x;}
-#else
-#define _OLOG(x)
-#endif
-
-#ifdef CLOG
-#define _CLOG(x) x
-// #elif defined(DEBUG)
-// #define _CLOG(x) if(GetLog()){x;}
-#else
-#define _CLOG(x)
-#endif
-
-#ifdef ILOG
-#define _ILOG(x) x
-// #elif defined(DEBUG)
-// #define _ILOG(x) if(GetLog(LOG_INTERPRETER)){x;}
-#else
-#define _ILOG(x)
-#endif
-
-#ifdef VLOG
-#define _VLOG(x) x
-// #elif defined(DEBUG)
-// #define _VLOG(x) if(GetLog(LOG_ANY)) {x}
-#else
-#define _VLOG(x)
+#define _MMLOG(x)
 #endif

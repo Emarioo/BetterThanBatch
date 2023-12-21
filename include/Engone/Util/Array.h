@@ -229,7 +229,8 @@ struct DynamicArray {
     //     return add(*(const T*)&t);
     // }
     bool pop(){
-        if(!used) return false;
+        if(used==0)
+            return false;
         T* ptr = _ptr + --used;
         ptr->~T();
         return true;
@@ -241,8 +242,12 @@ struct DynamicArray {
         T* ptr = _ptr + index;
         ptr->~T();
         --used;
-        if(index != used){
-            memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
+        if(index != used){ // if we didn't remove the last element
+            for(u32 i = index; i < used + 1; i++){
+                *(_ptr + i) = std::move(*(_ptr + i + 1));
+            }
+            // doesn't work with std::string
+            // memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
         }
         return true;
     }

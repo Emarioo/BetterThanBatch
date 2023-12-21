@@ -37,7 +37,7 @@ ReadFileFailed:
 }
 void OutputAsHex(const char* path, char* data, int size) {
     using namespace engone;
-    auto file = FileOpen("data.txt",0,FILE_ALWAYS_CREATE);
+    auto file = FileOpen(path,0,FILE_ALWAYS_CREATE);
     Assert(file);
 
     const int stride = 16;

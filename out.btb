@@ -1,0 +1,2 @@
+
+fn hey() -> i32 { return 23; }

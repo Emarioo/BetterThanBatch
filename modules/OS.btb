@@ -95,35 +95,3 @@ struct DirectoryIterator {
         DirectoryIteratorSkip(this);
     }
 }
-#ifndef LINK_BYTECODE
-
-// IMPORTANT: THREADS ARE NOT SUPPORTED IN THE INTERPRETER! yet?
-
-struct Thread {
-    handle: i64 = 0;
-    id: u32 = 0;
-}
-fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
-    threadId: u32 = 0;
-    handle = CreateThread(null, 0, func, param, null, &threadId);
-    return Thread{handle, threadId};
-}
-fn ThreadDestroy(thread: Thread) {
-    CloseHandle(thread.handle);
-}
-fn ThreadJoin(thread: Thread) {
-    WaitForSingleObject(thread.handle, 0xFFFFFFFF);
-}
-fn @dllimport CreateThread(
-  /* [in, optional]  LPSECURITY_ATTRIBUTES   */ lpThreadAttributes: void*,
-  /* [in]            SIZE_T                  */ dwStackSize: u64,
-  /* [in]            LPTHREAD_START_ROUTINE  */ lpStartAddress: fn_ref,
-  /* [in, optional]  __drv_aliasesMem LPVOID */ lpParameter: void*,
-  /* [in]            DWORD                   */ dwCreationFlags: void*,
-  /* [out, optional] LPDWORD                 */ lpThreadId: u32*
-) -> void* /* HANDLE */;
-fn @dllimport CloseHandle(handle: void*) -> bool;
-fn @dllimport WaitForSingleObject(handle: void*, ms: u32) -> u32;
-fn @dllimport GetLastError() -> u32;
-
-#endif
