@@ -7,7 +7,24 @@ l2(9) // should produce 9  (a bug at one point produced a2)
 l1(1,2) // should produce 1 (a bug at one point produced 1,2)
 
 #define k0(X,...) X.. k0(...)
+#define k1(...) k1(...)
 k0(0,1) // produces 0.. 1..
+k1(0,1) // produces 0.. 1..
+
+#define n(...) [ ... ]
+n(na,na) // should produce [ na, na ]
+
+#define print(...) { print_inner(...) }
+#define print_inner(X,...) _print(X); print_inner(...)
+#define gotoxy(x,y) print("\033[",(x),";",(y),"H")
+gotoxy(0,0) // it should not produce x and y but zeros. There was a bug where x and y were produced and the 0,0 arguments ignored or forgotten
+
+
+#define log(...) { log_inner(...) }
+#define log_inner(X, ...) p(X); p(' '); log_inner(...)
+#define log_inner(X) p(X); p('\n')
+
+a log("a", "b") // should produce one newline after } a bug at one point made a new line before the } on the ) token
 
 #define AA 3
 #define AB 3 4

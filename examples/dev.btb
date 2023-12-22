@@ -20,6 +20,9 @@
 // #import "Thread"
 // #import "OS"
 
+// #import "Map"
+// Test_StringMap();
+
 // #define l0(a0) a0
 // #define l1(a1) l0(a1)
 // #define l2(a2) l1(a2)
@@ -36,22 +39,60 @@
 
 // #define l2(a2) l1(a2)
 
+// HELLO, THOUGH BUG HERE FIX IT NOW (preprocessor bug)
 // #define l0(a0,...) a0
 // #define l1(...) l0(...)
 
 // a l2(9)
 // a l1(1,2)
 
-// HELLO, THOUGH BUG HERE FIX IT NOW (preprocessor bug)
+// #define g2(...) g1(...)
+// #define g1(X,...) X + g1(...)
 
-#define A1 3
-#define A2 3 4
-#define A3 3 4 5
+// a g1(1,2)
+// a g2(1,2)
 
-#define k0(X,...) X.. k0(...)
-a k0(#unwrap A1)
+// #define k0(X,...) X.. k0(...)
+// a k0(#unwrap A1)
+
+// #define n2(x,...) x - n2(...)
+
+// ##define n(...) [ n1(3) ]
+// ##define n1(x) x *
+// n(na,na)
+
+
+// #define log(...) { log_inner(...) }
+// #define log_inner(X, ...) log_inner(...)
+// #define log_inner(X) p('\n')
+
+// log(a)
 
 // #import "Logger"
+// #define log(...) { log_inner(...) }
+// #define log_inner(X, ...) p(X); p(' '); log_inner(...)
+// #define log_inner(X) p(X); p('\n')
+
+// #define println(...) { print_inner(...) _print("\n"); }
+// #define print(...) { print_inner(...) }
+// #define print_inner(X,...) _print(X); print_inner(...)
+
+// log("StringMap")
+// a log("a", "b")
+// for elements {
+//     print(nr,": ",it);
+// }
+// log(" baseArray:", baseArray.len);
+// for baseArray {
+//     print(nr,": ");
+// }
+
+// #define A1 3
+// #define A2 3 4
+// #define A3 3 4 5
+
+
+#import "Logger"
 
 // #define base(x,y,F) if(flags & F) { x - y }
 // #define log(x,y) base(x,y, LOG_TYPE)
@@ -63,14 +104,14 @@ a k0(#unwrap A1)
 
 // #define k2(a,b) k1(A,a,b,B)
 
-// #define print(...) { print_inner(...) }
-// #define print_inner(X,...) _print(X); print_inner(...)
 
 // // #define clear() print("\033[H\033[J")
-// #define gotoxy(x,y) print("\033[",(x),";",(y),"H")
+// UNIX coloring doesn't work
+#define gotoxy(x,y) print("\033[",(x),";",(y),"H")
 
+// print("\033[33;1m")
+print("Hello")
 // gotoxy(0,0)
-// print("Hello")
 // print("Sup")
 
 // struct ThreadContext {

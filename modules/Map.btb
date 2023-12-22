@@ -1,0 +1,73 @@
+
+#import "Array"
+
+
+/*
+Expectation: 0-10000 strings
+Read/write time: roughly constant
+
+*/
+#define T i32
+struct Chain_StringMap {
+    
+}
+struct StringMap {
+    elements: DynamicArray<T>;
+    baseArray: Chain_StringMap[];
+    
+    fn init() -> bool {
+        max = 256 * sizeof(Chain_StringMap);
+        baseArray.ptr = cast<Chain_StringMap*>Allocate(max);
+        if baseArray.ptr {
+            baseArray.len = 256;
+            return true
+        } else {
+            return false;
+        }
+    }
+    fn cleanup() {
+        elements.cleanup();
+        if baseArray.ptr {
+            Free(baseArray, baseArray.len * sizeof(Chain_StringMap));
+            baseArray.ptr = null;
+            baseArray.len = 0;
+        }
+    }
+    
+    fn set(str: char[], value: T) -> bool {
+        
+        return false;
+    }
+    fn get(str: char[]) -> T {
+        
+        return 0;
+    }
+    
+    fn print() {
+        log("StringMap")
+        log(" elements:", elements.len);
+        for elements {
+            print(nr,": ",it);
+        }
+        log(" baseArray:", baseArray.len);
+        for baseArray {
+            print(nr,": ");
+        }
+    }
+}
+
+#import "Logger"
+fn Test_StringMap() {
+    map: StringMap;
+    
+    map.set("a",1);
+    map.set("abc!",4);
+    map.set("sausage",7);
+    
+    log(map.get("a"))
+    log(map.get("abc!"))
+    log(map.get("sausage"))
+    log(map.get("sup"))
+    
+    map.print();
+}

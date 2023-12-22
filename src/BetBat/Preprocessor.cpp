@@ -1008,6 +1008,7 @@ SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall
             if(call && call->useDetailedArgs){
                 newCall->realArgumentCount++;
                 newCall->detailedArguments.add({});
+                newCall->realArgs_per_range.add(1);
                 for(int i=argRange.start;i<argRange.end;i++){
                     newCall->detailedArguments.last().add((const Token*)&argRange.stream->get(i));
                 }
@@ -1018,6 +1019,7 @@ SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall
                 // }
                 newCall->realArgumentCount++;
                 newCall->inputArgumentRanges.add(argRange);
+                newCall->realArgs_per_range.add(1);
                 _MLOG(log::out << " arg["<<(newCall->inputArgumentRanges.size()-1)<<"] "<<argRange<<"\n";)
             }
         }
@@ -1065,15 +1067,13 @@ SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall
             
             if(call && call->useDetailedArgs){
                 newCall->detailedArguments.add({});
-                for(int i=call->certainMacro->indexOfVariadic;i<call->certainMacro->indexOfVariadic+infArgs;i++){
-                    newCall->realArgumentCount++;
-                }
+                newCall->realArgumentCount+=infArgs;
                 newCall->detailedArguments.last().add(&argRange.stream->get(argRange.start));
+                newCall->realArgs_per_range.add(infArgs);
             } else {
-                for(int i=call->certainMacro->indexOfVariadic;i<call->certainMacro->indexOfVariadic+infArgs;i++){
-                    newCall->realArgumentCount++;
-                }
+                newCall->realArgumentCount+=infArgs;
                 newCall->inputArgumentRanges.add(argRange);
+                newCall->realArgs_per_range.add(infArgs);
             }
             argRange.start = index;
             
@@ -1242,6 +1242,11 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
             }
         }
     }
+    struct TempEnv {
+        int indexOfInputArg, argStart, argCount;
+        bool include_comma, is_last_arg;
+    };
+    DynamicArray<TempEnv> tempEnvs{};
     // TODO: Add some extra logic to transfer flags from tokens, parameters and macro calls.
     //  It looks a little nicer. I have started but not finished it because it's not very important.
 
@@ -1276,7 +1281,7 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
             }
         }
         if(env->range.end == env->range.start) {
-            _MLOG(log::out << "Env["<<(info.environments.size()-1)<<"] pop callIndex: "<<(env->callIndex==-1 ? "-1" : info.calls[env->callIndex]->rootMacro->name)<<"\n";)
+            _MLOG(log::out << log::GOLD << "Env["<<(info.environments.size()-1)<<"] pop callIndex: "<<(env->callIndex==-1 ? "-1" : info.calls[env->callIndex]->rootMacro->name)<<"\n";)
             delete info.environments.last();
             info.environments.pop();
             if(env->ownsCall!=-1){
@@ -1289,7 +1294,7 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                 break;
             continue;
         }
-        _MLOG(log::out << "Env["<<(info.environments.size()-1)<<"] callIndex: "<<(env->callIndex==-1 ? "-1" : info.calls[env->callIndex]->rootMacro->name) << ", ownsCall: "<<(env->ownsCall==-1 ? "-1" : info.calls[env->ownsCall]->rootMacro->name)<<"\n";)
+        _MLOG(log::out << log::GOLD << "Env["<<(info.environments.size()-1)<<"] callIndex: "<<(env->callIndex==-1 ? "-1" : info.calls[env->callIndex]->rootMacro->name) << ", ownsCall: "<<(env->ownsCall==-1 ? "-1" : info.calls[env->ownsCall]->rootMacro->name)<<"\n";)
         bool initialEnv = env->firstTime;
         if(env->firstTime){
             env->firstTime=false;
@@ -1301,27 +1306,30 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
         RootMacro* deeperMacro = nullptr;
 
         if(env->callIndex!=-1) {
+            // MATCH PARAMTER
             if(call->certainMacro && -1!=(parameterIndex = call->certainMacro->matchArg(token))){ // TOOD: rename matchArg to matchParameter
                 // @optimize TODO: Parameters are evaluated in full each time they occur.
                 //   This is inefficient with many parameters but a parameter will
                 //   usually only occur once or twice. Even so it could be worth thinking
                 //   of a way to optimize it.
-                int argCount = call->realArgumentCount;
+                // int argCount = call->realArgumentCount;
                 // int argCount = call->useDetailedArgs ? call->detailedArguments.size() : call->inputArgumentRanges.size();
-                int infArgs = argCount - (call->certainMacro->parameters.size() - 1);
-                int paramStart = parameterIndex;
-                int paramCount = 1;
-                if(call->certainMacro->isVariadic()){
-                    if(call->certainMacro->indexOfVariadic < parameterIndex) {
-                        paramStart += infArgs-1;
-                    }
-                }
-                if(parameterIndex==call->certainMacro->indexOfVariadic)
-                    paramCount = infArgs;
+                // int infArgs = argCount - (call->certainMacro->parameters.size() - 1);
+                // int paramStart = parameterIndex;
+                // int paramCount = 1;
+                // if(call->certainMacro->isVariadic()){
+                //     if(call->certainMacro->indexOfVariadic < parameterIndex) {
+                //         paramStart += infArgs-1;
+                //     }
+                // }
+                // if(parameterIndex==call->certainMacro->indexOfVariadic)
+                //     paramCount = infArgs;
 
-                _MLOG(log::out << "Param "<<token<<" Inf["<<paramStart<<"-"<<(paramStart+paramCount)<<"]\n";)
+                _MLOG(log::out << "Param "<<token<<" [param:"<<parameterIndex<<"]\n")
 
                 if(call->useDetailedArgs){
+                    Assert(false);
+                    #ifdef gone
                     // Yeah this is complicated.
                     int start = paramStart;
                     int end = paramStart + paramCount;
@@ -1357,7 +1365,117 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                             }
                         }
                     }
+                    #endif
                 } else {
+                    auto add_arg_env=[&](int indexOfInputArg, int argStart, int argCount, bool include_comma, bool is_last_arg) {
+                        _MLOG(log::out << log::LIME << "Arg env "<<indexOfInputArg << ", start:"<<argStart << ",count:"<<argCount<<"\n")
+                        Env* argEnv = new Env();
+                        argEnv->range = call->inputArgumentRanges[indexOfInputArg];
+                        argEnv->arg_start = argStart;
+                        argEnv->arg_count = argCount;
+                        
+                        // The code that decrements the range makes this happen:
+                        // #define Hey(...) PrintMessage(...)
+                        // Hey(a,b,c) -> PrintMessage(a,b,c)
+                        // Otherwise you would get PrintMessage(abc) which is kind of useless
+                        // perhaps do something with unwrap, spread or something to tweak when
+                        // this code is off but it's quite nice for the most part.
+                        if(include_comma) {
+                            argEnv->range.start--; // include comma
+                        }
+
+                        if(env->callIndex==0){
+                            // log::out << "Saw param, global env\n";
+                            argEnv->callIndex = -1;
+                        } else {
+                            // log::out << "Saw param, local env\n";
+                            argEnv->callIndex = env->callIndex-1;
+                        }
+                        if(is_last_arg)
+                            argEnv->finalFlags = token.flags;
+                        if(env->range.start == env->range.end)
+                            argEnv->finalFlags &= ~(TOKEN_SUFFIX_LINE_FEED); 
+                        info.environments.add(argEnv);
+                    };
+
+                    /* Whats going on?
+                    We found a parameter (token) in the environment (either macro content or argument environment).
+                    We need to evaluate the paramater based on our input arguments.
+                    We do this by adding a new environment that parses the argument input.
+
+                    The difficult part is figuring out which input argument we should parse based on the parameter we found.
+                    One input argument may be variadic and consist of multiple arguments. We need
+                    too count and add each input argument (also count inner arguments if variadic).
+
+                    Sometimes we want a subpart of an input argument: env->arg_start, env->arg_count
+                    */
+
+                    int inf_args = parameterIndex == call->certainMacro->indexOfVariadic ? call->realArgumentCount - (call->certainMacro->parameters.size() - 1) : 0;
+                    int remaining_args = parameterIndex == call->certainMacro->indexOfVariadic ? call->realArgumentCount - (call->certainMacro->parameters.size() - 1) : 1;
+                    if(env->arg_count != 0) {
+                        Assert(env->arg_count <= remaining_args);
+                        if(env->arg_count < remaining_args) {
+                            remaining_args = env->arg_count;
+                        }
+                    }
+
+                    int real_index = 0;
+                    int input_index = 0;
+                    int inner_index = 0;
+                    int added_envs = 0;
+                    tempEnvs.resize(0);
+                    while(true) {
+                        if(input_index >= call->realArgs_per_range.size()) {
+                            // end of arguments
+                            // we couldn't match the parameter
+                            // this will only happen with variadic arguments
+                            // because they may contain zero arguments.
+                            Assert(parameterIndex == call->certainMacro->indexOfVariadic);
+                            break;
+
+                        }
+
+                        if(parameterIndex == real_index - env->arg_start - added_envs) {
+                            // we have found our match
+                            // more if parameters include variadic arg
+                            // if our param is variadic then we found the start of the variadic args
+                            int available_args = call->realArgs_per_range[input_index] - inner_index;
+                            int args_to_use = 0;
+                            if(available_args >= remaining_args) {
+                                args_to_use = remaining_args;
+                            } else /* available_args < remaining_args */ {
+                                args_to_use = available_args;
+                            }
+                            remaining_args -= args_to_use;
+                            tempEnvs.add({input_index, inner_index, args_to_use, added_envs != 0, remaining_args == 0});
+                            // add_arg_env(input_index, inner_index, args_to_use, added_envs != 0, remaining_args == 0);
+                            added_envs++;
+                            if(remaining_args == 0) {
+                                // we done
+                                break;
+                            }
+                            Assert(remaining_args >= 0);
+                        }
+
+                        real_index++;
+                        inner_index++;
+                        if(inner_index >= call->realArgs_per_range[input_index]) {
+                            inner_index = 0;
+                            input_index++;
+                        }
+                    }
+                    for(int i=tempEnvs.size()-1;i>=0;i--) {
+                        auto& e = tempEnvs[i];
+                        add_arg_env(e.indexOfInputArg, e.argStart, e.argCount, e.include_comma, e.is_last_arg);
+                    }
+                    
+                    #ifdef old
+                    // if(real_index != -1) {
+                    //     // add_arg_env(,,);
+                    // } else {
+                    //     Assert(parameterIndex == call->certainMacro->indexOfVariadic);
+                    // }
+
                     // Yeah this is complicated.
                     int start = paramStart;
                     int end = paramStart + paramCount;
@@ -1365,12 +1483,28 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                         start += env->arg_start;
                         end = start + env->arg_end;
                     }
+
                     _MLOG(log::out << " Used range ["<<start<<"-"<<(end)<<"]\n";)
 
                     for(int i = end - 1; i >= start; i--){
-                        Assert(i<(int)call->inputArgumentRanges.size());
+                        int inputArgIndex = paramStart;
+                        if(call->certainMacro->isVariadic()) {
+                            if(parameterIndex < call->certainMacro->indexOfVariadic) {
+                                // as normal
+                                // inputArgIndex = paramStart;
+                            } else if(parameterIndex > call->certainMacro->indexOfVariadic) {
+                                // 
+                            } else { // equal
+
+                            }
+                        } else {
+                            // normal
+                            // inputArgIndex = paramStart;
+                        }
+
+                        Assert(index<(int)call->inputArgumentRanges.size());
                         Env* argEnv = new Env();
-                        argEnv->range = call->inputArgumentRanges[i];
+                        argEnv->range = call->inputArgumentRanges[inputArgIndex];
                         argEnv->arg_start = i;
                         argEnv->arg_end = i+1;
                         
@@ -1410,12 +1544,14 @@ SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
                             argEnv->finalFlags &= ~(TOKEN_SUFFIX_LINE_FEED); 
                         info.environments.add(argEnv);
                     }
+                    #endif
                 }
                 continue;
             }
         }
+        // MATCH MACRO
         if((deeperMacro = info.compileInfo->matchMacro(token))){
-            _MLOG(log::out << "Found macro call "<<token<<"\n";)
+            _MLOG(log::out << log::CYAN << "Found macro call "<<token<<"\n";)
             
             info.environments.add(new Env());
             info.calls.add(new MacroCall());

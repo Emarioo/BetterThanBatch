@@ -755,7 +755,15 @@ void TokenStream::print(){
     
         for(int i=0;i<token.length;i++){
             char chr = *(token.str+i);
-            log::out << chr;
+            if(token.flags&TOKEN_MASK_QUOTED) {
+                switch(chr) {
+                    case '\n': log::out << "\\n"; break;
+                    case '\t': log::out << "\\t"; break;
+                    default: log::out << chr; break;
+                }
+            } else {
+                log::out << chr;
+            }
         }
         if(token.flags&TOKEN_DOUBLE_QUOTED)
             log::out << "\"";

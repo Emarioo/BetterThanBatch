@@ -88,7 +88,7 @@ struct Env {
     int ownsCall=-1; // env will pop the call when popped
 
     int arg_start = 0;
-    int arg_end = 0;
+    int arg_count = 0;
 
     bool firstTime=true;
     bool unwrapOutput=false;
@@ -101,6 +101,7 @@ struct MacroCall {
     RootMacro* rootMacro = nullptr;
     CertainMacro* certainMacro = nullptr;
     DynamicArray<TokenSpan> inputArgumentRanges{}; // fetched arguments for the macro call, the input arguments to the macro call
+    DynamicArray<int> realArgs_per_range{};
     int realArgumentCount = 0; // inputArguments may contain ... which doesn't tell you how many actual arguments are there
     bool unwrapped=false;
     bool useDetailedArgs=false; // caused by #unwrap

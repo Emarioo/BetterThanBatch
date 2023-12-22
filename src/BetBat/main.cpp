@@ -287,13 +287,15 @@ int main(int argc, const char** argv){
             auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
             
             // TODO: Don't skip imports.
-            log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
-            log::out << log::GRAY << "Imports: ";
-            for(int i=0;i<stream->importList.size();i++) {
-                if(i!=0) log::out << ", ";
-                log::out << stream->importList[i].name;
+            if(stream->importList.size() > 0) {
+                log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
+                log::out << log::GRAY << "Imports: ";
+                for(int i=0;i<stream->importList.size();i++) {
+                    if(i!=0) log::out << ", ";
+                    log::out << stream->importList[i].name;
+                }
+                log::out<<"\n";
             }
-            log::out<<"\n";
             if(!stream) {
                 log::out << log::RED << "Cannot read file '"<< compileOptions.sourceFile.text<<"'\n";
             } else {
