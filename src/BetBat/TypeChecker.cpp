@@ -1543,6 +1543,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             ERR_SECTION(
                 ERR_HEAD(expr->tokenRange)
                 ERR_MSG("Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.")
+                ERR_LINE(expr->tokenRange,"bad")
             )
         }
         if(outTypes)

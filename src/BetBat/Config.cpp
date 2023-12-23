@@ -7,7 +7,7 @@
 
 LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_TOKENIZER    
-| LOG_PREPROCESSOR 
+// | LOG_PREPROCESSOR 
 // | LOG_PARSER       
 // | LOG_TYPECHECKER  
 // | LOG_GENERATOR     
@@ -16,6 +16,8 @@ LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_INTERPRETER   
 // | LOG_OVERVIEW       
 // | LOG_MACRO_MATCH    
+
+// | LOG_ALLOCATIONS
 );
 
 // static int s_activelogs=0;

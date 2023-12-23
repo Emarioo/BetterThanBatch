@@ -1,0 +1,25 @@
+/*
+    This file contains Unix specific features
+*/
+
+/*
+    Cursor movement using escape code
+*/
+
+#import "Logger"
+
+fn set_cursor(x: u32, y: u32) {
+    print("\e[",(x),";",(y),"H")
+}
+fn move_cursor(x: i32, y: i32) {
+    if y > 0 {
+        print("\e[",y,"A");
+    } else if y < 0 {
+        print("\e[",-y,"B");
+    }
+    if x > 0 {
+        print("\e[",x,"C");
+    } else if x < 0 {
+        print("\e[",-x,"D");
+    }
+}

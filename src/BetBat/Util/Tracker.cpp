@@ -1,6 +1,7 @@
 #include "BetBat/Util/Tracker.h"
 
 #include "Engone/Util/Array.h"
+#include "Engone/PlatformLayer.h"
 
 struct TrackerType {
     std::string name{};
@@ -8,30 +9,85 @@ struct TrackerType {
     u32 count = 0;
     DynamicArray<TrackLocation> locations{};
 };
-static std::unordered_map<size_t, TrackerType> s_trackedTypes{};
-static engone::Mutex s_trackLock{};
-static bool s_enabledtracking = true;
 
+struct Tracker_impl {
+    void setTracking(bool enabled);
+    void addTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
+    void delTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
+    void printTrackedTypes();
+    // how much memory the tracker uses
+    u32 getMemoryUsage();
+
+    std::unordered_map<size_t, TrackerType> m_trackedTypes{};
+    engone::Mutex m_trackLock{};
+    bool m_enableTracking = true;
+    DynamicArray<TrackLocation> m_uniqueTrackLocations{};
+
+    static Tracker_impl* Create();
+    static void Destroy(Tracker_impl* tracker);
+};
+
+
+static Tracker_impl* global_tracker = nullptr;
+
+#define ENSURE_GLOBAL_TRACKER if(!global_tracker) { global_tracker = Tracker_impl::Create(); Assert(global_tracker); }
+
+Tracker_impl* Tracker_impl::Create() {
+    Tracker_impl* ptr = (Tracker_impl*)engone::Allocate(sizeof(Tracker_impl));
+    if(!ptr) return nullptr;
+    new(ptr)Tracker_impl();
+    return ptr;
+}
+void Tracker_impl::Destroy(Tracker_impl* tracker) {
+    tracker->~Tracker_impl();
+    engone::Free(tracker, sizeof(Tracker_impl));
+}
+void Tracker::DestroyGlobal() {
+    if(global_tracker) {
+        Tracker_impl::Destroy(global_tracker);
+        global_tracker = nullptr;
+    }
+}
 void Tracker::SetTracking(bool enabled) {
-    s_trackLock.lock();
-    s_enabledtracking = enabled;
-    s_trackLock.unlock();
+    ENSURE_GLOBAL_TRACKER
+    global_tracker->setTracking(enabled);
 }
 void Tracker::AddTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
+    ENSURE_GLOBAL_TRACKER
+    global_tracker->addTracking(typeInfo, size,loc,count);
+}
+void Tracker::DelTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
+    ENSURE_GLOBAL_TRACKER
+    global_tracker->delTracking(typeInfo, size,loc,count);
+}
+void Tracker::PrintTrackedTypes(){
+    ENSURE_GLOBAL_TRACKER
+    global_tracker->printTrackedTypes();
+}
+u32 Tracker::GetMemoryUsage(){
+    ENSURE_GLOBAL_TRACKER
+    return global_tracker->getMemoryUsage() + sizeof(Tracker_impl); // the size of the tracker itself must be included here
+}
+void Tracker_impl::setTracking(bool enabled) {
+    m_trackLock.lock();
+    m_enableTracking = enabled;
+    m_trackLock.unlock();
+}
+void Tracker_impl::addTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
     auto id = typeInfo.hash_code();
     
-    if(!s_enabledtracking)
+    if(!m_enableTracking)
         return;
 
-    s_trackLock.lock();
+    m_trackLock.lock();
 
-    bool prev = s_enabledtracking;
-    s_enabledtracking = false;
+    bool prev = m_enableTracking;
+    m_enableTracking = false;
     
-    auto pair = s_trackedTypes.find(id);
+    auto pair = m_trackedTypes.find(id);
     TrackerType* ptr = nullptr;
-    if(pair == s_trackedTypes.end()) {
-        ptr = &(s_trackedTypes[id] = {});
+    if(pair == m_trackedTypes.end()) {
+        ptr = &(m_trackedTypes[id] = {});
         auto name = typeInfo.name();
         ptr->name = name;
         ptr->size = size;
@@ -46,25 +102,25 @@ void Tracker::AddTracking(const std::type_info& typeInfo, u32 size, const TrackL
         ptr->locations.add(loc);
         ptr->locations.last().count = count;
     }
-    s_enabledtracking = prev;
-    s_trackLock.unlock();
+    m_enableTracking = prev;
+    m_trackLock.unlock();
 }
-void Tracker::DelTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
+void Tracker_impl::delTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc, u32 count) {
     auto id = typeInfo.hash_code();
 
-    if(!s_enabledtracking)
+    if(!m_enableTracking)
         return;
     
 
-    s_trackLock.lock();
+    m_trackLock.lock();
 
-    bool prev = s_enabledtracking;
-    s_enabledtracking = false;
+    bool prev = m_enableTracking;
+    m_enableTracking = false;
 
-    auto pair = s_trackedTypes.find(id);
+    auto pair = m_trackedTypes.find(id);
     TrackerType* ptr = nullptr;
-    if(pair == s_trackedTypes.end()) {
-        ptr = &(s_trackedTypes[id] = {});
+    if(pair == m_trackedTypes.end()) {
+        ptr = &(m_trackedTypes[id] = {});
         auto name = typeInfo.name();
         ptr->name = name;
         ptr->size = size;
@@ -90,20 +146,20 @@ void Tracker::DelTracking(const std::type_info& typeInfo, u32 size, const TrackL
         }
         // Assert(removed);
     }
-    s_enabledtracking = prev;
-    s_trackLock.unlock();
+    m_enableTracking = prev;
+    m_trackLock.unlock();
 }
 
-DynamicArray<TrackLocation> s_uniqueTrackLocations{};
-void Tracker::PrintTrackedTypes(){
+void Tracker_impl::printTrackedTypes(){
     using namespace engone;
-    s_trackLock.lock();
-    bool prev = s_enabledtracking;
-    s_enabledtracking = false;
+
+    m_trackLock.lock();
+    bool prev = m_enableTracking;
+    m_enableTracking = false;
 
     u32 totalMemory = 0;
     log::out << log::BLUE<<"Tracked types:\n";
-    for(auto& pair : s_trackedTypes) {
+    for(auto& pair : m_trackedTypes) {
         TrackerType* trackType = &pair.second;
         if(trackType->count == 0)
             continue;
@@ -112,11 +168,11 @@ void Tracker::PrintTrackedTypes(){
             log::out <<" "<<log::LIME<< (trackType->name.c_str()+strlen("struct "))<<log::NO_COLOR <<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
         else
             log::out <<" "<<log::LIME<< trackType->name <<log::NO_COLOR<<"["<<trackType->size<<"]: "<<trackType->count<<"\n";
-        s_uniqueTrackLocations.resize(0);
+        m_uniqueTrackLocations.resize(0);
         for(int j=0;j<trackType->locations.size();j++){
             auto& loc = trackType->locations[j];
             bool found = false;
-            for(int k=0;k<s_uniqueTrackLocations.size();k++){
+            for(int k=0;k<m_uniqueTrackLocations.size();k++){
                 auto& loc2 = trackType->locations[k];
                 if(loc.fname == loc2.fname && loc.line == loc2.line) {
                     found = true;
@@ -124,10 +180,10 @@ void Tracker::PrintTrackedTypes(){
                 }
             }
             if(!found) {
-                s_uniqueTrackLocations.add(loc);
+                m_uniqueTrackLocations.add(loc);
             }
         }
-        for(int k=0;k<s_uniqueTrackLocations.size();k++){
+        for(int k=0;k<m_uniqueTrackLocations.size();k++){
             auto& loc2 = trackType->locations[k];
             int len = strlen(loc2.fname);
             int cutoff = len-1;
@@ -153,16 +209,16 @@ void Tracker::PrintTrackedTypes(){
         log::out << log::RED;
     log::out << "Tracked memory: "<<totalMemory<<"\n";
     
-    s_enabledtracking = prev;
-    s_trackLock.unlock();
+    m_enableTracking = prev;
+    m_trackLock.unlock();
 }
-u32 Tracker::GetMemoryUsage(){
+u32 Tracker_impl::getMemoryUsage(){
     u32 memory = 0;
-    s_trackLock.lock();
-    for(auto& pair : s_trackedTypes) {
+    m_trackLock.lock();
+    for(auto& pair : m_trackedTypes) {
         TrackerType* trackType = &pair.second;
         memory += trackType->locations.max * sizeof(TrackLocation);
     }
-    s_trackLock.unlock();
+    m_trackLock.unlock();
     return memory;
 }

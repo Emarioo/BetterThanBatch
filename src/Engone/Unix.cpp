@@ -26,7 +26,11 @@
 #else
 #define PL_PRINTF(...)
 #endif
-
+#ifndef NATIVE_BUILD
+#include "BetBat/Config.h"
+#else
+#define _LOG(...)
+#endif
 #include "Engone/Util/Array.h"
 #include "BetBat/Util/Perf.h"
 
@@ -211,7 +215,7 @@ namespace engone {
 		}
 		
 		if(!info->second.dirIter){
-			closedir(info->second.dirIter);;
+			closedir(info->second.dirIter);
 			info->second.dirIter = nullptr;
 		}
 		if(info->second.tempPtr) {
@@ -455,6 +459,9 @@ namespace engone {
 				printf(" %s (%lu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
 		}
 	}
+
+	static std::unordered_map<void*, int> s_userAllocations;
+
 	// static std::mutex s_allocStatsMutex;
 	static u64 s_totalAllocatedBytes=0;
 	static u64 s_totalNumberAllocations=0;
@@ -464,8 +471,16 @@ namespace engone {
 		if(bytes==0) return nullptr;
 		MEASURE;
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
+		// _LOG(LOG_ALLOCATIONS,printf("* Allocate %lu\n",bytes);)
         void* ptr = malloc(bytes);
 		if(!ptr) return nullptr;
+		_LOG(LOG_ALLOCATIONS,printf("* Allocate %lu %p\n",bytes,ptr);)
+		
+		_LOG(LOG_ALLOCATIONS,
+			auto pair = s_userAllocations.find(ptr);
+			Assert(("retrieved the same pointer?",pair == s_userAllocations.end()));
+			s_userAllocations[ptr] = bytes;
+		)
 		
 		PrintTracking(bytes,ENGONE_TRACK_ALLOC);
 		
@@ -475,15 +490,13 @@ namespace engone {
 		s_totalAllocatedBytes+=bytes;
 		s_totalNumberAllocations++;			
 		// s_allocStatsMutex.unlock();
-		#ifdef LOG_ALLOCATIONS
-		printf("* Allocate %lu\n",bytes);
-		#endif
 		
 		return ptr;
 	}
     void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes){
 		MEASURE;
         if(newBytes==0){
+			// Assert(newBytes != 0);
             Free(ptr,oldBytes);
             return nullptr;
         }else{
@@ -494,9 +507,21 @@ namespace engone {
                     PL_PRINTF("Reallocate : oldBytes is zero while the ptr isn't!?\n");   
                 }
                 // void* newPtr = HeapReAlloc(GetProcessHeap(),0,ptr,newBytes);
+				
                 void* newPtr = realloc(ptr,newBytes);
                 if(!newPtr)
                     return nullptr;
+
+				_LOG(LOG_ALLOCATIONS,printf("* Reallocate %lu -> %lu %p->%p\n",oldBytes, newBytes, ptr, newPtr);)
+
+				_LOG(LOG_ALLOCATIONS,
+					auto pair = s_userAllocations.find(ptr);
+					Assert(("pointer doesn't exist?",pair != s_userAllocations.end()));
+					auto pair2 = s_userAllocations.find(newPtr);
+					Assert(("new pointer exists?",ptr == newPtr || pair2 == s_userAllocations.end()));
+					s_userAllocations.erase(ptr);
+					s_userAllocations[newPtr] = newBytes;
+				)
                 
 				if(allocTracking.size()!=0)
 					printf("%s %lu -> %lu\n","realloc", oldBytes, newBytes);
@@ -507,9 +532,6 @@ namespace engone {
                 s_totalAllocatedBytes+=newBytes;
                 s_totalNumberAllocations++;			
                 // s_allocStatsMutex.unlock();
-				#ifdef LOG_ALLOCATIONS
-				printf("* Reallocate %lu -> %lu\n",oldBytes, newBytes);
-				#endif
                 return newPtr;
             }
         }
@@ -517,6 +539,13 @@ namespace engone {
 	void Free(void* ptr, u64 bytes){
 		if(!ptr) return;
 		MEASURE;
+		_LOG(LOG_ALLOCATIONS, printf("* Free %lu %p\n",bytes, ptr);)
+
+		_LOG(LOG_ALLOCATIONS,
+			auto pair = s_userAllocations.find(ptr);
+			Assert(("pointer doesn't exist?",pair != s_userAllocations.end()));
+			s_userAllocations.erase(ptr);
+		)	
 		free(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
 		PrintTracking(bytes,ENGONE_TRACK_FREE);
@@ -526,9 +555,6 @@ namespace engone {
 		Assert(s_allocatedBytes>=0);
 		Assert(s_numberAllocations>=0);
 		// s_allocStatsMutex.unlock();
-		#ifdef LOG_ALLOCATIONS
-		printf("* Free %lu\n",bytes);
-		#endif
 	}
 	u64 GetTotalAllocatedBytes() {
 		return s_totalAllocatedBytes;

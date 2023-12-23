@@ -28,7 +28,7 @@ if [ "$err" = 0 ]; then
     # cp bin/btb btb
     if [ $# = 0 ]; then
         ./bin/btb -dev
-        # ./bin/btb -ss dev.btb 
+        # ./bin/btb -ss dev.btb  -p
         # ./bin/btb -p examples/dev.btb
         # ./bin/btb -r ma.btb
     else

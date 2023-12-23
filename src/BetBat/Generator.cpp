@@ -482,9 +482,10 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
     // u8 reg0 = RegBySize(BC_AX, fti->size());
     // u8 reg1 = RegBySize(BC_AX, tti->size());
     // IMPORTANT: DO NOT!!!!!! USE ANY OTHER REGISTER THAN A!!!!!!
+    // OTHER REGISTERS MAY BE IN USE I THINK?
     u8 reg0 = RegBySize(BC_AX, fti);
     u8 reg1 = RegBySize(BC_AX, tti);
-    if (from == AST_FLOAT32 && AST::IsInteger(to)) {
+    if (AST::IsDecimal(from) && AST::IsInteger(to)) {
         info.addPop(reg0);
         // if(AST::IsSigned(to))
         info.addInstruction({BC_CAST, CAST_FLOAT_SINT, reg0, reg1});
@@ -492,7 +493,7 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
         info.addPush(reg1);
         return true;
     }
-    if (AST::IsInteger(from) && to == AST_FLOAT32) {
+    if (AST::IsInteger(from) && AST::IsDecimal(to)) {
         info.addPop(reg0);
         if(AST::IsSigned(from))
             info.addInstruction({BC_CAST, CAST_SINT_FLOAT, reg0, reg1});
@@ -1654,36 +1655,28 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                     GeneratePop(info,BC_REG_RBX, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
                 }
             }
-            // TODO: Is it correct to assume that a function with like this:
-            //   (int a, float b, int c)
-            //   will use the registers rcx, xmm1, r8
-            //   OR should it be rcx, xmm0, rdx
-            // See UNIXCALL for how you would do it otherwise
+            const int normal_regs[4]{
+                BC_REG_RCX,
+                BC_REG_RDX,
+                BC_REG_R8,
+                BC_REG_R9,
+            };
+            const int float_regs[4] {
+                BC_REG_XMM0d,
+                BC_REG_XMM1d,
+                BC_REG_XMM2d,
+                BC_REG_XMM3d,
+            };
             auto& argTypes = funcImpl->argumentTypes;
-            if(fullArgs.size() > 3){
-                if(argTypes[3].typeId == AST_FLOAT32)
-                    info.addPop(BC_REG_XMM3f);
-                else
-                    info.addPop(BC_REG_R9);
+            for(int i=fullArgs.size()-1;i>=0;i--) {
+                auto argType = argTypes[i].typeId;
+                if(AST::IsDecimal(argType)) {
+                    info.addPop(float_regs[i]);
+                } else {
+                    info.addPop(normal_regs[i]);
+                }
             }
-            if(fullArgs.size() > 2){
-                if(argTypes[2].typeId == AST_FLOAT32)
-                    info.addPop(BC_REG_XMM2f);
-                else
-                    info.addPop(BC_REG_R8);
-            }
-            if(fullArgs.size() > 1){
-                if(argTypes[1].typeId == AST_FLOAT32)
-                    info.addPop(BC_REG_XMM1f);
-                else
-                    info.addPop(BC_REG_RDX);
-            }
-            if(fullArgs.size() > 0){
-                if(argTypes[0].typeId == AST_FLOAT32)
-                    info.addPop(BC_REG_XMM0f);
-                else
-                    info.addPop(BC_REG_RCX);
-            }
+
             // native function can be handled normally
             info.addCall(astFunc->linkConvention, astFunc->callConvention);
             if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
@@ -1714,11 +1707,11 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 info.restoreStackMoment(startSP);
                 
                 auto &ret = funcImpl->returnTypes[0];
-                if(ret.typeId == AST_FLOAT32) {
-                    // 
-                    info.addPush(BC_REG_XMM0f);
+                int size = info.ast->getTypeSize(ret.typeId);
+                if(AST::IsDecimal(ret.typeId)) {
+                    info.addPush(ENCODE_REG_BITS(BC_XMM0, SIZE_TO_BITS(size)));
                 } else {
-                    u8 reg = RegBySize(BC_AX, info.ast->getTypeSize(ret.typeId));
+                    u8 reg = RegBySize(BC_AX, size);
                     info.addPush(reg);
                 }
                 outTypeIds->add(ret.typeId);
@@ -1751,14 +1744,14 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 BC_REG_R9,
             };
             const int float_regs[8] {
-                BC_REG_XMM0f,
-                BC_REG_XMM1f,
-                BC_REG_XMM2f,
-                BC_REG_XMM3f,
-                BC_REG_XMM4f,
-                BC_REG_XMM5f,
-                BC_REG_XMM6f,
-                BC_REG_XMM7f,
+                BC_REG_XMM0d,
+                BC_REG_XMM1d,
+                BC_REG_XMM2d,
+                BC_REG_XMM3d,
+                BC_REG_XMM4d,
+                BC_REG_XMM5d,
+                BC_REG_XMM6d,
+                BC_REG_XMM7d,
             };
             int used_normals = 0;
             int used_floats = 0;
@@ -1774,9 +1767,6 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
             // Then, from the back, we can pop and place arguments in the right register.
             for(int i=fullArgs.size()-1;i>=0;i--) {
                 if(AST::IsDecimal(argTypes[i].typeId)) {
-                    // I am not sure if doubles work so we should test and not assume.
-                    // This assert will prevent incorrect assumptions from causing trouble.
-                    Assert(argTypes[i].typeId == AST_FLOAT32);
                     info.addPop(float_regs[--used_floats]);
                 } else {
                     info.addPop(normal_regs[--used_normals]);
@@ -1812,11 +1802,11 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 info.restoreStackMoment(startSP);
                 
                 auto &ret = funcImpl->returnTypes[0];
-                if(ret.typeId == AST_FLOAT32) {
-                    // 
-                    info.addPush(BC_REG_XMM0f);
+                int size = info.ast->getTypeSize(ret.typeId);
+                if(AST::IsDecimal(ret.typeId)) {
+                    info.addPush(ENCODE_REG_BITS(BC_XMM0, SIZE_TO_BITS(size)));
                 } else {
-                    u8 reg = RegBySize(BC_AX, info.ast->getTypeSize(ret.typeId));
+                    u8 reg = RegBySize(BC_AX, size);
                     info.addPush(reg);
                 }
                 outTypeIds->add(ret.typeId);
@@ -1954,13 +1944,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // return SignalDefault::SUCCESS;
         }
         else if (expression->typeId == AST_FLOAT64) {
-            Assert(("64-bit floats not implement",false));
-            float val = expression->f32Value;
+            double val = expression->f64Value;
 
             // TOKENINFO(expression->tokenRange)
             // info.code->addDebugText("  expr push float");
-            info.addLoadIm(BC_REG_EAX, *(u32*)&val);
-            info.addPush(BC_REG_EAX);
+            info.addLoadIm2(BC_REG_RAX, *(u64*)&val);
+            info.addPush(BC_REG_RAX);
             
             // outTypeIds->add( expression->typeId);
             // return SignalDefault::SUCCESS;
@@ -3080,7 +3069,15 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         info.addInstruction({BC_MOV_RM, regOut, BC_REG_RBX, outSize});
                     }
                 } else if ((AST::IsDecimal(ltype) || AST::IsInteger(ltype)) && (AST::IsDecimal(rtype) || AST::IsInteger(rtype))){
-                    Assert(ltype != AST_FLOAT64 && rtype != AST_FLOAT64);
+                    // Note that we will at least have one decimal.
+                    Assert(AST::IsDecimal(ltype) || AST::IsDecimal(rtype));
+
+                    /*
+                    integers should be converted to floats
+                    floats should have same size
+                    smaller float should be converted to the bigger float
+                    */
+                    
 
                     BCInstruction bytecodeOp = ASTOpToBytecode(operationType,true);
                     u8 lsize = info.ast->getTypeSize(ltype);
@@ -3089,18 +3086,19 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     u8 reg1i = RegBySize(BC_AX, lsize); // get the appropriate registers
                     u8 reg2i = RegBySize(BC_AX, rsize);
                     
-                    u8 reg1 = BC_REG_XMM0f;
-                    u8 reg2 = BC_REG_XMM1f;
-                    u8 regOut = BC_REG_XMM0f;
-                    bool comparison = false;
-                    if(bytecodeOp == BC_FLT ||bytecodeOp == BC_FLTE || bytecodeOp == BC_FGT || bytecodeOp == BC_FGTE || bytecodeOp == BC_FEQ || bytecodeOp == BC_FNEQ) {
-                        regOut = BC_REG_AL;
-                        comparison = true;
+                    u8 finalSize = 0;
+                    if(AST::IsDecimal(ltype)) {
+                        finalSize = lsize;
                     }
-                    if(bytecodeOp == BC_FMOD) {
-                        regOut = BC_REG_XMM2f;
+                    if(AST::IsDecimal(rtype)) {
+                        if(rsize > finalSize)
+                            finalSize = rsize;
                     }
-                    
+
+                    u8 reg1 = ENCODE_REG_BITS(BC_XMM0, SIZE_TO_BITS(finalSize));
+                    u8 reg2 = ENCODE_REG_BITS(BC_XMM1, SIZE_TO_BITS(finalSize));
+                    u8 regOut = ENCODE_REG_BITS(BC_XMM0, SIZE_TO_BITS(finalSize));
+
                     if(AST::IsInteger(rtype)){
                         info.addPop(reg2i); // note that right expression should be popped first
                         // log::out << __FILE__ << ":"<<__LINE__<<"\n";
@@ -3110,6 +3108,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         } else {
                             info.addInstruction({BC_CAST, CAST_UINT_FLOAT, reg2i, reg2});
                         }
+                        rsize = finalSize;
                     } else {
                         info.addPop(reg2);
                     }
@@ -3120,8 +3119,32 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         } else {
                             info.addInstruction({BC_CAST, CAST_UINT_FLOAT, reg1i, reg1});
                         }
+                        lsize = finalSize;
                     } else {
                         info.addPop(reg1);
+
+                        info.addInstruction({BC_CAST, CAST_FLOAT_FLOAT, reg1i, reg1});
+
+                        info.addPop(reg1);
+                        if(lsize )
+                    }
+                    
+                    if(AST::IsDecimal(ltype)) {
+                        
+                    }
+                    if(AST::IsDecimal(rtype)) {
+                        if(rsize > finalSize)
+                            finalSize = rsize;
+                    }
+
+                    bool comparison = false;
+                    if(bytecodeOp == BC_FLT ||bytecodeOp == BC_FLTE || bytecodeOp == BC_FGT || bytecodeOp == BC_FGTE || bytecodeOp == BC_FEQ || bytecodeOp == BC_FNEQ) {
+                        regOut = BC_REG_AL;
+                        comparison = true;
+                    }
+                    if(bytecodeOp == BC_FMOD) {
+                        // we must use xmm2 instead, it makes it easier to deal with in x64 converter
+                        regOut = ENCODE_REG_BITS(BC_XMM2, SIZE_TO_BITS(finalSize));
                     }
 
                     if(bytecodeOp==0){
@@ -3478,7 +3501,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                             dfun->localVariables.last().frameOffset = OFFSET;\
                             dfun->localVariables.last().typeId = TYPE;
 
-        if(function->callConvention == BETCALL) {
+        switch(function->callConvention) {
+        case BETCALL: {
             if (function->arguments.size() != 0) {
                 _GLOG(log::out << "set " << function->arguments.size() << " args\n");
                 // int offset = 0;
@@ -3571,7 +3595,9 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             //  Generating them multiple times for each function is bad.
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
-        } else if(function->callConvention == STDCALL) {
+            break;
+        }
+        case STDCALL: {
             if (function->arguments.size() != 0) {
                 _GLOG(log::out << "set " << function->arguments.size() << " args\n");
                 // int offset = 0;
@@ -3642,28 +3668,29 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 arg.virtualType->id = funcImpl->polyArgs[i];
             }
 
+            const int normal_regs[4]{
+                BC_REG_RCX,
+                BC_REG_RDX,
+                BC_REG_R8,
+                BC_REG_R9,
+            };
+            const int float_regs[4] {
+                BC_REG_XMM0d,
+                BC_REG_XMM1d,
+                BC_REG_XMM2d,
+                BC_REG_XMM3d,
+            };
             auto& argTypes = funcImpl->argumentTypes;
-            #define MOV_ARG(I,R,R2) u8 size = info.ast->getTypeSize(argTypes[I].typeId); if(argTypes[I].typeId == AST_FLOAT32) \
-                    info.addInstruction({BC_MOV_RM_DISP32, R2, BC_REG_FP, size});\
-                else \
-                    info.addInstruction({BC_MOV_RM_DISP32, R, BC_REG_FP, size});\
-                info.addImm(GenInfo::FRAME_SIZE + I * 8);
-                    
-            if(argTypes.size() > 3){
-                // MOV_ARG(3, BC_REG_R9, BC_REG_XMM3)
-                MOV_ARG(3, (ENCODE_REG_BITS(BC_R9, SIZE_TO_BITS(size))), BC_REG_XMM3f)
-            }
-            if(argTypes.size() > 2){
-                // MOV_ARG(2, BC_REG_R8, BC_REG_XMM2)
-                MOV_ARG(2, (ENCODE_REG_BITS(BC_R8, SIZE_TO_BITS(size))), BC_REG_XMM2f)
-            }
-            if(argTypes.size() > 1){
-                MOV_ARG(1, (ENCODE_REG_BITS(BC_DX, SIZE_TO_BITS(size))), BC_REG_XMM1f)
-            }
-            // BC_REG
-            if(argTypes.size() > 0){
-                MOV_ARG(0, (ENCODE_REG_BITS(BC_CX, SIZE_TO_BITS(size))), BC_REG_XMM0f)
-                // MOV_ARG(0, BC_REG_RCX, BC_REG_XMM0)
+            for(int i=argTypes.size()-1;i>=0;i--) {
+                auto argType = argTypes[i].typeId;
+
+                u8 size = info.ast->getTypeSize(argType);
+                if(AST::IsDecimal(argType)) {
+                    info.addInstruction({BC_MOV_RM_DISP32, ENCODE_REG_BITS(float_regs[i], SIZE_TO_BITS(size)), BC_REG_FP, size});
+                } else {
+                    info.addInstruction({BC_MOV_RM_DISP32, ENCODE_REG_BITS(normal_regs[i], SIZE_TO_BITS(size)), BC_REG_FP, size});
+                }
+                info.addImm(GenInfo::FRAME_SIZE + i * 8);
             }
 
             // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES
@@ -3675,7 +3702,9 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             //  Generating them multiple times for each function is bad.
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
-        } else if(function->callConvention == UNIXCALL) {
+            break;
+        }
+        case UNIXCALL: {
             if (function->arguments.size() != 0) {
                 _GLOG(log::out << "set " << function->arguments.size() << " args\n");
                 // int offset = 0;
@@ -3823,8 +3852,11 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
             //  Generating them multiple times for each function is bad.
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
-        } else {
+            break;
+        }
+        default: {
             Assert(false);
+        }
         }
         
         dfun->srcStart = info.code->length();
@@ -3833,7 +3865,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
 
         dfun->srcEnd = info.code->length();
 
-        if(function->callConvention == BETCALL) {
+        switch(function->callConvention) {
+        case BETCALL: {
             for(int i=0;i<(int)function->polyArgs.size();i++){
                 auto& arg = function->polyArgs[i];
                 arg.virtualType->id = {}; // disable types
@@ -3870,12 +3903,14 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 }
             }
             if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
-                // add return if it doesn't exist
-                
+                // add return with no return values if it doesn't exist
+                // this is only fine if the function doesn't return values
                 info.addPop(BC_REG_FP);
                 info.addInstruction({BC_RET});
             }
-        } else if(function->callConvention == STDCALL) {
+            break;
+        }
+        case STDCALL: {
             for(int i=0;i<(int)function->polyArgs.size();i++){
                 auto& arg = function->polyArgs[i];
                 arg.virtualType->id = {}; // disable types
@@ -3912,12 +3947,15 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 }
             }
             if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
-                // add return if it doesn't exist
+                // add return with no return values if it doesn't exist
+                // this is only fine if the function doesn't return values
                 info.addInstruction({BC_BXOR, BC_REG_RAX, BC_REG_RAX, BC_REG_RAX});
                 info.addPop(BC_REG_FP);
                 info.addInstruction({BC_RET});
             }
-        } else if(function->callConvention == UNIXCALL) {
+            break;
+        }
+        case UNIXCALL: {
             for(int i=0;i<(int)function->polyArgs.size();i++){
                 auto& arg = function->polyArgs[i];
                 arg.virtualType->id = {}; // disable types
@@ -3955,13 +3993,17 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 }
             }
             if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
-                // add return if it doesn't exist
+                // add return with no return values if it doesn't exist
+                // this is only fine if the function doesn't return values
                 info.addInstruction({BC_BXOR, BC_REG_RAX, BC_REG_RAX, BC_REG_RAX});
                 info.addPop(BC_REG_FP);
                 info.addInstruction({BC_RET});
             }
-        } else {
+            break;
+        }
+        default: {
             Assert(false);
+        }
         }
         
         dfun->funcEnd = info.code->length() - 1;
@@ -5029,7 +5071,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             }
 
             //-- Evaluate return values
-            if(info.currentFunction->callConvention == BETCALL){
+            switch(info.currentFunction->callConvention){
+            case BETCALL: {
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
                     ASTExpression *expr = statement->arrayValues.get(argi);
                     // nextExpr = nextExpr->next;
@@ -5059,7 +5102,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         GeneratePop(info, 0, 0, dtype);
                     }
                 }
-            } else if (info.currentFunction->callConvention == STDCALL) {
+            }
+            case STDCALL: {
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
                     ASTExpression *expr = statement->arrayValues.get(argi);
                     // nextExpr = nextExpr->next;
@@ -5083,7 +5127,11 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         }
                         u8 size = info.ast->getTypeSize(retType.typeId);
                         if(size<=8){
-                            info.addPop(BC_REG_RAX);
+                            if(AST::IsDecimal(retType.typeId)) {
+                                info.addPop(BC_REG_XMM0d);
+                            } else {
+                                info.addPop(BC_REG_RAX);
+                            }
                         } else {
                             GeneratePop(info, 0, 0, retType.typeId); // throw away value to prevent cascading bugs
                         }
@@ -5094,7 +5142,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 if(statement->arrayValues.size()==0){
                     info.addInstruction({BC_BXOR, BC_REG_RAX,BC_REG_RAX,BC_REG_RAX});
                 }
-            } else if (info.currentFunction->callConvention == UNIXCALL) {
+            }
+            case UNIXCALL: {
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
                     ASTExpression *expr = statement->arrayValues.get(argi);
                     // nextExpr = nextExpr->next;
@@ -5118,7 +5167,11 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         }
                         u8 size = info.ast->getTypeSize(retType.typeId);
                         if(size<=8){
-                            info.addPop(BC_REG_RAX);
+                            if(AST::IsDecimal(retType.typeId)) {
+                                info.addPop(BC_REG_XMM0d);
+                            } else {
+                                info.addPop(BC_REG_RAX);
+                            }
                         } else {
                             GeneratePop(info, 0, 0, retType.typeId); // throw away value to prevent cascading bugs
                         }
@@ -5129,8 +5182,10 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 if(statement->arrayValues.size()==0){
                     info.addInstruction({BC_BXOR, BC_REG_RAX,BC_REG_RAX,BC_REG_RAX});
                 }
-            } else {
+            }
+            default: {
                 INCOMPLETE
+            }
             }
 
             // fix stack pointer before returning

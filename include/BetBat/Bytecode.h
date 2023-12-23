@@ -184,6 +184,7 @@ enum BCInstruction : u8{
     #define CAST_SINT_UINT 4
     #define CAST_UINT_SINT 5
     #define CAST_SINT_SINT 6
+    #define CAST_FLOAT_FLOAT 7
 
     BC_FEQ =   91,
     BC_FNEQ =  92,
@@ -238,7 +239,7 @@ u8
 
 #define DECODE_REG_BITS(R) (u8)(((R)&BC_REG_MASK)>>6)
 #define DECODE_REG_SIZE(R) (u8)(R==0?0:(1<<DECODE_REG_BITS(R)))
-#define ENCODE_REG_BITS(R,B) (u8)(((B)<<6)|R)
+#define ENCODE_REG_BITS(R,B) (u8)(((B)<<6)|(R&~BC_REG_MASK))
 
 #define SIZE_TO_BITS(X) (u8)(X&8?3:X&4?2:X&2?1:X&1?0:0)
 // The ordering is strange to make it easier to convert it
@@ -276,7 +277,7 @@ u8
 #define BC_XMM6 26
 #define BC_XMM7 27
 
-#define IS_REG_XMM(reg) (BC_XMM0 <= DECODE_REG_TYPE(reg) && DECODE_REG_TYPE(reg) <= BC_XMM3)
+#define IS_REG_XMM(reg) (BC_XMM0 <= DECODE_REG_TYPE(reg) && DECODE_REG_TYPE(reg) <= BC_XMM7)
 
 // BC_REG_ALL can't be 0 because it's seen as no register so we do 8.
 #define BC_REG_AL (ENCODE_REG_BITS(BC_AX, BC_REG_8))

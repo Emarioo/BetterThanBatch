@@ -153,8 +153,8 @@
 #define OPCODE_3_MOVSS_RM_REG (u32)0x110fF3
 // manual says "MOVSS xmm1, m32" but register to register might work too, test it though
 #define OPCODE_3_MOVSS_REG_RM (u32)0x100fF3
-// for double
-// #define OPCODE_MOVSD
+#define OPCODE_3_MOVSD_RM_REG (u32)0x110fF2
+#define OPCODE_3_MOVSD_REG_RM (u32)0x100fF2
 
 #define OPCODE_3_ADDSS_REG_RM (u32)0x580FF3
 #define OPCODE_3_SUBSS_REG_RM (u32)0x5C0FF3
@@ -694,6 +694,7 @@ void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuff
         log::out << log::NO_COLOR << it.message << "\n";
     }
 }
+// allowRX refers to the registers R8-R11
 u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool allowRX = false){
     u8 size = DECODE_REG_SIZE(bcreg);
     Assert(size&handlingSizes);
@@ -1004,9 +1005,22 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 u8 reg0 = BCToProgramReg(op0,0xF, xmm_op0, extend_op0);
                 u8 reg1 = BCToProgramReg(op1,0xF, xmm_op1, extend_op1);
                 if(xmm_op0 && xmm_op1) {
-                    Assert(size0 == 4 && size1 == 4);
-                    prog->add3(OPCODE_3_MOVSS_REG_RM);
-                    prog->addModRM(MODE_REG, reg1, reg0);
+                    Assert(size0 == size1);
+                    switch(size0) {
+                        case 4: {
+                            prog->add3(OPCODE_3_MOVSS_REG_RM);
+                            prog->addModRM(MODE_REG, reg1, reg0);
+                            break;
+                        }
+                        case 8: {
+                            prog->add3(OPCODE_3_MOVSD_REG_RM);
+                            prog->addModRM(MODE_REG, reg1, reg0);
+                            break;
+                        }
+                        default: {
+                            Assert(("size when moving float isn't f32 or f64",false));
+                        }
+                    }
                 } else if(xmm_op0) {
                     Assert(size0 == 4 && size1 == 4);
                     prog->add3(OPCODE_3_MOVSS_RM_REG);

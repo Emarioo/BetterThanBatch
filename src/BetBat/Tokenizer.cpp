@@ -182,7 +182,8 @@ std::string Token::getLine(){
     range.endIndex = end;
     range.firstToken.tokenStream = tokenStream;
     std::string out = "";
-    range.feed(out);
+    out.resize(range.queryFeedSize());
+    range.feed((char*)out.data(), out.size());
     
     // for(int i=start;i<end;i++){
     //     out += std::string(tokenStream->get(i));
@@ -206,7 +207,7 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment) c
         if(tok.flags&TOKEN_DOUBLE_QUOTED){
             if(quoted_environment) {
                 *(outBuffer++) = '\\';
-                CHECK_END    
+                CHECK_END
             }
             *(outBuffer++) = '"';
             CHECK_END
@@ -215,7 +216,7 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment) c
         else if(tok.flags&TOKEN_SINGLE_QUOTED){
             if(quoted_environment) {
                 *(outBuffer++) = '\\';
-                CHECK_END    
+                CHECK_END
             }
             *(outBuffer++) = '\'';
             CHECK_END
@@ -224,11 +225,40 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment) c
         for(int j=0;j<tok.length;j++){
             char chr = *(tok.str+j);
             if(chr=='\n'){
-                *(outBuffer++) = '\\'; // Is this okay? should it create two characters?
+                *(outBuffer++) = '\\';
                 CHECK_END
-                *(outBuffer++) = 'n'; // look at other feed functions
+                *(outBuffer++) = 'n';
                 CHECK_END
-            }else{
+            } else if(chr=='\t'){
+                *(outBuffer++) = '\\';
+                CHECK_END
+                *(outBuffer++) = 't';
+                CHECK_END
+            } else if(chr=='\r'){
+                *(outBuffer++) = '\\';
+                CHECK_END
+                *(outBuffer++) = 'r';
+                CHECK_END
+            } else if(chr=='\0'){
+                *(outBuffer++) = '\\';
+                CHECK_END
+                *(outBuffer++) = '0';
+                CHECK_END
+            } else if(chr=='\e'){
+                *(outBuffer++) = '\\';
+                CHECK_END
+                *(outBuffer++) = 'e';
+                CHECK_END
+            } else if(0 == (chr&0xE0)){ // chr < 32
+                *(outBuffer++) = '\\';
+                CHECK_END
+                *(outBuffer++) = 'x';
+                CHECK_END
+                *(outBuffer++) = (chr >> 4) < 10 ? (chr >> 4) + '0' : (chr >> 4) + 'a';
+                CHECK_END
+                *(outBuffer++) = (chr & 0xF) < 10 ? (chr & 0xF) + '0' : (chr & 0xF) + 'a';;
+                CHECK_END
+            } else {
                 *(outBuffer++) = chr;
                 CHECK_END
             }
@@ -285,10 +315,13 @@ u32 TokenRange::queryFeedSize(bool quoted_environment) const {
         
         for(int j=0;j<tok.length;j++){
             char chr = *(tok.str+j);
-            if(chr=='\n'){
+            if(chr=='\n'||chr=='\r'||chr=='\t'||chr=='\e'||chr=='\0'){
                 size+=2;
-            }else
+            } else if(0 == (chr & 0xE0)){
+                size+=4;
+            } else {
                 size++;
+            }
         }
         if(tok.flags&TOKEN_DOUBLE_QUOTED) {
             if(quoted_environment) {
@@ -312,6 +345,7 @@ u32 TokenRange::queryFeedSize(bool quoted_environment) const {
 }
 void TokenRange::feed(std::string& outBuffer) const {
     using namespace engone;
+    
     // assert?
     if(!tokenStream()) return;
     for(int i=startIndex();i<endIndex;i++){
@@ -344,38 +378,8 @@ void TokenRange::feed(std::string& outBuffer) const {
 }
 void Token::print(bool skipSuffix) const{
     using namespace engone;
-    if(!str) {
-        return;
-    }
-    // if(printFlags&TOKEN_PRINT_QUOTES){
-        if(flags&TOKEN_DOUBLE_QUOTED)
-            log::out << '"';
-        else if(flags&TOKEN_SINGLE_QUOTED)
-            log::out << '\'';
-    // }
-    for(int i=0;i<length;i++){
-        char chr = *(str+i);
-        // Assert(chr!=0);
-        if(chr=='\n'){
-            log::out << "\\n"; // Is this okay?
-        }else if(chr=='\t'){
-            log::out << "\\t"; 
-        }else if(chr=='\\'){
-            log::out << "\\\\"; 
-        }else if(chr=='\0'){
-            log::out << "\\0"; 
-        }else
-            log::out << chr;
-    }
-    // if(printFlags&TOKEN_PRINT_QUOTES){
-        if(flags&TOKEN_DOUBLE_QUOTED)
-            log::out << '"';
-        else if(flags&TOKEN_SINGLE_QUOTED)
-            log::out << '\'';
-    // }
-    if(flags&TOKEN_SUFFIX_SPACE && !skipSuffix){
-        log::out << " ";
-    }
+    auto tokrange = range();
+    tokrange.print();
 }
 bool Token::operator==(const std::string& text) const {
     if((int)text.length()!=length)
@@ -411,19 +415,8 @@ bool Token::operator!=(const char* text) const {
     return !(*this == text);
 }
 int Token::calcLength() const {
-    int len = length;
-    if(flags & TOKEN_MASK_QUOTED)
-        len += 2;
-    // TODO: Take care of all special characters but to it in a
-    //   scalable way. Not loads of if statements because you will
-    //   need this code else where. Like token.print
-    for(int i=0;i<length;i++){
-        char chr = str[i];
-        if(chr=='\n'||chr=='\t'||chr=='\\'){
-            len+=1; // one extra
-        }
-    }
-    return len;
+    auto tokrange = range();
+    return tokrange.queryFeedSize();
 }
 engone::Logger& operator<<(engone::Logger& logger, Token& token){
     token.print(true);
@@ -976,8 +969,8 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                 // MEASURE;
 
                 // #define OPTIMIZE_COMMENT
-                // Thought this code would be an optimization but it
-                // doesn't seem like it. Not very noticeable at least.
+                // I thought this code would be faster but it seems
+                // like it's slower.
                 #ifdef OPTIMIZE_COMMENT
                 if(chr=='\n'||index==length){
                     if(!foundNonSpaceOnLine)
@@ -1094,6 +1087,31 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                     } else if(nextChr=='r'){
                         tmp = '\r';
                         _TLOG(log::out << "\\r";)
+                    } else if(nextChr=='e'){
+                        tmp = '\e';
+                        _TLOG(log::out << "\\e";)
+                    } else if(nextChr=='x'){
+                        char hex0 = text[index];
+                        index++;
+                        char hex1 = text[index];
+                        index++;
+
+                        // NOTE: Currently, \x3k is seen as \x03. Is this okay?
+                        tmp = 0;
+                        bool valid_hex = false;
+                        if(hex0 >= '0' && hex0 <= '9') {
+                            tmp = hex0 - '0';
+                        } else if((hex0|32) >= 'a' && (hex0|32) <= 'f') {
+                            tmp = (hex0|32) - 'a' + 10;
+                        }
+                        if(hex1 >= '0' && hex1 <= '9') {
+                            tmp = (tmp << 4) + hex1 - '0';
+                        } else if((hex1|32) >= 'a' && (hex1|32) <= 'f') {
+                            tmp = (tmp << 4) + (hex1|32) - 'a' + 10;
+                        }
+
+                        // tmp = '\r';
+                        _TLOG(log::out << "\\x" << hex0 << hex1;)
                     } else{
                         tmp = '?';
                         _TLOG(log::out << tmp;)

@@ -241,14 +241,21 @@ struct DynamicArray {
         Assert(index < used);
         T* ptr = _ptr + index;
         ptr->~T();
-        --used;
-        if(index != used){ // if we didn't remove the last element
-            for(u32 i = index; i < used + 1; i++){
-                *(_ptr + i) = std::move(*(_ptr + i + 1));
+        // PROBABLY BUG HERE
+        if(index != used - 1){ // if we didn't remove the last element
+            // this is not beautiful but required for std::string to work
+            new(ptr)T();
+            for(u32 i = index; i < used - 1; i++){
+                T* a = _ptr + i;
+                T* b = _ptr + i + 1;
+                *(a) = std::move(*(b));
             }
+            T* lastPtr = _ptr + used - 1;
+            lastPtr->~T();
             // doesn't work with std::string
             // memcpy((void*)(_ptr + index), _ptr + index + 1, (used-index) * sizeof(T));
         }
+        --used;
         return true;
     }
     T* getPtr(u32 index) const {

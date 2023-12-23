@@ -1,10 +1,10 @@
 
-int hey(int a,int b) {
-    return a + b;
+double hey() {
+    return 0.432;
 }
 
 int main() {
-    hey(2,5);
+    auto a = hey();
     
     return 0;    
 }

@@ -174,6 +174,7 @@ AST *AST::Create() {
     ast->createPredefinedType(Token("i32"),scopeId, AST_INT32, 4);
     ast->createPredefinedType(Token("i64"),scopeId, AST_INT64, 8);
     ast->createPredefinedType(Token("f32"),scopeId, AST_FLOAT32, 4);
+    ast->createPredefinedType(Token("f64"),scopeId, AST_FLOAT64, 8);
     ast->createPredefinedType(Token("bool"),scopeId, AST_BOOL, 1);
     ast->createPredefinedType(Token("char"),scopeId, AST_CHAR, 1);
     ast->createPredefinedType(Token("null"),scopeId, AST_NULL, 8);
@@ -376,10 +377,13 @@ bool AST::castable(TypeId from, TypeId to){
         if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
             return true;
     }
-    if (from == AST_FLOAT32 && AST::IsInteger(to)) {
+    if (AST::IsDecimal(from) && AST::IsInteger(to)) {
         return true;
     }
-    if (AST::IsInteger(from) && to == AST_FLOAT32) {
+    if (AST::IsInteger(from) && AST::IsDecimal(to)) {
+        return true;
+    }
+    if (AST::IsDecimal(from) && AST::IsDecimal(to)) {
         return true;
     }
     if ((AST::IsInteger(from) && to == AST_CHAR) ||
@@ -2087,6 +2091,8 @@ void ASTExpression::print(AST *ast, int depth) {
         log::out.flush();
         if (typeId == AST_FLOAT32)
             log::out << f32Value;
+        if (typeId == AST_FLOAT64)
+            log::out << f64Value;
         else if (AST::IsInteger(typeId))
             log::out << i64Value;
         else if (typeId == AST_BOOL)

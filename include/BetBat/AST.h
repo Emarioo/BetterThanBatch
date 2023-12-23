@@ -58,7 +58,7 @@ enum PrimitiveType : u16 {
     AST_CHAR,
     
     AST_FLOAT32,
-    AST_FLOAT64, // not supported yet
+    AST_FLOAT64,
     
     AST_STRING, // converted to char[]
     AST_NULL, // converted to void*
@@ -474,6 +474,7 @@ struct ASTExpression : ASTNode {
     union {
         i64 i64Value=0;
         float f32Value;
+        double f64Value;
         bool boolValue;
         char charValue;
     };

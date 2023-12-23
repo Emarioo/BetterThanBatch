@@ -70,8 +70,6 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 // #define DUMP_ALL_ASM
 #endif
 
-// #define LOG_ALLOCATIONS
-
 // #define LOG_ALLOC
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
@@ -143,23 +141,26 @@ enum LoggingSection : u32 {
     LOG_INTERPRETER     = 0x80,
     LOG_OVERVIEW        = 0x100,
     LOG_MACRO_MATCH     = 0x200,
+
+    LOG_ALLOCATIONS     = 0x400,
 };
 extern LoggingSection global_loggingSection;
 
 #ifdef DEBUG
-#define _BASE_LOG(F,...) { if(global_loggingSection & F) { __VA_ARGS__; } }
-#define _TLOG(x)    _BASE_LOG(LOG_TOKENIZER,x)
-#define _MLOG(x)    _BASE_LOG(LOG_PREPROCESSOR,x)
-#define _PLOG(x)    _BASE_LOG(LOG_PARSER,x)
-#define _TCLOG(x)   _BASE_LOG(LOG_TYPECHECKER,x)
-#define _GLOG(x)    _BASE_LOG(LOG_GENERATOR,x)
-#define _OLOG(x)    _BASE_LOG(LOG_OPTIMIZER,x)
-#define _CLOG(x)    _BASE_LOG(LOG_CONVERTER,x)
-#define _ILOG(x)    _BASE_LOG(LOG_INTERPRETER,x)
-#define _VLOG(x)    _BASE_LOG(LOG_OVERVIEW,x)
+#define _LOG(F,...) { if(global_loggingSection & F) { __VA_ARGS__; } }
+#define _TLOG(x)    _LOG(LOG_TOKENIZER,x)
+#define _MLOG(x)    _LOG(LOG_PREPROCESSOR,x)
+#define _PLOG(x)    _LOG(LOG_PARSER,x)
+#define _TCLOG(x)   _LOG(LOG_TYPECHECKER,x)
+#define _GLOG(x)    _LOG(LOG_GENERATOR,x)
+#define _OLOG(x)    _LOG(LOG_OPTIMIZER,x)
+#define _CLOG(x)    _LOG(LOG_CONVERTER,x)
+#define _ILOG(x)    _LOG(LOG_INTERPRETER,x)
+#define _VLOG(x)    _LOG(LOG_OVERVIEW,x)
 
-#define _MMLOG(x)   _BASE_LOG(LOG_MACRO_MATCH,x)
+#define _MMLOG(x)   _LOG(LOG_MACRO_MATCH,x)
 #else
+#define _LOG(F,...)
 #define _TLOG(x) 
 #define _MLOG(x) 
 #define _PLOG(x) 

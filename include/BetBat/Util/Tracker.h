@@ -8,6 +8,16 @@
         Very automated. You should't need to name the allocations.
         Option to turn off since tracking will cause overhead
         Information of where in the code the allocation came from (need macros for this or you pass this info through arguments). Try macros since you want it to be automatic.
+
+    Side note:
+        Tracker.h and Tracker.cpp have gotten a little strange because I wanted to
+        use DynamicArray in the tracker for storing counts and types.
+        But Array.h (where DynamicArray is) can't be included here because it 
+        uses Tracker.h. We would get circular includes. We can't put method definitions from DynamicArray
+        into a .cpp file and include Tracker.h there instead of Array.h because the methods uses templates.
+        C++ is really annoying because the two options is doing stupid stuff here or
+        create a non-template definition for every template function where the tracker is used.
+        Sigh.
 */
 
 #define TRACK_ADDS(TYPE, COUNT)
@@ -33,7 +43,6 @@
 #include <string>
 #include <typeinfo>
 
-// kind of needs to be in a struct because of C++'s awful templates and headers
 struct TrackLocation {
     const char* fname=nullptr;
     u32 line = 0;
@@ -62,7 +71,11 @@ struct TrackLocation {
 // TODO init and cleanup functions
 // you have to disable tracking when the destructors of
 // global data is called. 
+// struct Tracker_impl;
 struct Tracker {
+    // static Tracker_impl* Create();
+    // static void Destroy(Tracker_impl* tracker);
+    static void DestroyGlobal();
     // enabled by default
     static void SetTracking(bool enabled);
     static void AddTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
@@ -70,5 +83,13 @@ struct Tracker {
     static void PrintTrackedTypes();
     // how much memory the tracker uses
     static u32 GetMemoryUsage();
+
+    // // enabled by default
+    // void setTracking(bool enabled);
+    // void addTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
+    // void delTracking(const std::type_info& typeInfo, u32 size, const TrackLocation& loc = {}, u32 count = 1);
+    // void printTrackedTypes();
+    // // how much memory the tracker uses
+    // u32 getMemoryUsage();
 };
 #endif // NO_TRACKER

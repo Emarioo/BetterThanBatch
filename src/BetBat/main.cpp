@@ -429,7 +429,9 @@ int main(int argc, const char** argv){
     // log::out << "Total allocated bytes: "<<GetTotalAllocatedBytes() << "\n";
     log::out.cleanup();
     // system("pause");
+
     Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+    Tracker::DestroyGlobal();
 
     return compilerExitCode;
 }

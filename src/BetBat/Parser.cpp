@@ -1417,22 +1417,29 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsDecimal(token)){
                 Token tok = info.get(info.at()+1);
+                ASTExpression* tmp = nullptr;
+                Assert(token.str[0]!='-');// ensure that the tokenizer hasn't been changed
+                // to clump the - together with the number token
                 if((token.flags&TOKEN_SUFFIX_LINE_FEED)==0 && 0==(token.flags&TOKEN_SUFFIX_SPACE)
                 && Equal(tok,"d")) {
                     info.next();
-                    // TODO: 213.3d is parsed as a double
-                    Assert(("doubles not supported",false));
+                    info.next();
+                    tmp = info.ast->createExpression(TypeId(AST_FLOAT64));
+                    tmp->f64Value = ConvertDecimal(token);
+                    if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
+                        ops.pop();
+                        tmp->f64Value = -tmp->f64Value;
+                    }
+                } else {
+                    info.next();
+                    tmp = info.ast->createExpression(TypeId(AST_FLOAT32));
+                    tmp->f32Value = ConvertDecimal(token);
+                    if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
+                        ops.pop();
+                        tmp->f32Value = -tmp->f32Value;
+                    }
                 }
-                token = info.next();
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FLOAT32));
-                tmp->f32Value = ConvertDecimal(token);
-                Assert(token.str[0]!='-');// ensure that the tokenizer hasn't been changed
-                // to clump the - together with the number token
 
-                if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
-                    ops.pop();
-                    tmp->f32Value = -tmp->f32Value;
-                }
                 values.add(tmp);
                 tmp->constantValue = true;
                 tmp->tokenRange.firstToken = token;
