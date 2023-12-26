@@ -1,0 +1,26 @@
+
+
+// // using u64 as File does not work since functions are evaluated
+// // first and then using. Using won't be applied to functions.
+// // A macro is used instead,or now.
+// // File handle
+#define File u64
+// enum FileFlag {
+//     FILE_NO_FLAG=0,
+//     FILE_ONLY_READ=1,
+//     FILE_CAN_CREATE=2,
+//     FILE_ALWAYS_CREATE=4,
+// }
+// returns file handle and file size
+fn LINK_TYPE FileOpen(path: Slice<char>*, readOnly: bool, outFileSize: u64* = null) -> File;
+// returns read bytes
+fn LINK_TYPE FileRead(file: File, buffer: void*, readBytes: u64) -> u64;
+// returns written bytes
+fn LINK_TYPE FileWrite(file: File, buffer: void*, writeBytes: u64) -> u64;
+fn LINK_TYPE FileClose(file: File);
+
+
+fn LINK_TYPE DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterator*;
+fn LINK_TYPE DirectoryIteratorDestroy(iterator: DirectoryIterator*);
+fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);

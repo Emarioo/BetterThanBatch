@@ -217,25 +217,29 @@ fn _print(t: f32){
         _print(decimals)
     }
 
-    fn printBits(bits: u64) {
-        for @reverse 0..64 {
-            if bits & (cast<u64>1 << nr) {
-                print('1')
-            } else 
-                print('0')
-        }
-        print('\n')
-    }
-    fn printBits(bits: u32) {
-        for @reverse 0..32 {
-            if bits & (cast<u64>1 << nr) {
-                print('1')
-            } else 
-                print('0')
-        }
-        print('\n')
-    }
+    // fn printBits(bits: u64) {
+    //     for @reverse 0..64 {
+    //         if bits & (cast<u64>1 << nr) {
+    //             print('1')
+    //         } else 
+    //             print('0')
+    //     }
+    //     print('\n')
+    // }
+    // fn printBits(bits: u32) {
+    //     for @reverse 0..32 {
+    //         if bits & (cast<u64>1 << nr) {
+    //             print('1')
+    //         } else 
+    //             print('0')
+    //     }
+    //     print('\n')
+    // }
     // #endif
+}
+fn _print(tt: f64){
+    // TODO: Print 64-bit float without casting it to 32-bit and loosing information.
+    _print(cast<f32>tt);
 }
 fn @hide _print(t: char){
     prints(Slice<char>{&t, 1})

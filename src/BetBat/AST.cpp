@@ -453,6 +453,10 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
                 TypeId implArgType = overload.funcImpl->argumentTypes[j+startOfRealArguments].typeId;
                 if(argTypes[j] != implArgType) {
                     found = false;
+                    // NOTE: What about implicitly casting float?
+                    //  Casting floats and doubles has more overhead than integers.
+                    //  It may therefore be a good idea to force the user to explicitly cast.
+                    //  Or create two functions for f32 and f64.
                     if(!(AST::IsInteger(implArgType) && AST::IsInteger(argTypes[j]))) {
                         foundInt = false;
                     }
@@ -2091,7 +2095,7 @@ void ASTExpression::print(AST *ast, int depth) {
         log::out.flush();
         if (typeId == AST_FLOAT32)
             log::out << f32Value;
-        if (typeId == AST_FLOAT64)
+        else if (typeId == AST_FLOAT64)
             log::out << f64Value;
         else if (AST::IsInteger(typeId))
             log::out << i64Value;

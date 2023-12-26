@@ -11,12 +11,8 @@
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION("Type checker, ", CONTENT)
 
-#ifdef TCLOG
-#define _TCLOG_ENTER(X) X
+#define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
 // #define _TCLOG_ENTER(X)
-#else
-#define _TCLOG_ENTER(X)
-#endif
 
 SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, TinyArray<TypeId>* outTypes, bool attempt);
 

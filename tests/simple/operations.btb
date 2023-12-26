@@ -106,6 +106,15 @@ test 1u; cast<u64>0x8000_0000_0000_0000 >= 0u
 test 0u; cast<u64>0x8000_0000_0000_0000 < 0u
 test 0u; cast<u64>0x8000_0000_0000_0000 <= 0u
 
+test 23.0; cast<f32>cast<u8>23;
+test 23.0; cast<f32>cast<u16>23;
+test 23.0; cast<f32>cast<u32>23;
+test 23.0; cast<f32>cast<u64>23;
+test 23.0; cast<f64>cast<u8>23;
+test 23.0; cast<f64>cast<u16>23;
+test 23.0; cast<f64>cast<u32>23;
+test 23.0; cast<f64>cast<u64>23;
+
 // TODO: Signed conversions of 8,16,32,64-bit integers and floats.
 // TODO: f64
 

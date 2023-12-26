@@ -1087,7 +1087,7 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
         
         DynamicArray<u32> typeOffsets{};
 
-        FORN(di->functions) {
+        FORNI(di->functions)
             ALIGN4
             inOutInfo->functionTypeIndices[nr] = nextTypeIndex++;
             typeOffsets.add(offset - typeRecordStart);
@@ -1099,8 +1099,8 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
             WRITE(u32, 0); // scope, 0 means global
             Assert(bareProcedure != -1);
             WRITE(u32, bareProcedure); // procedure type
-            pdb->write(streamNumber, offset, it->name.length() + 1, (void*)it->name.c_str());
-            offset += it->name.length() + 1;
+            pdb->write(streamNumber, offset, it.name.length() + 1, (void*)it.name.c_str());
+            offset += it.name.length() + 1;
             
             *typeLength = offset - typeOffset;
         }

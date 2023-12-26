@@ -57,9 +57,23 @@ bool streq(const char* a, const char* b) {
     }
     return true;
 }
+#include "unistd.h"
 int main(int argc, const char** argv){
     using namespace engone;
-    
+
+    // const int a = sizeof(timespec);
+
+    // clock_gettime
+
+    // CompileInfo info{};
+
+    // Path dir = "examples/unix";
+    // Path dir = "";
+    // Path p = info.findSourceFile("/home/emarioo/BetterThanBatch/examples/unix/../dev.btb",dir);
+    // log::out << p.text << "\n";
+
+    // return 0;
+
     // log::out << "a "<< sizeof(pthread_t)<<"\n";
     
     // struct Bug {

@@ -161,20 +161,41 @@
 #define OPCODE_3_MULSS_REG_RM (u32)0x590FF3
 #define OPCODE_3_DIVSS_REG_RM (u32)0x5E0FF3
 
-// convert i32 (or i64 with rexw) to float
+#define OPCODE_3_ADDSD_REG_RM (u32)0x580FF2
+#define OPCODE_3_SUBSD_REG_RM (u32)0x5C0FF2
+#define OPCODE_3_MULSD_REG_RM (u32)0x590FF2
+#define OPCODE_3_DIVSD_REG_RM (u32)0x5E0FF2
+
+
+// IMPORTANT: REXW can't be pre-appended to the opcode.
+//  It's sort of built in for some reason. You have to define
+//  OPCODE_4_REXW if you need rexw
+// NOTE: C/C++ uses the truncated conversion instead. This language should too.
+//  convert float to i32 (or i64 with rexw) with truncation (float is rounded down)
+
+// int -> float
 #define OPCODE_3_CVTSI2SS_REG_RM (u32)0x2A0FF3
 #define OPCODE_4_REXW_CVTSI2SS_REG_RM (u32)0x2A0F48F3
-// convert float to i32 (or i64 with rexw)
-// C/C++ uses the truncated conversion instead. This language should too.
-// #define OPCODE_3_CVTSS2SI_REG_RM (u32)0x2D0FF3
-// #define OPCODE_4_REXW_CVTSS2SI_REG_RM (u32)0x2D0F48F3
-// conver float to i32 (or i64 with rexw) with truncation (float is rounded down)
+// float -> int
 #define OPCODE_3_CVTTSS2SI_REG_RM (u32)0x2C0FF3
 #define OPCODE_4_REXW_CVTTSS2SI_REG_RM (u32)0x2C0F48F3
+// double -> int
+#define OPCODE_3_CVTTSD2SI_REG_RM (u32)0x2C0FF2
+#define OPCODE_4_REXW_CVTTSD2SI_REG_RM (u32)0x2C0F48F2
+// int -> double
+#define OPCODE_3_CVTSI2SD_REG_RM (u32)0x2A0FF2
+#define OPCODE_4_REXW_CVTSI2SD_REG_RM (u32)0x2A0F48F2
+// double -> float
+#define OPCODE_3_CVTSD2SS_REG_RM (u32)0x5A0FF2
+// float -> double
+#define OPCODE_3_CVTSS2SD_REG_RM (u32)0x5F0FF3
+
 
 // float comparisson, sets flags, see https://www.felixcloutier.com/x86/comiss
 #define OPCODE_2_COMISS_REG_RM (u16)0x2F0F
 #define OPCODE_2_UCOMISS_REG_RM (u16)0x2E0F
+
+#define OPCODE_3_COMISD_REG_RM (u32)0x2F0F66
 
 #define OPCODE_4_ROUNDSS_REG_RM_IMM8 (u32)0x0A3A0F66
 
@@ -1005,6 +1026,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 u8 reg0 = BCToProgramReg(op0,0xF, xmm_op0, extend_op0);
                 u8 reg1 = BCToProgramReg(op1,0xF, xmm_op1, extend_op1);
                 if(xmm_op0 && xmm_op1) {
+                    // testandcommit
                     Assert(size0 == size1);
                     switch(size0) {
                         case 4: {
@@ -1018,31 +1040,77 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             break;
                         }
                         default: {
-                            Assert(("size when moving float isn't f32 or f64",false));
+                            Assert(("operands for BC_MOV_RR have invalid size, they must be 4 or 8 bytes (f32 or f64) COMPILER BUG?",false));
+                            break;
                         }
                     }
                 } else if(xmm_op0) {
-                    Assert(size0 == 4 && size1 == 4);
-                    prog->add3(OPCODE_3_MOVSS_RM_REG);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                    Assert(size0 == size1);
+                    // NOTE: Is it okay to write below the stack pointer?
+                    // testandcommit
+                    switch(size0) {
+                    case 4: {
+                        prog->add3(OPCODE_3_MOVSS_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
 
-                    if(extend_op1) 
-                        prog->add(PREFIX_REXR);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, reg1, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                        if(extend_op1) 
+                            prog->add(PREFIX_REXR);
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg1, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                        break;
+                    }
+                    case 8: {
+                        prog->add3(OPCODE_3_MOVSD_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+
+                        if(extend_op1) 
+                            prog->add(PREFIX_REXR);
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg1, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                        break;
+                    }
+                    default: {
+                        Assert(("operands for BC_MOV_RR have invalid size, they must be 4 or 8 bytes (f32 or f64) COMPILER BUG?",false));
+                        break;
+                    }
+                    }
                 } else if(xmm_op1) {
-                    Assert(size0 == 4 && size1 == 4);
-                    if(extend_op0) 
-                        prog->add(PREFIX_REXR);
-                    prog->add(OPCODE_MOV_RM_REG);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                    // testandcommit
+                    Assert(size0 == size1);
+                    switch(size0) {
+                    case 4: {
+                        if(extend_op0) 
+                            prog->add(PREFIX_REXR);
+                        prog->add(OPCODE_MOV_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
 
-                    prog->add3(OPCODE_3_MOVSS_REG_RM);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, reg1, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                        prog->add3(OPCODE_3_MOVSS_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg1, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                        break;
+                    }
+                    case 8: {
+                        if(extend_op0) 
+                            prog->add(PREFIX_REXR);
+                        prog->add(OPCODE_MOV_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+
+                        prog->add3(OPCODE_3_MOVSD_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg1, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                        break;
+                    }
+                    default: {
+                        Assert(("operands for BC_MOV_RR have invalid size, they must be 4 or 8 bytes (f32 or f64) COMPILER BUG?",false));
+                        break;
+                    }
+                    }
                 } else {
                     // Assert(size0 == size1);
                     // We may be doing a dangerous thing if the operands are
@@ -1140,11 +1208,18 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 }
 
                 if(xmm_reg) {
-                    Assert(mov_size == 4); // moving 1 or 2 bytes from a float doesn't make since and double floats aren't supported yet.
-                    if(to_memory)
-                        prog->add3(OPCODE_3_MOVSS_RM_REG);
-                    else
-                        prog->add3(OPCODE_3_MOVSS_REG_RM);
+                    Assert(mov_size == 4 || mov_size == 8); // moving 1 or 2 bytes from a float doesn't make since and double floats aren't supported yet.
+                    if(to_memory) {
+                        if(mov_size == 4)
+                            prog->add3(OPCODE_3_MOVSS_RM_REG);
+                        else
+                            prog->add3(OPCODE_3_MOVSD_RM_REG);
+                    } else {
+                        if(mov_size == 4)
+                            prog->add3(OPCODE_3_MOVSS_REG_RM);
+                        else
+                            prog->add3(OPCODE_3_MOVSD_REG_RM);
+                    }
                 } else {
                     switch(mov_size) {
                         case 1: {
@@ -1204,83 +1279,6 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 }
                 break;
             }
-            // break; case BC_MOV_MR:
-            // case BC_MOV_MR_DISP32: {
-            //     // IMPORTANT: Be careful when changing stuff here. You might think you know
-            //     //  but you really don't. Keep track of which operand is destination and output
-            //     //  and which one is register and register/memory
-            //     i8 size = (i8)op2;
-            //     #ifndef ENABLE_FAULTY_X64
-            //     if(DECODE_REG_TYPE(op0)!=DECODE_REG_TYPE(op1) && size != 8 && size != 4) {
-            //         // the upper bits of 32-bit registers will be cleared automatically.
-            //         // 8-bit and 16-bit registers will not do that so we do it ourselves.
-            //         prog->add(PREFIX_REXW);
-            //         prog->add(OPCODE_XOR_REG_RM);
-            //         prog->addModRM(MODE_REG,BCToProgramReg(op1,0xF),BCToProgramReg(op1,0xF));
-            //     }
-            //     #endif
-            //     Assert(DECODE_REG_TYPE(op0)!=DECODE_REG_TYPE(op1));
-
-            //     bool xmm_op1 = IS_REG_XMM(op1);
-            //     if(xmm_op1) {
-            //         Assert(false);
-            //     } else {
-            //         u8 rmReg = BCToProgramReg(op0,8);
-            //         u8 mode = MODE_DEREF;
-            //         bool useSIB = false;
-            //         if(rmReg == REG_SP) {
-            //             useSIB = true;
-            //         }
-            //         if(imm==0){
-            //             if(rmReg == REG_BP) {
-            //                 mode = MODE_DEREF_DISP8;
-            //             }
-            //         } else if(imm >= -128 && imm <= 127) {
-            //             mode = MODE_DEREF_DISP8;
-            //         } else {
-            //             mode = MODE_DEREF_DISP32;
-            //         }
-            //         Assert(size==1||size==2||size==4||size==8);
-            //         switch(size) {
-            //             case 1: {
-            //                 prog->add(OPCODE_MOV_REG_RM8);
-            //                 // prog->addModRM(mode, BCToProgramReg(op1,size), BCToProgramReg(op0,8));
-            //                 break;
-            //             }
-            //             break; case 2: {
-            //                 prog->add(PREFIX_16BIT);
-            //                 prog->add(OPCODE_MOV_REG_RM);
-            //                 // prog->addModRM(mode, BCToProgramReg(op1,size), BCToProgramReg(op0,8));
-            //                 break;
-            //             }
-            //             break; case 4: {
-            //                 prog->add(OPCODE_MOV_REG_RM);
-            //                 // prog->addModRM(mode, BCToProgramReg(op1,size), BCToProgramReg(op0,8));
-            //                 break;
-            //             }
-            //             break; case 8: {
-            //                 prog->add(PREFIX_REXW);
-            //                 prog->add(OPCODE_MOV_REG_RM);
-            //                 // prog->addModRM(mode, BCToProgramReg(op1,size), BCToProgramReg(op0,8));
-            //                 break;
-            //             }
-            //             default: {
-            //                 Assert(false);
-            //             }
-            //         }
-            //         if(useSIB) {
-            //             prog->addModRM_SIB(mode, BCToProgramReg(op1,size), SIB_SCALE_1, SIB_INDEX_NONE, rmReg);
-            //         } else {
-            //             prog->addModRM(mode, BCToProgramReg(op1,size), rmReg);
-            //         }
-            //         if(mode == MODE_DEREF_DISP8) {
-            //             prog->add((u8)imm);
-            //         } else if(mode == MODE_DEREF_DISP32) {
-            //             prog->add4((u32)imm);
-            //         }
-            //     }
-            //     break;
-            // }
             break; case BC_ADDI: {
                 Assert(op0 == op2 || op1 == op2);
                 u8 op01 = op0 == op2 ? op1 : op0;
@@ -1522,43 +1520,73 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 break;
             }
             break; case BC_FMOD: {
-                Assert(op0 == BC_REG_XMM0f && op1 == BC_REG_XMM1f  && op2 == BC_REG_XMM2f);
+                Assert((op0 == BC_REG_XMM0f && op1 == BC_REG_XMM1f  && op2 == BC_REG_XMM2f) ||
+                    (op0 == BC_REG_XMM0d && op1 == BC_REG_XMM1d  && op2 == BC_REG_XMM2d)
+                );
 
-                //    xmm3 = xmm0 - rounddown(x / y) * y
-                /*
-                    movss xmm2, xmm0
-                    divss xmm2, xmm1
-                    roundss xmm2, xmm2, 1
-                    mulss xmm2, xmm1
-                    subss xmm0, xmm2
-                    movss xmm2, xmm0
-                */
-                // OPCODE_3_MOVSS_REG_RM
-                // OPCODE_3_ROUNDSS_REG_RM
-                // OPCODE_3_DIVSS_REG_RM
-                // OPCODE_3_MULSS_REG_RM
-                // OPCODE_3_SUBSS_REG_RM
+                // out = x - rounddown(x / y) * y
+                // xmm2 = xmm0 - rounddown(xmm0 / xmm1) * xmm1
 
-                u8 arr[]{ 0xF3, 0x0F, 0x10, 0xD0, 0xF3, 0x0F, 0x5E, 0xD1, 0x66, 0x0F, 0x3A, 0x0A, 0xD2, 0x01, 0xF3, 0x0F, 0x59, 0xD1, 0xF3, 0x0F, 0x5C, 0xC2, 0xF3, 0x0F, 0x10, 0xD0 };
-                prog->addRaw(arr,sizeof(arr));
+                if(op0 == BC_REG_XMM0f) { // float, f32
+                    /*
+                        movss xmm2, xmm0
+                        divss xmm2, xmm1
+                        roundss xmm2, xmm2, 1
+                        mulss xmm2, xmm1
+                        subss xmm0, xmm2
+                        movss xmm2, xmm0
+                    */
+                    // OPCODE_3_MOVSS_REG_RM
+                    // OPCODE_3_ROUNDSS_REG_RM
+                    // OPCODE_3_DIVSS_REG_RM
+                    // OPCODE_3_MULSS_REG_RM
+                    // OPCODE_3_SUBSS_REG_RM
+                    u8 arr[]{ 0xF3, 0x0F, 0x10, 0xD0, 0xF3, 0x0F, 0x5E, 0xD1, 0x66, 0x0F, 0x3A, 0x0A, 0xD2, 0x01, 0xF3, 0x0F, 0x59, 0xD1, 0xF3, 0x0F, 0x5C, 0xC2, 0xF3, 0x0F, 0x10, 0xD0 };
+                    prog->addRaw(arr,sizeof(arr));
+                } else { // double, f64
+                    u8 arr[] { 0xF2, 0x0F, 0x10, 0xD0, 0xF2, 0x0F, 0x5E, 0xD1, 0x66, 0x0F, 0x3A, 0x0B, 0xD2, 0x01, 0xF2, 0x0F, 0x59, 0xD1, 0xF2, 0x0F, 0x5C, 0xC2, 0xF2, 0x0F, 0x10, 0xD0 };
+                    prog->addRaw(arr,sizeof(arr));
+                }
                 break;
             }
             break; case BC_FSUB:
             case BC_FMUL:
             case BC_FDIV:
             case BC_FADD: {
-                Assert(IS_REG_XMM(op0) && IS_REG_XMM(op1) && op0 == op2);
+                u8 size0 = DECODE_REG_SIZE(op0);
+                Assert(IS_REG_XMM(op0) && IS_REG_XMM(op1) && op0 == op2 
+                    && size0 == DECODE_REG_SIZE(op1)
+                    && size0 == DECODE_REG_SIZE(op2));
+
                 
-                u8 reg0 = BCToProgramReg(op0, 4, true);
-                u8 reg1 = BCToProgramReg(op1, 4, true);
+                u8 reg0 = BCToProgramReg(op0, 4|8, true);
+                u8 reg1 = BCToProgramReg(op1, 4|8, true);
                 u8 reg2 = reg0;
 
                 u32 operation = 0;
-                switch(opcode) {
-                    case BC_FADD: operation = OPCODE_3_ADDSS_REG_RM; break;
-                    case BC_FSUB: operation = OPCODE_3_SUBSS_REG_RM; break;
-                    case BC_FMUL: operation = OPCODE_3_MULSS_REG_RM; break;
-                    case BC_FDIV: operation = OPCODE_3_DIVSS_REG_RM; break;
+                switch(size0) {
+                case 4: {
+                    switch(opcode) {
+                        case BC_FADD: operation = OPCODE_3_ADDSS_REG_RM; break;
+                        case BC_FSUB: operation = OPCODE_3_SUBSS_REG_RM; break;
+                        case BC_FMUL: operation = OPCODE_3_MULSS_REG_RM; break;
+                        case BC_FDIV: operation = OPCODE_3_DIVSS_REG_RM; break;
+                    }
+                    break;
+                }
+                case 8: {
+                    switch(opcode) {
+                        case BC_FADD: operation = OPCODE_3_ADDSD_REG_RM; break;
+                        case BC_FSUB: operation = OPCODE_3_SUBSD_REG_RM; break;
+                        case BC_FMUL: operation = OPCODE_3_MULSD_REG_RM; break;
+                        case BC_FDIV: operation = OPCODE_3_DIVSD_REG_RM; break;
+                    }
+                    break;
+                }
+                default: {
+                    Assert(("float operations only work on single or double precision. Operans are of a different size. Compiler bug?",false));
+                    break;
+                }
                 }
                 prog->add3(operation);
                 prog->addModRM(MODE_REG, reg2, reg1);
@@ -1859,24 +1887,31 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->addModRM(MODE_REG, reg2, reg2);
                 break;
             }
-            break; case BC_FLT:
+            case BC_FLT:
             case BC_FLTE:
             case BC_FGT:
             case BC_FGTE:
             case BC_FEQ:
             case BC_FNEQ: {
-                Assert(op0 == BC_REG_XMM0f && op1 == BC_REG_XMM1f);
+                Assert((op0 == BC_REG_XMM0f && op1 == BC_REG_XMM1f) ||
+                    (op0 == BC_REG_XMM0d && op1 == BC_REG_XMM1d)
+                );
 
-                u8 reg0 = BCToProgramReg(op0,4, true);
-                u8 reg1 = BCToProgramReg(op1,4, true);
+                u8 reg0 = BCToProgramReg(op0,4|8, true);
+                u8 reg1 = BCToProgramReg(op1,4|8, true);
                 u8 reg2 = BCToProgramReg(op2,0xF);
 
+                u8 size0 = DECODE_REG_SIZE(op0);
                 u8 size2 = DECODE_REG_SIZE(op2);
                 
                 // NOTE: UCOMISS is another instructions you could use.
                 // It depends if you care about ordered or unordered (NaN comparison)
                 // I am not sure how we care about it at the moment so we always use ordered (COMISS)
-                prog->add2(OPCODE_2_COMISS_REG_RM);
+                if(size0 == 4) {
+                    prog->add2(OPCODE_2_COMISS_REG_RM);
+                } else {
+                    prog->add3(OPCODE_3_COMISD_REG_RM);
+                }
                 prog->addModRM(MODE_REG, reg0, reg1);
                 
                 switch(opcode) {
@@ -1989,18 +2024,38 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 bool xmm_op0 = IS_REG_XMM(op0);
                 u8 reg0 = BCToProgramReg(op0,0xF, xmm_op0, extend_op0);
                 if(xmm_op0) {
-                    Assert(op1 != 2); // double float not implemented
-                    u8 size0 = DECODE_REG_SIZE(op0);
-                    Assert(size0 == 4);
+                    if (op1 == 1) {
+                        u8 size0 = DECODE_REG_SIZE(op0);
+                        Assert(size0 == 4);
 
-                    prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, 0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
-                    prog->add4((u32)imm);
+                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, 0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                        prog->add4((u32)imm);
 
-                    prog->add3(OPCODE_3_MOVSS_REG_RM);
-                    prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                    prog->add((u8)-8);
+                        prog->add3(OPCODE_3_MOVSS_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                    } else if(op1 == 2) {
+                        u8 size0 = DECODE_REG_SIZE(op0);
+                        Assert(size0 == 8);
+
+                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, 0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                        prog->add4((u32)imm);
+
+                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, 0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-4);
+                        prog->add4((u32)imm2);
+
+                        prog->add3(OPCODE_3_MOVSD_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, reg0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                    } else {
+                        Assert(false);
+                    }
                 } else {
                     u8 size0 = DECODE_REG_SIZE(op0);
                     u8 rex = 0;
@@ -2098,14 +2153,29 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             break; case BC_PUSH: {
                 if(IS_REG_XMM(op0)) {
                     u8 reg = BCToProgramReg(op0, 4|8, true);
+
+                    int size0 = DECODE_REG_SIZE(op0);
                     
                     prog->add(PREFIX_REXW);
                     prog->add(OPCODE_ADD_RM_IMM8_SLASH_0);
                     prog->addModRM(MODE_REG, 0, REG_SP);
                     prog->add((u8)-8);
 
-                    prog->add3(OPCODE_3_MOVSS_RM_REG);
-                    prog->addModRM_SIB(MODE_DEREF, reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                    switch(size0) {
+                    case 4: {
+                        prog->add3(OPCODE_3_MOVSS_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF, reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        break;
+                    }
+                    case 8:{
+                        prog->add3(OPCODE_3_MOVSD_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF, reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        break;
+                    }
+                    default: {
+                        Assert(("operand was not the size of a float or double",false));
+                    }
+                    }
                 } else {
                     int size = DECODE_REG_SIZE(op0);
                     // Shouldn't need this if the register was properly zero/sign extended to begin with
@@ -2138,10 +2208,24 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             break; case BC_POP: {
                 if(IS_REG_XMM(op0)) {
                     u8 reg = BCToProgramReg(op0, 4|8, true);
-
-                    prog->add3(OPCODE_3_MOVSS_REG_RM);
-                    prog->addModRM_SIB(MODE_DEREF, reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-
+                    int size0 = DECODE_REG_SIZE(op0);
+                    
+                    switch(size0) {
+                    case 4: {
+                        prog->add3(OPCODE_3_MOVSS_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF, reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        break;
+                    }
+                    case 8:{
+                        prog->add3(OPCODE_3_MOVSD_REG_RM);
+                        prog->addModRM_SIB(MODE_DEREF, reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        break;
+                    }
+                    default: {
+                        Assert(("operand was not the size of a float or double",false));
+                    }
+                    }
+                    
                     prog->add(PREFIX_REXW);
                     prog->add(OPCODE_ADD_RM_IMM8_SLASH_0);
                     prog->addModRM(MODE_REG, 0, REG_SP);
@@ -2223,7 +2307,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 relativeRelocations.add(reloc);
                 break;
             }
-            break; case BC_CAST: {
+            case BC_CAST: {
                 u8 type = op0;
 
                 int fsize = DECODE_REG_SIZE(op1);
@@ -2234,66 +2318,35 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
                 u8 freg = BCToProgramReg(op1, 0xF, fromXmm);
                 u8 treg = BCToProgramReg(op2, 0xF, toXmm);
-                Assert(freg == treg || fromXmm != toXmm);
-
-                // if(fsize == tsize){
-                //     break; // nothing to change
-                // }
-                // TODO: Test some casting with u8,i16,f32,f64,u64 and stuff.
-
-                // prog->add(PREFIX_REXW); this doesn't work if freg == treg, zero-ing the from register will always result in zero in to register
-                // prog->add(OPCODE_XOR_REG_RM);
-                // prog->addModRM(MODE_REG,treg,treg);
-
-                // prog->add(OPCODE_MOV_RM_REG);
-                // prog->addModRM_SIB(MODE_DEREF_DISP8, BCToProgramReg(op0), SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                // prog->add((u8)-8);
-
-                // prog->add3(OPCODE_3_MOVSS_REG_RM);
-                // prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                // prog->add((u8)-8);
-
-                // prog->add(OPCODE_MOV_RM_REG);
-                // prog->addModRM_SIB(MODE_DEREF_DISP8, BCToProgramReg(op1), SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                // prog->add((u8)-8);
-
-                // u32 operation = 0;
-                // switch(opcode) {
-                //     case BC_FADD: operation = OPCODE_3_ADDSS_REG_RM; break;
-                //     case BC_FSUB: operation = OPCODE_3_SUBSS_REG_RM; break;
-                //     case BC_FMUL: operation = OPCODE_3_MULSS_REG_RM; break;
-                //     case BC_FDIV: operation = OPCODE_3_DIVSS_REG_RM; break;
-                // }
-                // prog->add3(operation);
-                // prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                // prog->add((u8)-8);
-
-                // prog->add3(OPCODE_3_MOVSS_RM_REG);
-                // prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                // prog->add((u8)-8);
-
-                // prog->add(OPCODE_MOV_REG_RM);
-                // prog->addModRM_SIB(MODE_DEREF_DISP8, BCToProgramReg(op2), SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                // prog->add((u8)-8);
+                // Assert(freg == treg); // Does this make sense? What about casting eax into xmm0?
 
                 u8 minSize = fsize < tsize ? fsize : tsize;
 
                 if(type==CAST_FLOAT_SINT){
-                    Assert(fsize == 4);
+                    Assert(fsize == 4 || fsize == 8);
                     Assert(!toXmm);
 
-                    if(fromXmm) {
-                        prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
-                        prog->addModRM(MODE_REG, treg, freg);
-                    } else {
+                    if(!fromXmm) {
                         prog->add(OPCODE_MOV_RM_REG);
                         prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
-
-                        if(tsize == 8)
-                            prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
-                        else
+                    }
+                    if(fsize == 4) {
+                        if(tsize == 8) {
+                            prog->add3(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
+                        } else {
                             prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                        }
+                    } else {
+                        if(tsize == 8) {
+                            prog->add3(OPCODE_4_REXW_CVTTSD2SI_REG_RM);
+                        } else {
+                            prog->add3(OPCODE_3_CVTTSD2SI_REG_RM);
+                        }
+                    }
+                    if(fromXmm) {
+                        prog->addModRM(MODE_REG, treg, freg);
+                    } else {
                         prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
                     }
@@ -2317,7 +2370,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 //         prog->add((u8)-8);
                 //     }
                 } else if(type==CAST_SINT_FLOAT){
-                    Assert(tsize == 4);
+                    Assert(tsize == 4 || tsize == 8);
                     Assert(!fromXmm);
                     if(fsize == 1){
                         Assert(false); // we might need to sign extend
@@ -2325,26 +2378,42 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
                         // prog->addModRM(MODE_REG, 4, freg);
                         // prog->add4((u32)0xFF);
-                        prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                        if(tsize == 4)
+                            prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                        else
+                            prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
                     } else if(fsize == 2){
                         Assert(false); // we might need to sign extend
                         // prog->add(PREFIX_REXW);
                         // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
                         // prog->addModRM(MODE_REG, 4, freg);
                         // prog->add4((u32)0xFFFF);
-                        prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                        if(tsize == 4)
+                            prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                        else
+                            prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
                     } else if(fsize == 4) {
-                        prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                        if(tsize == 4)
+                            prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                        else
+                            prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
                     } else if(fsize == 8) {
-                        prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                        if(tsize == 4)
+                            prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                        else
+                            prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
                     }
                     if(toXmm) {
                         prog->addModRM(MODE_REG, treg, freg);
                         // prog->add(OPCODE_NOP);
                     } else {
+                        // BUG: Hoping that xmm7 isn't used is considered bad programming.
                         prog->addModRM(MODE_REG, REG_XMM7, freg);
 
-                        prog->add3(OPCODE_3_MOVSS_RM_REG); // TODO: movaps instead?
+                        if(tsize == 4)
+                            prog->add3(OPCODE_3_MOVSS_RM_REG);
+                        else
+                            prog->add3(OPCODE_3_MOVSD_RM_REG);
                         prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM7, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
 
@@ -2353,11 +2422,19 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add((u8)-8);
                     }
                 } else if(type==CAST_UINT_FLOAT){
-                    Assert(tsize == 4);
+                    Assert(tsize == 4 || tsize == 8);
                     Assert(!fromXmm);
                     
                     
                     if(fsize == 8) {
+                        // Assert(false);
+                        // This code is bugged, doesn't work.
+                        /*
+                        t = cast<f32>cast<u64>23
+                        println(t)
+                        */
+                        
+
                         /*
                         test rax, rax
                         jl signed
@@ -2372,6 +2449,11 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         mulss xmm0, 2
                         end:
                         */
+
+                       // TODO: This is way to many instructions to convert an unsigned integer to a float.
+                       //   Users who don't realize this will unknowningly have slow code because of casts
+                       //   they didn't pay attention to. Can we minimize the amount of instructions?
+                       //   Can we be less correct and generate fewer instructions?
 
                         // Assert(false);
                         // We have to do some extra work since we use unsigned 64-bit integer but
@@ -2404,6 +2486,11 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add((u8)0xF3);
                         prog->add((u8)(PREFIX_REXW));
                         prog->add2((u16)0x2A0F);
+                        if(tsize == 4) {
+                            prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                        } else {
+                            prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                        }
                         prog->addModRM(MODE_REG, xmm, freg);
 
                         prog->add(OPCODE_JMP_IMM8);
@@ -2447,19 +2534,25 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->addModRM(MODE_REG, 0, tempReg);
                         prog->add((u8)2);
 
-                        prog->add((u8)0xF3); // CVTSI2SS_REG_RM
-                        prog->add((u8)(PREFIX_REXB));
-                        prog->add2((u16)0x2A0F);
+                        if(tsize == 4)
+                            prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                        else
+                            prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
                         prog->addModRM(MODE_REG, REG_XMM7, tempReg);
-
-                        prog->add3(OPCODE_3_MULSS_REG_RM);
+                        if(tsize == 4) 
+                            prog->add3(OPCODE_3_MULSS_REG_RM);
+                        else
+                            prog->add3(OPCODE_3_MULSD_REG_RM);
                         prog->addModRM(MODE_REG, xmm, REG_XMM7);
 
                         // END
                         prog->set(jumpEnd, prog->size() - (jumpEnd+1)); // +1 because jumpEnd points to the byte to change in the jump instruction, we want the end of the instruction.
 
                         if (!toXmm) {
-                            prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            if(tsize==4)
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            else
+                                prog->add3(OPCODE_3_MOVSD_RM_REG);
                             prog->addModRM_SIB(MODE_DEREF_DISP8, xmm, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                             prog->add((u8)-8);
 
@@ -2475,20 +2568,29 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
                             // prog->addModRM(MODE_REG, 4, freg);
                             // prog->add4((u32)0xFF);
-                            prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                            if(tsize==4)
+                                prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                            else
+                                prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
                         } else if(fsize == 2){
                             // prog->add(PREFIX_REXW);
                             // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
                             // prog->addModRM(MODE_REG, 4, freg);
                             // prog->add4((u32)0xFFFF);
-                            prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                            if(tsize==4)
+                                prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                            else
+                                prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
                         } else if(fsize == 4) {
                             // It is probably safe to use rexw so that rax is used
                             // when eax was specified. Most instructions zero the upper bits.
                             // There may be an edge case though.
                             // We must use rexw with this operation since it assumes signed values
                             // but we have an unsigned so we must use 64-bit values.
-                            prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                            if(tsize==4)
+                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                            else
+                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
                         }
 
                         if(toXmm) {
@@ -2496,7 +2598,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         } else {
                             prog->addModRM(MODE_REG, REG_XMM7, freg);
 
-                            prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            if(tsize==4)
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            else
+                                prog->add3(OPCODE_3_MOVSD_RM_REG);
                             prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM7, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                             prog->add((u8)-8);
 
@@ -2532,50 +2637,158 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         // prog->add(OPCODE_MOV_REG_RM);
                         // prog->addModRM(MODE_REG, treg, freg);
                     }
-                } else if(type==CAST_SINT_SINT){
-                    if(minSize==1){
-                        if(tsize==8)
-                            prog->add(PREFIX_REXW);
-                        else if(tsize==2)
-                            prog->add(PREFIX_16BIT);
-                        prog->add2(OPCODE_2_MOVSX_REG_RM8);
-                        prog->addModRM(MODE_REG, treg, freg);
-                    } else if(minSize == 2) {
-                        if(tsize == fsize) {
-                            prog->add(PREFIX_16BIT);
-                            prog->add(OPCODE_MOVSXD_REG_RM);
+                } else if(type==CAST_SINT_SINT) {
+                    // i8 -> i16,i32,i64
+                    // i64 -> i32,i16,i8
+
+                    // TODO: Sign extend properly
+                    prog->add(PREFIX_REXW);
+                    prog->add(OPCODE_MOV_REG_RM);
+                    prog->addModRM(MODE_REG, treg, freg);
+                    // if(minSize==1){
+                    //     prog->add(PREFIX_REXW);
+                    //     prog->add2(OPCODE_2_MOVZX_REG_RM8);
+                    //     prog->addModRM(MODE_REG, treg, freg);
+                    // } else if(minSize == 2) {
+                    //     prog->add(PREFIX_REXW);
+                    //     prog->add2(OPCODE_2_MOVZX_REG_RM16);
+                    //     prog->addModRM(MODE_REG, treg, freg);
+                    // } else if(minSize == 4) {
+                    //     // Assert(freg == treg);
+                    //     prog->add(OPCODE_MOV_REG_RM);
+                    //     prog->addModRM(MODE_REG, treg, freg);
+                    //     // prog->add(OPCODE_NOP); // this might just work
+                    //     // prog->add(PREFIX_REXW);
+                    //     // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
+                    //     // prog->addModRM(MODE_REG, 4, treg);
+                    //     // prog->add4((u32)0xFFFFFFFF);
+                    // } else if(minSize == 8) {
+                    //     Assert(freg == treg);
+                    //     // nothing needs to be done
+                    //     // prog->add(PREFIX_REXW);
+                    //     // prog->add(OPCODE_MOV_REG_RM);
+                    //     // prog->addModRM(MODE_REG, treg, freg);
+                    // }
+                } else if(type==CAST_FLOAT_FLOAT){
+                    Assert((fsize == 4 || fsize == 8) && (tsize == 4 || tsize == 8));
+
+                    if(fromXmm && toXmm) {
+                        if(fsize == 4 && tsize == 8) {
+                            prog->add4(OPCODE_3_CVTSS2SD_REG_RM);
+                            prog->addModRM(MODE_REG, treg, freg);
+                        } else if(fsize == 8 && tsize == 4) {
+                            prog->add4(OPCODE_3_CVTSD2SS_REG_RM);
                             prog->addModRM(MODE_REG, treg, freg);
                         } else {
-                            if(tsize==8)
-                                prog->add(PREFIX_REXW);
-                            if(tsize==2){
-                                prog->add(PREFIX_16BIT);
-                                prog->add(OPCODE_MOVSXD_REG_RM);
-                                prog->addModRM(MODE_REG, treg, freg);
-                            } else {
-                                prog->add2(OPCODE_2_MOVSX_REG_RM16);
-                                prog->addModRM(MODE_REG, treg, freg);
-                            }
+                            // do nothing
                         }
-                    } else if(minSize == 4) {
-                        if(tsize==8)
+                    } else if(!fromXmm && toXmm) {
+                        if(fsize == 8)
                             prog->add(PREFIX_REXW);
-                        prog->add(OPCODE_MOVSXD_REG_RM);
-                        prog->addModRM(MODE_REG, treg, freg);
-                    } else if(minSize == 8) {
-                        Assert(freg == treg);
-                        // do nothing
-                        // prog->add(PREFIX_REXW);
-                        // prog->add(OPCODE_MOV_REG_RM);
-                        // prog->addModRM(MODE_REG, treg, freg);
+                        u8 temp = REG_XMM7;
+                        prog->add(OPCODE_MOV_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+
+                        if(fsize == 4 && tsize == 8) {
+                            prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
+                        } else if(fsize == 8 && tsize == 4) {
+                            prog->add3(OPCODE_3_CVTSD2SS_REG_RM);
+                        } else if(fsize == 4 && tsize == 4){
+                            prog->add3(OPCODE_3_MOVSS_REG_RM);
+                        } else if(fsize == 8 && tsize == 8) {
+                            prog->add3(OPCODE_3_MOVSD_REG_RM);
+                        }
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                    } else if(fromXmm && !toXmm) {
+                        u8 temp = REG_XMM7;
+                        if(fsize == 4 && tsize == 8) {
+                            prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
+                            prog->addModRM(MODE_REG, temp, freg);
+
+                            prog->add3(OPCODE_3_MOVSD_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+                        } else if(fsize == 8 && tsize == 4) {
+                            prog->add3(OPCODE_3_CVTSD2SS_REG_RM);
+                            prog->addModRM(MODE_REG, temp, freg);
+
+                            prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+                        } else if(fsize == 4 && tsize == 4){
+                            prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+                        } else if(fsize == 8 && tsize == 8) {
+                            prog->add3(OPCODE_3_MOVSD_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+                        }
+                    } else if(!fromXmm && !toXmm) {
+                        if(fsize == 8)
+                            prog->add(PREFIX_REXW);
+                        u8 temp = REG_XMM7;
+                        prog->add(OPCODE_MOV_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+
+                        if(fsize == 4 && tsize == 8) {
+                            prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
+                        } else if(fsize == 8 && tsize == 4) {
+                            prog->add3(OPCODE_3_CVTSD2SS_REG_RM);
+                        } else if(fsize == 4 && tsize == 4){
+                            prog->add3(OPCODE_3_MOVSS_REG_RM);
+                        } else if(fsize == 8 && tsize == 8) {
+                            prog->add3(OPCODE_3_MOVSD_REG_RM);
+                        }
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+
+                        if(tsize == 4) {
+                            prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+                            
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+                        } else if(tsize == 8) {
+                            prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+                        }
                     }
                 } else {
-                    Assert(("Cast type not implemented in x64 backend",false));
+                    Assert(("Cast type not implemented in x64 backend, Compiler bug",false));
                 }
-
                 break;
             }
-            break; case BC_CALL: {
+            case BC_CALL: {
                 LinkConventions linkConvention = (LinkConventions)op0;
                 CallConventions callConvention = (CallConventions)op1;
                 if(linkConvention == LinkConventions::DLLIMPORT || linkConvention == LinkConventions::VARIMPORT) {
@@ -2613,6 +2826,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     // }
                     // break;
                         case NATIVE_prints: {
+                        // TODO: Check platform target instead
                         #ifdef OS_WINDOWS
                         // ptr = [rsp + 0]
                         // len = [rsp + 8]

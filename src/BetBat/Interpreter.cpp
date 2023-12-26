@@ -852,9 +852,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                 break; case NATIVE_FileClose:{
                     APIFile file = *(APIFile*)(fp+argoffset);
                     FileClose(file);
-                    // #ifdef VLOG
                     // log::out << log::GRAY<<"FileClose: "<<file<<"\n";
-                    // #endif
                     break;
                 }
                 break; case NATIVE_DirectoryIteratorCreate:{
@@ -867,9 +865,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     // std::string rootPath = std::string(strptr,len);
                     auto iterator = DirectoryIteratorCreate(rootPath);
 
-                    #ifdef VLOG
                     // log::out << log::GRAY<<"Create dir iterator: "<<rootPath<<"\n";
-                    #endif
 
                     // auto iterator = (Language::DirectoryIterator*)engone::Allocate(sizeof(Language::DirectoryIterator));
                     // new(iterator)Language::DirectoryIterator();
@@ -886,9 +882,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     // INCOMPLETE
                     DirectoryIteratorDestroy(iterator);
 
-                    #ifdef VLOG
                     // log::out << log::GRAY<<"Destroy dir iterator: "<<iterator->rootPath<<"\n";
-                    #endif
                     // if(iterator->result.name.ptr) {
                     //     engone::Free(iterator->result.name.ptr, iterator->result.name.len);
                     //     iterator->result.name.ptr = nullptr;
@@ -920,12 +914,10 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     // //     memcpy(iterator->result.name.ptr, result.name.data(), result.name.length());
                     // //     iterator->result.name.len = (u64)result.name.length();
                     // // }
-                    // #ifdef VLOG
                     // // if(success)
                     // // log::out << log::GRAY<<"Next dir iterator: "<<iterator->rootPath<<", file: "<<result.name<<"\n";
                     // // else
                     // // log::out << log::GRAY<<"Next dir iterator: "<<iterator->rootPath<<", finished\n";
-                    // #endif
                     // if(success)
                     //     *(Language::DirectoryIteratorData**)(fp-8) = &iterator->result;
                     // else
@@ -938,9 +930,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     
                     DirectoryIteratorSkip(iterator);
 
-                    // #ifdef VLOG
                     // // log::out << log::GRAY<<"Skip dir iterator: "<<iterator->result.name<<"\n";
-                    // #endif
                     break;
                 }
                 break; case NATIVE_CurrentWorkingDirectory:{
@@ -952,9 +942,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
 
                     *(char**)(fp-16) = cwdBuffer;
                     *(u64*)(fp-8) = temp.length();
-                    #ifdef VLOG
-                    log::out << log::GRAY<<"CWD: "<<temp<<"\n";
-                    #endif
+                    // log::out << log::GRAY<<"CWD: "<<temp<<"\n";
                     break;
                 }
                 break; case NATIVE_StartMeasure:{
@@ -962,9 +950,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     
                     *(u64*)(fp-8) = (u64)timePoint;
 
-                    #ifdef VLOG
-                    log::out << log::GRAY<<"Start mesaure: "<<(u64)timePoint<<"\n";
-                    #endif
+                    // log::out << log::GRAY<<"Start mesaure: "<<(u64)timePoint<<"\n";
                     break;
                 }
                 break; case NATIVE_StopMeasure:{
@@ -973,17 +959,13 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     double time = StopMeasure(timePoint);
 
                     *(float*)(fp - 8) = (float)time;
-                    #ifdef VLOG
-                    log::out << log::GRAY<<"Stop measure: "<<(u64)timePoint << ", "<<time<<"\n";
-                    #endif
+                    // log::out << log::GRAY<<"Stop measure: "<<(u64)timePoint << ", "<<time<<"\n";
                     break;
                 }
                 break; case NATIVE_CmdLineArgs:{
                     *(Language::Slice<char>**)(fp - 16) = cmdArgs.ptr;
                     *(u64*)(fp - 8) = cmdArgs.len;
-                    #ifdef VLOG
-                    log::out << log::GRAY<<"Cmd line args: len: "<<cmdArgs.len<<"\n";
-                    #endif
+                    // log::out << log::GRAY<<"Cmd line args: len: "<<cmdArgs.len<<"\n";
                     break;
                 }
                 break; case NATIVE_NativeSleep:{

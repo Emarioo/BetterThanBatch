@@ -155,10 +155,26 @@ std::string TrimDir(const std::string& path){
         return path;
     return path.substr(slashI+1);
 }
-std::string BriefString(const std::string& path, int max){
-    if((int)path.length()>max){
-        return std::string("...") + path.substr(path.length()-max,max);
-    }   
+std::string BriefString(const std::string& path, int max, bool skip_cwd){
+    if(skip_cwd) {
+        std::string cwd = engone::GetWorkingDirectory() + "/";
+        int where = cwd.size();
+        for(int i=0;i<path.size();i++) {
+            if(i >= cwd.size() && cwd[i] != path[i]) {
+                where = i;
+                break;
+            }
+        }
+        if((int)path.length() - where > max){
+            return std::string("...") + path.substr(path.length()-max,max);
+        } else {
+            return path.substr(where);
+        }
+    } else {
+        if((int)path.length()>max){
+            return std::string("...") + path.substr(path.length()-max,max);
+        }
+    }
     return path;
 }
 /*

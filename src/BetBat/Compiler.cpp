@@ -89,29 +89,47 @@ Path Path::getFileName(bool withoutFormat) const {
     }
     return name.substr(0,index);
 }
+bool Path::isAbsolute() const {
+    return text.size() > 0 && (text[0] == '/' || text[0] == '~');
+}
 Path Path::getAbsolute() const {
-    if(isAbsolute()) return *this;
+    // if(isAbsolute()) return *this;
 
     std::string cwd = engone::GetWorkingDirectory();
     if(cwd.empty()) return {}; // error?
+    
     if(text.length() > 0 && text[0] == '.') {
         if(text.length() > 1 && text[1] == '/') {
             if(cwd.back() == '/')
-                return Path(cwd + text.substr(2));
+                cwd += text.substr(2);
             else
-                return Path(cwd + text.substr(1));
+                cwd += text.substr(1);
         } else {
             if(cwd.back() == '/')
-                return Path(cwd + text.substr(1));
+                cwd += text.substr(1);
             else
-                return Path(cwd + "/" + text.substr(1));
+                cwd += "/" + text.substr(1);
         }
-    } else {
+    } else if (text.length()>0 && text[0] != '/' && text[0] != '~') {
         if(cwd.back() == '/')
-            return Path(cwd + text);
+            cwd += text;
         else
-            return Path(cwd + "/" + text);
+            cwd += "/" + text;
+    } else {
+        cwd = text;
     }
+    while(true) {
+        // engone::log::out << "cwd "<<cwd<<"\n";
+        int dotdot = cwd.find("..");
+        if(dotdot == -1) break;
+        // engone::log::out << "dot "<<dotdot<<"\n";
+
+        int slash = cwd.find_last_of("/",dotdot - 2);
+        Assert(slash != -1);
+        // engone::log::out << "slash " <<slash<<"\n";
+        cwd = cwd.substr(0,slash+1) + cwd.substr(dotdot + 3);
+    }
+    return Path(cwd);
 }
 Path Path::getDirectory() const {
     if(isDir()) return *this;
@@ -330,6 +348,71 @@ void CompileInfo::addStats(i32 lines, i32 blankLines, i32 commentCount, i32 read
     otherLock.unlock();
     #endif
 }
+Path CompileInfo::findSourceFile(const Path& path, const Path& sourceDirectory) {
+    using namespace engone;
+    // absolute
+    // ./path always from sourceDirectory
+    // relative to cwd OR import directories
+    // .btb is implicit
+
+    Path fullPath = {};
+    int dotindex = path.text.find_last_of(".");
+    int slashindex = path.text.find_last_of("/");
+    if(dotindex==-1 || dotindex<slashindex){
+        fullPath = path.text+".btb";
+    } else {
+        fullPath = path.text;
+    }
+
+    //-- Search directory of current source file
+    if(fullPath.text.find("./")==0) {
+        Assert(!sourceDirectory.text.empty());
+        if(sourceDirectory.text[sourceDirectory.text.size()-1] == '/') {
+            fullPath = sourceDirectory.text + fullPath.text.substr(2);
+        } else {
+            fullPath = sourceDirectory.text + fullPath.text.substr(1);
+        }
+        fullPath = fullPath.getAbsolute();
+    } 
+    //-- Search cwd or absolute path
+    else if(engone::FileExist(fullPath.text)){
+        // if(!fullPath.isAbsolute())
+        fullPath = fullPath.getAbsolute();
+    }
+    else {
+        Path temp = sourceDirectory.text;
+        if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
+            temp.text += "/";
+        temp.text += fullPath.text;
+        if(FileExist(temp.text)){
+            fullPath = temp.getAbsolute();
+        } else {
+            //-- Search additional import directories.
+            // TODO: DO THIS WITH #INCLUDE TOO!
+            // We only read importDirectories which makes this thread safe
+            // if we had modified it in anyway then it wouldn't have been.
+            bool yes = false;
+            for(int i=0;i<(int)importDirectories.size();i++){
+                const Path& dir = importDirectories[i];
+                Assert(dir.isDir() && dir.isAbsolute());
+                if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
+                    temp = dir.text + fullPath.text;
+                else
+                    temp = dir.text + "/" + fullPath.text;
+
+                if(FileExist(temp.text)) {
+                    fullPath = temp.getAbsolute();
+                    yes = true;
+                    break;
+                }
+            }
+            if(!yes) {
+                fullPath = "";
+            }
+        }
+    }
+    return fullPath;
+}
 void CompileInfo::addLinkDirective(const std::string& name){
     otherLock.lock();
     for(int i=0;i<(int)linkDirectives.size();i++){
@@ -352,7 +435,7 @@ void CompileInfo::cleanup(){
             TokenStream::Destroy(it->initialStream);
         if(it->finalStream)
             TokenStream::Destroy(it->finalStream);
-        // engone::Free(it,sizeof(Stream));
+        it->~StreamToProcess();
         TRACK_FREE(it, StreamToProcess);
     }
     streams.cleanup();
@@ -364,12 +447,10 @@ void CompileInfo::cleanup(){
         for(auto& pair : pair.second->certainMacros) {
             pair.second->~CertainMacro();
             TRACK_FREE(pair.second, CertainMacro);
-            // engone::Free(pair.second, sizeof(CertainMacro));
         }
-        pair.second->~RootMacro();
         // engone::log::out << "no\n";
+        pair.second->~RootMacro();
         TRACK_FREE(pair.second, RootMacro);
-        // engone::Free(pair.second, sizeof(RootMacro));
     }
     _rootMacros.clear();
     // for(auto& stream : streamsToClean){
@@ -378,10 +459,12 @@ void CompileInfo::cleanup(){
     // streamsToClean.resize(0);
 }
 
-StreamToProcess* CompileInfo::addStream(const Path& path){
+StreamToProcess* CompileInfo::addStream(const Path& path, StreamToProcess** existingStream){
     streamLock.lock();
     auto pair = tokenStreams.find(path.text);
     if(pair!=tokenStreams.end() && pair->second) {
+        if(existingStream)
+            *existingStream = pair->second;
         streamLock.unlock();
         return nullptr;
     }
@@ -658,14 +741,19 @@ u32 ProcessSource(void* ptr) {
         //     log::out << "Proc source "<<source.path.text<<"\n";
         info->sourceLock.unlock();
         
-        bool yes = FileExist(source.path.text);
-        if(!yes) {
-            int dotindex = source.path.text.find_last_of(".");
-            int slashindex = source.path.text.find_last_of("/");
-            if(dotindex==-1 || dotindex<slashindex){
-                source.path = source.path.text + ".btb";
-            }
-        }
+        // log::out << "Yeet "<<source.path.text <<"\n";
+        auto pathp = info->findSourceFile(source.path);
+        // log::out << "Proc "<<source.path.text << " "<<pathp.text<<"\n";
+        source.path = pathp;
+
+        // bool yes = FileExist(source.path.text);
+        // if(!yes) {
+        //     int dotindex = source.path.text.find_last_of(".");
+        //     int slashindex = source.path.text.find_last_of("/");
+        //     if(dotindex==-1 || dotindex<slashindex){
+        //         source.path = source.path.text + ".btb";
+        //     }
+        // }
         
         _VLOG(log::out <<log::BLUE<< "Tokenize: "<<BriefString(source.path.text)<<"\n";)
         TokenStream* tokenStream = nullptr;
@@ -717,71 +805,13 @@ u32 ProcessSource(void* ptr) {
         Path dir = source.path.getDirectory();
         for(int i=0;i<(int)tokenStream->importList.size();i++){
             auto& item = tokenStream->importList[i];
-            Path importName = "";
-            int dotindex = item.name.find_last_of(".");
-            int slashindex = item.name.find_last_of("/");
-            // log::out << "dot "<<dotindex << " slash "<<slashindex<<"\n";
-            if(dotindex==-1 || dotindex<slashindex){
-                importName = item.name+".btb";
-            } else {
-                importName = item.name;
-            }
-            // TODO: import AS
-            
-            Path fullPath = {};
-            // TODO: Test "/src.btb", "ok./hum" and other unusual paths
-            
-            //-- Search directory of current source file
-            if(importName.text.find("./")==0) {
-                fullPath = dir.text + importName.text.substr(2);
-            } 
-            //-- Search cwd or absolute path
-            else if(FileExist(importName.text)){
-                fullPath = importName;
-                if(!fullPath.isAbsolute())
-                    fullPath = fullPath.getAbsolute();
-            }
-            else if(fullPath = dir.text + importName.text, FileExist(fullPath.text)){
-                // fullpath =  dir.text + importName.text;
-            }
-            //-- Search additional import directories.
-            // TODO: DO THIS WITH #INCLUDE TOO!
-            else {
-                // We only read importDirectories which makes this thread safe
-                // if we had modified it in anyway then it wouldn't have been.
-                for(int i=0;i<(int)info->importDirectories.size();i++){
-                    const Path& dir = info->importDirectories[i];
-                    Assert(dir.isDir() && dir.isAbsolute());
-                    Path path = dir.text + importName.text;
-                    bool yes = FileExist(path.text);
-                    if(yes) {
-                        fullPath = path;
-                        break;
-                    }
-                }
-            }
-            
+
+            Path fullPath = info->findSourceFile(item.name, dir);
+
             if(fullPath.text.empty()){
-                log::out << log::RED << "Could not find import '"<<importName.text<<"' (import from '"<<BriefString(source.path.text,20)<<"'\n";
+                log::out << log::RED << "Could not find import '"<<fullPath.text<<"' (import from '"<<BriefString(source.path.text,20)<<"'\n";
             } else {
-                // if(info->hasStream(fullPath)){   
-                //     _VLOG(log::out << log::LIME << "Already imported "<<BriefString(fullPath.text,20)<<"\n";)
-                //     tempPaths[i] = {};
-                // }else{
-                    tempPaths[i] = fullPath;
-                    // info->addStream(fullPath);
-                    // info->sourceLock.lock();
-                    // info->addStream(fullPath);
-                    // // log::out << "Add source "<<fullPath.getFileName().text<<"\n";
-                    // SourceToProcess source{};
-                    // source.path = fullPath;
-                    // source.as = item.as;
-                    // source.textBuffer = nullptr;
-                    // info->sourcesToProcess.add(source);
-                    // if(info->sourcesToProcess.size() == 1)
-                    //     info->sourceWaitLock.signal();
-                    // info->sourceLock.unlock();
-                // }
+                tempPaths[i] = fullPath;
             }
         }
         info->sourceLock.lock();
@@ -789,14 +819,18 @@ u32 ProcessSource(void* ptr) {
             auto& item = tokenStream->importList[i];
             if(tempPaths[i].text.size()==0)
                 continue;
-            // log::out << "Add source "<<tempPaths[i].getFileName().text<<"\n";
-            auto importStream = info->addStream(tempPaths[i]);
+            // log::out << "Add source "<<tempPaths[i].text<<"\n";
+            StreamToProcess* existingStream = nullptr;
+            auto importStream = info->addStream(tempPaths[i], &existingStream);
+            
             if(!importStream) {
+                if(existingStream) {
+                    stream->dependencies.add(existingStream->index);
+                }
                 _VLOG(log::out << log::LIME << "Already imported "<<BriefString(source.path.text,20)<<"\n";)
                 continue;
             }
-            if(stream->dependencyIndex > importStream->index)
-                stream->dependencyIndex = importStream->index;
+            stream->dependencies.add(importStream->index);
             importStream->as = item.as;
             SourceToProcess source{};
             source.path = tempPaths[i];
@@ -830,9 +864,21 @@ u32 ProcessSource(void* ptr) {
     // process that stream. The question then is how to calculate the depth.
     // There may be a flaw with this approach.
 
+    _LOG(LOG_IMPORTS,
+    FORNI(info->streams)
+        log::out << "Stream "<<nr << " " <<BriefString(it->initialStream->streamName,15)<< ": ind:"<<it->index << " deps:\n";
+        for(int j=0;j<it->dependencies.size();j++) {
+            if(j!=0) log::out << ", ";
+            log::out << " "<<it->dependencies[j];
+        }
+        if(it->dependencies.size()!=0)
+            log::out << "\n";
+    }
+    )
+
     info->sourceLock.lock();
     // int readDependencyIndex = info->streams.size()-1;
-    info->completedDependencyIndex = info->streams.size();
+    // info->completedDependencyIndex = info->streams.size();
     info->waitingThreads++;
     info->availableThreads++;
     // log::out << "Cool\n";
@@ -844,6 +890,8 @@ u32 ProcessSource(void* ptr) {
         stream->finalStream = Preprocess(info, stream->initialStream);
         stream->completed = true;
         stream->available = false;
+        
+        info->compileOrder.add(0);
     }
     // log::out << "End\n";
 
@@ -868,7 +916,7 @@ u32 ProcessSource(void* ptr) {
         info->waitingThreads--;
         // TODO: Optimize by not going starting from the end and going through the whole stream array. Start from an index where
         //  you know that everything to the right has been processed.
-        if(info->completedDependencyIndex==0) {
+        if(info->completedStreams == info->streams.size()) {
             if(!info->signaled) {
                 info->sourceWaitLock.signal();
                 info->signaled = true;
@@ -877,13 +925,33 @@ u32 ProcessSource(void* ptr) {
             break;
         }
         StreamToProcess* stream = nullptr;
-        int index = info->completedDependencyIndex-1;
+        int index = info->streams.size()-1; // TODO: Optimize by choosing an index were the all streams on the right side are completed
         bool allCompleted = true;
+        bool circularDependency = true;
         while(index >= 0) {
             stream = info->streams[index];
-            if(stream->available && stream->dependencyIndex >= info->completedDependencyIndex) {
-                stream->available = false;
-                break;
+            if(stream->available) { // && stream->dependencyIndex >= info->completedDependencyIndex) {
+                // log::out << "avail "<<index<<"\n";
+                bool ready = true;
+                for(int di=0;di<stream->dependencies.size();di++) {
+                    int i = stream->dependencies[di];
+                    // log::out << " "<<i<<" "<<info->streams[i]->completed<<"\n";
+                    if(!info->streams[i]->completed) {
+                        ready = false;
+                        break;
+                    }
+                }
+                if(ready) {
+                    // log::out << "ready, compute "<<index<<"\n";
+                    stream->available = false;
+                    circularDependency = false;
+                    break;
+                }
+            } else {
+                if(!stream->completed) {
+                    // log::out << "being processed "<<index<<"\n";
+                    circularDependency = false;
+                }
             }
             if(!stream->completed){
                 allCompleted = false;
@@ -899,11 +967,38 @@ u32 ProcessSource(void* ptr) {
                 info->sourceLock.unlock();
                 break;
             } else {
+                if(circularDependency) {
+                    if(!info->circularError) {
+                        log::out << log::RED <<"There is a circular dependency when importing files. Circular imports are not supported right now (problems with preprocessor).\n";
+                        log::out << log::BLOOD <<"Files causing circular dependencies:\n";
+                        for(int i=0;i<info->streams.size();i++) {
+                            auto stream = info->streams[i];
+                            // log::out << "s "<<i<<"\n";
+                            for(auto di : stream->dependencies) {
+                                // log::out << " d "<<di<<"\n";
+                                auto stream2 = info->streams[di];
+                                for(int j=0;j<stream2->dependencies.size();j++) {
+                                    int di2 = stream2->dependencies[j];
+                                    // log::out << "  a "<<di2<<"\n";
+                                    if(i == di2) {
+                                        stream2->dependencies.removeAt(j);
+                                        j--;
+                                        log::out << log::CYAN << BriefString(stream->initialStream->streamName, 24) << log::GOLD<< " <-> "<< log::CYAN <<BriefString(stream2->initialStream->streamName,24)<<"\n";
+                                    }
+                                }
+                            }
+                        }
+                        log::out << "\n";
+                        info->circularError = true;
+                    }
+                }
+
                 info->waitingThreads++;
                 info->sourceLock.unlock();
                 continue;
             }
         }
+        info->compileOrder.add(index);
         if(!info->signaled) {
             info->sourceWaitLock.signal(); // one stream was available there may be more
             info->signaled = true;
@@ -918,16 +1013,10 @@ u32 ProcessSource(void* ptr) {
         }
 
         info->sourceLock.lock();
-        stream->completed = true;
-        
-        while(info->completedDependencyIndex>0){
-            StreamToProcess* s = info->streams[info->completedDependencyIndex-1];
-            if(!s->completed) {
-                break;
-            }
-            info->completedDependencyIndex--;
-        }
 
+        stream->completed = true;
+        info->completedStreams++;
+        
         if(!info->signaled) {
             info->sourceWaitLock.signal();
             info->signaled = true;
@@ -1033,19 +1122,13 @@ Bytecode* CompileSource(CompileOptions* options) {
     for(int i=1;i<options->threadCount;i++){
         threadInfos[i]._thread.join();
     }
-    // for(int i=0;i<compileInfo.streams.size();i++){
+    // for(int i=0;i<compileInfo.compileOrder.size();i++){
     //     StreamToProcess* stream = compileInfo.streams[i];
     //     log::out << BriefString(stream->initialStream->streamName,10)<<"\n";
     // }
-    {
-        int i = compileInfo.streams.size()-1; // process essential first
+    for(int i=0;i<compileInfo.compileOrder.size();i++) {
         StreamToProcess* stream = compileInfo.streams[i];
-         // are used in this source file
-        // if (!stream->finalStream && (stream->initialStream->enabled & LAYER_PREPROCESSOR)) {
-        //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
-        //     stream->finalStream = Preprocess(&compileInfo, stream->initialStream);
-        // }
-
+        
         TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
         if(procStream) {
             _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
@@ -1059,42 +1142,62 @@ Bytecode* CompileSource(CompileOptions* options) {
             }
         }
     }
-    for(int i=compileInfo.streams.size()-2;i>=0;i--){
-        StreamToProcess* stream = compileInfo.streams[i];
-         // are used in this source file
-        // TokenStream* procStream = stream->initialStream;
-        // if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
-        //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
-        //     procStream = Preprocess(&compileInfo, stream->initialStream);
-        //     // if(macroBenchmark){
-        //     //     log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
-        //     //     #ifndef LOG_MEASURES
-        //     //     if(finalStream->length()<50){
-        //     //         finalStream->print();
-        //     //         log::out<<"\n";
-        //     //     }
-        //     //     #endif
-        //     // }
-        //     stream->finalStream = procStream;
-        //     // tokenStream->print();
-        // }
-        TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
-        if(procStream) {
-            _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
-            ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
-            if(body){
-                if(stream->as.empty()){
-                    compileInfo.ast->appendToMainBody(body);
-                } else {
-                    compileInfo.ast->mainBody->add(compileInfo.ast, body);
-                }
-            }
-        }
-    }
+    // {
+    //     int i = compileInfo.streams.size()-1; // process essential first
+    //     StreamToProcess* stream = compileInfo.streams[i];
+    //      // are used in this source file
+    //     // if (!stream->finalStream && (stream->initialStream->enabled & LAYER_PREPROCESSOR)) {
+    //     //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
+    //     //     stream->finalStream = Preprocess(&compileInfo, stream->initialStream);
+    //     // }
 
-    #ifdef AST_LOG
-    _VLOG(log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
-    #endif
+    //     TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
+    //     if(procStream) {
+    //         _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
+    //         ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
+    //         if(body){
+    //             if(stream->as.empty()){
+    //                 compileInfo.ast->appendToMainBody(body);
+    //             } else {
+    //                 compileInfo.ast->mainBody->add(compileInfo.ast, body);
+    //             }
+    //         }
+    //     }
+    // }
+    // for(int i=compileInfo.streams.size()-2;i>=0;i--){
+    //     StreamToProcess* stream = compileInfo.streams[i];
+    //      // are used in this source file
+    //     // TokenStream* procStream = stream->initialStream;
+    //     // if (stream->initialStream->enabled & LAYER_PREPROCESSOR) {
+    //     //     _VLOG(log::out <<log::BLUE<< "Preprocess: "<<BriefString(stream->initialStream->streamName)<<"\n";)
+    //     //     procStream = Preprocess(&compileInfo, stream->initialStream);
+    //     //     // if(macroBenchmark){
+    //     //     //     log::out << log::LIME<<"Finished with " << finalStream->length()<<" token(s)\n";
+    //     //     //     #ifndef LOG_MEASURES
+    //     //     //     if(finalStream->length()<50){
+    //     //     //         finalStream->print();
+    //     //     //         log::out<<"\n";
+    //     //     //     }
+    //     //     //     #endif
+    //     //     // }
+    //     //     stream->finalStream = procStream;
+    //     //     // tokenStream->print();
+    //     // }
+    //     TokenStream* procStream = stream->finalStream ? stream->finalStream : stream->initialStream;
+    //     if(procStream) {
+    //         _VLOG(log::out <<log::BLUE<< "Parse: "<<BriefString(stream->initialStream->streamName)<<"\n";)
+    //         ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
+    //         if(body){
+    //             if(stream->as.empty()){
+    //                 compileInfo.ast->appendToMainBody(body);
+    //             } else {
+    //                 compileInfo.ast->mainBody->add(compileInfo.ast, body);
+    //             }
+    //         }
+    //     }
+    // }
+
+    _LOG(LOG_AST,log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
     TypeCheck(compileInfo.ast, compileInfo.ast->mainBody, &compileInfo);
     
     // if(compileInfo.errors==0){

@@ -274,9 +274,7 @@ extern "C" {
     void attr_stdcall DirectoryIteratorDestroy(Language::DirectoryIterator* iterator) {
         engone::DirectoryIteratorDestroy((void*)iterator->_handle, (engone::DirectoryIteratorData*)&iterator->result);
         // Assert(!iterator->result.name.ptr);
-        #ifdef VLOG
         // log::out << log::GRAY<<"Destroy dir iterator: "<<iterator->rootPath<<"\n";
-        #endif
         engone::Free(iterator->rootPath.ptr,iterator->rootPath.len);
         iterator->~DirectoryIterator();
         engone::Free(iterator,sizeof(Language::DirectoryIterator));

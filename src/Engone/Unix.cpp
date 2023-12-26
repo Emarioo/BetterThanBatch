@@ -231,22 +231,27 @@ namespace engone {
 		s_rdiInfos.erase(iterator);
 	}
 
-#define NS 1000000000
+#define NS (u64)1000000000
 	TimePoint StartMeasure() {
-		timespec ts;
+		struct timespec ts;
+		memset(&ts,0,sizeof(ts));
 		int res = clock_gettime(CLOCK_MONOTONIC,&ts);
 		if (res == -1) {
-			// err
+			PL_PRINTF("StartMeasure");
 		}
-		return ((u64)ts.tv_sec*NS + (u64)ts.tv_nsec);
+		// return ((u64)ts.tv_sec*NS + (u64)ts.tv_nsec);
+		return ((u64)ts.tv_sec);
 	}
 	double StopMeasure(TimePoint startPoint) {
-		timespec ts;
+		struct timespec ts;
+		memset(&ts,0,sizeof(ts));
 		int res = clock_gettime(CLOCK_MONOTONIC, &ts);
 		if (res == -1) {
-			// err
+			PL_PRINTF("StopMeasure");
 		}
-		return (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec) - startPoint)/(double)NS;
+		// printf("%d\n",ts.tv_sec);
+		return (double)(((u64)ts.tv_sec) - startPoint);
+		// return (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec) - startPoint)/(double)NS;
 	}
 	double DiffMeasure(TimePoint endSubStart) {
 		return (double)(endSubStart)/(double)NS;

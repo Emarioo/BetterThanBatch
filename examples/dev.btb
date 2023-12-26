@@ -16,11 +16,71 @@
 // #import "graphics/perf.btb"
 
 // #import "Array"
+// #import "unix/threads"
+// #import "Thread"
+// #import "Unix"
+#import "Logger"
+// // #import "OS"
 
-#import "Thread"
-#import "OS"
-// #import "Logger"
-#import "Unix"
+// // fn @import @unixcall StartMeasure() -> u64;
+// // fn @import @unixcall StopMeasure(timePoint: u64) -> i32; // TODO: Use f64 (double) when implemented
+// // fn @import @unixcall StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
+
+// #define CLOCK_MONOTONIC 1
+// struct timespec {
+//     tv_sec: u64;
+//     tv_nsec: u32;
+// }
+// fn @import @unixcall clock_gettime(clk_id: i32, tp: timespec*) -> i32;
+
+// // tp: timespec;
+// // err = clock_gettime(CLOCK_MONOTONIC, &tp);
+// // #define NS cast<u64>1000000000
+
+// fn time() -> u64 {
+//     tp: timespec;
+//     err = clock_gettime(CLOCK_MONOTONIC, &tp);
+//     #define NS cast<u64>1000000000
+//     huge: u64 = NS*tp.tv_sec + tp.tv_nsec;
+//     return huge;
+// }
+// start = time()
+// end = time() - start;
+
+// t = cast<f32>end; ///cast<f32>NS;
+
+// ###########################
+// make these compile and work
+// ###########################
+// t = cast<f32>cast<u32>23 == 23.0
+t = cast<f32>cast<u64>23 == 23.0
+log(t);
+// fn printBits(bits: u32) {
+//     for @reverse 0..32 {
+//         if bits & (cast<u64>1 << nr) {
+//             print('1')
+//         } else 
+//             print('0')
+//     }
+//     print('\n')
+// }
+
+// printBits(*cast<u64*>cast<void*>&t);
+
+// // fn @unixcall k() -> f32 { return 0.5 }
+// // a = k();
+
+// log("end",end,"t",t);
+
+// tp = StartMeasure();
+
+// NativeSleep(3.3);
+
+// t = StopMeasure(tp);
+
+// log(t);
+
+// log("dev")
 
 // #import "Map"
 // Test_StringMap();
@@ -121,10 +181,32 @@
 // fn @unixcall ok() -> f32 {
 //     return 0.32
 // }
-t = StartMeasure()
-StopMeasure(t)
-v = cast_unsafe<f64> asm { sub rsp, -8; movsd [rsp], xmm0 }
-log(v)
+// t = StartMeasure()
+// StopMeasure(t)
+// v = cast_unsafe<f64> asm { sub rsp, -8; movsd [rsp], xmm0 }
+// log(v)
+
+// #import "Logger"
+
+// a: f32 = 324.1245;
+// b: f32 = 92.5123;
+
+// c: f64 = 9512.2d;
+// d: f64 = 52.92d;
+
+
+// r0: f32 = a + b
+// r1:f32 = c + d
+// println(r0)
+// println(r1)
+
+// print(5.3d)
+
+// fn ka(v: f32) { }
+// fn ka(v: f64) { }
+
+// ka(cast<i32>3);
+// ka(cast<i64>5);
 
 // struct ThreadContext {
 //     sum: i64;

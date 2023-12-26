@@ -245,6 +245,7 @@ void Instruction::print(){
             case CAST_SINT_SINT: log::out << "s->s"; break;
             case CAST_UINT_SINT: log::out << "u->s"; break;
             case CAST_SINT_UINT: log::out << "s->u"; break;
+            case CAST_FLOAT_FLOAT: log::out << "f->f"; break;
         }
         log::out<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::NO_COLOR;
     } else if(opcode==BC_LT || opcode==BC_LTE ||opcode==BC_GT ||opcode==BC_GTE) {

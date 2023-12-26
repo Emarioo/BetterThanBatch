@@ -1416,7 +1416,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(IsDecimal(token)){
-                Token tok = info.get(info.at()+1);
+                Token tok = info.get(info.at()+2);
                 ASTExpression* tmp = nullptr;
                 Assert(token.str[0]!='-');// ensure that the tokenizer hasn't been changed
                 // to clump the - together with the number token
@@ -2105,6 +2105,11 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         if(resultBody!=SignalDefault::SUCCESS){
             return SignalAttempt::FAILURE;
         }
+
+        // nocheckin
+        // TODO: Don't allow if true  if true  print("hi")
+        // You can't nest if statements without curly braces
+        // Correct form is: if true { if true  print("hi") }
         
         ASTScope* elseBody=0;
         Token token = info.get(info.at()+1);

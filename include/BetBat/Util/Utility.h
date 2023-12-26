@@ -36,7 +36,7 @@ const char* FormatTime(double seconds);
 // src -> /
 std::string TrimLastFile(const std::string& path);
 std::string TrimDir(const std::string& path);
-std::string BriefString(const std::string& path, int max=40);
+std::string BriefString(const std::string& path, int max=25, bool skip_cwd = true);
 
 void OutputAsHex(const char* path, char* data, int size);
 
@@ -68,7 +68,9 @@ struct ScopeDebug {
 #define BROKEN engone::log::out << engone::log::RED<< __FUNCTION__<<":"<<__LINE__<<" is broken\n"
 
 #define FOR(LIST) for(auto& it : LIST)
-#define FORN(LIST) auto it = LIST.data(); for(int nr=0; nr < (int)LIST.size() && (it = &LIST[nr]); nr++)
+// #define FORN(LIST) auto it = LIST.data(); for(int nr=0; nr < (int)LIST.size() && (it = &LIST[nr]); nr++)
+#define FORN(LIST) for(int nr=0; nr < (int)LIST.size(); nr++)
+#define FORNI(LIST) for(int nr=0; nr < (int)LIST.size(); nr++) { auto it = LIST[nr];
 
 // #define COMBINE1(X,Y) X##Y
 // #define COMBINE(X,Y) COMBINE1(X,Y)

@@ -27,7 +27,8 @@ struct Path {
         ABSOLUTE = 0x2,
     };
     bool isDir() const { return _type & DIR; }
-    bool isAbsolute() const { return _type & ABSOLUTE; }
+    bool isAbsolute() const;
+    //  { return  _type & ABSOLUTE; }
     // Turns path into the absolute form based on CWD.
     // Nothing happens if it already is in absolute form
     Path getAbsolute() const;
@@ -175,7 +176,9 @@ struct StreamToProcess {
     TokenStream* initialStream = nullptr; // from tokenizer
     TokenStream* finalStream = nullptr; // preprocessed
     std::string as="";
-    int dependencyIndex = 0x7FFFFFFF;
+    // #define INVALID_DEPENDENCY_INDEX 0x7FFFFFFF
+    // int dependencyIndex = INVALID_DEPENDENCY_INDEX;
+    QuickArray<int> dependencies;
     bool available = true; // for processing
     bool completed = false;
     int index = 0;
@@ -203,6 +206,7 @@ struct CompileInfo {
     std::unordered_map<std::string, StreamToProcess*> tokenStreams; // import streams
 
     QuickArray<StreamToProcess*> streams;
+    QuickArray<int> compileOrder;
 
     std::unordered_map<std::string, TokenStream*> includeStreams;
 
@@ -214,7 +218,7 @@ struct CompileInfo {
     // thread safe
     // StreamToProcess* addStream(TokenStream* stream);
     // returns null if the stream's name already exists.
-    StreamToProcess* addStream(const Path& path);
+    StreamToProcess* addStream(const Path& path, StreamToProcess** existingStream = nullptr);
     // NOT thread safe
     StreamToProcess* getStream(const Path& name);
     // thread safe
@@ -227,7 +231,13 @@ struct CompileInfo {
     // static const u32 THREAD_COUNT = 4;
     // #endif
 
+    // returns absolute path
+    Path findSourceFile(const Path& path, const Path& sourceDirectory = "");
+
     DynamicArray<SourceToProcess> sourcesToProcess{};
+    engone::Semaphore emptyLock{}; // locks when empty
+    engone::Mutex arrayLock{}; // lock when modifying the array
+
     engone::Semaphore sourceWaitLock{};
     engone::Mutex sourceLock{};
     int waitingThreads = 0;
@@ -235,7 +245,9 @@ struct CompileInfo {
     bool waitForContent = false;
     bool signaled=false;
     // int readDependencyIndex = 0;
-    int completedDependencyIndex = 0;
+    int completedStreams = 0;
+    bool circularError = false;
+    // int completedDependencyIndex = 0;
 
     engone::Mutex streamLock{}; // tokenStream
     // engone::Mutex includeStreamLock{};

@@ -18,6 +18,9 @@ LoggingSection global_loggingSection = (LoggingSection)(0
 // | LOG_MACRO_MATCH    
 
 // | LOG_ALLOCATIONS
+// | LOG_AST
+// | LOG_IMPORTS    
+// | LOG_INCLUDES   
 );
 
 // static int s_activelogs=0;

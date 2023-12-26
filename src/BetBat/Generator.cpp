@@ -130,6 +130,8 @@ void GenInfo::popInstructions(u32 count){
 bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
     using namespace engone;
 
+    // Assert(inst.op0 == CAST_SINT_SINT);
+
     // This is here to prevent mistakes.
     // the stack is kept track of behind the scenes with info.addPush, info.addPop.
     // using info.addInstruction would bypass that which would cause bugs.
@@ -477,14 +479,14 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
     // TODO: I just threw in currentScopeId. Not sure if it is supposed to be in all cases.
     // auto fti = info.ast->getTypeInfo(from);
     // auto tti = info.ast->getTypeInfo(to);
-    auto fti = info.ast->getTypeSize(from);
-    auto tti = info.ast->getTypeSize(to);
+    auto from_size = info.ast->getTypeSize(from);
+    auto to_size = info.ast->getTypeSize(to);
     // u8 reg0 = RegBySize(BC_AX, fti->size());
     // u8 reg1 = RegBySize(BC_AX, tti->size());
     // IMPORTANT: DO NOT!!!!!! USE ANY OTHER REGISTER THAN A!!!!!!
     // OTHER REGISTERS MAY BE IN USE I THINK?
-    u8 reg0 = RegBySize(BC_AX, fti);
-    u8 reg1 = RegBySize(BC_AX, tti);
+    u8 reg0 = RegBySize(BC_AX, from_size);
+    u8 reg1 = RegBySize(BC_AX, to_size);
     if (AST::IsDecimal(from) && AST::IsInteger(to)) {
         info.addPop(reg0);
         // if(AST::IsSigned(to))
@@ -499,6 +501,12 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
             info.addInstruction({BC_CAST, CAST_SINT_FLOAT, reg0, reg1});
         else
             info.addInstruction({BC_CAST, CAST_UINT_FLOAT, reg0, reg1});
+        info.addPush(reg1);
+        return true;
+    }
+    if (AST::IsDecimal(from) && AST::IsDecimal(to)) {
+        info.addPop(reg0);
+        info.addInstruction({BC_CAST, CAST_FLOAT_FLOAT, reg0, reg1});
         info.addPush(reg1);
         return true;
     }
@@ -867,10 +875,10 @@ SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId
                     }
                 } else {
                     StringBuilder values = {};
-                    FORN(tempTypes) {
+                    FORNI(tempTypes)
                         if(nr != 0)
                             values += ", ";
-                        values += info.ast->typeToString(*it);
+                        values += info.ast->typeToString(it);
                     }
                     ERR_SECTION(
                         ERR_HEAD(member.defaultValue->tokenRange)
@@ -879,7 +887,11 @@ SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId
                     )
                 }
             } else {
-                SignalDefault result = GenerateDefaultValue(info, baseReg, offset + memdata.offset, memdata.typeId, tokenRange, false);
+                if(!memdata.typeId.isValid() || memdata.typeId == AST_VOID) {
+                    Assert(info.hasForeignErrors());
+                } else {
+                    SignalDefault result = GenerateDefaultValue(info, baseReg, offset + memdata.offset, memdata.typeId, tokenRange, false);
+                }
             }
         }
     } else {
@@ -1029,12 +1041,14 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 case VariableInfo::GLOBAL: {
                     info.addInstruction({BC_DATAPTR, BC_REG_RBX});
                     info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    break; 
                 }
-                break; case VariableInfo::LOCAL: {
+                case VariableInfo::LOCAL: {
                     info.addLoadIm(BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     info.addInstruction({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
+                    break; 
                 }
-                break; case VariableInfo::MEMBER: {
+                case VariableInfo::MEMBER: {
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
                     Assert(info.currentFunction->callConvention == BETCALL);
                     info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
@@ -1042,6 +1056,7 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                     
                     info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
+                    break;
                 }
                 default: {
                     Assert(false);
@@ -1455,7 +1470,7 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
         } else {
             DynamicArray<TypeId> tempTypes{};
             result = GenerateExpression(info, arg, &tempTypes);
-            Assert(tempTypes.size() == 1);
+            if(tempTypes.size()>0) {
                 TypeId argType = tempTypes[0];
                 // log::out << "PUSH ARG "<<info.ast->typeToString(argType)<<"\n";
                 bool wasSafelyCasted = PerformSafeCast(info,argType, funcImpl->argumentTypes[i].typeId);
@@ -1466,6 +1481,9 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                         ERR_LINE(arg->tokenRange,"bad argument")
                     )
                 }
+            } else {
+                Assert(info.hasForeignErrors());
+            }
                 // Assert(wasSafelyCasted);
             // } else {
             //     StringBuilder values = {};
@@ -1992,12 +2010,14 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                             info.addInstruction({BC_DATAPTR, BC_REG_RBX});
                             info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
                             GeneratePush(info, BC_REG_RBX, 0, varinfo->versions_typeId[info.currentPolyVersion]);
+                            break; 
                         }
-                        break; case VariableInfo::LOCAL: {
+                        case VariableInfo::LOCAL: {
                             GeneratePush(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
+                            break;
                         }
-                        break; case VariableInfo::MEMBER: {
+                        case VariableInfo::MEMBER: {
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
                             info.addInstruction({BC_MOV_MR_DISP32, BC_REG_FP, BC_REG_RBX, 8});
                             info.addImm(GenInfo::FRAME_SIZE);
@@ -2007,6 +2027,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
                             GeneratePush(info, BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
+                            break;
                         }
                         default: {
                             Assert(false);
@@ -2262,10 +2283,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             
             if(ltypes.size()!=1) {
                 StringBuilder values = {};
-                FORN(ltypes) {
+                FORNI(ltypes)
                     if(nr != 0)
                         values += ", ";
-                    values += info.ast->typeToString(*it);
+                    values += info.ast->typeToString(it);
                 }
                 ERR_SECTION(
                     ERR_HEAD(expression->left->tokenRange)
@@ -3083,8 +3104,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
 
-                    u8 reg1i = RegBySize(BC_AX, lsize); // get the appropriate registers
+                    u8 reg1i = RegBySize(BC_AX, lsize); // get the appropriate input registers
                     u8 reg2i = RegBySize(BC_AX, rsize);
+                    u8 reg1f = RegBySize(BC_XMM0, lsize);
+                    u8 reg2f = RegBySize(BC_XMM1, rsize);
                     
                     u8 finalSize = 0;
                     if(AST::IsDecimal(ltype)) {
@@ -3110,7 +3133,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         }
                         rsize = finalSize;
                     } else {
-                        info.addPop(reg2);
+                        if(rsize < finalSize) {
+                            info.addPop(reg2f);
+                            info.addInstruction({BC_CAST, CAST_FLOAT_FLOAT, reg2f, reg2});
+                        } else {
+                            info.addPop(reg2);
+                        }
                     }
                     if(AST::IsInteger(ltype)){
                         info.addPop(reg1i);
@@ -3121,22 +3149,14 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         }
                         lsize = finalSize;
                     } else {
-                        info.addPop(reg1);
-
-                        info.addInstruction({BC_CAST, CAST_FLOAT_FLOAT, reg1i, reg1});
-
-                        info.addPop(reg1);
-                        if(lsize )
+                        if(lsize < finalSize) {
+                            info.addPop(reg1f);
+                            info.addInstruction({BC_CAST, CAST_FLOAT_FLOAT, reg1f, reg1});
+                        } else {
+                            info.addPop(reg1);
+                        }
                     }
                     
-                    if(AST::IsDecimal(ltype)) {
-                        
-                    }
-                    if(AST::IsDecimal(rtype)) {
-                        if(rsize > finalSize)
-                            finalSize = rsize;
-                    }
-
                     bool comparison = false;
                     if(bytecodeOp == BC_FLT ||bytecodeOp == BC_FLTE || bytecodeOp == BC_FGT || bytecodeOp == BC_FGTE || bytecodeOp == BC_FEQ || bytecodeOp == BC_FNEQ) {
                         regOut = BC_REG_AL;
@@ -3164,6 +3184,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     }
                     if(comparison)
                         outTypeIds->add(AST_BOOL);
+                    else if(finalSize == 8)
+                        outTypeIds->add(AST_FLOAT64);
                     else
                         outTypeIds->add(AST_FLOAT32);
                 } else if (operationType == AST_AND || operationType==AST_OR || operationType == AST_NOT){
@@ -3813,35 +3835,12 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 if(AST::IsDecimal(argTypes[i].typeId)) {
                     // I am not sure if doubles work so we should test and not assume.
                     // This assert will prevent incorrect assumptions from causing trouble.
-                    Assert(argTypes[i].typeId == AST_FLOAT32);
-                     info.addInstruction({BC_MOV_RM_DISP32, (u8)float_regs[--used_floats], BC_REG_FP, size});\
+                     info.addInstruction({BC_MOV_RM_DISP32, (u8)ENCODE_REG_BITS(float_regs[--used_floats], SIZE_TO_BITS(size)), BC_REG_FP, size});
                 } else {
-                    info.addInstruction({BC_MOV_RM_DISP32, (u8)normal_regs[--used_normals], BC_REG_FP, size});\
+                    info.addInstruction({BC_MOV_RM_DISP32, (u8)ENCODE_REG_BITS(normal_regs[--used_normals], SIZE_TO_BITS(size)), BC_REG_FP, size});
                 }
                 info.addImm(GenInfo::FRAME_SIZE + i * 8);
             }
-            // #define MOV_ARG(I,R,R2) u8 size = info.ast->getTypeSize(argTypes[I].typeId); if(argTypes[I].typeId == AST_FLOAT32) backslash
-            //         info.addInstruction({BC_MOV_RM_DISP32, R2, BC_REG_FP, size});backslash
-            //     else backslash
-            //         info.addInstruction({BC_MOV_RM_DISP32, R, BC_REG_FP, size});backslash
-            //     info.addImm(GenInfo::FRAME_SIZE + I * 8); 
-                    
-            // if(argTypes.size() > 3){
-            //     // MOV_ARG(3, BC_REG_R9, BC_REG_XMM3)
-            //     MOV_ARG(3, (ENCODE_REG_BITS(BC_R9, SIZE_TO_BITS(size))), BC_REG_XMM3f)
-            // }
-            // if(argTypes.size() > 2){
-            //     // MOV_ARG(2, BC_REG_R8, BC_REG_XMM2)
-            //     MOV_ARG(2, (ENCODE_REG_BITS(BC_R8, SIZE_TO_BITS(size))), BC_REG_XMM2f)
-            // }
-            // if(argTypes.size() > 1){
-            //     MOV_ARG(1, (ENCODE_REG_BITS(BC_DX, SIZE_TO_BITS(size))), BC_REG_XMM1f)
-            // }
-            // // BC_REG
-            // if(argTypes.size() > 0){
-            //     MOV_ARG(0, (ENCODE_REG_BITS(BC_CX, SIZE_TO_BITS(size))), BC_REG_XMM0f)
-            //     // MOV_ARG(0, BC_REG_RCX, BC_REG_XMM0)
-            // }
 
             // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES
             // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
@@ -4343,13 +4342,15 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             // info.addInstruction({BC_DATAPTR, BC_REG_RBX});
                             // info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // GeneratePop(info, BC_REG_RBX, 0, varinfo->versions_typeId[info.currentPolyVersion]);
+                            break; 
                         }
-                        break; case VariableInfo::LOCAL: {
+                        case VariableInfo::LOCAL: {
                             // info.addLoadIm(BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // info.addInstruction({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
                             GeneratePop(info, BC_REG_FP, frameOffsetOfLastVarname + j * elementSize, elementType);
+                            break;
                         }
-                        break; case VariableInfo::MEMBER: {
+                        case VariableInfo::MEMBER: {
                             Assert(false); // broken with arrays, this should probably not be allowed
                             // Assert(info.currentFunction && info.currentFunction->parentStruct);
                             // // TODO: Verify that  you
@@ -4360,6 +4361,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             // // info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // // info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
                             // GeneratePop(info, BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
+                            break;
                         }
                         default: {
                             Assert(false);
@@ -4425,13 +4427,15 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             info.addInstruction({BC_DATAPTR, BC_REG_RBX});
                             info.addImm(varinfo->versions_dataOffset[info.currentPolyVersion]);
                             GeneratePop(info, BC_REG_RBX, 0, varinfo->versions_typeId[info.currentPolyVersion]);
+                            break; 
                         }
-                        break; case VariableInfo::LOCAL: {
+                        case VariableInfo::LOCAL: {
                             // info.addLoadIm(BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // info.addInstruction({BC_ADDI, BC_REG_FP, BC_REG_RBX, BC_REG_RBX});
                             GeneratePop(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
+                            break;
                         }
-                        break; case VariableInfo::MEMBER: {
+                        case VariableInfo::MEMBER: {
                             Assert(info.currentFunction && info.currentFunction->parentStruct);
                             // TODO: Verify that  you
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
@@ -4441,6 +4445,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             // info.addLoadIm(BC_REG_RAX, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_RAX, BC_REG_RBX});
                             GeneratePop(info, BC_REG_RBX, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
+                            break;
                         }
                         default: {
                             Assert(false);
@@ -5102,6 +5107,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         GeneratePop(info, 0, 0, dtype);
                     }
                 }
+                break;
             }
             case STDCALL: {
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
@@ -5142,6 +5148,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 if(statement->arrayValues.size()==0){
                     info.addInstruction({BC_BXOR, BC_REG_RAX,BC_REG_RAX,BC_REG_RAX});
                 }
+                break;
             }
             case UNIXCALL: {
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
@@ -5182,6 +5189,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 if(statement->arrayValues.size()==0){
                     info.addInstruction({BC_BXOR, BC_REG_RAX,BC_REG_RAX,BC_REG_RAX});
                 }
+                break;
             }
             default: {
                 INCOMPLETE

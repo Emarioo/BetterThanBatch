@@ -95,33 +95,9 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 
 #include "Engone/Asserts.h"
 
-// Debug config
 #ifdef DEBUG
 
-
-// #define VLOG
-
-// will print AST
-// #define AST_LOG
-
-// #define TLOG
-
-// (DEPRECATED) import list in tokenizfer
-// #define LOG_IMPORTS
-
-// newly tokenized includes in preprocessor
-// #define LOG_INCLUDES
-
-// #define MLOG
-// #define PLOG
-// type checker
-// #define TCLOG
-// #define GLOG
-// #define ILOGf
 // #define ILOG_REGS
-// x64 converter
-// #define CLOG
-// #define OLOG
 #endif
 
 /*
@@ -143,6 +119,9 @@ enum LoggingSection : u32 {
     LOG_MACRO_MATCH     = 0x200,
 
     LOG_ALLOCATIONS     = 0x400,
+    LOG_AST             = 0x800,
+    LOG_IMPORTS         = 0x1000,
+    LOG_INCLUDES        = 0x2000,
 };
 extern LoggingSection global_loggingSection;
 
@@ -151,7 +130,7 @@ extern LoggingSection global_loggingSection;
 #define _TLOG(x)    _LOG(LOG_TOKENIZER,x)
 #define _MLOG(x)    _LOG(LOG_PREPROCESSOR,x)
 #define _PLOG(x)    _LOG(LOG_PARSER,x)
-#define _TCLOG(x)   _LOG(LOG_TYPECHECKER,x)
+#define _TCLOG(...)   _LOG(LOG_TYPECHECKER,__VA_ARGS__)
 #define _GLOG(x)    _LOG(LOG_GENERATOR,x)
 #define _OLOG(x)    _LOG(LOG_OPTIMIZER,x)
 #define _CLOG(x)    _LOG(LOG_CONVERTER,x)

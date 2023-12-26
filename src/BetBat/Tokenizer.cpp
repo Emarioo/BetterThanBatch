@@ -48,12 +48,17 @@ bool IsDecimal(const Token& token){
     if(token.flags&TOKEN_MASK_QUOTED) return false;
     if(token==".") return false;
     int hasDot=false;
+    bool hasD = false;
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
         if(hasDot && chr=='.')
             return false; // cannot have 2 dots
+        if(hasD && chr =='d')
+            return false; // cannot have two d
         if(chr=='.')
             hasDot = true;
+        else if(chr=='d')
+            hasD = true;
         else if(chr<'0'||chr>'9')
             return false;
     }
@@ -1535,11 +1540,11 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
         _TLOG(log::out<<log::LIME<<"Couldn't find #. Disabling preprocessor.\n";)
     }
     
-    #ifdef LOG_IMPORTS
-    for(auto& str : outStream->importList){
-        log::out << log::LIME<<" @import '"<<str<<"'\n";
-    }   
-    #endif
+    _LOG(LOG_IMPORTS,
+        for(auto& str : outStream->importList){
+            engone::log::out << log::LIME<<" #import '"<<str.name << "' as "<<str.as<<"'\n";
+        }   
+    )
     token.str = (char*)outStream->tokenData.data + (u64)token.str;
     token.tokenIndex = outStream->length()-1;
     token.tokenStream = outStream;

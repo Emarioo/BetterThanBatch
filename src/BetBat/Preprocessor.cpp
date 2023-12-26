@@ -662,11 +662,11 @@ SignalAttempt ParseInclude(PreprocInfo& info, bool attempt, bool quoted = false)
             info.compileInfo->otherLock.unlock();
             includeStream = TokenStream::Tokenize(fullpath.text);
             info.compileInfo->otherLock.lock();
-            #ifdef LOG_INCLUDES
-            if(includeStream){
-                log::out << log::GRAY <<"Tokenized include: "<< log::LIME<<filepath<<"\n";
-            }
-            #endif
+            _LOG(LOG_INCLUDES,
+                if(includeStream){
+                    log::out << log::GRAY <<"Tokenized include: "<< log::LIME<<filepath<<"\n";
+                }
+            )
             info.compileInfo->includeStreams[fullpath.text] = includeStream;
         }else{
             includeStream = pair->second;

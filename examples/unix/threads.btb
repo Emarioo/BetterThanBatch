@@ -1,0 +1,77 @@
+#import "OS"
+#import "Thread"
+#import "Logger"
+#import "Unix"
+// #import "../dev"
+
+struct ThreadContext {
+    sum: i64;
+    running: bool = false;
+    thread: Thread;
+}
+contexts: ThreadContext[4];
+
+/*
+    Enable how many threads you want
+*/
+#define ENABLE(I) contexts.ptr[I].running=true; contexts.ptr[I].thread = ThreadCreate(ThreadWork, &contexts.ptr[I]);
+ENABLE(0)
+// ENABLE(1)
+ENABLE(2)
+// ENABLE(3)
+
+
+fn print_state(contexts: ThreadContext[], initial: bool = false) {
+    if !initial {
+        move_cursor(0,4);
+    }
+    for 0..4 {
+        print("T",it,": ", contexts.ptr[it].sum,"\n");
+    }
+}
+
+print_state(contexts, true);
+
+start_time = StartMeasure()
+
+i = 0;
+running_any = false;
+while true {
+    if i == 0 {
+        running_any = false;
+        print_state(contexts);
+        NativeSleep(0.1);
+    }
+    if contexts.ptr[i].running {
+        running_any = true;
+    }
+
+    i = (i + 1) % cast<i32>contexts.len;
+    if i == 0 && !running_any {
+        break;
+    }
+}
+
+for @ptr contexts {
+    ThreadJoin(it.thread);
+}
+
+end_time = StopMeasure(start_time);
+log("Time",end_time)
+
+sum = 0
+for @ptr contexts {
+    sum += cast<i64>it.sum;
+}
+// log("Finished sum:", sum);
+log("Finished sum:", sum, "in", cast<i32>(end_time * 1000),"ms");
+
+fn @unixcall ThreadWork(param: ThreadContext*) -> void* {
+    for 0..1000000000 {
+        param.sum++;
+    }
+    // param.sum += 5;
+    // log("T done: ",param.thread.id);
+    param.running = false;
+    return null;
+}

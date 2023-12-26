@@ -6,7 +6,11 @@
     Cursor movement using escape code
 */
 
+// ifdef does not affect imports
 #import "Logger"
+
+#ifdef OS_UNIX
+
 
 fn set_cursor(x: u32, y: u32) {
     print("\e[",(x),";",(y),"H")
@@ -23,3 +27,5 @@ fn move_cursor(x: i32, y: i32) {
         print("\e[",-x,"D");
     }
 }
+
+#endif // OS_UNIX
