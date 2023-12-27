@@ -67,6 +67,10 @@ int main(int argc, const char** argv){
     //     log::out.flush();
     //     engone::Sleep(0.5);
     // }
+    // u64 a = 0x8000'0000'0000'0001;
+    // double f = a;
+
+    // return 0;
 
     log::out.enableReport(false);
     MeasureInit();

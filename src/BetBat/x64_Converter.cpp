@@ -90,10 +90,13 @@
 #define OPCODE_SHL_RM_IMM8_SLASH_4 (u8)0xC1
 #define OPCODE_SHR_RM_IMM8_SLASH_5 (u8)0xC1
 
+#define OPCODE_SHR_RM_ONCE_SLASH_5 (u8)0xD1
+
 // logical and with flags being set, registers are not modified
 #define OPCODE_TEST_RM_REG (u8)0x85
 
 #define OPCODE_JL_REL8 (u8)0x7C
+#define OPCODE_JS_REL8 (u8)0x78
 
 #define OPCODE_NOT_RM_SLASH_2 (u8)0xF7
 
@@ -198,6 +201,7 @@
 #define OPCODE_3_COMISD_REG_RM (u32)0x2F0F66
 
 #define OPCODE_4_ROUNDSS_REG_RM_IMM8 (u32)0x0A3A0F66
+#define OPCODE_3_PXOR_RM_REG (u32)0xEF0F66
 
 #define OPCODE_3_SQRTSS_REG_RM (u32)0x510FF3
 
@@ -327,6 +331,7 @@ void Program_x64::add2(u16 word){
 }void Program_x64::add3(u32 word){
     if(head>0){
         // This is not how you use rex prefix
+        // cvtsi2ss instructions use smashed in between it's other opcode bytes
         Assert(*(text + head - 1) != PREFIX_REXW);
     }
     Assert(0==(word&0xFF000000));
@@ -2040,6 +2045,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         u8 size0 = DECODE_REG_SIZE(op0);
                         Assert(size0 == 8);
 
+                        // TODO: Use movabs instruction
                         prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
                         prog->addModRM_SIB(MODE_DEREF_DISP8, 0, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
@@ -2327,22 +2333,22 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     Assert(!toXmm);
 
                     if(!fromXmm) {
+                        if(fsize == 8)
+                            prog->add(PREFIX_REXW);
                         prog->add(OPCODE_MOV_RM_REG);
                         prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
                     }
-                    if(fsize == 4) {
-                        if(tsize == 8) {
-                            prog->add3(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
-                        } else {
-                            prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
-                        }
+                    if        (fsize == 4 && tsize == 4) {
+                        prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                    } else if (fsize == 4 && tsize == 8) {
+                        prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
+                    } else if (fsize == 8 && tsize == 4) {
+                        prog->add3(OPCODE_3_CVTTSD2SI_REG_RM);
+                    } else if (fsize == 8 && tsize == 8) {
+                        prog->add4(OPCODE_4_REXW_CVTTSD2SI_REG_RM);
                     } else {
-                        if(tsize == 8) {
-                            prog->add3(OPCODE_4_REXW_CVTTSD2SI_REG_RM);
-                        } else {
-                            prog->add3(OPCODE_3_CVTTSD2SI_REG_RM);
-                        }
+                        Assert(false);
                     }
                     if(fromXmm) {
                         prog->addModRM(MODE_REG, treg, freg);
@@ -2417,6 +2423,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM7, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
 
+                        if(tsize == 8)
+                            prog->add(PREFIX_REXW);
                         prog->add(OPCODE_MOV_REG_RM);
                         prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
@@ -2425,8 +2433,221 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     Assert(tsize == 4 || tsize == 8);
                     Assert(!fromXmm);
                     
-                    
                     if(fsize == 8) {
+                        // We have freg but the code may change so to ensure no future bugs we get
+                        // the register again with BCToReg and ensure that it isn't extended (with R8-R11) and that
+                        // it is a 64-bit register.
+                        u8 from_reg = BCToProgramReg(op1, 8);
+
+                        u8 xmm_reg = REG_XMM7; // nocheckin, use xmm7 if treg is rax,rbx.. otherwise we can actually just use xmm register
+
+                        if(toXmm) {
+                            xmm_reg = treg;
+                        }
+
+                        if(tsize == 4) {
+                            /*
+                            test   rax,rax
+                            js     unsigned
+                            pxor   xmm0,xmm0
+                            cvtsi2ss xmm0,rax
+                            jmp    end
+                        unsigned:
+                            mov    rdx,rax
+                            shr    rdx,1
+                            and    eax,0x1
+                            or     rdx,rax
+                            pxor   xmm0,xmm0
+                            cvtsi2ss xmm0,rdx
+                            addss  xmm0,xmm0
+                        end:
+                            */
+
+                            u8 temp_reg = REG_DI;
+                            prog->add(OPCODE_PUSH_RM_SLASH_6);
+                            prog->addModRM(MODE_REG, 6, temp_reg);
+
+                            // Check signed bit
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_TEST_RM_REG);
+                            prog->addModRM(MODE_REG, from_reg, from_reg);
+
+                            prog->add(OPCODE_JS_REL8);
+                            int jmp_offset_unsigned = prog->size();
+                            prog->add((u8)0); // set later
+
+                            // Normal conversion since the signed bit is off
+                            prog->add3(OPCODE_3_PXOR_RM_REG);
+                            prog->addModRM(MODE_REG, xmm_reg, xmm_reg);
+
+                            prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                            prog->addModRM(MODE_REG, xmm_reg, from_reg);
+
+                            prog->add(OPCODE_JMP_IMM8);
+                            int jmp_offset_end = prog->size();
+                            prog->add((u8)0);
+
+                            prog->set(jmp_offset_unsigned, prog->size() - (jmp_offset_unsigned +1)); // +1 gives the offset after the jump instruction (immediate is one byte)
+                            
+                            // Special conversion because the signed bit is on but since our conversion is unsigned
+                            // we need some special stuff so that our float isn't negative and half the number we except
+
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM(MODE_REG, temp_reg, from_reg);
+
+                            prog->add(PREFIX_REXW);    
+                            prog->add(OPCODE_SHR_RM_ONCE_SLASH_5);
+                            prog->addModRM(MODE_REG, 5, temp_reg);
+
+                            prog->add(OPCODE_AND_RM_IMM8_SLASH_4);
+                            prog->addModRM(MODE_REG, 4, from_reg);
+                            prog->add((u8)1);
+
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_OR_RM_REG);
+                            prog->addModRM(MODE_REG, from_reg, temp_reg);
+
+                            prog->add3(OPCODE_3_PXOR_RM_REG);
+                            prog->addModRM(MODE_REG, xmm_reg, xmm_reg);
+
+                            prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                            prog->addModRM(MODE_REG, xmm_reg, temp_reg);
+
+                            prog->add3(OPCODE_3_ADDSS_REG_RM);
+                            prog->addModRM(MODE_REG, xmm_reg, xmm_reg);
+
+                            prog->set(jmp_offset_end, prog->size() - (jmp_offset_end +1));
+
+                            prog->add(OPCODE_POP_RM_SLASH_0);
+                            prog->addModRM(MODE_REG, 0, temp_reg);
+
+                            if(!toXmm) {
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, xmm_reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                prog->add((u8)-8);
+
+                                prog->add(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                prog->add((u8)-8);
+                            }
+                        } else if(tsize == 8) {
+                            /*
+                            test   rax,rax
+                            js     unsigned
+                            pxor   xmm0,xmm0
+                            cvtsi2sd xmm0,rax
+                            jmp    end
+                        unsigned:
+                            mov    rdx,rax
+                            shr    rdx,1
+                            and    eax,0x1
+                            or     rdx,rax
+                            pxor   xmm0,xmm0
+                            cvtsi2sd xmm0,rdx
+                            addsd  xmm0,xmm0
+                        end:
+                            */
+                            u8 temp_reg = REG_DI;
+                            prog->add(OPCODE_PUSH_RM_SLASH_6);
+                            prog->addModRM(MODE_REG, 6, temp_reg);
+
+                            // Check signed bit
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_TEST_RM_REG);
+                            prog->addModRM(MODE_REG, from_reg, from_reg);
+
+                            prog->add(OPCODE_JS_REL8);
+                            int jmp_offset_unsigned = prog->size();
+                            prog->add((u8)0); // set later
+
+                            // Normal conversion since the signed bit is off
+                            prog->add3(OPCODE_3_PXOR_RM_REG);
+                            prog->addModRM(MODE_REG, xmm_reg, xmm_reg);
+
+                            prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                            prog->addModRM(MODE_REG, xmm_reg, from_reg);
+
+                            prog->add(OPCODE_JMP_IMM8);
+                            int jmp_offset_end = prog->size();
+                            prog->add((u8)0);
+
+                            prog->set(jmp_offset_unsigned, prog->size() - (jmp_offset_unsigned +1)); // +1 gives the offset after the jump instruction (immediate is one byte)
+                            
+                            // Special conversion because the signed bit is on but since our conversion is unsigned
+                            // we need some special stuff so that our float isn't negative and half the number we except
+
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM(MODE_REG, temp_reg, from_reg);
+
+                            prog->add(PREFIX_REXW);    
+                            prog->add(OPCODE_SHR_RM_ONCE_SLASH_5);
+                            prog->addModRM(MODE_REG, 5, temp_reg);
+
+                            prog->add(OPCODE_AND_RM_IMM8_SLASH_4);
+                            prog->addModRM(MODE_REG, 4, from_reg);
+                            prog->add((u8)1);
+
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_OR_RM_REG);
+                            prog->addModRM(MODE_REG, from_reg, temp_reg);
+
+                            prog->add3(OPCODE_3_PXOR_RM_REG);
+                            prog->addModRM(MODE_REG, xmm_reg, xmm_reg);
+
+                            prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                            prog->addModRM(MODE_REG, xmm_reg, temp_reg);
+
+                            prog->add3(OPCODE_3_ADDSD_REG_RM);
+                            prog->addModRM(MODE_REG, xmm_reg, xmm_reg);
+
+                            prog->set(jmp_offset_end, prog->size() - (jmp_offset_end +1));
+
+                            prog->add(OPCODE_POP_RM_SLASH_0);
+                            prog->addModRM(MODE_REG, 0, temp_reg);
+
+                            if(!toXmm) {
+                                prog->add3(OPCODE_3_MOVSD_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, xmm_reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                prog->add((u8)-8);
+
+                                prog->add(PREFIX_REXW);
+                                prog->add(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                prog->add((u8)-8);
+                            }
+                        }
+
+
+                        #ifdef gone
+                        // TODO: THIS IS FLAWED! The convert int to float instruction assumes signed integers but
+                        //  we are dealing with unsigned ones. That means that large unsigned 64-bit numbers would
+                        //  be converted to negative slighly smaller numbers.
+                        if(tsize==4)
+                            prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                        else
+                            prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+
+                         if(toXmm) {
+                            prog->addModRM(MODE_REG, treg, freg);
+                        } else {
+                            prog->addModRM(MODE_REG, REG_XMM7, freg);
+
+                            if(tsize==4)
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            else
+                                prog->add3(OPCODE_3_MOVSD_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM7, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+
+                            if(tsize==8)
+                                prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            prog->add((u8)-8);
+                        }
+
                         // Assert(false);
                         // This code is bugged, doesn't work.
                         /*
@@ -2535,6 +2756,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add(OPCODE_XOR_REG_RM);
                         prog->addModRM(MODE_REG, tempReg, tempReg);
 
+                        // TODO: REXW may be needed here
                         prog->add(PREFIX_REXB);
                         prog->add(OPCODE_MOV_RM_IMM8_SLASH_0);
                         prog->addModRM(MODE_REG, 0, tempReg);
@@ -2562,12 +2784,14 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             prog->addModRM_SIB(MODE_DEREF_DISP8, xmm, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                             prog->add((u8)-8);
 
+
                             prog->add(OPCODE_MOV_REG_RM);
                             prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                             prog->add((u8)-8);
                         } else {
                             // xmm register is already loaded with correct value
                         }
+                        #endif
                     } else {
                         if(fsize == 1){
                             // prog->add(PREFIX_REXW);
@@ -2594,9 +2818,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             // We must use rexw with this operation since it assumes signed values
                             // but we have an unsigned so we must use 64-bit values.
                             if(tsize==4)
-                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                                prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
                             else
-                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                                prog->add4(OPCODE_3_CVTSI2SD_REG_RM);
                         }
 
                         if(toXmm) {
@@ -2611,11 +2835,13 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM7, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                             prog->add((u8)-8);
 
+                            if(tsize==8)
+                                prog->add(PREFIX_REXW);
                             prog->add(OPCODE_MOV_REG_RM);
                             prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                             prog->add((u8)-8);
 
-                            prog->add(OPCODE_NOP);
+                            // prog->add(OPCODE_NOP);
                         }
                     }
                 } else if(type==CAST_UINT_SINT || type==CAST_SINT_UINT){
@@ -2689,13 +2915,14 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             // do nothing
                         }
                     } else if(!fromXmm && toXmm) {
+                        u8 temp = REG_XMM7;
                         if(fsize == 8)
                             prog->add(PREFIX_REXW);
-                        u8 temp = REG_XMM7;
                         prog->add(OPCODE_MOV_RM_REG);
                         prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
 
+                        // NOTE: Do we need REXW one some of these?
                         if(fsize == 4 && tsize == 8) {
                             prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
                         } else if(fsize == 8 && tsize == 4) {
@@ -2751,13 +2978,14 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             prog->add((u8)-8);
                         }
                     } else if(!fromXmm && !toXmm) {
+                        u8 temp = REG_XMM7;
                         if(fsize == 8)
                             prog->add(PREFIX_REXW);
-                        u8 temp = REG_XMM7;
                         prog->add(OPCODE_MOV_RM_REG);
                         prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
 
+                        // NOTE: Do we need REXW here?
                         if(fsize == 4 && tsize == 8) {
                             prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
                         } else if(fsize == 8 && tsize == 4) {

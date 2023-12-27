@@ -1093,6 +1093,8 @@ Bytecode* CompileSource(CompileOptions* options) {
     // #elif defined(OS_UNIX)
     "#define OS_UNIX\n"
     #endif
+    "fn @native prints(str: char[]);\n"
+    "fn @native printc(str: char);\n"
     ;
     essentialStructs += (options->target == TARGET_BYTECODE ? "#define LINK_BYTECODE\n" : "");
     TextBuffer essentialBuffer{};

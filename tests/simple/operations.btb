@@ -95,11 +95,13 @@ generator but then not generate the actual code. This annotation could have mult
 */
 @TEST-CASE conversions
 
-// unsigned conversion
-test 1; cast<f32>0x8100_0001 > 0.0;
-test 1; cast<f32>0x8100_0000_0000_0001 > 0.0;
-test 1; cast<f32>0x8100_0000_0000_0010 > 0.0;
-test 1; cast<f32>0x8100_0000_0000_0011 > 0.0;
+// unsigned conversion, floats should not be negative
+test 1; cast<f32>cast<u32>0x8100_0001 > 0.0;
+test 1; cast<f32>cast<u64>0x8100_0000_0000_0001 > 0.0;
+test 1; cast<f32>cast<u64>0x8100_0000_0000_0010 > 0.0;
+test 1; cast<f32>cast<u64>0x8100_0000_0000_0011 > 0.0;
+
+// TODO: Test float to integer conversions! Not just int to float.
 
 test 17.0; cast<f32>cast<u64>0x0000_0000_0000_0011; // A bug at some point produced 18.0 instead of 17.0
 
@@ -112,10 +114,10 @@ test 23.0; cast<f32>cast<u8>23;
 test 23.0; cast<f32>cast<u16>23;
 test 23.0; cast<f32>cast<u32>23;
 test 23.0; cast<f32>cast<u64>23;
-test 23.0; cast<f64>cast<u8>23;
-test 23.0; cast<f64>cast<u16>23;
-test 23.0; cast<f64>cast<u32>23;
-test 23.0; cast<f64>cast<u64>23;
+test 23.0d; cast<f64>cast<u8>23;
+test 23.0d; cast<f64>cast<u16>23;
+test 23.0d; cast<f64>cast<u32>23;
+test 23.0d; cast<f64>cast<u64>23;
 
 // these conversions, divisions don't work properly
 // sample0 = 47627486

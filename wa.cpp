@@ -7,7 +7,7 @@ int main() {
     // auto a = hey();
 
     unsigned long int j = 235;
-    float k = j;
+    double k = j;
     
     return 0;    
 }

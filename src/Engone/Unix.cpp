@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <sys/stat.h>
 #include <sys/wait.h>
+#include <sys/ioctl.h>
 #include <time.h>
 #include <semaphore.h>
 #include <pthread.h>

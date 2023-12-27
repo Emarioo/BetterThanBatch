@@ -1,8 +1,9 @@
 // #import "OS"
 
+// always preloaded
+// fn @native prints(str: char[]);
+// fn @native printc(str: char);
 
-fn @native prints(str: char[]);
-fn @native printc(str: char);
 fn @intrinsic strlen(str: char*) -> u32;
 
 // This is not beautifully done. If _print has a bug then printi would work in interpreter but not otherwise. No one likes inconsistencies. 
