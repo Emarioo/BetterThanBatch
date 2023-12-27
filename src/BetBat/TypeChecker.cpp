@@ -1183,439 +1183,479 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
 
     TINY_ARRAY(TypeId, typeArray, 1);
 
-    if(expr->typeId == AST_REFER){
-        if(expr->left) {
-            CheckExpression(info,scopeId, expr->left, outTypes, attempt);
-        }
-        if(outTypes) outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()+1);
-    } else if(expr->typeId == AST_DEREF){
-        if(expr->left) {
-            CheckExpression(info,scopeId, expr->left, outTypes, attempt);
-        }
-        if(outTypes && outTypes->last().getPointerLevel()==0){
-            ERR_SECTION(
-                ERR_HEAD(expr->left->tokenRange)
-                ERR_MSG("Cannot dereference non-pointer.")
-                ERR_LINE(expr->left->tokenRange,info.ast->typeToString(outTypes->last()));
-            )
-        }else{
-            if(outTypes) outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
-        }
-    } else if(expr->typeId == AST_MEMBER){
-        Assert(expr->left);
-        if(expr->left->typeId == AST_ID){
-            // TODO: Generator passes idScope. What is it and is it required in type checker?
-            // A simple check to see if the identifier in the expr node is an enum type.
-            // no need to check for pointers or so.
-            TypeInfo *typeInfo = info.ast->convertToTypeInfo(expr->left->name, scopeId, true);
-            if (typeInfo && typeInfo->astEnum) {
-                i32 enumValue;
-                bool found = typeInfo->astEnum->getMember(expr->name, &enumValue);
-                if (!found) {
+    // switch 
+    if(expr->isValue) {
+        if(expr->typeId == AST_ID){
+            // NOTE: When changing this code, don't forget to do the same with AST_SIZEOF. It also has code for AST_ID.
+            if(IsName(expr->name)){
+                // TODO: What about enum?
+                auto iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name);
+                if(iden){
+                    expr->identifier = iden;
+                    if(iden->type == Identifier::VARIABLE){
+                        auto varinfo = info.ast->identifierToVariable(iden);
+                        if(varinfo){
+                            if(outTypes) outTypes->add(varinfo->versions_typeId[info.currentPolyVersion]);
+                        }
+                    } else if(iden->type == Identifier::FUNCTION) {
+                        if(iden->funcOverloads.overloads.size() == 1) {
+                            auto overload = &iden->funcOverloads.overloads[0];
+                            CallConventions expected_convention = CallConventions::UNIXCALL;
+                            if(info.compileInfo->compileOptions->target == TARGET_WINDOWS_x64)
+                                expected_convention = CallConventions::STDCALL;
+                            if(info.compileInfo->compileOptions->target == TARGET_UNIX_x64)
+                                expected_convention = CallConventions::UNIXCALL;
+                            if (overload->astFunc->callConvention != expected_convention) {
+                                ERR_SECTION(
+                                    ERR_HEAD(expr->tokenRange)
+                                    ERR_MSG("You can only take a reference from functions that use "<<ToString(expected_convention)<<" (calling convention). The system for function pointers is a temporary solution and can't support anything else. But it exists at least; making threads possible.")
+                                    ERR_LINE(expr->tokenRange, "function must use stdcall")
+                                )
+                                if(outTypes) outTypes->add(AST_VOID);
+                            } else {
+                                if(overload->astFunc->body && overload->funcImpl->usages == 0){
+                                    CheckInfo::CheckImpl checkImpl{};
+                                    checkImpl.astFunc = overload->astFunc;
+                                    checkImpl.funcImpl = overload->funcImpl;
+                                    info.checkImpls.add(checkImpl);
+                                }
+                                overload->funcImpl->usages++;
+                                if(outTypes) outTypes->add(AST_FUNC_REFERENCE);
+                            }
+                        } else {
+                            ERR_SECTION(
+                                ERR_HEAD(expr->tokenRange)
+                                ERR_MSG("Function is overloaded. Taking a reference would therefore be ambiguous. You must rename the function so that it only has one overload. There will be a better way to solve this in the future.")
+                                ERR_LINE(expr->tokenRange, "ambiguous")
+                            )
+                            if(outTypes) outTypes->add(AST_VOID);
+                        }
+                    } else {
+                        INCOMPLETE
+                    }
+                } else {
                     ERR_SECTION(
-                        ERR_HEAD(expr->tokenRange)
-                        ERR_MSG("'"<<expr->name << "' is not a member of enum " << typeInfo->astEnum->name <<".")
+                        ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
+                        ERR_MSG("'"<<expr->name<<"' is not declared.")
+                        ERR_LINE(expr->tokenRange,"undeclared")
                     )
                     return SignalAttempt::FAILURE;
                 }
+            } else {
+                // TODO: What to do with type? Return some type object?
+            }
+        } else if(expr->typeId == AST_FNCALL){
+            CheckFncall(info,scopeId,expr, outTypes, attempt, false);
+        } else if(expr->typeId == AST_STRING){
+            u32 index=0;
+            auto constString = info.ast->getConstString(expr->name,&index);
+            // Assert(constString);
+            expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
-                if(outTypes) outTypes->add(typeInfo->id);
-                return SignalAttempt::SUCCESS;
+            if(expr->flags & ASTNode::NULL_TERMINATED) {
+                TypeId theType = CheckType(info, scopeId, "char*", expr->tokenRange, nullptr);
+                if(outTypes) outTypes->add(theType);
+            } else {
+                TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+                if(outTypes) outTypes->add(theType);
+            } 
+        } else if(expr->typeId == AST_SIZEOF) {
+            Assert(expr->left);
+            TypeId finalType = {};
+            if(expr->left->typeId == AST_ID){
+                // AST_ID could result in a type or a variable
+                Identifier* iden = nullptr;
+                Token& name = expr->left->name;
+                // TODO: Handle function pointer type
+                // This code may need to update when code for AST_ID does
+                if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name)) && iden->type==Identifier::VARIABLE){
+                    auto var = info.ast->identifierToVariable(iden);
+                    Assert(var);
+                    if(var){
+                        finalType = var->versions_typeId[info.currentPolyVersion];
+                    }
+                } else {
+                    finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
+                }
+            } else {
+                // DynamicArray<TypeId> temps{};
+                typeArray.resize(0);
+                SignalAttempt result = CheckExpression(info, scopeId, expr->left, &typeArray, attempt);
+                finalType = typeArray.size()==0?AST_VOID:typeArray.last();
+            }
+            expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
+            if(outTypes) outTypes->add(AST_UINT32);
+        } else if(expr->typeId == AST_ASM){
+            // Polymorphism may cause duplicated inline assembly.
+            Assert(info.currentPolyVersion==0);
+            // TODO: Check variables?
+            if(outTypes)
+                outTypes->add(AST_VOID);
+        } else if(expr->typeId == AST_NAMEOF) {
+            // Assert(expr->left);
+            // TypeId finalType = {};
+            // if(expr->left->typeId == AST_ID){
+            //     // AST_ID could result in a type or a variable
+            //     Identifier* iden = nullptr;
+            //     Token& name = expr->left->name;
+            //     // TODO: Handle function pointer type
+            //     // This code may need to update when code for AST_ID does
+            //     if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, name)) && iden->type==Identifier::VARIABLE){
+            //         auto var = info.ast->identifierToVariable(iden);
+            //         Assert(var);
+            //         if(var){
+            //             finalType = var->typeId;
+            //         }
+            //     } else {
+            //         finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
+            //     }
+            // } else {
+            //     DynamicArray<TypeId> temps{};
+            //     int result = CheckExpression(info, scopeId, expr->left, &temps);
+            //     finalType = temps.size()==0?AST_VOID:temps.last();
+            // }
+            // expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
+            // outTypes->add(AST_UINT32);
+            
+            // TODO: nameof doesn't use an expression, it uses expr->name, so you cannot
+            //   evaluate expressions like sizeof. You may want to change it so nameof works
+            //   like sizeof.
+            std::string name = "";
+            auto ti = CheckType(info, scopeId, expr->name, expr->tokenRange, nullptr);
+            if(ti.isValid()){
+                name = info.ast->typeToString(ti);
+            }else{
+                // AST_ID could result in a type or a variable
+                Identifier* iden = nullptr;
+                // Token& name = expr->name;
+                // TODO: Handle function pointer type
+                // This code may need to update when code for AST_ID does
+                if(IsName(expr->name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name)) && iden->type==Identifier::VARIABLE){
+                    auto var = info.ast->identifierToVariable(iden);
+                    Assert(var);
+                    if(var){
+                        name = info.ast->typeToString(var->versions_typeId[info.currentPolyVersion]);
+                        // finalType = var->typeId;
+                    }
+                } else {
+                    name = expr->name;
+                    // finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
+                }
+            }
+            u32 index=0;
+            auto constString = info.ast->getConstString(name,&index);
+            // Assert(constString);
+            expr->versions_constStrIndex[info.currentPolyVersion] = index;
+            // expr->constStrIndex = index;
+
+            TypeId theType =CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+            if(outTypes)
+                outTypes->add(theType);
+        } else if(expr->typeId == AST_NULL){
+            // u32 index=0;
+            // auto constString = info.ast->getConstString(expr->name,&index);
+            // // Assert(constString);
+            // expr->versions_constStrIndex[info.currentPolyVersion] = index;
+
+            // TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+            TypeId theType = AST_VOID;
+            theType.setPointerLevel(1);
+            if(outTypes)
+                outTypes->add(theType);
+        } else {
+            Assert(expr->typeId.getId() < AST_PRIMITIVE_COUNT);
+            if(outTypes) outTypes->add(expr->typeId);
+        }
+        // if(outTypes) outTypes->add(expr->typeId);
+    } else {
+        TypeId leftType{};
+        TypeId rightType{};
+        if(expr->typeId != AST_REFER && expr->typeId != AST_DEREF && expr->typeId != AST_MEMBER&& expr->typeId != AST_CAST && expr->typeId != AST_INITIALIZER) {
+            TINY_ARRAY(TypeId, operatorArgs, 2);
+            if(expr->left) {
+                typeArray.resize(0);
+                CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+                Assert(typeArray.size()<2); // error message
+                if(typeArray.size()>0) {
+                    leftType = typeArray.last();
+                    operatorArgs.add(typeArray.last());
+                }
+            }
+            if(expr->right) {
+                typeArray.resize(0);
+                CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
+                Assert(typeArray.size()<2); // error message
+                if(typeArray.size()>0) {
+                    rightType = typeArray.last();
+                    operatorArgs.add(typeArray.last());
+                }
+            }
+            // TODO: You should not be allowed to overload all operators.
+            //  Fix some sort of way to limit which ones you can.
+            const char* str = OpToStr((OperationType)expr->typeId.getId(), true);
+            if(str && operatorArgs.size() == 2) {
+                
+                expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
+                SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
+                
+                if(result == SignalAttempt::SUCCESS)
+                    return SignalAttempt::SUCCESS;
+
+                if(result != SignalAttempt::BAD_ATTEMPT)
+                    return result;
             }
         }
-        // DynamicArray<TypeId> typeArray{};
-        // TINY_ARRAY(TypeId, typeArray, 1);
-        // if(expr->left) {
-            CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
-        // }
+        switch(expr->typeId.getId()) {
+        case AST_REFER: {
+            if(expr->left) {
+                CheckExpression(info,scopeId, expr->left, outTypes, attempt);
+                if(outTypes) {
+                    if(outTypes->size()>0)
+                        outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()+1);
+                }
+            }
+            break;
+        }
+        case AST_DEREF: {
+            if(expr->left) {
+                CheckExpression(info,scopeId, expr->left, outTypes, attempt);
+                if(outTypes) {
+                    if(outTypes->last().getPointerLevel()==0){
+                        ERR_SECTION(
+                            ERR_HEAD(expr->left->tokenRange)
+                            ERR_MSG("Cannot dereference non-pointer.")
+                            ERR_LINE(expr->left->tokenRange,info.ast->typeToString(outTypes->last()));
+                        )
+                    }else{
+                        outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
+                    }
+                }
+            }
+            break;
+        }
+        case AST_MEMBER: {
+            Assert(expr->left);
+            if(expr->left->typeId == AST_ID){
+                // TODO: Generator passes idScope. What is it and is it required in type checker?
+                // A simple check to see if the identifier in the expr node is an enum type.
+                // no need to check for pointers or so.
+                TypeInfo *typeInfo = info.ast->convertToTypeInfo(expr->left->name, scopeId, true);
+                if (typeInfo && typeInfo->astEnum) {
+                    i32 enumValue;
+                    bool found = typeInfo->astEnum->getMember(expr->name, &enumValue);
+                    if (!found) {
+                        ERR_SECTION(
+                            ERR_HEAD(expr->tokenRange)
+                            ERR_MSG("'"<<expr->name << "' is not a member of enum " << typeInfo->astEnum->name <<".")
+                        )
+                        return SignalAttempt::FAILURE;
+                    }
 
-        if(typeArray.size()==0) 
-            typeArray.add(AST_VOID);
-        // outType holds the type of expr->left
-        TypeInfo* ti = info.ast->getTypeInfo(typeArray.last().baseType());
-        Assert(typeArray.last().getPointerLevel()<2);
-        if(ti && ti->astStruct){
-            TypeInfo::MemberData memdata = ti->getMember(expr->name);
-            if(memdata.index!=-1){
-                if(outTypes)
-                    outTypes->add(memdata.typeId);
+                    if(outTypes) outTypes->add(typeInfo->id);
+                    return SignalAttempt::SUCCESS;
+                }
+            }
+            // DynamicArray<TypeId> typeArray{};
+            // TINY_ARRAY(TypeId, typeArray, 1);
+            if(expr->left) {
+                // Operator overload checking does not run on AST_MEMBER since it can't be overloaded
+                // leftType has therefore note been set and expression not checked.
+                // We must check it here.
+                CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+                if(typeArray.size()>0)
+                    leftType = typeArray.last();
+            }
+
+            // if(typeArray.size()==0) 
+            //     typeArray.add(AST_VOID);
+            // outType holds the type of expr->left
+            TypeInfo* ti = info.ast->getTypeInfo(leftType.baseType());
+            Assert(leftType.getPointerLevel()<2);
+            if(ti && ti->astStruct){
+                TypeInfo::MemberData memdata = ti->getMember(expr->name);
+                if(memdata.index!=-1){
+                    if(outTypes)
+                        outTypes->add(memdata.typeId);
+                } else {
+                    std::string msgtype = "not member of "+info.ast->typeToString(leftType);
+                    ERR_SECTION(
+                        ERR_HEAD(expr->tokenRange)
+                        ERR_MSG_LOG("'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(leftType)<<"'.";
+                            log::out << "These are the members: ";
+                            for(int i=0;i<(int)ti->astStruct->members.size();i++){
+                                if(i!=0)
+                                    log::out << ", ";
+                                log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
+                            }
+                            log::out <<"\n";
+                            log::out << "\n"
+                        )
+                        ERR_LINE(expr->name,msgtype.c_str());
+                    )
+                    if(outTypes)
+                        outTypes->add(AST_VOID);
+                    return SignalAttempt::FAILURE;
+                }
             } else {
-                std::string msgtype = "not member of "+info.ast->typeToString(typeArray.last());
                 ERR_SECTION(
                     ERR_HEAD(expr->tokenRange)
-                    ERR_MSG_LOG("'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(typeArray.last())<<"'.";
-                        log::out << "These are the members: ";
-                        for(int i=0;i<(int)ti->astStruct->members.size();i++){
-                            if(i!=0)
-                                log::out << ", ";
-                            log::out << log::LIME << ti->astStruct->members[i].name<<log::NO_COLOR<<": "<<info.ast->typeToString(ti->getMember(i).typeId);
-                        }
-                        log::out <<"\n";
-                        log::out << "\n"
-                    )
-                    ERR_LINE(expr->name,msgtype.c_str());
+                    ERR_MSG("Member access only works on structs, pointers to structs, and enums. '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).")
+                    ERR_LINE(expr->tokenRange,info.ast->typeToString(leftType))
                 )
                 if(outTypes)
                     outTypes->add(AST_VOID);
                 return SignalAttempt::FAILURE;
             }
-        } else {
-            ERR_SECTION(
-                ERR_HEAD(expr->tokenRange)
-                ERR_MSG("Member access only works on structs, pointers to structs, and enums. '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).")
-                ERR_LINE(expr->tokenRange,info.ast->typeToString(typeArray.last()))
-            )
-            if(outTypes)
-                outTypes->add(AST_VOID);
-            return SignalAttempt::FAILURE;
+            break;
         }
-    } else if(expr->typeId == AST_INDEX) {
-        // SAVEPOINT
-        TINY_ARRAY(TypeId, operatorArgs, 2);
-        
-        TypeId leftType = {}, rightType = {};
-        if(expr->left) {
-            typeArray.resize(0);
-            CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
-            Assert(typeArray.size()<2); // error message
-            if(typeArray.size()>0) {
-                leftType = typeArray.last();
-                operatorArgs.add(typeArray.last());
-            }
-        }
-        if(expr->right) {
-            typeArray.resize(0);
-            CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
-            Assert(typeArray.size()<2); // error message
-            if(typeArray.size()>0) {
-                rightType = typeArray.last();
-                operatorArgs.add(typeArray.last());
-            }
-        }
-        // if(expr->left) {
-        //     CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
-        //     if(typeArray.)
-        //     // if(typeArray.size()==0){
-        //     //     typeArray.add(AST_VOID);
-        //     // }
-        // }
-        // if(expr->right) {
-        //     CheckExpression(info,scopeId, expr->right, nullptr, attempt);
-        // }
-        if(expr->left && expr->right) {
-            expr->nonNamedArgs = 2; // unless operator overloading
-            SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
+        case AST_INDEX: {
+            // TODO: THE COMMENTED CODE CAN BE REMOVED. IT'S OLD. SOMETHING WITH OPERATOR OVERLOADING
+            // BUT WE DO THAT ABOVE.
+            // TINY_ARRAY(TypeId, operatorArgs, 2);
             
-            if(result == SignalAttempt::SUCCESS)
-                return SignalAttempt::SUCCESS;
+            // TypeId leftType = {}, rightType = {};
+            // if(expr->left) {
+            //     typeArray.resize(0);
+            //     CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+            //     Assert(typeArray.size()<2); // error message
+            //     if(typeArray.size()>0) {
+            //         leftType = typeArray.last();
+            //         operatorArgs.add(typeArray.last());
+            //     }
+            // }
+            // if(expr->right) {
+            //     typeArray.resize(0);
+            //     CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
+            //     Assert(typeArray.size()<2); // error message
+            //     if(typeArray.size()>0) {
+            //         rightType = typeArray.last();
+            //         operatorArgs.add(typeArray.last());
+            //     }
+            // }
+            // if(expr->left) {
+            //     CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
+            //     if(typeArray.)
+            //     // if(typeArray.size()==0){
+            //     //     typeArray.add(AST_VOID);
+            //     // }
+            // }
+            // if(expr->right) {
+            //     CheckExpression(info,scopeId, expr->right, nullptr, attempt);
+            // }
+            // if(expr->left && expr->right) {
+            //     expr->nonNamedArgs = 2; // unless operator overloading
+            //     SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
+                
+            //     if(result == SignalAttempt::SUCCESS)
+            //         return SignalAttempt::SUCCESS;
 
-            if(result != SignalAttempt::BAD_ATTEMPT)
-                return result;
-        }
-        // DynamicArray<TypeId> typeArray{};
-        
-        // if(outTypes) outTypes->add(AST_VOID);
-        // DynamicArray<TypeId> temp{};
-        if(leftType.getPointerLevel()==0){
-            if(!attempt) {
-                ERR_SECTION(
-                    ERR_HEAD(expr->left->tokenRange)
-                    ERR_MSG("Cannot index non-pointer.")
-                    ERR_LINE(expr->left->tokenRange,info.ast->typeToString(leftType))
-                )
-                return SignalAttempt::FAILURE;
-            }
-            return SignalAttempt::BAD_ATTEMPT;
-        }else{
-            if(outTypes){
-                outTypes->add(leftType);
-                outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
-            }
-        }
-    } else if(expr->typeId == AST_ID){
-        // NOTE: When changing this code, don't forget to do the same with AST_SIZEOF. It also has code for AST_ID.
-        if(IsName(expr->name)){
-            // TODO: What about enum?
-            auto iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name);
-            if(iden){
-                expr->identifier = iden;
-                if(iden->type == Identifier::VARIABLE){
-                    auto varinfo = info.ast->identifierToVariable(iden);
-                    if(varinfo){
-                        if(outTypes) outTypes->add(varinfo->versions_typeId[info.currentPolyVersion]);
-                    }
-                } else if(iden->type == Identifier::FUNCTION) {
-                    if(iden->funcOverloads.overloads.size() == 1) {
-                        auto overload = &iden->funcOverloads.overloads[0];
-                        CallConventions expected_convention = CallConventions::UNIXCALL;
-                        if(info.compileInfo->compileOptions->target == TARGET_WINDOWS_x64)
-                            expected_convention = CallConventions::STDCALL;
-                        if(info.compileInfo->compileOptions->target == TARGET_UNIX_x64)
-                            expected_convention = CallConventions::UNIXCALL;
-                        if (overload->astFunc->callConvention != expected_convention) {
-                            ERR_SECTION(
-                                ERR_HEAD(expr->tokenRange)
-                                ERR_MSG("You can only take a reference from functions that use "<<ToString(expected_convention)<<" (calling convention). The system for function pointers is a temporary solution and can't support anything else. But it exists at least; making threads possible.")
-                                ERR_LINE(expr->tokenRange, "function must use stdcall")
-                            )
-                            if(outTypes) outTypes->add(AST_VOID);
-                        } else {
-                            if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                                CheckInfo::CheckImpl checkImpl{};
-                                checkImpl.astFunc = overload->astFunc;
-                                checkImpl.funcImpl = overload->funcImpl;
-                                info.checkImpls.add(checkImpl);
-                            }
-                            overload->funcImpl->usages++;
-                            if(outTypes) outTypes->add(AST_FUNC_REFERENCE);
-                        }
-                    } else {
-                        ERR_SECTION(
-                            ERR_HEAD(expr->tokenRange)
-                            ERR_MSG("Function is overloaded. Taking a reference would therefore be ambiguous. You must rename the function so that it only has one overload. There will be a better way to solve this in the future.")
-                            ERR_LINE(expr->tokenRange, "ambiguous")
-                        )
-                        if(outTypes) outTypes->add(AST_VOID);
-                    }
-                } else {
-                    INCOMPLETE
+            //     if(result != SignalAttempt::BAD_ATTEMPT)
+            //         return result;
+            // }
+            // DynamicArray<TypeId> typeArray{};
+            
+            // if(outTypes) outTypes->add(AST_VOID);
+            // DynamicArray<TypeId> temp{};
+            if(leftType.getPointerLevel()==0){
+                if(!attempt) {
+                    ERR_SECTION(
+                        ERR_HEAD(expr->left->tokenRange)
+                        ERR_MSG("Cannot index non-pointer.")
+                        ERR_LINE(expr->left->tokenRange,info.ast->typeToString(leftType))
+                    )
+                    return SignalAttempt::FAILURE;
                 }
-            } else {
-                ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
-                    ERR_MSG("'"<<expr->name<<"' is not declared.")
-                    ERR_LINE(expr->tokenRange,"undeclared")
-                )
-                return SignalAttempt::FAILURE;
-            }
-        } else {
-            // TODO: What to do with type? Return some type object?
-        }
-    }  else if(expr->typeId == AST_SIZEOF) {
-        Assert(expr->left);
-        TypeId finalType = {};
-        if(expr->left->typeId == AST_ID){
-            // AST_ID could result in a type or a variable
-            Identifier* iden = nullptr;
-            Token& name = expr->left->name;
-            // TODO: Handle function pointer type
-            // This code may need to update when code for AST_ID does
-            if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name)) && iden->type==Identifier::VARIABLE){
-                auto var = info.ast->identifierToVariable(iden);
-                Assert(var);
-                if(var){
-                    finalType = var->versions_typeId[info.currentPolyVersion];
+                return SignalAttempt::BAD_ATTEMPT;
+            }else{
+                if(outTypes){
+                    outTypes->add(leftType);
+                    outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
                 }
-            } else {
-                finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
             }
-        } else {
-            // DynamicArray<TypeId> temps{};
-            typeArray.resize(0);
-            SignalAttempt result = CheckExpression(info, scopeId, expr->left, &typeArray, attempt);
-            finalType = typeArray.size()==0?AST_VOID:typeArray.last();
+            break;
         }
-        expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
-        if(outTypes) outTypes->add(AST_UINT32);
-    } else if(expr->typeId == AST_RANGE){
-        // DynamicArray<TypeId> temp={};
-        if(expr->left) {
-            CheckExpression(info,scopeId, expr->left, nullptr, attempt);
-        }
-        if(expr->right) {
-            CheckExpression(info,scopeId, expr->right, nullptr, attempt);
-        }
-        TypeId theType = CheckType(info, scopeId, "Range", expr->tokenRange, nullptr);
-        if(outTypes) outTypes->add(theType);
-    } else if(expr->typeId == AST_STRING){
-        u32 index=0;
-        auto constString = info.ast->getConstString(expr->name,&index);
-        // Assert(constString);
-        expr->versions_constStrIndex[info.currentPolyVersion] = index;
-
-        if(expr->flags & ASTNode::NULL_TERMINATED) {
-            TypeId theType = CheckType(info, scopeId, "char*", expr->tokenRange, nullptr);
-            if(outTypes) outTypes->add(theType);
-        } else {
-            TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
-            if(outTypes) outTypes->add(theType);
-        }
-    } else if(expr->typeId == AST_NULL){
-        // u32 index=0;
-        // auto constString = info.ast->getConstString(expr->name,&index);
-        // // Assert(constString);
-        // expr->versions_constStrIndex[info.currentPolyVersion] = index;
-
-        // TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
-        TypeId theType = AST_VOID;
-        theType.setPointerLevel(1);
-        if(outTypes)
-            outTypes->add(theType);
-    }  else if(expr->typeId == AST_NAMEOF) {
-        // Assert(expr->left);
-        // TypeId finalType = {};
-        // if(expr->left->typeId == AST_ID){
-        //     // AST_ID could result in a type or a variable
-        //     Identifier* iden = nullptr;
-        //     Token& name = expr->left->name;
-        //     // TODO: Handle function pointer type
-        //     // This code may need to update when code for AST_ID does
-        //     if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, name)) && iden->type==Identifier::VARIABLE){
-        //         auto var = info.ast->identifierToVariable(iden);
-        //         Assert(var);
-        //         if(var){
-        //             finalType = var->typeId;
-        //         }
-        //     } else {
-        //         finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
-        //     }
-        // } else {
-        //     DynamicArray<TypeId> temps{};
-        //     int result = CheckExpression(info, scopeId, expr->left, &temps);
-        //     finalType = temps.size()==0?AST_VOID:temps.last();
-        // }
-        // expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
-        // outTypes->add(AST_UINT32);
-        
-        // TODO: nameof doesn't use an expression, it uses expr->name, so you cannot
-        //   evaluate expressions like sizeof. You may want to change it so nameof works
-        //   like sizeof.
-        std::string name = "";
-        auto ti = CheckType(info, scopeId, expr->name, expr->tokenRange, nullptr);
-        if(ti.isValid()){
-            name = info.ast->typeToString(ti);
-        }else{
-            // AST_ID could result in a type or a variable
-            Identifier* iden = nullptr;
-            // Token& name = expr->name;
-            // TODO: Handle function pointer type
-            // This code may need to update when code for AST_ID does
-            if(IsName(expr->name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name)) && iden->type==Identifier::VARIABLE){
-                auto var = info.ast->identifierToVariable(iden);
-                Assert(var);
-                if(var){
-                    name = info.ast->typeToString(var->versions_typeId[info.currentPolyVersion]);
-                    // finalType = var->typeId;
-                }
-            } else {
-                name = expr->name;
-                // finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
-            }
-        }
-        u32 index=0;
-        auto constString = info.ast->getConstString(name,&index);
-        // Assert(constString);
-        expr->versions_constStrIndex[info.currentPolyVersion] = index;
-        // expr->constStrIndex = index;
-
-        TypeId theType =CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
-        if(outTypes)
-            outTypes->add(theType);
-    } else if(expr->typeId == AST_FNCALL){
-        CheckFncall(info,scopeId,expr, outTypes, attempt, false);
-    } else if(expr->typeId == AST_INITIALIZER) {
-        // Assert(expr->args);
-        // for(auto now : *expr->args){
-        for(auto now : expr->args){
+        case AST_RANGE: {
             // DynamicArray<TypeId> temp={};
-            CheckExpression(info, scopeId, now, nullptr, attempt);
+            // if(expr->left) {
+            //     CheckExpression(info,scopeId, expr->left, nullptr, attempt);
+            // }
+            // if(expr->right) {
+            //     CheckExpression(info,scopeId, expr->right, nullptr, attempt);
+            // }
+            TypeId theType = CheckType(info, scopeId, "Range", expr->tokenRange, nullptr);
+            if(outTypes) outTypes->add(theType);
+            break;
         }
-        auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, nullptr);
-        if(outTypes)
-            outTypes->add(ti);
-        expr->versions_castType[info.currentPolyVersion] = ti;
-    } else if(expr->typeId == AST_CAST){
-        // DynamicArray<TypeId> temp{};
-        Assert(expr->left);
-        CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
-        Assert(typeArray.size()==1);
-
-        Assert(expr->castType.isString());
-        bool printedError = false;
-        auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
-        if (ti.isValid()) {
-
-        } else if(!printedError){
-            ERR_SECTION(
-                ERR_HEAD(expr->tokenRange)
-                ERR_MSG("Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.")
-                ERR_LINE(expr->tokenRange,"bad")
-            )
+        case AST_INITIALIZER: {
+            // Assert(expr->args);
+            // for(auto now : *expr->args){
+            for(auto arg_expr : expr->args){
+                // DynamicArray<TypeId> temp={};
+                CheckExpression(info, scopeId, arg_expr, nullptr, attempt);
+            }
+            auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, nullptr);
+            if(outTypes)
+                outTypes->add(ti);
+            expr->versions_castType[info.currentPolyVersion] = ti;
+            break;
         }
-        if(outTypes)
-            outTypes->add(ti);
-        expr->versions_castType[info.currentPolyVersion] = ti;
-        
-        if(expr->isUnsafeCast()) {
-            
-        } else if (expr->left->typeId == AST_ASM) {
-            ERR_SECTION(
-                ERR_HEAD(expr->tokenRange, )
-                ERR_MSG("You must use cast_unsafe to cast an inline assembly block. BE VERY careful as you are likely to make mistakes.")
-                ERR_LINE(expr->tokenRange,"use cast_unsafe instead?")
-                ERR_EXAMPLE_TINY("cast_unsafe<i32> asm { mov eax, 23 }")
-            )
-        } else if(!info.ast->castable(typeArray.last(),ti)){
-            std::string strleft = info.ast->typeToString(typeArray.last());
-            std::string strcast = info.ast->typeToString(ti);
-            ERR_SECTION(
-                ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
-                ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?")
-                ERR_LINE(expr->left->tokenRange,strleft)
-                ERR_LINE(expr->tokenRange,strcast)
-                ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
-            )
-        }
-    } else if(expr->typeId == AST_ASM){
-        // Polymorphism may cause duplicated inline assembly.
-        Assert(info.currentPolyVersion==0);
-        // TODO: Check variables?
-        if(outTypes)
-            outTypes->add(AST_VOID);
-    } else {
-        // TODO: This code is buggy and doesn't behave as it should for all types.
-        //   Not sure what to do about it.
-        TypeId leftType{};
-        TypeId rightType{};
-        TINY_ARRAY(TypeId, operatorArgs, 2);
-        if(expr->left) {
-            typeArray.resize(0);
+        case AST_CAST: {
+            // DynamicArray<TypeId> temp{};
+            Assert(expr->left);
             CheckExpression(info,scopeId, expr->left, &typeArray, attempt);
-            Assert(typeArray.size()<2); // error message
-            if(typeArray.size()>0) {
-                leftType = typeArray.last();
-                operatorArgs.add(typeArray.last());
-            }
-        }
-        if(expr->right) {
-            typeArray.resize(0);
-            CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
-            Assert(typeArray.size()<2); // error message
-            if(typeArray.size()>0) {
-                rightType = typeArray.last();
-                operatorArgs.add(typeArray.last());
-            }
-        }
-        // SAVEPOINT
-        // TODO: You should not be allowed to overload all operators.
-        //  Fix some sort of way to limit which ones you can.
-        const char* str = OpToStr((OperationType)expr->typeId.getId(), true);
-        if(str && operatorArgs.size() == 2) {
-            
-            expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
-            SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
-            
-            if(result == SignalAttempt::SUCCESS)
-                return SignalAttempt::SUCCESS;
+            Assert(typeArray.size()==1);
 
-            if(result != SignalAttempt::BAD_ATTEMPT)
-                return result;
-        }
+            Assert(expr->castType.isString());
+            bool printedError = false;
+            auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
+            if (ti.isValid()) {
 
-        if(outTypes) {
-            if(expr->typeId.getId() < AST_TRUE_PRIMITIVES){
-                outTypes->add(expr->typeId);
-            } else {
+            } else if(!printedError){
+                ERR_SECTION(
+                    ERR_HEAD(expr->tokenRange)
+                    ERR_MSG("Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.")
+                    ERR_LINE(expr->tokenRange,"bad")
+                )
+            }
+            if(outTypes)
+                outTypes->add(ti);
+            expr->versions_castType[info.currentPolyVersion] = ti;
+            
+            if(expr->isUnsafeCast()) {
+                
+            } else if (expr->left->typeId == AST_ASM) {
+                ERR_SECTION(
+                    ERR_HEAD(expr->tokenRange, )
+                    ERR_MSG("You must use cast_unsafe to cast an inline assembly block. BE VERY careful as you are likely to make mistakes.")
+                    ERR_LINE(expr->tokenRange,"use cast_unsafe instead?")
+                    ERR_EXAMPLE_TINY("cast_unsafe<i32> asm { mov eax, 23 }")
+                )
+            } else if(!info.ast->castable(typeArray.last(),ti)){
+                std::string strleft = info.ast->typeToString(typeArray.last());
+                std::string strcast = info.ast->typeToString(ti);
+                ERR_SECTION(
+                    ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
+                    ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?")
+                    ERR_LINE(expr->left->tokenRange,strleft)
+                    ERR_LINE(expr->tokenRange,strcast)
+                    ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
+                )
+            }
+            break;
+        }
+        case AST_ASSIGN: {
+            if(outTypes) {
+                outTypes->add(leftType);
+            }
+            break;
+        }
+        case AST_ADD:
+        case AST_SUB:
+        case AST_MUL:
+        case AST_DIV:
+        case AST_MODULUS:
+        case AST_UNARY_SUB: {
+            if(outTypes) {
                 if(!rightType.isValid() || rightType == AST_VOID) {
                     outTypes->add(leftType); // unary operator
                 } else if(leftType.isPointer() && AST::IsInteger(rightType)){
@@ -1633,8 +1673,63 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                         outTypes->add(rightType);
                 } else {
                     outTypes->add(leftType);
+                }
             }
+            break;
+        }
+        case AST_EQUAL:
+        case AST_NOT_EQUAL:
+        case AST_LESS:
+        case AST_GREATER:
+        case AST_LESS_EQUAL:
+        case AST_GREATER_EQUAL:
+        case AST_AND:
+        case AST_OR:
+        case AST_NOT: {
+            if(outTypes) {
+                outTypes->add(TypeId(AST_BOOL));
             }
+            break;
+        }
+        case AST_BAND:
+        case AST_BOR:
+        case AST_BXOR: {
+            if(leftType != rightType) {
+                ERR_SECTION(
+                    ERR_HEAD(expr->tokenRange)
+                    ERR_MSG("Left and right type must be the same for binary AND, OR, XOR operations. The types were not the same.")
+                    ERR_LINE(expr->left->tokenRange, info.ast->typeToString(leftType))
+                    ERR_LINE(expr->right->tokenRange, info.ast->typeToString(rightType))
+                )
+                if(outTypes) {
+                    // TODO: output poison type
+                    // outTypes->add(leftType);
+                }
+            } else {
+                if(outTypes) {
+                    outTypes->add(leftType);
+                }
+            }
+            break;
+        }
+        case AST_BNOT:
+        case AST_BLSHIFT:
+        case AST_BRSHIFT: {
+            if(outTypes) {
+                outTypes->add(leftType);
+            }
+            break;
+        }
+        case AST_INCREMENT:
+        case AST_DECREMENT: {
+            if(outTypes) {
+                outTypes->add(leftType);
+            }
+            break;
+        }
+        default: {
+            Assert(false);
+        }
         }
     }
     return SignalAttempt::SUCCESS;
@@ -2308,6 +2403,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
         } else if(now->type == ASTStatement::ASSIGN){
             auto& poly_typeArray = now->versions_expressionTypes[info.currentPolyVersion];
             poly_typeArray.resize(0);
+            typeArray.resize(0);
             if(now->firstExpression){
                 // may not exist, meaning just a declaration, no assignment
                 if(Equal(now->firstExpression->name, "_reserve")) {

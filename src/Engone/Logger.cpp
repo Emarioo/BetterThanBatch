@@ -125,6 +125,15 @@ namespace engone {
 		int len = info.lineBuffer.used;
 		// print((char*)info.lineBuffer.data, info.lineBuffer.used);
 
+		// For debugging
+		// for(int i=0;i<len;i++){
+		// 	char chr = str[i];
+		// 	if(chr == '\n') {
+
+		// 		int k = 232;
+		// 	}
+		// }
+
 		auto outFile = engone::GetStandardOut();
 
 		m_printMutex.lock();
@@ -194,7 +203,7 @@ namespace engone {
 				extraBuffer[10]=' ';
 				_GetClock(extraBuffer+1);
                 #ifdef OS_WINDOWS
-				sprintf(extraBuffer+11,"[Thread %lu] ",(u64)Thread::GetThisThreadId());
+				sprintf(extraBuffer+11,"[Thread %llu] ",(u64)Thread::GetThisThreadId());
                 #else
 				sprintf(extraBuffer+11,"[Thread %lu] ",(u64)Thread::GetThisThreadId());
                 #endif

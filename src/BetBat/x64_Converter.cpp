@@ -2470,9 +2470,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         if(toXmm) {
                             xmm = treg;
                             Assert(treg != REG_XMM7);
-                            // XMM7 is in use. but more importantly I am assuming you arent gonna use
-                            // register above xmm3 so my assumption would be wrong and thus millions of bugs
-                            // in the code.
+                            // IMPORTANT: XMM7 is in use. More importantly, we assume registers
+                            // above xmm3 are unused by the bytecode. We will have many bugs
+                            // if the assumption is wrong.
                         }
 
                         prog->add(PREFIX_REXW);
@@ -2483,9 +2483,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         u32 jumpSign = prog->size();
                         prog->add((u8)0);
 
-                        prog->add((u8)0xF3);
-                        prog->add((u8)(PREFIX_REXW));
-                        prog->add2((u16)0x2A0F);
+                        // prog->add((u8)0xF3);
+                        // prog->add((u8)(PREFIX_REXW));
+                        // prog->add2((u16)0x2A0F);
                         if(tsize == 4) {
                             prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
                         } else {
@@ -2520,9 +2520,15 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->addModRM(MODE_REG, freg, tempReg);
                         
                         // F3 REX.W 0F 2A  <- the CVTSI2SS_REG_RM requires the rex byte smashed inside it
-                        prog->add((u8)0xF3);
-                        prog->add((u8)(PREFIX_REXW|PREFIX_REXB));
-                        prog->add2((u16)0x2A0F);
+                        if(tsize == 4) {
+                            prog->add((u8)0xF3);
+                            prog->add((u8)(PREFIX_REXW|PREFIX_REXB));
+                            prog->add2((u16)0x2A0F);
+                        } else {
+                            prog->add((u8)0xF2);
+                            prog->add((u8)(PREFIX_REXW|PREFIX_REXB));
+                            prog->add2((u16)0x2A0F);
+                        }
                         prog->addModRM(MODE_REG, xmm, tempReg);
                         
                         prog->add((u8)(PREFIX_REXW|PREFIX_REXB|PREFIX_REXR));

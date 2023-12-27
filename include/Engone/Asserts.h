@@ -13,6 +13,6 @@
 // logger doesn't exist in Win32 so you can't flush it.
 // #define Assert(expression) ((expression) ? true : (engone::log::out.flushInternal(), fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
 #define Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
-#define WHILE_TRUE u64 COMBINE(limit,__LINE__)=10; while(Assert(COMBINE(limit,__LINE__)--))
+#define WHILE_TRUE u64 COMBINE(limit,__LINE__)=100; while(Assert(COMBINE(limit,__LINE__)--))
 #define WHILE_TRUE_N(LIMIT) u64 COMBINE(limit,__LINE__)=LIMIT; while(Assert(COMBINE(limit,__LINE__)--))
 // #endif

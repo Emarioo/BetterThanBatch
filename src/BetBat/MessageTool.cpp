@@ -9,7 +9,22 @@ void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const Str
     if(tokenRange.tokenStream()) {
         // log::out << "./"+ TrimDir(tokenRange.tokenStream()->streamName)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
         // log::out << "."+ tokenRange.tokenStream()->streamName<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
-        log::out << tokenRange.tokenStream()->streamName<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+
+        // NOTE: Stream name is an absolute path. If the path contains CWD then skip that part to reduce
+        //   the clutter on the screen. The user can probably deduce where the file is even if we drop the CWD part.
+        //   Make sure you can still click on the path in your editor/terminal to quick jump to the location. (at least in vscode)
+        std::string cwd = engone::GetWorkingDirectory() + "/";
+        ReplaceChar((char*)cwd.data(), cwd.length(), '\\','/');
+        int index = 0;
+        while(tokenRange.tokenStream()->streamName.size() > index && cwd.size() > index) {
+            if(tokenRange.tokenStream()->streamName[index] != cwd[index])
+                break;
+            index++;
+        }
+        if(index != 0)
+            log::out << "./" << tokenRange.tokenStream()->streamName.substr(index)<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
+        else
+            log::out << tokenRange.tokenStream()->streamName<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
     } else {
         log::out << "?"<<":"<<(tokenRange.firstToken.line)<<":"<<(tokenRange.firstToken.column);
     }
@@ -135,7 +150,7 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
     const log::Color markColor = log::CYAN;
 
     int lineDigits = 0;
-    int baseColumn = 999999;
+    int baseColumn = 99999999;
     for(int i=start;i<end;i++){
         Token& tok = tokenRange.tokenStream()->get(i);
         int numlen = tok.line>0 ? ((int)log10(tok.line)+1) : 1;
@@ -144,6 +159,9 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
         if(tok.column<baseColumn)
             baseColumn = tok.column;
     }
+    const char* const line_sep_str = " | "; // text that separates the line number and the code
+    static const int line_sep_len = strlen(line_sep_str);
+    int line_number_width = lineDigits + line_sep_len;
     // log::out << start << " - " <<end<<"\n";
     int currentLine = -1;
     int minPos = -1;
@@ -158,25 +176,24 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
             int numlen = currentLine>0 ? ((int)log10(currentLine)+1) : 1;
             for(int j=0;j<lineDigits-numlen;j++)
                 log::out << " ";
-            const char* const linestr = " | ";
-            static const int linestrlen = strlen(linestr);
-            log::out << codeColor << currentLine<<linestr;
-            pos = lineDigits + linestrlen + tok.column-baseColumn;
-            if(minPos>pos || minPos == -1)
+            log::out << codeColor << currentLine << line_sep_str;
+            pos = line_number_width + tok.column-baseColumn;
+            if(pos < minPos || minPos == -1)
                 minPos = pos;
             for(int j=0;j<tok.column-baseColumn;j++) log::out << " ";
         }
+        // log::out.flush();
         if(i<tokenRange.startIndex()){
             pos += tok.calcLength();
-            if(tok.flags&TOKEN_SUFFIX_SPACE)
-                pos += 1;
+            // if(tok.flags&TOKEN_SUFFIX_SPACE)
+            //     pos += 1;
             log::out << codeColor;
             if(pos>minPos || minPos == -1)
                 minPos = pos;
         } else if(i>=tokenRange.endIndex){
             pos += tok.calcLength();
-            if(tok.flags&TOKEN_SUFFIX_SPACE)
-                pos += 1;
+            // if(tok.flags&TOKEN_SUFFIX_SPACE)
+            //     pos += 1;
             // if(minPos>pos || minPos == -1)
             //     minPos = pos;
             log::out << codeColor;
@@ -185,20 +202,32 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
             if(i==tokenRange.startIndex())
                 pos = minPos;
             pos += tok.calcLength();
-            if(tok.flags&TOKEN_SUFFIX_SPACE && 0==(tok.flags&TOKEN_SUFFIX_LINE_FEED) && i+1 != tokenRange.endIndex)
-                pos += 1;
+            if((tok.flags&TOKEN_SUFFIX_SPACE) || (tok.flags&TOKEN_SUFFIX_LINE_FEED))
+                pos--;
             if(pos>maxPos || maxPos==-1)
                 maxPos = pos;
+            if((tok.flags&TOKEN_SUFFIX_SPACE) || (tok.flags&TOKEN_SUFFIX_LINE_FEED))
+                pos++;
         }
         tok.print(false);
+        // log::out.flush();
     }
-    log::out << "\n";
+    // log::out << "\n";
+
+    // for(int i=0;i<minPos;i++) log::out << " ";
+    // log::out << "<";
+    // for(int i=0;i<maxPos - minPos;i++) log::out << " ";
+    // log::out << ">\n";
+    // for(int i=0;i<maxPos-1;i++)
+    //     log::out << " ";
+    // log::out << ">\n";
+
     int msglen = stringBuilder.size();
     // log::out << "len "<<msglen<<"\n";
     log::out << markColor;
-    if(msglen+4<minPos){ // +4 for some extra space
+    if(msglen+1<minPos){
         // print message on left side of mark
-        for(int i=0;i<minPos-msglen - 1;i++)
+        for(int i=0;i<minPos-(msglen+1);i++)
             log::out << " ";
         if(stringBuilder.size()!=0)
             log::out << stringBuilder<<" ";

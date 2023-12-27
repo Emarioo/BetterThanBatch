@@ -127,10 +127,11 @@ fn _print(t: f32){
     // #else
     bits: u32 = *cast<u32*>cast<void*>&t;
     // log("float")
-    sign = (bits >> 31) & 1;
+    
+    sign = (bits >> 31) & 1u;
     exp = (bits >> 23) & 0xFF
     mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
-    
+
 // 0x8000_0000_0000_0000
 
     // printBits(bits);
@@ -188,7 +189,7 @@ fn _print(t: f32){
             acc = acc*10u
             // log("nr", nr)
             if nr < 24 {
-                bit = 1 & (mantissa >> nr)
+                bit = cast<u64>1 & (mantissa >> nr)
                 if bit {
                     acc += mul;
                 }

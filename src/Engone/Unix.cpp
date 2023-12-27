@@ -655,6 +655,15 @@ namespace engone {
 		// fprintf(stdout,"{%d}",(int)color);
 		// fflush(stdout);
 	}
+	int GetConsoleWidth() {
+		struct winsize w;
+		int err = ioctl(STDOUT_FILENO, TIOCGWINSZ, &w);
+		if(err==-1) {
+			PL_PRINTF("ioctl, TIOCGWINSZ")
+			return 0;
+		}
+		return w.ws_col;
+	}
 
 	Semaphore::Semaphore(u32 initial, u32 max) {
 		Assert(!m_initialized);

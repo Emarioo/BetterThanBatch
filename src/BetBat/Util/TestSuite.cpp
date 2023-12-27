@@ -333,7 +333,20 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         
         
         if(!options.instant_report) {
-            log::out << log::GOLD << "Remaining tests: "<<(testCases.size()-i)<<" " << log::LIME << BriefString(testcase.testName,20) <<"                               \r"; // <- extra space to cover over previous large numbers
+            // log::out << log::GOLD << "Remaining tests: "<<(testCases.size()-i)<<" " << log::LIME << BriefString(testcase.testName,20) <<"                               \r"; // <- extra space to cover over previous large numbers
+
+            int console_w = GetConsoleWidth();
+            char buffer[256];
+            int len=0;
+            len = snprintf(buffer,sizeof(buffer), "Remaining tests: %d ", (testCases.size()-i));
+            log::out << log::GOLD << buffer;
+            std::string name = BriefString(testcase.testName,20);
+            log::out << log::LIME << name;
+            int w = len + name.length();
+            for(int i=0;i<console_w - w;i++){
+                log::out << " ";
+            }
+            log::out << "\r";
             log::out.flush();
         }
 
@@ -455,7 +468,13 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     }
     
     auto test_endTime = engone::StopMeasure(test_startTime);
-    
+
+    int console_w = GetConsoleWidth();
+    for(int i=0;i<console_w;i++){
+        log::out << " ";
+    }
+    log::out << "\r";
+
     log::out << log::GOLD << "Test cases ("<< testCases.size() <<")\n";
     std::string lastFile = "";
     for(int i=0;i<results.size();i++) {

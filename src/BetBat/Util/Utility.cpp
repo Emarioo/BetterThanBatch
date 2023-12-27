@@ -160,7 +160,7 @@ std::string BriefString(const std::string& path, int max, bool skip_cwd){
         std::string cwd = engone::GetWorkingDirectory() + "/";
         int where = cwd.size();
         for(int i=0;i<path.size();i++) {
-            if(i >= cwd.size() && cwd[i] != path[i]) {
+            if(i >= cwd.size() || cwd[i] != path[i]) {
                 where = i;
                 break;
             }

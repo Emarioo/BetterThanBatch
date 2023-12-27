@@ -57,60 +57,16 @@ bool streq(const char* a, const char* b) {
     }
     return true;
 }
-#include "unistd.h"
+// #include "unistd.h"
 int main(int argc, const char** argv){
     using namespace engone;
 
-    // const int a = sizeof(timespec);
-
-    // clock_gettime
-
-    // CompileInfo info{};
-
-    // Path dir = "examples/unix";
-    // Path dir = "";
-    // Path p = info.findSourceFile("/home/emarioo/BetterThanBatch/examples/unix/../dev.btb",dir);
     // log::out << p.text << "\n";
-
-    // return 0;
-
-    // log::out << "a "<< sizeof(pthread_t)<<"\n";
-    
-    // struct Bug {
-    //     u32 line=0;
-    //     u32 column=0;
-    //     std::string file{};
-    //     std::string desc{};
-    //     std::string preDesc{};
-    //     void* stream = nullptr;
-    // };
-    // DynamicArray<Bug> ya{};
-
-    // for(int i=0;i<3;i++) {
-    //     ya.add({});
+    // for(int i=0;i<10000;i++) {
+    //     log::out << i << "\r";
+    //     log::out.flush();
+    //     engone::Sleep(0.5);
     // }
-
-    // std::string* a = (std::string*)Allocate(sizeof(std::string));
-    // std::string* b = (std::string*)Allocate(sizeof(std::string));
-
-    // new(a)std::string();
-    // new(b)std::string();
-    // *a = std::move(*b);
-
-    // test_garbage();
-    // return 0;
-    
-    /*
-        INITIALIZE
-    */
-
-//    FileOpen()
-
-    // auto file = FileOpen("ya",nullptr, engone::FILE_ALWAYS_CREATE);
-
-    // StartProgram("echo hello", PROGRAM_WAIT, nullptr, {}, file, {});
-
-    // return 0;
 
     log::out.enableReport(false);
     MeasureInit();

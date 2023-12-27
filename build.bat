@@ -41,6 +41,7 @@ if !USE_OPTIMIZATIONS!==1 (
 SET MSVC_LINK_OPTIONS=/nologo /ignore:4099 Advapi32.lib gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.8/lib/glfw3_mt.lib libs/glew-2.1.0/lib/glew32s.lib 
 SET MSVC_INCLUDE_DIRS=/Iinclude /Ilibs/stb/include /Ilibs/glfw-3.3.8/include /Ilibs/glew-2.1.0/include 
 SET MSVC_DEFINITIONS=/DOS_WINDOWS
+SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /std:c++14 /nologo /TP /EHsc /wd4129
 
 if !USE_DEBUG!==1 (
     SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /Zi
@@ -135,8 +136,8 @@ if !compileSuccess! == 0 (
 
     @REM link bin/obj_test.obj bin/NativeLayer.obj
 
-    @REM btb -dev
-    btb examples/dev.btb -p
+    btb -dev
+    @REM btb examples/dev.btb -p
     @REM btb --test
     @REM btb -sfs dev.btb
     @REM objdump bin/dev.obj -W

@@ -831,16 +831,27 @@ namespace engone {
 			}
 		}
 	}
-	static HANDLE m_consoleHandle = NULL;
+	static HANDLE m_consoleHandle = NULL; // possibly a bad idea
     void SetConsoleColor(uint16 color){
 		if (m_consoleHandle == NULL) {
-			m_consoleHandle = GetStdHandle(-11);
+			m_consoleHandle = GetStdHandle(STD_OUTPUT_HANDLE);
 			if (m_consoleHandle == NULL)
 				return;
 		}
 		// TODO: don't set color if already set? difficult if you have a variable of last color and a different 
 		//		function sets color without changing the variable.
 		SetConsoleTextAttribute((HANDLE)m_consoleHandle, color);
+	}
+	int GetConsoleWidth() {
+		HANDLE handle = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO info;
+		bool yes = GetConsoleScreenBufferInfo(handle, &info);
+		if(!yes) {
+			DWORD err = GetLastError();
+			PL_PRINTF("[WinError %lu] GetConsoleScreenBufferInfo\n",err);
+			return 0;	
+		}
+		return info.dwSize.X;
 	}
     Semaphore::Semaphore(u32 initial, u32 max) {
 		Assert(!m_internalHandle);

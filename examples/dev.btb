@@ -20,7 +20,7 @@
 // #import "Thread"
 // #import "Unix"
 #import "Logger"
-// // #import "OS"
+#import "OS"
 
 // // fn @import @unixcall StartMeasure() -> u64;
 // // fn @import @unixcall StopMeasure(timePoint: u64) -> i32; // TODO: Use f64 (double) when implemented
@@ -33,28 +33,50 @@
 // }
 // fn @import @unixcall clock_gettime(clk_id: i32, tp: timespec*) -> i32;
 
-// // tp: timespec;
-// // err = clock_gettime(CLOCK_MONOTONIC, &tp);
-// // #define NS cast<u64>1000000000
+// fn @intrinsic rdtsc() -> u64;
 
-// fn time() -> u64 {
-//     tp: timespec;
-//     err = clock_gettime(CLOCK_MONOTONIC, &tp);
-//     #define NS cast<u64>1000000000
-//     huge: u64 = NS*tp.tv_sec + tp.tv_nsec;
-//     return huge;
-// }
-// start = time()
-// end = time() - start;
 
-// t = cast<f32>end; ///cast<f32>NS;
+// tp: timespec;
+// err = clock_gettime(CLOCK_MONOTONIC, &tp);
+// #define NS cast<u64>1000000000
+
+fn time() -> u64 {
+    return rdtsc();
+    // tp: timespec;
+    // err = clock_gettime(CLOCK_MONOTONIC, &tp);
+    // #define NS cast<u64>1000000000
+    // huge: u64 = NS*tp.tv_sec + tp.tv_nsec;
+    // return huge;
+}
+start = time()
+NativeSleep(0.01)
+end = time() - start;
+
+v: u64[]{
+    47627486,
+    53253632,
+}
+
+t = cast<f64>end/cast<f64>2900000000; ///cast<f32>NS;
+log("end",end,"t",t);
+
+// t = cast<f32>end/cast<f32>2900000000; ///cast<f32>NS;
+// log("end",end,"t",t);
+
 
 // ###########################
 // make these compile and work
 // ###########################
 // t = cast<f32>cast<u32>23 == 23.0
-t = cast<f32>cast<u64>23 == 23.0
-log(t);
+// t = cast<f32>cast<u64>23 == 23.0
+// log(t);
+
+// fn hey(tf: char) {
+//     a = Slice<char>{&tf,1};
+// }
+
+// hey(3)
+
 // fn printBits(bits: u32) {
 //     for @reverse 0..32 {
 //         if bits & (cast<u64>1 << nr) {
@@ -70,7 +92,6 @@ log(t);
 // // fn @unixcall k() -> f32 { return 0.5 }
 // // a = k();
 
-// log("end",end,"t",t);
 
 // tp = StartMeasure();
 

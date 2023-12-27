@@ -90,7 +90,11 @@ Path Path::getFileName(bool withoutFormat) const {
     return name.substr(0,index);
 }
 bool Path::isAbsolute() const {
-    return text.size() > 0 && (text[0] == '/' || text[0] == '~');
+    #ifdef OS_WINDOWS
+    return text.size() >= 3 && (text[1] == ':' && text[2] == '/');
+    #else
+    return text.size() >= 1 && (text[0] == '/' || text[0] == '~');
+    #endif
 }
 Path Path::getAbsolute() const {
     // if(isAbsolute()) return *this;
@@ -110,13 +114,21 @@ Path Path::getAbsolute() const {
             else
                 cwd += "/" + text.substr(1);
         }
-    } else if (text.length()>0 && text[0] != '/' && text[0] != '~') {
+    } 
+    #ifdef OS_WINDOWS
+    else if(text.size() >= 3 && (text[1] == ':' && text[2] == '/')) {
+        cwd = text;
+    }
+    #else
+    else if(text.size() >= 1 && (text[0] == '/' || text[0] == '~')) {
+        cwd = text;
+    }
+    #endif
+    else {
         if(cwd.back() == '/')
             cwd += text;
         else
             cwd += "/" + text;
-    } else {
-        cwd = text;
     }
     while(true) {
         // engone::log::out << "cwd "<<cwd<<"\n";

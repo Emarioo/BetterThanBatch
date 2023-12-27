@@ -116,40 +116,16 @@ u64 ConvertHexadecimal(const Token& token){
     }
     return hex;
 }
-void TokenRange::print(){
+void TokenRange::print(bool skipSuffix) const {
     using namespace engone;
-    // assert?
-    if(!tokenStream()) return;
-    
-    for(int i=startIndex();i<endIndex;i++){
-        Token& tok = tokenStream()->get(i);
-        if(!tok.str)
-            continue;
-        
-        if(tok.flags&TOKEN_DOUBLE_QUOTED)
-            log::out << '"';
-        else if(tok.flags&TOKEN_SINGLE_QUOTED)
-            log::out << '\'';
-        
-        for(int j=0;j<tok.length;j++){
-            char chr = *(tok.str+j);
-            // Assert(chr!=0);
-            if(chr=='\0'){
-                log::out << "\\0"; // Is this okay?
-            }else if(chr=='\n'){
-                log::out << "\\n"; // Is this okay?
-            }else
-                log::out << chr;
-        }
-        if(tok.flags&TOKEN_DOUBLE_QUOTED)
-            log::out << '"';
-        else if(tok.flags&TOKEN_SINGLE_QUOTED)
-            log::out << '\'';
-            
-        if(((tok.flags&TOKEN_SUFFIX_SPACE) || (tok.flags&TOKEN_SUFFIX_LINE_FEED)) && i+1!=endIndex){
-            log::out << " ";
-        }
+
+    char temp[256];
+    int token_index = 0;
+    int written = 0;
+    while((written = feed(temp, sizeof(temp), false, &token_index))) {
+        log::out.print(temp, written);
     }
+    Assert(finishedFeed(&token_index));
 }
 engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange){
     tokenRange.print();
@@ -195,105 +171,105 @@ std::string Token::getLine(){
     // }
     return out;
 }
-u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment) const {
+u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, int* token_index) const {
     using namespace engone;
     // assert?
     if(!tokenStream()) return 0;
-    // int written = 0;
-    char* start = outBuffer;
-    char* end = outBuffer + bufferSize;
-    #define CHECK_END if (outBuffer == end) return (u64)outBuffer - (u64)start;
-    for(int i=startIndex();i<endIndex;i++){
+    int written_temp = 0;
+    int written = 0;
+    #define ENSURE(N) if (written_temp + N > bufferSize) return written;
+
+    int* index = token_index;
+    int trash = 0;
+    if(!index) index = &trash;
+
+    for(int i=startIndex() + *index; i < endIndex; *index = ++i - startIndex()){
         Token& tok = tokenStream()->get(i);
-        
-        if(!tok.str)
+        if(!tok.str) {
             continue;
-        
+        }
+
+        // ENSURE(2) // queryFeedSize makes the caller use a specific bufferSize.
+        //  Ensuring and returning when we THINK we can't fit characters would skip some remaining tokens even though they would actually fit if we tried.
         if(tok.flags&TOKEN_DOUBLE_QUOTED){
             if(quoted_environment) {
-                *(outBuffer++) = '\\';
-                CHECK_END
+                ENSURE(1)
+                *(outBuffer + written++) = '\\';
             }
-            *(outBuffer++) = '"';
-            CHECK_END
+            ENSURE(1)
+            *(outBuffer + written++) = '"';
         }
-        
         else if(tok.flags&TOKEN_SINGLE_QUOTED){
             if(quoted_environment) {
-                *(outBuffer++) = '\\';
-                CHECK_END
+                ENSURE(1)
+                *(outBuffer + written++) = '\\';
             }
-            *(outBuffer++) = '\'';
-            CHECK_END
+            ENSURE(1)
+            *(outBuffer + written_temp++) = '\'';
         }
         
         for(int j=0;j<tok.length;j++){
             char chr = *(tok.str+j);
+            // ENSURE(4) // 0x03 may occur which needs 4 bytes
             if(chr=='\n'){
-                *(outBuffer++) = '\\';
-                CHECK_END
-                *(outBuffer++) = 'n';
-                CHECK_END
+                ENSURE(2)
+                *(outBuffer + written_temp++) = '\\';
+                *(outBuffer + written_temp++) = 'n';
             } else if(chr=='\t'){
-                *(outBuffer++) = '\\';
-                CHECK_END
-                *(outBuffer++) = 't';
-                CHECK_END
+                ENSURE(2)
+                *(outBuffer + written_temp++) = '\\';
+                *(outBuffer + written_temp++) = 't';
             } else if(chr=='\r'){
-                *(outBuffer++) = '\\';
-                CHECK_END
-                *(outBuffer++) = 'r';
-                CHECK_END
+                ENSURE(2)
+                *(outBuffer + written_temp++) = '\\';
+                *(outBuffer + written_temp++) = 'r';
             } else if(chr=='\0'){
-                *(outBuffer++) = '\\';
-                CHECK_END
-                *(outBuffer++) = '0';
-                CHECK_END
-            } else if(chr=='\e'){
-                *(outBuffer++) = '\\';
-                CHECK_END
-                *(outBuffer++) = 'e';
-                CHECK_END
+                ENSURE(2)
+                *(outBuffer + written_temp++) = '\\';
+                *(outBuffer + written_temp++) = '0';
+            } else if(chr=='\x1b'){ // '\e' becomes 'e' in some compilers (MSVC, sigh)
+                ENSURE(2)
+                *(outBuffer + written_temp++) = '\\';
+                *(outBuffer + written_temp++) = 'e';
             } else if(0 == (chr&0xE0)){ // chr < 32
-                *(outBuffer++) = '\\';
-                CHECK_END
-                *(outBuffer++) = 'x';
-                CHECK_END
-                *(outBuffer++) = (chr >> 4) < 10 ? (chr >> 4) + '0' : (chr >> 4) + 'a';
-                CHECK_END
-                *(outBuffer++) = (chr & 0xF) < 10 ? (chr & 0xF) + '0' : (chr & 0xF) + 'a';;
-                CHECK_END
+                ENSURE(4)
+                *(outBuffer + written_temp++) = '\\';
+                *(outBuffer + written_temp++) = 'x';
+                *(outBuffer + written_temp++) = (chr >> 4) < 10 ? (chr >> 4) + '0' : (chr >> 4) + 'a';
+                *(outBuffer + written_temp++) = (chr & 0xF) < 10 ? (chr & 0xF) + '0' : (chr & 0xF) + 'a';;
             } else {
-                *(outBuffer++) = chr;
-                CHECK_END
+                ENSURE(1)
+                *(outBuffer + written_temp++) = chr;
             }
         }
+        // ENSURE(4)
         if(tok.flags&TOKEN_DOUBLE_QUOTED){
             if(quoted_environment) {
-                *(outBuffer++) = '\\';
-                CHECK_END    
+                ENSURE(1)
+                *(outBuffer + written_temp++) = '\\';
             }
-            *(outBuffer++) = '"';
-            CHECK_END
+            ENSURE(1)
+            *(outBuffer + written_temp++) = '"';
         } else if(tok.flags&TOKEN_SINGLE_QUOTED){
             if(quoted_environment) {
-                *(outBuffer++) = '\\';
-                CHECK_END    
+                ENSURE(1)
+                *(outBuffer + written_temp++) = '\\';
             }
-            *(outBuffer++) = '\'';
-            CHECK_END
+            ENSURE(1)
+            *(outBuffer + written_temp++) = '\'';
         }
-        if((tok.flags&TOKEN_SUFFIX_SPACE) && i!=endIndex){
-            *(outBuffer++) = ' ';
-            CHECK_END
+        if((tok.flags&TOKEN_SUFFIX_LINE_FEED)){
+            ENSURE(1)
+            *(outBuffer + written_temp++) = '\n';
+        } else if((tok.flags&TOKEN_SUFFIX_SPACE)){ // don't write space if we wrote newline
+            ENSURE(1)
+            *(outBuffer + written_temp++) = ' ';
         }
-        if((tok.flags&TOKEN_SUFFIX_LINE_FEED) && i!=endIndex){
-            *(outBuffer++) = '\n';
-            CHECK_END
-        }
+
+        written = written_temp;
     }
-    #undef CHECK_END
-    return (u64)outBuffer - (u64)start;
+    #undef ENSURE
+    return written;
 }
 u32 TokenRange::queryFeedSize(bool quoted_environment) const {
     using namespace engone;
@@ -320,7 +296,8 @@ u32 TokenRange::queryFeedSize(bool quoted_environment) const {
         
         for(int j=0;j<tok.length;j++){
             char chr = *(tok.str+j);
-            if(chr=='\n'||chr=='\r'||chr=='\t'||chr=='\e'||chr=='\0'){
+            // '\e' becomes 'e' in some compilers (MSVC), we use '\x1b' instead
+            if(chr=='\n'||chr=='\r'||chr=='\t'||chr=='\x1b'||chr=='\0'){
                 size+=2;
             } else if(0 == (chr & 0xE0)){
                 size+=4;
@@ -339,10 +316,9 @@ u32 TokenRange::queryFeedSize(bool quoted_environment) const {
             }
             size++;
         }
-        if((tok.flags&TOKEN_SUFFIX_SPACE) && i!=endIndex){
+        if((tok.flags&TOKEN_SUFFIX_LINE_FEED)){
             size++;
-        }
-        if((tok.flags&TOKEN_SUFFIX_LINE_FEED) && i!=endIndex){
+        } else if((tok.flags&TOKEN_SUFFIX_SPACE)){
             size++;
         }
     }
@@ -351,40 +327,18 @@ u32 TokenRange::queryFeedSize(bool quoted_environment) const {
 void TokenRange::feed(std::string& outBuffer) const {
     using namespace engone;
     
-    // assert?
-    if(!tokenStream()) return;
-    for(int i=startIndex();i<endIndex;i++){
-        Token& tok = tokenStream()->get(i);
-        
-        if(!tok.str)
-            continue;
-        
-        if(tok.flags&TOKEN_DOUBLE_QUOTED)
-            outBuffer += '"';
-        else if(tok.flags&TOKEN_SINGLE_QUOTED)
-            outBuffer += '\'';
-        
-        for(int j=0;j<tok.length;j++){
-            char chr = *(tok.str+j);
-            if(chr=='\n'){
-                outBuffer += "\\n"; // Is this okay?
-            }else
-                outBuffer += chr;
-        }
-        if(tok.flags&TOKEN_DOUBLE_QUOTED)
-            outBuffer += '"';
-        else if(tok.flags&TOKEN_SINGLE_QUOTED)
-            outBuffer += '\'';
-            
-        if(tok.flags&TOKEN_SUFFIX_SPACE && i!=endIndex){
-            outBuffer += " ";
-        }
+    char temp[256];
+    int token_index = 0;
+    int written = 0;
+    while((written = feed(temp, sizeof(temp), false, &token_index))) {
+        outBuffer.append(temp,written);
     }
+    Assert(finishedFeed(&token_index));
 }
 void Token::print(bool skipSuffix) const{
     using namespace engone;
     auto tokrange = range();
-    tokrange.print();
+    tokrange.print(skipSuffix);
 }
 bool Token::operator==(const std::string& text) const {
     if((int)text.length()!=length)
@@ -1093,7 +1047,7 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                         tmp = '\r';
                         _TLOG(log::out << "\\r";)
                     } else if(nextChr=='e'){
-                        tmp = '\e';
+                        tmp = '\x1b'; // '\e' is not supported in some compilers
                         _TLOG(log::out << "\\e";)
                     } else if(nextChr=='x'){
                         char hex0 = text[index];

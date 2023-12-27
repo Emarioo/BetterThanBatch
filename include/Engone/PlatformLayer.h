@@ -145,6 +145,8 @@ namespace engone {
 	void DirectoryIteratorDestroy(DirectoryIterator iterator, DirectoryIteratorData* dataToDestroy);
     
 	void SetConsoleColor(uint16 color);
+	// returns 0 if something went wrong
+	int GetConsoleWidth();
 
 	struct PlatformError{
 		uint32 errorType;

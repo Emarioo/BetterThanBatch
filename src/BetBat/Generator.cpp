@@ -1018,7 +1018,7 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 if(!info.hasForeignErrors()){
                     ERR_SECTION(
                         ERR_HEAD(now->tokenRange)
-                        ERR_MSG("'"<<now->tokenRange.firstToken << " is undefined.")
+                        ERR_MSG("'"<<now->tokenRange.firstToken << "' is undefined.")
                         ERR_LINE(now->tokenRange,"bad");
                     )
                 }
@@ -2071,8 +2071,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 // }
                 return SignalDefault::FAILURE;
             }
-        }
-        else if (expression->typeId == AST_FNCALL) {
+        } else if (expression->typeId == AST_FNCALL) {
             return GenerateFnCall(info, expression, outTypeIds, false);
         } else if(expression->typeId==AST_STRING){
             // Assert(expression->constStrIndex!=-1);
@@ -3080,10 +3079,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         } else {
                             info.addInstruction({bytecodeOp, reg1, reg2, regOut});
                         }
-                        if(lsize > rsize)
-                            outTypeIds->add(ltype);
-                        else
+                        if(lsize < rsize)
                             outTypeIds->add(rtype);
+                        else
+                            outTypeIds->add(ltype);
                         info.addPush(regOut);
                     }
                     if(expression->typeId==AST_ASSIGN){
@@ -4380,11 +4379,18 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
                 // Type checker or generator has a bug if they check/generate different types
                 Assert(typesFromExpr.size()==rightTypes.size());
+                bool cont = false;
                 for(int i=0;i<(int)typesFromExpr.size();i++){
                     std::string a0 = info.ast->typeToString(typesFromExpr[i]);
                     std::string a1 = info.ast->typeToString(rightTypes[i]);
-                    Assert(typesFromExpr[i] == rightTypes[i]);
+                    // Assert(typesFromExpr[i] == rightTypes[i]);
+                    if(typesFromExpr[i] != rightTypes[i]) {
+                        Assert(info.hasForeignErrors());
+                        cont=true;
+                        continue;
+                    }
                 }
+                if(cont) continue;
                 for(int i = (int)typesFromExpr.size()-1;i>=0;i--){
                     TypeId typeFromExpr = typesFromExpr[i];
                     if((int)statement->varnames.size() <= i){
