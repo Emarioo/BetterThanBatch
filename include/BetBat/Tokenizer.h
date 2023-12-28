@@ -245,6 +245,7 @@ bool IsAnnotation(const Token& token);
 bool IsDecimal(const Token& token);
 bool IsHexadecimal(const Token& token);
 u64 ConvertHexadecimal(const Token& token);
+u64 ConvertHexadecimal_content(char* str, int length);
 bool Equal(const Token& token, const char* str);
 bool StartsWith(const Token& token, const char* str);
 

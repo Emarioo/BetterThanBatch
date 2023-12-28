@@ -37,6 +37,7 @@ const char* FormatTime(double seconds);
 std::string TrimLastFile(const std::string& path);
 std::string TrimDir(const std::string& path);
 std::string BriefString(const std::string& path, int max=25, bool skip_cwd = true);
+std::string TrimCWD(const std::string& path);
 
 void OutputAsHex(const char* path, char* data, int size);
 

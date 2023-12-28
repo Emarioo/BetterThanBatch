@@ -155,6 +155,21 @@ std::string TrimDir(const std::string& path){
         return path;
     return path.substr(slashI+1);
 }
+std::string TrimCWD(const std::string& path) {
+    std::string cwd = engone::GetWorkingDirectory() + "/";
+    int where = cwd.size();
+    Assert(path.size()!=0); // there are bugs here if path is empty
+    for(int i=0;i<path.size();i++) {
+        if(i >= cwd.size() || cwd[i] != path[i]) {
+            where = i;
+            break;
+        }
+    }
+    if(where == 0)
+        return path;
+    else
+        return "./"+path.substr(where);
+}
 std::string BriefString(const std::string& path, int max, bool skip_cwd){
     if(skip_cwd) {
         std::string cwd = engone::GetWorkingDirectory() + "/";

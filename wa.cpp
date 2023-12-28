@@ -6,8 +6,9 @@
 int main() {
     // auto a = hey();
 
-    unsigned long int j = 235;
-    double k = j;
+    double k = 4.5;
+    // float k = 4.5f;
+    unsigned long int j = k;
     
     return 0;    
 }

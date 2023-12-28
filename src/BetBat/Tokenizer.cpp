@@ -116,6 +116,24 @@ u64 ConvertHexadecimal(const Token& token){
     }
     return hex;
 }
+// does not expect 0x at the start.
+u64 ConvertHexadecimal_content(char* str, int length){
+    Assert(str && length > 0);
+    u64 hex = 0;
+    for(int i=0;i<length;i++){
+        char chr = str[i];
+        if(chr>='0' && chr <='9'){
+            hex = 16*hex + chr-'0';
+            continue;
+        }
+        chr = chr&(~32); // what is this for? chr = chr&0x20 ?
+        if(chr>='A' && chr<='F'){
+            hex = 16*hex + chr-'A' + 10;
+            continue;
+        }
+    }
+    return hex;
+}
 void TokenRange::print(bool skipSuffix) const {
     using namespace engone;
 

@@ -716,7 +716,7 @@ void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuff
     #endif
     
     FOR(errors) {
-        log::out << log::RED << asmInstance.file << ":" << (asmInstance.lineStart-1 + it.line + line_offset);
+        log::out << log::RED << TrimCWD(asmInstance.file) << ":" << (asmInstance.lineStart-1 + it.line + line_offset);
         log::out << log::NO_COLOR << it.message << "\n";
     }
 }
@@ -785,8 +785,6 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     for (int i=0;i<bytecode->asmInstances.size();i++){
         Bytecode::ASM& asmInst = bytecode->asmInstances.get(i);
         
-        // TODO: This code is specific to the COFF format and the ".code" and "END" is specific (I think) to
-        //  MASM (Microsoft Macro Assembler). This won't do on Unix systems.
         #define TEMP_ASM_FILE "bin/inline_asm.asm"
         #define TEMP_ASM_OBJ_FILE "bin/inline_asm.o"
         auto file = engone::FileOpen(TEMP_ASM_FILE,nullptr,FILE_ALWAYS_CREATE);
@@ -819,8 +817,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
         engone::FileClose(file);
 
-        auto masmLog = engone::FileOpen("bin/masm.log",0,FILE_ALWAYS_CREATE);
-        defer { engone::FileClose(masmLog); };
+        auto asmLog = engone::FileOpen("bin/asm.log",0,FILE_ALWAYS_CREATE);
+        defer { engone::FileClose(asmLog); };
 
         // TODO: Turn off logging from ml64? or at least pipe into somewhere other than stdout.
         //  If ml64 failed then we do want the error messages.
@@ -833,16 +831,16 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         #endif
         cmd += TEMP_ASM_FILE;
         int exitCode = 0;
-        yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, {}, masmLog, masmLog);
+        yes = engone::StartProgram((char*)cmd.data(), PROGRAM_WAIT, &exitCode, {}, asmLog, asmLog);
         Assert(yes);
         if(exitCode != 0) {
-            u64 fileSize = engone::FileGetSize(masmLog);
-            engone::FileSetHead(masmLog, 0);
+            u64 fileSize = engone::FileGetSize(asmLog);
+            engone::FileSetHead(asmLog, 0);
             
             QuickArray<char> errorMessages{};
             errorMessages.resize(fileSize);
             
-            yes = engone::FileRead(masmLog, errorMessages.data(), errorMessages.size());
+            yes = engone::FileRead(asmLog, errorMessages.data(), errorMessages.size());
             Assert(yes);
             
             ReformatAssemblerError(asmInst, errorMessages, -asm_line_offset);
@@ -850,7 +848,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             // u64 readBytes = 0;
             // log::out.setMasterColor(log::RED);
             // while(readBytes < fileSize) {
-            //     u64 bytes = FileRead(masmLog, tempBuffer, tempBufferSize);
+            //     u64 bytes = FileRead(asmLog, tempBuffer, tempBufferSize);
             //     if(bytes == -1) break;
             //     readBytes += bytes;
             //     // TODO: Reformat error messages? It shows the file bin/inline_asm.asm which
@@ -859,12 +857,12 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             // }
             // log::out.setMasterColor(log::NO_COLOR);
             
-            // engone::FileClose(masmLog);
+            // engone::FileClose(asmLog);
             failure = true;
             continue;
         }
         
-        // engone::FileClose(masmLog);
+        // engone::FileClose(asmLog);
 
         // TODO: DeconstructFile isn't optimized and we deconstruct symbols and segments we don't care about.
         //  Write a specific function for just the text segment.
@@ -892,7 +890,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         }
         auto section = objfile->sections[sectionIndex];
         if(section->NumberOfRelocations!=0){
-            log::out << log::RED << "Relocations is not supported in inline assembly.\n";
+            // TODO: Tell the user where the relocation was? Which instruction?
+            //  user may type 'pop rac' instead of 'pop rax'. pop rac is a valid instruction if rac is a symbol.
+            //  This mistake is difficult to detect.
+            log::out << log::RED << "Relocations are not supported in inline assembly.\n";
             continue;
         }
         
@@ -920,7 +921,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         int relocations_count=0;
         auto relocations = objfile->relaOfSection(textSection_index, &relocations_count);
         if(relocations_count!=0){
-            log::out << log::RED << "Relocations is not supported in inline assembly.\n";
+            log::out << log::RED << "Relocations are not supported in inline assembly.\n";
             continue;
         }
         
@@ -2356,25 +2357,85 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
                         prog->add((u8)-8);
                     }
-                // } else if(type==CAST_FLOAT_UINT){
-                //     Assert(fsize == 4);
+                } else if(type==CAST_FLOAT_UINT){
+                    Assert(fsize == 4 || fsize == 8);
 
-                //     if(fromXmm) {
-                //         prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
-                //         prog->addModRM(MODE_REG, treg, freg);
-                //     } else {
-                //         prog->add(OPCODE_MOV_RM_REG);
-                //         prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                //         prog->add((u8)-8);
+                    Assert(false); // TODO: float to uint64 is very special, needs to be handled properly
 
-                //         if(tsize == 8)
-                //             prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
-                //         else
-                //             prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                    if(tsize == 8) {
+                        if(fsize == 4) {
+                            /*
+                            movss  xmm0,DWORD PTR [rip+0x0]        # 10 <main+0x10>
 
-                //         prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
-                //         prog->add((u8)-8);
-                //     }
+                            movss  DWORD PTR [rbp-0xc],xmm0
+                            movss  xmm0,DWORD PTR [rbp-0xc]
+                            comiss xmm0,DWORD PTR [rip+0x0]        # 21 <main+0x21>
+                            jae    unsigned
+                            movss  xmm0,DWORD PTR [rbp-0xc]
+                            cvttss2si rax,xmm0
+                            mov    QWORD PTR [rbp-0x8],rax
+                            jmp    end
+                        unsigned:
+                            movss  xmm0,DWORD PTR [rbp-0xc]
+                            movss  xmm1,DWORD PTR [rip+0x0]        # 40 <main+0x40>
+
+                            subss  xmm0,xmm1
+                            cvttss2si rax,xmm0
+                            mov    QWORD PTR [rbp-0x8],rax
+                            movabs rax,0x8000000000000000
+
+                            xor    QWORD PTR [rbp-0x8],rax
+                        end:
+                            mov    rax,QWORD PTR [rbp-0x8]
+                            mov    QWORD PTR [rbp-0x8],rax
+                            */
+                        } else if(fsize == 8) {
+                            /*
+                            movsd  xmm0,QWORD PTR [rip+0x0]        # 10 <main+0x10>
+
+                            movsd  QWORD PTR [rbp-0x10],xmm0
+                            movsd  xmm0,QWORD PTR [rbp-0x10]
+                            comisd xmm0,QWORD PTR [rip+0x0]        # 22 <main+0x22>
+
+                            jae    unsigned
+                            movsd  xmm0,QWORD PTR [rbp-0x10]
+                            cvttsd2si rax,xmm0
+                            mov    QWORD PTR [rbp-0x8],rax
+                            jmp    end
+                        unsigned:
+                            movsd  xmm0,QWORD PTR [rbp-0x10]
+                            movsd  xmm1,QWORD PTR [rip+0x0]        # 41 <main+0x41>
+
+                            subsd  xmm0,xmm1
+                            cvttsd2si rax,xmm0
+                            mov    QWORD PTR [rbp-0x8],rax
+                            movabs rax,0x8000000000000000
+                        end:
+                            xor    QWORD PTR [rbp-0x8],rax
+                            mov    rax,QWORD PTR [rbp-0x8]
+                            mov    QWORD PTR [rbp-0x8],rax
+                            */
+                        }
+                    } else {
+
+                    }
+
+                    if(fromXmm) {
+                        prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                        prog->addModRM(MODE_REG, treg, freg);
+                    } else {
+                        prog->add(OPCODE_MOV_RM_REG);
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+
+                        if(tsize == 8)
+                            prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
+                        else
+                            prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+
+                        prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        prog->add((u8)-8);
+                    }
                 } else if(type==CAST_SINT_FLOAT){
                     Assert(tsize == 4 || tsize == 8);
                     Assert(!fromXmm);
@@ -3246,6 +3307,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     // log::out << "InlineASM "<<len<<" machine code bytes\n";
                     prog->addRaw(ptr, len);
                 } else {
+                    
+                    log::out << log::RED << "BC_ASM at "<<bcIndex<<" was incomplete\n";
                     // print error or has that been done already?
                 }
                 break;

@@ -1336,6 +1336,159 @@ void CompileStats::printWarnings(){
     using namespace engone;
     log::out << log::YELLOW<<"Compiler had "<<warnings<<" warning(s)\n";
 }
+void ReformatLinkerError(QuickArray<char>& inBuffer, Program_x64* program) {
+    using namespace engone;
+    Assert(program);
+    
+    struct ErrorInfo {
+        std::string func;
+        int textOffset;
+        std::string textOffset_hex;
+        std::string message;
+        // std::string symbolName;
+    };
+    DynamicArray<ErrorInfo> errors{};
+    ErrorInfo errorInfo{};
+    #ifdef OS_WINDOWS
+    Assert(("Windows version does not reformat linker errors",false));
+    #else
+    // HOLY CRAP THIS CODE IS BEAUTIFUL AND SIMPLE
+    enum State {
+        BEGIN, // beginning of a new error
+        FUNCTION,
+        OFFSET, // parse text offset
+        MESSAGE, // the error message
+    };
+    State state = BEGIN;
+    int hex_start = 0;
+    int msg_start = 0;
+    int func_start = 0;
+    int index = 0;
+    while(index < inBuffer.size()) {
+        char chr = inBuffer[index];
+        char chr1 = 0;
+        if(index+1<inBuffer.size())
+            chr1 = inBuffer[index+1];
+        char chr2 = 0;
+        if(index+2<inBuffer.size())
+            chr2 = inBuffer[index+2];
+        index++;
+        
+        switch(state) {
+            case BEGIN: {
+                if(chr == '+' && chr1 == '0' && chr2 == 'x') {
+                    state = OFFSET;
+                    index+=2;
+                    hex_start = index;
+                }
+                if(chr == ':') {
+                    static const char* const func_msg = " in function";
+                    static const int func_msg_len = strlen(func_msg);
+                    int correct = 0;
+                    for(;correct<func_msg_len;correct++) {
+                        char c = inBuffer[index + correct];
+                        if(c != func_msg[correct])
+                            break;
+                    }
+                    if(correct == func_msg_len) {
+                        index += func_msg_len +2; // +2 to skip ' `'
+                        state = FUNCTION;
+                        func_start = index;
+                    }
+                }
+                break;
+            }
+            case FUNCTION: {
+                if(chr == '\'') {
+                    int func_end = index-1;
+                    index++; // skip :
+                    state = BEGIN;
+                    errorInfo.func = std::string(inBuffer.data() + func_start, func_end - func_start);
+                }
+                break;
+            }
+            case OFFSET: {
+                // Parse hexidecimal
+                if(chr == ')') {
+                    int hex_end = index-1; // exclusive, -1 since index is at : right now
+
+                    u64 off = ConvertHexadecimal_content(inBuffer.data() + hex_start, hex_end - hex_start);
+                    errorInfo.textOffset = off;
+                    errorInfo.textOffset_hex = std::string(inBuffer.data() + hex_start, hex_end - hex_start);
+
+                    index+=2; // skip ': '
+
+                    state = MESSAGE;
+                    msg_start = index;
+                }
+                break;
+            }
+            case MESSAGE: {
+                if(chr == '\n') {
+                    int msg_end = index-1; // -1 to exclude newline
+                    state = BEGIN;
+                    errorInfo.message = std::string(inBuffer.data() + msg_start, msg_end - msg_start);
+                    errors.add(errorInfo);
+                }
+                break;
+            }
+            default: {
+                Assert(false);
+                break;
+            }
+        }
+    }
+    #endif
+    
+    if(errors.size() > 0 && (!program || !program->debugInformation)) {
+        // NOTE: program == nullptr shouldn't really happen
+        log::out << log::GOLD << "Enabling debug information will display "<<log::RED<<"file:line"<<log::GOLD<<" instead of "<<log::RED<<".text+0x0"<<log::GOLD<<"\n";
+    }
+    FOR(errors) {
+        bool found = false;
+        if(program && program->debugInformation) {
+            auto d = program->debugInformation;
+            int lineNumber = 0;
+            int fileIndex = 0;
+            // TODO: This will be slow with many functions
+            for(int k=0;k<d->functions.size();k++) {
+                auto& func = d->functions[k];
+                if(func.funcStart <= it.textOffset && it.textOffset < func.funcEnd) {
+                    fileIndex = func.fileIndex;
+                    if(func.lines.size()>0)
+                        lineNumber = func.lines[0].lineNumber;
+                    for(int i=0;i < func.lines.size();i++) {
+                        auto& line = func.lines[i];
+                        if(it.textOffset < func.funcStart + line.funcOffset) {
+                            found = true;
+                            break;
+                        }
+                        lineNumber = line.lineNumber;
+                    }
+                    if(!found) {
+                        if(func.lines.size()>0)
+                            lineNumber = func.lines.last().lineNumber;
+                        found = true;
+                    }
+                    if(found)
+                        break;
+                }
+            }
+            if(found) {
+                log::out << log::RED << TrimCWD(d->files[fileIndex])<<":" << lineNumber<<": ";
+                log::out << log::NO_COLOR << it.message << "\n";
+            }
+        }
+        if(!found) {
+            if(it.func.empty()) {
+                log::out << log::RED << ".text+0x" << it.textOffset_hex<<": ";
+            } else {
+                log::out << log::RED << ".text+0x" << it.textOffset_hex<<" ("<<it.func<<"): ";
+            }
+            log::out << log::NO_COLOR << it.message << "\n";
+        }
+    }
+}
 bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     using namespace engone;
     MEASURE
@@ -1618,10 +1771,14 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
                 if(!options->silent)
                     log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
+
+                    
+                auto linkerLog = engone::FileOpen("bin/linker.log",0,FILE_ALWAYS_CREATE);
+                defer { engone::FileClose(linkerLog); };
                 
                 options->compileStats.start_linker = StartMeasure();
                 int exitCode = 0;
-                engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+                engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode,{},linkerLog,linkerLog);
                 options->compileStats.end_linker = StartMeasure();
                 
                 // if(changeCWD) {
@@ -1631,6 +1788,17 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
                 if(exitCode != 0) { // 0 means success
                     failure = true;
+
+                    u64 fileSize = engone::FileGetSize(linkerLog);
+                    engone::FileSetHead(linkerLog, 0);
+                    
+                    QuickArray<char> errorMessages{};
+                    errorMessages.resize(fileSize);
+                    
+                    yes = engone::FileRead(linkerLog, errorMessages.data(), errorMessages.size());
+                    Assert(yes);
+                    
+                    ReformatLinkerError(errorMessages, program);
                 } else {
                     // if(outputOtherDirectory){
                     //     FileDelete(outPath.text);

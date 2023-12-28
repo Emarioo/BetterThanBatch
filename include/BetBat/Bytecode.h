@@ -178,7 +178,7 @@ enum BCInstruction : u8{
     BC_CAST = 90,
     // flags for first operand
     #define CAST_FLOAT_SINT 0
-    // #define CAST_FLOAT_UINT 1
+    #define CAST_FLOAT_UINT 1
     #define CAST_SINT_FLOAT 2
     #define CAST_UINT_FLOAT 3
     #define CAST_SINT_UINT 4

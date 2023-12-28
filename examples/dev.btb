@@ -67,28 +67,46 @@
 // StartMeasure/StopMeasure didn't work before, do they now?
 
 // this was bugged, now it's not
-a: u64 = 0x8000_0001_0000_0001;
-t: f64 = a;
-pbits(cast_unsafe<u64>t);
+// a: u64 = 0x8000_0001_0000_0001;
+// // a: u64 = 9923;
+// t: f64 = a;
+// f: u64 = t;
+// pbits(cast_unsafe<u64>t);
+// pbits(cast_unsafe<u64>f);
 
-fn pbits(bits: u32) {
-    for @reverse 0..32 {
-        if bits & (cast<u32>1 << nr) {
-            printc('1')
-        } else 
-            printc('0')
-    }
-    printc('\n')
-}
-fn pbits(bits: u64) {
-    for @reverse 0..64 {
-        if bits & (cast<u64>1 << nr) {
-            printc('1')
-        } else 
-            printc('0')
-    }
-    printc('\n')
-}
+// fn pbits(bits: u32) {
+//     for @reverse 0..32 {
+//         if bits & (cast<u32>1 << nr) {
+//             printc('1')
+//         } else 
+//             printc('0')
+//     }
+//     printc('\n')
+// }
+// fn pbits(bits: u64) {
+//     for @reverse 0..64 {
+//         if bits & (cast<u64>1 << nr) {
+//             printc('1')
+//         } else 
+//             printc('0')
+//     }
+//     printc('\n')
+// }
+
+fn @import why();
+fn @import whay();
+fn @import what();
+
+why();
+whay();
+what();
+why();
+what();
+
+// asm {
+//     push rax
+//     po rax
+// }
 
 // ###########################
 // make these compile and work
