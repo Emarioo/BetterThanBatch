@@ -30,8 +30,8 @@ struct TokenStream;
 #define MSG_CODE_LOCATION2
 #define MSG_CODE_LOCATION
 #endif
-#define BASE_SECTION(CODE, CONTENT) { if(!info.ignoreErrors) info.errors++; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
-#define BASE_WARN_SECTION(CODE, CONTENT) { info.compileInfo->compileOptions->compileStats.warnings++; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
+#define BASE_SECTION(CODE, CONTENT) { if(!info.ignoreErrors) info.errors++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
+#define BASE_WARN_SECTION(CODE, CONTENT) { info.compileInfo->compileOptions->compileStats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
 
 // #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
 // #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
@@ -43,14 +43,14 @@ struct TokenStream;
 #define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";
 #define ERR_MSG_LOG(STR) engone::log::out << STR ;
 // #define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
-#define ERR_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream);
+#define ERR_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream, &base_column);
 #define ERR_EXAMPLE_TINY(STR) engone::log::out << engone::log::LIME << "Example: " << MESSAGE_COLOR << (StringBuilder{} + STR)<<"\n";
 #define ERR_EXAMPLE(LN, STR) engone::log::out << engone::log::LIME << "Example:"; PrintExample(LN, StringBuilder{} + STR);
 
 #define WARN_HEAD(TR,...) PrintHead(WARN_HEADER_COLOR, TR, warn_type, &prevStream);
 
 #define WARN_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";
-#define WARN_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream);
+#define WARN_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream, &base_column);
 
 // #define ERR_BUILDER(TR, CODE, MSG) PrintHead(ERR_HEADER_COLOR, TR, CODE, MSG);
 // #define WARN_BUILDER(TR, CODE, MSG) PrintHead(WARN_HEADER_COLOR, TR, CODE, MSG);
@@ -60,8 +60,8 @@ struct TokenStream;
 void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode , TokenStream** prevStream = nullptr);
 void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode, TokenStream** prevStream = nullptr);
 
-void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr);
-void PrintCode(const Token& token, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr);
+void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
+void PrintCode(const Token& token, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
 
 void PrintExample(int line, const StringBuilder& stringBuilder);
 
@@ -87,12 +87,12 @@ enum CompileError : u32 {
     ERROR_INVALID_TYPE = 1004, // generic invalid type, usually void being used when it can't
     ERROR_TOO_MANY_VARIABLES = 1005, // usually with more assignment variables than return values resulting in some variables missing a type
     
-    
     ERROR_DUPLICATE_CASE = 2101,
     ERROR_DUPLICATE_DEFAULT_CASE = 2102,
     ERROR_C_STYLED_DEFAULT_CASE = 2103,
     ERROR_BAD_TOKEN_IN_SWITCH = 2104,
     ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH = 2105,
+    ERROR_AMBIGUOUS_IF_ELSE = 2106,
     
     ERROR_OVERLOAD_MISMATCH = 3001,
     

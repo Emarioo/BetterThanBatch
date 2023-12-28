@@ -1,0 +1,22 @@
+
+@TEST-CASE yoo
+
+if true
+    test 1; 1;
+else
+    test 1; 0;
+
+@TEST-CASE if_edge_case
+
+n = 1
+if n > 0
+    if n == 1 // bad, ambiguous
+        test n; 1;
+else
+    test 1; 0;
+
+if n > 0
+    if n == 1 // bad, ambiguous
+        test n; 1;
+    else
+        test 0; 0;

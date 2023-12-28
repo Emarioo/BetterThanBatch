@@ -936,6 +936,7 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                 break; case NATIVE_CurrentWorkingDirectory:{
                     
                     std::string temp = GetWorkingDirectory();
+                    ReplaceChar((char*)temp.data(), temp.length(),'\\','/');
                     Assert(temp.length()<CWD_LIMIT);
                     memcpy(cwdBuffer,temp.data(),temp.length());
                     usedCwd = temp.length();

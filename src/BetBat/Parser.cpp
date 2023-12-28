@@ -19,7 +19,7 @@
 */
 ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace);
 // out token contains a newly allocated string. use delete[] on it
-SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal = false);
+SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal = false, bool* has_curlies = nullptr);
 // normal assignment a = 9
 SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt);
 SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct);
@@ -2094,24 +2094,23 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
     int startIndex = info.at()+1;
     if(Equal(firstToken,"if")){
         info.next();
-        ASTExpression* expr=0;
+        ASTExpression* expr=nullptr;
         SignalAttempt result = ParseExpression(info,expr,false);
         if(result!=SignalAttempt::SUCCESS){
             // TODO: should more stuff be done here?
             return SignalAttempt::FAILURE;
         }
-        ASTScope* body=0;
-        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId);
+
+        int endIndex = info.at()+1;
+
+        ASTScope* body=nullptr;
+        bool has_culries = false;
+        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId, false, &has_culries);
         if(resultBody!=SignalDefault::SUCCESS){
             return SignalAttempt::FAILURE;
         }
 
-        // nocheckin
-        // TODO: Don't allow if true  if true  print("hi")
-        // You can't nest if statements without curly braces
-        // Correct form is: if true { if true  print("hi") }
-        
-        ASTScope* elseBody=0;
+        ASTScope* elseBody=nullptr;
         Token token = info.get(info.at()+1);
         if(Equal(token,"else")){
             info.next();
@@ -2127,7 +2126,19 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         statement->secondBody = elseBody;
         statement->tokenRange.firstToken = firstToken;
         
-        statement->tokenRange.endIndex = info.at()+1;
+        // statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.endIndex = endIndex;
+
+        if(!has_culries && body->statements.size()>0) {
+            if (body->statements[0]->type == ASTStatement::IF) {
+                ERR_SECTION(
+                    ERR_HEAD(body->statements[0]->tokenRange, ERROR_AMBIGUOUS_IF_ELSE)
+                    ERR_MSG("Nested if statements without curly braces may be ambiguous with else statements and is therefore not allowed. Use curly braces on the \"highest\" if statement.")
+                    ERR_LINE(statement->tokenRange, "use curly braces here")
+                    ERR_LINE(body->statements[0]->tokenRange, "ambiguous when using else")
+                )
+            }
+        }
         
         return SignalAttempt::SUCCESS;
     }else if(Equal(firstToken,"while")){
@@ -3385,7 +3396,7 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
     // statement->tokenRange.endIndex = info.at()+1;
     return SignalAttempt::SUCCESS;  
 }
-SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal){
+SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal, bool* has_curlies){
     using namespace engone;
     MEASURE;
     // Note: two infos in case ParseAssignment modifies it and then fails.
@@ -3402,6 +3413,8 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
     ScopeId prevScope = info.currentScopeId;
     defer { info.currentScopeId = prevScope; }; // ensure that we exit with the same scope we came in with
 
+    if(has_curlies)
+        *has_curlies = false;
     bool expectEndingCurlyBrace = false;
     // bool inheritScope = true;
     bool inheritScope = false; // Read note below as to why this is false (why scopes always are created)
@@ -3414,6 +3427,8 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         if(Equal(token,"{")) {
             token = info.next();
             expectEndingCurlyBrace = true;
+            if(has_curlies)
+                *has_curlies = true;
             inheritScope = false;
         }
         // NOTE: Always creating scope even with "if true  print("hey")" with no curly brace

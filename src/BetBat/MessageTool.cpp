@@ -106,10 +106,10 @@ const char* ToCompileErrorString(temp_compile_error stuff) {
 void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode, TokenStream** prevStream) {
     PrintHead(color, token.operator TokenRange(), errorCode, prevStream);
 }
-void PrintCode(const Token& token, const StringBuilder& stringBuilder, TokenStream** prevStream){
-     PrintCode(token.operator TokenRange(), stringBuilder, prevStream);
+void PrintCode(const Token& token, const StringBuilder& stringBuilder, TokenStream** prevStream, int* base_column){
+     PrintCode(token.operator TokenRange(), stringBuilder, prevStream, base_column);
 }
-void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream){
+void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream, int* base_column){
     using namespace engone;
     if(!tokenRange.tokenStream())
         return;
@@ -150,15 +150,17 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
     const log::Color markColor = log::CYAN;
 
     int lineDigits = 0;
-    int baseColumn = 99999999;
+    int baseColumn = base_column ? *base_column : -1;
     for(int i=start;i<end;i++){
         Token& tok = tokenRange.tokenStream()->get(i);
         int numlen = tok.line>0 ? ((int)log10(tok.line)+1) : 1;
         if(numlen>lineDigits)
             lineDigits = numlen;
-        if(tok.column<baseColumn)
+        if(tok.column<baseColumn || baseColumn == -1)
             baseColumn = tok.column;
     }
+    if(base_column)
+        *base_column = baseColumn;
     const char* const line_sep_str = " | "; // text that separates the line number and the code
     static const int line_sep_len = strlen(line_sep_str);
     int line_number_width = lineDigits + line_sep_len;

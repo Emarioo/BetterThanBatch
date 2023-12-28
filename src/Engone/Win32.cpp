@@ -1080,7 +1080,7 @@ namespace engone {
 		return GetCurrentThreadId();
 	}
 	std::string GetWorkingDirectory(){
-		DWORD length = GetCurrentDirectoryA(0,0);
+		DWORD length = GetCurrentDirectoryA(0,nullptr);
 		if(length==0){
 			DWORD err = GetLastError();
 			printf("[WinError %lu] GetWorkingDirectory\n",err);
@@ -1093,6 +1093,10 @@ namespace engone {
 				DWORD err = GetLastError();
 				printf("[WinError %lu] GetWorkingDirectory\n",err);
 				return "";
+			}
+			for(int i=0;i<out.length();i++){
+				if(out[i] == '\\')
+					((char*)out.data())[i] = '/';
 			}
 			return out;
 		}

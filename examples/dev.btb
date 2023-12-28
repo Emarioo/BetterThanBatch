@@ -93,15 +93,23 @@
 //     printc('\n')
 // }
 
-fn @import why();
-fn @import whay();
-fn @import what();
+// fn @import why();
+// fn @import whay();
+// fn @import what();
 
-why();
-whay();
-what();
-why();
-what();
+// why();
+// whay();
+// what();
+// why();
+// what();
+fn hey() {}
+
+n = 2
+if n > 0
+    if n == 1
+        hey();
+else
+    hey();
 
 // asm {
 //     push rax

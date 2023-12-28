@@ -157,6 +157,7 @@ std::string TrimDir(const std::string& path){
 }
 std::string TrimCWD(const std::string& path) {
     std::string cwd = engone::GetWorkingDirectory() + "/";
+    ReplaceChar((char*)cwd.data(), cwd.length(),'\\','/');
     int where = cwd.size();
     Assert(path.size()!=0); // there are bugs here if path is empty
     for(int i=0;i<path.size();i++) {
@@ -173,6 +174,7 @@ std::string TrimCWD(const std::string& path) {
 std::string BriefString(const std::string& path, int max, bool skip_cwd){
     if(skip_cwd) {
         std::string cwd = engone::GetWorkingDirectory() + "/";
+        ReplaceChar((char*)cwd.data(), cwd.length(),'\\','/');
         int where = cwd.size();
         Assert(path.size()!=0); // there are bugs here if path is empty
         for(int i=0;i<path.size();i++) {

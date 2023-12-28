@@ -3,6 +3,7 @@
 #include "BetBat/COFF.h"
 #include "BetBat/ELF.h"
 
+#include "BetBat/CompilerEnums.h"
 
 /*
     x86/x64 instructions are complicated and it's not really my fault
@@ -506,13 +507,14 @@ Disassembly of section .text:
   34:   5d                      pop    %rbp
   35:   c3                      ret   
 */
-void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes) {
+void ReformatDumpbinAsm(LinkerChoice linker, QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes) {
     using namespace engone;
     Assert(!outBuffer); // not implemented
     
     int startIndex = 0;
     int endIndex = 0;
-    #ifdef OS_WINDOWS
+    switch(linker){
+    case LINKER_MSVC: {
      // Skip heading
     int index = 0;
     int lineCount = 0;
@@ -546,7 +548,9 @@ void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer,
         }
     }
     // endIndex = index; endIndex is set in while loop
-    #else
+    break;
+    }
+    case LINKER_GCC: {
     // Skip heading
     int index = 0;
     int lineCount = 0;
@@ -562,7 +566,13 @@ void ReformatDumpbinAsm(QuickArray<char>& inBuffer, QuickArray<char>* outBuffer,
     startIndex = index;
     index = 0;
     endIndex = inBuffer.size();
-    #endif
+    break;
+    }
+    default: {
+        Assert(false);
+        break;
+    }
+    }
     // Print disassembly
     int len = endIndex - startIndex;
     if(outBuffer) {
@@ -788,6 +798,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         #define TEMP_ASM_FILE "bin/inline_asm.asm"
         #define TEMP_ASM_OBJ_FILE "bin/inline_asm.o"
         auto file = engone::FileOpen(TEMP_ASM_FILE,nullptr,FILE_ALWAYS_CREATE);
+        defer { if(file) engone::FileClose(file); };
         if(!file) {
             log::out << log::RED << "Could not create " TEMP_ASM_FILE "!\n";
             continue;
@@ -845,24 +856,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             
             ReformatAssemblerError(asmInst, errorMessages, -asm_line_offset);
             
-            // u64 readBytes = 0;
-            // log::out.setMasterColor(log::RED);
-            // while(readBytes < fileSize) {
-            //     u64 bytes = FileRead(asmLog, tempBuffer, tempBufferSize);
-            //     if(bytes == -1) break;
-            //     readBytes += bytes;
-            //     // TODO: Reformat error messages? It shows the file bin/inline_asm.asm which
-            //     //  doesn't mean anything to the user.
-            //     log::out.print(tempBuffer, bytes);
-            // }
-            // log::out.setMasterColor(log::NO_COLOR);
-            
-            // engone::FileClose(asmLog);
             failure = true;
             continue;
         }
-        
-        // engone::FileClose(asmLog);
+        engone::FileClose(asmLog);
 
         // TODO: DeconstructFile isn't optimized and we deconstruct symbols and segments we don't care about.
         //  Write a specific function for just the text segment.

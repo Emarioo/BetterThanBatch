@@ -122,6 +122,8 @@ namespace engone {
     bool FileLastWriteSeconds(const std::string& path, double* seconds);
     
 	// Not thread safe if you change working directory or if used within shared libraries. (from windows docs)
+	// Backslashes are converted to forward slashes. Every function in platform layer uses forward slashes but
+	// converts to backslashes if the operating system requires it.
 	std::string GetWorkingDirectory();
 	bool SetWorkingDirectory(const std::string& path);
 

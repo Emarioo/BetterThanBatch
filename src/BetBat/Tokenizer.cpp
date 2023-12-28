@@ -116,6 +116,21 @@ u64 ConvertHexadecimal(const Token& token){
     }
     return hex;
 }
+std::string NumberToHex(u64 number) {
+    if(number == 0) return "0";
+
+    std::string out = "";
+    while(true) {
+        u64 part = number & 0xF;
+        number = number >> 4;
+        // TODO: Optimize
+        out.insert(out.begin() + 0, (char)(part < 10 ? part + '0' : part - 10 + 'a'));
+        if(number == 0)
+            break;
+    }
+
+    return out;
+}
 // does not expect 0x at the start.
 u64 ConvertHexadecimal_content(char* str, int length){
     Assert(str && length > 0);

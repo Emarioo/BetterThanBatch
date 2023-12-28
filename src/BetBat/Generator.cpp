@@ -465,14 +465,18 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
         if ((to.baseType() == AST_UINT64 || to.baseType() == AST_INT64) && 
             from.getPointerLevel() - to.getPointerLevel() == 1)
             return true;
-        if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+        // if(to.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+        //     return true;
+        if(to.baseType() == AST_VOID && to.getPointerLevel() > 0)
             return true;
     }
     if(to.isPointer()) {
         if ((from.baseType() == AST_UINT64 || from.baseType() == AST_INT64) && 
             to.getPointerLevel() - from.getPointerLevel() == 1)
             return true;
-        if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+        // if(from.baseType() == AST_VOID && from.getPointerLevel() == to.getPointerLevel())
+        //     return true;
+        if(from.baseType() == AST_VOID && from.getPointerLevel() > 0)
             return true;
     }
 
