@@ -353,7 +353,7 @@ int main(int argc, const char** argv){
         } else {
             #define EXE_FILE "dev.exe"
             compileOptions.outputFile = EXE_FILE;
-            // compileOptions.useDebugInformation = true;
+            compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         }

@@ -757,10 +757,27 @@ u32 ProcessSource(void* ptr) {
         //     log::out << "Proc source "<<source.path.text<<"\n";
         info->sourceLock.unlock();
         
-        // log::out << "Yeet "<<source.path.text <<"\n";
-        auto pathp = info->findSourceFile(source.path);
+        if(!source.textBuffer) {
+            // log::out << "Yeet "<<source.path.text <<"\n";
+            auto pathp = info->findSourceFile(source.path);
+            if(pathp.text.empty()) {
+                log::out << log::RED << "Could not find '" << BriefString(source.path.text) <<"'\n";
+                info->compileOptions->compileStats.errors++;
+                
+                info->sourceLock.lock();
+                if(info->waitingThreads == info->availableThreads-1 || info->sourcesToProcess.size()>0) {
+                    if(!info->signaled) {
+                        info->sourceWaitLock.signal();
+                        info->signaled=true;
+                    }
+                }
+                info->waitingThreads++;
+                info->sourceLock.unlock();
+                continue;
+            }
+            source.path = pathp; // don't set source.path if pathp is empty? seems kind of dumb to do that.
+        }
         // log::out << "Proc "<<source.path.text << " "<<pathp.text<<"\n";
-        source.path = pathp;
 
         // bool yes = FileExist(source.path.text);
         // if(!yes) {
@@ -776,7 +793,7 @@ u32 ProcessSource(void* ptr) {
         if(source.textBuffer) {
             tokenStream = TokenStream::Tokenize(source.textBuffer);
             // tokenStream->streamName = path.text;
-        } else {
+        } else if(source.path.text.size() != 0) {
             Assert(source.path.isAbsolute()); // A bug at the call site if not absolute
             tokenStream = TokenStream::Tokenize(source.path.text);
         }
@@ -881,7 +898,8 @@ u32 ProcessSource(void* ptr) {
     // There may be a flaw with this approach.
 
     _LOG(LOG_IMPORTS,
-    FORNI(info->streams)
+    FORN(info->streams) {
+        auto it = info->streams[nr];
         log::out << "Stream "<<nr << " " <<BriefString(it->initialStream->streamName,15)<< ": ind:"<<it->index << " deps:\n";
         for(int j=0;j<it->dependencies.size();j++) {
             if(j!=0) log::out << ", ";
@@ -1099,6 +1117,8 @@ Bytecode* CompileSource(CompileOptions* options) {
     #endif
     "fn @native prints(str: char[]);\n"
     "fn @native printc(str: char);\n"
+    "#define Assert(X) { prints(#quoted X); }"
+    // "#define Assert(X) { prints(#quoted X); *cast<char>null; }"
     ;
     essentialStructs += (options->target == TARGET_BYTECODE ? "#define LINK_BYTECODE\n" : "");
     TextBuffer essentialBuffer{};
@@ -1116,7 +1136,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     if(options->initialSourceBuffer.buffer){
         initialSource.textBuffer = &options->initialSourceBuffer;
     } else {
-        initialSource.path = options->sourceFile.getAbsolute();
+        initialSource.path = options->sourceFile;
     }
     initialSource.stream = compileInfo.addStream(initialSource.path);
     compileInfo.sourcesToProcess.add(initialSource);
@@ -1587,7 +1607,7 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
                         lineNumber = func.lines[0].lineNumber;
                     for(int i=0;i < func.lines.size();i++) {
                         auto& line = func.lines[i];
-                        if(it.textOffset < func.funcStart + line.funcOffset) {
+                        if(it.textOffset < func.funcStart + line.funcOffset) { // NOTE: Is funcStart + funcOffset correct?
                             found = true;
                             break;
                         }
@@ -1689,6 +1709,14 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
         return false;
     }
     Path& outPath = options->outputFile;
+    if(options->target == TARGET_WINDOWS_x64) {
+        if(outPath.getFormat().empty()) {
+            outPath.text += ".exe";
+            // Windows doesn't run executables unless they have .exe.
+            // You have to force it at least so we might as well ensure
+            // .exe is there.
+        }
+    }
 
     options->compileStats.start_convertx64 = StartMeasure();
     Program_x64* program = ConvertTox64(bytecode);
@@ -1964,8 +1992,12 @@ bool ExecuteTarget(CompileOptions* options, Bytecode* bytecode) {
             // if(options->outputFile.getFormat() != "exe") {
             //     log::out << log::RED << "Cannot execute '" << options->outputFile.getFileName().text <<"'. The file format must be '.exe'.\n";
             // } else {
+                
                 std::string hoho{};
                 hoho += options->outputFile.text;
+                if(options->outputFile.getFormat().empty()) {
+                    hoho += ".exe";
+                }
                 for(auto& arg : options->userArguments){
                     hoho += " ";
                     hoho += arg;

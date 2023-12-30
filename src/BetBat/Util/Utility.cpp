@@ -172,11 +172,12 @@ std::string TrimCWD(const std::string& path) {
         return "./"+path.substr(where);
 }
 std::string BriefString(const std::string& path, int max, bool skip_cwd){
+    if(path.size() == 0)
+        return "";
     if(skip_cwd) {
         std::string cwd = engone::GetWorkingDirectory() + "/";
         ReplaceChar((char*)cwd.data(), cwd.length(),'\\','/');
         int where = cwd.size();
-        Assert(path.size()!=0); // there are bugs here if path is empty
         for(int i=0;i<path.size();i++) {
             if(i >= cwd.size() || cwd[i] != path[i]) {
                 where = i;

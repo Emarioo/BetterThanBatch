@@ -1,0 +1,90 @@
+#import "OS"
+#import "Logger"
+
+// TODO: Asserts
+// Note that memory is uninitialized
+struct ByteStream {
+    // zero initialized by default
+    data: void*;
+    max: u32; // allocated bytes
+    size: u32; // elements in allocation
+
+    fn cleanup() { _reserve(0); }
+
+    fn write(ptr: void*, len: u64) -> bool {
+        if size + len > max {
+            yes = _reserve(64u + len + max * 2u)
+            if !yes   return false;
+        }
+        memcpy(data + size, ptr, len);
+        size += len;
+        return true;
+    }
+    fn write<T>(value: T) -> bool {
+        size: u32 = sizeof(T);
+        if size == 1 || size == 2 || size == 4 || size == 8 {
+            return write(&value, size);
+        }
+        return false;
+    }
+    // Marked unsafe because the pointer in the returned slice
+    // may be invalidated if the stream is cleaned up.
+    fn sliced_unsafe() -> Slice<u8> {
+        return Slice<u8>{cast<u8*>data, size};
+    }
+    // fn resize(newLen: u32) -> bool {
+    //     if newLen > max {
+    //         if !_reserve(newLen)
+    //             return false;
+    //     }
+    //     len = newLen;
+    //     return true;
+    // }
+    fn _reserve(newMax: u32) -> bool {
+        // log("newMax",newMax)
+        if(newMax==0){
+            // log("oh")
+            if(max!=0){
+                Free(data, max);
+            }
+            data = null;
+            max = 0;
+            size = 0;
+            return true;
+        }
+        // log("what",cast<u64>ptr)
+        if(!data){
+            // log("huh")
+            data = Allocate(newMax);
+            // log("allocSize",newMax * sizeof T)
+            // log("ptr",ptr)
+            // Assert(ptr);
+            // initialization of elements is done when adding them
+            if(!data)
+                return false;
+            max = newMax;
+            return true;
+        } else {
+            newPtr: u8* = Reallocate(data, max, newMax);
+            // Assert(newPtr);
+            if(!newPtr)
+                return false;
+            data = newPtr;
+            max = newMax;
+            if(size > newMax){
+                size = newMax;
+            }
+            return true;
+        }
+        return false;
+    }
+}
+
+
+fn print_bytes(stream: ByteStream*) {
+    slice = stream.sliced_unsafe()
+    for slice {
+        _print(it); _print(' ');
+    }
+    _print('\n');
+}

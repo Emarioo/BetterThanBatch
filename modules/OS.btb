@@ -8,7 +8,11 @@
 #ifdef LINK_BYTECODE
 #define LINK_TYPE @native
 #else
-#define LINK_TYPE @import
+#ifdef OS_UNIX
+#define LINK_TYPE @import @unixcall
+#else
+#define LINK_TYPE @import @stdcall
+#endif
 #endif
 
 // #define Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))

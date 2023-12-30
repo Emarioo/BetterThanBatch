@@ -12,6 +12,10 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
     }
     bool suc = true;
     #define CHECK Assert(suc);
+
+    if(program->debugInformation) {
+        engone::log::out << engone::log::RED << "Debug information (DWARF) has not been implemented when writing ELF files\n";
+    }
     
     // data relocations not implemented
     // Assert(program->dataRelocations.size() == 0);
@@ -367,7 +371,20 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         // memset(sym, 0, sizeof(*sym));
 
         // int sym_main = addSymbol("main", ind_text, 0, STB_LOCAL, STT_FUNC);
-        int sym_main = addSymbol("main", ind_text, 0, STB_GLOBAL, STT_FUNC);
+        int sym_main = -1;
+        for(int i=0;i<program->namedSymbols.size();i++) {
+            auto& sym = program->namedSymbols[i];
+
+            // TODO: We assume that all named symbols are functions. This may not be true in the future.
+            if(sym.name == "main") {
+                sym_main = addSymbol(sym.name, ind_text, sym.textOffset, STB_GLOBAL, STT_FUNC);
+            } else {
+                addSymbol(sym.name, ind_text, sym.textOffset, STB_GLOBAL, STT_FUNC);
+            }
+        }
+        if(sym_main == -1) {
+            sym_main = addSymbol("main", ind_text, 0, STB_GLOBAL, STT_FUNC);
+        }
 
         section->sh_info = 0; // number of local symbols
         // Local symbols should be added first

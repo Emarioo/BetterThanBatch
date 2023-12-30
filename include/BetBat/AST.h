@@ -809,6 +809,7 @@ struct AST {
 
     // Returns nullptr if variable already exists or if scopeId is invalid
     VariableInfo* addVariable(ScopeId scopeId, const Token& name, ContentOrder contentOrder, Identifier** identifier);
+    VariableInfo* getVariable(Identifier* identifier);
     // VariableInfo* addVariable(ScopeId scopeId, const Token& name, bool shadowPreviousVariables=false, Identifier** identifier = nullptr);
     // Returns nullptr if variable already exists or if scopeId is invalid
     Identifier* addIdentifier(ScopeId scopeId, const Token& name, ContentOrder contentOrder);

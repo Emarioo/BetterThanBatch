@@ -35,6 +35,7 @@ const char* FormatTime(double seconds);
 // base.btb -> /
 // src -> /
 std::string TrimLastFile(const std::string& path);
+// Removes the last slash and all text before it leaving the file name.
 std::string TrimDir(const std::string& path);
 std::string BriefString(const std::string& path, int max=25, bool skip_cwd = true);
 std::string TrimCWD(const std::string& path);
@@ -71,7 +72,7 @@ struct ScopeDebug {
 #define FOR(LIST) for(auto& it : LIST)
 // #define FORN(LIST) auto it = LIST.data(); for(int nr=0; nr < (int)LIST.size() && (it = &LIST[nr]); nr++)
 #define FORN(LIST) for(int nr=0; nr < (int)LIST.size(); nr++)
-#define FORNI(LIST) for(int nr=0; nr < (int)LIST.size(); nr++) { auto it = LIST[nr];
+// #define FORNI(LIST) for(int nr=0; nr < (int)LIST.size(); nr++) { auto it = LIST[nr];
 
 // #define COMBINE1(X,Y) X##Y
 // #define COMBINE(X,Y) COMBINE1(X,Y)

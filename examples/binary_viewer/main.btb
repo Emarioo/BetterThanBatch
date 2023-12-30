@@ -1,0 +1,244 @@
+#import "Logger"
+
+#import "Array"
+#import "Stream"
+
+
+fn hey() {
+
+}
+
+fn main(argc: i32, argv: char**) -> i32 {
+    // arguments
+    // for 0..argc
+    //     log(nr,argv[nr])
+    // TestSpec();
+    hey();
+
+    // asm {
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    //     xor eax, eax
+    // }
+    struct Basket {
+        items: DynamicArray<i32>;
+        fn cleanup() {
+            items.cleanup();
+        }
+    }
+
+    bask: Basket;
+    defer { bask.cleanup(); }
+    bask.items.add(5);
+
+    return 2;
+}
+
+fn TestSpec() {
+    spec: FormatSpec;
+    stream: ByteStream;
+    spec.init();
+    stream._reserve(0x1000);
+    defer {
+        spec.cleanup();
+        // stream.cleanup();
+    }
+
+    spec.addField(cast_unsafe<u32>FieldType.TYPE_I32)
+    // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
+    // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
+    // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
+    // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
+
+    suc = stream.write<i32>(5);
+    // suc = stream.write<char>('H');
+    // suc = stream.write<char>('Y');
+    // suc = stream.write<char>('O');
+    // suc = stream.write<char>('D');
+
+    // print_bytes(&stream);
+
+    // Interpret(stream.sliced_unsafe(), &spec);
+}
+
+enum FieldType {
+    TYPE_NONE=0, // usually represents the fields in the specification itself
+    TYPE_CHAR,
+    TYPE_I8,
+    TYPE_I16,
+    TYPE_I32,
+    TYPE_I64,
+    TYPE_U8,
+    TYPE_U16,
+    TYPE_U32,
+    TYPE_U64,
+    TYPE_F32,
+    TYPE_F64,
+
+    TYPE_PRIMITIVE_COUNT,
+}
+struct Field {
+    type: u32; // user defined struct or primitive
+    count: u32;
+    dynamic: bool; // dynamic based on another field, could be an expression?
+    // value: u32; // index to the value data, stored in spec struct
+    // name: char[];
+}
+struct TypeDefinition {
+    type: u32;
+    size: u32;
+
+    fields: DynamicArray<Field>;
+}
+struct FormatSpec {
+    fields: DynamicArray<Field>;
+    definitions: DynamicArray<TypeDefinition>;
+
+    fn init() {
+        #define ADD(...) definitions.add(TypeDefinition{cast_unsafe<u32>FieldType.TYPE_##...});
+        ADD(NONE, 0)
+        ADD(CHAR, 1)
+        
+        ADD(I8  , 1)
+        ADD(I16 , 2)
+        ADD(I32 , 4)
+        ADD(I64 , 8)
+
+        ADD(U8  , 1)
+        ADD(U16 , 2)
+        ADD(U32 , 4)
+        ADD(U64 , 8)
+
+        ADD(F32 , 4)
+        ADD(F64 , 8)
+        #undef ADD
+    }
+    fn cleanup() {
+        fields.cleanup();
+        // for @ptr definitions.sliced_unsafe()
+        //     it.fields.cleanup();
+        // definitions.cleanup();
+    }
+    
+    fn getFieldDef(definition: u32) -> TypeDefinition* {
+        return definitions.getPtr(definition);
+    }
+    fn getField(definition: u32, fieldIndex: u32) -> Field* {
+        // getPtr handles out of range
+        if definition == 0 {
+            return fields.getPtr(fieldIndex);
+        }
+        def = getFieldDef(definition);
+        return def.fields.getPtr(fieldIndex);
+    }
+
+    fn addField(type: u32, definition: u32 = 0) {
+        if definition == 0 {
+            fields.add(Field{type});
+        } else {
+            def = getFieldDef(definition);
+            if def
+                def.fields.add(Field{type});
+            else
+                print("BAD, '",definition,"' is not a definition")
+        }
+    }
+}
+
+// fn Interpret(path: char[], spec: FormatSpec*) {
+//     FileOpen(path)
+// }
+
+// Prints the content of the stream based on the specification.
+fn Interpret(stream: u8[], spec: FormatSpec*) {
+    // TODO: The output should go through a standard logger with color and redirection support.
+    //  Perhaps it's written to stdout, a file, and a StringBuilder.
+
+    // Assert(spec)
+
+    head: u32 = 0; // read head of stream
+
+    struct Layer {
+        definition: u32 = 0; // 0 refers to specification
+        fieldIndex: u32 = 0;
+    }
+    stack: DynamicArray<Layer>;
+    stack.add(Layer{0, 0});
+
+    print("Start interpret ",stream.len," bytes\n")
+    
+    while stack.len {
+        // get next field
+        layer = stack.getPtr(stack.len - 1);
+
+        element: Field* = spec.getField(layer.definition, layer.fieldIndex);
+        if !element {
+            stack.pop();
+            continue;
+        }
+        layer.fieldIndex++;
+
+        if element.type >= cast_unsafe<u32>FieldType.TYPE_PRIMITIVE_COUNT {
+            // user defined field. make new stack
+            stack.add(Layer{element.type, 0});
+        } else {
+            // print primitive field
+            // element
+            print("<name>: "); // element.name when that exists
+            #multidefine CASE(E,T)
+            case FieldType.TYPE_##E: {
+                tmp: T;
+                memcpy(&tmp, stream.ptr + head, sizeof T);
+                head += sizeof T;
+                print(tmp);
+            }
+            #enddef
+            switch element.type {
+            CASE(CHAR, char)
+
+            CASE(I8, i8)
+            CASE(I16, i16)
+            CASE(I32, i32)
+            CASE(I64, i64)
+
+            CASE(U8, u8)
+            CASE(U16, u16)
+            CASE(U32, u32)
+            CASE(U64, u64)
+
+            CASE(F32, f32)
+            CASE(F64, f64)
+            case: {
+                print("UNREACHABLE_312")
+            }
+            }
+                
+            print('\n');
+        }
+    }
+    print("Finished, read ",head," bytes\n");
+}

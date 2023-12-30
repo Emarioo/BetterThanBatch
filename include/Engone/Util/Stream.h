@@ -8,6 +8,10 @@
 
 // An artificial array of bytes. The allocations is handled within.
 // Most functions return bool which indicates whether the function succeded or not.
+// A single write operation (of any size) is not split up into multiple allocations.
+// This means that you can safely take a pointer to the struct or element you write and modify it
+// without worrying about the boundary.
+// Write operations do not invalidate previous pointers. Operations like finalize() may invalidate pointers.
 struct ByteStream {
     static ByteStream* Create(engone::Allocator* allocator) {
         if(!allocator)
@@ -78,6 +82,48 @@ struct ByteStream {
         allocation->writtenBytes += size;
         writtenBytes+=size;
         return true;
+    }
+    bool write_late_at(u32 offset, void** out_ptr, u32 size) {
+        Assert(size != 0);
+        Assert(!unknown_state);
+        Assert(offset < writtenBytes);
+        if(out_ptr)
+            *out_ptr = nullptr;
+        
+        Allocation* first = nullptr;
+        Allocation* second = nullptr;
+        int seek_offset = 0;
+        for(int i=0;i<allocations.size();i++) {
+            auto& all = allocations[i];
+
+            if(offset >= seek_offset && offset < seek_offset + all.writtenBytes) {
+                first = &all;
+                if (i + 1 < allocations.size())
+                    second = &allocations[i+1];
+                break;
+            }
+            seek_offset += all.writtenBytes;
+        }
+
+        if(!first)
+            return false; // offset is out of range
+        
+        if(size < first->writtenBytes - (offset - seek_offset)) {
+            if(out_ptr)
+                *out_ptr = first->ptr + (offset - seek_offset);
+            return true;
+        } else if (second) {
+            // we could technically write into 3 allocations if we need to but
+            // that's a rare case which requires more complications. Not worthh it.
+            
+            // I realized a flaw, we can't return two pointers...
+            return false;
+
+            // return true;
+        } else {
+            // offset + size is out of range
+            return false;
+        }
     }
     // ALWAYS call wrote_unknown after calling this
     bool write_unknown(void** out_ptr, u32 max_size) {
@@ -281,7 +327,7 @@ struct ByteStream {
         }
     }
     
-    // Useful methods
+    // Write a string with null termination
     bool write(const char* ptr) {
         Assert(ptr);
         int size = strlen(ptr) + 1;
@@ -303,6 +349,16 @@ struct ByteStream {
         return true;
     }
     bool write4(u32 value) {
+        u8* ptr = (u8*)&value;
+        int size = sizeof(value);
+        void* reserved_ptr = nullptr;
+        bool suc = write_late(&reserved_ptr, size);
+        if(!suc)
+            return false;
+        memcpy(reserved_ptr, ptr, size);
+        return true;
+    }
+    bool write4_at(u32 offset, u32 value) {
         u8* ptr = (u8*)&value;
         int size = sizeof(value);
         void* reserved_ptr = nullptr;
@@ -359,6 +415,18 @@ struct ByteStream {
         if(success)
             *success = suc;
         return val;
+    }
+    template<typename T>
+    bool write_at(u32 offset, T value) {
+        // don't pass by value is type is bigger than 8?
+        Assert(sizeof(T) <= 8);
+
+        void* ptr = nullptr;
+        bool yes = write_late_at(offset, &ptr, sizeof(T));
+        if(!yes) return false;
+
+        memcpy(ptr,&value,sizeof(T));
+        return true;
     }
     
 private:

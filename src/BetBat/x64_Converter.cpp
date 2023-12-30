@@ -949,8 +949,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     // }
 
     // TODO: Can this be improved?
-     // array to translate addresses of bytecode instructions to
-     // the ones in x64 instructions.
+    //  array to translate addresses of bytecode instructions to
+    //  the ones in x64 instructions.
     DynamicArray<i32> addressTranslation;
     addressTranslation.resize(bytecode->length());
 
@@ -3779,14 +3779,22 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     Assert(prog->text[prog->size()-1] == OPCODE_RET); // bytecode generator should have added a return
     // prog->add(OPCODE_RET);
 
+    for(int i=0;i<bytecode->exportedSymbols.size();i++) {
+        auto& sym = bytecode->exportedSymbols[i];
+        NamedSymbol tmp{};
+        tmp.name = sym.name;
+        tmp.textOffset = addressTranslation[sym.location];
+        prog->namedSymbols.add(tmp);
+    }
+
     if(prog->debugInformation) {
         int funcs = prog->debugInformation->functions.size();
         for(int i=0;i<funcs;i++){
             auto& fun = prog->debugInformation->functions[i];
             fun.funcStart = addressTranslation[fun.funcStart];
             fun.funcEnd = addressTranslation[fun.funcEnd];
-            fun.srcStart = addressTranslation[fun.srcStart];
-            fun.srcEnd = addressTranslation[fun.srcEnd];
+            fun.codeStart = addressTranslation[fun.codeStart];
+            fun.codeEnd = addressTranslation[fun.codeEnd];
             // Don't forget to add new translations here
 
             int lines = fun.lines.size();

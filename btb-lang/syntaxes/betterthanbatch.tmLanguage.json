@@ -50,17 +50,10 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control",
-				"match": "\\b(if|else|while|switch|for|break|continue|global|fn|enum|return|asm|defer|each|operator|cast|test|using|as)\\b"
-			},{
-				"name": "entity.name.class",
-				"match": "\\b(struct)\\b"
-			},{
-				"name": "entity.name.type.enum",
-				"match": "\\b(enum)\\b"
-			},{
-				"name": "entity.name.namespace",
-				"match": "\\b(namespace)\\b"
-			}]
+				"match": "\\b(if|else|while|switch|case|default|for|break|namespace|continue|global|fn|enum|struct|return|asm|defer|each|operator|cast|test|using|as)\\b"
+			}
+			
+			]
 		},
 		"preproc":{
 			"patterns": [{

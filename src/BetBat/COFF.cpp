@@ -827,7 +827,14 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         u32 symbolIndex = 0;
     };
     DynamicArray<FuncSymbol> funcSymbols;
-    
+    for(int i=0;i<program->namedSymbols.size();i++) {
+        auto& sym = program->namedSymbols[i];
+        FuncSymbol tmp{};
+        tmp.name = sym.name;
+        tmp.address = sym.textOffset;
+        tmp.symbolIndex = totalSymbols++;
+        funcSymbols.add(tmp);
+    }
 
     if(program->debugInformation) {
         #ifdef USE_DWARF_AS_DEBUG
@@ -890,6 +897,9 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
             
             WRITE(u32, CV_SIGNATURE_C13);
             
+            // exported symbols and functions from debug information collides here
+            // we have to fix this up. The code is broken.
+            Assert(false); 
             Assert(funcSymbols.size() == 0);
             // IMPORTANT: functions can't be overloaded
             for(int i=0;i<di->functions.size();i++){
@@ -1013,10 +1023,10 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
                         WRITE(u32, 0) // end
                         WRITE(u32, 0) // next
                         WRITE(u32, fun.funcEnd - fun.funcStart) // len
-                        // WRITE(u32, fun.srcStart) // dbgstart
-                        // WRITE(u32, fun.srcEnd) // dbgend
-                        WRITE(u32, fun.srcStart - fun.funcStart) // dbgstart
-                        WRITE(u32, fun.srcEnd - fun.funcStart) // dbgend
+                        // WRITE(u32, fun.lineStart) // dbgstart
+                        // WRITE(u32, fun.codeEnd) // dbgend
+                        WRITE(u32, fun.lineStart - fun.funcStart) // dbgstart
+                        WRITE(u32, fun.codeEnd - fun.funcStart) // dbgend
                         WRITE(u32, typeInformation.functionTypeIndices[i]) // typeind
 
                         OffSegReloc reloc;
@@ -1118,7 +1128,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
                         if(j == 0)
                             data.offset = 0;
                         else
-                            data.offset = line.funcOffset - fun.funcStart;
+                            data.offset = line.funcOffset - fun.funcStart; // TODO: This is not right
                         data.linenumStart = line.lineNumber;
                         data.deltaLineEnd = 0;
                         WRITE(CV_Line_t, data);
@@ -1199,7 +1209,8 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         suc = obj_stream->write_late((void**)&symbol, Symbol_Record::SIZE);
         CHECK
         
-        sprintf(symbol->Name.ShortName,"$d%u",i);
+        int len = sprintf(symbol->Name.ShortName,"$d%u",i);
+        Assert(len <= 8);
         symbol->SectionNumber = dataSectionNumber;
         symbol->Value = dataSymbols[i];
         symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
@@ -1252,7 +1263,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     
     for(int i=0;i<stringsForTable.size();i++) {
         auto& string = stringsForTable[i];
-        log::out << string << "\n";
+        // log::out << string << "\n";
         Assert(string.length() > 8); // string does not need to be in string table if it's length is less or equal to 8
         suc = obj_stream->write(string.c_str(), string.length() + 1);
         CHECK

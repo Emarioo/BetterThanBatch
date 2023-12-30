@@ -483,11 +483,20 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             info.next();
             SignalDefault result = ParseTypeId(info,typeToken,nullptr);
             if(result!=SignalDefault::SUCCESS) {
-                ERR_SECTION(
-                    ERR_HEAD(typeToken)
-                    ERR_MSG("Failed parsing type "<<typeToken<<".")
-                    ERR_LINE(typeToken,"bad")
-                )
+                if(typeToken.str) {
+                    ERR_SECTION(
+                        ERR_HEAD(typeToken)
+                        ERR_MSG("Failed parsing type '"<<typeToken<<"'.")
+                        ERR_LINE(typeToken,"bad")
+                    )
+                } else {
+                    Token tok = info.get(info.at() + 1);
+                    ERR_SECTION(
+                        ERR_HEAD(tok)
+                        ERR_MSG("Failed parsing type '"<<tok<<"'.")
+                        ERR_LINE(tok,"bad")
+                    )
+                }
                 continue;
             }
             typeEndToken = info.at()+1;
@@ -1747,7 +1756,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     // tmp->tokenRange.startIndex = startToken;
                     tmp->tokenRange.endIndex = info.at()+1;
                     // tmp->tokenRange.tokenStream = info.tokens;
-                } else if(Equal(tok,"{") && 0 == (token.flags & TOKEN_SUFFIX_SPACE)){ // Struct {} is ignored
+                } else if(Equal(tok,"{") && 0 == (token.flags & TOKEN_MASK_SUFFIX)){ // Struct {} is ignored
                     // initializer
                     info.next();
                     ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
@@ -1795,7 +1804,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                         } else if(mustBeNamed){
                             ERR_SECTION(
                                 ERR_HEAD(token)
-                                ERR_MSG("Expected named argument because of previous named argument "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<".")
+                                ERR_MSG("Expected named field because of previous named field "<<prevNamed << " at "<<prevNamed.line<<":"<<prevNamed.column<<".")
                                 ERR_LINE(token,"bad")
                             )
                             // return or continue could desync the parsing so don't do that.
@@ -1832,7 +1841,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                         } else {
                             ERR_SECTION(
                                 ERR_HEAD(token)
-                                ERR_MSG("Expected , or } not "<<token<<".")
+                                ERR_MSG("Expected , or } in initializer list not '"<<token<<"'.")
                                 ERR_LINE(token,"bad")
                             )
                             continue;
@@ -2143,12 +2152,19 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         return SignalAttempt::SUCCESS;
     }else if(Equal(firstToken,"while")){
         info.next();
-        ASTExpression* expr=0;
-        SignalAttempt result = ParseExpression(info,expr,false);
-        if(result!=SignalAttempt::SUCCESS){
-            // TODO: should more stuff be done here?
-            return SignalAttempt::FAILURE;
+
+        ASTExpression* expr=nullptr;
+        if(Equal(info.get(info.at() + 1), "{")) {
+            // no expression, infinite loop
+        } else {
+            SignalAttempt result = ParseExpression(info,expr,false);
+            if(result!=SignalAttempt::SUCCESS){
+                // TODO: should more stuff be done here?
+                return SignalAttempt::FAILURE;
+            }
         }
+
+        int endIndex = info.at()+1;
 
         info.functionScopes.last().loopScopes.add({});
         ASTScope* body=0;
@@ -2163,7 +2179,7 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         statement->firstBody = body;
         statement->tokenRange.firstToken = firstToken;
         
-        statement->tokenRange.endIndex = info.at()+1;
+        statement->tokenRange.endIndex = endIndex;
         
         return SignalAttempt::SUCCESS;
     } else if(Equal(firstToken,"for")){

@@ -425,6 +425,15 @@ struct Bytecode {
     DynamicArray<ASM> asmInstances;
     // NativeRegistry* nativeRegistry = nullptr;
 
+    // usually a function like main
+    struct ExportedSymbol {
+        std::string name;
+        u32 location = 0;
+    };
+    DynamicArray<ExportedSymbol> exportedSymbols;
+    // returns false if a symbol with 'name' has been exported already
+    bool addExportedSymbol(const std::string& name,  u32 location);
+
     struct ExternalRelocation {
         std::string name;
         u32 location=0;

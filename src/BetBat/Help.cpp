@@ -16,7 +16,7 @@ void print_help(){
     using namespace engone;
     log::out << log::BLUE << "##   Help (outdated)   ##\n";
     log::out << log::GRAY << "More information can be found here:\n"
-        "https://github.com/Emarioo/BetterThanBatch/tree/master/docs\n";
+        "https://github.com/Emarioo/BetterThanBatch/tree/main/docs\n";
     #define PRINT_USAGE(X) log::out << log::YELLOW << X ": "<<log::NO_COLOR;
     #define PRINT_DESC(X) log::out << X;
     #define PRINT_EXAMPLES log::out << log::LIME << " Examples:\n";

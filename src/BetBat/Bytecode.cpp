@@ -116,6 +116,19 @@ uint32 Bytecode::getMemoryUsage(){
         ;
     return sum;
 }
+
+bool Bytecode::addExportedSymbol(const std::string& name,  u32 location) {
+    for(int i=0;i<exportedSymbols.size();i++) {
+        if(exportedSymbols[i].name == name) {
+            return false;
+        }
+    }
+    ExportedSymbol tmp{};
+    tmp.name = name;
+    tmp.location = location;
+    exportedSymbols.add(tmp);
+    return true;
+}
 void Bytecode::addExternalRelocation(const std::string& name, u32 location){
     ExternalRelocation tmp{};
     tmp.name = name;

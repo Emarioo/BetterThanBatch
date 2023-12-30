@@ -168,7 +168,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
                 if(info.showErrors) {
                     ERR_SECTION(
                         ERR_HEAD(astStruct->tokenRange)
-                        ERR_MSG("Type "<< info.ast->typeToString(implMem.typeId) << " in "<< astStruct->name<<"."<<member.name << " is not a type.")
+                        ERR_MSG("Type '"<< info.ast->typeToString(implMem.typeId) << "' in '"<< astStruct->name<<"."<<member.name << "' is not a type or an incomplete one. Do structs depend on each other recursively?")
                     )
                 }
             }
@@ -219,32 +219,35 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
             * pointer to struct begins here
         */
     }
-
-    if(offset != 0){
-        structImpl->alignedSize = alignedSize;
-        int misalign = offset % alignedSize;
-        if(misalign!=0){
-            offset+=alignedSize-misalign;
+    if(success) {
+        if(offset != 0){
+            structImpl->alignedSize = alignedSize;
+            int misalign = offset % alignedSize;
+            if(misalign!=0){
+                offset+=alignedSize-misalign;
+            }
         }
+        structImpl->size = offset;
     }
-    structImpl->size = offset;
-    std::string polys = "";
-    if(structImpl->polyArgs.size()!=0){
-        polys+="<";
-        for(int i=0;i<(int)structImpl->polyArgs.size();i++){
-            if(i!=0) polys+=",";
-            polys += info.ast->typeToString(structImpl->polyArgs[i]);
+    _VLOG(
+        std::string polys = "";
+        if(structImpl->polyArgs.size()!=0){
+            polys+="<";
+            for(int i=0;i<(int)structImpl->polyArgs.size();i++){
+                if(i!=0) polys+=",";
+                polys += info.ast->typeToString(structImpl->polyArgs[i]);
+            }
+            polys+=">";
         }
-        polys+=">";
-    }
-    _VLOG(log::out << "Struct "<<log::LIME << astStruct->name<<polys<<log::NO_COLOR<<" (size: "<<structImpl->size <<(astStruct->isPolymorphic()?", poly. impl.":"")<<", scope: "<<info.ast->getScope(astStruct->scopeId)->parent<<")\n";)
-    for(int i=0;i<(int)structImpl->members.size();i++){
-        auto& name = astStruct->members[i].name;
-        auto& mem = structImpl->members[i];
-        
-        i32 size = info.ast->getTypeSize(mem.typeId);
-        _VLOG(log::out << " "<<mem.offset<<": "<<name<<" ("<<size<<" bytes)\n";)
-    }
+        log::out << "Struct "<<log::LIME << astStruct->name<<polys<<log::NO_COLOR<<" (size: "<<structImpl->size <<(astStruct->isPolymorphic()?", poly. impl.":"")<<", scope: "<<info.ast->getScope(astStruct->scopeId)->parent<<")\n";
+        for(int i=0;i<(int)structImpl->members.size();i++){
+            auto& name = astStruct->members[i].name;
+            auto& mem = structImpl->members[i];
+            
+            i32 size = info.ast->getTypeSize(mem.typeId);
+            _VLOG(log::out << " "<<mem.offset<<": "<<name<<" ("<<size<<" bytes)\n";)
+        }
+    )
     // _TCLOG(log::out << info.ast->typeToString << " was evaluated to "<<offset<<" bytes\n";)
     // }
     if(success)
@@ -395,7 +398,7 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
     // @OPTIMIZE: When a struct fails, you can store the index you failed at continue from there instead of restarting from the beginning.
     for(auto astStruct : scope->structs){
         //-- Get struct info
-        TypeInfo* structInfo = 0;
+        TypeInfo* structInfo = nullptr;
         if(astStruct->state==ASTStruct::TYPE_EMPTY){
             // structInfo = info.ast->getTypeInfo(scope->scopeId, astStruct->name,false,true);
             structInfo = info.ast->createType(astStruct->name, scope->scopeId);
@@ -635,6 +638,19 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         parentStructImpl = ti->structImpl;
         parentAstStruct = ti->astStruct;
         fnOverloads = ti->astStruct->getMethod(baseName);
+
+        if(!fnOverloads) {
+            if(operatorOverloadAttempt || attempt)
+                return SignalAttempt::BAD_ATTEMPT;
+
+            ERR_SECTION(
+                ERR_HEAD(expr->tokenRange)
+                ERR_MSG("Method '"<<baseName <<"' does not exist. Did you mispell the name?")
+                ERR_LINE(baseName,"undefined")
+            )
+            FNCALL_FAIL
+            return SignalAttempt::FAILURE;
+        }
     } else {
         if(info.currentAstFunc && info.currentAstFunc->parentStruct) {
             // TODO: Check if function name exists in parent struct
@@ -1622,7 +1638,19 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             expr->versions_castType[info.currentPolyVersion] = ti;
             
             if(expr->isUnsafeCast()) {
-                
+                int ls = info.ast->getTypeSize(ti);
+                int rs = info.ast->getTypeSize(typeArray.last());
+                if(ls != rs) {
+                    std::string strleft = info.ast->typeToString(typeArray.last()) + " ("+std::to_string(ls)+")";
+                    std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
+                    ERR_SECTION(
+                        ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
+                        ERR_MSG("cast_unsafe requires that both types have the same size. "<<ls << " != "<<rs<<"'.")
+                        ERR_LINE(expr->left->tokenRange,strleft)
+                        ERR_LINE(expr->tokenRange,strcast)
+                        ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
+                    )
+                }
             } else if (expr->left->typeId == AST_ASM) {
                 ERR_SECTION(
                     ERR_HEAD(expr->tokenRange, )
@@ -2111,10 +2139,19 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
                 funcImpl->name = function->name;
                 funcImpl->usages = 0;
                 fnOverloads->addOverload(function, funcImpl);
+                int overload_i = fnOverloads->overloads.size()-1;
                 if(parentStruct)
                     funcImpl->structImpl = parentStruct->nonPolyStruct;
                 // DynamicArray<TypeId> retTypes{}; // @unused
                 SignalDefault yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, nullptr);
+
+                if(funcImpl->name == "main") {
+                    funcImpl->usages = 1;
+                    CheckInfo::CheckImpl checkImpl{};
+                    checkImpl.astFunc = fnOverloads->overloads[overload_i].astFunc;
+                    checkImpl.funcImpl = fnOverloads->overloads[overload_i].funcImpl;
+                    info.checkImpls.add(checkImpl);
+                }
                 // implementation isn't checked/generated
                 // if(function->body){
                 //     CheckInfo::CheckImpl checkImpl{};
@@ -2498,12 +2535,21 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             // name already exists. If you allow this then it's called shadowing.
                             // This should be allowed but the current system can't support it so we
                             // don't allow it for now.
-                            ERR_SECTION(
-                                ERR_HEAD(varname.name)
-                                ERR_MSG("Cannot redeclare variables. Identifier shadowing not implemented yet\n")
-                                ERR_LINE(varname.name,"");
-                            )
-                            continue;
+
+                            // NOTE: I had some issues with polymorphic structs and local variables in methods.
+                            //  As a quick fix I added this. Whether this does what I think it does or if we have
+                            //  to add something else for edge cases to be taken care of is another matter.
+                            //  - Emarioo, 2023-12-29 (By the way, merry christmas and happy new year!)
+                            if(varname.identifier->order != contentOrder) {
+                                ERR_SECTION(
+                                    ERR_HEAD(varname.name)
+                                    ERR_MSG("Cannot redeclare variables. Identifier shadowing not implemented yet\n")
+                                    ERR_LINE(varname.name,"");
+                                )
+                                continue;
+                            } else {
+                                varinfo = info.ast->getVariable(varname.identifier);
+                            }
                             // Assert(varname.identifier->order == contentOrder);
                             // varinfo = info.ast->identifierToVariable(varname.identifier);
                             // Assert(varinfo);
@@ -2602,7 +2648,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             }
             _TCLOG(log::out << "\n";)
         } else if(now->type == ASTStatement::WHILE){
-            SignalAttempt result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            if(now->firstExpression) {
+                // no expresion represents infinite loop
+                SignalAttempt result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            }
             SignalDefault result = CheckRest(info, now->firstBody);
         } else if(now->type == ASTStatement::FOR){
             // DynamicArray<TypeId> temp{};

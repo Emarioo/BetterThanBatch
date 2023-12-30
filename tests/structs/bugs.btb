@@ -1,0 +1,13 @@
+
+@TEST-CASE struct_cleanup
+
+#import "Array"
+
+struct Basket {
+    items: DynamicArray<i32>;
+}
+
+bask: Basket;
+defer { bask.items.cleanup(); };
+
+bask.items.add(5);

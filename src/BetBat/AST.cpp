@@ -226,7 +226,12 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder 
     variables.add(ptr);
     return ptr;
 }
-
+VariableInfo* AST::getVariable(Identifier* identifier) {
+    Assert(identifier && identifier->type == Identifier::VARIABLE);
+    if(identifier->varIndex < variables.size())
+        return variables[identifier->varIndex];
+    return nullptr;
+}
 // Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
 Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, ContentOrder contentOrder) {
     using namespace engone;
@@ -657,6 +662,7 @@ FnOverloads* ASTStruct::getMethod(const std::string& name, bool create){
     if(pair == _methods.end()){
         if(create)
             return &(_methods[name] = {});
+        
         return nullptr;
     }
     return &pair->second;

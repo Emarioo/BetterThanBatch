@@ -879,7 +879,8 @@ SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId
                     }
                 } else {
                     StringBuilder values = {};
-                    FORNI(tempTypes)
+                    FORN(tempTypes) {
+                        auto& it = tempTypes[nr];
                         if(nr != 0)
                             values += ", ";
                         values += info.ast->typeToString(it);
@@ -2286,7 +2287,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             
             if(ltypes.size()!=1) {
                 StringBuilder values = {};
-                FORNI(ltypes)
+                FORN(ltypes) {
+                    auto& it = ltypes[nr];
                     if(nr != 0)
                         values += ", ";
                     values += info.ast->typeToString(it);
@@ -3503,6 +3505,32 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         funcImpl->address = info.code->length();
         info.currentPolyVersion = funcImpl->polyVersion;
 
+        // TODO: Export function symbol if annotated with @export
+        //  Perhaps force functions named main to be annotated with @export in parser
+        //  instead of handling the special case for main here?
+        if(funcImpl->name == "main") {
+            switch(info.compileInfo->compileOptions->target) { // this is really cheeky
+            case TARGET_WINDOWS_x64:
+                function->callConvention = STDCALL;
+                break;
+            case TARGET_UNIX_x64:
+                function->callConvention = UNIXCALL;
+                break;
+            default:
+                Assert(false);
+                break;
+            }
+            bool yes = info.code->addExportedSymbol(funcImpl->name, funcImpl->address);
+            if(!yes) {
+                ERR_SECTION(
+                    ERR_HEAD(function->tokenRange)
+                    ERR_MSG("You cannot have two functions named main since it is the entry point. Either main is overloaded or polymorphic which isn't allowed.\n")
+                    ERR_LINE(function->tokenRange,"second main (or third...)")
+                    // TODO: Show all functions named main
+                )
+            }
+        }
+
         auto prevFunc = info.currentFunction;
         auto prevFuncImpl = info.currentFuncImpl;
         auto prevScopeId = info.currentScopeId;
@@ -3861,11 +3889,11 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         }
         }
         
-        dfun->srcStart = info.code->length();
+        dfun->codeStart = info.code->length();
         
         SignalDefault result = GenerateBody(info, function->body);
 
-        dfun->srcEnd = info.code->length();
+        dfun->codeEnd = info.code->length();
 
         switch(function->callConvention) {
         case BETCALL: {
@@ -4672,25 +4700,24 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             loopScope->continueAddress = info.code->length();
             loopScope->stackMoment = info.saveStackMoment();
 
-            TypeId dtype = {};
-            SignalDefault result = GenerateExpression(info, statement->firstExpression, &dtype);
-            if (result != SignalDefault::SUCCESS) {
-                // generate body anyway or not?
-                continue;
-            }
-            // if(dtype!=AST_BOOL8){
-            //     ERR_HEAD2(statement->expression->token) << "Expected a boolean, not '"<<TypeIdToStr(dtype)<<"'\n";
-            //     continue;
-            // }
-            // info.addInstruction({BC_POP,BC_REG_RAX});
-            // TypeInfo *typeInfo = info.ast->getTypeInfo(dtype);
-            u32 size = info.ast->getTypeSize(dtype);
-            u8 reg = RegBySize(BC_AX, size);
+            SignalDefault result{};
+            if(statement->firstExpression) {
+                TypeId dtype = {};
+                result = GenerateExpression(info, statement->firstExpression, &dtype);
+                if (result != SignalDefault::SUCCESS) {
+                    // generate body anyway or not?
+                    continue;
+                }
+                u32 size = info.ast->getTypeSize(dtype);
+                u8 reg = RegBySize(BC_AX, size);
 
-            info.addPop(reg);
-            info.addInstruction({BC_JNE, reg});
-            loopScope->resolveBreaks.add(info.code->length());
-            info.addImm(0);
+                info.addPop(reg);
+                info.addInstruction({BC_JNE, reg});
+                loopScope->resolveBreaks.add(info.code->length());
+                info.addImm(0);
+            } else {
+                // infinite loop
+            }
 
             result = GenerateBody(info, statement->firstBody);
             if (result != SignalDefault::SUCCESS)
@@ -4701,6 +4728,15 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
             for (auto ind : loopScope->resolveBreaks) {
                 info.code->getIm(ind) = info.code->length();
+            }
+
+            if(!statement->firstExpression && loopScope->resolveBreaks.size() == 0) {
+                // TODO: Should this error exist?
+                ERR_SECTION(
+                    ERR_HEAD(statement->tokenRange)
+                    ERR_MSG("A true infinite loop without any break statements is not allowed. If this was intended, write 'while true' or put 'if false break' in the body of the loop.")
+                    ERR_LINE(statement->tokenRange,"true infinite loop")
+                )
             }
 
             // pop loop happens in defer
@@ -5436,12 +5472,12 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     info.addPush(BC_REG_FP);
     info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
     
-    dfun->srcStart = info.code->length();
+    dfun->codeStart = info.code->length();
 
     // TODO: What to do about result? nothing?
     result = GenerateBody(info, info.ast->mainBody);
     
-    dfun->srcEnd = info.code->length();
+    dfun->codeEnd = info.code->length();
 
     info.addPop(BC_REG_FP);
 

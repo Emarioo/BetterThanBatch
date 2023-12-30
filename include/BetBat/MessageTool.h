@@ -86,7 +86,8 @@ enum CompileError : u32 {
     ERROR_TYPE_MISMATCH = 1003, // generic type mismatch
     ERROR_INVALID_TYPE = 1004, // generic invalid type, usually void being used when it can't
     ERROR_TOO_MANY_VARIABLES = 1005, // usually with more assignment variables than return values resulting in some variables missing a type
-    
+    ERROR_INCOMPLETE_FIELD = 1100, // usually when structs depend on each other recursively
+
     ERROR_DUPLICATE_CASE = 2101,
     ERROR_DUPLICATE_DEFAULT_CASE = 2102,
     ERROR_C_STYLED_DEFAULT_CASE = 2103,

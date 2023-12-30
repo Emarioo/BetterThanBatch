@@ -137,6 +137,7 @@ if !compileSuccess! == 0 (
     @REM link bin/obj_test.obj bin/NativeLayer.obj
 
     btb -dev
+    @REM btb -ss binary_viewer/main.btb -o dev -r
     @REM btb examples/dev.btb -p
     @REM btb --test
     @REM btb -sfs dev.btb

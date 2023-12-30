@@ -1087,7 +1087,8 @@ bool WritePDBFile(const std::string& path, DebugInformation* di, TypeInformation
         
         DynamicArray<u32> typeOffsets{};
 
-        FORNI(di->functions)
+        FORN(di->functions) {
+            auto& it = di->functions[nr];
             ALIGN4
             inOutInfo->functionTypeIndices[nr] = nextTypeIndex++;
             typeOffsets.add(offset - typeRecordStart);

@@ -239,13 +239,13 @@ namespace dwarf {
     #define DW_FORM_addr                        0x01    // address
     #define DW_FORM_block2                      0x03    // block
     #define DW_FORM_block4                      0x04    // block
-    #define DW_FORM_data2                       0x05    // constant
-    #define DW_FORM_data4                       0x06    // constant, lineptr, loclistptr, macptr, rangelistptr
-    #define DW_FORM_data8                       0x07    // constant, lineptr, loclistptr, macptr, rangelistptr
+    #define DW_FORM_data2                       0x05    // constant, 2 bytes
+    #define DW_FORM_data4                       0x06    // constant, 4 bytes, lineptr, loclistptr, macptr, rangelistptr
+    #define DW_FORM_data8                       0x07    // constant, 8 bytes, lineptr, loclistptr, macptr, rangelistptr
     #define DW_FORM_string                      0x08    // string
     #define DW_FORM_block                       0x09    // block
     #define DW_FORM_block1                      0x0a    // block
-    #define DW_FORM_data1                       0x0b    // constant
+    #define DW_FORM_data1                       0x0b    // constant, 1 byte
     #define DW_FORM_flag                        0x0c    // flag
     #define DW_FORM_sdata                       0x0d    // constant
     #define DW_FORM_strp                        0x0e    // string
@@ -282,4 +282,75 @@ namespace dwarf {
     #define DW_LNE_define_file                          0x03
     #define DW_LNE_lo_user                              0x80
     #define DW_LNE_hi_user                              0xff 
+
+    /* ###################3
+        OPS of some sort
+    ###########*/
+    #define DW_OP_addr                  0x03 // constant address (size target specific)
+    #define DW_OP_deref                 0x06 // 
+    #define DW_OP_const1u               0x08 // 1-byte constant
+    #define DW_OP_const1s               0x09 // 1-byte constant
+    #define DW_OP_const2u               0x0a // 2-byte constant
+    #define DW_OP_const2s               0x0b // 2-byte constant
+    #define DW_OP_const4u               0x0c // 4-byte constant
+    #define DW_OP_const4s               0x0d // 4-byte constant
+    #define DW_OP_const8u               0x0e // 8-byte constant
+    #define DW_OP_const8s               0x0f // 8-byte constant
+    #define DW_OP_constu                0x10 // ULEB128 constant
+    #define DW_OP_consts                0x11 // SLEB128 constant
+    #define DW_OP_dup                   0x12 // 
+    #define DW_OP_drop                  0x13 // 
+    #define DW_OP_over                  0x14 // 
+    #define DW_OP_pick                  0x15 // 1-byte stack index
+    #define DW_OP_swap                  0x16 // 
+    #define DW_OP_rot                   0x17 // 
+    #define DW_OP_xderef                0x18 // 
+    #define DW_OP_abs                   0x19 // 
+    #define DW_OP_and                   0x1a // 
+    #define DW_OP_div                   0x1b // 
+    #define DW_OP_minus                 0x1c // 
+    #define DW_OP_mod                   0x1d // 
+    #define DW_OP_mul                   0x1e // 
+    #define DW_OP_neg                   0x1f // 
+    #define DW_OP_not                   0x20 // 
+    #define DW_OP_or                    0x21 // 
+    #define DW_OP_plus                  0x22 // 
+    #define DW_OP_plus_uconst           0x23 // ULEB128 addend
+    #define DW_OP_shl                   0x24 // 
+    #define DW_OP_shr                   0x25 // 
+    #define DW_OP_shra                  0x26 // 
+    #define DW_OP_xor                   0x27 // 
+    #define DW_OP_skip                  0x2f // signed 2-byte constant
+    #define DW_OP_bra                   0x28 // signed 2-byte constant
+    #define DW_OP_eq                    0x29 // 
+    #define DW_OP_ge                    0x2a // 
+    #define DW_OP_gt                    0x2b // 
+    #define DW_OP_le                    0x2c // 
+    #define DW_OP_lt                    0x2d // 
+    #define DW_OP_ne                    0x2e // 
+    #define DW_OP_lit0                  0x30 // 
+    #define DW_OP_lit1                  0x31 // 
+    #define DW_OP_lit31                 0x4f // literals 0..31 = (DW_OP_lit0 + literal)
+    #define DW_OP_reg0                  0x50 // 
+    #define DW_OP_reg1                  0x51 // 
+    #define DW_OP_reg31                 0x6f // reg 0..31 = (DW_OP_reg0 + regnum)
+    #define DW_OP_breg0                 0x70 // 
+    #define DW_OP_breg1                 0x71 // 
+    #define DW_OP_breg31                0x8f // SLEB128 offset base register 0..31 = (DW_OP_breg0 + regnum)
+    #define DW_OP_regx                  0x90 // ULEB128 register
+    #define DW_OP_fbreg                 0x91 // SLEB128 offset
+    #define DW_OP_bregx                 0x92 // ULEB128 register followed by SLEB128 offset
+    #define DW_OP_piece                 0x93 // ULEB128 size of piece addressed
+    #define DW_OP_deref_size            0x94 // 1-byte size of data retrieved
+    #define DW_OP_xderef_size           0x95 // 1-byte size of data retrieved
+    #define DW_OP_nop                   0x96 // 
+    #define DW_OP_push_object_address   0x97 // 
+    #define DW_OP_call2                 0x98 // 2-byte offset of DIE
+    #define DW_OP_call4                 0x99 // 4-byte offset of DIE
+    #define DW_OP_call_ref              0x9a // 4- or 8-byte offset of DIE
+    #define DW_OP_form_tls_address      0x9b // 
+    #define DW_OP_call_frame_cfa        0x9c // 
+    #define DW_OP_bit_piece             0x9d // 
+    #define DW_OP_lo_user               0xe0 // 
+    #define DW_OP_hi_user               0xff // 
 }

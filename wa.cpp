@@ -1,14 +1,16 @@
+#include "na.cpp"
 
-// double hey() {
-//     return 0.432;
+// void hey() { }
+// int hey(int a) {
+//     return a + 4;
 // }
 
-int main() {
-    // auto a = hey();
 
-    double k = 4.5;
-    // float k = 4.5f;
-    unsigned long int j = k;
-    
+int main() {
+    // int k = 5;
+    // k += hey(8);
+    // hey();
+    no();
     return 0;    
 }
+

@@ -36,7 +36,8 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb.exe",
             // "args": ["--test"],
-            "args": ["-dev","-g"],
+            // "args": ["-ss", "main.btb","-o","dev", "-r"],
+            "args": ["-dev"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
@@ -44,13 +45,13 @@
         },
         {
             "name": "(Windows) Test",
-            "type": "cppvsdbg",
+            "type": "cppdbg",
             "request": "launch",
-            "program": "${workspaceFolder}/test.exe",
+            "program": "${workspaceFolder}/wa.exe",
             "args": [
-                "-dev"
+                
             ],
-            "stopAtEntry": false,
+            "stopAtEntry": true,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "console": "integratedTerminal"

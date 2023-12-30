@@ -26,6 +26,10 @@ struct NamedRelocation {
     std::string name;
     u32 textOffset; // where to modify
 };
+struct NamedSymbol {
+    std::string name;
+    u32 textOffset; // where to modify
+};
 
 struct Program_x64 {
     ~Program_x64(){
@@ -49,6 +53,7 @@ struct Program_x64 {
 
     DynamicArray<DataRelocation> dataRelocations;
     DynamicArray<NamedRelocation> namedRelocations;
+    DynamicArray<NamedSymbol> namedSymbols;
 
     DebugInformation* debugInformation = nullptr;
 

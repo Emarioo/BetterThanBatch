@@ -1,0 +1,36 @@
+@TEST-CASE initializer_list
+
+struct Apple {
+    red: i32;
+    size: f32;
+    name: char[];
+}
+apple = Apple{32, 1.2, "Your name"};
+
+test 32; apple.red;
+test 1.2; apple.size;
+s = "Your name"
+for apple.name
+    test s.ptr[nr]; it;
+
+apple2 = Apple{13, name = "My fruit", size = 0.3};
+
+test 13; apple2.red;
+test 0.3; apple2.size;
+s2 = "My fruit"
+for apple2.name
+    test s2.ptr[nr]; it;
+
+@TEST-CASE recursive_struct
+
+// TODO: TEST-ERROR is not ignored in the parser inside structs.
+//  While you are at it. Create a general ParseAnnotations which ignores TEST-ERROR and TEST-CASE.
+//  Could be useful in the future.
+struct A {
+                                    n: u32;
+@TEST-ERROR ERROR_INCOMPLETE_FIELD  f: B;
+}
+struct FieldDefinition {
+                                    n: u32;
+@TEST-ERROR ERROR_INCOMPLETE_FIELD  a: A;
+}

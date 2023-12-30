@@ -1,6 +1,6 @@
 // import allocation functions
 #import "OS"
-// #import "Logger"
+#import "Logger"
 
 #define ARRAY_CLEANUP(ARR) for @ptr ARR.sliced() it.cleanup(); ARR.cleanup();
 
@@ -12,15 +12,15 @@ struct DynamicArray<T> {
     max: u32; // allocated bytes
     len: u32; // elements in allocation
 
-    fn cleanup() { _reserve(0u); }
+    fn cleanup() { _reserve(0); }
 
     // returns index where element was inserted
     // fn add(newElement: T) -> u32 {
     fn add(newElement: T) -> T* {
-        if(len + 1u > max){
-            re = _reserve(7u + max * 2u);
+        if len + 1u > max {
+            res: bool = _reserve(7u + max * 2u);
             // log("re",re);
-            if(!re){
+            if !res {
                 // return -1;
                 return null;
                 // return;
@@ -30,7 +30,7 @@ struct DynamicArray<T> {
         return ptr + len++ * sizeof T;
         // return len++;
     }
-    fn sliced() -> Slice<T> {
+    fn sliced_unsafe() -> Slice<T> {
         return Slice<T>{ptr, len};
     }
     fn pop() {
@@ -56,10 +56,12 @@ struct DynamicArray<T> {
     }
     fn _reserve(newMax: u32) -> bool {
         // log("newMax",newMax)
-        if(newMax==0){
-            // log("oh")
-            if(max!=0){
+        if newMax==0 {
+            log("{",cast<u64>ptr, max, len,"}",newMax);
+            if max!=0 {
+                log("oh")
                 Free(ptr, max * sizeof T);
+                log("nah")
             }
             ptr = null;
             max = 0;
@@ -67,25 +69,26 @@ struct DynamicArray<T> {
             return true;
         }
         // log("what",cast<u64>ptr)
-        if(!ptr){
+        if !ptr {
             // log("huh")
             ptr = Allocate(newMax * sizeof T);
             // log("allocSize",newMax * sizeof T)
             // log("ptr",ptr)
             // Assert(ptr);
             // initialization of elements is done when adding them
-            if(!ptr)
+            if !ptr
                 return false;
+            len = 0;
             max = newMax;
             return true;
         } else {
             newPtr: T* = Reallocate(ptr, max * sizeof T, newMax * sizeof T);
             // Assert(newPtr);
-            if(!newPtr)
+            if !newPtr
                 return false;
             ptr = newPtr;
             max = newMax;
-            if(len > newMax){
+            if len > newMax {
                 len = newMax;
             }
             return true;

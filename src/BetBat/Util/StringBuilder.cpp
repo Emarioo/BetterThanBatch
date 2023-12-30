@@ -13,7 +13,8 @@ void StringBuilder::append(const TokenRange& tokenRange) {
     *(_ptr + len) = '\0';
 }
 void StringBuilder::append(const Token& token) {
-    append(token.str, token.length);
+    if(token.str && token.length > 0)
+        append(token.str, token.length);
 }
 
 engone::Logger& operator<<(engone::Logger& logger, const StringBuilder& stringBuilder){
