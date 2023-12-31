@@ -2128,7 +2128,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->add(PREFIX_REXW);
                 prog->add(OPCODE_LEA_REG_M);
                 prog->addModRM_rip(BCToProgramReg(op0,8), (u32)0);
-                DataRelocation reloc{};
+                Program_x64::DataRelocation reloc{};
                 reloc.dataOffset = imm;
                 reloc.textOffset = prog->size() - 4;
                 prog->dataRelocations.add(reloc);
@@ -3087,17 +3087,17 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     Assert(bytecode->externalRelocations[imm].location == bcIndex);
                     prog->add(OPCODE_CALL_RM_SLASH_2);
                     prog->addModRM_rip(2,(u32)0);
-                    NamedRelocation namedReloc{};
+                    Program_x64::NamedUndefinedRelocation namedReloc{};
                     namedReloc.name = bytecode->externalRelocations[imm].name;
                     namedReloc.textOffset = prog->size() - 4;
-                    prog->namedRelocations.add(namedReloc);
+                    prog->namedUndefinedRelocations.add(namedReloc);
                 } else if(linkConvention == LinkConventions::IMPORT) {
                     Assert(bytecode->externalRelocations[imm].location == bcIndex);
                     prog->add(OPCODE_CALL_IMM);
-                    NamedRelocation namedReloc{};
+                    Program_x64::NamedUndefinedRelocation namedReloc{};
                     namedReloc.name = bytecode->externalRelocations[imm].name;
                     namedReloc.textOffset = prog->size();
-                    prog->namedRelocations.add(namedReloc);
+                    prog->namedUndefinedRelocations.add(namedReloc);
                     prog->add4((u32)0);
                 } else if (linkConvention == LinkConventions::NONE){ // or export
                     prog->add(OPCODE_CALL_IMM);
@@ -3150,17 +3150,17 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         */
                         // Assert(false); // is the assembly wrong?
                         // rdx should be buffer and r8 length
-                        NamedRelocation reloc0{};
+                        Program_x64::NamedUndefinedRelocation reloc0{};
                         reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
                         reloc0.textOffset = prog->size() + 0xB;
-                        NamedRelocation reloc1{};
+                        Program_x64::NamedUndefinedRelocation reloc1{};
                         reloc1.name = "__imp_WriteFile";
                         reloc1.textOffset = prog->size() + 0x26;
                         u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xD8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
                         prog->addRaw(arr,sizeof(arr));
 
-                        prog->namedRelocations.add(reloc0);
-                        prog->namedRelocations.add(reloc1);
+                        prog->namedUndefinedRelocations.add(reloc0);
+                        prog->namedUndefinedRelocations.add(reloc1);
                     #else
                         // ptr = [rsp + 0]
                         // len = [rsp + 8]
@@ -3184,10 +3184,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add4((u32)0);
 
                         // We call the Unix write system call, altough not directly
-                        NamedRelocation reloc0{};
+                        Program_x64::NamedUndefinedRelocation reloc0{};
                         reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
                         reloc0.textOffset = reloc_pos;
-                        prog->namedRelocations.add(reloc0);
+                        prog->namedUndefinedRelocations.add(reloc0);
                     #endif
                         break;
                     }
@@ -3223,17 +3223,17 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         call   QWORD PTR [rip+0x0]          # WriteFile(...)
                         add    rsp,0x38
                         */
-                        NamedRelocation reloc0{};
+                        Program_x64::NamedUndefinedRelocation reloc0{};
                         reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
                         reloc0.textOffset = prog->size() + 0xB;
-                        NamedRelocation reloc1{};
+                        Program_x64::NamedUndefinedRelocation reloc1{};
                         reloc1.name = "__imp_WriteFile";
                         reloc1.textOffset = prog->size() + 0x26;
                         u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xD8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
                         prog->addRaw(arr,sizeof(arr));
 
-                        prog->namedRelocations.add(reloc0);
-                        prog->namedRelocations.add(reloc1);
+                        prog->namedUndefinedRelocations.add(reloc0);
+                        prog->namedUndefinedRelocations.add(reloc1);
 
                     #else
                         // char = [rsp + 7]
@@ -3266,10 +3266,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add4((u32)0);
 
                         // We call the Unix write system call, altough not directly
-                        NamedRelocation reloc0{};
+                        Program_x64::NamedUndefinedRelocation reloc0{};
                         reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
                         reloc0.textOffset = reloc_pos;
-                        prog->namedRelocations.add(reloc0);
+                        prog->namedUndefinedRelocations.add(reloc0);
                     #endif
                         break;
                     }
@@ -3405,10 +3405,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // 4600 bytes of machine code. With a subroutine you would get less than 1500 (100*12 + 46) which scales well
                 // when using even more test intstructions.
 
-                NamedRelocation reloc0{};
+                Program_x64::NamedUndefinedRelocation reloc0{};
                 reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
                 reloc0.textOffset = prog->size() + 0x20;
-                NamedRelocation reloc1{};
+                Program_x64::NamedUndefinedRelocation reloc1{};
                 reloc1.name = "__imp_WriteFile";
                 reloc1.textOffset = prog->size() + 0x3F;
                 u8 arr[]= {
@@ -3425,8 +3425,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 arr[0x10] = imm&0xFF;
                 prog->addRaw(arr,sizeof(arr));
 
-                prog->namedRelocations.add(reloc0);
-                prog->namedRelocations.add(reloc1);
+                prog->namedUndefinedRelocations.add(reloc0);
+                prog->namedUndefinedRelocations.add(reloc1);
                 #else
                 /*
                 sub    rsp,0x10  # must be 16-byte aligned when calling unix write
@@ -3452,10 +3452,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x10 
                 };
 
-                NamedRelocation reloc0{};
+                Program_x64::NamedUndefinedRelocation reloc0{};
                 reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
                 reloc0.textOffset = prog->size() + 0x27;
-                prog->namedRelocations.add(reloc0);
+                prog->namedUndefinedRelocations.add(reloc0);
                 arr[0x0B] = (imm>>8)&0xFF; // set location info
                 arr[0x0C] = imm&0xFF;
                 prog->addRaw(arr,sizeof(arr));
@@ -3781,10 +3781,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
     for(int i=0;i<bytecode->exportedSymbols.size();i++) {
         auto& sym = bytecode->exportedSymbols[i];
-        NamedSymbol tmp{};
+        Program_x64::ExportedSymbol tmp{};
         tmp.name = sym.name;
         tmp.textOffset = addressTranslation[sym.location];
-        prog->namedSymbols.add(tmp);
+        prog->exportedSymbols.add(tmp);
     }
 
     if(prog->debugInformation) {
@@ -3792,9 +3792,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         for(int i=0;i<funcs;i++){
             auto& fun = prog->debugInformation->functions[i];
             fun.funcStart = addressTranslation[fun.funcStart];
-            fun.funcEnd = addressTranslation[fun.funcEnd];
+            fun.funcEnd = addressTranslation[fun.funcEnd - 1];
             fun.codeStart = addressTranslation[fun.codeStart];
-            fun.codeEnd = addressTranslation[fun.codeEnd];
+            fun.codeEnd = addressTranslation[fun.codeEnd - 1];
             // Don't forget to add new translations here
 
             int lines = fun.lines.size();

@@ -3529,6 +3529,16 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // TODO: Show all functions named main
                 )
             }
+        } else {
+            bool yes = info.code->addExportedSymbol(funcImpl->name, funcImpl->address);
+            if(!yes) {
+                ERR_SECTION(
+                    ERR_HEAD(function->tokenRange)
+                    ERR_MSG("Exporting two functions with the same name is not possible.\n")
+                    ERR_LINE(function->tokenRange,"second function, same name")
+                    // TODO: Show all functions named main
+                )
+            }
         }
 
         auto prevFunc = info.currentFunction;
@@ -3548,6 +3558,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         info.currentFrameOffset = 0;
 
         dfun->funcStart = info.code->length();
+        dfun->entry_line = function->name.line;
 
         #define DFUN_ADD_VAR(NAME, OFFSET, TYPE) dfun->localVariables.add({});\
                             dfun->localVariables.last().name = NAME;\
@@ -4036,7 +4047,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         }
         }
         
-        dfun->funcEnd = info.code->length() - 1;
+        dfun->funcEnd = info.code->length();
 
         // Assert(info.virtualStackPointer == GenInfo::VIRTUAL_STACK_START);
         // Assert(info.currentFrameOffset == 0);
@@ -5427,65 +5438,73 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     //   Maybe the type checker can inform the generator?
     // info.code->addDebugText("FUNCTION SEGMENT\n");
     info.code->setLocationInfo("FUNCTION SEGMENT");
-    _GLOG(log::out << "Jump to skip functions\n";)
-    info.code->add_notabug({BC_JMP});
-    int skipIndex = info.code->length();
-    info.addImm(0);
+    // _GLOG(log::out << "Jump to skip functions\n";)
+    // info.code->add_notabug({BC_JMP});
+    // int skipIndex = info.code->length();
+    // info.addImm(0);
     // IMPORTANT: Functions are generated before the code because
     //  compile time execution will need these functions to exist.
     //  There is still a dependency problem if you use compile time execution
     //  in a function which uses a function which hasn't been generated yet.
     result = GenerateFunctions(info, info.ast->mainBody);
-    if(skipIndex == info.code->length() -1) {
-        // skip jump instruction if no functions where generated
-        // info.popInstructions(2); // pop JMP and immediate
-        info.code->instructionSegment.used = 0;
-        _GLOG(log::out << "Delete jump instruction\n";)
-    } else {
-        info.code->getIm(skipIndex) = info.code->length();
-    }
+    // if(skipIndex == info.code->length() -1) {
+    //     // skip jump instruction if no functions where generated
+    //     // info.popInstructions(2); // pop JMP and immediate
+    //     info.code->instructionSegment.used = 0;
+    //     _GLOG(log::out << "Delete jump instruction\n";)
+    // } else {
+    //     info.code->getIm(skipIndex) = info.code->length();
+    // }
 
     info.code->setLocationInfo("GLOBAL CODE SEGMENT");
     // info.code->addDebugText("GLOBAL CODE SEGMENT\n");
 
-    auto di = info.code->debugInformation;
-
-    info.debugFunctionIndex = di->functions.size();
     // It is dangerous to take a pointer to an element of an array that may reallocate the elements
     // but the array should only reallocate when generating new functions which we have already done.
     // this function is the last function we are adding. Taking the pointer is therefore not dangerous.
-    DebugInformation::Function* dfun = di->addFunction("main_btb");
     
-    if(info.ast->mainBody->statements.size()>0) {
-        dfun->fileIndex = di->addOrGetFile(info.ast->mainBody->statements[0]->tokenRange.tokenStream()->streamName);
-    } else {
-        dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->sourceFile.text);
+    bool hasMain = false;
+    for(int i=0;i<info.code->exportedSymbols.size();i++) {
+        auto& sym = info.code->exportedSymbols[i];
+        if(sym.name == "main") {
+            hasMain = true;
+            break;
+        }
     }
 
-    dfun->funcImpl = nullptr; // func with no args or return types
+    if(!hasMain) {
+        auto di = info.code->debugInformation;
+        info.debugFunctionIndex = di->functions.size();
+        DebugInformation::Function* dfun = di->addFunction("main");
+        info.code->addExportedSymbol("main", info.code->length());
+        
+        if(info.ast->mainBody->statements.size()>0) {
+            dfun->fileIndex = di->addOrGetFile(info.ast->mainBody->statements[0]->tokenRange.tokenStream()->streamName);
+        } else {
+            dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->sourceFile.text);
+        }
+        dfun->funcImpl = nullptr; // func with no args or return types
+        dfun->funcStart = info.code->length();
 
-    dfun->funcStart = info.code->length();
+        info.currentPolyVersion = 0;
+        info.virtualStackPointer = GenInfo::VIRTUAL_STACK_START;
+        info.currentFrameOffset = 0;
+        info.addPush(BC_REG_FP);
+        info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
+        
+        dfun->codeStart = info.code->length();
+        dfun->entry_line = info.ast->mainBody->tokenRange.firstToken.line;
 
-    info.currentPolyVersion = 0;
-    info.virtualStackPointer = GenInfo::VIRTUAL_STACK_START;
-    info.currentFrameOffset = 0;
-    info.addPush(BC_REG_FP);
-    info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_FP});
-    
-    dfun->codeStart = info.code->length();
+        // TODO: What to do about result? nothing?
+        result = GenerateBody(info, info.ast->mainBody);
+        
+        dfun->codeEnd = info.code->length();
 
-    // TODO: What to do about result? nothing?
-    result = GenerateBody(info, info.ast->mainBody);
-    
-    dfun->codeEnd = info.code->length();
+        info.addPop(BC_REG_FP);
 
-    info.addPop(BC_REG_FP);
-
-    // Return instruction should be right at funcEnd.
-    // I know this from looking at cvdump and dumpbin of some C code.
-    dfun->funcEnd = info.code->length();
-    info.addInstruction({BC_RET});
-
+        info.addInstruction({BC_RET});
+        dfun->funcEnd = info.code->length();
+    }
 
     std::unordered_map<FuncImpl*, int> resolveFailures;
     for(auto& e : info.callsToResolve){

@@ -1,5 +1,8 @@
 /*
     DWARF debug information which can be used by GDB
+    This file (and this compiler) will use DWARF version 3 for now.
+    It's kind of old but it should have all you need to debug some basic
+    things. Other versions may be more complicated.
 
     https://dwarfstd.org/doc/Dwarf3.pdf
     
@@ -9,6 +12,8 @@
     
     What the ObjectWriter wants is sections and the data of those sections separately.
     Additionaly, DWARF may need to provide symbols
+
+    
 */
 #pragma once
 
@@ -42,25 +47,67 @@ namespace dwarf {
         // ? file_entry[][];
         // u8 nuLL_end_of_files = 0;
     };
+    struct ArangesHeader {
+        u32 unit_length;
+        u16 version;
+        u32 debug_info_offset;
+        u8 address_size;
+        u8 segment_size;
+    };
+    // THE START OF THIS STRUCT MUST BE 8-BYTE ALIGNED
+    struct CommonInformationEntry {
+        u32 length; // must be a multiple of 8 (or the address of the target system)
+        u32 CIE_id;
+        u8 version;
+        // augmentation, null terminated UTF-8 string
+        // code_alignment_factor, ULEB-128
+        // data_alignment_factor, SLEB-128
+        // return_address_register, ULEB-128
+        // initial_instructions, array of u8
+        // padding of DW_CFA_nop to match the specified length
+    };
+    struct FrameDescriptionEntry {
+        u32 length; // multiple of 8?
+        u32 CIE_pointer; // points to common information entry this description belongs to?
+        u64 initial_location;
+        u64 address_range;
+        // instructions, array of u8
+        // padding, DW_CFA_nop untill the length is reached
+    };
     #pragma pack(pop)
     
+
     struct DWARFInfo {
         // section numbers
         int number_debug_info = -1;
         int number_debug_abbrev = -1;
         int number_debug_line = -1;
+        int number_debug_aranges = -1;
+        int number_debug_frame = -1;
         
-        COFF_Format::Section_Header* section_debug_info = nullptr;
-        COFF_Format::Section_Header* section_debug_abbrev = nullptr;
-        COFF_Format::Section_Header* section_debug_line = nullptr;
+        coff::Section_Header* section_debug_info = nullptr;
+        coff::Section_Header* section_debug_abbrev = nullptr;
+        coff::Section_Header* section_debug_line = nullptr;
+        coff::Section_Header* section_debug_aranges = nullptr;
+        coff::Section_Header* section_debug_frame = nullptr;
         
         // input/output
         ByteStream* stream = nullptr;
-        COFF_Format::COFF_File_Header* header = nullptr;
+        coff::COFF_File_Header* header = nullptr;
         DebugInformation* debug = nullptr;
         
         DynamicArray<std::string>* stringTable = nullptr;
         u32* stringTableOffset = nullptr;
+
+        DynamicArray<coff::SectionSymbol>* sectionSymbols = nullptr;
+
+        int symindex_text = -1;
+        int symindex_debug_info = -1;
+        int symindex_debug_line = -1;
+        int symindex_debug_abbrev = -1;
+        // int symindex_debug_aranges = -1;
+
+        Program_x64* program = nullptr; // DWARF needs to know the size of the program code
     };
 
     // @param stream sections or written to the stream
@@ -353,4 +400,36 @@ namespace dwarf {
     #define DW_OP_bit_piece             0x9d // 
     #define DW_OP_lo_user               0xe0 // 
     #define DW_OP_hi_user               0xff // 
+
+    // high 2 bits are constant, low 6 bits are special
+    #define DW_CFA_advance_loc(DELTA) ((0x1<<6)|(delta))
+    #define DW_CFA_offset(REG) ((0x2<<6)|(REG)) // ULEB128 offset
+    #define DW_CFA_restore(REG) ((0x3<<6)|(REG))
+
+    // the comments indicate the operands, 0, 1 or 2
+    #define DW_CFA_nop                  0x00 //
+    #define DW_CFA_set_loc              0x01 // address
+    #define DW_CFA_advance_loc1         0x02 // 1-byte delta
+    #define DW_CFA_advance_loc2         0x03 // 2-byte delta
+    #define DW_CFA_advance_loc4         0x04 // 4-byte delta
+    #define DW_CFA_offset_extended      0x05 // ULEB128 register ULEB128 offset
+    #define DW_CFA_restore_extended     0x06 // ULEB128 register
+    #define DW_CFA_undefined            0x07 // ULEB128 register
+    #define DW_CFA_same_value           0x08 // ULEB128 register
+    #define DW_CFA_register             0x09 // ULEB128 register ULEB128 register
+    #define DW_CFA_remember_state       0x0a //
+    #define DW_CFA_restore_state        0x0b //
+    #define DW_CFA_def_cfa              0x0c // ULEB128 register ULEB128 offset
+    #define DW_CFA_def_cfa_register     0x0d // ULEB128 register
+    #define DW_CFA_def_cfa_offset       0x0e // ULEB128 offset
+    #define DW_CFA_def_cfa_expression0  0x0f // BLOCK
+    #define DW_CFA_expression0          0x10 // ULEB128 register BLOCK
+    #define DW_CFA_offset_extended_sf0  0x11 // ULEB128 register SLEB128 offset
+    #define DW_CFA_def_cfa_sf0          0x12 // ULEB128 register SLEB128 offset
+    #define DW_CFA_def_cfa_offset_sf0   0x13 // SLEB128 offset
+    #define DW_CFA_val_offset0          0x14 // ULEB128 ULEB128
+    #define DW_CFA_val_offset_sf0       0x15 // ULEB128 SLEB128
+    #define DW_CFA_val_expression0      0x16 // ULEB128 BLOCK
+    #define DW_CFA_lo_user              0x1c //
+    #define DW_CFA_hi_user              0x3f //
 }

@@ -32,7 +32,8 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 // #define DEV_FILE "tests/simple/garb.btb"
 #ifdef OS_WINDOWS
 #define CONFIG_DEFAULT_TARGET TARGET_WINDOWS_x64
-#define CONFIG_DEFAULT_LINKER LINKER_MSVC
+// #define CONFIG_DEFAULT_LINKER LINKER_MSVC
+#define CONFIG_DEFAULT_LINKER LINKER_GCC
 #else
 #define CONFIG_DEFAULT_TARGET TARGET_UNIX_x64
 #define CONFIG_DEFAULT_LINKER LINKER_GCC

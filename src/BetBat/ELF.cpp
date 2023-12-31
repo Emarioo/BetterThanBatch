@@ -323,8 +323,8 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         
         // IMPORTANT: THIS TYPE OF RELOCATION IS USED FOR call rel32!
         //  IT WON'T WORK WITH call FAR or ABSOLUTE.
-        for(int i=0;i<program->namedRelocations.size();i++) {
-            NamedRelocation* nrel = &program->namedRelocations[i];
+        for(int i=0;i<program->namedUndefinedRelocations.size();i++) {
+            Program_x64::NamedUndefinedRelocation* nrel = &program->namedUndefinedRelocations[i];
             
             Elf64_Rela* rel = nullptr;
             suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
@@ -340,7 +340,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         }
 
         for(int i=0;i<program->dataRelocations.size();i++) {
-            DataRelocation* drel = &program->dataRelocations[i];
+            Program_x64::DataRelocation* drel = &program->dataRelocations[i];
             
             Elf64_Rela* rel = nullptr;
             suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
@@ -372,8 +372,8 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
 
         // int sym_main = addSymbol("main", ind_text, 0, STB_LOCAL, STT_FUNC);
         int sym_main = -1;
-        for(int i=0;i<program->namedSymbols.size();i++) {
-            auto& sym = program->namedSymbols[i];
+        for(int i=0;i<program->exportedSymbols.size();i++) {
+            auto& sym = program->exportedSymbols[i];
 
             // TODO: We assume that all named symbols are functions. This may not be true in the future.
             if(sym.name == "main") {

@@ -33,6 +33,9 @@ struct DebugInformation {
         u32 codeStart; // the instruction where actual source code starts, funcStart includes setup of frame pointer and stack, srcStart does not include that.
         u32 codeEnd; // exclusive
 
+        u32 entry_line; // line where function was declared
+        // u32 returning_line; // line where function ends/returns
+
         std::string name;
 
         FuncImpl* funcImpl = nullptr; // nullptr indicates no arguments or return values
@@ -54,6 +57,8 @@ struct DebugInformation {
     // will rename the function if it already exists.
     // return pointer may be invalidated if a reallocation occurs
     Function* addFunction(const std::string name);
+
+    void print();
 
     AST* ast = nullptr; // make sure you don't destroy the AST while debug information is using it
 };

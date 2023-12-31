@@ -1419,8 +1419,8 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
                     int extras = 0;
                     if(program && !lastSymbol.empty()) {
                         // this is really slow
-                        for(int i=0;i<program->namedRelocations.size();i++) {
-                            auto& rel = program->namedRelocations[i];
+                        for(int i=0;i<program->namedUndefinedRelocations.size();i++) {
+                            auto& rel = program->namedUndefinedRelocations[i];
                             if(rel.name == lastSymbol) {
                                 errorInfo.textOffset = rel.textOffset;
                                 errorInfo.textOffset_hex = NumberToHex(rel.textOffset);
@@ -1629,7 +1629,7 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
         }
         if(!found) {
             if(it.no_location) {
-                log::out << log::RED << "error: ";
+                log::out << log::RED << "linker: ";
             } else if(it.func.empty()) {
                 log::out << log::RED << ".text+0x" << it.textOffset_hex<<": ";
             } else {
@@ -1786,6 +1786,12 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
         Assert(options->target == TARGET_WINDOWS_x64);
         outputOtherDirectory = outPath.text.find("/") != std::string::npos;
         
+        // TEMPORARY
+        if(options->useDebugInformation) {
+            log::out << log::RED << "You must use another linker than MSVC when compiling with debug information. Add the flag "<<log::LIME<<"--linker gcc"<<log::RED<<" (make sure to have gcc installed). The compiler does not support PDB debug information, it only supports DWARF. DWARF uses sections with long names but MSVC linker truncates those names. That's why you cannot use MVSC linker.\n";
+            return false;
+        }
+
         cmd = "link /nologo /INCREMENTAL:NO ";
         if(options->useDebugInformation)
             cmd += "/DEBUG ";

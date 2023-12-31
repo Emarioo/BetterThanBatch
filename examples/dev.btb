@@ -53,15 +53,17 @@
 
 // HELLO! NEXT STEP, fix profiling of time
 // StartMeasure/StopMeasure didn't work before, do they now?
+fn @stdcall main() -> i32 {
+    b = hey() + hey3();
+    return 3
+}
 
-fn hey3() -> i32 {
-    a = 3
+fn @stdcall hey3() -> i32 {
+    a: i32 = 3
     return a + 2
 }
 
-fn hey() -> i32 {
-    a = 3
+fn @stdcall hey() -> i32 {
+    a: i32 = 3
     return a + 2
 }
-
-b = hey() + 5

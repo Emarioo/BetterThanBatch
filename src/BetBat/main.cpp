@@ -61,6 +61,10 @@ bool streq(const char* a, const char* b) {
 int main(int argc, const char** argv){
     using namespace engone;
 
+    log::out.enableReport(false);
+    MeasureInit();
+    ProfilerInitialize();
+
     // log::out << p.text << "\n";
     // for(int i=0;i<10000;i++) {
     //     log::out << i << "\r";
@@ -70,11 +74,13 @@ int main(int argc, const char** argv){
     // u64 a = 0x8000'0000'0000'0001;
     // double f = a;
 
-    // return 0;
+    // auto f = FileCOFF::DeconstructFile("wa.exe", false);
+    // auto f = FileCOFF::DeconstructFile("bin/dev.obj");
 
-    log::out.enableReport(false);
-    MeasureInit();
-    ProfilerInitialize();
+    // log::out.print(f->stringTableData, f->stringTableSize);
+
+    // dwarf::LEB128_test();
+    // return 0;
 
     CompileOptions compileOptions{};
     compileOptions.threadCount = 1;

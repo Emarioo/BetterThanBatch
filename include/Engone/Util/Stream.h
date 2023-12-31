@@ -327,6 +327,19 @@ struct ByteStream {
         }
     }
     
+    bool write_align(u32 alignment) {
+        u32 head = getWriteHead();
+        u32 dt = head % alignment;
+        if(dt != 0) {
+            int size = 8 - dt;
+            void* reserved_ptr = nullptr;
+            bool suc = write_late(&reserved_ptr, size);
+            if(!suc)
+                return false;
+            memset(reserved_ptr, 0, size);
+        }
+        return true;
+    }
     // Write a string with null termination
     bool write(const char* ptr) {
         Assert(ptr);

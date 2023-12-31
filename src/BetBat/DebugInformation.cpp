@@ -23,3 +23,12 @@ DebugInformation::Function* DebugInformation::addFunction(const std::string name
     }
     return &functions.last();
 }
+void DebugInformation::print() {
+    using namespace engone;
+    for(auto& fun : functions){
+        log::out << fun.name <<"\n";
+        for(auto& line : fun.lines) {
+            log::out << " ln "<<line.lineNumber << ": 0x" << NumberToHex(line.funcOffset)<<"\n";
+        }
+    }
+}

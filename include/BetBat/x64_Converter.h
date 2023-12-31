@@ -18,18 +18,6 @@ using a macro or some other function when converting bytecode operands to
 x64 operands
 
 */
-struct DataRelocation {
-    u32 dataOffset; // offset in data segment
-    u32 textOffset; // where to modify        
-};
-struct NamedRelocation {
-    std::string name;
-    u32 textOffset; // where to modify
-};
-struct NamedSymbol {
-    std::string name;
-    u32 textOffset; // where to modify
-};
 
 struct Program_x64 {
     ~Program_x64(){
@@ -37,7 +25,7 @@ struct Program_x64 {
         TRACK_ARRAY_FREE(globalData, u8, globalSize);
         // engone::Free(globalData, globalSize);
         dataRelocations.cleanup();
-        namedRelocations.cleanup();
+        namedUndefinedRelocations.cleanup();
         if(debugInformation) {
             DebugInformation::Destroy(debugInformation);
             debugInformation = nullptr;
@@ -51,9 +39,22 @@ struct Program_x64 {
     u8* globalData = nullptr;
     u64 globalSize = 0;
 
+    struct DataRelocation {
+        u32 dataOffset; // offset in data segment
+        u32 textOffset; // where to modify        
+    };
+    struct NamedUndefinedRelocation {
+        std::string name; // name of symbol
+        u32 textOffset; // where to modify
+    };
+    struct ExportedSymbol {
+        std::string name; // name of symbol
+        u32 textOffset; // where to modify?
+    };
+
     DynamicArray<DataRelocation> dataRelocations;
-    DynamicArray<NamedRelocation> namedRelocations;
-    DynamicArray<NamedSymbol> namedSymbols;
+    DynamicArray<NamedUndefinedRelocation> namedUndefinedRelocations;
+    DynamicArray<ExportedSymbol> exportedSymbols;
 
     DebugInformation* debugInformation = nullptr;
 

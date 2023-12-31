@@ -10,7 +10,7 @@
 #include "BetBat/Compiler.h"
 #include "BetBat/DWARF.h"
 
-namespace COFF_Format {
+namespace coff {
     
     #define SWITCH_START(TYPE) const char* ToString(TYPE flags);\
         engone::Logger& operator<<(engone::Logger& logger, TYPE flags){return logger << ToString(flags);}\
@@ -129,7 +129,7 @@ void FileCOFF::Destroy(FileCOFF* objectFile){
 }
 FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
     using namespace engone;
-    using namespace COFF_Format;
+    using namespace coff;
     u64 fileSize=0;
     // std::string filename = "obj_test.o";
     // std::string filename = "obj_test.obj";
@@ -150,9 +150,18 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
 
     u64 fileOffset = 0;
 
+    u32 signature_offset = *(u32*)(filedata + 0x3c);
+    u32 signature = *(u32*)(filedata + signature_offset);
+    if(signature == 0x00004550) {
+        if(!silent)
+            log::out << "WARNING: "<<path<<" is an executable which the deconstruct functions doesn't quite support\n";
+        // "PE\0\0"
+        fileOffset += signature_offset + 4;
+    }
+
     Assert(fileSize-fileOffset>=COFF_File_Header::SIZE);
-    COFF_File_Header* coffHeader = (COFF_File_Header*)filedata;
-    fileOffset = COFF_File_Header::SIZE;
+    COFF_File_Header* coffHeader = (COFF_File_Header*)(filedata + fileOffset);
+    fileOffset += COFF_File_Header::SIZE;
 
     objectFile->header = coffHeader;
 
@@ -178,11 +187,16 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
     }
     u64 stringTableOffset = coffHeader->PointerToSymbolTable+coffHeader->NumberOfSymbols*Symbol_Record::SIZE;
     Assert(fileSize>=stringTableOffset+sizeof(u32));
-    char* stringTablePointer = (char*)filedata + stringTableOffset;
-    u32 stringTableSize = *(u32*)(stringTablePointer);
+    char* stringTablePointer = nullptr;
+    u32 stringTableSize = 0;
 
-    objectFile->stringTableSize = stringTableSize;
-    objectFile->stringTableData = stringTablePointer;
+    if(coffHeader->PointerToSymbolTable != 0) {
+        stringTablePointer = (char*)filedata + stringTableOffset;
+        stringTableSize = *(u32*)(stringTablePointer);
+        
+        objectFile->stringTableSize = stringTableSize;
+        objectFile->stringTableData = stringTablePointer;
+    }
 
     for(int i=0;i<coffHeader->NumberOfSections;i++){
         Assert(fileSize-fileOffset>=Section_Header::SIZE);
@@ -353,7 +367,7 @@ u64 AlignOffset(u64 offset, u64 alignment){
 }
 void FileCOFF::writeFile(const std::string& path) {
     using namespace engone;
-    using namespace COFF_Format;
+    using namespace coff;
 
     //-- Calculate sizes
     
@@ -598,7 +612,7 @@ void FileCOFF::writeFile(const std::string& path) {
 
 bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from, u32 to){
     using namespace engone;
-    using namespace COFF_Format;
+    using namespace coff;
     Assert(program);
 
     if(to==-1){
@@ -617,7 +631,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     
     // TODO: Improve the memory estimation
     u64 estimation = 2000 + program->size() + program->dataRelocations.size() * 18
-        + program->namedRelocations.size() * 30 + program->globalSize;
+        + program->namedUndefinedRelocations.size() * 30 + program->globalSize;
     if(program->debugInformation) {
         estimation += program->debugInformation->files.size() * 200 + program->debugInformation->functions.size() * 100;
         for(int i=0;i<program->debugInformation->functions.size();i++) {
@@ -753,10 +767,22 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
 
     u32 totalSymbols = 0;
     std::unordered_map<i32, i32> dataSymbolMap;
-    std::unordered_map<std::string, i32> namedSymbolMap; // named as in the name is the important part
-
     DynamicArray<i32> dataSymbols;
+
+    std::unordered_map<std::string, u32> namedSymbolMap; // named as in the name is the important part
     DynamicArray<std::string> namedSymbols;
+
+    auto add_or_get_symbol = [&](const std::string& name) {
+        auto pair = namedSymbolMap.find(name);
+        if(pair == namedSymbolMap.end()){
+            namedSymbolMap[name] = totalSymbols;
+            namedSymbols.add(name);
+            totalSymbols++;
+            return (totalSymbols - 1);
+        } else {
+            return pair->second;
+        }
+    };
 
     textSection->NumberOfRelocations = 0;
     textSection->PointerToRelocations = obj_stream->getWriteHead();
@@ -784,11 +810,11 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
             }
         }
     }
-    if(program->namedRelocations.size()!=0){
-        textSection->NumberOfRelocations += program->namedRelocations.size();
+    if(program->namedUndefinedRelocations.size()!=0){
+        textSection->NumberOfRelocations += program->namedUndefinedRelocations.size();
 
-        for(int i=0;i<program->namedRelocations.size();i++){
-            auto& namedRelocation = program->namedRelocations[i];
+        for(int i=0;i<program->namedUndefinedRelocations.size();i++){
+            auto& namedRelocation = program->namedUndefinedRelocations[i];
             
             COFF_Relocation* coffReloc = nullptr;
             suc = obj_stream->write_late((void**)&coffReloc, COFF_Relocation::SIZE);
@@ -796,16 +822,18 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
             
             coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
             coffReloc->VirtualAddress = namedRelocation.textOffset;
+            
+            coffReloc->SymbolTableIndex = add_or_get_symbol(namedRelocation.name);
 
-            auto pair = namedSymbolMap.find(namedRelocation.name);
-            if(pair == namedSymbolMap.end()){
-                coffReloc->SymbolTableIndex = totalSymbols;
-                namedSymbolMap[namedRelocation.name] = totalSymbols;
-                namedSymbols.add(namedRelocation.name);
-                totalSymbols++;
-            } else {
-                coffReloc->SymbolTableIndex = pair->second;
-            }
+            // auto pair = namedSymbolMap.find(namedRelocation.name);
+            // if(pair == namedSymbolMap.end()){
+            //     coffReloc->SymbolTableIndex = totalSymbols;
+            //     namedSymbolMap[namedRelocation.name] = totalSymbols;
+            //     namedSymbols.add(namedRelocation.name);
+            //     totalSymbols++;
+            // } else {
+            //     coffReloc->SymbolTableIndex = pair->second;
+            // }
         }
     }
 
@@ -827,18 +855,67 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         u32 symbolIndex = 0;
     };
     DynamicArray<FuncSymbol> funcSymbols;
-    for(int i=0;i<program->namedSymbols.size();i++) {
-        auto& sym = program->namedSymbols[i];
+    for(int i=0;i<program->exportedSymbols.size();i++) {
+        auto& sym = program->exportedSymbols[i];
         FuncSymbol tmp{};
         tmp.name = sym.name;
         tmp.address = sym.textOffset;
         tmp.symbolIndex = totalSymbols++;
         funcSymbols.add(tmp);
     }
+    bool hasMain = false;
+    FOR (funcSymbols) {
+        if(it.name == "main") {
+            hasMain = true;
+            break;
+        }
+    }
+    if(!hasMain){
+        FuncSymbol sym{};
+        sym.name = "main";
+        sym.address = 0;
+        sym.symbolIndex = totalSymbols++;
+        // sym.sectionNumber = textSectionNumber;
+        funcSymbols.add(sym);
+    }
+
+    DynamicArray<coff::SectionSymbol> sectionSymbols;
+    dwarfInfo.sectionSymbols = &sectionSymbols;
+
+    {
+        SectionSymbol tmp{};
+        tmp.name = ".text";
+        tmp.symbolIndex = totalSymbols++;
+        dwarfInfo.symindex_text = tmp.symbolIndex;
+        tmp.sectionNumber = textSectionNumber;
+        sectionSymbols.add(tmp);
+        if(program->debugInformation) {
+            tmp.name = ".debug_info";
+            tmp.symbolIndex = totalSymbols++;
+            dwarfInfo.symindex_debug_info = tmp.symbolIndex;
+            tmp.sectionNumber = dwarfInfo.number_debug_info;
+            sectionSymbols.add(tmp);
+
+            tmp.name = ".debug_line";
+            tmp.symbolIndex = totalSymbols++;
+            dwarfInfo.symindex_debug_line = tmp.symbolIndex;
+            tmp.sectionNumber = dwarfInfo.number_debug_line;
+            sectionSymbols.add(tmp);
+            
+            tmp.name = ".debug_abbrev";
+            tmp.symbolIndex = totalSymbols++;
+            dwarfInfo.symindex_debug_abbrev = tmp.symbolIndex;
+            tmp.sectionNumber = dwarfInfo.number_debug_abbrev;
+            sectionSymbols.add(tmp);
+        }
+    }
+    dwarfInfo.program = program;
 
     if(program->debugInformation) {
         #ifdef USE_DWARF_AS_DEBUG
         
+        // ensure
+
         dwarf::ProvideSectionData(&dwarfInfo);
         
         #else
@@ -1169,6 +1246,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
                         coffReloc->SymbolTableIndex = reloc.symbolIndex;
                     }
                 }
+    
             }
         }
         #undef WRITE
@@ -1185,21 +1263,6 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         }
     }
 
-    bool hasMain = false;
-    FOR (funcSymbols) {
-        if(it.name == "main") {
-            hasMain = true;
-            break;
-        }
-    }
-    if(!hasMain){
-        FuncSymbol sym{};
-        sym.name = "main";
-        sym.address = 0;
-        sym.symbolIndex = totalSymbols++;
-        // sym.sectionNumber = textSectionNumber;
-        funcSymbols.add(sym);
-    }
 
     header->PointerToSymbolTable = obj_stream->getWriteHead();
     Assert(dataSymbols.size() == 0 || dataSectionNumber > 0); // ensure that dataSection exists if we have data symbols
@@ -1235,14 +1298,17 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         }
         symbol->SectionNumber = 0; // doesn't belong to a known section
         symbol->Value = 0; // unknown for named symbols
+        // symbol->Type 
+        
         symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
         symbol->Type = 32; // should perhaps be a function?
         // symbol->Type = IMAGE_SYM_DTYPE_FUNCTION;
         symbol->NumberOfAuxSymbols = 0;
     }
-    Assert(funcSymbols.size() == 0 || textSectionNumber > 0); // ensure that text sections exists when using fuunc symbols
+
     for (int i=0;i<funcSymbols.size();i++){
         auto& fsymbol = funcSymbols[i];
+        Assert(fsymbol.symbolIndex == header->NumberOfSymbols);
         header->NumberOfSymbols++; // incremented e
         Symbol_Record* symbol = nullptr;
         suc = obj_stream->write_late((void**)&symbol, Symbol_Record::SIZE);
@@ -1253,6 +1319,21 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         symbol->Value = fsymbol.address; // address of function
         symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
         symbol->Type = 32; // IMAGE_SYM_DTYPE_FUNCTION is a macro which evaluates to 2
+        symbol->NumberOfAuxSymbols = 0;
+    }
+    for (int i=0;i<sectionSymbols.size();i++){
+        auto& sym = sectionSymbols[i];
+        Assert(sym.symbolIndex == header->NumberOfSymbols);
+        header->NumberOfSymbols++; // incremented e
+        Symbol_Record* symbol = nullptr;
+        suc = obj_stream->write_late((void**)&symbol, Symbol_Record::SIZE);
+        CHECK
+        
+        strcpy(symbol->Name.ShortName, sym.name.c_str());
+        symbol->SectionNumber = sym.sectionNumber;
+        symbol->Value = 0; // section has no value
+        symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_STATIC;
+        symbol->Type = 0; // IMAGE_SYM_DTYPE_FUNCTION is a macro which evaluates to 2
         symbol->NumberOfAuxSymbols = 0;
     }
 
@@ -1295,6 +1376,11 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         while(obj_stream->iterate(iter)) {
             engone::FileWrite(file, (void*)iter.ptr, iter.size);
         }
+    }
+
+    if(program->debugInformation) {
+        log::out << "Printing debug information\n";
+        program->debugInformation->print();
     }
     
     engone::FileClose(file);

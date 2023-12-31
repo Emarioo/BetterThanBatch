@@ -8,7 +8,7 @@
 
 #include "BetBat/x64_Converter.h"
 
-namespace COFF_Format {
+namespace coff {
     // This information comes from this site:
     // https://learn.microsoft.com/en-us/windows/win32/debug/pe-format
     // I will refer to this site as MSDOC
@@ -206,6 +206,15 @@ namespace COFF_Format {
         u8 Unused[3]{0};
     };
     #pragma pack(pop)
+
+    // #######################
+    //   NOT DEFINED BY COFF
+    // ######################
+    struct SectionSymbol {
+        std::string name;
+        int sectionNumber = 0;
+        u32 symbolIndex = 0;
+    };
 }
 struct FileCOFF {
     FileCOFF() = default;
@@ -218,12 +227,12 @@ struct FileCOFF {
     u8* _rawFileData = nullptr;
     u64 fileSize = 0;
 
-    COFF_Format::COFF_File_Header* header = nullptr;
+    coff::COFF_File_Header* header = nullptr;
 
     std::string getSectionName(int sectionIndex);
-    QuickArray<COFF_Format::Section_Header*> sections{};
+    QuickArray<coff::Section_Header*> sections{};
 
-    QuickArray<COFF_Format::Symbol_Record*> symbols{};
+    QuickArray<coff::Symbol_Record*> symbols{};
 
     u32 stringTableSize = 0;
     char* stringTableData = nullptr;
