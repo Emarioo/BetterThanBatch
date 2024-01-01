@@ -53,17 +53,24 @@
 
 // HELLO! NEXT STEP, fix profiling of time
 // StartMeasure/StopMeasure didn't work before, do they now?
-fn @stdcall main() -> i32 {
-    b = hey() + hey3();
-    return 3
+
+// #import "examples/binary_viewer/main.btb"
+
+// DEBUG TEST
+
+struct Cake {
+    a: i32*;
+    b: Cake*;
 }
 
-fn @stdcall hey3() -> i32 {
-    a: i32 = 3
-    return a + 2
+fn main() -> i32 {
+    p: i32 = 23;
+    cake: Cake = Cake{&p};
+    cake2: Cake = Cake{null,&cake};
+    return 9;
 }
 
-fn @stdcall hey() -> i32 {
-    a: i32 = 3
-    return a + 2
-}
+// fn hey(a: i64) -> i64 {
+//     k: i64 = a + 4;
+//     return k + 9;
+// }

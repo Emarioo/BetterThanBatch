@@ -49,6 +49,9 @@ void GenInfo::popNode(){
 }
 void GenInfo::addCallToResolve(int bcIndex, FuncImpl* funcImpl){
     if(disableCodeGeneration) return;
+    // if(bcIndex == 97) {
+    //     __debugbreak();
+    // }
     ResolveCall tmp{};
     tmp.bcIndex = bcIndex;
     tmp.funcImpl = funcImpl;
@@ -3498,10 +3501,11 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         } else {
             dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->sourceFile.text);
         }
-        dfun->funcImpl = nullptr; // func with no args or return types
+        dfun->funcImpl = funcImpl;
+        dfun->funcAst = function;
 
         _GLOG(log::out << "Function " << funcImpl->name << "\n";)
-        
+
         funcImpl->address = info.code->length();
         info.currentPolyVersion = funcImpl->polyVersion;
 
@@ -3530,15 +3534,15 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 )
             }
         } else {
-            bool yes = info.code->addExportedSymbol(funcImpl->name, funcImpl->address);
-            if(!yes) {
-                ERR_SECTION(
-                    ERR_HEAD(function->tokenRange)
-                    ERR_MSG("Exporting two functions with the same name is not possible.\n")
-                    ERR_LINE(function->tokenRange,"second function, same name")
-                    // TODO: Show all functions named main
-                )
-            }
+            // bool yes = info.code->addExportedSymbol(funcImpl->name, funcImpl->address);
+            // if(!yes) {
+            //     ERR_SECTION(
+            //         ERR_HEAD(function->tokenRange)
+            //         ERR_MSG("Exporting two functions with the same name is not possible.\n")
+            //         ERR_LINE(function->tokenRange,"second function, same name")
+            //         // TODO: Show all functions named main
+            //     )
+            // }
         }
 
         auto prevFunc = info.currentFunction;
@@ -3588,7 +3592,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // var->globalData = false;
                     varinfo->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + argImpl.offset;
                     _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
-                    DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
+                    // DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
                 }
                 _GLOG(log::out << "\n";)
             }
@@ -3693,7 +3697,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // the arguments onto the stack automatically so in the end 8*i will work fine.
                     varinfo->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + 8 * i;
                     _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
-                    DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
+                    // DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
                 }
                 _GLOG(log::out << "\n";)
             }
@@ -3800,7 +3804,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     // the arguments onto the stack automatically so in the end 8*i will work fine.
                     varinfo->versions_dataOffset[info.currentPolyVersion] = GenInfo::FRAME_SIZE + 8 * i;
                     _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
-                    DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
+                    // DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
                 }
                 _GLOG(log::out << "\n";)
             }
@@ -5483,7 +5487,10 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         } else {
             dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->sourceFile.text);
         }
-        dfun->funcImpl = nullptr; // func with no args or return types
+        // TODO: You could create a funcImpl for main here BUT we don't need to because this main
+        //  encapsulates the global code which doesn't have a function with arguments.
+        dfun->funcImpl = nullptr;
+        dfun->funcAst = nullptr;
         dfun->funcStart = info.code->length();
 
         info.currentPolyVersion = 0;
@@ -5523,7 +5530,8 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
                 pair->second++;
         }
     }
-    if(resolveFailures.size()!=0 && !info.hasErrors()){
+    // if(resolveFailures.size()!=0 && !info.hasErrors()){
+    if(resolveFailures.size()!=0){
         log::out << log::RED << "Invalid function resolutions:\n";
         for(auto& pair : resolveFailures){
             info.errors += pair.second;

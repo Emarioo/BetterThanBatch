@@ -60,13 +60,12 @@ enum PrimitiveType : u16 {
     AST_FLOAT32,
     AST_FLOAT64,
     
+    AST_TRUE_PRIMITIVES,
+
     AST_STRING, // converted to char[]
     AST_NULL, // converted to void*
 
     AST_FUNC_REFERENCE,
-
-    AST_TRUE_PRIMITIVES,
-
 
     AST_POLY,
 

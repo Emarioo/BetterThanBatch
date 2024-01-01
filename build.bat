@@ -107,6 +107,18 @@ echo Compiled in %finS%.%finS2% seconds
 cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
 lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
 
+@REM We need to compiler NativeLayer with MVSC and GCC linker because the user may use GCC on Windows and not just MSVC.
+SET GCC_COMPILE_OPTIONS=-std=c++14 -g
+@REM GCC_COMPILE_OPTIONS="-std=c++14 -O3"
+SET GCC_INCLUDE_DIRS=-Iinclude -Ilibs/stb/include -Ilibs/glfw-3.3.8/include -Ilibs/glew-2.1.0/include -include include/pch.h 
+SET GCC_DEFINITIONS=-DOS_WINDOWS
+SET GCC_WARN=-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unknown-warning-option -Wno-unused-but-set-variable -Wno-nonnull-compare 
+SET GCC_WARN=!GCC_WARN! -Wno-sign-compare 
+
+g++ -c !GCC_INCLUDE_DIRS! !GCC_WARN! -DOS_WINDOWS -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o
+@REM glfw, glew, opengl is not linked with here, it should be
+ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o 
+
 @REM lib /nologo bin/NativeLayer.obj Advapi32.lib /OUT:bin/NativeLayer.lib
 @REM dumpbin /ALL bin/NativeLayer.obj > nat.out
 
@@ -137,7 +149,7 @@ if !compileSuccess! == 0 (
     @REM link bin/obj_test.obj bin/NativeLayer.obj
 
     btb -dev
-    @REM btb -ss binary_viewer/main.btb -o dev -r
+    @REM btb -ss binary_viewer/main.btb -o dev.exe -r -g
     @REM btb examples/dev.btb -p
     @REM btb --test
     @REM btb -sfs dev.btb

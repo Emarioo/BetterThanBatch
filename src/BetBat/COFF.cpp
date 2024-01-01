@@ -907,6 +907,12 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
             dwarfInfo.symindex_debug_abbrev = tmp.symbolIndex;
             tmp.sectionNumber = dwarfInfo.number_debug_abbrev;
             sectionSymbols.add(tmp);
+            
+            tmp.name = ".debug_frame";
+            tmp.symbolIndex = totalSymbols++;
+            dwarfInfo.symindex_debug_frame = tmp.symbolIndex;
+            tmp.sectionNumber = dwarfInfo.number_debug_frame;
+            sectionSymbols.add(tmp);
         }
     }
     dwarfInfo.program = program;
@@ -1294,6 +1300,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         } else {
             symbol->Name.zero = 0; // NOTE: is this okay if it's not aligned? is it gonna be really slow?
             symbol->Name.offset = stringTableOffset;
+            stringsForTable.add(name);
             stringTableOffset += name.length() + 1; // null termination included
         }
         symbol->SectionNumber = 0; // doesn't belong to a known section
@@ -1313,8 +1320,16 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         Symbol_Record* symbol = nullptr;
         suc = obj_stream->write_late((void**)&symbol, Symbol_Record::SIZE);
         CHECK
-        
-        strcpy(symbol->Name.ShortName, fsymbol.name.c_str());
+        auto& name = fsymbol.name;
+        if(name.length()<=8) {
+            strcpy(symbol->Name.ShortName, name.c_str());
+        } else {
+            symbol->Name.zero = 0; // NOTE: is this okay if it's not aligned? is it gonna be really slow?
+            symbol->Name.offset = stringTableOffset;
+            stringsForTable.add(name);
+            stringTableOffset += name.length() + 1; // null termination included
+        }
+        // strcpy(symbol->Name.ShortName, fsymbol.name.c_str());
         symbol->SectionNumber = textSectionNumber;
         symbol->Value = fsymbol.address; // address of function
         symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_EXTERNAL;
@@ -1329,7 +1344,16 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         suc = obj_stream->write_late((void**)&symbol, Symbol_Record::SIZE);
         CHECK
         
-        strcpy(symbol->Name.ShortName, sym.name.c_str());
+        auto& name = sym.name;
+        if(name.length()<=8) {
+            strcpy(symbol->Name.ShortName, name.c_str());
+        } else {
+            symbol->Name.zero = 0; // NOTE: is this okay if it's not aligned? is it gonna be really slow?
+            symbol->Name.offset = stringTableOffset;
+            stringsForTable.add(name);
+            stringTableOffset += name.length() + 1; // null termination included
+        }
+        // strcpy(symbol->Name.ShortName, sym.name.c_str());
         symbol->SectionNumber = sym.sectionNumber;
         symbol->Value = 0; // section has no value
         symbol->StorageClass = (Storage_Class)IMAGE_SYM_CLASS_STATIC;
@@ -1349,15 +1373,15 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         suc = obj_stream->write(string.c_str(), string.length() + 1);
         CHECK
     }
-    for (int i=0;i<namedSymbols.size();i++) {
-        auto& name = namedSymbols[i];
-        if(name.length()<=8) {
+    // for (int i=0;i<namedSymbols.size();i++) {
+    //     auto& name = namedSymbols[i];
+    //     if(name.length()<=8) {
             
-        } else {
-            suc = obj_stream->write(name.c_str(), name.length() + 1);
-            CHECK
-        }
-    }
+    //     } else {
+    //         suc = obj_stream->write(name.c_str(), name.length() + 1);
+    //         CHECK
+    //     }
+    // }
 
     void* contiguous_ptr = nullptr;
     u32 total_size = 0;
@@ -1378,10 +1402,10 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
         }
     }
 
-    if(program->debugInformation) {
-        log::out << "Printing debug information\n";
-        program->debugInformation->print();
-    }
+    // if(program->debugInformation) {
+    //     log::out << "Printing debug information\n";
+    //     program->debugInformation->print();
+    // }
     
     engone::FileClose(file);
     

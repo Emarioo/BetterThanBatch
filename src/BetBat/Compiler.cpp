@@ -1083,9 +1083,11 @@ Bytecode* CompileSource(CompileOptions* options) {
     compileInfo.reporter.instant_report = options->instant_report;
     
     compileInfo.ast = AST::Create();
-    defer { 
-        AST::Destroy(compileInfo.ast);
-        compileInfo.ast = nullptr;
+    defer {
+        if(compileInfo.ast) {
+            AST::Destroy(compileInfo.ast);
+            compileInfo.ast = nullptr;
+        }
     };
     // compileInfo.compilerDir = TrimLastFile(compilerPath);
     options->modulesDirectory = options->modulesDirectory.getAbsolute();
@@ -1242,7 +1244,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     // }
     // if (tokens.enabled & LAYER_GENERATOR){
 
-    Bytecode* bytecode=0;
+    Bytecode* bytecode = nullptr;
     _VLOG(log::out <<log::BLUE<< "Generating code:\n";)
     // auto tp = StartMeasure();
     bytecode = Generate(compileInfo.ast, &compileInfo);
@@ -1259,7 +1261,24 @@ Bytecode* CompileSource(CompileOptions* options) {
             bytecode->debugInformation = nullptr;
         }
     }
-    if(compileInfo.ast) {
+    if(bytecode->debugInformation && bytecode->debugInformation->ast) {
+        bytecode->debugInformation->ownerOfAST = true;
+        compileInfo.ast = nullptr; // steal AST
+        for(auto& stream : compileInfo.tokenStreams) {
+            if(stream.second->finalStream)
+                bytecode->debugInformation->tokenStreams.add(stream.second->finalStream);
+            if(stream.second->initialStream)
+                bytecode->debugInformation->tokenStreams.add(stream.second->initialStream);
+            stream.second->finalStream = nullptr;
+            stream.second->initialStream = nullptr;
+        }
+        for(auto& stream : compileInfo.includeStreams) {
+            bytecode->debugInformation->tokenStreams.add(stream.second);
+        }
+        compileInfo.includeStreams.clear();
+        // compileInfo.tokenStreams.clear(); // don't clear, we stole the token streams but there is other stuff that needs to be cleared by CompileInfo::cleanup
+    }
+    if (compileInfo.ast) {
         AST::Destroy(compileInfo.ast);
         compileInfo.ast = nullptr;
     }
@@ -1280,7 +1299,6 @@ Bytecode* CompileSource(CompileOptions* options) {
             compileInfo.compileOptions->compileStats.printWarnings();
     }
 
-    // compileInfo.cleanup(); // descrutor
     return bytecode;
 }
 
@@ -1834,7 +1852,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
         cmd += objPath + " ";
         #ifndef MINIMAL_DEBUG
-        cmd += "bin/NativeLayer.lib ";
+        cmd += "bin/NativeLayer_gcc.lib "; // NOTE: Do we need one for clang too?
         // cmd += "uuid.lib ";
         // cmd += "shell32.lib ";
         #endif
@@ -1886,6 +1904,14 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             // can't handle. Instead of printing nothing to the user, it's better to print the direct messages.
             log::out.print(errorMessages.data(), errorMessages.size());
             log::out.flush();
+        } else {
+            if(errors > 100) {
+                log::out << log::YELLOW << "HEY! I (the compiler) noticed that you have "<<errors<<" linker errors. "
+                    "This is rare an usually caused by mixing libraries/code form different linkers.\n"
+                    "Perhaps NativeLayer.lib was compiled with MSVC while you chose GCC for the .btb files? "
+                    "You must use the same but in the future, NativeLayer.lib will be removed and compiled using .btb files\n"
+                ;
+            }
         }
         return false;
     }

@@ -1,13 +1,19 @@
 // #include "na.cpp"
 
-// int hey(int a) {
-//     a += 5;
-//     return a + 4;
+
+// struct Cake {
+//     int n;
+//     Cake* b;
+//     Cake** bbb;
+// };
+
+// void hey(int a) {
+//     Cake na = {a, nullptr};
 // }
 
 int main() {
-    int k = 2;
-    // int k = hey(5);
+    long int k = 5;
+    // hey(5);
     return 4;
 }
 

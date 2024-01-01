@@ -17,6 +17,19 @@ struct DebugInformation {
         ptr->~DebugInformation();
         TRACK_FREE(ptr, DebugInformation);
     }
+    ~DebugInformation() {
+        cleanup();
+    }
+    void cleanup() {
+        if(ownerOfAST)
+            AST::Destroy(ast);
+        ownerOfAST = false;
+        ast = nullptr;
+        for(auto& stream : tokenStreams) {
+            TokenStream::Destroy(stream);
+        }
+        tokenStreams.cleanup();
+    }
 
     struct Line {
         u32 lineNumber;
@@ -24,7 +37,7 @@ struct DebugInformation {
     };
     struct LocalVar {
         std::string name;
-        u32 frameOffset = 0;
+        int frameOffset = 0;
         TypeId typeId;
     };
     struct Function {
@@ -38,7 +51,8 @@ struct DebugInformation {
 
         std::string name;
 
-        FuncImpl* funcImpl = nullptr; // nullptr indicates no arguments or return values
+        ASTFunction* funcAst = nullptr; // needed for name of arguments
+        FuncImpl* funcImpl = nullptr; // needed for type information (arguments, return values)
 
         DynamicArray<LocalVar> localVariables;
 
@@ -60,5 +74,7 @@ struct DebugInformation {
 
     void print();
 
+    bool ownerOfAST = false;
     AST* ast = nullptr; // make sure you don't destroy the AST while debug information is using it
+    DynamicArray<TokenStream*> tokenStreams;
 };

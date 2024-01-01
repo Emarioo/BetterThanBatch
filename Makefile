@@ -29,9 +29,9 @@ build_native: src/Native/NativeLayer.cpp
 # 	cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
 # lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
 
-	$(CC) -c $(GCC_INCLUDE_DIRS) $(GCC_WARN) -DOS_UNIX -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer.o
+	$(CC) -c $(GCC_INCLUDE_DIRS) $(GCC_WARN) -DOS_UNIX -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o
 # glfw, glew, opengl is not linked with here, it should be
-	ar rcs -o bin/NativeLayer.lib bin/NativeLayer.o 
+	ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o 
 	
 
 ifeq ($(verbose),0)

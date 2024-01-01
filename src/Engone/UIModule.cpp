@@ -1,4 +1,4 @@
-#ifdef OS_WINDOWS
+#ifndef NO_UIMODULE
 
 #include "Engone/UIModule.h"
 #include "stb/stb_image.h"
@@ -952,4 +952,4 @@ void TestUIMaintain(UIModule& ui){
 }
 }
 
-#endif // OS_WINDOWS
+#endif // NO_UIMODULE

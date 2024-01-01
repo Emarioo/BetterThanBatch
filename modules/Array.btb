@@ -57,11 +57,11 @@ struct DynamicArray<T> {
     fn _reserve(newMax: u32) -> bool {
         // log("newMax",newMax)
         if newMax==0 {
-            log("{",cast<u64>ptr, max, len,"}",newMax);
+            // log("{",cast<u64>ptr, max, len,"}",newMax);
             if max!=0 {
-                log("oh")
+                // log("oh")
                 Free(ptr, max * sizeof T);
-                log("nah")
+                // log("nah")
             }
             ptr = null;
             max = 0;

@@ -29,3 +29,20 @@ hey(23);
 @TEST-CASE types
 
 // structs and enums
+
+@TEST-CASE debug_call_stack
+
+fn main() -> i32 {
+    b = hey() + hey3();
+    return b
+}
+
+fn hey3() -> i32 {
+    a: i32 = 3
+    return a + 2
+}
+
+fn hey() -> i32 {
+    a: i32 = 3
+    return a + 2
+}

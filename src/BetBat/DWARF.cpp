@@ -105,7 +105,7 @@ namespace dwarf {
                 IMAGE_SCN_ALIGN_1BYTES |
                 IMAGE_SCN_MEM_READ);
         }
-        #define DISABLE_DEBUG_FRAME
+        // #define DISABLE_DEBUG_FRAME
         #ifndef DISABLE_DEBUG_FRAME
         {
             info->number_debug_frame = ++info->header->NumberOfSections;
@@ -168,8 +168,11 @@ namespace dwarf {
         int abbrev_compUnit = 0;
         int abbrev_func = 0;
         int abbrev_var = 0;
-        int abbrev_type = 0;
         int abbrev_param = 0;
+        int abbrev_base_type = 0;
+        int abbrev_pointer_type = 0;
+        int abbrev_struct = 0;
+        int abbrev_member = 0;
 
         suc = stream->write_align(8);
         CHECK
@@ -204,7 +207,7 @@ namespace dwarf {
 
             WRITE_FORM(DW_AT_external,     DW_FORM_flag) // DW_FORM_flag_present is used in DWARF 5
             WRITE_FORM(DW_AT_name,         DW_FORM_string)
-            WRITE_FORM(DW_AT_decl_file,    DW_FORM_data1)
+            WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
             WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
             WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             // WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
@@ -212,7 +215,7 @@ namespace dwarf {
             WRITE_FORM(DW_AT_high_pc,      DW_FORM_addr)
             WRITE_FORM(DW_AT_frame_base,   DW_FORM_block1)
             // WRITE_FORM(DW_AT_call_all_tail_calls, DW_FORM_flag_present)
-            // WRITE_FORM(DW_AT_sibling,      DW_FORM_ref4)
+            WRITE_FORM(DW_AT_sibling,      DW_FORM_ref4)
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
 
@@ -222,22 +225,11 @@ namespace dwarf {
             stream->write1(DW_CHILDREN_no);
 
             WRITE_FORM(DW_AT_name,         DW_FORM_string)
-            WRITE_FORM(DW_AT_decl_file,    DW_FORM_data1)
+            WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
             WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
             WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
             WRITE_FORM(DW_AT_location,     DW_FORM_block1)
-            WRITE_LEB(0) // value
-            WRITE_LEB(0) // end attributes for abbreviation
-
-            abbrev_type = nextAbbrevCode++;
-            WRITE_LEB(abbrev_type) // code
-            WRITE_LEB(DW_TAG_base_type) // tag
-            stream->write1(DW_CHILDREN_no);
-
-            WRITE_FORM(DW_AT_name,         DW_FORM_string)
-            WRITE_FORM(DW_AT_byte_size,    DW_FORM_data1)
-            WRITE_FORM(DW_AT_encoding,     DW_FORM_data1)
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
             
@@ -247,14 +239,64 @@ namespace dwarf {
             stream->write1(DW_CHILDREN_no);
 
             WRITE_FORM(DW_AT_name,         DW_FORM_string)
-            WRITE_FORM(DW_AT_decl_file,    DW_FORM_data1)
-            WRITE_FORM(DW_AT_decl_line,    DW_FORM_data1)
-            WRITE_FORM(DW_AT_decl_column,  DW_FORM_data1)
+            WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
             WRITE_FORM(DW_AT_location,     DW_FORM_block1)
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
             
+            abbrev_base_type = nextAbbrevCode++;
+            WRITE_LEB(abbrev_base_type) // code
+            WRITE_LEB(DW_TAG_base_type) // tag
+            stream->write1(DW_CHILDREN_no);
+
+            WRITE_FORM(DW_AT_name,         DW_FORM_string)
+            WRITE_FORM(DW_AT_byte_size,    DW_FORM_data1)
+            WRITE_FORM(DW_AT_encoding,     DW_FORM_data1)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+
+            abbrev_pointer_type = nextAbbrevCode++;
+            WRITE_LEB(abbrev_pointer_type) // code
+            WRITE_LEB(DW_TAG_pointer_type) // tag
+            stream->write1(DW_CHILDREN_no);
+
+            WRITE_FORM(DW_AT_byte_size,    DW_FORM_data1)
+            WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+
+            abbrev_struct = nextAbbrevCode++;
+            WRITE_LEB(abbrev_struct) // code
+            WRITE_LEB(DW_TAG_structure_type) // tag
+            stream->write1(DW_CHILDREN_yes);
+
+            WRITE_FORM(DW_AT_name,         DW_FORM_string)
+            WRITE_FORM(DW_AT_byte_size,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            WRITE_FORM(DW_AT_sibling,  DW_FORM_ref4)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+
+            abbrev_member = nextAbbrevCode++;
+            WRITE_LEB(abbrev_member) // code
+            WRITE_LEB(DW_TAG_member) // tag
+            stream->write1(DW_CHILDREN_no);
+
+            WRITE_FORM(DW_AT_name,         DW_FORM_string)
+            WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
+            WRITE_FORM(DW_AT_data_member_location, DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+            
+
             WRITE_LEB(0) // zero terminate abbreviation section
             
             section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
@@ -296,6 +338,177 @@ namespace dwarf {
             int reloc_statement_list = stream->getWriteHead() - offset_section;
             stream->write4(0); // statement list, address/pointer to reloc thing
 
+            // TODO: Sibling for structure types, faster search time for debuggers
+            // TODO: Types
+
+            struct TypeRef {
+                // each array element belongs to a pointer level
+                u32 reference[4] = { 0 };
+                int queuePosition = -1;
+                int availablePointerLevel = 0;
+            };
+            // struct QueuedType {
+            //     TypeId typeId;
+            // };
+            DynamicArray<TypeId> queuedTypes{};
+            DynamicArray<TypeRef> allTypes{};
+            allTypes.resize(debug->ast->_typeInfos.size());
+
+            auto addType = [&](TypeId typeId) {
+                auto& allType = allTypes[typeId.getId()];
+
+                if (allType.queuePosition == -1) {
+                    allType.queuePosition = queuedTypes.size();
+                    queuedTypes.add(typeId);
+                } else {
+                    auto& queuedType = queuedTypes[allType.queuePosition];
+                    if(typeId.getPointerLevel() > queuedType.getPointerLevel())
+                        queuedType.setPointerLevel(typeId.getPointerLevel()); // increase pointer level
+                }
+            };
+            
+            // TODO: Holy snap the polymorphism will actually end me.
+            //  How do we make this work with polymorphism? Maybe it does work?
+            for(int i=0;i<debug->functions.size();i++) {
+                auto func = debug->functions[i];
+                if(!func.funcImpl)
+                    continue;
+
+                // TODO: Add return values, types
+
+                for(int pi=0;pi<func.funcImpl->argumentTypes.size();pi++){
+                    auto& arg_impl = func.funcImpl->argumentTypes[pi];
+
+                    addType(arg_impl.typeId);
+                }
+                for(int vi=0;vi<func.localVariables.size();vi++) {
+                    auto& var = func.localVariables[vi];
+                    addType(var.typeId);
+                }
+            }
+
+            AST* ast = debug->ast;
+            struct LateTypeRef {
+                u32 section_offset; // offset to u32, ref4 form
+                TypeId typeId;
+            };
+            DynamicArray<LateTypeRef> lateTypeRefs{};
+            for(int i=0;i<queuedTypes.size();i++) {
+                TypeId queuedType = queuedTypes[i];
+                auto typeInfo = ast->getTypeInfo(queuedType.baseType());
+                auto& allType = allTypes[queuedType.getId()];
+
+                allType.queuePosition = -1;
+                queuedTypes.removeAt(i); // ...we remove it here
+                i--;
+
+                // log::out << "Proc queued type "<<i<<"\n";
+                if(allType.reference[0] == 0) { // don't write base reference if it already exists
+                    if(typeInfo->structImpl) {
+                        Assert(typeInfo->astStruct);
+
+                        // struct type
+                        allType.reference[0] = stream->getWriteHead() - offset_section;
+                        WRITE_LEB(abbrev_struct)
+
+                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        stream->write2(typeInfo->getSize());
+
+                        u32* sibling_ref4 = nullptr;
+                        stream->write_late((void**)&sibling_ref4, sizeof(u32));
+                        
+                        Assert(typeInfo->structImpl->members.size() == typeInfo->astStruct->members.size());
+                        for (int mi=0;mi<typeInfo->structImpl->members.size();mi++) {
+                            auto& memImpl = typeInfo->structImpl->members[mi];
+                            auto& memAst = typeInfo->astStruct->members[mi];
+
+                            WRITE_LEB(abbrev_member)
+                            stream->write(memAst.name.str, memAst.name.length);
+                            stream->write1(0);
+                            int typeref = allTypes[memImpl.typeId.getId()].reference[memImpl.typeId.getPointerLevel()];
+                            if(typeref == 0) {
+                                addType(memImpl.typeId);
+                                // log::out << "Late "<<ast->typeToString(memImpl.typeId)<<" at "<< (stream->getWriteHead() - offset_section)<<"\n";
+                                lateTypeRefs.add({stream->getWriteHead() - offset_section, memImpl.typeId });
+                                stream->write4(0); // not known yet
+                            } else {
+                                stream->write4(typeref); // ref4
+                            }
+                            stream->write2(memImpl.offset); // data location
+                        }
+                        
+                        WRITE_LEB(0); // end of members in structure
+
+                        *sibling_ref4 = stream->getWriteHead() - offset_section;
+                    } else {
+                        Assert(i < AST_TRUE_PRIMITIVES);
+                        // other type
+
+                        // log::out << "Prim "<<typeInfo->name<<"\n";
+                        allType.reference[0] = stream->getWriteHead() - offset_section;
+                        WRITE_LEB(abbrev_base_type)
+                        
+                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        stream->write1(typeInfo->getSize()); // size
+
+                        switch(typeInfo->id.getId()) { // encoding (1 byte)
+                            case AST_VOID:
+                                Assert(false);
+                                break;
+                            case AST_UINT8:
+                            case AST_UINT16:
+                            case AST_UINT32:
+                            case AST_UINT64:
+                                stream->write1(DW_ATE_unsigned);
+                                break;
+                            case AST_INT8:
+                            case AST_INT16:
+                            case AST_INT32:
+                            case AST_INT64:
+                                stream->write1(DW_ATE_signed);
+                                break;
+                            case AST_BOOL:
+                                stream->write1(DW_ATE_boolean);
+                                break;
+                            case AST_CHAR:
+                                stream->write1(DW_ATE_unsigned_char);
+                                break;
+                            case AST_FLOAT32:
+                            case AST_FLOAT64:
+                                stream->write1(DW_ATE_float);
+                                break;
+                            default: {
+                                Assert(false);
+                                break;
+                            }
+                        }
+                    }
+                }
+
+                for(int j=allType.availablePointerLevel;j<queuedType.getPointerLevel();j++){
+                    // Note that pointer level = j + 1
+                    allType.reference[j + 1] = stream->getWriteHead() - offset_section;
+                    WRITE_LEB(abbrev_pointer_type)
+                    
+                    stream->write1(8); // size, pointers are 8 in size
+                    stream->write4(allType.reference[j]); // ref4, we refer to the previous pointer level (or struct/base type)
+                }
+            }
+
+            for(int i=0;i<lateTypeRefs.size();i++) {
+                auto& ref = lateTypeRefs[i];
+                u32 typeref = allTypes[ref.typeId.getId()].reference[ref.typeId.getPointerLevel()];
+                // log::out << "Late write "<<ast->typeToString(ref.typeId)<<" at "<<ref.section_offset<<"\n";
+                stream->write_at<u32>(offset_section + ref.section_offset, typeref);
+            }
+
+            // We need this because we added a 16-byte offset in .debug_frame.
+            // I don't know why gcc generates DWARF that way but we do the same because I don't know how it works.
+            // This offset makes things work and I can't be bothered to question it at the moment.
+            // Another problem for future me.
+            // - Emarioo, 2024-01-01 (Happy new year!)
+            #define RBP_CONSTANT_OFFSET (-16)
+
             for(int i=0;i<debug->functions.size();i++) {
                 auto func = debug->functions[i];
 
@@ -305,17 +518,16 @@ namespace dwarf {
                 stream->write(func.name.c_str(), func.name.length() + 1); // name
 
                 // Assert(func.lines.size() > 0);
-                int line = func.entry_line;
 
-                Assert(func.fileIndex + 1 < 0x100);
-                stream->write1((u8)(func.fileIndex + 1)); // file
-                Assert(line < 0x10000);
+                int file_index = func.fileIndex + 1;
+                Assert(file_index < 0x10000); // make sure we don't overflow
+                stream->write2((u16)(file_index)); // file
+                int line = func.entry_line;
+                Assert(line < 0x10000); // make sure we don't overflow
                 stream->write2((u16)(line)); // line
                 stream->write2((u16)(1)); // column
 
-                // Skipping 
-                // nocheckin, we need to set get and set the address here later when we know where the type is.
-                // stream->write4((u32)(0)); // reference to type in this section
+                // TODO: We skip the return type for now. Can we have multiple?
 
                 relocs.add({ stream->getWriteHead() - offset_section });
                 stream->write8((u64)(func.funcStart)); // pc low
@@ -324,16 +536,71 @@ namespace dwarf {
 
                 stream->write1((u8)(1)); // frame base, begins with block length
                 stream->write1((u8)(DW_OP_call_frame_cfa)); // block content
-                // int offset_lastSiblingData = stream->getWriteHead();
-                // stream->write4((u8)0); // sibling
                 
-                WRITE_LEB(0) // end entry
+                u32* sibling_ref4 = nullptr;
+                stream->write_late((void**)&sibling_ref4, sizeof(u32));
+                if(func.funcImpl) {
+                    Assert(func.funcImpl->argumentTypes.size() == func.funcAst->arguments.size());
+                    for(int pi=0;pi<func.funcImpl->argumentTypes.size();pi++){
+                        auto& arg_ast = func.funcAst->arguments[pi];
+                        auto& arg_impl = func.funcImpl->argumentTypes[pi];
+                        WRITE_LEB(abbrev_param)
+                        stream->write(arg_ast.name.str, arg_ast.name.length); // arg_ast.name is a Token and not zero terminated
+                        stream->write1(0); // we must zero terminate here
 
-                // nocheckin, TODO: We may need to add relocations in the section for these
-                // stream->write_at<u32>(offset_lastSiblingData, stream->getWriteHead() - offset_section);
+                        stream->write2((file_index)); // file
+                        Assert(arg_ast.name.line < 0x10000); // make sure we don't overflow
+                        stream->write2((arg_ast.name.line)); // line
+                        Assert(arg_ast.name.column < 0x10000); // make sure we don't overflow
+                        stream->write2((arg_ast.name.column)); // column
+
+                        int typeref = allTypes[arg_impl.typeId.getId()].reference[arg_impl.typeId.getPointerLevel()];
+                        Assert(typeref != 0);
+                        stream->write4(typeref); // type reference
+
+                        // NOTE: I have a worry here. What if the argument wasn't placed on the stack but put inside a register?
+                        //  And what if we never put the argument in the register on the stack and overwrote the argument value?
+                        //  This doesn't happen now but what about the future?
+                        u8* block_length = nullptr;
+                        stream->write_late((void**)&block_length, 1); // DW_AT_location, begins with block length
+                        int off_start = stream->getWriteHead();
+                        stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
+                        WRITE_SLEB(arg_impl.offset)
+                        *block_length = stream->getWriteHead() - off_start; // we write block length later since we don't know the size of the LEB128 integer
+                    }
+                }
+                for(int vi=0;vi<func.localVariables.size();vi++) {
+                    auto& var = func.localVariables[vi];
+
+                    WRITE_LEB(abbrev_var)
+                    stream->write(var.name.c_str());
+
+                    // TODO: Store line and column information in local variables in DebugInformation
+                    int var_line = 1;
+                    int var_column = 1;
+
+                    stream->write2((file_index)); // file
+                    Assert(var_line < 0x10000); // make sure we don't overflow
+                    stream->write2(var_line); // line
+                    Assert(var_column < 0x10000); // make sure we don't overflow
+                    stream->write2(var_column); // column
+
+                    int typeref = allTypes[var.typeId.getId()].reference[var.typeId.getPointerLevel()];
+                    Assert(typeref != 0);
+                    stream->write4(typeref); // type reference
+
+                    u8* block_length = nullptr;
+                    stream->write_late((void**)&block_length, 1); // DW_AT_location, begins with block length
+                    int off_start = stream->getWriteHead();
+                    stream->write1(DW_OP_fbreg); // operation, fbreg describes that we should use a register (rbp) with an offset to get the argument.
+                    WRITE_SLEB(var.frameOffset + RBP_CONSTANT_OFFSET)
+                    *block_length = stream->getWriteHead() - off_start; // we write block length later since we don't know the size of the LEB128 integer
+                }
+
+                WRITE_LEB(0) // end subprogram entry
+
+                *sibling_ref4 = stream->getWriteHead() - offset_section;
             }
-
-            // TODO: Types
 
             WRITE_LEB(0) // end compile unit
 
@@ -398,7 +665,7 @@ namespace dwarf {
             // header->header_length = don't know yet;
             header->minimum_instruction_length = 1;
             header->default_is_stmt = 1;
-            header->line_base = 0; // affects special opcodes
+            header->line_base = -5; // affects special opcodes
             header->line_range = 10; // affects special opcodes
             header->opcode_base = 1; // start at one, we increase it some more below
             
@@ -440,8 +707,8 @@ namespace dwarf {
             // file names
             for(int i=0;i<debug->files.size();i++) {
                 auto& file = debug->files[i];
-                // nocheckin, we must ensure that the file can be found in include directories
                 std::string no_dir = TrimDir(file);
+                // Assert(dir_entries[file_dir_indices[i]]+"/"+no_dir == file);
                 stream->write(no_dir.c_str());
                 WRITE_LEB(1 + file_dir_indices[i]) // index into include_directories starting from 1, index as 0 represents the current working directory
                 WRITE_LEB(0) // file last modified
@@ -540,9 +807,9 @@ namespace dwarf {
                 int dt_line = line - reg_line;
 
                 Assert(dt_code >= 0); // Make sure we always increment
-                Assert(dt_line >= 0); // DWARF allows decrementing but we need to extra stuff to handle it so we just don't allow it.
+                // Assert(dt_line >= 0); // DWARF allows decrementing but we need to extra stuff to handle it so we just don't allow it.
 
-                int special_opcode = (dt_line - header->line_base) +
+                u32 special_opcode = (dt_line - header->line_base) +
                         (header->line_range * dt_code) + header->opcode_base; 
 
                 if(special_opcode <= 255 && dt_line >= header->line_base && dt_line < header->line_base + header->line_range) {
@@ -568,7 +835,7 @@ namespace dwarf {
 
                     reg_line += dt_line;
                     WRITE_LEB(DW_LNS_advance_line)
-                    WRITE_LEB(dt_line)
+                    WRITE_SLEB(dt_line)
 
                     WRITE_LEB(DW_LNS_copy)
                 }
@@ -592,7 +859,8 @@ namespace dwarf {
                 for(int i=0;i<fun.lines.size();i++) {
                     auto& line = fun.lines[i];
                     // Ensure that the lines are stored in ascending order
-                    Assert(lastOffset <= line.funcOffset && lastLine <= line.lineNumber);
+                    Assert(lastOffset <= line.funcOffset);
+                    // Assert(lastLine <= line.lineNumber);
                     lastOffset = line.funcOffset;
                     lastLine = line.lineNumber;
 
@@ -702,56 +970,124 @@ namespace dwarf {
             section->PointerToRawData = stream->getWriteHead();
             int offset_section = stream->getWriteHead();
             
+            /* NOTES ABOUT .debug_frame
+                State machine and matrix with columns of locations and whether registers are preserved and which register is the return address.
+                We provide instructions which generates the matrix.
+                Some instructions are encoding in the opcode, others use operands like u32, LEB128.
+                The value of some operands are affected by a factor specified in Common Information Entry (CIE)
+                Read the DWARF-3 specification (page 112) for which instructions use a factor.
+            */
+
             u8* ptr = nullptr;
             int written = 0;
+
+            enum DW_registers : u8 {
+                DW_rbp = 6,
+                DW_rsp = 7,
+                DW_rip = 16,
+            };
             
             {
                 CommonInformationEntry* header = nullptr;
                 stream->write_late((void**)&header, sizeof(CommonInformationEntry));
                 // header->length = don't know yet;
-                header->CIE_id = 0;
+                header->CIE_id = 0xFFFFFFFF; // marks that this is isn't a FDE but a CIE
                 header->version = 3; // Specific version for debug_frame (not the DWARF version)
                 
                 stream->write1(0); // augmentation string, ZERO for now?
 
                 WRITE_LEB(1) // code_alignment factor
-                // WRITE_SLEB(0) // data_alignment_factor
+                WRITE_SLEB(-8) // data_alignment_factor
 
-                WRITE_LEB(0) // return address register, ?
+                WRITE_LEB(DW_rip) // return address register, ?
 
-                // TODO: initial instructions
+                // initial instructions for the columns?
+                // Copied from what g++ generates
+                stream->write1(DW_CFA_def_cfa);
+                WRITE_LEB(DW_rsp)
+                WRITE_LEB(8)
 
+                stream->write1(DW_CFA_offset(DW_rip));
+                WRITE_LEB(1) // 1 becomes -8 (1 * data_alignment_factor)
+
+                // What I have understood from what GCC generates is that the whole CIE should start at an 8-byte alignment
+                // and end at an 8-byte alignment. The same goes for the following FDEs
+                stream->write_align(8);
                 header->length = (stream->getWriteHead() - offset_section) - sizeof(CommonInformationEntry::length);
-                int dt = header->length % 8;
-                if(dt!=0) {
-                    u64 zero = 0;
-                    stream->write(&zero,8-dt);
-                    header->length += dt;
-                }
             }
+            struct Reloc {
+                int symindex_section;
+                u64 sectionOffset;
+            };
+            DynamicArray<Reloc> relocs{};
             for (int fi=0;fi<debug->functions.size();fi++) {
                 auto& fun = debug->functions[fi];
+                Assert(stream->getWriteHead() % 8 == 0);
+                int offset_fde_start = stream->getWriteHead();
 
                 FrameDescriptionEntry* header = nullptr;
                 stream->write_late((void**)&header, sizeof(FrameDescriptionEntry));
                 // header->length = don't know yet;
+                relocs.add({info->symindex_debug_frame, offset_fde_start - offset_section  + (u64)&header->CIE_pointer - (u64)header });
                 header->CIE_pointer = 0; // common information entry can be found at offset 0 in the section, may not be true in the future
+                
+                relocs.add({info->symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location - (u64)header });
                 header->initial_location = fun.funcStart;
                 header->address_range = fun.funcEnd - fun.funcStart;
 
-                // TODO: instructions
+                // instructions, based on what g++ generates and a little from DWARF specification
+                stream->write1(DW_CFA_advance_loc4);
+                stream->write4(1);
 
+                stream->write1(DW_CFA_def_cfa_offset);
+                WRITE_LEB(16)
+
+                stream->write1(DW_CFA_offset(DW_rbp));
+                WRITE_LEB(2) // * data_alignment_factor
+
+                stream->write1(DW_CFA_advance_loc4);
+                stream->write4(3);
+
+                stream->write1(DW_CFA_def_cfa_register);
+                WRITE_LEB(DW_rbp)
+
+                stream->write1(DW_CFA_advance_loc4);
+                stream->write4(fun.funcEnd - fun.funcStart - 1 - 4);
+
+                stream->write1(DW_CFA_restore(DW_rbp));
+
+                stream->write1(DW_CFA_def_cfa);
+                WRITE_LEB(DW_rsp)
+                WRITE_LEB(8)
                 
-                header->length = (stream->getWriteHead() - offset_section) - sizeof(FrameDescriptionEntry::length);
-                int dt = header->length % 8;
-                if(dt!=0) {
-                    u64 zero = 0;
-                    stream->write(&zero,8-dt);
-                    header->length += dt;
-                }
+                // potential padding
+                stream->write_align(8);
+                header->length = (stream->getWriteHead() - offset_fde_start) - sizeof(FrameDescriptionEntry::length);
             }
-
             section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
+
+            // ################
+            //   RELOCATIONS
+            // ################
+            
+            section->PointerToRelocations = stream->getWriteHead();
+            section->NumberOfRelocations = 0;
+
+            for(int i=0;i<relocs.size();i++) {
+                auto& rel = relocs[i];
+                section->NumberOfRelocations++;
+                bool suc = false;
+                COFF_Relocation* coffReloc = nullptr;
+                suc = stream->write_late((void**)&coffReloc, COFF_Relocation::SIZE);
+                CHECK
+                if(rel.symindex_section == info->symindex_text) {
+                    coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_ADDR64;
+                } else {
+                    coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_SECREL;
+                }
+                coffReloc->VirtualAddress = rel.sectionOffset;
+                coffReloc->SymbolTableIndex = rel.symindex_section;
+            }
         }
         #endif
     }
@@ -823,7 +1159,7 @@ namespace dwarf {
         do {
             byte = buffer[i]; //next byte in input
             i++;
-            result |= (byte & 0x7f << shift);
+            result |= ((byte & 0x7f) << shift);
             shift += 7;
         } while ((byte & 0x80));
 
@@ -839,6 +1175,7 @@ namespace dwarf {
         int errors = 0;
         int written = 0;
         u64 fin = 0;
+        i64 fin_s = 0;
         
         // test isn't very good. it just encodes and decodes which doesn't mean they encode and decode properly.
         // encode and decode can both be wrong and still produce the correct result since both of them are wrong.
@@ -849,39 +1186,39 @@ namespace dwarf {
                 errors++;
                 engone::log::out << engone::log::RED << "FAILED: "<< X << " -> "<<fin<<"\n";
             }
-            log::out << X <<" -> "<<fin<<"\n"; 
-            for(int i=0;i<written;i++) {
-                log::out << " "<<i<<": "<<buffer[i]<<"\n";
-            }
+            // log::out << X <<" -> "<<fin<<"\n"; 
+            // for(int i=0;i<written;i++) {
+            //     log::out << " "<<i<<": "<<buffer[i]<<"\n";
+            // }
         };
         auto TEST_S = [&](i64 X)  {
             written = SLEB128_encode(buffer, sizeof(buffer), X);
-            fin = SLEB128_decode(buffer, sizeof(buffer));
-            if(X != fin) { 
+            fin_s = SLEB128_decode(buffer, sizeof(buffer));
+            if(X != fin_s) { 
                 errors++;
-                engone::log::out << engone::log::RED << "FAILED: "<< X << " -> "<<fin<<"\n";
+                engone::log::out << engone::log::RED << "FAILED: "<< X << " -> "<<fin_s<<"\n";
             }
-            log::out << X <<" -> "<<fin<<"\n"; 
-            for(int i=0;i<written;i++) {
-                // log::out << " "<<i<<": "<<buffer[i]<<"\n";
-                log::out << " "<<i<<": 0x"<<NumberToHex(buffer[i])<<"\n";
-            }
+            // log::out << X <<" -> "<<fin_s<<"\n";
+            // for(int i=0;i<written;i++) {
+            //     // log::out << " "<<i<<": "<<buffer[i]<<"\n";
+            //     log::out << " "<<i<<": 0x"<<NumberToHex(buffer[i])<<"\n";
+            // }
         };
         
-        // TEST(2);
-        // TEST(127);
-        // TEST(128);
-        // TEST(129);
-        // TEST(130);
-        // TEST(12857);
+        TEST(2);
+        TEST(127);
+        TEST(128);
+        TEST(129);
+        TEST(130);
+        TEST(12857);
 
-        // TEST_S(2);
-        // TEST_S(127);
+        TEST_S(2);
+        TEST_S(127);
         TEST_S(-123456);
-        // TEST_S(-129);
-        // TEST_S(-55);
-        // TEST_S(12857);
-        // TEST_S(-12857);
+        TEST_S(-129);
+        TEST_S(-55);
+        TEST_S(12857);
+        TEST_S(-12857);
             
         if(errors == 0){
             engone::log::out << engone::log::GREEN << "LEB128 tests succeeded\n";

@@ -105,7 +105,7 @@ namespace dwarf {
         int symindex_debug_info = -1;
         int symindex_debug_line = -1;
         int symindex_debug_abbrev = -1;
-        // int symindex_debug_aranges = -1;
+        int symindex_debug_frame = -1;
 
         Program_x64* program = nullptr; // DWARF needs to know the size of the program code
     };
@@ -119,6 +119,8 @@ namespace dwarf {
     // return a negative number indicating how many bytes are missing
     int ULEB128_encode(u8* buffer, u32 buffer_space, u64 value);
     u64 ULEB128_decode(u8* buffer, u32 buffer_space);
+    int SLEB128_encode(u8* buffer, u32 buffer_space, i64 value);
+    i64 SLEB128_decode(u8* buffer, u32 buffer_space);
     void LEB128_test();
     
     /*#######################
@@ -432,4 +434,22 @@ namespace dwarf {
     #define DW_CFA_val_expression0      0x16 // ULEB128 BLOCK
     #define DW_CFA_lo_user              0x1c //
     #define DW_CFA_hi_user              0x3f //
+
+    #define DW_ATE_address              0x01
+    #define DW_ATE_boolean              0x02
+    #define DW_ATE_complex_float        0x03
+    #define DW_ATE_float                0x04
+    #define DW_ATE_signed               0x05
+    #define DW_ATE_signed_char          0x06
+    #define DW_ATE_unsigned             0x07
+    #define DW_ATE_unsigned_char        0x08
+    #define DW_ATE_imaginary_float      0x09
+    #define DW_ATE_packed_decimal       0x0a
+    #define DW_ATE_numeric_string       0x0b
+    #define DW_ATE_edited               0x0c
+    #define DW_ATE_signed_fixed         0x0d
+    #define DW_ATE_unsigned_fixed       0x0e
+    #define DW_ATE_decimal_float        0x0f
+    #define DW_ATE_lo_user              0x80
+    #define DW_ATE_hi_user              0xff
 }

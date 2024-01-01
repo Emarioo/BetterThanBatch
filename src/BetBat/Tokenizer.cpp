@@ -813,6 +813,7 @@ TokenStream* TokenStream::Create(){
     return ptr;
 }
 void TokenStream::Destroy(TokenStream* stream){
+    Assert(stream);
     // stream->cleanup();
     stream->~TokenStream();
     // engone::Free(stream,sizeof(TokenStream));

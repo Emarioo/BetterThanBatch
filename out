@@ -1,994 +1,2830 @@
+Compiling...all.cpp
+Compiled in 3.38 seconds
+NativeLayer.cpp
+Parsed struct Slice with 2 members
+Parsed struct Range  with 2 members
+Parsed struct Basket  with 1 members
+Parsed struct Field  with 3 members
+Parsed struct TypeDefinition  with 3 members
+Parsed struct FormatSpec  with 2 members
+Parsed struct Layer  with 2 members
+Parsed struct DynamicArray with 3 members
+Parsed struct ByteStream  with 3 members
+Parsed struct DirectoryIteratorData  with 4 members
+Parsed struct DirectoryIterator  with 3 members
+enter GenerateFunctions
+exit  GenerateFunctions
+Native function prints
+Native function printc
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Function cleanup
+Func cleanup
+set 1 args
+ [16] (: Basket*
 
-wa.exe:     file format pei-x86-64
+0: push fp   
+relsp -16
+1: mov sp fp  
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: cleanup(DynamicArray<i32>*)
+2: inc sp -16 
+relsp -32
+enter GenerateReference
+exit  GenerateReference
+ expr var push items
+3: mov [fp+disp] rbx 8 
+4: 16
+5: li rax 
+6: 0
+7: add rbx rax rbx 
+8: push rbx   
+relsp -40
+9: mov sp rbx  
+move return value
+10: pop rax   
+relsp -32
+11: mov rax [rbx+disp] 8 
+12: 8
+13: call none betcall 
+14: 999999999
+pop arguments
+15: inc sp 16 
+relsp -16
+16: pop fp   
+relsp -8
+17: ret    
+enter GenerateFunction
+exit  GenerateFunction
+Function main
+Func main
+set 2 args
+ [16] argc: i32
+ [24] argv: char**
 
-Contents of the .debug_aranges section:
+18: push fp   
+relsp -16
+19: mov sp fp  
+20: mov rdx [fp+disp] 8 
+21: 24
+22: mov ecx [fp+disp] 4 
+23: 16
+enter GenerateBody
+exit  GenerateBody
+enter ASSIGN
+exit  ASSIGN
+24: inc sp -16 
+relsp -32
+25: li rdi 
+26: -16
+27: add fp rdi rdi 
+28: li rbx 
+29: 16
+30: memzero rdi rbx  
+31: li rdi 
+32: -16
+33: add fp rdi rdi 
+34: li rbx 
+35: 16
+36: memzero rdi rbx  
+37: li rdi 
+38: -4
+39: add fp rdi rdi 
+40: li rbx 
+41: 4
+42: memzero rdi rbx  
+43: bxor rax rax rax 
+44: mov eax [fp+disp] 4 
+45: -4
+46: li rdi 
+47: -8
+48: add fp rdi rdi 
+49: li rbx 
+50: 4
+51: memzero rdi rbx  
+52: bxor rax rax rax 
+53: mov eax [fp+disp] 4 
+54: -8
+55: li rdi 
+56: -16
+57: add fp rdi rdi 
+58: li rbx 
+59: 8
+60: memzero rdi rbx  
+61: bxor rax rax rax 
+62: mov rax [fp+disp] 8 
+63: -16
+declare bask at -16
+ bask : Basket
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: add(DynamicArray<i32>*, i32)
+64: inc sp -16 
+relsp -48
+enter GenerateReference
+exit  GenerateReference
+ expr var push bask
+65: li rbx 
+66: -16
+67: add fp rbx rbx 
+68: push rbx   
+relsp -56
+enter GenerateExpression
+exit  GenerateExpression
+69: li eax 
+70: 5
+71: push rax   
+relsp -64
+72: mov sp rbx  
+move return value
+73: pop rax   
+relsp -56
+74: mov eax [rbx+disp] 4 
+75: 24
+move return value
+76: pop rax   
+relsp -48
+77: mov rax [rbx+disp] 8 
+78: 16
+79: call none betcall 
+80: 999999999
+extract return values
+81: mov sp rbx  
+82: inc sp 16 
+relsp -32
+83: mov [rbx+disp] rax 8 
+84: -24
+85: push rax   
+relsp -40
+move return value
+86: pop rax   
+relsp -32
+enter DEFER
+exit  DEFER
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: cleanup(Basket*)
+87: inc sp -16 
+relsp -48
+enter GenerateReference
+exit  GenerateReference
+ expr var push bask
+88: li rbx 
+89: -16
+90: add fp rbx rbx 
+91: push rbx   
+relsp -56
+92: mov sp rbx  
+move return value
+93: pop rax   
+relsp -48
+94: mov rax [rbx+disp] 8 
+95: 8
+96: call none betcall 
+97: 999999999
+pop arguments
+98: inc sp 16 
+relsp -32
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+99: li eax 
+100: 2
+101: push rax   
+relsp -40
+102: pop rax   
+relsp -32
+103: inc sp 16 
+relsp (temp) -16
+104: pop fp   
+105: ret    
+enter DEFER
+exit  DEFER
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: cleanup(Basket*)
+106: inc sp -16 
+relsp -48
+enter GenerateReference
+exit  GenerateReference
+ expr var push bask
+107: li rbx 
+108: -16
+109: add fp rbx rbx 
+110: push rbx   
+relsp -56
+111: mov sp rbx  
+move return value
+112: pop rax   
+relsp -48
+113: mov rax [rbx+disp] 8 
+114: 8
+115: call none betcall 
+116: 999999999
+pop arguments
+117: inc sp 16 
+relsp -32
+relsp -16
+118: bxor rax rax rax 
+119: pop fp   
+relsp -8
+120: ret    
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Native function strlen
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Function _print
+Func _print
+set 1 args
+ [16] t: i64
 
-  Length:                   44
-  Version:                  2
-  Offset into .debug_info:  0x0
-  Pointer Size:             8
-  Segment Size:             0
+121: push fp   
+relsp -16
+122: mov sp fp  
+enter GenerateBody
+exit  GenerateBody
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push t 
+123: mov [fp+disp] rax 8 
+124: 16
+125: push rax   
+relsp -24
+enter GenerateExpression
+exit  GenerateExpression
+126: li eax 
+127: 0
+128: push rax   
+relsp -32
+129: pop rax   
+relsp -24
+130: pop rcx   
+relsp -16
+131: cast s->s eax rax 
+132: eq rcx rax rcx 
+133: push rcx   
+relsp -24
+134: pop rax   
+relsp -16
+135: jne rax   
+136: 0
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: printc(char)
+137: inc sp -16 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+138: li al 
+139: 48
+140: push rax   
+relsp -40
+141: mov sp rbx  
+move return value
+142: pop rax   
+relsp -32
+143: mov al [rbx+disp] 1 
+144: 8
+145: call native betcall 
+146: 999999999
+pop arguments
+147: inc sp 16 
+relsp -16
+enter RETURN
+exit  RETURN
+148: pop fp   
+149: ret    
+enter ASSIGN
+exit  ASSIGN
+150: inc sp -8 
+relsp -24
+declare signed  at -8
+ signed  : bool
+enter GenerateExpression
+exit  GenerateExpression
+151: li al 
+152: 0
+153: push rax   
+relsp -32
+assign pop bool
+move return value
+154: pop rax   
+relsp -24
+155: mov al [fp+disp] 1 
+156: -8
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push t 
+157: mov [fp+disp] rax 8 
+158: 16
+159: push rax   
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+160: li eax 
+161: 0
+162: push rax   
+relsp -40
+163: pop rcx   
+relsp -32
+164: pop rax   
+relsp -24
+165: cast s->s ecx rcx 
+166: lt s-s rax rcx 
+167: push rcx   
+relsp -32
+168: pop rax   
+relsp -24
+169: jne al   
+170: 0
+enter GenerateBody
+exit  GenerateBody
+enter ASSIGN
+exit  ASSIGN
+ signed  : bool
+enter GenerateExpression
+exit  GenerateExpression
+171: li al 
+172: 1
+173: push rax   
+relsp -32
+assign pop bool
+move return value
+174: pop rax   
+relsp -24
+175: mov al [fp+disp] 1 
+176: -8
+enter ASSIGN
+exit  ASSIGN
+ t  : i64
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+177: li eax 
+178: 0
+179: push rax   
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push t
+180: mov [fp+disp] rax 8 
+181: 16
+182: push rax   
+relsp -40
+183: pop rax   
+relsp -32
+184: pop rcx   
+relsp -24
+185: cast s->s ecx rcx 
+186: sub rcx rax rcx 
+187: push rcx   
+relsp -32
+assign pop i64
+move return value
+188: pop rax   
+relsp -24
+189: mov rax [fp+disp] 8 
+190: 16
+enter ASSIGN
+exit  ASSIGN
+191: inc sp -24 
+relsp -48
+192: li rdx 
+193: 24
+194: memzero sp rdx  
+195: li rdi 
+196: -32
+197: add fp rdi rdi 
+198: li rbx 
+199: 1
+200: memzero rdi rbx  
+201: bxor rax rax rax 
+202: mov al [fp+disp] 1 
+203: -32
+204: li rdi 
+205: -31
+206: add fp rdi rdi 
+207: li rbx 
+208: 1
+209: memzero rdi rbx  
+210: bxor rax rax rax 
+211: mov al [fp+disp] 1 
+212: -31
+213: li rdi 
+214: -30
+215: add fp rdi rdi 
+216: li rbx 
+217: 1
+218: memzero rdi rbx  
+219: bxor rax rax rax 
+220: mov al [fp+disp] 1 
+221: -30
+222: li rdi 
+223: -29
+224: add fp rdi rdi 
+225: li rbx 
+226: 1
+227: memzero rdi rbx  
+228: bxor rax rax rax 
+229: mov al [fp+disp] 1 
+230: -29
+231: li rdi 
+232: -28
+233: add fp rdi rdi 
+234: li rbx 
+235: 1
+236: memzero rdi rbx  
+237: bxor rax rax rax 
+238: mov al [fp+disp] 1 
+239: -28
+240: li rdi 
+241: -27
+242: add fp rdi rdi 
+243: li rbx 
+244: 1
+245: memzero rdi rbx  
+246: bxor rax rax rax 
+247: mov al [fp+disp] 1 
+248: -27
+249: li rdi 
+250: -26
+251: add fp rdi rdi 
+252: li rbx 
+253: 1
+254: memzero rdi rbx  
+255: bxor rax rax rax 
+256: mov al [fp+disp] 1 
+257: -26
+258: li rdi 
+259: -25
+260: add fp rdi rdi 
+261: li rbx 
+262: 1
+263: memzero rdi rbx  
+264: bxor rax rax rax 
+265: mov al [fp+disp] 1 
+266: -25
+267: li rdi 
+268: -24
+269: add fp rdi rdi 
+270: li rbx 
+271: 1
+272: memzero rdi rbx  
+273: bxor rax rax rax 
+274: mov al [fp+disp] 1 
+275: -24
+276: li rdi 
+277: -23
+278: add fp rdi rdi 
+279: li rbx 
+280: 1
+281: memzero rdi rbx  
+282: bxor rax rax rax 
+283: mov al [fp+disp] 1 
+284: -23
+285: li rdi 
+286: -22
+287: add fp rdi rdi 
+288: li rbx 
+289: 1
+290: memzero rdi rbx  
+291: bxor rax rax rax 
+292: mov al [fp+disp] 1 
+293: -22
+294: li rdi 
+295: -21
+296: add fp rdi rdi 
+297: li rbx 
+298: 1
+299: memzero rdi rbx  
+300: bxor rax rax rax 
+301: mov al [fp+disp] 1 
+302: -21
+303: li rdi 
+304: -20
+305: add fp rdi rdi 
+306: li rbx 
+307: 1
+308: memzero rdi rbx  
+309: bxor rax rax rax 
+310: mov al [fp+disp] 1 
+311: -20
+312: li rdi 
+313: -19
+314: add fp rdi rdi 
+315: li rbx 
+316: 1
+317: memzero rdi rbx  
+318: bxor rax rax rax 
+319: mov al [fp+disp] 1 
+320: -19
+321: li rdi 
+322: -18
+323: add fp rdi rdi 
+324: li rbx 
+325: 1
+326: memzero rdi rbx  
+327: bxor rax rax rax 
+328: mov al [fp+disp] 1 
+329: -18
+330: li rdi 
+331: -17
+332: add fp rdi rdi 
+333: li rbx 
+334: 1
+335: memzero rdi rbx  
+336: bxor rax rax rax 
+337: mov al [fp+disp] 1 
+338: -17
+339: li rdi 
+340: -16
+341: add fp rdi rdi 
+342: li rbx 
+343: 1
+344: memzero rdi rbx  
+345: bxor rax rax rax 
+346: mov al [fp+disp] 1 
+347: -16
+348: li rdi 
+349: -15
+350: add fp rdi rdi 
+351: li rbx 
+352: 1
+353: memzero rdi rbx  
+354: bxor rax rax rax 
+355: mov al [fp+disp] 1 
+356: -15
+357: li rdi 
+358: -14
+359: add fp rdi rdi 
+360: li rbx 
+361: 1
+362: memzero rdi rbx  
+363: bxor rax rax rax 
+364: mov al [fp+disp] 1 
+365: -14
+366: li rdi 
+367: -13
+368: add fp rdi rdi 
+369: li rbx 
+370: 1
+371: memzero rdi rbx  
+372: bxor rax rax rax 
+373: mov al [fp+disp] 1 
+374: -13
+375: inc sp -16 
+relsp -64
+376: li rdx 
+377: 20
+378: push rdx   
+relsp -72
+379: li rbx 
+380: -32
+381: add rbx fp rbx 
+382: push rbx   
+relsp -80
+move return value member ptr
+move return value
+383: pop rax   
+relsp -72
+384: mov rax [fp+disp] 8 
+385: -48
+move return value member len
+move return value
+386: pop rax   
+relsp -64
+387: mov rax [fp+disp] 8 
+388: -40
+declare str at -48
+ str : Slice<char>
+enter ASSIGN
+exit  ASSIGN
+389: inc sp -8 
+relsp -72
+declare used  at -56
+ used  : i32
+enter GenerateExpression
+exit  GenerateExpression
+390: li eax 
+391: 19
+392: push rax   
+relsp -80
+assign pop i32
+move return value
+393: pop rax   
+relsp -72
+394: mov eax [fp+disp] 4 
+395: -56
+enter WHILE
+exit  WHILE
+push loop
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push t 
+396: mov [fp+disp] rax 8 
+397: 16
+398: push rax   
+relsp -80
+enter GenerateExpression
+exit  GenerateExpression
+399: li eax 
+400: 0
+401: push rax   
+relsp -88
+402: pop rcx   
+relsp -80
+403: pop rax   
+relsp -72
+404: cast s->s ecx rcx 
+405: gt s-s rax rcx 
+406: push rcx   
+relsp -80
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push used 
+407: mov [fp+disp] eax 4 
+408: -56
+409: push rax   
+relsp -88
+enter GenerateExpression
+exit  GenerateExpression
+410: li eax 
+411: 0
+412: push rax   
+relsp -96
+413: pop rcx   
+relsp -88
+414: pop rax   
+relsp -80
+415: gt s-s eax ecx 
+416: push rcx   
+relsp -88
+417: pop rax   
+relsp -80
+418: pop rcx   
+relsp -72
+419: and cl al cl 
+420: push rcx   
+relsp -80
+421: pop rax   
+relsp -72
+422: jne al   
+423: 0
+enter GenerateBody
+exit  GenerateBody
+enter ASSIGN
+exit  ASSIGN
+424: inc sp -8 
+relsp -80
+declare num at -64
+ num : u32
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push t 
+425: mov [fp+disp] rax 8 
+426: 16
+427: push rax   
+relsp -88
+enter GenerateExpression
+exit  GenerateExpression
+428: li eax 
+429: 10
+430: push rax   
+relsp -96
+431: pop rdx   
+relsp -88
+432: pop rax   
+relsp -80
+433: cast s->s edx rdx 
+434: mod al rax rdx 
+435: push rdx   
+relsp -88
+assign pop i64
+436: pop rax   
+relsp -80
+437: cast s->u rax eax 
+438: push rax   
+relsp -88
+move return value
+439: pop rax   
+relsp -80
+440: mov eax [fp+disp] 4 
+441: -64
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push num 
+442: mov [fp+disp] eax 4 
+443: -64
+444: push rax   
+relsp -88
+enter GenerateExpression
+exit  GenerateExpression
+445: li al 
+446: 48
+447: push rax   
+relsp -96
+448: pop rax   
+relsp -88
+449: pop rcx   
+relsp -80
+450: cast s->u al eax 
+451: add ecx eax ecx 
+452: push rcx   
+relsp -88
+enter GenerateReference
+exit  GenerateReference
+ expr var push str
+453: li rbx 
+454: -48
+455: add fp rbx rbx 
+456: push rbx   
+relsp -96
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push used
+457: mov [fp+disp] eax 4 
+458: -56
+459: push rax   
+relsp -104
+460: pop rdx   
+relsp -96
+461: pop rbx   
+relsp -88
+462: mov [rbx] rcx 8 
+463: add rcx eax rcx 
+464: push rcx   
+relsp -96
+465: pop rbx   
+relsp -88
+466: pop rax   
+relsp -80
+467: cast s->s eax al 
+468: push rax   
+relsp -88
+move return value
+469: pop rax   
+relsp -80
+470: mov al [rbx] 1 
+471: mov [rbx] al 1 
+472: push rax   
+relsp -88
+move return value
+473: pop rax   
+relsp -80
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateReference
+exit  GenerateReference
+ expr var push used
+474: li rbx 
+475: -56
+476: add fp rbx rbx 
+477: push rbx   
+relsp -88
+478: pop rbx   
+relsp -80
+479: mov [rbx] eax 4 
+480: push rax   
+relsp -88
+481: inc eax -1 
+482: mov eax [rbx] 4 
+move return value
+483: pop rax   
+relsp -80
+enter ASSIGN
+exit  ASSIGN
+ t  : i64
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push t 
+484: mov [fp+disp] rax 8 
+485: 16
+486: push rax   
+relsp -88
+enter GenerateExpression
+exit  GenerateExpression
+487: li eax 
+488: 10
+489: push rax   
+relsp -96
+490: pop rdx   
+relsp -88
+491: pop rax   
+relsp -80
+492: cast s->s edx rdx 
+493: div al rax rdx 
+494: push rax   
+relsp -88
+assign pop i64
+move return value
+495: pop rax   
+relsp -80
+496: mov rax [fp+disp] 8 
+497: 16
+fix sp when exiting body
+498: inc sp 8 
+relsp -72
+499: jmp    
+500: 396
+pop loop
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateReference
+exit  GenerateReference
+ expr var push str
+501: li rbx 
+502: -48
+503: add fp rbx rbx 
+504: push rbx   
+relsp -80
+505: pop rbx   
+relsp -72
+506: mov [rbx] rax 8 
+507: push rax   
+relsp -80
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push used 
+508: mov [fp+disp] eax 4 
+509: -56
+510: push rax   
+relsp -88
+enter GenerateExpression
+exit  GenerateExpression
+511: li eax 
+512: 1
+513: push rax   
+relsp -96
+514: pop rax   
+relsp -88
+515: pop rcx   
+relsp -80
+516: add ecx eax ecx 
+517: push rcx   
+relsp -88
+enter GenerateReference
+exit  GenerateReference
+ expr var push str
+518: li rbx 
+519: -48
+520: add fp rbx rbx 
+521: push rbx   
+relsp -96
+522: pop rbx   
+relsp -88
+523: pop rax   
+relsp -80
+524: pop rcx   
+relsp -72
+525: add rcx eax rcx 
+526: push rcx   
+relsp -80
+527: mov rcx [rbx] 8 
+move return value
+528: pop rax   
+relsp -72
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateReference
+exit  GenerateReference
+ expr var push str
+529: li rbx 
+530: -48
+531: add fp rbx rbx 
+532: push rbx   
+relsp -80
+533: pop rbx   
+relsp -72
+534: li eax 
+535: 8
+536: add rbx eax rbx 
+537: push rbx   
+relsp -80
+538: pop rbx   
+relsp -72
+539: mov [rbx] rax 8 
+540: push rax   
+relsp -80
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push used 
+541: mov [fp+disp] eax 4 
+542: -56
+543: push rax   
+relsp -88
+enter GenerateExpression
+exit  GenerateExpression
+544: li eax 
+545: 1
+546: push rax   
+relsp -96
+547: pop rax   
+relsp -88
+548: pop rcx   
+relsp -80
+549: add ecx eax ecx 
+550: push rcx   
+relsp -88
+enter GenerateReference
+exit  GenerateReference
+ expr var push str
+551: li rbx 
+552: -48
+553: add fp rbx rbx 
+554: push rbx   
+relsp -96
+555: pop rbx   
+relsp -88
+556: li eax 
+557: 8
+558: add rbx eax rbx 
+559: push rbx   
+relsp -96
+560: pop rbx   
+relsp -88
+561: pop rax   
+relsp -80
+562: pop rcx   
+relsp -72
+563: cast s->u eax rax 
+564: sub rcx rax rcx 
+565: push rcx   
+relsp -80
+566: mov rcx [rbx] 8 
+move return value
+567: pop rax   
+relsp -72
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push signed
 
-    Address            Length
-    0000000140001450 0000000000000024 
-    0000000000000000 0000000000000000 
-  Length:                   44
-  Version:                  2
-  Offset into .debug_info:  0xa0
-  Pointer Size:             8
-  Segment Size:             0
+568: mov [fp+disp] al 1 
+569: -8
+570: push rax   
+relsp -80
+571: pop rax   
+relsp -72
+572: jne al   
+573: 0
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: printc(char)
+574: inc sp -8 
+relsp -80
+enter GenerateExpression
+exit  GenerateExpression
+575: li al 
+576: 45
+577: push rax   
+relsp -88
+578: mov sp rbx  
+move return value
+579: pop rax   
+relsp -80
+580: mov al [rbx+disp] 1 
+581: 8
+582: call native betcall 
+583: 999999999
+pop arguments
+584: inc sp 8 
+relsp -72
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: prints(Slice<char>)
+585: inc sp -24 
+relsp -96
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push str
+push len
+586: mov [fp+disp] rax 8 
+587: -40
+588: push rax   
+relsp -104
+push ptr
+589: mov [fp+disp] rax 8 
+590: -48
+591: push rax   
+relsp -112
+592: mov sp rbx  
+move return value member ptr
+move return value
+593: pop rax   
+relsp -104
+594: mov rax [rbx+disp] 8 
+595: 16
+move return value member len
+move return value
+596: pop rax   
+relsp -96
+597: mov rax [rbx+disp] 8 
+598: 24
+599: call native betcall 
+600: 999999999
+pop arguments
+601: inc sp 24 
+relsp -72
+fix sp when exiting body
+602: inc sp 56 
+relsp -16
+603: pop fp   
+relsp -8
+604: ret    
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Function _print
+Func _print
+set 1 args
+ [16] t: char
 
-    Address            Length
-    00000001400024e0 0000000000000032 
-    0000000000000000 0000000000000000 
-  Length:                   28
-  Version:                  2
-  Offset into .debug_info:  0xc8
-  Pointer Size:             8
-  Segment Size:             0
+605: push fp   
+relsp -16
+606: mov sp fp  
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: prints(Slice<char>)
+607: inc sp -16 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+608: li eax 
+609: 1
+610: push rax   
+relsp -40
+611: pop rax   
+relsp -32
+612: cast s->u eax rax 
+613: push rax   
+relsp -40
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateReference
+exit  GenerateReference
+ expr var push t
+614: li rbx 
+615: 16
+616: add fp rbx rbx 
+617: push rbx   
+relsp -48
+618: mov sp rbx  
+move return value member ptr
+move return value
+619: pop rax   
+relsp -40
+620: mov rax [rbx+disp] 8 
+621: 16
+move return value member len
+move return value
+622: pop rax   
+relsp -32
+623: mov rax [rbx+disp] 8 
+624: 24
+625: call native betcall 
+626: 999999999
+pop arguments
+627: inc sp 16 
+relsp -16
+628: pop fp   
+relsp -8
+629: ret    
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Function _print
+Func _print
+set 1 args
+ [16] t: Slice<char>
 
-    Address            Length
-    0000000000000000 0000000000000000 
+630: push fp   
+relsp -16
+631: mov sp fp  
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: prints(Slice<char>)
+632: inc sp -16 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push t
+push len
+633: mov [fp+disp] rax 8 
+634: 24
+635: push rax   
+relsp -40
+push ptr
+636: mov [fp+disp] rax 8 
+637: 16
+638: push rax   
+relsp -48
+639: mov sp rbx  
+move return value member ptr
+move return value
+640: pop rax   
+relsp -40
+641: mov rax [rbx+disp] 8 
+642: 16
+move return value member len
+move return value
+643: pop rax   
+relsp -32
+644: mov rax [rbx+disp] 8 
+645: 24
+646: call native betcall 
+647: 999999999
+pop arguments
+648: inc sp 16 
+relsp -16
+649: pop fp   
+relsp -8
+650: ret    
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Native function memcpy
+Native function memzero
+Native function strlen
+Native function rdtsc
+Native function compare_swap
+Native function atomic_add
+External function Allocate
+External function Reallocate
+External function Free
+Native function CurrentWorkingDirectory
+External function StartMeasure
+External function StopMeasure
+External function DiffMeasure
+External function NativeSleep
+External function CmdLineArgs
+External function GetClockSpeed
+External function ExecuteCommand
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Function cleanup
+Func cleanup
+set 1 args
+ [16] (: DynamicArray<i32>*
 
-Contents of the .debug_info section:
+651: push fp   
+relsp -16
+652: mov sp fp  
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _reserve(DynamicArray<i32>*, u32)
+653: inc sp -16 
+relsp -32
+654: mov [fp+disp] rbx 8 
+655: 16
+656: push rbx   
+relsp -40
+enter GenerateExpression
+exit  GenerateExpression
+657: li eax 
+658: 0
+659: push rax   
+relsp -48
+660: pop rax   
+relsp -40
+661: cast s->u eax eax 
+662: push rax   
+relsp -48
+663: mov sp rbx  
+move return value
+664: pop rax   
+relsp -40
+665: mov eax [rbx+disp] 4 
+666: 24
+move return value
+667: pop rax   
+relsp -32
+668: mov rax [rbx+disp] 8 
+669: 16
+670: call none betcall 
+671: 999999999
+extract return values
+672: mov sp rbx  
+673: inc sp 16 
+relsp -16
+674: mov [rbx+disp] al 1 
+675: -24
+676: push rax   
+relsp -24
+move return value
+677: pop rax   
+relsp -16
+678: pop fp   
+relsp -8
+679: ret    
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Function add
+Func add
+set 2 args
+ [16] (: DynamicArray<i32>*
+ [24] newElement: i32
 
-  Compilation Unit @ offset 0x0:
-   Length:        0x9c (32-bit)
-   Version:       5
-   Unit Type:     DW_UT_compile (1)
-   Abbrev Offset: 0x0
-   Pointer Size:  8
- <0><c>: Abbrev Number: 1 (DW_TAG_compile_unit)
-    <d>   DW_AT_producer    : GNU C++17 12.2.0 -mtune=core2 -march=nocona -g
-    <3c>   DW_AT_language    : 33	(C++14)
-    <3d>   DW_AT_name        : (indirect line string, offset: 0x3b): wa.cpp
-    <41>   DW_AT_comp_dir    : (indirect line string, offset: 0x0): C:\Users\datao\Desktop\Backup\CodeProjects\BetterThanBatch
-    <45>   DW_AT_low_pc      : 0x140001450
-    <4d>   DW_AT_high_pc     : 0x24
-    <55>   DW_AT_stmt_list   : 0x0
- <1><59>: Abbrev Number: 2 (DW_TAG_subprogram)
-    <5a>   DW_AT_external    : 1
-    <5a>   DW_AT_name        : main
-    <5f>   DW_AT_decl_file   : 2
-    <60>   DW_AT_decl_line   : 9
-    <61>   DW_AT_decl_column : 5
-    <62>   DW_AT_type        : <0x78>
-    <66>   DW_AT_low_pc      : 0x140001457
-    <6e>   DW_AT_high_pc     : 0x1d
-    <76>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
-    <78>   DW_AT_call_all_tail_calls: 1
- <1><78>: Abbrev Number: 3 (DW_TAG_base_type)
-    <79>   DW_AT_byte_size   : 4
-    <7a>   DW_AT_encoding    : 5	(signed)
-    <7b>   DW_AT_name        : int
- <1><7f>: Abbrev Number: 4 (DW_TAG_subprogram)
-    <80>   DW_AT_external    : 1
-    <80>   DW_AT_name        : no
-    <83>   DW_AT_decl_file   : 1
-    <84>   DW_AT_decl_line   : 1
-    <85>   DW_AT_decl_column : 6
-    <86>   DW_AT_linkage_name: _Z2nov
-    <8d>   DW_AT_low_pc      : 0x140001450
-    <95>   DW_AT_high_pc     : 0x7
-    <9d>   DW_AT_frame_base  : 1 byte block: 9c 	(DW_OP_call_frame_cfa)
-    <9f>   DW_AT_call_all_calls: 1
- <1><9f>: Abbrev Number: 0
-  Compilation Unit @ offset 0xa0:
-   Length:        0x24 (32-bit)
-   Version:       5
-   Unit Type:     DW_UT_compile (1)
-   Abbrev Offset: 0x51
-   Pointer Size:  8
- <0><ac>: Abbrev Number: 1 (DW_TAG_compile_unit)
-    <ad>   DW_AT_stmt_list   : 0x60
-    <b1>   DW_AT_low_pc      : 0x1400024e0
-    <b9>   DW_AT_high_pc     : 50
-    <ba>   DW_AT_name        : (indirect string, offset: 0x0): ../../../../../src/gcc-12.2.0/libgcc/config/i386/cygwin.S
-    <be>   DW_AT_comp_dir    : (indirect string, offset: 0x3a): C:\mingw-builds\ucrt64-seh-posix\x86_64-1220-posix-seh-ucrt-rt_v10-rev2\build\gcc-12.2.0\x86_64-w64-mingw32\libgcc
-    <c2>   DW_AT_producer    : (indirect string, offset: 0xad): GNU AS 2.39
-    <c6>   DW_AT_language    : 32769	(MIPS assembler)
-  Compilation Unit @ offset 0xc8:
-   Length:        0xf22 (32-bit)
-   Version:       5
-   Unit Type:     DW_UT_compile (1)
-   Abbrev Offset: 0x65
-   Pointer Size:  8
- <0><d4>: Abbrev Number: 7 (DW_TAG_compile_unit)
-    <d5>   DW_AT_producer    : GNU C17 12.2.0 -mtune=core2 -march=nocona -g -g -g -O2 -O2 -O2 -fno-ident -fPIC -fbuilding-libgcc -fno-stack-protector
-    <14c>   DW_AT_language    : 29	(C11)
-    <14d>   DW_AT_name        : (indirect line string, offset: 0x1b2): ../../../../../src/gcc-12.2.0/libgcc/libgcc2.c
-    <151>   DW_AT_comp_dir    : (indirect line string, offset: 0x13f): C:\mingw-builds\ucrt64-seh-posix\x86_64-1220-posix-seh-ucrt-rt_v10-rev2\build\gcc-12.2.0\x86_64-w64-mingw32\libgcc
-    <155>   DW_AT_stmt_list   : 0xbc
- <1><159>: Abbrev Number: 2 (DW_TAG_base_type)
-    <15a>   DW_AT_byte_size   : 1
-    <15b>   DW_AT_encoding    : 6	(signed char)
-    <15c>   DW_AT_name        : char
- <1><161>: Abbrev Number: 2 (DW_TAG_base_type)
-    <162>   DW_AT_byte_size   : 8
-    <163>   DW_AT_encoding    : 7	(unsigned)
-    <164>   DW_AT_name        : long long unsigned int
- <1><17b>: Abbrev Number: 2 (DW_TAG_base_type)
-    <17c>   DW_AT_byte_size   : 8
-    <17d>   DW_AT_encoding    : 5	(signed)
-    <17e>   DW_AT_name        : long long int
- <1><18c>: Abbrev Number: 2 (DW_TAG_base_type)
-    <18d>   DW_AT_byte_size   : 2
-    <18e>   DW_AT_encoding    : 7	(unsigned)
-    <18f>   DW_AT_name        : short unsigned int
- <1><1a2>: Abbrev Number: 2 (DW_TAG_base_type)
-    <1a3>   DW_AT_byte_size   : 4
-    <1a4>   DW_AT_encoding    : 5	(signed)
-    <1a5>   DW_AT_name        : int
- <1><1a9>: Abbrev Number: 2 (DW_TAG_base_type)
-    <1aa>   DW_AT_byte_size   : 4
-    <1ab>   DW_AT_encoding    : 5	(signed)
-    <1ac>   DW_AT_name        : long int
- <1><1b5>: Abbrev Number: 2 (DW_TAG_base_type)
-    <1b6>   DW_AT_byte_size   : 4
-    <1b7>   DW_AT_encoding    : 7	(unsigned)
-    <1b8>   DW_AT_name        : unsigned int
- <1><1c5>: Abbrev Number: 2 (DW_TAG_base_type)
-    <1c6>   DW_AT_byte_size   : 16
-    <1c7>   DW_AT_encoding    : 4	(float)
-    <1c8>   DW_AT_name        : long double
- <1><1d4>: Abbrev Number: 2 (DW_TAG_base_type)
-    <1d5>   DW_AT_byte_size   : 1
-    <1d6>   DW_AT_encoding    : 8	(unsigned char)
-    <1d7>   DW_AT_name        : unsigned char
- <1><1e5>: Abbrev Number: 2 (DW_TAG_base_type)
-    <1e6>   DW_AT_byte_size   : 8
-    <1e7>   DW_AT_encoding    : 4	(float)
-    <1e8>   DW_AT_name        : double
- <1><1ef>: Abbrev Number: 2 (DW_TAG_base_type)
-    <1f0>   DW_AT_byte_size   : 4
-    <1f1>   DW_AT_encoding    : 4	(float)
-    <1f2>   DW_AT_name        : float
- <1><1f8>: Abbrev Number: 8 (DW_TAG_pointer_type)
-    <1f9>   DW_AT_byte_size   : 8
-    <1fa>   DW_AT_type        : <0x1fe>
- <1><1fe>: Abbrev Number: 9 (DW_TAG_subroutine_type)
-    <1ff>   DW_AT_prototyped  : 1
- <1><1ff>: Abbrev Number: 2 (DW_TAG_base_type)
-    <200>   DW_AT_byte_size   : 4
-    <201>   DW_AT_encoding    : 7	(unsigned)
-    <202>   DW_AT_name        : long unsigned int
- <1><214>: Abbrev Number: 2 (DW_TAG_base_type)
-    <215>   DW_AT_byte_size   : 2
-    <216>   DW_AT_encoding    : 5	(signed)
-    <217>   DW_AT_name        : short int
- <1><221>: Abbrev Number: 3 (DW_TAG_enumeration_type)
-    <222>   DW_AT_name        : ix86_tune_indices
-    <234>   DW_AT_encoding    : 7	(unsigned)
-    <234>   DW_AT_byte_size   : 4
-    <234>   DW_AT_type        : <0x1b5>
-    <238>   DW_AT_decl_file   : 1
-    <238>   DW_AT_decl_line   : 284
-    <23a>   DW_AT_decl_column : 6
-    <23a>   DW_AT_sibling     : <0xe3c>
- <2><23e>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <23f>   DW_AT_name        : X86_TUNE_SCHEDULE
-    <251>   DW_AT_const_value : 0
- <2><252>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <253>   DW_AT_name        : X86_TUNE_PARTIAL_REG_DEPENDENCY
-    <273>   DW_AT_const_value : 1
- <2><274>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <275>   DW_AT_name        : X86_TUNE_SSE_PARTIAL_REG_DEPENDENCY
-    <299>   DW_AT_const_value : 2
- <2><29a>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <29b>   DW_AT_name        : X86_TUNE_SSE_PARTIAL_REG_FP_CONVERTS_DEPENDENCY
-    <2cb>   DW_AT_const_value : 3
- <2><2cc>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <2cd>   DW_AT_name        : X86_TUNE_SSE_PARTIAL_REG_CONVERTS_DEPENDENCY
-    <2fa>   DW_AT_const_value : 4
- <2><2fb>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <2fc>   DW_AT_name        : X86_TUNE_DEST_FALSE_DEP_FOR_GLC
-    <31c>   DW_AT_const_value : 5
- <2><31d>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <31e>   DW_AT_name        : X86_TUNE_SSE_SPLIT_REGS
-    <336>   DW_AT_const_value : 6
- <2><337>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <338>   DW_AT_name        : X86_TUNE_PARTIAL_FLAG_REG_STALL
-    <358>   DW_AT_const_value : 7
- <2><359>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <35a>   DW_AT_name        : X86_TUNE_MOVX
-    <368>   DW_AT_const_value : 8
- <2><369>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <36a>   DW_AT_name        : X86_TUNE_MEMORY_MISMATCH_STALL
-    <389>   DW_AT_const_value : 9
- <2><38a>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <38b>   DW_AT_name        : X86_TUNE_FUSE_CMP_AND_BRANCH_32
-    <3ab>   DW_AT_const_value : 10
- <2><3ac>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <3ad>   DW_AT_name        : X86_TUNE_FUSE_CMP_AND_BRANCH_64
-    <3cd>   DW_AT_const_value : 11
- <2><3ce>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <3cf>   DW_AT_name        : X86_TUNE_FUSE_CMP_AND_BRANCH_SOFLAGS
-    <3f4>   DW_AT_const_value : 12
- <2><3f5>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <3f6>   DW_AT_name        : X86_TUNE_FUSE_ALU_AND_BRANCH
-    <413>   DW_AT_const_value : 13
- <2><414>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <415>   DW_AT_name        : X86_TUNE_ACCUMULATE_OUTGOING_ARGS
-    <437>   DW_AT_const_value : 14
- <2><438>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <439>   DW_AT_name        : X86_TUNE_PROLOGUE_USING_MOVE
-    <456>   DW_AT_const_value : 15
- <2><457>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <458>   DW_AT_name        : X86_TUNE_EPILOGUE_USING_MOVE
-    <475>   DW_AT_const_value : 16
- <2><476>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <477>   DW_AT_name        : X86_TUNE_USE_LEAVE
-    <48a>   DW_AT_const_value : 17
- <2><48b>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <48c>   DW_AT_name        : X86_TUNE_PUSH_MEMORY
-    <4a1>   DW_AT_const_value : 18
- <2><4a2>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <4a3>   DW_AT_name        : X86_TUNE_SINGLE_PUSH
-    <4b8>   DW_AT_const_value : 19
- <2><4b9>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <4ba>   DW_AT_name        : X86_TUNE_DOUBLE_PUSH
-    <4cf>   DW_AT_const_value : 20
- <2><4d0>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <4d1>   DW_AT_name        : X86_TUNE_SINGLE_POP
-    <4e5>   DW_AT_const_value : 21
- <2><4e6>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <4e7>   DW_AT_name        : X86_TUNE_DOUBLE_POP
-    <4fb>   DW_AT_const_value : 22
- <2><4fc>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <4fd>   DW_AT_name        : X86_TUNE_PAD_SHORT_FUNCTION
-    <519>   DW_AT_const_value : 23
- <2><51a>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <51b>   DW_AT_name        : X86_TUNE_PAD_RETURNS
-    <530>   DW_AT_const_value : 24
- <2><531>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <532>   DW_AT_name        : X86_TUNE_FOUR_JUMP_LIMIT
-    <54b>   DW_AT_const_value : 25
- <2><54c>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <54d>   DW_AT_name        : X86_TUNE_SOFTWARE_PREFETCHING_BENEFICIAL
-    <576>   DW_AT_const_value : 26
- <2><577>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <578>   DW_AT_name        : X86_TUNE_LCP_STALL
-    <58b>   DW_AT_const_value : 27
- <2><58c>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <58d>   DW_AT_name        : X86_TUNE_READ_MODIFY
-    <5a2>   DW_AT_const_value : 28
- <2><5a3>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <5a4>   DW_AT_name        : X86_TUNE_USE_INCDEC
-    <5b8>   DW_AT_const_value : 29
- <2><5b9>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <5ba>   DW_AT_name        : X86_TUNE_INTEGER_DFMODE_MOVES
-    <5d8>   DW_AT_const_value : 30
- <2><5d9>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <5da>   DW_AT_name        : X86_TUNE_OPT_AGU
-    <5eb>   DW_AT_const_value : 31
- <2><5ec>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <5ed>   DW_AT_name        : X86_TUNE_AVOID_LEA_FOR_ADDR
-    <609>   DW_AT_const_value : 32
- <2><60a>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <60b>   DW_AT_name        : X86_TUNE_SLOW_IMUL_IMM32_MEM
-    <628>   DW_AT_const_value : 33
- <2><629>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <62a>   DW_AT_name        : X86_TUNE_SLOW_IMUL_IMM8
-    <642>   DW_AT_const_value : 34
- <2><643>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <644>   DW_AT_name        : X86_TUNE_AVOID_MEM_OPND_FOR_CMOVE
-    <666>   DW_AT_const_value : 35
- <2><667>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <668>   DW_AT_name        : X86_TUNE_SINGLE_STRINGOP
-    <681>   DW_AT_const_value : 36
- <2><682>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <683>   DW_AT_name        : X86_TUNE_PREFER_KNOWN_REP_MOVSB_STOSB
-    <6a9>   DW_AT_const_value : 37
- <2><6aa>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <6ab>   DW_AT_name        : X86_TUNE_MISALIGNED_MOVE_STRING_PRO_EPILOGUES
-    <6d9>   DW_AT_const_value : 38
- <2><6da>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <6db>   DW_AT_name        : X86_TUNE_USE_SAHF
-    <6ed>   DW_AT_const_value : 39
- <2><6ee>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <6ef>   DW_AT_name        : X86_TUNE_USE_CLTD
-    <701>   DW_AT_const_value : 40
- <2><702>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <703>   DW_AT_name        : X86_TUNE_USE_BT
-    <713>   DW_AT_const_value : 41
- <2><714>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <715>   DW_AT_name        : X86_TUNE_AVOID_FALSE_DEP_FOR_BMI
-    <736>   DW_AT_const_value : 42
- <2><737>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <738>   DW_AT_name        : X86_TUNE_ADJUST_UNROLL
-    <74f>   DW_AT_const_value : 43
- <2><750>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <751>   DW_AT_name        : X86_TUNE_ONE_IF_CONV_INSN
-    <76b>   DW_AT_const_value : 44
- <2><76c>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <76d>   DW_AT_name        : X86_TUNE_AVOID_MFENCE
-    <783>   DW_AT_const_value : 45
- <2><784>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <785>   DW_AT_name        : X86_TUNE_EXPAND_ABS
-    <799>   DW_AT_const_value : 46
- <2><79a>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <79b>   DW_AT_name        : X86_TUNE_USE_HIMODE_FIOP
-    <7b4>   DW_AT_const_value : 47
- <2><7b5>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <7b6>   DW_AT_name        : X86_TUNE_USE_SIMODE_FIOP
-    <7cf>   DW_AT_const_value : 48
- <2><7d0>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <7d1>   DW_AT_name        : X86_TUNE_USE_FFREEP
-    <7e5>   DW_AT_const_value : 49
- <2><7e6>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <7e7>   DW_AT_name        : X86_TUNE_EXT_80387_CONSTANTS
-    <804>   DW_AT_const_value : 50
- <2><805>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <806>   DW_AT_name        : X86_TUNE_GENERAL_REGS_SSE_SPILL
-    <826>   DW_AT_const_value : 51
- <2><827>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <828>   DW_AT_name        : X86_TUNE_SSE_UNALIGNED_LOAD_OPTIMAL
-    <84c>   DW_AT_const_value : 52
- <2><84d>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <84e>   DW_AT_name        : X86_TUNE_SSE_UNALIGNED_STORE_OPTIMAL
-    <873>   DW_AT_const_value : 53
- <2><874>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <875>   DW_AT_name        : X86_TUNE_SSE_PACKED_SINGLE_INSN_OPTIMAL
-    <89d>   DW_AT_const_value : 54
- <2><89e>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <89f>   DW_AT_name        : X86_TUNE_SSE_TYPELESS_STORES
-    <8bc>   DW_AT_const_value : 55
- <2><8bd>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <8be>   DW_AT_name        : X86_TUNE_SSE_LOAD0_BY_PXOR
-    <8d9>   DW_AT_const_value : 56
- <2><8da>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <8db>   DW_AT_name        : X86_TUNE_INTER_UNIT_MOVES_TO_VEC
-    <8fc>   DW_AT_const_value : 57
- <2><8fd>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <8fe>   DW_AT_name        : X86_TUNE_INTER_UNIT_MOVES_FROM_VEC
-    <921>   DW_AT_const_value : 58
- <2><922>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <923>   DW_AT_name        : X86_TUNE_INTER_UNIT_CONVERSIONS
-    <943>   DW_AT_const_value : 59
- <2><944>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <945>   DW_AT_name        : X86_TUNE_SPLIT_MEM_OPND_FOR_FP_CONVERTS
-    <96d>   DW_AT_const_value : 60
- <2><96e>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <96f>   DW_AT_name        : X86_TUNE_USE_VECTOR_FP_CONVERTS
-    <98f>   DW_AT_const_value : 61
- <2><990>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <991>   DW_AT_name        : X86_TUNE_USE_VECTOR_CONVERTS
-    <9ae>   DW_AT_const_value : 62
- <2><9af>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <9b0>   DW_AT_name        : X86_TUNE_SLOW_PSHUFB
-    <9c5>   DW_AT_const_value : 63
- <2><9c6>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <9c7>   DW_AT_name        : X86_TUNE_AVOID_4BYTE_PREFIXES
-    <9e5>   DW_AT_const_value : 64
- <2><9e6>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <9e7>   DW_AT_name        : X86_TUNE_USE_GATHER_2PARTS
-    <a02>   DW_AT_const_value : 65
- <2><a03>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <a04>   DW_AT_name        : X86_TUNE_USE_GATHER_4PARTS
-    <a1f>   DW_AT_const_value : 66
- <2><a20>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <a21>   DW_AT_name        : X86_TUNE_USE_GATHER
-    <a35>   DW_AT_const_value : 67
- <2><a36>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <a37>   DW_AT_name        : X86_TUNE_AVOID_128FMA_CHAINS
-    <a54>   DW_AT_const_value : 68
- <2><a55>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <a56>   DW_AT_name        : X86_TUNE_AVOID_256FMA_CHAINS
-    <a73>   DW_AT_const_value : 69
- <2><a74>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <a75>   DW_AT_name        : X86_TUNE_V2DF_REDUCTION_PREFER_HADDPD
-    <a9b>   DW_AT_const_value : 70
- <2><a9c>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <a9d>   DW_AT_name        : X86_TUNE_AVX256_UNALIGNED_LOAD_OPTIMAL
-    <ac4>   DW_AT_const_value : 71
- <2><ac5>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <ac6>   DW_AT_name        : X86_TUNE_AVX256_UNALIGNED_STORE_OPTIMAL
-    <aee>   DW_AT_const_value : 72
- <2><aef>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <af0>   DW_AT_name        : X86_TUNE_AVX256_SPLIT_REGS
-    <b0b>   DW_AT_const_value : 73
- <2><b0c>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <b0d>   DW_AT_name        : X86_TUNE_AVX128_OPTIMAL
-    <b25>   DW_AT_const_value : 74
- <2><b26>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <b27>   DW_AT_name        : X86_TUNE_AVX256_OPTIMAL
-    <b3f>   DW_AT_const_value : 75
- <2><b40>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <b41>   DW_AT_name        : X86_TUNE_AVX256_MOVE_BY_PIECES
-    <b60>   DW_AT_const_value : 76
- <2><b61>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <b62>   DW_AT_name        : X86_TUNE_AVX256_STORE_BY_PIECES
-    <b82>   DW_AT_const_value : 77
- <2><b83>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <b84>   DW_AT_name        : X86_TUNE_AVX512_MOVE_BY_PIECES
-    <ba3>   DW_AT_const_value : 78
- <2><ba4>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <ba5>   DW_AT_name        : X86_TUNE_AVX512_STORE_BY_PIECES
-    <bc5>   DW_AT_const_value : 79
- <2><bc6>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <bc7>   DW_AT_name        : X86_TUNE_DOUBLE_WITH_ADD
-    <be0>   DW_AT_const_value : 80
- <2><be1>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <be2>   DW_AT_name        : X86_TUNE_ALWAYS_FANCY_MATH_387
-    <c01>   DW_AT_const_value : 81
- <2><c02>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <c03>   DW_AT_name        : X86_TUNE_UNROLL_STRLEN
-    <c1a>   DW_AT_const_value : 82
- <2><c1b>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <c1c>   DW_AT_name        : X86_TUNE_SHIFT1
-    <c2c>   DW_AT_const_value : 83
- <2><c2d>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <c2e>   DW_AT_name        : X86_TUNE_ZERO_EXTEND_WITH_AND
-    <c4c>   DW_AT_const_value : 84
- <2><c4d>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <c4e>   DW_AT_name        : X86_TUNE_PROMOTE_HIMODE_IMUL
-    <c6b>   DW_AT_const_value : 85
- <2><c6c>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <c6d>   DW_AT_name        : X86_TUNE_FAST_PREFIX
-    <c82>   DW_AT_const_value : 86
- <2><c83>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <c84>   DW_AT_name        : X86_TUNE_READ_MODIFY_WRITE
-    <c9f>   DW_AT_const_value : 87
- <2><ca0>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <ca1>   DW_AT_name        : X86_TUNE_MOVE_M1_VIA_OR
-    <cb9>   DW_AT_const_value : 88
- <2><cba>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <cbb>   DW_AT_name        : X86_TUNE_NOT_UNPAIRABLE
-    <cd3>   DW_AT_const_value : 89
- <2><cd4>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <cd5>   DW_AT_name        : X86_TUNE_PARTIAL_REG_STALL
-    <cf0>   DW_AT_const_value : 90
- <2><cf1>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <cf2>   DW_AT_name        : X86_TUNE_PROMOTE_QIMODE
-    <d0a>   DW_AT_const_value : 91
- <2><d0b>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <d0c>   DW_AT_name        : X86_TUNE_PROMOTE_HI_REGS
-    <d25>   DW_AT_const_value : 92
- <2><d26>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <d27>   DW_AT_name        : X86_TUNE_HIMODE_MATH
-    <d3c>   DW_AT_const_value : 93
- <2><d3d>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <d3e>   DW_AT_name        : X86_TUNE_SPLIT_LONG_MOVES
-    <d58>   DW_AT_const_value : 94
- <2><d59>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <d5a>   DW_AT_name        : X86_TUNE_USE_XCHGB
-    <d6d>   DW_AT_const_value : 95
- <2><d6e>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <d6f>   DW_AT_name        : X86_TUNE_USE_MOV0
-    <d81>   DW_AT_const_value : 96
- <2><d82>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <d83>   DW_AT_name        : X86_TUNE_NOT_VECTORMODE
-    <d9b>   DW_AT_const_value : 97
- <2><d9c>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <d9d>   DW_AT_name        : X86_TUNE_AVOID_VECTOR_DECODE
-    <dba>   DW_AT_const_value : 98
- <2><dbb>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <dbc>   DW_AT_name        : X86_TUNE_BRANCH_PREDICTION_HINTS
-    <ddd>   DW_AT_const_value : 99
- <2><dde>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <ddf>   DW_AT_name        : X86_TUNE_QIMODE_MATH
-    <df4>   DW_AT_const_value : 100
- <2><df5>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <df6>   DW_AT_name        : X86_TUNE_PROMOTE_QI_REGS
-    <e0f>   DW_AT_const_value : 101
- <2><e10>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <e11>   DW_AT_name        : X86_TUNE_EMIT_VZEROUPPER
-    <e2a>   DW_AT_const_value : 102
- <2><e2b>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <e2c>   DW_AT_name        : X86_TUNE_LAST
-    <e3a>   DW_AT_const_value : 103
- <2><e3b>: Abbrev Number: 0
- <1><e3c>: Abbrev Number: 3 (DW_TAG_enumeration_type)
-    <e3d>   DW_AT_name        : ix86_arch_indices
-    <e4f>   DW_AT_encoding    : 7	(unsigned)
-    <e4f>   DW_AT_byte_size   : 4
-    <e4f>   DW_AT_type        : <0x1b5>
-    <e53>   DW_AT_decl_file   : 1
-    <e53>   DW_AT_decl_line   : 440
-    <e55>   DW_AT_decl_column : 6
-    <e55>   DW_AT_sibling     : <0xec3>
- <2><e59>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <e5a>   DW_AT_name        : X86_ARCH_CMOV
-    <e68>   DW_AT_const_value : 0
- <2><e69>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <e6a>   DW_AT_name        : X86_ARCH_CMPXCHG
-    <e7b>   DW_AT_const_value : 1
- <2><e7c>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <e7d>   DW_AT_name        : X86_ARCH_CMPXCHG8B
-    <e90>   DW_AT_const_value : 2
- <2><e91>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <e92>   DW_AT_name        : X86_ARCH_XADD
-    <ea0>   DW_AT_const_value : 3
- <2><ea1>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <ea2>   DW_AT_name        : X86_ARCH_BSWAP
-    <eb1>   DW_AT_const_value : 4
- <2><eb2>: Abbrev Number: 1 (DW_TAG_enumerator)
-    <eb3>   DW_AT_name        : X86_ARCH_LAST
-    <ec1>   DW_AT_const_value : 5
- <2><ec2>: Abbrev Number: 0
- <1><ec3>: Abbrev Number: 2 (DW_TAG_base_type)
-    <ec4>   DW_AT_byte_size   : 1
-    <ec5>   DW_AT_encoding    : 6	(signed char)
-    <ec6>   DW_AT_name        : signed char
- <1><ed2>: Abbrev Number: 2 (DW_TAG_base_type)
-    <ed3>   DW_AT_byte_size   : 16
-    <ed4>   DW_AT_encoding    : 5	(signed)
-    <ed5>   DW_AT_name        : __int128
- <1><ede>: Abbrev Number: 2 (DW_TAG_base_type)
-    <edf>   DW_AT_byte_size   : 16
-    <ee0>   DW_AT_encoding    : 7	(unsigned)
-    <ee1>   DW_AT_name        : __int128 unsigned
- <1><ef3>: Abbrev Number: 2 (DW_TAG_base_type)
-    <ef4>   DW_AT_byte_size   : 2
-    <ef5>   DW_AT_encoding    : 4	(float)
-    <ef6>   DW_AT_name        : _Float16
- <1><eff>: Abbrev Number: 2 (DW_TAG_base_type)
-    <f00>   DW_AT_byte_size   : 4
-    <f01>   DW_AT_encoding    : 3	(complex float)
-    <f02>   DW_AT_name        : complex _Float16
- <1><f13>: Abbrev Number: 2 (DW_TAG_base_type)
-    <f14>   DW_AT_byte_size   : 8
-    <f15>   DW_AT_encoding    : 3	(complex float)
-    <f16>   DW_AT_name        : complex float
- <1><f24>: Abbrev Number: 2 (DW_TAG_base_type)
-    <f25>   DW_AT_byte_size   : 16
-    <f26>   DW_AT_encoding    : 3	(complex float)
-    <f27>   DW_AT_name        : complex double
- <1><f36>: Abbrev Number: 2 (DW_TAG_base_type)
-    <f37>   DW_AT_byte_size   : 32
-    <f38>   DW_AT_encoding    : 3	(complex float)
-    <f39>   DW_AT_name        : complex long double
- <1><f4d>: Abbrev Number: 2 (DW_TAG_base_type)
-    <f4e>   DW_AT_byte_size   : 16
-    <f4f>   DW_AT_encoding    : 4	(float)
-    <f50>   DW_AT_name        : _Float128
- <1><f5a>: Abbrev Number: 2 (DW_TAG_base_type)
-    <f5b>   DW_AT_byte_size   : 32
-    <f5c>   DW_AT_encoding    : 3	(complex float)
-    <f5d>   DW_AT_name        : complex _Float128
- <1><f6f>: Abbrev Number: 10 (DW_TAG_typedef)
-    <f70>   DW_AT_name        : func_ptr
-    <f79>   DW_AT_decl_file   : 2
-    <f7a>   DW_AT_decl_line   : 42
-    <f7b>   DW_AT_decl_column : 16
-    <f7c>   DW_AT_type        : <0x1f8>
- <1><f80>: Abbrev Number: 4 (DW_TAG_array_type)
-    <f81>   DW_AT_type        : <0xf6f>
-    <f85>   DW_AT_sibling     : <0xf8b>
- <2><f89>: Abbrev Number: 11 (DW_TAG_subrange_type)
- <2><f8a>: Abbrev Number: 0
- <1><f8b>: Abbrev Number: 5 (DW_TAG_variable)
-    <f8c>   DW_AT_name        : __CTOR_LIST__
-    <f9a>   DW_AT_decl_file   : 2
-    <f9a>   DW_AT_decl_line   : 47
-    <f9b>   DW_AT_decl_column : 17
-    <f9b>   DW_AT_type        : <0xf80>
-    <f9f>   DW_AT_external    : 1
-    <f9f>   DW_AT_declaration : 1
- <1><f9f>: Abbrev Number: 5 (DW_TAG_variable)
-    <fa0>   DW_AT_name        : __DTOR_LIST__
-    <fae>   DW_AT_decl_file   : 2
-    <fae>   DW_AT_decl_line   : 48
-    <faf>   DW_AT_decl_column : 17
-    <faf>   DW_AT_type        : <0xf80>
-    <fb3>   DW_AT_external    : 1
-    <fb3>   DW_AT_declaration : 1
- <1><fb3>: Abbrev Number: 4 (DW_TAG_array_type)
-    <fb4>   DW_AT_type        : <0xf6f>
-    <fb8>   DW_AT_sibling     : <0xfc3>
- <2><fbc>: Abbrev Number: 12 (DW_TAG_subrange_type)
-    <fbd>   DW_AT_type        : <0x161>
-    <fc1>   DW_AT_upper_bound : 1
- <2><fc2>: Abbrev Number: 0
- <1><fc3>: Abbrev Number: 6 (DW_TAG_variable)
-    <fc4>   DW_AT_specification: <0xf8b>
-    <fc8>   DW_AT_decl_file   : 3
-    <fc8>   DW_AT_decl_line   : 2451
-    <fca>   DW_AT_decl_column : 10
-    <fca>   DW_AT_type        : <0xfb3>
-    <fce>   DW_AT_location    : 9 byte block: 3 60 71 0 40 1 0 0 0 	(DW_OP_addr: 140007160)
- <1><fd8>: Abbrev Number: 6 (DW_TAG_variable)
-    <fd9>   DW_AT_specification: <0xf9f>
-    <fdd>   DW_AT_decl_file   : 3
-    <fdd>   DW_AT_decl_line   : 2452
-    <fdf>   DW_AT_decl_column : 10
-    <fdf>   DW_AT_type        : <0xfb3>
-    <fe3>   DW_AT_location    : 9 byte block: 3 50 71 0 40 1 0 0 0 	(DW_OP_addr: 140007150)
- <1><fed>: Abbrev Number: 0
+680: push fp   
+relsp -16
+681: mov sp fp  
+682: li rcx 
+683: 8
+684: mov fp rbx  
+685: sub rbx rcx rbx 
+686: memzero rbx rcx  
+687: inc sp -8 
+relsp -24
+Return values:
+ [0] : i32*
+enter GenerateBody
+exit  GenerateBody
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push len 
+688: mov [fp+disp] rbx 8 
+689: 16
+690: mov [rbx+disp] eax 4 
+691: 12
+692: push rax   
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+693: li eax 
+694: 1
+695: push rax   
+relsp -40
+696: pop rax   
+relsp -32
+697: pop rcx   
+relsp -24
+698: add ecx eax ecx 
+699: push rcx   
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push max 
+700: mov [fp+disp] rbx 8 
+701: 16
+702: mov [rbx+disp] eax 4 
+703: 8
+704: push rax   
+relsp -40
+705: pop rcx   
+relsp -32
+706: pop rax   
+relsp -24
+707: gt u-u eax ecx 
+708: push rcx   
+relsp -32
+709: pop rax   
+relsp -24
+710: jne al   
+711: 0
+enter GenerateBody
+exit  GenerateBody
+enter ASSIGN
+exit  ASSIGN
+712: inc sp -8 
+relsp -32
+declare res at -16
+ res : bool
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _reserve(DynamicArray<i32>*, u32)
+713: inc sp -16 
+relsp -48
+714: mov [fp+disp] rbx 8 
+715: 16
+716: push rbx   
+relsp -56
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+717: li eax 
+718: 7
+719: push rax   
+relsp -64
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push max 
+720: mov [fp+disp] rbx 8 
+721: 16
+722: mov [rbx+disp] eax 4 
+723: 8
+724: push rax   
+relsp -72
+enter GenerateExpression
+exit  GenerateExpression
+725: li eax 
+726: 2
+727: push rax   
+relsp -80
+728: pop rax   
+relsp -72
+729: pop rdx   
+relsp -64
+730: mul  edx eax 
+731: push rax   
+relsp -72
+732: pop rax   
+relsp -64
+733: pop rcx   
+relsp -56
+734: add ecx eax ecx 
+735: push rcx   
+relsp -64
+736: mov sp rbx  
+move return value
+737: pop rax   
+relsp -56
+738: mov eax [rbx+disp] 4 
+739: 24
+move return value
+740: pop rax   
+relsp -48
+741: mov rax [rbx+disp] 8 
+742: 16
+743: call none betcall 
+744: 999999999
+extract return values
+745: mov sp rbx  
+746: inc sp 16 
+relsp -32
+747: mov [rbx+disp] al 1 
+748: -24
+749: push rax   
+relsp -40
+assign pop bool
+move return value
+750: pop rax   
+relsp -32
+751: mov al [fp+disp] 1 
+752: -16
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push res 
+753: mov [fp+disp] al 1 
+754: -16
+755: push rax   
+relsp -40
+756: pop rax   
+relsp -32
+757: not al al  
+758: push rax   
+relsp -40
+759: pop rax   
+relsp -32
+760: jne al   
+761: 0
+enter GenerateBody
+exit  GenerateBody
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+762: li rax 
+763: 0
+764: push rax   
+relsp -40
+move return value
+765: pop rax   
+relsp -32
+766: mov rax [fp+disp] 8 
+767: -8
+768: inc sp 16 
+relsp (temp) -16
+769: pop fp   
+770: ret    
+fix sp when exiting body
+771: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newElement
+772: mov [fp+disp] eax 4 
+773: 24
+774: push rax   
+relsp -32
+enter GenerateReference
+exit  GenerateReference
+ expr var push ptr
+775: mov [fp+disp] rbx 8 
+776: 16
+777: li rax 
+778: 0
+779: add rbx rax rbx 
+780: push rbx   
+relsp -40
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push len
+781: mov [fp+disp] rbx 8 
+782: 16
+783: mov [rbx+disp] eax 4 
+784: 12
+785: push rax   
+relsp -48
+786: pop rdx   
+relsp -40
+787: pop rbx   
+relsp -32
+788: mov [rbx] rcx 8 
+789: li eax 
+790: 4
+791: mul al edx eax 
+792: add rcx eax rcx 
+793: push rcx   
+relsp -40
+794: pop rbx   
+relsp -32
+move return value
+795: pop rax   
+relsp -24
+796: mov eax [rbx] 4 
+797: mov [rbx] eax 4 
+798: push rax   
+relsp -32
+move return value
+799: pop rax   
+relsp -24
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push ptr 
+800: mov [fp+disp] rbx 8 
+801: 16
+802: mov [rbx] rax 8 
+803: push rax   
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateReference
+exit  GenerateReference
+ expr var push len
+804: mov [fp+disp] rbx 8 
+805: 16
+806: li rax 
+807: 12
+808: add rbx rax rbx 
+809: push rbx   
+relsp -40
+810: pop rbx   
+relsp -32
+811: mov [rbx] eax 4 
+812: push rax   
+relsp -40
+813: inc eax 1 
+814: mov eax [rbx] 4 
+enter GenerateExpression
+exit  GenerateExpression
+815: li eax 
+816: 4
+817: push rax   
+relsp -48
+818: pop rax   
+relsp -40
+819: pop rdx   
+relsp -32
+820: mul  edx eax 
+821: push rax   
+relsp -40
+822: pop rax   
+relsp -32
+823: pop rcx   
+relsp -24
+824: add rcx eax rcx 
+825: push rcx   
+relsp -32
+move return value
+826: pop rax   
+relsp -24
+827: mov rax [fp+disp] 8 
+828: -8
+829: inc sp 8 
+relsp (temp) -16
+830: pop fp   
+831: ret    
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+Function _reserve
+Func _reserve
+set 2 args
+ [16] (: DynamicArray<i32>*
+ [24] newMax: u32
 
-Contents of the .debug_abbrev section:
+832: push fp   
+relsp -16
+833: mov sp fp  
+834: li rcx 
+835: 8
+836: mov fp rbx  
+837: sub rbx rcx rbx 
+838: memzero rbx rcx  
+839: inc sp -8 
+relsp -24
+Return values:
+ [0] : bool
+enter GenerateBody
+exit  GenerateBody
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newMax
+840: mov [fp+disp] eax 4 
+841: 24
+842: push rax   
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+843: li eax 
+844: 0
+845: push rax   
+relsp -40
+846: pop rax   
+relsp -32
+847: pop rcx   
+relsp -24
+848: eq ecx eax ecx 
+849: push rcx   
+relsp -32
+850: pop rax   
+relsp -24
+851: jne eax   
+852: 0
+enter GenerateBody
+exit  GenerateBody
+enter BODY (statement)
+exit  BODY (statement)
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(Slice<char>)
+853: inc sp -24 
+relsp -48
+enter GenerateExpression
+exit  GenerateExpression
+854: li rax 
+855: 1
+856: push rax   
+relsp -56
+857: dataptr rbx   
+858: 3
+859: push rbx   
+relsp -64
+860: mov sp rbx  
+move return value member ptr
+move return value
+861: pop rax   
+relsp -56
+862: mov rax [rbx+disp] 8 
+863: 16
+move return value member len
+move return value
+864: pop rax   
+relsp -48
+865: mov rax [rbx+disp] 8 
+866: 24
+867: call none betcall 
+868: 999999999
+pop arguments
+869: inc sp 24 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(char)
+870: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+871: li al 
+872: 32
+873: push rax   
+relsp -40
+874: mov sp rbx  
+move return value
+875: pop rax   
+relsp -32
+876: mov al [rbx+disp] 1 
+877: 8
+878: call none betcall 
+879: 999999999
+pop arguments
+880: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(i64)
+881: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push ptr
+882: mov [fp+disp] rbx 8 
+883: 16
+884: mov [rbx] rax 8 
+885: push rax   
+relsp -40
+886: pop rax   
+relsp -32
+887: cast u->s rax rax 
+888: push rax   
+relsp -40
+889: mov sp rbx  
+move return value
+890: pop rax   
+relsp -32
+891: mov rax [rbx+disp] 8 
+892: 8
+893: call none betcall 
+894: 999999999
+pop arguments
+895: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(char)
+896: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+897: li al 
+898: 32
+899: push rax   
+relsp -40
+900: mov sp rbx  
+move return value
+901: pop rax   
+relsp -32
+902: mov al [rbx+disp] 1 
+903: 8
+904: call none betcall 
+905: 999999999
+pop arguments
+906: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(i64)
+907: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push max
+908: mov [fp+disp] rbx 8 
+909: 16
+910: mov [rbx+disp] eax 4 
+911: 8
+912: push rax   
+relsp -40
+913: pop rax   
+relsp -32
+914: cast u->s eax rax 
+915: push rax   
+relsp -40
+916: mov sp rbx  
+move return value
+917: pop rax   
+relsp -32
+918: mov rax [rbx+disp] 8 
+919: 8
+920: call none betcall 
+921: 999999999
+pop arguments
+922: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(char)
+923: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+924: li al 
+925: 32
+926: push rax   
+relsp -40
+927: mov sp rbx  
+move return value
+928: pop rax   
+relsp -32
+929: mov al [rbx+disp] 1 
+930: 8
+931: call none betcall 
+932: 999999999
+pop arguments
+933: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(i64)
+934: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push len
+935: mov [fp+disp] rbx 8 
+936: 16
+937: mov [rbx+disp] eax 4 
+938: 12
+939: push rax   
+relsp -40
+940: pop rax   
+relsp -32
+941: cast u->s eax rax 
+942: push rax   
+relsp -40
+943: mov sp rbx  
+move return value
+944: pop rax   
+relsp -32
+945: mov rax [rbx+disp] 8 
+946: 8
+947: call none betcall 
+948: 999999999
+pop arguments
+949: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(char)
+950: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+951: li al 
+952: 32
+953: push rax   
+relsp -40
+954: mov sp rbx  
+move return value
+955: pop rax   
+relsp -32
+956: mov al [rbx+disp] 1 
+957: 8
+958: call none betcall 
+959: 999999999
+pop arguments
+960: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(Slice<char>)
+961: inc sp -24 
+relsp -48
+enter GenerateExpression
+exit  GenerateExpression
+962: li rax 
+963: 1
+964: push rax   
+relsp -56
+965: dataptr rbx   
+966: 9
+967: push rbx   
+relsp -64
+968: mov sp rbx  
+move return value member ptr
+move return value
+969: pop rax   
+relsp -56
+970: mov rax [rbx+disp] 8 
+971: 16
+move return value member len
+move return value
+972: pop rax   
+relsp -48
+973: mov rax [rbx+disp] 8 
+974: 24
+975: call none betcall 
+976: 999999999
+pop arguments
+977: inc sp 24 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(char)
+978: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+979: li al 
+980: 32
+981: push rax   
+relsp -40
+982: mov sp rbx  
+move return value
+983: pop rax   
+relsp -32
+984: mov al [rbx+disp] 1 
+985: 8
+986: call none betcall 
+987: 999999999
+pop arguments
+988: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(i64)
+989: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newMax
+990: mov [fp+disp] eax 4 
+991: 24
+992: push rax   
+relsp -40
+993: pop rax   
+relsp -32
+994: cast u->s eax rax 
+995: push rax   
+relsp -40
+996: mov sp rbx  
+move return value
+997: pop rax   
+relsp -32
+998: mov rax [rbx+disp] 8 
+999: 8
+1000: call none betcall 
+1001: 999999999
+pop arguments
+1002: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(char)
+1003: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+1004: li al 
+1005: 10
+1006: push rax   
+relsp -40
+1007: mov sp rbx  
+move return value
+1008: pop rax   
+relsp -32
+1009: mov al [rbx+disp] 1 
+1010: 8
+1011: call none betcall 
+1012: 999999999
+pop arguments
+1013: inc sp 8 
+relsp -24
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push max
+1014: mov [fp+disp] rbx 8 
+1015: 16
+1016: mov [rbx+disp] eax 4 
+1017: 8
+1018: push rax   
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+1019: li eax 
+1020: 0
+1021: push rax   
+relsp -40
+1022: pop rax   
+relsp -32
+1023: pop rcx   
+relsp -24
+1024: neq ecx eax ecx 
+1025: push rcx   
+relsp -32
+1026: pop rax   
+relsp -24
+1027: jne eax   
+1028: 0
+enter GenerateBody
+exit  GenerateBody
+enter BODY (statement)
+exit  BODY (statement)
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(Slice<char>)
+1029: inc sp -24 
+relsp -48
+enter GenerateExpression
+exit  GenerateExpression
+1030: li rax 
+1031: 2
+1032: push rax   
+relsp -56
+1033: dataptr rbx   
+1034: 0
+1035: push rbx   
+relsp -64
+1036: mov sp rbx  
+move return value member ptr
+move return value
+1037: pop rax   
+relsp -56
+1038: mov rax [rbx+disp] 8 
+1039: 16
+move return value member len
+move return value
+1040: pop rax   
+relsp -48
+1041: mov rax [rbx+disp] 8 
+1042: 24
+1043: call none betcall 
+1044: 999999999
+pop arguments
+1045: inc sp 24 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(char)
+1046: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+1047: li al 
+1048: 10
+1049: push rax   
+relsp -40
+1050: mov sp rbx  
+move return value
+1051: pop rax   
+relsp -32
+1052: mov al [rbx+disp] 1 
+1053: 8
+1054: call none betcall 
+1055: 999999999
+pop arguments
+1056: inc sp 8 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: Free(void*, u64)
+1057: inc sp -40 
+relsp -64
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push ptr
+1058: mov [fp+disp] rbx 8 
+1059: 16
+1060: mov [rbx] rax 8 
+1061: push rax   
+relsp -72
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push max 
+1062: mov [fp+disp] rbx 8 
+1063: 16
+1064: mov [rbx+disp] eax 4 
+1065: 8
+1066: push rax   
+relsp -80
+enter GenerateExpression
+exit  GenerateExpression
+1067: li eax 
+1068: 4
+1069: push rax   
+relsp -88
+1070: pop rax   
+relsp -80
+1071: pop rdx   
+relsp -72
+1072: mul  edx eax 
+1073: push rax   
+relsp -80
+1074: pop rax   
+relsp -72
+1075: cast s->u eax rax 
+1076: push rax   
+relsp -80
+1077: pop rdx   
+relsp -72
+1078: pop rcx   
+relsp -64
+1079: call import stdcall 
+1080: 0
+1081: inc sp 40 
+relsp -24
+enter BODY (statement)
+exit  BODY (statement)
+enter GenerateBody
+exit  GenerateBody
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(Slice<char>)
+1082: inc sp -24 
+relsp -48
+enter GenerateExpression
+exit  GenerateExpression
+1083: li rax 
+1084: 3
+1085: push rax   
+relsp -56
+1086: dataptr rbx   
+1087: 5
+1088: push rbx   
+relsp -64
+1089: mov sp rbx  
+move return value member ptr
+move return value
+1090: pop rax   
+relsp -56
+1091: mov rax [rbx+disp] 8 
+1092: 16
+move return value member len
+move return value
+1093: pop rax   
+relsp -48
+1094: mov rax [rbx+disp] 8 
+1095: 24
+1096: call none betcall 
+1097: 999999999
+pop arguments
+1098: inc sp 24 
+relsp -24
+enter EXPRESSION
+exit  EXPRESSION
+enter GenerateExpression
+exit  GenerateExpression
+Overload: _print(char)
+1099: inc sp -8 
+relsp -32
+enter GenerateExpression
+exit  GenerateExpression
+1100: li al 
+1101: 10
+1102: push rax   
+relsp -40
+1103: mov sp rbx  
+move return value
+1104: pop rax   
+relsp -32
+1105: mov al [rbx+disp] 1 
+1106: 8
+1107: call none betcall 
+1108: 999999999
+pop arguments
+1109: inc sp 8 
+relsp -24
+enter ASSIGN
+exit  ASSIGN
+ ptr  : i32*
+enter GenerateExpression
+exit  GenerateExpression
+1110: li rax 
+1111: 0
+1112: push rax   
+relsp -32
+assign pop void*
+1113: mov [fp+disp] rbx 8 
+1114: 16
+move return value
+1115: pop rax   
+relsp -24
+1116: mov rax [rbx] 8 
+enter ASSIGN
+exit  ASSIGN
+ max  : u32
+enter GenerateExpression
+exit  GenerateExpression
+1117: li eax 
+1118: 0
+1119: push rax   
+relsp -32
+assign pop i32
+1120: pop rax   
+relsp -24
+1121: cast s->u eax eax 
+1122: push rax   
+relsp -32
+1123: mov [fp+disp] rbx 8 
+1124: 16
+move return value
+1125: pop rax   
+relsp -24
+1126: mov eax [rbx+disp] 4 
+1127: 8
+enter ASSIGN
+exit  ASSIGN
+ len  : u32
+enter GenerateExpression
+exit  GenerateExpression
+1128: li eax 
+1129: 0
+1130: push rax   
+relsp -32
+assign pop i32
+1131: pop rax   
+relsp -24
+1132: cast s->u eax eax 
+1133: push rax   
+relsp -32
+1134: mov [fp+disp] rbx 8 
+1135: 16
+move return value
+1136: pop rax   
+relsp -24
+1137: mov eax [rbx+disp] 4 
+1138: 12
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+1139: li al 
+1140: 1
+1141: push rax   
+relsp -32
+move return value
+1142: pop rax   
+relsp -24
+1143: mov al [fp+disp] 1 
+1144: -8
+1145: inc sp 8 
+relsp (temp) -16
+1146: pop fp   
+1147: ret    
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push ptr 
+1148: mov [fp+disp] rbx 8 
+1149: 16
+1150: mov [rbx] rax 8 
+1151: push rax   
+relsp -32
+1152: pop rax   
+relsp -24
+1153: not rax rax  
+1154: push rax   
+relsp -32
+1155: pop rax   
+relsp -24
+1156: jne al   
+1157: 0
+enter GenerateBody
+exit  GenerateBody
+enter ASSIGN
+exit  ASSIGN
+ ptr  : i32*
+enter GenerateExpression
+exit  GenerateExpression
+Overload: Allocate(u64)
+1158: inc sp -40 
+relsp -64
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newMax 
+1159: mov [fp+disp] eax 4 
+1160: 24
+1161: push rax   
+relsp -72
+enter GenerateExpression
+exit  GenerateExpression
+1162: li eax 
+1163: 4
+1164: push rax   
+relsp -80
+1165: pop rax   
+relsp -72
+1166: pop rdx   
+relsp -64
+1167: mul  edx eax 
+1168: push rax   
+relsp -72
+1169: pop rax   
+relsp -64
+1170: cast s->u eax rax 
+1171: push rax   
+relsp -72
+1172: pop rcx   
+relsp -64
+1173: call import stdcall 
+1174: 1
+1175: inc sp 40 
+relsp -24
+1176: push rax   
+relsp -32
+assign pop void*
+1177: mov [fp+disp] rbx 8 
+1178: 16
+move return value
+1179: pop rax   
+relsp -24
+1180: mov rax [rbx] 8 
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push ptr
 
-  Number TAG (0x0)
-   1      DW_TAG_compile_unit    [has children]
-    DW_AT_producer     DW_FORM_string
-    DW_AT_language     DW_FORM_data1
-    DW_AT_name         DW_FORM_line_strp
-    DW_AT_comp_dir     DW_FORM_line_strp
-    DW_AT_low_pc       DW_FORM_addr
-    DW_AT_high_pc      DW_FORM_data8
-    DW_AT_stmt_list    DW_FORM_sec_offset
-    DW_AT value: 0     DW_FORM value: 0
-   2      DW_TAG_subprogram    [no children]
-    DW_AT_external     DW_FORM_flag_present
-    DW_AT_name         DW_FORM_string
-    DW_AT_decl_file    DW_FORM_data1
-    DW_AT_decl_line    DW_FORM_data1
-    DW_AT_decl_column  DW_FORM_data1
-    DW_AT_type         DW_FORM_ref4
-    DW_AT_low_pc       DW_FORM_addr
-    DW_AT_high_pc      DW_FORM_data8
-    DW_AT_frame_base   DW_FORM_exprloc
-    DW_AT_call_all_tail_calls DW_FORM_flag_present
-    DW_AT value: 0     DW_FORM value: 0
-   3      DW_TAG_base_type    [no children]
-    DW_AT_byte_size    DW_FORM_data1
-    DW_AT_encoding     DW_FORM_data1
-    DW_AT_name         DW_FORM_string
-    DW_AT value: 0     DW_FORM value: 0
-   4      DW_TAG_subprogram    [no children]
-    DW_AT_external     DW_FORM_flag_present
-    DW_AT_name         DW_FORM_string
-    DW_AT_decl_file    DW_FORM_data1
-    DW_AT_decl_line    DW_FORM_data1
-    DW_AT_decl_column  DW_FORM_data1
-    DW_AT_linkage_name DW_FORM_string
-    DW_AT_low_pc       DW_FORM_addr
-    DW_AT_high_pc      DW_FORM_data8
-    DW_AT_frame_base   DW_FORM_exprloc
-    DW_AT_call_all_calls DW_FORM_flag_present
-    DW_AT value: 0     DW_FORM value: 0
-  Number TAG (0x51)
-   1      DW_TAG_compile_unit    [no children]
-    DW_AT_stmt_list    DW_FORM_sec_offset
-    DW_AT_low_pc       DW_FORM_addr
-    DW_AT_high_pc      DW_FORM_udata
-    DW_AT_name         DW_FORM_strp
-    DW_AT_comp_dir     DW_FORM_strp
-    DW_AT_producer     DW_FORM_strp
-    DW_AT_language     DW_FORM_data2
-    DW_AT value: 0     DW_FORM value: 0
-  Number TAG (0x65)
-   1      DW_TAG_enumerator    [no children]
-    DW_AT_name         DW_FORM_string
-    DW_AT_const_value  DW_FORM_data1
-    DW_AT value: 0     DW_FORM value: 0
-   2      DW_TAG_base_type    [no children]
-    DW_AT_byte_size    DW_FORM_data1
-    DW_AT_encoding     DW_FORM_data1
-    DW_AT_name         DW_FORM_string
-    DW_AT value: 0     DW_FORM value: 0
-   3      DW_TAG_enumeration_type    [has children]
-    DW_AT_name         DW_FORM_string
-    DW_AT_encoding     DW_FORM_implicit_const: 7
-    DW_AT_byte_size    DW_FORM_implicit_const: 4
-    DW_AT_type         DW_FORM_ref4
-    DW_AT_decl_file    DW_FORM_implicit_const: 1
-    DW_AT_decl_line    DW_FORM_data2
-    DW_AT_decl_column  DW_FORM_implicit_const: 6
-    DW_AT_sibling      DW_FORM_ref4
-    DW_AT value: 0     DW_FORM value: 0
-   4      DW_TAG_array_type    [has children]
-    DW_AT_type         DW_FORM_ref4
-    DW_AT_sibling      DW_FORM_ref4
-    DW_AT value: 0     DW_FORM value: 0
-   5      DW_TAG_variable    [no children]
-    DW_AT_name         DW_FORM_string
-    DW_AT_decl_file    DW_FORM_implicit_const: 2
-    DW_AT_decl_line    DW_FORM_data1
-    DW_AT_decl_column  DW_FORM_implicit_const: 17
-    DW_AT_type         DW_FORM_ref4
-    DW_AT_external     DW_FORM_flag_present
-    DW_AT_declaration  DW_FORM_flag_present
-    DW_AT value: 0     DW_FORM value: 0
-   6      DW_TAG_variable    [no children]
-    DW_AT_specification DW_FORM_ref4
-    DW_AT_decl_file    DW_FORM_implicit_const: 3
-    DW_AT_decl_line    DW_FORM_data2
-    DW_AT_decl_column  DW_FORM_implicit_const: 10
-    DW_AT_type         DW_FORM_ref4
-    DW_AT_location     DW_FORM_exprloc
-    DW_AT value: 0     DW_FORM value: 0
-   7      DW_TAG_compile_unit    [has children]
-    DW_AT_producer     DW_FORM_string
-    DW_AT_language     DW_FORM_data1
-    DW_AT_name         DW_FORM_line_strp
-    DW_AT_comp_dir     DW_FORM_line_strp
-    DW_AT_stmt_list    DW_FORM_sec_offset
-    DW_AT value: 0     DW_FORM value: 0
-   8      DW_TAG_pointer_type    [no children]
-    DW_AT_byte_size    DW_FORM_data1
-    DW_AT_type         DW_FORM_ref4
-    DW_AT value: 0     DW_FORM value: 0
-   9      DW_TAG_subroutine_type    [no children]
-    DW_AT_prototyped   DW_FORM_flag_present
-    DW_AT value: 0     DW_FORM value: 0
-   10      DW_TAG_typedef    [no children]
-    DW_AT_name         DW_FORM_string
-    DW_AT_decl_file    DW_FORM_data1
-    DW_AT_decl_line    DW_FORM_data1
-    DW_AT_decl_column  DW_FORM_data1
-    DW_AT_type         DW_FORM_ref4
-    DW_AT value: 0     DW_FORM value: 0
-   11      DW_TAG_subrange_type    [no children]
-    DW_AT value: 0     DW_FORM value: 0
-   12      DW_TAG_subrange_type    [no children]
-    DW_AT_type         DW_FORM_ref4
-    DW_AT_upper_bound  DW_FORM_data1
-    DW_AT value: 0     DW_FORM value: 0
+1181: mov [fp+disp] rbx 8 
+1182: 16
+1183: mov [rbx] rax 8 
+1184: push rax   
+relsp -32
+1185: pop rax   
+relsp -24
+1186: not rax rax  
+1187: push rax   
+relsp -32
+1188: pop rax   
+relsp -24
+1189: jne al   
+1190: 0
+enter GenerateBody
+exit  GenerateBody
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+1191: li al 
+1192: 0
+1193: push rax   
+relsp -32
+move return value
+1194: pop rax   
+relsp -24
+1195: mov al [fp+disp] 1 
+1196: -8
+1197: inc sp 8 
+relsp (temp) -16
+1198: pop fp   
+1199: ret    
+enter ASSIGN
+exit  ASSIGN
+ len  : u32
+enter GenerateExpression
+exit  GenerateExpression
+1200: li eax 
+1201: 0
+1202: push rax   
+relsp -32
+assign pop i32
+1203: pop rax   
+relsp -24
+1204: cast s->u eax eax 
+1205: push rax   
+relsp -32
+1206: mov [fp+disp] rbx 8 
+1207: 16
+move return value
+1208: pop rax   
+relsp -24
+1209: mov eax [rbx+disp] 4 
+1210: 12
+enter ASSIGN
+exit  ASSIGN
+ max  : u32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newMax
+1211: mov [fp+disp] eax 4 
+1212: 24
+1213: push rax   
+relsp -32
+assign pop u32
+1214: mov [fp+disp] rbx 8 
+1215: 16
+move return value
+1216: pop rax   
+relsp -24
+1217: mov eax [rbx+disp] 4 
+1218: 8
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+1219: li al 
+1220: 1
+1221: push rax   
+relsp -32
+move return value
+1222: pop rax   
+relsp -24
+1223: mov al [fp+disp] 1 
+1224: -8
+1225: inc sp 8 
+relsp (temp) -16
+1226: pop fp   
+1227: ret    
+1228: jmp    
+1229: 0
+enter GenerateBody
+exit  GenerateBody
+enter ASSIGN
+exit  ASSIGN
+1230: inc sp -8 
+relsp -32
+declare newPtr at -16
+ newPtr : i32*
+enter GenerateExpression
+exit  GenerateExpression
+Overload: Reallocate(void*, u64, u64)
+1231: inc sp -32 
+relsp -64
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push ptr
+1232: mov [fp+disp] rbx 8 
+1233: 16
+1234: mov [rbx] rax 8 
+1235: push rax   
+relsp -72
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push max 
+1236: mov [fp+disp] rbx 8 
+1237: 16
+1238: mov [rbx+disp] eax 4 
+1239: 8
+1240: push rax   
+relsp -80
+enter GenerateExpression
+exit  GenerateExpression
+1241: li eax 
+1242: 4
+1243: push rax   
+relsp -88
+1244: pop rax   
+relsp -80
+1245: pop rdx   
+relsp -72
+1246: mul  edx eax 
+1247: push rax   
+relsp -80
+1248: pop rax   
+relsp -72
+1249: cast s->u eax rax 
+1250: push rax   
+relsp -80
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newMax 
+1251: mov [fp+disp] eax 4 
+1252: 24
+1253: push rax   
+relsp -88
+enter GenerateExpression
+exit  GenerateExpression
+1254: li eax 
+1255: 4
+1256: push rax   
+relsp -96
+1257: pop rax   
+relsp -88
+1258: pop rdx   
+relsp -80
+1259: mul  edx eax 
+1260: push rax   
+relsp -88
+1261: pop rax   
+relsp -80
+1262: cast s->u eax rax 
+1263: push rax   
+relsp -88
+1264: pop r8   
+relsp -80
+1265: pop rdx   
+relsp -72
+1266: pop rcx   
+relsp -64
+1267: call import stdcall 
+1268: 2
+1269: inc sp 32 
+relsp -32
+1270: push rax   
+relsp -40
+assign pop void*
+move return value
+1271: pop rax   
+relsp -32
+1272: mov rax [fp+disp] 8 
+1273: -16
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newPtr
 
-Raw dump of debug contents of section .debug_line:
-
-  Offset:                      0x0
-  Length:                      92
-  DWARF Version:               5
-  Address size (bytes):        8
-  Segment selector (bytes):    0
-  Prologue Length:             47
-  Minimum Instruction Length:  1
-  Maximum Ops per Instruction: 1
-  Initial value of 'is_stmt':  1
-  Line Base:                   -5
-  Line Range:                  14
-  Opcode Base:                 13
-
- Opcodes:
-  Opcode 1 has 0 args
-  Opcode 2 has 1 arg
-  Opcode 3 has 1 arg
-  Opcode 4 has 1 arg
-  Opcode 5 has 1 arg
-  Opcode 6 has 0 args
-  Opcode 7 has 0 args
-  Opcode 8 has 0 args
-  Opcode 9 has 1 arg
-  Opcode 10 has 0 args
-  Opcode 11 has 0 args
-  Opcode 12 has 1 arg
-
- The Directory Table (offset 0x22, lines 1, columns 1):
-  Entry	Name
-  0	(indirect line string, offset: 0x42): C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch
-
- The File Name Table (offset 0x2c, lines 3, columns 2):
-  Entry	Dir	Name
-  0	0	(indirect line string, offset: 0x7d): wa.cpp
-  1	0	(indirect line string, offset: 0x84): na.cpp
-  2	0	(indirect line string, offset: 0x8b): wa.cpp
-
- Line Number Statements:
-  [0x0000003b]  Set column to 11
-  [0x0000003d]  Extended opcode 2: set Address to 0x140001450
-  [0x00000048]  Copy
-  [0x00000049]  Set column to 1
-  [0x0000004b]  Special opcode 63: advance Address by 4 to 0x140001454 and Line by 2 to 3
-  [0x0000004c]  Set File Name to entry 2 in the File Name Table
-  [0x0000004e]  Set column to 12
-  [0x00000050]  Special opcode 53: advance Address by 3 to 0x140001457 and Line by 6 to 9
-  [0x00000051]  Special opcode 117: advance Address by 8 to 0x14000145f and Line by 0 to 9
-  [0x00000052]  Set column to 7
-  [0x00000054]  Special opcode 79: advance Address by 5 to 0x140001464 and Line by 4 to 13
-  [0x00000055]  Set column to 12
-  [0x00000057]  Special opcode 76: advance Address by 5 to 0x140001469 and Line by 1 to 14
-  [0x00000058]  Set column to 1
-  [0x0000005a]  Special opcode 76: advance Address by 5 to 0x14000146e and Line by 1 to 15
-  [0x0000005b]  Advance PC by 6 to 0x140001474
-  [0x0000005d]  Extended opcode 1: End of Sequence
-
-
-  Offset:                      0x60
-  Length:                      88
-  DWARF Version:               5
-  Address size (bytes):        8
-  Segment selector (bytes):    0
-  Prologue Length:             46
-  Minimum Instruction Length:  1
-  Maximum Ops per Instruction: 1
-  Initial value of 'is_stmt':  1
-  Line Base:                   -5
-  Line Range:                  14
-  Opcode Base:                 13
-
- Opcodes:
-  Opcode 1 has 0 args
-  Opcode 2 has 1 arg
-  Opcode 3 has 1 arg
-  Opcode 4 has 1 arg
-  Opcode 5 has 1 arg
-  Opcode 6 has 0 args
-  Opcode 7 has 0 args
-  Opcode 8 has 0 args
-  Opcode 9 has 1 arg
-  Opcode 10 has 0 args
-  Opcode 11 has 0 args
-  Opcode 12 has 1 arg
-
- The Directory Table (offset 0x82, lines 2, columns 1):
-  Entry	Name
-  0	(indirect line string, offset: 0x92): C:\mingw-builds\ucrt64-seh-posix\x86_64-1220-posix-seh-ucrt-rt_v10-rev2\build\gcc-12.2.0\x86_64-w64-mingw32\libgcc
-  1	(indirect line string, offset: 0x105): ../../../../../src/gcc-12.2.0/libgcc/config/i386
-
- The File Name Table (offset 0x90, lines 2, columns 2):
-  Entry	Dir	Name
-  0	1	(indirect line string, offset: 0x136): cygwin.S
-  1	1	(indirect line string, offset: 0x136): cygwin.S
-
- Line Number Statements:
-  [0x0000009a]  Extended opcode 2: set Address to 0x1400024e0
-  [0x000000a5]  Advance Line by 116 to 117
-  [0x000000a8]  Copy
-  [0x000000a9]  Special opcode 21: advance Address by 1 to 0x1400024e1 and Line by 2 to 119
-  [0x000000aa]  Special opcode 21: advance Address by 1 to 0x1400024e2 and Line by 2 to 121
-  [0x000000ab]  Special opcode 90: advance Address by 6 to 0x1400024e8 and Line by 1 to 122
-  [0x000000ac]  Special opcode 76: advance Address by 5 to 0x1400024ed and Line by 1 to 123
-  [0x000000ad]  Special opcode 35: advance Address by 2 to 0x1400024ef and Line by 2 to 125
-  [0x000000ae]  Special opcode 104: advance Address by 7 to 0x1400024f6 and Line by 1 to 126
-  [0x000000af]  Special opcode 62: advance Address by 4 to 0x1400024fa and Line by 1 to 127
-  [0x000000b0]  Special opcode 90: advance Address by 6 to 0x140002500 and Line by 1 to 128
-  [0x000000b1]  Special opcode 90: advance Address by 6 to 0x140002506 and Line by 1 to 129
-  [0x000000b2]  Special opcode 35: advance Address by 2 to 0x140002508 and Line by 2 to 131
-  [0x000000b3]  Special opcode 48: advance Address by 3 to 0x14000250b and Line by 1 to 132
-  [0x000000b4]  Special opcode 63: advance Address by 4 to 0x14000250f and Line by 2 to 134
-  [0x000000b5]  Special opcode 21: advance Address by 1 to 0x140002510 and Line by 2 to 136
-  [0x000000b6]  Special opcode 21: advance Address by 1 to 0x140002511 and Line by 2 to 138
-  [0x000000b7]  Advance PC by 1 to 0x140002512
-  [0x000000b9]  Extended opcode 1: End of Sequence
-
-
-  Offset:                      0xbc
-  Length:                      68
-  DWARF Version:               5
-  Address size (bytes):        8
-  Segment selector (bytes):    0
-  Prologue Length:             60
-  Minimum Instruction Length:  1
-  Maximum Ops per Instruction: 1
-  Initial value of 'is_stmt':  1
-  Line Base:                   -5
-  Line Range:                  14
-  Opcode Base:                 13
-
- Opcodes:
-  Opcode 1 has 0 args
-  Opcode 2 has 1 arg
-  Opcode 3 has 1 arg
-  Opcode 4 has 1 arg
-  Opcode 5 has 1 arg
-  Opcode 6 has 0 args
-  Opcode 7 has 0 args
-  Opcode 8 has 0 args
-  Opcode 9 has 1 arg
-  Opcode 10 has 0 args
-  Opcode 11 has 0 args
-  Opcode 12 has 1 arg
-
- The Directory Table (offset 0xde, lines 3, columns 1):
-  Entry	Name
-  0	(indirect line string, offset: 0x1e1): C:/mingw-builds/ucrt64-seh-posix/x86_64-1220-posix-seh-ucrt-rt_v10-rev2/build/gcc-12.2.0/x86_64-w64-mingw32/libgcc
-  1	(indirect line string, offset: 0x254): ../../../../../src/gcc-12.2.0/libgcc
-  2	(indirect line string, offset: 0x279): ../../../../../src/gcc-12.2.0/libgcc/../gcc/config/i386
-
- The File Name Table (offset 0xf0, lines 4, columns 2):
-  Entry	Dir	Name
-  0	1	(indirect line string, offset: 0x2b1): libgcc2.c
-  1	2	(indirect line string, offset: 0x2bb): i386.h
-  2	1	(indirect line string, offset: 0x2c2): gbl-ctors.h
-  3	1	(indirect line string, offset: 0x2ce): libgcc2.c
-
- No Line Number Statements.
-Contents of the .debug_frame section:
-
-
-00000000 0000000000000014 ffffffff CIE
-  Version:               3
-  Augmentation:          ""
-  Code alignment factor: 1
-  Data alignment factor: -8
-  Return address column: 16
-
-  DW_CFA_def_cfa: r7 (rsp) ofs 8
-  DW_CFA_offset: r16 (rip) at cfa-8
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-
-00000018 0000000000000034 00000000 FDE cie=00000000 pc=0000000140001450..0000000140001457
-  DW_CFA_advance_loc4: 1 to 0000000140001451
-  DW_CFA_def_cfa_offset: 16
-  DW_CFA_offset: r6 (rbp) at cfa-16
-  DW_CFA_advance_loc4: 3 to 0000000140001454
-  DW_CFA_def_cfa_register: r6 (rbp)
-  DW_CFA_advance_loc4: 2 to 0000000140001456
-  DW_CFA_restore: r6 (rbp)
-  DW_CFA_def_cfa: r7 (rsp) ofs 8
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-
-00000050 0000000000000034 00000000 FDE cie=00000000 pc=0000000140001457..0000000140001474
-  DW_CFA_advance_loc4: 1 to 0000000140001458
-  DW_CFA_def_cfa_offset: 16
-  DW_CFA_offset: r6 (rbp) at cfa-16
-  DW_CFA_advance_loc4: 3 to 000000014000145b
-  DW_CFA_def_cfa_register: r6 (rbp)
-  DW_CFA_advance_loc4: 24 to 0000000140001473
-  DW_CFA_restore: r6 (rbp)
-  DW_CFA_def_cfa: r7 (rsp) ofs 8
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-  DW_CFA_nop
-
-Contents of the .debug_str section:
-
-  0x40011000 2e2e2f2e 2e2f2e2e 2f2e2e2f 2e2e2f73 ../../../../../s
-  0x40011010 72632f67 63632d31 322e322e 302f6c69 rc/gcc-12.2.0/li
-  0x40011020 62676363 2f636f6e 6669672f 69333836 bgcc/config/i386
-  0x40011030 2f637967 77696e2e 5300433a 5c6d696e /cygwin.S.C:\min
-  0x40011040 67772d62 75696c64 735c7563 72743634 gw-builds\ucrt64
-  0x40011050 2d736568 2d706f73 69785c78 38365f36 -seh-posix\x86_6
-  0x40011060 342d3132 32302d70 6f736978 2d736568 4-1220-posix-seh
-  0x40011070 2d756372 742d7274 5f763130 2d726576 -ucrt-rt_v10-rev
-  0x40011080 325c6275 696c645c 6763632d 31322e32 2\build\gcc-12.2
-  0x40011090 2e305c78 38365f36 342d7736 342d6d69 .0\x86_64-w64-mi
-  0x400110a0 6e677733 325c6c69 62676363 00474e55 ngw32\libgcc.GNU
-  0x400110b0 20415320 322e3339 00                 AS 2.39.
-
-Contents of the .debug_line_str section:
-
-  0x40012000 433a5c55 73657273 5c646174 616f5c44 C:\Users\datao\D
-  0x40012010 65736b74 6f705c42 61636b75 705c436f esktop\Backup\Co
-  0x40012020 64655072 6f6a6563 74735c42 65747465 deProjects\Bette
-  0x40012030 72546861 6e426174 63680077 612e6370 rThanBatch.wa.cp
-  0x40012040 7000433a 2f557365 72732f64 6174616f p.C:/Users/datao
-  0x40012050 2f446573 6b746f70 2f426163 6b75702f /Desktop/Backup/
-  0x40012060 436f6465 50726f6a 65637473 2f426574 CodeProjects/Bet
-  0x40012070 74657254 68616e42 61746368 0077612e terThanBatch.wa.
-  0x40012080 63707000 6e612e63 70700077 612e6370 cpp.na.cpp.wa.cp
-  0x40012090 7000433a 5c6d696e 67772d62 75696c64 p.C:\mingw-build
-  0x400120a0 735c7563 72743634 2d736568 2d706f73 s\ucrt64-seh-pos
-  0x400120b0 69785c78 38365f36 342d3132 32302d70 ix\x86_64-1220-p
-  0x400120c0 6f736978 2d736568 2d756372 742d7274 osix-seh-ucrt-rt
-  0x400120d0 5f763130 2d726576 325c6275 696c645c _v10-rev2\build\
-  0x400120e0 6763632d 31322e32 2e305c78 38365f36 gcc-12.2.0\x86_6
-  0x400120f0 342d7736 342d6d69 6e677733 325c6c69 4-w64-mingw32\li
-  0x40012100 62676363 002e2e2f 2e2e2f2e 2e2f2e2e bgcc.../../../..
-  0x40012110 2f2e2e2f 7372632f 6763632d 31322e32 /../src/gcc-12.2
-  0x40012120 2e302f6c 69626763 632f636f 6e666967 .0/libgcc/config
-  0x40012130 2f693338 36006379 6777696e 2e530043 /i386.cygwin.S.C
-  0x40012140 3a5c6d69 6e67772d 6275696c 64735c75 :\mingw-builds\u
-  0x40012150 63727436 342d7365 682d706f 7369785c crt64-seh-posix\
-  0x40012160 7838365f 36342d31 3232302d 706f7369 x86_64-1220-posi
-  0x40012170 782d7365 682d7563 72742d72 745f7631 x-seh-ucrt-rt_v1
-  0x40012180 302d7265 76325c62 75696c64 5c676363 0-rev2\build\gcc
-  0x40012190 2d31322e 322e305c 7838365f 36342d77 -12.2.0\x86_64-w
-  0x400121a0 36342d6d 696e6777 33325c6c 69626763 64-mingw32\libgc
-  0x400121b0 63002e2e 2f2e2e2f 2e2e2f2e 2e2f2e2e c.../../../../..
-  0x400121c0 2f737263 2f676363 2d31322e 322e302f /src/gcc-12.2.0/
-  0x400121d0 6c696267 63632f6c 69626763 63322e63 libgcc/libgcc2.c
-  0x400121e0 00433a2f 6d696e67 772d6275 696c6473 .C:/mingw-builds
-  0x400121f0 2f756372 7436342d 7365682d 706f7369 /ucrt64-seh-posi
-  0x40012200 782f7838 365f3634 2d313232 302d706f x/x86_64-1220-po
-  0x40012210 7369782d 7365682d 75637274 2d72745f six-seh-ucrt-rt_
-  0x40012220 7631302d 72657632 2f627569 6c642f67 v10-rev2/build/g
-  0x40012230 63632d31 322e322e 302f7838 365f3634 cc-12.2.0/x86_64
-  0x40012240 2d773634 2d6d696e 67773332 2f6c6962 -w64-mingw32/lib
-  0x40012250 67636300 2e2e2f2e 2e2f2e2e 2f2e2e2f gcc.../../../../
-  0x40012260 2e2e2f73 72632f67 63632d31 322e322e ../src/gcc-12.2.
-  0x40012270 302f6c69 62676363 002e2e2f 2e2e2f2e 0/libgcc.../../.
-  0x40012280 2e2f2e2e 2f2e2e2f 7372632f 6763632d ./../../src/gcc-
-  0x40012290 31322e32 2e302f6c 69626763 632f2e2e 12.2.0/libgcc/..
-  0x400122a0 2f676363 2f636f6e 6669672f 69333836 /gcc/config/i386
-  0x400122b0 006c6962 67636332 2e630069 3338362e .libgcc2.c.i386.
-  0x400122c0 68006762 6c2d6374 6f72732e 68006c69 h.gbl-ctors.h.li
-  0x400122d0 62676363 322e6300                   bgcc2.c.
-
+1274: mov [fp+disp] rax 8 
+1275: -16
+1276: push rax   
+relsp -40
+1277: pop rax   
+relsp -32
+1278: not rax rax  
+1279: push rax   
+relsp -40
+1280: pop rax   
+relsp -32
+1281: jne al   
+1282: 0
+enter GenerateBody
+exit  GenerateBody
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+1283: li al 
+1284: 0
+1285: push rax   
+relsp -40
+move return value
+1286: pop rax   
+relsp -32
+1287: mov al [fp+disp] 1 
+1288: -8
+1289: inc sp 16 
+relsp (temp) -16
+1290: pop fp   
+1291: ret    
+enter ASSIGN
+exit  ASSIGN
+ ptr  : i32*
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newPtr
+1292: mov [fp+disp] rax 8 
+1293: -16
+1294: push rax   
+relsp -40
+assign pop i32*
+1295: mov [fp+disp] rbx 8 
+1296: 16
+move return value
+1297: pop rax   
+relsp -32
+1298: mov rax [rbx] 8 
+enter ASSIGN
+exit  ASSIGN
+ max  : u32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newMax
+1299: mov [fp+disp] eax 4 
+1300: 24
+1301: push rax   
+relsp -40
+assign pop u32
+1302: mov [fp+disp] rbx 8 
+1303: 16
+move return value
+1304: pop rax   
+relsp -32
+1305: mov eax [rbx+disp] 4 
+1306: 8
+enter IF
+exit  IF
+enter GenerateExpression
+exit  GenerateExpression
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push len 
+1307: mov [fp+disp] rbx 8 
+1308: 16
+1309: mov [rbx+disp] eax 4 
+1310: 12
+1311: push rax   
+relsp -40
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newMax 
+1312: mov [fp+disp] eax 4 
+1313: 24
+1314: push rax   
+relsp -48
+1315: pop rcx   
+relsp -40
+1316: pop rax   
+relsp -32
+1317: gt u-u eax ecx 
+1318: push rcx   
+relsp -40
+1319: pop rax   
+relsp -32
+1320: jne al   
+1321: 0
+enter GenerateBody
+exit  GenerateBody
+enter ASSIGN
+exit  ASSIGN
+ len  : u32
+enter GenerateExpression
+exit  GenerateExpression
+ expr var push newMax
+1322: mov [fp+disp] eax 4 
+1323: 24
+1324: push rax   
+relsp -40
+assign pop u32
+1325: mov [fp+disp] rbx 8 
+1326: 16
+move return value
+1327: pop rax   
+relsp -32
+1328: mov eax [rbx+disp] 4 
+1329: 12
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+1330: li al 
+1331: 1
+1332: push rax   
+relsp -40
+move return value
+1333: pop rax   
+relsp -32
+1334: mov al [fp+disp] 1 
+1335: -8
+1336: inc sp 16 
+relsp (temp) -16
+1337: pop fp   
+1338: ret    
+relsp -24
+enter RETURN
+exit  RETURN
+enter GenerateExpression
+exit  GenerateExpression
+1339: li al 
+1340: 0
+1341: push rax   
+relsp -32
+move return value
+1342: pop rax   
+relsp -24
+1343: mov al [fp+disp] 1 
+1344: -8
+1345: inc sp 8 
+relsp (temp) -16
+1346: pop fp   
+1347: ret    
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+enter GenerateFunctions
+exit  GenerateFunctions
+enter GenerateFunction
+exit  GenerateFunction
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp:5520
+Invalid function address for instruction[97]
+C:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/src/BetBat/Generator.cpp:5520
+Invalid function address for instruction[116]
+Invalid function resolutions:
+ cleanup: 2 bad address(es)
+Compiler failed with 4 error(s) (44.47 ms, 456 line(s), 10.26 K lines/s)

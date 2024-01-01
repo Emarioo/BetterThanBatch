@@ -187,11 +187,10 @@ struct CompileInfo {
     
     // TODO: allocator for streams
     std::unordered_map<std::string, StreamToProcess*> tokenStreams; // import streams
+    std::unordered_map<std::string, TokenStream*> includeStreams;
 
     QuickArray<StreamToProcess*> streams;
     QuickArray<int> compileOrder;
-
-    std::unordered_map<std::string, TokenStream*> includeStreams;
 
     DynamicArray<Path> importDirectories;
     DynamicArray<std::string> linkDirectives; // passed to the linker, not with interpreter

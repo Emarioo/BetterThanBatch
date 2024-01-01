@@ -3,57 +3,21 @@
 #import "Array"
 #import "Stream"
 
-
-fn hey() {
-
+struct Basket {
+    items: DynamicArray<i32>;
+    fn cleanup() {
+        items.cleanup();
+    }
 }
-
 fn main(argc: i32, argv: char**) -> i32 {
     // arguments
     // for 0..argc
     //     log(nr,argv[nr])
-    // TestSpec();
-    hey();
+    TestSpec();
 
-    // asm {
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    //     xor eax, eax
-    // }
-    struct Basket {
-        items: DynamicArray<i32>;
-        fn cleanup() {
-            items.cleanup();
-        }
-    }
-
-    bask: Basket;
-    defer { bask.cleanup(); }
-    bask.items.add(5);
+    // bask: Basket;
+    // defer { bask.cleanup(); }
+    // bask.items.add(5);
 
     return 2;
 }

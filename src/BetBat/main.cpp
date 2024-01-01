@@ -227,7 +227,7 @@ int main(int argc, const char** argv){
         return EXIT_CODE_NOTHING; // not a compiler failure so we use "NOTHING" instead of "FAILURE"
     }
     if(compileOptions.useDebugInformation) {
-        log::out << log::RED << "Debug information is not fully supported yet\n";
+        log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
         // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
     }
     if(search_for_source) {

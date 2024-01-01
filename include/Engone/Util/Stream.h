@@ -371,16 +371,6 @@ struct ByteStream {
         memcpy(reserved_ptr, ptr, size);
         return true;
     }
-    bool write4_at(u32 offset, u32 value) {
-        u8* ptr = (u8*)&value;
-        int size = sizeof(value);
-        void* reserved_ptr = nullptr;
-        bool suc = write_late(&reserved_ptr, size);
-        if(!suc)
-            return false;
-        memcpy(reserved_ptr, ptr, size);
-        return true;
-    }
     bool write2(u16 value) {
         u8* ptr = (u8*)&value;
         int size = sizeof(value);

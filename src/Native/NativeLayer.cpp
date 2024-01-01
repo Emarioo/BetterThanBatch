@@ -1,4 +1,13 @@
 #include "Native/NativeLayer.h"
+
+#ifdef OS_WINDOWS
+// nocheckin, skip uimodule because there is some strange bug
+#define NO_UIMODULE
+#else
+// skip ui module on linux for now
+#define NO_UIMODULE
+#endif
+
 #ifdef NATIVE_BUILD
 #ifdef OS_WINDOWS
 #include "../src/Engone/Win32.cpp"
@@ -14,12 +23,6 @@
 #undef STB_IMAGE_WRITE_IMPLEMENTATION
 
 #else
-#endif
-
-#ifdef OS_WINDOWS
-#else
-// skip ui module on linux for now
-#define NO_UIMODULE
 #endif
 
 #include "Engone/PlatformLayer.h"

@@ -3792,9 +3792,17 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         for(int i=0;i<funcs;i++){
             auto& fun = prog->debugInformation->functions[i];
             fun.funcStart = addressTranslation[fun.funcStart];
-            fun.funcEnd = addressTranslation[fun.funcEnd - 1];
             fun.codeStart = addressTranslation[fun.codeStart];
-            fun.codeEnd = addressTranslation[fun.codeEnd - 1];
+            // Since funcEnd/codeEnd is exclusive, they may refer to instructions that are out of bounds.
+            // We must handle this with some ifs.
+            if(fun.funcEnd >= addressTranslation.size())
+                fun.funcEnd = prog->size();
+            else
+                fun.funcEnd = addressTranslation[fun.funcEnd];
+            if(fun.codeEnd >= addressTranslation.size())
+                fun.codeEnd = prog->size();
+            else
+                fun.codeEnd = addressTranslation[fun.codeEnd];
             // Don't forget to add new translations here
 
             int lines = fun.lines.size();
