@@ -189,8 +189,11 @@ namespace elf {
         Elf64_Xword	st_size;		/* Symbol size */
     } Elf64_Sym;
     
+    #define R_X86_64_PC64 24 // field: dword, calc: S + A - P
     #define R_X86_64_PC32 2 // field: dword, calc: S + A - P
     #define R_X86_64_PLT32 4 // field: dword, calc: L + A - P
+    #define R_X86_64_32 10 // field: dword, calc: S + A
+    #define R_X86_64_64 1 // field: qword, calc: S + A
 
     #define ELF32_R_SYM(i)	((i)>>8)
 	#define ELF32_R_TYPE(i)   ((unsigned char)(i))

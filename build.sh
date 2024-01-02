@@ -24,10 +24,16 @@ runtime=$((($endTime - $startTime)/1000000))
 
 echo "Compiled in $((($runtime) / 1000)).$((($endTime - $startTime) % 1000)) seconds"
 
+# g++ wa.cpp -c -gdwarf-3 -o wa.o && g++ wa.o -o wa.exe
+# g++ ga/wa.cpp -c -gdwarf-3 -o wa.o && g++ wa.o -o wa.exe
+
 if [ "$err" = 0 ]; then
     # cp bin/btb btb
     if [ $# = 0 ]; then
-        ./bin/btb -dev
+        # ./bin/btb -dev
+        # ./bin/btb --test tests/flow/defer.btb
+        ./bin/btb tests/flow/defer.btb
+        # ./bin/btb --test
         # ./bin/btb -ss dev.btb  -p
         # ./bin/btb -p examples/dev.btb
         # ./bin/btb -r ma.btb

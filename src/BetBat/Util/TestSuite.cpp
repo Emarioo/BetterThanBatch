@@ -309,6 +309,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     u64 finalTotalTests = 0;
 
     auto test_startTime = engone::StartMeasure();
+    bool progress_bar = false;
 
     Interpreter interpreter{};
     for(int i=0;i<testCases.size();i++) {
@@ -342,11 +343,15 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             log::out << log::GOLD << buffer;
             std::string name = BriefString(testcase.testName,20);
             log::out << log::LIME << name;
-            int w = len + name.length();
-            for(int i=0;i<console_w - w;i++){
-                log::out << " ";
+            if(progress_bar) {
+                int w = len + name.length();
+                for(int i=0;i<console_w - w;i++){
+                    log::out << " ";
+                }
+                log::out << "\r";
+            } else {
+                log::out << "\n";
             }
-            log::out << "\r";
             log::out.flush();
         }
 
@@ -469,11 +474,13 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     
     auto test_endTime = engone::StopMeasure(test_startTime);
 
-    int console_w = GetConsoleWidth();
-    for(int i=0;i<console_w;i++){
-        log::out << " ";
+    if(progress_bar) {
+        int console_w = GetConsoleWidth();
+        for(int i=0;i<console_w;i++){
+            log::out << " ";
+        }
+        log::out << "\r";
     }
-    log::out << "\r";
 
     log::out << log::GOLD << "Test cases ("<< testCases.size() <<")\n";
     std::string lastFile = "";

@@ -69,6 +69,8 @@ struct ScopeDebug {
 
 #define BROKEN engone::log::out << engone::log::RED<< __FUNCTION__<<":"<<__LINE__<<" is broken\n"
 
+#define CHECK_RANGE(DST,A,B) Assert((u64)(DST) >= (u64)(A) && (u64)(DST) < (u64)(B));
+
 #define FOR(LIST) for(auto& it : LIST)
 // #define FORN(LIST) auto it = LIST.data(); for(int nr=0; nr < (int)LIST.size() && (it = &LIST[nr]); nr++)
 #define FORN(LIST) for(int nr=0; nr < (int)LIST.size(); nr++)

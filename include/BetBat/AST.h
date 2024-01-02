@@ -185,42 +185,46 @@ struct TypeId {
     TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK | PRIMITIVE) {}
     static TypeId Create(u32 id) {
         TypeId out={}; 
-        out._flags = VALID_MASK; // TODO: ENUM or STRUCT?
+        // TODO: ENUM or STRUCT?
+        // out._flags = VALID_MASK;
+        out.valid = true;
         out._infoIndex0 = id&0xFFFF;
         out._infoIndex1 = id>>16;
         return out; 
     }
     static TypeId CreateString(u32 index) {
         TypeId out = {};
-        out._flags = VALID_MASK | STRING;
+        // out._flags = VALID_MASK | STRING;
+        out.valid = true;
+        out.string = true;
         out._infoIndex0 = index&0xFFFF;
         out._infoIndex1 = index>>16;
         return out;
     }
     enum TypeType : u32 {
         PRIMITIVE = 0x0,
-        STRING = 0x1,
-        POISON = 0x2,
-        // ENUM = 0x3,
-        // VIRTUAL = 0x4, // polymorphic, may be pointless
-        TYPE_MASK = 0x1 | 0x2 | 0x4,
+        VALID_MASK = 0x1,
+        STRING = 0x2,
+        POISON = 0x4,
+        TYPE_MASK = 0x2 | 0x4,
         POINTER_MASK = 0x8 | 0x10,
         POINTER_SHIFT = 3,
-        VALID_MASK = 0x80,
     };
     union {
-        struct { // actual data
-            u16 _infoIndex0;
-            u8 _infoIndex1; // not used
-            u8 _flags;
+        u16 _infoIndex0 = 0;
+        PrimitiveType union_primtive;
+        OperationType union_op;
+    };
+    u8 _infoIndex1 = 0;
+    union {
+        u8 _flags = 0;
+        struct {
+            bool valid : 1;
+            bool string : 1;
+            bool poison : 1;
+            u8 pointer_level : 2;
+    // u8 _bits_reserved : 3;
         };
-        struct { // for debugging
-            PrimitiveType union_primtive;
-        };
-        struct { // for debugging
-            OperationType union_op;
-        };
-        u32 _zero = 0; // vscode intelisense doesn't like multiple initialized fields in anonymous struct in union, sigh. So we use one here.
     };
 
     bool operator!=(TypeId type) const {
@@ -350,8 +354,8 @@ struct FuncImpl {
     QuickArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
     void print(AST* ast, ASTFunction* astFunc);
-    static const u64 ADDRESS_INVALID = 0; // undefined or not address that hasn't been set
-    static const u64 ADDRESS_EXTERNAL = 1;
+    static const i64 ADDRESS_INVALID = -1; // undefined or not address that hasn't been set
+    // static const u64 ADDRESS_EXTERNAL = -21;
 };
 struct Identifier {
     Identifier() {}

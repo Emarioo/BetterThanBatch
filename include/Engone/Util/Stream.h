@@ -57,6 +57,7 @@ struct ByteStream {
     }
     bool write_late(void** out_ptr, u32 size) {
         Assert(size != 0);
+        Assert(size < 0x10000000); // probably a bug if it's this large
         Assert(!unknown_state);
         if(out_ptr)
             *out_ptr = nullptr;
@@ -174,6 +175,7 @@ struct ByteStream {
         unknown_state = false;
     }
     bool read(u32 offset, void* ptr, u32 size) {
+        Assert(size != 0);
         int head = 0;
         for(int i=0;i<allocations.size();i++) {
             Allocation* all = &allocations[i];
@@ -188,14 +190,19 @@ struct ByteStream {
             
             int real_size = size;
             if(real_size > rem_size) {
-                real_size = rem_size;   
+                real_size = rem_size;
             }
-            
-            memcpy((char*)ptr + head - offset, all->ptr + rel_off, real_size);
+            u8* dst = (u8*)ptr + offset - rel_off - head;
+            Assert((u64)dst >= (u64)ptr && (u64)dst < (u64)ptr + size);
+            Assert(rel_off < all->writtenBytes);
+            memcpy(dst, all->ptr + rel_off, real_size);
             offset += real_size;
             size -= real_size;
             
             head += all->writtenBytes;
+
+            if(size == 0)
+                break;
         }
         
         return size == 0;
@@ -334,10 +341,11 @@ struct ByteStream {
     }
     
     bool write_align(u32 alignment) {
+        if(alignment == 0)  return true;
         u32 head = getWriteHead();
         u32 dt = head % alignment;
         if(dt != 0) {
-            int size = 8 - dt;
+            int size = alignment - dt;
             void* reserved_ptr = nullptr;
             bool suc = write_late(&reserved_ptr, size);
             if(!suc)

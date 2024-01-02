@@ -7,8 +7,10 @@
             "request": "launch",
             "program": "${workspaceFolder}/bin/btb",
             // "args": ["-dev"],
-            "args": ["--test"],
+            // "args": ["--test"],
             // "args": ["-ss", "dev.btb","-p"],
+            // "args": ["-ss", "operations.btb"],
+            "args": ["--test", "tests/simple/assignment.btb"],
             // "args": ["-p", "examples/dev.btb"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -17,11 +19,11 @@
             "MIMode": "gdb",
             "miDebuggerPath": "gdb",
             "setupCommands": [
-                {
-                    "description": "Enable pretty-printing for gdb",
-                    "text": "-enable-pretty-printing",
-                    "ignoreFailures": true
-                },
+                // {
+                //     "description": "Enable pretty-printing for gdb",
+                //     "text": "-enable-pretty-printing",
+                //     "ignoreFailures": true
+                // },
                 {
                     "description": "Set Disassembly Flavor to Intel",
                     "text": "-gdb-set disassembly-flavor intel",

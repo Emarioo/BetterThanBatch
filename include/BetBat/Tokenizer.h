@@ -247,7 +247,7 @@ bool IsHexadecimal(const Token& token);
 u64 ConvertHexadecimal(const Token& token);
 u64 ConvertHexadecimal_content(char* str, int length);
 // does not include 0x at the beginning
-std::string NumberToHex(u64 number);
+std::string NumberToHex(u64 number, bool withPrefix = false);
 
 bool Equal(const Token& token, const char* str);
 bool StartsWith(const Token& token, const char* str);

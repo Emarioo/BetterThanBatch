@@ -1,5 +1,5 @@
 
-@TEST-CASE yoo
+@TEST-CASE if_else
 
 if true
     test 1; 1;

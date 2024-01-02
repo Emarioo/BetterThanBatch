@@ -1638,18 +1638,31 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             expr->versions_castType[info.currentPolyVersion] = ti;
             
             if(expr->isUnsafeCast()) {
-                int ls = info.ast->getTypeSize(ti);
-                int rs = info.ast->getTypeSize(typeArray.last());
-                if(ls != rs) {
-                    std::string strleft = info.ast->typeToString(typeArray.last()) + " ("+std::to_string(ls)+")";
-                    std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
-                    ERR_SECTION(
-                        ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
-                        ERR_MSG("cast_unsafe requires that both types have the same size. "<<ls << " != "<<rs<<"'.")
-                        ERR_LINE(expr->left->tokenRange,strleft)
-                        ERR_LINE(expr->tokenRange,strcast)
-                        ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
-                    )
+                if(expr->left->typeId == AST_ASM) {
+                    // We don't know what type ASM generates so we always allow it.
+
+                    // TODO: Deprecate this and use asm<i32> {} instead of cast_unsafe<i32> asm {}. asm -> i32 {} is an alternative syntax
+                    //  asm<i32> makes more since because the casting is a little special since
+                    //  we don't know what type the inline assembly produces. Maybe it does 2 pushes
+                    //  or none. With unsafe cast we assume a type which isn't ideal.
+                    //  Unfortunately, it's difficult to know what type is pushed in the inline assembly.
+                    //  It might ruin the stack and frame pointers.
+                    
+                    // The unsafe cast implies that the asm block did this. hopefully it did.
+                } else {
+                    int ls = info.ast->getTypeSize(ti);
+                    int rs = info.ast->getTypeSize(typeArray.last());
+                    if(ls != rs) {
+                        std::string strleft = info.ast->typeToString(typeArray.last()) + " ("+std::to_string(ls)+")";
+                        std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
+                        ERR_SECTION(
+                            ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
+                            ERR_MSG("cast_unsafe requires that both types have the same size. "<<ls << " != "<<rs<<"'.")
+                            ERR_LINE(expr->left->tokenRange,strleft)
+                            ERR_LINE(expr->tokenRange,strcast)
+                            ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
+                        )
+                    }
                 }
             } else if (expr->left->typeId == AST_ASM) {
                 ERR_SECTION(

@@ -8,7 +8,7 @@
 add(fun(me), 2)
 // the first ) should not end the macro, parenthesis should accumulate
 
-@TEST-CASE other
+@TEST-CASE macro_other
 // single- and multiline definitions
 #define SINGLE i am SINGLE
 

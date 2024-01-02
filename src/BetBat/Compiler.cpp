@@ -1539,6 +1539,14 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
                     index+=2;
                     hex_start = index;
                 }
+                // This catches the usr/bin/ld message which may contain good info such as: /usr/bin/ld: DWARF error: offset (4294967292) greater than or equal to .debug_abbrev size (117)
+                
+                if(chr == 'l' && chr1 == 'd' && chr2 == ':') {
+                    state = MESSAGE;
+                    errorInfo.no_location = true;
+                    index+=3; // skip "d: "
+                    msg_start = index;
+                }
                 if(chr == ':') {
                     static const char* const func_msg = " in function";
                     static const int func_msg_len = strlen(func_msg);
@@ -1571,6 +1579,7 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
                     int hex_end = index-1; // exclusive, -1 since index is at : right now
 
                     u64 off = ConvertHexadecimal_content(inBuffer.data() + hex_start, hex_end - hex_start);
+                    errorInfo.no_location = false;
                     errorInfo.textOffset = off;
                     errorInfo.textOffset_hex = std::string(inBuffer.data() + hex_start, hex_end - hex_start);
 

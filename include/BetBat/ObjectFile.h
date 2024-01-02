@@ -16,20 +16,37 @@ struct ObjectFile {
     enum SectionFlags : u32 {
         FLAG_NONE            = 0x0,
         FLAG_READ_ONLY       = 0x1,
-        FLAG_CODE            = 0x2 | FLAG_READ_ONLY,
-        FLAG_DEBUG           = 0x4 | FLAG_READ_ONLY,
+        FLAG_CODE            = 0x2,
+        FLAG_DEBUG           = 0x4,
         // FLAG_EMPTY, whether section has initialized data or not?
     };
+    // Relocation types depend on object file format.
+    // I don't have a good grasp of the simularites between
+    // them so the types are rather scuffed.
+    // I can't make ELF relocations work with existing values at the place of relocation.
+    // It just ignores it or is off by some negative number. I DON'T UNDERSTAND.
+    // So you must specify your wanted offset value at the relocation with COFF
+    // but also pass it as an argument of ELF.
     enum RelocationType : u16 {
-        RELOC_ADDR64,
-        RELOC_SECREL,
-        RELOC_REL32,
+        // Windows x64, COFF
+        RELOCA_ADDR64,
+        RELOCA_SECREL,
+        RELOCA_REL32, // used when refering to external functions
 
-        RELOC_PC32,
-        RELOC_PLT32,
-        RELOC_32,
-        RELOC_64,
+        // Unix x64, ELF
+        // (RELOC = adds value to the relocation address, RELOCA = sets value + an addend to relocation address)
+        RELOCA_64 = RELOCA_ADDR64,
+        RELOCA_32 = RELOCA_SECREL,
+        RELOCA_PLT32 = RELOCA_REL32, // used when refering to external functions
+        RELOCA_PC32, // used when refering to data (in .data or .rodata)
     };
+    /*
+        What actions do we want relocations to do?
+        - Relocation to external function
+        - Relocation to data in another section (refer to .data in .text, text offset, data offset, addend)
+        - Some relocation to a section SECREL?
+        - Absolute relocation to some section? with some addend.
+    */
     struct Relocation {
         RelocationType type;
         u32 offset = 0;
@@ -37,7 +54,10 @@ struct ObjectFile {
             int symbolIndex;
             SectionNr sectionNr;
         };
-        u32 offsetIntoSection = 0; // called addend in ELF
+        union {
+            u32 addend;
+            u32 offsetIntoSection; // called addend in ELF
+        };
     };
     struct Section {
         SectionNr number = 0;
@@ -53,6 +73,7 @@ struct ObjectFile {
         SYM_SECTION,
         SYM_FUNCTION,
         SYM_DATA, // data/object/value in the section?
+        SYM_EMPTY,
     };
     struct Symbol {
         SymbolType type;
@@ -60,17 +81,22 @@ struct ObjectFile {
         SectionNr sectionNr;
         u32 offset = 0; // offset/value
     };
-    
+    ~ObjectFile() {
+        cleanup();
+    }
     void cleanup();
     void init(ObjectFileType objType) {
         _objType = objType;
-        if(objType == OBJ_ELF)
+        if(objType == OBJ_ELF) {
             addString(""); // ELF wants an empty string first
-        else if(objType == OBJ_COFF)
+            addSymbol(SYM_EMPTY, "", 0, 0); // ELF wants null symbol
+        } else if(objType == OBJ_COFF) {
             _strings_offset = 4; // COFF includes a 4-byte string table offset integer
+        }
     }
 
     SectionNr createSection(const std::string& name, SectionFlags flags = FLAG_NONE, u32 alignment = 8);
+    SectionNr findSection(const std::string& name);
     // void deleteSection(int index); // deleteSection might be a bad idea if you use the number of the section somewhere and then delete it.
     ByteStream* getStreamFromSection(SectionNr nr) {
         return &_sections[nr - 1]->stream;
@@ -88,8 +114,8 @@ struct ObjectFile {
     int addSymbol(SymbolType type, const std::string& name, SectionNr sectionNumber, u32 offset);
     // returns -1 if not found
     int findSymbol(const std::string& name);
-    void addRelocation(SectionNr sectionNr, RelocationType type, u32 offset, u32 symbolIndex);
-    void addRelocation(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2);
+    void addRelocation(SectionNr sectionNr, RelocationType type, u32 offset, u32 symbolIndex, u32 addend);
+    void addRelocation_data(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2);
     // writes file based on objType from init
     bool writeFile(const std::string& path);
 

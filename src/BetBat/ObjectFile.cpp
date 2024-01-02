@@ -13,6 +13,12 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     if (program->globalSize!=0){
         section_data = objectFile.createSection(".data", FLAG_NONE, 8);
     }
+    if(program->debugInformation) {
+        // We need to do this first because it adds more sections.
+        // Sections have symbols that should be local with the ELF formats.
+        // All local symbols MUST be added first (that's how elf works).
+        dwarf::ProvideSections(&objectFile, program);
+    }
 
     if(to - from > 0) {
         auto stream = objectFile.getStreamFromSection(section_text);
@@ -23,7 +29,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     
     for(int i=0;i<program->dataRelocations.size();i++){
         auto& dataRelocation = program->dataRelocations[i];
-        objectFile.addRelocation(section_text, dataRelocation.textOffset, section_data, dataRelocation.dataOffset);
+        objectFile.addRelocation_data(section_text, dataRelocation.textOffset, section_data, dataRelocation.dataOffset);
     }
 
     for(int i=0;i<program->namedUndefinedRelocations.size();i++){
@@ -33,7 +39,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         if(sym == -1)
             sym = objectFile.addSymbol(SYM_FUNCTION, namedRelocation.name, 0, 0);
 
-        objectFile.addRelocation(section_text, RELOC_REL32, namedRelocation.textOffset, sym);
+        objectFile.addRelocation(section_text, RELOCA_REL32, namedRelocation.textOffset, sym, 0);
     }
 
     for(int i=0;i<program->exportedSymbols.size();i++) {
@@ -46,10 +52,6 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         stream->write(program->globalData, program->size());
     }
 
-
-    if(program->debugInformation) {
-        dwarf::ProvideSections(&objectFile, program);
-    }
     // if(program->debugInformation) {
     //     log::out << "Printing debug information\n";
     //     program->debugInformation->print();
@@ -81,10 +83,10 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
     header->TimeDateStamp = time(nullptr);
 
     DynamicArray<Section_Header*> sectionHeaders{};
-    sectionHeaders.resize(_sections.size());
+    sectionHeaders.resize(_sections.size() + 1);
     for(int i=0;i<_sections.size();i++){
-        auto& sheader = sectionHeaders[i];
         auto& section = _sections[i];
+        auto& sheader = sectionHeaders[section->number];
 
         ++header->NumberOfSections;
         suc = obj_stream->write_late((void**)&sheader, Section_Header::SIZE);
@@ -135,11 +137,11 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
     // ###############3
     
     DynamicArray<std::unordered_map<i32, i32>> sections_dataSymbolMap;
-    sections_dataSymbolMap.resize(_sections.size());
+    sections_dataSymbolMap.resize(_sections.size() + 1);
 
     for(int si=0;si<_sections.size();si++) {
-        auto& sheader = sectionHeaders[si];
         auto& section = _sections[si];
+        auto& sheader = sectionHeaders[section->number];
 
         obj_stream->write_align(section->alignment);
 
@@ -159,7 +161,7 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
             suc = obj_stream->write_late((void**)&coffReloc, COFF_Relocation::SIZE);
             CHECK
             
-            if(rel.type == RELOC_PC32) {
+            if(rel.type == RELOCA_PC32) {
                 coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
                 coffReloc->VirtualAddress = rel.offset;
 
@@ -172,11 +174,11 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
                     coffReloc->SymbolTableIndex = pair->second;
                 }
             } else {
-                if(rel.type == RELOC_REL32)
+                if(rel.type == RELOCA_REL32)
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
-                else if(rel.type == RELOC_ADDR64)
+                else if(rel.type == RELOCA_ADDR64)
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_ADDR64;
-                else if(rel.type == RELOC_SECREL)
+                else if(rel.type == RELOCA_SECREL)
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_SECREL;
                 coffReloc->VirtualAddress = rel.offset;
                 coffReloc->SymbolTableIndex = rel.symbolIndex;
@@ -221,10 +223,10 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
         symbol->NumberOfAuxSymbols = 0;
     }
 
-    suc = obj_stream->write(&_strings_offset, sizeof(u32)); // nocheckin, does the offset have the right size, should it include offset integer itself?
+    suc = obj_stream->write(&_strings_offset, sizeof(u32));
     CHECK
 
-    u32 cur_offset = 0;
+    u32 cur_offset = 4; // string table offset starts at 4 with COFF
     for(int i=0;i<_strings.size();i++){
         auto& str = _strings[i];
         suc = obj_stream->write(str.c_str(), str.length() + 1);
@@ -241,13 +243,409 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
     }
     engone::FileClose(file);
 
-    // TODO: Return true or false?
-
     #undef CHECK
     return true;
 }
 bool ObjectFile::writeFile_elf(const std::string& path) {
-    Assert(false);
+    using namespace elf;
+    ByteStream stream{nullptr};
+    ByteStream* obj_stream = &stream;
+    u32 estimation = 0x100000;
+    obj_stream->reserve(estimation);
+
+    bool suc = true;
+    #define CHECK Assert(suc);
+
+    /*##############
+        HEADER
+    ##############*/
+    Elf64_Ehdr* header = nullptr;
+    suc = obj_stream->write_late((void**)&header, sizeof(*header));
+    CHECK
+    memset(header, 0, sizeof(*header)); // zero-initialize header for good practise
+    
+    memset(header->e_ident, 0, EI_NIDENT);
+    strcpy((char*)header->e_ident, "\x7f""ELF"); // IMPORTANT: I don't think the magic is correct. See the first image in cheat sheet (link in Elf.h)
+    header->e_ident[EI_CLASS] = 2; // 0 = invalid, 1 = 32 bit objects, 2 = 64 bit objects
+    header->e_ident[EI_DATA] = 1; // 0 = invalid, 1 = LSB (little endian?), 2 = MSB
+    header->e_ident[EI_VERSION] = 1; // should always be EV_CURRENT
+    // rest of ident can be zero, elf object files from gcc have zero
+    
+    header->e_type = ET_REL; // specifies that this is an object file and not an executable or shared/dynamic library
+    header->e_machine = EM_X86_64;
+    header->e_version = EV_CURRENT;
+    header->e_entry = 0; // zero for no entry point
+    header->e_phoff = 0; // we don't have program headers
+    header->e_shoff = 0; // we do have this
+    header->e_flags = 0; // Processor specific flags. I think it can be zero?
+    header->e_ehsize = sizeof(Elf64_Ehdr);
+    header->e_phentsize = 0; // no need
+    header->e_phnum = 0; // program header is optional, we don't need it for object files.
+    header->e_shentsize = sizeof(Elf64_Shdr);
+    header->e_shnum = 0; // incremented as we add sections below
+    header->e_shstrndx = 0; // index of string table section header, LATER
+    
+    /*##############
+        SECTIONS
+    ##############*/
+    header->e_shoff = obj_stream->getWriteHead();
+    
+    { // Undefined/null section (SHN_UNDEF). It is mandatory or at least expected.
+        header->e_shnum++;
+        Elf64_Shdr* section = nullptr;
+        suc = obj_stream->write_late((void**)&section, sizeof(*section));
+        CHECK
+        memset(section, 0, sizeof(*section));
+    }
+
+    DynamicArray<Elf64_Shdr*> sectionHeaders{};
+    sectionHeaders.resize(_sections.size() + 1);
+    for(int i=0;i<_sections.size();i++){
+        auto& section = _sections[i];
+        auto& sheader = sectionHeaders[section->number];
+        Assert(section->number == header->e_shnum);
+
+        ++header->e_shnum;
+        suc = obj_stream->write_late((void**)&sheader, sizeof(*sheader));
+        CHECK
+        memset(sheader, 0, sizeof(*sheader));
+        
+        sheader->sh_name = 0; // set in shstrtab section further down
+        sheader->sh_type = SHT_PROGBITS;
+        sheader->sh_flags = 0; // set below
+        sheader->sh_addr = 0; // always zero for object files
+        sheader->sh_offset = 0; // place where data lies, LATER
+        sheader->sh_size = 0; // size of data, LATER
+        sheader->sh_link = 0; // not used
+        sheader->sh_info = 0; // not used
+        sheader->sh_addralign = section->alignment; // check if alignment is 2**x
+        sheader->sh_entsize = 0;
+
+        sheader->sh_flags = SHF_ALLOC | SHF_WRITE;
+        if(section->flags & FLAG_READ_ONLY)
+            sheader->sh_flags = 0;
+        if(section->flags & FLAG_DEBUG)
+            sheader->sh_flags = 0;
+        if(section->flags & FLAG_CODE)
+            sheader->sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+    }
+
+    Elf64_Shdr* s_sectionStringTable = nullptr;
+    { // Section name string table
+        header->e_shstrndx = header->e_shnum;
+        header->e_shnum++;
+        Elf64_Shdr* sheader = nullptr;
+        suc = obj_stream->write_late((void**)&sheader, sizeof(*sheader));
+        CHECK
+        memset(sheader, 0, sizeof(*sheader));
+        s_sectionStringTable = sheader;
+        
+        sheader->sh_name = 0; // set in shstrtab section further down
+        sheader->sh_type = SHT_STRTAB;
+        sheader->sh_flags = 0; // should be none
+        sheader->sh_addr = 0; // always zero for object files
+        sheader->sh_offset = 0; // place where data lies, LATER
+        sheader->sh_size = 0; // size of data, LATER
+        sheader->sh_link = 0; 
+        sheader->sh_info = 0;  
+        sheader->sh_addralign = 1;
+        sheader->sh_entsize = 0;
+    }
+    
+    int ind_strtab = header->e_shnum;
+    Elf64_Shdr* s_stringTable = nullptr;
+    { // String table (for symbols)
+        header->e_shnum++;
+        Elf64_Shdr* sheader = nullptr;
+        suc = obj_stream->write_late((void**)&sheader, sizeof(*sheader));
+        CHECK
+        memset(sheader, 0, sizeof(*sheader));
+        s_stringTable = sheader;
+        
+        sheader->sh_name = 0; // set in shstrtab section further down
+        sheader->sh_type = SHT_STRTAB;
+        sheader->sh_flags = 0; // should be none
+        sheader->sh_addr = 0; // always zero for object files
+        sheader->sh_offset = 0; // place where data lies, LATER
+        sheader->sh_size = 0; // size of data, LATER
+        sheader->sh_link = 0; // not used
+        sheader->sh_info = 0; // not used
+        sheader->sh_addralign = 1;
+        sheader->sh_entsize = 0;
+    }
+
+    int ind_symtab = header->e_shnum;
+    Elf64_Shdr* s_symtab = nullptr;
+    { // Symbol table
+        header->e_shnum++;
+        Elf64_Shdr* sheader = nullptr;
+        suc = obj_stream->write_late((void**)&sheader, sizeof(*sheader));
+        CHECK
+        memset(sheader, 0, sizeof(*sheader));
+        s_symtab = sheader;
+        
+        sheader->sh_name = 0; // set in shstrtab section further down
+        sheader->sh_type = SHT_SYMTAB;
+        sheader->sh_flags = SHF_ALLOC;
+        sheader->sh_addr = 0; // always zero for object files
+        sheader->sh_offset = 0; // place where data lies, LATER
+        sheader->sh_size = 0; // size of data, LATER
+        sheader->sh_link = ind_strtab; // Index to string table section, names of symbols should be put there
+        sheader->sh_info = 0; // Index of first non-local symbol (or the number of local symbols). Local symbols must come first.
+        sheader->sh_addralign = 8;
+        sheader->sh_entsize = sizeof(Elf64_Sym);
+    }
+
+    DynamicArray<Elf64_Shdr*> reloca_sections;
+    reloca_sections.resize(_sections.size() + 1); // we may not use all
+    for(int i=0;i<_sections.size();i++) {
+        auto& section = _sections[i];
+        auto& sheader = reloca_sections[section->number];
+        if(section->relocations.size() == 0)  continue;
+
+        header->e_shnum++;
+        suc = obj_stream->write_late((void**)&sheader, sizeof(*sheader));
+        CHECK
+        memset(sheader, 0, sizeof(*sheader));
+        
+        sheader->sh_name = 0; // set in shstrtab section further down
+        sheader->sh_type = SHT_RELA;
+        sheader->sh_flags = 0; // IMPORTANT: what flags?
+        sheader->sh_addr = 0; // always zero for object files
+        sheader->sh_offset = 0; // place where data lies, LATER
+        sheader->sh_size = 0; // size of data, LATER
+        sheader->sh_link = ind_symtab; // index to symtab section
+        sheader->sh_info = section->number; // index to section where relocations should be applied
+        sheader->sh_addralign = 8;
+        sheader->sh_entsize = sizeof(Elf64_Rela);
+    }
+
+    // DynamicArray<Elf64_Shdr*> reloc_sections;
+    // reloc_sections.resize(_sections.size() + 1); // we may not use all
+    // for(int i=0;i<_sections.size();i++) {
+    //     auto& section = _sections[i];
+    //     auto& sheader = reloc_sections[section->number];
+    //     if(section->relocations.size() == 0)  continue;
+
+    //     header->e_shnum++;
+    //     suc = obj_stream->write_late((void**)&sheader, sizeof(*sheader));
+    //     CHECK
+    //     memset(sheader, 0, sizeof(*sheader));
+        
+    //     sheader->sh_name = 0; // set in shstrtab section further down
+    //     sheader->sh_type = SHT_REL;
+    //     sheader->sh_flags = 0; // IMPORTANT: what flags?
+    //     sheader->sh_addr = 0; // always zero for object files
+    //     sheader->sh_offset = 0; // place where data lies, LATER
+    //     sheader->sh_size = 0; // size of data, LATER
+    //     sheader->sh_link = ind_symtab; // index to symtab section
+    //     sheader->sh_info = section->number; // index to section where relocations should be applied
+    //     sheader->sh_addralign = 8;
+    //     sheader->sh_entsize = sizeof(Elf64_Rel);
+    // }
+
+    // ###################
+    //  SECTION DATA
+    // ####################
+    {
+        obj_stream->write_align(s_sectionStringTable->sh_addralign);
+        s_sectionStringTable->sh_offset = obj_stream->getWriteHead();
+        suc = obj_stream->write1('\0'); // table begins with null string
+        CHECK
+        for(int i=0;i<_sections.size();i++){
+            auto& section = _sections[i];
+            auto& sheader = sectionHeaders[section->number];
+
+            sheader->sh_name = obj_stream->getWriteHead() - s_sectionStringTable->sh_offset;
+            suc = obj_stream->write(section->name.c_str(),section->name.length() + 1);
+            CHECK
+
+            Elf64_Shdr* rheader = nullptr;
+            // auto rheader = reloc_sections[section->number];
+            // if(rheader) {
+            //     rheader->sh_name = obj_stream->getWriteHead() - s_sectionStringTable->sh_offset;
+            //     std::string nom = section->name+".rel";
+            //     suc = obj_stream->write(nom.c_str(),nom.length() + 1);
+            //     CHECK
+            // }
+            rheader = reloca_sections[section->number];
+            if(rheader) {
+                rheader->sh_name = obj_stream->getWriteHead() - s_sectionStringTable->sh_offset;
+                std::string nom = section->name+".rela";
+                suc = obj_stream->write(nom.c_str(),nom.length() + 1);
+                CHECK
+            }
+        }
+        s_sectionStringTable->sh_size = obj_stream->getWriteHead() - s_sectionStringTable->sh_offset;
+        // make sure that \0 is at the end of the table
+        Assert(obj_stream->read1(s_sectionStringTable->sh_offset + s_sectionStringTable->sh_size-1) == 0);
+    }
+
+    for(int si=0;si<_sections.size();si++){
+        auto& section = _sections[si];
+        auto& sheader = sectionHeaders[section->number];
+
+        obj_stream->write_align(sheader->sh_addralign);
+        sheader->sh_offset = obj_stream->getWriteHead();
+
+        obj_stream->steal_from(&section->stream);
+        // void* ptr=nullptr;
+        // obj_stream->write_late(&ptr, 8);
+        
+        sheader->sh_size = obj_stream->getWriteHead() - sheader->sh_offset;
+        // engone::log::out << section->name<<" ["<<NumberToHex(sheader->sh_offset,true) << "+"<<NumberToHex(sheader->sh_offset+sheader->sh_size,true)<<", "<<NumberToHex(sheader->sh_size,true)<<"]\n";
+
+        Elf64_Shdr* rheader = nullptr;
+        rheader = reloca_sections[section->number];
+        if(rheader) {
+            obj_stream->write_align(rheader->sh_addralign);
+            rheader->sh_offset = obj_stream->getWriteHead();
+
+            for(int ri=0;ri<section->relocations.size();ri++) {
+                auto& myrel = section->relocations[ri];
+
+                Elf64_Rela* rel = nullptr;
+                suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
+                CHECK
+                memset(rel, 0, sizeof(*rel));
+
+                if(myrel.type == RELOCA_PC32) {
+                    rel->r_offset = myrel.offset;
+                    int symindex = getSectionSymbol(myrel.sectionNr);
+                    rel->r_info = ELF64_R_INFO(symindex, R_X86_64_PC32);
+                    rel->r_addend = myrel.offsetIntoSection;
+                    rel->r_addend += -4;
+                } else if (myrel.type == RELOCA_PLT32) {
+                    rel->r_offset = myrel.offset;
+                    rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_PLT32);
+                    rel->r_addend = -4;
+                    // rel->r_addend = -4 + myrel.addend;
+                } else if(myrel.type == RELOCA_32) {
+                    rel->r_offset = myrel.offset;
+                    rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_32);
+                    rel->r_addend = 0;
+                    // rel->r_addend = -4 + myrel.addend;
+                } else if (myrel.type == RELOCA_64) {
+                    rel->r_offset = myrel.offset;
+                    rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_64);
+                    // rel->r_addend = -8;
+                    rel->r_addend = myrel.addend;
+                } else {
+                    Assert(false);
+                }
+            }
+            rheader->sh_size = obj_stream->getWriteHead() - rheader->sh_offset;
+        }
+        // rheader = reloc_sections[section->number];
+        // if(rheader) {
+        //     obj_stream->write_align(rheader->sh_addralign);
+        //     rheader->sh_offset = obj_stream->getWriteHead();
+
+        //     for(int ri=0;ri<section->relocations.size();ri++) {
+        //         auto& myrel = section->relocations[ri];
+
+        //         if(myrel.type == RELOC_PC64) {
+        //             Elf64_Rel* rel = nullptr;
+        //             suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
+        //             CHECK
+        //             memset(rel, 0, sizeof(*rel));
+
+        //             // if(myrel.type == RELOC_PC32) {
+        //             //     rel->r_offset = myrel.offset;
+        //             //     int symindex = getSectionSymbol(myrel.sectionNr);
+        //             //     rel->r_info = ELF64_R_INFO(symindex, R_X86_64_PC32);
+        //             //     rel->r_addend = myrel.offsetIntoSection;
+        //             //     rel->r_addend -= 4;
+        //             // } else if (myrel.type == RELOC_PLT32){
+        //             //     rel->r_offset = myrel.offset;
+        //             //     rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_PLT32);
+        //             //     rel->r_addend = -4;
+        //             // } else 
+        //             if (myrel.type == RELOC_PC64){
+        //                 rel->r_offset = myrel.offset;
+        //                 rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_64);
+        //                 // rel->r_info = ELF64_R_INFO(myrel.symbolIndex,R_X86_64_PC64);
+        //             }
+        //         }
+        //     }
+        //     rheader->sh_size = obj_stream->getWriteHead() - rheader->sh_offset;
+        // }
+    }
+
+    {
+        auto sheader = s_symtab;
+        obj_stream->write_align(sheader->sh_addralign);
+        sheader->sh_offset = obj_stream->getWriteHead();
+        sheader->sh_info = 1; // the first null symbol is local, rest is global
+        
+        int bind = STB_LOCAL;
+        Assert(_symbols[0].type == SYM_EMPTY); // ELF wants null symbol first
+        for(int i=0;i<_symbols.size();i++) {
+            auto& mysym = _symbols[i];
+
+            Elf64_Sym* sym = nullptr;
+            suc = obj_stream->write_late((void**)&sym, sizeof(*sym));
+            CHECK
+            memset(sym, 0, sizeof(*sym));
+            
+            if(mysym.type == SYM_EMPTY) {
+                // memset(sym, 0, sizeof(*sym));
+            } else {
+                sym->st_name = addString(mysym.name);
+                sym->st_other = 0; // always zero
+                sym->st_size = 0;
+                sym->st_shndx = mysym.sectionNr;
+                sym->st_value = mysym.offset;
+
+                if (mysym.type == SYM_SECTION){
+                    sym->st_info = ELF64_ST_INFO(bind, STT_SECTION);
+                    if(bind == STB_LOCAL) {
+                        sheader->sh_info = i + 1;
+                    }
+                } else {
+                    bind = STB_GLOBAL;
+                    if(mysym.type == SYM_FUNCTION) {
+                        sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_FUNC);
+                    } else if(mysym.type == SYM_DATA) {
+                        Assert(false);
+                        // use PC32 relocation if possible
+                        // addRelocation(section, off, section2, off2)
+                        // sym->st_info = ELF64_ST_INFO(STB_GLOBAL, STT_OBJECT);
+                    }
+                }
+            }
+        }
+        
+        sheader->sh_size = obj_stream->getWriteHead() - sheader->sh_offset;
+    }
+    {
+        auto sheader = s_stringTable;
+        obj_stream->write_align(sheader->sh_addralign);
+        sheader->sh_offset = obj_stream->getWriteHead();
+        
+        Assert(_strings[0] == ""); // ELF wants null string first
+        for(int i=0;i<_strings.size();i++) {
+            std::string& str = _strings[i];
+            suc = obj_stream->write(str.c_str(), str.length() + 1);
+            CHECK
+        }
+        
+        sheader->sh_size = obj_stream->getWriteHead() - sheader->sh_offset;
+        // make sure we didn't miscalculate something
+        Assert(sheader->sh_size == _strings_offset);
+        // make sure that \0 is at the end of the table
+        Assert(obj_stream->read1(sheader->sh_offset + sheader->sh_size-1) == 0);
+    }
+
+    auto file = engone::FileOpen(path, 0, engone::FILE_ALWAYS_CREATE);
+    if(!file)  return false;
+    ByteStream::Iterator iter{};
+    while(obj_stream->iterate(iter)) {
+        engone::FileWrite(file, (void*)iter.ptr, iter.size);
+    }
+    engone::FileClose(file);
+
+    #undef CHECK
     return true;
 }
 
@@ -262,6 +660,15 @@ SectionNr ObjectFile::createSection(const std::string& name, ObjectFile::Section
     ptr->symbolIndex = addSymbol(SYM_SECTION, name, ptr->number, 0);
 
     return ptr->number;
+}
+SectionNr ObjectFile::findSection(const std::string& name) {
+    for(int i=0;i<_sections.size();i++) {
+        auto& section = _sections[i];
+        if(section->name == name) {
+            return section->number;
+        }
+    }
+    return 0;
 }
 int ObjectFile::addSymbol(ObjectFile::SymbolType type, const std::string& name, SectionNr sectionNr, u32 offset) {
     if(type == SYM_SECTION) {
@@ -301,19 +708,20 @@ int ObjectFile::findSymbol(const std::string& name) {
 int ObjectFile::getSectionSymbol(SectionNr nr) {
     return _sections[nr - 1]->symbolIndex;
 }
-void ObjectFile::addRelocation(SectionNr sectionNr, ObjectFile::RelocationType type, u32 offset, u32 symbolIndex) {
+void ObjectFile::addRelocation(SectionNr sectionNr, ObjectFile::RelocationType type, u32 offset, u32 symbolIndex, u32 addend) {
     auto& sec = _sections[sectionNr - 1];
     sec->relocations.add({});
     auto& rel = sec->relocations.last();
     rel.type = type;
     rel.offset = offset;
     rel.symbolIndex = symbolIndex;
+    rel.addend = addend;
 }
-void ObjectFile::addRelocation(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2) {
+void ObjectFile::addRelocation_data(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2) {
     auto& sec = _sections[sectionNr - 1];
     sec->relocations.add({});
     auto& rel = sec->relocations.last();
-    rel.type = RELOC_PC32;
+    rel.type = RELOCA_PC32;
     rel.offset = offset;
     rel.sectionNr = sectionNr2;
     rel.offsetIntoSection = offset2;

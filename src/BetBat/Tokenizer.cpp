@@ -116,8 +116,13 @@ u64 ConvertHexadecimal(const Token& token){
     }
     return hex;
 }
-std::string NumberToHex(u64 number) {
-    if(number == 0) return "0";
+std::string NumberToHex(u64 number, bool withPrefix) {
+    if(number == 0) {
+        if (withPrefix)
+            return "0x0";
+        else
+            return "0";
+    }
 
     std::string out = "";
     while(true) {
@@ -128,6 +133,8 @@ std::string NumberToHex(u64 number) {
         if(number == 0)
             break;
     }
+    if(withPrefix)
+        out = "0x" + out;
 
     return out;
 }

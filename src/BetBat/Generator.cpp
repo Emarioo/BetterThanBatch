@@ -3445,9 +3445,9 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         } else {
             // exports not handled
             Assert(IS_IMPORT(function->linkConvention));
-            if(function->_impls.size()>0){
-                function->_impls.last()->address = FuncImpl::ADDRESS_EXTERNAL;
-            }
+            // if(function->_impls.size()>0){
+            //     function->_impls.last()->address = FuncImpl::ADDRESS_EXTERNAL;
+            // }
             _GLOG(log::out << "External function "<<function->name<<"\n";)
         }
         return SignalDefault::SUCCESS;
@@ -3464,7 +3464,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         if(!funcImpl->isUsed())
             // Skips implementation if it isn't used
             continue;
-        Assert(("func has already been generated!",funcImpl->address == 0));
+        Assert(("func has already been generated!",funcImpl->address == FuncImpl::ADDRESS_INVALID));
         // This happens with functions inside of polymorphic function.
         // if(function->callConvention != BETCALL) {
         //     ERR_SECTION(
