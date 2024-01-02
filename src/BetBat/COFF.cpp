@@ -701,7 +701,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     dwarfInfo.debug = program->debugInformation;
     dwarfInfo.stringTable = &stringsForTable;
     dwarfInfo.stringTableOffset = &stringTableOffset;
-    dwarfInfo.header = header;
+    dwarfInfo.coff_header = header;
     dwarfInfo.stream = obj_stream;
     
     // For PDB debug
@@ -713,7 +713,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     if(program->debugInformation) {
         #ifdef USE_DWARF_AS_DEBUG
         
-        dwarf::ProvideSections(&dwarfInfo);
+        dwarf::ProvideSections(&dwarfInfo, DWARF_OBJ_COFF);
         
         #else
         debugSSectionNumber = ++header->NumberOfSections;
@@ -920,9 +920,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     if(program->debugInformation) {
         #ifdef USE_DWARF_AS_DEBUG
         
-        // ensure
-
-        dwarf::ProvideSectionData(&dwarfInfo);
+        dwarf::ProvideSectionData(&dwarfInfo, DWARF_OBJ_ELF);
         
         #else
         DebugInformation* di = program->debugInformation;

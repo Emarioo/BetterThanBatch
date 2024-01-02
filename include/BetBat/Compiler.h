@@ -6,11 +6,13 @@
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
 #include "BetBat/NativeRegistry.h"
-#include "BetBat/COFF.h"
-#include "BetBat/ELF.h"
-#include "BetBat/x64_Converter.h"
 #include "BetBat/UserProfile.h"
 #include "BetBat/CompilerEnums.h"
+
+#include "BetBat/x64_Converter.h"
+#include "BetBat/COFF.h"
+#include "BetBat/ELF.h"
+#include "BetBat/ObjectFile.h"
 // #include "BetBat/MessageTool.h"
 
 // This class is here to standardise the usage of paths.

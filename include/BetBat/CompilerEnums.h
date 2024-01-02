@@ -2,7 +2,7 @@
 #include "Engone/Logger.h"
 
 enum TargetPlatform : u32 {
-    UNKNOWN_TARGET = 0,
+    TARGET_UNKNOWN = 0,
     TARGET_BYTECODE,
     // TODO: Add some option for COFF or ELF format? Probably not here.
     TARGET_WINDOWS_x64,
@@ -13,7 +13,7 @@ engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target);
 TargetPlatform ToTarget(const std::string& str);
 // Also known as linker tools
 enum LinkerChoice : u32 {
-    UNKNOWN_LINKER = 0,
+    LINKER_UNKNOWN = 0,
     LINKER_GCC,
     LINKER_MSVC,
     LINKER_CLANG,

@@ -6,6 +6,7 @@
 #include "Engone/Util/Array.h"
 #include "Engone/Util/Allocator.h"
 
+
 // An artificial array of bytes. The allocations is handled within.
 // Most functions return bool which indicates whether the function succeded or not.
 // A single write operation (of any size) is not split up into multiple allocations.
@@ -13,6 +14,7 @@
 // without worrying about the boundary.
 // Write operations do not invalidate previous pointers. Operations like finalize() may invalidate pointers.
 struct ByteStream {
+    #define ENSURE_ALLOCATOR if(!m_allocator) m_allocator = engone::GlobalHeapAllocator();
     static ByteStream* Create(engone::Allocator* allocator) {
         if(!allocator)
             allocator = engone::GlobalHeapAllocator();
@@ -70,6 +72,7 @@ struct ByteStream {
             
             allocation = &allocations.last();
             allocation->max = size*2 + writtenBytes * 1.5; // MEMORY GROWTH
+            ENSURE_ALLOCATOR
             allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
             if(!allocation->ptr) {
                 allocations.removeAt(allocations.size()-1);
@@ -142,6 +145,7 @@ struct ByteStream {
             
             allocation = &allocations.last();
             allocation->max = max_size*2 + writtenBytes * 1.5; // MEMORY GROWTH
+            ENSURE_ALLOCATOR
             allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
             if(!allocation->ptr) {
                 allocations.removeAt(allocations.size()-1);
@@ -221,6 +225,7 @@ struct ByteStream {
             *out_size = 0;
         
         int max = writtenBytes;
+        ENSURE_ALLOCATOR
         u8* ptr = (u8*)m_allocator->allocate(max);
         if(!ptr)
             return false;
@@ -294,6 +299,7 @@ struct ByteStream {
         
         auto allocation = &allocations.last();
         allocation->max = size;
+        ENSURE_ALLOCATOR
         allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
         if(!allocation->ptr) {
             allocations.removeAt(allocations.size()-1);

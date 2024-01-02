@@ -159,7 +159,7 @@ int main(int argc, const char** argv){
             if(i<argc){
                 arg = argv[i];
                 compileOptions.target = ToTarget(arg);
-                if(compileOptions.target == UNKNOWN_TARGET) {
+                if(compileOptions.target == TARGET_UNKNOWN) {
                     invalidArguments = true;
                     log::out << log::RED << arg << " is not a valid target.\n";
                     // TODO: print list of targets
@@ -176,7 +176,7 @@ int main(int argc, const char** argv){
             if(i<argc){
                 arg = argv[i];
                 compileOptions.linker = ToLinker(arg);
-                if(compileOptions.linker == UNKNOWN_LINKER) {
+                if(compileOptions.linker == LINKER_UNKNOWN) {
                     invalidArguments = true;
                     log::out << log::RED << arg << " is not a valid linker.\n";
                     // TODO: print list of targets

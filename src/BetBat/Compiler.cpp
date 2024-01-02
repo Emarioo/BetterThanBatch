@@ -279,7 +279,7 @@ const char* ToString(TargetPlatform target){
         CASE(TARGET_WINDOWS_x64,"win-x64")
         CASE(TARGET_UNIX_x64,"unix-x64")
         CASE(TARGET_BYTECODE,"bytecode")
-        CASE(UNKNOWN_TARGET,"unknown-target")
+        CASE(TARGET_UNKNOWN,"unknown-target")
     }
     return "unknown";
     #undef CASE
@@ -289,7 +289,7 @@ TargetPlatform ToTarget(const std::string& str){
     CASE(TARGET_WINDOWS_x64,"win-x64")
     CASE(TARGET_UNIX_x64,"unix-x64")
     CASE(TARGET_BYTECODE,"bytecode")
-    return UNKNOWN_TARGET;
+    return TARGET_UNKNOWN;
     #undef CASE
 }
 engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
@@ -301,7 +301,7 @@ const char* ToString(LinkerChoice v) {
         CASE(LINKER_GCC,"gcc")
         CASE(LINKER_MSVC,"msvc")
         CASE(LINKER_CLANG,"clang")
-        CASE(UNKNOWN_LINKER,"unknown-linker")
+        CASE(LINKER_UNKNOWN,"unknown-linker")
         default: {}
     }
     return "unknown";
@@ -312,8 +312,8 @@ LinkerChoice ToLinker(const std::string& str) {
     CASE(LINKER_GCC,"gcc")
     CASE(LINKER_MSVC,"msvc")
     CASE(LINKER_CLANG,"clang")
-    CASE(UNKNOWN_LINKER,"unknown-linker")
-    return UNKNOWN_LINKER;
+    CASE(LINKER_UNKNOWN,"unknown-linker")
+    return LINKER_UNKNOWN;
     #undef CASE
 }
 engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v) {
@@ -1778,11 +1778,13 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     switch(options->target) {
     case TARGET_WINDOWS_x64:
         objPath = "bin/" + outPath.getFileName(true).text + ".obj";
-        yes = FileCOFF::WriteFile(objPath,program);
+        yes = ObjectFile::WriteFile(OBJ_COFF, objPath, program);
+        // yes = FileCOFF::WriteFile(objPath,program);
         break;
     case TARGET_UNIX_x64:
         objPath = "bin/" + outPath.getFileName(true).text + ".o";
-        yes = FileELF::WriteFile(objPath, program);
+        yes = ObjectFile::WriteFile(OBJ_ELF, objPath, program);
+        // yes = FileELF::WriteFile(objPath, program);
         break;
     default: {
         Assert(false);
@@ -1845,6 +1847,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
         switch(options->linker) {
             case LINKER_GCC: cmd += "g++ "; break;
             case LINKER_CLANG: cmd += "clang++ "; break;
+            default: break;
         }
         
         if(options->useDebugInformation)

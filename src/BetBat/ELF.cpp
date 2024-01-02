@@ -1,5 +1,7 @@
 #include "BetBat/ELF.h"
 
+#include "BetBat/DWARF.h"
+
 namespace elf {
     
 }
@@ -16,9 +18,6 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
     if(program->debugInformation) {
         engone::log::out << engone::log::RED << "Debug information (DWARF) has not been implemented when writing ELF files\n";
     }
-    
-    // data relocations not implemented
-    // Assert(program->dataRelocations.size() == 0);
     
     ByteStream* obj_stream = ByteStream::Create(nullptr);
     defer {
@@ -211,6 +210,13 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         section->sh_addralign = 8;
         section->sh_entsize = sizeof(Elf64_Rela);
     }
+    dwarf::DWARFInfo dwarfInfo{};
+    dwarfInfo.program = program;
+    dwarfInfo.debug = program->debugInformation;
+    
+    if(program->debugInformation) {
+        dwarf::ProvideSections(&dwarfInfo, DWARF_OBJ_ELF);
+    }
     
     /*##########
         Data in sections
@@ -230,6 +236,14 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         s_data->sh_name = ADD(SECTION_NAME_DATA)
         s_symtab->sh_name = ADD(".symtab")
         s_textrela->sh_name = ADD(".rela.text")
+
+        if(program->debugInformation) {
+            dwarfInfo.elf_section_debug_info->sh_name = ADD(".debug_info")
+            dwarfInfo.elf_section_debug_abbrev->sh_name = ADD(".debug_abbrev")
+            dwarfInfo.elf_section_debug_line->sh_name = ADD(".debug_line")
+            dwarfInfo.elf_section_debug_aranges->sh_name = ADD(".debug_aranges")
+            dwarfInfo.elf_section_debug_frame->sh_name = ADD(".debug_frame")
+        }
         
         #undef ADD
         
@@ -238,8 +252,10 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         Assert(obj_stream->read1(section->sh_offset + section->sh_size-1) == 0);
     }
     
-    int stringTable_offset = 1;
+    u32 stringTable_offset = 1;
     DynamicArray<std::string> stringTable_strings{};
+    dwarfInfo.stringTable = &stringTable_strings;
+    dwarfInfo.stringTableOffset = &stringTable_offset;
 
     struct Symbol {
         int nameIndex; // index into string table
@@ -288,6 +304,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
 
         return (int)(symbols.size() - 1);
     };
+    dwarfInfo.elf_addSymbol = addSymbol;
 
     // TODO: Add .text symbol
     // int sym_data = addSymbol(".text", ind_data, 0, STB_LOCAL, STT_SECTION);
@@ -356,6 +373,15 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
             rel->r_addend -= 4;
         }
         section->sh_size = obj_stream->getWriteHead() - section->sh_offset;
+    }
+    dwarfInfo.symindex_text = addSymbol(".text", ind_text, 0, STB_GLOBAL, STT_SECTION);
+    if(program->debugInformation) {
+        dwarfInfo.symindex_debug_info = addSymbol(".debug_info", dwarfInfo.number_debug_info, 0,STB_GLOBAL, STT_SECTION );
+        dwarfInfo.symindex_debug_line = addSymbol(".debug_line", dwarfInfo.number_debug_line, 0,STB_GLOBAL, STT_SECTION );
+        dwarfInfo.symindex_debug_abbrev = addSymbol(".debug_abbrev", dwarfInfo.number_debug_abbrev, 0,STB_GLOBAL, STT_SECTION );
+        dwarfInfo.symindex_debug_frame = addSymbol(".debug_frame", dwarfInfo.number_debug_frame, 0,STB_GLOBAL, STT_SECTION );
+
+        dwarf::ProvideSectionData(&dwarfInfo, DWARF_OBJ_ELF);
     }
     
     {

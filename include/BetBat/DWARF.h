@@ -19,6 +19,13 @@
 
 #include "Engone/Util/Stream.h"
 #include "BetBat/COFF.h"
+#include "BetBat/ELF.h"
+#include "BetBat/ObjectFile.h"
+
+enum DWARF_ObjectFileType {
+    DWARF_OBJ_COFF,
+    DWARF_OBJ_ELF,
+};
 
 namespace dwarf {
     // IMPORTANT: All structs assume 32-bit DWARF format
@@ -85,21 +92,38 @@ namespace dwarf {
         int number_debug_aranges = -1;
         int number_debug_frame = -1;
         
-        coff::Section_Header* section_debug_info = nullptr;
-        coff::Section_Header* section_debug_abbrev = nullptr;
-        coff::Section_Header* section_debug_line = nullptr;
-        coff::Section_Header* section_debug_aranges = nullptr;
-        coff::Section_Header* section_debug_frame = nullptr;
+        union {
+            struct {
+                coff::Section_Header* coff_section_debug_info;
+                coff::Section_Header* coff_section_debug_abbrev;
+                coff::Section_Header* coff_section_debug_line;
+                coff::Section_Header* coff_section_debug_aranges;
+                coff::Section_Header* coff_section_debug_frame;
+            };
+            struct {
+                elf::Elf64_Shdr* elf_section_debug_info;
+                elf::Elf64_Shdr* elf_section_debug_abbrev;
+                elf::Elf64_Shdr* elf_section_debug_line;
+                elf::Elf64_Shdr* elf_section_debug_aranges;
+                elf::Elf64_Shdr* elf_section_debug_frame;
+            };
+            void* _zero[5] {nullptr};
+        };
         
         // input/output
         ByteStream* stream = nullptr;
-        coff::COFF_File_Header* header = nullptr;
+        union {
+            coff::COFF_File_Header* coff_header = nullptr;
+            elf::Elf64_Ehdr* elf_header;
+        };
         DebugInformation* debug = nullptr;
         
         DynamicArray<std::string>* stringTable = nullptr;
         u32* stringTableOffset = nullptr;
 
         DynamicArray<coff::SectionSymbol>* sectionSymbols = nullptr;
+        std::function<int(const std::string&, int, int, int, int)> elf_addSymbol = nullptr;
+        //  = [&](const std::string& name, int section, int value, int bind, int type) {
 
         int symindex_text = -1;
         int symindex_debug_info = -1;
@@ -110,10 +134,11 @@ namespace dwarf {
         Program_x64* program = nullptr; // DWARF needs to know the size of the program code
     };
 
+    void ProvideSections(ObjectFile* objectFile, Program_x64* program);
     // @param stream sections or written to the stream
     // @param header number of sections is modified
-    void ProvideSections(DWARFInfo* info);
-    void ProvideSectionData(DWARFInfo* info);
+    void ProvideSections(DWARFInfo* info, DWARF_ObjectFileType objType);
+    void ProvideSectionData(DWARFInfo* info, DWARF_ObjectFileType objType);
     
     // returns number of written bytes
     // return a negative number indicating how many bytes are missing

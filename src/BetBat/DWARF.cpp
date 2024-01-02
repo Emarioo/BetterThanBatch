@@ -1,146 +1,254 @@
 #include "BetBat/DWARF.h"
 
 namespace dwarf {
-    void ProvideSections(DWARFInfo* info) {
+    void ProvideSections(ObjectFile* objectFile, Program_x64* program) {
+        
+    }
+    void ProvideSections(DWARFInfo* info, DWARF_ObjectFileType objType) {
         using namespace engone;
         using namespace coff;
-        Assert(info->stream && info->header && info->debug);
+        using namespace elf;
+        Assert(info->stream && info->debug);
+        Assert(info->coff_header || info->elf_header);
         
         bool suc = false;
         #define CHECK Assert(suc);
-        
-        {
-            info->number_debug_info = ++info->header->NumberOfSections;
-            Section_Header* section = nullptr;
-            suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
-            CHECK
-        
-            info->section_debug_info = section;
-            info->stringTable->add(".debug_info");
-            snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
-            *info->stringTableOffset += info->stringTable->last().length() + 1;
-            section->NumberOfLineNumbers = 0;
-            section->PointerToLineNumbers = 0;
-            section->NumberOfRelocations = 0;
-            section->PointerToRelocations = 0;
-            section->VirtualAddress = 0;
-            section->VirtualSize = 0;
-            section->SizeOfRawData = 0;
-            section->PointerToRawData = 0;
-            section->Characteristics = (Section_Flags)(
-                IMAGE_SCN_CNT_INITIALIZED_DATA |
-                IMAGE_SCN_MEM_DISCARDABLE |
-                IMAGE_SCN_ALIGN_1BYTES |
-                IMAGE_SCN_MEM_READ);
+
+        switch(objType) {
+        case DWARF_OBJ_COFF:{
+            {
+                info->number_debug_info = ++info->coff_header->NumberOfSections;
+                Section_Header* section = nullptr;
+                suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
+                CHECK
+                info->coff_section_debug_info = section;
+
+                info->stringTable->add(".debug_info");
+                snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
+                *info->stringTableOffset += info->stringTable->last().length() + 1;
+                section->NumberOfLineNumbers = 0;
+                section->PointerToLineNumbers = 0;
+                section->NumberOfRelocations = 0;
+                section->PointerToRelocations = 0;
+                section->VirtualAddress = 0;
+                section->VirtualSize = 0;
+                section->SizeOfRawData = 0;
+                section->PointerToRawData = 0;
+                section->Characteristics = (Section_Flags)(
+                    IMAGE_SCN_CNT_INITIALIZED_DATA |
+                    IMAGE_SCN_MEM_DISCARDABLE |
+                    IMAGE_SCN_ALIGN_1BYTES |
+                    IMAGE_SCN_MEM_READ);
+            }
+            {
+                info->number_debug_abbrev = ++info->coff_header->NumberOfSections;
+                Section_Header* section = nullptr;
+                suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
+                CHECK
+            
+                info->coff_section_debug_abbrev = section;
+                info->stringTable->add(".debug_abbrev");
+                snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
+                *info->stringTableOffset += info->stringTable->last().length() + 1;
+                section->NumberOfLineNumbers = 0;
+                section->PointerToLineNumbers = 0;
+                section->NumberOfRelocations = 0;
+                section->PointerToRelocations = 0;
+                section->VirtualAddress = 0;
+                section->VirtualSize = 0;
+                section->SizeOfRawData = 0;
+                section->PointerToRawData = 0;
+                section->Characteristics = (Section_Flags)(
+                    IMAGE_SCN_CNT_INITIALIZED_DATA |
+                    IMAGE_SCN_MEM_DISCARDABLE |
+                    IMAGE_SCN_ALIGN_1BYTES |
+                    IMAGE_SCN_MEM_READ);
+            }
+            {
+                info->number_debug_line = ++info->coff_header->NumberOfSections;
+                Section_Header* section = nullptr;
+                suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
+                CHECK
+            
+                info->coff_section_debug_line = section;
+                info->stringTable->add(".debug_line");
+                snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
+                *info->stringTableOffset += info->stringTable->last().length() + 1;
+                section->NumberOfLineNumbers = 0;
+                section->PointerToLineNumbers = 0;
+                section->NumberOfRelocations = 0;
+                section->PointerToRelocations = 0;
+                section->VirtualAddress = 0;
+                section->VirtualSize = 0;
+                section->SizeOfRawData = 0;
+                section->PointerToRawData = 0;
+                section->Characteristics = (Section_Flags)(
+                    IMAGE_SCN_CNT_INITIALIZED_DATA |
+                    IMAGE_SCN_MEM_DISCARDABLE |
+                    IMAGE_SCN_ALIGN_1BYTES |
+                    IMAGE_SCN_MEM_READ);
+            }
+            {
+                info->number_debug_aranges = ++info->coff_header->NumberOfSections;
+                Section_Header* section = nullptr;
+                suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
+                CHECK
+            
+                info->coff_section_debug_aranges = section;
+                info->stringTable->add(".debug_aranges");
+                snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
+                *info->stringTableOffset += info->stringTable->last().length() + 1;
+                section->NumberOfLineNumbers = 0;
+                section->PointerToLineNumbers = 0;
+                section->NumberOfRelocations = 0;
+                section->PointerToRelocations = 0;
+                section->VirtualAddress = 0;
+                section->VirtualSize = 0;
+                section->SizeOfRawData = 0;
+                section->PointerToRawData = 0;
+                section->Characteristics = (Section_Flags)(
+                    IMAGE_SCN_CNT_INITIALIZED_DATA |
+                    IMAGE_SCN_MEM_DISCARDABLE |
+                    IMAGE_SCN_ALIGN_1BYTES |
+                    IMAGE_SCN_MEM_READ);
+            }
+            {
+                info->number_debug_frame = ++info->coff_header->NumberOfSections;
+                Section_Header* section = nullptr;
+                suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
+                CHECK
+            
+                info->coff_section_debug_frame = section;
+                info->stringTable->add(".debug_frame");
+                snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
+                *info->stringTableOffset += info->stringTable->last().length() + 1;
+                section->NumberOfLineNumbers = 0;
+                section->PointerToLineNumbers = 0;
+                section->NumberOfRelocations = 0;
+                section->PointerToRelocations = 0;
+                section->VirtualAddress = 0;
+                section->VirtualSize = 0;
+                section->SizeOfRawData = 0;
+                section->PointerToRawData = 0;
+                section->Characteristics = (Section_Flags)(
+                    IMAGE_SCN_CNT_INITIALIZED_DATA |
+                    IMAGE_SCN_MEM_DISCARDABLE |
+                    IMAGE_SCN_ALIGN_1BYTES |
+                    IMAGE_SCN_MEM_READ);
+            }
+            break;
         }
-        {
-            info->number_debug_abbrev = ++info->header->NumberOfSections;
-            Section_Header* section = nullptr;
-            suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
-            CHECK
-        
-            info->section_debug_abbrev = section;
-            info->stringTable->add(".debug_abbrev");
-            snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
-            *info->stringTableOffset += info->stringTable->last().length() + 1;
-            section->NumberOfLineNumbers = 0;
-            section->PointerToLineNumbers = 0;
-            section->NumberOfRelocations = 0;
-            section->PointerToRelocations = 0;
-            section->VirtualAddress = 0;
-            section->VirtualSize = 0;
-            section->SizeOfRawData = 0;
-            section->PointerToRawData = 0;
-            section->Characteristics = (Section_Flags)(
-                IMAGE_SCN_CNT_INITIALIZED_DATA |
-                IMAGE_SCN_MEM_DISCARDABLE |
-                IMAGE_SCN_ALIGN_1BYTES |
-                IMAGE_SCN_MEM_READ);
+        case DWARF_OBJ_ELF: {
+            {
+                info->number_debug_info = ++info->elf_header->e_shnum;
+                Elf64_Shdr* section = nullptr;
+                suc = info->stream->write_late((void**)&section, sizeof(*section));
+                CHECK
+                memset(section, 0, sizeof(*section));
+                info->elf_section_debug_info = section;
+
+                section->sh_name = 0; // set in ELF.cpps
+                section->sh_type = SHT_PROGBITS;
+                section->sh_flags = 0; // no flags?
+                section->sh_addr = 0; // always zero for object files
+                section->sh_offset = 0; // place where data lies, LATER
+                section->sh_size = 0; // size of data, LATER
+                section->sh_link = 0; // not used
+                section->sh_info = 0; // not used
+                section->sh_addralign = 1;
+                section->sh_entsize = 0;
+            }
+            {
+                info->number_debug_abbrev = ++info->elf_header->e_shnum;
+                Elf64_Shdr* section = nullptr;
+                suc = info->stream->write_late((void**)&section, sizeof(*section));
+                CHECK
+                memset(section, 0, sizeof(*section));
+                info->elf_section_debug_abbrev = section;
+
+                section->sh_name = 0; // set in ELF.cpps
+                section->sh_type = SHT_PROGBITS;
+                section->sh_flags = 0; // no flags?
+                section->sh_addr = 0; // always zero for object files
+                section->sh_offset = 0; // place where data lies, LATER
+                section->sh_size = 0; // size of data, LATER
+                section->sh_link = 0; // not used
+                section->sh_info = 0; // not used
+                section->sh_addralign = 1;
+                section->sh_entsize = 0;
+            }
+            {
+                info->number_debug_line = ++info->elf_header->e_shnum;
+                Elf64_Shdr* section = nullptr;
+                suc = info->stream->write_late((void**)&section, sizeof(*section));
+                CHECK
+                memset(section, 0, sizeof(*section));
+                info->elf_section_debug_line = section;
+
+                section->sh_name = 0; // set in ELF.cpps
+                section->sh_type = SHT_PROGBITS;
+                section->sh_flags = 0; // no flags?
+                section->sh_addr = 0; // always zero for object files
+                section->sh_offset = 0; // place where data lies, LATER
+                section->sh_size = 0; // size of data, LATER
+                section->sh_link = 0; // not used
+                section->sh_info = 0; // not used
+                section->sh_addralign = 1;
+                section->sh_entsize = 0;
+            }
+            {
+                info->number_debug_aranges = ++info->elf_header->e_shnum;
+                Elf64_Shdr* section = nullptr;
+                suc = info->stream->write_late((void**)&section, sizeof(*section));
+                CHECK
+                memset(section, 0, sizeof(*section));
+                info->elf_section_debug_aranges = section;
+
+                section->sh_name = 0; // set in ELF.cpps
+                section->sh_type = SHT_PROGBITS;
+                section->sh_flags = 0; // no flags?
+                section->sh_addr = 0; // always zero for object files
+                section->sh_offset = 0; // place where data lies, LATER
+                section->sh_size = 0; // size of data, LATER
+                section->sh_link = 0; // not used
+                section->sh_info = 0; // not used
+                section->sh_addralign = 1;
+                section->sh_entsize = 0;
+            }
+            {
+                info->number_debug_frame = ++info->elf_header->e_shnum;
+                Elf64_Shdr* section = nullptr;
+                suc = info->stream->write_late((void**)&section, sizeof(*section));
+                CHECK
+                memset(section, 0, sizeof(*section));
+                info->elf_section_debug_frame = section;
+
+                section->sh_name = 0; // set in ELF.cpps
+                section->sh_type = SHT_PROGBITS;
+                section->sh_flags = 0; // no flags?
+                section->sh_addr = 0; // always zero for object files
+                section->sh_offset = 0; // place where data lies, LATER
+                section->sh_size = 0; // size of data, LATER
+                section->sh_link = 0; // not used
+                section->sh_info = 0; // not used
+                section->sh_addralign = 1;
+                section->sh_entsize = 0;
+            }
+            break;
         }
-        {
-            info->number_debug_line = ++info->header->NumberOfSections;
-            Section_Header* section = nullptr;
-            suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
-            CHECK
-        
-            info->section_debug_line = section;
-            info->stringTable->add(".debug_line");
-            snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
-            *info->stringTableOffset += info->stringTable->last().length() + 1;
-            section->NumberOfLineNumbers = 0;
-            section->PointerToLineNumbers = 0;
-            section->NumberOfRelocations = 0;
-            section->PointerToRelocations = 0;
-            section->VirtualAddress = 0;
-            section->VirtualSize = 0;
-            section->SizeOfRawData = 0;
-            section->PointerToRawData = 0;
-            section->Characteristics = (Section_Flags)(
-                IMAGE_SCN_CNT_INITIALIZED_DATA |
-                IMAGE_SCN_MEM_DISCARDABLE |
-                IMAGE_SCN_ALIGN_1BYTES |
-                IMAGE_SCN_MEM_READ);
+        default: Assert(false);
         }
-        {
-            info->number_debug_aranges = ++info->header->NumberOfSections;
-            Section_Header* section = nullptr;
-            suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
-            CHECK
-        
-            info->section_debug_aranges = section;
-            info->stringTable->add(".debug_aranges");
-            snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
-            *info->stringTableOffset += info->stringTable->last().length() + 1;
-            section->NumberOfLineNumbers = 0;
-            section->PointerToLineNumbers = 0;
-            section->NumberOfRelocations = 0;
-            section->PointerToRelocations = 0;
-            section->VirtualAddress = 0;
-            section->VirtualSize = 0;
-            section->SizeOfRawData = 0;
-            section->PointerToRawData = 0;
-            section->Characteristics = (Section_Flags)(
-                IMAGE_SCN_CNT_INITIALIZED_DATA |
-                IMAGE_SCN_MEM_DISCARDABLE |
-                IMAGE_SCN_ALIGN_1BYTES |
-                IMAGE_SCN_MEM_READ);
-        }
-        // #define DISABLE_DEBUG_FRAME
-        #ifndef DISABLE_DEBUG_FRAME
-        {
-            info->number_debug_frame = ++info->header->NumberOfSections;
-            Section_Header* section = nullptr;
-            suc = info->stream->write_late((void**)&section, Section_Header::SIZE);
-            CHECK
-        
-            info->section_debug_frame = section;
-            info->stringTable->add(".debug_frame");
-            snprintf(section->Name, 8, "/%u", *info->stringTableOffset);
-            *info->stringTableOffset += info->stringTable->last().length() + 1;
-            section->NumberOfLineNumbers = 0;
-            section->PointerToLineNumbers = 0;
-            section->NumberOfRelocations = 0;
-            section->PointerToRelocations = 0;
-            section->VirtualAddress = 0;
-            section->VirtualSize = 0;
-            section->SizeOfRawData = 0;
-            section->PointerToRawData = 0;
-            section->Characteristics = (Section_Flags)(
-                IMAGE_SCN_CNT_INITIALIZED_DATA |
-                IMAGE_SCN_MEM_DISCARDABLE |
-                IMAGE_SCN_ALIGN_1BYTES |
-                IMAGE_SCN_MEM_READ);
-        }
-        #endif
         #undef CHECK
     }
     
-    void ProvideSectionData(DWARFInfo* info) {
+    void ProvideSectionData(DWARFInfo* info, DWARF_ObjectFileType objType) {
         using namespace engone;
         using namespace coff;
+        using namespace elf;
         
         auto stream = info->stream;
-        Section_Header* section = nullptr;
+        Section_Header* coff_section = nullptr;
+        Elf64_Shdr* elf_section = nullptr;
         auto debug = info->debug;
 
         bool suc = false;
@@ -176,9 +284,21 @@ namespace dwarf {
 
         suc = stream->write_align(8);
         CHECK
-        section = info->section_debug_abbrev;
-        if (section){
-            section->PointerToRawData = stream->getWriteHead();
+
+        #define OBJ_SWITCH(X,Y) switch(objType) { \
+            case DWARF_OBJ_COFF: { X; break; }\
+            case DWARF_OBJ_ELF: { Y; break; }\
+            default: Assert(false); }
+
+        OBJ_SWITCH(
+            coff_section = info->coff_section_debug_abbrev,
+            elf_section = info->elf_section_debug_abbrev
+        )
+        if (coff_section || elf_section){
+            OBJ_SWITCH(
+                coff_section->PointerToRawData = stream->getWriteHead();,
+                elf_section->sh_offset = stream->getWriteHead();
+            )
             
             u8* ptr = nullptr;
             int written = 0;
@@ -299,13 +419,23 @@ namespace dwarf {
 
             WRITE_LEB(0) // zero terminate abbreviation section
             
-            section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
+            OBJ_SWITCH(
+                coff_section->SizeOfRawData = stream->getWriteHead() - coff_section->PointerToRawData;,
+                elf_section->sh_size = stream->getWriteHead() - elf_section->sh_offset;
+            )
         }
         suc = stream->write_align(8);
         CHECK
-        section = info->section_debug_info;
-        if (section){
-            section->PointerToRawData = stream->getWriteHead();
+
+        OBJ_SWITCH(
+            coff_section = info->coff_section_debug_info,
+            elf_section = info->elf_section_debug_info
+        )
+        if (coff_section || elf_section){
+            OBJ_SWITCH(
+                coff_section->PointerToRawData = stream->getWriteHead();,
+                elf_section->sh_offset = stream->getWriteHead();
+            )
             int offset_section = stream->getWriteHead();
 
             CompilationUnitHeader* comp = nullptr;
@@ -604,13 +734,17 @@ namespace dwarf {
 
             WRITE_LEB(0) // end compile unit
 
-            section->SizeOfRawData = info->stream->getWriteHead() - section->PointerToRawData;
+            OBJ_SWITCH(
+                coff_section->SizeOfRawData = info->stream->getWriteHead() - coff_section->PointerToRawData;,
+                elf_section->sh_size = info->stream->getWriteHead() - elf_section->sh_offset;
+            )
             comp->unit_length = info->stream->getWriteHead() - offset_section - sizeof(CompilationUnitHeader::unit_length);
 
             // ################
             //   RELOCATIONS
             // ################
-            
+            Assert(false); // relocations for ELF
+            auto section = coff_section;
             section->PointerToRelocations = stream->getWriteHead();
             section->NumberOfRelocations = 0;
             {
@@ -650,9 +784,15 @@ namespace dwarf {
         }
         suc = stream->write_align(8);
         CHECK
-        section = info->section_debug_line;
-        if (section){
-            section->PointerToRawData = stream->getWriteHead();
+        OBJ_SWITCH(
+            coff_section = info->coff_section_debug_line,
+            elf_section = info->elf_section_debug_line
+        )
+        if (coff_section || elf_section){
+            OBJ_SWITCH(
+                coff_section->PointerToRawData = stream->getWriteHead();,
+                elf_section->sh_offset = stream->getWriteHead();
+            )
             int offset_section = stream->getWriteHead();
             
             u8* ptr = nullptr;
@@ -765,7 +905,7 @@ namespace dwarf {
             // This is a bit of problem because it's not really seen as a function.
             // That needs to be ironed out if we want things to work properly here.
             Assert(("bug in debug information, specify a main function as a fix",functions_in_order.size() > 0));
-            header->header_length = (stream->getWriteHead() - section->PointerToRawData) - (sizeof(LineNumberProgramHeader::header_length) + (u64)&header->header_length - (u64)header);
+            header->header_length = (stream->getWriteHead() - offset_section) - (sizeof(LineNumberProgramHeader::header_length) + (u64)&header->header_length - (u64)header);
 
             // ####################
             //  Line number generation!
@@ -883,7 +1023,7 @@ namespace dwarf {
             stream->write1(0); // extended opcode begins with zero
             stream->write1(1); // number of bytes for ext. opcode
             WRITE_LEB(DW_LNE_end_sequence) // actual opcode
-            
+            auto section = coff_section;
             section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
             header->unit_length = section->SizeOfRawData - sizeof(LineNumberProgramHeader::unit_length);
 
@@ -904,9 +1044,15 @@ namespace dwarf {
         }
         suc = stream->write_align(8);
         CHECK
-        section = info->section_debug_aranges;
-        if (section){
-            section->PointerToRawData = stream->getWriteHead();
+        OBJ_SWITCH(
+            coff_section = info->coff_section_debug_aranges,
+            elf_section = info->elf_section_debug_aranges
+        )
+        if (coff_section || elf_section){
+            OBJ_SWITCH(
+                coff_section->PointerToRawData = stream->getWriteHead();,
+                elf_section->sh_offset = stream->getWriteHead();
+            )
             int offset_section = stream->getWriteHead();
             
             u8* ptr = nullptr;
@@ -933,11 +1079,16 @@ namespace dwarf {
             stream->write8(0);
 
             header->unit_length = (stream->getWriteHead() - offset_section) - sizeof(ArangesHeader::unit_length);
-            section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
+            
+            OBJ_SWITCH(
+                coff_section->SizeOfRawData = stream->getWriteHead() - coff_section->PointerToRawData,
+                elf_section->sh_size = stream->getWriteHead() - elf_section->sh_offset;
+            )
 
             // ###############
             //   RELOCATIONS
             // ###############
+            auto section = coff_section;
             section->PointerToRelocations = stream->getWriteHead();
             section->NumberOfRelocations = 2;
 
@@ -965,9 +1116,15 @@ namespace dwarf {
         #ifndef DISABLE_DEBUG_FRAME
         suc = stream->write_align(8);
         CHECK
-        section = info->section_debug_frame;
-        if (section){
-            section->PointerToRawData = stream->getWriteHead();
+        OBJ_SWITCH(
+            coff_section = info->coff_section_debug_frame,
+            elf_section = info->elf_section_debug_frame
+        )
+        if (coff_section || elf_section){
+            OBJ_SWITCH(
+                coff_section->PointerToRawData = stream->getWriteHead();,
+                elf_section->sh_offset = stream->getWriteHead();
+            )
             int offset_section = stream->getWriteHead();
             
             /* NOTES ABOUT .debug_frame
@@ -1064,12 +1221,15 @@ namespace dwarf {
                 stream->write_align(8);
                 header->length = (stream->getWriteHead() - offset_fde_start) - sizeof(FrameDescriptionEntry::length);
             }
-            section->SizeOfRawData = stream->getWriteHead() - section->PointerToRawData;
+            OBJ_SWITCH(
+                coff_section->SizeOfRawData = stream->getWriteHead() - coff_section->PointerToRawData,
+                elf_section->sh_size = stream->getWriteHead() - elf_section->sh_offset;
+            )
 
             // ################
             //   RELOCATIONS
             // ################
-            
+            auto section = coff_section;
             section->PointerToRelocations = stream->getWriteHead();
             section->NumberOfRelocations = 0;
 
