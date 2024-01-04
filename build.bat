@@ -5,8 +5,15 @@
 @REM  Hello!
 @REM  run vcvars64.bat before running this script.
 @REM  
-@REM  g++ is used when debugging.
 @REM ########
+
+SET arg=%1
+if !arg!==run (
+    @REM Run compiler with compiling it
+    btb -dev
+
+    exit /b
+)
 
 @REM @REM cl /c src/Other/test.c /Z7
 @REM cl /c src/Other/test.c /Zi
@@ -84,6 +91,11 @@ set /a startTime=6000*( 100%time:~3,2% %% 100 ) + 100* ( 100%time:~6,2% %% 100 )
 SET compileSuccess=0
 
 if !USE_MSVC!==1 (
+    
+    @REM ICON of compiler executable
+    @REM rc /nologo /fo bin\resources.res res\resources.rc
+    @REM SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! bin\resources.res
+
     cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:!output!
     SET compileSuccess=!errorlevel!
     @REM cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! /Ycpch.h src/pch.cpp
@@ -104,8 +116,8 @@ set /a finS2=(endTime-startTime)%%100
 echo Compiled in %finS%.%finS2% seconds
 
 @REM Not using MSVC_COMPILE_OPTIONS because debug information may be added
-cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
-lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
+@REM cl /c /std:c++14 /nologo /TP /EHsc !MSVC_INCLUDE_DIRS! /DOS_WINDOWS /DNO_PERF /DNO_TRACKER /DNATIVE_BUILD src\Native\NativeLayer.cpp /Fo:bin/NativeLayer.obj
+@REM lib /nologo bin/NativeLayer.obj /ignore:4006 gdi32.lib user32.lib OpenGL32.lib libs/glew-2.1.0/lib/glew32s.lib libs/glfw-3.3.8/lib/glfw3_mt.lib Advapi32.lib /OUT:bin/NativeLayer.lib
 
 @REM We need to compiler NativeLayer with MVSC and GCC linker because the user may use GCC on Windows and not just MSVC.
 SET GCC_COMPILE_OPTIONS=-std=c++14 -g
@@ -115,8 +127,8 @@ SET GCC_DEFINITIONS=-DOS_WINDOWS
 SET GCC_WARN=-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unknown-warning-option -Wno-unused-but-set-variable -Wno-nonnull-compare 
 SET GCC_WARN=!GCC_WARN! -Wno-sign-compare 
 
-g++ -c !GCC_INCLUDE_DIRS! !GCC_WARN! -DOS_WINDOWS -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o
 @REM glfw, glew, opengl is not linked with here, it should be
+g++ -c !GCC_INCLUDE_DIRS! !GCC_WARN! -DOS_WINDOWS -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o
 ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o 
 
 @REM lib /nologo bin/NativeLayer.obj Advapi32.lib /OUT:bin/NativeLayer.lib
@@ -139,7 +151,7 @@ ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o
 @REM cvdump test.pdb > out3
 
 if !compileSuccess! == 0 (
-    echo f | XCOPY /y /q !output! btb.exe > nul
+    @REM echo f | XCOPY /y /q !output! btb.exe > nul
 
     @REM cl /c /TP src/Other/test.cpp /Fo: bin/test2.obj /nologo
 

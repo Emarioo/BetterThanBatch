@@ -1314,15 +1314,19 @@ CompileOptions::TestLocation* CompileOptions::getTestLocation(int index) {
 }
 void CompileStats::printSuccess(CompileOptions* opts){
     using namespace engone;
-    log::out << "Compiled " << FormatUnit((u64)lines) << " non-blank lines ("<<FormatUnit((u64)blankLines)<<" blanks, "<<FormatBytes(readBytes)<<")\n";
+    log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " non-blank lines ("<<log::AQUA<<FormatUnit((u64)blankLines)<<log::NO_COLOR<<" blanks, "<<log::AQUA<<FormatBytes(readBytes)<<log::NO_COLOR<<")\n";
     if(opts) {
+        /* Would it be nicer with this:
+            details: win-x64, gcc
+            files: examples/dev.btb, bin/dev.obj, dev.exe
+        */
         if(opts->initialSourceBuffer.buffer) {
             log::out << " text buffer: "<<opts->initialSourceBuffer.origin<<"\n";
         } else {
             // log::out << " initial file: "<< opts->initialSourceFile.getFileName().text<<"\n";
             log::out << " initial file: "<< BriefString(opts->sourceFile.getAbsolute().text,30)<<"\n";
         }
-        log::out << " target: "<<opts->target<<", output: ";
+        log::out << " target: "<<log::AQUA<<opts->target<<log::NO_COLOR<<", linker: " << log::AQUA<< opts->linker<<log::NO_COLOR << ", output: ";
         if(opts->compileStats.generatedFiles.size() == 0) {
             log::out << "nothing";
         }

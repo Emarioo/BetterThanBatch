@@ -29,8 +29,8 @@ struct CheckInfo : public PhaseContext {
     QuickArray<ContentOrder> currentContentOrder;
     ContentOrder getCurrentOrder() { Assert(currentContentOrder.size()>0); return currentContentOrder.last(); }
 
-    DynamicArray<TypeId> prevVirtuals{};
-    TinyArray<TypeId> temp_defaultArgs{};
+    // DynamicArray<TypeId> prevVirtuals{};
+    QuickArray<TypeId> temp_defaultArgs{};
 };
 
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);

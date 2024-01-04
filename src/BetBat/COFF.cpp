@@ -150,13 +150,17 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
 
     u64 fileOffset = 0;
 
-    u32 signature_offset = *(u32*)(filedata + 0x3c);
-    u32 signature = *(u32*)(filedata + signature_offset);
-    if(signature == 0x00004550) {
-        if(!silent)
-            log::out << "WARNING: "<<path<<" is an executable which the deconstruct functions doesn't quite support\n";
-        // "PE\0\0"
-        fileOffset += signature_offset + 4;
+    if(0x3c + 4 < fileSize) {
+        u32 signature_offset = *(u32*)(filedata + 0x3c);
+        if(signature_offset + 4 < fileSize) {
+            u32 signature = *(u32*)(filedata + signature_offset);
+            if(signature == 0x00004550) {
+                if(!silent)
+                    log::out << "WARNING: "<<path<<" is an executable which the deconstruct functions doesn't quite support\n";
+                // "PE\0\0"
+                fileOffset += signature_offset + 4;
+            }
+        }
     }
 
     Assert(fileSize-fileOffset>=COFF_File_Header::SIZE);
@@ -713,7 +717,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     if(program->debugInformation) {
         #ifdef USE_DWARF_AS_DEBUG
         
-        dwarf::ProvideSections(&dwarfInfo, DWARF_OBJ_COFF);
+        // dwarf::ProvideSections(&dwarfInfo, DWARF_OBJ_COFF);
         
         #else
         debugSSectionNumber = ++header->NumberOfSections;
@@ -920,7 +924,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     if(program->debugInformation) {
         #ifdef USE_DWARF_AS_DEBUG
         
-        dwarf::ProvideSectionData(&dwarfInfo, DWARF_OBJ_ELF);
+        // dwarf::ProvideSectionData(&dwarfInfo, DWARF_OBJ_ELF);
         
         #else
         DebugInformation* di = program->debugInformation;

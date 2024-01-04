@@ -38,89 +38,96 @@ StringBuilder& operator<<(StringBuilder& builder, LinkConventions convention){
     return builder << ToString(convention);
 }
 
-const char *OpToStr(OperationType optype, bool null) {
-#define CASE(A, B) \
-    case AST_##A:  \
-        return #B;
-    switch (optype) {
-        CASE(ADD, +)
-        CASE(SUB, -)
-        CASE(MUL, *)
-        // CASE(MUL, * (multiplication))
-        CASE(DIV, /)
-        CASE(MODULUS, %)
-        CASE(UNARY_SUB, -)
+const char* prim_op_names[]{
+// PRIMITIVES
+    "void",         // AST_VOID
+    "u8",           // AST_UINT8
+    "u16",          // AST_UINT16
+    "u32",          // AST_UINT32
+    "u64",          // AST_UINT64
+    "i8",           // AST_INT8
+    "i16",          // AST_INT16
+    "i32",          // AST_INT32
+    "i64",          // AST_INT64
 
-        CASE(EQUAL, ==)
-        CASE(NOT_EQUAL, !=)
-        CASE(LESS, <)
-        CASE(LESS_EQUAL, <=)
-        CASE(GREATER, >)
-        CASE(GREATER_EQUAL, >=)
-        CASE(AND, &&)
-        CASE(OR, ||)
-        CASE(NOT, !)
+    "bool",         // AST_BOOL
+    "char",         // AST_CHAR
 
-        CASE(BAND, &)
-        CASE(BOR, |)
-        CASE(BXOR, ^)
-        CASE(BNOT, ~)
-        CASE(BLSHIFT, <<)
-        CASE(BRSHIFT, >>)
+    "f32",          // AST_FLOAT32
+    "f64",          // AST_FLOAT64
+    
+    nullptr,        // AST_TRUE_PRIMITIVES
+    
+    "ast_string",    // AST_STRING
+    "null",         // AST_NULL
 
-        // parenthesis don't work, operator overloading converts
-        // enum to string and it becomes << (bit shift) which is bad
-        // CASE(BAND, & (bitwise and))
-        // CASE(BOR, | (bitwise or))
-        // CASE(BXOR, ^ (bitwise xor))
-        // CASE(BNOT, ~ (bitwise not))
-        // CASE(BLSHIFT, << (bit shift))
-        // CASE(BRSHIFT, >> (bit shift))
+    "fn_ref",        // AST_FUNC_REFERENCE
 
-        CASE(RANGE, ..)
-        CASE(INDEX, [])
-        CASE(INCREMENT, ++)
-        CASE(DECREMENT, --)
+    "ast_id",        // AST_ID
+    "ast_call",     // AST_FNCALL
+    "ast_asm",     // AST_ASM
+    "ast_sizeof",   // AST_SIZEOF
+    "ast_nameof",   // AST_NAMEOF
+    
+// OPERATIONS
+     "+",                   // AST_ADD, AST_PRIMITIVE_COUNT
+     "-",                   // AST_SUB
+     "*",                   // AST_MUL
+     "/",                   // AST_DIV
+     "%",                   // AST_MODULUS
+     "-",                   // AST_UNARY_SUB
 
-        CASE(CAST, cast)
-        CASE(MEMBER, member)
-        CASE(INITIALIZER, initializer)
-        CASE(SLICE_INITIALIZER, slice_initializer)
-        CASE(FROM_NAMESPACE, namespaced)
-        CASE(ASSIGN, =)
+     "==",                  // AST_EQUAL
+     "!=",                  // AST_NOT_EQUAL
+     "<",                   // AST_LESS
+     "<=",                  // AST_LESS_EQUAL
+     ">",                   // AST_GREATER
+     ">=",                  // AST_GREATER_EQUAL
+     "&&",                  // AST_AND
+     "||",                  // AST_OR
+     "!",                   // AST_NOT
 
-        CASE(REFER, & (reference))
-        CASE(DEREF, * (dereference))
-        // default: return "?";
+     "&",                   // AST_BAND
+     "|",                   // AST_BOR
+     "^",                   // AST_BXOR
+     "~",                   // AST_BNOT
+     "<<",                  // AST_BLSHIFT
+     ">>",                  // AST_BRSHIFT
 
-        case AST_OPERATION_COUNT: { break; }
-    }
-#undef CASE
-    if(null)
-        return nullptr;
-    return "?";
-}
-const char *StateToStr(int type) {
-#define CASE(A, B)        \
-    case ASTStatement::A: \
-        return #B;
-    switch (type) {
-        CASE(ASSIGN, assign)
-        CASE(IF, if)
-        CASE(WHILE, while)
-        CASE(SWITCH, switch)
-        CASE(FOR, for)
-        CASE(RETURN, return)
-        CASE(BREAK, break)
-        CASE(CONTINUE, continue)
-        CASE(EXPRESSION, expression)
-        CASE(USING, using)
-        CASE(BODY, body)
-        CASE(DEFER, defer)
-    }
-#undef CASE
-    return "?";
-}
+     "..",                  // AST_RANGE
+     "[]",                  // AST_INDEX
+     "++",                  // AST_INCREMENT
+     "--",                  // AST_DECREMENT
+     
+     "cast",                // AST_CAST
+     "member",              // AST_MEMBER
+     "initializer",         // AST_INITIALIZER
+     "slice_initializer",   // AST_SLICE_INITIALIZER
+     "namespaced",          // AST_FROM_NAMESPACE
+     "=",                   // AST_ASSIGN
+
+     "& (reference)",       // AST_REFER
+     "* (dereference)",     // AST_DEREF               
+};
+const char* statement_names[] {
+    "expression",     // EXPRESSION
+    "assign",         // ASSIGN  
+    "if",             // IF
+
+    "while",          // WHILE
+    "for",            // FOR
+
+    "return",         // RETURN
+    "break",          // BREAK
+    "continue",       // CONTINUE
+    
+    "switch",         // SWITCH
+    
+    "using",          // USING
+    "body",           // BODY
+    "defer",          // DEFER
+    "test",           // TEST
+};
 
 AST *AST::Create() {
     using namespace engone;
@@ -164,28 +171,28 @@ AST *AST::Create() {
     ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO)->id;
     ast->globalScopeId = scopeId;
     // initialize default data types
-    ast->createPredefinedType(Token("void"),scopeId, AST_VOID);
-    ast->createPredefinedType(Token("u8"),scopeId, AST_UINT8, 1);
-    ast->createPredefinedType(Token("u16"),scopeId, AST_UINT16, 2);
-    ast->createPredefinedType(Token("u32"),scopeId, AST_UINT32, 4);
-    ast->createPredefinedType(Token("u64"),scopeId, AST_UINT64, 8);
-    ast->createPredefinedType(Token("i8"),scopeId, AST_INT8, 1);
-    ast->createPredefinedType(Token("i16"),scopeId, AST_INT16, 2);
-    ast->createPredefinedType(Token("i32"),scopeId, AST_INT32, 4);
-    ast->createPredefinedType(Token("i64"),scopeId, AST_INT64, 8);
-    ast->createPredefinedType(Token("f32"),scopeId, AST_FLOAT32, 4);
-    ast->createPredefinedType(Token("f64"),scopeId, AST_FLOAT64, 8);
-    ast->createPredefinedType(Token("bool"),scopeId, AST_BOOL, 1);
-    ast->createPredefinedType(Token("char"),scopeId, AST_CHAR, 1);
-    ast->createPredefinedType(Token("null"),scopeId, AST_NULL, 8);
-    ast->createPredefinedType(Token("ast-string"),scopeId, AST_STRING, 0);
-    ast->createPredefinedType(Token("fn_ref"),scopeId, AST_FUNC_REFERENCE, 8);
-    ast->createPredefinedType(Token("ast-id"),scopeId, AST_ID);
-    // ast->createPredefinedType(Token("ast-member"),scopeId, AST_MEMBER);
-    ast->createPredefinedType(Token("ast-sizeof"),scopeId, AST_SIZEOF);
-    ast->createPredefinedType(Token("ast-call"),scopeId, AST_FNCALL);
-    ast->createPredefinedType(Token("ast-poly"),scopeId, AST_POLY);
-
+    #define ADD(T, S) ast->createPredefinedType(Token(PRIM_NAME(T)), scopeId, T, S);
+    ADD(AST_VOID,0);
+    ADD(AST_UINT8, 1);
+    ADD(AST_UINT16, 2);
+    ADD(AST_UINT32, 4);
+    ADD(AST_UINT64, 8);
+    ADD(AST_INT8, 1);
+    ADD(AST_INT16, 2);
+    ADD(AST_INT32, 4);
+    ADD(AST_INT64, 8);
+    ADD(AST_FLOAT32, 4);
+    ADD(AST_FLOAT64, 8);
+    ADD(AST_BOOL, 1);
+    ADD(AST_CHAR, 1);
+    ADD(AST_NULL, 8);
+    ADD(AST_STRING, 0);
+    ADD(AST_FUNC_REFERENCE, 8);
+    ADD(AST_ID,0);
+    ADD(AST_SIZEOF,0);
+    ADD(AST_NAMEOF,0);
+    ADD(AST_FNCALL,0);
+    #undef ADD
     ast->mainBody = ast->createBody();
     // {
     //     // TODO: set size and offset of language structs here instead of letting the compiler do it.
@@ -212,7 +219,7 @@ AST *AST::Create() {
 VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder contentOrder, Identifier** identifier) {
     using namespace engone;
     bool shadowPreviousVariables = false;
-    auto id = addIdentifier(scopeId, name, shadowPreviousVariables);
+    auto id = addIdentifier(scopeId, name, contentOrder);
     if(!id) {
         return nullptr;
     }
@@ -226,12 +233,17 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder 
     variables.add(ptr);
     return ptr;
 }
-VariableInfo* AST::getVariable(Identifier* identifier) {
+VariableInfo* AST::getVariableByIdentifier(Identifier* identifier) {
     Assert(identifier && identifier->type == Identifier::VARIABLE);
     if(identifier->varIndex < variables.size())
         return variables[identifier->varIndex];
     return nullptr;
 }
+// VariableInfo* AST::identifierToVariable(Identifier* identifier){
+//     Assert(identifier);
+//     Assert(identifier->varIndex < variables.size());
+//     return variables[identifier->varIndex];
+// }
 // Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
 Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, ContentOrder contentOrder) {
     using namespace engone;
@@ -343,10 +355,7 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
     }
     return nullptr;
 }
-VariableInfo* AST::identifierToVariable(Identifier* identifier){
-    Assert(identifier->varIndex < variables.size());
-    return variables[identifier->varIndex];
-}
+
 void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
     auto si = getScope(scopeId);
     auto pair = si->identifierMap.find(name);
@@ -411,7 +420,7 @@ bool AST::castable(TypeId from, TypeId to){
 
 }
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis());
     // Assume the only overload. The generator may do implicit casting if needed.
@@ -502,7 +511,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
 }
 
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& argTypes, TinyArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
     using namespace engone;
     // Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
     FnOverloads::Overload* outOverload = nullptr;
@@ -599,6 +608,60 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, TinyArray<TypeId>& arg
     }
     return outOverload;
 }
+// void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, QuickArray<TypeId>* structPolyArgs){
+void ASTFunction::pushPolyState(FuncImpl* funcImpl) {
+    pushPolyState(&funcImpl->polyArgs, funcImpl->structImpl);
+}
+void ASTFunction::pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* structParent) {
+    Assert((parentStruct == nullptr) == (structParent == nullptr));
+    polyStates.add({});
+    auto& state = polyStates.last();
+    if(parentStruct){
+        Assert(parentStruct->polyArgs.size() == structParent->polyArgs.size());
+        state.structTypes.resize(parentStruct->polyArgs.size());
+        for(int j=0;j<(int)parentStruct->polyArgs.size();j++){
+            state.structTypes[j] = parentStruct->polyArgs[j].virtualType->id;
+            parentStruct->polyArgs[j].virtualType->id = structParent->polyArgs.get(j);
+        }
+    }
+    Assert(polyArgs.size() == funcPolyArgs->size());
+    state.argTypes.resize(polyArgs.size());
+    for(int j=0;j<(int)polyArgs.size();j++){
+        state.argTypes[j] = polyArgs[j].virtualType->id;
+        polyArgs[j].virtualType->id = funcPolyArgs->get(j);
+    }
+}
+void ASTFunction::popPolyState(){
+    Assert(polyStates.size()>0);
+    auto& state = polyStates.last();
+    for(int j=0;j<(int)polyArgs.size();j++){
+        polyArgs[j].virtualType->id = state.argTypes[j];
+    }
+    if(parentStruct){
+        for(int j=0;j<(int)parentStruct->polyArgs.size();j++){
+            parentStruct->polyArgs[j].virtualType->id = state.structTypes[j];
+        }
+    }
+    polyStates.pop();
+}
+void ASTStruct::pushPolyState(StructImpl* structImpl) {
+    polyStates.add({});
+    auto& state = polyStates.last();
+    Assert(polyArgs.size() == structImpl->polyArgs.size());
+    state.structPolyArgs.resize(polyArgs.size());
+    for(int j=0;j<(int)polyArgs.size();j++){
+        state.structPolyArgs[j] = polyArgs[j].virtualType->id;
+        polyArgs[j].virtualType->id = structImpl->polyArgs.get(j);
+    }
+}
+void ASTStruct::popPolyState(){
+    Assert(polyStates.size()>0);
+    auto& state = polyStates.last();
+    for(int j=0;j<(int)polyArgs.size();j++){
+        polyArgs[j].virtualType->id = state.structPolyArgs[j];
+    }
+    polyStates.pop();
+}
 // ASTFunction* FnOverloads::getPolyOverload(AST* ast, DynamicArray<TypeId>& typeIds, DynamicArray<TypeId>& polyTypes){
 //     using namespace engone;
 //     ASTFunction* outFunc = nullptr;
@@ -670,24 +733,37 @@ FnOverloads* ASTStruct::getMethod(const std::string& name, bool create){
 
 void AST::appendToMainBody(ASTScope *body) {
     Assert(body);
+
+    // engone::log::out << engone::log::RED << "Content order is ruined in appendToMainBody\n";
+
+    // How do we maintain it.
+    // Content order of all child scopes must recalculated
+    // Content order of existing children don't need to be recalculated
+
     for(auto it : body->content) {
         switch(it.spotType) {
         case ASTScope::STRUCT: {
             mainBody->add(this, body->structs[it.index]);
+            break;
         }
-        break; case ASTScope::ENUM: {
+        case ASTScope::ENUM: {
             mainBody->add(this, body->enums[it.index]);
+            break; 
         }
-        break; case ASTScope::FUNCTION: {
+        case ASTScope::FUNCTION: {
             mainBody->add(this, body->functions[it.index]);
+            break; 
         }
-        break; case ASTScope::STATEMENT: {
+        case ASTScope::STATEMENT: {
             mainBody->add(this, body->statements[it.index]);
+            break; 
         }
-        break; case ASTScope::NAMESPACE: {
+        case ASTScope::NAMESPACE: {
             mainBody->add(this, body->namespaces[it.index]);
+            break;
         }
-    }
+        default: Assert(false);
+        }
     }
     body->structs.cleanup();
     body->enums.cleanup();
@@ -775,6 +851,10 @@ void ASTScope::add(AST* ast, ASTStatement *astStatement) {
     }
     if(astStatement->secondBody) {
         ast->getScope(astStatement->secondBody->scopeId)->contentOrder = content.size()-1;
+    }
+    FOR(astStatement->switchCases) {
+        // nocheckin IMPORTANT: Will this work, the switch case scopes having the same order?
+        ast->getScope(it.caseBody->scopeId)->contentOrder = content.size()-1;
     }
 }
 void ASTScope::add(AST* ast, ASTStruct *astStruct) {
@@ -1142,6 +1222,28 @@ TypeInfo* AST::createType(Token name, ScopeId scopeId){
     // ll(this);
     return ptr;
 }
+engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
+    if(typeId.getId() < AST_PRIMITIVE_COUNT) {
+        logger << PRIM_NAME(typeId.getId());
+    } else if(typeId.getId() < AST_OPERATION_COUNT) {
+        logger << OP_NAME(typeId.getId());
+    } else {
+        logger << "TypeId{";
+        if(typeId.isValid()) {
+            logger << typeId.getId();
+            if(typeId.string)
+                logger << ",string";
+            if(typeId.string)
+                logger << ",poison";
+            if(typeId.pointer_level > 0)
+                logger << ",ptr:"<<typeId.pointer_level;
+        }
+        else
+            logger << "invalid";
+        logger <<"}";
+    }
+    return logger;
+}
 TypeInfo* AST::createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 size) {
     auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
     new(ptr) TypeInfo{name, id, size};
@@ -1217,10 +1319,13 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVir
     } else {
         // Find base type in parent scopes
         ScopeId nextScopeId = scopeId;
+        // log::out << "find "<<typeString<<"\n";
         WHILE_TRUE {
             ScopeInfo* scope = getScope(nextScopeId);
             if(!scope) return {};
-
+            // for(auto& pair : scope->nameTypeMap){
+            //     log::out <<" "<<pair.first << " : " <<pair.second->id.getId() << "\n";
+            // }
             auto pair = scope->nameTypeMap.find(typeName);
             if(pair!=scope->nameTypeMap.end()){
                 typeInfo = pair->second;
@@ -1246,12 +1351,18 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVir
         return {};
     }
     if(transformVirtual) {
-        WHILE_TRUE {
-            TypeInfo* virtualInfo = getTypeInfo(typeInfo->id);
-            if(virtualInfo && typeInfo != virtualInfo){
-                typeInfo = virtualInfo;
-            } else {
-                break;
+        if(typeInfo->id != typeInfo->originalId) {
+            WHILE_TRUE {
+                TypeInfo* virtualInfo = getTypeInfo(typeInfo->id);
+                if(virtualInfo && typeInfo != virtualInfo){
+                    typeInfo = virtualInfo;
+                } else {
+                    break;
+                }
+            }
+            if(!typeInfo->id.isValid()) {
+                MSG_CODE_LOCATION;
+                log::out << log::RED << "Compiler Bug: Transformed virtual had TypeInfo but it's virtual TypeId was invalid (all zeros)\n";
             }
         }
         TypeId out = typeInfo->id;
@@ -1264,6 +1375,7 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVir
     }
 
 }
+
 TypeInfo *AST::getBaseTypeInfo(TypeId id) {
     Assert(!id.isString());
     if(!id.isValid() && !id.isString()) return nullptr;
@@ -1281,16 +1393,36 @@ TypeInfo *AST::getTypeInfo(TypeId id) {
     if(id.getId() >= _typeInfos.size()) return nullptr;
     return _typeInfos[id.getId()];
 }
+void ScopeInfo::print(AST* ast) {
+    using namespace engone;
+    log::out << log::LIME << "Scope " << id<<"\n";
+    if(nameTypeMap.size() > 0) {
+        log::out << " Types: " << log::GRAY;
+        for(auto& pair : nameTypeMap) {
+            engone::log::out << pair.first << " {"<<pair.second->id.getId()<<"}, ";
+        }
+        log::out << log::NO_COLOR << "\n";
+    }
+    if(identifierMap.size() > 0) {
+        log::out << " Identifiers: " << log::GRAY;
+        for(auto& pair : identifierMap) {
+            engone::log::out << pair.first << ", ";
+        }
+        log::out << log::NO_COLOR <<"\n";
+    }
+    ScopeInfo* sc = ast->getScope(parent);
+    if(sc != this) {
+        log::out << "Parent-";
+        sc->print(ast);
+    }
+}
 std::string AST::typeToString(TypeId typeId){
     using namespace engone;
     if(typeId.isString())
         return std::string((Token)getTokenFromTypeString(typeId));
-    const char* cstr = OpToStr((OperationType)typeId.getId());
-    // if(!cstr) {
-    //     return "";
-    if(strcmp(cstr,"?") != 0) {
+    const char* cstr = OP_NAME((OperationType)typeId.getId());
+    if(cstr)
         return cstr;
-    }
     std::string out="";
     TypeInfo* ti = getBaseTypeInfo(typeId);
     if(!ti)
@@ -1546,7 +1678,7 @@ Token AST::TrimPointer(Token& token, u32* outLevel){
     return out;
 }
 Token AST::TrimBaseType(Token typeString, Token* outNamespace, 
-    u32* level, TinyArray<Token>* outPolyTypes, Token* typeName)
+    u32* level, QuickArray<Token>* outPolyTypes, Token* typeName)
 {
     if(!typeString.str || !outNamespace || !level || !outPolyTypes) {
         return typeString;
@@ -1633,7 +1765,7 @@ Token AST::TrimBaseType(Token typeString, Token* outNamespace,
     
     return typeString;
 }
-Token AST::TrimPolyTypes(Token typeString, TinyArray<Token>* outPolyTypes) {
+Token AST::TrimPolyTypes(Token typeString, QuickArray<Token>* outPolyTypes) {
     //-- Trim poly types
     Assert(typeString.str[typeString.length-1] != '*');
     if(typeString.length < 2 || typeString.str[typeString.length-1] != '>') {
@@ -1755,14 +1887,14 @@ u32 AST::getTypeAlignedSize(TypeId typeId) {
     }
     return ti->_size > 8 ? 8 : ti->_size;
 }
-void ASTExpression::printArgTypes(AST* ast, TinyArray<TypeId>& argTypes){
+void ASTExpression::printArgTypes(AST* ast, QuickArray<TypeId>& argTypes){
     using namespace engone;
     Assert(args.size() == argTypes.size());
     for(int i=0;i<(int)args.size();i++){
         if(i!=0) log::out << ", ";
         if(args.get(i)->namedValue.str)
             log::out << args.get(i)->namedValue <<"=";
-        log::out << ast->typeToString(argTypes[i]);
+        log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
     }
     
     // Assert(args);
@@ -2046,7 +2178,7 @@ void ASTEnum::print(AST *ast, int depth) {
 void ASTStatement::print(AST *ast, int depth) {
     using namespace engone;
     PrintSpace(depth);
-    log::out << "Statement " << StateToStr(type);
+    log::out << "Statement " << STATEMENT_NAME(type);
 
     for(int i=0;i<(int)varnames.size();i++){
         auto& vn = varnames[i];
@@ -2059,7 +2191,7 @@ void ASTStatement::print(AST *ast, int depth) {
     if(alias)
         log::out << " as " << *alias;
     // if(opType!=0)
-    //     log::out << " "<<OpToStr((OperationType)opType)<<"=";
+    //     log::out << " "<<OP_NAME((OperationType)opType)<<"=";
     log::out << "\n";
     // if (lvalue) {
     //     lvalue->print(ast, depth + 1);
@@ -2070,6 +2202,10 @@ void ASTStatement::print(AST *ast, int depth) {
             firstExpression->print(ast, depth + 1);
         }
         if (firstBody) {
+            if(type == ASTStatement::SWITCH) {
+                PrintSpace(depth+1);
+                log::out << "Default case:\n";
+            }
             firstBody->print(ast, depth + 1);
         }
         if (secondBody) {
@@ -2143,10 +2279,10 @@ void ASTExpression::print(AST *ast, int depth) {
     } else {
         if(typeId == AST_ASSIGN) {
             if(castType.getId()!=0){
-                log::out << OpToStr((OperationType)castType.getId(), true);
+                log::out << OP_NAME((OperationType)castType.getId());
             }
         }
-        log::out << OpToStr((OperationType)typeId.getId()) << " ";
+        log::out << OP_NAME((OperationType)typeId.getId()) << " ";
         if (typeId == AST_CAST) {
             log::out << ast->typeToString(castType);
             log::out << "\n";
@@ -2181,7 +2317,7 @@ void ASTExpression::print(AST *ast, int depth) {
                 left->print(ast, depth + 1);
         } else if(typeId == AST_ASSIGN) {
             // if(castType.getId()!=0){
-            //     log::out << OpToStr((OperationType)castType.getId());
+            //     log::out << OP_NAME((OperationType)castType.getId());
             // }
             log::out << "\n";
             if (left) {

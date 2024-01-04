@@ -1,6 +1,6 @@
 @TEST-CASE while
-i = 0
-sum = 0
+i := 0
+sum := 0
 while i < 5 {
     sum += i
     i++
@@ -8,7 +8,7 @@ while i < 5 {
 test 5; i;
 test 10; sum;
 @TEST-CASE for
-i = 0
+i := 0
 for 0..5 {
     test i; it;
     test i; nr;
@@ -16,8 +16,8 @@ for 0..5 {
 }
 test 5; i;
 @TEST-CASE for_rev
-i = 0
-N = 5
+i := 0
+N := 5
 for @rev (-2)..N {
     test N - 1 - i; it;
     test N - 1 - i; nr;
@@ -38,7 +38,7 @@ for arr {
 
 @TEST-CASE for_str
 // This caused a crash at one point (the generator forgot to add an instruction)
-str = "Yay wee"
+str := "Yay wee"
 for str {
 
 }

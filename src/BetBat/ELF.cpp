@@ -215,7 +215,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
     dwarfInfo.debug = program->debugInformation;
     
     if(program->debugInformation) {
-        dwarf::ProvideSections(&dwarfInfo, DWARF_OBJ_ELF);
+        // dwarf::ProvideSections(&dwarfInfo, DWARF_OBJ_ELF);
     }
     
     /*##########
@@ -381,7 +381,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         dwarfInfo.symindex_debug_abbrev = addSymbol(".debug_abbrev", dwarfInfo.number_debug_abbrev, 0,STB_GLOBAL, STT_SECTION );
         dwarfInfo.symindex_debug_frame = addSymbol(".debug_frame", dwarfInfo.number_debug_frame, 0,STB_GLOBAL, STT_SECTION );
 
-        dwarf::ProvideSectionData(&dwarfInfo, DWARF_OBJ_ELF);
+        // dwarf::ProvideSectionData(&dwarfInfo, DWARF_OBJ_ELF);
     }
     
     {

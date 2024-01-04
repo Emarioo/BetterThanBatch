@@ -158,7 +158,8 @@ u64 ConvertHexadecimal_content(char* str, int length){
 }
 void TokenRange::print(bool skipSuffix) const {
     using namespace engone;
-
+    // if(this->firstToken == "Taste")
+    //     __debugbreak();
     char temp[256];
     int token_index = 0;
     int written = 0;
@@ -214,7 +215,7 @@ std::string Token::getLine(){
 u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, int* token_index) const {
     using namespace engone;
     // assert?
-    if(!tokenStream()) return 0;
+    if(!tokenStream() && endIndex - firstToken.tokenIndex > 1) return 0;
     int written_temp = 0;
     int written = 0;
     #define ENSURE(N) if (written_temp + N > bufferSize) return written;
@@ -224,7 +225,7 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
     if(!index) index = &trash;
 
     for(int i=startIndex() + *index; i < endIndex; *index = ++i - startIndex()){
-        Token& tok = tokenStream()->get(i);
+        const Token& tok = tokenStream() ? tokenStream()->get(i) : firstToken;
         if(!tok.str) {
             continue;
         }
@@ -234,15 +235,15 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
         if(tok.flags&TOKEN_DOUBLE_QUOTED){
             if(quoted_environment) {
                 ENSURE(1)
-                *(outBuffer + written++) = '\\';
+                *(outBuffer + written_temp++) = '\\';
             }
             ENSURE(1)
-            *(outBuffer + written++) = '"';
+            *(outBuffer + written_temp++) = '"';
         }
         else if(tok.flags&TOKEN_SINGLE_QUOTED){
             if(quoted_environment) {
                 ENSURE(1)
-                *(outBuffer + written++) = '\\';
+                *(outBuffer + written_temp++) = '\\';
             }
             ENSURE(1)
             *(outBuffer + written_temp++) = '\'';

@@ -1597,19 +1597,32 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 ASTExpression* left=nullptr;
                 SignalAttempt result = ParseExpression(info, left, false);
                 tmp->left = left;
-                tmp->constantValue = left->constantValue;
+                tmp->constantValue = true;
                 
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.endIndex = info.at()+1;
                 values.add(tmp);
             } else if(Equal(token,"nameof")) {
                 info.next();
-                Token token = {};
-                SignalDefault result = ParseTypeId(info,token, nullptr);
 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NAMEOF));
-                tmp->constantValue = true; // IMPORTANT: Won't be constant if you use the same method as sizeof
-                tmp->name = token;
+
+                // With ParseTypeId we can parse polymorphic types like Fruit<Apple>
+                // We could add a keyword like nameof_poly this uses ParseTypeId.
+                // We say that space Fruit < Fruit > is a comparison while no space Fruit<Apple> is a poly type.
+                // What about pointers? This is a type "okay* other_token2" this is multiplication "ok * yoo"
+                // How well will this work with macros? A bit annoying probably.
+
+                // Token token = {};
+                // SignalDefault result = ParseTypeId(info,token, nullptr);
+                
+                // With this, we can get the type of an expression.
+                ASTExpression* left=nullptr;
+                SignalAttempt result = ParseExpression(info, left, false);
+
+                tmp->left = left;
+                tmp->constantValue = true;
+                // tmp->name = token;
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.endIndex = info.at()+1;
                 values.add(tmp);
@@ -2413,14 +2426,19 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
                     // )
                     WARN_SECTION(
                         WARN_HEAD(info.get(info.at()+1))
-                        WARN_MSG("The body of the case is missing curly braces. Only one statement will be parsed. Put statement on one line to suppress this warning.")
+                        WARN_MSG("The body of the case is missing curly braces. Only one statement will be parsed. Put statement on one line to suppress this warning. In the future, the curly braces will be implicit.")
                         WARN_LINE(info.get(info.at()+1),"no curly brace here")
                         // TODO: should braces for body in case be forced
                     )
                 }
             }
+
+            // TODO: Implicit curly braces. I believe this requires ParseBody to detect quit when it sees "case".
+            //  Either we pass a general end token into parse function or we pass a bool telling ParseBody to see "case" as end.
+            //  Maybe ParseBody should have an u64 bitfield argument. There you can specify all the bools you want with ease.
+            //  You could also do an output of bitfields.
             
-            ASTScope* caseBody=0;
+            ASTScope* caseBody=nullptr;
             SignalDefault resultBody = ParseBody(info,caseBody, info.currentScopeId);
             if(resultBody!=SignalDefault::SUCCESS){
                 return SignalAttempt::FAILURE;
@@ -3022,8 +3040,8 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
         function->arguments.add({});
         auto& argv = function->arguments[function->arguments.size()-1];
         argv.name = "this";
-        argv.name.tokenStream = info.tokens;
-        argv.name.tokenIndex = tok.tokenIndex;
+        // argv.name.tokenStream = info.tokens; // feed and print won't work if we set these, they think this comes from the stream and tries to print it
+        // argv.name.tokenIndex = tok.tokenIndex;
         argv.name.line = tok.line;
         argv.name.column = tok.column+1;
         argv.defaultValue = nullptr;
@@ -3277,53 +3295,63 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
         if(Equal(token,":")){
             info.next(); // :
             attempt=false;
-            
-            Token typeToken{};
-            SignalDefault result = ParseTypeId(info,typeToken, nullptr);
-            if(result!=SignalDefault::SUCCESS)
-                return CastSignal(result);
-            // Assert(result==SignalDefault::SUCCESS);
-            int arrayLength = -1;
-            Token token1 = info.get(info.at()+1);
-            Token token2 = info.get(info.at()+2);
-            Token token3 = info.get(info.at()+3);
-            if(Equal(token1,"[") && Equal(token3,"]")) {
-                info.next();
-                info.next();
-                info.next();
 
-                if(IsInteger(token2)) {
-                    lengthTokenOfLastVar = token2;
-                    arrayLength = ConvertInteger(token2);
-                    if(arrayLength<0){
+
+            token = info.get(info.at()+1);
+            if(Equal(token,"=")) {
+                int index = statement->varnames.size()-1;
+                while(index>=0 && !statement->varnames[index].declaration){
+                    statement->varnames[index].declaration = true;
+                    index--;
+                }
+            } else {
+                Token typeToken{};
+                SignalDefault result = ParseTypeId(info,typeToken, nullptr);
+                if(result!=SignalDefault::SUCCESS)
+                    return CastSignal(result);
+                // Assert(result==SignalDefault::SUCCESS);
+                int arrayLength = -1;
+                Token token1 = info.get(info.at()+1);
+                Token token2 = info.get(info.at()+2);
+                Token token3 = info.get(info.at()+3);
+                if(Equal(token1,"[") && Equal(token3,"]")) {
+                    info.next();
+                    info.next();
+                    info.next();
+
+                    if(IsInteger(token2)) {
+                        lengthTokenOfLastVar = token2;
+                        arrayLength = ConvertInteger(token2);
+                        if(arrayLength<0){
+                            ERR_SECTION(
+                                ERR_HEAD(token2)
+                                ERR_MSG("Array cannot have negative size.")
+                                ERR_LINE(info.get(info.at()-1),"< 0")
+                            )
+                            arrayLength = 0;
+                        }
+                    } else {
                         ERR_SECTION(
                             ERR_HEAD(token2)
-                            ERR_MSG("Array cannot have negative size.")
-                            ERR_LINE(info.get(info.at()-1),"< 0")
+                            ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
+                            ERR_LINE(info.get(info.at()-1), "must be positive integer literal")
                         )
-                        arrayLength = 0;
                     }
-                } else {
-                    ERR_SECTION(
-                        ERR_HEAD(token2)
-                        ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
-                        ERR_LINE(info.get(info.at()-1), "must be positive integer literal")
-                    )
+                    std::string* str = info.ast->createString();
+                    *str = "Slice<";
+                    *str += typeToken;
+                    *str += ">";
+                    typeToken = *str;
                 }
-                std::string* str = info.ast->createString();
-                *str = "Slice<";
-                *str += typeToken;
-                *str += ">";
-                typeToken = *str;
-            }
-            
-            TypeId strId = info.ast->getTypeString(typeToken);
+                TypeId strId = info.ast->getTypeString(typeToken);
 
-            int index = statement->varnames.size()-1;
-            while(index>=0 && !statement->varnames[index].assignString.isValid()){
-                statement->varnames[index].assignString = strId;
-                statement->varnames[index].arrayLength = arrayLength;
-                index--;
+                int index = statement->varnames.size()-1;
+                while(index>=0 && !statement->varnames[index].declaration){
+                    statement->varnames[index].assignString = strId;
+                    statement->varnames[index].declaration = true;
+                    statement->varnames[index].arrayLength = arrayLength;
+                    index--;
+                }
             }
         }
         token = info.get(info.at()+1);
@@ -3452,7 +3480,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         //  then content order must count the statements of the if body. I don't think not creating a
         //  scope has any benefits. Sure, you could declare a variable inside the if statement and use
         //  it outside since it wouldn't be enclosed in a scope but the complication there is
-        //  how it should be initialized (zero or default values as normal I guess?).
+        //  how it should be initialized if the if statement doesn't run (zero or default values I guess?).
         if(inheritScope) {
             // Code to use the current scope for this body.
             bodyLoc->scopeId = info.currentScopeId;

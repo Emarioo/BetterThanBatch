@@ -13,7 +13,7 @@ struct ByteStream {
 
     fn write(ptr: void*, len: u64) -> bool {
         if size + len > max {
-            yes = _reserve(64u + len + max * 2u)
+            yes := _reserve(64u + len + max * 2u)
             if !yes   return false;
         }
         memcpy(data + size, ptr, len);
@@ -21,7 +21,7 @@ struct ByteStream {
         return true;
     }
     fn write<T>(value: T) -> bool {
-        size: u32 = sizeof(T);
+        size := sizeof(T);
         if size == 1 || size == 2 || size == 4 || size == 8 {
             return write(&value, size);
         }
@@ -82,7 +82,7 @@ struct ByteStream {
 
 
 fn print_bytes(stream: ByteStream*) {
-    slice = stream.sliced_unsafe()
+    slice := stream.sliced_unsafe()
     for slice {
         _print(it); _print(' ');
     }

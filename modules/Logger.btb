@@ -52,13 +52,13 @@ fn @hide _print(t: i64){
         printc('0')
         return;
     }
-    signed = false;
+    signed := false;
     if t < 0 {
         signed = true;
         t = 0-t;
     }
     str: char[20];
-    used = 19;
+    used := 19;
     while t > 0 && used > 0 {
         num: u32 = t % 10;
         // log('A','0'+num)
@@ -243,8 +243,21 @@ fn _print(tt: f64){
     // TODO: Print 64-bit float without casting it to 32-bit and loosing information.
     _print(cast<f32>tt);
 }
+// fn _print(p: void*) {
+fn _print<T>(p: T*) {
+    // _print(cast<u64>p)
+    prints("0x")
+    for @rev 0..16 {
+        hex := (cast<u64>p >> cast<u64>(4*nr)) & cast<u64>0xF;
+        if hex < 10u
+            printc('0'+hex)
+        else
+            printc('a' + hex - 10)
+    }
+}
 fn @hide _print(t: char){
-    prints(Slice<char>{&t, 1})
+    printc(t);
+    // prints(Slice<char>{&t, 1})
 }
 fn @hide _print(t: bool){
     if t

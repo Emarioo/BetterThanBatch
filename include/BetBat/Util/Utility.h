@@ -44,6 +44,7 @@ void OutputAsHex(const char* path, char* data, int size);
 
 // bool BeginsWith(const std::string& string, const std::string& has);
 
+#define BREAK(COND) if(COND) __debugbreak();
 #define FUNC_ENTER ScopeDebug scopeDebug{__FUNCTION__,info.funcDepth};
 #define FUNC_ENTER_IF(COND) ScopeDebug scopeDebug{(COND)?__FUNCTION__:nullptr,info.funcDepth};
 #define SCOPE_LOG(X) ScopeDebug scopeDebug{X,info.funcDepth};

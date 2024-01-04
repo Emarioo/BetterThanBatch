@@ -1,5 +1,5 @@
 @TEST-CASE inline_asm_stack
-a = cast_unsafe<i32> asm {
+a := cast_unsafe<i32> asm {
     mov eax, 23
     push rax
 }
@@ -9,7 +9,7 @@ struct Pack {
     x: i32;
     y: char;
 }
-b = cast_unsafe<Pack> asm {
+b := cast_unsafe<Pack> asm {
     mov eax, 'A'
     push rax
     mov eax, 5

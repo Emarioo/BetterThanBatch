@@ -28,7 +28,28 @@ hey(23);
 
 @TEST-CASE types
 
-// structs and enums
+struct Cake {
+    a: i32*;
+    b: Cake*;
+}
+
+fn main() -> i32 {
+    defer {
+        log("Hi bro");
+    }
+    p: i32 = 23;
+    cake: Cake = Cake{&p};
+    cake2: Cake = Cake{null,&cake};
+    hey(1);
+    return 9;
+}
+
+fn hey(a: i64) -> i64 {
+    k: i64 = a + 4;
+    return k + 9;
+}
+
+// TODO: Enums
 
 @TEST-CASE debug_call_stack
 
@@ -46,3 +67,5 @@ fn hey() -> i32 {
     a: i32 = 3
     return a + 2
 }
+
+@TEST-CASE debug_asm_scope

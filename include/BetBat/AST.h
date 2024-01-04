@@ -53,6 +53,7 @@ enum PrimitiveType : u16 {
     AST_INT16,
     AST_INT32,
     AST_INT64,
+// IMPORTANT: YOU MUST MODIFY primitive_names in AST.cpp IF YOU MAKE CHANGES HERE
     
     AST_BOOL,
     AST_CHAR,
@@ -66,8 +67,6 @@ enum PrimitiveType : u16 {
     AST_NULL, // converted to void*
 
     AST_FUNC_REFERENCE,
-
-    AST_POLY,
 
     // TODO: should these be moved somewhere else?
     AST_ID, // variable, enum, type
@@ -100,6 +99,7 @@ enum OperationType : u16 {
     AST_AND,
     AST_OR,
     AST_NOT,
+    // IMPORTANT: MODIFY operation_names in AST.cpp IF YOU MAKE A CHANGE HERE
 
     AST_BAND,
     AST_BOR,
@@ -125,6 +125,14 @@ enum OperationType : u16 {
 
     AST_OPERATION_COUNT,
 };
+extern const char* statement_names[];
+extern const char* prim_op_names[];
+// Preferably use these macros since the way we access
+// the names may change. Perhaps prim and op will be split into
+// their own tables.
+#define PRIM_NAME(X) ((X) >= 0 && (X) < AST_PRIMITIVE_COUNT ? prim_op_names[X] : nullptr)
+#define OP_NAME(X) ((X) >= AST_PRIMITIVE_COUNT && (X) < AST_OPERATION_COUNT ? prim_op_names[X] : nullptr)
+#define STATEMENT_NAME(X) ((X) >= 0 && (X) < ASTStatement::STATEMENT_COUNT ? statement_names[X] : nullptr)
 struct ASTNode {
     // TODO: Add a flag which you can check to know whether there are enums or not.
     //  If there aren't then you don't need to go through all the nodes.
@@ -181,8 +189,8 @@ struct PolyVersions {
 };
 struct TypeId {
     TypeId() = default;
-    TypeId(PrimitiveType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK | PRIMITIVE) {}
-    TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK | PRIMITIVE) {}
+    TypeId(PrimitiveType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
+    TypeId(OperationType type) : _infoIndex0((u16)type), _infoIndex1(0), _flags(VALID_MASK) {}
     static TypeId Create(u32 id) {
         TypeId out={}; 
         // TODO: ENUM or STRUCT?
@@ -264,6 +272,7 @@ struct TypeId {
     bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
     //  && !isVirtual(); }
 };
+engone::Logger& operator <<(engone::Logger&, TypeId typeId);
 struct FnOverloads {
     struct Overload {
         ASTFunction* astFunc=0;
@@ -278,8 +287,8 @@ struct FnOverloads {
     QuickArray<PolyOverload> polyOverloads{};
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
-    Overload* getOverload(AST* ast, TinyArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
-    Overload* getOverload(AST* ast, TinyArray<TypeId>& argTypes, TinyArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
+    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
+    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
     // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
     // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
     // Get base polymorphic overload which can match with the typeIds.
@@ -312,6 +321,7 @@ struct TypeInfo {
     TypeInfo(TypeId id, u32 size=0) : id(id), originalId(id), _size(size) {}
     std::string name;
     TypeId id={}; // can be virtual and point to a different type
+    
     TypeId originalId={};
     u32 _size=0;
     u32 _alignedSize=0;
@@ -417,6 +427,8 @@ struct ScopeInfo {
 
     QuickArray<ScopeInfo*> usingScopes;
 
+    void print(AST* ast);
+
     // Returns the full namespace.
     // Name of parent scopes are concatenated.
     std::string getFullNamespace(AST* ast);
@@ -428,7 +440,6 @@ struct ScopeInfo {
 //     }
 // };
 struct AST;
-const char* OpToStr(OperationType op, bool null = false);
 struct ASTExpression : ASTNode {
     ASTExpression() {
         // printf("hum\n");
@@ -510,7 +521,7 @@ struct ASTExpression : ASTNode {
     PolyVersions<TypeId> versions_outTypeSizeof{};
     PolyVersions<TypeId> versions_castType{};
 
-    void printArgTypes(AST* ast, TinyArray<TypeId>& argTypes);
+    void printArgTypes(AST* ast, QuickArray<TypeId>& argTypes);
 
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
@@ -532,7 +543,7 @@ struct ASTStatement : ASTNode {
         DEFER,
         TEST,
 
-        STATEMENT_TYPE_COUNT,
+        STATEMENT_COUNT,
     };
     ~ASTStatement(){
         // returnValues.~QuickArray<ASTExpression*>();
@@ -544,14 +555,16 @@ struct ASTStatement : ASTNode {
         TypeId assignString{};
         int arrayLength=-1;
         bool declaration = false;
-        PolyVersions<TypeId> versions_assignType{};
+        PolyVersions<TypeId> versions_assignType{}; // is inferred from expression in type checker
         // true if variable declares a new variable (it does if it has a type)
         // false if variable implicitly declares a new type OR assigns to an existing variable
         // bool declaration(){
         //     return assignString.isValid();
         // }
         
-        Identifier* identifier = nullptr; // the contents of the identifier are polymorphic
+        // The corresponding identifier. Set in type checker.
+        // Will be null in first polymorphic check, but will be set for later polymorphic checks
+        Identifier* identifier = nullptr;
     };
     DynamicArray<VarName> varnames;
     std::string* alias = nullptr;
@@ -581,6 +594,12 @@ struct ASTStatement : ASTNode {
         };
         // DynamicArray<ASTExpression*> returnValues{};
     };
+    struct SwitchCase {
+        ASTExpression* caseExpr = nullptr;
+        ASTScope* caseBody = nullptr;
+    };
+    QuickArray<SwitchCase> switchCases; // used with switch statement
+    
     // IMPORTANT: If you put an array in a union then you must explicitly
     // do cleanup in the destructor. Destructor in unions isn't called since
     // C++ doesn't know which variable to destruct.
@@ -590,11 +609,6 @@ struct ASTStatement : ASTNode {
     // };
     PolyVersions<DynamicArray<TypeId>> versions_expressionTypes; // types from firstExpression
 
-    struct SwitchCase {
-        ASTExpression* caseExpr = nullptr;
-        ASTScope* caseBody = nullptr;
-    };
-    QuickArray<SwitchCase> switchCases; // used with switch statement
 
     bool rangedForLoop=false; // otherwise sliced for loop
     bool globalAssignment=false; // for variables, indicates whether variable refers to global data in data segment
@@ -636,6 +650,16 @@ struct ASTStruct : ASTNode {
     // FnOverloads* addMethod(const std::string& name);
     FnOverloads* getMethod(const std::string& name, bool create = false);
     // void addPolyMethod(const std::string& name, ASTFunction* func, FuncImpl* funcImpl);
+
+    // TODO: Be more efficient with allocations. You don't have to pop the poly states once allocated. Use an integer to know which depth you are at. Then once the compiler is done it can clean up the arrays.
+    struct PolyState {
+        DynamicArray<TypeId> structPolyArgs;
+    };
+    DynamicArray<PolyState> polyStates;
+    // void pushPolyState(QuickArray<TypeId>* funcPolyArgs, QuickArray<TypeId>* structPolyArgs);
+    // void pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* structParent);
+    void pushPolyState(StructImpl* structImpl);
+    void popPolyState();
 
     QuickArray<ASTFunction*> functions{};
     // ASTFunction* functions = 0;
@@ -693,6 +717,15 @@ struct ASTFunction : ASTNode {
     const QuickArray<FuncImpl*>& getImpls(){
         return _impls;
     }
+
+    struct PolyState {
+        DynamicArray<TypeId> argTypes;
+        DynamicArray<TypeId> structTypes;
+    };
+    DynamicArray<PolyState> polyStates;
+    void pushPolyState(FuncImpl* funcImpl);
+    void pushPolyState(QuickArray<TypeId>* funcPolyArgs, StructImpl* structParent);
+    void popPolyState();
 
     u32 polyVersionCount=0;
     ASTStruct* parentStruct = nullptr;
@@ -808,11 +841,14 @@ struct AST {
     // Searches for identifier with some name. It does so recursively
     // Identifier* findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes = true);
     Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const Token& name, bool searchParentScopes = true);
-    VariableInfo* identifierToVariable(Identifier* identifier);
+    // VariableInfo* identifierToVariable(Identifier* identifier);
 
     // Returns nullptr if variable already exists or if scopeId is invalid
     VariableInfo* addVariable(ScopeId scopeId, const Token& name, ContentOrder contentOrder, Identifier** identifier);
-    VariableInfo* getVariable(Identifier* identifier);
+    // We don't overload addVariable because we may want to change the name or 
+    // behaviour of this function and it's very useful to have descriptive name
+    // when we do.
+    VariableInfo* getVariableByIdentifier(Identifier* identifier);
     // VariableInfo* addVariable(ScopeId scopeId, const Token& name, bool shadowPreviousVariables=false, Identifier** identifier = nullptr);
     // Returns nullptr if variable already exists or if scopeId is invalid
     Identifier* addIdentifier(ScopeId scopeId, const Token& name, ContentOrder contentOrder);
@@ -876,10 +912,10 @@ struct AST {
     ConstString& getConstString(u32 index);
 
     // Must be used after TrimPointer
-    static Token TrimPolyTypes(Token token, TinyArray<Token>* outPolyTypes = nullptr);
+    static Token TrimPolyTypes(Token token, QuickArray<Token>* outPolyTypes = nullptr);
     static Token TrimNamespace(Token token, Token* outNamespace = nullptr);
     static Token TrimPointer(Token& token, u32* level = nullptr);
-    static Token TrimBaseType(Token token, Token* outNamespace, u32* level, TinyArray<Token>* outPolyTypes, Token* typeName);
+    static Token TrimBaseType(Token token, Token* outNamespace, u32* level, QuickArray<Token>* outPolyTypes, Token* typeName);
     // true if id is one of u8-64, i8-64
     static bool IsInteger(TypeId id);
     // will return false for non number types

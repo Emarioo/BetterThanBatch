@@ -18,17 +18,18 @@ struct DynamicArray<T> {
     // fn add(newElement: T) -> u32 {
     fn add(newElement: T) -> T* {
         if len + 1u > max {
-            res: bool = _reserve(7u + max * 2u);
-            // log("re",re);
+            // res: bool = _reserve(7u + max * 2u);
+            res: bool = _reserve(1 + max); // nocheckin, small growth when debugging
             if !res {
-                // return -1;
                 return null;
-                // return;
             }
         }
         ptr[len] = newElement;
-        return ptr + len++ * sizeof T;
-        // return len++;
+        ptr_elem := ptr + len * sizeof T;
+        // ind = len;
+        len++;
+        return ptr_elem;
+        // return ind;
     }
     fn sliced_unsafe() -> Slice<T> {
         return Slice<T>{ptr, len};
@@ -56,6 +57,7 @@ struct DynamicArray<T> {
     }
     fn _reserve(newMax: u32) -> bool {
         // log("newMax",newMax)
+        // log("size",sizeof T)
         if newMax==0 {
             // log("{",cast<u64>ptr, max, len,"}",newMax);
             if max!=0 {

@@ -24,7 +24,7 @@
 Try to edit Config.cpp instead of this file because you will have to compile all headers and translation units otherwise.
 */
 
-#define COMPILER_VERSION "0.2.0/unix-2023.12.20"
+#define COMPILER_VERSION "0.2.0/dwarf-2024-01-03"
 
 // DEV_FILE defaults to dev.btb if none is specified
 // #define DEV_FILE "examples/debug_test.btb"

@@ -13,7 +13,7 @@ fn main(argc: i32, argv: char**) -> i32 {
     // arguments
     // for 0..argc
     //     log(nr,argv[nr])
-    TestSpec();
+    TestSpec(); 
 
     // bask: Basket;
     // defer { bask.cleanup(); }
@@ -27,22 +27,26 @@ fn TestSpec() {
     stream: ByteStream;
     spec.init();
     stream._reserve(0x1000);
-    defer {
-        spec.cleanup();
+    // defer {
+    //     spec.cleanup();
         // stream.cleanup();
-    }
+    // }
 
     spec.addField(cast_unsafe<u32>FieldType.TYPE_I32)
     // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
     // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
     // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
     // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
-
-    suc = stream.write<i32>(5);
+    log("ptr", spec.fields.ptr)
+    suc := stream.write<i32>(5);
+    log("ptr", spec.fields.ptr)
     // suc = stream.write<char>('H');
     // suc = stream.write<char>('Y');
     // suc = stream.write<char>('O');
     // suc = stream.write<char>('D');
+
+    spec.cleanup();
+    // stream.cleanup();
 
     // print_bytes(&stream);
 
@@ -84,21 +88,34 @@ struct FormatSpec {
 
     fn init() {
         #define ADD(...) definitions.add(TypeDefinition{cast_unsafe<u32>FieldType.TYPE_##...});
+        log("BAD?")
         ADD(NONE, 0)
+        log("BAD?")
         ADD(CHAR, 1)
+        log("BAD?")
         
         ADD(I8  , 1)
+        log("BAD?")
         ADD(I16 , 2)
+        log("BAD?")
         ADD(I32 , 4)
+        log("BAD?")
         ADD(I64 , 8)
 
+        log("BAD?")
         ADD(U8  , 1)
+        log("BAD?")
         ADD(U16 , 2)
+        log("BAD?")
         ADD(U32 , 4)
+        log("BAD?")
         ADD(U64 , 8)
+        log("BAD?")
 
         ADD(F32 , 4)
+        log("BAD?")
         ADD(F64 , 8)
+        log("BAD?")
         #undef ADD
     }
     fn cleanup() {
@@ -116,7 +133,7 @@ struct FormatSpec {
         if definition == 0 {
             return fields.getPtr(fieldIndex);
         }
-        def = getFieldDef(definition);
+        def := getFieldDef(definition);
         return def.fields.getPtr(fieldIndex);
     }
 
@@ -124,7 +141,7 @@ struct FormatSpec {
         if definition == 0 {
             fields.add(Field{type});
         } else {
-            def = getFieldDef(definition);
+            def := getFieldDef(definition);
             if def
                 def.fields.add(Field{type});
             else
@@ -157,7 +174,7 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
     
     while stack.len {
         // get next field
-        layer = stack.getPtr(stack.len - 1);
+        layer := stack.getPtr(stack.len - 1);
 
         element: Field* = spec.getField(layer.definition, layer.fieldIndex);
         if !element {

@@ -243,12 +243,16 @@ extern "C" {
         return engone::GetClockSpeed();
     }
     void* attr_stdcall Allocate(u64 size) {
-        return engone::Allocate(size);
+        void* ptr = engone::Allocate(size);
+        // printf("Allocate: %llu, %p\n", size, ptr);
+        return ptr;
     }
     void* attr_stdcall Reallocate(void* ptr, u64 oldSize, u64 newSize) {
+        // printf("Reallocate: %llu -> %llu, %p\n", oldSize, newSize, ptr);
         return engone::Reallocate(ptr, oldSize, newSize);
     }
     void attr_stdcall Free(void* ptr, u64 size) {
+        // printf("Free: %llu, %p\n", size, ptr);
         engone::Free(ptr,size);
     }
     u64 attr_stdcall FileOpen(Language::Slice<char>* path, bool readOnly, u64* outFileSize) {

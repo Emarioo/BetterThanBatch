@@ -1,20 +1,18 @@
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Compiler.h"
 
+// Old logging
 #undef WARN_HEAD3
 #define WARN_HEAD3(R,M) info.compileInfo->compileOptions->compileStats.warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
-
-/*
-    Latest logging
-*/
 
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION("Type checker, ", CONTENT)
 
-#define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
+#define _TCLOG_ENTER(...) FUNC_ENTER_IF(global_loggingSection & LOG_TYPECHECKER)
+// #define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
 // #define _TCLOG_ENTER(X)
 
-SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, TinyArray<TypeId>* outTypes, bool attempt);
+SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt);
 
 SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
     using namespace engone;
@@ -77,20 +75,22 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
     Assert(astStruct->polyArgs.size() == structImpl->polyArgs.size());
     // DynamicArray<TypeId> prevVirtuals{};
     
-    info.prevVirtuals.resize(astStruct->polyArgs.size());
-    for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-        TypeId id = structImpl->polyArgs[i];
-        if(info.errors == 0){
-            // Assert(id.isValid()); // poly arg type could have failed, an error would have been logged
-        }
-        // Assert(astStruct->polyArgs[i].virtualType->isVirtual());
-        info.prevVirtuals[i] = astStruct->polyArgs[i].virtualType->id;
-        astStruct->polyArgs[i].virtualType->id = id;
-    }
+    // info.prevVirtuals.resize(astStruct->polyArgs.size());
+    // for(int i=0;i<(int)astStruct->polyArgs.size();i++){
+    //     TypeId id = structImpl->polyArgs[i];
+    //     if(info.errors == 0){
+    //         // Assert(id.isValid()); // poly arg type could have failed, an error would have been logged
+    //     }
+    //     // Assert(astStruct->polyArgs[i].virtualType->isVirtual());
+    //     info.prevVirtuals[i] = astStruct->polyArgs[i].virtualType->id;
+    //     astStruct->polyArgs[i].virtualType->id = id;
+    // }
+    astStruct->pushPolyState(structImpl);
     defer{
-        for(int i=0;i<(int)astStruct->polyArgs.size();i++){
-            astStruct->polyArgs[i].virtualType->id = info.prevVirtuals[i];
-        }
+        astStruct->popPolyState();
+        // for(int i=0;i<(int)astStruct->polyArgs.size();i++){
+        //     astStruct->polyArgs[i].virtualType->id = info.prevVirtuals[i];
+        // }
     };
    
     structImpl->members.resize(astStruct->members.size());
@@ -264,7 +264,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const Toke
     Token token = info.ast->getTokenFromTypeString(typeString);
     return CheckType(info, scopeId, token, tokenRange, printedError);
 }
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError){
+TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& err_tokenRange, bool* printedError){
     using namespace engone;
     MEASURE;
     _TCLOG_ENTER(FUNC_ENTER)
@@ -292,7 +292,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTokens[i], scopeId);
             // TypeId id = info.ast->convertToTypeId(polyTokens[i], scopeId);
             bool printedError = false;
-            TypeId id = CheckType(info, scopeId, polyTokens[i], tokenRange, &printedError);
+            TypeId id = CheckType(info, scopeId, polyTokens[i], err_tokenRange, &printedError);
             if(i!=0)
                 *realTypeName += ",";
             *realTypeName += info.ast->typeToString(id);
@@ -301,11 +301,11 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
 
             } else if(!printedError) {
             //     // ERR_SECTION(
-            // ERR_HEAD(tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
+            // ERR_HEAD(err_tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
                 ERR_SECTION(
-                    ERR_HEAD(tokenRange)
+                    ERR_HEAD(err_tokenRange)
                     ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
-                    ERR_LINE(tokenRange,"here somewhere")
+                    ERR_LINE(err_tokenRange,"here somewhere")
                 )
             }
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
@@ -324,9 +324,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             return {};
         if(ti && ti->astStruct && ti->astStruct->polyArgs.size() != 0 && !ti->structImpl) {
             ERR_SECTION(
-                ERR_HEAD(tokenRange)
+                ERR_HEAD(err_tokenRange)
                 ERR_MSG(info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>. (if in a function: compiler does not have knowledge of where).")
-                ERR_LINE(tokenRange,"")
+                ERR_LINE(err_tokenRange,"")
             )
             if(printedError)
                 *printedError = true;
@@ -338,18 +338,18 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
 
     if(polyTokens.size() == 0) {
         // ERR_SECTION(
-        // ERR_HEAD(tokenRange) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
+        // ERR_HEAD(err_tokenRange) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // type isn't polymorphic and does just not exist
     }
     TypeInfo* baseInfo = info.ast->convertToTypeInfo(baseType, scopeId, true);
     if(!baseInfo) {
         // ERR_SECTION(
-        // ERR_HEAD(tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
+        // ERR_HEAD(err_tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // print error? base type for polymorphic type doesn't exist
     }
     if(polyTokens.size() != baseInfo->astStruct->polyArgs.size()) {
         ERR_SECTION(
-            ERR_HEAD(tokenRange)
+            ERR_HEAD(err_tokenRange)
             ERR_MSG("Polymorphic type "<<typeString << " has "<< (u32)polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<(u32)baseInfo->astStruct->polyArgs.size()<<".")
         )
         // ERR() << "Polymorphic type "<<typeString << " has "<< polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<baseInfo->astStruct->polyArgs.size()<< "\n";
@@ -372,7 +372,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
     SignalDefault hm = CheckStructImpl(info, typeInfo->astStruct, baseInfo, typeInfo->structImpl);
     if(hm != SignalDefault::SUCCESS) {
         ERR_SECTION(
-            ERR_HEAD(tokenRange)
+            ERR_HEAD(err_tokenRange)
             ERR_MSG(__FUNCTION__ <<": structImpl for type "<<typeString << " failed.")
         )
     } else {
@@ -481,8 +481,8 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
     // }
     return SignalDefault::SUCCESS;
 }
-SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, TinyArray<TypeId>* outTypes);
-SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, TinyArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, TinyArray<TypeId>* operatorArgs = nullptr) {
+SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes);
+SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs = nullptr) {
     using namespace engone;
     Assert(!outTypes || outTypes->size()==0);
     #define FNCALL_SUCCESS \
@@ -504,7 +504,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     Token baseName{};
     
     if(operatorOverloadAttempt) {
-        baseName = OpToStr((OperationType)expr->typeId.getId());
+        baseName = OP_NAME((OperationType)expr->typeId.getId());
     } else {
         baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
         for(int i=0;i<(int)polyTokens.size();i++){
@@ -874,14 +874,22 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                 argTypes.size() > overload.astFunc->arguments.size() - lessArguments
                 )
                 continue;
-            for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-                overload.astFunc->polyArgs[j].virtualType->id = {};
-            }
-            if(parentAstStruct){
-                for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                    parentAstStruct->polyArgs[j].virtualType->id = {};
-                }
-            }
+            
+            // What is the purpose of voiding virtual types?
+            // The loop of nonNamedArgs doesn't transform virtuals.
+            // If the type is a virtual then it handles it differently so
+            // in theory we won't ever access the value virtualType->id (just virtualType->originalId)
+            // It might do something important though.
+            // - Emarioo, 2024-01-03
+            // for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
+            //     overload.astFunc->polyArgs[j].virtualType->id = {};
+            // }
+            // if(parentAstStruct){
+            //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+            //         parentAstStruct->polyArgs[j].virtualType->id = {};
+            //     }
+            // }
+
             // IMPORTANT TODO: NAMESPACES ARE IGNORED AT THE MOMENT. HANDLE THEM!
             // TODO: Fix this code it does not work properly. Some behaviour is missing.
             bool found = true;
@@ -1006,23 +1014,25 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             //-- Double check so that the types we choose actually works.
             // Just in case the code for implicit types has bugs.
             // IMPORTANT: We also run CheckType in case types needs to be created.
-            if(parentAstStruct){
-                for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                    parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
-                }
-            }
-            for(int j=0;j<(int)polyOverload->astFunc->polyArgs.size();j++){
-                polyOverload->astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
-            }
+            // if(parentAstStruct){
+            //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+            //         parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
+            //     }
+            // }
+            // for(int j=0;j<(int)polyOverload->astFunc->polyArgs.size();j++){
+            //     polyOverload->astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
+            // }
+            polyOverload->astFunc->pushPolyState(&fnPolyArgs, parentStructImpl);
             defer {
-                for(int j=0;j<(int)polyOverload->astFunc->polyArgs.size();j++){
-                    polyOverload->astFunc->polyArgs[j].virtualType->id = {};
-                }
-                if(parentAstStruct){
-                    for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                        parentAstStruct->polyArgs[j].virtualType->id = {};
-                    }
-                }
+                polyOverload->astFunc->popPolyState();
+                // for(int j=0;j<(int)polyOverload->astFunc->polyArgs.size();j++){
+                //     polyOverload->astFunc->polyArgs[j].virtualType->id = {};
+                // }
+                // if(parentAstStruct){
+                //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+                //         parentAstStruct->polyArgs[j].virtualType->id = {};
+                //     }
+                // }
             };
             bool found = true;
             for (u32 j=0;j<expr->nonNamedArgs;j++){
@@ -1054,23 +1064,25 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                 argTypes.size() > overload.astFunc->arguments.size() - lessArguments
                 )
                 continue;
-            if(parentAstStruct){
-                for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                    parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
-                }
-            }
-            for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-                overload.astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
-            }
+            // if(parentAstStruct){
+            //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+            //         parentAstStruct->polyArgs[j].virtualType->id = parentStructImpl->polyArgs[j];
+            //     }
+            // }
+            // for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
+            //     overload.astFunc->polyArgs[j].virtualType->id = fnPolyArgs[j];
+            // }
+            overload.astFunc->pushPolyState(&fnPolyArgs, parentStructImpl);
             defer {
-                for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
-                    overload.astFunc->polyArgs[j].virtualType->id = {};
-                }
-                if(parentAstStruct){
-                    for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
-                        parentAstStruct->polyArgs[j].virtualType->id = {};
-                    }
-                }
+                overload.astFunc->popPolyState();
+                // for(int j=0;j<(int)overload.astFunc->polyArgs.size();j++){
+                //     overload.astFunc->polyArgs[j].virtualType->id = {};
+                // }
+                // if(parentAstStruct){
+                //     for(int j=0;j<(int)parentAstStruct->polyArgs.size();j++){
+                //         parentAstStruct->polyArgs[j].virtualType->id = {};
+                //     }
+                // }
             };
             bool found = true;
             for (u32 j=0;j<expr->nonNamedArgs;j++){
@@ -1107,11 +1119,13 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         ERR_SECTION(
             ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
             ERR_MSG_LOG(
-                "Overloads for function '"<<baseName <<"' does not match these argument(s): ";
+                "Overloads for function '"<< log::LIME<< baseName << log::NO_COLOR <<"' does not match these argument(s): ";
                 if(argTypes.size()==0){
                     log::out << "zero arguments";
                 } else {
+                    log::out << "(";
                     expr->printArgTypes(info.ast, argTypes);
+                    log::out << ")";
                 }
                 
                 log::out << "\n";
@@ -1182,7 +1196,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     FNCALL_SUCCESS
     return SignalAttempt::SUCCESS;
 }
-SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, TinyArray<TypeId>* outTypes, bool attempt){
+SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt){
     using namespace engone;
     MEASURE;
     Assert(expr);
@@ -1204,12 +1218,14 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         if(expr->typeId == AST_ID){
             // NOTE: When changing this code, don't forget to do the same with AST_SIZEOF. It also has code for AST_ID.
             if(IsName(expr->name)){
+                // ScopeInfo* sc = info.ast->getScope(scopeId);
+                // sc->print(info.ast);
                 // TODO: What about enum?
                 auto iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name);
                 if(iden){
                     expr->identifier = iden;
                     if(iden->type == Identifier::VARIABLE){
-                        auto varinfo = info.ast->identifierToVariable(iden);
+                        auto varinfo = info.ast->getVariableByIdentifier(iden);
                         if(varinfo){
                             if(outTypes) outTypes->add(varinfo->versions_typeId[info.currentPolyVersion]);
                         }
@@ -1270,12 +1286,13 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
 
             if(expr->flags & ASTNode::NULL_TERMINATED) {
                 TypeId theType = CheckType(info, scopeId, "char*", expr->tokenRange, nullptr);
-                if(outTypes) outTypes->add(theType);
+                Assert(theType.isValid()); if(outTypes) outTypes->add(theType);
             } else {
                 TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+                Assert(theType.isValid());
                 if(outTypes) outTypes->add(theType);
             } 
-        } else if(expr->typeId == AST_SIZEOF) {
+        } else if(expr->typeId == AST_SIZEOF || expr->typeId == AST_NAMEOF) {
             Assert(expr->left);
             TypeId finalType = {};
             if(expr->left->typeId == AST_ID){
@@ -1285,88 +1302,47 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 // TODO: Handle function pointer type
                 // This code may need to update when code for AST_ID does
                 if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name)) && iden->type==Identifier::VARIABLE){
-                    auto var = info.ast->identifierToVariable(iden);
+                    auto var = info.ast->getVariableByIdentifier(iden);
                     Assert(var);
                     if(var){
                         finalType = var->versions_typeId[info.currentPolyVersion];
                     }
                 } else {
+                    // auto sc = info.ast->getScope(scopeId);
+                    // sc->print(info.ast);
                     finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
                 }
-            } else {
+            }
+            if(!finalType.isValid()) {
                 // DynamicArray<TypeId> temps{};
                 typeArray.resize(0);
                 SignalAttempt result = CheckExpression(info, scopeId, expr->left, &typeArray, attempt);
-                finalType = typeArray.size()==0?AST_VOID:typeArray.last();
+                finalType = typeArray.size()==0 ? AST_VOID : typeArray.last();
             }
-            expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
-            if(outTypes) outTypes->add(AST_UINT32);
+            if(finalType.isValid()) {
+                if(expr->typeId == AST_SIZEOF) {
+                    expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
+                    if(outTypes)  outTypes->add(AST_UINT32);
+                } else if(expr->typeId == AST_NAMEOF) {
+                    std::string name = info.ast->typeToString(finalType);
+                    u32 index=0;
+                    auto constString = info.ast->getConstString(name,&index);
+                    // Assert(constString);
+                    expr->versions_constStrIndex[info.currentPolyVersion] = index;
+                    // expr->constStrIndex = index;
+
+                    TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+                    if(outTypes)  outTypes->add(theType);
+                }
+            } else {
+                if(outTypes) outTypes->add(AST_VOID);
+            }
         } else if(expr->typeId == AST_ASM){
             // Polymorphism may cause duplicated inline assembly.
             Assert(info.currentPolyVersion==0);
             // TODO: Check variables?
             if(outTypes)
                 outTypes->add(AST_VOID);
-        } else if(expr->typeId == AST_NAMEOF) {
-            // Assert(expr->left);
-            // TypeId finalType = {};
-            // if(expr->left->typeId == AST_ID){
-            //     // AST_ID could result in a type or a variable
-            //     Identifier* iden = nullptr;
-            //     Token& name = expr->left->name;
-            //     // TODO: Handle function pointer type
-            //     // This code may need to update when code for AST_ID does
-            //     if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, name)) && iden->type==Identifier::VARIABLE){
-            //         auto var = info.ast->identifierToVariable(iden);
-            //         Assert(var);
-            //         if(var){
-            //             finalType = var->typeId;
-            //         }
-            //     } else {
-            //         finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
-            //     }
-            // } else {
-            //     DynamicArray<TypeId> temps{};
-            //     int result = CheckExpression(info, scopeId, expr->left, &temps);
-            //     finalType = temps.size()==0?AST_VOID:temps.last();
-            // }
-            // expr->versions_outTypeSizeof[info.currentPolyVersion] = finalType;
-            // outTypes->add(AST_UINT32);
-            
-            // TODO: nameof doesn't use an expression, it uses expr->name, so you cannot
-            //   evaluate expressions like sizeof. You may want to change it so nameof works
-            //   like sizeof.
-            std::string name = "";
-            auto ti = CheckType(info, scopeId, expr->name, expr->tokenRange, nullptr);
-            if(ti.isValid()){
-                name = info.ast->typeToString(ti);
-            }else{
-                // AST_ID could result in a type or a variable
-                Identifier* iden = nullptr;
-                // Token& name = expr->name;
-                // TODO: Handle function pointer type
-                // This code may need to update when code for AST_ID does
-                if(IsName(expr->name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name)) && iden->type==Identifier::VARIABLE){
-                    auto var = info.ast->identifierToVariable(iden);
-                    Assert(var);
-                    if(var){
-                        name = info.ast->typeToString(var->versions_typeId[info.currentPolyVersion]);
-                        // finalType = var->typeId;
-                    }
-                } else {
-                    name = expr->name;
-                    // finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
-                }
-            }
-            u32 index=0;
-            auto constString = info.ast->getConstString(name,&index);
-            // Assert(constString);
-            expr->versions_constStrIndex[info.currentPolyVersion] = index;
-            // expr->constStrIndex = index;
-
-            TypeId theType =CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
-            if(outTypes)
-                outTypes->add(theType);
         } else if(expr->typeId == AST_NULL){
             // u32 index=0;
             // auto constString = info.ast->getConstString(expr->name,&index);
@@ -1408,7 +1384,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             }
             // TODO: You should not be allowed to overload all operators.
             //  Fix some sort of way to limit which ones you can.
-            const char* str = OpToStr((OperationType)expr->typeId.getId(), true);
+            const char* str = OP_NAME(expr->typeId.getId());
             if(str && operatorArgs.size() == 2) {
                 
                 expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
@@ -1779,37 +1755,40 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
 SignalDefault CheckRest(CheckInfo& info, ASTScope* scope);
 // Evaluates types and offset for the given function implementation
 // It does not modify ast func
-SignalDefault CheckFunctionImpl(CheckInfo& info, const ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, TinyArray<TypeId>* outTypes){
+SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes){
     using namespace engone;
     MEASURE;
     _TCLOG_ENTER(FUNC_ENTER)
 
     Assert(funcImpl->polyArgs.size() == func->polyArgs.size());
-    for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
-        TypeId id = funcImpl->polyArgs[i];
-        Assert(id.isValid());
-        func->polyArgs[i].virtualType->id = id;
-    }
-    if(funcImpl->structImpl){
-        Assert(parentStruct);
-        // Assert funcImpl->structImpl must come from parentStruct
-        for(int i=0;i<(int)funcImpl->structImpl->polyArgs.size();i++){
-            TypeId id = funcImpl->structImpl->polyArgs[i];
-            Assert(id.isValid());
-            parentStruct->polyArgs[i].virtualType->id = id;
-        }
-    }
+    // for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
+    //     TypeId id = funcImpl->polyArgs[i];
+    //     Assert(id.isValid());
+    //     func->polyArgs[i].virtualType->id = id;
+    // }
+    // if(funcImpl->structImpl){
+    //     Assert(parentStruct);
+    //     // Assert funcImpl->structImpl must come from parentStruct
+    //     for(int i=0;i<(int)funcImpl->structImpl->polyArgs.size();i++){
+    //         TypeId id = funcImpl->structImpl->polyArgs[i];
+    //         Assert(id.isValid());
+    //         parentStruct->polyArgs[i].virtualType->id = id;
+    //     }
+    // }
+    Assert(func->parentStruct == parentStruct);
+    func->pushPolyState(funcImpl);
     defer {
-        for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
-            func->polyArgs[i].virtualType->id = {};
-        }
-        if(funcImpl->structImpl){
-            Assert(parentStruct);
-            for(int i=0;i<(int)funcImpl->structImpl->polyArgs.size();i++){
-                TypeId id = funcImpl->structImpl->polyArgs[i];
-                parentStruct->polyArgs[i].virtualType->id = {};
-            }
-        }
+        func->popPolyState();
+        // for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
+        //     func->polyArgs[i].virtualType->id = {};
+        // }
+        // if(funcImpl->structImpl){
+        //     Assert(parentStruct);
+        //     for(int i=0;i<(int)funcImpl->structImpl->polyArgs.size();i++){
+        //         TypeId id = funcImpl->structImpl->polyArgs[i];
+        //         parentStruct->polyArgs[i].virtualType->id = {};
+        //     }
+        // }
     };
 
     _TCLOG(log::out << "FUNC IMPL "<< funcImpl->name<<"\n";)
@@ -2006,7 +1985,6 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
         auto& arg = function->polyArgs[i];
         arg.virtualType = info.ast->createType(arg.name, function->scopeId);
         // _TCLOG(log::out << "Virtual type["<<i<<"] "<<arg.name<<"\n";)
-        // arg.virtualType->id = AST_POLY;
     }
     // defer {
     //     for(int i=0;i<(int)function->polyArgs.size();i++){
@@ -2049,9 +2027,9 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
             }
         }
     }
-    if(function->name == "_print") {
-        int a = 9;
-    }
+    // if(function->name == "_print") {
+    //     int a = 9;
+    // }
     if(function->polyArgs.size()==0 && (!parentStruct || parentStruct->polyArgs.size() == 0)){
         // The code below is used to 
         // Acquire identifiable arguments
@@ -2246,7 +2224,10 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     }
     for(auto it : scope->structs){
         for(auto fn : it->functions){
-            CheckFunction(info, fn , it, scope);
+            SignalDefault result = CheckFunction(info, fn , it, scope);
+            if(result != SignalDefault::SUCCESS) {
+                log::out << log::RED <<  "Bad\n";
+            }
             if(fn->body){ // external/native function do not have bodies
                 SignalDefault result = CheckFunctions(info, fn->body);
             }
@@ -2280,27 +2261,30 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
     info.currentFuncImpl = funcImpl;
     info.currentAstFunc = func;
 
-    if(func->parentStruct){
-        for(int i=0;i<(int)func->parentStruct->polyArgs.size();i++){
-            auto& arg = func->parentStruct->polyArgs[i];
-            arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
-        }
-    }
-    for(int i=0;i<(int)func->polyArgs.size();i++){
-        auto& arg = func->polyArgs[i];
-        arg.virtualType->id = funcImpl->polyArgs[i];
-    }
+    // if(func->parentStruct){
+    //     for(int i=0;i<(int)func->parentStruct->polyArgs.size();i++){
+    //         auto& arg = func->parentStruct->polyArgs[i];
+    //         arg.virtualType->id = funcImpl->structImpl->polyArgs[i];
+    //     }
+    // }
+    // for(int i=0;i<(int)func->polyArgs.size();i++){
+    //     auto& arg = func->polyArgs[i];
+    //     arg.virtualType->id = funcImpl->polyArgs[i];
+    // }
+    // BREAK(func->name == "add")
+    func->pushPolyState(funcImpl);
     defer {
-        if(func->parentStruct){
-            for(int i=0;i<(int)func->parentStruct->polyArgs.size();i++){
-                auto& arg = func->parentStruct->polyArgs[i];
-                arg.virtualType->id = {};
-            }
-        }
-        for(int i=0;i<(int)func->polyArgs.size();i++){
-            auto& arg = func->polyArgs[i];
-            arg.virtualType->id = {};
-        }
+        func->popPolyState();
+        // if(func->parentStruct){
+        //     for(int i=0;i<(int)func->parentStruct->polyArgs.size();i++){
+        //         auto& arg = func->parentStruct->polyArgs[i];
+        //         arg.virtualType->id = {};
+        //     }
+        // }
+        // for(int i=0;i<(int)func->polyArgs.size();i++){
+        //     auto& arg = func->polyArgs[i];
+        //     arg.virtualType->id = {};
+        // }
     };
 
     // Assert(false);
@@ -2314,7 +2298,8 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
         auto& argImpl = funcImpl->argumentTypes[i];
         _TCLOG(log::out << " " << arg.name<<": "<< info.ast->typeToString(argImpl.typeId) <<"\n";)
         // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
-        auto varinfo = info.ast->identifierToVariable(arg.identifier);
+        auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
+        Assert(varinfo); // nocheckin
         if(varinfo){
             varinfo->versions_typeId[info.currentPolyVersion] = argImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
             // the same type as the generator.
@@ -2341,7 +2326,8 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
             auto& memImpl = funcImpl->structImpl->members[i];
             _TCLOG(log::out << " " << iden->name<<": "<< info.ast->typeToString(memImpl.typeId) <<"\n";)
             // auto varinfo = info.ast->addVariable(func->scopeId, std::string(arg.name), CONTENT_ORDER_ZERO, &arg.identifier);
-            auto varinfo = info.ast->identifierToVariable(iden);
+            auto varinfo = info.ast->getVariableByIdentifier(iden);
+            Assert(varinfo); // nocheckin
             if(varinfo){
                 varinfo->versions_typeId[info.currentPolyVersion] = memImpl.typeId; // typeId comes from CheckExpression which may or may not evaluate
                 // the same type as the generator.
@@ -2351,6 +2337,7 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
     }
     _TCLOG(log::out << "\n";)
 
+    // log::out << log::CYAN << "BODY " << log::NO_COLOR << func->body->tokenRange<<"\n";
     CheckRest(info, func->body);
     
     // for(auto& name : vars){
@@ -2373,7 +2360,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     // Hello past me!
     //  I seem to have a good implementation of function overloading and was
     //  wondering why sizeof wasn't calculated properly. I figured something
-    //  was wrong with CheckRest and indeed there is! I don't appreciate that
+    //  was wrong with CheckRest and indeed there was! I don't appreciate that
     //  you left this for me but I'm in a good mood so I'll let it slide.
 
     // TODO: Type check default values in structs and functions
@@ -2405,10 +2392,19 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
         if(now->isNoCode()) {
             info.ignoreErrors = true;
         }
+
+
+        // #define print_t { auto ti = CheckType(info,scope->scopeId, "T", now->tokenRange, nullptr); log::out << "T = " << ti << "\n"; }
+        // print_t
+
         //-- Check assign types in all varnames. The result is put in version_assignType for
         //   the generator and rest of the code to use.
         for(auto& varname : now->varnames) {
+            // if(varname.name == "ptr_elem")
+            //     __debugbreak();
             if(varname.assignString.isString()){
+                // log::out << "Check assign "<<varname.name<<"\n";
+                // info.ast->getScope(scope->scopeId)->print(info.ast);
                 bool printedError = false;
                 auto ti = CheckType(info, scope->scopeId, varname.assignString, now->tokenRange, &printedError);
                 // NOTE: We don't care whether it's a pointer just that the type exists.
@@ -2456,10 +2452,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             typeArray.resize(0);
             if(now->firstExpression){
                 // may not exist, meaning just a declaration, no assignment
-                if(Equal(now->firstExpression->name, "_reserve")) {
+                // if(Equal(now->firstExpression->name, "_reserve")) {
                     // __debugbreak();
                     // log::out << "okay\n";
-                }
+                // }
                 SignalAttempt result = CheckExpression(info, scope->scopeId,now->firstExpression, &typeArray, false);
                 for(int i=0;i<typeArray.size();i++){
                     if(typeArray[i].isValid() && typeArray[i] != AST_VOID)
@@ -2476,9 +2472,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     )
                 }
             }
-
             for(auto& t : typeArray)
                 poly_typeArray.add(t);
+
             bool hadError = false;
             if(now->firstExpression && poly_typeArray.size() < now->varnames.size()){
                 if(info.errors==0) {
@@ -2492,53 +2488,183 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 }
                 // don't return here, we can still evaluate some things
             }
+
             _TCLOG(log::out << "assign ";)
             for (int vi=0;vi<(int)now->varnames.size();vi++) {
                 auto& varname = now->varnames[vi];
-                // possible implicit type
-                // if(varname.arrayLength!=0){
-                //     if(varname.assignString.isValid()) { // if assigned type didn't exist the
 
-                //     }
-                // } else 
-                if(!varname.assignString.isValid()) { // if assigned type didn't exist then 
-                    if(vi < poly_typeArray.size()){ // out of bounds, error is printed above
-                        // if (!poly_typeArray[vi].isValid()) {
-                        //     ERR_SECTION(
-                        //         ERR_HEAD("")
-                        //         ERR_MSG(now->firstExpression)
-                        //         ERR_LINE(now->firstExpression, info.ast->typeToString(poly_typeArray[vi]))
-                        //     )
-                        // } else if(poly_typeArray[vi] == AST_VOID) {
+                const auto err_non_variable = [&]() {
+                    // TODO: Print what type the identifier is. Don't just say non-variable
+                    ERR_SECTION(
+                        ERR_HEAD(varname.name)
+                        ERR_MSG("'"<<varname.name<<"' is defined as a non-variable and cannot be used.")
+                        ERR_LINE(varname.name, "bad")
+                    )
+                };
 
-                        // }
-                        varname.versions_assignType[info.currentPolyVersion] = poly_typeArray[vi];
-                    } else {
-                        if(!hadError){
+                
+                // We begin by matching the varname in ASTStatement with an identifier and VariableInfo
+
+                VariableInfo* varinfo = nullptr;
+                if(!varname.declaration) {
+                    if(!varname.identifier) {
+                        // info.ast->getScope(scope->scopeId)->print(info.ast);
+                        Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                        if(!possible_identifier) {
                             ERR_SECTION(
                                 ERR_HEAD(varname.name)
-                                ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
-                                ERR_LINE(varname.name, "typeless");
+                                ERR_MSG("'"<<varname.name<<"' is not a defined identifier. You have to declare the variable first.")
+                                ERR_LINE(varname.name, "undeclared")
+                                ERR_EXAMPLE(1,"var: i32 = 12;")
+                                ERR_EXAMPLE(2,"var := 23;  // inferred type")
                             )
+                            continue;
+                        } else if(possible_identifier->type != Identifier::VARIABLE) {
+                            err_non_variable();
+                            continue;
+                        } else {
+                            varname.identifier = possible_identifier;
                         }
                     }
-                }
-                // TODO: Do you need to do something about global data here?
-                _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
-                if(!varname.identifier) {
-                    varname.identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
-                }
-                VariableInfo* varinfo = nullptr;
-                if(!varname.identifier){
-                    varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
+                    varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                } else {
+                    // Infer type
+                    if(!varname.assignString.isValid()) {
+                        if(vi < poly_typeArray.size()){
+                            varname.versions_assignType[info.currentPolyVersion] = poly_typeArray[vi];
+                        } else {
+                            Assert(hadError);
+                            // Do we need this err section? do we not always check the out of bounds above
+                            //  // out of bounds
+                            // if(!hadError){ // error may have been printed above
+                            //     ERR_SECTION(
+                            //         ERR_HEAD(varname.name)
+                            //         ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
+                            //         ERR_LINE(varname.name, "typeless");
+                            //     )
+                            // }
+                        }
+                    }
+                    // Logic if identifier exists or not and whether the identifier is of a variable type or not AND which scope the identifier was found in.
+                    // Based on all that, we may use the one we found or create a new variable identifier.
+                    Identifier* possible_identifier = nullptr;
+                    if(!varname.identifier) {
+                        possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                        if(!possible_identifier) {
+                            // identifier does not exist, we should create it.
+                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
+                            Assert(varinfo);
+                            varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+                        } else if(possible_identifier->type == Identifier::VARIABLE) {
+                            // Identifier does exist but we can still declare it if is in a parent scope.
+
+                            // An identifier would have to allow multiple variables with different content orders.
+                            if(possible_identifier->scopeId == scope->scopeId) {
+                                // variable may already exist if we are in a polymorphic scope.
+                                // if we are in the same scope with the same content order then we have
+                                // already touched this statement. we can set the versionTypeID just fine.
+                                // The other scenario has to do with declaring a new variable but the 
+                                // name already exists. If you allow this then it's called shadowing.
+                                // This should be allowed but the current system can't support it so we
+                                // don't allow it for now.
+
+                                // NOTE: I had some issues with polymorphic structs and local variables in methods.
+                                //  As a quick fix I added this. Whether this does what I think it does or if we have
+                                //  to add something else for edge cases to be taken care of is another matter.
+                                //  - Emarioo, 2023-12-29 (By the way, merry christmas and happy new year!)
+                                if(possible_identifier->order != contentOrder) {
+                                    ERR_SECTION(
+                                        ERR_HEAD(varname.name)
+                                        ERR_MSG("Cannot redeclare variables. Identifier shadowing not implemented yet\n")
+                                        ERR_LINE(varname.name,"");
+                                    )
+                                    continue;
+                                } else {
+                                    varname.identifier = possible_identifier;
+                                    // We should only be here if the scope is polymorphic.
+                                    varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                                    // The 'now' statement was checked to be global and thus made varinfo global. varinfo->type will always be the same as now->globalAssignment
+                                    // The assert will fire if we have a bug in the code.
+                                    Assert(varinfo->type == (now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
+                                }
+                            } else {
+                                varname.identifier = possible_identifier;
+                                // variable does not exist in scope, we can therefore create it
+                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
+                                Assert(varinfo);
+                                // ACTUALLY! I thought global assignment in local scopes didn't work but I believe it does.
+                                //  The code here just handles where the variable is visible. That should be the local scope which is correct.
+                                //  The VariableInfo::GLOBAL type is what puts the data into the global data section. Silly me.
+                                //  - Emarioo, 2024-1-03
+                                // if(now->globalAssignment && scope->scopeId != 0) {
+                                //     ERR_SECTION(
+                                //         ERR_HEAD(now->tokenRange)
+                                //         ERR_MSG("Global assignment in local scope not implemented. Move global variable to global scope or remove the global keyword. In the future, ")
+                                //         ERR_LINE(now->tokenRange, "can't be global")
+                                //     )
+                                //     // TODO: Global assignment needs extra code.
+                                //     //  We should not add variable into 'scope->scopeId' like we do above
+                                //     //  We also need to check the identifier against the global scope not 'scope->scopeId'
+                                //     //  Basically, global assignment could use it's own code path.
+                                // }
+                                varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+                            }
+                        } else {
+                            err_non_variable();
+                            continue;
+                        }
+                    } else {
+                        // We should only be here if we are in a polymorphic scope/check.
+                        Assert(varname.identifier->type == Identifier::VARIABLE);
+                        varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                        Assert(varinfo);
+                        Assert(varinfo->type == (now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
+                    }
                     Assert(varinfo);
-                    varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+
+                    Assert(!varinfo->versions_typeId[info.currentPolyVersion].isValid()); // nocheckin, this might not work, maybe i am missing something but i don't think this will ever fire
+
+                    // FINALLY we can set the declaration type
                     varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
-                    varname.declaration = true;
+                }
+
+                if(varname.declaration) {
+                    _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
+                } else {
+                    _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
+                }
+
+                // We continue by checking the expression with the variable/identifier info type
+
+                #ifdef gone
+                // NOTE: This is old code but I changed it a big before deprecating it so it doesn't work
+
+                // TODO: Do you need to do something about global data here?
+                Identifier* possible_identifier = nullptr;
+                VariableInfo* varinfo = nullptr;
+                if(!varname.identifier) {
+                    possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                    if(!possible_identifier) {
+                        // identifier does not exist, we should create it.
+                        varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
+                        Assert(varinfo);
+                        varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+
+                        // Can we move these down? Are they similar to code below?
+                        varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
+                        varname.declaration = true;
+                    } else {
+
+                    }
+                }
+                if(!varname.identifier){
                     // vars.add(varname.name);
                 } else if(varname.identifier->type==Identifier::VARIABLE) {
-                    // variable is already defined
+                    // variable/identifier does exist
+
                     if(varname.assignString.isValid()){
+                        // A valid assignString means that variable should be declared
+
                         // An identifier would have to allow multiple variables with different content orders.
                         if(varname.identifier->scopeId == scope->scopeId) {
                             // variable may already exist if we are in a polymorphic scope.
@@ -2570,6 +2696,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             // Assert(varname.declaration);
                             // Assert(varinfo->type == (now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
                         } else {
+                            // variable does not exist in scope, we can therefore create it
                             varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
                             Assert(varinfo);
                             varname.declaration = true;
@@ -2577,7 +2704,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         }
                         varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
                     } else {
+                        if(varname.name == "ptr_elem")
+                            __debugbreak();
                         varinfo = info.ast->identifierToVariable(varname.identifier);
+                        // TypeId typeId = info.ast->ensureNonVirtualId(varinfo->versions_typeId[info.currentPolyVersion])
                         Assert(varinfo);
                         if(!info.ast->castable(varname.versions_assignType[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])){
                             std::string leftstr = info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]);
@@ -2597,6 +2727,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         ERR_LINE(varname.name, "bad")
                     )
                 }
+                #endif
+                // Technically, we don't need vi < poly_typeArray.size
+                // We check for it above. HOWEVER, we don't stop and that's because we try to
+                // find more errors. That is why we need vi < ...
                 if(vi < (int)poly_typeArray.size()){
                     if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
                         ERR_SECTION(
@@ -2942,6 +3076,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             }
             
             if(now->firstBody) {
+                // default case
                 CheckRest(info, now->firstBody);
             } else {
                 // You are allowed to skip enum members when using default case but not otherwise.

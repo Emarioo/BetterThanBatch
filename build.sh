@@ -13,6 +13,11 @@
 
 # clear
 
+if [ $1 = run ]; then
+    btb -dev
+    exit
+fi
+
 echo -ne "Compiling...\r"
 startTime=$(($(date +%s%N)))
 

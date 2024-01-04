@@ -4,7 +4,7 @@
 #undef ERRTYPE
 #undef ERRTYPE1
 #define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD(L, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(L,info.ast->typeToString(LT)) ERR_LINE(R,info.ast->typeToString(RT)))
-#define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD(R, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(R,info.ast->typeToString(RT)))
+#define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD(R, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(R,"expects "+info.ast->typeToString(RT)))
 
 #undef WARN_HEAD3
 #define WARN_HEAD3(R, M) info.compileInfo->warnings++;engone::log::out << WARN_DEFAULT_R(R,"Gen. warning","W0000") << M
@@ -1033,7 +1033,7 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 return SignalDefault::FAILURE;
             }
         
-            auto varinfo = info.ast->identifierToVariable(id);
+            auto varinfo = info.ast->getVariableByIdentifier(id);
             _GLOG(log::out << " expr var push " << now->name << "\n";)
             // TOKENINFO(now->tokenRange)
             // char buf[100];
@@ -1998,11 +1998,11 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             auto id = expression->identifier;
             if (id) {
                 if (id->type == Identifier::VARIABLE) {
-                    auto varinfo = info.ast->identifierToVariable(id);
+                    auto varinfo = info.ast->getVariableByIdentifier(id);
                     if(!varinfo->versions_typeId[info.currentPolyVersion].isValid()){
                         return SignalDefault::FAILURE;
                     }
-                    // auto var = info.ast->identifierToVariable(id);
+                    // auto var = info.ast->getVariableByIdentifier(id);
                     // TODO: check data type?
                     // fp + offset
                     // TODO: what about struct
@@ -2941,7 +2941,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if (operationType != AST_ADD && operationType != AST_SUB  && operationType != AST_EQUAL  && operationType != AST_NOT_EQUAL) {
                         ERR_SECTION(
                             ERR_HEAD(expression->tokenRange)
-                            ERR_MSG(OpToStr((OperationType)operationType.getId()) << " does not work with pointers. Only addition and subtraction works.")
+                            ERR_MSG(OP_NAME((OperationType)operationType.getId()) << " does not work with pointers. Only addition and subtraction works.")
                             ERR_LINE(expression->left->tokenRange, info.ast->typeToString(ltype));
                             ERR_LINE(expression->right->tokenRange, info.ast->typeToString(rtype));
                         )
@@ -3178,7 +3178,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if(bytecodeOp==0){
                         ERR_SECTION(
                             ERR_HEAD(expression->tokenRange)
-                            ERR_MSG("Operation "<< OpToStr((OperationType)operationType.getId()) << " not available for types "<<info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype))
+                            ERR_MSG("Operation "<< OP_NAME((OperationType)operationType.getId()) << " not available for types "<<info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype))
                             // ERR_LINE(expression->left->tokenRange, info.ast->typeToString(ltype))
                             // ERR_LINE(expression->right->tokenRange, info.ast->typeToString(rtype))
                             ERR_LINE(expression->tokenRange, "types don't work with the operation")
@@ -3579,7 +3579,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     auto &arg = function->arguments[i];
                     auto &argImpl = funcImpl->argumentTypes[i];
                     // auto var = info.ast->addVariable(info.currentScopeId, arg.name);
-                    auto varinfo = info.ast->identifierToVariable(arg.identifier);
+                    auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
                     if (!varinfo) {
                         ERR_SECTION(
                             ERR_HEAD(arg.name.range())
@@ -3609,7 +3609,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     if(!identifier) continue; // see type checker as to why this may happen
                     auto& memImpl = funcImpl->structImpl->members[i];
 
-                    auto varinfo = info.ast->identifierToVariable(identifier);
+                    auto varinfo = info.ast->getVariableByIdentifier(identifier);
                     varinfo->versions_dataOffset[info.currentPolyVersion] = memImpl.offset;
                 }
             }
@@ -3674,7 +3674,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     auto &arg = function->arguments[i];
                     auto &argImpl = funcImpl->argumentTypes[i];
                     Assert(arg.identifier); // bug in compiler?
-                    auto varinfo = info.ast->identifierToVariable(arg.identifier);
+                    auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
                     // auto varinfo = info.ast->addVariable(info.currentScopeId, arg.name);
                     if (!varinfo) {
                         ERR_SECTION(
@@ -3781,7 +3781,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                     auto &arg = function->arguments[i];
                     auto &argImpl = funcImpl->argumentTypes[i];
                     Assert(arg.identifier); // bug in compiler?
-                    auto varinfo = info.ast->identifierToVariable(arg.identifier);
+                    auto varinfo = info.ast->getVariableByIdentifier(arg.identifier);
                     // auto varinfo = info.ast->addVariable(info.currentScopeId, arg.name);
                     if (!varinfo) {
                         ERR_SECTION(
@@ -4169,15 +4169,17 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 continue;
             }
 
-            if(statement->globalAssignment && statement->firstExpression && info.currentScopeId != info.ast->globalScopeId) {
-                ERR_SECTION(
-                    ERR_HEAD(statement->tokenRange)
-                    ERR_MSG("Assigning a value to a global variable inside a local scope is not allowed. Either move the variable to the global scope or separate the declaration and assignment with expression.")
-                    ERR_LINE(statement->tokenRange,"bad")
-                    ERR_EXAMPLE(1,"global someName;\nsomeName = 3;")
-                )
-                continue;
-            }
+            // This is not an error we want. You should be able to do this.
+            // if(statement->globalAssignment && statement->firstExpression && info.currentScopeId != info.ast->globalScopeId) {
+            //     ERR_SECTION(
+            //         ERR_HEAD(statement->tokenRange)
+            //         ERR_MSG("Assigning a value to a global variable inside a local scope is not allowed. Either move the variable to the global scope or separate the declaration and assignment with expression.")
+            //         ERR_LINE(statement->tokenRange,"bad")
+            //         ERR_EXAMPLE(1,"global someName;")
+            //         ERR_EXAMPLE(2,"someName = 3;")
+            //     )
+            //     continue;
+            // }
 
             // for(int i = 0;i<(int)typesFromExpr.size();i++){
             //     TypeId typeFromExpr = typesFromExpr[i];
@@ -4192,29 +4194,23 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 auto& varname = statement->varnames[i];
                 // _GLOG(log::out << log::LIME <<"assign pop "<<info.ast->typeToString(rightType)<<"\n";)
                 
-                // NOTE: Global/static variables refer to memory in data segment.
-                //  Each declaration of a variable which is static will get it's own memory.
-                //  This means that polymorphic implementations will have multiple static variables
+                // NOTE: Global variables refer to memory in data segment.
+                //  Each declaration of a variable which is global will get it's own memory.
+                //  This means that polymorphic implementations will have multiple global variables
                 //  for the same name, referring to different data. This is fine, the variables don't
                 //  collide since the variables exist within a scope. Global variables accessed within
                 //  a polymorphic function is also fine since the variable's type will stay the same.
 
-                TypeId declaredType = varname.versions_assignType[info.currentPolyVersion];
-                if(!declaredType.isValid()){
-                    if(!info.hasForeignErrors()){
-                        Assert(declaredType.isValid()); // Type checker should have fixed this. Implicit ones too.
-                    }
-                    continue;
-                }
-
                 Identifier* varIdentifier = varname.identifier;
                 if(!varIdentifier){
-                    Assert(info.errors!=0); // there should have been errors
+                    Assert(info.hasForeignErrors());
+                    // Assert(info.errors!=0); // there should have been errors
                     continue;
                 }
-                VariableInfo* varinfo = info.ast->identifierToVariable(varIdentifier);
+                VariableInfo* varinfo = info.ast->getVariableByIdentifier(varIdentifier);
                 if(!varinfo){
-                    Assert(info.errors!=0); // there should have been errors
+                    Assert(info.hasForeignErrors());
+                    // Assert(info.errors!=0); // there should have been errors
                     continue;
                 }
                 
@@ -4372,7 +4368,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
                     // TypeId stateTypeId = varname.versions_assignType[info.currentPolyVersion];
                     Identifier* id = varname.identifier;
-                    VariableInfo* varinfo = info.ast->identifierToVariable(id);
+                    VariableInfo* varinfo = info.ast->getVariableByIdentifier(id);
                     if(!varinfo){
                         Assert(info.errors!=0); // there should have been errors
                         continue;
@@ -4453,11 +4449,12 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
                     // Token* name = &statement->varnames[i].name;
                     // auto id = info.ast->findIdentifier(info.currentScopeId, *name);
-                    // if(!id){
-                    //     Assert(info.errors!=0); // there should have been errors
-                    //     continue;
-                    // }
-                    VariableInfo* varinfo = info.ast->identifierToVariable(id);
+                    if(!id){
+                        // there should have been errors
+                        Assert(info.hasForeignErrors());
+                        continue;
+                    }
+                    VariableInfo* varinfo = info.ast->getVariableByIdentifier(id);
                     if(!varinfo){
                         Assert(info.errors!=0); // there should have been errors
                         continue;
@@ -4800,8 +4797,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
                 continue;
             }
-            auto varinfo_index = info.ast->identifierToVariable(varnameNr.identifier);
-            auto varinfo_item = info.ast->identifierToVariable(varnameIt.identifier);
+            auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
+            auto varinfo_item = info.ast->getVariableByIdentifier(varnameIt.identifier);
 
             if(statement->rangedForLoop){
                 // TypeId itemtype = varname.versions_assignType[info.currentPolyVersion];
@@ -4957,7 +4954,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 // }
                 i32 itemsize = info.ast->getTypeSize(varnameIt.versions_assignType[info.currentPolyVersion]);
                 // auto varinfo_item = info.ast->addVariable(scopeForVariables,itemvar);
-                // auto varinfo_item = info.ast->identifierToVariable(varname.identifier);
+                // auto varinfo_item = info.ast->getVariableByIdentifier(varname.identifier);
                 //  info.ast->addVariable(scopeForVariables,itemvar);
                 // varinfo_item->typeId = itemtype;
                 // if(statement->pointer){

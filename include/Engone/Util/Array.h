@@ -12,10 +12,12 @@
 
 #include "Engone/Asserts.h"
 
-#define TINY_ARRAY(TYPE,NAME,SIZE) TYPE arr_##NAME[SIZE]; memset((void*)arr_##NAME,0,SIZE*sizeof(TYPE)); TinyArray<TYPE> NAME={}; NAME.initFixedSize(arr_##NAME, SIZE);
+// #define TINY_ARRAY(TYPE,NAME,SIZE) TYPE arr_##NAME[SIZE]; memset((void*)arr_##NAME,0,SIZE*sizeof(TYPE)); TinyArray<TYPE> NAME={}; NAME.initFixedSize(arr_##NAME, SIZE);
+#define TINY_ARRAY(TYPE,NAME,SIZE) QuickArray<TYPE> NAME{};
 // The purpose of this array is speed.
 // It will not call constructors or destructors
 // Few allocations
+#ifdef gone
 template<typename T>
 struct TinyArray {
     TinyArray() = default;
@@ -169,6 +171,7 @@ struct TinyArray {
         return _ptr + used;
     }
 };
+#endif
 
 // Do not pop or add elements while iterating.
 // Be careful at least.
@@ -378,23 +381,23 @@ struct DynamicArray {
         arr.used = 0;
         arr.max = 0;
     }
-    void stealFrom(TinyArray<T>& arr){
-        cleanup();
-        if(!arr.owner) {
-            // _ptr = (T*)engone::Allocate(arr.used * sizeof(T));
-            _ptr = TRACK_ARRAY_ALLOC(T, arr.used);
-            used = arr.used;
-            max = arr.used;
-            arr.used = 0;
-        } else {
-            _ptr = arr._ptr;
-            used = arr.used;
-            max = arr.max;
-            arr._ptr = nullptr;
-            arr.used = 0;
-            arr.max = 0;
-        }
-    }
+    // void stealFrom(TinyArray<T>& arr){
+    //     cleanup();
+    //     if(!arr.owner) {
+    //         // _ptr = (T*)engone::Allocate(arr.used * sizeof(T));
+    //         _ptr = TRACK_ARRAY_ALLOC(T, arr.used);
+    //         used = arr.used;
+    //         max = arr.used;
+    //         arr.used = 0;
+    //     } else {
+    //         _ptr = arr._ptr;
+    //         used = arr.used;
+    //         max = arr.max;
+    //         arr._ptr = nullptr;
+    //         arr.used = 0;
+    //         arr.max = 0;
+    //     }
+    // }
 };
 
 // Does not call any constructors or destructors.

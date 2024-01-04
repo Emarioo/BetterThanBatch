@@ -51,9 +51,9 @@ varf: f32 = -12415.92913
 test -2; -var;
 test 12415.92913; -varf;
 
-a = 6;
-pa = &a;
-ppa = &pa;
+a := 6;
+pa := &a;
+ppa := &pa;
 test 6; *ppa[0]; // test precedence between deref and index operations
 
 data: u32* = &var;

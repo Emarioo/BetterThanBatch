@@ -135,10 +135,6 @@ namespace dwarf {
     };
 
     void ProvideSections(ObjectFile* objectFile, Program_x64* program);
-    // @param stream sections or written to the stream
-    // @param header number of sections is modified
-    void ProvideSections(DWARFInfo* info, DWARF_ObjectFileType objType);
-    void ProvideSectionData(DWARFInfo* info, DWARF_ObjectFileType objType);
     
     // returns number of written bytes
     // return a negative number indicating how many bytes are missing
