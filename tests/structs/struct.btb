@@ -1,4 +1,4 @@
-@TEST-CASE access
+@TEST_CASE(access)
 struct Base {
     mem: i32;
     fn hey() -> i32 {
@@ -14,7 +14,7 @@ base: Base;
 //   the member access should happen first though.
 base.incr();
 
-@TEST-CASE shortcuts
+@TEST_CASE(shortcuts)
 
 struct Base {
     mem: i32;

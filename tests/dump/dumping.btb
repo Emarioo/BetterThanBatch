@@ -1,5 +1,5 @@
-@TEST-CASE dump_test
-{ @dump-asm
+@TEST_CASE(dump_test)
+{ @dump_asm
     fn hej() {
         
     }
@@ -8,6 +8,6 @@
 fn outside() {
     
 }
-{ @dump-asm
+{ @dump_asm
     outside();
 }

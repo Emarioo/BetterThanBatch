@@ -1,4 +1,4 @@
-@TEST-CASE quick_defer
+@TEST_CASE(quick_defer)
 
 n := 0;
 for 0..1 {
@@ -9,7 +9,7 @@ for 0..1 {
     }
 }
 
-@TEST-CASE advanced_defer
+@TEST_CASE(advanced_defer)
 
 #import "Logger"
 

@@ -1,5 +1,5 @@
 
-@TEST-CASE struct_cleanup
+@TEST_CASE(struct_cleanup)
 
 #import "Array"
 

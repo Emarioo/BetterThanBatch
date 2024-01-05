@@ -1,4 +1,4 @@
-@TEST-CASE switch-integers
+@TEST_CASE(switch_integers)
 
 fn @native printc(str: char);
 
@@ -47,7 +47,7 @@ switch msg {
 }
 test 7; out;
 
-@TEST-CASE switch-enums
+@TEST_CASE(switch_enums)
 
 enum Mouthful { Batter, Bitter, Butter }
 
@@ -67,14 +67,14 @@ switch msg {
     case Butter: { } // no default case require all enum members
 }
 
-@TEST-CASE switch-errors
+@TEST_CASE(switch_errors)
 
 msg := 9
 switch msg {
     case 1: { }                                                 
     case: { }
-    case: { }       @TEST-ERROR ERROR_DUPLICATE_DEFAULT_CASE    
-    default: {}     @TEST-ERROR ERROR_C_STYLED_DEFAULT_CASE     
+    case: { }       @TEST_ERROR(ERROR_DUPLICATE_DEFAULT_CASE)
+    default: {}     @TEST_ERROR(ERROR_C_STYLED_DEFAULT_CASE)
 }
 
 enum Mouthful {
@@ -84,9 +84,9 @@ enum Mouthful {
 }
 
 msge := Mouthful.Butter
-switch msge { @TEST-ERROR ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH
+switch msge { @TEST_ERROR(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
     case Batter: { }                                                        
-    case Batter: { }    @TEST-ERROR ERROR_DUPLICATE_CASE                    
+    case Batter: { }    @TEST_ERROR(ERROR_DUPLICATE_CASE)
     case Bitter: { }                                                        
-    chicken             @TEST-ERROR ERROR_BAD_TOKEN_IN_SWITCH               
+    chicken             @TEST_ERROR(ERROR_BAD_TOKEN_IN_SWITCH)     
 }

@@ -79,6 +79,12 @@ int main(int argc, const char** argv){
 
     // log::out.print(f->stringTableData, f->stringTableSize);
 
+    // DynamicArray<std::string> files{};
+    // PatternMatchFiles("*main.cpp|*.h|!libs",&files);
+    // log::out << "RESULT:\n";
+    // FOR(files)
+    //     log::out << it<<"\n";
+
     // dwarf::LEB128_test();
     // return 0;
 
@@ -105,6 +111,8 @@ int main(int argc, const char** argv){
     bool performTests = false; // could be one or more
     bool show_profiling = false;
     bool search_for_source = false;
+
+    std::string pattern_for_files = ""; // used with --test --search-for-files
 
     if (argc < 2) {
         print_version();
@@ -139,19 +147,29 @@ int main(int argc, const char** argv){
             }
         } else if (streq(arg,"-dev")) {
             devmode = true;
-        } else if (streq(arg,"--test")) {
+        } else if (streq(arg,"--test") || streq(arg,"-ts")) {
             performTests = true;
             compileOptions.instant_report = false;
-        } else if (streq(arg,"--test-with-errors")) {
+            if(i+1 < argc && argv[i+1][0] != '-'){
+                i++;
+                arg = argv[i];
+                pattern_for_files = arg;
+            }
+        } else if (streq(arg,"--test-with-errors") || streq(arg,"-twe")) {
             performTests = true;
             compileOptions.instant_report = true;
+            if(i+1 < argc && argv[i+1][0] != '-'){
+                i++;
+                arg = argv[i];
+                pattern_for_files = arg;
+            }
         } else if (streq(arg,"--debug") || streq(arg, "-g")) {
             compileOptions.useDebugInformation = true;
         } else if (streq(arg,"--silent")) {
             compileOptions.silent = true;
         } else if (streq(arg,"--verbose")) {
             compileOptions.verbose = true;
-            log::out << log::RED << "Verbose option (--verbose) is not implemented\n";
+            log::out << log::RED << "Verbose option (--verbose) is not used anywhere yet\n";
         } else if (streq(arg,"--profiling")) {
             show_profiling = true;
         } else if (streq(arg,"--target") || streq(arg, "-t")){
@@ -197,9 +215,18 @@ int main(int argc, const char** argv){
         //         invalidArguments = true;
         //         log::out << log::RED << "You must specify a command line linker after '"<<arg<<"'.\n";
         //     }
-        }else if (streq(arg,"--search-for-source") || streq(arg, "-ss")){
+        }else if (streq(arg,"--pattern-match") || streq(arg, "-pm")){
             search_for_source = true;
-        } else if(streq(arg,"--user-args")) {
+            i++;
+            if(i<argc){
+                arg = argv[i];
+                pattern_for_files = arg;
+            } else {
+                invalidArguments = true;
+                log::out << log::RED << "You must specify a pattern after '"<<arg<<"'.\n";
+                // TODO: print list of targets
+            }
+        } else if(streq(arg,"--user-args") || streq(arg,"-ua")) {
             i++;
             for(;i<argc;i++) {
                 const char* arg = argv[i];
@@ -211,12 +238,14 @@ int main(int argc, const char** argv){
                 log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
                 invalidArguments = true;
             } else {
+                // arg = argv[i];
+                // pattern_for_files = arg;
                 compileOptions.sourceFile = arg;
             }
         }
     }
     
-    if(!devmode && !performTests && compileOptions.sourceFile.text.empty()) {
+    if(!devmode && !performTests && !search_for_source && compileOptions.sourceFile.text.empty()) {
         log::out << log::RED << "Specify a source file\n";
         return EXIT_CODE_NOTHING;
     }
@@ -231,31 +260,49 @@ int main(int argc, const char** argv){
         // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
     }
     if(search_for_source) {
-        if(!compileOptions.sourceFile.isAbsolute()) {
-            const char* path = compileOptions.sourceFile.text.c_str();
-            int pathlen = compileOptions.sourceFile.text.length();
-            Assert(pathlen != 0);
-            auto iter = engone::DirectoryIteratorCreate(".",1);
-            engone::DirectoryIteratorData data{};
-            defer { engone::DirectoryIteratorDestroy(iter, &data); };
-            while(engone::DirectoryIteratorNext(iter, &data)) {
-                // log::out << data.name<< "\n";
-                if(data.isDirectory) {
-                    if(data.namelen >= 3 && !strncmp(data.name, "./.", 3)) { // ignore folders like .git, .vscode, .vs
-                        engone::DirectoryIteratorSkip(iter);
-                    }
-                    continue;
-                }
-                if(data.namelen >= pathlen && !strcmp(data.name + data.namelen - pathlen, path)) {
-                    Assert(data.namelen >= 2);
-                    if(data.name[0] == '.' && data.name[1] == '/')
-                        compileOptions.sourceFile.text = data.name + 2;
-                    else
-                        compileOptions.sourceFile.text = data.name;
-                    break;
-                }
+        DynamicArray<std::string> files{};
+        int num = PatternMatchFiles(pattern_for_files, &files);
+        if(files.size() == 0) {
+            log::out << log::RED << "Pattern '"<<pattern_for_files<<"' did not match any files\n";
+            return EXIT_CODE_NOTHING;
+        } else if(files.size() > 1) {
+            log::out << log::RED << "Pattern '"<<pattern_for_files<<"' matched more than one file:\n";
+            for(int i=0;i<files.size();i++) {
+                log::out << " "<<files[i]<<"\n";
             }
+            return EXIT_CODE_NOTHING;
+        } else {
+            compileOptions.sourceFile = files[0];
+            // ok
+            // for(int i=0;i<files.size();i++) {
+            //     log::out << log::GRAY<< " "<<files[i]<<"\n";
+            // }
         }
+        // if(!compileOptions.sourceFile.isAbsolute()) {
+        //     const char* path = compileOptions.sourceFile.text.c_str();
+        //     int pathlen = compileOptions.sourceFile.text.length();
+        //     Assert(pathlen != 0);
+        //     auto iter = engone::DirectoryIteratorCreate(".",1);
+        //     engone::DirectoryIteratorData data{};
+        //     defer { engone::DirectoryIteratorDestroy(iter, &data); };
+        //     while(engone::DirectoryIteratorNext(iter, &data)) {
+        //         // log::out << data.name<< "\n";
+        //         if(data.isDirectory) {
+        //             if(data.namelen >= 3 && !strncmp(data.name, "./.", 3)) { // ignore folders like .git, .vscode, .vs
+        //                 engone::DirectoryIteratorSkip(iter);
+        //             }
+        //             continue;
+        //         }
+        //         if(data.namelen >= pathlen && !strcmp(data.name + data.namelen - pathlen, path)) {
+        //             Assert(data.namelen >= 2);
+        //             if(data.name[0] == '.' && data.name[1] == '/')
+        //                 compileOptions.sourceFile.text = data.name + 2;
+        //             else
+        //                 compileOptions.sourceFile.text = data.name;
+        //             break;
+        //         }
+        //     }
+        // }
     }
     
     // #ifdef gone
@@ -265,19 +312,19 @@ int main(int argc, const char** argv){
         } else {
             auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
             
-            // TODO: Don't skip imports.
-            if(stream->importList.size() > 0) {
-                log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
-                log::out << log::GRAY << "Imports: ";
-                for(int i=0;i<stream->importList.size();i++) {
-                    if(i!=0) log::out << ", ";
-                    log::out << stream->importList[i].name;
-                }
-                log::out<<"\n";
-            }
             if(!stream) {
                 log::out << log::RED << "Cannot read file '"<< compileOptions.sourceFile.text<<"'\n";
             } else {
+                // TODO: Don't skip imports.
+                if(stream->importList.size() > 0) {
+                    log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
+                    log::out << log::GRAY << "Imports: ";
+                    for(int i=0;i<stream->importList.size();i++) {
+                        if(i!=0) log::out << ", ";
+                        log::out << stream->importList[i].name;
+                    }
+                    log::out<<"\n";
+                }
                 CompileInfo compileInfo{};
                 compileInfo.compileOptions = &compileOptions;
                 auto stream2 = Preprocess(&compileInfo, stream);
@@ -298,11 +345,15 @@ int main(int argc, const char** argv){
             }
         }
     } else if(performTests) {
-        if(compileOptions.sourceFile.text.length() != 0) {
+        if(pattern_for_files.length() != 0) {
             DynamicArray<std::string> tests;
-            tests.add(compileOptions.sourceFile.text);
-            int failures = VerifyTests(&compileOptions, tests);
-            compilerExitCode = failures;
+            int matches = PatternMatchFiles(pattern_for_files, &tests);
+            if(matches == 0) {
+                log::out << log::RED << "The pattern '"<<pattern_for_files << "' did not match with any files\n";
+            } else {
+                int failures = VerifyTests(&compileOptions, tests);
+                compilerExitCode = failures;
+            }
         } else {
             // DynamicArray<std::string> tests;
             // tests.add("tests/simple/operations.btb");

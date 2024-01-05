@@ -33,9 +33,9 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
     origin.size = fileSize;
     outTestOrigins->add(origin);
 
-    const char* const testKey = "TEST-CASE ";
+    const char* const testKey = "TEST_CASE";
     const int testKeyLen = strlen(testKey);
-    const char* const testErrKey = "TEST-ERROR ";
+    const char* const testErrKey = "TEST_ERROR";
     const int testErrKeyLen = strlen(testErrKey);
     
     TestCase nextTest = {};
@@ -109,19 +109,34 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
             index += testKeyLen;
             column += testKeyLen;
 
+            // TODO: we hope that we skip ( but we shouldn't
+            index++; // skip (
+
+            int depth = 0;
             int startIndex = -1;
             int nameLen = 0;
-            bool hadLineFeed = false;
+            // bool hadLineFeed = false;
             while (index<fileSize){
                 char chr = buffer[index];
                 index++;
                 column++;
+
+                if(chr == '(') {
+                    depth++;
+                }
+
                 if(chr == '\n') {
                     line++;
                     column = 1;
                 }
+                if(chr == ')') {
+                    if(depth == 0) {
+                        break;
+                    }
+                    depth--;
+                }
                 if(chr == '\n') {
-                    hadLineFeed=true;
+                    // hadLineFeed=true;
                     break;
                 }
                 if(chr == ' ' || chr == '\t' || chr == '\r') {
@@ -133,19 +148,19 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
                     startIndex = index-1;
                 nameLen++;
             }
-            if(!hadLineFeed){
-                while (index<fileSize){
-                    char chr = buffer[index];
-                    index++;
-                    column++;
-                    if(chr == '\n') {
-                        line++;
-                        column = 1;
-                    }
-                    if(chr == '\n')
-                        break;
-                }
-            }
+            // if(!hadLineFeed){
+            //     while (index<fileSize){
+            //         char chr = buffer[index];
+            //         index++;
+            //         column++;
+            //         if(chr == '\n') {
+            //             line++;
+            //             column = 1;
+            //         }
+            //         if(chr == '\n')
+            //             break;
+            //     }
+            // }
             if(startIndex==-1){
                 ERR_SECTION(
                     ERR_HEAD_SUITE_L()
@@ -166,28 +181,56 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
                 continue;
             index += testErrKeyLen;
             column += testErrKeyLen;
+
+            // TODO: we hope that we skip ( but we shouldn't
+            index++; // skip (
             
             int start = index;
-            int testLine = line;
+            int end = index;
+            int depth = 0;
             
             while (index<fileSize){
                 char chr = buffer[index];
                 index++;
                 column++;
+
+
+                if(chr == '\n' || chr == ',' || ( depth == 0 && chr == ')')) {
+                    // add test
+                    int len = end - start;
+                    if(len > 0)  {
+                        char errBuffer[256];
+                        Assert(sizeof(errBuffer) > len);
+                        memcpy(errBuffer, buffer + start, len);
+                        errBuffer[len] = '\0';
+                        CompileError errType = ToCompileError(errBuffer);
+                        nextTest.expectedErrors.add({errType, (u32)line});
+
+                        start = index;
+                        end = index;
+                    }
+                }
+
+                if(chr == '(') {
+                    depth++;
+                }
+                if(chr == ')') {
+                    if(depth == 0) {
+                        break;
+                    }
+                    depth--;
+                }
                 if(chr == '\n') {
                     line++;
                     column = 1;
-                }
-                if(chr == '\n' || chr == '\r' || chr == ' ')
                     break;
+                }
+                if(chr != ' ') {
+                    end = index;
+                    if(buffer[start] == ' ')
+                        start = index;
+                }
             }
-            int len = index - 1 - start;
-            char errBuffer[256];
-            Assert(sizeof(errBuffer) > len);
-            memcpy(errBuffer, buffer + start, len);
-            errBuffer[len] = '\0';
-            CompileError errType = ToCompileError(errBuffer);
-            nextTest.expectedErrors.add({errType, (u32)testLine});
         } else {
             // TODO: text insertion
             // Otherwise the @ is an annotation in the actual code
@@ -219,6 +262,9 @@ u32 TestSuite(CompileOptions* options, TestSelection testSelection){
     }
     if(testSelection&TEST_ASSEMBLY) {
         tests.add("tests/inline-asm/simple.btb");
+    }
+    if(testSelection&TEST_POLYMORPHIC) {
+        tests.add("tests/polymorphism/structs.btb");
     }
 
     return VerifyTests(options, tests);
@@ -404,7 +450,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         }
         
         if(!bytecode) {
-            // errors will be smaller than errorTypes since errors isn't incremented when doing TEST-ERROR
+            // errors will be smaller than errorTypes since errors isn't incremented when doing TEST_ERROR(
             if(options.compileStats.errorTypes.size() < options.compileStats.errors) {
                 log::out << log::YELLOW << "TestSuite: errorTypes: "<< options.compileStats.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
             }

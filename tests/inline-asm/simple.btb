@@ -1,4 +1,4 @@
-@TEST-CASE inline_asm_stack
+@TEST_CASE(inline_asm_stack)
 a := cast_unsafe<i32> asm {
     mov eax, 23
     push rax
@@ -19,7 +19,7 @@ b := cast_unsafe<Pack> asm {
 test 5; b.x;
 test 'A'; b.y;
 
-@TEST-CASE inline_asm_labels
+@TEST_CASE(inline_asm_labels)
 
 test 15; cast_unsafe<i32> asm {
     mov ecx, 0

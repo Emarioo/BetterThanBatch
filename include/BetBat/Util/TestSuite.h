@@ -32,6 +32,7 @@ enum TestSelection : u64 {
     TEST_FLOW       = 0x2, // for, switch, defer
     TEST_FUNCTION   = 0x4, // local variables, inline assembly, calling conventions
     TEST_ASSEMBLY   = 0x8, // inline assembly
+    TEST_POLYMORPHIC   = 0x16, // polymorphic structs, functions...
 };
 
 u32 TestSuite(CompileOptions* options, TestSelection testSelection);

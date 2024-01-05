@@ -30,13 +30,12 @@ bool IsName(const Token& token){
     if(token.flags&TOKEN_MASK_QUOTED) return false;
     for(int i=0;i<token.length;i++){
         char chr = token.str[i];
+        char tmp = chr|32;
         if(i==0){
-            if(!((chr>='A'&&chr<='Z')||
-            (chr>='a'&&chr<='z')||chr=='_'))
+            if(!((tmp>='a'&&tmp<='z')||chr=='_'))
                 return false;
         } else {
-            if(!((chr>='A'&&chr<='Z')||
-            (chr>='a'&&chr<='z')||
+            if(!((tmp>='a'&&tmp<='z')||
             (chr>='0'&&chr<='9')||chr=='_'))
                 return false;
         }
@@ -156,6 +155,13 @@ u64 ConvertHexadecimal_content(char* str, int length){
     }
     return hex;
 }
+const Token& TokenRange::getRelative(int relativeIndex) const {
+    Assert(relativeIndex < endIndex - firstToken.tokenIndex);
+    if(relativeIndex == 0)
+        return firstToken;
+    else
+        return tokenStream()->get(firstToken.tokenIndex + relativeIndex);
+}
 void TokenRange::print(bool skipSuffix) const {
     using namespace engone;
     // if(this->firstToken == "Taste")
@@ -163,10 +169,19 @@ void TokenRange::print(bool skipSuffix) const {
     char temp[256];
     int token_index = 0;
     int written = 0;
+    // BREAK(firstToken.length==163);
     while((written = feed(temp, sizeof(temp), false, &token_index))) {
         log::out.print(temp, written);
     }
     Assert(finishedFeed(&token_index));
+    // if(!finishedFeed(&token_index)) {
+    //     const Token& tok = getRelative(token_index);
+    //     if(tok.length < sizeof(temp)) {
+    //         log::out << "<tok["<<firstToken.length<<"]>\n";
+    //     } else {
+    //         Assert(("finishedFeed and token_index was strange",false));
+    //     }
+    // }
 }
 engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange){
     tokenRange.print();
@@ -227,6 +242,24 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
     for(int i=startIndex() + *index; i < endIndex; *index = ++i - startIndex()){
         const Token& tok = tokenStream() ? tokenStream()->get(i) : firstToken;
         if(!tok.str) {
+            continue;
+        }
+
+        // We do a hopeful comparison where too big characters are printed.
+        // as <t+124>. We do *3 because characters may result in \x00.
+        // We don't do *4 because it's unlikely that all characters will
+        // need \x00. That does mean that we have a rare bug here but that's
+        // okay because this all happens if you pass binary files
+        // which you shouldn't. Even if it's binary, we should handle it properly.
+        // -Emarioo, 2024-01-04
+        if(tok.length*3 > bufferSize) {
+            char tmp[20];
+            int len = snprintf(tmp,sizeof(20), "<t+%u>",tok.length);
+            ENSURE(len);
+            memcpy(outBuffer + written_temp, tmp, len);
+            written_temp += len;
+            
+            written = written_temp;
             continue;
         }
 
@@ -322,6 +355,13 @@ u32 TokenRange::queryFeedSize(bool quoted_environment) const {
         
         if(!tok.str)
             continue;
+
+        // if(tok.length > bufferSize) {
+        //     char tmp[20];
+        //     int len = snprintf(tmp,sizeof(20), "<t+%u>",tok.length);
+        //     size += len;
+        //     continue;
+        // }
         
         if(tok.flags&TOKEN_DOUBLE_QUOTED) {
             if(quoted_environment) {
@@ -374,6 +414,13 @@ void TokenRange::feed(std::string& outBuffer) const {
     while((written = feed(temp, sizeof(temp), false, &token_index))) {
         outBuffer.append(temp,written);
     }
+    // if(!finishedFeed(&token_index)) {
+    //     if() {
+    //         out
+    //     } else {
+
+    //     }
+    // }
     Assert(finishedFeed(&token_index));
 }
 void Token::print(bool skipSuffix) const{
@@ -1437,13 +1484,13 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                 anot.line = ln;
                 anot.column = col;
                 anot.length = 1;
-                anot.flags = TOKEN_SUFFIX_SPACE;
+                // anot.flags = TOKEN_SUFFIX_SPACE;
                 
                 outStream->addData(chr);
                 bool bad=false;
                 // TODO: Code below WILL have some edge cases not accounted for. Check it out.
                 while(index<length){
-                    char c = text[index];
+                    char chr = text[index];
                     char nc = 0;
                     char pc = 0;
 
@@ -1452,20 +1499,26 @@ TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optional
                     if(index+1<length)
                         nc = text[index+1];
                     index++;
-                    if(c=='\t')
+                    if(chr=='\t')
                         column+=4;
                     else
                         column++;
-                    if(c == '\n'){
+                    if(chr == '\n'){
                         line++;
                         column=1;
                     }
-                    if(c==' '||c=='\t'||c=='\r'||c=='\n'){
-                        if(c=='\n')
+                    register char tmp = chr | 32;
+                    if(!(tmp >= 'a' && tmp <= 'z') && !(chr == '_') && !(chr >= '0' && chr <= '9') ) {
+                    // if(c==' '||c=='\t'||c=='\r'||c=='\n'){
+                        if(chr=='\n')
                             anot.flags |= TOKEN_SUFFIX_LINE_FEED;
+                        else if(chr==' ')
+                            anot.flags |= TOKEN_SUFFIX_SPACE;
+                        else
+                            index--; // go back, we didn't consume the characters
                         break;
                     }
-                    outStream->addData(c);
+                    outStream->addData(chr);
                     anot.length++;
                     if (index==length){
                         break;

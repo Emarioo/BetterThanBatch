@@ -143,6 +143,134 @@ const char* FormatTime(double seconds){
     return buf;
 }
 
+bool PatternMatchString(const std::string& pattern, const char* str, int len) {
+    bool left_wildcard = pattern[0] == '*';
+    bool right_wildcard = pattern[pattern.length()-1] == '*';
+    // bool left_slash = false;
+    // if(data.namelen > 1)
+    //     left_slash = left_wildcard ? data.name[1] == '/' : data.name[0] == '/';
+    // bool rule_left_slash = false;
+    // if(it.length() > 1)
+    //     rule_left_slash = it[0] == '*' ? it[1] == '/' : it[0] == '/';
+
+    // TODO: '*/src/*' won't match this 'src/main.cpp'
+    //  But if root is different, this 'Project/src/main.cpp' would match
+    //  the beginning slash should be ignored if the rule begins with a slash.
+
+    if(!left_wildcard && !right_wildcard) { // full match
+        if(pattern == str) {
+            return true;
+        }
+    } else if(left_wildcard && !right_wildcard) { // *file
+        if(len >= pattern.length()-1) {
+            if(!strncmp(pattern.c_str()+1, str + len - (pattern.length() - 1), pattern.length()-1)) {
+                return true;
+            }
+        }
+    } else if(!left_wildcard && right_wildcard) { // file*
+        if(len >= pattern.length()-1) {
+            if(!strncmp(pattern.c_str(),str,pattern.length()-1)) {
+                return true;
+            }
+        }
+    } else /*if (left_wildcard && right_wildcard)*/ { // *file*
+        int correct = 0;
+        for(int k=0;k<len;k++) {
+            char chr = str[k];
+            if(pattern[1 + correct] == chr) {
+                correct++;
+                if(correct == pattern.length()-2) {
+                    return true;
+                }
+            } else {
+                correct = 0;
+            }
+        }
+    }
+    return false;
+}
+// Example code
+// DynamicArray<std::string> files{};
+// PatternMatchFiles("*main.cpp|*.h|!libs",&files);
+// log::out << "RESULT:\n";
+// FOR(files)
+//     log::out << it<<"\n";
+int PatternMatchFiles(const std::string& pattern, DynamicArray<std::string>* matched_files, const std::string& root_path, bool output_relative_to_cwd) {
+    using namespace engone;
+    int num_matched_files = 0;
+    
+    DynamicArray<std::string> rules{};
+    DynamicArray<std::string> exclusions{};
+    int lastSplit = 0;
+    int index = 0;
+    bool is_exclusion = false;
+    while(index < pattern.length()){
+        char chr = pattern[index];
+        index++;
+        if(index - 1 == lastSplit && chr == '!') {
+            is_exclusion = true;
+            lastSplit = index;
+            continue;
+        }
+        if(chr == '|' || index == pattern.length()) {
+            int len = (index-1) - lastSplit;
+            if(index == pattern.length())
+                len++;
+            if(len > 0) {
+                if(is_exclusion)
+                    exclusions.add(pattern.substr(lastSplit, len));
+                else
+                    rules.add(pattern.substr(lastSplit, len));
+            }
+            is_exclusion = false;
+            lastSplit = index;
+            continue;
+        }
+    }
+    // FOR(rules)  log::out << it << "\n";
+
+    // TODO: verify wildcard positions. These are forbidden **  *   a*d 
+
+    exclusions.add(".git");
+    exclusions.add(".vs");
+    exclusions.add(".vscode");
+
+    Assert(rules.size() != 0);
+    
+    auto iter = engone::DirectoryIteratorCreate(root_path.c_str(), root_path.length());
+    engone::DirectoryIteratorData data{};
+    while(engone::DirectoryIteratorNext(iter,&data)) {
+        if(data.isDirectory) {
+            FOR(exclusions) {
+                if(PatternMatchString(it, data.name, data.namelen)) {
+                    engone::DirectoryIteratorSkip(iter);
+                    break;
+                }
+            }
+            continue;
+        }
+        Assert(data.namelen != 0);
+        // log::out << data.name<<"\n";
+        
+
+        bool include = false;
+        FOR(rules) {
+            if(PatternMatchString(it, data.name, data.namelen)) {
+                include = true;
+                break;
+            }
+        }
+        if(include) {
+            if(matched_files)
+                matched_files->add(data.name);
+            num_matched_files++;
+        }
+    }
+
+    engone:DirectoryIteratorDestroy(iter, &data);
+
+    return num_matched_files;
+}
 std::string TrimLastFile(const std::string& path){
     int slashI = path.find_last_of("/");
     if(slashI==std::string::npos)

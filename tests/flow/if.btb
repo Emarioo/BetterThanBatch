@@ -1,12 +1,12 @@
 
-@TEST-CASE if_else
+@TEST_CASE(if_else)
 
 if true
     test 1; 1;
 else
     test 1; 0;
 
-@TEST-CASE if_edge_case
+@TEST_CASE(if_edge_case)
 
 n = 1
 if n > 0

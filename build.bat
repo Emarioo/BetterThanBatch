@@ -7,12 +7,15 @@
 @REM  
 @REM ########
 
+
 SET arg=%1
 if !arg!==run (
     @REM Run compiler with compiling it
-    btb -dev
+    @REM btb -dev
 
-    exit /b
+    goto RUN_COMPILER
+
+    @REM exit /b
 )
 
 @REM @REM cl /c src/Other/test.c /Z7
@@ -128,7 +131,7 @@ SET GCC_WARN=-Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-n
 SET GCC_WARN=!GCC_WARN! -Wno-sign-compare 
 
 @REM glfw, glew, opengl is not linked with here, it should be
-g++ -c !GCC_INCLUDE_DIRS! !GCC_WARN! -DOS_WINDOWS -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o
+g++ -c -g !GCC_INCLUDE_DIRS! !GCC_WARN! -DOS_WINDOWS -DNO_PERF -DNO_TRACKER -DNATIVE_BUILD src/Native/NativeLayer.cpp -o bin/NativeLayer_gcc.o
 ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o 
 
 @REM lib /nologo bin/NativeLayer.obj Advapi32.lib /OUT:bin/NativeLayer.lib
@@ -151,8 +154,12 @@ ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o
 @REM cvdump test.pdb > out3
 
 if !compileSuccess! == 0 (
-    @REM echo f | XCOPY /y /q !output! btb.exe > nul
+:RUN_COMPILER
+    rem
+    
 
+
+    @REM echo f | XCOPY /y /q !output! btb.exe > nul
     @REM cl /c /TP src/Other/test.cpp /Fo: bin/test2.obj /nologo
 
     @REM cl /c /std:c11 /Tc src/BetBat/obj_test.c /Fo: bin/obj_test.obj /nologo
@@ -161,6 +168,11 @@ if !compileSuccess! == 0 (
     @REM link bin/obj_test.obj bin/NativeLayer.obj
 
     btb -dev
+
+    @REM btb dev.btb -p
+    @REM btb -p -pm *dev.btb
+
+    @REM btb --test --profiling
     @REM btb -ss binary_viewer/main.btb -o dev.exe -r -g
     @REM btb examples/dev.btb -p
     @REM btb --test

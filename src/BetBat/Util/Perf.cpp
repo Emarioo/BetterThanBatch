@@ -65,11 +65,28 @@ void PrintMeasures(u32 filters, u32 limit){
         }
     }
 
-    log::out << log::BLUE << "Measure statistics:\n";
-    int maxName = 0;
-    int maxTotalTime = 0;
-    int maxTime = 0;
+    log::out << log::BLUE << "Profiling:\n";
     int maxHits = 0;
+    int maxTime = 0;
+    int maxTotalTime = 0;
+    int maxName = 0;
+
+    const char* titles[]{
+        "Hits",
+        "Sub time",
+        "Total time",
+        "Name" // not necessarily a function name
+    };
+
+    int temp_len = strlen(titles[0]);
+    if(maxHits < temp_len)  maxHits = temp_len;
+    temp_len = strlen(titles[1]);
+    if(maxTime < temp_len)  maxTime = temp_len;
+    temp_len = strlen(titles[2]);
+    if(maxTotalTime < temp_len)  maxTotalTime = temp_len;
+    temp_len = strlen(titles[3]);
+    if(maxName < temp_len)  maxName = temp_len;
+
     u32 i = 0;
     for(auto& stat : stats){
         if(i >= limit)
@@ -80,6 +97,7 @@ void PrintMeasures(u32 filters, u32 limit){
         if((filters & MIN_MICROSECOND) && time < 1e-6)
             continue; // Cannot use break unless you sort by time.
         
+        // TODO: Optimize by keeping result from FormatTime for the next loop where we really need it?
         const char* timeString = FormatTime(time);
         int len=0;
         len = strlen(timeString);
@@ -92,7 +110,8 @@ void PrintMeasures(u32 filters, u32 limit){
         if(maxTotalTime < len)
             maxTotalTime = len;
 
-        len = log10(stat.hits);
+        len = log10(stat.hits)+1;
+        // log::out << "h "<<stat.hits<<"->"<<len<<"\n";
         if(maxHits < len)
             maxHits = len;
 
@@ -102,6 +121,28 @@ void PrintMeasures(u32 filters, u32 limit){
 
     }
     #define SPACING(L)  for(int _j = 0; _j < (L);_j++) log::out << " ";
+    #define DELIM "  "
+    // #define DELIM ", "
+    {
+        log::out << titles[0]<<DELIM;
+        int len = strlen(titles[0]);
+        SPACING(maxHits - len)
+        
+        log::out << titles[1]<<DELIM;
+        len = strlen(titles[1]);
+        SPACING(maxTime - len)
+    
+        log::out << titles[2]<<DELIM;
+        len = strlen(titles[2]);
+        SPACING(maxTotalTime - len)
+
+        log::out << titles[3]<<DELIM;
+        len = strlen(titles[3]);
+        log::out << "\n";
+        // SPACING(maxName - len)
+    }
+
+
     i = 0;
     float summedTime = 0;
     for(auto& stat : stats){
@@ -114,19 +155,19 @@ void PrintMeasures(u32 filters, u32 limit){
         if((filters & MIN_MICROSECOND) && time < 1e-6)
             continue; // Cannot use break unless you sort by time.
         log::out << log::LIME;
-        int len;
-        len = log10(stat.hits);
-        log::out << stat.hits<<", ";
+        int len = 0;
+        len = log10(stat.hits) + 1;
+        log::out << stat.hits<<DELIM;
         SPACING(maxHits - len)
 
         const char* timeString = FormatTime(time);
         len = strlen(timeString);
-        log::out << timeString<<", ";
+        log::out << timeString<<DELIM;
         SPACING(maxTime - len)
 
         const char* ttimeString = FormatTime(ttime);
         len = strlen(ttimeString);
-        log::out << ttimeString<<", ";
+        log::out << ttimeString<<DELIM;
         SPACING(maxTotalTime - len)
 
 

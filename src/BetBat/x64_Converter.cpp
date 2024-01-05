@@ -827,9 +827,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         #endif
 
         engone::FileClose(file);
+        file = {};
 
         auto asmLog = engone::FileOpen("bin/asm.log",0,FILE_ALWAYS_CREATE);
-        defer { engone::FileClose(asmLog); };
+        defer { if(asmLog) engone::FileClose(asmLog); };
 
         // TODO: Turn off logging from ml64? or at least pipe into somewhere other than stdout.
         //  If ml64 failed then we do want the error messages.
@@ -860,6 +861,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             continue;
         }
         engone::FileClose(asmLog);
+        asmLog = {};
 
         // TODO: DeconstructFile isn't optimized and we deconstruct symbols and segments we don't care about.
         //  Write a specific function for just the text segment.

@@ -122,6 +122,8 @@ struct TokenRange {
     //     return endIndex;
     // }
 
+    const Token& getRelative(int relativeIndex) const;
+
     void print(bool skipSuffix=true) const;
     void feed(std::string& outBuffer) const;
     // does not null terminate

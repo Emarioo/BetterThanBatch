@@ -14,6 +14,7 @@
 #define USE_RDTSC
 
 // #define LOG_ALLOCATIONS
+// #define LOG_ALLOC(...) if(global_loggingSection&LOG_ALLOCATIONS) { __VA_ARGS__; }
 
 #include <unordered_map>
 #include <vector>
@@ -733,7 +734,7 @@ namespace engone {
 		// }
 
 		#ifdef LOG_ALLOCATIONS
-		printf("* Allocate %lld\n",bytes);
+		printf("* Allocate %lld, %p\n",bytes, ptr);
 		#endif
 		
 		return ptr;
@@ -754,8 +755,10 @@ namespace engone {
                 }
                 // void* newPtr = HeapReAlloc(GetProcessHeap(),0,ptr,newBytes);
                 void* newPtr = realloc(ptr,newBytes);
-                if(!newPtr)
+				if(!newPtr) {
+					printf("Err %d\n",errno);
                     return nullptr;
+				}
                 
 				if(allocTracking.size()!=0)
 					printf("%s %llu -> %llu\n","realloc", oldBytes, newBytes);

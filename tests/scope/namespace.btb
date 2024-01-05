@@ -2,9 +2,9 @@
 
 fn hey() -> i32 { return 23; }
 
-@TEST-CASE import_as
+@TEST_CASE(import_as)
 #import "my_space.btb" as cool
 
 cool::hey()
 
-@TEST_ERROR E0 hey()
+@TEST_ERROR(E0) hey()

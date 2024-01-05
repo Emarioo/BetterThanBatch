@@ -2,32 +2,33 @@
     Debugging is hard to use automatic tests for.
     So we do them manually for now.
 */
-@TEST-CASE general
+@TEST_CASE(general)
 #define fail (*cast<u8*>null);
 
 ok(3)
-a = 9;
+a := 9;
 a *= 2;
 
 // fail
 
 fn ok(arg: i32){
-    i = arg + 3;
+    i := arg + 3;
 
     fail
 }
-@TEST-CASE overloading
+@TEST_CASE(overloading)
 fn hey(a: i32) {
-    k = a;
+    k := a;
 }
 fn hey() {
-    a = 9
+    a := 9
 }
 hey();
 hey(23);
 
-@TEST-CASE types
+@TEST_CASE(types)
 
+#import "Logger"
 struct Cake {
     a: i32*;
     b: Cake*;
@@ -51,10 +52,10 @@ fn hey(a: i64) -> i64 {
 
 // TODO: Enums
 
-@TEST-CASE debug_call_stack
+@TEST_CASE(debug_call_stack)
 
 fn main() -> i32 {
-    b = hey() + hey3();
+    b := hey() + hey3();
     return b
 }
 
@@ -68,4 +69,4 @@ fn hey() -> i32 {
     return a + 2
 }
 
-@TEST-CASE debug_asm_scope
+// @TEST_CASE(debug_asm_scope)

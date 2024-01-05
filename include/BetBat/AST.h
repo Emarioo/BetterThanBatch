@@ -273,6 +273,7 @@ struct TypeId {
     //  && !isVirtual(); }
 };
 engone::Logger& operator <<(engone::Logger&, TypeId typeId);
+struct StructImpl;
 struct FnOverloads {
     struct Overload {
         ASTFunction* astFunc=0;
@@ -288,7 +289,8 @@ struct FnOverloads {
     // Do not modify overloads while using the returned pointer
     // TODO: Use BucketArray to allow modifications
     Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
-    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
+    // Note that this function becomes complex if parentStruct is polymorphic.
+    Overload* getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
     // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, ASTExpression* fncall, bool canCast = false);
     // Overload* getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly = false, bool canCast = false);
     // Get base polymorphic overload which can match with the typeIds.

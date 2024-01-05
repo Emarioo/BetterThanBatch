@@ -3,7 +3,7 @@
 // TODO: Add tests to trigger certain errors (redeclaring a variable for example, same scope and different scope)
 // TODO: Test assignment in expressions (not just statements)
 
-@TEST-CASE globals
+@TEST_CASE(globals)
 #import "OS"
 
 global num: i32;
@@ -18,10 +18,10 @@ global str: char*;
 str = Allocate(16);
 *str; // This caused a crash at some point in time
 
-@TEST-CASE many_assignments
+@TEST_CASE(many_assignments)
 
 fn fvoid() {}
-@TEST-ERROR ERROR_INVALID_TYPE wawa := fvoid(); // should fail
+@TEST_ERROR(ERROR_INVALID_TYPE) wawa := fvoid(); // should fail
 
 // standard
 a := 1
@@ -41,8 +41,8 @@ h, j := many() // declartion with skipped values
 
 a = many() // skipping return values
 a, b, c = many() // all return values
-@TEST-ERROR ERROR_TOO_MANY_VARIABLES a, b, c, d = many(); // should fail
-// This doesn't work anymore, why: @TEST-ERROR ERROR_TOO_MANY_VARIABLES @TEST-ERROR ERROR_TYPE_MISMATCH a, b, c, d = many(); // should fail
+@TEST_ERROR(ERROR_TOO_MANY_VARIABLES) a, b, c, d = many(); // should fail
+// This doesn't work anymore, why: @TEST_ERROR( ERROR_TOO_MANY_VARIABLES @TEST_ERROR( ERROR_TYPE_MISMATCH a, b, c, d = many(); // should fail
 
 // shadowing is not implemented yet so we need to scope the assignments
 {

@@ -105,8 +105,6 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
             memcpy(sheader->Name, section->name.c_str(), section->name.length());
             if(section->name.length() < 8)
                 sheader->Name[section->name.length()] = '\0';
-            // I don't trust my understanding of strncpy
-            // strncpy(sheader->Name, section->name.c_str(), sizeof(sheader->Name));
         }
         sheader->NumberOfLineNumbers = 0;
         sheader->PointerToLineNumbers = 0;

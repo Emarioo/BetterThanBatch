@@ -172,6 +172,7 @@ Token& ParseInfo::get(uint _index){
 }
 bool ParseInfo::end(){
     // Assert(index<=tokens->length());
+    // return index>=tokens->length();
     return index>=tokens->length();
 }
 void ParseInfo::finish(){
@@ -858,6 +859,73 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     _PLOG(log::out << "Parsed enum "<<log::LIME<< name <<log::NO_COLOR <<" with "<<astEnum->members.size()<<" members\n";)
     return error;
 }
+// out_arguments may be null to parse but ignore arguments
+SignalDefault ParseAnnotationArguments(ParseInfo& info, TokenRange* out_arguments) {
+    // MEASURE;
+
+    if(out_arguments)
+        *out_arguments = {};
+
+    // Can the previous token have a suffix? probably not?
+    Token& prev = info.get(info.at());
+    if(prev.flags & (TOKEN_MASK_SUFFIX)) {
+        return SignalDefault::SUCCESS;
+    }
+
+    Token& tok = info.get(info.at()+1);
+    if(!Equal(tok,"(")){
+        return SignalDefault::SUCCESS;
+    }
+    info.next(); // skip (
+
+    int depth = 0;
+
+    while(!info.end()) {
+        Token& tok = info.get(info.at()+1);
+        if(Equal(tok,")")){
+            if(depth == 0) {
+                info.next();
+                break;
+            }
+            depth--;
+        }
+        if(Equal(tok,"(")){
+            depth++;
+        }
+
+        if(out_arguments) {
+            if(!out_arguments->firstToken.str) {
+                *out_arguments = tok;
+            } else {
+                out_arguments->endIndex = info.at() + 1;
+            }
+        }
+
+        info.next();
+    }
+    
+    return SignalDefault::SUCCESS;
+}
+SignalDefault ParseAnnotation(ParseInfo& info, Token* out_annotation_name, TokenRange* out_arguments) {
+    // MEASURE;
+
+    *out_annotation_name = {};
+    *out_arguments = {};
+
+    Token& tok = info.get(info.at()+1);
+    if(!IsAnnotation(tok)) {
+        return SignalDefault::SUCCESS;
+    }
+
+    *out_annotation_name = info.next();
+
+    // ParseAnnotationArguments check for suffix of the previous token
+    // Args will not be parsed in cases like this: @hello (sad, arg) but will here: @hello(happy)
+    SignalDefault result = ParseAnnotationArguments(info, out_arguments);
+
+    Assert(result == SignalDefault::SUCCESS); // what do we do if args fail?
+    return SignalDefault::SUCCESS;
+}
 SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
     MEASURE;
 
@@ -1202,10 +1270,16 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
             }
         }else{
             bool cstring = false;
-            if(IsAnnotation(token) && Equal(token, "@cstr")){
-                info.next();
-                token = info.get(info.at() + 1);
-                cstring = true;
+            if(IsAnnotation(token)) {
+                if(Equal(token, "@cstr")) {
+                    info.next();
+
+                    // TokenRange args; // TODO: Warn if cstr has errors?
+                    // ParseAnnotationArguments(info, );
+
+                    token = info.get(info.at() + 1);
+                    cstring = true;
+                }
             }
             if(Equal(token,"&")){
                 info.next();
@@ -2330,13 +2404,17 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
             }
             
             if(IsAnnotation(tok)) {
-                if(Equal(tok,"@TEST-ERROR")) {
+                if(Equal(tok,"@TEST_ERROR")) {
                     info.ignoreErrors = true;
                     if(mayRevertError)
                         info.errors--;
                     statement->setNoCode(true);
                     info.next();
-                    info.next();
+                    
+                    // TokenRange args;
+                    // auto res = ParseAnnotationArguments(info, &args);
+                    auto res = ParseAnnotationArguments(info, nullptr);
+
                     continue;
                 }else {
                     // TODO: ERR annotation not supported   
@@ -2446,13 +2524,14 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
             
             Token& token2 = info.get(info.at()+1);
             if(IsAnnotation(token2)) {
-                if(Equal(token2,"@TEST-ERROR")) {
+                if(Equal(token2,"@TEST_ERROR")) {
                     info.ignoreErrors = true;
                     if(mayRevertError)
                         info.errors--;
                     statement->setNoCode(true);
                     info.next();
-                    info.next(); // skip error type
+                    
+                    auto res = ParseAnnotationArguments(info, nullptr);
                 } else {
                     // TODO: ERR annotation not supported   
                 }
@@ -3508,10 +3587,10 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
 
     Token tok = info.get(info.at() + 1);
     if(IsAnnotation(tok)) {
-        if(Equal(tok, "@dump-asm")) {
+        if(Equal(tok, "@dump_asm")) {
             info.next();
             bodyLoc->flags |= ASTNode::DUMP_ASM;
-        } else if(Equal(tok, "@dump-bc")) {
+        } else if(Equal(tok, "@dump_bc")) {
             info.next();
             bodyLoc->flags |= ASTNode::DUMP_BC;
         }
@@ -3563,20 +3642,23 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         while(true) {
             Token& token2 = info.get(info.at()+1);
             if(IsAnnotation(token2)) {
-                if(Equal(token2,"@TEST-ERROR")) {
+                if(Equal(token2,"@TEST_ERROR")) {
                     info.ignoreErrors = true;
                     noCode = true;
                     info.next();
-                    info.next(); // skip error type
+                    
+                    auto res = ParseAnnotationArguments(info, nullptr);
                     continue;
-                } else if(Equal(token2,"@TEST-CASE")) {
+                } else if(Equal(token2,"@TEST_CASE")) {
                     info.next();
-                    while(true) {
-                        token2 = info.next(); // skip case name
-                        if(token2.flags & (TOKEN_SUFFIX_SPACE | TOKEN_SUFFIX_LINE_FEED)) {
-                            break;   
-                        }
-                    }
+
+                    auto res = ParseAnnotationArguments(info, nullptr);
+                    // while(true) {
+                    //     token2 = info.next(); // skip case name
+                    //     if(token2.flags & (TOKEN_SUFFIX_SPACE | TOKEN_SUFFIX_LINE_FEED)) {
+                    //         break;   
+                    //     }
+                    // }
                     continue;
                 } else if(Equal(token2, "@no-code")) {
                     noCode = true;

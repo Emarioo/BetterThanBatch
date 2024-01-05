@@ -6,7 +6,7 @@
 struct CompileInfo;
 struct ParseInfo : public PhaseContext {
     ParseInfo(TokenStream* tokens) : tokens(tokens){}
-    int index=0;
+    int index=0; // index of the next token, index-1 is the current token
     TokenStream* tokens;
     int funcDepth=0;
     AST* ast=nullptr;

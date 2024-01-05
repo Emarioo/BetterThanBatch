@@ -400,7 +400,8 @@ int Bytecode::appendData(const void* data, int size){
 //         debugText.push_back(std::string(str,length));
 //         // debugText.push_back({});
 //         // debugText.resize(length);
-//         // strncpy((char*)debugText.data(),str,length);
+        // // Assert(false); MISSING BOUNDS CHECK ON STRCPY
+//         // strcpy((char*)debugText.data(),str,length);
 //         *((u32*)debugSegment.data + instructionIndex) = index + 1;
 //     }else{
 //         Assert((int)debugText.size()<=oldIndex);

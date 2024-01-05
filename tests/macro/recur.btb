@@ -1,4 +1,4 @@
-@TEST-CASE macro_recursion
+@TEST_CASE(macro_recursion)
 
 #define ADD(X,...) X + ADD(...)
 #define ADD(X) X

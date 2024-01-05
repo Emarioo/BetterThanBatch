@@ -1,0 +1,81 @@
+
+@TEST_CASE(poly_var_bug)
+
+struct Basket<T> {
+    content: T;
+    fn set(t: T) {
+        tmp: T; // this caused an error
+
+        content = t;
+        sizeof T; // this caused an error
+    }
+}
+
+a: Basket<i32>;
+b: Basket<char>;
+
+a.set(5)
+b.set('2')
+
+@TEST_CASE(bug_poly_sizeof)
+
+struct Poly<T> {
+    t: u32;
+
+    fn first() -> i32 {
+        return second();
+    }
+    fn second() -> i32 {
+        // #import "Logger"
+        // log("second, size",sizeof T)
+        return sizeof T;
+    }
+}
+
+a: Poly<i32>;
+b: Poly<i64>;
+
+// a.first();
+// b.first();
+
+// There was a bug that generated 8 for both
+test 4; a.first();
+test 8; b.first();
+
+@TEST_CASE(poly_other)
+
+
+struct Arr<T> {
+    ptr: T*;
+    a: i32;
+    b: i32;
+    fn size() -> i32 {
+        return size_2();
+    }
+    fn size_2() -> i32 {
+        return sizeof T;
+    }
+}
+struct Big {
+    a: i32;
+    b: i32;
+    c: i32;
+}
+struct Basket {
+    a: i32;
+    b: i32;
+    arr: Arr<Big>;
+}
+
+struct Main {
+    bigs: Arr<Big>;
+    baskets: Arr<Basket>;
+
+    fn init() -> i32 {
+        return baskets.size();
+    }
+}
+
+ma: Main;
+
+test 24; ma.init();

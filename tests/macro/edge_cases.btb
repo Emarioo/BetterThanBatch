@@ -1,4 +1,4 @@
-@TEST-CASE variadic_macro
+@TEST_CASE(variadic_macro)
 
 #define l0(a0,...) a0
 #define l1(...) l0(...)

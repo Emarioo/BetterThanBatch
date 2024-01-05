@@ -270,6 +270,8 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
     _TCLOG_ENTER(FUNC_ENTER)
     _TCLOG(log::out << "check "<<typeString<<"\n";)
 
+    // TODO: Log what type we thought it was
+
     TypeId typeId = {};
 
     u32 plevel=0;
@@ -679,7 +681,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             fnOverloads = &iden->funcOverloads;
         }
     }
-    bool implicitPoly = false;
+    bool implicitPoly = false; // implicit poly does not affect parentStruct
     // if(fnPolyArgs.size()==0){
     if(fnPolyArgs.size()==0 && (!parentAstStruct || parentAstStruct->polyArgs.size()==0)){
         // match args with normal impls
@@ -833,14 +835,16 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     // }
     
     // TODO: Allow implicit cast. Same as we do with normal functions.
-    FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr, implicitPoly);
+    // TODO: Optimize by checking what in the overloads didn't match. If all parent structs are a bad match then
+    //  we don't have we don't need to getOverload the second time with canCast=true
+    FnOverloads::Overload* overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, expr, implicitPoly);
     if(overload){
         overload->funcImpl->usages++;
         FNCALL_SUCCESS
         return SignalAttempt::SUCCESS;
     }
     // bool useCanCast = false;
-    overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr, implicitPoly, true);
+    overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, expr, implicitPoly, true);
     if(overload){
         overload->funcImpl->usages++;
         FNCALL_SUCCESS
@@ -852,6 +856,9 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
 
     ASTFunction* polyFunc = nullptr;
     if(implicitPoly) {
+        // IMPORTANT: Parent structs may not be handled properly.
+        // Assert(!parentStructImpl);
+
         int lessArguments = 0;
         if(expr->hasImplicitThis())
             lessArguments = 1;
@@ -865,8 +872,22 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         DynamicArray<TypeId> realChoosenTypes{};
         FnOverloads::PolyOverload* polyOverload = nullptr;
         for(int i=0;i<(int)fnOverloads->polyOverloads.size();i++){
-
             FnOverloads::PolyOverload& overload = fnOverloads->polyOverloads[i];
+
+            // if(parentStructImpl) {
+            //     if(overload.funcImpl->structImpl->polyArgs.size() != polyArgs.size() /* && !implicitPoly */)
+            //         continue;
+            //     // I don't think implicitPoly should affects this
+            //     for(int j=0;j<(int)parentStruct->polyArgs.size();j++){
+            //         if(parentStruct->polyArgs[j] != overload.funcImpl->structImpl->polyArgs[j]){
+            //             doesPolyArgsMatch = false;
+            //             break;
+            //         }
+            //     }
+            //     if(!doesPolyArgsMatch)
+            //             continue;
+            // }
+
             // continue if more args than possible
             // continue if less args than minimally required
             if(expr->nonNamedArgs > overload.astFunc->arguments.size() - lessArguments || 
@@ -1049,6 +1070,9 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             Assert(found); // If function we thought would match doesn't then the code is incorrect.
         }
     } else {
+        // IMPORTANT: Poly parent structs may not be handled properly!
+        // Assert(!parentStructImpl);
+
         int lessArguments = 0;
         if(expr->hasImplicitThis())
             lessArguments = 1;
@@ -1163,9 +1187,9 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     info.checkImpls.add(checkImpl);
 
     // Can overload be null since we generate a new func impl?
-    overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr);
+    overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, expr);
     if(!overload)
-        overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, expr, false, true);
+        overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, expr, false, true);
     Assert(overload == newOverload);
     if(!overload){
         ERR_SECTION(
@@ -1791,7 +1815,7 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* fu
         // }
     };
 
-    _TCLOG(log::out << "FUNC IMPL "<< funcImpl->name<<"\n";)
+    _TCLOG(log::out << "Check func impl "<< funcImpl->name<<"\n";)
 
     // TODO: parentStruct argument may not be necessary since this function only calculates
     //  offsets of arguments and return values.
@@ -2250,7 +2274,7 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
 
 SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
     using namespace engone;
-    _TCLOG(FUNC_ENTER) // if(func->body->nativeCode)
+    _TCLOG_ENTER(FUNC_ENTER) // if(func->body->nativeCode)
     //     return true;
 
     funcImpl->polyVersion = func->polyVersionCount++; // New poly version
@@ -2260,6 +2284,8 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
 
     info.currentFuncImpl = funcImpl;
     info.currentAstFunc = func;
+
+    _TCLOG(log::out << "Impl scope: "<<funcImpl->name<<"\n";)
 
     // if(func->parentStruct){
     //     for(int i=0;i<(int)func->parentStruct->polyArgs.size();i++){
@@ -2319,6 +2345,7 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
     //         // vars.add(std::string(arg.name));
     //     // }   
     // }
+    _TCLOG(log::out << "Struct members:\n";)
     if(func->parentStruct) {
         for (int i=0;i<(int)func->memberIdentifiers.size();i++) {
             auto iden = func->memberIdentifiers[i];

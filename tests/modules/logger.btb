@@ -1,4 +1,4 @@
-@TEST-CASE decimals
+@TEST_CASE(decimals)
 
 // these are some good tests but you should use
 // swrite and compare against that buffer instead

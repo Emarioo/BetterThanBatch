@@ -217,7 +217,7 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
             intPart = (mantissa) >> decimalBits;
         // LN;
         // log(intPart)
-        { @dump-bc
+        { @dump_bc
             buffer += swrite_unsafe(buffer, cast<i64>intPart);
         }
         *buffer = '.';

@@ -3,6 +3,7 @@
 #include "Engone/Alloc.h"
 #include "Engone/Logger.h"
 #include "Engone/PlatformLayer.h"
+#include "Engone/Util/Array.h"
 
 #include "BetBat/Config.h"
 
@@ -31,6 +32,7 @@ const char* FormatBytes(u64 bytes);
 const char* FormatTime(double seconds);
 
 
+
 // src/util/base.btb -> src/util/
 // base.btb -> /
 // src -> /
@@ -39,6 +41,24 @@ std::string TrimLastFile(const std::string& path);
 std::string TrimDir(const std::string& path);
 std::string BriefString(const std::string& path, int max=25, bool skip_cwd = true);
 std::string TrimCWD(const std::string& path);
+
+/*
+Matching rules:
+    pattern is a string consisting of rules.
+    Each rule is separated by '|'. A single rule in a string does not need '|'.
+    A rule is a sequence of characters such as 'hi' or 'main.c'.
+    '*' is a wildcard and will match any number of characters.
+    You can have maximum of two wildcards on either side of the rule like this '*.c' or '*src/*'.
+    Space ' ' is a valid character.
+    Examples: '*.c|*.h'.
+    The path (characters) in a rule matches relative to the root path.
+    Exclamation mark '!' to exclude directories. It can speed up pattern matching by skipping directories and minimizing the potential matches.
+    There are default exclusions: .git, .vs, .vscode and maybe more.
+Function usage:
+    Returns number of matched files.
+    Empty string as root matches files in CWD
+*/
+int PatternMatchFiles(const std::string& pattern, DynamicArray<std::string>* matched_files, const std::string& root_path = "", bool output_relative_to_cwd = true);
 
 void OutputAsHex(const char* path, char* data, int size);
 

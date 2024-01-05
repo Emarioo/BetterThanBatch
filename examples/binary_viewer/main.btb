@@ -3,21 +3,13 @@
 #import "Array"
 #import "Stream"
 
-struct Basket {
-    items: DynamicArray<i32>;
-    fn cleanup() {
-        items.cleanup();
-    }
-}
 fn main(argc: i32, argv: char**) -> i32 {
     // arguments
     // for 0..argc
     //     log(nr,argv[nr])
     TestSpec(); 
 
-    // bask: Basket;
-    // defer { bask.cleanup(); }
-    // bask.items.add(5);
+    // log(sizeof TypeDefinition)
 
     return 2;
 }

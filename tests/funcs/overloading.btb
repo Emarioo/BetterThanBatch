@@ -1,4 +1,4 @@
-@TEST-CASE overload_with_casting
+@TEST_CASE(overload_with_casting)
 
 fn say(v: i16) {
     // log("int");
@@ -9,7 +9,7 @@ fn say(v: i64) {
 fn say(v: char) {
     // log("chr");
 }
-@TEST-ERROR ERROR_OVERLOAD_MISMATCH say(32)
+@TEST_ERROR(ERROR_OVERLOAD_MISMATCH) say(32)
 
 fn say2(v: i16) {
     // log("int");
@@ -19,7 +19,7 @@ fn say2(v: char) {
 }
 say2(32) // should be fine, i32 is casted to i16
 
-@TEST-CASE add_or_operator
+@TEST_CASE(add_or_operator)
 operator +(a: i32, b: i32) -> i32 {
     return a * b;
 }
@@ -39,7 +39,7 @@ result := i128{5,8} | i128{3,9}
 test flag0.x | flag1.x; result.x;
 test flag0.y | flag1.y; result.y;
 
-@TEST-CASE index_operator
+@TEST_CASE(index_operator)
 operator [](slice: Slice<char>, index: i64) -> i32 {
     return slice.ptr[index];
 }

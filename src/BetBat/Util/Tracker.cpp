@@ -65,7 +65,9 @@ void Tracker::PrintTrackedTypes(){
     global_tracker->printTrackedTypes();
 }
 u32 Tracker::GetMemoryUsage(){
-    ENSURE_GLOBAL_TRACKER
+    // ENSURE_GLOBAL_TRACKER <- don't create memory when we ask for memory usage. We may have queried overall memory usage which would miss this new memory
+    if(!global_tracker)
+        return 0;
     return global_tracker->getMemoryUsage() + sizeof(Tracker_impl); // the size of the tracker itself must be included here
 }
 void Tracker_impl::setTracking(bool enabled) {

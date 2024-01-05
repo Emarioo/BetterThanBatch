@@ -55,24 +55,37 @@
 // StartMeasure/StopMeasure didn't work before, do they now?
 
 // #import "examples/binary_viewer/main.btb"
+#import "bug.btb"
+
 
 // a := 9
 
 // fn many() -> i32, i32 { return 0, 3 }
 // a, b := many()
 
-a := 0
+// #import "Logger"
+
+// hi := 9
+
+// log(hi);
+
+// fn @okay(a: i32) {
+
+
+// }
+
+// a := 0
 
 // if 1 {
 //     a = 9
 // }
 
-switch a {
-    case 0:
-        a = 1
-    case:
-        a = -1
-}
+// switch a {
+//     case 0:
+//         a = 1
+//     case:
+//         a = -1
+// }
 
 // a
 

@@ -1,4 +1,4 @@
-@TEST-CASE macro_spacing
+@TEST_CASE(macro_spacing)
 /*
     I don't know how to test this
 */

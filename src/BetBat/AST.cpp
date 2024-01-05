@@ -511,8 +511,11 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
 }
 
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
-FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
+FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& argTypes, QuickArray<TypeId>& polyArgs, StructImpl* parentStruct, ASTExpression* fncall, bool implicitPoly, bool canCast){
     using namespace engone;
+    // nocheckin IMPORTANT BUG: We compare poly args of a function BUT NOT the parent struct.
+    // That means that we match if two parent structs have different args.
+
     // Assert(!fncall->hasImplicitThis()); // copy code from other getOverload
     FnOverloads::Overload* outOverload = nullptr;
     // TODO: Check all overloads in case there are more than one match.
@@ -520,16 +523,31 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
     //  An optimised build would not do this.
     for(int i=0;i<(int)polyImplOverloads.size();i++){
         auto& overload = polyImplOverloads[i];
+        bool doesPolyArgsMatch = true;
         // The number of poly args must match. Using 1 poly arg when referring to a function with 2
         // does not make sense.
         if(overload.funcImpl->polyArgs.size() != polyArgs.size() && !implicitPoly)
             continue;
-        // The args must match exactly. Otherwise, a new implementation should be generated.
-        bool doesPolyArgsMatch = true;
+        if((overload.funcImpl->structImpl == nullptr) != (parentStruct == nullptr))
+            continue;
+        if(parentStruct) {
+            if(overload.funcImpl->structImpl->polyArgs.size() != parentStruct->polyArgs.size() /* && !implicitPoly */)
+                continue;
+            // I don't think implicitPoly should affects this
+            for(int j=0;j<(int)parentStruct->polyArgs.size();j++){
+                if(parentStruct->polyArgs[j] != overload.funcImpl->structImpl->polyArgs[j]){
+                    doesPolyArgsMatch = false;
+                    break;
+                }
+            }
+            if(!doesPolyArgsMatch)
+                    continue;
+        }
         bool found = true;
         bool foundInt = true;
 
         if(!implicitPoly){
+            // The args must match exactly. Otherwise, a new implementation should be generated.
             for(int j=0;j<(int)polyArgs.size();j++){
                 if(polyArgs[j] != overload.funcImpl->polyArgs[j]){
                     doesPolyArgsMatch = false;
@@ -539,6 +557,7 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
             if(!doesPolyArgsMatch)
                 continue;
         }
+
         if (fncall->hasImplicitThis()) {
             // Implicit this means that the arguments the function call has won't have the this argument (this = the object the method is called from)
             // But the function implementation uses a this argument so we do -1 and +1 in some places in the code below

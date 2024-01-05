@@ -1,4 +1,4 @@
-@TEST-CASE unsigned_signed
+@TEST_CASE(unsigned_signed)
 
 23u
 9s
