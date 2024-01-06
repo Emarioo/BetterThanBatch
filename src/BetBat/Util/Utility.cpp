@@ -9,7 +9,7 @@ engone::Memory<char> ReadFile(const char* path){
         return {};
     }
     
-    auto file = engone::FileOpen(path,&fileSize,engone::FILE_ONLY_READ);
+    auto file = engone::FileOpen(path,engone::FILE_READ_ONLY, &fileSize);
     if(!file)
         goto ReadFileFailed;
     
@@ -37,7 +37,7 @@ ReadFileFailed:
 }
 void OutputAsHex(const char* path, char* data, int size) {
     using namespace engone;
-    auto file = FileOpen(path,0,FILE_ALWAYS_CREATE);
+    auto file = FileOpen(path,FILE_CLEAR_AND_WRITE);
     Assert(file);
 
     const int stride = 16;
@@ -66,14 +66,14 @@ void OutputAsHex(const char* path, char* data, int size) {
     FileClose(file);
 }
 // bool WriteFile(const char* path, engone::Memory buffer){
-//     auto file = engone::FileOpen(path,0,engone::FILE_ALWAYS_CREATE);
+//     auto file = engone::FileOpen(path,0,engone::FILE_CLEAR_AND_WRITE);
 //     if(!file) return false;
 //     if(!engone::FileWrite(file,buffer.data,buffer.used)) return false;
 //     engone::FileClose(file);
 //     return true;
 // }
 // bool WriteFile(const char* path, std::string& buffer){
-//     auto file = engone::FileOpen(path,0,engone::FILE_ALWAYS_CREATE);
+//     auto file = engone::FileOpen(path,0,engone::FILE_CLEAR_AND_WRITE);
 //     if(!file) return false;
 //     if(!engone::FileWrite(file,buffer.data(),buffer.length())) return false;
 //     engone::FileClose(file);

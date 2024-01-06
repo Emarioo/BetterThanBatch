@@ -213,7 +213,7 @@ namespace engone {
 				auto find = m_logFiles.find(path);
 				APIFile file={};
 				if(find==m_logFiles.end()){
-					file = engone::FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
+					file = engone::FileOpen(path,FILE_CLEAR_AND_WRITE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
@@ -232,7 +232,7 @@ namespace engone {
 				APIFile file={};
 				if(find==m_logFiles.end()){
 					// file = FileOpen(path,0,FILE_CAN_CREATE);
-					file = engone::FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
+					file = engone::FileOpen(path,FILE_CLEAR_AND_WRITE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{
@@ -252,7 +252,7 @@ namespace engone {
 				APIFile file={};
 				if(find==m_logFiles.end()){
 					// file = FileOpen(path,0,FILE_CAN_CREATE);
-					file = engone::FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
+					file = engone::FileOpen(path,FILE_CLEAR_AND_WRITE);
 					if(file)
 						m_logFiles[path] = file;
 				}else{

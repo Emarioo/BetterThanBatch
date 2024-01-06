@@ -230,7 +230,7 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
             break;
 
         fileSize: u64 = 0;
-        file = FileOpen(&info.path, true,  outFileSize = &fileSize);
+        file = FileOpen(&info.path, FILE_READ_ONLY, outFileSize = &fileSize);
         defer FileClose(file);
 
         if !file

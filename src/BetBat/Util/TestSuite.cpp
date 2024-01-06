@@ -14,7 +14,7 @@ void ParseTestCases(std::string path,  DynamicArray<TestOrigin>* outTestOrigins,
     Assert(outTestCases);
     Assert(outTestOrigins);
     u64 fileSize = 0;
-    auto file = engone::FileOpen(path, &fileSize, FILE_ONLY_READ);
+    auto file = engone::FileOpen(path, FILE_READ_ONLY, &fileSize);
     if(!file) {
         ERR_SECTION(
             ERR_HEAD_SUITE()
@@ -472,7 +472,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                 std::string hoho{};
                 hoho += options.outputFile.text;
                 int errorCode = 0;
-                // auto file = engone::FileOpen("ya",nullptr, engone::FILE_ALWAYS_CREATE);
+                // auto file = engone::FileOpen("ya",nullptr, engone::FILE_CLEAR_AND_WRITE);
                 {
                     MEASURE_WHO("Test: StartProgram")
                     engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, PipeGetWrite(pipe));

@@ -12,6 +12,8 @@
 // #define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
 // #define _TCLOG_ENTER(X)
 
+TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError);
+TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);
 SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt);
 
 SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
@@ -22,15 +24,37 @@ SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
 
     SignalDefault error = SignalDefault::SUCCESS;
     for(auto aenum : scope->enums){
+        if(aenum->colonType.isValid()) {
+            Token typeString = info.ast->getTokenFromTypeString(aenum->colonType);
+            bool printedError = false;
+            TypeId colonType = CheckType(info, scope->scopeId, typeString, aenum->tokenRange, &printedError);
+            if(!colonType.isValid()) {
+                if(!printedError) {
+                    ERR_SECTION(
+                        ERR_HEAD(aenum->name)
+                        ERR_MSG("The type for the enum after : was not valid.")
+                        ERR_LINE(aenum->name, typeString<< " was invalid")
+                    )
+                }
+            } else {
+                aenum->colonType = colonType;
+            }
+        }
         TypeInfo* typeInfo = info.ast->createType(aenum->name, scope->scopeId);
         if(typeInfo){
+            aenum->actualType = typeInfo->id;
             _TCLOG(log::out << "Defined enum "<<info.ast->typeToString(typeInfo->id)<<"\n";)
-            typeInfo->_size = 4; // i32
+            
+            if(aenum->colonType.isValid()) {
+                typeInfo->_size = info.ast->getTypeSize(aenum->colonType);
+            } else {
+                typeInfo->_size = 4;
+            }
             typeInfo->astEnum = aenum;
         } else {
             ERR_SECTION(
                 ERR_HEAD(aenum->name)
-                ERR_MSG(aenum->name << " is taken.")
+                ERR_MSG(aenum->name << " is already a type. TODO: Show where the previous definition was.")
             )
         }
     }
@@ -64,8 +88,7 @@ SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
     return error;
 }
 
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError);
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);
+
 SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER)
@@ -1290,11 +1313,29 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                         INCOMPLETE
                     }
                 } else {
-                    ERR_SECTION(
-                        ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
-                        ERR_MSG("'"<<expr->name<<"' is not declared.")
-                        ERR_LINE(expr->tokenRange,"undeclared")
-                    )
+                    // Perhaps it's an enum member?
+                    int memberIndex = -1;
+                    ASTEnum* astEnum = nullptr;
+                    bool found = info.ast->findEnumMember(scopeId, expr->name, info.getCurrentOrder(), &astEnum, &memberIndex);
+                    if(found){
+                        expr->enum_ast = astEnum;
+                        expr->enum_member = memberIndex;
+                        if(outTypes) outTypes->add(astEnum->actualType);
+                        return SignalAttempt::SUCCESS;
+                    } else if(astEnum) {
+                        ERR_SECTION(
+                            ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
+                            ERR_MSG("'"<<expr->name<<"' is not declared but a member of the enum '"<<astEnum->name<<"' could have matched if it wasn't @enclosed.")
+                            ERR_LINE(astEnum->members[memberIndex].name,"could have matched")
+                            ERR_LINE(expr->tokenRange,"undeclared")
+                        )
+                    } else {
+                        ERR_SECTION(
+                            ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
+                            ERR_MSG("'"<<expr->name<<"' is not declared.")
+                            ERR_LINE(expr->tokenRange,"undeclared")
+                        )
+                    }
                     return SignalAttempt::FAILURE;
                 }
             } else {
@@ -2024,7 +2065,7 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
     } else {
         iden = info.ast->findIdentifier(scope->scopeId, CONTENT_ORDER_MAX, function->name);
         if(!iden){
-            iden = info.ast->addIdentifier(scope->scopeId, function->name, CONTENT_ORDER_ZERO);
+            iden = info.ast->addIdentifier(scope->scopeId, function->name, CONTENT_ORDER_ZERO, nullptr);
             iden->type = Identifier::FUNCTION;
         }
         if(iden->type != Identifier::FUNCTION){
@@ -2039,13 +2080,13 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
     }
     for(int i=0;i<(int)function->arguments.size();i++){
         auto& arg = function->arguments[i];
-        auto var = info.ast->addVariable(function->scopeId, arg.name, CONTENT_ORDER_ZERO, &arg.identifier);
+        auto var = info.ast->addVariable(function->scopeId, arg.name, CONTENT_ORDER_ZERO, &arg.identifier, nullptr);
     }
     if(parentStruct) {
         function->memberIdentifiers.resize(parentStruct->members.size());
         for(int i=0;i<(int)parentStruct->members.size();i++){
             auto& mem = parentStruct->members[i];
-            auto varinfo = info.ast->addVariable(function->scopeId, mem.name, CONTENT_ORDER_ZERO, &function->memberIdentifiers[i]);
+            auto varinfo = info.ast->addVariable(function->scopeId, mem.name, CONTENT_ORDER_ZERO, &function->memberIdentifiers[i], nullptr);
             if(varinfo){
                 varinfo->type = VariableInfo::MEMBER;
             }
@@ -2579,7 +2620,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
                         if(!possible_identifier) {
                             // identifier does not exist, we should create it.
-                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
+                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
                             Assert(varinfo);
                             varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
                         } else if(possible_identifier->type == Identifier::VARIABLE) {
@@ -2617,7 +2658,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             } else {
                                 varname.identifier = possible_identifier;
                                 // variable does not exist in scope, we can therefore create it
-                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
+                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
                                 Assert(varinfo);
                                 // ACTUALLY! I thought global assignment in local scopes didn't work but I believe it does.
                                 //  The code here just handles where the variable is visible. That should be the local scope which is correct.
@@ -2837,8 +2878,11 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             auto& varnameNr = now->varnames[1];
 
             ScopeId varScope = now->firstBody->scopeId;
-            auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier);
-            auto varinfo_item = info.ast->addVariable(varScope, varnameIt.name, CONTENT_ORDER_ZERO, &varnameIt.identifier);
+            
+            bool reused_index = false;
+            bool reused_item = false;
+            auto varinfo_index = info.ast->addVariable(varScope, varnameNr.name, CONTENT_ORDER_ZERO, &varnameNr.identifier, &reused_index);
+            auto varinfo_item = info.ast->addVariable(varScope, varnameIt.name, CONTENT_ORDER_ZERO, &varnameIt.identifier, &reused_item);
             if(!varinfo_index || !varinfo_item) {
                 ERR_SECTION(
                     ERR_HEAD(now->tokenRange)

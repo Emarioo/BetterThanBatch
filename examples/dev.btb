@@ -54,9 +54,20 @@
 // HELLO! NEXT STEP, fix profiling of time
 // StartMeasure/StopMeasure didn't work before, do they now?
 
-// #import "examples/binary_viewer/main.btb"
-#import "bug.btb"
+#import "examples/binary_viewer/main.btb"
+// #import "bug.btb"
+// #import "Lexer"
 
+// stream := LexFile("examples/binary_viewer/sample.txt");
+
+// stream.print();
+
+
+// struct Okay {
+
+// }
+
+// typeid(Okay)
 
 // a := 9
 
@@ -64,6 +75,8 @@
 // a, b := many()
 
 // #import "Logger"
+
+
 
 // hi := 9
 

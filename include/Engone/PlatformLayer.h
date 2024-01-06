@@ -91,18 +91,18 @@ namespace engone {
     // Note that the platform/os may not have the accuracy you need.
     void Sleep(double seconds);
 	
-	enum FileFlag : uint32{
-		FILE_NO_FLAG = 0,
-		FILE_ONLY_READ = 1, // FILE_ONLY_READ is taken
-		FILE_ALWAYS_CREATE = 2,
+	enum FileOpenFlags : u32 {
+		FILE_READ_ONLY	 		= 0x1,
+		FILE_CLEAR_AND_WRITE 	= 0x2,
+		FILE_READ_AND_WRITE 	= 0x4,
 		// FILE_SHARE_READ = 8, // always true
 		// FILE_SHARE_WRITE = 16,
 	};
 
 	// Returns 0 if function failed
     // canWrite = true -> WRITE and READ. False only READ.
-	APIFile FileOpen(const std::string& path, u64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
-	APIFile FileOpen(const char* path, u32 pathlen, u64* outFileSize = nullptr, uint32 flags = FILE_NO_FLAG);
+	APIFile FileOpen(const std::string& path, FileOpenFlags flags, u64* outFileSize = nullptr);
+	APIFile FileOpen(const char* path, u32 pathlen, FileOpenFlags flags, u64* outFileSize = nullptr);
 	// Returns number of bytes read
 	// -1 means error with read
 	u64 FileRead(APIFile file, void* buffer, u64 readBytes);

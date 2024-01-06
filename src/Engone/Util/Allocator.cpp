@@ -68,7 +68,7 @@ namespace engone {
         return baseAllocation;
     }
     bool StateAllocator::save(const std::string& path){
-        auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
+        auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
         if (!file) {
             log::out << log::RED << "Engone : Failed saving game memory\n";
             return false;
@@ -92,7 +92,8 @@ namespace engone {
     }
     bool StateAllocator::load(const std::string& path){
         u64 fileSize;
-        auto file = FileOpen(path, &fileSize, FILE_ONLY_READ);
+        #undef FILE_READ_ONLY // bye Windows flag
+        auto file = FileOpen(path, FILE_READ_ONLY, &fileSize);
         if (!file) {
             log::out << log::RED << "Engone : Failed loading game memory\n";
             return false;
@@ -411,7 +412,7 @@ namespace engone {
         }
     }
     void WriteResult(StateAllocator& memory, const char* path){
-        auto file = FileOpen(path,0,FILE_ALWAYS_CREATE);
+        auto file = FileOpen(path,FILE_CLEAR_AND_WRITE);
         
         char buffer[10000];
         int bytes=0;

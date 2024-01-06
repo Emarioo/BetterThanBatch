@@ -87,6 +87,25 @@ const char* InstToString(int type){
     #undef CASE
     return "BC_?";
 }
+#define MOV_SIZE_NAME(X) ((X) >= 1 && (X) <= 8 ? mov_size_names[(X)-1] : "?")
+const char* mov_size_names[]{
+    // "Byte",
+    // "Word",
+    // "?",
+    // "Dword",
+    // "?",
+    // "?",
+    // "?",
+    // "Qword",
+    "1b",
+    "2b",
+    "?",
+    "4b",
+    "?",
+    "?",
+    "?",
+    "8b",
+};
 int RegBySize(u8 regName, int size){
     if(size==1) return ENCODE_REG_BITS(regName, BC_REG_8);
     else if(size==2) return ENCODE_REG_BITS(regName, BC_REG_16);
@@ -106,7 +125,7 @@ bool Bytecode::removeLast(){
     return true;
 }
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
-    instruction.print();
+    instruction.print(0);
     return logger;
 }
 uint32 Bytecode::getMemoryUsage(){
@@ -150,18 +169,23 @@ void Bytecode::printInstruction(u32 index, bool printImmediates){
     Assert(index < (u32)length());
 
     u8 opcode = get(index).opcode;
-    log::out << index<< ": "<<get(index)<<" ";
+    log::out << index<< ": ";
+    Instruction inst = get(index);
+    i64 imm = 0;
     if(printImmediates){
         u8 immCount = immediatesOfInstruction(index);
         if(immCount>0) {
             if(opcode == BC_LI && get(index).op1 == 2) {
-                i64 imm = (i64)getIm(index+1) | ((i64)getIm(index+2) << 32);
-                log::out << imm;
+                imm = (i64)getIm(index+1) | ((i64)getIm(index+2) << 32);
+                // log::out << imm;
             } else { 
-                log::out << getIm(index + 1);
+                // log::out << getIm(index + 1);
+                imm = (i64)getIm(index + 1);
             }
         }
     }
+    inst.print(imm);
+    log::out << " ";
     log::out<<"\n";
 }
 u32 Bytecode::immediatesOfInstruction(u32 index) {
@@ -241,7 +265,7 @@ const char* RegToStr(u8 reg){
     #undef CASER
     return "$?";
 }
-void Instruction::print(){
+void Instruction::print(i64 imm){
     using namespace engone;
 
     if(opcode==BC_INCR){
@@ -272,13 +296,13 @@ void Instruction::print(){
         log::out<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::NO_COLOR;
     }
     else if(opcode==BC_MOV_MR) {
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "] "<<RegToStr(op1)<< " "<<op2<<log::NO_COLOR;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "] "<<RegToStr(op1)<< " "<<MOV_SIZE_NAME(op2)<<log::NO_COLOR;
     } else if(opcode==BC_MOV_MR_DISP32) {
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "+disp] "<<RegToStr(op1)<< " "<<op2<<log::NO_COLOR;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "+"<<NumberToHex_signed(imm,true)<<"] "<<RegToStr(op1)<< " "<<MOV_SIZE_NAME(op2)<<log::NO_COLOR;
     } else if(opcode==BC_MOV_RM) {
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "] "<<op2<<log::NO_COLOR;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "] "<<MOV_SIZE_NAME(op2)<<log::NO_COLOR;
     } else if(opcode==BC_MOV_RM_DISP32){
-        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "+disp] "<<op2<<log::NO_COLOR;
+        log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "+"<<NumberToHex_signed(imm,true)<<"] "<<MOV_SIZE_NAME(op2)<<log::NO_COLOR;
     } else if(opcode==BC_CALL) {
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY <<" "<< (LinkConventions)op0 << " "<< (CallConventions)op1 <<log::NO_COLOR;
     } else if(opcode==BC_ASM) {
@@ -288,6 +312,8 @@ void Instruction::print(){
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0);
         if(op1 == 2)
             log::out << " qword";
+        // if(op1 == 2)
+        log::out << " "<<imm;
          log::out<<log::NO_COLOR;
     } else if(opcode==BC_TEST_VALUE) {
         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<op0<<" " << RegToStr(op1)<< " "<<RegToStr(op2);

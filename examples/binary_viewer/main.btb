@@ -19,30 +19,26 @@ fn TestSpec() {
     stream: ByteStream;
     spec.init();
     stream._reserve(0x1000);
-    // defer {
-    //     spec.cleanup();
-        // stream.cleanup();
-    // }
+    defer {
+        spec.cleanup();
+        stream.cleanup();
+    }
 
-    spec.addField(cast_unsafe<u32>FieldType.TYPE_I32)
-    // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
-    // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
-    // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
-    // spec.addField(cast_unsafe<u32>FieldType.TYPE_CHAR)
-    log("ptr", spec.fields.ptr)
+    // Format description
+    spec.addField("all_size", TYPE_I32)
+    type_header := spec.createDefinition("Header")
+    spec.addField("magic", TYPE_I32, type_header)
+    spec.addField("section_count", TYPE_I32, type_header)
+    spec.addField("header",type_header)
+
+    // Test data
     suc := stream.write<i32>(5);
-    log("ptr", spec.fields.ptr)
-    // suc = stream.write<char>('H');
-    // suc = stream.write<char>('Y');
-    // suc = stream.write<char>('O');
-    // suc = stream.write<char>('D');
-
-    spec.cleanup();
-    // stream.cleanup();
+    suc = stream.write<i32>(0x9932949);
+    suc = stream.write<i32>(92);
 
     // print_bytes(&stream);
 
-    // Interpret(stream.sliced_unsafe(), &spec);
+    Interpret(stream.sliced_unsafe(), &spec);
 }
 
 enum FieldType {
@@ -66,78 +62,76 @@ struct Field {
     count: u32;
     dynamic: bool; // dynamic based on another field, could be an expression?
     // value: u32; // index to the value data, stored in spec struct
-    // name: char[];
+    name: char[];
 }
 struct TypeDefinition {
     type: u32;
     size: u32;
+    name: char[];
 
     fields: DynamicArray<Field>;
 }
 struct FormatSpec {
     fields: DynamicArray<Field>;
-    definitions: DynamicArray<TypeDefinition>;
+    definitions: DynamicArray<TypeDefinition>; // TODO: BucketArray
 
     fn init() {
-        #define ADD(...) definitions.add(TypeDefinition{cast_unsafe<u32>FieldType.TYPE_##...});
-        log("BAD?")
-        ADD(NONE, 0)
-        log("BAD?")
-        ADD(CHAR, 1)
-        log("BAD?")
+        #define ADD(...) definitions.add(TypeDefinition{TYPE_##...});
+        ADD(NONE, 0, "none")
+        ADD(CHAR, 1, "char")
         
-        ADD(I8  , 1)
-        log("BAD?")
-        ADD(I16 , 2)
-        log("BAD?")
-        ADD(I32 , 4)
-        log("BAD?")
-        ADD(I64 , 8)
+        ADD(I8  , 1, "i8")
+        ADD(I16 , 2, "i16")
+        ADD(I32 , 4, "i32")
+        ADD(I64 , 8, "i64")
 
-        log("BAD?")
-        ADD(U8  , 1)
-        log("BAD?")
-        ADD(U16 , 2)
-        log("BAD?")
-        ADD(U32 , 4)
-        log("BAD?")
-        ADD(U64 , 8)
-        log("BAD?")
+        ADD(U8  , 1, "u8")
+        ADD(U16 , 2, "u16")
+        ADD(U32 , 4, "u32")
+        ADD(U64 , 8, "u64")
 
-        ADD(F32 , 4)
-        log("BAD?")
-        ADD(F64 , 8)
-        log("BAD?")
+        ADD(F32 , 4, "f32")
+        ADD(F64 , 8, "f64")
         #undef ADD
     }
     fn cleanup() {
         fields.cleanup();
-        // for @ptr definitions.sliced_unsafe()
-        //     it.fields.cleanup();
-        // definitions.cleanup();
+        for @ptr definitions.sliced_unsafe()
+            it.fields.cleanup();
+        definitions.cleanup();
     }
     
-    fn getFieldDef(definition: u32) -> TypeDefinition* {
+    fn getDefinition(definition: u32) -> TypeDefinition* {
         return definitions.getPtr(definition);
+    }
+    fn createDefinition(name: char[]) -> u32 {
+        def := definitions.add(TypeDefinition{});
+        def.type = definitions.size() - 1;
+        def.name = name;
+        return def.type;
     }
     fn getField(definition: u32, fieldIndex: u32) -> Field* {
         // getPtr handles out of range
         if definition == 0 {
             return fields.getPtr(fieldIndex);
         }
-        def := getFieldDef(definition);
+        def := getDefinition(definition);
         return def.fields.getPtr(fieldIndex);
     }
 
-    fn addField(type: u32, definition: u32 = 0) {
+    fn addField(name: char[], type: u32, definition: u32 = 0) {
         if definition == 0 {
-            fields.add(Field{type});
+            f := fields.add(Field{type});
+            f.name = name;
         } else {
-            def := getFieldDef(definition);
-            if def
-                def.fields.add(Field{type});
-            else
-                print("BAD, '",definition,"' is not a definition")
+            def := getDefinition(definition);
+            if def {
+                f := def.fields.add(Field{type});
+                f.name = name;
+                typeDef := getDefinition(type);
+                def.size += typeDef.size;
+            } else
+                pr("BAD, '",definition,"' is not a definition")
         }
     }
 }
@@ -156,38 +150,53 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
     head: u32 = 0; // read head of stream
 
     struct Layer {
-        definition: u32 = 0; // 0 refers to specification
+        type: u32 = 0; // 0 refers to specification
         fieldIndex: u32 = 0;
     }
     stack: DynamicArray<Layer>;
     stack.add(Layer{0, 0});
 
-    print("Start interpret ",stream.len," bytes\n")
+    pr("Interpret stream of ",stream.len," bytes\n")
+
+    fn print_indent(indent: i32) {
+        for 0..indent  printc(' ')
+    }
     
     while stack.len {
         // get next field
         layer := stack.getPtr(stack.len - 1);
 
-        element: Field* = spec.getField(layer.definition, layer.fieldIndex);
+        element: Field* = spec.getField(layer.type, layer.fieldIndex);
         if !element {
+            // log("pop",layer.type);
             stack.pop();
             continue;
         }
+        elemDef := spec.getDefinition(element.type);
         layer.fieldIndex++;
 
-        if element.type >= cast_unsafe<u32>FieldType.TYPE_PRIMITIVE_COUNT {
+        print_indent(stack.len-1);
+        if element.name.ptr {
+            pr(element.name,": ");
+        } else {
+            pr("<name>: ");
+        }
+        if element.type >= TYPE_PRIMITIVE_COUNT {
             // user defined field. make new stack
+            // log("push",element.type);
             stack.add(Layer{element.type, 0});
         } else {
-            // print primitive field
-            // element
-            print("<name>: "); // element.name when that exists
+            if head + elemDef.size > stream.len {
+                pr("abrupt end\n");
+                // corruption somewhere
+                break;
+            }
             #multidefine CASE(E,T)
-            case FieldType.TYPE_##E: {
+            case TYPE_##E: {
                 tmp: T;
                 memcpy(&tmp, stream.ptr + head, sizeof T);
                 head += sizeof T;
-                print(tmp);
+                pr(tmp);
             }
             #enddef
             switch element.type {
@@ -206,12 +215,13 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
             CASE(F32, f32)
             CASE(F64, f64)
             case: {
-                print("UNREACHABLE_312")
+                pr("UNREACHABLE_312")
             }
             }
                 
-            print('\n');
         }
+        pr(" (",elemDef.name,")");
+        pr('\n');
     }
-    print("Finished, read ",head," bytes\n");
+    pr("Finished, read ",head," bytes\n");
 }

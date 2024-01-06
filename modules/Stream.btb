@@ -16,6 +16,7 @@ struct ByteStream {
             yes := _reserve(64u + len + max * 2u)
             if !yes   return false;
         }
+
         memcpy(data + size, ptr, len);
         size += len;
         return true;

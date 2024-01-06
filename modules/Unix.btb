@@ -13,18 +13,18 @@
 
 
 fn set_cursor(x: u32, y: u32) {
-    print("\e[",(x),";",(y),"H")
+    pr("\e[",(x),";",(y),"H")
 }
 fn move_cursor(x: i32, y: i32) {
     if y > 0 {
-        print("\e[",y,"A");
+        pr("\e[",y,"A");
     } else if y < 0 {
-        print("\e[",-y,"B");
+        pr("\e[",-y,"B");
     }
     if x > 0 {
-        print("\e[",x,"C");
+        pr("\e[",x,"C");
     } else if x < 0 {
-        print("\e[",-x,"D");
+        pr("\e[",-x,"D");
     }
 }
 

@@ -358,7 +358,7 @@ struct Instruction {
         };
     };
 
-    void print();
+    void print(i64 imm);
 };
 engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction);
 

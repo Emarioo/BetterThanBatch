@@ -32,7 +32,6 @@ SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count)
 SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt);
 SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt);
 SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt);
-// don't forget to free data in outgoing token
 SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed);
 
 /*
@@ -251,7 +250,7 @@ SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
             if(Equal(tok,",") // (a: i32, b: i32)     struct {a: i32, b: i32}
                 ||Equal(tok,"=") // a: i32 = 9;
                 ||Equal(tok,")") // (a: i32)
-                ||Equal(tok,"{") // () -> i32 {
+                ||Equal(tok,"{") // () -> i32 {   enum A : i32 {
                 ||Equal(tok,"}") // struct { x: f32 }
                 ||Equal(tok,";") // cast<i32>
             ){
@@ -415,7 +414,7 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     //  internal namespaces, structs, enums...
 
     // Func
-    ScopeInfo* structScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
+    ScopeInfo* structScope = info.ast->createScope(info.currentScopeId, info.getNextOrder(), nullptr);
     astStruct->scopeId = structScope->id;
 
     // ensure scope is the same when returning
@@ -655,7 +654,7 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
     // astNamespace->tokenRange.tokenStream = info.tokens;
     astNamespace->setHidden(hideAnnotation);
 
-    ScopeInfo* newScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
+    ScopeInfo* newScope = info.ast->createScope(info.currentScopeId, info.getNextOrder(), astNamespace);
     astNamespace->scopeId = newScope->id;
 
     newScope->name = name;
@@ -745,13 +744,25 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     bool hideAnnotation = false;
     Token name = info.get(info.at()+1);
 
+    ASTEnum::Rules enumRules = ASTEnum::NONE;
+
     while (IsAnnotation(name)){
         info.next();
         if(Equal(name,"@hide")){
             hideAnnotation=true;
+        } else if(Equal(name,"@specified")) {
+            enumRules = (ASTEnum::Rules)(enumRules | ASTEnum::SPECIFIED);
+        } else if(Equal(name,"@bitfield")) {
+            enumRules = (ASTEnum::Rules)(enumRules | ASTEnum::BITFIELD);
+        } else if(Equal(name,"@unique")) {
+            enumRules = (ASTEnum::Rules)(enumRules | ASTEnum::UNIQUE);
+        } else if(Equal(name,"@enclosed")) {
+            enumRules = (ASTEnum::Rules)(enumRules | ASTEnum::ENCLOSED);
         } else {
-            WARN_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                WARN_LINE2(info.at(),"unknown");
+            WARN_SECTION(
+                WARN_HEAD(name)
+                WARN_MSG("'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for enums.")
+                WARN_LINE(name,"unknown")
             )
         }
         name = info.get(info.at()+1);
@@ -767,8 +778,21 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         return SignalAttempt::FAILURE;
     }
     info.next(); // name
-    
+
+    TypeId colonType = {};
+
     Token token = info.get(info.at()+1);
+    if(Equal(token,":")) {
+        info.next();
+
+        Token tokenType{};
+        SignalDefault res = ParseTypeId(info, tokenType, nullptr);
+        if(res == SignalDefault::SUCCESS) {
+            colonType = info.ast->getTypeString(tokenType);
+        }
+    }
+    
+    token = info.get(info.at()+1);
     if(!Equal(token,"{")){
         ERR_SECTION(
             ERR_HEAD(token)
@@ -778,8 +802,13 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         return SignalAttempt::FAILURE;
     }
     info.next();
-    int nextId=0;
+    i64 nextValue=0;
+    if(enumRules & ASTEnum::BITFIELD) {
+        nextValue = 1;
+    }
     astEnum = info.ast->createEnum(name);
+    astEnum->rules = enumRules;
+    astEnum->colonType = colonType;
     astEnum->tokenRange.firstToken = enumToken;
     // astEnum->tokenRange.startIndex = startIndex;
     // astEnum->tokenRange.tokenStream = info.tokens;
@@ -792,6 +821,14 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
             info.next();
             break;
         }
+
+        bool ignoreRules = false;
+        if(Equal(name, "@norules")) {
+            info.next();
+            ignoreRules = true;
+        }
+
+        name = info.get(info.at()+1);
         
         if(!IsName(name)){
             info.next(); // move forward to prevent infinite loop
@@ -803,19 +840,27 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
             error = SignalAttempt::FAILURE;
             continue;
         }
+        name.flags &= ~TOKEN_MASK_SUFFIX;
+
+        // bool semanticError = false;
+        // if there was an error you could skip adding the member but that
+        // cause a cascading effect of undefined AST_ID which are referring to the member 
+        // that had an error. It's probably better to add the number but use a zero or something as value.
+
         info.next();   
         Token token = info.get(info.at()+1);
         if(Equal(token,"=")){
             info.next();
             token = info.get(info.at()+1);
             // TODO: Handle expressions
+            // TODO: Handle negative values (automatically done if you fix expressions)
             if(IsInteger(token)){
                 info.next();
-                nextId = ConvertInteger(token);
+                nextValue = ConvertInteger(token);
                 token = info.get(info.at()+1);
             } else if(IsHexadecimal(token)){
                 info.next();
-                nextId = ConvertHexadecimal(token);
+                nextValue = ConvertHexadecimal(token);
                 token = info.get(info.at()+1);
             } else{
                 ERR_SECTION(
@@ -824,8 +869,59 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
                     ERR_LINE(token,"bad")
                 )
             }
+        } else {
+            if(!ignoreRules && (enumRules & ASTEnum::SPECIFIED)) {
+                ERR_SECTION(
+                    ERR_HEAD(name)
+                    ERR_MSG("Enum uses @specified but the value of the member '"<<name<<"' was not specified. Explicitly give all members a value!")
+                    ERR_LINE(name,"specify a value")
+                )
+            }
         }
-        astEnum->members.add({name,nextId++});
+
+        if(!ignoreRules && (enumRules & ASTEnum::UNIQUE)) {
+            for(int i=0;i<astEnum->members.size();i++) {
+                auto& mem = astEnum->members[i];
+                if(mem.enumValue == nextValue) {
+                    ERR_SECTION(
+                        ERR_HEAD(name)
+                        ERR_MSG("Enum uses @unique but the value of member '"<<name<<"' collides with member '"<<mem.name<<"'. There cannot be any duplicates!")
+                        ERR_LINE(mem.name, "value "<<mem.enumValue)
+                        ERR_LINE(name, "value "<<nextValue)
+                    )
+                }
+            }
+        }
+        for(int i=0;i<astEnum->members.size();i++) {
+            auto& mem = astEnum->members[i];
+            if(mem.name == name) {
+                ERR_SECTION(
+                    ERR_HEAD(name)
+                    ERR_MSG("Enum cannot have two members with the same name.")
+                    ERR_LINE(mem.name, mem.name)
+                    ERR_LINE(name, name)
+                )
+            }
+        }
+        Assert(nextValue < 0xFFFF'FFFF);
+        astEnum->members.add({name,(int)(nextValue)});
+        if(enumRules & ASTEnum::BITFIELD) {
+            if(nextValue == 0)
+                nextValue++;
+            else {
+                // we can't just do nextValue <<= 1;
+                // if the value was user specified then it may be 7 which would result in 14
+                u32 shifts = 0;
+                u64 value = nextValue;
+                while(value){
+                    value >>= 1;
+                    shifts++;
+                }
+                nextValue = (u64)1 << (shifts);
+            }
+        } else {
+            nextValue++;
+        }
         
         // token = info.get(info.at()+1);
         if(Equal(token,",")){
@@ -845,6 +941,11 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
         }
     }
     astEnum->tokenRange.endIndex = info.at()+1;
+
+    // for(auto& mem : astEnum->members) {
+    //     log::out << mem.name << " = " << mem.enumValue<<"\n";
+    // }
+
     // auto typeInfo = info.ast->getTypeInfo(info.currentScopeId, name, false, true);
     // int strId = info.ast->getTypeString(name);
     // if(!typeInfo){
@@ -2745,7 +2846,7 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
 
     function->name = name;
 
-    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
+    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder(), nullptr);
     function->scopeId = funcScope->id;
 
     // ensure we leave this parse function with the same scope we entered with
@@ -3066,7 +3167,7 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
     }
     function->name = name;
 
-    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder());
+    ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder(), nullptr);
     function->scopeId = funcScope->id;
 
     // ensure we leave this parse function with the same scope we entered with
@@ -3564,7 +3665,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             // Code to use the current scope for this body.
             bodyLoc->scopeId = info.currentScopeId;
         } else {
-            ScopeInfo* scopeInfo = info.ast->createScope(parentScope, info.getNextOrder());
+            ScopeInfo* scopeInfo = info.ast->createScope(parentScope, info.getNextOrder(), bodyLoc);
             bodyLoc->scopeId = scopeInfo->id;
 
             info.currentScopeId = bodyLoc->scopeId;
@@ -3639,6 +3740,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             tempStatement->tokenRange = body->tokenRange;
         }
         bool noCode = false;
+        bool log_nodeid = false;
         while(true) {
             Token& token2 = info.get(info.at()+1);
             if(IsAnnotation(token2)) {
@@ -3662,6 +3764,10 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                     continue;
                 } else if(Equal(token2, "@no-code")) {
                     noCode = true;
+                    info.next();
+                    continue;
+                }  else if(Equal(token2, "@nodeid")) {
+                    log_nodeid = true;
                     info.next();
                     continue;
                 }
@@ -3723,7 +3829,9 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         }
         // We add the AST structures even during error to
         // avoid leaking memory.
+        ASTNode* astNode = nullptr;
         if(tempStatement) {
+            astNode = (ASTNode*)tempStatement;
             if(tempStatement->type == ASTStatement::DEFER) {
                 nearDefers.add(tempStatement);
                 if(info.functionScopes.last().loopScopes.size()==0){
@@ -3794,21 +3902,40 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             }
         }
         if(tempFunction) {
+            astNode = (ASTNode*)tempFunction;
             bodyLoc->add(info.ast, tempFunction);
             info.nextContentOrder.last()++;
         }
         if(tempStruct) {
+            astNode = (ASTNode*)tempStruct;
             bodyLoc->add(info.ast, tempStruct);
             info.nextContentOrder.last()++;
         }
         if(tempEnum) {
+            astNode = (ASTNode*)tempEnum;
             bodyLoc->add(info.ast, tempEnum);
             info.nextContentOrder.last()++;
         }
         if(tempNamespace) {
+            astNode = (ASTNode*)tempNamespace;
             bodyLoc->add(info.ast, tempNamespace);
             info.nextContentOrder.last()++;
         }
+
+        if(log_nodeid) {
+            Assert(astNode);
+            char buf[20];
+            int len = snprintf(buf,sizeof(buf),"nodeid = %d",astNode->nodeId);
+            Assert(len);
+            log::out << log::YELLOW << "Annotation @nodeid: logging node id\n";
+            TokenStream* prevStream = nullptr;
+            PrintCode(astNode->tokenRange, buf, &prevStream);
+            if(tempStatement == astNode && tempStatement->firstExpression) {
+                int len = snprintf(buf,sizeof(buf),"nodeid = %d",tempStatement->firstExpression->nodeId);
+                Assert(len);
+                PrintCode(tempStatement->firstExpression->tokenRange, buf, &prevStream);
+            }
+         }
 
         if(result==SignalAttempt::BAD_ATTEMPT){
             // Try again. Important because loop would break after one time if scoped is false.
@@ -3867,14 +3994,13 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
     } else {
         // TODO: Should namespaced imports from a source file you import as a namespace
         //  have global has their parent? It does now, ast->globalScopeId is used.
-        ScopeInfo* newScope = info.ast->createScope(ast->globalScopeId, CONTENT_ORDER_ZERO);
-
-        newScope->name = theNamespace;
-        info.ast->getScope(newScope->parent)->nameScopeMap[theNamespace] = newScope->id;
 
         body = info.ast->createNamespace(theNamespace);
+        ScopeInfo* newScope = info.ast->createScope(ast->globalScopeId, CONTENT_ORDER_ZERO, body);
+
         body->scopeId = newScope->id;
-        
+        newScope->name = theNamespace;
+        info.ast->getScope(newScope->parent)->nameScopeMap[theNamespace] = newScope->id;
     }
     info.currentScopeId = body->scopeId;
 

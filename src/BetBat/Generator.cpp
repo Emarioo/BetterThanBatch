@@ -548,6 +548,16 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
         info.addPush(reg1);
         return true;
     }
+    auto from_typeInfo = info.ast->getTypeInfo(from);
+    // int to_size = info.ast->getTypeSize(to);
+    if(from_typeInfo && from_typeInfo->astEnum && AST::IsInteger(to)) {
+        // TODO: Print an error that says big enums can't be casted to small integers.
+        if(to_size >= from_typeInfo->_size) {
+            info.addPop(reg0);
+            info.addPush(reg1);
+            return true;
+        }
+    }
     // Asserts when we have missed a conversion
     if(!info.hasForeignErrors()){
         std::string l = info.ast->typeToString(from);
@@ -1982,17 +1992,38 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
         }
         else if (expression->typeId == AST_ID) {
             // NOTE: HELLO! i commented out the code below because i thought it was strange and out of place.
-            //   It might be important but I just don't know why. Yes it was important past me.
-            //   AST_VAR and variables have simular syntax.
-            // if (expression->name) {
-            TypeInfo *typeInfo = info.ast->convertToTypeInfo(expression->name, idScope, true);
-            // A simple check to see if the identifier in the expr node is an enum type.
-            // no need to check for pointers or so.
-            if (typeInfo && typeInfo->astEnum) {
-                outTypeIds->add(typeInfo->id);
+            //   It might be important but I just don't know why.
+            // NOTE: Yes it was important past me. AST_ID and variables have simular syntax.
+            // NOTE: Hello again! I am commenting the enum code again because I don't think it's necessary with the new changes.
+            
+            // TypeInfo *typeInfo = info.ast->convertToTypeInfo(expression->name, idScope, true);
+            // // A simple check to see if the identifier in the expr node is an enum type.
+            // // no need to check for pointers or so.
+            // if (typeInfo && typeInfo->astEnum) {
+            //     Assert(false);
+            //     outTypeIds->add(typeInfo->id);
+            //     return SignalDefault::SUCCESS;
+            // }
+
+            if(expression->enum_ast) {
+                // SAMECODE as AST_MEMBER further down
+                auto& mem = expression->enum_ast->members[expression->enum_member];
+                int size = info.ast->getTypeSize(expression->enum_ast->actualType);
+                Assert(size <= 8);
+                
+                if(size > 4) {
+                    Assert(sizeof(mem.enumValue) == size); // bug in parser/AST
+                    info.addLoadIm2(BC_REG_EAX, mem.enumValue);
+                    info.addPush(BC_REG_RAX);
+                } else {
+                    info.addLoadIm(BC_REG_EAX, mem.enumValue);
+                    info.addPush(BC_REG_EAX);
+                }
+
+                outTypeIds->add(expression->enum_ast->actualType);
                 return SignalDefault::SUCCESS;
             }
-            // }
+
             // check data type and get it
             // auto id = info.ast->findIdentifier(idScope, , expression->name);
             auto id = expression->identifier;
@@ -2448,6 +2479,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 // A simple check to see if the identifier in the expr node is an enum type.
                 // no need to check for pointers or so.
                 if (typeInfo && typeInfo->astEnum) {
+                    // SAMECODE as when checking AST_ID further up
                     i32 enumValue;
                     bool found = typeInfo->astEnum->getMember(expression->name, &enumValue);
                     if (!found) {
@@ -2892,6 +2924,11 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 outTypeIds->add(rtype);
             } else {
                 // basic operations
+                // if() {
+                //     int a = 923;
+                // }
+                // log::out << "id: "<<expression->nodeId<<"\n";
+                // BREAK(expression->nodeId == 1365)
                 TypeId rtype;
                 SignalDefault err = GenerateExpression(info, expression->left, &ltype);
                 if (err != SignalDefault::SUCCESS)
@@ -2901,6 +2938,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     return err;
 
                 TypeId operationType = expression->typeId;
+                int assignedSize = info.ast->getTypeSize(ltype);
                 if(expression->typeId==AST_ASSIGN){
                     TypeId assignType={};
                     SignalDefault result = GenerateReference(info,expression->left,&assignType,idScope);
@@ -2909,9 +2947,13 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     operationType = expression->assignOpType;
                     info.addPop(BC_REG_RBX);
                 }
-                if(operationType == AST_GREATER_EQUAL){
-                    int a = 0;
-                }
+
+                TypeInfo* left_info = info.ast->getTypeInfo(ltype.baseType());
+                TypeInfo* right_info = info.ast->getTypeInfo(rtype.baseType());
+                Assert(left_info && right_info);
+                // if(operationType == AST_GREATER_EQUAL){
+                //     int a = 0;
+                // }
                 u8 FIRST_REG = BC_CX; 
                 u8 SECOND_REG = BC_AX;
                 u8 OUT_REG = BC_CX;
@@ -2979,8 +3021,9 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         }
                         outTypeIds->add(rtype);
                     }
-                } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR) && (AST::IsInteger(rtype) || rtype == AST_CHAR)){
-                    
+                } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR || left_info->astEnum) && (AST::IsInteger(rtype) || rtype == AST_CHAR || right_info->astEnum)){
+                    // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
+
                     BCInstruction bytecodeOp = ASTOpToBytecode(operationType,false);
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
@@ -3095,7 +3138,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         info.addPush(regOut);
                     }
                     if(expression->typeId==AST_ASSIGN){
-                        info.addInstruction({BC_MOV_RM, regOut, BC_REG_RBX, outSize});
+                        Assert(assignedSize <= 8); // a mov instruction isn't enough for memory larger than 8-bytes.
+                        Assert(assignedSize < 256); // assignedSize is casted to u8, we have loss of information
+                        info.addInstruction({BC_MOV_RM, regOut, BC_REG_RBX, (u8)assignedSize});
+                        // we can't use outsize, it may have been elevated to a bigger size than
+                        // what the reference/variable we are assigning to causing us to another variable's memory.
+                        // info.addInstruction({BC_MOV_RM, regOut, BC_REG_RBX, outSize});
                     }
                 } else if ((AST::IsDecimal(ltype) || AST::IsInteger(ltype)) && (AST::IsDecimal(rtype) || AST::IsInteger(rtype))){
                     // Note that we will at least have one decimal.

@@ -51,7 +51,7 @@ struct StringMap {
         }
         log(" baseArray:", baseArray.len);
         for baseArray {
-            print(nr,": ");
+            pr(nr,": ");
         }
     }
 }

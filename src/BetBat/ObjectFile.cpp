@@ -233,7 +233,7 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
     }
     Assert(_strings_offset == cur_offset);
 
-    auto file = engone::FileOpen(path, 0, engone::FILE_ALWAYS_CREATE);
+    auto file = engone::FileOpen(path, engone::FILE_CLEAR_AND_WRITE);
     Assert(file);
     ByteStream::Iterator iter{};
     while(obj_stream->iterate(iter)) {
@@ -635,7 +635,7 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
         Assert(obj_stream->read1(sheader->sh_offset + sheader->sh_size-1) == 0);
     }
 
-    auto file = engone::FileOpen(path, 0, engone::FILE_ALWAYS_CREATE);
+    auto file = engone::FileOpen(path, engone::FILE_CLEAR_AND_WRITE);
     if(!file)  return false;
     ByteStream::Iterator iter{};
     while(obj_stream->iterate(iter)) {

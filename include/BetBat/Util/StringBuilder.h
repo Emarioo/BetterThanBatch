@@ -22,6 +22,9 @@ struct StringBuilder {
     ~StringBuilder() {
         cleanup();
     }
+    // StringBuilder(const char* str) {
+    //     borrow(str);
+    // }
     StringBuilder& operator=(const StringBuilder& builder) = delete;
     StringBuilder& operator=(StringBuilder& builder) {
         // if(arr.used>0){
@@ -78,14 +81,14 @@ struct StringBuilder {
         }
     }
     
-    private:
+private:
     // These are private in case of dramatic changes
     // to how the builder works internally
     char* _ptr = nullptr; // null terminatet
     u32 max = 0; // null termination is excluded
     u32 len = 0; // null termination is excluded
     bool owner=true; // false if the pointer is borrowed
-    public:
+public:
 
     char* data() const { return _ptr; }
     u32 size() const { return len; }
@@ -96,30 +99,30 @@ struct StringBuilder {
     operator const char*(){
         return _ptr;
     }
-    #define OP_METHOD(T)\
+    #define OP_METHOD_CREF(T)\
         StringBuilder& operator +(const T& t){append(t);return *this;}\
         StringBuilder& operator +=(const T& t){append(t);return *this;}\
         StringBuilder& operator <<(const T& t){append(t);return *this;}
         
-    #define OP_METHOD2(T)\
+    #define OP_METHOD(T)\
         StringBuilder& operator +(T t){append(t);return *this;}\
         StringBuilder& operator +=(T t){append(t);return *this;}\
         StringBuilder& operator <<(T t){append(t);return *this;}
 
-    OP_METHOD(TokenRange)
-    OP_METHOD(Token)
-    OP_METHOD(std::string)
-    OP_METHOD2(const char*)
-    OP_METHOD2(u8)
-    OP_METHOD2(char)
-    OP_METHOD2(u16)
-    OP_METHOD2(i16)
-    OP_METHOD2(u32)
-    OP_METHOD2(i64)
-    OP_METHOD2(u64)
-    OP_METHOD2(i32)
-    OP_METHOD2(float)
-    OP_METHOD2(double)
+    OP_METHOD_CREF(TokenRange)
+    OP_METHOD_CREF(Token)
+    OP_METHOD_CREF(std::string)
+    OP_METHOD(const char*)
+    OP_METHOD(u8)
+    OP_METHOD(char)
+    OP_METHOD(u16)
+    OP_METHOD(i16)
+    OP_METHOD(u32)
+    OP_METHOD(i64)
+    OP_METHOD(u64)
+    OP_METHOD(i32)
+    OP_METHOD(float)
+    OP_METHOD(double)
 
     #undef OP_METHOD
 
@@ -241,6 +244,7 @@ struct StringBuilder {
     // call cleanup to make the builder usable again
     // unless you borrow again
     void borrow(const char* str) {
+        if(!str) return;
         _ptr = (char*)str;
         len = strlen(str);
         max = len;

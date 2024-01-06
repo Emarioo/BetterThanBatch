@@ -43,7 +43,7 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
     memzero(ptr, sizeof ProfiledData);
 
     fileSize: u64;
-    file = FileOpen(&path, true, &fileSize);
+    file = FileOpen(&path, FILE_READ_ONLY, &fileSize);
     if(!file)
         return null;
     data: void* = Allocate(fileSize);

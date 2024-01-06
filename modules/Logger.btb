@@ -26,8 +26,7 @@ fn @native printd(str: f32);
 #define log_inner(X, ...) _print(X); _print(' '); log_inner(...)
 #define log_inner(X) _print(X); _print('\n')
 
-#define println(...) { print_inner(...) _print("\n"); }
-#define print(...) { print_inner(...) }
+#define pr(...) { print_inner(...) }
 #define print_inner(X,...) _print(X); print_inner(...)
 
 // IMPORTANT: SAFE_CONVERSIONS in x64_Converter must be defined for this function to work properly.
@@ -117,7 +116,7 @@ fn @hide _print(t: i64){
 //     #endif
 // }
 fn _print(str: char*){
-    slice = Slice<char>{str, strlen(str)};
+    slice := Slice<char>{str, strlen(str)};
     prints(slice);
 }
 // IMPORTANT: This function does not print accurate
@@ -129,8 +128,8 @@ fn _print(t: f32){
     bits: u32 = *cast<u32*>cast<void*>&t;
     // log("float")
     
-    sign = (bits >> 31) & 1u;
-    exp = (bits >> 23) & 0xFF
+    sign := (bits >> 31) & 1u;
+    exp := (bits >> 23) & 0xFF
     mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
 
 // 0x8000_0000_0000_0000
@@ -154,7 +153,7 @@ fn _print(t: f32){
             printc('0')
         } else {
             str: char[23];
-            used = 22;
+            used := 22;
             while intPart > 0u && used > 0 {
                 digit: u8 = intPart % 10u;
                 // log("i",intPart);
@@ -181,8 +180,8 @@ fn _print(t: f32){
         acc: u64 = 0;
         mul: u64 = 1;
         // _print(decimalBits); _print('\n')
-        precision = 19; // digits u64 can contain (18446744073709551615)
-        minBits = decimalBits - precision;
+        precision := 19; // digits u64 can contain (18446744073709551615)
+        minBits := decimalBits - precision;
         if minBits < 0
             minBits = 0;
         for @rev minBits..decimalBits {
@@ -190,7 +189,7 @@ fn _print(t: f32){
             acc = acc*10u
             // log("nr", nr)
             if nr < 24 {
-                bit = cast<u64>1 & (mantissa >> nr)
+                bit := cast<u64>1 & (mantissa >> nr)
                 if bit {
                     acc += mul;
                 }
@@ -200,13 +199,13 @@ fn _print(t: f32){
         // _print(acc);
         if acc == 0
             _print('0');
-        blank = true;
-        lastZero = 0
-        limit = precision;
+        blank := true;
+        lastZero := 0
+        limit := precision;
         if decimalBits < precision;
             limit = decimalBits;
         for @rev 0..limit {
-            digit = acc % 10u;
+            digit := acc % 10u;
             acc = acc / 10u;
             if !blank || digit != 0 {
                 decimals.ptr[nr] = digit + '0';
@@ -222,20 +221,20 @@ fn _print(t: f32){
     // fn printBits(bits: u64) {
     //     for @reverse 0..64 {
     //         if bits & (cast<u64>1 << nr) {
-    //             print('1')
+    //             pr('1')
     //         } else 
-    //             print('0')
+    //             pr('0')
     //     }
-    //     print('\n')
+    //     pr('\n')
     // }
     // fn printBits(bits: u32) {
     //     for @reverse 0..32 {
     //         if bits & (cast<u64>1 << nr) {
-    //             print('1')
+    //             pr('1')
     //         } else 
-    //             print('0')
+    //             pr('0')
     //     }
-    //     print('\n')
+    //     pr('\n')
     // }
     // #endif
 }
@@ -247,12 +246,16 @@ fn _print(tt: f64){
 fn _print<T>(p: T*) {
     // _print(cast<u64>p)
     prints("0x")
+    zeros: bool = true;
     for @rev 0..16 {
         hex := (cast<u64>p >> cast<u64>(4*nr)) & cast<u64>0xF;
-        if hex < 10u
-            printc('0'+hex)
-        else
-            printc('a' + hex - 10)
+        if hex != 0  zeros = false
+        if !zeros {
+            if hex < 10u
+                printc('0'+hex)
+            else
+                printc('a' + hex - 10)
+        }
     }
 }
 fn @hide _print(t: char){

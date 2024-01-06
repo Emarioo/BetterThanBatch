@@ -115,6 +115,13 @@ u64 ConvertHexadecimal(const Token& token){
     }
     return hex;
 }
+
+std::string NumberToHex_signed(i64 number, bool withPrefix) {
+    if(number < 0)
+        return "-"+NumberToHex(-number,withPrefix);
+    else
+        return NumberToHex(number,withPrefix);
+}
 std::string NumberToHex(u64 number, bool withPrefix) {
     if(number == 0) {
         if (withPrefix)
@@ -170,7 +177,7 @@ void TokenRange::print(bool skipSuffix) const {
     int token_index = 0;
     int written = 0;
     // BREAK(firstToken.length==163);
-    while((written = feed(temp, sizeof(temp), false, &token_index))) {
+    while((written = feed(temp, sizeof(temp), false, &token_index, skipSuffix))) {
         log::out.print(temp, written);
     }
     Assert(finishedFeed(&token_index));
@@ -227,7 +234,7 @@ std::string Token::getLine(){
     // }
     return out;
 }
-u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, int* token_index) const {
+u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, int* token_index, bool skipSuffix) const {
     using namespace engone;
     // assert?
     if(!tokenStream() && endIndex - firstToken.tokenIndex > 1) return 0;
@@ -332,12 +339,14 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
             ENSURE(1)
             *(outBuffer + written_temp++) = '\'';
         }
-        if((tok.flags&TOKEN_SUFFIX_LINE_FEED)){
-            ENSURE(1)
-            *(outBuffer + written_temp++) = '\n';
-        } else if((tok.flags&TOKEN_SUFFIX_SPACE)){ // don't write space if we wrote newline
-            ENSURE(1)
-            *(outBuffer + written_temp++) = ' ';
+        if(!skipSuffix || i-1 != endIndex) {
+            if((tok.flags&TOKEN_SUFFIX_LINE_FEED)){
+                ENSURE(1)
+                *(outBuffer + written_temp++) = '\n';
+            } else if((tok.flags&TOKEN_SUFFIX_SPACE)){ // don't write space if we wrote newline
+                ENSURE(1)
+                *(outBuffer + written_temp++) = ' ';
+            }
         }
 
         written = written_temp;
@@ -466,7 +475,8 @@ int Token::calcLength() const {
     return tokrange.queryFeedSize();
 }
 engone::Logger& operator<<(engone::Logger& logger, Token& token){
-    token.print(true);
+    token.print(true); // Names of structs, enums and such may should not be printed with line suffix
+    // token.print(false);
     return logger;
 }
 Token::operator std::string() const{
@@ -753,7 +763,7 @@ void TokenStream::printTokens(int tokensPerLine, bool showlncol){
 }
 void TokenStream::writeToFile(const std::string& path){
     using namespace engone;
-    auto file = FileOpen(path, nullptr, FILE_ALWAYS_CREATE);
+    auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
     Assert(file);
     #undef WRITE
     #define WRITE(X, L) FileWrite(file, X, L);
@@ -830,7 +840,7 @@ void TokenStream::printData(int charsPerLine){
 }
 TokenStream* TokenStream::Tokenize(const std::string& filePath){
     u64 fileSize = 0;
-    auto file = engone::FileOpen(filePath, &fileSize, engone::FILE_ONLY_READ);
+    auto file = engone::FileOpen(filePath, engone::FILE_READ_ONLY, &fileSize);
     if(!file)
         return nullptr;
     TextBuffer textBuffer{};

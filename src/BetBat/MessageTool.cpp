@@ -125,10 +125,11 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
     // otherwise we will assume the line we print comes from the location the head of error message
     // displayed.
     // Assert(prevStream);
-    // if(!prevStream || tokenRange.tokenStream() != *prevStream) {
-    if(prevStream && tokenRange.tokenStream() != *prevStream) {
+    if(!prevStream || tokenRange.tokenStream() != *prevStream) {
+    // if(prevStream && tokenRange.tokenStream() != *prevStream) {
         log::out << log::GRAY << "-- "<<TrimDir(tokenRange.tokenStream()->streamName) <<":"<<tokenRange.firstToken.line << " --\n";
-        *prevStream = tokenRange.tokenStream();
+        if(prevStream)
+            *prevStream = tokenRange.tokenStream();
     }
 
     // log::out <<"We " <<start << " "<<end<<"\n";
@@ -257,6 +258,11 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
     log::out << "\n";
 }
 
+void PrintCode(const TokenRange& tokenRange, const char* message, TokenStream** prevStream){
+    StringBuilder temp{};
+    temp.borrow(message);   
+    PrintCode(tokenRange, temp, prevStream);
+}
 void PrintCode(const TokenRange& tokenRange, const char* message){
     StringBuilder temp{};
     temp.borrow(message);   

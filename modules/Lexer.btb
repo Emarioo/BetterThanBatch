@@ -1,0 +1,41 @@
+/*
+    A lexer for all your tokenizing needs
+*/
+
+#import "OS"
+#import "Array"
+
+struct Token {
+
+}
+
+struct TokenStream {
+    tokens: DynamicArray<Token>;
+    rawData: DynamicArray<u8>;
+
+    fn print() {
+        // pr("TokenStream")
+    }
+}
+fn LexFile(path: char[]) -> TokenStream* {
+
+    filesize: u64;
+    FileOpen(path, FILE_READ_ONLY, &filesize);
+
+}
+enum TokenType : u16 {
+    TOKEN_NULL               = '\0',
+    TOKEN_TAB                = '\t',
+    TOKEN_NEWLINE            = '\n',
+    TOKEN_CARRIAGE_RETURN    = '\r',
+    TOKEN_ESCAPE             = '\e',
+    TOKEN_SPACE              = ' ',
+    // normal characters are just ' 
+
+    TOKEN_LIT_STRING = 256,
+    TOKEN_LIT_NUMBER,
+    TOKEN_LIT_DECIMAL,
+
+    TOKEN_STRUCT,
+
+}

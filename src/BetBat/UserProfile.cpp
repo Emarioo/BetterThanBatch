@@ -113,7 +113,7 @@ void UserProfile::cleanup(){
 bool UserProfile::serialize(const std::string& path){
     using namespace engone;
 
-    auto file = FileOpen(path, nullptr, FILE_ALWAYS_CREATE);
+    auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
     if(!file) return false;
 
     // TODO: Use a buffer and sprintf and decrease the amount of calls to FileWrite
@@ -207,7 +207,7 @@ neat = "sour thumb"
 bool UserProfile::deserialize(const std::string& path){
     using namespace engone;
     u64 fileSize=0;
-    auto file = FileOpen(path, &fileSize, FILE_ONLY_READ); 
+    auto file = FileOpen(path, FILE_READ_ONLY , &fileSize); 
     if(!file) return false;
 
     if(fileSize == 0){

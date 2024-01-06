@@ -339,20 +339,22 @@ namespace engone {
 	void Sleep(double seconds){
         WIN_Sleep((uint32)(seconds*1000));   
     }
-    APIFile FileOpen(const char* path, u32 len, u64* outFileSize, uint32 flags){
-		return FileOpen(std::string(path,len), outFileSize, flags);
+    APIFile FileOpen(const char* path, u32 len, FileOpenFlags flags, u64* outFileSize){
+		return FileOpen(std::string(path,len), flags, outFileSize);
 	}
-    APIFile FileOpen(const std::string& path, u64* outFileSize, uint32 flags){
+    APIFile FileOpen(const std::string& path, FileOpenFlags flags, u64* outFileSize){
         DWORD access = GENERIC_READ|GENERIC_WRITE;
         DWORD sharing = WIN_SHARE_READ|WIN_SHARE_WRITE;
-        if(flags&FILE_ONLY_READ){
+		Assert(flags != 0);
+		#undef FILE_READ_ONLY // bye bye Windows defined flag
+        if(flags & FILE_READ_ONLY){
             access = GENERIC_READ;
 		}
 		
 		DWORD creation = OPEN_EXISTING;
 		// if(flags&FILE_CAN_CREATE)
 		// 	creation = OPEN_ALWAYS;
-		if(flags&FILE_ALWAYS_CREATE)
+		if(flags&FILE_CLEAR_AND_WRITE)
 			creation = CREATE_ALWAYS;
 		
 		if(creation&OPEN_ALWAYS||creation&CREATE_ALWAYS){

@@ -1,6 +1,6 @@
 #import "OS"
 
-file, size = FileOpen("test.bat",FileFlag.FILE_ONLY_READ);
+file, size = FileOpen("test.bat", FILE_READ_ONLY);
 defer FileClose(file);
 
 buffer = cast<char*>malloc(size)

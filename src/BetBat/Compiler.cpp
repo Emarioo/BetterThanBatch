@@ -1314,7 +1314,7 @@ CompileOptions::TestLocation* CompileOptions::getTestLocation(int index) {
 }
 void CompileStats::printSuccess(CompileOptions* opts){
     using namespace engone;
-    log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " non-blank lines ("<<log::AQUA<<FormatUnit((u64)blankLines)<<log::NO_COLOR<<" blanks, "<<log::AQUA<<FormatBytes(readBytes)<<log::NO_COLOR<<")\n";
+    log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " non-blank lines ("<<log::AQUA<<FormatUnit((u64)lines + (u64)blankLines)<<log::NO_COLOR<<" total, "<<log::AQUA<<FormatBytes(readBytes)<<log::NO_COLOR<<")\n";
     if(opts) {
         /* Would it be nicer with this:
             details: win-x64, gcc
@@ -1895,7 +1895,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     if(!options->silent)
         log::out << log::LIME<<"Link cmd: "<<cmd<<"\n";
     
-    auto linkerLog = engone::FileOpen("bin/linker.log",0,FILE_ALWAYS_CREATE);
+    auto linkerLog = engone::FileOpen("bin/linker.log",FILE_CLEAR_AND_WRITE);
     defer { engone::FileClose(linkerLog); };
 
     options->compileStats.start_linker = StartMeasure();
@@ -1980,7 +1980,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             // if(yes)
             //     options->compileStats.generatedFiles.add(DUMP_ASM_OBJ);
 
-            auto file = engone::FileOpen(DUMP_ASM_ASM, 0, FILE_ALWAYS_CREATE);
+            auto file = engone::FileOpen(DUMP_ASM_ASM, FILE_CLEAR_AND_WRITE);
             defer { if(file) engone::FileClose(file); };
 
             std::string cmd = "";
@@ -2117,7 +2117,7 @@ bool CompileAll(CompileOptions* options){
 // bool ExportBytecode(CompileOptions* options, Bytecode* bytecode){
 //     using namespace engone;
 //     Assert(bytecode);
-//     auto file = FileOpen(options->outputFile.text, 0, engone::FILE_ALWAYS_CREATE);
+//     auto file = FileOpen(options->outputFile.text, 0, engone::FILE_CLEAR_AND_WRITE);
 //     if(!file)
 //         return false;
 //     BTBCHeader header{};

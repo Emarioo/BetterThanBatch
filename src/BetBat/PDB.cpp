@@ -303,7 +303,7 @@ bool PDBFile::writeFile(const char* path) {
 
     msfHeader->blockCount = _blockCount;
 
-    auto file = engone::FileOpen(path, nullptr, engone::FILE_ALWAYS_CREATE);
+    auto file = engone::FileOpen(path, engone::FILE_CLEAR_AND_WRITE);
     if(!file) {
         return false;
     }
@@ -564,7 +564,7 @@ PDBFile* PDBFile::Deconstruct(const char* path) {
     using namespace engone;
     
     u64 fileSize = 0;
-    auto file = FileOpen(path, &fileSize, FILE_ONLY_READ);
+    auto file = FileOpen(path, FILE_READ_ONLY, &fileSize);
     if(!file)
         return nullptr;
     u8* fileData = TRACK_ARRAY_ALLOC(u8,fileSize);
@@ -2248,7 +2248,7 @@ void DeconstructDebugTypes(u8* buffer, u32 size, bool fromPDB) {
 //         // engone::log::out << "Use "<<byte<<":"<<bit<<"\n";
 //     }
 
-//     auto file = engone::FileOpen(path, nullptr, engone::FILE_ALWAYS_CREATE);
+//     auto file = engone::FileOpen(path, nullptr, engone::FILE_CLEAR_AND_WRITE);
 //     if(!file) {
 //         return false;
 //     }

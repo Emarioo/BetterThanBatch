@@ -133,7 +133,7 @@ FileCOFF* FileCOFF::DeconstructFile(const std::string& path, bool silent) {
     u64 fileSize=0;
     // std::string filename = "obj_test.o";
     // std::string filename = "obj_test.obj";
-    auto file = FileOpen(path,&fileSize,FILE_ONLY_READ);
+    auto file = FileOpen(path,FILE_READ_ONLY,&fileSize);
     if(!file)
         return nullptr;
     u8* filedata = TRACK_ARRAY_ALLOC(u8, fileSize);
@@ -604,7 +604,7 @@ void FileCOFF::writeFile(const std::string& path) {
     // header->PointerToSymbolTable = fileOffset;
     fileOffset += stringTableSize;
 
-    auto file = engone::FileOpen(path,nullptr,FILE_ALWAYS_CREATE);
+    auto file = engone::FileOpen(path,FILE_CLEAR_AND_WRITE);
     if(!file) {
         log::out << "failed creating\n";
         return;
@@ -1392,7 +1392,7 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     // NOTE: It is possible to finalize the byte stream but that will cause a massive allocation and many dealloactions.
     //  Iterating through the allocations with obj_stream->iterate but call FileWrite multiple times may be better.
 
-    auto file = engone::FileOpen(path, 0, FILE_ALWAYS_CREATE);
+    auto file = engone::FileOpen(path, FILE_CLEAR_AND_WRITE);
     Assert(file);
     
     if(contiguous_ptr) {

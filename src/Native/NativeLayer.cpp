@@ -255,8 +255,8 @@ extern "C" {
         // printf("Free: %llu, %p\n", size, ptr);
         engone::Free(ptr,size);
     }
-    u64 attr_stdcall FileOpen(Language::Slice<char>* path, bool readOnly, u64* outFileSize) {
-        return engone::FileOpen(path->ptr, path->len, outFileSize, readOnly ? engone::FILE_ONLY_READ : engone::FILE_ALWAYS_CREATE).internal;
+    u64 attr_stdcall FileOpen(Language::Slice<char>* path, u32 flags, u64* outFileSize) {
+        return engone::FileOpen(path->ptr, path->len, (engone::FileOpenFlags)flags, outFileSize).internal;
     }
     u64 attr_stdcall FileRead(u64 file, void* buffer, u64 length) {
         return engone::FileRead({file}, buffer, length);

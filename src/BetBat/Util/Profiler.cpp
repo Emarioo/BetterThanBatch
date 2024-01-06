@@ -132,7 +132,7 @@ struct DataFormat {
 void ProfilerExport(const char* path) {
     using namespace engone;
 
-    auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
+    auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
 
     u32 contextCount = global_profilerSession.usedContexts;
     FileWrite(file, &contextCount, sizeof(contextCount));

@@ -24,15 +24,14 @@ struct DynamicArray<T> {
                 return null;
             }
         }
-        // { @dump_asm
-            ptr[len] = newElement;
-        // }
+        ptr[len] = newElement;
         ptr_elem := ptr + len * sizeof T;
         // ind = len;
         len++;
         return ptr_elem;
         // return ind;
     }
+    fn size() -> u32 { return len; }
     fn sliced_unsafe() -> Slice<T> {
         return Slice<T>{ptr, len};
     }
@@ -75,7 +74,7 @@ struct DynamicArray<T> {
         // log("what",cast<u64>ptr)
         if !ptr {
             // log("huh")
-            log("Try reserve, sizeof T =",sizeof T)
+            // log("Try reserve, sizeof T =",sizeof T)
             ptr = Allocate(newMax * sizeof T);
             // log("allocSize",newMax * sizeof T)
             // log("ptr",ptr)

@@ -40,7 +40,7 @@
 //     mul *= 5
 //     acc *= 10
 //     if mantissa & (1 << (22 - i)) {
-//         // print("+ ")
+//         // pr("+ ")
 //         acc += mul
 //     }
 //     // println(22 - i," ", acc," ",mul, " ", 1 << (22 - i));
@@ -91,11 +91,11 @@
 // fn printBits(bits: u64) {
 //     for @reverse 0..32 {
 //         if bits & (cast<u64>1 << nr) {
-//             print('1')
+//             pr('1')
 //         } else 
-//             print('0')
+//             pr('0')
 //     }
-//     print('\n')
+//     pr('\n')
 // }
 
 // // #link "uuid.lib" // not necessary for some reason

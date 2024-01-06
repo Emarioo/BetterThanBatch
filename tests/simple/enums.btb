@@ -1,0 +1,55 @@
+@TEST_CASE(enum_base)
+// TODO: Fix tests
+// enum Taste { }
+
+// enum Flag32 : u32 { }
+// enum Flag64 : u64 { }
+
+// enum @bitfield Flag : u64 {
+
+// }
+
+// TODO: Fix up the tests, organize a bit, add error message typees
+
+enum @specified NOM {
+    A,
+    A, // bad
+}
+
+enum @specified NOM {
+    A,
+    B = 0,
+}
+
+enum @unique Un {
+    A,
+    C = 0,
+}
+
+enum @bitfield Caul {
+    A,
+    B,
+    C,
+    K = 30,
+    NA,
+}
+
+enum Nom {
+    A,
+}
+cast<Nom>5
+cast<i32>Nom.A
+
+enum Stone {
+    Rough,
+    Ripe
+}
+Rough
+Stone.Ripe
+
+enum @enclosed Coal {
+    Hard,
+    Molten
+}
+Coal.Hard
+Molten // not allowed

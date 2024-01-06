@@ -427,7 +427,7 @@ void Program_x64::printAsm(const char* path, const char* objpath){
         #endif
     }
 
-    auto file = FileOpen(path, 0, FILE_ALWAYS_CREATE);
+    auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
 
     #ifdef OS_WINDOWS
     std::string cmd = "dumpbin /NOLOGO /DISASM:BYTES ";
@@ -797,7 +797,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         
         #define TEMP_ASM_FILE "bin/inline_asm.asm"
         #define TEMP_ASM_OBJ_FILE "bin/inline_asm.o"
-        auto file = engone::FileOpen(TEMP_ASM_FILE,nullptr,FILE_ALWAYS_CREATE);
+        auto file = engone::FileOpen(TEMP_ASM_FILE,FILE_CLEAR_AND_WRITE);
         defer { if(file) engone::FileClose(file); };
         if(!file) {
             log::out << log::RED << "Could not create " TEMP_ASM_FILE "!\n";
@@ -829,7 +829,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         engone::FileClose(file);
         file = {};
 
-        auto asmLog = engone::FileOpen("bin/asm.log",0,FILE_ALWAYS_CREATE);
+        auto asmLog = engone::FileOpen("bin/asm.log",FILE_CLEAR_AND_WRITE);
         defer { if(asmLog) engone::FileClose(asmLog); };
 
         // TODO: Turn off logging from ml64? or at least pipe into somewhere other than stdout.

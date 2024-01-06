@@ -45,7 +45,7 @@ extern "C" {
     // void Free(void* ptr, u64 size);
 
     // // Returns an id representing the file handle, zero means null
-    u64 attr_stdcall FileOpen(Language::Slice<char>* path, bool readOnly, u64* outFileSize);
+    u64 attr_stdcall FileOpen(Language::Slice<char>* path, u32 flags, u64* outFileSize);
     u64 attr_stdcall FileRead(u64 file, void* buffer, u64 length);
     u64 attr_stdcall FileWrite(u64 file, void* buffer, u64 length);
     void attr_stdcall FileClose(u64 file);

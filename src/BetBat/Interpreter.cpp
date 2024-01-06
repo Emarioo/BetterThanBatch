@@ -816,11 +816,11 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
                     // It's just complicated.
                     // slice
                     Language::Slice<char>* path = *(Language::Slice<char>**)(fp+argoffset + 0);
-                    bool readOnly = *(bool*)(fp+argoffset+8);
+                    u32 flags = *(u32*)(fp+argoffset+8);
                     u64* outFileSize = *(u64**)(fp+argoffset+16);
 
                     // INCOMPLETE
-                    u64 file = FileOpen(path, readOnly, outFileSize);
+                    u64 file = FileOpen(path, flags, outFileSize);
 
                     *(u64*)(fp-8) = (u64)file;
                     break;

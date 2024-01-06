@@ -141,13 +141,14 @@ struct ASTNode {
     // every type of node
     enum Flags : u16 {
         HIDDEN = 0x1,
-        REVERSE = 0x2,
-        POINTER = 0x4,
-        NULL_TERMINATED = 0x8, // for AST_STRING
+        REVERSE = 0x2, // for loop
+        POINTER = 0x4, // for loop
+        NULL_TERMINATED = 0x8, // AST_STRING
         DUMP_ASM = 0x10,
         DUMP_BC = 0x20,
         NO_CODE = 0x40,
     };
+    int nodeId = 0;
     u16 flags = 0;
     LinkConventions linkConvention = LinkConventions::NONE;
     CallConventions callConvention = BETCALL;
@@ -422,12 +423,14 @@ struct ScopeInfo {
     ScopeId parent = 0;
     ContentOrder contentOrder = CONTENT_ORDER_ZERO; // the index of this scope in the parent content list
 
-    std::unordered_map<std::string, ScopeId> nameScopeMap;
+    std::unordered_map<std::string, ScopeId> nameScopeMap; // namespace map?
     std::unordered_map<std::string, TypeInfo*> nameTypeMap;
 
     std::unordered_map<std::string, Identifier> identifierMap;
 
     QuickArray<ScopeInfo*> usingScopes;
+
+    ASTScope* astScope = nullptr; // some scopes don't belong to ASTScope
 
     void print(AST* ast);
 
@@ -505,10 +508,14 @@ struct ASTExpression : ASTNode {
     // Used if expression type is AST_ID
     Identifier* identifier = nullptr;
 
-    // TypeId finalType={}; // evaluated by type checker
+    // TODO: Is okay to fill ASTExpression with more data? It's quite large already.
+    //  How else would we store this information because we don't want to recalculate it
+    //  in Generator. I guess some unions?
+    ASTEnum* enum_ast = nullptr;
+    int enum_member = -1;
+
 
     QuickArray<ASTExpression*> args; // fncall or initialiser
-    // DynamicArray<ASTExpression*>* args=nullptr; // fncall or initialiser
     u32 nonNamedArgs = 0;
 
     // PolyVersions<DynamicArray<TypeId>> versions_argTypes{};
@@ -681,8 +688,22 @@ struct ASTEnum : ASTNode {
     struct Member {
         Token name{};
         int enumValue=0;
+        bool ignoreRules = false;
     };
     QuickArray<Member> members{};
+
+    enum Rules : u32 {
+        NONE = 0,
+        UNIQUE            = 0x1,
+        SPECIFIED         = 0x2,
+        BITFIELD          = 0x4,
+        ENCLOSED          = 0x8,
+        OPERATION_LESS    = 0x10,
+    };
+    Rules rules = NONE;
+
+    TypeId colonType = AST_UINT32;
+    TypeId actualType = {};
     
     bool getMember(const Token& name, int* out);
 
@@ -791,7 +812,7 @@ struct AST {
     //-- Scope stuff
     ScopeId globalScopeId=0;
     QuickArray<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
-    ScopeInfo* createScope(ScopeId parentScope, ContentOrder contentOrder);
+    ScopeInfo* createScope(ScopeId parentScope, ContentOrder contentOrder, ASTScope* astScope);
     ScopeInfo* getScope(ScopeId id);
     // Searches specified scope for a scope with a certain name.
     // Does not check parent scopes.
@@ -846,15 +867,21 @@ struct AST {
     // VariableInfo* identifierToVariable(Identifier* identifier);
 
     // Returns nullptr if variable already exists or if scopeId is invalid
-    VariableInfo* addVariable(ScopeId scopeId, const Token& name, ContentOrder contentOrder, Identifier** identifier);
+    // If out_reused_identical isn't null then an identical variable can be returned it if exists. This can happen in polymorphic scopes.
+    VariableInfo* addVariable(ScopeId scopeId, const Token& name, ContentOrder contentOrder, Identifier** identifier, bool* out_reused_identical);
     // We don't overload addVariable because we may want to change the name or 
     // behaviour of this function and it's very useful to have descriptive name
     // when we do.
     VariableInfo* getVariableByIdentifier(Identifier* identifier);
     // VariableInfo* addVariable(ScopeId scopeId, const Token& name, bool shadowPreviousVariables=false, Identifier** identifier = nullptr);
     // Returns nullptr if variable already exists or if scopeId is invalid
-    Identifier* addIdentifier(ScopeId scopeId, const Token& name, ContentOrder contentOrder);
+    // If out_reused_identical isn't null then an identical identifier can be returned it if exists. This can happen in polymorphic scopes.
+    Identifier* addIdentifier(ScopeId scopeId, const Token& name, ContentOrder contentOrder, bool* out_reused_identical);
     // Identifier* addIdentifier(ScopeId scopeId, const Token& name, bool shadowPreviousIdentifier=false);
+
+    // returns true if successful, out_enum/member contains what was found.
+    // returns false if not found. This could also mean that the enum was enclosed, if so the out parameters may tell you the enum that would have matched if it wasn't enclosed (it allows you to be more specific with error messages).
+    bool findEnumMember(ScopeId scopeId, const Token& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member);
 
     void removeIdentifier(ScopeId scopeId, const Token& name);
     void removeIdentifier(Identifier* identifier);
@@ -926,7 +953,10 @@ struct AST {
 
     // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
     void appendToMainBody(ASTScope* body);
-    
+
+    int nextNodeId = 1; // start at 1, 0 indicates a non-set id for ASTNode, probably a bug if so
+    int getNextNodeId() { return nextNodeId++; }
+
     StructImpl* createStructImpl();
     FuncImpl* createFuncImpl(ASTFunction* astFunc);
 

@@ -67,9 +67,9 @@ fn printData<T>(t: T*) {
     while at < sizeof T {
         byte: u8 = *(cast<u8*>cast<void*>t + at);
         if at % 8 == 0 {
-            print('\n',at,": ");
+            pr('\n',at,": ");
         }
-        print(byte, ' ')
+        pr(byte, ' ')
         at++
     }
 }

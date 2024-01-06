@@ -628,7 +628,7 @@ SignalAttempt ParseInclude(PreprocInfo& info, bool attempt, bool quoted = false)
 
     if(quoted) {
         u64 fileSize=0;
-        auto file = engone::FileOpen(fullpath.text, &fileSize, engone::FILE_ONLY_READ);
+        auto file = engone::FileOpen(fullpath.text, engone::FILE_READ_ONLY, &fileSize);
         defer { if(file) engone::FileClose(file); };
         if(!file) {
             ERR_SECTION(

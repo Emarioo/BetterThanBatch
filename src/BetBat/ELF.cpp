@@ -482,7 +482,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
     suc = obj_stream->finalize(&filedata, &filesize);
     CHECK
     
-    auto file = engone::FileOpen(name, nullptr, engone::FILE_ALWAYS_CREATE);
+    auto file = engone::FileOpen(name, engone::FILE_CLEAR_AND_WRITE);
     if(!file)
         return false;
     suc = engone::FileWrite(file, filedata, filesize);
@@ -503,7 +503,7 @@ FileELF* FileELF::DeconstructFile(const std::string& path, bool silent) {
     using namespace elf;
     
     u64 fileSize=0;
-    auto file = FileOpen(path,&fileSize,FILE_ONLY_READ);
+    auto file = FileOpen(path, FILE_READ_ONLY, &fileSize);
     if(!file)
         return nullptr;
     u8* filedata = TRACK_ARRAY_ALLOC(u8, fileSize);

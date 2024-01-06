@@ -168,7 +168,9 @@ AST *AST::Create() {
 
     ast->initLinear();
 
-    ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO)->id;
+    ast->mainBody = ast->createBody();
+
+    ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO, ast->mainBody)->id;
     ast->globalScopeId = scopeId;
     // initialize default data types
     #define ADD(T, S) ast->createPredefinedType(Token(PRIM_NAME(T)), scopeId, T, S);
@@ -193,7 +195,6 @@ AST *AST::Create() {
     ADD(AST_NAMEOF,0);
     ADD(AST_FNCALL,0);
     #undef ADD
-    ast->mainBody = ast->createBody();
     // {
     //     // TODO: set size and offset of language structs here instead of letting the compiler do it.
     //     ASTStruct* astStruct = ast->createStruct("Slice");
@@ -216,22 +217,30 @@ AST *AST::Create() {
 }
 
 // VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, bool shadowPreviousVariables) {
-VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder contentOrder, Identifier** identifier) {
+VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder contentOrder, Identifier** identifier, bool* out_reused_identical = nullptr) {
     using namespace engone;
     bool shadowPreviousVariables = false;
-    auto id = addIdentifier(scopeId, name, contentOrder);
+    auto id = addIdentifier(scopeId, name, contentOrder, out_reused_identical);
     if(!id) {
         return nullptr;
     }
-    id->type = Identifier::VARIABLE;
-    id->varIndex = variables.size();
-    id->order = contentOrder;
+    VariableInfo* varinfo = nullptr;
     if(identifier)
         *identifier = id;
-    auto ptr = (VariableInfo*)allocate(sizeof(VariableInfo));
-    new(ptr)VariableInfo();
-    variables.add(ptr);
-    return ptr;
+    if(out_reused_identical && *out_reused_identical) {
+        varinfo = getVariableByIdentifier(id);
+        Assert(varinfo);
+        // If we reused identifier then it must have been a variable
+        // and it should have varinfo. Probably bug otherwise.
+    } else {
+        id->type = Identifier::VARIABLE;
+        id->varIndex = variables.size();
+        id->order = contentOrder;
+        varinfo = (VariableInfo*)allocate(sizeof(VariableInfo));
+        new(varinfo)VariableInfo();
+        variables.add(varinfo);
+    }
+    return varinfo;
 }
 VariableInfo* AST::getVariableByIdentifier(Identifier* identifier) {
     Assert(identifier && identifier->type == Identifier::VARIABLE);
@@ -245,7 +254,7 @@ VariableInfo* AST::getVariableByIdentifier(Identifier* identifier) {
 //     return variables[identifier->varIndex];
 // }
 // Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
-Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, ContentOrder contentOrder) {
+Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, ContentOrder contentOrder, bool* out_reused_identical) {
     using namespace engone;
     bool shadowPreviousIdentifiers = false;
     ScopeInfo* si = getScope(scopeId);
@@ -253,7 +262,16 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, ContentOrder 
         return nullptr;
     std::string sName = std::string(name); // string view?
     auto pair = si->identifierMap.find(sName);
-    if (pair != si->identifierMap.end() && !shadowPreviousIdentifiers){
+    if (pair != si->identifierMap.end()){
+        if(out_reused_identical) {
+            if(scopeId == pair->second.scopeId
+            && contentOrder == pair->second.order
+            && name == pair->second.name
+            && pair->second.type == Identifier::VARIABLE) { // we can only reuse variable identifiers, not function identifiers
+                *out_reused_identical = true;
+                return &pair->second;
+            }
+        }
         return nullptr;
     }
 
@@ -371,7 +389,48 @@ void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
         // Assert(("cannot remove non-existent identifier, compiler bug?",false));
     }
 }
+bool AST::findEnumMember(ScopeId scopeId, const Token& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member) {
+    Token ns={};
+    Token realName = TrimNamespace(Token(name), &ns);
+    Assert(!ns.str); // namespace stuff not implemented, see findIdentifier and convertTypeId for it's implementation
 
+    Assert(out_enum && out_member);
+
+    ScopeId nextScopeId = scopeId;
+    ContentOrder nextOrder = contentOrder;
+    WHILE_TRUE {
+        ScopeInfo* si = getScope(nextScopeId);
+        Assert(si);
+        if(si->astScope) {
+            for(auto& astEnum : si->astScope->enums) {
+                if((astEnum->rules & ASTEnum::ENCLOSED) && *out_enum != nullptr) {
+                    continue;
+                }
+                for(int i=0;i<astEnum->members.size();i++){
+                    auto& mem = astEnum->members[i];
+                    // NOTE: We still check enclosed enums because it is useful to know
+                    //  which member/enum could have matched if it wasn't enclosed when no other enum/member matches.
+                    if(mem.name == name) {
+                        *out_enum = astEnum;
+                        *out_member = i;
+                        if(astEnum->rules & ASTEnum::ENCLOSED) {
+                            break;
+                        } else {
+                            return true;
+                        }
+                    }
+                }
+            }
+        }
+        if(nextScopeId == 0 && si->parent == 0){
+            // quit when we checked global
+            break;
+        }
+        nextScopeId = si->parent;
+        nextOrder = si->contentOrder;
+    }
+    return false;
+}
 bool AST::castable(TypeId from, TypeId to){
     if (from == to)
         return true;
@@ -414,6 +473,14 @@ bool AST::castable(TypeId from, TypeId to){
     }
     if (AST::IsInteger(from) && AST::IsInteger(to)) {
         return true;
+    }
+
+    auto from_typeInfo = getTypeInfo(from);
+    int to_size = getTypeSize(to);
+    if(from_typeInfo && from_typeInfo->astEnum && AST::IsInteger(to)) {
+        // TODO: Print an error that says big enums can't be casted to small integers.
+        if(to_size >= from_typeInfo->_size)
+            return true;
     }
 
     return false;
@@ -811,35 +878,41 @@ void AST::appendToMainBody(ASTScope *body) {
 ASTScope *AST::createBody() {
     auto ptr = (ASTScope *)allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
+    ptr->nodeId = getNextNodeId();
     ptr->isNamespace = false;
     return ptr;
 }
 ASTStatement *AST::createStatement(ASTStatement::Type type) {
     auto ptr = (ASTStatement *)allocate(sizeof(ASTStatement));
     new(ptr) ASTStatement();
+    ptr->nodeId = getNextNodeId();
     ptr->type = type;
     return ptr;
 }
 ASTStruct *AST::createStruct(const Token &name) {
     auto ptr = (ASTStruct *)allocate(sizeof(ASTStruct));
     new(ptr) ASTStruct();
+    ptr->nodeId = getNextNodeId();
     ptr->name = name;
     return ptr;
 }
 ASTEnum *AST::createEnum(const Token &name) {
     auto ptr = (ASTEnum *)allocate(sizeof(ASTEnum));
     new(ptr) ASTEnum();
+    ptr->nodeId = getNextNodeId();
     ptr->name = name;
     return ptr;
 }
 ASTFunction *AST::createFunction() {
     auto ptr = (ASTFunction *)allocate(sizeof(ASTFunction));
     new(ptr) ASTFunction();
+    ptr->nodeId = getNextNodeId();
     return ptr;
 }
 ASTExpression *AST::createExpression(TypeId type) {
     auto ptr = (ASTExpression *)allocate(sizeof(ASTExpression));
     new(ptr) ASTExpression();
+    ptr->nodeId = getNextNodeId();
     ptr->isValue = (u32)type.getId() < AST_PRIMITIVE_COUNT;
     ptr->typeId = type;
     return ptr;
@@ -847,6 +920,7 @@ ASTExpression *AST::createExpression(TypeId type) {
 ASTScope *AST::createNamespace(const Token& name) {
     auto ptr = (ASTScope *)allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
+    ptr->nodeId = getNextNodeId();
     ptr->isNamespace = true;
     ptr->name = (std::string*)allocate(sizeof(std::string));
     new(ptr->name)std::string(name);
@@ -1020,11 +1094,12 @@ void AST::cleanup() {
     linearAllocationMax = 0;
     linearAllocationUsed = 0;
 }
-ScopeInfo* AST::createScope(ScopeId parentScope, ContentOrder contentOrder) {
+ScopeInfo* AST::createScope(ScopeId parentScope, ContentOrder contentOrder, ASTScope* astScope) {
     auto ptr = (ScopeInfo *)allocate(sizeof(ScopeInfo));
     new(ptr) ScopeInfo{(u32)_scopeInfos.size()};
     ptr->parent = parentScope;
     ptr->contentOrder = contentOrder;
+    ptr->astScope = astScope;
     // engone::log::out << "Order: "<<contentOrder<<"\n";
     _scopeInfos.add(ptr);
     return ptr;
@@ -1402,14 +1477,14 @@ TypeInfo *AST::getBaseTypeInfo(TypeId id) {
     return _typeInfos[id.getId()];
 }
 TypeInfo *AST::getTypeInfo(TypeId id) {
+    // These if checks have caught many mistakes.
+    // Do not remove them. Explicitly use TypeId.baseType() to get the type info.
     if(!id.isValid())
         return nullptr;
-    if(!id.isNormalType()) {
-        // Assert(id.isNormalType());
+    if(!id.isNormalType())
         return nullptr;
-    }
-    // Assert(id.isNormalType());
-    if(id.getId() >= _typeInfos.size()) return nullptr;
+    if(id.getId() >= _typeInfos.size())
+        return nullptr;
     return _typeInfos[id.getId()];
 }
 void ScopeInfo::print(AST* ast) {
@@ -1631,9 +1706,9 @@ u32 TypeInfo::alignedSize() {
     return _size > 8 ? 8 : _size;
 }
 Token AST::TrimNamespace(Token typeString, Token* outNamespace){
+    if(outNamespace)
+        *outNamespace = {};
     if(!typeString.str || typeString.length < 3) {
-        if(outNamespace)           
-           *outNamespace = {};
         return typeString;
     }
     // TODO: Line and column is ignored but it should also be separated properly.

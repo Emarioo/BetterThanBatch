@@ -62,6 +62,7 @@ void PrintHead(engone::log::Color color, const Token& token, const StringBuilder
 
 void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
 void PrintCode(const Token& token, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
+void PrintCode(const TokenRange& tokenRange, const char* message, TokenStream** prevStream);
 
 void PrintExample(int line, const StringBuilder& stringBuilder);
 
