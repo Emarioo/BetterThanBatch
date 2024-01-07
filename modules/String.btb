@@ -104,6 +104,18 @@ struct StringBuilder {
 
 fn @intrinsic strlen(str: char*) -> u32;
 
+operator ==(a: Slice<char>, b: Slice<char>) -> bool {
+    if a.len != b.len  return false;
+    for a
+        if it != b.ptr[nr]
+            return false;
+    return true;
+}
+// TODO: Inline
+operator !=(a: Slice<char>, b: Slice<char>) -> bool {
+    return !(a == b);
+}
+
 // Returns the amount of written bytes
 // Will put a null termination at the end of the written bytes
 fn @hide swrite_unsafe(buffer: char*, slice: char[]) -> u32 {

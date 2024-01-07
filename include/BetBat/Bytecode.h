@@ -16,6 +16,8 @@
 //     BCO_MOV_RM_DISP32 = 3,
 //     BCO_MOV_MR = 4,
 //     BCO_MOV_MR_DISP32 = 5,
+
+        // NOP?
     
 //     BCO_MOD = 10, // control, op1, op2
 //     BCO_ADD = 11, // control, op1, op2
@@ -117,6 +119,8 @@ enum BCInstruction : u8{
     BC_MOV_RM_DISP32 = 3,
     BC_MOV_MR = 4,
     BC_MOV_MR_DISP32 = 5,
+
+    BC_NOP = 6,
 
     #define ARITHMETIC_UINT 0
     #define ARITHMETIC_SINT 1
@@ -369,6 +373,7 @@ struct Bytecode {
     void cleanup();
     
     uint32 getMemoryUsage();
+
     
     // struct Register {
     //     bool inUse = false;
@@ -402,10 +407,10 @@ struct Bytecode {
     struct Dump {
         bool dumpBytecode = false;
         bool dumpAsm = false;
-        int startIndex = 0;
-        int endIndex = 0;
-        int startIndexAsm = 0;
-        int endIndexAsm = 0;
+        int bc_startIndex = 0;
+        int bc_endIndex = 0;
+        int asm_startIndex = 0;
+        int asm_endIndex = 0;
         std::string description;
     };
     DynamicArray<Dump> debugDumps;
@@ -442,6 +447,12 @@ struct Bytecode {
     DynamicArray<ExternalRelocation> externalRelocations;
     void addExternalRelocation(const std::string& name,  u32 location);
 
+    // struct PtrDataRelocation {
+    //     u32 referer_dataOffset;
+    //     u32 target_dataOffset;
+    // };
+    // DynamicArray<PtrDataRelocation> ptrDataRelocations;
+
     // struct Symbol {
     //     std::string name;
     //     u32 bcIndex=0;
@@ -465,6 +476,10 @@ struct Bytecode {
     // data may be nullptr which will give you space with zero-initialized data.
     int appendData(const void* data, int size);
     void ensureAlignmentInData(int alignment);
+    // returns offset into data, also sets out_ptr which is a DANGEROUS pointer that may be invalidated.
+    // write to it before calling appendData again!
+
+    // int appendData_late(void** out_ptr, int size);
 
     void printInstruction(u32 index, bool printImmediates);
     // Returns the number of immediates an instruction uses.

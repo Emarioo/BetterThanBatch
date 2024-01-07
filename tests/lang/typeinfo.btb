@@ -1,0 +1,49 @@
+@TEST_CASE(base_typeinfo)
+
+#import "Lang"
+#import "String"
+// #import "Logger"
+
+// TODO: How do we test type information?
+//  Check that the names aren't corrupt with odd characters?
+//  Create some types and make sure they exist in the type array?
+
+enum Flavour : u16 {
+    STRAWBERRY,
+    CHICKEN,
+    CHOCOLATE,
+}
+
+struct Milkshake {
+    temperature: f32;
+    flavour: Flavour;
+    size: i32;
+}
+
+found_enum := false;
+found_struct := false;
+
+strs := lang_strings.ptr;
+
+for @ptr lang_typeInfos {
+    if !it.type  continue; // some types are NONE
+
+    name := Slice<char>{&lang_strings.ptr[it.name.beg], it.name.end-it.name.beg};
+    
+    // _print(lang_TypeId{nr}) printc('\n')
+    // _print(it); printc('\n')
+    // log(name)
+    // prints(name) printc('\n')
+
+    if name == "Milkshake" {
+        found_struct = true;
+        test 12; it.size;
+        test 3; it.members.end - it.members.beg;
+    } else if name == "Flavour" {
+        found_enum = true;
+        test 2; it.size;
+    }
+}
+
+test true; found_enum;
+test true; found_struct;

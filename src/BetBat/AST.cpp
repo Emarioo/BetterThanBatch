@@ -68,6 +68,7 @@ const char* prim_op_names[]{
     "ast_asm",     // AST_ASM
     "ast_sizeof",   // AST_SIZEOF
     "ast_nameof",   // AST_NAMEOF
+    "ast_typeid",   // AST_NAMEOF
     
 // OPERATIONS
      "+",                   // AST_ADD, AST_PRIMITIVE_COUNT
@@ -193,6 +194,7 @@ AST *AST::Create() {
     ADD(AST_ID,0);
     ADD(AST_SIZEOF,0);
     ADD(AST_NAMEOF,0);
+    ADD(AST_TYPEID,0);
     ADD(AST_FNCALL,0);
     #undef ADD
     // {
@@ -479,7 +481,7 @@ bool AST::castable(TypeId from, TypeId to){
     int to_size = getTypeSize(to);
     if(from_typeInfo && from_typeInfo->astEnum && AST::IsInteger(to)) {
         // TODO: Print an error that says big enums can't be casted to small integers.
-        if(to_size >= from_typeInfo->_size)
+        if(to_size >= from_typeInfo->getSize())
             return true;
     }
 
@@ -823,8 +825,8 @@ void AST::appendToMainBody(ASTScope *body) {
     // engone::log::out << engone::log::RED << "Content order is ruined in appendToMainBody\n";
 
     // How do we maintain it.
-    // Content order of all child scopes must recalculated
-    // Content order of existing children don't need to be recalculated
+    // Content order of existing children don't need to be recalculated.
+    // Content order of all child scopes must recalculated.
 
     for(auto it : body->content) {
         switch(it.spotType) {
@@ -842,6 +844,10 @@ void AST::appendToMainBody(ASTScope *body) {
         }
         case ASTScope::STATEMENT: {
             mainBody->add(this, body->statements[it.index]);
+            // if(body->statements[it.index]->globalAssignment) {
+            //     mainBody->add_at(this, body->statements[it.index], CONTENT_ORDER_ZERO);
+            // } else {
+            // }
             break; 
         }
         case ASTScope::NAMESPACE: {
@@ -856,6 +862,7 @@ void AST::appendToMainBody(ASTScope *body) {
     body->functions.cleanup();
     body->statements.cleanup();
     body->namespaces.cleanup();
+    body->content.cleanup();
     // #define _ADD(X) for(auto it : body->X) { mainBody->add(this, it); } body->X.cleanup();
     // _ADD(enums)
     // _ADD(functions)
@@ -950,6 +957,32 @@ void ASTScope::add(AST* ast, ASTStatement *astStatement) {
         ast->getScope(it.caseBody->scopeId)->contentOrder = content.size()-1;
     }
 }
+// void ASTScope::add_at(AST* ast, ASTStatement *astStatement, ContentOrder contentOrder) {
+//     TAIL_ADD(statements, astStatement)
+    
+//     // if(contentOrder == CONTENT_ORDER_ZERO) {
+//     //     // nocheckin, This is used to put globals at the beginning and making sure they are checked
+//     //     // first. This was the easiest way to implement that but probably not the best.
+//     //     // This is only used for the root scope or wherever you appendToMainBody.
+//     //     content.add({});
+//     //     memmove(content.data() + 1, content.data(), (content.size()-1) * sizeof(Spot));
+//     //     content[0] = {STATEMENT, statements.size()-1};
+//     // } else {
+//     //     Assert(("ASTScope::add_at, contentOrder must be zero, incomplete",false));
+//     // }
+//     content.add({STATEMENT, statements.size() -1 });
+
+//     if(astStatement->firstBody) {
+//         ast->getScope(astStatement->firstBody->scopeId)->contentOrder = content.size()-1;
+//     }
+//     if(astStatement->secondBody) {
+//         ast->getScope(astStatement->secondBody->scopeId)->contentOrder = content.size()-1;
+//     }
+//     FOR(astStatement->switchCases) {
+//         // nocheckin IMPORTANT: Will this work, the switch case scopes having the same order?
+//         ast->getScope(it.caseBody->scopeId)->contentOrder = content.size()-1;
+//     }
+// }
 void ASTScope::add(AST* ast, ASTStruct *astStruct) {
     TAIL_ADD(structs, astStruct)
     content.add({STRUCT, structs.size()-1});
@@ -2353,6 +2386,10 @@ void ASTExpression::print(AST *ast, int depth) {
         else if(typeId == AST_STRING)
             log::out <<name;
         else if(typeId == AST_SIZEOF)
+            log::out << name;
+        else if(typeId == AST_NAMEOF)
+            log::out << name;
+        else if(typeId == AST_TYPEID)
             log::out << name;
         else if(typeId == AST_ASM)
             log::out << "?";

@@ -28,6 +28,8 @@ struct ObjectFile {
     // So you must specify your wanted offset value at the relocation with COFF
     // but also pass it as an argument of ELF.
     enum RelocationType : u16 {
+        // RELOC_PTR,
+
         // Windows x64, COFF
         RELOCA_ADDR64,
         RELOCA_SECREL,
@@ -116,6 +118,7 @@ struct ObjectFile {
     int findSymbol(const std::string& name);
     void addRelocation(SectionNr sectionNr, RelocationType type, u32 offset, u32 symbolIndex, u32 addend);
     void addRelocation_data(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2);
+    // void addRelocation_ptr(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2);
     // writes file based on objType from init
     bool writeFile(const std::string& path);
 

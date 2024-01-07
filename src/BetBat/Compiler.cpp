@@ -1954,7 +1954,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
         }
         if(dump.dumpBytecode) {
-            for(int j=dump.startIndex;j<dump.endIndex;j++){
+            for(int j=dump.bc_startIndex;j<dump.bc_endIndex;j++){
                 log::out << " ";
                 bytecode->printInstruction(j, true);
                 u8 immCount = bytecode->immediatesOfInstruction(j);
@@ -1968,10 +1968,10 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             bool yes = false;
             switch(options->target){
             case TARGET_WINDOWS_x64:
-                yes = FileCOFF::WriteFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                yes = FileCOFF::WriteFile(DUMP_ASM_OBJ, program, dump.asm_startIndex, dump.asm_endIndex);
                 break;
             case TARGET_UNIX_x64:
-                yes = FileELF::WriteFile(DUMP_ASM_OBJ, program, dump.startIndexAsm, dump.endIndexAsm);
+                yes = FileELF::WriteFile(DUMP_ASM_OBJ, program, dump.asm_startIndex, dump.asm_endIndex);
                 break;
             default:
                 Assert(false);

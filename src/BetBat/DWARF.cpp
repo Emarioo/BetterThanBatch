@@ -315,6 +315,16 @@ namespace dwarf {
                         WRITE_LEB(0); // end of members in structure
 
                         *sibling_ref4 = stream->getWriteHead() - offset_section;
+                    } else if(typeInfo->astEnum) {
+                        log::out << " enum\n";
+
+                        allType.reference[0] = stream->getWriteHead() - offset_section;
+                        WRITE_LEB(abbrev_base_type)
+                        
+                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        stream->write1(typeInfo->getSize()); // size
+                        stream->write1(DW_ATE_unsigned); // encoding (1 byte)
+                        
                     } else {
                         Assert(queuedType.getId() < AST_TRUE_PRIMITIVES);
                         // other type

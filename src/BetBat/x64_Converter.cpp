@@ -1284,6 +1284,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 }
                 break;
             }
+            case BC_NOP: {
+                prog->add(OPCODE_NOP);
+                break;
+            }
             break; case BC_ADDI: {
                 Assert(op0 == op2 || op1 == op2);
                 u8 op01 = op0 == op2 ? op1 : op0;
@@ -1774,43 +1778,75 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             case BC_GTE: {
                 u8 type = op0;
 
-                u8 reg1 = BCToProgramReg(op1,0xF);
-                u8 reg2 = BCToProgramReg(op2,0xF);
                 u8 size1 = DECODE_REG_SIZE(op1);
                 u8 size2 = DECODE_REG_SIZE(op2);
                 
+                // NOTE: I was about to make R registers available for this instruction
+                //  But then I realized it wasn't necessary. The code disabled with "newstuff"
+                //  has not been tested. But if you need R registers in the future then most of
+                //  it has been implemented.
+
+                u8 prefix_op1 = 0;
+                u8 prefix_op2 = 0;
+                // #define newstuff
+                #ifdef newstuff
+                u8 reg1 = BCToProgramReg(op1,0xF, false, true);
+                u8 reg2 = BCToProgramReg(op2,0xF, false, true);
+                bool extend_op1 = IS_REG_RX(op1);
+                bool extend_op2 = IS_REG_RX(op2);
+                if(extend_op1)
+                    prefix_op1 = PREFIX_REXB | PREFIX_REXR;
+                if(extend_op2)
+                    prefix_op2 = PREFIX_REXB | PREFIX_REXR;
+                #else
+                u8 reg1 = BCToProgramReg(op1,0xF);
+                u8 reg2 = BCToProgramReg(op2,0xF);
+                #endif
+
                 if(size1>size2){
                     if(size2==1) {
-                        prog->add(PREFIX_REXW);
+                        prog->add((u8)(PREFIX_REXW | prefix_op2));
                         prog->add2(OPCODE_2_MOVSX_REG_RM8); // DON'T SIGN EXTEND IF UNSIGNED!
                         prog->addModRM(MODE_REG, reg2, reg2);
                     } else if(size2==2) {
-                        prog->add(PREFIX_REXW);
+                        prog->add((u8)(PREFIX_REXW | prefix_op2));
                         prog->add2(OPCODE_2_MOVSX_REG_RM16);
                         prog->addModRM(MODE_REG, reg2, reg2);
                     } else if(size2==4) {
-                        prog->add(PREFIX_REXW);
+                        prog->add((u8)(PREFIX_REXW| prefix_op2));
                         prog->add(OPCODE_MOVSXD_REG_RM);
                         prog->addModRM(MODE_REG, reg2, reg2);
                     }
                 }else if(size2>size1) {
                     if(size1==1) {
-                        prog->add(PREFIX_REXW);
+                        prog->add((u8)(PREFIX_REXW| prefix_op1));
                         prog->add2(OPCODE_2_MOVSX_REG_RM8);
                         prog->addModRM(MODE_REG, reg1, reg1);
                     } else if(size1==2) {
-                        prog->add(PREFIX_REXW);
+                        prog->add((u8)(PREFIX_REXW| prefix_op1));
                         prog->add2(OPCODE_2_MOVSX_REG_RM16);
                         prog->addModRM(MODE_REG, reg1, reg1);\
                     } else if(size1==4) {
-                        prog->add(PREFIX_REXW);
+                        prog->add((u8)(PREFIX_REXW| prefix_op1));
                         prog->add(OPCODE_MOVSXD_REG_RM);
                         prog->addModRM(MODE_REG, reg1, reg1);
                     }
                 }
+                #ifdef newstuff
+                u8 prefix = 0;
+                if(size1 == 8 || size2 == 8)
+                    prefix |= PREFIX_REXW;
+                if(extend_op1)
+                    prefix |= PREFIX_REXR;
+                if(extend_op2)
+                    prefix |= PREFIX_REXB;
+
+                if(prefix!=0)
+                    prog->add(prefix);
+#else
                 if(size1 == 8 || size2 == 8)
                     prog->add(PREFIX_REXW);
-
+                #endif
                 prog->add(OPCODE_CMP_REG_RM);
                 prog->addModRM(MODE_REG, reg1, reg2);
 
@@ -1882,12 +1918,27 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         break;
                     }
                 }
-
+                #ifdef newstuff
+                prefix = 0;
+                if(extend_op2)
+                    prefix |= PREFIX_REXB;
+                if(prefix!=0)
+                    prog->add(prefix);
+#endif
                 Assert(setType!=0);
                 prog->add2(setType);
                 prog->addModRM(MODE_REG, 0, reg2);
+      #ifdef newstuff          
+                prefix = 0;
                 if(size2 == 8)
-                    prog->add(PREFIX_REXW);
+                    prefix |= PREFIX_REXW;
+                if(extend_op2)
+                    prefix |= PREFIX_REXB | PREFIX_REXR;
+                if(prefix!=0)
+                    prog->add(prefix);
+#else
+                prog->add(PREFIX_REXW);
+                #endif
                 prog->add2(OPCODE_2_MOVZX_REG_RM8);
                 prog->addModRM(MODE_REG, reg2, reg2);
                 break;
@@ -2274,10 +2325,19 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // TODO: Replace with a better instruction? If there is one.
                 u8 size = DECODE_REG_SIZE(op0);
 
+                bool extend_op0 = IS_REG_RX(op0);
+
+                u8 reg0 = BCToProgramReg(op0,0xF, false, true);
+
+                u8 prefix = 0;
                 if(size==8)
-                    prog->add(PREFIX_REXW);
+                    prefix |= PREFIX_REXW;
+                if(extend_op0)
+                    prefix |= PREFIX_REXB;
+                if(prefix!=0)
+                    prog->add(prefix);
                 prog->add(OPCODE_CMP_RM_IMM8_SLASH_7);
-                prog->addModRM(MODE_REG, 7, BCToProgramReg(op0,0xF));
+                prog->addModRM(MODE_REG, 7, reg0);
                 prog->add((u8)0);
                 
                 // I know, it's kind of funny that we use JE when the bytecode instruction is JNE
@@ -3465,7 +3525,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 #endif
                 break;
             }
-            break; case BC_MEMZERO: {
+            case BC_MEMZERO: {
+                // The operands we supplied will be modified. SP, FP should not be modified like we do in memzero.
+                Assert(op0 != BC_REG_SP && op0 != BC_REG_FP && op1 != BC_REG_SP && op1 != BC_REG_FP);
+
                 // Assert(op0 == BC_REG_RDI && op1 == BC_REG_RBX);
                 // here so you can turn it off.
                 // Some time later...
@@ -3473,17 +3536,90 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // You gotta take care of your mess because I wasted time
                 // wondering what's going on!
                 // You should have put a log message or something
+                // #ifdef gone
+                u8 batch_size = op2;
+                if(batch_size == 0)
+                    batch_size = 1;
 
-                if(op0 != BC_REG_RDI) {
+                u8 reg_cur = BCToProgramReg(op0,8);
+                u8 reg_fin = BCToProgramReg(op1,8);
+
+                prog->add(PREFIX_REXW);
+                prog->add(OPCODE_ADD_RM_REG);
+                prog->addModRM(MODE_REG, reg_cur, reg_fin);
+
+                int offset_loop = prog->size();
+
+                prog->add(PREFIX_REXW);
+                prog->add(OPCODE_CMP_REG_RM);
+                prog->addModRM(MODE_REG, reg_fin, reg_cur);
+
+                prog->add(OPCODE_JE_IMM8);
+                int offset_jmp_imm = prog->size();
+                prog->add((u8)0);
+
+                switch(batch_size) {
+                case 1:
+                    prog->add(OPCODE_MOV_RM_IMM8_SLASH_0);
+                    break;
+                case 2:
+                    Assert(("Memzero conversion incomplete for 2-byte batch size",false));
+                    break;
+                case 4:
+                    prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    break;
+                case 8:
                     prog->add(PREFIX_REXW);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM(MODE_REG, REG_DI, BCToProgramReg(op0,8));
+                    prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    break;
+                default: Assert(false);
                 }
-                if(op1 != BC_REG_RBX) {
-                    prog->add(PREFIX_REXW);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM(MODE_REG, REG_B, BCToProgramReg(op1,8));
+
+                if(reg_cur == REG_BP || reg_cur == REG_SP) {
+                    prog->addModRM_SIB(MODE_DEREF, 0, SIB_SCALE_1, SIB_INDEX_NONE, reg_cur);
+                } else {
+                    prog->addModRM(MODE_DEREF, 0, reg_cur);
                 }
+
+                switch(batch_size) {
+                case 1:
+                    prog->add((u8)0);
+                    break;
+                case 2:
+                    Assert(("Memzero conversion incomplete for 2-byte batch size",false));
+                    break;
+                case 4:
+                    prog->add4((u32)0);
+                    break;
+                case 8:
+                    prog->add4((u32)0);
+                    break;
+                default: Assert(false);
+                }
+
+                prog->add(PREFIX_REXW);
+                prog->add(OPCODE_ADD_RM_IMM8_SLASH_0);
+                prog->addModRM(MODE_REG, 0, reg_cur);
+                prog->add((u8)batch_size);
+
+                prog->add(OPCODE_JMP_IMM8);
+                prog->add((u8)(offset_loop - (prog->size()+1)));
+
+                prog->set(offset_jmp_imm, (u8)(prog->size() - (offset_jmp_imm + 1)));
+                // #endif
+
+                // if(op0 != BC_REG_RDI) {
+                //     prog->add(PREFIX_REXW);
+                //     prog->add(OPCODE_MOV_REG_RM);
+                //     prog->addModRM(MODE_REG, REG_DI, BCToProgramReg(op0,8));
+                // }
+                // if(op1 != BC_REG_RBX) {
+                //     prog->add(PREFIX_REXW);
+                //     prog->add(OPCODE_MOV_REG_RM);
+                //     prog->addModRM(MODE_REG, REG_B, BCToProgramReg(op1,8));
+                // }
+
+
                 /*
                     0:  48 01 fb                add    rbx,rdi
                     3:  48 39 df                cmp    rdi,rbx
@@ -3493,26 +3629,9 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     e:  eb f3                   jmp    0x3
                 */
                 // you might want this to be a function
-                u8 arr[] = { 0x48, 0x01, 0xFB, 0x48, 0x39, 0xDF, 0x74, 0x08, 0xC6, 0x07, 0x00, 0x48, 0xFF, 0xC7, 0xEB, 0xF3 };
-                prog->addRaw(arr, sizeof(arr));
+                // u8 arr[] = { 0x48, 0x01, 0xFB, 0x48, 0x39, 0xDF, 0x74, 0x08, 0xC6, 0x07, 0x00, 0x48, 0xFF, 0xC7, 0xEB, 0xF3 };
+                // prog->addRaw(arr, sizeof(arr));
 
-                // I begun by writing it by hand like this but this is annoying so I wrote it in
-                // x64 assembly instead and then used a encoder to get the bytes.
-                // Keep this in case I change my mind.
-                /*
-                prog->add(PREFIX_REXW);
-                prog->add(OPCODE_ADD_REG_RM);
-                prog->addModRM(MODE_REG, REG_B, REG_DI);
-
-                int loopAddress = prog->size();
-                prog->add(PREFIX_REXW);
-                prog->add(OPCODE_CMP_REG_RM);
-                prog->addModRM(MODE_REG, REG_B, REG_DI);
-
-                prog->add(OPCODE_JE_IMM8);
-                prog->add()
-                */
-                
                 break;
             }
             break; case BC_MEMCPY: {
@@ -3775,6 +3894,11 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             // confusing.
         }
     }
+
+    // Assert(sizeof(Bytecode::PtrDataRelocation) == sizeof(Program_x64::PtrDataRelocation));
+    // prog->ptrDataRelocations.resize(bytecode->ptrDataRelocations.size());
+    // memcpy(prog->ptrDataRelocations.data(), bytecode->ptrDataRelocations.data(), bytecode->ptrDataRelocations.size() * sizeof(Bytecode::PtrDataRelocation));
+
     // FP pop is generated by the bytecode generator
     // prog->add(OPCODE_POP_RM_SLASH_0);
     // prog->addModRM(MODE_REG,0,REG_BP);
@@ -3818,8 +3942,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     for(int i=0;i<bytecode->debugDumps.size();i++){
         Bytecode::Dump& dump = bytecode->debugDumps[i];
         if(dump.dumpAsm) {
-            dump.startIndexAsm = addressTranslation[dump.startIndex];
-            dump.endIndexAsm = addressTranslation[dump.endIndex];
+            dump.asm_startIndex = addressTranslation[dump.bc_startIndex];
+            dump.asm_endIndex = addressTranslation[dump.bc_endIndex];
         }
     }
     

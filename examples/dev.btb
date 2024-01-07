@@ -1,24 +1,3 @@
-// #import "OS"
-// #import "Basic"
-// #import "String"
-// #import "Math"
-
-// #import "macros"
-// #import "macro-bench"
-// #import "overloading"
-// #import "defer"
-// #import "dir-iterator"
-// #import "random/operator"
-// #import "threads"
-// #import "linecounter"
-// #import "graphics/quad.btb"
-// #import "graphics/perf.btb"
-
-// #import "Array"
-// #import "unix/threads"
-// #import "Thread"
-// #import "Unix"
-// #import "Logger"
 // // #import "OS"
 
 // // fn @import @unixcall StartMeasure() -> u64;
@@ -31,7 +10,6 @@
 //     tv_nsec: u32;
 // }
 // fn @import @unixcall clock_gettime(clk_id: i32, tp: timespec*) -> i32;
-
 // fn @intrinsic rdtsc() -> u64;
 
 
@@ -54,66 +32,15 @@
 // HELLO! NEXT STEP, fix profiling of time
 // StartMeasure/StopMeasure didn't work before, do they now?
 
-#import "examples/binary_viewer/main.btb"
-// #import "bug.btb"
-// #import "Lexer"
+#import "Lang"
+#import "Logger"
 
-// stream := LexFile("examples/binary_viewer/sample.txt");
+for @ptr type : lang_typeInfos {
+    if !type.type  continue;
 
-// stream.print();
+    // log(type)
 
+    // _print(lang_strings.ptr[type.name.beg])
 
-// struct Okay {
-
-// }
-
-// typeid(Okay)
-
-// a := 9
-
-// fn many() -> i32, i32 { return 0, 3 }
-// a, b := many()
-
-// #import "Logger"
-
-
-
-// hi := 9
-
-// log(hi);
-
-// fn @okay(a: i32) {
-
-
-// }
-
-// a := 0
-
-// if 1 {
-//     a = 9
-// }
-
-// switch a {
-//     case 0:
-//         a = 1
-//     case:
-//         a = -1
-// }
-
-// a
-
-// #import "OS"
-// #import "Logger"
-
-// ptr = Allocate(16)
-// newPtr = Reallocate(ptr, 16, 17);
-
-// log(cast<u64>ptr, cast<u64>newPtr)
-
-// #import "OS"
-// #import "Logger"
-
-// #import "Array"
-
-// arr: DynamicArray<i32>;
-// arr.add(4)
+    log(lang_TypeId{nr})
+}

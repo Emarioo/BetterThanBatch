@@ -4,6 +4,8 @@
 #include "BetBat/Bytecode.h"
 #include "BetBat/PhaseContext.h"
 
+#include "BetBat/Lang.h"
+
 struct CompileInfo;
 struct GenInfo;
 struct GenInfo : public PhaseContext {
@@ -88,6 +90,15 @@ struct GenInfo : public PhaseContext {
     // FunctionScope* getFunctionScope(int index=-1);
     int currentFrameOffset = 0;
     // int functionStackMoment = 0;    
+
+    #define VAR_INFOS 0
+    #define VAR_MEMBERS 1
+    #define VAR_STRINGS 2
+    #define VAR_COUNT 3
+    VariableInfo* varInfos[VAR_COUNT];
+    int dataOffset_types = -1;
+    int dataOffset_members = -1;
+    int dataOffset_strings = -1;
 
     static const int FRAME_SIZE=16; // pc, fp
     // what the relative stack pointer should be right after a funtion call.

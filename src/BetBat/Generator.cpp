@@ -256,7 +256,7 @@ void GenInfo::addPop(int reg) {
     int size = DECODE_REG_SIZE(reg);
     if (size == 0 ) { // we don't print if we had errors since they probably caused size of 0
         if(!hasErrors()){
-            Assert(false);
+            Assert(("register had 0 zero",false));
             log::out << log::RED << "GenInfo::addPop : Cannot pop register with 0 size\n";
         }
         return;
@@ -789,7 +789,7 @@ SignalDefault GeneratePush(GenInfo& info, u8 baseReg, int offset, TypeId typeId)
     }
     return SignalDefault::SUCCESS;
 }
-
+SignalDefault GeneratePreload(GenInfo& info);
 SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope = -1);
 SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, TypeId *outTypeId, ScopeId idScope = -1);
 // pop of structs
@@ -811,7 +811,10 @@ SignalDefault GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
         _GLOG(log::out << "move return value\n";)
         u8 reg = RegBySize(BC_AX, size);
         info.addPop(reg);
-        if(baseReg!=0){ // baseReg == 0 says: "dont' care about value, just pop it"
+        if(baseReg==0) {
+            // 0 as register will just pop and ignore the value.
+            // We want this when an error occurs and we need to pop disallowed types.
+        } else {
             if(offset == 0){
                 // The x64 architecture has a special meaning when using fp.
                 // The converter asserts about using addModRM_disp32 instead. Instead of changing
@@ -832,6 +835,26 @@ SignalDefault GeneratePop(GenInfo& info, u8 baseReg, int offset, TypeId typeId){
         }
     }    
     return SignalDefault::SUCCESS;
+}
+void GenMemzero(GenInfo& info, u8 ptr_reg, u8 size_reg, int size) {
+    if(size <= 8) {
+        Assert(size == 1 || size == 2 || size == 4 || size == 8);
+        info.addInstruction({BC_BXOR, size_reg, size_reg, size_reg});
+        info.addInstruction({BC_MOV_RM,size_reg,ptr_reg,(u8)size});
+    } else {
+        u8 batch = 1;
+        if(size % 8 == 0)
+            batch = 8;
+        else if(size % 4 == 0)
+            batch = 4;
+        else if(size % 2 == 0)
+            batch = 2;
+        // size = size / batch; // don't do this, see how memzero is converted
+        info.addLoadIm(size_reg, size);
+        info.addInstruction({BC_MEMZERO, ptr_reg, size_reg, batch});
+    }
+    // info.addLoadIm(size_reg, size);
+    // info.addInstruction({BC_MEMZERO, ptr_reg, size_reg, 1});
 }
 // baseReg as 0 will push default values to stack
 // non-zero as baseReg will mov default values to the pointer in baseReg
@@ -858,8 +881,9 @@ SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId
             info.addLoadIm(BC_REG_RBX, offset);
             info.addInstruction({BC_ADDI, baseReg, BC_REG_RBX, BC_REG_RDI});
         }
-        info.addLoadIm(BC_REG_RBX, size);
-        info.addInstruction({BC_MEMZERO, BC_REG_RDI, BC_REG_RBX});
+        GenMemzero(info, BC_REG_RDI, BC_REG_RBX, size);
+        // info.addLoadIm(BC_REG_RBX, size);
+        // info.addInstruction({BC_MEMZERO, BC_REG_RDI, BC_REG_RBX});
         #endif
     }
     if (typeInfo && typeInfo->astStruct) {
@@ -2170,7 +2194,43 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 
             outTypeIds->add(AST_UINT32);
             return SignalDefault::SUCCESS;
-        } else if(expression->typeId == AST_ASM){
+        } else if(expression->typeId == AST_TYPEID){
+
+            // TypeId typeId = info.ast->convertToTypeId(expression->name, idScope);
+            // Assert(typeId.isValid()); // Did type checker fix this? Maybe not on errors?
+
+            TypeId result_typeId = expression->versions_outTypeTypeid[info.currentPolyVersion];
+
+            const char* tname = "lang_TypeId";
+            TypeInfo* typeInfo = info.ast->convertToTypeInfo(Token(tname), info.ast->globalScopeId, true);
+            if(!typeInfo){
+                Assert(info.hasForeignErrors());
+                return SignalDefault::FAILURE;
+            }
+            Assert(typeInfo->getSize() == 4);
+
+            // NOTE: This is scuffed, could be a bug in the future
+            // lang::TypeId tmp={};
+            // tmp.index0 = result_typeId._infoIndex0;
+            // tmp.index1 = result_typeId._infoIndex1;
+            // tmp.ptr_level = result_typeId.pointer_level;
+
+            // info.addLoadIm(BC_REG_EAX, *(u32*)&tmp);
+            // info.addPush(BC_REG_EAX);
+            
+            // NOTE: Struct members are pushed in the opposite order
+            info.addLoadIm(BC_REG_AL, result_typeId.pointer_level);
+            info.addPush(BC_REG_AL);
+
+            info.addLoadIm(BC_REG_AL, result_typeId._infoIndex1);
+            info.addPush(BC_REG_AL);
+
+            info.addLoadIm(BC_REG_AX, result_typeId._infoIndex0);
+            info.addPush(BC_REG_AX);
+
+            outTypeIds->add(typeInfo->id);
+            return SignalDefault::SUCCESS;
+        }  else if(expression->typeId == AST_ASM){
             // TODO: How does polymorphism complicated this?
             //   You don't want duplicate inline assembly.
             if(!info.disableCodeGeneration) {
@@ -2497,6 +2557,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     return SignalDefault::SUCCESS;
                 }
             }
+            // TODO: We don't allow Apple{"Green",9}.name because initializer is not
+            //  a reference. We should allow it though.
 
             SignalDefault result = GenerateReference(info,expression,&exprId);
             if(result != SignalDefault::SUCCESS) {
@@ -3680,7 +3742,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
                 info.addLoadIm(BC_REG_RCX, funcImpl->returnSize);
                 info.addInstruction({BC_MOV_RR, BC_REG_FP, BC_REG_RBX});
                 info.addInstruction({BC_SUBI, BC_REG_RBX, BC_REG_RCX, BC_REG_RBX});
-                info.addInstruction({BC_MEMZERO, BC_REG_RBX, BC_REG_RCX});
+                GenMemzero(info, BC_REG_RBX, BC_REG_RCX, funcImpl->returnSize);
+                // info.addInstruction({BC_MEMZERO, BC_REG_RBX, BC_REG_RCX});
                 #endif
                 // info.addIncrSp(-funcImpl->returnSize);
                 info.addStackSpace(-funcImpl->returnSize);
@@ -3953,6 +4016,10 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         }
         
         dfun->codeStart = info.code->length();
+
+        if(funcImpl->name == "main") {
+            GeneratePreload(info);
+        }
         
         SignalDefault result = GenerateBody(info, function->body);
 
@@ -4154,10 +4221,11 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
     Bytecode::Dump debugDump{};
     if(body->flags & ASTNode::DUMP_ASM) {
         debugDump.dumpAsm = true;
-    } else if(body->flags & ASTNode::DUMP_BC) {
+    }
+    if(body->flags & ASTNode::DUMP_BC) {
         debugDump.dumpBytecode = true;
     }
-    debugDump.startIndex = info.code->length();
+    debugDump.bc_startIndex = info.code->length();
     
     bool codeWasDisabled = info.disableCodeGeneration;
     bool errorsWasIgnored = info.ignoreErrors;
@@ -4169,8 +4237,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
         if(debugDump.dumpAsm || debugDump.dumpBytecode) {
             debugDump.description = body->tokenRange.tokenStream()->streamName + ":"+std::to_string(body->tokenRange.firstToken.line);
             // debugDump.description = TrimDir(body->tokenRange.tokenStream()->streamName) + ":"+std::to_string(body->tokenRange.firstToken.line);
-            debugDump.endIndex = info.code->length();
-            Assert(debugDump.startIndex <= debugDump.endIndex);
+            debugDump.bc_endIndex = info.code->length();
+            Assert(debugDump.bc_startIndex <= debugDump.bc_endIndex);
             info.code->debugDumps.add(debugDump);
         }
     };
@@ -4330,15 +4398,23 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                             }
 
                             #ifndef DISABLE_ZERO_INITIALIZATION
-                            info.addLoadIm(BC_REG_RDX,arraySize);
-                            info.addInstruction({BC_MEMZERO, BC_REG_SP, BC_REG_RDX});
+                            // info.addLoadIm(BC_REG_RDX,arraySize);
+                            // info.addInstruction({BC_MEMZERO, BC_REG_SP, BC_REG_RDX});
+                            info.addInstruction({BC_MOV_RR, BC_REG_SP, BC_REG_RDI});
+                            GenMemzero(info, BC_REG_RDI, BC_REG_RBX, arraySize);
                             #endif
-                            
-                            // TODO: Annotation to disable this
-                            for(int j = 0;j<varname.arrayLength;j++) {
-                                SignalDefault result = GenerateDefaultValue(info, BC_REG_FP, arrayFrameOffset + elementSize * j, elementType);
-                                if(result!=SignalDefault::SUCCESS)
-                                    return SignalDefault::FAILURE;
+                            TypeInfo* elementInfo = info.ast->getTypeInfo(elementType);
+                            if(elementInfo->astStruct) {
+                                // TODO: Annotation to disable this
+                                // TODO: Create a loop with cmp, je, jmp instructions instead of
+                                //  "unrolling" the loop like this. We generate a lot of instructions from this.
+                                for(int j = 0;j<varname.arrayLength;j++) {
+                                    SignalDefault result = GenerateDefaultValue(info, BC_REG_FP, arrayFrameOffset + elementSize * j, elementType);
+                                    if(result!=SignalDefault::SUCCESS)
+                                        return SignalDefault::FAILURE;
+                                }
+                            } else {
+                                
                             }
                         }
                         // data type may be zero if it wasn't specified during initial assignment
@@ -4565,14 +4641,20 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             //     ERR_HEAD2(statement->expression->token) << "Expected a boolean, not '"<<TypeIdToStr(dtype)<<"'\n";
             //     continue;
             // }
-
-            // info.addInstruction({BC_POP,BC_REG_RAX});
-            // TypeInfo *typeInfo = info.ast->getTypeInfo(dtype);
+            Assert(dtype.isValid()); // We expect a good type, otherwise result should have been a failure
             u32 size = info.ast->getTypeSize(dtype);
-            if (!size) {
-                // TODO: Print error? or does generate expression do that since it gives us dtype?
+            Assert(size != 0);
+
+            if(size > 8) {
+                ERR_SECTION(
+                    ERR_HEAD(statement->firstExpression->tokenRange)
+                    ERR_MSG("The type '"<<info.ast->typeToString(dtype)<<"' in this expression was bigger than 8 bytes and can't be used in an if statement.")
+                    ERR_LINE(statement->firstExpression->tokenRange, size << " bytes is to much")
+                )
+                GeneratePop(info, 0, 0, dtype);
                 continue;
             }
+
             u8 reg = RegBySize(BC_AX, size);
 
             info.addPop(reg);
@@ -5056,6 +5138,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 info.addInstruction({BC_MOV_RM_DISP32, index_reg, BC_REG_FP, DECODE_REG_SIZE(index_reg)});
                 info.addImm(varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
+                // u8 cond_reg = BC_REG_EBX;
+                // u8 cond_reg = BC_REG_R9;
                 if(statement->isReverse()){
                     // info.code->addDebugText("For condition (reversed)\n");
                     info.addLoadIm(length_reg,-1); // length reg is not used with reversed
@@ -5087,7 +5171,6 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
                     info.addInstruction({BC_MOV_RM_DISP32, ptr_reg, BC_REG_FP, 8});
                     info.addImm(varinfo_item->versions_dataOffset[info.currentPolyVersion]);
-
                 } else {
                     if(itemsize>1){
                         info.addLoadIm(BC_REG_RAX,itemsize);
@@ -5099,10 +5182,13 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
 
                     info.addLoadIm(BC_REG_RDI,varinfo_item->versions_dataOffset[info.currentPolyVersion]);
                     info.addInstruction({BC_ADDI,BC_REG_RDI, BC_REG_FP, BC_REG_RDI});
-                    // info.code->add({BC_BNOT,BC_REG_RAX,BC_REG_RAX});
-                    info.addInstruction({BC_MOV_RR, BC_REG_RBX, BC_REG_RAX});
+                    
+                    // info.addInstruction({BC_BXOR, BC_REG_RAX, BC_REG_RAX}); // BC_MEMCPY USES AL
+                    
+                    info.addLoadIm(BC_REG_RBX,itemsize);
+                    // info.addInstruction({BC_MOV_RR, BC_REG_RAX, BC_REG_RBX}); // BC_MEMCPY USES AL
                     info.addInstruction({BC_MEMCPY,BC_REG_RDI, ptr_reg, BC_REG_RBX});
-                    // info.code->add({BC_BNOT,BC_REG_RAX,BC_REG_RAX});
+                    
 
                     // info.code->add({BC_MOV_RR, ptr_reg, BC_REG_RAX});
                     // info.code->add({BC_SUBI, BC_REG_RAX, BC_REG_RDI, BC_REG_RAX});
@@ -5429,6 +5515,35 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
     }
     return SignalDefault::SUCCESS;
 }
+SignalDefault GeneratePreload(GenInfo& info) {
+    u8 src_reg = BC_REG_RSI;
+    u8 dst_reg = BC_REG_RDI;
+    int polyVersion = 0;
+
+    if(!info.varInfos[VAR_INFOS])
+        return SignalDefault::SUCCESS;
+
+    // Take pointer of type information arrays
+    // and move into the global slices.
+    info.addInstruction({BC_DATAPTR, src_reg});
+    info.addImm(info.dataOffset_types);
+    info.addInstruction({BC_DATAPTR, dst_reg});
+    info.addImm(info.varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
+    info.addInstruction({BC_MOV_RM, src_reg, dst_reg, 8});
+    
+    info.addInstruction({BC_DATAPTR, src_reg});
+    info.addImm(info.dataOffset_members);
+    info.addInstruction({BC_DATAPTR, dst_reg});
+    info.addImm(info.varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
+    info.addInstruction({BC_MOV_RM, src_reg, dst_reg, 8});
+
+    info.addInstruction({BC_DATAPTR, src_reg});
+    info.addImm(info.dataOffset_strings);
+    info.addInstruction({BC_DATAPTR, dst_reg});
+    info.addImm(info.varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
+    info.addInstruction({BC_MOV_RM, src_reg, dst_reg, 8});
+    return SignalDefault::SUCCESS;
+}
 // Generate data from the type checker
 SignalDefault GenerateData(GenInfo& info) {
     using namespace engone;
@@ -5453,6 +5568,141 @@ SignalDefault GenerateData(GenInfo& info) {
         auto& constString = info.ast->getConstString(pair.second);
         constString.address = offset;
     }
+
+    Identifier* identifiers[VAR_COUNT]{
+        info.ast->findIdentifier(info.ast->globalScopeId, CONTENT_ORDER_MAX, "lang_typeInfos", true),
+        info.ast->findIdentifier(info.ast->globalScopeId, CONTENT_ORDER_MAX, "lang_members", true),
+        info.ast->findIdentifier(info.ast->globalScopeId, CONTENT_ORDER_MAX, "lang_strings", true),
+    };
+
+    if(identifiers[0] && identifiers[1] && identifiers[2]) {
+        FORAN(identifiers) {
+            Assert(identifiers[nr]->type == Identifier::VARIABLE);
+            info.varInfos[nr] = info.ast->getVariableByIdentifier(identifiers[nr]);
+            Assert(info.varInfos[nr] && info.varInfos[nr]->isGlobal());
+            Assert(info.varInfos[nr]->versions_dataOffset._array.size() == 1);
+        }
+
+        // TODO: Optimize, don't append the types that aren't used in the code.
+        //  Implement a feature like FuncImpl.usages
+        // TODO: Optimize in general? Many cache misses. Probably need to change the 
+        //  Type and AST structure though.
+
+        int count_types = info.ast->_typeInfos.size();
+        int count_members = 0;
+        int count_stringdata = 0;
+        for(int i=0;i<info.ast->_typeInfos.size();i++){
+            auto ti = info.ast->_typeInfos[i];
+            if(!ti)  continue;
+            count_stringdata += ti->name.length() + 1; // +1 for null termination
+            if(ti->structImpl) {
+                count_members += ti->astStruct->members.size();
+                for(int mi=0;mi<ti->astStruct->members.size();mi++){
+                    auto& mem = ti->astStruct->members[mi];
+                    count_stringdata += mem.name.length + 1; // +1 for null termination
+                }
+            }
+        }
+        info.code->ensureAlignmentInData(8); // just to be safe
+        int off_typedata   = info.code->appendData(nullptr, count_types * sizeof(lang::TypeInfo));
+        info.code->ensureAlignmentInData(8); // just to be safe
+        int off_memberdata = info.code->appendData(nullptr, count_members * sizeof(lang::TypeMember));
+        int off_stringdata = info.code->appendData(nullptr, count_stringdata);
+        
+        lang::TypeInfo* typedata = (lang::TypeInfo*)(info.code->dataSegment.data + off_typedata);
+        lang::TypeMember* memberdata = (lang::TypeMember*)(info.code->dataSegment.data + off_memberdata);
+        char* stringdata = (char*)(info.code->dataSegment.data + off_stringdata);
+
+        // TODO: Zero initialize memory? Or use '_'?
+
+        // log::out << "TypeInfo size " <<sizeof(lang::TypeInfo);
+
+        u32 string_offset = 0;
+        int member_count = 0;
+        for(int i=0;i<info.ast->_typeInfos.size();i++){
+            auto ti = info.ast->_typeInfos[i];
+            if(!ti) { 
+                typedata[i] = {}; // zero initialize
+                // typedata[i].type = lang::Primitive::NONE;
+                continue;
+            }
+
+            typedata[i].size = ti->getSize();
+            if(ti->astEnum)                      typedata[i].type = lang::Primitive::ENUM;
+            else if(ti->astStruct)               typedata[i].type = lang::Primitive::STRUCT;
+            else if(AST::IsDecimal(ti->id))      typedata[i].type = lang::Primitive::DECIMAL;
+            else if(AST::IsInteger(ti->id)) {    
+                if(AST::IsSigned(ti->id))        typedata[i].type = lang::Primitive::SIGNED_INT;
+                else                             typedata[i].type = lang::Primitive::UNSIGNED_INT;
+            } else if(ti->id == AST_CHAR)        typedata[i].type = lang::Primitive::CHAR;
+            else if(ti->id == AST_BOOL)          typedata[i].type = lang::Primitive::BOOL;
+            else typedata[i].type = lang::Primitive::NONE; // compiler specific type like ast_typeid or ast_string, ast_fncall
+            
+            typedata[i].name.beg = string_offset;
+            // The order of beg, end matters. string_offset is at beginning now
+            strncpy(stringdata + string_offset, ti->name.c_str(), ti->name.length() + 1);
+            string_offset += ti->name.length() + 1;
+            // Now string_offset is at end. DON'T MOVE AROUND THE LINES!
+            typedata[i].name.end = string_offset - 1; // -1 won't include null termination
+            typedata[i].members.beg = 0; // set later
+            typedata[i].members.end = 0;
+
+            if(ti->structImpl) {
+                typedata[i].members.beg = member_count;
+
+                for(int mi=0;mi<ti->structImpl->members.size();mi++){
+                    auto& mem = ti->structImpl->members[mi];
+                    auto& ast_mem = ti->astStruct->members[mi];
+
+                    memberdata[member_count].name.beg = string_offset;
+
+                    memcpy(stringdata + string_offset, ast_mem.name.str, ast_mem.name.length);
+                    stringdata[string_offset + ast_mem.name.length] = '\0';
+                    string_offset += ast_mem.name.length + 1;
+
+                    memberdata[member_count].name.end = string_offset - 1; // -1 won't include null termination
+
+                    // TODO: Enum member
+
+                    memberdata[member_count].type.index0 = mem.typeId._infoIndex0;
+                    memberdata[member_count].type.index1 = mem.typeId._infoIndex1;
+                    memberdata[member_count].type.ptr_level = mem.typeId.getPointerLevel();
+                    memberdata[member_count].offset = mem.offset;
+
+                    member_count++;
+                }
+                typedata[i].members.end = member_count;
+            }
+        }
+        Assert(string_offset == count_stringdata && count_members == member_count);
+
+        // TODO: Assert that the variables are of the right type
+
+        int polyVersion = 0;
+
+        lang::Slice* slice_types = (lang::Slice*)(info.code->dataSegment.data + info.varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
+        lang::Slice* slice_members = (lang::Slice*)(info.code->dataSegment.data + info.varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
+        lang::Slice* slice_strings = (lang::Slice*)(info.code->dataSegment.data + info.varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
+        slice_types->len = count_types;
+        slice_members->len = count_members;
+        slice_strings->len = count_stringdata;
+        info.dataOffset_types = off_typedata;
+        info.dataOffset_members = off_memberdata;
+        info.dataOffset_strings = off_stringdata;
+        // log::out << "types "<<count_types<<", members "<<count_members << ", strings "<<count_stringdata <<"\n";
+
+        // This is scrap
+        // info.code->ptrDataRelocations.add({
+        //     (u32)varInfos[VAR_INFOS]->versions_dataOffset[polyVersion],
+        //     (u32)off_typedata});
+        // info.code->ptrDataRelocations.add({
+        //     (u32)varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion],
+        //     (u32)off_memberdata});
+        // info.code->ptrDataRelocations.add({
+        //     (u32)varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion],
+        //     (u32)off_stringdata});
+    }
+
     return SignalDefault::SUCCESS;
 }
 
@@ -5546,6 +5796,8 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         
         dfun->codeStart = info.code->length();
         dfun->entry_line = info.ast->mainBody->tokenRange.firstToken.line;
+
+        GeneratePreload(info);
 
         // TODO: What to do about result? nothing?
         result = GenerateBody(info, info.ast->mainBody);

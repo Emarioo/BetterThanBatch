@@ -8,6 +8,9 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
     ObjectFile objectFile{};
     objectFile.init(objType);
 
+    bool suc = false;
+    #define CHECK Assert(suc);
+
     auto section_text = objectFile.createSection(".text", FLAG_CODE, 16);
     SectionNr section_data = -1;
     if (program->globalSize!=0){
@@ -24,13 +27,18 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
         auto stream = objectFile.getStreamFromSection(section_text);
         if(to > program->size())
             to = program->size();
-        stream->write(program->text + from, to - from);
+        suc = stream->write(program->text + from, to - from);
+        CHECK
     }
     
     for(int i=0;i<program->dataRelocations.size();i++){
-        auto& dataRelocation = program->dataRelocations[i];
-        objectFile.addRelocation_data(section_text, dataRelocation.textOffset, section_data, dataRelocation.dataOffset);
+        auto& rel = program->dataRelocations[i];
+        objectFile.addRelocation_data(section_text, rel.textOffset, section_data, rel.dataOffset);
     }
+    // for(int i=0;i<program->ptrDataRelocations.size();i++){
+    //     auto& rel = program->ptrDataRelocations[i];
+    //     objectFile.addRelocation_ptr(section_data, rel.referer_dataOffset, section_data, rel.target_dataOffset);
+    // }
 
     for(int i=0;i<program->namedUndefinedRelocations.size();i++){
         auto& namedRelocation = program->namedUndefinedRelocations[i];
@@ -49,7 +57,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
 
     if(program->globalSize != 0) {
         auto stream = objectFile.getStreamFromSection(section_data);
-        stream->write(program->globalData, program->size());
+        suc = stream->write(program->globalData, program->globalSize);
+        CHECK
     }
 
     // if(program->debugInformation) {
@@ -137,6 +146,7 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
     DynamicArray<std::unordered_map<i32, i32>> sections_dataSymbolMap;
     sections_dataSymbolMap.resize(_sections.size() + 1);
 
+    int reloc_ptrs = 0;
     for(int si=0;si<_sections.size();si++) {
         auto& section = _sections[si];
         auto& sheader = sectionHeaders[section->number];
@@ -171,13 +181,23 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
                 } else {
                     coffReloc->SymbolTableIndex = pair->second;
                 }
-            } else {
+            } 
+            // else if(rel.type == RELOC_PTR) {
+            //     // TODO: Can we do this without a pointer? Can we write the "addend" to the data section?
+            //     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_ADDR64;
+            //     coffReloc->VirtualAddress = rel.offset;
+            //     coffReloc->SymbolTableIndex = addSymbol(SYM_DATA, "$d"+std::to_string(reloc_ptrs), rel.sectionNr, rel.offsetIntoSection);
+            //     reloc_ptrs++;
+            // }
+            else {
                 if(rel.type == RELOCA_REL32)
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_REL32;
                 else if(rel.type == RELOCA_ADDR64)
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_ADDR64;
                 else if(rel.type == RELOCA_SECREL)
                     coffReloc->Type = (Type_Indicator)IMAGE_REL_AMD64_SECREL;
+                else
+                    Assert(("Missing relocation implementation",false));
                 coffReloc->VirtualAddress = rel.offset;
                 coffReloc->SymbolTableIndex = rel.symbolIndex;
             }
@@ -529,7 +549,7 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
                     // rel->r_addend = -8;
                     rel->r_addend = myrel.addend;
                 } else {
-                    Assert(false);
+                    Assert(("Missing relocation implementation",false));
                 }
             }
             rheader->sh_size = obj_stream->getWriteHead() - rheader->sh_offset;
@@ -724,6 +744,15 @@ void ObjectFile::addRelocation_data(SectionNr sectionNr, u32 offset, SectionNr s
     rel.sectionNr = sectionNr2;
     rel.offsetIntoSection = offset2;
 }
+// void ObjectFile::addRelocation_ptr(SectionNr sectionNr, u32 offset, SectionNr sectionNr2, u32 offset2) {
+//     auto& sec = _sections[sectionNr - 1];
+//     sec->relocations.add({});
+//     auto& rel = sec->relocations.last();
+//     rel.type = RELOC_PTR;
+//     rel.offset = offset;
+//     rel.sectionNr = sectionNr2;
+//     rel.offsetIntoSection = offset2;
+// }
 bool ObjectFile::writeFile(const std::string& path) {
     switch(_objType) {
     case OBJ_COFF:

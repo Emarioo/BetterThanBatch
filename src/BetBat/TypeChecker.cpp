@@ -1332,7 +1332,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                     } else {
                         ERR_SECTION(
                             ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
-                            ERR_MSG("'"<<expr->name<<"' is not declared.")
+                            ERR_MSG("'"<<expr->name<<"' is not a declared variable.")
                             ERR_LINE(expr->tokenRange,"undeclared")
                         )
                     }
@@ -1357,7 +1357,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 Assert(theType.isValid());
                 if(outTypes) outTypes->add(theType);
             } 
-        } else if(expr->typeId == AST_SIZEOF || expr->typeId == AST_NAMEOF) {
+        } else if(expr->typeId == AST_SIZEOF || expr->typeId == AST_NAMEOF || expr->typeId == AST_TYPEID) {
             Assert(expr->left);
             TypeId finalType = {};
             if(expr->left->typeId == AST_ID){
@@ -1397,6 +1397,20 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                     // expr->constStrIndex = index;
 
                     TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+                    if(outTypes)  outTypes->add(theType);
+                } else if(expr->typeId == AST_TYPEID) {
+                    
+                    expr->versions_outTypeTypeid[info.currentPolyVersion] = finalType;
+                    
+                    const char* tname = "lang_TypeId";
+                    TypeId theType = CheckType(info, scopeId, tname, expr->tokenRange, nullptr);
+                    if(!theType.isValid()) {
+                        ERR_SECTION(
+                            ERR_HEAD(expr->tokenRange)
+                            ERR_MSG("'"<<tname << "' was not a valid type. Did you forget to #import \"Lang\".")
+                            ERR_LINE(expr->tokenRange, "bad")
+                        )
+                    }
                     if(outTypes)  outTypes->add(theType);
                 }
             } else {
@@ -1556,8 +1570,9 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             } else {
                 ERR_SECTION(
                     ERR_HEAD(expr->tokenRange)
-                    ERR_MSG("Member access only works on structs, pointers to structs, and enums. '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).")
-                    ERR_LINE(expr->tokenRange,info.ast->typeToString(leftType))
+                    ERR_MSG("Member access only works on variable with a struct type and enums. The type '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).")
+                    ERR_LINE(expr->left->tokenRange,"cannot take a member from this")
+                    ERR_LINE(expr->name,"member to access")
                 )
                 if(outTypes)
                     outTypes->add(AST_VOID);
@@ -1651,6 +1666,13 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 CheckExpression(info, scopeId, arg_expr, nullptr, attempt);
             }
             auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, nullptr);
+            if(!ti.isValid()) {
+                ERR_SECTION(
+                    ERR_HEAD(expr->tokenRange)
+                    ERR_MSG("'"<<info.ast->typeToString(expr->castType)<<"' is not a type.")
+                    ERR_LINE(expr->tokenRange,"bad")
+                )
+            }
             if(outTypes)
                 outTypes->add(ti);
             expr->versions_castType[info.currentPolyVersion] = ti;
@@ -2413,7 +2435,10 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
     // }
     return SignalDefault::SUCCESS;
 }
+// SignalDefault CheckGlobals(CheckInfo& info, ASTScope* scope) {
 
+//     return SignalDefault::SUCCESS;
+// }
 SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     MEASURE;
@@ -2449,13 +2474,30 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     // DynamicArray<TypeId> typeArray{};
     TINY_ARRAY(TypeId, typeArray, 4)
 
+    bool perform_global_check = true;
+
+    // TODO: Optimize by only doing one loop if the scope has no globals.
+    //  The parser could set a flag if the scope has globals. Most scopes won't have globals so this will save us a lot of performance.
     for(int contentOrder=0;contentOrder<scope->content.size();contentOrder++){
+        defer {
+            if(perform_global_check) {
+                if(contentOrder == scope->content.size() - 1) {
+                    // We have done global check, now do the normal.
+                    perform_global_check = false;
+                    contentOrder = -1; // -1 because for loop increments by 1
+                }
+            }
+        };
         if(scope->content[contentOrder].spotType!=ASTScope::STATEMENT)
             continue;
         info.currentContentOrder.last() = contentOrder;
         auto now = scope->statements[scope->content[contentOrder].index];
+
+        if(perform_global_check) {
+            if(now->type != ASTStatement::ASSIGN || !now->globalAssignment)
+                continue;
+        }
         typeArray.resize(0);
-        
         info.ignoreErrors = errorsWasIgnored;
         if(now->isNoCode()) {
             info.ignoreErrors = true;
@@ -2515,6 +2557,11 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 result = CheckRest(info, now->secondBody);
             }
         } else if(now->type == ASTStatement::ASSIGN){
+            if(!perform_global_check && now->globalAssignment)
+                continue;; // We already checked globals
+
+            // log::out << now->varnames[0].name << " checked\n";
+                
             auto& poly_typeArray = now->versions_expressionTypes[info.currentPolyVersion];
             poly_typeArray.resize(0);
             typeArray.resize(0);
@@ -2620,7 +2667,11 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
                         if(!possible_identifier) {
                             // identifier does not exist, we should create it.
-                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
+                            if(now->globalAssignment) {
+                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, CONTENT_ORDER_ZERO, &varname.identifier, nullptr);
+                            } else {
+                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
+                            }
                             Assert(varinfo);
                             varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
                         } else if(possible_identifier->type == Identifier::VARIABLE) {
@@ -2690,7 +2741,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     }
                     Assert(varinfo);
 
-                    Assert(!varinfo->versions_typeId[info.currentPolyVersion].isValid()); // nocheckin, this might not work, maybe i am missing something but i don't think this will ever fire
+                    // O don't think this will ever fire. But just in case.
+                    // HAHA, IT DID FIRE! Globals were checked twice! -Emarioo, 2024-01-06
+                    Assert(!varinfo->versions_typeId[info.currentPolyVersion].isValid());
 
                     // FINALLY we can set the declaration type
                     varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];

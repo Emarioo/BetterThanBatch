@@ -469,6 +469,17 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
                 errorParsingMembers = SignalAttempt::FAILURE;
                 continue;
             }
+            for(auto& mem : astStruct->members) {
+                if(mem.name == name) {
+                    ERR_SECTION(
+                        ERR_HEAD(name)
+                        ERR_MSG("The name '"<<name<<"' is already used in another member of the struct. You cannot have two members with the same name.")
+                        ERR_LINE(mem.name, "last")
+                        ERR_LINE(name, "now")
+                    )
+                    break;
+                }
+            }
             info.next();   
             Token token = info.get(info.at()+1);
             if(!Equal(token,":")){
@@ -1761,47 +1772,51 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 // tmp->tokenRange.startIndex = info.at();
                 tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
-            } else if(Equal(token,"sizeof")) {
+            } else if(Equal(token,"sizeof") || Equal(token,"nameof") || Equal(token,"typeid")) {
                 info.next();
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_SIZEOF));
+                ASTExpression* tmp = nullptr;
+                if(Equal(token,"sizeof"))
+                    tmp = info.ast->createExpression(TypeId(AST_SIZEOF));
+                if(Equal(token,"nameof"))
+                    tmp = info.ast->createExpression(TypeId(AST_NAMEOF));
+                if(Equal(token,"typeid"))
+                    tmp = info.ast->createExpression(TypeId(AST_TYPEID));
 
                 // Token token = {}; 
                 // int result = ParseTypeId(info,token);
                 // tmp->name = token;
 
+                bool hasParentheses = false;
+                Token tok = info.get(info.at() + 1);
+                if(Equal(tok, "(")) {
+                    // NOTE: We need to handle parentheses here because otherwise
+                    //  typeid(Apple).ptr_level would be seen as typeid( (Apple).ptr_level )
+                    info.next();
+                    hasParentheses=true;
+                }
+
                 ASTExpression* left=nullptr;
                 SignalAttempt result = ParseExpression(info, left, false);
                 tmp->left = left;
                 tmp->constantValue = true;
+
+                if(hasParentheses) {
+                    Token tok = info.get(info.at() + 1);
+                    if(Equal(tok, ")")) {
+                        info.next();
+                    } else {
+                        ERR_SECTION(
+                            ERR_HEAD(tok)
+                            ERR_MSG("Missing closing parentheses.")
+                            ERR_LINE(tok,"opening parentheses")
+                        )
+                    }
+                }
                 
                 tmp->tokenRange.firstToken = token;
                 tmp->tokenRange.endIndex = info.at()+1;
                 values.add(tmp);
-            } else if(Equal(token,"nameof")) {
-                info.next();
-
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NAMEOF));
-
-                // With ParseTypeId we can parse polymorphic types like Fruit<Apple>
-                // We could add a keyword like nameof_poly this uses ParseTypeId.
-                // We say that space Fruit < Fruit > is a comparison while no space Fruit<Apple> is a poly type.
-                // What about pointers? This is a type "okay* other_token2" this is multiplication "ok * yoo"
-                // How well will this work with macros? A bit annoying probably.
-
-                // Token token = {};
-                // SignalDefault result = ParseTypeId(info,token, nullptr);
-                
-                // With this, we can get the type of an expression.
-                ASTExpression* left=nullptr;
-                SignalAttempt result = ParseExpression(info, left, false);
-
-                tmp->left = left;
-                tmp->constantValue = true;
-                // tmp->name = token;
-                tmp->tokenRange.firstToken = token;
-                tmp->tokenRange.endIndex = info.at()+1;
-                values.add(tmp);
-            } else if(Equal(token, "asm")) {
+            }  else if(Equal(token, "asm")) {
                 info.next();
 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ASM));
@@ -3441,6 +3456,7 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
 
     // to make things easier attempt is checked here
     if(attempt && !(IsName(info.get(tokenAt+1)) && (Equal(info.get(tokenAt+2),",") || Equal(info.get(tokenAt+2),":") || Equal(info.get(tokenAt+2),"=") ))){
+    // if(attempt && !(IsName(info.get(tokenAt+1)) && (Equal(info.get(tokenAt+2),",") || Equal(info.get(tokenAt+2),":")))){
         return SignalAttempt::BAD_ATTEMPT;
     }
     attempt = true;
@@ -3532,6 +3548,14 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
                     statement->varnames[index].arrayLength = arrayLength;
                     index--;
                 }
+            }
+        } else {
+            if(globalAssignment) {
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Global variables must use declaration syntax. You must use a ':' (':=' if you want the type to be inferred).")
+                    ERR_LINE(token, "add a colon before this")
+                )
             }
         }
         token = info.get(info.at()+1);
@@ -3686,17 +3710,23 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         }
     };
 
-    Token tok = info.get(info.at() + 1);
-    if(IsAnnotation(tok)) {
-        if(Equal(tok, "@dump_asm")) {
-            info.next();
-            bodyLoc->flags |= ASTNode::DUMP_ASM;
-        } else if(Equal(tok, "@dump_bc")) {
-            info.next();
-            bodyLoc->flags |= ASTNode::DUMP_BC;
+    while(true) {
+        Token tok = info.get(info.at() + 1);
+        if(IsAnnotation(tok)) {
+            if(Equal(tok, "@dump_asm")) {
+                info.next();
+                bodyLoc->flags |= ASTNode::DUMP_ASM;
+            } else if(Equal(tok, "@dump_bc")) {
+                info.next();
+                bodyLoc->flags |= ASTNode::DUMP_BC;
+            } else {
+                // Annotation may belong to statement so we don't
+                // complain about not recognizing it here.
+                break;
+            }
+        } else {
+            break;
         }
-        // Annotation may belong to statement so we don't
-        // complain about not recognizing it here.
     }
     
     

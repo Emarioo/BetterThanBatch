@@ -18,6 +18,8 @@ global str: char*;
 str = Allocate(16);
 *str; // This caused a crash at some point in time
 
+// TODO: Test that you can access globals from another file.
+
 @TEST_CASE(many_assignments)
 
 fn fvoid() {}
@@ -62,3 +64,8 @@ a, b, c = many() // all return values
     a: i64, b: i32 = many() // does this fail or does it cast?
 }
 
+
+{
+    str: char[20];
+    str.ptr[0] = 5 // crashed at one point
+}

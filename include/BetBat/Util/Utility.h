@@ -92,6 +92,9 @@ struct ScopeDebug {
 
 #define CHECK_RANGE(DST,A,B) Assert((u64)(DST) >= (u64)(A) && (u64)(DST) < (u64)(B));
 
+// #define FORA(ARR) for(int auto& it : LIST)
+#define FORAN(ARR) for(int nr=0; nr < sizeof(ARR)/sizeof(*ARR); nr++)
+
 #define FOR(LIST) for(auto& it : LIST)
 // #define FORN(LIST) auto it = LIST.data(); for(int nr=0; nr < (int)LIST.size() && (it = &LIST[nr]); nr++)
 #define FORN(LIST) for(int nr=0; nr < (int)LIST.size(); nr++)

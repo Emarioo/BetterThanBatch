@@ -43,6 +43,10 @@ struct Program_x64 {
         u32 dataOffset; // offset in data segment
         u32 textOffset; // where to modify        
     };
+    // struct PtrDataRelocation {
+    //     u32 referer_dataOffset;
+    //     u32 target_dataOffset;
+    // };
     struct NamedUndefinedRelocation {
         std::string name; // name of symbol
         u32 textOffset; // where to modify
@@ -52,6 +56,7 @@ struct Program_x64 {
         u32 textOffset; // where to modify?
     };
 
+    // DynamicArray<PtrDataRelocation> ptrDataRelocations;
     DynamicArray<DataRelocation> dataRelocations;
     DynamicArray<NamedUndefinedRelocation> namedUndefinedRelocations;
     DynamicArray<ExportedSymbol> exportedSymbols;

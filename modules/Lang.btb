@@ -1,0 +1,112 @@
+/*
+    This file contains type information and other
+    useful things from the language/compiler.
+
+    NOTE: The way we store information may not be optimal or cache friendly.
+     It could be a good idea to look into it.
+
+    NOTE: The content here is not in a namespace but instead prefixed with lang_
+     in case namespaces stops working at some point. The less complexity here
+     the better.
+
+    TODO: Undefined behaviour if you define these yourself. In the future,
+    we will forbid the names of these structs and variables.
+
+    IMPORTANT: YOU NEED TO MODIFY CODE IN Generator.cpp and Lang.h
+     If you make changes in this file!
+*/
+
+enum @enclosed @specified lang_Primitive : u8 {
+    NONE            = 0,
+    STRUCT          = 1,
+    ENUM            = 2,
+    SIGNED_INT      = 3,
+    UNSIGNED_INT    = 4,
+    DECIMAL         = 5,
+    CHAR            = 6,
+    BOOL            = 7,
+}
+struct lang_TypeId {
+    index0: u16;
+    index1: u8;
+    ptr_level: u8;
+
+    fn index() -> u32 { return cast<u32>index0 | (cast<u32>index1 << 16); }
+}
+struct lang_TypeInfo {
+    type: lang_Primitive;
+    size: u16;
+    name: Range; // refers to lang_strings
+
+    // enums needs a different kind of members
+    members: Range; // refers to lang_members
+}
+struct lang_TypeMember {
+    name: Range; // refers to lang_strings
+    // TODO: Union for enums
+    type: lang_TypeId; // refers to lang_TypeInfo
+    offset: u16;
+}
+
+// Generator.cpp refers to these names, don't forget to modify them there.
+global lang_typeInfos: lang_TypeInfo[];
+global lang_members: lang_TypeMember[];
+global lang_strings: char[]; // string data
+
+// These are not necessary because of nameof, sizeof
+// #define LANG_TYPENAME(TYPE) lang_typename(typeid(TYPE))
+// #define LANG_TYPESIZE(TYPE) lang_typesize(typeid(TYPE))
+
+#define LANG_TYPEMEMBERS(TYPE) lang_typemembers(typeid(TYPE))
+
+fn lang_typename(id: lang_TypeId) -> Slice<char> {
+    index := id.index();
+    // Assert(id.ptr_level == 0);
+    return Slice<char>{
+        &lang_strings.ptr[lang_typeInfos.ptr[index].name.beg],
+        lang_typeInfos.ptr[index].name.end - lang_typeInfos.ptr[index].name.beg
+    };
+}
+fn lang_typemembers(id: lang_TypeId) -> Slice<lang_TypeMember> {
+    index := id.index();
+    // Assert(id.ptr_level == 0);
+    return Slice<lang_TypeMember>{
+        &lang_members.ptr[lang_typeInfos.ptr[index].members.beg],
+        lang_typeInfos.ptr[index].members.end - lang_typeInfos.ptr[index].members.beg
+    };
+}
+fn lang_typesize(id: lang_TypeId) -> u16 {
+    if id.ptr_level != 0  return 8;
+    index := id.index();
+    return lang_typeInfos.ptr[index].size;
+}
+
+fn _print(type: lang_TypeInfo*) {
+    pr("{ size: ",type.size,
+        ", type: ",type.type,
+        ", name: ",type.name.beg,"-",type.name.end,
+        ", members: ",type.members.beg,"-",type.members.end,
+    " }")
+}
+fn _print(type: lang_TypeId) {
+    fn print_pointers(type: lang_TypeId) {
+        for 0..type.ptr_level
+            printc('*')
+    }
+    _print("{ ");
+    _print(lang_typename(type));
+    print_pointers(type)
+    _print(", size: ")
+    _print(lang_typesize(type));
+    members := lang_typemembers(type);
+    if members.len > 0u {
+        _print(", members: ");
+        for @ptr members {
+            if nr != 0
+                _print(", ");
+            _print(lang_typename(it.type))
+            print_pointers(it.type)
+        }
+    }
+    _print(" }");
+}

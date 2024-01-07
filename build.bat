@@ -168,6 +168,7 @@ if !compileSuccess! == 0 (
     @REM link bin/obj_test.obj bin/NativeLayer.obj
 
     btb -dev
+    @REM btb -pm *typeinfo.btb -o dev.exe -g -r
 
     @REM btb dev.btb -p
     @REM btb -p -pm *dev.btb

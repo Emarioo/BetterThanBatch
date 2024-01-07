@@ -74,6 +74,7 @@ enum PrimitiveType : u16 {
     AST_ASM, // inline assembly
     AST_SIZEOF,
     AST_NAMEOF,
+    AST_TYPEID,
     
     AST_PRIMITIVE_COUNT, // above types are true with isValue
 };
@@ -327,7 +328,7 @@ struct TypeInfo {
     
     TypeId originalId={};
     u32 _size=0;
-    u32 _alignedSize=0;
+    // u32 _alignedSize=0;
     u32 arrlen=0;
     ASTStruct* astStruct=0;
     StructImpl* structImpl=0; // nullptr means pure/base poly type 
@@ -451,6 +452,10 @@ struct ASTExpression : ASTNode {
         // engone::log::out << "default init\n";
         // *(char*)0 = 9;
     }
+    ~ASTExpression() {
+        versions_outTypeSizeof.~PolyVersions();
+        // versions_outTypeTypeid.~PolyVersions(); // union with ...Sizeof
+    }
     // enum Type: u8 {
     //     NORMAL = 0,
     //     INLINE_ASSEMBLY = 1,
@@ -527,7 +532,10 @@ struct ASTExpression : ASTNode {
     // you could use a union with some of these to save memory
     // outTypeSizeof and castType could perhaps be combined?
     PolyVersions<int> versions_constStrIndex{};
-    PolyVersions<TypeId> versions_outTypeSizeof{};
+    union {
+        PolyVersions<TypeId> versions_outTypeSizeof{};
+        PolyVersions<TypeId> versions_outTypeTypeid;
+    };
     PolyVersions<TypeId> versions_castType{};
 
     void printArgTypes(AST* ast, QuickArray<TypeId>& argTypes);
@@ -780,8 +788,9 @@ struct ASTScope : ASTNode {
     QuickArray<ASTScope*> namespaces{};
     void add(AST* ast, ASTScope* astNamespaces);
     
-    QuickArray<ASTStatement*> statements{};    
+    QuickArray<ASTStatement*> statements{};
     void add(AST* ast, ASTStatement* astStatement);
+    // void add_at(AST* ast, ASTStatement* astStatement, ContentOrder ContentOrder);
 
     // Using doesn't affect functions or structs because
     // functions and structs doesn't have an order while

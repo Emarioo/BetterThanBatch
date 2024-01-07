@@ -2,6 +2,10 @@
     A lexer for all your tokenizing needs
 */
 
+
+// stream := LexFile("examples/binary_viewer/sample.txt");
+// stream.print();
+
 #import "OS"
 #import "Array"
 
