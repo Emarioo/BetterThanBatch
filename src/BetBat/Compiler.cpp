@@ -6,6 +6,7 @@
 #include <x86intrin.h>
 #endif
 
+
 Path::Path(const char* path) : text(path), _type((Type)0) {
     ReplaceChar((char*)text.data(), text.length(), '\\', '/');
 #ifdef OS_WINDOWS
@@ -400,7 +401,7 @@ Path CompileInfo::findSourceFile(const Path& path, const Path& sourceDirectory) 
         if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
             temp.text += "/";
         temp.text += fullPath.text;
-        if(FileExist(temp.text)){
+        if(FileExist(temp.text)){ // search directory of current source file again but implicit ./
             fullPath = temp.getAbsolute();
         } else {
             //-- Search additional import directories.
@@ -1103,9 +1104,9 @@ Bytecode* CompileSource(CompileOptions* options) {
         "ptr: T*;"
         "len: u64;"
     "}\n"
-    // "operator [](slice: Slice<char>, index: u32) -> char {"
-    //     "return slice.ptr[index];"
-    // "}\n"
+    "operator [](slice: Slice<char>, index: u32) -> char {"
+        "return slice.ptr[index];"
+    "}\n"
     // "struct Range {" 
     "struct @hide Range {" 
         "beg: i32;"
@@ -1119,7 +1120,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     #endif
     "fn @native prints(str: char[]);\n"
     "fn @native printc(str: char);\n"
-    "#define Assert(X) { prints(#quoted X); }"
+    // "#define Assert(X) { prints(#quoted X); }"
     // "#define Assert(X) { prints(#quoted X); *cast<char>null; }"
     ;
     essentialStructs += (options->target == TARGET_BYTECODE ? "#define LINK_BYTECODE\n" : "");
@@ -1834,6 +1835,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
         cmd += "bin/NativeLayer.lib ";
         cmd += "uuid.lib ";
         cmd += "shell32.lib ";
+        // cmd += "Bcrypt.lib "; // random64 uses BCryptGenRandom, #link is used instead
         #endif
         // I don't know which of these we should use when. Sometimes the linker complains about 
         // a certain default lib.

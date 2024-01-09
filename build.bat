@@ -154,12 +154,12 @@ ar rcs -o bin/NativeLayer_gcc.lib bin/NativeLayer_gcc.o
 @REM cvdump test.pdb > out3
 
 if !compileSuccess! == 0 (
+    echo f | XCOPY /y /q !output! btb.exe > nul
 :RUN_COMPILER
     rem
     
 
 
-    @REM echo f | XCOPY /y /q !output! btb.exe > nul
     @REM cl /c /TP src/Other/test.cpp /Fo: bin/test2.obj /nologo
 
     @REM cl /c /std:c11 /Tc src/BetBat/obj_test.c /Fo: bin/obj_test.obj /nologo

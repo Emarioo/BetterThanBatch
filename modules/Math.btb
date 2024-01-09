@@ -12,6 +12,39 @@ fn @intrinsic round(v: f32) -> f32;
 // TODO: Intrinsics for min and max
 
 
+// TODO: Pseudo random generator with seeds
+fn random64() -> u64 {
+    num: u64;
+#ifdef OS_WINDOWS       
+    // NTSTATUS BCryptGenRandom(
+    // [in, out] BCRYPT_ALG_HANDLE hAlgorithm,
+    // [in, out] PUCHAR            pbBuffer,
+    // [in]      ULONG             cbBuffer,
+    // [in]      ULONG             dwFlags
+    // );
+    // #link "Bcrypt.lib"
+    #link "-lBcrypt"
+    fn @dllimport @stdcall BCryptGenRandom(_: void*, buf: void*, len: u32, flags: u32) -> i32;
+    #define BCRYPT_USE_SYSTEM_PREFERRED_RNG cast<u32>0x00000002
+    
+    status := BCryptGenRandom(null, &num, sizeof num, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
+    if status < 0;
+        *cast<u32*>null;
+        // TODO: Assert
+    
+#elif OS_UNIX
+    missing_impl
+#else
+    missing_impl
+#endif
+    return num;
+}
+// random between 0.0 and 1.0
+fn random_f32() -> f32 {
+    return cast<f32>random64() / cast<f32>0xFFFF_FFFF_FFFF_FFFF;
+}
+
+
 // From NativeLayer
 // fn @import sine(f: f32) -> f32;
 

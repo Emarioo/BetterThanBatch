@@ -1672,6 +1672,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                     ERR_MSG("'"<<info.ast->typeToString(expr->castType)<<"' is not a type.")
                     ERR_LINE(expr->tokenRange,"bad")
                 )
+                return SignalAttempt::FAILURE;
             }
             if(outTypes)
                 outTypes->add(ti);
@@ -2243,7 +2244,7 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
         }
     } else {
         if(fnOverloads->polyOverloads.size()!=0){
-            WARN_HEAD3(function->tokenRange,"Ambiguity for polymorphic overloads is not checked!\n\n";)
+            WARN_HEAD3(function->tokenRange,"Ambiguity for polymorphic overloads is not checked! '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n\n";)
         }
         // Base poly overload is added without regard for ambiguity. It's hard to check ambiguity so to it later.
         fnOverloads->addPolyOverload(function);

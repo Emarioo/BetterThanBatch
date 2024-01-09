@@ -57,14 +57,17 @@ bool streq(const char* a, const char* b) {
     }
     return true;
 }
+// #include "Bcrypt.h"
 // #include "unistd.h"
 int main(int argc, const char** argv){
     using namespace engone;
 
+    
+
     log::out.enableReport(false);
     MeasureInit();
     ProfilerInitialize();
-
+    
     // log::out << p.text << "\n";
     // for(int i=0;i<10000;i++) {
     //     log::out << i << "\r";

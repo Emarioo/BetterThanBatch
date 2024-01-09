@@ -203,7 +203,7 @@ struct MasterInfo {
                 continue;
             }
 
-            return files.getPtr(oldVal).sliced();
+            return files.get_unsafe(oldVal).sliced();
         }
         // won't ever run
         return Slice<char>{null,0};

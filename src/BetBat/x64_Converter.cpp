@@ -2975,8 +2975,14 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->addModRM(MODE_REG, treg, freg);
                     } else if(minSize == 4) {
                         // Assert(freg == treg);
+                        // prog->add(OPCODE_PUSH_RM_SLASH_6);
+                        
+                        // prog->add(PREFIX_REXW);
                         prog->add(OPCODE_MOV_REG_RM);
-                        prog->addModRM(MODE_REG, treg, freg);
+                        prog->addModRM(MODE_REG, REG_D, freg);
+                        prog->add(OPCODE_MOV_REG_RM);
+                        prog->addModRM(MODE_REG, treg, REG_D);
+                        
                         // prog->add(OPCODE_NOP); // this might just work
                         // prog->add(PREFIX_REXW);
                         // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
@@ -2994,33 +3000,34 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     // i64 -> i32,i16,i8
 
                     // TODO: Sign extend properly
-                    prog->add(PREFIX_REXW);
-                    prog->add(OPCODE_MOV_REG_RM);
-                    prog->addModRM(MODE_REG, treg, freg);
-                    // if(minSize==1){
-                    //     prog->add(PREFIX_REXW);
-                    //     prog->add2(OPCODE_2_MOVZX_REG_RM8);
-                    //     prog->addModRM(MODE_REG, treg, freg);
-                    // } else if(minSize == 2) {
-                    //     prog->add(PREFIX_REXW);
-                    //     prog->add2(OPCODE_2_MOVZX_REG_RM16);
-                    //     prog->addModRM(MODE_REG, treg, freg);
-                    // } else if(minSize == 4) {
-                    //     // Assert(freg == treg);
-                    //     prog->add(OPCODE_MOV_REG_RM);
-                    //     prog->addModRM(MODE_REG, treg, freg);
-                    //     // prog->add(OPCODE_NOP); // this might just work
-                    //     // prog->add(PREFIX_REXW);
-                    //     // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
-                    //     // prog->addModRM(MODE_REG, 4, treg);
-                    //     // prog->add4((u32)0xFFFFFFFF);
-                    // } else if(minSize == 8) {
-                    //     Assert(freg == treg);
-                    //     // nothing needs to be done
-                    //     // prog->add(PREFIX_REXW);
-                    //     // prog->add(OPCODE_MOV_REG_RM);
-                    //     // prog->addModRM(MODE_REG, treg, freg);
-                    // }
+                    // prog->add(PREFIX_REXW);
+                    // prog->add(OPCODE_MOV_REG_RM);
+                    // prog->addModRM(MODE_REG, treg, freg);
+                    if(minSize==1){
+                        prog->add(PREFIX_REXW);
+                        prog->add2(OPCODE_2_MOVSX_REG_RM8);
+                        prog->addModRM(MODE_REG, treg, freg);
+                    } else if(minSize == 2) {
+                        prog->add(PREFIX_REXW);
+                        prog->add2(OPCODE_2_MOVSX_REG_RM16);
+                        prog->addModRM(MODE_REG, treg, freg);
+                    } else if(minSize == 4) {
+                        // Assert(freg == treg);
+                        prog->add(PREFIX_REXW);
+                        prog->add(OPCODE_MOVSXD_REG_RM);
+                        prog->addModRM(MODE_REG, treg, freg);
+                        // prog->add(OPCODE_NOP); // this might just work
+                        // prog->add(PREFIX_REXW);
+                        // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
+                        // prog->addModRM(MODE_REG, 4, treg);
+                        // prog->add4((u32)0xFFFFFFFF);
+                    } else if(minSize == 8) {
+                        Assert(freg == treg);
+                        // nothing needs to be done
+                        // prog->add(PREFIX_REXW);
+                        // prog->add(OPCODE_MOV_REG_RM);
+                        // prog->addModRM(MODE_REG, treg, freg);
+                    }
                 } else if(type==CAST_FLOAT_FLOAT){
                     Assert((fsize == 4 || fsize == 8) && (tsize == 4 || tsize == 8));
 

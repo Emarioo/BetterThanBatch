@@ -38,9 +38,10 @@ fn LINK_TYPE Allocate(size: u64) -> void*;
 fn LINK_TYPE Reallocate(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
 fn LINK_TYPE Free(ptr: void*, size: u64) ;
 
-struct FileHandle { // not named File because someone might want that name for other things
-    handle: u64;
-}
+#define FileHandle u64
+// struct FileHandle { // not named File because someone might want that name for other things
+//     handle: u64;
+// }
 enum @specified FileOpenFlags {
     FILE_READ_ONLY          = 0x1, // From Engone/Win32.cpp, DO NOT MODIFY
     FILE_CLEAR_AND_WRITE    = 0x2,

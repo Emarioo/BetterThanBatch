@@ -1,73 +1,313 @@
 
 #import "Array"
+#import "Logger"
+#import "String"
 
+#define Map_i32 Map<i32,i32>
 
-/*
-Expectation: 0-10000 strings
-Read/write time: roughly constant
-
-*/
-#define T i32
-struct Chain_StringMap {
-    
+struct MapChain<Key,Val> {
+    key: Key;
+    next: u32; // -1 can't be seen as unused because the chain may link to other chains which we would sever. We could use a bitmask but that's annoying
+    unused: bool;
+    val: Val;
 }
-struct StringMap {
-    elements: DynamicArray<T>;
-    baseArray: Chain_StringMap[];
+struct MapIterator<Key,Val> {
+    key: Key*;
+    val: Val*;
     
-    fn init() -> bool {
-        max = 256 * sizeof(Chain_StringMap);
-        baseArray.ptr = cast<Chain_StringMap*>Allocate(max);
-        if baseArray.ptr {
-            baseArray.len = 256;
-            return true
-        } else {
-            return false;
-        }
+    // internal members
+    _chain_index: u32;
+}
+// Works best for integers or similar data types
+// Strings or types with allocations are not handled.
+// Slice<char> can be used but you are responsible for the memory of the slice's pointer.
+struct Map<Key,Val> {
+    chains: DynamicArray<MapChain<Key,Val>>; // bucket array? save us some reallocations
+    table: DynamicArray<u32>;
+    count: u32;
+    
+    #define MAP_CHAIN_INDEX_NULL 0
+    // #define MAP_CHAIN_INDEX_BEGIN 1
+    
+    fn init(tableSize: u32, reserved_chains: u32 = 0) {
+        // TODO: Assert(chains.len == 0)
+        //   We could call remap but that has overhead and init is supposed to be called
+        //   on a fresh map.
+        table.resize(tableSize);
+        if reserved_chains > 0u
+            chains.reserve(reserved_chains);
     }
     fn cleanup() {
-        elements.cleanup();
-        if baseArray.ptr {
-            Free(baseArray, baseArray.len * sizeof(Chain_StringMap));
-            baseArray.ptr = null;
-            baseArray.len = 0;
+        chains.cleanup();
+        table.cleanup();   
+    }
+    fn remap(newTableSize: u32) {
+        table.resize(newTableSize);
+        memzero(table.ptr,table.len * sizeof(*table.ptr));
+        
+        // move unused chains to the back of the list
+        // We have to cleanse unused chains now because they will be detached and lost later.
+        // We could store unused ones in an array and reuse them but that creates more complexity
+        // in the set function and another list to keep track of so taking care of it here
+        // is not a bad thing.
+        i := 0u;
+        while i < chains.len {
+            chain := &chains.ptr[i];
+            if chain.unused {
+                if i == chains.len - 1
+                    break;
+                    
+                *chain = chains.ptr[chains.len - 1]
+                chains.len--;
+            }
+            i++;
         }
+        
+        // rehash the key-value pairs in chains
+        // unused_waste := 0;
+        for @ptr chains.sliced_unsafe() {
+            // if it.unused {
+            //     unused_waste++;
+            //     continue;   
+            // }
+            it.next = 0;
+            it.unused = false;
+            
+            slot := hash(it.key)
+            index := table.ptr[slot]
+            
+            if index == 0 {
+                table.ptr[slot] = nr + 1;
+                continue;
+            }
+            while {
+                chain := chains.get_unsafe(index-1); // -1 because 0 is null
+                if !chain
+                    break; // TODO: Bug, assert instead
+                if chain.next == MAP_CHAIN_INDEX_NULL {
+                    chain.next = nr + 1; // +1 because 0 is seen as null
+                    break;
+                }
+                index = chain.next;
+            }   
+        }
+        // if unused_waste > 0 {
+        //     // The map could have a second array with positions to the unused chains. We can reuse chains from this array in the set function.
+        //     // Another solution would be to rearrange memory so that unused chains are last and popped.
+        //     pr("WARNING in Map.remap: There were ",unused_waste," unused chains which are detached and wasting chain spots!\n")
+        // }
     }
     
-    fn set(str: char[], value: T) -> bool {
+    fn hash(str: Slice<char>) -> u32 {
+        if table.size() == 0
+            return 0;
+        // https://en.wikipedia.org/wiki/Fowler%E2%80%93Noll%E2%80%93Vo_hash_function#FNV-1a_hash
+        fnv_prime: u32 = 0x01000193; // TODO: Make these constants?
+        fn_offset_basis: u32 = 0x811c9dc5;
         
+        final_hash: u32 = fn_offset_basis;
+        for str {
+            final_hash *= fnv_prime;
+            final_hash ^= it;
+        }
+        return final_hash % table.size();
+    }
+    fn hash(num: i32) -> u32 {
+        if table.size() == 0
+            return 0;
+        // https://www.shadertoy.com/view/WttXWX
+        x: u32 = num;
+        x ^= x >> 17;
+        x *= 0xed5ad4bb;
+        x ^= x >> 11;
+        x *= 0xac4c1b51;
+        x ^= x >> 15;
+        x *= 0x31848bab;
+        x ^= x >> 14;
+        return x % table.size();
+    }
+    fn size() {
+        return count;
+    }
+    fn find_chain_unsafe(key: Key) -> MapChain<Key,Val>* {
+        slot := hash(key);
+        if slot >= table.len
+            return null;
+        index := table.get(slot);
+        
+        if index == 0
+            return null;
+        while {
+            chain := chains.get_unsafe(index-1);
+            if !chain
+                return null;
+            if !chain.unused && chain.key == key {
+                return chain;
+            }
+            if chain.next == MAP_CHAIN_INDEX_NULL
+                return null;
+            index = chain.next;
+        }
+        return null;
+    }
+    fn set(key: Key, val: Val) -> bool {
+        if table.size() == 0
+            log("Dude, you got to map.init before map.set-ing it") // TODO: Use assert instead
+        slot := hash(key);
+        if slot >= table.len
+            return false;
+        index := table.get(slot);
+        
+        if index == 0 {
+            chains.add(MapChain<Key,Val>{key = key, next = 0, unused = false, val = val});
+            table.ptr[slot] = chains.size(); // not size-1 because 0 is seen as null
+            count++;
+            return true;   
+        }
+        while {
+            chain := chains.get_unsafe(index-1); // -1 because 0 is null
+            if !chain
+                return false; // TODO: Bug, assert instead
+            if chain.unused {
+                chain.key = key;
+                chain.val = val;
+                count++;
+                return true;
+            }
+            if chain.key == key {
+                chain.val = val;
+                return true;
+            }
+            if chain.next == MAP_CHAIN_INDEX_NULL {
+                chain.next = chains.size()+1; // not size because 0 is seen as null
+                chains.add(MapChain<Key,Val>{
+                    key = key, next = 0, unused = false, val = val
+                });
+                count++;
+                return true;
+            }
+            index = chain.next;
+        }
+        return true;
+    }
+    fn get(key: Key) -> Val {
+        chain := find_chain_unsafe(key);
+        if chain
+            return chain.val;
+        return Val{};
+    }
+    fn get_unsafe(key: Key) -> Val* {
+        chain := find_chain_unsafe(key);
+        if chain
+            return &chain.val;
+        return null;
+    }
+    fn remove(key: Key) {
+        chain := find_chain_unsafe(key);
+        if !chain
+            return;
+        
+        // TODO: Cleanup value
+        chain.unused = true;
+        count--;
+        // We need to represent an unused chain because otherwise
+        // we would need to delete the chain from chains and unlink
+        // the chain from it's parent. Sometimes we won't be able to pop the chain
+        // making deletion complicated, bucket array would make it easier.
+        // SO we leave chains as unused when we remove them.
+    }
+    // DO NOT perform a write operation such as add/remove when using this function. That's why the function is marked unsafe.
+    // The iterator should be initialized with default values (zeros)
+    // returns true when iterator contains a new value, false when there are no more values
+    fn iterate_unsafe(iterator: MapIterator<Key,Val>*) -> bool {
+        // NOTE: _table_pos and _next_chain points to the next position of where we should read NOT the current we have read.
+        //  It is more efficient since we don't need to check an old chain to get the new chain, we can get the new chain right away.
+        
+        while {
+            if iterator._chain_index >= chains.size() {
+                iterator.val = null;
+                // TODO: Should we reset iterator?
+                return false;
+            }
+            
+            chain := chains.get_unsafe(iterator._chain_index); // _next_index DOES start from 0, 0 does NOT mean null here
+            if !chain
+                return false; // TODO: Assert? bug in code?
+            iterator._chain_index++;
+            if chain.unused
+                continue;
+            
+            iterator.key = &chain.key;
+            iterator.val = &chain.val;
+            return true;
+        }
         return false;
-    }
-    fn get(str: char[]) -> T {
         
-        return 0;
+        // while {
+        //     // find chain in slots
+        //     if iterator._next_chain == 0 {
+        //         slot := iterator._table_pos
+        //         if slot >= table.len
+        //             return false;
+        //         index := table.ptr[slot]
+                
+        //         if index == 0 {
+        //             iterator._table_pos++;
+        //             continue;
+        //         }
+                
+        //         iterator._next_chain = index
+        //     }
+            
+        //     // we have found chain
+        //     index := iterator._next_chain;
+            
+        //     chain := chains.get_unsafe(index-1); // -1 because 0 as index means null
+            
+        //     if chain.unused {
+        //         iterator._next_chain = chain.next;
+        //         if chain.next == 0 {
+        //             iterator._table_pos++;
+        //         }
+        //         continue;   
+        //     }
+            
+        //     iterator.val = &chain.val;
+            
+        //     if chain.next == 0 {
+        //         iterator._next_chain = 0;
+        //         iterator._table_pos++;
+        //     }
+        //     return true;
+        // }
     }
-    
+    fn clear() {
+        // TODO: Clear map
+        chains.len = 0;
+        memzero(table.ptr, table.max * sizeof(*table.ptr));
+    }
     fn print() {
-        log("StringMap")
-        log(" elements:", elements.len);
-        for elements {
-            print(nr,": ",it);
-        }
-        log(" baseArray:", baseArray.len);
-        for baseArray {
-            pr(nr,": ");
+        if table.size() == 0
+            log("Map is empty")
+        for table.sliced_unsafe() {
+            if it == 0  continue;
+            
+            pr("[",nr,"] ")
+            
+            index := it;
+            while {
+                chain := chains.get_unsafe(index-1);
+                if !chain
+                    break;
+                if !chain.unused {
+                    pr("<",chain.key,": ", chain.val,">, ")
+                }
+                index = chain.next;
+                
+                if chain.next == MAP_CHAIN_INDEX_NULL
+                    break;
+            }
+            pr("\n");
         }
     }
-}
-
-#import "Logger"
-fn Test_StringMap() {
-    map: StringMap;
-    
-    map.set("a",1);
-    map.set("abc!",4);
-    map.set("sausage",7);
-    
-    log(map.get("a"))
-    log(map.get("abc!"))
-    log(map.get("sausage"))
-    log(map.get("sup"))
-    
-    map.print();
 }

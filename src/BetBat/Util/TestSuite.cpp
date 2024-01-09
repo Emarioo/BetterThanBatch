@@ -267,6 +267,7 @@ u32 TestSuite(CompileOptions* options, TestSelection testSelection){
         tests.add("tests/polymorphism/structs.btb");
     }
     tests.add("tests/lang/typeinfo.btb");
+    tests.add("tests/modules/test_maps.btb");
 
     return VerifyTests(options, tests);
 }

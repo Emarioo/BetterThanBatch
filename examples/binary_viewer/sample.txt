@@ -1,5 +1,0 @@
-struct Header {
-	magic: char[8]
-	version: char[256]
-	name: char[256]
-}

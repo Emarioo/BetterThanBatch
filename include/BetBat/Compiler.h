@@ -195,7 +195,7 @@ struct CompileInfo {
     QuickArray<int> compileOrder;
 
     DynamicArray<Path> importDirectories;
-    DynamicArray<std::string> linkDirectives; // passed to the linker, not with interpreter
+    DynamicArray<std::string> linkDirectives; // no duplicates, passed to the linker, not with interpreter
     // thread safe, duplicates will be ignored
     void addLinkDirective(const std::string& name);
 

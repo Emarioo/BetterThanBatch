@@ -434,6 +434,17 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     WHILE_TRUE {
         Token name = info.get(info.at()+1);
 
+        if(name == END_TOKEN) {
+            ERR_SECTION(
+                ERR_HEAD(info.get(info.at()))
+                ERR_MSG("Sudden end when parsing struct.")
+                ERR_LINE(structToken,"this struct")
+                ERR_LINE(info.get(info.at()), "should this token be inside the struct?")
+            )
+            
+            return SignalAttempt::COMPLETE_FAILURE;   
+        }
+
         if(Equal(name,";")){
             info.next();
             continue;
@@ -873,7 +884,11 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
                 info.next();
                 nextValue = ConvertHexadecimal(token);
                 token = info.get(info.at()+1);
-            } else{
+            } else if(token.length == 1 && (token.flags & TOKEN_SINGLE_QUOTED)) {
+                info.next();
+                nextValue = *token.str;
+                token = info.get(info.at()+1);
+            } else {
                 ERR_SECTION(
                     ERR_HEAD(token)
                     ERR_MSG(token<<" is not an integer (i32).")
@@ -1923,6 +1938,26 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 tok = info.get(info.at()+1);
                 Token tok2 = info.get(info.at()+2);
                 Assert(!(Equal(tok,"[") && Equal(tok2,"]"))); // HANDLE SLICE TYPES!
+                
+                std::string pointers = "";
+                int pointer_level = 0;
+                while(true) {
+                    tok = info.get(info.at() + pointer_level + 1);
+                    if(Equal(tok,"*")) {
+                        pointer_level++;
+                    } else if(Equal(tok,"{")) {
+                        // initializer for pointer
+                        for(int i=0;i<pointer_level;i++) {
+                            pointers+="*";
+                            info.next();
+                        }
+                        break;
+                    } else {
+                        break;   
+                    }
+                    
+                }
+                tok = info.get(info.at()+1);
 
                 if(Equal(tok,"(")){
                     // function call
@@ -1979,6 +2014,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     }
                     ns += token;
                     ns += polyTypes;
+                    ns += pointers;
                     std::string* nsp = info.ast->createString();
                     *nsp = ns;
                     initExpr->castType = info.ast->getTypeString(*nsp);

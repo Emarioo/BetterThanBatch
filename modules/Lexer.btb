@@ -8,38 +8,280 @@
 
 #import "OS"
 #import "Array"
+#import "Stream"
+#import "String"
 
 struct Token {
-
+    type: TokenType;
+    line: u16;
+    column: u16;
+    flags: u16;
+    data_index: u32; // index to raw data in token stream
 }
 
+fn CreateTokenStream() -> TokenStream* {
+    stream: TokenStream* = Allocate(sizeof(TokenStream));
+    *stream = TokenStream{};
+    return stream;
+}
+fn DestroyTokenStream(stream: TokenStream*) {
+    stream.cleanup();
+    Free(stream, sizeof(TokenStream));
+}
 struct TokenStream {
     tokens: DynamicArray<Token>;
-    rawData: DynamicArray<u8>;
+    rawData: ByteStream;
+
+    fn size() -> u32 {
+        return tokens.len;
+    }
+    fn cleanup() {
+        tokens.cleanup();
+        rawData.cleanup();   
+    }
+    fn add(type: TokenType, line: u32, column: u32, ptr: void* = null, len: u32 = 0) {
+        offset := 0;
+        if ptr!=null && len != 0 {
+            if len > 255u {
+                *cast<u8*>null // TODO: Assert
+            }
+            offset = rawData.get_head();
+            rawData.write<u8>(len);
+            rawData.write(ptr,len);
+        }
+        tokens.add(Token{type = type, line = line, column = column, data_index = offset});
+    }
+    
+    fn get(index: u32) -> Token* {
+        return &tokens.ptr[index];
+    }
+    fn get_string(index: u32) -> Slice<char> {
+        it := &tokens.ptr[index];
+        len: u8 = *(cast<u8*>rawData.data + it.data_index);
+        str: char* = cast<char*>rawData.data + 1 + it.data_index;
+        return Slice<char>{str,len};
+    }
+    fn get_number(index: u32) -> i64 {
+        it := &tokens.ptr[index];
+        len: u8 = *(cast<u8*>rawData.data + it.data_index);
+        if len == 1 {
+            return *(cast<i8*>rawData.data + 1 + it.data_index);
+        } else if len == 2 {
+            return *(cast<i16*>rawData.data + 1 + it.data_index);
+        } else if len == 4 {
+            return *(cast<i32*>rawData.data + 1 + it.data_index);
+        } else if len == 8 {
+            return *(cast<i64*>rawData.data + 1 + it.data_index);
+        }
+        // TODO: Assert bad length
+        return 0;
+    }
+    
+    // returns written bytes, token is cut off if buffer is to small
+    fn feed(index: u32, buffer: Slice<char>) -> u32 {
+        if index >= tokens.len
+            return 0;
+        it := &tokens.ptr[index];
+        bytes: u32 = 0;
+        if cast<u16>it.type < 256u {
+            buffer.ptr[0] = cast<char>cast<u16>it.type;
+            bytes = 1;
+        } else if(it.type == TOKEN_IDENTIFIER) {
+            slice := get_string(index);
+            
+            bytes = buffer.len;
+            if bytes > slice.len
+                bytes = slice.len
+                
+            memcpy(buffer.ptr, slice.ptr, bytes);
+        } else if(it.type == TOKEN_LIT_NUMBER) {
+            num := get_number(index);
+            
+            // TODO: Assert buffer.len > 24 (maximum printed length of i64)
+            bytes = swrite_unsafe(buffer.ptr, num);
+        } else if(it.type == TOKEN_STRUCT) {
+            slice := "struct";
+            // TODO: Assert buffer.len >= slice.len
+            memcpy(buffer.ptr, slice.ptr, slice.len);
+            bytes = slice.len;
+        }
+        return bytes;
+    }
+    fn print(index: u32) {
+        buf: char[256];
+        written := feed(index, buf);
+        _print(Slice<char>{buf.ptr, written});
+    }
 
     fn print() {
-        // pr("TokenStream")
+        pr("TokenStream\n")
+        
+        for @ptr tokens.sliced_unsafe() {
+            pr("Tok ",nr,": ")
+            
+            print(nr);
+            
+            pr("\n")
+        }
+        
+        pr("Raw data\n")
+        for 0..rawData.get_head() {
+            chr := (cast<char*>rawData.data)[nr];
+            if chr < 32u {
+                pr("<",cast<u8>chr,">")
+            } else {
+                pr(chr)
+            }
+        }
+        pr("\n")
     }
 }
 fn LexFile(path: char[]) -> TokenStream* {
-
-    filesize: u64;
-    FileOpen(path, FILE_READ_ONLY, &filesize);
-
+    textlen: i64;
+    file := FileOpen(&path, FILE_READ_ONLY, cast<u64*>cast<void*>&textlen);
+    if !file  return null
+    text: char* = Allocate(textlen);
+    defer Free(text,textlen);
+    FileRead(file,text,textlen);
+    FileClose(file);
+    
+    stream := CreateTokenStream();
+    
+    enum State {
+        STATE_ANY,
+        STATE_COMMENT,
+        STATE_COMMENT_MULTILINE,
+        STATE_IDENTIFIER,
+        STATE_NUMBER,
+    }
+    state: State;
+    
+    start_of_token := 0;
+    
+    line := 1
+    column := 1
+    head := 0;
+    while head < cast<i64>textlen {
+        // Get some characters, previous one, current and next ones
+        chr, chr_prev, chr_next, chr_next2: char;
+        chr = text[head];
+        if head-1 >= 0
+            chr_prev = text[head-1];
+        if head+1 < textlen
+            chr_next = text[head+1];
+        if head+2 < textlen
+            chr_next2 = text[head+2];
+        head++;
+        
+        column++;
+        if chr == '\n' {
+            line++;
+            column = 1;
+        }
+        
+        if state == STATE_COMMENT {
+            if chr == '\n'
+                state = STATE_ANY
+            continue;
+        }
+        if state == STATE_COMMENT_MULTILINE {
+            if chr == '*' && chr_next == '/' {
+                head++;
+                state = STATE_ANY
+            }
+            continue;
+        }
+        if state == STATE_IDENTIFIER {
+            tmp := chr | cast<char>32;
+            if !((tmp >= 'a' && tmp <= 'z') || chr == '_' || (chr >= '0' && chr <= '9')) {
+                state = STATE_ANY
+                head--;
+                
+                string := Slice<char>{text + start_of_token, head - start_of_token};
+                if string == "struct" {
+                    stream.add(TOKEN_STRUCT, line, column);
+                } else {
+                    stream.add(TOKEN_IDENTIFIER, line, column, string.ptr, string.len);
+                }
+            }
+            continue;
+        }
+        if state == STATE_NUMBER {
+            tmp := chr | cast<char>32;
+            if !(chr >= '0' && chr <= '9') {
+                state = STATE_ANY
+                head--;
+                
+                slice := Slice<char>{text + start_of_token, head - start_of_token};
+                
+                read_chars: u32;
+                num: i64 = parse_i64(slice, &read_chars);
+                
+                if num <= cast<i32>0xFFFF_FFFF {
+                    n: i32 = num;
+                    stream.add(TOKEN_LIT_NUMBER, line, column, &n, sizeof(n));
+                } else
+                    stream.add(TOKEN_LIT_NUMBER, line, column, &num, sizeof(num));
+                
+            }
+            continue;
+        }
+        
+        if chr == '/' && chr_next == '/' {
+            head++;
+            state = STATE_COMMENT;   
+            continue;
+        }
+        if chr == '/' && chr_next == '*' {
+            head++;
+            state = STATE_COMMENT_MULTILINE;
+            continue;
+        }
+        
+        tmp := chr | cast<char>32;
+        if (tmp >= 'a' && tmp <= 'z') || chr == '_' {
+            // possible name
+            state = STATE_IDENTIFIER;
+            start_of_token = head-1;
+            continue;
+        }
+        
+        // TODO: Hexidecimal, floats, binary form
+        if chr >= '0' && chr <= '9' {
+            state = STATE_NUMBER
+            start_of_token = head-1;
+            continue;
+        }
+        
+        if chr != ' ' && chr != '\n' && chr != '\r' && chr != '\t' {
+            stream.add(cast_unsafe<TokenType>cast<u16>chr, line, column);
+        }
+    }
+    
+    // stream.print();
+    
+    return stream;
+}
+operator ==(a: TokenType, b: char) -> bool {
+    return cast<u16>a == cast<u16>b;
+}
+operator !=(a: TokenType, b: char) -> bool {
+    return cast<u16>a != cast<u16>b;
 }
 enum TokenType : u16 {
-    TOKEN_NULL               = '\0',
-    TOKEN_TAB                = '\t',
-    TOKEN_NEWLINE            = '\n',
-    TOKEN_CARRIAGE_RETURN    = '\r',
-    TOKEN_ESCAPE             = '\e',
-    TOKEN_SPACE              = ' ',
+    // TOKEN_NULL               = '\0',
+    // TOKEN_TAB                = '\t',
+    // TOKEN_NEWLINE            = '\n',
+    // TOKEN_CARRIAGE_RETURN    = '\r',
+    // TOKEN_ESCAPE             = '\e',
+    // TOKEN_SPACE              = ' ',
     // normal characters are just ' 
 
     TOKEN_LIT_STRING = 256,
     TOKEN_LIT_NUMBER,
     TOKEN_LIT_DECIMAL,
 
+    TOKEN_IDENTIFIER,
     TOKEN_STRUCT,
 
 }

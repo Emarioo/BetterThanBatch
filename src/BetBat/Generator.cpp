@@ -548,7 +548,9 @@ bool PerformSafeCast(GenInfo &info, TypeId from, TypeId to) {
         info.addPush(reg1);
         return true;
     }
-    auto from_typeInfo = info.ast->getTypeInfo(from);
+    TypeInfo* from_typeInfo = nullptr;
+    if(from.isNormalType())
+        from_typeInfo = info.ast->getTypeInfo(from);
     // int to_size = info.ast->getTypeSize(to);
     if(from_typeInfo && from_typeInfo->astEnum && AST::IsInteger(to)) {
         // TODO: Print an error that says big enums can't be casted to small integers.
@@ -2572,120 +2574,151 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
         }
         else if (expression->typeId == AST_INITIALIZER) {
             TypeId castType = expression->versions_castType[info.currentPolyVersion];
-            TypeInfo *structInfo = info.ast->getTypeInfo(castType); // TODO: castType should be renamed
+            TypeInfo* base_typeInfo = info.ast->getTypeInfo(castType.baseType()); // TODO: castType should be renamed
             // TypeInfo *structInfo = info.ast->getTypeInfo(info.currentScopeId, Token(*expression->name));
-            if (!structInfo || !structInfo->astStruct) {
+            if (!base_typeInfo) {
                 auto str = info.ast->typeToString(castType);
                 ERR_SECTION(
                     ERR_HEAD(expression->tokenRange)
-                    ERR_MSG_LOG("cannot do initializer on non-struct " << log::YELLOW << str << "\n")
+                    ERR_MSG_LOG("Cannot do initializer on type '" << log::YELLOW << str << log::NO_COLOR << "'\n")
+                    ERR_LINE(expression->tokenRange, "bad")
                 )
                 return SignalDefault::FAILURE;
             }
+            bool is_struct = base_typeInfo->astStruct && castType.isNormalType();
+            if(!is_struct && expression->args.size() > 1) {
+                auto str = info.ast->typeToString(castType);
+                ERR_SECTION(
+                    ERR_HEAD(expression->tokenRange)
+                    ERR_MSG_LOG("The type '" << log::YELLOW << str << log::NO_COLOR << "' is not a struct and cannot have more than one value/expression in the initializer.\n")
+                    ERR_LINE(expression->args[1]->tokenRange, "not allowed")
+                )
+                return SignalDefault::FAILURE;
+            }    
+            
+            ASTStruct *ast_struct = base_typeInfo->astStruct;
+            
+            if(is_struct) {
+                // store expressions in a list so we can iterate in reverse
+                // TODO: parser could arrange the expressions in reverse.
+                //   it would probably be easier since it constructs the nodes
+                //   and has a little more context and control over it.
+                // std::vector<ASTExpression *> exprs;
+                TINY_ARRAY(ASTExpression*,exprs,6);
+                exprs.resize(ast_struct->members.size());
 
-            ASTStruct *astruct = structInfo->astStruct;
+                // Assert(expression->args);
+                // for (int index = 0; index < (int)expression->args->size(); index++) {
+                //     ASTExpression *expr = expression->args->get(index);
+                    
+                for (int index = 0; index < (int)expression->args.size(); index++) {
+                    ASTExpression *expr = expression->args.get(index);
 
-            // store expressions in a list so we can iterate in reverse
-            // TODO: parser could arrange the expressions in reverse.
-            //   it would probably be easier since it constructs the nodes
-            //   and has a little more context and control over it.
-            // std::vector<ASTExpression *> exprs;
-            TINY_ARRAY(ASTExpression*,exprs,6);
-            exprs.resize(astruct->members.size());
-
-            // Assert(expression->args);
-            // for (int index = 0; index < (int)expression->args->size(); index++) {
-            //     ASTExpression *expr = expression->args->get(index);
-                
-            for (int index = 0; index < (int)expression->args.size(); index++) {
-                ASTExpression *expr = expression->args.get(index);
-
-                if (!expr->namedValue.str) {
-                    if ((int)exprs.size() <= index) {
-                        ERR_SECTION(
-                            ERR_HEAD(expr->tokenRange)
-                            ERR_MSG("To many members for struct " << astruct->name << " (" << astruct->members.size() << " member(s) allowed).")
-                        )
-                        continue;
-                    }
-                    else
-                        exprs[index] = expr;
-                } else {
-                    int memIndex = -1;
-                    for (int i = 0; i < (int)astruct->members.size(); i++) {
-                        if (astruct->members[i].name == expr->namedValue) {
-                            memIndex = i;
-                            break;
-                        }
-                    }
-                    if (memIndex == -1) {
-                        ERR_SECTION(
-                            ERR_HEAD(expr->tokenRange)
-                            ERR_MSG("'"<<expr->namedValue << "' is not an member in " << astruct->name << ".")
-                        )
-                        continue;
-                    } else {
-                        if (exprs[memIndex]) {
+                    if (!expr->namedValue.str) {
+                        if ((int)exprs.size() <= index) {
                             ERR_SECTION(
                                 ERR_HEAD(expr->tokenRange)
-                                ERR_MSG("Argument for " << astruct->members[memIndex].name << " is already specified at " << LOGAT(exprs[memIndex]->tokenRange) << ".")
+                                ERR_MSG("To many members for struct " << ast_struct->name << " (" << ast_struct->members.size() << " member(s) allowed).")
                             )
-                            
+                            continue;
+                        }
+                        else
+                            exprs[index] = expr;
+                    } else {
+                        int memIndex = -1;
+                        for (int i = 0; i < (int)ast_struct->members.size(); i++) {
+                            if (ast_struct->members[i].name == expr->namedValue) {
+                                memIndex = i;
+                                break;
+                            }
+                        }
+                        if (memIndex == -1) {
+                            ERR_SECTION(
+                                ERR_HEAD(expr->tokenRange)
+                                ERR_MSG("'"<<expr->namedValue << "' is not an member in " << ast_struct->name << ".")
+                            )
+                            continue;
                         } else {
-                            exprs[memIndex] = expr;
+                            if (exprs[memIndex]) {
+                                ERR_SECTION(
+                                    ERR_HEAD(expr->tokenRange)
+                                    ERR_MSG("Argument for " << ast_struct->members[memIndex].name << " is already specified at " << LOGAT(exprs[memIndex]->tokenRange) << ".")
+                                )
+                                
+                            } else {
+                                exprs[memIndex] = expr;
+                            }
                         }
                     }
                 }
-            }
 
-            for (int i = 0; i < (int)astruct->members.size(); i++) {
-                auto &mem = astruct->members[i];
-                if (!exprs[i])
-                    exprs[i] = mem.defaultValue;
-            }
-            // for (int i = (int)astruct->members.size()-1;i>=0; i--) {
-            //     auto &mem = astruct->members[i];
-            //     if (!exprs[i])
-            //         exprs[i] = mem.defaultValue;
-            // }
+                for (int i = 0; i < (int)ast_struct->members.size(); i++) {
+                    auto &mem = ast_struct->members[i];
+                    if (!exprs[i])
+                        exprs[i] = mem.defaultValue;
+                }
+                // for (int i = (int)astruct->members.size()-1;i>=0; i--) {
+                //     auto &mem = astruct->members[i];
+                //     if (!exprs[i])
+                //         exprs[i] = mem.defaultValue;
+                // }
 
-            int index = (int)exprs.size();
-            while (index > 0) {
-                index--;
-                ASTExpression *expr = exprs[index];
-                TypeId exprId={};
-                if (!expr) {
-                    exprId = structInfo->getMember(index).typeId;
-                    SignalDefault result = GenerateDefaultValue(info, 0, 0, exprId, nullptr);
+                int index = (int)exprs.size();
+                while (index > 0) {
+                    index--;
+                    ASTExpression *expr = exprs[index];
+                    TypeId exprId={};
+                    if (!expr) {
+                        exprId = base_typeInfo->getMember(index).typeId;
+                        SignalDefault result = GenerateDefaultValue(info, 0, 0, exprId, nullptr);
+                        if (result != SignalDefault::SUCCESS)
+                            return result;
+                        // ERR_SECTION(
+                    // ERR_HEAD(expression->tokenRange, "Missing argument for " << astruct->members[index].name << " (call to " << astruct->name << ").\n";
+                        // )
+                        // continue;
+                    } else {
+                        SignalDefault result = GenerateExpression(info, expr, &exprId);
+                        if (result != SignalDefault::SUCCESS)
+                            return result;
+                    }
+
+                    if (index >= (int)base_typeInfo->astStruct->members.size()) {
+                        // ERR() << "To many arguments! func:"<<*expression->funcName<<" max: "<<astFunc->arguments.size()<<"\n";
+                        continue;
+                    }
+                    TypeId tid = base_typeInfo->getMember(index).typeId;
+                    if (!PerformSafeCast(info, exprId, tid)) {   // implicit conversion
+                        // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
+                        ERRTYPE1(expr->tokenRange, exprId, tid, "(initializer)");
+                        
+                        continue;
+                    }
+                }
+            } else {
+                if(expression->args.size()>0) {
+                    ASTExpression* expr = expression->args[0];
+                    TypeId expr_type{};
+                    SignalDefault result = GenerateExpression(info, expr, &expr_type);
                     if (result != SignalDefault::SUCCESS)
                         return result;
-                    // ERR_SECTION(
-                // ERR_HEAD(expression->tokenRange, "Missing argument for " << astruct->members[index].name << " (call to " << astruct->name << ").\n";
-                    // )
-                    // continue;
+                        
+                    // if(expr_type!=castType){ // strict, no conversion
+                    if (!PerformSafeCast(info, expr_type, castType)) { // implicit conversion
+                        ERRTYPE1(expr->tokenRange, expr_type, castType, "(initializer)");
+                        return SignalDefault::FAILURE;
+                    }
                 } else {
-                    SignalDefault result = GenerateExpression(info, expr, &exprId);
+                    SignalDefault result = GenerateDefaultValue(info, 0, 0, castType, nullptr);
                     if (result != SignalDefault::SUCCESS)
                         return result;
-                }
-
-                if (index >= (int)structInfo->astStruct->members.size()) {
-                    // ERR() << "To many arguments! func:"<<*expression->funcName<<" max: "<<astFunc->arguments.size()<<"\n";
-                    continue;
-                }
-                TypeId tid = structInfo->getMember(index).typeId;
-                if (!PerformSafeCast(info, exprId, tid)) {   // implicit conversion
-                    // if(astFunc->arguments[index].typeId!=dt){ // strict, no conversion
-                    ERRTYPE1(expr->tokenRange, exprId, tid, "(initializer)");
-                    
-                    continue;
                 }
             }
             // if((int)exprs.size()!=(int)structInfo->astStruct->members.size()){
             //     // return SignalDefault::FAILURE;
             // }
-
-            outTypeIds->add( structInfo->id);
+            if(outTypeIds)
+                outTypeIds->add(castType);
         }
         else if (expression->typeId == AST_SLICE_INITIALIZER) {
 
@@ -3045,7 +3078,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if (operationType != AST_ADD && operationType != AST_SUB  && operationType != AST_EQUAL  && operationType != AST_NOT_EQUAL) {
                         ERR_SECTION(
                             ERR_HEAD(expression->tokenRange)
-                            ERR_MSG(OP_NAME((OperationType)operationType.getId()) << " does not work with pointers. Only addition and subtraction works.")
+                            ERR_MSG(OP_NAME((OperationType)operationType.getId()) << " does not work with pointers. Only addition, subtraction and equality works.")
                             ERR_LINE(expression->left->tokenRange, info.ast->typeToString(ltype));
                             ERR_LINE(expression->right->tokenRange, info.ast->typeToString(rtype));
                         )
@@ -3058,6 +3091,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     u8 reg2 = RegBySize(SECOND_REG, rsize);
                     info.addPop(reg2); // note that right expression should be popped first
                     info.addPop(reg1);
+                    
+                    bool is_equality = operationType == AST_EQUAL || operationType == AST_NOT_EQUAL;
 
                     BCInstruction bytecodeOp = ASTOpToBytecode(operationType,false);
                     if(bytecodeOp==0){
@@ -3074,14 +3109,20 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         if(expression->typeId==AST_ASSIGN){
                             info.addInstruction({BC_MOV_RM, reg1, BC_REG_RBX, lsize});
                         }
-                        outTypeIds->add(ltype);
+                        if(is_equality)
+                            outTypeIds->add(AST_BOOL);
+                        else
+                            outTypeIds->add(ltype);
                     }else{
                         info.addInstruction({bytecodeOp, reg1, reg2, reg2});
                         info.addPush(reg2);
                         if(expression->typeId==AST_ASSIGN){
                             info.addInstruction({BC_MOV_RM, reg2, BC_REG_RBX, rsize});
                         }
-                        outTypeIds->add(rtype);
+                        if(is_equality)
+                            outTypeIds->add(AST_BOOL);
+                        else
+                            outTypeIds->add(rtype);
                     }
                 } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR || left_info->astEnum) && (AST::IsInteger(rtype) || rtype == AST_CHAR || right_info->astEnum)){
                     // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
@@ -3441,9 +3482,9 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
         }
     }
     for(auto& typ : *outTypeIds){
-        TypeInfo* ti = info.ast->getTypeInfo(typ);
+        TypeInfo* ti = info.ast->getTypeInfo(typ.baseType());
         if(ti){
-            Assert(("Leaking virtual type!",ti->id == typ));
+            Assert(("Leaking virtual type!",ti->id == typ.baseType()));
         }
     }
     // To avoid ensuring non virtual type everywhere all the entry point where virtual type can enter
@@ -4871,15 +4912,15 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             for (auto ind : loopScope->resolveBreaks) {
                 info.code->getIm(ind) = info.code->length();
             }
-
-            if(!statement->firstExpression && loopScope->resolveBreaks.size() == 0) {
-                // TODO: Should this error exist?
-                ERR_SECTION(
-                    ERR_HEAD(statement->tokenRange)
-                    ERR_MSG("A true infinite loop without any break statements is not allowed. If this was intended, write 'while true' or put 'if false break' in the body of the loop.")
-                    ERR_LINE(statement->tokenRange,"true infinite loop")
-                )
-            }
+            
+            // TODO: Should this error exist? We need to check for returns too.
+            // if(!statement->firstExpression && loopScope->resolveBreaks.size() == 0) {
+            //     ERR_SECTION(
+            //         ERR_HEAD(statement->tokenRange)
+            //         ERR_MSG("A true infinite loop without any break statements is not allowed. If this was intended, write 'while true' or put 'if false break' in the body of the loop.")
+            //         ERR_LINE(statement->tokenRange,"true infinite loop")
+            //     )
+            // }
 
             // pop loop happens in defer
             // _GLOG(log::out << "pop loop\n");

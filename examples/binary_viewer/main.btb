@@ -2,12 +2,16 @@
 
 #import "Array"
 #import "Stream"
+#import "Lexer"
+
 
 fn main(argc: i32, argv: char**) -> i32 {
     // arguments
     // for 0..argc
     //     log(nr,argv[nr])
     TestSpec(); 
+    
+    // LexFile("examples/binary_viewer/spec.txt")
 
     // log(sizeof TypeDefinition)
 
@@ -15,30 +19,32 @@ fn main(argc: i32, argv: char**) -> i32 {
 }
 
 fn TestSpec() {
+    suc: bool;
     spec: FormatSpec;
     stream: ByteStream;
-    spec.init();
-    stream._reserve(0x1000);
     defer {
         spec.cleanup();
         stream.cleanup();
     }
 
-    // Format description
-    spec.addField("all_size", TYPE_I32)
-    type_header := spec.createDefinition("Header")
-    spec.addField("magic", TYPE_I32, type_header)
-    spec.addField("section_count", TYPE_I32, type_header)
-    spec.addField("header",type_header)
+    // // Format description
+    // spec.init();
+    // spec.addField("all_size", TYPE_I32)
+    // type_header := spec.createDefinition("Header")
+    // spec.addField("magic", TYPE_I32, type_header)
+    // spec.addField("section_count", TYPE_I32, type_header)
+    // spec.addField("header",type_header)
 
-    // Test data
-    suc := stream.write<i32>(5);
-    suc = stream.write<i32>(0x9932949);
-    suc = stream.write<i32>(92);
-
+    // // Test data
+    // stream.reserve(0x1000);
+    // suc = stream.write<i32>(5);
+    // suc = stream.write<i32>(0x9932949);
+    // suc = stream.write<i32>(92);
     // print_bytes(&stream);
-
-    Interpret(stream.sliced_unsafe(), &spec);
+    // Interpret(stream.sliced_unsafe(), &spec);
+    
+    suc = ParseSpecification("examples/binary_viewer/spec.txt", &spec);
+    Interpret("examples/binary_viewer/data.txt", &spec);
 }
 
 enum FieldType {
@@ -102,7 +108,7 @@ struct FormatSpec {
     }
     
     fn getDefinition(definition: u32) -> TypeDefinition* {
-        return definitions.getPtr(definition);
+        return definitions.get_unsafe(definition);
     }
     fn createDefinition(name: char[]) -> u32 {
         def := definitions.add(TypeDefinition{});
@@ -111,12 +117,12 @@ struct FormatSpec {
         return def.type;
     }
     fn getField(definition: u32, fieldIndex: u32) -> Field* {
-        // getPtr handles out of range
+        // get_unsafe handles out of range
         if definition == 0 {
-            return fields.getPtr(fieldIndex);
+            return fields.get_unsafe(fieldIndex);
         }
         def := getDefinition(definition);
-        return def.fields.getPtr(fieldIndex);
+        return def.fields.get_unsafe(fieldIndex);
     }
 
     fn addField(name: char[], type: u32, definition: u32 = 0) {
@@ -136,9 +142,21 @@ struct FormatSpec {
     }
 }
 
-// fn Interpret(path: char[], spec: FormatSpec*) {
-//     FileOpen(path)
-// }
+fn Interpret(path: char[], spec: FormatSpec*) {
+    filesize: u64;
+    file := FileOpen(&path, FILE_READ_ONLY, &filesize);
+    if !file
+        return;
+        
+    suc: bool;
+    buffer: u8* = Allocate(filesize);
+    defer Free(buffer, filesize);
+    suc = FileRead(file, buffer, filesize);
+    // TODO: Assert(suc)
+    FileClose(file);
+    
+    Interpret(Slice<u8>{buffer, filesize}, spec);
+}
 
 // Prints the content of the stream based on the specification.
 fn Interpret(stream: u8[], spec: FormatSpec*) {
@@ -164,7 +182,7 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
     
     while stack.len {
         // get next field
-        layer := stack.getPtr(stack.len - 1);
+        layer := stack.get_unsafe(stack.len - 1);
 
         element: Field* = spec.getField(layer.type, layer.fieldIndex);
         if !element {
@@ -224,4 +242,84 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
         pr('\n');
     }
     pr("Finished, read ",head," bytes\n");
+}
+
+
+fn ParseSpecification(path: Slice<char>, out_spec: FormatSpec*) -> bool {
+    out_spec.cleanup();
+    out_spec.init();
+    
+    tokenStream := LexFile(path)
+    defer DestroyTokenStream(tokenStream);
+    if !tokenStream
+        return false;
+    
+    parser: SpecParser;
+    parser.tokens = tokenStream;
+    parser.spec = out_spec;
+    
+    tokenStream.print();
+    
+    parser.parseBody();
+    
+    return true;
+}
+struct SpecParser {
+    tokens: TokenStream*;
+    spec: FormatSpec*;
+    head: u32; // token index
+    
+    fn get(off: u32 = 0) -> Token* {
+        return tokens.get(head + off);
+    }
+    fn consume(n: u32 = 1) {
+        head += n;
+    }
+    
+    fn parseBody() {
+        
+        while head < tokens.size() {
+            tok := get();
+            
+            if tok.type == TOKEN_STRUCT {
+                consume();
+                parseStruct();
+            }
+            
+            consume();
+            log("BAD SYNTAX");
+            tokens.print(head)
+            pr("\n")
+        }
+    }
+    fn parseStruct() {
+        tok := get();
+         
+        if tok.type != TOKEN_STRUCT {
+        }
+        
+        if tok.
+        
+        while head < tokens.size() {
+            tok := get();
+            
+            consume();
+            if tok.type != TOKEN_IDENTIFIER {
+                log("BAD SYNTAX");
+                tokens.print(head)
+                pr("\n")
+                continue;
+            }
+            
+            consume();   
+            if tok.type != ':' {
+                log("BAD SYNTAX");
+                tokens.print(head)
+                pr("\n")
+                continue;
+            }
+            
+            
+        }
+    }
 }

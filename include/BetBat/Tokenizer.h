@@ -134,6 +134,7 @@ struct TokenRange {
     bool finishedFeed(int* token_index) const { return *token_index == endIndex - startIndex(); }
     u32 queryFeedSize(bool quoted_environment = false) const;
 };
+extern Token END_TOKEN;
 engone::Logger& operator<<(engone::Logger& logger, TokenRange& tokenRange);
 struct TokenStream {
     ~TokenStream() {

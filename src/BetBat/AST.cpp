@@ -477,7 +477,9 @@ bool AST::castable(TypeId from, TypeId to){
         return true;
     }
 
-    auto from_typeInfo = getTypeInfo(from);
+    TypeInfo* from_typeInfo = nullptr;
+    if(from.isNormalType())
+        from_typeInfo = getTypeInfo(from);
     int to_size = getTypeSize(to);
     if(from_typeInfo && from_typeInfo->astEnum && AST::IsInteger(to)) {
         // TODO: Print an error that says big enums can't be casted to small integers.
@@ -503,12 +505,18 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
 
     FnOverloads::Overload* lastOverload = nullptr;
     FnOverloads::Overload* intOverload = nullptr;
+    FnOverloads::Overload* uintOverload = nullptr;
+    FnOverloads::Overload* sintOverload = nullptr;
     int validOverloads = 0;
     int intOverloads = 0;
+    int uintOverloads = 0;
+    int sintOverloads = 0;
     for(int i=0;i<(int)overloads.size();i++){
         auto& overload = overloads[i];
         bool found = true;
-        bool foundInt = true;
+        bool found_int = true; // any signedness
+        bool found_sint = true; // signed
+        bool found_uint = true; // unsigned
         // TODO: Store non defaults in Identifier or ASTStruct to save time.
         //   Recalculating non default arguments here every time you get a function is
         //   unnecessary.
@@ -526,7 +534,9 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
             continue;
             
         if(canCast){
-            foundInt = false; // we don't use int
+            found_int = false;
+            found_sint = false; // we don't use int
+            found_uint = false;
             for(int j=0;j<(int)fncall->nonNamedArgs;j++){
                 TypeId implArgType = overload.funcImpl->argumentTypes[j+startOfRealArguments].typeId;
                 if(!ast->castable(argTypes[j], implArgType)) {
@@ -545,17 +555,34 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                     //  It may therefore be a good idea to force the user to explicitly cast.
                     //  Or create two functions for f32 and f64.
                     if(!(AST::IsInteger(implArgType) && AST::IsInteger(argTypes[j]))) {
-                        foundInt = false;
+                        found_sint = false;
+                        found_uint = false;
+                        found_int = false;
+                    } else {
+                        if(!(AST::IsSigned(implArgType) && AST::IsSigned(argTypes[j]))) {
+                            found_sint = false;
+                        }
+                        if(!(!AST::IsSigned(implArgType) && !AST::IsSigned(argTypes[j]))) {
+                            found_uint = false;
+                        }
                     }
                     // break; // We can't break when using foundInt
                 }
                 // log::out << ast->typeToString(overload.funcImpl->argumentTypes[j].typeId) << " = "<<ast->typeToString(argTypes[j])<<"\n";
             }
         }
-        if(foundInt) {
+        if(found_int) {
             intOverload = &overload;
             intOverloads++;
         }
+        if(found_sint) {
+            sintOverload = &overload;
+            sintOverloads++;
+        } 
+        if(found_uint) {
+            uintOverload = &overload;
+            uintOverloads++;
+        } 
         if(!found)
             continue;
 
@@ -573,10 +600,15 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
         lastOverload = &overload;
         validOverloads++;
     }
-    if(intOverloads == 1 && !lastOverload) {
+    if(lastOverload)
+        return lastOverload;
+    if(uintOverloads == 1)
+        return uintOverload;
+    if(sintOverloads == 1)
+        return sintOverload;
+    if(intOverloads == 1)
         return intOverload;
-    }
-    return lastOverload;
+    return nullptr;
 }
 
 // FnOverloads::Overload* FnOverloads::getOverload(AST* ast, DynamicArray<TypeId>& argTypes, DynamicArray<TypeId>& polyArgs, ASTExpression* fncall, bool implicitPoly, bool canCast){
@@ -613,7 +645,6 @@ FnOverloads::Overload* FnOverloads::getOverload(AST* ast, QuickArray<TypeId>& ar
                     continue;
         }
         bool found = true;
-        bool foundInt = true;
 
         if(!implicitPoly){
             // The args must match exactly. Otherwise, a new implementation should be generated.
@@ -1514,8 +1545,10 @@ TypeInfo *AST::getTypeInfo(TypeId id) {
     // Do not remove them. Explicitly use TypeId.baseType() to get the type info.
     if(!id.isValid())
         return nullptr;
-    if(!id.isNormalType())
-        return nullptr;
+    Assert(id.isNormalType());
+    Assert(id.getId() < _typeInfos.size());
+    // if(!id.isNormalType())
+    //     return nullptr;
     if(id.getId() >= _typeInfos.size())
         return nullptr;
     return _typeInfos[id.getId()];

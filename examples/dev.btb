@@ -32,15 +32,21 @@
 // HELLO! NEXT STEP, fix profiling of time
 // StartMeasure/StopMeasure didn't work before, do they now?
 
-#import "Lang"
+
+// #import "examples/binary_viewer/main.btb"
+
+#import "Map"
 #import "Logger"
 
-for @ptr type : lang_typeInfos {
-    if !type.type  continue;
+map: Map<i32,i32>;
+map.init(3)
 
-    // log(type)
+map.set(3,1);
+map.set(52,2);
+map.set(92,3);
+map.set(32,4);
+map.print();
 
-    // _print(lang_strings.ptr[type.name.beg])
-
-    log(lang_TypeId{nr})
-}
+map.remove(32);
+map.remove(3);
+map.print();

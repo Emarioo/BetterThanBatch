@@ -174,12 +174,16 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
     int minPos = -1;
     int maxPos = -1;
     int pos = -1;
+    bool added_newline = false;
     for(int i=start;i<end;i++){
         Token& tok = tokenRange.tokenStream()->get(i);
         if(tok.line != currentLine){
             currentLine = tok.line;
-            if(i!=start)
-                log::out << "\n";
+            if(i!=start) {
+                if(!added_newline)
+                    log::out << "\n";
+                added_newline = false;
+            }
             int numlen = currentLine>0 ? ((int)log10(currentLine)+1) : 1;
             for(int j=0;j<lineDigits-numlen;j++)
                 log::out << " ";
@@ -217,6 +221,8 @@ void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder,
                 pos++;
         }
         tok.print(false);
+        if(tok.flags&TOKEN_SUFFIX_LINE_FEED)
+            added_newline = true;
         // log::out.flush();
     }
     // log::out << "\n";

@@ -6,15 +6,6 @@
 
 fn @intrinsic strlen(str: char*) -> u32;
 
-// This is not beautifully done. If _print has a bug then printi would work in interpreter but not otherwise. No one likes inconsistencies. 
-#ifdef LINK_BYTECODE
-fn @native printi(str: i64);
-fn @native printd(str: f32);
-#else
-#define printi(...) _print(...)
-#define printd(...) _print(...)
-#endif
-
 /*
     The reason functions are named "print" and not "log"
     is because you might want your own log function.
@@ -31,12 +22,9 @@ fn @native printd(str: f32);
 
 // IMPORTANT: SAFE_CONVERSIONS in x64_Converter must be defined for this function to work properly.
 //  There will be some unexpected bits otherwise.
-fn @hide _print(t: i64){
+fn @hide _print(t: u64){
     // If you are worried that this language will be filled with ifdefs like C/C++
     // then you can calm down. This is just temporary.
-    #ifdef LINK_BYTECODE
-    printi(t)
-    #else
     
     // optimise by using a log10 function to know how many characters you need.
     // then allocate some memory for that space
@@ -51,70 +39,31 @@ fn @hide _print(t: i64){
         printc('0')
         return;
     }
-    signed := false;
-    if t < 0 {
-        signed = true;
-        t = 0-t;
-    }
     str: char[20];
     used := 19;
-    while t > 0 && used > 0 {
-        num: u32 = t % 10;
+    while t > 0u && used > 0 {
+        num: u32 = t % 10u;
         // log('A','0'+num)
         // log(,num)
         str.ptr[used] = num + '0';
         used--;
         
-        t = t / 10;
+        t = t / 10u;
     }
     str.ptr += used + 1;
     // str.len -= used - 1;
     str.len -= used + 1;
-    if signed
-        printc('-');
     prints(str);
-    #endif
 }
-// fn @hide _print(t: u64){
-//     // If you are worried that this language will be filled with ifdefs like C/C++
-//     // then you can calm down. This is just temporary.
-//     #ifdef LINK_BYTECODE
-//     printi(t)
-//     #else
-    
-//     // optimise by using a log10 function to know how many characters you need.
-//     // then allocate some memory for that space
-//     // run a while looop filling up that memory
-//     // then print all characters at once
-//     // free memory
-//     // One last thing, the memory should be allocated using a linear allocator
-//     // or some other temporary allocator. Perhaps you can allocate it on the
-//     // stack or something?
-//     if t == 0 {
-//         printc('0')
-//         return;
-//     }
-//     signed = false;
-//     if t < 0 {
-//         signed = true;
-//         t = 0-t;
-//     }
-//     str: char[20];
-//     used = 19;
-//     while t > 0 && used > 0 {
-//         num = t % 10;
-//         str.ptr[used] = num + '0';
-//         used--;
-        
-//         t = t / 10;
-//     }
-//     str.ptr += used + 1;
-//     str.len -= used + 1;
-//     if signed
-//         printc('-');
-//     prints(str);
-//     #endif
-// }
+fn @hide _print(t: i64){
+    mask: i64 = 0x8000_0000_0000_0000;
+    if t & mask {
+        printc('-');
+        _print(cast<u64>(-t));
+    } else {
+        _print(cast<u64>(t));
+    }
+}
 fn _print(str: char*){
     slice := Slice<char>{str, strlen(str)};
     prints(slice);
@@ -257,6 +206,8 @@ fn _print<T>(p: T*) {
                 printc('a' + hex - 10)
         }
     }
+    if zeros
+        printc('0'); // we want at least one zero
 }
 fn @hide _print(t: char){
     printc(t);
@@ -270,4 +221,7 @@ fn @hide _print(t: bool){
 }
 fn @hide _print(t: char[]){
     prints(t);
+}
+fn @hide _print(ptr: char*, len: u64){
+    prints(Slice<char>(ptr, len));
 }

@@ -339,6 +339,7 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
             ENSURE(1)
             *(outBuffer + written_temp++) = '\'';
         }
+        // TODO: Change || to &&? Otherwise we would do the suffix if it was the final character no?
         if(!skipSuffix || i-1 != endIndex) {
             if((tok.flags&TOKEN_SUFFIX_LINE_FEED)){
                 ENSURE(1)
@@ -499,7 +500,7 @@ TokenRange Token::range() const {
     return r;
     // return (TokenRange)*this;
 }
-static Token END_TOKEN{"$END$"};
+Token END_TOKEN{"$END$"};
 // Token& TokenStream::next(){
 //     if(readHead == length())
 //         return END_TOKEN;

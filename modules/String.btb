@@ -137,7 +137,7 @@ fn @hide swrite_unsafe(buffer: char*, cstr: char*) -> u32 {
 // Will put a null termination at the end of the written bytes
 fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
     // LN
-    start = buffer;
+    start := buffer;
     if value == 0 {
         buffer[0] = '0';
         buffer[1] = '\0';
@@ -150,9 +150,9 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
     }
     // LN
     str: char[21];
-    used = 20;
+    used := 20;
     while value > 0 && used > 0 {
-        num = value % 10;
+        num := value % 10;
         value = value / 10;
         str.ptr[used] = num + '0';
         used--;
@@ -346,3 +346,24 @@ fn @hide swrite_unsafe(buffer: char*, t: f32) -> u32 {
 //     // log(written);
 //     return str.len;
 // }
+
+
+fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
+    // TODO: Parse white space?
+    // TODO: Parse negative number
+    result: i64;
+    i: u32 = 0;
+    while i < slice.len {
+        chr := slice.ptr[i];
+        if chr >= '0' && chr <= '9' {
+            result = result * 10 + chr - '0';
+        } else {
+            break;
+        }
+        i++;
+    }
+    if read_chars {
+        *read_chars = i;
+    }
+    return result;
+}

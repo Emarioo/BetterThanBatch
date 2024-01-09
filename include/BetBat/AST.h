@@ -270,7 +270,7 @@ struct TypeId {
     }
     u32 getPointerLevel() const { return (_flags & POINTER_MASK)>>POINTER_SHIFT; }
     u32 getId() const { return (u32)_infoIndex0 | ((u32)_infoIndex1<<8); }
-    // TODO: Rename to something better
+    // returns true if valid, no string, and no pointer
     bool isNormalType() const { return isValid() && !isString() && !isPointer(); }
     //  && !isVirtual(); }
 };

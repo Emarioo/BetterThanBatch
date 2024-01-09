@@ -725,6 +725,9 @@ SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
     bool active = info.compileInfo->matchMacro(name);
     if(notDefined)
         active = !active;
+    notDefined = false; // reset, we use it later
+    
+    bool complete_inactive = false;
     
     int depth = 0;
     SignalAttempt error = SignalAttempt::SUCCESS;
@@ -745,13 +748,41 @@ SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
             //  to skip them later which is unnecessary computation
             if(token=="ifdef" || token=="ifndef"){
                 if(!active){
-                    info.next();
+                    info.next(); // hashtag
                     info.next();
                     depth++;
                     // log::out << log::GRAY<< "   ifdef - new depth "<<depth<<"\n";
                 }
+                //  else {
+                //     info.next(); // hashtag
+                //     info.next(); // ifdef/ifndef
+                    
+                // }
                 // continue;
-            }else if(token=="endif"){
+            } else if(token == "elif" || (token == "elnif" && (notDefined = true))) {
+                info.next(); // hashtag
+                info.next(); // elif
+                
+                name = info.next(); // name, hopefully
+                if(!IsName(name)) {
+                    ERR_SECTION(
+                        ERR_HEAD(name)
+                        ERR_MSG("#elif/elnif expects a valid macro name after it same as #ifdef/ifndef.")
+                        ERR_LINE(name,"not a valid macro name")
+                    )
+                } else {
+                    if(!active) {
+                        // if a previous ifdef/elif matched we don't want to check this one
+                        active = info.compileInfo->matchMacro(name);
+                        if(notDefined)
+                            active = !active;
+                    } else {
+                        complete_inactive = true;
+                        active = false;
+                    }
+                }
+                notDefined = false; // reset for later
+            } else if(token=="endif"){
                 if(depth==0){
                     info.next();
                     info.next();
@@ -765,7 +796,8 @@ SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
                 if(depth==0){
                     info.next();
                     info.next();
-                    active = !active;
+                    if(!complete_inactive)
+                        active = !active;
                     _MLOG(log::out << log::GRAY<< "   else - "<<name<<"\n";)
                     continue;
                 }

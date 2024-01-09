@@ -1,0 +1,73 @@
+# Loops
+There are two loops, for and while.
+
+## For
+The *for* loop is used to iterate through an array or range of values
+
+```
+#import "Logger" // See chapter about "Imports and namespaces"
+// Logger provides a macro/function called 'log' which can print numbers, strings, and floats among other types.
+
+TODO: Explain it, nr
+TODO: Explain that it, nr used the same memory with ranges but not with slices
+
+for 0..5
+    log(it);
+
+for i: 0..5
+    log(i);
+
+arr: i32[10] { 5, 9, 2, 4, 23, 1982, 18};
+
+for arr
+    log(it);
+    
+for num: arr
+    log(num);
+    
+```
+
+## While
+The *while* loop is used when looping/iterating as long as a condition is true.
+
+```
+i := 0
+while i < 5 {
+    log(i);
+    i++;
+}
+
+i := 0
+while { // infinte loop
+    log(i);
+    i++;
+    if i == 5
+        break;
+}
+```
+
+## Break and continue
+All loops support *break* and *continue*.
+
+```
+TODO: break does what
+TODO: continue does what
+
+
+while {
+    
+}
+
+```
+
+With while loops, you can skip the expression to get an infinite loop. However, the compiler will complain
+unless you have a break statement inside the while's body.
+```
+n = 0
+while {
+    log(n)
+    n++
+    if n == 5
+        break
+}
+```
