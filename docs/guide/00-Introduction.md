@@ -13,9 +13,9 @@ For information about the options you can pass to the compiler
 
 
 ## Compiling the compiler
-**Unix**: `build.sh`      (requires `gcc`)
+**Unix**: `build.sh`      (requires `g++`)
 
-**Windows**: `build.bat`  (requires `cl`, `link`, and `gcc`)
+**Windows**: `build.bat`  (requires `cl`, `link`, and `g++` for DWARF debug information)
 
-**NOTE**: On Windows, `gcc` can be acquired from MinGW. Installing Visual Studio will give the tools but then
-you must make sure `cl`, `link` is available in environment variables. Look into `vcvarsall.bat`
+**NOTE**: On Windows, `g++` can be acquired from MinGW. Installing Visual Studio will give the tools but then
+you must make sure `cl`, `link` is available in environment variables. Look into `vcvars64.bat`

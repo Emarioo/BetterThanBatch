@@ -1025,8 +1025,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
             pc = data;
             break;
         }
-        break; case BC_JE:
-        case BC_JNE: {
+        break; case BC_JNZ:
+        case BC_JZ: {
             u8 r0 = DECODE_REG0(inst);
 
             // u32 data = *(u32*)bytecode->get(pc);
@@ -1050,8 +1050,8 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
             
             bool yes=false;
             switch (opcode){
-                case BC_JE: yes = testValue!=0; break;
-                break; case BC_JNE: yes = testValue==0; break;
+                case BC_JNZ: yes = testValue!=0; break;
+                break; case BC_JZ: yes = testValue==0; break;
             }
             if(yes){
                 pc = data;

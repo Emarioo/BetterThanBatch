@@ -17,9 +17,18 @@
 /*
     Declaration of functions
 */
+enum ParseFlags : u32 {
+    PARSE_NO_FLAGS = 0x0,
+    // INPUT
+    PARSE_INSIDE_SWITCH = 0x1,
+    PARSE_TRULY_GLOBAL = 0x2,
+    // OUTPUT
+    PARSE_HAS_CURLIES = 0x4,
+    PARSE_HAS_CASE_FALL = 0x8, // annotation @fall for switch cases
+};
 ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace);
 // out token contains a newly allocated string. use delete[] on it
-SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal = false, bool* has_curlies = nullptr);
+SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags = PARSE_NO_FLAGS, ParseFlags* out_flags = nullptr);
 // normal assignment a = 9
 SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt);
 SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct);
@@ -33,6 +42,7 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt);
 SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt);
 SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt);
 SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed);
+
 
 /*
     Code for the functions
@@ -830,7 +840,8 @@ SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     }
     astEnum = info.ast->createEnum(name);
     astEnum->rules = enumRules;
-    astEnum->colonType = colonType;
+    if (colonType.isValid()) // use default type in astEnum if type isn't specified
+        astEnum->colonType = colonType;
     astEnum->tokenRange.firstToken = enumToken;
     // astEnum->tokenRange.startIndex = startIndex;
     // astEnum->tokenRange.tokenStream = info.tokens;
@@ -2352,8 +2363,8 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         int endIndex = info.at()+1;
 
         ASTScope* body=nullptr;
-        bool has_culries = false;
-        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId, false, &has_culries);
+        ParseFlags parsed_flags = PARSE_NO_FLAGS;
+        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId, PARSE_NO_FLAGS, &parsed_flags);
         if(resultBody!=SignalDefault::SUCCESS){
             return SignalAttempt::FAILURE;
         }
@@ -2377,7 +2388,7 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         // statement->tokenRange.endIndex = info.at()+1;
         statement->tokenRange.endIndex = endIndex;
 
-        if(!has_culries && body->statements.size()>0) {
+        if(!(parsed_flags&PARSE_HAS_CURLIES) && body->statements.size()>0) {
             if (body->statements[0]->type == ASTStatement::IF) {
                 ERR_SECTION(
                     ERR_HEAD(body->statements[0]->tokenRange, ERROR_AMBIGUOUS_IF_ELSE)
@@ -2554,6 +2565,10 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
                 info.next();
                 break;   
             }
+            if(Equal(tok,";")) {
+                info.next();
+                continue;
+            }
             
             if(IsAnnotation(tok)) {
                 if(Equal(tok,"@TEST_ERROR")) {
@@ -2641,35 +2656,9 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
                 info.next(); // :
             }
             
-            tok = info.get(info.at()+1);
-            if(!Equal(tok,"{")){
-                if((colonTok.flags & TOKEN_SUFFIX_LINE_FEED) != 0){
-                    // We don't print a message if the statement without curly braces are on the same line.
-                    // It can be seen as you want just the one statement. If you put it on a new
-                    // line then you may expect more statments.
-                    
-                    // TODO: Should bracket for body in case be forced
-                    // ERR_SECTION(
-                    //     ERR_HEAD(info.get(info.at()+1))
-                    //     ERR_MSG("No curly-braces will just allow one statement. You must use curly-braces if you want the statement on a new line. ")
-                    //     ERR_LINE(info.get(info.at()+1),"here")
-                    // )
-                    WARN_SECTION(
-                        WARN_HEAD(info.get(info.at()+1))
-                        WARN_MSG("The body of the case is missing curly braces. Only one statement will be parsed. Put statement on one line to suppress this warning. In the future, the curly braces will be implicit.")
-                        WARN_LINE(info.get(info.at()+1),"no curly brace here")
-                        // TODO: should braces for body in case be forced
-                    )
-                }
-            }
-
-            // TODO: Implicit curly braces. I believe this requires ParseBody to detect quit when it sees "case".
-            //  Either we pass a general end token into parse function or we pass a bool telling ParseBody to see "case" as end.
-            //  Maybe ParseBody should have an u64 bitfield argument. There you can specify all the bools you want with ease.
-            //  You could also do an output of bitfields.
-            
+            ParseFlags parsed_flags = PARSE_NO_FLAGS;
             ASTScope* caseBody=nullptr;
-            SignalDefault resultBody = ParseBody(info,caseBody, info.currentScopeId);
+            SignalDefault resultBody = ParseBody(info,caseBody, info.currentScopeId, PARSE_INSIDE_SWITCH, &parsed_flags);
             if(resultBody!=SignalDefault::SUCCESS){
                 return SignalAttempt::FAILURE;
             }
@@ -2700,7 +2689,11 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
                     statement->firstBody = caseBody;
                 }
             } else {
-                statement->switchCases.add({caseExpression, caseBody});
+                ASTStatement::SwitchCase tmp{};
+                tmp.caseExpr = caseExpression;
+                tmp.caseBody = caseBody;
+                tmp.fall = parsed_flags & PARSE_HAS_CASE_FALL;
+                statement->switchCases.add(tmp);
             }
         }
         
@@ -3680,7 +3673,7 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
     // statement->tokenRange.endIndex = info.at()+1;
     return SignalAttempt::SUCCESS;  
 }
-SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, bool trulyGlobal, bool* has_curlies){
+SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags, ParseFlags* out_flags){
     using namespace engone;
     MEASURE;
     // Note: two infos in case ParseAssignment modifies it and then fails.
@@ -3697,8 +3690,8 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
     ScopeId prevScope = info.currentScopeId;
     defer { info.currentScopeId = prevScope; }; // ensure that we exit with the same scope we came in with
 
-    if(has_curlies)
-        *has_curlies = false;
+    if(out_flags)
+        *out_flags = PARSE_NO_FLAGS;
     bool expectEndingCurlyBrace = false;
     // bool inheritScope = true;
     bool inheritScope = false; // Read note below as to why this is false (why scopes always are created)
@@ -3711,8 +3704,8 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         if(Equal(token,"{")) {
             token = info.next();
             expectEndingCurlyBrace = true;
-            if(has_curlies)
-                *has_curlies = true;
+            if(out_flags)
+                *out_flags = (ParseFlags)(*out_flags|PARSE_HAS_CURLIES);
             inheritScope = false;
         }
         // NOTE: Always creating scope even with "if true  print("hey")" with no curly brace
@@ -3737,11 +3730,11 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
         // endToken is set later
     }
 
-    if(!inheritScope || trulyGlobal) {
+    if(!inheritScope || (in_flags & PARSE_TRULY_GLOBAL)) {
         info.nextContentOrder.add(CONTENT_ORDER_ZERO);
     }
     defer {
-        if(!inheritScope || trulyGlobal) {
+        if(!inheritScope || (in_flags & PARSE_TRULY_GLOBAL)) {
             info.nextContentOrder.pop(); 
         }
     };
@@ -3775,10 +3768,24 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
 
     while(!info.end()){
         Token& token = info.get(info.at()+1);
+        
+        if((in_flags & PARSE_INSIDE_SWITCH) && IsAnnotation(token)) {
+            if(Equal(token,"@fall")) {
+                info.next();
+                if(out_flags)
+                    *out_flags = (ParseFlags)(*out_flags | PARSE_HAS_CASE_FALL);
+                continue;
+            }
+        }
         if(expectEndingCurlyBrace && Equal(token,"}")){
             info.next();
             break;
         }
+        if((in_flags & PARSE_INSIDE_SWITCH) && (Equal(token, "case") || (!expectEndingCurlyBrace && Equal(token,"}")))) {
+            // we should not info.next on else
+            break;
+        }
+        
         if(Equal(token,";")){
             info.next();
             continue;
@@ -4014,7 +4021,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
             info.next();
         }
         // current body may have the same "parentScope == bodyLoc->scopeId" will make sure break 
-        if(!expectEndingCurlyBrace && !trulyGlobal){
+        if(!expectEndingCurlyBrace && !(in_flags & PARSE_TRULY_GLOBAL) && !(in_flags & PARSE_INSIDE_SWITCH)){
             break;
         }
     }
@@ -4071,7 +4078,7 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
     info.currentScopeId = body->scopeId;
 
     info.functionScopes.add({});
-    SignalDefault result = ParseBody(info, body, ast->globalScopeId, true);
+    SignalDefault result = ParseBody(info, body, ast->globalScopeId, PARSE_TRULY_GLOBAL);
     info.functionScopes.pop();
     
     info.compileInfo->compileOptions->compileStats.errors += info.errors;

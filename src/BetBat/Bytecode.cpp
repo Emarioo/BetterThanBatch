@@ -27,8 +27,8 @@ const char* InstToString(int type){
         CASE(BC_JMP,"jmp")
         CASE(BC_CALL,"call")
         CASE(BC_RET,"ret")
-        CASE(BC_JE,"je")
-        CASE(BC_JNE,"jne")
+        CASE(BC_JNZ,"je")
+        CASE(BC_JZ,"jne")
         
         CASE(BC_PUSH,"push")
         CASE(BC_POP,"pop")
@@ -190,7 +190,7 @@ void Bytecode::printInstruction(u32 index, bool printImmediates){
 }
 u32 Bytecode::immediatesOfInstruction(u32 index) {
     u8 opcode = get(index).opcode;
-    if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JE || opcode==BC_JNE || opcode==BC_CALL || opcode==BC_DATAPTR||
+    if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JNZ || opcode==BC_JZ || opcode==BC_CALL || opcode==BC_DATAPTR||
         opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR || opcode==BC_TEST_VALUE){
         
         if(opcode == BC_LI && get(index).op1 == 2){

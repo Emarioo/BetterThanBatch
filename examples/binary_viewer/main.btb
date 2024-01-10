@@ -29,11 +29,10 @@ fn TestSpec() {
 
     // // Format description
     // spec.init();
-    // spec.addField("all_size", TYPE_I32)
     // type_header := spec.createDefinition("Header")
     // spec.addField("magic", TYPE_I32, type_header)
     // spec.addField("section_count", TYPE_I32, type_header)
-    // spec.addField("header",type_header)
+    // spec.setBaseField(type_header)
 
     // // Test data
     // stream.reserve(0x1000);
@@ -71,14 +70,14 @@ struct Field {
     name: char[];
 }
 struct TypeDefinition {
-    type: u32;
+    type: u32; // skip this member, index to access the type definition is the same as this value
     size: u32;
     name: char[];
 
     fields: DynamicArray<Field>;
 }
 struct FormatSpec {
-    fields: DynamicArray<Field>;
+    base_field: u32; // FieldType or reference to a TypeDefinition 
     definitions: DynamicArray<TypeDefinition>; // TODO: BucketArray
 
     fn init() {
@@ -101,12 +100,14 @@ struct FormatSpec {
         #undef ADD
     }
     fn cleanup() {
-        fields.cleanup();
+        base_field = 0;
         for @ptr definitions.sliced_unsafe()
             it.fields.cleanup();
         definitions.cleanup();
     }
-    
+    fn setBaseField(type: u32) {
+        base_field = type;
+    }
     fn getDefinition(definition: u32) -> TypeDefinition* {
         return definitions.get_unsafe(definition);
     }
@@ -118,27 +119,32 @@ struct FormatSpec {
     }
     fn getField(definition: u32, fieldIndex: u32) -> Field* {
         // get_unsafe handles out of range
-        if definition == 0 {
-            return fields.get_unsafe(fieldIndex);
-        }
         def := getDefinition(definition);
         return def.fields.get_unsafe(fieldIndex);
     }
-
-    fn addField(name: char[], type: u32, definition: u32 = 0) {
-        if definition == 0 {
-            f := fields.add(Field{type});
+    // returns index in TypeDefinition.fields (or FormatSpec) where field was placed
+    fn addField(name: char[], type: u32, definition: u32) -> u32 {
+        def := getDefinition(definition);
+        if def {
+            f := def.fields.add(Field{type});
             f.name = name;
+            f.count = 1;
+            typeDef := getDefinition(type);
+            def.size += typeDef.size;
+            return def.fields.size() - 1;
         } else {
-            def := getDefinition(definition);
-            if def {
-                f := def.fields.add(Field{type});
-                f.name = name;
-                typeDef := getDefinition(type);
-                def.size += typeDef.size;
-            } else
-                pr("BAD, '",definition,"' is not a definition")
+            pr("BAD, '",definition,"' is not a definition")
         }
+        return -1;
+    }
+    // return 0 if string isn't a type
+    fn typeFromString(string: char[]) -> u32 {
+        for @ptr definitions.sliced_unsafe() {
+            if it.name == string {
+                return it.type;
+            }
+        }
+        return 0;
     }
 }
 
@@ -168,11 +174,12 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
     head: u32 = 0; // read head of stream
 
     struct Layer {
+        count: u32 = 0;
         type: u32 = 0; // 0 refers to specification
         fieldIndex: u32 = 0;
     }
     stack: DynamicArray<Layer>;
-    stack.add(Layer{0, 0});
+    stack.add(Layer{type = spec.base_field, fieldIndex = 0});
 
     pr("Interpret stream of ",stream.len," bytes\n")
 
@@ -186,26 +193,39 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
 
         element: Field* = spec.getField(layer.type, layer.fieldIndex);
         if !element {
+            layer.count = 0;
             // log("pop",layer.type);
             stack.pop();
             continue;
         }
         elemDef := spec.getDefinition(element.type);
-        layer.fieldIndex++;
+        layer.count++;
+        defer if element.count == layer.count {
+            layer.fieldIndex++;
+            layer.count = 0;
+        }
 
         print_indent(stack.len-1);
-        if element.name.ptr {
+        
+        // Assert(element.name.ptr)
+        if element.count == 1 {
             pr(element.name,": ");
         } else {
-            pr("<name>: ");
+            if layer.count == 1 {
+                pr(element.name);
+            } else {
+                print_indent(element.name.len)
+            }
+            pr(" [",layer.count - 1,"]: ")
         }
+        
         if element.type >= TYPE_PRIMITIVE_COUNT {
             // user defined field. make new stack
             // log("push",element.type);
             stack.add(Layer{element.type, 0});
         } else {
             if head + elemDef.size > stream.len {
-                pr("abrupt end\n");
+                pr("<ABRUPT END>\n");
                 // corruption somewhere
                 break;
             }
@@ -218,6 +238,26 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
             }
             #enddef
             switch element.type {
+            case TYPE_CHAR: {
+                tmp: char;
+                memcpy(&tmp, stream.ptr + head, sizeof char);
+                head += sizeof char;
+                if tmp < 32u {
+                    if tmp == '\n' {
+                        pr("\\n")
+                    } else if tmp == '\r' {
+                        pr("\\r")
+                    } else if tmp == '\0' {
+                        pr("\\0")
+                    } else if tmp == '\t' {
+                        pr("\\t")
+                    } else {
+                        pr("<",cast<u8>tmp,">")
+                    }
+                } else {
+                    pr(tmp);
+                }
+            }
             CASE(CHAR, char)
 
             CASE(I8, i8)
@@ -241,7 +281,7 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
         pr(" (",elemDef.name,")");
         pr('\n');
     }
-    pr("Finished, read ",head," bytes\n");
+    pr("FINISHED, ",head," bytes (",stream.len-head," unread)\n");
 }
 
 
@@ -262,6 +302,12 @@ fn ParseSpecification(path: Slice<char>, out_spec: FormatSpec*) -> bool {
     
     parser.parseBody();
     
+    header_type := out_spec.typeFromString("Header");
+    out_spec.setBaseField(header_type); // add to base fields
+    
+    tokenStream.rawData = ByteStream{}; // MEMORY LEAK, we "detach" allocation with strings so that the string slices in FormatSpec doesn't refer to deallocated memory.
+    // TODO: In the future, FormatSpec should allocate it's own array per field and type name
+    
     return true;
 }
 struct SpecParser {
@@ -269,12 +315,17 @@ struct SpecParser {
     spec: FormatSpec*;
     head: u32; // token index
     
+    // TODO: A stack of current types allowing structs within structs
+    current_struct_type: u32; // type index/definition in FormatSpec
+    
     fn get(off: u32 = 0) -> Token* {
         return tokens.get(head + off);
     }
     fn consume(n: u32 = 1) {
         head += n;
     }
+    
+#define PARSE_ERROR(T,...) pr("BAD SYNTAX: ") tokens.print(T); pr("\n")
     
     fn parseBody() {
         
@@ -284,42 +335,117 @@ struct SpecParser {
             if tok.type == TOKEN_STRUCT {
                 consume();
                 parseStruct();
+                continue;
             }
             
             consume();
-            log("BAD SYNTAX");
-            tokens.print(head)
-            pr("\n")
+            PARSE_ERROR(tok)
         }
     }
     fn parseStruct() {
-        tok := get();
+        tok_a := get();
          
-        if tok.type != TOKEN_STRUCT {
-        }
+        // struct should have been consumed
         
-        if tok.
+        if tok_a.type == TOKEN_IDENTIFIER {
+            slice := tokens.get_string(head);
+            consume(); // struct name
+            
+            // current_struct_type could be a local variable instead of a member.
+            // you wouldn't need a stack/list if structs exist within structs, the current_type is a local variable on the stack
+            current_struct_type = spec.createDefinition(slice);
+        }
+        defer current_struct_type = 0;
+        
+        tok_a = get();
+        if tok_a.type == '{' {
+            consume();
+        } else {
+            // handle error
+            PARSE_ERROR(tok_a)
+        }
         
         while head < tokens.size() {
             tok := get();
             
-            consume();
+            if tok.type == '}' {
+                consume();
+                break;
+            }
+            
             if tok.type != TOKEN_IDENTIFIER {
-                log("BAD SYNTAX");
-                tokens.print(head)
-                pr("\n")
+                consume(); // prevent infinite loop by consuming
+                
+                PARSE_ERROR(tok)
                 continue;
             }
+            member_name := tokens.get_string(head);
+            consume();
             
-            consume();   
+            tok = get();
+            
             if tok.type != ':' {
-                log("BAD SYNTAX");
-                tokens.print(head)
-                pr("\n")
+                consume();   
+                
+                PARSE_ERROR(tok)
                 continue;
             }
+            consume();
             
+            tok = get();
+            type_string := tokens.get_string(head);
             
+            // TODO: Check for brackets: u32[123]
+            
+            field_type := spec.typeFromString(type_string);
+            field_index := -1;
+            if field_type == 0 {
+                pr("Not a type: ",type_string,"\n");
+            } else {
+                field_index = spec.addField(member_name, field_type, current_struct_type);
+                
+            }
+            consume();
+
+            tok = get();
+            if tok.type == '[' {
+                consume();
+                
+                tok = get();
+                if tok.type == TOKEN_LIT_NUMBER {
+                    num := tokens.get_number(head);
+                    consume();
+                    
+                    // Assert(field_index != -1)
+                    field := spec.getField(current_struct_type, field_index);
+                    // Assert(num >= 0)
+                    field.count = num;
+                    
+                    // log("ignoring",num);
+                } else {
+                    PARSE_ERROR(tok);
+                }
+                
+                tok = get();
+                if tok.type == ']' {
+                    consume();
+                    
+                } else {
+                    PARSE_ERROR(tok)   
+                    // consume();
+                }
+            }
+            
+            tok = get();
+            if tok.type == ';' { // optional for now, ; is a good marker for the end of the type so maybe bring back later?
+                consume();
+                
+                // PARSE_ERROR(tok)
+                // continue;
+            }
+            
+            // Yay!
         }
     }
+#undef PARSE_ERROR
 }

@@ -29,8 +29,8 @@
 //     BCO_JMP = 30,
 //     BCO_CALL = 31,
 //     BCO_RET = 32,
-//     BCO_JE = 33,
-//     BCO_JNE = 34,
+//     BCO_JNZ = 33,
+//     BCO_JZ = 34,
     
 //     BCO_PUSH = 40,
 //     BCO_POP = 41,
@@ -141,9 +141,9 @@ enum BCInstruction : u8{
     BC_CALL = 21,
     BC_RET = 22,
     // jump if not zero
-    BC_JE = 23,
+    BC_JNZ = 23,
     // jump if zero
-    BC_JNE = 24,
+    BC_JZ = 24,
 
     BC_PUSH = 30,
     BC_POP = 31,

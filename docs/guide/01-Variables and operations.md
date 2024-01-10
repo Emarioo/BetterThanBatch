@@ -4,8 +4,7 @@ Words: declaration, assignment, unary operator, binary operator, primitive types
 This is how you declare and use variables.
 ```
 a := 5    // declaration
-b := 9
-c := a + b
+c := a - 9
 
 c = 2 * b  // reassign a value to a variable, note the sole '=' without the ':'
 ```

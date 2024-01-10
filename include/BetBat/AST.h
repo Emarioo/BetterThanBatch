@@ -433,6 +433,12 @@ struct ScopeInfo {
 
     ASTScope* astScope = nullptr; // some scopes don't belong to ASTScope
 
+    // TODO: Move these elsewhere
+    u32 bc_start;
+    u32 bc_end;
+    u32 asm_start;
+    u32 asm_end;
+
     void print(AST* ast);
 
     // Returns the full namespace.
@@ -614,6 +620,7 @@ struct ASTStatement : ASTNode {
     struct SwitchCase {
         ASTExpression* caseExpr = nullptr;
         ASTScope* caseBody = nullptr;
+        bool fall = false;
     };
     QuickArray<SwitchCase> switchCases; // used with switch statement
     
@@ -710,7 +717,7 @@ struct ASTEnum : ASTNode {
     };
     Rules rules = NONE;
 
-    TypeId colonType = AST_UINT32;
+    TypeId colonType = AST_UINT32; // may be a type string before the type checker, may be a type string after if checker failed.
     TypeId actualType = {};
     
     bool getMember(const Token& name, int* out);

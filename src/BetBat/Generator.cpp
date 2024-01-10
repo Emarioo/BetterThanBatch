@@ -3654,6 +3654,8 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         }
         dfun->funcImpl = funcImpl;
         dfun->funcAst = function;
+        info.currentScopeDepth = -1; // incremented to 0 in GenerateBody
+        // dfun->scopeId = function->body->scopeId;
 
         _GLOG(log::out << "Function " << funcImpl->name << "\n";)
 
@@ -4271,7 +4273,12 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
     bool codeWasDisabled = info.disableCodeGeneration;
     bool errorsWasIgnored = info.ignoreErrors;
     ScopeId savedScope = info.currentScopeId;
+    ScopeInfo* body_scope = info.ast->getScope(body->scopeId);
+    body_scope->bc_start = info.code->length();
+    info.currentScopeDepth++;
     defer {
+        info.currentScopeDepth--;
+        body_scope->bc_end = info.code->length();
         info.currentScopeId = savedScope; 
         info.disableCodeGeneration = codeWasDisabled;
         info.ignoreErrors = errorsWasIgnored;
@@ -4483,10 +4490,11 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                         GeneratePop(info, BC_REG_FP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
 
                         auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
-                        fun.localVariables.add({});
-                        fun.localVariables.last().name = varname.name;
-                        fun.localVariables.last().frameOffset = varinfo->versions_dataOffset[info.currentPolyVersion];
-                        fun.localVariables.last().typeId = varinfo->versions_typeId[info.currentPolyVersion];
+                        fun.addVar(varname.name,
+                            varinfo->versions_dataOffset[info.currentPolyVersion],
+                            varinfo->versions_typeId[info.currentPolyVersion],
+                            info.currentScopeDepth,
+                            varname.identifier->scopeId);
                     } else {
                         if(!varinfo->isGlobal()) {
                             // address of global variables is managed in type checker
@@ -4494,10 +4502,11 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                                 !statement->firstExpression, false);
 
                             auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
-                            fun.localVariables.add({});
-                            fun.localVariables.last().name = varname.name;
-                            fun.localVariables.last().frameOffset = varinfo->versions_dataOffset[info.currentPolyVersion];
-                            fun.localVariables.last().typeId = varinfo->versions_typeId[info.currentPolyVersion];
+                            fun.addVar(varname.name,
+                                varinfo->versions_dataOffset[info.currentPolyVersion],
+                                varinfo->versions_typeId[info.currentPolyVersion],
+                                info.currentScopeDepth,
+                                varname.identifier->scopeId);
                         }
                     }
                     _GLOG(log::out << "declare " << (varinfo->isGlobal()?"global ":"")<< varname.name << " at " << varinfo->versions_dataOffset[info.currentPolyVersion] << "\n";)
@@ -4699,7 +4708,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             u8 reg = RegBySize(BC_AX, size);
 
             info.addPop(reg);
-            info.addInstruction({BC_JNE, reg});
+            info.addInstruction({BC_JZ, reg});
             u32 skipIfBodyIndex = info.code->length();
             info.addImm(0);
 
@@ -4826,7 +4835,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 info.addImm(switchValueOffset);
                 
                 info.addInstruction({BC_EQ, switchValueReg, caseValueReg, caseValueReg});
-                info.addInstruction({BC_JE, caseValueReg});
+                info.addInstruction({BC_JNZ, caseValueReg});
                 caseData[nr].caseJumpAddress = info.code->length();
                 info.addImm(0);
             }
@@ -4838,28 +4847,60 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             info.addInstruction({BC_JMP});
             u32 noCaseJumpAddress = info.code->length();
             info.addImm(0);
+            
+            /* TODO: Cases without a body does not fall but perhaps they should.
+            I can think of a scenario where implicit fall would be confusing.
+            If you have a bunch of cases, none use @fall, and you comment out a body
+            or remove it you may not realize that empty bodies will fall to next
+            statements. You become irritated and put a nop statment. Alternative is 
+            @fall after each case which isn't ideal either but it's consistent and it's
+            fast to type. NO IMPLICIT FALLS FOR NOW. -Emarioo, 2024-01-10
+            code.
+                case 1:     <- implicit fall would be nifty
+                case 2:
+                    say_hi()
+                case 4:
+                    no()
+            */
+            // i32 address_prevFallJump = -1;
+            
             auto& list = statement->switchCases;
             for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
                 auto it = &statement->switchCases[nr];
                 info.code->getIm(caseData[nr].caseJumpAddress) = info.code->length();
-                
+               
+                // if(address_prevFallJump != -1) {
+                //     info.code->getIm(address_prevFallJump) = info.code->length();
+                // }
                 
                 // TODO: break statements in body should jump to here
                 result = GenerateBody(info, it->caseBody);
                 if (result != SignalDefault::SUCCESS)
                     continue;
                 
-                
-                // implicit break
-                info.addInstruction({BC_JMP});
-                caseData[nr].caseBreakAddress = info.code->length();
-                info.addImm(0);
+                if(!it->fall) {
+                    // implicit break
+                    info.addInstruction({BC_JMP});
+                    caseData[nr].caseBreakAddress = info.code->length();
+                    info.addImm(0);
+                } else {
+                    caseData[nr].caseBreakAddress = -1;
+                    // skip the jump so that we execute instructions on the next body
+                    // NOTE: The last case doesn't need to jump out of the switch because
+                    //  we just added the last instructions so we already are at the end.
+                    //  Perhaps we won't be in the future?
+                    
+                    // info.addInstruction({BC_JMP});
+                    // address_prevFallJump = info.code->length();
+                    // info.addImm(0);
+                }
             }
             
             info.code->getIm(noCaseJumpAddress) = info.code->length();
                 
             for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
-                info.code->getIm(caseData[nr].caseBreakAddress) = info.code->length();
+                if(caseData[nr].caseBreakAddress != -1)
+                    info.code->getIm(caseData[nr].caseBreakAddress) = info.code->length();
             }
             
             for (auto ind : loopScope->resolveBreaks) {
@@ -4895,7 +4936,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 u8 reg = RegBySize(BC_AX, size);
 
                 info.addPop(reg);
-                info.addInstruction({BC_JNE, reg});
+                info.addInstruction({BC_JZ, reg});
                 loopScope->resolveBreaks.add(info.code->length());
                 info.addImm(0);
             } else {
@@ -4970,6 +5011,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             }
             auto varinfo_index = info.ast->getVariableByIdentifier(varnameNr.identifier);
             auto varinfo_item = info.ast->getVariableByIdentifier(varnameIt.identifier);
+
+            // NOTE: We add debug information last because varinfo does not have the frame offsets yet.
 
             if(statement->rangedForLoop){
                 // TypeId itemtype = varname.versions_assignType[info.currentPolyVersion];
@@ -5061,8 +5104,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     // info.addInstruction({BC_LT,index_reg,length_reg,BC_REG_EAX});
                     info.addInstruction({BC_LT,CMP_SINT_SINT,index_reg,length_reg});
                 }
-                // info.addInstruction({BC_JNE, BC_REG_EAX});
-                info.addInstruction({BC_JNE, length_reg});
+                // info.addInstruction({BC_JZ, BC_REG_EAX});
+                info.addInstruction({BC_JZ, length_reg});
                 // resolve end, not break, resolveBreaks is bad naming
                 loopScope->resolveBreaks.add(info.code->length());
                 info.addImm(0);
@@ -5192,8 +5235,8 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                     info.addInstruction({BC_LT,CMP_SINT_SINT,index_reg,length_reg});
                 }
                 // resolve end, not break, resolveBreaks is bad naming
-                // info.addInstruction({BC_JNE, BC_REG_RAX});
-                info.addInstruction({BC_JNE, length_reg});
+                // info.addInstruction({BC_JZ, BC_REG_RAX});
+                info.addInstruction({BC_JZ, length_reg});
                 loopScope->resolveBreaks.add(info.code->length());
                 info.addImm(0);
 
@@ -5252,6 +5295,28 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 // info.ast->removeIdentifier(scopeForVariables, "nr");
                 // info.ast->removeIdentifier(scopeForVariables, itemvar);
             }
+            
+            auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
+            fun.addVar(varnameIt.name,
+                varinfo_item->versions_dataOffset[info.currentPolyVersion],
+                varinfo_item->versions_typeId[info.currentPolyVersion],
+                info.currentScopeDepth + 1, // +1 because variables exist within stmt->firstBody, not the current scope
+                varnameIt.identifier->scopeId);
+            fun.addVar(varnameNr.name,
+                varinfo_index->versions_dataOffset[info.currentPolyVersion],
+                varinfo_index->versions_typeId[info.currentPolyVersion],
+                info.currentScopeDepth + 1,
+                varnameNr.identifier->scopeId);
+                
+            // fun.localVariables.add({});
+            // fun.localVariables.last().name = varnameIt.name;
+            // fun.localVariables.last().frameOffset = varinfo_item->versions_dataOffset[info.currentPolyVersion];
+            // fun.localVariables.last().typeId = varinfo_item->versions_typeId[info.currentPolyVersion];
+            
+            // fun.localVariables.add({});
+            // fun.localVariables.last().name = varnameNr.name;
+            // fun.localVariables.last().frameOffset = varinfo_index->versions_dataOffset[info.currentPolyVersion];
+            // fun.localVariables.last().typeId = varinfo_index->versions_typeId[info.currentPolyVersion];
 
             info.restoreStackMoment(stackBeforeLoop);
             info.currentFrameOffset = frameBeforeLoop;
@@ -5828,6 +5893,8 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         dfun->funcImpl = nullptr;
         dfun->funcAst = nullptr;
         dfun->funcStart = info.code->length();
+        info.currentScopeDepth = -1;
+        // dfun->scopeId = info.ast->globalScopeId;
 
         info.currentPolyVersion = 0;
         info.virtualStackPointer = GenInfo::VIRTUAL_STACK_START;

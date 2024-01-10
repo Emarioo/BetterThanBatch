@@ -987,7 +987,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         i32 imm2 = 0;
         
         _CLOG(log::out << bcIndex << ": "<< inst;)
-        if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JE || opcode==BC_JNE || opcode==BC_CALL || opcode==BC_DATAPTR||
+        if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JNZ || opcode==BC_JZ || opcode==BC_CALL || opcode==BC_DATAPTR||
             opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR||opcode==BC_TEST_VALUE){
             bcIndex++;
             imm = bytecode->getIm(bcIndex);
@@ -2319,7 +2319,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 relativeRelocations.add(reloc);
                 break;
             }
-            break; case BC_JNE: {
+            break; case BC_JZ: {
                 i16 offset = (i16)((i16)op1| ((i16)op2<<8));
 
                 // TODO: Replace with a better instruction? If there is one.
@@ -2351,7 +2351,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 relativeRelocations.add(reloc);
                 break;
             }
-            break; case BC_JE: {
+            break; case BC_JNZ: {
                 i16 offset = (i16)((i16)op1| ((i16)op2<<8));
 
                 // TODO: Replace with a better instruction? If there is one.
@@ -3943,6 +3943,14 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 auto& line = fun.lines[j];
                 line.funcOffset = addressTranslation[line.funcOffset];
             }
+        }
+        for (int i=0;i<prog->debugInformation->ast->_scopeInfos.size();i++) {
+            auto scope = prog->debugInformation->ast->_scopeInfos[i];
+            scope->asm_start = addressTranslation[scope->bc_start];
+             if(scope->bc_end >= addressTranslation.size())
+                scope->asm_end = prog->size();
+            else
+                scope->asm_end = addressTranslation[scope->bc_end];
         }
     }
 

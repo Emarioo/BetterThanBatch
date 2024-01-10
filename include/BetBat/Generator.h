@@ -57,6 +57,7 @@ struct GenInfo : public PhaseContext {
     ScopeId fromScopeId = 0; // AST_FROM_NAMESPACE
 
     u32 currentPolyVersion=0;
+    int currentScopeDepth = 0; // necessary for scoped variables in debug information
 
     // won't work with multiple threads
     bool disableCodeGeneration = false; // used with @no-code

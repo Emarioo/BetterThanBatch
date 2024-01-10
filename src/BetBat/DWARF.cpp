@@ -49,7 +49,11 @@ namespace dwarf {
         int abbrev_base_type = 0;
         int abbrev_pointer_type = 0;
         int abbrev_struct = 0;
-        int abbrev_member = 0;
+        int abbrev_struct_member = 0;
+        int abbrev_enum = 0;
+        int abbrev_enum_member_64 = 0;
+        int abbrev_enum_member_32 = 0;
+        int abbrev_lexical_block = 0;
 
         stream = objectFile->getStreamFromSection(section_abbrev);
         {
@@ -154,19 +158,76 @@ namespace dwarf {
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
 
-            abbrev_member = nextAbbrevCode++;
-            WRITE_LEB(abbrev_member) // code
+            abbrev_struct_member = nextAbbrevCode++;
+            WRITE_LEB(abbrev_struct_member) // code
             WRITE_LEB(DW_TAG_member) // tag
             stream->write1(DW_CHILDREN_no);
 
-            WRITE_FORM(DW_AT_name,         DW_FORM_string)
-            WRITE_FORM(DW_AT_type,         DW_FORM_ref4)
+            WRITE_FORM(DW_AT_name,           DW_FORM_string)
+            WRITE_FORM(DW_AT_type,           DW_FORM_ref4)
             WRITE_FORM(DW_AT_data_member_location, DW_FORM_data2)
             // WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
             // WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
             // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
             WRITE_LEB(0) // value
             WRITE_LEB(0) // end attributes for abbreviation
+            
+            abbrev_enum = nextAbbrevCode++;
+            WRITE_LEB(abbrev_enum) // code
+            WRITE_LEB(DW_TAG_enumeration_type) // tag
+            stream->write1(DW_CHILDREN_yes);
+
+            WRITE_FORM(DW_AT_name,          DW_FORM_string)
+            WRITE_FORM(DW_AT_byte_size,     DW_FORM_data1)
+            WRITE_FORM(DW_AT_type,          DW_FORM_ref4)
+            // WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            WRITE_FORM(DW_AT_sibling,  DW_FORM_ref4)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+            
+            abbrev_enum_member_64 = nextAbbrevCode++;
+            WRITE_LEB(abbrev_enum_member_64) // code
+            WRITE_LEB(DW_TAG_enumerator) // tag
+            stream->write1(DW_CHILDREN_no);
+
+            WRITE_FORM(DW_AT_name,           DW_FORM_string)
+            WRITE_FORM(DW_AT_const_value,    DW_FORM_data8)
+            // WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+            
+            abbrev_enum_member_32 = nextAbbrevCode++;
+            WRITE_LEB(abbrev_enum_member_32) // code
+            WRITE_LEB(DW_TAG_enumerator) // tag
+            stream->write1(DW_CHILDREN_no);
+
+            WRITE_FORM(DW_AT_name,           DW_FORM_string)
+            WRITE_FORM(DW_AT_const_value,    DW_FORM_data4)
+            // WRITE_FORM(DW_AT_decl_file,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_line,    DW_FORM_data2)
+            // WRITE_FORM(DW_AT_decl_column,  DW_FORM_data2)
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+            
+            abbrev_lexical_block = nextAbbrevCode++;
+            WRITE_LEB(abbrev_lexical_block) // code
+            WRITE_LEB(DW_TAG_lexical_block) // tag
+            stream->write1(DW_CHILDREN_yes);
+
+            WRITE_FORM(DW_AT_low_pc,           DW_FORM_addr)
+            WRITE_FORM(DW_AT_high_pc,          DW_FORM_addr)
+            
+            WRITE_LEB(0) // value
+            WRITE_LEB(0) // end attributes for abbreviation
+            
+            // NOTE: DWARF-3 page 81 mentions DW_AT_bit_stride which can hold multiple symbol names for
+            //  one type if I understood it correctly. This would be convenient for enum @bitfield.
+            //  ACTUALLY, the debugger seems to display bit masked enums anyway but I guess DW_AT_bit_stride
+            //  allows for masking a range of bits in the integer?
             
             WRITE_LEB(0) // zero terminate abbreviation section
         }
@@ -236,6 +297,11 @@ namespace dwarf {
                         queuedType.setPointerLevel(typeId.getPointerLevel()); // increase pointer level
                 }
             };
+            auto getTypeRef = [&](TypeId typeId) {
+                auto& allType = allTypes[typeId.getId()];
+                return allType.reference[typeId.getPointerLevel()];
+            };
+            
             
             // TODO: Holy snap the polymorphism will actually end me.
             //  How do we make this work with polymorphism? Maybe it does work?
@@ -279,7 +345,7 @@ namespace dwarf {
                 if(allType.reference[0] == 0) { // don't write base reference if it already exists
                     if(typeInfo->structImpl) {
                         Assert(typeInfo->astStruct);
-                        log::out << " struct\n";
+                        // log::out << " struct\n";
 
                         // struct type
                         allType.reference[0] = stream->getWriteHead() - offset_section;
@@ -296,10 +362,10 @@ namespace dwarf {
                             auto& memImpl = typeInfo->structImpl->members[mi];
                             auto& memAst = typeInfo->astStruct->members[mi];
 
-                            WRITE_LEB(abbrev_member)
+                            WRITE_LEB(abbrev_struct_member)
                             stream->write(memAst.name.str, memAst.name.length);
-                            stream->write1(0);
-                            int typeref = allTypes[memImpl.typeId.getId()].reference[memImpl.typeId.getPointerLevel()];
+                            stream->write1('\0');
+                            int typeref = getTypeRef(memImpl.typeId);
                             if(typeref == 0) {
                                 addType(memImpl.typeId);
                                 // log::out << "Late "<<ast->typeToString(memImpl.typeId)<<" at "<< (stream->getWriteHead() - offset_section)<<"\n";
@@ -319,11 +385,45 @@ namespace dwarf {
                         log::out << " enum\n";
 
                         allType.reference[0] = stream->getWriteHead() - offset_section;
-                        WRITE_LEB(abbrev_base_type)
+                        WRITE_LEB(abbrev_enum)
                         
                         stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        Assert(typeInfo->getSize() < 256); // size should fit in one bye
                         stream->write1(typeInfo->getSize()); // size
-                        stream->write1(DW_ATE_unsigned); // encoding (1 byte)
+                        
+                        int typeRef = getTypeRef(typeInfo->astEnum->colonType);
+                        if (typeRef == 0) {
+                            addType(typeInfo->astEnum->colonType);
+                            lateTypeRefs.add({stream->getWriteHead() - offset_section, typeInfo->astEnum->colonType });
+                            stream->write4(0); // not known yet
+                        } else {
+                            stream->write4(typeRef);
+                        }
+                        
+                        u32* sibling_ref4 = nullptr;
+                        stream->write_late((void**)&sibling_ref4, sizeof(u32));
+
+                        for (int mi=0;mi<typeInfo->astEnum->members.size();mi++) {
+                            auto& mem = typeInfo->astEnum->members[mi];
+                            
+                            if (typeInfo->getSize() > 4) {
+                                WRITE_LEB(abbrev_enum_member_64)
+                                stream->write(mem.name.str, mem.name.length);
+                                stream->write1('\0');
+                                
+                                stream->write8(mem.enumValue);
+                            } else {
+                                WRITE_LEB(abbrev_enum_member_32)
+                                stream->write(mem.name.str, mem.name.length);
+                                stream->write1('\0');
+                                
+                                stream->write4(mem.enumValue);   
+                            }
+                        }
+                        
+                        WRITE_LEB(0); // end of members in enum
+                        
+                        *sibling_ref4 = stream->getWriteHead() - offset_section;
                         
                     } else {
                         Assert(queuedType.getId() < AST_TRUE_PRIMITIVES);
@@ -458,8 +558,58 @@ namespace dwarf {
                         *block_length = stream->getWriteHead() - off_start; // we write block length later since we don't know the size of the LEB128 integer
                     }
                 }
+                
+                auto indent = [&](int n) {
+                    for (int i=0;i<n;i++) log::out <<" ";
+                };
+                
+                log::out.enableConsole(false);
+                int curLevel = 0;
+                bool left_scope_once = false;
                 for(int vi=0;vi<func.localVariables.size();vi++) {
                     auto& var = func.localVariables[vi];
+                    // ScopeId curScope = scopeStack.last();
+                    
+                    while (true) {
+                        // curScope = scopeStack.last();
+                        
+                        // The condition is a bit crazy, it makes sure that two variables that are on
+                        // the same level but in different scopes doesn't end up in the same lexical
+                        // scope. To do this, we check if the variables come from different scopeIds,
+                        // then we make sure to end the current lexical scope at least once so that the
+                        // next variable at the same level but different scope ends up in a new lexical
+                        // scope. -Emarioo, 2024-01-10
+                        
+                        if (var.scopeLevel == curLevel && (vi == 0 || func.localVariables[vi-1].scopeLevel != var.scopeLevel || left_scope_once || func.localVariables[vi-1].scopeId == var.scopeId)) {
+                            left_scope_once = false;
+                            // nothing, same scope
+                            break;
+                        } else if(var.scopeLevel > curLevel) {
+                            indent(curLevel);
+                            curLevel++;
+                            log::out << "scope "<<curLevel<<"\n";
+                            // var is in a deeper scope
+                            WRITE_LEB(abbrev_lexical_block)
+                            auto scope = ast->getScope(var.scopeId);
+                            u32 proc_low = scope->asm_start;
+                            u32 proc_high = scope->asm_end;
+                            relocs.add({ stream->getWriteHead() - offset_section, proc_low });
+                            stream->write8(proc_low); // pc low
+                            relocs.add({ stream->getWriteHead() - offset_section, proc_high });
+                            stream->write8(proc_high); // pc high
+                            
+                        // } else if(var.scopeLevel < curLevel) {
+                        } else {
+                            left_scope_once = true;
+                            curLevel--;
+                            indent(curLevel);
+                            log::out << "end scope "<<(curLevel+1)<<"\n";
+                            WRITE_LEB(0) // end lexical scope
+                        }
+                    }
+                    
+                    indent(curLevel);
+                    log::out << "var "<<var.name<<" "<<var.scopeId<<"\n";
 
                     WRITE_LEB(abbrev_var)
                     stream->write(var.name.c_str());
@@ -485,6 +635,13 @@ namespace dwarf {
                     WRITE_SLEB(var.frameOffset + RBP_CONSTANT_OFFSET)
                     *block_length = stream->getWriteHead() - off_start; // we write block length later since we don't know the size of the LEB128 integer
                 }
+                while(curLevel>0) {
+                    curLevel--;
+                    indent(curLevel);
+                    log::out << "end scope "<<(curLevel+1)<<"\n";
+                    WRITE_LEB(0) // end lexical scope
+                }
+                log::out.enableConsole(true);
 
                 WRITE_LEB(0) // end subprogram entry
 

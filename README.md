@@ -46,55 +46,32 @@ You can compile the compiler for Windows and Ubuntu (probably most Unix systems,
 
 The documentation and guide is being worked on but there are examples and `examples/dev.btb` usually contain the new additions in each commit.
 
-## Examples and guide
-You can find some examples in the examples folder. Some examples may be old and not work, sorry.
+## Guide and examples
+[Full Guide](/docs/guide/00-Introduction.md) (work in progress).
 
-[Rendering test](/examples/graphics/quad.btb) with GLEW, GLFW, and OpenGL
+[Rendering test](/examples/graphics/quad.btb) rendering with GLEW, GLFW, and OpenGL
 
-[Line counter](/examples/linecounter.btb) with multiple threads
+[Line counter](/examples/linecounter.btb) reading files, multiple threads
 
-[Binary viewer](/examples/binary_viewer/main.btb) with multiple threads
+[Binary viewer](/examples/binary_viewer/main.btb) parsing/reading binary files, lexing
 
 [Recent random code](/examples/dev.btb)
 
-Here is a thorough [Full Guide](/docs/guide/00-Introduction.md) (work in progress).
 
 # Usage
-You may want to read [Building](#building) first.
+The official usage of the compiler has not been established yet. `btb --help` will show the current way of compiling files and describe useful flags.
 
-The official usage of the compiler has not been established yet.
-You can at least do `btb yourfile.btb` to compile and run the initial file.
-`btb --help` may provide more options.
+These commands will most likely work.
+`btb main.btb --run` (`--run` will also run the executable after it's been built)
 
 
 # Building
-First of all, the project isn't compiled with CMAKE or Visual Studio.
-It uses shell scripts to compile as a unity build. This causes the least amount of headaches.
-(may change in the future)
-## Windows
-### Building with vcvars (with Visual Studio installed)
-First you need Visual Studio installed. Then you need to find vcvars64 in
-`C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build`.
-The exact directory depends on the version and location of your installation.
+On Linux/Unix you only to run `build.sh`.
 
-Clone the repository through git or download the files from github.
-Start a new terminal inside the project (the folder where `build.bat` exists).
-Type in the path to `vcvars64.bat`. This will setup the command cl which is
-used to compile the compiler.
-Then run `build.bat` which will generate an executable in the bin directory.
-That is the compiler compiled and ready for compilation.
+On Windows however, you need to go into `build.bat` and comment or uncomment a variable at the top depending on whether you are compiling using `g++` or with Visual Studio tools (MSVC). Then you can run the script.
 
-I would recommend adding the directory of vcvars64 in your user environment variable PATH.
-With this, you can type `vcvars64.bat` instead of the long directory path.
+The compiler executable can be found at this path `bin/btb.exe` (skip the `.exe` on Unix).
 
-### Building with g++ (MinGW or CYGWIN)
-First you need to install MinGW-64 (or CYGWIN?).
-You can modify `build.bat` to compile with g++ instead of cl (MSVC).
-This is done by removing `SET USE_MSVC=1` and adding (or uncommenting) `SET USE_GCC=1`.
-Then simply build with `build.bat`. The compiler can be found in the folder bin.
+**NOTE**: The script assumes that `link` and `cl` (with MSVC) are accesible from the command line. Running `vcvars64.bat` will set the appropriate environment variables (vcvars can be found here `C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build`). Personally, I have set the environment variables manually instead of having vcvars64.bat do it everytime because the script can be rather slow.
 
-## Linux
-Tested with Ubuntu every 5-10 commits.
-
-Clone or download files from the repository.
-Build with `build.sh`. The compiler can be found in the bin directory found in bin.
+**NOTE**: The Linux/Unix version is not tested after every commit but you can expect every 5-10 commits to be tested with Ubuntu.

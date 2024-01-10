@@ -24,7 +24,7 @@ SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
 
     SignalDefault error = SignalDefault::SUCCESS;
     for(auto aenum : scope->enums){
-        if(aenum->colonType.isValid()) {
+        if(aenum->colonType.isString()) {
             Token typeString = info.ast->getTokenFromTypeString(aenum->colonType);
             bool printedError = false;
             TypeId colonType = CheckType(info, scope->scopeId, typeString, aenum->tokenRange, &printedError);
