@@ -3,7 +3,7 @@
 ## Importing files and modules
 Source files and modules are the same thing, files. Every compilation starts with an initial file and only one file. This file imports other files creating a spider net of dependencies (all which the compiler handles mind you).
 
-```
+```c++
 // cake.btb
 fn hey() {
     log("Hey! I like cake.");
@@ -16,7 +16,7 @@ hey();
 ```
 
 The import directive has some rules when looking for the file you specified in the quotes. You can always skip `.btb` if you want. The compiler will append it for you.
-```
+```c++
 // Import from an absolute path
 #import "/usr/home/your_name/cake.btb"          // Unix
 #import "C:/Users/your_name/Desktop/cake.btb"   // Windows
@@ -34,7 +34,7 @@ ProjectFolder (where your current working directory is, assuming it is)
   cake.btb
 ```
 If you are not using the relative or absolute format the compiler will search for the files in both. But also the current working directory and the import directories supplied as compiler options when running the compiler.
-```
+```c++
 // main.btb
 #import "cookie.btb"
 #import "util/cake.btb"
@@ -62,7 +62,7 @@ The compiler has a set of standard modules that provide functions and structures
 - File formats (JSON?)
 - Type information (from the compiler)
 
-```
+```c++
 TODO: Update these!
 #import "Array"
 #import "Map"

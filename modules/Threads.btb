@@ -11,7 +11,7 @@ struct Thread {
     os_handle: u64 = 0;
     id: u64 = 0;
 }
-#define ThreadId u64
+#macro ThreadId u64
 // func should be fn @unixcall/@stdcall (void*) -> void*
 fn ThreadCreate(func: fn_ref, param: void*) -> Thread {
     // TODO: Handle error

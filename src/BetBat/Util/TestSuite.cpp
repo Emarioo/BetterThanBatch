@@ -266,6 +266,7 @@ u32 TestSuite(CompileOptions* options, TestSelection testSelection){
     if(testSelection&TEST_POLYMORPHIC) {
         tests.add("tests/polymorphism/structs.btb");
     }
+    tests.add("tests/structs/basic.btb");
     tests.add("tests/lang/typeinfo.btb");
     tests.add("tests/modules/test_maps.btb");
 

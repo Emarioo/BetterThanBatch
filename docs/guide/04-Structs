@@ -2,7 +2,7 @@
 Structs or structures are types that can contain multiple types. Each member in a struct has a type and a name. Internally, members also have a relative offset into the struct.
 
 This is how you declare and use a struct.
-```
+```c++
 #import "Logger"
 
 struct Apples {
@@ -16,7 +16,7 @@ log(your_apples.count, your_apples.size);
 ```
 
 Members of a struct cannot be of the struct's type as that would create a paradox. You can however use a pointer of it's own struct since pointers have a fixed size.
-```
+```c++
 struct Paradox {
     n: i32;
     hm: Paradox; // what is the size of Paradox? infinite?
@@ -24,5 +24,24 @@ struct Paradox {
 struct NotAParadox {
     n: i32;
     ptr: Paradox*; // this is fine   
+}
+```
+
+## Unions
+Currently, unions are only available inside structs.
+
+TO EXPLAIN:
+- First member of union can have a default value. The rest cannot not even if they are bigger (will be zero initialized though). Initializer affects the first member.
+- The active/first member can be changed using an annotation. @active, @first, @front
+- Nested unions are flattened
+- 
+
+```
+struct Bee {
+    size: i32;
+    union {
+        cool: i32;
+        taste: f32;   
+    }   
 }
 ```

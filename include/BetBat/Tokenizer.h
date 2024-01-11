@@ -178,6 +178,8 @@ struct TokenStream {
     // bool addTokenAndData(Token token);
 
     Token& get(u32 index) const;
+    
+    TokenRange getLineRange(u32 tokenIndex);
 
     //-- For parsing
 

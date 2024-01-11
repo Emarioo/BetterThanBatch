@@ -78,23 +78,24 @@ void GenInfo::popInstructions(u32 count){
                     }
                     if(stackAlignment.size()!=0){
                         auto align = stackAlignment.last();
-                        if(!hasErrors() && align.size!=0){
+                        if(!hasErrors()){
                             // size of 0 could mean extra alignment for between structs
                             Assert(("bug in compiler!", align.size == size));
                         }
                         // You pushed some size and tried to pop a different size.
                         // Did you copy paste some code involving addPop/addPush recently?
+                        virtualStackPointer += size;
                         stackAlignment.pop();
-                        if (align.diff != 0) {
+                        if (align.diff) {
                             virtualStackPointer += align.diff;
                             // code->addDebugText("align sp\n");
                             i16 offset = align.diff;
+                            code->instructionSegment.used-=1;
                             // addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
                         }
                         if(align.size == 0)
                             continue;
                     }
-                    virtualStackPointer += size;
                     break;
                 }
                 break;   
@@ -172,17 +173,17 @@ bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
             _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
             return false;
         }
-        if(inst.opcode == BC_POP && instLast.opcode == BC_PUSH
-        && DECODE_REG_SIZE(inst.op0) == DECODE_REG_SIZE(instLast.op0)) {
-            u8 op = instLast.op0;
-            popInstructions(1);
-            _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
-            bool yes = addInstruction({BC_MOV_RR, op, inst.op0});
-            if(yes) {
-                _GLOG(log::out << log::GRAY << "(replaced with register move)\n";)
-            }
-            return false;
-        }
+        // if(inst.opcode == BC_POP && instLast.opcode == BC_PUSH
+        // && DECODE_REG_SIZE(inst.op0) == DECODE_REG_SIZE(instLast.op0)) {
+        //     u8 op = instLast.op0;
+        //     popInstructions(1);
+        //     _GLOG(log::out << log::GRAY << "(delete redundant push/pop)\n";)
+        //     bool yes = addInstruction({BC_MOV_RR, op, inst.op0});
+        //     if(yes) {
+        //         _GLOG(log::out << log::GRAY << "(replaced with register move)\n";)
+        //     }
+        //     return false;
+        // }
         // if(inst.opcode == BC_MOV_RR && inst.op0 == instLast.op0) {
         //     u8 opcode = instLast.opcode;
         //     u8* outOp = nullptr;
@@ -324,6 +325,7 @@ void GenInfo::addPush(int reg, bool withoutInstruction) {
     if(!withoutInstruction) {
         addInstruction({BC_PUSH, (u8)reg}, true);
     }
+    // BREAK(size == 16);
     stackAlignment.add({diff, size});
     virtualStackPointer -= size;
     _GLOG(log::out << "relsp "<<virtualStackPointer<<"\n";)
@@ -2456,7 +2458,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
         }
         else if (expression->typeId == AST_BNOT) {
             SignalDefault result = GenerateExpression(info, expression->left, &ltype);
-            if (result == SignalDefault::FAILURE)
+            if (result != SignalDefault::SUCCESS)
                 return result;
             // TypeInfo *ti = info.ast->getTypeInfo(ltype);
             u32 size = info.ast->getTypeSize(ltype);
@@ -3115,10 +3117,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                             outTypeIds->add(ltype);
                     }else{
                         info.addInstruction({bytecodeOp, reg1, reg2, reg2});
-                        info.addPush(reg2);
                         if(expression->typeId==AST_ASSIGN){
                             info.addInstruction({BC_MOV_RM, reg2, BC_REG_RBX, rsize});
                         }
+                        info.addPush(reg2);
                         if(is_equality)
                             outTypeIds->add(AST_BOOL);
                         else
@@ -3224,10 +3226,12 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                             info.ast->typeToString(ltype) << " - "<<info.ast->typeToString(rtype)<<".")
                         )
                     }
+                    u8 reg_to_push = 0;
                     if(compareOp) {
                         info.addInstruction({bytecodeOp, cmpType, reg1, reg2});
                         outTypeIds->add(AST_BOOL);
-                        info.addPush(reg2);
+                        // info.addPush(reg2);
+                        reg_to_push = reg2;
                     } else {
                         if(bytecodeOp == BC_DIVI || bytecodeOp == BC_MODI || bytecodeOp == BC_MULI) {
                             info.addInstruction({bytecodeOp, arithmeticType, reg1, reg2});
@@ -3238,7 +3242,8 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                             outTypeIds->add(rtype);
                         else
                             outTypeIds->add(ltype);
-                        info.addPush(regOut);
+                        // info.addPush(regOut);
+                        reg_to_push = regOut;
                     }
                     if(expression->typeId==AST_ASSIGN){
                         Assert(assignedSize <= 8); // a mov instruction isn't enough for memory larger than 8-bytes.
@@ -3248,6 +3253,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         // what the reference/variable we are assigning to causing us to another variable's memory.
                         // info.addInstruction({BC_MOV_RM, regOut, BC_REG_RBX, outSize});
                     }
+                    info.addPush(reg_to_push);
                 } else if ((AST::IsDecimal(ltype) || AST::IsInteger(ltype)) && (AST::IsDecimal(rtype) || AST::IsInteger(rtype))){
                     // Note that we will at least have one decimal.
                     Assert(AST::IsDecimal(ltype) || AST::IsDecimal(rtype));
@@ -3337,10 +3343,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     }
 
                     info.addInstruction({bytecodeOp, reg1, reg2, regOut});
-                    info.addPush(regOut);
                     if(expression->typeId==AST_ASSIGN){
                         info.addInstruction({BC_MOV_RM, regOut, BC_REG_RBX, DECODE_REG_SIZE(regOut)});
                     }
+                    info.addPush(regOut);
                     if(comparison)
                         outTypeIds->add(AST_BOOL);
                     else if(finalSize == 8)
@@ -3387,6 +3393,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     //     info.addInstruction({bytecodeOp, reg1, reg2, reg2});
                     //     outTypeIds->add(rtype);
                     // }
+                    Assert(expression->typeId != AST_ASSIGN);
                     // if(expression->typeId==AST_ASSIGN){
                     //     info.addInstruction({BC_MOV_RM, reg2, BC_REG_RBX, rsize});
                     // }
@@ -3654,6 +3661,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         }
         dfun->funcImpl = funcImpl;
         dfun->funcAst = function;
+        dfun->tokenStream = function->body->tokenRange.tokenStream();
         info.currentScopeDepth = -1; // incremented to 0 in GenerateBody
         // dfun->scopeId = function->body->scopeId;
 
@@ -3715,6 +3723,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         info.currentFrameOffset = 0;
 
         dfun->funcStart = info.code->length();
+        dfun->bc_start = info.code->length();
         dfun->entry_line = function->name.line;
 
         #define DFUN_ADD_VAR(NAME, OFFSET, TYPE) dfun->localVariables.add({});\
@@ -4210,6 +4219,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
         }
         
         dfun->funcEnd = info.code->length();
+        dfun->bc_end = info.code->length();
 
         // Assert(info.virtualStackPointer == GenInfo::VIRTUAL_STACK_START);
         // Assert(info.currentFrameOffset == 0);
@@ -4304,9 +4314,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
         MAKE_NODE_SCOPE(statement);
 
         auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
-        fun.lines.add({});
-        fun.lines.last().funcOffset = info.code->length();
-        fun.lines.last().lineNumber = statement->tokenRange.firstToken.line;
+        fun.addLine(statement->tokenRange.firstToken.line, info.code->length(), statement->tokenRange.firstToken.tokenIndex);
         
         info.disableCodeGeneration = codeWasDisabled;
         info.ignoreErrors = errorsWasIgnored;
@@ -4906,7 +4914,6 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             for (auto ind : loopScope->resolveBreaks) {
                 info.code->getIm(ind) = info.code->length();
             }
-            info.restoreStackMoment(loopScope->stackMoment);
             
         } else if (statement->type == ASTStatement::WHILE) {
             _GLOG(SCOPE_LOG("WHILE"))
@@ -5893,6 +5900,8 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         dfun->funcImpl = nullptr;
         dfun->funcAst = nullptr;
         dfun->funcStart = info.code->length();
+        dfun->bc_start = info.code->length();
+        dfun->tokenStream = info.ast->mainBody->tokenRange.tokenStream();
         info.currentScopeDepth = -1;
         // dfun->scopeId = info.ast->globalScopeId;
 
@@ -5916,6 +5925,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
 
         info.addInstruction({BC_RET});
         dfun->funcEnd = info.code->length();
+        dfun->bc_end = info.code->length();
     }
 
     std::unordered_map<FuncImpl*, int> resolveFailures;

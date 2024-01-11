@@ -2,7 +2,7 @@
 Words: declaration, assignment, unary operator, binary operator, primitive types
 
 This is how you declare and use variables.
-```
+```c++
 a := 5    // declaration
 c := a - 9
 
@@ -13,7 +13,7 @@ c = 2 * b  // reassign a value to a variable, note the sole '=' without the ':'
 
 ## Arithmetic operations
 
-```
+```c++
 12 := 3 + 9    // addition
  3 := 5 - 2    // subtraction
 18 := 9 * 2    // multiplication
@@ -38,7 +38,7 @@ These are the (current) primitive types:
 **Pointers**: void*, i32*, char* (8 bytes on a 64-bit computer, the compiler only supports 64-bit)
 
 The type of a variable can be specified between the colon and equal sign. Otherwise, the type is infered from the expression.
-```
+```c++
 num0: i32 = 23
 num1: f32 = 96.5
 final := num0 + num1
@@ -51,7 +51,7 @@ yes: bool = true
 Literals refer to the plain and constant numbers, strings, and floats in the code.
 Most (or all) literals use the 32-bit variation when available
 
-```
+```c++
 a := 9241    // signed integer literal
 a =  9241u   // unsigned integer literal
 a =  0x92_39    // integer literal but hexidecimal form
@@ -69,7 +69,7 @@ str: Slice<char> = "My string"  // string literal, more about how to use strings
 
 ## Pointers and arrays
 The language has pointers like C/C++.
-```
+```c++
 a: i32 = 82;
 ptr: i32* = &a;     // take a pointer to a variable
 value: i32 = *ptr;  // dereference the pointer to get the value at the pointer's address
@@ -91,7 +91,7 @@ str[str.len - 1] // access last character which is 'g'
 
 The language has pointer arithmetic which means that you can perform add and subtract operations on
 pointers with integers. The **difference** from C/C++ is that there is no automatic scaling. Adding 3 to a 32-bit integer pointer will not scale it up to 12. `sizeof(type or expression)` can be used to retrieve the size of the type and then you can multiply by the integer yourself.
-```
+```c++
 arr: i32[10];
 
 *(arr.ptr + 9 * sizeof(i32)) = 92  // set the value of the last element
@@ -104,7 +104,7 @@ arr: i32[10];
 ## More operations
 Words: bitwise operator, comparison/equality operator, logical operator
 
-```
+```c++
 11 = 9 | 3  (bitwise or)
  1 = 9 & 3  (bitwise and)
 10 = 9 ^ 3  (bitwise xor)
@@ -133,7 +133,7 @@ that can cause integer overflow and underflow should be treated with care.
 
 There is also the issue of converting large integers to small integers where you lose data.
 Converting small integers to large integers is fine but sometimes you may write something like this:
-```
+```c++
 a: u8 = 5
 b: u32 = a << 16    
 // shifting an 8-bit integer 16 bits will always result in 0, b will not be 0x5_0000

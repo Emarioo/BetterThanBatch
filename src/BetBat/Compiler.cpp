@@ -1113,17 +1113,17 @@ Bytecode* CompileSource(CompileOptions* options) {
         "end: i32;"
     "}\n"
     #ifdef OS_WINDOWS
-    "#define OS_WINDOWS\n"
+    "#macro OS_WINDOWS #endmacro\n"
     #else
     // #elif defined(OS_UNIX)
-    "#define OS_UNIX\n"
+    "#define OS_UNIX #endmacro\n"
     #endif
     "fn @native prints(str: char[]);\n"
     "fn @native printc(str: char);\n"
-    // "#define Assert(X) { prints(#quoted X); }"
-    // "#define Assert(X) { prints(#quoted X); *cast<char>null; }"
+    // "#macro Assert(X) { prints(#quoted X); }"
+    // "#macro Assert(X) { prints(#quoted X); *cast<char>null; }"
     ;
-    essentialStructs += (options->target == TARGET_BYTECODE ? "#define LINK_BYTECODE\n" : "");
+    essentialStructs += (options->target == TARGET_BYTECODE ? "#macro LINK_BYTECODE #endmacro\n" : "");
     TextBuffer essentialBuffer{};
     essentialBuffer.origin = "<base>";
     essentialBuffer.size = essentialStructs.size();
@@ -1639,7 +1639,8 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
                         lineNumber = func.lines[0].lineNumber;
                     for(int i=0;i < func.lines.size();i++) {
                         auto& line = func.lines[i];
-                        if(it.textOffset < func.funcStart + line.funcOffset) { // NOTE: Is funcStart + funcOffset correct?
+                        if(it.textOffset < line.asm_address) { // NOTE: Is funcStart + funcOffset correct?
+                        // if(it.textOffset < func.funcStart + line.funcOffset) { // NOTE: Is funcStart + funcOffset correct?
                             found = true;
                             break;
                         }
@@ -1956,7 +1957,39 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
             log::out << "Dump: "<<log::GOLD<<dump.description<<"\n";
         }
         if(dump.dumpBytecode) {
+            auto debug = program->debugInformation;
+            // auto debug = bytecode->debugInformation;
+            int next_line = 0;
+            int last_func = -1;
             for(int j=dump.bc_startIndex;j<dump.bc_endIndex;j++){
+                if(debug) {
+                    for (int fi = 0;fi<debug->functions.size();fi++) {
+                        auto& fun = debug->functions[fi];
+                        if(!(fun.bc_start <= j && j < fun.bc_end)) {
+                            continue;
+                        }
+                        last_func = fi;
+                        bool printed = false;
+                        for (int li = next_line;li<fun.lines.size();li++) {
+                            auto& line = fun.lines[li];
+                            int beg = line.bc_address;
+                            int end = fun.bc_end;
+                            if(li+1 != fun.lines.size())
+                                end = fun.lines[li + 1].bc_address;
+                            if(beg <= j && j < end) {
+                                next_line = li+1;
+                                log::out << log::LIME << line.lineNumber<<"| " << log::AQUA;
+                                auto range = fun.tokenStream->getLineRange(line.tokenIndex);
+                                range.print(true);
+                                log::out << "\n";
+                                printed = true;
+                                break;
+                            }
+                        }
+                        if(printed)
+                            break;
+                    }
+                }
                 log::out << " ";
                 bytecode->printInstruction(j, true);
                 u8 immCount = bytecode->immediatesOfInstruction(j);

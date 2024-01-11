@@ -14,9 +14,9 @@
 
 // fn @import Sleep(ms: i32); // windows sleep, remove this later
 
-// #define GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",#line,glErrCode,":",glewGetErrorString(glErrCode)); }
+// #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",#line,glErrCode,":",glewGetErrorString(glErrCode)); }
 // #ifndef GLCHECK
-// #define GLCHECK
+// #macro GLCHECK #endmacro
 // #endif
 struct Zone {
     start: u64;
@@ -36,7 +36,7 @@ struct ProfiledData {
     rawData: void*;
 }
 
-// #define LN printc('L'); printc('N'); _print(cast<i64>#line); _print('\n')
+// #macro LN printc('L'); printc('N'); std_print(cast<i64>#line); std_print('\n')
 
 fn ReadPerfData(path: char[]) -> ProfiledData* {
     ptr: ProfiledData* = Allocate(sizeof ProfiledData);

@@ -6,17 +6,17 @@
 // fn @native prints(str: char[]) ;
 
 #ifdef LINK_BYTECODE
-#define LINK_TYPE @native
+#macro LINK_TYPE @native
 #else
 #ifdef OS_UNIX
-#define LINK_TYPE @import @unixcall
+#macro LINK_TYPE @import @unixcall
 #else
-#define LINK_TYPE @import @stdcall
+#macro LINK_TYPE @import @stdcall
 #endif
 #endif
 
-// #define Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
-#define Assert(expression)
+// #macro Assert(expression) ((expression) ? true : (fprintf(stderr,"[Assert] %s (%s:%u)\n",#expression,__FILE__,__LINE__), *((char*)0) = 0))
+#macro Assert(expression) #endmacro
 
 // TODO: Move intrinsics elsewhere
 // len is in bytes
@@ -38,7 +38,7 @@ fn LINK_TYPE Allocate(size: u64) -> void*;
 fn LINK_TYPE Reallocate(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
 fn LINK_TYPE Free(ptr: void*, size: u64) ;
 
-#define FileHandle u64
+#macro FileHandle u64
 // struct FileHandle { // not named File because someone might want that name for other things
 //     handle: u64;
 // }

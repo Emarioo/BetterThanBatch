@@ -311,7 +311,7 @@
 // }
 // struct Po<T> {
 //     a: T;
-//     fn pr(){
+//     fn std_print(){
 //         poly<T>(a);
 //     }
 // }
@@ -410,7 +410,7 @@
 //         this.x += a;
 //     }
 // }
-// #define E i32
+// #macro E i32
 // #import "OS"
 // FileOpen();
 // FileRead();

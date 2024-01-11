@@ -1,25 +1,25 @@
 @TEST_CASE(macro_recursion)
 
-#define ADD(X,...) X + ADD(...)
-#define ADD(X) X
+#macro ADD(X,...) X + ADD(...)
+#macro ADD(X) X
 
 test 1+2; ADD(1,2);
 test 4+9; ADD(4,9,);
 ADD() // should not cause an error
 
-#define REV(F,...) REV(...), F
-#define REV(F) F
+#macro REV(F,...) REV(...), F
+#macro REV(F) F
 
 arr: i32[] { REV(0,1,2) }
 test arr.ptr[0]; 2;
 test arr.ptr[1]; 1;
 test arr.ptr[2]; 0;
 
-// #define CHAOS(F,S,...) S CHAOS(...) F
-// #define CHAOS
+// #macro CHAOS(F,S,...) S CHAOS(...) F
+// #macro CHAOS
 
-#define NOR(X,...) !X || NOR(...)
-#define NOR(X) !X
+#macro NOR(X,...) !X || NOR(...)
+#macro NOR(X) !X
 
 test 1; NOR(0);
 test 1; NOR(1,0,1,0);
@@ -31,11 +31,11 @@ test 0; NOR(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
 
 // TODO: More and better tests
 
-// #define ORS(T,X,...) T==X || ORS(T,...)
-// #define ORS(T,X) T==X
+// #macro ORS(T,X,...) T==X || ORS(T,...)
+// #macro ORS(T,X) T==X
 
-// #define PART0 a,b
-// #define PART1 1,2
+// #macro PART0 a,b
+// #macro PART1 1,2
 
 // ORS(t,b,c,d,e,f)
 // ORS(type,#unwrap PART0,#unwrap PART1)

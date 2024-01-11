@@ -310,7 +310,7 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     _PLOG(FUNC_ENTER)
     Token structToken = info.get(info.at()+1);
     int startIndex = info.at()+1;
-    if(!Equal(structToken,"struct")){
+    if(!Equal(structToken,"struct")){ // TODO: Allow union
         if(attempt) return SignalAttempt::BAD_ATTEMPT;
         ERR_SECTION(
             ERR_HEAD(structToken)
@@ -430,13 +430,13 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
     // ensure scope is the same when returning
     auto prevScope = info.currentScopeId;
     defer {info.currentScopeId = prevScope; };
-    
     info.currentScopeId = astStruct->scopeId;
 
     int offset=0;
     auto errorParsingMembers = SignalAttempt::SUCCESS;
     bool hadRecentError = false;
     bool affectedByAlignment=false;
+    int union_depth = 0;
     // TODO: May want to change the structure of the while loop
     //  struct { a 9 }   <-  : is expected and not 9, function will quit but that's not good because we still have }.
     //  that will cause all sorts of issue outside. leaving this parse function when } is reached even if errors occured
@@ -460,7 +460,11 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             continue;
         } else if(Equal(name,"}")){
             info.next();
-            break;
+            if(union_depth == 0) {
+                break;
+            }
+            union_depth--;
+            continue;
         }
         bool wasFunction = false;
         Token typeToken{};
@@ -476,20 +480,43 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             func->parentStruct = astStruct;
             astStruct->add(func);
             // ,func->polyArgs.size()==0?&func->baseImpl:nullptr);
-        } else {
-            if(!IsName(name)){
-                info.next();
-                if(!hadRecentError){
-                    ERR_SECTION(
-                        ERR_HEAD(name)
-                        ERR_MSG("Expected a name, "<<name<<" isn't.")
-                        ERR_LINE(name,"bad")
-                    )
-                }
-                hadRecentError=true;
-                errorParsingMembers = SignalAttempt::FAILURE;
-                continue;
+        } else if(Equal(name, "union")) {
+            info.next();
+            
+            Assert(union_depth < 1); // nocheckin, support nested unions and structs
+            
+            Token tok = info.get(info.at()+1);
+            if(IsName(tok)) {
+                ERR_SECTION(
+                    ERR_HEAD(tok)
+                    ERR_MSG("Named unions not allowed inside structs.")
+                    ERR_LINE(tok,"bad")
+                )
+                info.next(); // skip it, continue as normal
             }
+            
+            tok = info.get(info.at()+1);
+            
+            if(Equal(tok,"{")) {
+                info.next();
+                union_depth++;
+                continue;
+            } else {
+                ERR_SECTION(
+                    ERR_HEAD(tok)
+                    ERR_MSG("Expected 'union {' but there was no curly brace.")
+                    ERR_LINE(tok,"should be a curly brace")
+                )
+                // what do we do?
+            }
+        } else if(Equal(name, "struct")) {
+            ERR_SECTION(
+                ERR_HEAD(name)
+                ERR_MSG("Structs not allowed inside structs.")
+                ERR_LINE(name,"bad")
+            )
+            Assert(("struct definitin in struct not allowed",false)); // error instead
+        } else if(IsName(name)) {
             for(auto& mem : astStruct->members) {
                 if(mem.name == name) {
                     ERR_SECTION(
@@ -583,18 +610,29 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
                 mem.defaultValue = defaultValue;
                 mem.stringType = typeId;
             }
+        } else {
+            info.next();
+            if(!hadRecentError){
+                ERR_SECTION(
+                    ERR_HEAD(name)
+                    ERR_MSG("Expected a name, "<<name<<" isn't.")
+                    ERR_LINE(name,"bad")
+                )
+            }
+            hadRecentError=true;
+            errorParsingMembers = SignalAttempt::FAILURE;
+            continue;   
         }
         Token token = info.get(info.at()+1);
-        if(Equal(token,"fn")){
-            // semi-colon not needed for functions
+        if(Equal(token,"fn") || Equal(token, "struct") || Equal(token, "union")){
+            // semi-colon not required
             continue;
         }else if(Equal(token,";")){
             info.next();
             hadRecentError=false;
             continue;
         }else if(Equal(token,"}")){
-            info.next();
-            break;
+            continue; // handle break at beginning of loop
         }else{
             if(wasFunction)
                 continue;
@@ -2036,7 +2074,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     bool mustBeNamed=false;
                     Token prevNamed = {};
                     int count=0;
-                    WHILE_TRUE {
+                    WHILE_TRUE_N(10000) {
                         Token token = info.get(info.at()+1);
                         if(Equal(token,"}")){
                            info.next();
@@ -2330,7 +2368,9 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
         if(ending){
             expression = values.last();
             expression->computeWhenPossible = shouldComputeExpression;
-            Assert(values.size()==1);
+            if(!info.hasErrors()) {
+                Assert(values.size()==1);
+            }
 
             // we have a defer above which destroys expressions which is why we
             // clear the list to prevent it
@@ -2497,34 +2537,36 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
         info.next();
         
         statement = info.ast->createStatement(ASTStatement::RETURN);
-
-        WHILE_TRUE {
-            ASTExpression* expr=0;
-            Token token = info.get(info.at()+1);
-            if(Equal(token,";")&&statement->arrayValues.size()==0){ // return 1,; should not be allowed, that's why we do &&!base
-                info.next();
-                break;
-            }
-            SignalAttempt result = ParseExpression(info,expr,true);
-            if(result!=SignalAttempt::SUCCESS){
-                break;
-            }
-            statement->arrayValues.add(expr);
-            // if(!base){
-            //     base = expr;
-            //     prev = expr;
-            // }else{
-            //     prev->next = expr;
-            //     prev = expr;
-            // }
-            
-            Token tok = info.get(info.at()+1);
-            if(!Equal(tok,",")){
-                if(Equal(tok,";"))
+        
+        if((firstToken.flags & TOKEN_SUFFIX_LINE_FEED) == 0) {
+            WHILE_TRUE {
+                ASTExpression* expr=0;
+                Token token = info.get(info.at()+1);
+                if(Equal(token,";")&&statement->arrayValues.size()==0){ // return 1,; should not be allowed, that's why we do &&!base
                     info.next();
-                break;   
+                    break;
+                }
+                SignalAttempt result = ParseExpression(info,expr,true);
+                if(result!=SignalAttempt::SUCCESS){
+                    break;
+                }
+                statement->arrayValues.add(expr);
+                // if(!base){
+                //     base = expr;
+                //     prev = expr;
+                // }else{
+                //     prev->next = expr;
+                //     prev = expr;
+                // }
+                
+                Token tok = info.get(info.at()+1);
+                if(!Equal(tok,",")){
+                    if(Equal(tok,";"))
+                        info.next();
+                    break;   
+                }
+                info.next();
             }
-            info.next();
         }
         
         // statement->rvalue = base;

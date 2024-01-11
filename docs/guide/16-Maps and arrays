@@ -3,7 +3,7 @@ Data structures are not internal concepts of the compiler. Like C and C++ you cr
 
 
 Here is a dynamically sized array
-```
+```c++
 #import "Array"
 
 arr: DynamicArray<i32>;
@@ -19,7 +19,7 @@ for arr.sliced_unsafe()
 ```
 
 Here is a hash map for integers:
-```
+```c++
 #import "Map"
 #import "Logger"
 

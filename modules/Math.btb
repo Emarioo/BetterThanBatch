@@ -25,7 +25,7 @@ fn random64() -> u64 {
     // #link "Bcrypt.lib"
     #link "-lBcrypt"
     fn @dllimport @stdcall BCryptGenRandom(_: void*, buf: void*, len: u32, flags: u32) -> i32;
-    #define BCRYPT_USE_SYSTEM_PREFERRED_RNG cast<u32>0x00000002
+    #macro BCRYPT_USE_SYSTEM_PREFERRED_RNG cast<u32>0x00000002
     
     status := BCryptGenRandom(null, &num, sizeof num, BCRYPT_USE_SYSTEM_PREFERRED_RNG);
     if status < 0;

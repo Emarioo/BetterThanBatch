@@ -373,11 +373,11 @@ namespace engone {
             }
             
             // Todo: KB/MB formatting?
-            Block* pr = type?f:u;
-            log::out << " [ "<<pr->start;
-            if(type) log::out<<" - "<< pr->size<<" - ";
-            else log::out << " # "<<pr->size<<" # ";
-            log::out<<(pr->start+pr->size-1)<<"]\n";
+            Block* block = type?f:u;
+            log::out << " [ "<<block->start;
+            if(type) log::out<<" - "<< block->size<<" - ";
+            else log::out << " # "<<block->size<<" # ";
+            log::out<<(block->start+block->size-1)<<"]\n";
             // printf("|%llu - %llu ",f->start,f->start+f->size-1);
         }
         // log::out << "\n";

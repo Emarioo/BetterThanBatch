@@ -1,7 +1,7 @@
 #import "Logger"
 // fn @native printi(n: i64);
 // fn @native prints(s: char[]);
-// #define NL prints("\n");
+// #macro NL prints("\n");
 
 struct vec2 {
     x: i32;

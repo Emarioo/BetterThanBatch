@@ -1,39 +1,39 @@
 @TEST_CASE(variadic_macro)
 
-#define l0(a0,...) a0
-#define l1(...) l0(...)
-#define l2(a2) l1(a2)
+#macro l0(a0,...) a0
+#macro l1(...) l0(...)
+#macro l2(a2) l1(a2)
 l2(9) // should produce 9  (a bug at one point produced a2)
 l1(1,2) // should produce 1 (a bug at one point produced 1,2)
 
-#define k0(X,...) X.. k0(...)
-#define k1(...) k1(...)
+#macro k0(X,...) X.. k0(...)
+#macro k1(...) k1(...)
 k0(0,1) // produces 0.. 1..
 k1(0,1) // produces 0.. 1..
 
-#define n(...) [ ... ]
+#macro n(...) [ ... ]
 n(na,na) // should produce [ na, na ]
 
-#define print(...) { print_inner(...) }
-#define print_inner(X,...) _print(X); print_inner(...)
-#define gotoxy(x,y) print("\033[",(x),";",(y),"H")
+#macro print(...) { print_inner(...) }
+#macro print_inner(X,...) std_print(X); print_inner(...)
+#macro gotoxy(x,y) print("\033[",(x),";",(y),"H")
 gotoxy(0,0) // it should not produce x and y but zeros. There was a bug where x and y were produced and the 0,0 arguments ignored or forgotten
 
 
-#define log(...) { log_inner(...) }
-#define log_inner(X, ...) p(X); p(' '); log_inner(...)
-#define log_inner(X) p(X); p('\n')
+#macro log(...) { log_inner(...) }
+#macro log_inner(X, ...) p(X); p(' '); log_inner(...)
+#macro log_inner(X) p(X); p('\n')
 
 a log("a", "b") // should produce one newline after } a bug at one point made a new line before the } on the ) token
 
-#define AA 3
-#define AB 3 4
+#macro AA 3
+#macro AB 3 4
 l2(#unwrap AA)
 l1(#unwrap AB)
 
 
 
-#define base(x,y,F) if(flags & F) { x - y }
-#define log(x,y) base(x,y, LOG_TYPE)
-#define ENTER yoo, hi
+#macro base(x,y,F) if(flags & F) { x - y }
+#macro log(x,y) base(x,y, LOG_TYPE)
+#macro ENTER yoo, hi
 log(ENTER,other) // should produce   if(flags & LOG_TYPE) { yoo, hi - other }

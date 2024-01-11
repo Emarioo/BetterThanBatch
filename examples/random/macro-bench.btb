@@ -7,19 +7,19 @@
     (it might have been removed)
 */
 
-#define ADDS(X,...) X + ADDS(...)
-#define ADDS(X) X
+#macro ADDS(X,...) X + ADDS(...)
+#macro ADDS(X) X
 
-#define OVER()
-#define OVER(X,Y,...) umf OVER1(X,...) wha OVER1(Y,...) so OVER(...)
-#define OVER1(X, Y) OVER_1 ( OVER(X,X) )
-#define OVER1(X,...) OVER_1 ( OVER1(...) )
-#define OVER1()
+#macro OVER() #endmacro
+#macro OVER(X,Y,...) umf OVER1(X,...) wha OVER1(Y,...) so OVER(...)
+#macro OVER1(X, Y) OVER_1 ( OVER(X,X) )
+#macro OVER1(X,...) OVER_1 ( OVER1(...) )
+#macro OVER1() #endmacro
 
-#define MASSIVE(X,...,Y) DECR(X, X, ..., X, X) MASSIVE(...) DECR(Y, Y, ..., Y, Y)
-#define MASSIVE()
-#define DECR(HUMMUS,...,Y) HUMMUS  OAEO HUMMUS oaE o Y eAEE ae aOEPAPE  DECR(...) HUMMUS
-#define DECR() ENDING MEE
+#macro MASSIVE(X,...,Y) DECR(X, X, ..., X, X) MASSIVE(...) DECR(Y, Y, ..., Y, Y)
+#macro MASSIVE() #endmacro
+#macro DECR(HUMMUS,...,Y) HUMMUS  OAEO HUMMUS oaE o Y eAEE ae aOEPAPE  DECR(...) HUMMUS
+#macro DECR() ENDING MEE
 
 ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))
 ADDS(#unwrap DECR(AAD, KAOD, AOIDw, AIIOda, abid, aior, abwi, dwau))

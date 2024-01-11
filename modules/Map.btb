@@ -3,7 +3,7 @@
 #import "Logger"
 #import "String"
 
-#define Map_i32 Map<i32,i32>
+#macro Map_i32 Map<i32,i32>
 
 struct MapChain<Key,Val> {
     key: Key;
@@ -26,8 +26,8 @@ struct Map<Key,Val> {
     table: DynamicArray<u32>;
     count: u32;
     
-    #define MAP_CHAIN_INDEX_NULL 0
-    // #define MAP_CHAIN_INDEX_BEGIN 1
+    #macro MAP_CHAIN_INDEX_NULL 0
+    // #macro MAP_CHAIN_INDEX_BEGIN 1
     
     fn init(tableSize: u32, reserved_chains: u32 = 0) {
         // TODO: Assert(chains.len == 0)
@@ -94,7 +94,7 @@ struct Map<Key,Val> {
         // if unused_waste > 0 {
         //     // The map could have a second array with positions to the unused chains. We can reuse chains from this array in the set function.
         //     // Another solution would be to rearrange memory so that unused chains are last and popped.
-        //     pr("WARNING in Map.remap: There were ",unused_waste," unused chains which are detached and wasting chain spots!\n")
+        //     std_print("WARNING in Map.remap: There were ",unused_waste," unused chains which are detached and wasting chain spots!\n")
         // }
     }
     
@@ -292,7 +292,7 @@ struct Map<Key,Val> {
         for table.sliced_unsafe() {
             if it == 0  continue;
             
-            pr("[",nr,"] ")
+            std_print("[",nr,"] ")
             
             index := it;
             while {
@@ -300,14 +300,14 @@ struct Map<Key,Val> {
                 if !chain
                     break;
                 if !chain.unused {
-                    pr("<",chain.key,": ", chain.val,">, ")
+                    std_print("<",chain.key,": ", chain.val,">, ")
                 }
                 index = chain.next;
                 
                 if chain.next == MAP_CHAIN_INDEX_NULL
                     break;
             }
-            pr("\n");
+            std_print("\n");
         }
     }
 }

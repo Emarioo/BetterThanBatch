@@ -19,8 +19,8 @@ fn log(t: Slice<char>){
     prints(t);
 }
 
-// #define LOG(X,...) log(X); LOG(...);
-// #define LOG()
+// #macro LOG(X,...) log(X); LOG(...);
+// #macro LOG() #endmacro
 
 // LOG("Hello ", 007, " are you ",false && true,'\n');
 

@@ -3,6 +3,7 @@ TODO: What is this language about?
 
 ## Compiling code
 TODO: How to compile code.
+TODO: Test all the code showcased in the guide. I have not actually tested anything so I could have messed up the syntax somewhere.
 
 Compile code with this:
 `btb main.btb`

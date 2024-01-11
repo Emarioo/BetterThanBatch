@@ -1,0 +1,9 @@
+struct SuperBlock {
+  FileMagic: char[sizeof(Magic)];
+  ulittle32_t BlockSize;
+  ulittle32_t FreeBlockMapBlock;
+  ulittle32_t NumBlocks;
+  ulittle32_t NumDirectoryBytes;
+  ulittle32_t Unknown;
+  ulittle32_t BlockMapAddr;
+};

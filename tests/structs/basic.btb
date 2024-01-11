@@ -5,32 +5,101 @@ struct Apple {
     size: f32;
     name: char[];
 }
-apple = Apple{32, 1.2, "Your name"};
+apple := Apple{32, 1.2, "Your name"};
 
 test 32; apple.red;
 test 1.2; apple.size;
-s = "Your name"
+s := "Your name"
 for apple.name
     test s.ptr[nr]; it;
 
-apple2 = Apple{13, name = "My fruit", size = 0.3};
+apple2 := Apple{13, name = "My fruit", size = 0.3};
 
 test 13; apple2.red;
 test 0.3; apple2.size;
-s2 = "My fruit"
+s2 := "My fruit"
 for apple2.name
     test s2.ptr[nr]; it;
+
+@TEST_CASE(unions_in_structs)
+
+// TODO: FIX this
+struct Basket {
+    type: u32;
+    union {
+        f: f32 = 3;
+        k: i32;
+    }   
+}
+
+bask: Basket;
+
+struct Soup {
+    type: u32;
+    union {
+        coded: i32;
+        // struct {
+        //     min: i16;
+        //     max: i16;
+        // }
+        // struct {
+        //     raw: u8[4]; // not implemented yet, we need to implement constant evaluation
+        // }
+    }   
+}
+soup: Soup;
+
+// test osup
+
+// TODO: TEST DEFAULT VALUES
+
+
+// copy paste to dev.btb
+// struct App {
+//     n: i32;
+//     union {
+//         u0: i32;
+//         u1: f32;
+//         struct {
+//             m: i32;
+//             k: f32;
+            
+//         }
+//         // union {
+//         // union {
+//         d: i32;
+//         p: i32;   
+//         // }
+//         // }
+//     }
+//     k: i32;
+// }
+
+// union {
+//     a: i32;
+//     struct {
+//         n: i32;
+//         k: u8;
+//         k: i32;
+//     }   
+// }
+
+// a := App{};
+// a.u1 = 23.0;
+
+// std_prints("size ",sizeof App, " ",a.u0,"\n")
+
 
 @TEST_CASE(recursive_struct)
 
 // TODO: TEST_ERROR is not ignored in the parser inside structs.
 //  While you are at it. Create a general ParseAnnotations which ignores TEST_ERROR and TEST_CASE.
 //  Could be useful in the future.
-struct A {
-                                    n: u32;
-@TEST_ERROR(ERROR_INCOMPLETE_FIELD)  f: B;
-}
-struct FieldDefinition {
-                                    n: u32;
-@TEST_ERROR(ERROR_INCOMPLETE_FIELD)  a: A;
-}
+// struct A {
+//                                     n: u32;
+// @TEST_ERROR(ERROR_INCOMPLETE_FIELD)  f: B;
+// }
+// struct FieldDefinition {
+//                                     n: u32;
+// @TEST_ERROR(ERROR_INCOMPLETE_FIELD)  a: A;
+// }

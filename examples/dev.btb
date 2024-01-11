@@ -4,7 +4,7 @@
 // // fn @import @unixcall StopMeasure(timePoint: u64) -> i32; // TODO: Use f64 (double) when implemented
 // // fn @import @unixcall StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
 
-// #define CLOCK_MONOTONIC 1
+// #macro CLOCK_MONOTONIC 1
 // struct timespec {
 //     tv_sec: u64;
 //     tv_nsec: u32;
@@ -15,94 +15,23 @@
 
 // tp: timespec;
 // err = clock_gettime(CLOCK_MONOTONIC, &tp);
-// #define NS cast<u64>1000000000
+// #macro NS cast<u64>1000000000
 
 // fn time() -> u64 {
 //     return rdtsc();
 //     // tp: timespec;
 //     // err = clock_gettime(CLOCK_MONOTONIC, &tp);
-//     // #define NS cast<u64>1000000000
+//     // #macro NS cast<u64>1000000000
 //     // huge: u64 = NS*tp.tv_sec + tp.tv_nsec;
 //     // return huge;
 // }
 // start = time()
 // NativeSleep(0.01)
+// }
 // end = time() - start;
 
 // HELLO! NEXT STEP, fix profiling of time
-// StartMeasure/StopMeasure didn't work before, do they now?
+// StartMeasure/StopMeasure didn't work before, do they now? MAKE A TEST FOR IT
 
 
-// #import "examples/binary_viewer/main.btb"
-#import "Logger"
-// n := 2;
-
-// fn na(a: char[]) {
-//     log(a);
-// }
-
-// switch n {
-// case 0:
-//     na("hi")
-// case 2:
-//     na("twos")
-//     @fall
-// case 3:
-//     na("thrice")
-//     na("twaceo")
-// }
-
-#import "Array"
-
-// for 0..9 {
-//     n := it + nr;
-// }
-
-// a := 2;
-
-// {
-//     b := 9;   
-// }
-
-// {
-//     b := 9;   
-// }
-
-arr: DynamicArray<i32>;
-arr.add(6)
-arr.add(9)
-arr.add(3)
-// str := "tyoo";
-
-// for str {
-//     n := it;
-//     // _print(n); _print("\n")
-// }
-for @ptr arr.sliced_unsafe() {
-    n := *it + nr;
-    _print(n); _print("\n")
-}
-for @ptr myptr: arr.sliced_unsafe() {
-    n := *myptr + nr
-    _print(n); _print("\n")
-    {
-        ea := 902;   
-        n := "more n!"
-    }
-}
-
-// #import "Map"
-// #import "Logger"
-
-// map: Map<i32,i32>;
-// map.init(3)
-
-// map.set(3,1);
-// map.set(52,2);
-// map.set(92,3);
-// map.set(32,4);
-// map.print();
-
-// map.remove(32);
-// map.remove(3);
-// map.print();
+#import "examples/binary_viewer/main.btb"

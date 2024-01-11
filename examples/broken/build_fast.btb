@@ -6,19 +6,19 @@
 
 // @disable optimizer
 
-// #define USE_GCC
+// #macro USE_GCC #endmacro
 
-#define USE_MSVC
+#macro USE_MSVC #endmacro
 
-#define GCC_INCLUDE_DIRS -Iinclude
-#define GCC_DEFINITIONS -DOS_WINDOWS
-#define GCC_COMPILE_OPTIONS -std=c++14 -g
-#define GCC_WARN -Wall -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
+#macro GCC_INCLUDE_DIRS -Iinclude
+#macro GCC_DEFINITIONS -DOS_WINDOWS
+#macro GCC_COMPILE_OPTIONS -std=c++14 -g
+#macro GCC_WARN -Wall -Wno-unused-variable -Wno-unused-value -Wno-unused-but-set-variable
 
-#define MSVC_COMPILE_OPTIONS /std:c++14 /nologo /TP /EHsc
-#define MSVC_LINK_OPTIONS /nologo /debug
-#define MSVC_INCLUDE_DIRS /Iinclude
-#define MSVC_DEFINITIONS /DOS_WINDOWS
+#macro MSVC_COMPILE_OPTIONS /std:c++14 /nologo /TP /EHsc
+#macro MSVC_LINK_OPTIONS /nologo /debug
+#macro MSVC_INCLUDE_DIRS /Iinclude
+#macro MSVC_DEFINITIONS /DOS_WINDOWS
 
 cmd mkdir bin 2> nul
 

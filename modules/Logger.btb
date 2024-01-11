@@ -13,16 +13,15 @@ fn @intrinsic strlen(str: char*) -> u32;
     if the language took that name from you.
 */
 
-#define log(...) { log_inner(...) }
-#define log_inner(X, ...) _print(X); _print(' '); log_inner(...)
-#define log_inner(X) _print(X); _print('\n')
+#macro log(...) { log_inner(...) }
+#macro log_inner(X, ...) std_print(X); std_print(' '); log_inner(...)
+#macro log_inner(X) std_print(X); std_print('\n')
 
-#define pr(...) { print_inner(...) }
-#define print_inner(X,...) _print(X); print_inner(...)
+#macro std_prints(X,...) std_print(X); std_prints(...)
 
 // IMPORTANT: SAFE_CONVERSIONS in x64_Converter must be defined for this function to work properly.
 //  There will be some unexpected bits otherwise.
-fn @hide _print(t: u64){
+fn @hide std_print(t: u64){
     // If you are worried that this language will be filled with ifdefs like C/C++
     // then you can calm down. This is just temporary.
     
@@ -55,25 +54,23 @@ fn @hide _print(t: u64){
     str.len -= used + 1;
     prints(str);
 }
-fn @hide _print(t: i64){
+fn @hide std_print(t: i64){
     mask: i64 = 0x8000_0000_0000_0000;
     if t & mask {
         printc('-');
-        _print(cast<u64>(-t));
+        std_print(cast<u64>(-t));
     } else {
-        _print(cast<u64>(t));
+        std_print(cast<u64>(t));
     }
 }
-fn _print(str: char*){
+fn std_print(str: char*){
     slice := Slice<char>{str, strlen(str)};
     prints(slice);
 }
 // IMPORTANT: This function does not print accurate
 //  floats. It has some precision issues.
-fn _print(t: f32){
-    // #ifndef X64
-    // printd(t)
-    // #else
+fn std_print(t: f32){
+    
     bits: u32 = *cast<u32*>cast<void*>&t;
     // log("float")
     
@@ -85,14 +82,14 @@ fn _print(t: f32){
 
     // printBits(bits);
     if sign
-        _print('-');
+        std_print('-');
 // 01011111000000000000000000000000
     intPart: u64 = 0;
     decimalBits: i32 = 23 - (exp-127);
     // log(decimalBits)
-    // _print('\n')
-    // _print(exp)
-    // _print('\n')
+    // std_print('\n')
+    // std_print(exp)
+    // std_print('\n')
     if decimalBits < 1 {
         // log(mantissa);
         intPart = (mantissa) << (0-decimalBits);
@@ -115,20 +112,20 @@ fn _print(t: f32){
             str.len -= used + 1;
             prints(str);
         }
-        // _print(intPart);
-        _print('.');
-        _print('0');
+        // std_print(intPart);
+        std_print('.');
+        std_print('0');
     } else {
         if exp > 126u
             intPart = (mantissa) >> decimalBits;
-        _print(cast<i64>intPart);
-        _print('.');
+        std_print(cast<i64>intPart);
+        std_print('.');
 
         decimals: char[24];
 
         acc: u64 = 0;
         mul: u64 = 1;
-        // _print(decimalBits); _print('\n')
+        // std_print(decimalBits); std_print('\n')
         precision := 19; // digits u64 can contain (18446744073709551615)
         minBits := decimalBits - precision;
         if minBits < 0
@@ -142,12 +139,12 @@ fn _print(t: f32){
                 if bit {
                     acc += mul;
                 }
-                // _print(acc); _print('\n')
+                // std_print(acc); std_print('\n')
             }
         }
-        // _print(acc);
+        // std_print(acc);
         if acc == 0
-            _print('0');
+            std_print('0');
         blank := true;
         lastZero := 0
         limit := precision;
@@ -164,36 +161,35 @@ fn _print(t: f32){
             }
         }
         decimals.len = lastZero;
-        _print(decimals)
+        std_print(decimals)
     }
 
     // fn printBits(bits: u64) {
     //     for @reverse 0..64 {
     //         if bits & (cast<u64>1 << nr) {
-    //             pr('1')
+    //             std_print('1')
     //         } else 
-    //             pr('0')
+    //             std_print('0')
     //     }
-    //     pr('\n')
+    //     std_print('\n')
     // }
     // fn printBits(bits: u32) {
     //     for @reverse 0..32 {
     //         if bits & (cast<u64>1 << nr) {
-    //             pr('1')
+    //             std_print('1')
     //         } else 
-    //             pr('0')
+    //             std_print('0')
     //     }
-    //     pr('\n')
+    //     std_print('\n')
     // }
-    // #endif
 }
-fn _print(tt: f64){
+fn std_print(tt: f64){
     // TODO: Print 64-bit float without casting it to 32-bit and loosing information.
-    _print(cast<f32>tt);
+    std_print(cast<f32>tt);
 }
-// fn _print(p: void*) {
-fn _print<T>(p: T*) {
-    // _print(cast<u64>p)
+// fn std_print(p: void*) {
+fn std_print<T>(p: T*) {
+    // std_print(cast<u64>p)
     prints("0x")
     zeros: bool = true;
     for @rev 0..16 {
@@ -209,19 +205,19 @@ fn _print<T>(p: T*) {
     if zeros
         printc('0'); // we want at least one zero
 }
-fn @hide _print(t: char){
+fn @hide std_print(t: char){
     printc(t);
     // prints(Slice<char>{&t, 1})
 }
-fn @hide _print(t: bool){
+fn @hide std_print(t: bool){
     if t
         prints("true");
     else
         prints("false");
 }
-fn @hide _print(t: char[]){
+fn @hide std_print(t: char[]){
     prints(t);
 }
-fn @hide _print(ptr: char*, len: u64){
+fn @hide std_print(ptr: char*, len: u64){
     prints(Slice<char>(ptr, len));
 }

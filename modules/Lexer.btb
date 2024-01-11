@@ -110,37 +110,37 @@ struct TokenStream {
     fn print(index: u32) {
         buf: char[256];
         written := feed(index, buf);
-        _print(Slice<char>{buf.ptr, written});
+        std_print(Slice<char>{buf.ptr, written});
     }
     fn print(token: Token*) {
         buf: char[256];
         // TODO: Check if token pointer is within tokens.ptr and token.len
         index := cast<u64>(tokens.ptr - token) / sizeof(Token);
         written := feed(index, buf);
-        _print(Slice<char>{buf.ptr, written});
+        std_print(Slice<char>{buf.ptr, written});
     }
 
     fn print() {
-        pr("TokenStream\n")
+        std_print("TokenStream\n")
         
         for @ptr tokens.sliced_unsafe() {
-            pr("Tok ",nr,": ")
+            std_prints("Tok ",nr,": ")
             
             print(nr);
             
-            pr("\n")
+            std_print("\n")
         }
         
-        pr("Raw data\n")
+        std_print("Raw data\n")
         for 0..rawData.get_head() {
             chr := (cast<char*>rawData.data)[nr];
             if chr < 32u {
-                pr("<",cast<u8>chr,">")
+                std_prints("<",cast<u8>chr,">")
             } else {
-                pr(chr)
+                std_print(chr)
             }
         }
-        pr("\n")
+        std_print("\n")
     }
 }
 fn LexFile(path: char[]) -> TokenStream* {

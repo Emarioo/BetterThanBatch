@@ -3,7 +3,7 @@
     So we do them manually for now.
 */
 @TEST_CASE(general)
-#define fail (*cast<u8*>null);
+#macro fail (*cast<u8*>null);
 
 ok(3)
 a := 9;

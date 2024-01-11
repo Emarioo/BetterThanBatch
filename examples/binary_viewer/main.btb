@@ -81,7 +81,7 @@ struct FormatSpec {
     definitions: DynamicArray<TypeDefinition>; // TODO: BucketArray
 
     fn init() {
-        #define ADD(...) definitions.add(TypeDefinition{TYPE_##...});
+        #macro ADD(...) definitions.add(TypeDefinition{TYPE_##...});
         ADD(NONE, 0, "none")
         ADD(CHAR, 1, "char")
         
@@ -133,7 +133,7 @@ struct FormatSpec {
             def.size += typeDef.size;
             return def.fields.size() - 1;
         } else {
-            pr("BAD, '",definition,"' is not a definition")
+            std_prints("BAD, '",definition,"' is not a definition")
         }
         return -1;
     }
@@ -181,7 +181,7 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
     stack: DynamicArray<Layer>;
     stack.add(Layer{type = spec.base_field, fieldIndex = 0});
 
-    pr("Interpret stream of ",stream.len," bytes\n")
+    std_prints("Interpret stream of ",stream.len," bytes\n")
 
     fn print_indent(indent: i32) {
         for 0..indent  printc(' ')
@@ -209,14 +209,14 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
         
         // Assert(element.name.ptr)
         if element.count == 1 {
-            pr(element.name,": ");
+            std_prints(element.name,": ");
         } else {
             if layer.count == 1 {
-                pr(element.name);
+                std_prints(element.name);
             } else {
                 print_indent(element.name.len)
             }
-            pr(" [",layer.count - 1,"]: ")
+            std_prints(" [",layer.count - 1,"]: ")
         }
         
         if element.type >= TYPE_PRIMITIVE_COUNT {
@@ -225,18 +225,18 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
             stack.add(Layer{element.type, 0});
         } else {
             if head + elemDef.size > stream.len {
-                pr("<ABRUPT END>\n");
+                std_prints("<ABRUPT END>\n");
                 // corruption somewhere
                 break;
             }
-            #multidefine CASE(E,T)
+            #macro CASE(E,T)
             case TYPE_##E: {
                 tmp: T;
                 memcpy(&tmp, stream.ptr + head, sizeof T);
                 head += sizeof T;
-                pr(tmp);
+                std_print(tmp);
             }
-            #enddef
+            #endmacro
             switch element.type {
             case TYPE_CHAR: {
                 tmp: char;
@@ -244,18 +244,18 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
                 head += sizeof char;
                 if tmp < 32u {
                     if tmp == '\n' {
-                        pr("\\n")
+                        std_print("\\n")
                     } else if tmp == '\r' {
-                        pr("\\r")
+                        std_print("\\r")
                     } else if tmp == '\0' {
-                        pr("\\0")
+                        std_print("\\0")
                     } else if tmp == '\t' {
-                        pr("\\t")
+                        std_print("\\t")
                     } else {
-                        pr("<",cast<u8>tmp,">")
+                        std_prints("<",cast<u8>tmp,">")
                     }
                 } else {
-                    pr(tmp);
+                    std_print(tmp);
                 }
             }
             CASE(CHAR, char)
@@ -273,15 +273,15 @@ fn Interpret(stream: u8[], spec: FormatSpec*) {
             CASE(F32, f32)
             CASE(F64, f64)
             case: {
-                pr("UNREACHABLE_312")
+                std_prints("UNREACHABLE_312")
             }
             }
                 
         }
-        pr(" (",elemDef.name,")");
-        pr('\n');
+        std_prints(" (",elemDef.name,")");
+        std_prints('\n');
     }
-    pr("FINISHED, ",head," bytes (",stream.len-head," unread)\n");
+    std_prints("FINISHED, ",head," bytes (",stream.len-head," unread)\n");
 }
 
 
@@ -325,7 +325,7 @@ struct SpecParser {
         head += n;
     }
     
-#define PARSE_ERROR(T,...) pr("BAD SYNTAX: ") tokens.print(T); pr("\n")
+#macro PARSE_ERROR(T,...) std_prints("BAD SYNTAX: ") tokens.print(T); std_prints("\n")
     
     fn parseBody() {
         
@@ -400,7 +400,7 @@ struct SpecParser {
             field_type := spec.typeFromString(type_string);
             field_index := -1;
             if field_type == 0 {
-                pr("Not a type: ",type_string,"\n");
+                std_prints("Not a type: ",type_string,"\n");
             } else {
                 field_index = spec.addField(member_name, field_type, current_struct_type);
                 

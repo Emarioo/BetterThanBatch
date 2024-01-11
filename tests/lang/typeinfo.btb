@@ -30,8 +30,8 @@ for @ptr lang_typeInfos {
 
     name := Slice<char>{&lang_strings.ptr[it.name.beg], it.name.end-it.name.beg};
     
-    // _print(lang_TypeId{nr}) printc('\n')
-    // _print(it); printc('\n')
+    // std_print(lang_TypeId{nr}) printc('\n')
+    // std_print(it); printc('\n')
     // log(name)
     // prints(name) printc('\n')
 
@@ -47,3 +47,27 @@ for @ptr lang_typeInfos {
 
 test true; found_enum;
 test true; found_struct;
+
+@TEST_CASE(printing_types)
+#import "Logger"
+#import "Lang"
+
+struct Soul {
+    ko: i32;
+    numsi: f32;
+}
+struct App {
+    a: i32;
+    soul: Soul;
+    tr: bool;
+}
+app: App;
+app.a = 932
+app.tr = true
+app.soul.numsi = 232.232
+app.soul.ko = 2
+// std_print_any(app, true);
+std_print_any("yoo!", true);
+// std_print_any(app, false);
+
+// TODO: how to test this? At least we test that there are no compiler errors.

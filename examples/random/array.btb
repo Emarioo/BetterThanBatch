@@ -52,9 +52,9 @@
 
 // you could use a macro like this for array initializers
 // no point now when it's supported in the language
-// #define ARR_INIT(name, type, ...) name: type; { _i=0; ARR_INIT_ELEMS(name, ...) }
-// #define ARR_INIT_ELEMS(name, X, ...) name.ptr[_i++] = X; ARR_INIT_ELEMS(name, ...)
-// #define ARR_INIT_ELEMS(name)
+// #macro ARR_INIT(name, type, ...) name: type; { _i=0; ARR_INIT_ELEMS(name, ...) }
+// #macro ARR_INIT_ELEMS(name, X, ...) name.ptr[_i++] = X; ARR_INIT_ELEMS(name, ...)
+// #macro ARR_INIT_ELEMS(name)
 // ARR_INIT(vertices, f32[9],
 //     -0.5, a/400.0 - 0.8, 0.0,
 //     0.5, -0.5, 0.0,

@@ -23,10 +23,10 @@ printf(\"%s says %s to %s\",name,getmsg(name,2),\"to\");
 //@disable interpreter
 //@disable optimizer
 
-#define FIND_PRINTF 0
-#define FIND_PAR 1
-#define FIND_FORMAT 2
-#define EVAL_WORK 4
+#macro FIND_PRINTF 0
+#macro FIND_PAR 1
+#macro FIND_FORMAT 2
+#macro EVAL_WORK 4
 
 out = ""
 argHead = 0

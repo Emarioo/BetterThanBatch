@@ -33,7 +33,9 @@ struct DebugInformation {
 
     struct Line {
         u32 lineNumber;
-        u32 funcOffset; // absolute offset, probably should be relative
+        u32 bc_address; // absolute offset, probably should be relative
+        u32 asm_address; // absolute offset, probably should be relative
+        u32 tokenIndex;
     };
     struct LocalVar {
         std::string name;
@@ -42,7 +44,13 @@ struct DebugInformation {
         int scopeLevel = 0;
         ScopeId scopeId;
     };
+    // struct LexicalScope {
+    //     ScopeId scopeId;
+    // };
     struct Function {
+        u32 bc_start;
+        u32 bc_end; // exclusive
+        
         u32 funcStart; // first instruction in the function
         u32 funcEnd; // the byte after the last instruction (also called exclusive)
         u32 codeStart; // the instruction where actual source code starts, funcStart includes setup of frame pointer and stack, this member does not include that.
@@ -65,10 +73,19 @@ struct DebugInformation {
             localVariables.last().scopeLevel=scopeLevel;
             localVariables.last().scopeId=scopeId;
         }
+        
+        void addLine(u32 line, u32 bc_address, u32 tokenIndex) {
+            lines.add({});
+            lines.last().lineNumber = line;
+            lines.last().bc_address = bc_address;
+            lines.last().tokenIndex = tokenIndex;
+        }
 
         DynamicArray<LocalVar> localVariables;
+        // DynamicArray<LexicalScope> scopes;
 
         u32 fileIndex;
+        TokenStream* tokenStream;
 
         DynamicArray<Line> lines;
 

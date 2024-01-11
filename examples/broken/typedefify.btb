@@ -21,14 +21,14 @@ struct B {
      language is fairly easy to code in.
      (I have a bias of course)
 */
-#define SIMPLE_CODE
+#macro SIMPLE_CODE #endmacro
 
         #ifdef SIMPLE_CODE
 
 // spaces is needed between important words and {};
-#define FIND_STRUCT 0
-#define FIND_NAME 1
-#define FIND_END 2
+#macro FIND_STRUCT 0
+#macro FIND_NAME 1
+#macro FIND_END 2
 
 out = ""
 mode = FIND_STRUCT

@@ -3,19 +3,19 @@
     I don't know how to test this
 */
 
-#define Nom(a,b,c) a + b + c
-#define Grub 1,2,3
+#macro Nom(a,b,c) a + b + c
+#macro Grub 1,2,3
 Nom(#unwrap Grub)
-#define Grub2 1,2
+#macro Grub2 1,2
 Nom(9,#unwrap Grub2)
 /* THIS IS NOT RIGHT
 1+ 2+ 3
 9+ 1+ 2
 */
 
-#define RValues sugar,sand,snow,wood
-#define Rev(x,...) Rev(...), x
-#define Rev(x) x
+#macro RValues sugar,sand,snow,wood
+#macro Rev(x,...) Rev(...), x
+#macro Rev(x) x
 Rev(#unwrap RValues)
 /*
 The macro preprocessor needs to be able to modify flags of arguments.

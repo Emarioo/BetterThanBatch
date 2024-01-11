@@ -4,74 +4,74 @@
 
 @TEST_CASE(parenthesis_depth)
 
-#define add(x,y) x + y
+#macro add(x,y) x + y
 add(fun(me), 2)
 // the first ) should not end the macro, parenthesis should accumulate
 
 @TEST_CASE(macro_other)
 // single- and multiline definitions
-#define SINGLE i am SINGLE
+#macro SINGLE i am SINGLE
 
-#multidefine MULTI
+#macro MULTI
 i am
 not 
-SINGLE #enddef
+SINGLE #endmacro
 
 SINGLE SINGLE
 SINGLE MULTI
 MULTI
 
 // zero tokens
-#define ZERO #enddef
+#macro ZERO #endmacro
 Undisturbed ZERO text
 
 // redefine
-#define SINGLE oh no
+#macro SINGLE oh no
 SINGLE
 
 // multi evaluation (recursive implementation)
-#define ONE 1111 TWO 1111
+#macro ONE 1111 TWO 1111
 
-#define TWO 2222 TRI 2222
-#define TRI 3333
+#macro TWO 2222 TRI 2222
+#macro TRI 3333
 
 TWO ONE
 TWO
 
 // with arguments
-#define Base(T, NAME) T NAME;
-#define Alt(T) hole..T
-#define Integer int
+#macro Base(T, NAME) T NAME;
+#macro Alt(T) hole..T
+#macro Integer int
 
 Base(Integer, Alt(suce))
 
 // inner argument evaluation
-#define Base(A) new A()
-#define Alt(B) Base(B)
+#macro Base(A) new A()
+#macro Alt(B) Base(B)
 Alt(int)
 
 // Recursion
-#define REV(F,...) REV(...) F
-#define REV(L) L
+#macro REV(F,...) REV(...) F
+#macro REV(L) L
 REV(1,2,3,4)
 
 // Infinite Recursion
-#define Trick Hej Trick0
-#define Trick0 Hej Trick
+#macro Trick Hej Trick0
+#macro Trick0 Hej Trick
 
-#define NotBug(A,...) NotBug0(...)
-#define NotBug0(...) NotBug(A,B,...)
+#macro NotBug(A,...) NotBug0(...)
+#macro NotBug0(...) NotBug(A,B,...)
 
 // increment
-#define NotBug(...) Here NotBug(0,...)
-#define NotBug(a,a,a,a,a,a)
+#macro NotBug(...) Here NotBug(0,...)
+#macro NotBug(a,a,a,a,a,a) #endmacro
 NotBug()
 
 // print
-#define Mass(M,...) print M; Mass(...)
-#define Mass(M) print M
+#macro Mass(M,...) print M; Mass(...)
+#macro Mass(M) print M
 Mass(Hey, you, cool?)
 
 // Empty base
-#define Mass(M,...) print M Mass(...)
-#define Mass()
+#macro Mass(M,...) print M Mass(...)
+#macro Mass() #endmacro

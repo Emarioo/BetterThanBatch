@@ -14,7 +14,7 @@ contexts: ThreadContext[4];
 /*
     Enable how many threads you want
 */
-#define ENABLE(I) contexts.ptr[I].running=true; contexts.ptr[I].thread = ThreadCreate(ThreadWork, &contexts.ptr[I]);
+#macro ENABLE(I) contexts.ptr[I].running=true; contexts.ptr[I].thread = ThreadCreate(ThreadWork, &contexts.ptr[I]);
 ENABLE(0)
 // ENABLE(1)
 ENABLE(2)
@@ -26,7 +26,7 @@ fn print_state(contexts: ThreadContext[], initial: bool = false) {
         move_cursor(0,4);
     }
     for 0..4 {
-        pr("T",it,": ", contexts.ptr[it].sum,"\n");
+        std_print("T",it,": ", contexts.ptr[it].sum,"\n");
     }
 }
 

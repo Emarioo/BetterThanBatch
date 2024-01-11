@@ -7,26 +7,26 @@
 
 // @macro-benchmark
 
-// #define ADD(X,...) X + ADD(...)
-// #define ADD(X) X
+// #macro ADD(X,...) X + ADD(...)
+// #macro ADD(X) X
 
 // // ADD(1,2,3)
 // // ADD(#unwrap 1,2,3)
 
-// // #define ADD(X,...) X+ADD(...)
-// // #define ADD(X) X 
+// // #macro ADD(X,...) X+ADD(...)
+// // #macro ADD(X) X 
 
 // // ADD(#unwrap 1 ,2 ,3 )
 // // ADD(#unwrap 1 ,2 ,3 )
 
-#multidefine OUT
+#macro OUT
 -ADD(1,2,3)-
 - ADD(1,2,3)-
 -ADD(1,2,3) -
 -ADD( 1,2,3)
 NEWLINE
-#enddef
-// #define YEET ME 
+#endmacro
+// #macro YEET ME  #endmacro
 
 // YEET +
 
@@ -34,38 +34,38 @@ NEWLINE
 
 // OUT
 
-// #define LIST Apple, Book, Chicken
-// #define ADDS(X,...) X + ADDS(...)
-// #define ADDS(X) X
+// #macro LIST Apple, Book, Chicken
+// #macro ADDS(X,...) X + ADDS(...)
+// #macro ADDS(X) X
 // ADDS(#unwrap LIST)
 
 // X + ADDS(...)
 
-// #define Sup()
+// #macro Sup() #endmacro
 
-// #define rec(X,...) X + rec(...)
-// #define rec(X) X
+// #macro rec(X,...) X + rec(...)
+// #macro rec(X) X
 // rec(1,2,3)
 
-// #define inf(A,...) ...
+// #macro inf(A,...) ...
 
 // inf(a,j,w)
 
 
-// #define for(x,y,z) x; while y { defer z;
+// #macro for(x,y,z) x; while y { defer z;
 // // A flaw in the parser
 // for(i=0,i< 5,i++)
 //     printi(i);
 // }
 
-// #define Cool(X,Y) (X) (Y)
-// #define Cool(X) (X------X)
-// #define HELLO(X,Y) A Cool(X) B Cool(Y,91) C
+// #macro Cool(X,Y) (X) (Y)
+// #macro Cool(X) (X------X)
+// #macro HELLO(X,Y) A Cool(X) B Cool(Y,91) C
 // HELLO(HA0 Ha1,OA)
-// #define cool(X) X -- X
-// #define HELLO(X) cool(X)
-// #define cool AD  AD 
-// #define HELLO cool
+// #macro cool(X) X -- X
+// #macro HELLO(X) cool(X)
+// #macro cool AD  AD 
+// #macro HELLO cool
 
 // HELLO
 
@@ -74,7 +74,7 @@ NEWLINE
 // LOG(1,2,3,4,5,6,7)
 
 
-// #define MACRO(PARAM) MACRO(MACRO(PARAM + PARAM,2), PARAM) PARAM
+// #macro MACRO(PARAM) MACRO(MACRO(PARAM + PARAM,2), PARAM) PARAM
 
 // <macro-define> = <name> <parameters> <content>
 // <macro-usage> = <name> <arguments>

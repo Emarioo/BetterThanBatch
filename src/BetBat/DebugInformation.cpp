@@ -28,7 +28,7 @@ void DebugInformation::print() {
     for(auto& fun : functions){
         log::out << fun.name <<"\n";
         for(auto& line : fun.lines) {
-            log::out << " ln "<<line.lineNumber << ": 0x" << NumberToHex(line.funcOffset)<<"\n";
+            log::out << " ln "<<line.lineNumber << ": 0x" << NumberToHex(line.asm_address)<<"\n";
         }
     }
 }

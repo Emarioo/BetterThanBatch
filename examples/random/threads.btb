@@ -5,7 +5,7 @@
 
 #import "OS"
 #import "Logger"
-#define THREAD_SAFE
+#macro THREAD_SAFE #endmacro
 
 final: u32 = 0
 

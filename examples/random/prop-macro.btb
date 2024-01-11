@@ -1,9 +1,9 @@
 
-#multidefine SET_PROPS(OBJ, EXPR, ...)
+#macro SET_PROPS(OBJ, EXPR, ...)
 OBJ.EXPR;
 SET_PROPS(OBJ, ...)
-#enddef
-#define SET_PROPS(OBJ)
+#endmacro
+#macro SET_PROPS(OBJ)
 
 struct Options {
     name: char[];

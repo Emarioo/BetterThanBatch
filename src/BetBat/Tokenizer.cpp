@@ -199,7 +199,33 @@ void TokenStream::addImport(const std::string& name, const std::string& as){
     auto& p = importList.last().name;
     ReplaceChar((char*)p.data(),p.length(),'\\','/');
 }
-
+TokenRange TokenStream::getLineRange(u32 tokenIndex){
+    int start = tokenIndex;
+    int end = tokenIndex+1;
+    // log::out <<"We " <<start << " "<<end<<"\n";
+    while(start>0){
+        Token& prev = get(start-1);
+        if(prev.flags&TOKEN_SUFFIX_LINE_FEED){
+            break;
+        }
+        start--;
+        // log::out << "start "<<start<<"\n";
+    }
+    // NOTE: end is exclusive
+    while(end<length()){
+        Token& next = get(end-1); // -1 since end is exclusive
+        if(next.flags&TOKEN_SUFFIX_LINE_FEED){
+            break;
+        }
+        end++;
+        // log::out << "end "<<end<<"\n";
+    }
+    TokenRange range{};
+    range.firstToken.tokenIndex = start;
+    range.endIndex = end;
+    range.firstToken.tokenStream = this;
+    return range;
+}
 std::string Token::getLine(){
     int start = tokenIndex;
     int end = tokenIndex+1;
@@ -339,8 +365,7 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
             ENSURE(1)
             *(outBuffer + written_temp++) = '\'';
         }
-        // TODO: Change || to &&? Otherwise we would do the suffix if it was the final character no?
-        if(!skipSuffix || i-1 != endIndex) {
+        if(!skipSuffix || i+1 != endIndex) {
             if((tok.flags&TOKEN_SUFFIX_LINE_FEED)){
                 ENSURE(1)
                 *(outBuffer + written_temp++) = '\n';

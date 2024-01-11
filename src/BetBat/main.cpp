@@ -9,6 +9,8 @@
 #include <math.h>
 // #include "BetBat/glfwtest.h"
 
+#include "BetBat/Fuzzer.h"
+
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image.h"
@@ -67,6 +69,12 @@ int main(int argc, const char** argv){
     log::out.enableReport(false);
     MeasureInit();
     ProfilerInitialize();
+    
+    // FuzzerOptions opts{};
+    // opts.requested_size = 10000;
+    // GenerateFuzzedFile(opts,"oi.btb");
+    
+    // return 0;
     
     // log::out << p.text << "\n";
     // for(int i=0;i<10000;i++) {
@@ -412,6 +420,12 @@ int main(int argc, const char** argv){
             CompileAll(&compileOptions);
         } else {
             #define EXE_FILE "dev.exe"
+            
+            FuzzerOptions opts{};
+            opts.requested_size = 10000;
+            GenerateFuzzedFile(opts,"oi.btb");
+            compileOptions.sourceFile = "oi.btb";
+            
             compileOptions.outputFile = EXE_FILE;
             compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;

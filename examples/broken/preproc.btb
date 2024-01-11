@@ -1,16 +1,16 @@
 @disable all
 @enable preprocessor
 
-// #define END ko
-// #multidefine HAHA(X,...) Ha HAHA(...)
+// #macro END ko
+// #macro HAHA(X,...) Ha HAHA(...)
 // END
-// #enddef
-// #define HAHA() a
+// #endmacro
+// #macro HAHA() a
 
 // beg HAHA(1,2,3,4) WAIT
 
-#define SEC haha coool
-#define CON #quoted SEC
+#macro SEC haha coool
+#macro CON #quoted SEC
 
 cool CON
 

@@ -2,9 +2,9 @@ fn @native printc(chr: char);
 fn @native prints(slice: Slice<char>);
 fn @import @unixcall write(fd: i32, buf: void*, count: u64) -> u64;
 
-// #define STDIN_FILENO 0
-#define STDOUT_FILENO 1
-// #define STDERR_FILENO 2
+// #macro STDIN_FILENO 0
+#macro STDOUT_FILENO 1
+// #macro STDERR_FILENO 2
 
 s0 = "s0 = Hello world!\n"
 s1 = "s1 = I was here!\n"

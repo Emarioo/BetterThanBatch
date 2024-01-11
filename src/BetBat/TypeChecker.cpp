@@ -2115,7 +2115,7 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
             }
         }
     }
-    // if(function->name == "_print") {
+    // if(function->name == "std_print") {
     //     int a = 9;
     // }
     if(function->polyArgs.size()==0 && (!parentStruct || parentStruct->polyArgs.size() == 0)){

@@ -3,7 +3,7 @@
 
 // // #import "OS"
 
-// _print(0.01)
+// std_print(0.01)
 
 // fn @native printi(n : i64);
 // fn @native printc(n : char);
@@ -82,8 +82,8 @@ fn @intrinsic rdtscp() -> u64, u32;
 
 // fn measure_rdtscp_overhead() -> u32 {
 //     // overhead: u32;
-//     // #define TC 1000000
-//     #define TC 10
+//     // #macro TC 1000000
+//     #macro TC 10
 //     min: u32 = 0;
 //     max: u32 = 99999999;
 //     mid: u32 = 0;

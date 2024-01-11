@@ -563,16 +563,78 @@ namespace dwarf {
                     for (int i=0;i<n;i++) log::out <<" ";
                 };
                 
+                
+                
                 log::out.enableConsole(false);
-                int curLevel = 0;
                 bool left_scope_once = false;
+                
+                DynamicArray<ScopeId> scopeStack{};
+                if(func.funcAst)
+                    scopeStack.add(func.funcAst->scopeId);
+                else
+                    scopeStack.add(ast->globalScopeId);
+                int curLevel = 0;
+                
                 for(int vi=0;vi<func.localVariables.size();vi++) {
                     auto& var = func.localVariables[vi];
                     // ScopeId curScope = scopeStack.last();
                     
+                    // make sure we have the right lexical scope for the variable
                     while (true) {
-                        // curScope = scopeStack.last();
+                        // If the variable is the same scope as the one one the stack then we good!
+                        if(var.scopeId == scopeStack.last()) {
+                            break;
+                        }
                         
+                        // Calculate some information
+                        DynamicArray<ScopeId> scopes_to_generate{};
+                        int found_on_stack = -1; // the last scope on the stack that is a close or far parent to the variable
+                        ScopeId next_var_scope = var.scopeId;
+                        WHILE_TRUE {
+                            for(int i=scopeStack.size()-1;i>=0;i--) {
+                                ScopeInfo* scope = ast->getScope(scopeStack[i]);
+                                if(scope->id == next_var_scope) {
+                                    // found the scope we needed
+                                    found_on_stack = i;
+                                    break;
+                                }
+                            }
+                            if(found_on_stack == -1) {
+                                scopes_to_generate.add(next_var_scope);
+                                ScopeInfo* var_scope = ast->getScope(next_var_scope);
+                                next_var_scope = var_scope->parent;
+                                continue;   
+                            }
+                            break;
+                        }
+                        // pop scopes until the variables distant (or close) parent
+                        while(scopeStack.size()-1 != found_on_stack) {
+                            scopeStack.pop();
+                            WRITE_LEB(0) // end lexical scope
+                            
+                            curLevel--;
+                            indent(curLevel);
+                            log::out << "end scope "<<(curLevel+1)<<"\n";
+                        }
+                        // generate the parent scopes for the variable
+                        for(int i=scopes_to_generate.size()-1;i>=0;i--) {
+                            scopeStack.add(scopes_to_generate[i]);
+                            ScopeInfo* scope = ast->getScope(scopes_to_generate[i]);
+                            u32 proc_low = scope->asm_start;
+                            u32 proc_high = scope->asm_end;
+                            
+                            WRITE_LEB(abbrev_lexical_block)
+                            relocs.add({ stream->getWriteHead() - offset_section, proc_low });
+                            stream->write8(proc_low); // pc low
+                            relocs.add({ stream->getWriteHead() - offset_section, proc_high });
+                            
+                            stream->write8(proc_high); // pc high
+                            indent(curLevel);
+                            curLevel++;
+                            log::out << "scope "<<curLevel<<"\n";
+                        }
+                        
+                        #ifdef gone
                         // The condition is a bit crazy, it makes sure that two variables that are on
                         // the same level but in different scopes doesn't end up in the same lexical
                         // scope. To do this, we check if the variables come from different scopeIds,
@@ -585,12 +647,21 @@ namespace dwarf {
                             // nothing, same scope
                             break;
                         } else if(var.scopeLevel > curLevel) {
+                            
                             indent(curLevel);
-                            curLevel++;
-                            log::out << "scope "<<curLevel<<"\n";
+                            log::out << "scope "<<(curLevel+1)<<"\n";
                             // var is in a deeper scope
                             WRITE_LEB(abbrev_lexical_block)
-                            auto scope = ast->getScope(var.scopeId);
+                            
+                            // We need to find the parent scope of the level that we just added.
+                            // previously, I put var.scopeId always put that won't work because we
+                            // forget about the parenst that led to that scope.
+                            ScopeInfo* scope = ast->getScope(var.scopeId);
+                            for(int i=0;i<var.scopeLevel - curLevel - 1;i++) { 
+                                scope = ast->getScope(scope->parent);
+                            }
+                            // auto scope = ast->getScope(var.scopeId);
+                            
                             u32 proc_low = scope->asm_start;
                             u32 proc_high = scope->asm_end;
                             relocs.add({ stream->getWriteHead() - offset_section, proc_low });
@@ -599,6 +670,7 @@ namespace dwarf {
                             stream->write8(proc_high); // pc high
                             
                         // } else if(var.scopeLevel < curLevel) {
+                            curLevel++; // we increment this last so we don't move around code and forget that this exists in the middle of it all
                         } else {
                             left_scope_once = true;
                             curLevel--;
@@ -606,6 +678,7 @@ namespace dwarf {
                             log::out << "end scope "<<(curLevel+1)<<"\n";
                             WRITE_LEB(0) // end lexical scope
                         }
+                        #endif
                     }
                     
                     indent(curLevel);
@@ -874,12 +947,12 @@ namespace dwarf {
                 for(int i=0;i<fun.lines.size();i++) {
                     auto& line = fun.lines[i];
                     // Ensure that the lines are stored in ascending order
-                    Assert(lastOffset <= line.funcOffset);
+                    Assert(lastOffset <= line.asm_address);
                     // Assert(lastLine <= line.lineNumber);
-                    lastOffset = line.funcOffset;
+                    lastOffset = line.asm_address;
                     lastLine = line.lineNumber;
 
-                    add_row(line.funcOffset, line.lineNumber);
+                    add_row(line.asm_address, line.lineNumber);
                 }
                 // the debugger won't stop at the last instruction because the line
                 // number is the same. I was hoping it would stop at the return statement

@@ -2974,26 +2974,13 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add2(OPCODE_2_MOVZX_REG_RM16);
                         prog->addModRM(MODE_REG, treg, freg);
                     } else if(minSize == 4) {
-                        // Assert(freg == treg);
-                        // prog->add(OPCODE_PUSH_RM_SLASH_6);
                         
-                        // prog->add(PREFIX_REXW);
                         prog->add(OPCODE_MOV_REG_RM);
-                        prog->addModRM(MODE_REG, REG_D, freg);
-                        prog->add(OPCODE_MOV_REG_RM);
-                        prog->addModRM(MODE_REG, treg, REG_D);
+                        prog->addModRM(MODE_REG, treg, freg);
                         
-                        // prog->add(OPCODE_NOP); // this might just work
-                        // prog->add(PREFIX_REXW);
-                        // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
-                        // prog->addModRM(MODE_REG, 4, treg);
-                        // prog->add4((u32)0xFFFFFFFF);
                     } else if(minSize == 8) {
                         Assert(freg == treg);
                         // nothing needs to be done
-                        // prog->add(PREFIX_REXW);
-                        // prog->add(OPCODE_MOV_REG_RM);
-                        // prog->addModRM(MODE_REG, treg, freg);
                     }
                 } else if(type==CAST_SINT_SINT) {
                     // i8 -> i16,i32,i64
@@ -3941,7 +3928,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             int lines = fun.lines.size();
             for(int j=0;j<lines;j++) {
                 auto& line = fun.lines[j];
-                line.funcOffset = addressTranslation[line.funcOffset];
+                line.asm_address = addressTranslation[line.bc_address];
             }
         }
         for (int i=0;i<prog->debugInformation->ast->_scopeInfos.size();i++) {

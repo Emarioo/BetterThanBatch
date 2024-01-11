@@ -40,7 +40,7 @@
 //     mul *= 5
 //     acc *= 10
 //     if mantissa & (1 << (22 - i)) {
-//         // pr("+ ")
+//         // std_print("+ ")
 //         acc += mul
 //     }
 //     // println(22 - i," ", acc," ",mul, " ", 1 << (22 - i));
@@ -91,11 +91,11 @@
 // fn printBits(bits: u64) {
 //     for @reverse 0..32 {
 //         if bits & (cast<u64>1 << nr) {
-//             pr('1')
+//             std_print('1')
 //         } else 
-//             pr('0')
+//             std_print('0')
 //     }
-//     pr('\n')
+//     std_print('\n')
 // }
 
 // // #link "uuid.lib" // not necessary for some reason
@@ -108,7 +108,7 @@
 
 // fn @import printme() -> u32;
 
-// _print(printme())
+// std_print(printme())
 
 // str = " from NativeLayer.cpp!\n";
 // WriteFile(GetStdHandle(-11), str.ptr, str.len, null, null)

@@ -207,10 +207,10 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     // TODO: only allow define on new line?
     
     bool multiline = false;
-    if(token=="define"){
+    if(token=="macro"){
         
-    }else if(token=="multidefine"){
-        multiline=true;
+    // }else if(token=="multidefine"){
+    //     multiline=true;
     }else{
         if(attempt){
             return SignalAttempt::BAD_ATTEMPT;
@@ -252,7 +252,11 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     
     int suffixFlags = name.flags;
     CertainMacro localMacro{};
-    if(!((name.flags&TOKEN_SUFFIX_SPACE) || (name.flags&TOKEN_SUFFIX_LINE_FEED))){
+    
+    if(name.flags&TOKEN_MASK_SUFFIX){
+        suffixFlags = name.flags;
+
+    } else {
         Token token = info.next();
         if(token!="("){
             ERR_SECTION(
@@ -325,6 +329,9 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
             log::out << " (variadic)\n";)
     
     }
+    if(suffixFlags & TOKEN_SUFFIX_LINE_FEED) {
+        multiline = true;
+    }
     // RootMacro* rootMacro = info.compileInfo->ensureRootMacro(name, localMacro.isVariadic());
     
     // CertainMacro* certainMacro = 0;
@@ -356,49 +363,50 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     bool invalidContent = false;
     int startToken = info.at()+1;
     int endToken = startToken;
-    if(multiline || 0==(suffixFlags&TOKEN_SUFFIX_LINE_FEED)) {
-        while(!info.end()){
-            Token token = info.next();
-            if(token=="#"){
-                if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
-                    continue;
-                    // ERR_SECTION(
-                    // ERR_HEAD(token, "SPACE AFTER "<<token<<"!\n";
-                    // )
-                    // return SignalAttempt::FAILURE;
-                }
-                Token token = info.get(info.at()+1);
-                if(token=="enddef"){
-                    info.next();
-                    endToken = info.at()-1;
-                    break;
-                }
-                if(token=="define" || token=="multidefine"){
-                    ERR_SECTION(
-                        ERR_HEAD(token)
-                        ERR_MSG("Macro definitions inside macros are not allowed.")
-                        ERR_LINE(token,"not allowed")
-                    )
-                    invalidContent = true;
-                }
-                //not end, continue
+    // if(multiline || 0==(suffixFlags&TOKEN_SUFFIX_LINE_FEED)) {
+    while(!info.end()){
+        Token token = info.next();
+        if(token=="#"){
+            if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
+                continue;
+                // ERR_SECTION(
+                // ERR_HEAD(token, "SPACE AFTER "<<token<<"!\n";
+                // )
+                // return SignalAttempt::FAILURE;
             }
-            if(!multiline){
-                if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-                    endToken = info.at()+1;
-                    break;
-                }
+            Token token = info.get(info.at()+1);
+            if(token=="endmacro"){
+                info.next();
+                endToken = info.at()-1;
+                break;
             }
-            if(info.end()&&multiline){
+            if(token=="macro"){
+            // if(token=="define" || token=="multidefine"){
                 ERR_SECTION(
                     ERR_HEAD(token)
-                    ERR_MSG("Missing enddef for macro '"<<name<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments)")
-                    ERR_LINE(name, "this needs #enddef somewhere")
-                    ERR_LINE(info.get(info.length()-1),"macro content ends here!")
+                    ERR_MSG("Macro definitions inside macros are not allowed.")
+                    ERR_LINE(token,"not allowed")
                 )
+                invalidContent = true;
+            }
+            //not end, continue
+        }
+        if(!multiline){
+            if(token.flags&TOKEN_SUFFIX_LINE_FEED){
+                endToken = info.at()+1;
+                break;
             }
         }
+        if(info.end()&&multiline){
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Missing '#endmacro' for macro '"<<name<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments)")
+                ERR_LINE(name, "this needs #endmacro somewhere")
+                ERR_LINE(info.get(info.length()-1),"macro content ends here!")
+            )
+        }
     }
+    // }
     localMacro.name = name;
     localMacro.start = startToken;
     localMacro.contentRange.stream = info.inTokens;
@@ -417,7 +425,7 @@ SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     
     info.compileInfo->insertCertainMacro(rootMacro, &localMacro);
 
-    _MLOG(log::out << log::LIME<< "#"<<"define '"<<name<<"' ";
+    _MLOG(log::out << log::LIME<< "#"<<"macro def. '"<<name<<"' ";
     if(argc!=0){
         log::out<< argc;
         if(argc==1) log::out << " arg, ";
@@ -972,7 +980,8 @@ SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, T
         time(&timer);
         auto date = localtime(&timer);
         
-        int len = snprintf(buffer, bufferLen, "%d.%d.%d",date->tm_mday, 1 + date->tm_mon, 1900 + date->tm_year);
+        // int len = snprintf(buffer, bufferLen, "%d.%d.%d",date->tm_mday, 1 + date->tm_mon, 1900 + date->tm_year);
+        int len = snprintf(buffer, bufferLen, "%d.%d.%d",1900+date->tm_year, 1 + date->tm_mon, date->tm_mday);
         Assert(len != 0);
         outToken = parseToken;
         outToken.str = (char*)buffer;

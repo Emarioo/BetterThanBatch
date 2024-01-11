@@ -1,7 +1,7 @@
 #import "OS"
 #import "Logger"
 
-#define LN printc('L'); printc('N'); _print(cast<i64>#line); _print('\n')
+#macro LN printc('L'); printc('N'); std_print(cast<i64>#line); std_print('\n')
 
 // heap allocated for now
 struct StringBuilder {

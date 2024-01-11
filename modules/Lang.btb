@@ -54,10 +54,10 @@ global lang_members: lang_TypeMember[];
 global lang_strings: char[]; // string data
 
 // These are not necessary because of nameof, sizeof
-// #define LANG_TYPENAME(TYPE) lang_typename(typeid(TYPE))
-// #define LANG_TYPESIZE(TYPE) lang_typesize(typeid(TYPE))
+// #macro LANG_TYPENAME(TYPE) lang_typename(typeid(TYPE))
+// #macro LANG_TYPESIZE(TYPE) lang_typesize(typeid(TYPE))
 
-#define LANG_TYPEMEMBERS(TYPE) lang_typemembers(typeid(TYPE))
+#macro LANG_TYPEMEMBERS(TYPE) lang_typemembers(typeid(TYPE))
 
 fn lang_typename(id: lang_TypeId) -> Slice<char> {
     index := id.index();
@@ -65,6 +65,12 @@ fn lang_typename(id: lang_TypeId) -> Slice<char> {
     return Slice<char>{
         &lang_strings.ptr[lang_typeInfos.ptr[index].name.beg],
         lang_typeInfos.ptr[index].name.end - lang_typeInfos.ptr[index].name.beg
+    };
+}
+fn lang_name_from_range(range: Range) -> Slice<char> {
+    return Slice<char>{
+        &lang_strings.ptr[range.beg],
+        range.end - range.beg
     };
 }
 fn lang_typemembers(id: lang_TypeId) -> Slice<lang_TypeMember> {
@@ -81,32 +87,106 @@ fn lang_typesize(id: lang_TypeId) -> u16 {
     return lang_typeInfos.ptr[index].size;
 }
 
-fn _print(type: lang_TypeInfo*) {
-    pr("{ size: ",type.size,
+fn std_print(type: lang_TypeInfo*) {
+    std_print("{ size: ",type.size,
         ", type: ",type.type,
         ", name: ",type.name.beg,"-",type.name.end,
         ", members: ",type.members.beg,"-",type.members.end,
     " }")
 }
-fn _print(type: lang_TypeId) {
+fn std_print(type: lang_TypeId) {
     fn print_pointers(type: lang_TypeId) {
         for 0..type.ptr_level
             printc('*')
     }
-    _print("{ ");
-    _print(lang_typename(type));
+    std_print("{ ");
+    std_print(lang_typename(type));
     print_pointers(type)
-    _print(", size: ")
-    _print(lang_typesize(type));
+    std_print(", size: ")
+    std_print(lang_typesize(type));
     members := lang_typemembers(type);
     if members.len > 0u {
-        _print(", members: ");
+        std_print(", members: ");
         for @ptr members {
             if nr != 0
-                _print(", ");
-            _print(lang_typename(it.type))
+                std_print(", ");
+            std_print(lang_typename(it.type))
             print_pointers(it.type)
         }
     }
-    _print(" }");
+    std_print(" }");
+}
+fn std_print_any<T>(value: T, pretty: bool = false) {
+    id := typeid(T);
+    std_print_any(&value, id, pretty);
+    
+}
+fn std_print_any(ptr: void*, type: lang_TypeId, pretty: bool = false, depth: i32 = 1) {
+    
+    if type.ptr_level != 0 {
+        std_print(*cast<void**>(ptr))
+        return;   
+    }
+    enum ASTPrimitives {
+        AST_VOID = 0,
+        AST_UINT8,
+        AST_UINT16,
+        AST_UINT32,
+        AST_UINT64,
+        AST_INT8,
+        AST_INT16,
+        AST_INT32,
+        AST_INT64,
+        AST_BOOL,
+        AST_CHAR,
+        AST_FLOAT32,
+        AST_FLOAT64,   
+    }
+    
+    type_id := type.index();
+    switch type_id {
+    case AST_UINT8:     std_print(*cast<u8*>  (ptr)) return
+    case AST_UINT16:    std_print(*cast<u16*> (ptr)) return
+    case AST_UINT32:    std_print(*cast<u32*> (ptr)) return
+    case AST_UINT64:    std_print(*cast<u64*> (ptr)) return
+    case AST_INT8:      std_print(*cast<i8*>  (ptr)) return
+    case AST_INT16:     std_print(*cast<i16*> (ptr)) return
+    case AST_INT32:     std_print(*cast<i32*> (ptr)) return
+    case AST_INT64:     std_print(*cast<i64*> (ptr)) return
+    case AST_BOOL:      std_print(*cast<bool*>(ptr)) return
+    case AST_CHAR:      std_print(*cast<char*>(ptr)) return
+    case AST_FLOAT32:   std_print(*cast<f32*> (ptr)) return
+    case AST_FLOAT64:   std_print(*cast<f64*> (ptr)) return
+    }
+    
+    fn indent(n: i32) { for 0..n  std_print("  ") }
+    
+    // std_print(lang_typename(id));
+    std_print("{")
+    if pretty  std_print('\n')
+    members := lang_typemembers(type);
+    if members.len > 0u {
+        for @ptr members {
+            if nr != 0 {
+                std_print(", ");
+                if pretty  std_print('\n')
+            }
+            
+            if pretty  indent(depth)
+            
+            name := lang_name_from_range(it.name);
+            std_print(name)
+            std_print(": ")
+            
+            std_print_any(ptr + it.offset, it.type, pretty, depth + 1)
+        }
+    } else {
+        std_print("incomplete");
+    }
+    if pretty {
+        std_print('\n')
+        indent(depth-1)
+    }
+    
+    std_print("}");
 }

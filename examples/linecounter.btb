@@ -20,7 +20,7 @@
 //     log("Arg",nr,":", it);
 // }
 
-#define LN log(#line)
+#macro LN log(#line)
 
 struct Options {
     fn cleanup() {
@@ -173,8 +173,8 @@ struct CalcData {
 
     // thread safe
     fn combine(data: CalcData*) {
-        // #define REC(X,...) X += data.X; REC(...)
-        #define REC(X,...) atomic_add(cast<void*>&X, data.X); REC(...)
+        // #macro REC(X,...) X += data.X; REC(...)
+        #macro REC(X,...) atomic_add(cast<void*>&X, data.X); REC(...)
         REC(lines, blankLines, commentLines, readCharacters);
         #undef REC
     }
@@ -222,7 +222,7 @@ fn @stdcall CalculateLines(_info: void*) -> u32 {
     buffer: char* = null;
     defer Free(buffer, bufferSize);
 
-    #define DEFAULT_BUFFER_SIZE 0x100000
+    #macro DEFAULT_BUFFER_SIZE 0x100000
 
     while true {
         info.path = info.masterInfo.nextFile();
