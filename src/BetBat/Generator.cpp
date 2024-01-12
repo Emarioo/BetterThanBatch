@@ -5901,6 +5901,7 @@ Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
         dfun->funcAst = nullptr;
         dfun->funcStart = info.code->length();
         dfun->bc_start = info.code->length();
+        // IMPORTANT TODO: A global main body does not have one tokenstream...
         dfun->tokenStream = info.ast->mainBody->tokenRange.tokenStream();
         info.currentScopeDepth = -1;
         // dfun->scopeId = info.ast->globalScopeId;

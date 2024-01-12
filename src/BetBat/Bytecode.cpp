@@ -278,7 +278,7 @@ void Instruction::print(i64 imm){
         switch(op0){
             case CAST_FLOAT_SINT: log::out << "f->s"; break;
             case CAST_SINT_FLOAT: log::out << "s->f"; break;
-            case CAST_UINT_FLOAT: log::out << "u->s"; break;
+            case CAST_UINT_FLOAT: log::out << "u->f"; break;
             case CAST_SINT_SINT: log::out << "s->s"; break;
             case CAST_UINT_SINT: log::out << "u->s"; break;
             case CAST_SINT_UINT: log::out << "s->u"; break;

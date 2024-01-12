@@ -723,6 +723,30 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             }
             overload->funcImpl->usages++;
 
+            for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
+                auto& argImpl = overload->funcImpl->argumentTypes[i];
+                auto& arg = overload->astFunc->arguments[i];;
+                tempTypes.resize(0);
+                SignalAttempt result = CheckExpression(info, scopeId, arg.defaultValue,&tempTypes,false);
+                //  DynamicArray<TypeId> temp{};
+                // info.temp_defaultArgs.resize(0);
+                // CheckExpression(info,func->scopeId, arg.defaultValue, &info.temp_defaultArgs, false);
+                if(tempTypes.size()==0)
+                    tempTypes.add(AST_VOID);
+                if(!info.ast->castable(tempTypes.last(),argImpl.typeId)){
+                // if(temp.last() != argImpl.typeId){
+                    std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
+                    std::string argtype = info.ast->typeToString(argImpl.typeId);
+                    ERR_SECTION(
+                        ERR_HEAD(arg.defaultValue->tokenRange)
+                        ERR_MSG("Type of default value does not match type of argument.")
+                        ERR_LINE(arg.defaultValue->tokenRange,deftype.c_str())
+                        ERR_LINE(arg.name,argtype.c_str())
+                    )
+                    continue; // continue when failing
+                }
+            }
+
             FNCALL_SUCCESS
             return SignalAttempt::SUCCESS;
         }
@@ -1926,26 +1950,29 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* fu
             argImpl.typeId = arg.stringType;
         }
 
-        if(arg.defaultValue){
-            // TODO: Don't check default expression every time. Do check once and store type in AST.
-            // DynamicArray<TypeId> temp{};
-            info.temp_defaultArgs.resize(0);
-            CheckExpression(info,func->scopeId, arg.defaultValue, &info.temp_defaultArgs, false);
-            if(info.temp_defaultArgs.size()==0)
-                info.temp_defaultArgs.add(AST_VOID);
-            if(!info.ast->castable(info.temp_defaultArgs.last(),argImpl.typeId)){
-            // if(temp.last() != argImpl.typeId){
-                std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
-                std::string argtype = info.ast->typeToString(argImpl.typeId);
-                ERR_SECTION(
-                    ERR_HEAD(arg.defaultValue->tokenRange)
-                    ERR_MSG("Type of default value does not match type of argument.")
-                    ERR_LINE(arg.defaultValue->tokenRange,deftype.c_str())
-                    ERR_LINE(arg.name,argtype.c_str())
-                )
-                continue; // continue when failing
-            }
-        }
+        // NOTE: We check the default value at the call site every time. Checking the expression requires the content
+        //   order number and stack to be setup which it isn't here. We handle that as an edge cause but we also need to
+        //   know polymorphic types and I guess we are checking the implementation so it should be set up but perhaps
+        //   it's just better to check at call site. Easier at least.
+        // if(arg.defaultValue){
+        //      DynamicArray<TypeId> temp{};
+        //     info.temp_defaultArgs.resize(0);
+        //     CheckExpression(info,func->scopeId, arg.defaultValue, &info.temp_defaultArgs, false);
+        //     if(info.temp_defaultArgs.size()==0)
+        //         info.temp_defaultArgs.add(AST_VOID);
+        //     if(!info.ast->castable(info.temp_defaultArgs.last(),argImpl.typeId)){
+        //     // if(temp.last() != argImpl.typeId){
+        //         std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
+        //         std::string argtype = info.ast->typeToString(argImpl.typeId);
+        //         ERR_SECTION(
+        //             ERR_HEAD(arg.defaultValue->tokenRange)
+        //             ERR_MSG("Type of default value does not match type of argument.")
+        //             ERR_LINE(arg.defaultValue->tokenRange,deftype.c_str())
+        //             ERR_LINE(arg.name,argtype.c_str())
+        //         )
+        //         continue; // continue when failing
+        //     }
+        // }
             
         int size = info.ast->getTypeSize(argImpl.typeId);
         int asize = info.ast->getTypeAlignedSize(argImpl.typeId);

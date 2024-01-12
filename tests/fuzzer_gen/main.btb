@@ -1,0 +1,81 @@
+while EXPR {
+   while EXPR {
+      while EXPR {
+         EXPR;
+      }
+      while EXPR {
+         EXPR;
+      }
+      EXPR;
+      while EXPR {
+         EXPR;
+         EXPR;
+      }
+      if EXPR {
+         EXPR;
+      }
+      EXPR;
+      if EXPR {
+      } else {
+         while EXPR {
+            EXPR;
+            EXPR;
+            EXPR;
+            if EXPR {
+               if EXPR {
+                  while EXPR {
+                     while EXPR {
+                        while EXPR {
+                           while EXPR {
+                              EXPR;
+                              while EXPR {
+                                 EXPR;
+                                 while EXPR {
+                                    while EXPR {
+                                       while EXPR {
+                                          while EXPR {
+                                             while EXPR {
+                                                while EXPR {
+                                                   while EXPR {
+                                                      if EXPR {
+                                                         EXPR;
+                                                      } else {
+                                                         EXPR;
+                                                      }
+                                                      EXPR;
+                                                   }
+                                                   if EXPR {
+                                                      while EXPR {
+                                                         while EXPR {
+                                                            while EXPR {
+                                                               while EXPR {
+                                                                  if EXPR {
+                                                                     EXPR;
+                                                                     EXPR;
+                                                                     while EXPR {
+                                                                        while EXPR {
+                                                                        }
+                                                                     }
+                                                                  }
+                                                               }
+                                                            }
+                                                         }
+                                                      }
+                                                   }
+                                                }
+                                             }
+                                          }
+                                       }
+                                    }
+                                 }
+                              }
+                           }
+                        }
+                     }
+                  }
+               }
+            }
+         }
+      }
+   }
+}

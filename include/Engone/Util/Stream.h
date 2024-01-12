@@ -208,6 +208,7 @@ struct ByteStream {
         return size == 0;
     }
     u32 getWriteHead() const { return writtenBytes; }
+    void resetHead() { writtenBytes = 0; }
     bool steal_from(ByteStream* stream) {
         Assert(stream);
         Assert(m_allocator == stream->m_allocator);
@@ -264,8 +265,8 @@ struct ByteStream {
         u8* ptr = nullptr;
         u32 size = 0;
     
-        u32 m_readBytes = 0;
-        u32 m_index = 0;
+        u32 _readBytes = 0;
+        u32 _index = 0;
     };
     // Iterates thorugh all allocations in a contiguous fashion.
     // Do not use a write operation such as write, write_late, finalize
@@ -277,24 +278,24 @@ struct ByteStream {
         while(true) {
             Allocation* all = nullptr;
             
-            if((u32)iterator.m_index < allocations.size()) {
-                all = &allocations[iterator.m_index];
+            if((u32)iterator._index < allocations.size()) {
+                all = &allocations[iterator._index];
             } else {
                 break;
             }
             
-            if(all->writtenBytes == iterator.m_readBytes) {
-                iterator.m_readBytes = 0;
-                iterator.m_index++;
+            if(all->writtenBytes == iterator._readBytes) {
+                iterator._readBytes = 0;
+                iterator._index++;
                 continue;
             }
                 
-            iterator.size = all->writtenBytes - iterator.m_readBytes;
+            iterator.size = all->writtenBytes - iterator._readBytes;
             if(iterator.size > byteLimit)
                 iterator.size = byteLimit;
                 
-            iterator.ptr = all->ptr + iterator.m_readBytes;
-            iterator.m_readBytes += iterator.size;
+            iterator.ptr = all->ptr + iterator._readBytes;
+            iterator._readBytes += iterator.size;
             break;
         }
         return iterator.size != 0;
@@ -336,7 +337,7 @@ struct ByteStream {
         
         Iterator iterator{};
         while(stream->iterate(iterator)) {
-            printf("%d: %u bytes - %p\n", iterator.m_index, iterator.size, iterator.ptr);
+            printf("%d: %u bytes - %p\n", iterator._index, iterator.size, iterator.ptr);
         }
     }
     
@@ -358,6 +359,16 @@ struct ByteStream {
     bool write(const char* ptr) {
         Assert(ptr);
         int size = strlen(ptr) + 1;
+        void* reserved_ptr = nullptr;
+        bool suc = write_late(&reserved_ptr, size);
+        if(!suc)
+            return false;
+        memcpy(reserved_ptr, ptr, size);
+        return true;
+    }
+    bool write_no_null(const char* ptr) {
+        Assert(ptr);
+        int size = strlen(ptr);
         void* reserved_ptr = nullptr;
         bool suc = write_late(&reserved_ptr, size);
         if(!suc)

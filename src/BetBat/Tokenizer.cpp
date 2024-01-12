@@ -874,8 +874,8 @@ TokenStream* TokenStream::Tokenize(const std::string& filePath){
     // TODO: Reuse buffers, request them from compileInfo?
     textBuffer.buffer = TRACK_ARRAY_ALLOC(char, fileSize);
     textBuffer.size = fileSize;
-    bool yes = engone::FileRead(file, textBuffer.buffer, textBuffer.size);
-    Assert(yes);
+    u64 readBytes = engone::FileRead(file, textBuffer.buffer, textBuffer.size);
+    Assert(readBytes != -1);
         
     engone::FileClose(file);
     

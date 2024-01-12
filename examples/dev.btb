@@ -33,5 +33,5 @@
 // HELLO! NEXT STEP, fix profiling of time
 // StartMeasure/StopMeasure didn't work before, do they now? MAKE A TEST FOR IT
 
-
-#import "examples/binary_viewer/main.btb"
+#import "examples/random/test_randoms"
+// #import "examples/binary_viewer/main.btb"

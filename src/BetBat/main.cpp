@@ -421,10 +421,10 @@ int main(int argc, const char** argv){
         } else {
             #define EXE_FILE "dev.exe"
             
-            FuzzerOptions opts{};
-            opts.requested_size = 10000;
-            GenerateFuzzedFile(opts,"oi.btb");
-            compileOptions.sourceFile = "oi.btb";
+            // FuzzerOptions opts{};
+            // opts.node_iterations_per_file = 100;
+            // GenerateFuzzedFiles(opts,"main.btb");
+            // compileOptions.sourceFile = "oi.btb";
             
             compileOptions.outputFile = EXE_FILE;
             compileOptions.useDebugInformation = true;

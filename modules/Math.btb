@@ -7,6 +7,8 @@
 // tan
 // asin,acos,atan2?
 
+#import "OS"
+
 fn @intrinsic sqrt(v: f32) -> f32;
 fn @intrinsic round(v: f32) -> f32;
 // TODO: Intrinsics for min and max
@@ -22,7 +24,9 @@ fn random64() -> u64 {
     // [in]      ULONG             cbBuffer,
     // [in]      ULONG             dwFlags
     // );
+    // MSVC linker
     // #link "Bcrypt.lib"
+    // g++ linker
     #link "-lBcrypt"
     fn @dllimport @stdcall BCryptGenRandom(_: void*, buf: void*, len: u32, flags: u32) -> i32;
     #macro BCRYPT_USE_SYSTEM_PREFERRED_RNG cast<u32>0x00000002
@@ -42,6 +46,32 @@ fn random64() -> u64 {
 // random between 0.0 and 1.0
 fn random_f32() -> f32 {
     return cast<f32>random64() / cast<f32>0xFFFF_FFFF_FFFF_FFFF;
+}
+
+// TODO: Test it
+struct RandomGenerator {
+    seed: u64;
+    _state32: u32;
+    _state64: u64;
+    fn rand32() -> u32 {
+        // https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
+        state: u32 = _state32;
+        _state32 = _state32 * 747796405u + 2891336453u;
+        word: u32 = ((state >> ((state >> 28u) + 4u)) ^ state) * 277803737u;
+        return (word >> 22u) ^ word;
+    }
+    fn rand64() -> u64 {
+        // https://www.reedbeta.com/blog/hash-functions-for-gpu-rendering/
+        // https://en.wikipedia.org/wiki/Permuted_congruential_generator#Variants
+        // https://github.com/imneme/pcg-c/blob/master/include/pcg_variants.h#L276
+        state: u64 = _state64;
+        _state64 = _state64 * 6364136223846793005u + 1442695040888963407u;
+        word: u64 = ((state >> ((state >> 59u) + 5u)) ^ state) * 12605985483714917081u;
+        return (word >> 43u) ^ word;
+    }
+}
+fn create_random_generator(seed: u64 = StartMeasure()) -> RandomGenerator {
+    return RandomGenerator{seed = seed, _state32 = seed, _state64 = seed};
 }
 
 

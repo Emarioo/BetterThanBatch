@@ -1,5 +1,5 @@
 struct Header {
 	magic: char[4]
 	version: char[4]
-	name: char[8]
+	data: char[8]
 }

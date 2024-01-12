@@ -852,6 +852,16 @@ FnOverloads* ASTStruct::getMethod(const std::string& name, bool create){
 
 void AST::appendToMainBody(ASTScope *body) {
     Assert(body);
+    
+    if(mainBody->tokenRange.tokenStream() == nullptr) {
+        // IMPORTANT TODO: This is so horribly bad and I will regret this later.
+        //    The main body has multiple scopes appended to it. They all come from different token streams.
+        //    Adding to the madness, we assume that the preloaded import doesn't have a tokenStream to skip it.
+        //    We may not have a token stream if the import is empty.
+        if (body->tokenRange.tokenStream() && body->tokenRange.tokenStream()->streamName != "<base>") {
+            mainBody->tokenRange = body->tokenRange;
+        }
+    }
 
     // engone::log::out << engone::log::RED << "Content order is ruined in appendToMainBody\n";
 
