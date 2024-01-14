@@ -19,8 +19,13 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
 SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     Assert(scope);
-    MEASURE;
+    ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
+
+    // OPTIMIZE TODO: Recursively checking enums may be slower than iteratively doing so with a
+    //   list of scopes to check. How much performance do we gain from that?
+    // OPTIMIZE TODO: Parser should set a flag for whether a scope contains enums, structs and functions.
+    //   We can do that per namespace, function or import scope. Don't have to do that for each if, while, for scope.
 
     SignalDefault error = SignalDefault::SUCCESS;
     for(auto aenum : scope->enums){
@@ -289,7 +294,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const Toke
 }
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& err_tokenRange, bool* printedError){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
     _TCLOG(log::out << "check "<<typeString<<"\n";)
 
@@ -409,7 +414,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
 }
 SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::X11Purple);
     _TCLOG_ENTER(FUNC_ENTER)
     //-- complete structs
 
@@ -1269,7 +1274,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
 }
 SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Purple);
     Assert(expr);
     _TCLOG_ENTER(FUNC_ENTER)
     
@@ -1869,7 +1874,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope);
 // It does not modify ast func
 SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
 
     Assert(funcImpl->polyArgs.size() == func->polyArgs.size());
@@ -2280,7 +2285,7 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
 }
 SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
     Assert(scope||info.errors!=0);
     if(!scope) return SignalDefault::FAILURE;
@@ -2469,7 +2474,7 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
 // }
 SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
 
     // Hello me in the future!
@@ -3255,7 +3260,8 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
 }
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     using namespace engone;
-    MEASURE;
+    // MEASURE;
+    ZoneScopedC(tracy::Color::Purple4);
     CheckInfo info = {};
     info.ast = ast;
     info.compileInfo = compileInfo;

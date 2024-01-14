@@ -712,7 +712,7 @@ u32 ProcessSource(void* ptr) {
     info->waitingThreads++;
     info->sourceLock.unlock();
     WHILE_TRUE {
-        MEASURE_WHO("Process Source")
+        // MEASURE_WHO("Process Source")
         // info->sourceLock.lock();
         // info->waitingThreads++;
         // // If the last thread finished and there are no sources we are done.
@@ -942,7 +942,7 @@ u32 ProcessSource(void* ptr) {
     // info->dependencyIndex = info->streams.size()-1;
     // return 0;
     WHILE_TRUE {
-        MEASURE_WHO("Process macro")
+        // MEASURE_WHO("Process macro")
         info->sourceWaitLock.wait();
 
         // TODO: Is it possible to skip some locks and use atomic intrinsics instead?
@@ -1064,7 +1064,7 @@ u32 ProcessSource(void* ptr) {
 
 Bytecode* CompileSource(CompileOptions* options) {
     using namespace engone;
-    MEASURE
+    ZoneScopedC(tracy::Color::Gainsboro);
     
     #ifdef SINGLE_THREADED
     options->threadCount = 1;
@@ -1675,7 +1675,7 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
 }
 bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     using namespace engone;
-    MEASURE
+    ZoneScopedC(tracy::Color::Blue3);
     
     if(options->target == TARGET_BYTECODE) {
         // Bytecode exporting has been disabled because you rarely use it.
@@ -1763,43 +1763,46 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     auto format = outPath.getFormat();
     bool outputIsObject = format == "o" || format == "obj";
 
-    if(outputIsObject){
-        bool yes = false;
-        options->compileStats.start_objectfile = StartMeasure();
-        switch(options->target) {
-        case TARGET_WINDOWS_x64:
-            yes = FileCOFF::WriteFile(outPath.text, program);
-            break;
-        case TARGET_UNIX_x64:
-            yes = FileELF::WriteFile(outPath.text, program);
-            break;
-        default:
-            Assert(false);
-            break;
-        }
-        options->compileStats.end_objectfile = StartMeasure();
-        if(yes) {
-            options->compileStats.generatedFiles.add(outPath.text);
-        } else {
-            log::out << log::RED << "Failed writing object file '"<<outPath<<"'\n";
-            return false;
-        }
-        return true;
-    }
+    // if(outputIsObject){
+    //     bool yes = false;
+    //     options->compileStats.start_objectfile = StartMeasure();
+    //     switch(options->target) {
+    //     case TARGET_WINDOWS_x64:
+    //         yes = FileCOFF::WriteFile(outPath.text, program);
+    //         break;
+    //     case TARGET_UNIX_x64:
+    //         yes = FileELF::WriteFile(outPath.text, program);
+    //         break;
+    //     default:
+    //         Assert(false);
+    //         break;
+    //     }
+    //     options->compileStats.end_objectfile = StartMeasure();
+    //     if(yes) {
+    //         options->compileStats.generatedFiles.add(outPath.text);
+    //     } else {
+    //         log::out << log::RED << "Failed writing object file '"<<outPath<<"'\n";
+    //         return false;
+    //     }
+    //     return true;
+    // }
 
     std::string objPath = "";
+    if(outputIsObject){
+        objPath = outPath.text;
+    }
     bool yes = false;
     options->compileStats.start_objectfile = StartMeasure();
     switch(options->target) {
     case TARGET_WINDOWS_x64:
-        objPath = "bin/" + outPath.getFileName(true).text + ".obj";
+        if(objPath.empty())
+            objPath = "bin/" + outPath.getFileName(true).text + ".obj";
         yes = ObjectFile::WriteFile(OBJ_COFF, objPath, program);
-        // yes = FileCOFF::WriteFile(objPath,program);
         break;
     case TARGET_UNIX_x64:
-        objPath = "bin/" + outPath.getFileName(true).text + ".o";
+        if(objPath.empty())
+            objPath = "bin/" + outPath.getFileName(true).text + ".o";
         yes = ObjectFile::WriteFile(OBJ_ELF, objPath, program);
-        // yes = FileELF::WriteFile(objPath, program);
         break;
     default: {
         Assert(false);
@@ -1807,12 +1810,15 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
     }
     }
     options->compileStats.end_objectfile = StartMeasure();
+
     if(yes) {
         options->compileStats.generatedFiles.add(objPath);
     } else {
         log::out << log::RED << "Failed writing object file '"<<objPath<<"'\n";
         return false;
     }
+    if(outputIsObject)
+        return true;
 
     std::string cmd = "";
     bool outputOtherDirectory = false;
@@ -1903,7 +1909,10 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
     options->compileStats.start_linker = StartMeasure();
     int exitCode = 0;
-    engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
+    {
+        ZoneNamedNC(zone0,"Linker",tracy::Color::Blue2, true);
+        engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
+    }
     options->compileStats.end_linker = StartMeasure();
     
     if(exitCode != 0) {

@@ -49,8 +49,8 @@ if !USE_OPTIMIZATIONS!==1 (
 )
 
 SET MSVC_LINK_OPTIONS=/nologo /ignore:4099 Advapi32.lib gdi32.lib user32.lib OpenGL32.lib libs/glfw-3.3.8/lib/glfw3_mt.lib libs/glew-2.1.0/lib/glew32s.lib 
-SET MSVC_INCLUDE_DIRS=/Iinclude /Ilibs/stb/include /Ilibs/glfw-3.3.8/include /Ilibs/glew-2.1.0/include 
-SET MSVC_DEFINITIONS=/DOS_WINDOWS
+SET MSVC_INCLUDE_DIRS=/Iinclude /Ilibs/stb/include /Ilibs/glfw-3.3.8/include /Ilibs/glew-2.1.0/include /Ilibs/tracy-0.10/public
+SET MSVC_DEFINITIONS=/DOS_WINDOWS /DTRACY_ENABLE
 SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /std:c++14 /nologo /TP /EHsc /wd4129
 
 if !USE_DEBUG!==1 (
@@ -84,10 +84,6 @@ for /r %%i in (*.cpp) do (
 )
 echo #include ^"../src/Native/NativeLayer.cpp^" >> !srcfile!
 
-@REM echo #include ^"TracyClient.cpp^" >> !srcfile!
-SET MSVC_DEFINITIONS=!MSVC_DEFINITIONS! /DTRACY_ENABLE
-SET MSVC_INCLUDE_DIRS=!MSVC_INCLUDE_DIRS! /Itracy/public
-
 @REM #####################
 @REM      Compiling
 @REM #####################
@@ -103,6 +99,7 @@ if !USE_MSVC!==1 (
     @REM rc /nologo /fo bin\resources.res res\resources.rc
     @REM SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! bin\resources.res
 
+    @REM COMPILE TRACY
     cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! tracy\public\TracyClient.cpp /Fobin/tracy.obj
     SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /FI pch.h
 

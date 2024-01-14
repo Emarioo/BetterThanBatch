@@ -861,7 +861,7 @@ void GenMemzero(GenInfo& info, u8 ptr_reg, u8 size_reg, int size) {
 // non-zero as baseReg will mov default values to the pointer in baseReg
 SignalDefault GenerateDefaultValue(GenInfo &info, u8 baseReg, int offset, TypeId typeId, TokenRange* tokenRange = nullptr, bool zeroInitialize=true) {
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Blue2);
     if(baseReg!=0) {
         Assert(DECODE_REG_SIZE(baseReg) == 8);
     }
@@ -1036,7 +1036,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, TypeI
 // used for assignment.
 SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Blue2);
     _GLOG(FUNC_ENTER)
     Assert(_expression);
     MAKE_NODE_SCOPE(_expression);
@@ -1882,7 +1882,7 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
 }
 SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope) {
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Blue2);
     if(idScope==(ScopeId)-1)
         idScope = info.currentScopeId;
     _GLOG(FUNC_ENTER)
@@ -3500,7 +3500,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
 SignalDefault GenerateBody(GenInfo &info, ASTScope *body);
 SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* astStruct = nullptr){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Blue2);
 
     _GLOG(FUNC_ENTER_IF(function->linkConvention == LinkConventions::NONE)) // no need to log
     
@@ -4227,7 +4227,7 @@ SignalDefault GenerateFunction(GenInfo& info, ASTFunction* function, ASTStruct* 
 }
 SignalDefault GenerateFunctions(GenInfo& info, ASTScope* body){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Blue2);
     _GLOG(FUNC_ENTER)
     Assert(body || info.hasForeignErrors());
     if(!body) return SignalDefault::FAILURE;
@@ -4260,7 +4260,7 @@ SignalDefault GenerateFunctions(GenInfo& info, ASTScope* body){
 }
 SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
     using namespace engone;
-    MEASURE
+    ZoneScopedC(tracy::Color::Blue2);
     PROFILE_SCOPE
     _GLOG(FUNC_ENTER)
     Assert(body||info.hasForeignErrors());
@@ -5818,7 +5818,7 @@ SignalDefault GenerateData(GenInfo& info) {
 
 Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Blue);
 #ifdef LOG_ALLOC
     static bool sneaky=false;
     if(!sneaky){

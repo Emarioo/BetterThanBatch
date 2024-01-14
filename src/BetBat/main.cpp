@@ -67,7 +67,7 @@ int main(int argc, const char** argv){
     
 
     log::out.enableReport(false);
-    MeasureInit();
+    // MeasureInit();
     ProfilerInitialize();
     
     // FuzzerOptions opts{};
@@ -457,16 +457,18 @@ int main(int argc, const char** argv){
     //     log::out << (log::Color)(i%16);
     //     log::out << chr;
     // }
-    if(show_profiling)
-        PrintMeasures();
-    MeasureCleanup();
+    // if(show_profiling)
+    //     PrintMeasures();
+    // MeasureCleanup();
+
     // ProfilerPrint();
     // ProfilerExport("profiled.dat");
 
     ProfilerCleanup();
 
     NativeRegistry::DestroyGlobal();
-    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
+    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage();
+    // int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
     if(finalMemory!=0){
         log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";
         PrintRemainingTrackTypes();

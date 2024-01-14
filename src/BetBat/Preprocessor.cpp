@@ -180,7 +180,7 @@ SignalAttempt ParseDirective(PreprocInfo& info, bool attempt, const char* str){
 }
 SignalAttempt ParseDefine(PreprocInfo& info, bool attempt){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Wheat);
     Token token = info.get(info.at()+1);
     if(!Equal(token,"#")){
         if(attempt){
@@ -541,7 +541,7 @@ SignalAttempt ParseUndef(PreprocInfo& info, bool attempt){
 
 SignalAttempt ParseLink(PreprocInfo& info, bool attempt){
     using namespace engone;
-    MEASURE;
+    // ZoneScopeC(tracy::Color::Wheat);
     Token token = info.get(info.at()+1);
     SignalAttempt result = ParseDirective(info, attempt, "link");
     if(result==SignalAttempt::BAD_ATTEMPT)
@@ -563,7 +563,7 @@ SignalAttempt ParseLink(PreprocInfo& info, bool attempt){
 }
 SignalAttempt ParseInclude(PreprocInfo& info, bool attempt, bool quoted = false){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Wheat);
     Token hashtag = info.get(info.at()+1);
     SignalAttempt result = ParseDirective(info, attempt, "include");
     if(result==SignalAttempt::BAD_ATTEMPT)
@@ -836,7 +836,7 @@ SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
 // YOU MUST PARSE HASHTAG BEFORE CALLING THIS
 SignalAttempt ParsePredefinedMacro(PreprocInfo& info, const Token& parseToken, Token& outToken, char* buffer, u32 bufferLen){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Wheat);
     // Token token = info.get(info.at()+1);
     // Token token = parseToken;
     // early exit
@@ -1015,7 +1015,7 @@ engone::Logger& operator<<(engone::Logger& logger, const TokenSpan& span){
 SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall* call, MacroCall* newCall, DynamicArray<bool>& unwrappedArgs){
     using namespace engone;
     int& index = tokenRange.start;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Wheat);
     
     _MLOG(log::out << "Pre fetch input args:\n";)
 
@@ -1167,7 +1167,7 @@ SignalDefault FetchArguments(PreprocInfo& info, TokenSpan& tokenRange, MacroCall
 // A warning: the code in this function is complex and hard to understand.
 SignalAttempt ParseMacro_fast(PreprocInfo& info, int attempt){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::Wheat);
     
     bool quote_tokens = false;
     int extra_off = 0;
@@ -1901,7 +1901,7 @@ TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
     using namespace engone;
     Assert(compileInfo);
     Assert(inTokens);
-    MEASURE;
+    ZoneScopedC(tracy::Color::Wheat);
     
     PreprocInfo info{};
     info.compileInfo = compileInfo;

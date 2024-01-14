@@ -219,7 +219,8 @@ Token CombineTokens(ParseInfo& info){
 }
 SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
     using namespace engone;
-    MEASURE;
+    // MEASURE;
+    
     int startToken = info.at()+1;
     int endTok = info.at()+1; // exclusive
     int totalLength=0;
@@ -306,7 +307,8 @@ SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
 }
 SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt){
     using namespace engone;
-    MEASURE;
+    // MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     Token structToken = info.get(info.at()+1);
     int startIndex = info.at()+1;
@@ -666,7 +668,7 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
 }
 SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool attempt){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     Token token = info.get(info.at()+1);
     int startIndex = info.at()+1;
@@ -799,7 +801,7 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
 }
 SignalAttempt ParseEnum(ParseInfo& info, ASTEnum*& astEnum, bool attempt){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     Token enumToken = info.get(info.at()+1);
     int startIndex = info.at()+1;
@@ -1107,7 +1109,7 @@ SignalDefault ParseAnnotation(ParseInfo& info, Token* out_annotation_name, Token
     return SignalDefault::SUCCESS;
 }
 SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
 
     // TODO: sudden end, error handling
     bool expectComma=false;
@@ -1174,7 +1176,7 @@ SignalDefault ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count)
 }
 SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool attempt){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     
     if(info.end()){
@@ -2390,7 +2392,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
 }
 SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     
     if(info.end()){
@@ -2872,7 +2874,7 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
 }
 SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attempt) {
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     Token beginToken = info.get(info.at()+1);
     // int startIndex = info.at()+1;
@@ -3152,7 +3154,7 @@ SignalAttempt ParseOperator(ParseInfo& info, ASTFunction*& function, bool attemp
 }
 SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attempt, ASTStruct* parentStruct){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     Token fnToken = info.get(info.at()+1);
     // int startIndex = info.at()+1;
@@ -3522,7 +3524,7 @@ SignalAttempt ParseFunction(ParseInfo& info, ASTFunction*& function, bool attemp
 }
 SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool attempt){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
 
     bool globalAssignment = false;
@@ -3726,7 +3728,7 @@ SignalAttempt ParseAssignment(ParseInfo& info, ASTStatement*& statement, bool at
 }
 SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags, ParseFlags* out_flags){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     // Note: two infos in case ParseAssignment modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
     _PLOG(FUNC_ENTER)
@@ -4103,7 +4105,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
 
 ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace){
     using namespace engone;
-    MEASURE;
+    ZoneScopedC(tracy::Color::OrangeRed1);
     _VLOG(log::out <<log::BLUE<<  "##   Parser   ##\n";)
     
     ParseInfo info{tokens};

@@ -712,7 +712,7 @@ namespace engone {
 	void* Allocate(u64 bytes){
 		if(bytes==0) return nullptr;
 		#ifndef NO_PERF
-		MEASURE
+		// MEASURE
 		#endif
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
         void* ptr = malloc(bytes);
@@ -743,7 +743,7 @@ namespace engone {
 	}
     void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes){
 		#ifndef NO_PERF
-		MEASURE
+		// MEASURE
 		#endif
         if(newBytes==0){
             Free(ptr,oldBytes);
@@ -789,7 +789,7 @@ namespace engone {
 	void Free(void* ptr, u64 bytes){
 		if(!ptr) return;
 		#ifndef NO_PERF
-		MEASURE
+		// MEASURE
 		#endif
 		free(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
@@ -886,7 +886,7 @@ namespace engone {
         }
 	}
 	void Semaphore::wait() {
-		MEASURE
+		// MEASURE
 		if (m_internalHandle == 0) {
 			HANDLE handle = CreateSemaphore(NULL, m_initial, m_max, NULL);
 			if (handle == INVALID_HANDLE_VALUE) {
@@ -905,7 +905,7 @@ namespace engone {
 		}
 	}
 	void Semaphore::signal(int count) {
-		MEASURE
+		// MEASURE
 		if (m_internalHandle != 0) {
 			BOOL yes = ReleaseSemaphore(TO_HANDLE(m_internalHandle), count, NULL);
 			if (!yes) {
@@ -928,7 +928,7 @@ namespace engone {
         }
 	}
 	void Mutex::lock() {
-		MEASURE
+		// MEASURE
 		if (m_internalHandle == 0) {
 			HANDLE handle = CreateMutex(NULL, false, NULL);
 			if (handle == INVALID_HANDLE_VALUE) {
@@ -954,7 +954,7 @@ namespace engone {
 		}
 	}
 	void Mutex::unlock() {
-		MEASURE
+		// MEASURE
 		if (m_internalHandle != 0) {
 			// printf("Unlock %d %d\n",m_ownerThread, (int)m_internalHandle);
 			m_ownerThread = 0;

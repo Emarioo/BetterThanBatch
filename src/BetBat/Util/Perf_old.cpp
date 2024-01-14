@@ -1,4 +1,4 @@
-
+#ifdef gone
 #include "BetBat/Config.h"
 
 #include "BetBat/Util/Perf.h"
@@ -185,3 +185,4 @@ void PrintMeasures(u32 filters, u32 limit){
 }
 #endif // LOG_MEASURES
 #endif // NO_PERF
+#endif

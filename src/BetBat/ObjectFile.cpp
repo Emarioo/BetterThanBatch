@@ -5,6 +5,7 @@
 #include "BetBat/COFF.h"
 
 bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Program_x64* program, u32 from, u32 to) {
+    ZoneScopedC(tracy::Color::Blue4);
     ObjectFile objectFile{};
     objectFile.init(objType);
 
@@ -70,6 +71,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
 }
 bool ObjectFile::writeFile_coff(const std::string& path) {
     using namespace coff;
+    ZoneScopedC(tracy::Color::Blue4);
     ByteStream stream{nullptr};
     ByteStream* obj_stream = &stream;
     u32 estimation = 0x100000;
@@ -266,6 +268,7 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
 }
 bool ObjectFile::writeFile_elf(const std::string& path) {
     using namespace elf;
+    ZoneScopedC(tracy::Color::Blue4);
     ByteStream stream{nullptr};
     ByteStream* obj_stream = &stream;
     u32 estimation = 0x100000;

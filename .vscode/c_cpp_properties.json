@@ -7,13 +7,14 @@
                 "${workspaceFolder}/libs/glew-2.1.0/include/**",
                 "${workspaceFolder}/libs/glfw-3.3.8/include/**",
                 "${workspaceFolder}/libs/stb/include/**",
-                "${workspaceFolder}/tracy/public/**"
+                "${workspaceFolder}/libs/tracy-0.10/public/**"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "OS_WINDOWS"
+                "OS_WINDOWS",
+                "TRACY_ENABLE"
             ],
             "windowsSdkVersion": "10.0.20348.0",
             "compilerPath": "cl.exe",

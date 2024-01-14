@@ -929,7 +929,7 @@ void InitSpecialsTable() {
 }
 TokenStream* TokenStream::Tokenize(TextBuffer* textBuffer, TokenStream* optionalIn){
     using namespace engone;
-    MEASURE
+    ZoneScopedC(tracy::Color::Honeydew);
     // PROFILE_SCOPE
     // _VLOG(log::out << log::BLUE<< "##   Tokenizer   ##\n";)
     // TODO: handle errors like outStream->add returning false
@@ -1754,7 +1754,5 @@ void PerfTestTokenize(const char* file, int times){
     if(text.max != 0)
         text.resize(0);
 
-    #ifdef LOG_MEASURES
-    PrintMeasures();
-    #endif
+    // PrintMeasures();
 }

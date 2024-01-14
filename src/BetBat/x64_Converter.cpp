@@ -761,6 +761,7 @@ u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool 
 Program_x64* ConvertTox64(Bytecode* bytecode){
     using namespace engone;
     Assert(bytecode);
+    ZoneScopedC(tracy::Color::SkyBlue1);
 
     _VLOG(log::out <<log::BLUE<< "x64 Converter:\n";)
 
