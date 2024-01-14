@@ -132,7 +132,7 @@ extern const char* prim_op_names[];
 // the names may change. Perhaps prim and op will be split into
 // their own tables.
 #define PRIM_NAME(X) ((X) >= 0 && (X) < AST_PRIMITIVE_COUNT ? prim_op_names[X] : nullptr)
-#define OP_NAME(X) ((X) >= AST_PRIMITIVE_COUNT && (X) < AST_OPERATION_COUNT ? prim_op_names[X] : nullptr)
+#define OP_NAME(X) (((PrimitiveType)X) >= AST_PRIMITIVE_COUNT && (X) < AST_OPERATION_COUNT ? prim_op_names[X] : nullptr)
 #define STATEMENT_NAME(X) ((X) >= 0 && (X) < ASTStatement::STATEMENT_COUNT ? statement_names[X] : nullptr)
 struct ASTNode {
     // TODO: Add a flag which you can check to know whether there are enums or not.

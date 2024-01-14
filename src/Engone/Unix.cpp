@@ -16,6 +16,7 @@
 #include <pthread.h>
 #include <time.h>
 #include <dirent.h>
+#include <sys/random.h>
 
 #include <unordered_map>
 #include <vector>
@@ -56,9 +57,12 @@ namespace engone {
 	DirectoryIterator DirectoryIteratorCreate(const char* name, int pathlen){
 		DirectoryIterator iterator = (DirectoryIterator)(++s_uniqueRDI);
 		auto& info = s_rdiInfos[iterator] = {};
-		info.root.resize(pathlen);
-		memcpy((char*)info.root.data(), name, pathlen);
-		// info.handle=INVALID_HANDLE_VALUE;
+		// if(pathlen == 0) {
+		// 	info.root = "."; // CWD
+		// } else {
+			info.root.resize(pathlen);
+			memcpy((char*)info.root.data(), name, pathlen);
+		// }
 		info.directories.add(info.root);
 
 		
@@ -95,6 +99,9 @@ namespace engone {
 				}
 				info->second.directories.removeAt(0);
                 
+				
+				
+
                 // std::string temp = info->second.dir;
                 // if(!temp.empty())
                 //     temp += "\\";
@@ -106,8 +113,12 @@ namespace engone {
 				
 				// DWORD err = GetLastError();
 				// PL_PRINTF("[WinError %lu] GetLastError '%llu'\n",err,(u64)iterator);
+				if(!info->second.dir.empty())
+					info->second.dirIter = opendir(info->second.dir.c_str());
+				else {
+					info->second.dirIter = opendir("./");
+				}
 
-				info->second.dirIter = opendir(info->second.dir.c_str());
 
 				// HANDLE handle=INVALID_HANDLE_VALUE;
 				// handle = FindFirstFileA(temp.c_str(),&data);
@@ -129,10 +140,12 @@ namespace engone {
 			if(!strcmp(entry->d_name, ".") || !strcmp(entry->d_name, ".."))
 				continue;
 			
-			// if(info->second.dir == ".")
-			// 	filepath_len = snprintf(filepath, sizeof(filepath), "%s", entry->d_name);
-			// else
-            filepath_len = snprintf(filepath, sizeof(filepath), "%s/%s", info->second.dir.c_str(), entry->d_name);
+			if(!info->second.dir.empty()) {
+            	filepath_len = snprintf(filepath, sizeof(filepath), "%s/%s", info->second.dir.c_str(), entry->d_name);
+			} else {
+            	filepath_len = snprintf(filepath, sizeof(filepath), "%s", entry->d_name);
+			}
+			// printf("F %s\n",filepath);
 
 			int err = stat(filepath, &statBuffer);
 			if(err == -1) {
@@ -240,8 +253,8 @@ namespace engone {
 		if (res == -1) {
 			PL_PRINTF("StartMeasure");
 		}
-		// return ((u64)ts.tv_sec*NS + (u64)ts.tv_nsec);
-		return ((u64)ts.tv_sec);
+		return ((u64)ts.tv_sec*NS + (u64)ts.tv_nsec);
+		// return ((u64)ts.tv_sec);
 	}
 	double StopMeasure(TimePoint startPoint) {
 		struct timespec ts;
@@ -251,8 +264,8 @@ namespace engone {
 			PL_PRINTF("StopMeasure");
 		}
 		// printf("%d\n",ts.tv_sec);
-		return (double)(((u64)ts.tv_sec) - startPoint);
-		// return (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec) - startPoint)/(double)NS;
+		// return (double)(((u64)ts.tv_sec) - startPoint);
+		return (double)(((u64)ts.tv_sec * NS + (u64)ts.tv_nsec) - startPoint)/(double)NS;
 	}
 	double DiffMeasure(TimePoint endSubStart) {
 		return (double)(endSubStart)/(double)NS;
@@ -268,13 +281,13 @@ namespace engone {
 		// TODO: Don't hardcode the processors' frequency
 		return 2800 * 1e6;
 	}
-	APIFile FileOpen(const char* path, u32 len, u64* outFileSize, u32 flags){
-		return FileOpen(std::string(path,len), outFileSize, flags);
+	APIFile FileOpen(const char* path, u32 len, FileOpenFlags flags, u64* outFileSize){
+		return FileOpen(std::string(path,len), flags, outFileSize);
 	}
-	APIFile FileOpen(const std::string& path, u64* outFileSize, u32 flags) {
+	APIFile FileOpen(const std::string& path, FileOpenFlags flags, u64* outFileSize) {
         int fileFlags = O_RDWR;
         int mode = 0;
-        if(flags&FILE_ONLY_READ){
+        if(flags&FILE_READ_ONLY){
             fileFlags = O_RDONLY;
 		}
 		// if(flags&FILE_CAN_CREATE) {
@@ -475,7 +488,7 @@ namespace engone {
 	static u64 s_numberAllocations=0;
 	void* Allocate(u64 bytes){
 		if(bytes==0) return nullptr;
-		MEASURE;
+		// MEASURE;
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
 		// _LOG(LOG_ALLOCATIONS,printf("* Allocate %lu\n",bytes);)
         void* ptr = malloc(bytes);
@@ -500,7 +513,7 @@ namespace engone {
 		return ptr;
 	}
     void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes){
-		MEASURE;
+		// MEASURE;
         if(newBytes==0){
 			// Assert(newBytes != 0);
             Free(ptr,oldBytes);
@@ -544,7 +557,7 @@ namespace engone {
     }
 	void Free(void* ptr, u64 bytes){
 		if(!ptr) return;
-		MEASURE;
+		// MEASURE;
 		_LOG(LOG_ALLOCATIONS, printf("* Free %lu %p\n",bytes, ptr);)
 
 		_LOG(LOG_ALLOCATIONS,
@@ -698,7 +711,7 @@ namespace engone {
 		}
 	}
 	void Semaphore::wait() {
-		MEASURE
+		// MEASURE
 
 		Assert(sizeof(sem_t) == SEM_SIZE);
 		if(m_initialized) {
@@ -715,7 +728,7 @@ namespace engone {
 		}
 	}
 	void Semaphore::signal(int count) {
-		MEASURE
+		// MEASURE
 
 		if(m_initialized) {
 			while(count>0){

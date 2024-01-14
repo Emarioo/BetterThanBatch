@@ -74,6 +74,11 @@ int main(int argc, const char** argv){
     // opts.requested_size = 10000;
     // GenerateFuzzedFile(opts,"oi.btb");
     
+    // auto tp = StartMeasure();
+    // Sleep(1.292);
+    // double t = StopMeasure(tp);
+    // log::out << "time: " <<t << "\n";
+
     // return 0;
     
     // log::out << p.text << "\n";

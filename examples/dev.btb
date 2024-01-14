@@ -1,55 +1,10 @@
-// // #import "OS"
-
-// // fn @import @unixcall StartMeasure() -> u64;
-// // fn @import @unixcall StopMeasure(timePoint: u64) -> i32; // TODO: Use f64 (double) when implemented
-// // fn @import @unixcall StopMeasure(timePoint: u64) -> f32; // TODO: Use f64 (double) when implemented
-
-// #macro CLOCK_MONOTONIC 1
-// struct timespec {
-//     tv_sec: u64;
-//     tv_nsec: u32;
-// }
-// fn @import @unixcall clock_gettime(clk_id: i32, tp: timespec*) -> i32;
-// fn @intrinsic rdtsc() -> u64;
-
-
-// tp: timespec;
-// err = clock_gettime(CLOCK_MONOTONIC, &tp);
-// #macro NS cast<u64>1000000000
-
-// fn time() -> u64 {
-//     return rdtsc();
-//     // tp: timespec;
-//     // err = clock_gettime(CLOCK_MONOTONIC, &tp);
-//     // #macro NS cast<u64>1000000000
-//     // huge: u64 = NS*tp.tv_sec + tp.tv_nsec;
-//     // return huge;
-// }
-// start = time()
-// NativeSleep(0.01)
-// }
-// end = time() - start;
-
-// HELLO! NEXT STEP, fix profiling of time
-// StartMeasure/StopMeasure didn't work before, do they now? MAKE A TEST FOR IT
-
-// #import "Logger"
+#import "OS"
+#import "Logger"
 // #import "tests/fuzzer_gen/main"
 
-@TEST_CASE(special)
+tp := StartMeasure()
+NativeSleep(0.383);
+t := StopMeasure(tp)
+log("Time: ",t)
 
-
-enum Mouthful {
-    Batter,
-    Bitter,
-    Butter,
-}
-
-// msge := Mouthful.Butter
-msge: Mouthful;
-switch msge { @TEST_ERROR(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
-    case Batter: { }                                                        
-    case Batter: { }  @TEST_ERROR(ERROR_DUPLICATE_CASE)
-    case Bitter: { }                                                        
-    chicken             @TEST_ERROR(ERROR_BAD_TOKEN_IN_SWITCH)     
-}
+// #import "examples/random/test_randoms.btb"

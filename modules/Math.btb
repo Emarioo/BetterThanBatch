@@ -37,7 +37,12 @@ fn random64() -> u64 {
         // TODO: Assert
     
 #elif OS_UNIX
-    missing_impl
+    fn @import @unixcall getrandom(buf: void*, len: u64, flags: u32) -> i64;
+    bytes := getrandom(&num, sizeof num, 0);
+    if bytes != 8 {
+        *cast<u32*>null;
+        // TODO: Assert
+    }
 #else
     missing_impl
 #endif

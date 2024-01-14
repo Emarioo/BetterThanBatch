@@ -6,3 +6,4 @@ logs
 *.obj
 *.pdb
 tracy
+!libs/tracy-0.10/**

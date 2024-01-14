@@ -36,7 +36,10 @@ struct TokenRange;
 struct TokenStream;
 struct Token {
     Token() = default;
-    Token(const char* str) : str((char*)str), length(strlen(str)) {};
+    Token(const char* str) {
+        this->str = (char*)str;
+        length = strlen(str);
+    }
     Token(const std::string& str) : str((char*)str.c_str()), length(str.length()) {};
     Token(char* str, int len) : str((char*)str), length(len) {};
     

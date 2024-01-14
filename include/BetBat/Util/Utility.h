@@ -48,7 +48,7 @@ Matching rules:
     Each rule is separated by '|'. A single rule in a string does not need '|'.
     A rule is a sequence of characters such as 'hi' or 'main.c'.
     '*' is a wildcard and will match any number of characters.
-    You can have maximum of two wildcards on either side of the rule like this '*.c' or '*src/*'.
+    You can have maximum of two wildcards on either side of the rule like this '*.c' or '*src\*'.
     Space ' ' is a valid character.
     Examples: '*.c|*.h'.
     The path (characters) in a rule matches relative to the root path.

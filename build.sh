@@ -35,9 +35,11 @@ echo "Compiled in $((($runtime) / 1000)).$((($endTime - $startTime) % 1000)) sec
 if [ "$err" = 0 ]; then
     # cp bin/btb btb
     if [ $# = 0 ]; then
-        # ./bin/btb -dev
+        ./bin/btb -dev
         # ./bin/btb --test tests/flow/defer.btb
-        ./bin/btb tests/flow/defer.btb
+        # ./bin/btb tests/flow/defer.btb
+        # ./bin/btb -pm *dev.btb
+        # ./bin/btb tests/simple/operations.btb
         # ./bin/btb --test
         # ./bin/btb -ss dev.btb  -p
         # ./bin/btb -p examples/dev.btb

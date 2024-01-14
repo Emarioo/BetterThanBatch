@@ -236,8 +236,12 @@ int PatternMatchFiles(const std::string& pattern, DynamicArray<std::string>* mat
     exclusions.add(".vscode");
 
     Assert(rules.size() != 0);
-    
-    auto iter = engone::DirectoryIteratorCreate(root_path.c_str(), root_path.length());
+    engone::DirectoryIterator iter{};
+    // if(root_path.empty()) {
+        iter = engone::DirectoryIteratorCreate(root_path.c_str(), root_path.length());
+    // } else {
+
+    // }
     engone::DirectoryIteratorData data{};
     while(engone::DirectoryIteratorNext(iter,&data)) {
         if(data.isDirectory) {

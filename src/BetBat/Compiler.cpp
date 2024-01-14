@@ -281,6 +281,7 @@ const char* ToString(TargetPlatform target){
         CASE(TARGET_UNIX_x64,"unix-x64")
         CASE(TARGET_BYTECODE,"bytecode")
         CASE(TARGET_UNKNOWN,"unknown-target")
+        default: Assert(false);
     }
     return "unknown";
     #undef CASE
@@ -1116,7 +1117,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     "#macro OS_WINDOWS #endmacro\n"
     #else
     // #elif defined(OS_UNIX)
-    "#define OS_UNIX #endmacro\n"
+    "#macro OS_UNIX #endmacro\n"
     #endif
     "fn @native prints(str: char[]);\n"
     "fn @native printc(str: char);\n"

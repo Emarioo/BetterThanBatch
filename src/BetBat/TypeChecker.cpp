@@ -3236,14 +3236,19 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 // default case
                 CheckRest(info, now->firstBody);
             } else {
-                // You are allowed to skip enum members when using default case but not otherwise.
+                // not default case
                 if(allCasesUseEnumType && usedMemberCount != (int)usedMembers.size()) {
-                    ERR_SECTION(
-                        ERR_HEAD(now->tokenRange, ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
-                        ERR_MSG("You have forgotten these enum members in the switch statement:")
+                    // NOTE: I find that errors about having missed members is annoying most of the time.
+                    //  BUT, there are certainly times were you forget to handle new enums you add which is when
+                    //  this error is nice. I have added this as a TODO because we need to add some annotations
+                    //  so that the user can decide how they want the error to work an on what members.
+
+                    // ERR_SECTION(
+                    //     ERR_HEAD(now->tokenRange, ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+                    //     ERR_MSG("You have forgotten these enum members in the switch statement:")
                         
-                        ERR_LINE(now->tokenRange, "this switch")
-                    )
+                    //     ERR_LINE(now->tokenRange, "this switch")
+                    // )
                 }
             }
         } else {

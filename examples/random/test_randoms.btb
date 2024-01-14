@@ -4,12 +4,14 @@
 
 gen := create_random_generator();
 
-iterations: u64 = 10000;
-bits32: u32[32];
-bits64: u32[64];
+iterations: i32 = 10000;
+bits32: i32[32];
+bits64: i32[64];
+random_bits64: i32[64];
 for 0..iterations {
     ran32 := gen.rand32();   
     ran64 := gen.rand64();
+    r64 := random64();
 
     for 0..32 {
         bits32.ptr[nr] += ran32 & 1u;
@@ -19,12 +21,21 @@ for 0..iterations {
         bits64.ptr[nr] += ran64 & cast<u64>1u;
         ran64 = ran64 >> 1;
     }
+    for 0..64 {
+        random_bits64.ptr[nr] += r64 & cast<u64>1u;
+        r64 = r64 >> 1;
+    }
 }
-log("rand32: bit frequencies:")
+log("gen.rand32:")
 for 0..32 {
-    log("Bit",nr,bits32.ptr[nr])
+    log("Bit",nr,":",iterations/2-bits32.ptr[nr])
 }
-log("rand64: bit frequencies:")
+log("gen.rand64:")
 for 0..64 {
-    log("Bit",nr,bits64.ptr[nr])
+    log("Bit",nr,":",iterations/2-bits64.ptr[nr])
+}
+
+log("random64:")
+for 0..64 {
+    log("Bit",nr,":",iterations/2-bits64.ptr[nr])
 }
