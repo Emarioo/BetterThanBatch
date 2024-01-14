@@ -3210,7 +3210,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         if(usedMembers[index]) {
                             ERR_SECTION(
                                 ERR_HEAD(it.caseExpr->tokenRange, ERROR_DUPLICATE_CASE)
-                                ERR_MSG("There is no point in having two expression")   
+                                ERR_MSG("Two cases handle the same enum member.")
                                 ERR_LINE(usedMembers[index]->tokenRange, "previous")
                                 ERR_LINE(it.caseExpr->tokenRange, "bad")
                             )

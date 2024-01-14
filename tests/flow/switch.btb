@@ -86,7 +86,7 @@ enum Mouthful {
 msge := Mouthful.Butter
 switch msge { @TEST_ERROR(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
     case Batter: { }                                                        
-    case Batter: { }    @TEST_ERROR(ERROR_DUPLICATE_CASE)
+    case Batter: { }  @TEST_ERROR(ERROR_DUPLICATE_CASE)
     case Bitter: { }                                                        
     chicken             @TEST_ERROR(ERROR_BAD_TOKEN_IN_SWITCH)     
 }

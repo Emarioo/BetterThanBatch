@@ -2729,7 +2729,7 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
                 } else {
                     // TODO: ERR annotation not supported   
                 }
-                //  else if(Equal(token2, "@no-code")) {
+                //  else if(Equal(token2, "@no_code")) {
                 //     noCode = true;
                 //     info.next();
                 // }
@@ -3888,7 +3888,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
                     //     }
                     // }
                     continue;
-                } else if(Equal(token2, "@no-code")) {
+                } else if(Equal(token2, "@no_code")) {
                     noCode = true;
                     info.next();
                     continue;

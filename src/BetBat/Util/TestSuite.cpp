@@ -489,6 +489,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                     #else
                     if(errorCode < 0) { // negative numbers represents an error or crash on Unix
                     #endif
+                        log::out << "ACCESS VIOLATION\n";
                         failedTests++;
                         totalTests++;
                     }

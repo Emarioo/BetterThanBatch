@@ -426,8 +426,8 @@ int main(int argc, const char** argv){
             // opts.file_count = 20;
             // GenerateFuzzedFiles(opts,"main.btb");
             
-            // compileOptions.useDebugInformation = true;
-            // compileOptions.executeOutput = true;
+            compileOptions.useDebugInformation = true;
+            compileOptions.executeOutput = true;
             compileOptions.outputFile = EXE_FILE;
             CompileAll(&compileOptions);
         }

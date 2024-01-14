@@ -17,7 +17,9 @@ struct GenInfo : public PhaseContext {
         int size=0;
     };
     DynamicArray<AlignInfo> stackAlignment;
-    int virtualStackPointer=0;
+    int virtualStackPointer = 0;
+    int currentFrameOffset = 0;
+
     void addPop(int reg);
     // DON'T USE withoutInstruction UNLESS YOU ARE 100% CERTAIN ABOUT WHAT YOU ARE DOING.
     // It's mainly used for cast with ast_asm.
@@ -84,13 +86,6 @@ struct GenInfo : public PhaseContext {
     };
     DynamicArray<ResolveCall> callsToResolve;
     void addCallToResolve(int bcIndex, FuncImpl* funcImpl);
-
-    // TODO: avoid vector and unordered_map. resizing vector may do unwanted things with the map (like whole a copy).
-    // DynamicArray<FunctionScope*> functionScopes;
-    // int currentFunctionScope=0;
-    // FunctionScope* getFunctionScope(int index=-1);
-    int currentFrameOffset = 0;
-    // int functionStackMoment = 0;    
 
     #define VAR_INFOS 0
     #define VAR_MEMBERS 1

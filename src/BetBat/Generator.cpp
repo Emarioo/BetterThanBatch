@@ -4283,11 +4283,30 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
     ScopeInfo* body_scope = info.ast->getScope(body->scopeId);
     body_scope->bc_start = info.code->length();
     info.currentScopeDepth++;
+
+    info.currentScopeId = body->scopeId;
+
+    int lastOffset = info.currentFrameOffset;
+    int savedMoment = info.saveStackMoment();
+
     defer {
+        info.disableCodeGeneration = codeWasDisabled;
+
+        if (lastOffset != info.currentFrameOffset) {
+            _GLOG(log::out << "fix sp when exiting body\n";)
+            info.restoreStackMoment(savedMoment); // -8 to not include BC_REG_FP
+            // info.code->addDebugText("fix sp when exiting body\n");
+            // info.addIncrSp(info.currentFrameOffset);
+            // info.addIncrSp(lastOffset - info.currentFrameOffset);
+            // info.addInstruction({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
+            info.currentFrameOffset = lastOffset;
+        } else {
+            info.restoreStackMoment(savedMoment, false, true);
+        }
+
         info.currentScopeDepth--;
         body_scope->bc_end = info.code->length();
         info.currentScopeId = savedScope; 
-        info.disableCodeGeneration = codeWasDisabled;
         info.ignoreErrors = errorsWasIgnored;
         if(debugDump.dumpAsm || debugDump.dumpBytecode) {
             debugDump.description = body->tokenRange.tokenStream()->streamName + ":"+std::to_string(body->tokenRange.firstToken.line);
@@ -4297,11 +4316,6 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             info.code->debugDumps.add(debugDump);
         }
     };
-
-    info.currentScopeId = body->scopeId;
-
-    int lastOffset = info.currentFrameOffset;
-    int savedMoment = info.saveStackMoment();
 
     for(auto it : body->namespaces) {
         SignalDefault result = GenerateBody(info, it);
@@ -4315,10 +4329,28 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
         
         info.disableCodeGeneration = codeWasDisabled;
         info.ignoreErrors = errorsWasIgnored;
+        
+        int prev_stackAlignment_size = 0;
+        int prev_virtualStackPointer = 0;
+        int prev_currentFrameOffset = 0;
         if(statement->isNoCode()) {
             info.disableCodeGeneration = true;
             info.ignoreErrors = true;
+            
+            prev_stackAlignment_size = info.stackAlignment.size();
+            prev_virtualStackPointer = info.virtualStackPointer;
+            prev_currentFrameOffset = info.currentFrameOffset;
         }
+
+        defer {
+            if(statement->isNoCode()) {
+                Assert(prev_stackAlignment_size <= info.stackAlignment.size()); // We lost information, the no code remove stack elements which we can't get back. We would need to save the elements not just the size of stack alignment
+                info.stackAlignment.resize(prev_stackAlignment_size);
+                info.virtualStackPointer = prev_virtualStackPointer;
+                info.currentFrameOffset = prev_currentFrameOffset;
+            }
+        };
+
         if (statement->type == ASTStatement::ASSIGN) {
             _GLOG(SCOPE_LOG("ASSIGN"))
             
@@ -5608,21 +5640,17 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             Assert(("You forgot to implement statement type!",false));
         }
     }
-    // Assert(varsToRemove.size()==0);
-    // for(auto& name : varsToRemove){
-    //     info.ast->removeIdentifier(body->scopeId,name);
+    // if (lastOffset != info.currentFrameOffset) {
+    //     _GLOG(log::out << "fix sp when exiting body\n";)
+    //     info.restoreStackMoment(savedMoment); // -8 to not include BC_REG_FP
+    //     // info.code->addDebugText("fix sp when exiting body\n");
+    //     // info.addIncrSp(info.currentFrameOffset);
+    //     // info.addIncrSp(lastOffset - info.currentFrameOffset);
+    //     // info.addInstruction({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
+    //     info.currentFrameOffset = lastOffset;
+    // } else {
+    //     info.restoreStackMoment(savedMoment, false, true);
     // }
-    if (lastOffset != info.currentFrameOffset) {
-        _GLOG(log::out << "fix sp when exiting body\n";)
-        info.restoreStackMoment(savedMoment); // -8 to not include BC_REG_FP
-        // info.code->addDebugText("fix sp when exiting body\n");
-        // info.addIncrSp(info.currentFrameOffset);
-        // info.addIncrSp(lastOffset - info.currentFrameOffset);
-        // info.addInstruction({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
-        info.currentFrameOffset = lastOffset;
-    } else {
-        info.restoreStackMoment(savedMoment, false, true);
-    }
     return SignalDefault::SUCCESS;
 }
 SignalDefault GeneratePreload(GenInfo& info) {
@@ -5816,7 +5844,7 @@ SignalDefault GenerateData(GenInfo& info) {
     return SignalDefault::SUCCESS;
 }
 
-Bytecode *Generate(AST *ast, CompileInfo* compileInfo) {
+Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue);
 #ifdef LOG_ALLOC

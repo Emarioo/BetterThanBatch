@@ -34,19 +34,22 @@
 // StartMeasure/StopMeasure didn't work before, do they now? MAKE A TEST FOR IT
 
 // #import "Logger"
-#import "tests/fuzzer_gen/main"
+// #import "tests/fuzzer_gen/main"
 
-// arr: i32[5]{4,7,9,13,25}
-// for @ptr arr {
-//     log("value:",*it, " relative address:", it - arr.ptr)
-// }
+@TEST_CASE(special)
 
-     // IEEE 754 Floating Point. Assembler doesn't like 0x prefix.
-// std_print(cast_unsafe<f32>asm {
-//     // IEEE 754 Floating Point.
-//     mov eax, 4144CCCDh // Assembler doesn't like 0x prefix.
-//     push rax
-// });
-// std_print('\n');
-// #import "examples/random/test_randoms"
-// #import "examples/binary_viewer/main.btb"
+
+enum Mouthful {
+    Batter,
+    Bitter,
+    Butter,
+}
+
+// msge := Mouthful.Butter
+msge: Mouthful;
+switch msge { @TEST_ERROR(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+    case Batter: { }                                                        
+    case Batter: { }  @TEST_ERROR(ERROR_DUPLICATE_CASE)
+    case Bitter: { }                                                        
+    chicken             @TEST_ERROR(ERROR_BAD_TOKEN_IN_SWITCH)     
+}
