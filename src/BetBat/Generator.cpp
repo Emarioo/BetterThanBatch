@@ -6,9 +6,6 @@
 #define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD(L, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(L,info.ast->typeToString(LT)) ERR_LINE(R,info.ast->typeToString(RT)))
 #define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD(R, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE(R,"expects "+info.ast->typeToString(RT)))
 
-#undef WARN_HEAD3
-#define WARN_HEAD3(R, M) info.compileInfo->warnings++;engone::log::out << WARN_DEFAULT_R(R,"Gen. warning","W0000") << M
-
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION("Generator, ", CONTENT)
 
@@ -2248,7 +2245,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                 int size = range.queryFeedSize();
                 info.code->rawInlineAssembly._reserve(info.code->rawInlineAssembly.used + size);
                 int feed_size = range.feed(info.code->rawInlineAssembly.data() + info.code->rawInlineAssembly.size(), size);
-                Assert(feed_size == size);
+                // Assert(feed_size == size);
                 info.code->rawInlineAssembly.used+=size;
                 
                 // This doesn't output the tokens correctly. feed is built to accurately output the tokens
@@ -3070,7 +3067,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         if((AST::IsInteger(rtype) && info.ast->getTypeSize(rtype) != 8) || (AST::IsInteger(rtype) && info.ast->getTypeSize(rtype) != 8)) {
                             ERR_SECTION(
                                 ERR_HEAD(expression->tokenRange)
-                                ERR_MSG("When using equal operator with a pointer and integer they must be of the same size. The integer must be u64 or i64.")
+                                ERR_MSG("When using equality operators with a pointer and integer they must be of the same size. The integer must be u64 or i64.")
                                 ERR_LINE(expression->left->tokenRange, info.ast->typeToString(ltype));
                                 ERR_LINE(expression->right->tokenRange, info.ast->typeToString(rtype));
                             )

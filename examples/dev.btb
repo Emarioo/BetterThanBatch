@@ -33,5 +33,20 @@
 // HELLO! NEXT STEP, fix profiling of time
 // StartMeasure/StopMeasure didn't work before, do they now? MAKE A TEST FOR IT
 
-#import "examples/random/test_randoms"
+// #import "Logger"
+#import "tests/fuzzer_gen/main"
+
+// arr: i32[5]{4,7,9,13,25}
+// for @ptr arr {
+//     log("value:",*it, " relative address:", it - arr.ptr)
+// }
+
+     // IEEE 754 Floating Point. Assembler doesn't like 0x prefix.
+// std_print(cast_unsafe<f32>asm {
+//     // IEEE 754 Floating Point.
+//     mov eax, 4144CCCDh // Assembler doesn't like 0x prefix.
+//     push rax
+// });
+// std_print('\n');
+// #import "examples/random/test_randoms"
 // #import "examples/binary_viewer/main.btb"

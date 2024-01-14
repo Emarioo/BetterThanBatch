@@ -9,15 +9,16 @@ c := a - 9
 c = 2 * b  // reassign a value to a variable, note the sole '=' without the ':'
 ```
 
-**NOTE**: Semi-colon ';' is used to separate statements (like variable assignments/declarations) but is is optional right now. This may not be true in the future and you are encouraged to semi-colons. There may be unexpected ambiguity when parsing if you do not.
+**NOTE**: Semi-colon ';' is used to separate statements (like variable assignments/declarations) but it is optional. There is ambiguity in the syntax most commonly multiplcation and dereference. The semi-colon helps solve the ambiguity. Semi-colon may not be optional in the future.
 
 ## Arithmetic operations
 
 ```c++
-12 := 3 + 9    // addition
- 3 := 5 - 2    // subtraction
-18 := 9 * 2    // multiplication
+12 :=  3 + 9   // addition
+ 3 :=  5 - 2   // subtraction
+18 :=  9 * 2   // multiplication
 12 := 25 / 2   // integer division
+ 1 :=  6 % 5   // modulo
 ```
 
 ## Primitive types
@@ -41,21 +42,22 @@ The type of a variable can be specified between the colon and equal sign. Otherw
 ```c++
 num0: i32 = 23
 num1: f32 = 96.5
-final := num0 + num1
+final := num0 + num1 // type of final is infered from the expression
 
 chr: char = 'A'
 yes: bool = true
 ```
 
 ## Literals
-Literals refer to the plain and constant numbers, strings, and floats in the code.
-Most (or all) literals use the 32-bit variation when available
+Literals refer to the constant numbers, strings, and floats in the code.
+Most (or all) literals use the 32-bit variation when available.
 
 ```c++
-a := 9241    // signed integer literal
-a =  9241u   // unsigned integer literal
-a =  0x92_39    // integer literal but hexidecimal form
-a =  0b1_0110_0101    // integer literal but binary form
+a := 9241           // signed integer literal
+a =  9241s          // signed integer literal
+a =  9241u          // unsigned integer literal
+a =  0x92_39        // integer literal but hexidecimal form
+a =  0b1_0110_0101  // integer literal but binary form
 // underscore can be used to separate the bytes/bits in hexidecimal or binary forms making it easier grasp their value
 
 f := 3.144   // float literal
@@ -94,12 +96,14 @@ pointers with integers. The **difference** from C/C++ is that there is no automa
 ```c++
 arr: i32[10];
 
-*(arr.ptr + 9 * sizeof(i32)) = 92  // set the value of the last element
-// Note t
+*(arr.ptr + (arr.len-1) * sizeof(i32)) = 92  // set the value of the last element
+// Note that you would use the index operator for things like this.
+arr.ptr[arr.len-1] = 92
+
 
 ```
 
-**NOTE**: In the future, not having the automatic scaling may be a nuisance and thus could change. The reason we do not is because `void*` do not have a size and so you can't increment them. You could of course see void* as an edge case and use a 1-byte scaling. In C/C++ you are required to do quite a few casts which makes your code rather confusing. Sometimes you can feel as though you are fighting the pointer arithmetic and pointer conversions but in this language you are only fighting it one way.
+**NOTE**: In the future, not having the automatic scaling may be a nuisance and thus could change. The reason we do not is because `void*` do not have a size and so you can't increment them. You could of course see void* as an edge case and use a 1-byte scaling. In C/C++ you are required to do quite a few casts and it would be nice if you didn't need to. Sometimes you can feel as though you are fighting the pointer arithmetic and pointer conversions but in this language you are only fighting it one way.
 
 ## More operations
 Words: bitwise operator, comparison/equality operator, logical operator

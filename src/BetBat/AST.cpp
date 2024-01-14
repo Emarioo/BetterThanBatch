@@ -334,7 +334,7 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
         Token realName = TrimNamespace(Token(name), &ns);
         ScopeId nextScopeId = startScopeId;
         ContentOrder nextOrder = contentOrder;
-        WHILE_TRUE {
+        WHILE_TRUE_N(1000) {
             if(ns.str) {
                 Assert(false); // broken with content order
                 ScopeInfo* nscope = getScope(ns, nextScopeId);
@@ -1488,7 +1488,7 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVir
         // Find base type in parent scopes
         ScopeId nextScopeId = scopeId;
         // log::out << "find "<<typeString<<"\n";
-        WHILE_TRUE {
+        WHILE_TRUE_N(1000) {
             ScopeInfo* scope = getScope(nextScopeId);
             if(!scope) return {};
             // for(auto& pair : scope->nameTypeMap){

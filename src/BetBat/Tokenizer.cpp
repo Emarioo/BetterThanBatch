@@ -175,9 +175,10 @@ void TokenRange::print(bool skipSuffix) const {
     //     __debugbreak();
     char temp[256];
     int token_index = 0;
+    int char_index = 0;
     int written = 0;
     // BREAK(firstToken.length==163);
-    while((written = feed(temp, sizeof(temp), false, &token_index, skipSuffix))) {
+    while((written = feed(temp, sizeof(temp), false, &token_index, &char_index, skipSuffix))) {
         log::out.print(temp, written);
     }
     Assert(finishedFeed(&token_index));
@@ -260,7 +261,7 @@ std::string Token::getLine(){
     // }
     return out;
 }
-u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, int* token_index, bool skipSuffix) const {
+u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, int* token_index, int* char_index, bool skipSuffix) const {
     using namespace engone;
     // assert?
     if(!tokenStream() && endIndex - firstToken.tokenIndex > 1) return 0;
@@ -271,6 +272,9 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
     int* index = token_index;
     int trash = 0;
     if(!index) index = &trash;
+    int* charIndex = char_index;
+    int trash2 = 0;
+    if(!charIndex) charIndex = &trash2;
 
     for(int i=startIndex() + *index; i < endIndex; *index = ++i - startIndex()){
         const Token& tok = tokenStream() ? tokenStream()->get(i) : firstToken;
@@ -285,37 +289,38 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
         // okay because this all happens if you pass binary files
         // which you shouldn't. Even if it's binary, we should handle it properly.
         // -Emarioo, 2024-01-04
-        if(tok.length*3 > bufferSize) {
-            char tmp[20];
-            int len = snprintf(tmp,sizeof(20), "<t+%u>",tok.length);
-            ENSURE(len);
-            memcpy(outBuffer + written_temp, tmp, len);
-            written_temp += len;
+        // if(tok.length> bufferSize) {
+        //     char tmp[20];
+        //     int len = snprintf(tmp,sizeof(20), "<t+%u>",tok.length);
+        //     ENSURE(len);
+        //     memcpy(outBuffer + written_temp, tmp, len);
+        //     written_temp += len;
             
-            written = written_temp;
-            continue;
-        }
+        //     written = written_temp;
+        //     continue;
+        // }
 
         // ENSURE(2) // queryFeedSize makes the caller use a specific bufferSize.
         //  Ensuring and returning when we THINK we can't fit characters would skip some remaining tokens even though they would actually fit if we tried.
-        if(tok.flags&TOKEN_DOUBLE_QUOTED){
-            if(quoted_environment) {
+        if(*charIndex == 0) {
+            if(tok.flags&TOKEN_DOUBLE_QUOTED){
+                if(quoted_environment) {
+                    ENSURE(1)
+                    *(outBuffer + written_temp++) = '\\';
+                }
                 ENSURE(1)
-                *(outBuffer + written_temp++) = '\\';
+                *(outBuffer + written_temp++) = '"';
             }
-            ENSURE(1)
-            *(outBuffer + written_temp++) = '"';
-        }
-        else if(tok.flags&TOKEN_SINGLE_QUOTED){
-            if(quoted_environment) {
+            else if(tok.flags&TOKEN_SINGLE_QUOTED){
+                if(quoted_environment) {
+                    ENSURE(1)
+                    *(outBuffer + written_temp++) = '\\';
+                }
                 ENSURE(1)
-                *(outBuffer + written_temp++) = '\\';
+                *(outBuffer + written_temp++) = '\'';
             }
-            ENSURE(1)
-            *(outBuffer + written_temp++) = '\'';
         }
-        
-        for(int j=0;j<tok.length;j++){
+        for(int j=*charIndex;j<tok.length;j++){
             char chr = *(tok.str+j);
             // ENSURE(4) // 0x03 may occur which needs 4 bytes
             if(chr=='\n'){
@@ -374,7 +379,7 @@ u32 TokenRange::feed(char* outBuffer, u32 bufferSize, bool quoted_environment, i
                 *(outBuffer + written_temp++) = ' ';
             }
         }
-
+        *charIndex = 0;
         written = written_temp;
     }
     #undef ENSURE

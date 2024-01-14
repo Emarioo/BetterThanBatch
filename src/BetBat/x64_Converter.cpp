@@ -348,6 +348,9 @@ void Program_x64::add2(u16 word){
     head+=3;
 }
 void Program_x64::add4(u32 dword){
+    // wish we could assert to find bugs but immediates may be zero and won't work.
+    // we could make a nother functionn specifcially for immediates though.
+    // Assert(dword & 0xFF00'0000);
     if(head+4 >= _allocationSize ){
         bool yes = _reserve(_allocationSize*2 + 100);
         Assert(yes);
@@ -2913,6 +2916,8 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         }
                         #endif
                     } else {
+                        // nocheckin, rexw when converting u32 to f32/f64 otherwise the last bit will
+                        // be treated as a signed bit by CVTSI2SS
                         if(fsize == 1){
                             // prog->add(PREFIX_REXW);
                             // prog->add(OPCODE_AND_RM_IMM_SLASH_4);
@@ -2937,10 +2942,17 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                             // There may be an edge case though.
                             // We must use rexw with this operation since it assumes signed values
                             // but we have an unsigned so we must use 64-bit values.
+                            prog->add(PREFIX_REXW);
+                            prog->add(OPCODE_MOV_REG_RM);
+                            prog->addModRM(MODE_REG, freg, freg); // clear upper 32 bits
                             if(tsize==4)
-                                prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
                             else
-                                prog->add4(OPCODE_3_CVTSI2SD_REG_RM);
+                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                            // if(tsize==4)
+                            //     prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                            // else
+                            //     prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
                         }
 
                         if(toXmm) {
@@ -3020,10 +3032,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
                     if(fromXmm && toXmm) {
                         if(fsize == 4 && tsize == 8) {
-                            prog->add4(OPCODE_3_CVTSS2SD_REG_RM);
+                            prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
                             prog->addModRM(MODE_REG, treg, freg);
                         } else if(fsize == 8 && tsize == 4) {
-                            prog->add4(OPCODE_3_CVTSD2SS_REG_RM);
+                            prog->add3(OPCODE_3_CVTSD2SS_REG_RM);
                             prog->addModRM(MODE_REG, treg, freg);
                         } else {
                             // do nothing

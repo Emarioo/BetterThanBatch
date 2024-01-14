@@ -130,7 +130,7 @@ struct TokenRange {
     // token_index can be used to perform a feed operation on all the tokens using multiple feed function calls.
     // this is useful if you have a small buffer where you feed it a few tokens at a time.
     // Operation has finished if token_index == endIndex - startIndex(). Or just finishedFeed(token_index)
-    u32 feed(char* outBuffer, u32 bufferSize, bool quoted_environment = false, int* token_index = nullptr, bool skipSuffix = false) const;
+    u32 feed(char* outBuffer, u32 bufferSize, bool quoted_environment = false, int* token_index = nullptr, int* char_index = nullptr, bool skipSuffix = false) const;
     bool finishedFeed(int* token_index) const { return *token_index == endIndex - startIndex(); }
     u32 queryFeedSize(bool quoted_environment = false) const;
 };

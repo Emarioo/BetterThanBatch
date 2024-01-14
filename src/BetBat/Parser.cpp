@@ -1,11 +1,11 @@
 #include "BetBat/Parser.h"
 #include "BetBat/Compiler.h"
 
-#undef WARN_HEAD3
-#define WARN_HEAD3(T, M) info.compileInfo->compileOptions->compileStats.warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
+// #undef WARN_HEAD3
+// #define WARN_HEAD3(T, M) info.compileInfo->compileOptions->compileStats.warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
 
-#undef WARN_LINE2
-#define WARN_LINE2(I, M) PrintCode(I, info.tokens, M)
+// #undef WARN_LINE2
+// #define WARN_LINE2(I, M) PrintCode(I, info.tokens, M)
 
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION("Parser, ", CONTENT)
@@ -331,8 +331,10 @@ SignalAttempt ParseStruct(ParseInfo& info, ASTStruct*& astStruct,  bool attempt)
             hideAnnotation=true;
         // } else if(Equal(name,"@export")) {
         } else {
-            WARN_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                WARN_LINE2(info.at(),"unknown");
+            WARN_SECTION(
+                WARN_HEAD(name)
+                WARN_MSG("'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.")
+                WARN_LINE(info.get(info.at()),"unknown");
             )
         }
         name = info.get(info.at()+1);
@@ -688,8 +690,10 @@ SignalAttempt ParseNamespace(ParseInfo& info, ASTScope*& astNamespace, bool atte
         if(Equal(name,"@hide")){
             hideAnnotation=true;
         } else {
-            WARN_HEAD3(name, "'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.\n\n";
-                WARN_LINE2(info.at(),"unknown");
+            WARN_SECTION(
+                WARN_HEAD(name)
+                WARN_MSG("'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.")
+                WARN_LINE(info.get(info.at()),"unknown")
             )
         }
         name = info.get(info.at()+1);
@@ -1321,10 +1325,13 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
 
                 // if(Equal(token,"*") && (info.now().flags&TOKEN_SUFFIX_LINE_FEED)){
                 if(info.now().flags&TOKEN_SUFFIX_LINE_FEED){
-                    WARN_HEAD3(token, "'"<<token << "' is treated as a multiplication but perhaps you meant to do a dereference since the operation exists on a new line. "
-                        "Separate with a semi-colon for dereference or put the multiplication on the same line to silence this message.\n\n";
-                        WARN_LINE2(info.at(), "semi-colon is recommended after statements");
-                        WARN_LINE2(info.at()+1, "should this be left and right operation");
+                    ERR_SECTION(
+                        ERR_HEAD(token, ERROR_AMBIGUOUS_PARSING)
+                        ERR_MSG("Possible ambiguous meaning! '"<<token << "' is treated as a binary operation (operation with two expressions) but the operator was placed on a new line. "
+                        "Was your intention a unary operation where the left expressions is it's own statement and unrelated to the expression on the new line? Please put a semi-colon to solve this ambiguity.")
+                        ERR_LINE(info.get(info.at()), "semi-colon is recommended after statements");
+                        ERR_LINE(info.get(info.at()+1), "currently a binary operation");
+                        ERR_EXAMPLE(1, "5\n*ptr = 9\n5 * ptr = 9");
                     )
                 }
                 info.next();
@@ -1918,7 +1925,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                     if(token.tokenStream != stream) {
                         ERR_SECTION(
                             ERR_HEAD(token)
-                            ERR_MSG("Tokens in inlined assembly must come frome the same source file due to implementation restrictions. (it will be fixed later)")
+                            ERR_MSG("Tokens in inlined assembly must come frome the same source file due to implementation restrictions. (spam the developer to fix this. Oh wait, that's me)")
                             ERR_LINE(firstToken,"first file")
                             ERR_LINE(token,"second file")
                         )
@@ -2485,8 +2492,10 @@ SignalAttempt ParseFlow(ParseInfo& info, ASTStatement*& statement, bool attempt)
             } else if(Equal(token,"@pointer") || Equal(token,"@ptr")){
                 pointerAnnot=true;
             } else {
-                WARN_HEAD3(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for functions.\n\n";
-                    WARN_LINE2(info.at(),"unknown");
+                WARN_SECTION(
+                    WARN_HEAD(token)
+                    WARN_MSG("'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for functions.")
+                    WARN_LINE(info.get(info.at()),"unknown")
                 )
             }
             token = info.get(info.at()+1);
@@ -3922,11 +3931,11 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
 
         if(result==SignalAttempt::BAD_ATTEMPT){
             if(IsAnnotation(token)){
-                 {
-                    WARN_HEAD3(token, "'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for bodies.\n\n";
-                        WARN_LINE2(info.at()+1,"unknown");
-                    )
-                }
+                WARN_SECTION(
+                    WARN_HEAD(token)
+                    WARN_MSG("'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for bodies.")
+                    WARN_LINE(info.get(info.at()+1),"unknown")
+                )
                 info.next();
             } else {
                 Token& token = info.get(info.at()+1);

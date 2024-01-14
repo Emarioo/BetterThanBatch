@@ -45,9 +45,10 @@ struct TokenStream;
 // #define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
 #define ERR_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream, &base_column);
 #define ERR_EXAMPLE_TINY(STR) engone::log::out << engone::log::LIME << "Example: " << MESSAGE_COLOR << (StringBuilder{} + STR)<<"\n";
-#define ERR_EXAMPLE(LN, STR) engone::log::out << engone::log::LIME << "Example:"; PrintExample(LN, StringBuilder{} + STR);
+// #define ERR_EXAMPLE(LN, STR) engone::log::out << engone::log::LIME << "Example:"; PrintExample(LN, StringBuilder{} + STR);
+#define ERR_EXAMPLE(LN, STR) PrintExample(LN, StringBuilder{} + STR);
 
-#define WARN_HEAD(TR,...) PrintHead(WARN_HEADER_COLOR, TR, warn_type, &prevStream);
+#define WARN_HEAD(TR,...) warn_type+="W0"; PrintHead(WARN_HEADER_COLOR, TR, warn_type, &prevStream);
 
 #define WARN_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";
 #define WARN_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream, &base_column);
@@ -87,7 +88,12 @@ enum CompileError : u32 {
     ERROR_TYPE_MISMATCH = 1003, // generic type mismatch
     ERROR_INVALID_TYPE = 1004, // generic invalid type, usually void being used when it can't
     ERROR_TOO_MANY_VARIABLES = 1005, // usually with more assignment variables than return values resulting in some variables missing a type
+    
     ERROR_INCOMPLETE_FIELD = 1100, // usually when structs depend on each other recursively
+
+    ERROR_AMBIGUOUS_PARSING = 1200,
+
+    // ERROR_POSSIBLE_USER_MISTAKE = 1200,
 
     ERROR_DUPLICATE_CASE = 2101,
     ERROR_DUPLICATE_DEFAULT_CASE = 2102,

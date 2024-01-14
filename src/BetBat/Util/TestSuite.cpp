@@ -479,6 +479,19 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                 {
                     MEASURE_WHO("Test: StartProgram")
                     engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, PipeGetWrite(pipe));
+                    // TODO: Check whether program crashed but how do we do that on Windows and Unix?
+                    //  the program may not output a 0 as exit code? Maybe we force a zero in there when parsing?
+                    //  Another option is to check for error codes. Usually negative but the program may output negative numbers too.
+                    //  Specific negative numbers may work.
+                    //  By the way, if a program crashed, that should count as a failed test.
+                    #ifdef OS_WINDOWS
+                    if(errorCode == 0xc000'0005) { // access violation
+                    #else
+                    if(errorCode < 0) { // negative numbers represents an error or crash on Unix
+                    #endif
+                        failedTests++;
+                        totalTests++;
+                    }
                 }
                 // engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, file);
                 // engone::StartProgram((char*)hoho.data(),PROGRAM_WAIT,&errorCode, {}, {}, file);

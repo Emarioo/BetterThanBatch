@@ -8,6 +8,7 @@
 
 #include <unordered_map>
 
+#ifndef NO_PERF
 #ifdef LOG_MEASURES
 ScopeStat scopeStatArray[SCOPE_STAT_ARRAY]{0};
 std::unordered_map<const char*, u32> scopeStatMap;
@@ -182,4 +183,5 @@ void PrintMeasures(u32 filters, u32 limit){
     // Total time of all measurements is useless information
     log::out << log::LIME << " Total : "<<FormatTime(summedTime) <<log::GRAY<<" (threads may cause unexpected timings)\n";
 }
-#endif
+#endif // LOG_MEASURES
+#endif // NO_PERF

@@ -1,5 +1,5 @@
 # Structs
-Structs or structures are types that can contain multiple types. Each member in a struct has a type and a name. Internally, members also have a relative offset into the struct.
+Structs are types that can contain multiple types. Each member in a struct has a type and a name. Members also have a relative offset into the struct but that is handled by the compiler.
 
 This is how you declare and use a struct.
 ```c++
@@ -15,7 +15,7 @@ your_apples = Apples{ 5, 92.1 };
 log(your_apples.count, your_apples.size);
 ```
 
-Members of a struct cannot be of the struct's type as that would create a paradox. You can however use a pointer of it's own struct since pointers have a fixed size.
+The type of members cannot be that of their own struct as that would create a paradox. You can however use a pointer of it's own struct since pointers have a fixed size.
 ```c++
 struct Paradox {
     n: i32;
@@ -27,8 +27,7 @@ struct NotAParadox {
 }
 ```
 
-## Unions
-Currently, unions are only available inside structs.
+## Unions (not implemented)
 
 TO EXPLAIN:
 - First member of union can have a default value. The rest cannot not even if they are bigger (will be zero initialized though). Initializer affects the first member.

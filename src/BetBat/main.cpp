@@ -422,13 +422,13 @@ int main(int argc, const char** argv){
             #define EXE_FILE "dev.exe"
             
             // FuzzerOptions opts{};
-            // opts.node_iterations_per_file = 100;
+            // opts.node_iterations_per_file = 5000;
+            // opts.file_count = 20;
             // GenerateFuzzedFiles(opts,"main.btb");
-            // compileOptions.sourceFile = "oi.btb";
             
+            // compileOptions.useDebugInformation = true;
+            // compileOptions.executeOutput = true;
             compileOptions.outputFile = EXE_FILE;
-            compileOptions.useDebugInformation = true;
-            compileOptions.executeOutput = true;
             CompileAll(&compileOptions);
         }
         compilerExitCode = compileOptions.compileStats.errors;

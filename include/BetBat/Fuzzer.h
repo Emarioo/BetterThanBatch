@@ -49,10 +49,10 @@ struct FuzzedText {
 struct FuzzerNode {
     enum Type {
         EXPR,
+        DECL,
         BODY,
         IF,
         WHILE,
-        ASSIGN,
         // SWITCH,
         // FOR,
         // FUNC,
@@ -62,7 +62,11 @@ struct FuzzerNode {
     };
     FuzzerNode() = default;
     FuzzerNode(Type type) : type(type) {}
+
+    // void* operator new(std::size_t size) = delete;
+
     Type type;
+    int id = 0;
     DynamicArray<FuzzerNode*> nodes;
 };
 struct FuzzerImport {
@@ -74,13 +78,22 @@ struct FuzzerContext {
     // int paren_depth = 0;
     // DynamicArray<EnvType> env_stack;
     
-    // DynamicArray<std::string> identifiers{};
-    // std::unordered_map<std::string,bool> identifiers{};
+    struct Scope {
+        int used_ids;
+    };
+    DynamicArray<Scope> scopes;
+    DynamicArray<std::string> identifiers{};
+    std::unordered_map<std::string,bool> map_ids{};
     // std::unordered_map<std::string,bool> functions{};
     
     DynamicArray<FuzzerImport*> imports;
     int current_import_index = 0;
     ByteStream stream{nullptr};
+
+    FuzzerNode* createRandomNode(int depth = 0);
+    FuzzerNode* createNode(FuzzerNode::Type type);
+
+    DynamicArray<FuzzerNode*> allocatedNodes;
     
     // FuzzedText* output=nullptr;
     FuzzerOptions* options=nullptr;

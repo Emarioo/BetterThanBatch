@@ -43,14 +43,14 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
     memzero(ptr, sizeof ProfiledData);
 
     fileSize: u64;
-    file = FileOpen(&path, FILE_READ_ONLY, &fileSize);
+    file := FileOpen(&path, FILE_READ_ONLY, &fileSize);
     if(!file)
         return null;
     data: void* = Allocate(fileSize);
     FileRead(file, data, fileSize);
     FileClose(file);
 
-    offset = 0;
+    offset := 0;
     
     ptr.contextCount = *cast<u32*>data + offset;
     // return null;
@@ -70,7 +70,7 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
     ptr.rawSize = fileSize;
 // 9999999999999
 // 95679105467774
-    profiledData = ptr;
+    profiledData := ptr;
     // minx: u64 = 9999999999999;
     // for depth: 0..profiledData.contextCount {
     //     zoneC = profiledData.zoneCounts[nr];
@@ -83,11 +83,11 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
     //     }
     // }
     for depth: 0..profiledData.contextCount {
-        zoneC = profiledData.zoneCounts[nr];
-        zones = cast<Zone*>profiledData.rawData + profiledData.zoneOffsets[nr];
+        zoneC := profiledData.zoneCounts[nr];
+        zones := cast<Zone*>profiledData.rawData + profiledData.zoneOffsets[nr];
 
         for 0..zoneC {
-            zone = &zones[nr];
+            zone := &zones[nr];
             log(cast<i64>zone.start, cast<i64>zone.end)
         }
     }
@@ -108,15 +108,15 @@ main();
 // global offsetY: i32 = 0;
 fn main(){
     // log(tempBuilder.len, tempBuilder.max);
-    profiledData = ReadPerfData("profiled.dat");
+    profiledData := ReadPerfData("profiled.dat");
     if !profiledData {
         log("Cannot find data");
         return;
     }
     // return;
-    winw = 800;
-    winh = 600;
-    window = InitGLFWAndCreateWindow(winw, winh);
+    winw := 800;
+    winh := 600;
+    window := InitGLFWAndCreateWindow(winw, winh);
 
     // vshader = "
     //     #version 330 core
@@ -141,7 +141,7 @@ fn main(){
     // glUseProgram(shaderProgram);
     // GLCHECK
 
-    module = CreateUIModule();
+    module := CreateUIModule();
 
     // box = module.makeBox(3);
     // box.x = 20;
@@ -150,20 +150,20 @@ fn main(){
     // box.h = 200;
     // box.color = UIColor{1,1,1,1};
 
-    lastTime = rdtsc();
+    lastTime := rdtsc();
     invClockSpeed: f32 = 1.0/GetClockSpeed();
 
     // avg: f32;
-    str = "Hello";
+    str := "Hello";
     // frames = 0
     while !glfwWindowShouldClose(window) {
         // if frames > 200
         //     break;
         // frames++
-        now = rdtsc();
+        now := rdtsc();
         delta: f32 = cast<f32>(now - lastTime) * invClockSpeed;
         // delta: f32 = cast<f32>(now - lastTime) / clockSpeed;
-        lastTime = now;
+        lastTime := now;
         
         glfwGetWindowSize(window, &winw, &winh);
         glViewport(0,0,winw,winh);
@@ -203,15 +203,15 @@ fn main(){
     glfwTerminate();
 }
 fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
-    scale = 10*800*1.0/GetClockSpeed();
+    scale := 10*800*1.0/GetClockSpeed();
 
-    strOffset = 0;
+    strOffset := 0;
     // tempBuilder.clear();
     // log("##############")
     minx: u64 = -1;
     for depth: 0..profiledData.contextCount {
-        zoneC = profiledData.zoneCounts[nr];
-        zones = cast<Zone*>profiledData.rawData + profiledData.zoneOffsets[nr];
+        zoneC := profiledData.zoneCounts[nr];
+        zones := cast<Zone*>profiledData.rawData + profiledData.zoneOffsets[nr];
         // cmp = zones[0].start < minx;
         // log("start ", zones[0].start," < ", minx, " ", cmp );
         if zones[0].start < minx || minx == -1 {
@@ -220,13 +220,13 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
         }
     }
     for depth: 0..profiledData.contextCount {
-        zoneC = profiledData.zoneCounts[nr];
-        zones = cast<Zone*>profiledData.rawData + profiledData.zoneOffsets[nr];
+        zoneC := profiledData.zoneCounts[nr];
+        zones := cast<Zone*>profiledData.rawData + profiledData.zoneOffsets[nr];
 
         for 0..zoneC { 
-            zone = &zones[nr];
+            zone := &zones[nr];
 
-            box = module.makeBox();
+            box := module.makeBox();
             box.x = (zone.start-minx) * scale;
             box.w = (zone.end - zone.start) * scale;
             box.y = 10 + 60 * depth;
@@ -240,17 +240,17 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
             timeText.h = box.h*0.8;
             timeText.y = box.y + box.h/2 - timeText.h/2;
 
-            time = 1000.0 * cast<f32>(zone.end - zone.start) / GetClockSpeed();
+            time := 1000.0 * cast<f32>(zone.end - zone.start) / GetClockSpeed();
             len: u32;
             timeText.string = tempStringData + strOffset;
             // log("data:",(cast<i64>tempStringData)," off:",cast<i64>strOffset," time:",time);
-            len = swrite_unsafe(tempStringData + strOffset, time);
+            len := swrite_unsafe(tempStringData + strOffset, time);
             // if len > 8
             //     len = 8;
             strOffset += len;
             timeText.length = len;
 
-            textwidth = module.getWidthOfText(timeText);
+            textwidth := module.getWidthOfText(timeText);
 
             timeText.x += box.w/2 - textwidth/2;
 

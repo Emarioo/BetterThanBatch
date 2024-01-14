@@ -1,5 +1,9 @@
 #pragma once
 
+// #include "tracy/Tracy.hpp"
+
+#define NO_PERF
+
 #ifndef NO_PERF
 #include <unordered_map>
 
@@ -176,11 +180,29 @@ void MeasureCleanup();
 #define MeasureGetMemoryUsage(...) 0
 #define MeasureCleanup(...)
 #endif // LOG_MEASURES
+#else // NO_PERF
+#define MeasureInit(...)
+#define PrintMeasures(...)
+#define MeasureGetMemoryUsage(...) 0
+#define MeasureCleanup(...)
 #endif // NO_PERF
 
 #ifndef MEASURE
+
+#ifdef TRACY_ENABLE
+#define MEASURE ZoneScoped;
+#else
 #define MEASURE
 #endif
-#ifndef MEASUREN
-#define MEASUREN(CSTR)
+
+#endif
+
+#ifndef MEASURE_WHO
+
+#ifdef TRACY_ENABLE
+#define MEASURE_WHO(CSTR) ZoneScoped;
+#else
+#define MEASURE_WHO(CSTR)
+#endif
+
 #endif

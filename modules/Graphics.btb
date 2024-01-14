@@ -158,6 +158,7 @@ fn @import glGetError() -> u32;
 
 fn @import Sleep(ms: i32); // windows sleep, remove this later
 
+global glErrCode: bool = false;
 #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",cast<i64>#line,cast<i64>glErrCode,":",glewGetErrorString(glErrCode)); }
 #ifndef GLCHECK
 #macro GLCHECK
@@ -165,7 +166,7 @@ fn @import Sleep(ms: i32); // windows sleep, remove this later
 
 // returns GLFWwindow*
 fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
-    yes = glfwInit();
+    yes := glfwInit();
     if !yes {
         log("glfwInit failed");
         return null;
@@ -173,8 +174,8 @@ fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    title = @cstr "Yes sir"
-    window = glfwCreateWindow(width, height, title, null, null);
+    title := @cstr "Yes sir"
+    window := glfwCreateWindow(width, height, title, null, null);
     if !window {
         log("window failed");
         glfwTerminate();
@@ -183,9 +184,9 @@ fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
 
     glfwMakeContextCurrent(window);
 
-    err = glewInit();
+    err := glewInit();
     if err {
-        msg = glewGetErrorString(err);
+        msg := glewGetErrorString(err);
         log("glew failed: ",msg)
         glfwTerminate();
         return null;
@@ -203,7 +204,7 @@ fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
 }
 // returns program id which can be passes to glUseProgram
 fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    vertexShader := glCreateShader(GL_VERTEX_SHADER);
     GLCHECK
     glShaderSource(vertexShader, 1, &vshader.ptr, null);
     GLCHECK
@@ -218,7 +219,7 @@ fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
         log("Vertex shader error: ",infoLog);
     }
 
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    fragmentShader := glCreateShader(GL_FRAGMENT_SHADER);
     GLCHECK
     glShaderSource(fragmentShader, 1, &fshader.ptr, null);
     GLCHECK
@@ -233,7 +234,7 @@ fn CreateShaderProgram(vshader: char[], fshader: char[]) -> u32 {
         log("Fragment shader error: ",infoLog);
     }
 
-    shaderProgram = glCreateProgram();
+    shaderProgram := glCreateProgram();
     GLCHECK
     glAttachShader(shaderProgram, vertexShader);
     GLCHECK

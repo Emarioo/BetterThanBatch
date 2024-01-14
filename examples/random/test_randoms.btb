@@ -4,21 +4,27 @@
 
 gen := create_random_generator();
 
-// log(gen.rand32())
-// log(gen.rand64())
+iterations: u64 = 10000;
+bits32: u32[32];
+bits64: u32[64];
+for 0..iterations {
+    ran32 := gen.rand32();   
+    ran64 := gen.rand64();
 
-// struct u128 {
-//     a: u64;
-//     b: u64;
-    
-// }
-
-sum32: u64 = 0;
-// sum64 := 0;
-for 0..10000 {
-    sum32 += gen.rand32();   
+    for 0..32 {
+        bits32.ptr[nr] += ran32 & 1u;
+        ran32 = ran32 >> 1;
+    }
+    for 0..64 {
+        bits64.ptr[nr] += ran64 & cast<u64>1u;
+        ran64 = ran64 >> 1;
+    }
 }
-{ @dump_bc @dump_asm
-avg := cast<f64>sum32 / cast<f64>0xFFFF_FFFF;
+log("rand32: bit frequencies:")
+for 0..32 {
+    log("Bit",nr,bits32.ptr[nr])
 }
-// log("Avg 32:", avg)
+log("rand64: bit frequencies:")
+for 0..64 {
+    log("Bit",nr,bits64.ptr[nr])
+}

@@ -111,10 +111,11 @@ test 23.0; cast<f32>cast<u8>23;
 test 23.0; cast<f32>cast<u16>23;
 test 23.0; cast<f32>cast<u32>23;
 test 23.0; cast<f32>cast<u64>23;
-test 23.0d; cast<f64>cast<u8>23;
-test 23.0d; cast<f64>cast<u16>23;
-test 23.0d; cast<f64>cast<u32>23;
-test 23.0d; cast<f64>cast<u64>23;
+
+test 1; cast<f64>cast<u8> 0x8100_0001 > 0.0;
+test 1; cast<f64>cast<u16>0x8100_ > 0.0;
+test 1; cast<f64>cast<u32>0x8100_0000 > 0.0;
+test 1; cast<f64>cast<u64>0x8100_0000_0000_0011 > 0.0;
 
 // these conversions, divisions don't work properly
 // sample0 = 47627486

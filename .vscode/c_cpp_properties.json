@@ -6,7 +6,8 @@
                 "${workspaceFolder}/include/**",
                 "${workspaceFolder}/libs/glew-2.1.0/include/**",
                 "${workspaceFolder}/libs/glfw-3.3.8/include/**",
-                "${workspaceFolder}/libs/stb/include/**"
+                "${workspaceFolder}/libs/stb/include/**",
+                "${workspaceFolder}/tracy/public/**"
             ],
             "defines": [
                 "_DEBUG",

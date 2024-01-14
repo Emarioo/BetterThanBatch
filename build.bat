@@ -84,6 +84,10 @@ for /r %%i in (*.cpp) do (
 )
 echo #include ^"../src/Native/NativeLayer.cpp^" >> !srcfile!
 
+@REM echo #include ^"TracyClient.cpp^" >> !srcfile!
+SET MSVC_DEFINITIONS=!MSVC_DEFINITIONS! /DTRACY_ENABLE
+SET MSVC_INCLUDE_DIRS=!MSVC_INCLUDE_DIRS! /Itracy/public
+
 @REM #####################
 @REM      Compiling
 @REM #####################
@@ -99,7 +103,10 @@ if !USE_MSVC!==1 (
     @REM rc /nologo /fo bin\resources.res res\resources.rc
     @REM SET MSVC_LINK_OPTIONS=!MSVC_LINK_OPTIONS! bin\resources.res
 
-    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! shell32.lib /OUT:!output!
+    cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! tracy\public\TracyClient.cpp /Fobin/tracy.obj
+    SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /FI pch.h
+
+    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! bin\tracy.obj shell32.lib /OUT:!output!
     SET compileSuccess=!errorlevel!
     @REM cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! /Ycpch.h src/pch.cpp
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Yupch.h /Fobin/all.obj /link !MSVC_LINK_OPTIONS! pch.obj shell32.lib /OUT:bin/program.exe

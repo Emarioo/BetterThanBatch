@@ -15,6 +15,7 @@
 // #include "glm/gtc/matrix_transform.hpp"
 
 #include <time.h>
+
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -23,3 +24,9 @@
 // #include "GLFW/glfw3.h"
 
 #include "Engone/Typedefs.h"
+
+// #define TRACY_ENABLE
+
+#ifdef TRACY_ENABLE
+#include "tracy/Tracy.hpp"
+#endif

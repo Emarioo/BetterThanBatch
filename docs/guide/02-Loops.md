@@ -9,22 +9,38 @@ The *for* loop is used to iterate through an array or range of values
 // Logger provides a macro/function called 'log' which can print numbers, strings, and floats among other types.
 
 TODO: Explain it, nr
-TODO: Explain that it, nr used the same memory with ranges but not with slices
+TODO: Explain that it, nr uses the same memory with ranges but not with slices
 
 for 0..5
     log(it);
 
-for i: 0..5
+for i: 0..5 {
     log(i);
+}
 
 arr: i32[10] { 5, 9, 2, 4, 23, 1982, 18};
 
-for arr
+for arr {
     log(it);
+}
     
 for num: arr
     log(num);
     
+```
+For loops have two annotations which are `@pointer` and `@reverse`. They can be abbreviated to `@ptr` and `@rev` (annotations are explained in another chapter).
+
+```c++
+// loop in reverse printing 4, 3, 2, 1, 0
+for @rev 0..5
+    log(it)
+```
+`@pointer` is only allowed with slices. Instead of `it` being the actual type, it is a pointer to the value in the slice.
+```c++
+arr: i32[5]{4,7,9,13,25}
+for @ptr arr {
+    log("value:",*it, " relative address:", it - arr.ptr)
+}
 ```
 
 ## While

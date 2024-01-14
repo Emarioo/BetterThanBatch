@@ -63,15 +63,16 @@ struct ByteStream {
             *out_ptr = nullptr;
         
         Allocation* allocation = nullptr;
-        if(allocations.size() > 0)
-            allocation = &allocations.last();
+        if(allocations.size() > lastAllocation)
+            allocation = &allocations[lastAllocation];
         
         if(!allocation || allocation->writtenBytes + size > allocation->max) {
             bool suc = allocations.add({});
             if(!suc)
                 return false;
+            lastAllocation = allocations.size()-1;
             
-            allocation = &allocations.last();
+            allocation = &allocations[lastAllocation];
             allocation->max = size*2 + writtenBytes * 1.5; // MEMORY GROWTH
             ENSURE_ALLOCATOR
             allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
@@ -136,15 +137,16 @@ struct ByteStream {
             *out_ptr = nullptr;
         
         Allocation* allocation = nullptr;
-        if(allocations.size() > 0)
-            allocation = &allocations.last();
+        if(allocations.size() > lastAllocation)
+            allocation = &allocations[lastAllocation];
         
         if(!allocation || allocation->writtenBytes + max_size > allocation->max) {
             bool suc = allocations.add({});
             if(!suc)
                 return false;
+            lastAllocation = allocations.size()-1;
             
-            allocation = &allocations.last();
+            allocation = &allocations[lastAllocation];
             allocation->max = max_size*2 + writtenBytes * 1.5; // MEMORY GROWTH
             ENSURE_ALLOCATOR
             allocation->ptr = (u8*)m_allocator->allocate(allocation->max);
@@ -165,8 +167,8 @@ struct ByteStream {
         Assert(unknown_state);
         
         Allocation* allocation = nullptr;
-        if(allocations.size() > 0)
-            allocation = &allocations.last();
+        if(allocations.size() > lastAllocation)
+            allocation = &allocations[lastAllocation];
         Assert(allocation);
         Assert(allocation->writtenBytes + size <= allocation->max);
         
@@ -208,7 +210,13 @@ struct ByteStream {
         return size == 0;
     }
     u32 getWriteHead() const { return writtenBytes; }
-    void resetHead() { writtenBytes = 0; }
+    void resetHead() {
+        writtenBytes = 0;
+        lastAllocation = 0;
+        for(int i=0;i<allocations.size();i++) {
+            allocations[i].writtenBytes = 0;
+        }
+    }
     bool steal_from(ByteStream* stream) {
         Assert(stream);
         Assert(m_allocator == stream->m_allocator);
@@ -219,6 +227,7 @@ struct ByteStream {
             allocations.add(all);
             writtenBytes += all.writtenBytes;
         }
+        lastAllocation = allocations.size()-1;
         stream->allocations.cleanup();
         stream->writtenBytes = 0;
         return true;
@@ -254,10 +263,11 @@ struct ByteStream {
         allocations.last().ptr = ptr;
         allocations.last().max = max;
         allocations.last().writtenBytes = writtenBytes;
+        lastAllocation = allocations.size()-1;
         
-         if(out_ptr)
+        if(out_ptr)
             *out_size = writtenBytes;
-         if(out_size)
+        if(out_size)
             *out_ptr = ptr;
         return true;
     }
@@ -466,6 +476,7 @@ private:
     };
     DynamicArray<Allocation> allocations;
     int writtenBytes = 0; // next byte to write to
+    int lastAllocation = 0; // allocation that was last written to or should be written to
     
     bool unknown_state = false;
 };

@@ -5,3 +5,4 @@ logs
 *.ilk
 *.obj
 *.pdb
+tracy

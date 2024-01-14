@@ -55,6 +55,8 @@ CompileError ToCompileError(const char* str){
     CASE(ERROR_TOO_MANY_VARIABLES)
 
     CASE(ERROR_INCOMPLETE_FIELD)
+
+    CASE(ERROR_AMBIGUOUS_PARSING)
     
     CASE(ERROR_DUPLICATE_CASE)
     CASE(ERROR_DUPLICATE_DEFAULT_CASE)
@@ -71,7 +73,6 @@ CompileError ToCompileError(const char* str){
 const char* ToCompileErrorString(temp_compile_error stuff) {
     // if(stuff.err == ERROR_NONE)
     //     return "";
-    
     if(!stuff.shortVersion) {
         #define CASE(ERR) if(stuff.err == ERR) return #ERR;
         CASE(ERROR_NONE)
@@ -84,6 +85,8 @@ const char* ToCompileErrorString(temp_compile_error stuff) {
         CASE(ERROR_TOO_MANY_VARIABLES)
 
         CASE(ERROR_INCOMPLETE_FIELD)
+
+        CASE(ERROR_AMBIGUOUS_PARSING)
     
         CASE(ERROR_DUPLICATE_CASE)
         CASE(ERROR_DUPLICATE_DEFAULT_CASE)
@@ -286,8 +289,14 @@ void PrintCode(int index, TokenStream* stream, const char* message){
 void PrintExample(int line, const StringBuilder& stringBuilder){
     using namespace engone;
 
+    const char* str_example = "Example ";
+    int str_example_len = strlen(str_example);
+
     const log::Color codeColor = log::NO_COLOR;
     const log::Color markColor = log::CYAN;
+
+    const char* const linestr = " | ";
+    static const int linestrlen = strlen(linestr);
 
     int lastLine = line;
     for(int i=0;i<stringBuilder.size();i++){
@@ -298,22 +307,29 @@ void PrintExample(int line, const StringBuilder& stringBuilder){
     }
     int lineDigits = lastLine>0 ? ((int)log10(lastLine)+1) : 1;
     
+    log::out << log::LIME << str_example << log::NO_COLOR;
+
     int currentLine = line;
     for(int i=0;i<stringBuilder.size();i++){
         char chr = stringBuilder.data()[i];
         if(chr == '\n' || i==0) {
+            if(chr=='\n')
+                log::out << '\n';
+            if(i!=0) {
+                for(int j=0;j<str_example_len;j++)
+                    log::out << " ";
+            }
             int numlen = currentLine>0 ? ((int)log10(currentLine)+1) : 1;
             for(int j=0;j<lineDigits-numlen;j++)
                 log::out << " ";
-            const char* const linestr = " | ";
-            static const int linestrlen = strlen(linestr);
-            log::out << codeColor << currentLine<<linestr;
-
             if(chr=='\n') {
                 currentLine++;
             }
+            log::out << codeColor << currentLine<<linestr;
+
         }
-        log::out << chr;
+        if(chr != '\n')
+            log::out << chr;
     }
     log::out << "\n";
 }

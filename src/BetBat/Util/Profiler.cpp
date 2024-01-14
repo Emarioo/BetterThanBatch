@@ -35,7 +35,7 @@ void ProfilerSession::initContextForThread() {
     // log::out << "Good day "<<(res-1)<<"\n";
     ProfilerContext* context = &contexts[res-1];
     new(context)ProfilerContext();
-    context->ensure(4096*4);
+    context->ensure(0x40000);
     bool yes = Thread::SetTLSValue(global_profilerSession.contextTLS, context);
     Assert(yes);
 }
@@ -77,7 +77,7 @@ void ProfilerContext::insertNewZone(ProfilerZone* zone) {
 }
 void ProfilerContext::cleanup() {
     if(reallocations)
-        engone::log::out << engone::log::RED << "Profiler did "<<reallocations<<"!\n";
+        engone::log::out << engone::log::RED << "Profiler did "<<reallocations<<" reallocations!\n";
     // destructors shouldn't have to be called on the zones
     engone::Free(zones, sizeof(ProfilerZone) * max);
     max = 0;
