@@ -192,31 +192,31 @@ int ParseInfo::at(){
 }
 // Concatenates current token with the next tokens not seperated by space, linefeed or such
 // operators and special characters are seen as normal letters
-Token CombineTokens(ParseInfo& info){
-    using namespace engone;
+// Token CombineTokens(ParseInfo& info){
+//     using namespace engone;
         
-    Token outToken{};
-    while(!info.end()) {
-        Token token = info.get(info.at()+1);
-        // TODO: stop at ( # ) and such
-        if(token==";"&& !(token.flags&TOKEN_MASK_QUOTED)){
-            break;   
-        }
-        if((token.flags&TOKEN_MASK_QUOTED) && outToken.str){
-            break;
-        }
-        token = info.next();
-        if(!outToken.str)
-            outToken.str = token.str;
-        outToken.length += token.length;
-        outToken.flags = token.flags;
-        if(token.flags&TOKEN_MASK_QUOTED)
-            break;
-        if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED))
-            break;
-    }
-    return outToken;
-}
+//     Token outToken{};
+//     while(!info.end()) {
+//         Token token = info.get(info.at()+1);
+//         // TODO: stop at ( # ) and such
+//         if(token==";"&& !(token.flags&TOKEN_MASK_QUOTED)){
+//             break;   
+//         }
+//         if((token.flags&TOKEN_MASK_QUOTED) && outToken.str){
+//             break;
+//         }
+//         token = info.next();
+//         if(!outToken.str)
+//             outToken.str = token.str;
+//         outToken.length += token.length;
+//         outToken.flags = token.flags;
+//         if(token.flags&TOKEN_MASK_QUOTED)
+//             break;
+//         if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED))
+//             break;
+//     }
+//     return outToken;
+// }
 SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
     using namespace engone;
     // MEASURE;

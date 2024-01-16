@@ -10,6 +10,7 @@
 // #include "BetBat/glfwtest.h"
 
 #include "BetBat/Fuzzer.h"
+#include "BetBat/Lexer.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -63,23 +64,16 @@ bool streq(const char* a, const char* b) {
 // #include "unistd.h"
 int main(int argc, const char** argv){
     using namespace engone;
-
-    
-
     log::out.enableReport(false);
     // MeasureInit();
     ProfilerInitialize();
     
-    // FuzzerOptions opts{};
-    // opts.requested_size = 10000;
-    // GenerateFuzzedFile(opts,"oi.btb");
-    
-    // auto tp = StartMeasure();
-    // Sleep(1.292);
-    // double t = StopMeasure(tp);
-    // log::out << "time: " <<t << "\n";
+    lexer::Lexer lexer{};
+    u16 fileid = lexer.tokenize("examples/dev.btb");
 
-    // return 0;
+    lexer.print(fileid);
+
+    return 0;
     
     // log::out << p.text << "\n";
     // for(int i=0;i<10000;i++) {
