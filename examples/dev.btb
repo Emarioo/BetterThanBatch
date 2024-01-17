@@ -5,6 +5,7 @@
 tp := StartMeasure()
 NativeSleep(0.383);
 t := StopMeasure(tp)
-log("Time: ",t)
+log("Time: ", t)
 
 // #import "examples/random/test_randoms.btb"
+

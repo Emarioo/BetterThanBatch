@@ -69,9 +69,18 @@ int main(int argc, const char** argv){
     ProfilerInitialize();
     
     lexer::Lexer lexer{};
-    u16 fileid = lexer.tokenize("examples/dev.btb");
+    u32 import_id = lexer.tokenize("examples/dev.btb");
 
-    lexer.print(fileid);
+    lexer.print(import_id);
+    
+    log::out << "-----------------\n";
+    
+    Preprocessor preprocessor{};
+    preprocessor.init(&lexer);
+    
+    u32 preproc_import_id = preprocessor.process(import_id);
+
+    lexer.print(preproc_import_id);
 
     return 0;
     

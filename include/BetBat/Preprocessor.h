@@ -1,6 +1,8 @@
 
 #pragma once
 
+#include "BetBat/Lexer.h"
+
 #include "BetBat/Tokenizer.h"
 #include "BetBat/PhaseContext.h"
 #include "Engone/Util/BucketArray.h"
@@ -164,3 +166,57 @@ struct PreprocInfo : public PhaseContext {
 };
 TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* tokens);
 // void PreprocessImports(CompileInfo* compileInfo, TokenStream* tokens); deprecated
+
+
+
+struct Preprocessor {
+    
+    void init(lexer::Lexer* lexer) { this->lexer = lexer; }
+    
+    // returns preprocessed import_id (unsigned 32-bit integer where 0 means failure)
+    u32 process(u32 import_id);
+    
+private:
+    lexer::Lexer* lexer=nullptr;
+    
+    struct Import {
+        bool processed_directives = false;
+        bool evaluated_macros = false;
+        DynamicArray<u32> import_dependencies;
+        std::unordered_map<std::string, RootMacro*> rootMacros;
+    };
+    
+    BucketArray<Import> imports{256};
+    engone::Mutex lock_imports;
+    
+    friend class PreprocContext;
+};
+struct PreprocContext {
+    lexer::Lexer* lexer=nullptr;
+    
+    u32 new_import_id=0;
+    u32 import_id=0;
+    Preprocessor::Import* current_import = nullptr;
+    u32 head=0;
+    
+    // The token that will be returned is the one at index = head + off
+    lexer::Token gettok(int off = 0) {
+        return lexer->getTokenFromImport(import_id, head + off);
+    }
+    void advance(int n = 1) {
+        Assert(n > 0);
+        head += n;
+    }
+    
+    void parseAll();
+    
+    // NOTE: We assume that the hashtag and directive identifiers were parsed.
+    //   Next is the content
+    void parseMacroDefinition();
+    void parseUndef();
+    void parseLink();
+    void parseImport();
+    void parseInclude();
+    void parseIf();
+    void parsePredefinedMacros();
+};

@@ -160,13 +160,15 @@ struct BucketArray {
 		//engone::log::out << "FA:Add " << valueIndex << "\n";
 		return bucketIndex * m_valuesPerBucket + valueIndex;
 	}
-	// @return Index where element is. -1 if something failed.
-    // @param value A pointer to the value of the new element. Note that a memcpy occurs. Value can be nullptr for zero initialized data.
-    // @param outElement A pointer to the newly added element. Optional.
-    bool requestSpot(int requestedIndex, T* value, T** outElement = nullptr) {
+    /*
+	@return Pointer to the newly added element. nullptr if spot wasn't available.
+    @param requestedIndex The index where you want your new element to be. Note that the index isn't available if there already is an element there.
+    @param value A pointer to the value of the new element. Note that a memcpy occurs. Value can be nullptr for zero initialized data.
+    */
+    T* requestSpot(int requestedIndex, T* value) {
 		if (m_valuesPerBucket == 0) {
 			engone::log::out << engone::log::RED << __FUNCTION__  << " : valuesPerBucket is 0\n";
-			return false;
+			return nullptr;
 		}
 
 		u32 bucketIndex = requestedIndex / m_valuesPerBucket;
@@ -178,7 +180,7 @@ struct BucketArray {
 			if (!newBuckets) {
 				//engone::log::out >> engone::log::Disable;
 				engone::log::out << engone::log::RED << __FUNCTION__ << " : failed resize buckets\n";
-				return false;
+				return nullptr;
 			}
             m_buckets = newBuckets;
             
@@ -194,7 +196,7 @@ struct BucketArray {
             bucket.m_data = (u8*)engone::Allocate(newSize);
 			if (!bucket.m_data) {
 				engone::log::out << engone::log::RED << __FUNCTION__<<" : failed resize bucket\n";
-				return false;
+				return nullptr;
 			}
             bucket.m_max = newSize;
 
@@ -204,7 +206,7 @@ struct BucketArray {
 
 		bool yes = bucket.getBool(valueIndex);
 		if (yes)
-			return false;
+			return nullptr; // spot is not empty, element is there, request failed
 
 		bucket.m_amountOfUsedSpots++;
 		m_valueCount++;
@@ -217,10 +219,8 @@ struct BucketArray {
 			new(ptr)T();
 			// memset(ptr, 0, sizeof(T));
 		//engone::log::out >> engone::log::Disable;
-		if (outElement)
-			*outElement = ptr;
 		//engone::log::out << "FA:Add " << valueIndex << "\n";
-		return true;
+		return ptr;
 	}
     T* get(u32 index) {
 		u32 bucketIndex = index / m_valuesPerBucket;

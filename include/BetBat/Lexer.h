@@ -16,17 +16,22 @@
 namespace lexer {
 
     enum TokenFlags : u16 {
-        TOKEN_FLAG_NEWLINE          = 1,
-        TOKEN_FLAG_SPACE            = 2,
-        TOKEN_FLAG_SINGLE_QUOTED    = 4,
-        TOKEN_FLAG_DOUBLE_QUOTED    = 8,
-        TOKEN_FLAG_HAS_DATA         = 16,
+        TOKEN_FLAG_NEWLINE          = 0x1,
+        TOKEN_FLAG_SPACE            = 0x2,
+        TOKEN_FLAG_SINGLE_QUOTED    = 0x4,
+        TOKEN_FLAG_DOUBLE_QUOTED    = 0x8,
+        TOKEN_FLAG_HAS_DATA         = 0x10,
+        TOKEN_FLAG_NULL_TERMINATED  = 0x20,
+        
+        // for convenience
+        TOKEN_FLAG_ANY_SUFFIX       = TOKEN_FLAG_NEWLINE|TOKEN_FLAG_SPACE,
     };
     enum TokenType : u16 {
         TOKEN_NONE = 0,
         // 0-255, ascii
         TOKEN_TYPE_BEGIN = 256,
 
+        TOKEN_EOF,
         TOKEN_IDENTIFIER,
         TOKEN_ANNOTATION,
         TOKEN_LITERAL_STRING,
@@ -63,6 +68,9 @@ namespace lexer {
 
     /*
         The lexer class is responsible for managing memory and extra information about all tokens.
+        
+        Should be thread safe as long as you don't read from imports that are being
+        lexed. After imports/chunks have been lexed you can read as many tokens as you want.
     */
     struct Lexer {
         struct TokenInfo {
@@ -73,11 +81,11 @@ namespace lexer {
             u32 data_offset;
         };
         struct Chunk {
-            u32 file_id;
+            u32 import_id;
             DynamicArray<TokenInfo> tokens;
             DynamicArray<u8> auxiliary_data;
         };
-        struct File {
+        struct Import {
             std::string path;
             DynamicArray<u32> chunk_indices;
 
@@ -105,22 +113,28 @@ namespace lexer {
 
         void print(u32 fileid);
 
-        Token getTokenFromFile(u32 fileid, u32 token_index_into_file);
-        u32 getStringFromToken(Token tok, char** ptr);
-        u32 getDataFromToken(Token tok, void** ptr);
+        Token getTokenFromImport(u32 fileid, u32 token_index_into_import);
+        // same as getDataFromToken but char instead of void
+        u32 getStringFromToken(Token tok, const char** ptr);
+        u32 getDataFromToken(Token tok, const void** ptr);
 
-        // struct Iterator {
-
-        // };
-        // bool iterate(Iterator& iter);
-
+        u32 createImport(Import** out_import);
+        // unsafe if you have an import_id reference hanging somewhere
+        void destroyImport_unsafe(u32 import_id);
+        
+        Token appendToken(u32 fileId, Token token);
+        
+        bool equals(Token token, const char* str);
+        
     private:
         // TODO: Bucket array
-        BucketArray<File> files{256};
+        BucketArray<Import> imports{256};
         BucketArray<Chunk> chunks{256};
+        
+        engone::Mutex lock_imports;
+        engone::Mutex lock_chunks;
 
-        u16 createFile(File** out_file);
-        Token appendToken(u16 fileId, TokenType type, u32 flags, u32 line, u32 column);
+        Token appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 column);
         // Extra data will be appended to the token. If the token had data previously then
         // the data will be appended to the previous data possibly changing the data offset
         // if space isn't available.
@@ -131,8 +145,8 @@ namespace lexer {
         // so we hide it behine encode and decode functions.
         // u32 encode_origin(u32 token_index);
         TokenOrigin encode_origin(u32 chunk_index, u32 tiny_token_index);
-        u32 encode_file_token_index(u32 file_chunk_index, u32 tiny_token_index);
+        u32 encode_import_token_index(u32 file_chunk_index, u32 tiny_token_index);
         void decode_origin(TokenOrigin origin, u32* chunk_index, u32* tiny_token_index);
-        void decode_file_token_index(u32 token_index_into_file, u32* file_chunk_index, u32* tiny_token_index);
+        void decode_import_token_index(u32 token_index_into_file, u32* file_chunk_index, u32* tiny_token_index);
     };
 }

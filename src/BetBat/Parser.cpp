@@ -1212,7 +1212,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
 
     // bool negativeNumber=false;
     bool expectOperator=false;
-    WHILE_TRUE {
+    WHILE_TRUE_N(10000) {
         int tokenIndex = info.at()+1;
         Token token = info.get(tokenIndex);
         

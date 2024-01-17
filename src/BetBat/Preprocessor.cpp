@@ -1940,3 +1940,276 @@ TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
 
     return info.outTokens;
 }
+/* #####################
+    NEW PREPROCESSOR
+#######################*/
+
+void PreprocContext::parseMacroDefinition() {
+    using namespace engone;
+    ZoneScopedC(tracy::Color::Wheat);
+
+    bool multiline = false;
+    
+    lexer::Token name_token = gettok();
+    
+    if(name_token.type == lexer::TOKEN_IDENTIFIER){
+        // TODO: Create new error report system (or finalize the started one)?
+        //   We should do a complete failure here stopping preprocessing because
+        //   everything else could be wrong. All imports which import the current
+        //   will not be preprocessed or parsed minimizing meaningless errors.
+        Assert(false);
+        // ERR_SECTION(
+        //     ERR_HEAD(name)
+        //     ERR_MSG("'"<<name<<"' is not a valid name for macros. If the name is valid for variables then it is valid for macros.")
+        //     ERR_LINE(name, "bad");
+        // )
+        return;
+    }
+    
+    advance();
+    
+    // TODO: Can we redefine macros? or should there be some scenario where
+    //   we cannot? non-scoped macros perhaps.
+    
+    bool has_newline = name_token.flags & lexer::TOKEN_FLAG_NEWLINE;
+    CertainMacro localMacro{};
+    
+    if(name_token.flags&lexer::TOKEN_FLAG_ANY_SUFFIX){
+
+    } else {
+        lexer::Token token = gettok();
+        if(token.type != '('){
+            Assert(false); // nocheckin, report error
+            // ERR_SECTION(
+            //     ERR_HEAD(token)
+            //     ERR_MSG("'"<<token<<"' is not allowed directly after a macro's name. Either use a '(' to indicate arguments or a space for none.")
+            //     ERR_LINE(token,"bad");
+            // )
+            return;
+            // return SignalAttempt::FAILURE;
+        }
+        advance();
+        int hadError = false;
+        while(true){
+            lexer::Token token = gettok();
+            if(token.type == ')'){
+                has_newline = token.flags&lexer::TOKEN_FLAG_NEWLINE;
+                break;   
+            }
+            
+            if(lexer->equals(token,"...")) { // TODO: Use token type instead of string ("...")
+                if(localMacro.indexOfVariadic == -1) {
+                    // log::out << " param: "<<token<<"\n";
+                    localMacro.indexOfVariadic = localMacro.parameters.size();
+                    localMacro.addParam(token);
+                } else {
+                    if(!hadError){
+                        Assert(false); // nocheckin
+                        // ERR_SECTION(
+                        //     ERR_HEAD(token)
+                        //     ERR_MSG("Macros can only have 1 variadic argument.")
+                        //     ERR_LINE(localMacro.parameters[localMacro.indexOfVariadic], "previous")
+                        //     ERR_LINE(token, "not allowed")
+                        // )
+                    }
+                    
+                    hadError=true;
+                }
+            } else if(token.type != lexer::TOKEN_IDENTIFIER){
+                if(!hadError){
+                    Assert(false); // nocheckin
+                    // ERR_SECTION(
+                    //     ERR_HEAD(token)
+                    //     ERR_MSG("'"<<token<<"' is not a valid name for arguments. The first character must be an alpha (a-Z) letter, the rest can be alpha and numeric (0-9). '...' is also available to specify a variadic argument.")
+                    //     ERR_LINE(token, "bad");
+                    // )
+                }
+                hadError=true;
+            } else {
+                // log::out << " param: "<<token<<"\n";
+                localMacro.addParam(token);
+            }
+            advance();
+            token = gettok();
+            if(token.type == ')'){
+                continue; // logic handled at start of loop
+            } else if(token.type == ','){
+                advance();
+                // cool
+            } else{
+                if(!hadError){
+                    ERR_SECTION(
+                        ERR_HEAD(token)
+                        ERR_MSG("'"<<token<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.")
+                        ERR_LINE(token, "bad");
+                    )
+                }
+                hadError = true;
+            }
+        }
+        
+        _MLOG(log::out << "loaded "<<localMacro.parameters.size()<<" arg names";
+        if(!localMacro.isVariadic())
+            log::out << "\n";
+        else
+            log::out << " (variadic)\n";)
+    
+    }
+    if(has_newline) {
+        multiline = true;
+    }
+    // RootMacro* rootMacro = info.compileInfo->ensureRootMacro(name, localMacro.isVariadic());
+    
+    // CertainMacro* certainMacro = 0;
+    // if(!localMacro.isVariadic()){
+    //     certainMacro = info.compileInfo->matchArgCount(rootMacro, localMacro.parameters.size(),false);
+    //     if(certainMacro){
+    //         // if(!certainMacro->isVariadic() && !certainMacro->isBlank()){
+    //         //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
+    //         //         ERR_LINE(certainMacro->name, "previous");
+    //         //         ERR_LINE2(name.tokenIndex, "replacement");
+    //         //     )
+    //         // }
+    //         *certainMacro = localMacro;
+    //     }else{
+    //         // move localMacro info appropriate place in rootMacro
+    //         certainMacro = &(rootMacro->certainMacros[(int)localMacro.parameters.size()] = localMacro);
+    //     }
+    // }else{
+    //     // if(rootMacro->hasVariadic){
+    //     //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
+    //     //         ERR_LINE(certainMacro->name, "previous");
+    //     //         ERR_LINE2(name.tokenIndex, "replacement");
+    //     //     )
+    //     // }
+    //     rootMacro->hasVariadic = true;
+    //     rootMacro->variadicMacro = localMacro;
+    //     certainMacro = &rootMacro->variadicMacro;
+    // }
+    bool invalidContent = false;
+    int startToken = info.at()+1;
+    int endToken = startToken;
+    // if(multiline || 0==(suffixFlags&TOKEN_SUFFIX_LINE_FEED)) {
+    while(!info.end()){
+        Token token = info.next();
+        if(token=="#"){
+            if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
+                continue;
+                // ERR_SECTION(
+                // ERR_HEAD(token, "SPACE AFTER "<<token<<"!\n";
+                // )
+                // return SignalAttempt::FAILURE;
+            }
+            Token token = info.get(info.at()+1);
+            if(token=="endmacro"){
+                info.next();
+                endToken = info.at()-1;
+                break;
+            }
+            if(token=="macro"){
+            // if(token=="define" || token=="multidefine"){
+                ERR_SECTION(
+                    ERR_HEAD(token)
+                    ERR_MSG("Macro definitions inside macros are not allowed.")
+                    ERR_LINE(token,"not allowed")
+                )
+                invalidContent = true;
+            }
+            //not end, continue
+        }
+        if(!multiline){
+            if(token.flags&TOKEN_SUFFIX_LINE_FEED){
+                endToken = info.at()+1;
+                break;
+            }
+        }
+        if(info.end()&&multiline){
+            ERR_SECTION(
+                ERR_HEAD(token)
+                ERR_MSG("Missing '#endmacro' for macro '"<<name<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments)")
+                ERR_LINE(name, "this needs #endmacro somewhere")
+                ERR_LINE(info.get(info.length()-1),"macro content ends here!")
+            )
+        }
+    }
+    // }
+    localMacro.name = name;
+    localMacro.start = startToken;
+    localMacro.contentRange.stream = info.inTokens;
+    localMacro.contentRange.start = startToken;
+    if(!invalidContent){
+        localMacro.end = endToken;
+        localMacro.contentRange.end = endToken;
+    } else {
+        localMacro.end = startToken;
+        localMacro.contentRange.end = startToken;
+    }
+    int count = endToken-startToken;
+    int argc = localMacro.parameters.size();
+
+    RootMacro* rootMacro = info.compileInfo->ensureRootMacro(name, localMacro.isVariadic() && localMacro.parameters.size() > 1);
+    
+    info.compileInfo->insertCertainMacro(rootMacro, &localMacro);
+
+    _MLOG(log::out << log::LIME<< "#"<<"macro def. '"<<name<<"' ";
+    if(argc!=0){
+        log::out<< argc;
+        if(argc==1) log::out << " arg, ";
+        else log::out << " args, ";
+    }
+    log::out << count;
+    // Are you proud of me?
+    if(count==1) log::out << " token\n";
+    else log::out << " tokens\n";)
+    return SignalAttempt::SUCCESS;
+}
+void PreprocContext::parseAll() {
+    while(true) {
+        lexer::Token token = gettok();
+        if(token.type == lexer::TOKEN_EOF)
+            break;
+        
+        if(token.type != '#' || (token.flags & (lexer::TOKEN_FLAG_NEWLINE|lexer::TOKEN_FLAG_SPACE))) {
+            advance();
+            lexer->appendToken(new_import_id, token);
+            continue;
+        }
+        // handle directive
+        advance(); // skip #
+        
+        // TODO: Create token types for non-user directives (#import, #include, #macro...)
+        token = gettok();
+        if(token.type == lexer::TOKEN_IDENTIFIER) {
+            const char* str = nullptr;
+            u32 len = lexer->getStringFromToken(token,&str);
+            
+            
+            if(!strcmp(str, "macro")) {
+                advance();
+                parseMacroDefinition();
+            } else {
+                // user defined macro?   
+            }
+        }
+        advance(); // skip identifier
+    }
+}
+u32 Preprocessor::process(u32 import_id) {
+    ZoneScopedC(tracy::Color::Wheat);
+ 
+    PreprocContext context{};
+    context.lexer = lexer;
+    context.import_id = import_id;
+    
+    context.new_import_id = lexer->createImport(nullptr);
+    Assert(context.new_import_id != 0);
+    
+    lock_imports.lock();
+    context.current_import = imports.requestSpot(import_id-1, nullptr);
+    lock_imports.unlock();
+    Assert(context.current_import);
+    
+    context.parseAll();
+    
+    return context.new_import_id;
+}
