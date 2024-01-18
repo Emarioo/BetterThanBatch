@@ -54,17 +54,17 @@ namespace lexer {
     //         + ((TOKEN_ORIGIN_CHUNK_BITS + TOKEN_ORIGIN_TOKEN_BITS) % 32 == 0 ? 0 : 1)];
     // };
     struct Token {
+        Token() = default;
+        Token(TokenType type) : type(type) {}
         TokenType type=TOKEN_NONE;
         u16 flags=0;
         TokenOrigin origin={}; // decode to get chunk and token index
     };
-    // struct TokenRange {
-    //     // u16 chunk_id;
-    //     u16 token_id_start;
-    //     u16 token_id_end;
-    //     // flags?
-    //     // TokenChunk* chunk;
-    // };
+    struct TokenRange {
+        u32 importId;
+        u32 token_index_start;
+        u32 token_index_end;
+    };
 
     /*
         The lexer class is responsible for managing memory and extra information about all tokens.
@@ -97,8 +97,8 @@ namespace lexer {
         };
 
         // returns file id, 0 means failure
-        u32 tokenize(char* text, u64 length, const std::string& path_name);
-        u32 tokenize(const std::string& path);
+        u32 tokenize(char* text, u64 length, const std::string& path_name, u32 prepared_import_id = 0);
+        u32 tokenize(const std::string& path, u32 existing_import_id = 0);
 
         struct FeedIterator {
             u32 file_id=0;
@@ -117,14 +117,25 @@ namespace lexer {
         // same as getDataFromToken but char instead of void
         u32 getStringFromToken(Token tok, const char** ptr);
         u32 getDataFromToken(Token tok, const void** ptr);
+        
+        std::string getStdStringFromToken(Token tok);
 
-        u32 createImport(Import** out_import);
+        u32 createImport(const std::string& path, Import** out_import);
         // unsafe if you have an import_id reference hanging somewhere
         void destroyImport_unsafe(u32 import_id);
         
         Token appendToken(u32 fileId, Token token);
         
-        bool equals(Token token, const char* str);
+        bool equals_identifier(Token token, const char* str);
+        
+        const BucketArray<Import>& getImports() { return imports; }
+        
+        Import* getImport_unsafe(u32 import_id) {
+            lock_imports.lock();
+            auto imp = imports.get(import_id-1);
+            lock_imports.unlock();
+            return imp;
+        }
         
     private:
         // TODO: Bucket array

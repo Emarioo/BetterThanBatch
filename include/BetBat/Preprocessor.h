@@ -168,22 +168,49 @@ TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* tokens);
 // void PreprocessImports(CompileInfo* compileInfo, TokenStream* tokens); deprecated
 
 
-
+struct MacroSpecific {
+    lexer::TokenRange content;
+    
+    DynamicArray<lexer::Token> parameters;
+    void addParam(lexer::Token name, bool variadic);
+    int indexOfVariadic=-1; // tells you which argument is the infinite one, -1 for none
+    // returns index to argumentNames
+    bool isVariadic() { return indexOfVariadic != -1; }
+    u32 nonVariadicArguments() { return isVariadic() ? parameters.size() - 1 : parameters.size(); }
+    // -1 if not found
+    int matchArg(lexer::Token token, lexer::Lexer* lexer);
+};
+struct MacroRoot {
+    // lexer::Token origin; // soure location
+    std::string name;
+    
+    std::unordered_map<int,MacroSpecific*> specificMacros;
+    bool hasVariadic=false;
+    bool hasBlank=false;
+    MacroSpecific variadicMacro;
+};
+struct Compiler;
 struct Preprocessor {
     
-    void init(lexer::Lexer* lexer) { this->lexer = lexer; }
+    void init(lexer::Lexer* lexer, Compiler* compiler) { this->lexer = lexer; this->compiler = compiler; }
     
     // returns preprocessed import_id (unsigned 32-bit integer where 0 means failure)
-    u32 process(u32 import_id);
+    u32 process(u32 import_id, bool phase_2);
     
+    MacroRoot* create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank);
+    void insertCertainMacro(u32 import_id, MacroRoot* rootMacro, MacroSpecific* localMacro);
+    bool Preprocessor::removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int argumentAmount, bool variadic);
+    MacroRoot* matchMacro(u32 import_id, const std::string& name);
+    MacroSpecific* matchArgCount(MacroRoot* root, int count);
 private:
     lexer::Lexer* lexer=nullptr;
+    Compiler* compiler=nullptr;
     
     struct Import {
         bool processed_directives = false;
         bool evaluated_macros = false;
-        DynamicArray<u32> import_dependencies;
-        std::unordered_map<std::string, RootMacro*> rootMacros;
+        DynamicArray<u32> import_dependencies; //import_ids
+        std::unordered_map<std::string, MacroRoot*> rootMacros;
     };
     
     BucketArray<Import> imports{256};
@@ -192,8 +219,11 @@ private:
     friend class PreprocContext;
 };
 struct PreprocContext {
+    Preprocessor* preprocessor=nullptr;
     lexer::Lexer* lexer=nullptr;
+    Compiler* compiler=nullptr;
     
+    bool evaluateTokens=false;
     u32 new_import_id=0;
     u32 import_id=0;
     Preprocessor::Import* current_import = nullptr;
@@ -204,19 +234,24 @@ struct PreprocContext {
         return lexer->getTokenFromImport(import_id, head + off);
     }
     void advance(int n = 1) {
-        Assert(n > 0);
         head += n;
     }
+    // returns token index into import of the next token to read
+    // The token gettok will read.
+    u32 gethead() { return head; }
     
-    void parseAll();
+    // void parseAll();
+    bool parseOne();
     
     // NOTE: We assume that the hashtag and directive identifiers were parsed.
     //   Next is the content
     void parseMacroDefinition();
-    void parseUndef();
+    bool parseMacroEvaluation();
     void parseLink();
     void parseImport();
-    void parseInclude();
     void parseIf();
+    
+    void parseUndef();
+    void parseInclude();
     void parsePredefinedMacros();
 };

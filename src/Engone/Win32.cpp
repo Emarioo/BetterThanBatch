@@ -854,10 +854,14 @@ namespace engone {
 		if(!yes) {
 			DWORD err = GetLastError();
 			PL_PRINTF("[WinError %lu] GetConsoleScreenBufferInfo\n",err);
-			return 0;	
+			return 0;
 		}
 		return info.dwSize.X;
 	}
+    i32 atomic_add(volatile i32* ptr, i32 value) {
+        i32 res = InterlockedAdd((volatile long*)ptr, value);
+        return res;
+    }
     Semaphore::Semaphore(u32 initial, u32 max) {
 		Assert(!m_internalHandle);
 		m_initial = initial;

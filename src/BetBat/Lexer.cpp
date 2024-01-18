@@ -1,7 +1,7 @@
 #include "BetBat/Lexer.h"
 
 namespace lexer {
-u32 Lexer::tokenize(const std::string& path){
+u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
     u64 fileSize = 0;
     auto file = engone::FileOpen(path, engone::FILE_READ_ONLY, &fileSize);
     if(!file) return 0;
@@ -26,19 +26,28 @@ u32 Lexer::tokenize(const std::string& path){
     engone::FileClose(file); // close file as soon as possible so that other code can read or write to it if they want
     file = {};
         
-    u32 file_id = tokenize(buffer,size,path);
+    u32 file_id = tokenize(buffer,size,path, existing_import_id);
 
     return file_id;
 }
-u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name){
+u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 existing_import_id){
     using namespace engone;
     ZoneScopedC(tracy::Color::Honeydew);
 
     Import* file=nullptr;
-    u32 file_id = createImport(&file); file->path = path_name;
-
-    const char* specials = "+-*/%=<>!&|~" "$@#{}()[]" ":;.,";
-    int specialLength = strlen(specials);
+    u32 file_id = 0;
+    
+    if(existing_import_id==0){
+        file_id = createImport(path_name, &file);
+    } else {
+        // use existing/prepared import
+        file_id = existing_import_id;
+        lock_imports.lock();
+        file = imports.get(existing_import_id-1);
+        lock_imports.unlock();
+    }
+    
+    Assert(file && file_id != 0);
 
     // TODO: Optimize by keeping traack of chunks ids and their pointers here instead of using
     //  appendToken which queries file and chunk id every time.
@@ -845,6 +854,8 @@ Token Lexer::appendToken(u32 fileId, Token token) {
     auto from_info = getTokenInfo_unsafe(token);
     
     *info = *from_info;
+    info->flags = (from_info->flags & (TOKEN_FLAG_HAS_DATA|TOKEN_FLAG_NULL_TERMINATED|TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED));
+    info->flags |= token.flags&(TOKEN_FLAG_NEWLINE|TOKEN_FLAG_SPACE);
     info->data_offset = 0;
     
     if(from_info->flags & TOKEN_FLAG_HAS_DATA) {
@@ -875,7 +886,7 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
 
     // Make sure we don't add an identifier that is quoted.
     // shouldn't happen, bug in the code if it happens.
-    Assert(type != TOKEN_IDENTIFIER || (flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED)));
+    Assert(type != TOKEN_IDENTIFIER || !(flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED)));
 
     lock_imports.lock();
     Import* imp = imports.get(fileId-1);
@@ -983,7 +994,7 @@ u32 Lexer::modifyTokenData(Token token, void* ptr, u32 size, bool with_null_term
     }
     return 0; // TODO: Don't always return 0, what should we do?
 }
-u32 Lexer::createImport(Import** file) {
+u32 Lexer::createImport(const std::string& path, Import** file) {
     using namespace engone;
     
     lock_imports.lock();
@@ -993,7 +1004,12 @@ u32 Lexer::createImport(Import** file) {
             *file = nullptr;
         return 0;
     }
-    u32 file_index = imports.add(nullptr, file);
+    Import* _imp;
+    u32 file_index = imports.add(nullptr, &_imp);
+    if(_imp)
+        _imp->path = path;
+    if(file)
+        *file = _imp;    
     lock_imports.unlock();
 
     if(file_index+1 >= 0x10000) {
@@ -1030,7 +1046,7 @@ void Lexer::destroyImport_unsafe(u32 import_id) {
     imports.removeAt(import_id-1);
     lock_imports.unlock();
 }
-bool Lexer::equals(Token token, const char* str) {
+bool Lexer::equals_identifier(Token token, const char* str) {
     if(token.type == TOKEN_IDENTIFIER) {
         const char* tstr;
         u32 len = getStringFromToken(token,&tstr);
@@ -1142,9 +1158,12 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator) {
             written++;
             iterator.char_index++;
         } else if(tok.type == TOKEN_LITERAL_STRING) {
-            Assert(tok.flags & TOKEN_FLAG_DOUBLE_QUOTED);
+            Assert(tok.flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED));
             ENSURE(1)
-            *(buffer + written) = '"';
+            if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
+                *(buffer + written) = '\'';
+            else
+                *(buffer + written) = '"';
             written++;
             iterator.char_index++;
             
@@ -1173,7 +1192,10 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator) {
             }
             
             ENSURE(1)
-            *(buffer + written) = '"';
+            if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
+                *(buffer + written) = '\'';
+            else
+                *(buffer + written) = '"';
             iterator.char_index++;
             written++;
         } else if(tok.type == TOKEN_IDENTIFIER) {
@@ -1310,8 +1332,14 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator) {
 u32 Lexer::getStringFromToken(Token tok, const char** ptr) {
     return getDataFromToken(tok, (const void**)ptr);
 }
+std::string Lexer::getStdStringFromToken(Token tok) {
+    const void* ptr;
+    u32 len = getDataFromToken(tok, &ptr);
+    return std::string((const char*)ptr, len);
+}
 u32 Lexer::getDataFromToken(Token tok, const void** ptr){
     auto info = getTokenInfo_unsafe(tok);
+    Assert(info->flags & TOKEN_FLAG_HAS_DATA);
     u32 cindex,tindex;
     decode_origin(tok.origin,&cindex,&tindex);
     lock_chunks.lock();

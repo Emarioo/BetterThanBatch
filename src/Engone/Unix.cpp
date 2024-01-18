@@ -678,7 +678,10 @@ namespace engone {
 		}
 		return w.ws_col;
 	}
-
+    i32 atomic_add(volatile i32* ptr, i32 value) {
+        i32 res = value + __atomic_fetch_add((volatile long*)ptr, value, __ATOMIC_SEQ_CST);
+        return res;
+    }
 	Semaphore::Semaphore(u32 initial, u32 max) {
 		Assert(!m_initialized);
 		m_initial = initial;
@@ -752,6 +755,7 @@ namespace engone {
         // }
 	}
 	void Mutex::lock() {
+        Assert(false);
 		// if (m_internalHandle == 0) {
 		// 	HANDLE handle = CreateMutex(NULL, false, NULL);
 		// 	if (handle == INVALID_HANDLE_VALUE) {
@@ -1204,5 +1208,6 @@ namespace engone {
 		}
 		Free(argv, totalSize);
 	}
+    
 }
 #endif

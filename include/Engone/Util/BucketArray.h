@@ -36,11 +36,7 @@ struct BucketArray {
 
     // constructor does nothing except remember the variable
     // valuesPerBucket is forced to be divisible by 8. (data alignment * bits as bools)
-    BucketArray(u32 valuesPerBucket) : m_valuesPerBucket(valuesPerBucket) {
-        u32 off = valuesPerBucket & 7;
-		if (off != 0)
-			m_valuesPerBucket = (m_valuesPerBucket & (~7)) + 8;
-    }
+    BucketArray(u32 valuesPerBucket) : m_valuesPerBucket((valuesPerBucket+7)&7 /*ensure 8-byte alignment*/) { }
     ~BucketArray() { cleanup(); }
     // Does not call free on the items.
     void cleanup() {
@@ -149,11 +145,10 @@ struct BucketArray {
 		m_valueCount++;
 		bucket.setBool(valueIndex, true);
 		T* ptr = (T*)bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
-		if (value)
-			memcpy(ptr,value,sizeof(T));
-		else
+		if (value) {
+            new(ptr)T(*value);
+        } else
 			new(ptr)T();
-			// memset(ptr, 0, sizeof(T));
 		//engone::log::out >> engone::log::Disable;
 		if (outElement)
 			*outElement = ptr;
@@ -214,7 +209,7 @@ struct BucketArray {
 
 		T* ptr = (T*)bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
 		if (value)
-			memcpy(ptr,value,sizeof(T));
+            new(ptr)T(*value);
 		else
 			new(ptr)T();
 			// memset(ptr, 0, sizeof(T));
@@ -286,8 +281,9 @@ struct BucketArray {
         int index=-1;
         T* ptr=nullptr;
     };
+    BucketArray<T>::Iterator iterator() const { return {}; }
     // Returns false if nothing more to iterate. Values in iterator are reset
-    bool iterate(Iterator& iterator)  {
+    bool iterate(Iterator& iterator) const {
 		while (true) {
             iterator.index++;
 			u32 bucketIndex = iterator.index / m_valuesPerBucket;

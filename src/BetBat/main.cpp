@@ -68,19 +68,29 @@ int main(int argc, const char** argv){
     // MeasureInit();
     ProfilerInitialize();
     
-    lexer::Lexer lexer{};
-    u32 import_id = lexer.tokenize("examples/dev.btb");
+    // lexer::Lexer lexer{};
+    // u32 import_id = lexer.tokenize("examples/dev.btb");
 
-    lexer.print(import_id);
+    // lexer.print(import_id);
     
-    log::out << "-----------------\n";
     
-    Preprocessor preprocessor{};
-    preprocessor.init(&lexer);
+    // Preprocessor preprocessor{};
+    // preprocessor.init(&lexer);
     
-    u32 preproc_import_id = preprocessor.process(import_id);
+    // u32 preproc_import_id = preprocessor.process(import_id);
 
-    lexer.print(preproc_import_id);
+    // lexer.print(preproc_import_id);
+    
+    Compiler compiler{};
+    compiler.importDirectories.add(Path("modules/").getAbsolute());
+    compiler.compileSource("examples/dev.btb");
+
+    auto iter = compiler.lexer.getImports().iterator();
+    while(compiler.lexer.getImports().iterate(iter)) {
+        log::out << "---- "<<iter.ptr->path<<" -----\n";
+        
+        compiler.lexer.print(iter.index+1);
+    }
 
     return 0;
     

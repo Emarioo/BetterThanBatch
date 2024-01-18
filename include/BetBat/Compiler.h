@@ -276,3 +276,59 @@ bool ExecuteTarget(CompileOptions* options);
 // bool ExecuteBytecode(CompileOptions* options, Bytecode* bytecode);
 
 bool CompileAll(CompileOptions* options);
+
+
+
+struct Compiler {
+    lexer::Lexer lexer{};
+    Preprocessor preprocessor{};
+    
+    enum ImportFlags {
+        FLAG_NONE=0,
+        FLAG_LEXED              = 0x1,
+        FLAG_PREPROCESSED       = 0x2,
+        FLAG_PREPROCESSED_2     = 0x4,
+        FLAG_PARSED             = 0x8,
+        FLAG_BUSY               = 0x10,
+        FLAG_FINISHED           = 0x20,
+    };
+    struct Import {
+        ImportFlags state = FLAG_NONE;
+        std::string path; // file path (sometimes name for preloaded imports)
+        
+        u32 import_id=0;
+        u32 preproc_import_id=0;
+        
+        DynamicArray<u32> dependencies;
+    };
+    BucketArray<Import> imports{256};
+    
+    // DynamicArray<u32> queue_import_ids;
+        
+    // Lex, preprocess, parse.
+    // Multiple threads can call this function to perform
+    // processing faster.
+    void processImports();
+    
+    void compileSource(const std::string& path);
+    
+    // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
+    u32 addImport(const std::string& path, const std::string& dir_of_origin_file = "");
+    void addDependency(u32 import_id, u32 dep_import_id);
+    
+    DynamicArray<Path> importDirectories;
+    Path findSourceFile(const Path& path, const Path& sourceDirectory = "");
+    
+    DynamicArray<std::string> linkDirectives; // no duplicates, passed to the linker, not with interpreter
+    engone::Mutex lock_miscellaneous;
+    // thread safe, duplicates will be ignored
+    void addLinkDirective(const std::string& text);
+
+private:
+    engone::Mutex lock_imports;
+    engone::Semaphore lock_wait_for_imports;
+    bool signaled = true;
+    volatile int waiting_threads = 0;
+    volatile int total_threads = 0;
+    
+};

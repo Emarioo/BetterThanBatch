@@ -1952,7 +1952,7 @@ void PreprocContext::parseMacroDefinition() {
     
     lexer::Token name_token = gettok();
     
-    if(name_token.type == lexer::TOKEN_IDENTIFIER){
+    if(name_token.type != lexer::TOKEN_IDENTIFIER){
         // TODO: Create new error report system (or finalize the started one)?
         //   We should do a complete failure here stopping preprocessing because
         //   everything else could be wrong. All imports which import the current
@@ -1972,7 +1972,7 @@ void PreprocContext::parseMacroDefinition() {
     //   we cannot? non-scoped macros perhaps.
     
     bool has_newline = name_token.flags & lexer::TOKEN_FLAG_NEWLINE;
-    CertainMacro localMacro{};
+    MacroSpecific localMacro{};
     
     if(name_token.flags&lexer::TOKEN_FLAG_ANY_SUFFIX){
 
@@ -1993,15 +1993,15 @@ void PreprocContext::parseMacroDefinition() {
         while(true){
             lexer::Token token = gettok();
             if(token.type == ')'){
+                advance();
                 has_newline = token.flags&lexer::TOKEN_FLAG_NEWLINE;
                 break;   
             }
             
-            if(lexer->equals(token,"...")) { // TODO: Use token type instead of string ("...")
-                if(localMacro.indexOfVariadic == -1) {
+            if(lexer->equals_identifier(token,"...")) { // TODO: Use token type instead of string ("...")
+                if(!localMacro.isVariadic()) {
                     // log::out << " param: "<<token<<"\n";
-                    localMacro.indexOfVariadic = localMacro.parameters.size();
-                    localMacro.addParam(token);
+                    localMacro.addParam(token, true);
                 } else {
                     if(!hadError){
                         Assert(false); // nocheckin
@@ -2027,7 +2027,7 @@ void PreprocContext::parseMacroDefinition() {
                 hadError=true;
             } else {
                 // log::out << " param: "<<token<<"\n";
-                localMacro.addParam(token);
+                localMacro.addParam(token, false);
             }
             advance();
             token = gettok();
@@ -2038,11 +2038,12 @@ void PreprocContext::parseMacroDefinition() {
                 // cool
             } else{
                 if(!hadError){
-                    ERR_SECTION(
-                        ERR_HEAD(token)
-                        ERR_MSG("'"<<token<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.")
-                        ERR_LINE(token, "bad");
-                    )
+                    Assert(false); // nocheckin
+                    // ERR_SECTION(
+                    //     ERR_HEAD(token)
+                    //     ERR_MSG("'"<<token<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.")
+                    //     ERR_LINE(token, "bad");
+                    // )
                 }
                 hadError = true;
             }
@@ -2058,41 +2059,14 @@ void PreprocContext::parseMacroDefinition() {
     if(has_newline) {
         multiline = true;
     }
-    // RootMacro* rootMacro = info.compileInfo->ensureRootMacro(name, localMacro.isVariadic());
-    
-    // CertainMacro* certainMacro = 0;
-    // if(!localMacro.isVariadic()){
-    //     certainMacro = info.compileInfo->matchArgCount(rootMacro, localMacro.parameters.size(),false);
-    //     if(certainMacro){
-    //         // if(!certainMacro->isVariadic() && !certainMacro->isBlank()){
-    //         //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
-    //         //         ERR_LINE(certainMacro->name, "previous");
-    //         //         ERR_LINE2(name.tokenIndex, "replacement");
-    //         //     )
-    //         // }
-    //         *certainMacro = localMacro;
-    //     }else{
-    //         // move localMacro info appropriate place in rootMacro
-    //         certainMacro = &(rootMacro->certainMacros[(int)localMacro.parameters.size()] = localMacro);
-    //     }
-    // }else{
-    //     // if(rootMacro->hasVariadic){
-    //     //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
-    //     //         ERR_LINE(certainMacro->name, "previous");
-    //     //         ERR_LINE2(name.tokenIndex, "replacement");
-    //     //     )
-    //     // }
-    //     rootMacro->hasVariadic = true;
-    //     rootMacro->variadicMacro = localMacro;
-    //     certainMacro = &rootMacro->variadicMacro;
-    // }
     bool invalidContent = false;
-    int startToken = info.at()+1;
+    int startToken = gethead();
     int endToken = startToken;
     // if(multiline || 0==(suffixFlags&TOKEN_SUFFIX_LINE_FEED)) {
-    while(!info.end()){
-        Token token = info.next();
-        if(token=="#"){
+    while(true){
+        lexer::Token token = gettok();
+        advance();
+        if(token.type == '#'){
             if((token.flags&TOKEN_SUFFIX_SPACE)||(token.flags&TOKEN_SUFFIX_LINE_FEED)){
                 continue;
                 // ERR_SECTION(
@@ -2100,79 +2074,507 @@ void PreprocContext::parseMacroDefinition() {
                 // )
                 // return SignalAttempt::FAILURE;
             }
-            Token token = info.get(info.at()+1);
-            if(token=="endmacro"){
-                info.next();
-                endToken = info.at()-1;
+            token = gettok();
+            if(lexer->equals_identifier(token, "endmacro")){
+                advance();
+                endToken = gethead()-3;
                 break;
             }
-            if(token=="macro"){
-            // if(token=="define" || token=="multidefine"){
-                ERR_SECTION(
-                    ERR_HEAD(token)
-                    ERR_MSG("Macro definitions inside macros are not allowed.")
-                    ERR_LINE(token,"not allowed")
-                )
+            if(lexer->equals_identifier(token, "macro")){
+                Assert(false); // nocheckin
+                // ERR_SECTION(
+                //     ERR_HEAD(token)
+                //     ERR_MSG("Macro definitions inside macros are not allowed.")
+                //     ERR_LINE(token,"not allowed")
+                // )
                 invalidContent = true;
             }
             //not end, continue
         }
         if(!multiline){
             if(token.flags&TOKEN_SUFFIX_LINE_FEED){
-                endToken = info.at()+1;
+                endToken = gethead();
                 break;
             }
         }
-        if(info.end()&&multiline){
-            ERR_SECTION(
-                ERR_HEAD(token)
-                ERR_MSG("Missing '#endmacro' for macro '"<<name<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments)")
-                ERR_LINE(name, "this needs #endmacro somewhere")
-                ERR_LINE(info.get(info.length()-1),"macro content ends here!")
-            )
+        if(token.type == lexer::TOKEN_EOF&&multiline){
+            Assert(false); // nocheckin
+            // ERR_SECTION(
+            //     ERR_HEAD(token)
+            //     ERR_MSG("Missing '#endmacro' for macro '"<<name<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments)")
+            //     ERR_LINE(name, "this needs #endmacro somewhere")
+            //     ERR_LINE(info.get(info.length()-1),"macro content ends here!")
+            // )
         }
     }
     // }
-    localMacro.name = name;
-    localMacro.start = startToken;
-    localMacro.contentRange.stream = info.inTokens;
-    localMacro.contentRange.start = startToken;
+    
+    localMacro.content.importId = import_id;
+    localMacro.content.token_index_start = startToken;
     if(!invalidContent){
-        localMacro.end = endToken;
-        localMacro.contentRange.end = endToken;
+        localMacro.content.token_index_end = endToken;
     } else {
-        localMacro.end = startToken;
-        localMacro.contentRange.end = startToken;
+        localMacro.content.token_index_end = startToken;
     }
     int count = endToken-startToken;
     int argc = localMacro.parameters.size();
 
-    RootMacro* rootMacro = info.compileInfo->ensureRootMacro(name, localMacro.isVariadic() && localMacro.parameters.size() > 1);
-    
-    info.compileInfo->insertCertainMacro(rootMacro, &localMacro);
+    if(!evaluateTokens) {
+        MacroRoot* rootMacro = preprocessor->create_or_get_macro(import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1);
+        
+        preprocessor->insertCertainMacro(import_id, rootMacro, &localMacro);
 
-    _MLOG(log::out << log::LIME<< "#"<<"macro def. '"<<name<<"' ";
-    if(argc!=0){
-        log::out<< argc;
-        if(argc==1) log::out << " arg, ";
-        else log::out << " args, ";
+        std::string name = lexer->getStdStringFromToken(name_token);
+        
+        _MLOG(log::out << log::LIME<< "#"<<"macro def. '"<<name<<"' ";
+        if(argc!=0){
+            log::out<< argc;
+            if(argc==1) log::out << " arg, ";
+            else log::out << " args, ";
+        }
+        log::out << count;
+        // Are you proud of me? - Emarioo, 2023-0?-??
+        // Yes - Emarioo, 2024-01-17
+        if(count==1) log::out << " token\n";
+        else log::out << " tokens\n";)
     }
-    log::out << count;
-    // Are you proud of me?
-    if(count==1) log::out << " token\n";
-    else log::out << " tokens\n";)
-    return SignalAttempt::SUCCESS;
 }
-void PreprocContext::parseAll() {
-    while(true) {
+
+void PreprocContext::parseLink(){
+    using namespace engone;
+    // ZoneScopeC(tracy::Color::Wheat);
+
+    lexer::Token name_token = gettok();
+    if(name_token.type == lexer::TOKEN_LITERAL_STRING){
+        Assert(false); // nocheckin
+        // ERR_SECTION(
+        //     ERR_HEAD(name)
+        //     ERR_MSG("Expected a string not "<<name<<".")
+        // )
+        // return SignalAttempt::FAILURE;
+    }
+    advance();
+    
+    if(evaluateTokens) {
+        std::string name = lexer->getStdStringFromToken(name_token);
+        preprocessor->compiler->addLinkDirective(name);
+    }
+    
+    // return SignalAttempt::SUCCESS;
+}
+
+void PreprocContext::parseIf(){
+    using namespace engone;
+
+    bool not_modifier=false;
+    // TODO: Parse condition as some expression (not ASTExpressions)
+    
+    lexer::Token tok = gettok();
+    if(tok.type == '!') {
+        not_modifier = true;
+        advance();
+        tok = gettok();
+    }
+    
+    if(tok.type == lexer::TOKEN_IDENTIFIER) {
+        Assert(false); // nocheckin, fix error   
+    }
+    
+    std::string name = lexer->getStdStringFromToken(tok);
+    
+    bool active = preprocessor->matchMacro(import_id, name);
+    if(not_modifier)
+        active = !active;
+    not_modifier = false; // reset, we use it later
+    
+    bool complete_inactive = false;
+    
+    int depth = 0;
+    SignalAttempt error = SignalAttempt::SUCCESS;
+    // bool hadElse=false;
+    _MLOG(log::out << log::GRAY<< "   ifdef - "<<name<<"\n";)
+    while(true){
+        lexer::Token token = gettok();
+        
+        if(token.type == lexer::TOKEN_EOF) {
+            Assert(false); // nocheckin
+            // ERR_SECTION(
+            //     ERR_HEAD(info.get(info.length()-1))
+            //     ERR_MSG("Missing endif somewhere for ifdef or ifndef.")
+            // )
+            // return SignalAttempt::FAILURE;
+        }
+        
+        if(token.type == '#' && !(token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX)){
+            token = gettok(1);
+            // If !yes we can skip these tokens, otherwise we will have
+            //  to skip them later which is unnecessary computation
+            if(lexer->equals_identifier(token, "if")){
+                if(!active){
+                    // inactive means we skip current tokens
+                    advance(); // hashtag
+                    advance(); // if
+                    depth++;
+                    // log::out << log::GRAY<< "   ifdef - new depth "<<depth<<"\n";
+                } else {
+                    // evaluate later properly
+                }
+            } else if(lexer->equals_identifier(token, "elif")) {
+                advance();// hashtag
+                advance();// elif
+                
+                token = gettok();
+                not_modifier = false;   
+                if(token.type == '!') {
+                    not_modifier = true;
+                    advance();
+                    token = gettok();
+                }
+                if(token.type == lexer::TOKEN_IDENTIFIER) {
+                    Assert(false); // nocheckin
+                    // ERR_SECTION(
+                    //     ERR_HEAD(name)
+                    //     ERR_MSG("#elif expects a valid macro name after it same as #if.")
+                    //     ERR_LINE(name,"not a valid macro name")
+                    // )
+                } else {
+                    name = lexer->getStdStringFromToken(token);
+                    if(!active) {
+                        // if a previous if/elif matched we don't want to check this one
+                        active = preprocessor->matchMacro(import_id, name);
+                        if(not_modifier)
+                            active = !active;
+                    } else {
+                        complete_inactive = true;
+                        active = false;
+                    }
+                }
+                not_modifier = false; // reset for later
+            } else if(lexer->equals_identifier(token,"endif")){
+                if(depth==0){
+                    advance();
+                    advance();
+                    _MLOG(log::out << log::GRAY<< "   endif - "<<name<<"\n";)
+                    break;
+                }
+                // log::out << log::GRAY<< "   endif - new depth "<<depth<<"\n";
+                depth--;
+                continue;
+            } else if(lexer->equals_identifier(token,"else")){ // we allow multiple elses, they toggle active and inactive sections
+                if(depth==0){
+                    advance();
+                    advance();
+                    if(!complete_inactive)
+                        active = !active;
+                    _MLOG(log::out << log::GRAY<< "   else - "<<name<<"\n";)
+                    continue;
+                }
+            }
+        }
+        // TODO: what about errors?
+        
+        if(active){
+            parseOne(); // nocheckin, is this right?
+        }else{
+            advance();
+            // log::out << log::GRAY<<" skip "<<skip << "\n";
+        }
+    }
+    //  log::out << "     exit  ifdef loop\n";
+}
+void PreprocContext::parseImport() {
+    
+    lexer::Token token = gettok();
+    if(token.type != lexer::TOKEN_LITERAL_STRING) {
+        Assert(false); // nocheckin, fix error
+    }
+    advance();
+    
+    if(!evaluateTokens) {
+        // only if not in conditional directive
+        std::string path = lexer->getStdStringFromToken(token);
+        
+        preprocessor->lock_imports.lock();
+        auto imp = preprocessor->imports.get(import_id-1);
+        preprocessor->lock_imports.unlock();
+        
+        u32 dep_id = compiler->addImport(path);
+        
+        if(dep_id == 0) {
+            Assert(false); // nocheckin, fix error   
+        } else {
+            imp->import_dependencies.add(dep_id);
+            compiler->addDependency(import_id, dep_id);
+        }
+    }
+}
+bool PreprocContext::parseMacroEvaluation() {
+    if(!evaluateTokens) {
+        advance(); // skip, is this okay?
+        return true;   
+    }
+    
+    lexer::Token macro_token = gettok();
+    Assert(macro_token.type == lexer::TOKEN_IDENTIFIER);
+    
+    std::string macro_name = lexer->getStdStringFromToken(macro_token);
+    MacroRoot* root = preprocessor->matchMacro(import_id,macro_name);
+    if(!root)
+        return false;
+    advance();
+    
+    typedef DynamicArray<lexer::Token> TokenList;
+    
+    u32 origin_import_id = import_id;
+    
+    struct Layer {
+        Layer(bool eval_content) : eval_content(eval_content) {
+            if(eval_content) {
+                new(&input_arguments)DynamicArray<TokenList>();
+                specific = nullptr;
+                root = nullptr;
+            } else {
+                id = 0;
+                caller = nullptr;
+                paren_depth = 0;
+            }
+        }
+        ~Layer() {
+            if(eval_content) {
+                input_arguments.~DynamicArray();
+            } else {
+                
+            }
+        }
+        u32 _head = 0;
+        u32 start_head = 0;
+        u32* ref_head = nullptr;
+        bool eval_content = true;
+        union {
+            struct {
+                DynamicArray<TokenList> input_arguments;
+                MacroSpecific* specific;
+                MacroRoot* root;
+            };
+            struct {
+                u32 id;
+                Layer* caller;
+                Layer* callee; // rename, can easily be confused
+                int paren_depth;
+            };
+        };
+        
+        lexer::Token get(lexer::Lexer* lexer, int off = 0) {
+            Assert(specific || id != 0);
+            if(id!=0 && !eval_content) {
+                u32 index = *ref_head + off;
+                // if(index >= specific->content.token_index_end)
+                //     return {lexer::TOKEN_EOF};
+                return lexer->getTokenFromImport(id, *ref_head + off);
+            } else {
+                u32 index = specific->content.token_index_start + *ref_head + off;
+                if(index >= specific->content.token_index_end)
+                    return {lexer::TOKEN_EOF};
+                return lexer->getTokenFromImport(specific->content.importId, specific->content.token_index_start + *ref_head + off);
+            }
+        }
+        void step(int n = 1) {
+            *ref_head+=n;
+        }
+        void sethead(u32 head) {
+            _head = head;
+            start_head = head;
+            ref_head = &_head;
+        }
+        void sethead(u32* phead) {
+            this->ref_head = phead;
+            this->start_head = *phead;
+        }
+        u32 gethead() {
+            return *ref_head;
+        }
+    };
+    DynamicArray<Layer*> stack{};
+    Layer* first = new Layer(true);
+    stack.add(first);
+    first->root = root;
+    first->sethead((u32)0);
+    
+    lexer::Token tok = gettok();
+    if(!(macro_token.flags & (lexer::TOKEN_FLAG_ANY_SUFFIX)) && tok.type == '(') {
+        advance();
+        Layer* second = new Layer(false);
+        stack.add(second);
+        second->callee = first;
+        second->id = import_id;
+        second->sethead(&head);
+    }
+    
+    // TODO: Limit recursion
+    while(stack.size() != 0) {
+        Layer* layer = stack.last();
+        if(!layer->eval_content) {
+            
+            lexer::Token token = layer->get(lexer);
+            if(token.type == lexer::TOKEN_EOF) {
+                Assert(false);
+            }
+            
+            if(layer->paren_depth==0 && (token.type == ',' || token.type == ')')) {
+                if(token.type == ',') {
+                    layer->callee->input_arguments.add({});
+                }
+                layer->step();
+                   
+                if(token.type == ',') {
+                    layer->step();
+                    continue;
+                }
+                if(token.type == ')') {
+                    delete layer;
+                    stack.pop();
+                    continue;
+                }
+                Assert(false);
+            }
+            
+            if(token.type == '(') {
+                layer->paren_depth++;
+                layer->step();
+                continue;
+            } else if(token.type == ')') {
+                layer->paren_depth--;
+                layer->step();
+                continue;
+            }
+            
+            if(token.type == lexer::TOKEN_IDENTIFIER && layer->caller) { // we don't have a caller if it's arguments for the first layer
+                MacroSpecific* caller_spec = layer->caller->specific;
+                int param_index = caller_spec->matchArg(token,lexer);
+                
+                if(param_index!=-1) {
+                    layer->step();
+                    
+                    int real_index = param_index;
+                    int real_count = 1;
+                    if(caller_spec->isVariadic()) {
+                        if(param_index == caller_spec->indexOfVariadic) {
+                            real_count = layer->caller->input_arguments.size() - caller_spec->nonVariadicArguments();
+                        } else if(param_index > caller_spec->indexOfVariadic) {
+                            real_index = param_index - 1 + layer->caller->input_arguments.size() - caller_spec->nonVariadicArguments();
+                        }
+                    }
+                    
+                    for(int i = real_index; i < real_index + real_count;i++) {
+                        auto& list = layer->callee->input_arguments[i];
+                        for(int j=0;j<list.size();j++) {
+                            auto& token = list[j];
+                            if(layer->callee->input_arguments.size() == 0)
+                                layer->callee->input_arguments.add({});
+                            layer->callee->input_arguments.last().add(token);
+                        }
+                        if(i != real_index + real_count - 1)
+                            layer->callee->input_arguments.add({});
+                    }
+                    continue;
+                }
+            }
+            // if(token.type == '#') {
+            //     // ?
+            // }
+            
+            layer->step();
+            if(layer->callee->input_arguments.size() == 0)
+                layer->callee->input_arguments.add({});
+            layer->callee->input_arguments.last().add(token);
+        } else {
+            if(!layer->specific) {
+                layer->specific = preprocessor->matchArgCount(layer->root, layer->input_arguments.size());
+            
+                if(!layer->specific) {
+                    Assert(false); // nocheckin, fix error
+                }
+            }
+        
+            lexer::Token token = layer->get(lexer);
+            if(token.type == lexer::TOKEN_EOF) {
+                delete layer;
+                stack.pop();
+                continue;
+            }
+            
+            if(token.type == '#') {
+                std::string name = lexer->getStdStringFromToken(token);
+                MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
+                if (macroroot) {
+                    layer->step(); // name
+                    
+                    Layer* layer_macro = new Layer(true);
+                    layer_macro->root = macroroot;
+                    first->sethead((u32)0);
+                    
+                    token = layer->get(lexer);
+                    if(token.type == '(') {
+                        layer->step();
+                        
+                        Layer* layer_arg = new Layer(false);
+                        layer_arg->caller = layer_macro;
+                        layer_arg->specific = layer->specific;
+                        layer_arg->sethead(layer->gethead());
+                    }
+                    
+                    continue;
+                }
+            }
+            
+            if(token.type == lexer::TOKEN_IDENTIFIER) {
+                int param_index = layer->specific->matchArg(token,lexer);
+                if(param_index!=-1) {
+                    layer->step();
+                    
+                    int real_index = param_index;
+                    int real_count = 1;
+                    if(layer->specific->isVariadic()) {
+                        if(param_index == layer->specific->indexOfVariadic) {
+                            real_count = layer->input_arguments.size() - layer->specific->nonVariadicArguments();
+                        } else if(param_index > layer->specific->indexOfVariadic) {
+                            real_index = param_index - 1 + layer->input_arguments.size() - layer->specific->nonVariadicArguments();
+                        }
+                    }
+                    
+                    for(int i = real_index; i < real_index + real_count;i++) {
+                        auto& list = layer->input_arguments[i];
+                        for(int j=0;j<list.size();j++) {
+                            lexer->appendToken(new_import_id, list[j]);
+                        }
+                    }
+                    
+                    continue;
+                }
+            }
+            layer->step();
+            lexer->appendToken(new_import_id, token);
+        }
+    }
+    #undef gettok
+    #undef advance
+    return true;
+}
+
+bool PreprocContext::parseOne() {
+    // while(true) {
         lexer::Token token = gettok();
         if(token.type == lexer::TOKEN_EOF)
-            break;
+            return false; // nocheckin, should we error? return false? or what do we do?
+            // break;
         
         if(token.type != '#' || (token.flags & (lexer::TOKEN_FLAG_NEWLINE|lexer::TOKEN_FLAG_SPACE))) {
             advance();
-            lexer->appendToken(new_import_id, token);
-            continue;
+            if(evaluateTokens) {
+                lexer->appendToken(new_import_id, token);
+            }
+            return true;
+            // continue;
         }
         // handle directive
         advance(); // skip #
@@ -2183,33 +2585,241 @@ void PreprocContext::parseAll() {
             const char* str = nullptr;
             u32 len = lexer->getStringFromToken(token,&str);
             
-            
             if(!strcmp(str, "macro")) {
                 advance();
                 parseMacroDefinition();
+            } else if(!strcmp(str, "import")) {
+                advance();
+                parseImport();
+            } else if(!strcmp(str, "link")) {
+                advance();
+                parseLink();
+            } else if(!strcmp(str, "if")) {
+                advance();
+                parseIf();
             } else {
-                // user defined macro?   
+                bool yes = parseMacroEvaluation();
+                if(!yes) {
+                    if(evaluateTokens) {
+                        lexer->appendToken(new_import_id, gettok(-2)); // hashtag
+                        lexer->appendToken(new_import_id, token);
+                    }
+                }
             }
+        } else {
+            advance();
+            Assert(false); // nocheckin, fix err
         }
-        advance(); // skip identifier
-    }
+    // }
+    return true;
 }
-u32 Preprocessor::process(u32 import_id) {
+u32 Preprocessor::process(u32 import_id, bool phase2) {
     ZoneScopedC(tracy::Color::Wheat);
  
     PreprocContext context{};
     context.lexer = lexer;
+    context.preprocessor = this;
+    context.compiler = compiler;
     context.import_id = import_id;
+    context.evaluateTokens = phase2;
     
-    context.new_import_id = lexer->createImport(nullptr);
-    Assert(context.new_import_id != 0);
+    if(context.evaluateTokens) {
+        auto old_imp = lexer->getImport_unsafe(import_id);
+        std::string name = BriefString(old_imp->path,15);
+        
+        context.new_import_id = lexer->createImport(name, nullptr);
+        Assert(context.new_import_id != 0);
+        
+        lock_imports.lock();
+        auto new_imp = imports.requestSpot(context.new_import_id-1, nullptr);
+        Assert(new_imp);
+        context.current_import = imports.get(import_id-1);
+        lock_imports.unlock();
+    } else {
+        lock_imports.lock();
+        context.current_import = imports.requestSpot(import_id-1, nullptr);
+        lock_imports.unlock();
+        Assert(context.current_import);
+    }
     
-    lock_imports.lock();
-    context.current_import = imports.requestSpot(import_id-1, nullptr);
-    lock_imports.unlock();
-    Assert(context.current_import);
-    
-    context.parseAll();
+    while(true) {
+        bool yes = context.parseOne();
+        if(!yes)
+            break;
+    }
     
     return context.new_import_id;
 }
+/* #region */
+
+void MacroSpecific::addParam(lexer::Token name, bool variadic) {
+    parameters.add(name);
+    if(variadic) {
+        Assert(!isVariadic()); // can't add another variadic parameter
+        indexOfVariadic = parameters.size()-1;
+    }
+}
+int MacroSpecific::matchArg(lexer::Token token, lexer::Lexer* lexer) {
+    Assert(token.type == lexer::TOKEN_IDENTIFIER);
+    const char* astr = 0;
+    u32 alen = lexer->getStringFromToken(token,&astr);
+    for(int i=0;i<(int)parameters.size();i++){
+        lexer::Token& tok = parameters[i];
+        const char* bstr = 0;
+        u32 blen = lexer->getStringFromToken(tok,&bstr);
+        if(alen == blen && !strcmp(astr,bstr)){
+            _MMLOG(engone::log::out <<engone::log::MAGENTA<< "match tok with arg '"<<astr<<"'\n";)
+            return i;
+        }
+    }
+    return -1;
+}
+
+MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, bool ensure_blank) {
+    Assert(name.type == lexer::TOKEN_IDENTIFIER);
+    
+    lock_imports.lock();
+    Import* imp = imports.get(import_id-1);
+    lock_imports.unlock();
+    Assert(imp);
+    
+    MacroRoot* macroRoot = nullptr;
+    std::string str_name = lexer->getStdStringFromToken(name);
+    
+    auto pair = imp->rootMacros.find(str_name);
+    if(pair != imp->rootMacros.end()){
+        macroRoot = pair->second;
+    } else {
+        macroRoot = TRACK_ALLOC(MacroRoot);
+        // engone::log::out << "yes\n";
+        new(macroRoot)MacroRoot();
+        macroRoot->name = str_name;
+        imp->rootMacros[str_name] = macroRoot;
+    }
+    
+    // READ BEFORE CHANGING! 
+    //You usually want a base case for variadic arguments when
+    // using it recursively. Instead of having to specify the blank
+    // base macro yourself, the compiler does it for you.
+    // IMPORTANT: It should NOT happen for macro(...)
+    // because the blank macro with zero arguments would be
+    // used instead of the variadic one making it impossible to
+    // use macro(...).
+    if (ensure_blank){
+        auto pair = macroRoot->specificMacros.find(0);
+        if(pair == macroRoot->specificMacros.end()) {
+            MacroSpecific* macro = TRACK_ALLOC(MacroSpecific);
+            new(macro)MacroSpecific();
+            macroRoot->specificMacros[0] = macro;
+            macroRoot->hasBlank = true;
+        }
+    }
+    return macroRoot;
+}
+
+void Preprocessor::insertCertainMacro(u32 import_id, MacroRoot* rootMacro, MacroSpecific* localMacro) {
+    lock_imports.lock();
+    Import* imp = imports.get(import_id-1);
+    lock_imports.unlock();
+    Assert(imp);
+    
+    if(!localMacro->isVariadic()){
+        auto pair = rootMacro->specificMacros.find(localMacro->parameters.size());
+        MacroSpecific* macro = nullptr;
+        if(pair!=rootMacro->specificMacros.end()){
+            // if(!certainMacro->isVariadic() && !certainMacro->isBlank()){
+            //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
+            //         ERR_LINE(certainMacro->name, "previous");
+            //         ERR_LINE2(name.tokenIndex, "replacement");
+            //     )
+            // }
+            if(localMacro->parameters.size() == 0) {
+                rootMacro->hasBlank = false;
+            }
+            macro = pair->second;
+            *macro = *localMacro;
+            // if(includeInf && rootMacro->hasVariadic && (int)rootMacro->variadicMacro.parameters.size()-1<=count) {
+            //     macro = &rootMacro->variadicMacro;
+            //     _MLOG(MLOG_MATCH(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< rootMacro->variadicMacro.parameters.size()<<" (inf)\n";))
+            // }
+        }else{
+            // _MLOG(MLOG_MATCH(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< pair->second.parameters.size()<<"\n";))
+            macro = TRACK_ALLOC(MacroSpecific);
+            new(macro)MacroSpecific(*localMacro);
+            rootMacro->specificMacros[localMacro->parameters.size()] = macro;
+        }
+    }else{
+        // if(rootMacro->hasVariadic){
+        //     WARN_HEAD3(name, "Intentional redefinition of '"<<name<<"'?\n\n";
+        //         ERR_LINE(certainMacro->name, "previous");
+        //         ERR_LINE2(name.tokenIndex, "replacement");
+        //     )
+        // }
+        rootMacro->hasVariadic = true;
+        rootMacro->variadicMacro = *localMacro;
+    }
+}
+
+bool Preprocessor::removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int argumentAmount, bool variadic){
+    lock_imports.lock();
+    Import* imp = imports.get(import_id-1);
+    lock_imports.unlock();
+    Assert(imp);
+    
+    bool removed=false;
+    if(variadic) {
+        if(rootMacro->hasVariadic) {
+            rootMacro->hasVariadic = false;
+            removed = true;
+            // rootMacro->variadicMacro.cleanup();
+            rootMacro->variadicMacro = {};
+            if(rootMacro->hasBlank){
+                auto blank = rootMacro->specificMacros[0];
+                blank->~MacroSpecific();
+                TRACK_FREE(blank,MacroSpecific);
+                rootMacro->specificMacros.erase(0);
+                rootMacro->hasBlank = false;
+            }
+        }
+    } else {
+        auto pair = rootMacro->specificMacros.find(argumentAmount);
+        if(pair != rootMacro->specificMacros.end()){
+            removed = true;
+            pair->second->~MacroSpecific();
+            TRACK_FREE(pair->second,MacroSpecific);
+            rootMacro->specificMacros.erase(pair);
+        }
+    }
+    return removed;
+}
+MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name) {
+    lock_imports.lock();
+    Import* imp = imports.get(import_id-1);
+    lock_imports.unlock();
+    Assert(imp);
+    
+    auto pair = imp->rootMacros.find(name);
+    MacroRoot* ptr = nullptr;
+    if(pair != imp->rootMacros.end()){
+        ptr = pair->second;
+    }
+    _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<"\n")
+    
+    return ptr;
+}
+
+MacroSpecific* Preprocessor::matchArgCount(MacroRoot* root, int count){
+    auto pair = root->specificMacros.find(count);
+    MacroSpecific* macro = nullptr;
+    if(pair==root->specificMacros.end()){
+        if(root->hasVariadic && (int)root->variadicMacro.parameters.size()-1<=count) {
+            macro = &root->variadicMacro;
+            _MMLOG(engone::log::out<<engone::log::MAGENTA << "match argcount "<<count<<" with "<< root->variadicMacro.parameters.size()<<" (inf)\n")
+        }
+    }else{
+        macro = pair->second;
+        _MMLOG(engone::log::out <<engone::log::MAGENTA<< "match argcount "<<count<<" with "<< macro->parameters.size()<<"\n")
+    }
+    return macro;
+}
+/* #endregion */
