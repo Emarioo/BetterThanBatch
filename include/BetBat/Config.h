@@ -75,7 +75,7 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
 
-#define PREPROC_REC_LIMIT 30
+#define PREPROC_REC_LIMIT 10000
 
 // THESE SHOULD BE OFF FOR THE COMPILER TO WORK PROPERLY
 // #define DISABLE_BASE_IMPORT

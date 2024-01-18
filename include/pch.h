@@ -25,8 +25,6 @@
 
 #include "Engone/Typedefs.h"
 
-// #define TRACY_ENABLE
-
 // #ifdef TRACY_ENABLE
 // #include "tracy/Tracy.hpp"
 // #endif

@@ -835,7 +835,7 @@ Token Lexer::appendToken(u32 fileId, Token token) {
         chunk = chunks.get(cindex);
         lock_chunks.unlock();
         
-        if(chunk->tokens.size()+1 >= 0x10000) {
+        if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
             chunk = nullptr; // chunk is full!
             cindex = 0;
         }
@@ -902,7 +902,7 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
         chunk = chunks.get(cindex);
         lock_chunks.unlock();
         
-        if(chunk->tokens.size()+1 >= 0x10000) {
+        if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
             chunk = nullptr; // chunk is full!
             cindex = 0;
         }
@@ -999,6 +999,7 @@ u32 Lexer::createImport(const std::string& path, Import** file) {
     
     lock_imports.lock();
     if(imports.getCount() >= 0xFFFF) {
+        Assert(false);
         lock_imports.unlock();
         if(file)
             *file = nullptr;
@@ -1090,6 +1091,13 @@ Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
     out.flags = info->flags;
     out.type = info->type;
     out.origin = encode_origin(cindex,tindex);
+    #ifdef LEXER_DEBUG_DETAILS
+    if(out.flags & TOKEN_FLAG_HAS_DATA)
+        u32 str_len = getStringFromToken(out,&out.s);
+    else if(out.type < 256) {
+        out.c = (char)out.type;
+    }
+    #endif
     return out;
 }
 Lexer::FeedIterator Lexer::createFeedIterator(Token start_token, Token end_token) {
@@ -1395,8 +1403,8 @@ TokenType StringToTokenType(const char* str, int len) {
 //     return token_index;
 // }
 TokenOrigin Lexer::encode_origin(u32 chunk_index, u32 tiny_token_index) {
-    Assert(chunk_index < (1<<TOKEN_ORIGIN_CHUNK_BITS));
-    Assert(tiny_token_index < (1<<TOKEN_ORIGIN_TOKEN_BITS));
+    Assert(chunk_index < TOKEN_ORIGIN_CHUNK_MAX);
+    Assert(tiny_token_index < TOKEN_ORIGIN_TOKEN_MAX);
     return (chunk_index<<TOKEN_ORIGIN_TOKEN_BITS) | tiny_token_index;
 }
 void Lexer::decode_origin(TokenOrigin origin, u32* chunk_index, u32* tiny_token_index){

@@ -1,0 +1,29 @@
+
+#import "Array"
+
+struct StackPiece {
+    popped: bool;
+    start: u32;
+    len: u32;
+}
+struct StackAllocator {
+    data: void*;
+    stack: DynamicArray<StackPiece>;
+    fn allocate(size: i32, ptr: void*) -> void* {
+        if size == 0 {
+            // free the stack piece
+            data_index := ptr - data;
+            
+        } else {
+            // find popped pieces from the back
+            
+            // if none fit, add new one
+        
+            ptr := stack.add(StackPiece{});
+            ptr.start = 0;
+            ptr.lne = size;
+            ptr.popped = false;
+        }
+    }
+    
+}

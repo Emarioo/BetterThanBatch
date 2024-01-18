@@ -87,10 +87,12 @@ int main(int argc, const char** argv){
 
     auto iter = compiler.lexer.getImports().iterator();
     while(compiler.lexer.getImports().iterate(iter)) {
-        log::out << "---- "<<iter.ptr->path<<" -----\n";
+        log::out << log::GOLD << "---- "<<TrimCWD(iter.ptr->path)<<" -----\n";
         
         compiler.lexer.print(iter.index+1);
     }
+    
+    log::out << "Finished\n";
 
     return 0;
     

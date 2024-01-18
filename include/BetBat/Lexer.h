@@ -13,6 +13,8 @@
 #include "BetBat/Util/Utility.h"
 #include "BetBat/Util/Perf.h"
 
+#define LEXER_DEBUG_DETAILS
+
 namespace lexer {
 
     enum TokenFlags : u16 {
@@ -48,6 +50,8 @@ namespace lexer {
 
     #define TOKEN_ORIGIN_CHUNK_BITS 17
     #define TOKEN_ORIGIN_TOKEN_BITS 15
+    #define TOKEN_ORIGIN_CHUNK_MAX (1<<TOKEN_ORIGIN_CHUNK_BITS)
+    #define TOKEN_ORIGIN_TOKEN_MAX (1<<TOKEN_ORIGIN_TOKEN_BITS)
     typedef u32 TokenOrigin; // change to u64 when changing chunk/token bits
     // struct TokenOrigin {
     //     u32 data[(TOKEN_ORIGIN_CHUNK_BITS + TOKEN_ORIGIN_TOKEN_BITS) / 32
@@ -59,6 +63,10 @@ namespace lexer {
         TokenType type=TOKEN_NONE;
         u16 flags=0;
         TokenOrigin origin={}; // decode to get chunk and token index
+        #ifdef LEXER_DEBUG_DETAILS
+        const char* s = nullptr;
+        char c = 0;
+        #endif
     };
     struct TokenRange {
         u32 importId;
@@ -125,6 +133,7 @@ namespace lexer {
         void destroyImport_unsafe(u32 import_id);
         
         Token appendToken(u32 fileId, Token token);
+        Token appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 column);
         
         bool equals_identifier(Token token, const char* str);
         
@@ -145,7 +154,6 @@ namespace lexer {
         engone::Mutex lock_imports;
         engone::Mutex lock_chunks;
 
-        Token appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 column);
         // Extra data will be appended to the token. If the token had data previously then
         // the data will be appended to the previous data possibly changing the data offset
         // if space isn't available.

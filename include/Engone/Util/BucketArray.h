@@ -36,7 +36,7 @@ struct BucketArray {
 
     // constructor does nothing except remember the variable
     // valuesPerBucket is forced to be divisible by 8. (data alignment * bits as bools)
-    BucketArray(u32 valuesPerBucket) : m_valuesPerBucket((valuesPerBucket+7)&7 /*ensure 8-byte alignment*/) { }
+    BucketArray(u32 valuesPerBucket) : m_valuesPerBucket((valuesPerBucket+7)&~7 /*ensure 8-byte alignment*/) { }
     ~BucketArray() { cleanup(); }
     // Does not call free on the items.
     void cleanup() {

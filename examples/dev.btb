@@ -1,11 +1,18 @@
 
-// #import "OS"
-// #import "Logger"
-// #import "tests/fuzzer_gen/main"
+#import "dev2"
 
-#macro okay(a,b) a + b + 123
-1
-#okay(2,5)
-3
-// tp := StartMeasure()
+#okay(1,3)
+
+#macro okay(a,...) a + #okay(...)
+#macro okay(a) a
+// // #macro hm(a,...) { ... }
+
+
+#if from2
+exists!
+#else
+does not exist!
+#endif
+
+// #okay(2,5,#)
 

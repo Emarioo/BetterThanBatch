@@ -2157,6 +2157,8 @@ void Compiler::processImports() {
     waiting_threads++;
     lock_imports.unlock();
     while(true) {
+        ZoneNamedNC(zone0,"processImport", tracy::Color::Azure1,true);
+        
         lock_wait_for_imports.wait();
         
         lock_imports.lock();
@@ -2251,6 +2253,8 @@ void Compiler::processImports() {
     lock_imports.unlock();
 }
 void Compiler::compileSource(const std::string& path) {
+    ZoneScopedC(tracy::Color::Azure1);
+    
     lock_wait_for_imports.init(1,1);
     signaled = true;
     preprocessor.init(&lexer, this);
@@ -2279,7 +2283,7 @@ u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origi
     
     imp.path = abs_path.text;
     lexer::Lexer::Import* intern_imp;
-    imp.import_id = lexer.createImport(path, &intern_imp);
+    imp.import_id = lexer.createImport(imp.path, &intern_imp);
     
     imports.add(&imp);
     lock_imports.unlock();

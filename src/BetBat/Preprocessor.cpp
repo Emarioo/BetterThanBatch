@@ -2166,9 +2166,9 @@ void PreprocContext::parseLink(){
 void PreprocContext::parseIf(){
     using namespace engone;
 
-    bool not_modifier=false;
-    // TODO: Parse condition as some expression (not ASTExpressions)
+    bool not_modifier=false,active=false,complete_inactive=false;
     
+    // TODO: Parse condition as some expression (not ASTExpressions)
     lexer::Token tok = gettok();
     if(tok.type == '!') {
         not_modifier = true;
@@ -2176,23 +2176,24 @@ void PreprocContext::parseIf(){
         tok = gettok();
     }
     
-    if(tok.type == lexer::TOKEN_IDENTIFIER) {
+    if(tok.type != lexer::TOKEN_IDENTIFIER) {
         Assert(false); // nocheckin, fix error   
     }
+    advance();
+    
     
     std::string name = lexer->getStdStringFromToken(tok);
-    
-    bool active = preprocessor->matchMacro(import_id, name);
-    if(not_modifier)
-        active = !active;
-    not_modifier = false; // reset, we use it later
-    
-    bool complete_inactive = false;
+    if(evaluateTokens) {
+        active = preprocessor->matchMacro(import_id, name);
+        if(not_modifier)
+            active = !active;
+        not_modifier = false; // reset, we use it later
+        complete_inactive = false;
+    }
     
     int depth = 0;
     SignalAttempt error = SignalAttempt::SUCCESS;
-    // bool hadElse=false;
-    _MLOG(log::out << log::GRAY<< "   ifdef - "<<name<<"\n";)
+    _MLOG(log::out << log::GRAY<< "   #if "<<(not_modifier?"!":"")<<name<<"\n";)
     while(true){
         lexer::Token token = gettok();
         
@@ -2230,7 +2231,7 @@ void PreprocContext::parseIf(){
                     advance();
                     token = gettok();
                 }
-                if(token.type == lexer::TOKEN_IDENTIFIER) {
+                if(token.type != lexer::TOKEN_IDENTIFIER) {
                     Assert(false); // nocheckin
                     // ERR_SECTION(
                     //     ERR_HEAD(name)
@@ -2238,12 +2239,15 @@ void PreprocContext::parseIf(){
                     //     ERR_LINE(name,"not a valid macro name")
                     // )
                 } else {
+                    advance();
                     name = lexer->getStdStringFromToken(token);
                     if(!active) {
                         // if a previous if/elif matched we don't want to check this one
-                        active = preprocessor->matchMacro(import_id, name);
-                        if(not_modifier)
-                            active = !active;
+                        if(evaluateTokens){
+                            active = preprocessor->matchMacro(import_id, name);
+                            if(not_modifier)
+                                active = !active;
+                        }
                     } else {
                         complete_inactive = true;
                         active = false;
@@ -2298,20 +2302,29 @@ void PreprocContext::parseImport() {
         auto imp = preprocessor->imports.get(import_id-1);
         preprocessor->lock_imports.unlock();
         
-        u32 dep_id = compiler->addImport(path);
+        auto lexer_imp = lexer->getImport_unsafe(import_id);
+        std::string orig_dir = TrimLastFile(lexer_imp->path);
+        
+        u32 dep_id = compiler->addImport(path, orig_dir);
         
         if(dep_id == 0) {
             Assert(false); // nocheckin, fix error   
         } else {
+            // preprocessor->lock_imports.lock();
+            // preprocessor->imports.requestSpot(dep_id,nullptr);
+            // preprocessor->lock_imports.unlock();
+            
             imp->import_dependencies.add(dep_id);
             compiler->addDependency(import_id, dep_id);
         }
     }
 }
 bool PreprocContext::parseMacroEvaluation() {
+    ZoneScopedC(tracy::Color::Goldenrod2);
+    
     if(!evaluateTokens) {
         advance(); // skip, is this okay?
-        return true;   
+        return true;
     }
     
     lexer::Token macro_token = gettok();
@@ -2325,14 +2338,18 @@ bool PreprocContext::parseMacroEvaluation() {
     
     typedef DynamicArray<lexer::Token> TokenList;
     
+    // TODO: Optimize by not allocating tokens on the heap.
+    //  Linear or some form of stack allocator would be better.
+    //  Perhaps an array of arrays that you can reuse?
+    
     u32 origin_import_id = import_id;
     
     struct Layer {
         Layer(bool eval_content) : eval_content(eval_content) {
+            specific = nullptr;
+            root = nullptr;
             if(eval_content) {
                 new(&input_arguments)DynamicArray<TokenList>();
-                specific = nullptr;
-                root = nullptr;
             } else {
                 id = 0;
                 caller = nullptr;
@@ -2350,11 +2367,11 @@ bool PreprocContext::parseMacroEvaluation() {
         u32 start_head = 0;
         u32* ref_head = nullptr;
         bool eval_content = true;
+        MacroSpecific* specific;
+        MacroRoot* root;
         union {
             struct {
                 DynamicArray<TokenList> input_arguments;
-                MacroSpecific* specific;
-                MacroRoot* root;
             };
             struct {
                 u32 id;
@@ -2412,6 +2429,11 @@ bool PreprocContext::parseMacroEvaluation() {
     
     // TODO: Limit recursion
     while(stack.size() != 0) {
+        if(stack.size() >= PREPROC_REC_LIMIT) {
+            Assert(("recursion limit",false)); // nocheckin, fix error
+            break;
+        }
+        
         Layer* layer = stack.last();
         if(!layer->eval_content) {
             
@@ -2424,13 +2446,13 @@ bool PreprocContext::parseMacroEvaluation() {
                 if(token.type == ',') {
                     layer->callee->input_arguments.add({});
                 }
-                layer->step();
-                   
+                
                 if(token.type == ',') {
                     layer->step();
                     continue;
                 }
                 if(token.type == ')') {
+                    layer->step();
                     delete layer;
                     stack.pop();
                     continue;
@@ -2466,7 +2488,7 @@ bool PreprocContext::parseMacroEvaluation() {
                     }
                     
                     for(int i = real_index; i < real_index + real_count;i++) {
-                        auto& list = layer->callee->input_arguments[i];
+                        auto& list = layer->caller->input_arguments[i];
                         for(int j=0;j<list.size();j++) {
                             auto& token = list[j];
                             if(layer->callee->input_arguments.size() == 0)
@@ -2504,26 +2526,34 @@ bool PreprocContext::parseMacroEvaluation() {
             }
             
             if(token.type == '#') {
-                std::string name = lexer->getStdStringFromToken(token);
-                MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
-                if (macroroot) {
-                    layer->step(); // name
-                    
-                    Layer* layer_macro = new Layer(true);
-                    layer_macro->root = macroroot;
-                    first->sethead((u32)0);
-                    
-                    token = layer->get(lexer);
-                    if(token.type == '(') {
-                        layer->step();
+                lexer::Token mac_tok = layer->get(lexer,1);
+                if(mac_tok.type == lexer::TOKEN_IDENTIFIER) {
+                    std::string name = lexer->getStdStringFromToken(mac_tok);
+                    MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
+                    if (macroroot) {
+                        layer->step(); // hashtag
+                        layer->step(); // name
                         
-                        Layer* layer_arg = new Layer(false);
-                        layer_arg->caller = layer_macro;
-                        layer_arg->specific = layer->specific;
-                        layer_arg->sethead(layer->gethead());
+                        Layer* layer_macro = new Layer(true);
+                        layer_macro->root = macroroot;
+                        layer_macro->sethead((u32)0);
+                        stack.add(layer_macro);
+                        
+                        token = layer->get(lexer);
+                        if(token.type == '(') {
+                            layer->step();
+                            
+                            Layer* layer_arg = new Layer(false);
+                            layer_arg->caller = layer;
+                            layer_arg->callee = layer_macro;
+                            layer_arg->specific = layer->specific;
+                            layer_arg->sethead(layer->ref_head);
+                            
+                            stack.add(layer_arg);
+                        }
+                        
+                        continue;
                     }
-                    
-                    continue;
                 }
             }
             
@@ -2546,6 +2576,11 @@ bool PreprocContext::parseMacroEvaluation() {
                         auto& list = layer->input_arguments[i];
                         for(int j=0;j<list.size();j++) {
                             lexer->appendToken(new_import_id, list[j]);
+                        }
+                        if(i+1 != real_index + real_count && list.size() != 0) {
+                            // nocheckin, fix line and column.
+                            lexer->appendToken(new_import_id, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE, 0, 0);
+                            // lexer->appendToken(new_import_id, list[j]);
                         }
                     }
                     
@@ -2601,14 +2636,20 @@ bool PreprocContext::parseOne() {
                 bool yes = parseMacroEvaluation();
                 if(!yes) {
                     if(evaluateTokens) {
-                        lexer->appendToken(new_import_id, gettok(-2)); // hashtag
+                        lexer->appendToken(new_import_id, gettok(-1)); // hashtag
                         lexer->appendToken(new_import_id, token);
+                        advance();
                     }
                 }
             }
         } else {
             advance();
-            Assert(false); // nocheckin, fix err
+            if(evaluateTokens) {
+                lexer->appendToken(new_import_id, token);
+            }
+            return true;
+            // advance();
+            // Assert(false); // nocheckin, fix err, should there be one?
         }
     // }
     return true;
@@ -2625,7 +2666,7 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
     
     if(context.evaluateTokens) {
         auto old_imp = lexer->getImport_unsafe(import_id);
-        std::string name = BriefString(old_imp->path,15);
+        std::string name = old_imp->path;
         
         context.new_import_id = lexer->createImport(name, nullptr);
         Assert(context.new_import_id != 0);
@@ -2697,14 +2738,12 @@ MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, b
         imp->rootMacros[str_name] = macroRoot;
     }
     
-    // READ BEFORE CHANGING! 
-    //You usually want a base case for variadic arguments when
-    // using it recursively. Instead of having to specify the blank
-    // base macro yourself, the compiler does it for you.
-    // IMPORTANT: It should NOT happen for macro(...)
-    // because the blank macro with zero arguments would be
-    // used instead of the variadic one making it impossible to
-    // use macro(...).
+    // NOTE: You usually want a base case for recursive macros. ensure_blank
+    //   will ensure that an empty zero argument macro is the base case so
+    //   you won't have to specify it yourself.
+    // IMPORTANT: It should NOT happen for 'macro(...)' because the blank
+    //   macro would be matched instead of the variadic one. The caller of
+    //   this f unction handles that logic at the moment.
     if (ensure_blank){
         auto pair = macroRoot->specificMacros.find(0);
         if(pair == macroRoot->specificMacros.end()) {
@@ -2718,6 +2757,7 @@ MacroRoot* Preprocessor::create_or_get_macro(u32 import_id, lexer::Token name, b
 }
 
 void Preprocessor::insertCertainMacro(u32 import_id, MacroRoot* rootMacro, MacroSpecific* localMacro) {
+    // nocheckin, we should not be able to insert specific macros into roots from other imports. Otherwise other files that import those files would suddenly have a specific macro available to them even if the import of the root macro didn't specify it.
     lock_imports.lock();
     Import* imp = imports.get(import_id-1);
     lock_imports.unlock();
@@ -2761,6 +2801,7 @@ void Preprocessor::insertCertainMacro(u32 import_id, MacroRoot* rootMacro, Macro
 }
 
 bool Preprocessor::removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int argumentAmount, bool variadic){
+    Assert(false); // nocheckin, only for local macros
     lock_imports.lock();
     Import* imp = imports.get(import_id-1);
     lock_imports.unlock();
@@ -2793,19 +2834,40 @@ bool Preprocessor::removeCertainMacro(u32 import_id, MacroRoot* rootMacro, int a
     return removed;
 }
 MacroRoot* Preprocessor::matchMacro(u32 import_id, const std::string& name) {
-    lock_imports.lock();
-    Import* imp = imports.get(import_id-1);
-    lock_imports.unlock();
-    Assert(imp);
-    
-    auto pair = imp->rootMacros.find(name);
-    MacroRoot* ptr = nullptr;
-    if(pair != imp->rootMacros.end()){
-        ptr = pair->second;
+    DynamicArray<u32> checked_ids{}; // necessary to prevent infinite loop with circular dependencies
+    DynamicArray<u32> ids_to_check{};
+    ids_to_check.add(import_id);
+    while(ids_to_check.size()>0) {
+        u32 id = ids_to_check.last();
+        ids_to_check.pop();
+        
+        lock_imports.lock();
+        Import* imp = imports.get(id-1);
+        lock_imports.unlock();
+        Assert(imp);
+        
+        auto pair = imp->rootMacros.find(name);
+        if(pair != imp->rootMacros.end()){
+            _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<" from '"<<id<<"'\n")
+            return pair->second;
+        }
+        checked_ids.add(id);
+        
+        // TODO: Optimize
+        FOR(imp->import_dependencies) {
+            bool already_checked = false;
+            for(int i=0;i<checked_ids.size();i++) {
+                if(checked_ids[i] == it) {
+                    already_checked=true;
+                    break;   
+                }
+            }
+            if(!already_checked) {
+                ids_to_check.add(it);
+            }
+        }
     }
-    _MMLOG(engone::log::out << engone::log::CYAN << "match root "<<name<<"\n")
-    
-    return ptr;
+    return nullptr;
 }
 
 MacroSpecific* Preprocessor::matchArgCount(MacroRoot* root, int count){
