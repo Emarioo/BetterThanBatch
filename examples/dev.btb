@@ -1,10 +1,10 @@
-#import "OS"
-#import "Logger"
-// #import "tests/fuzzer_gen/main"
+// #import "OS"
+// #import "Logger"
+#import "tests/fuzzer_gen/main"
 
-tp := StartMeasure()
-NativeSleep(0.383);
-t := StopMeasure(tp)
-log("Time: ",t)
+// tp := StartMeasure()
+// NativeSleep(0.383);
+// t := StopMeasure(tp)
+// log("Time: ",t)
 
-// #import "examples/random/test_randoms.btb"
+// // #import "examples/random/test_randoms.btb"
