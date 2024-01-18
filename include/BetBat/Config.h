@@ -107,7 +107,16 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 
 #define INCOMPLETE Assert(("Incomplete",false));
 
-enum LoggingSection : u32 {
+#ifdef DEBUG
+#define LOG(CATEGORY, ...) if(global_loggingSection&(CATEGORY)) { engone::log::out << __VA_ARGS__; }
+#else
+#define LOG(CATEGORY,...)
+#endif
+enum LoggingSection : u64 {
+    CAT_ALL = 0xFFFF'FFFF'FFFF'0000,
+    CAT_PROCESSING          = 0x10000,
+    CAT_PROCESSING_DETAILED = 0x20000,
+    
     LOG_TOKENIZER       = 0x1,
     LOG_PREPROCESSOR    = 0x2,
     LOG_PARSER          = 0x4,
@@ -123,6 +132,7 @@ enum LoggingSection : u32 {
     LOG_AST             = 0x800,
     LOG_IMPORTS         = 0x1000,
     LOG_INCLUDES        = 0x2000,
+    
 };
 extern LoggingSection global_loggingSection;
 

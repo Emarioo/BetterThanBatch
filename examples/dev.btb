@@ -1,18 +1,16 @@
 
-#import "dev2"
+#import "tests/fuzzer_gen/main"
+// #import "tests/fuzzer_gen/f19"
 
-#okay(1,3)
+// #import "dev2"
 
-#macro okay(a,...) a + #okay(...)
-#macro okay(a) a
-// // #macro hm(a,...) { ... }
+// #macro okay(a,...) a + #okay(...)
+// #macro okay(a) a
 
-
-#if from2
-exists!
-#else
-does not exist!
-#endif
+// #if from2
+// exists!
+// #else
+// does not exist!
+// #endif
 
 // #okay(2,5,#)
-

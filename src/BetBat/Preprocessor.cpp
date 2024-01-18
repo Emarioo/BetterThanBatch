@@ -1946,7 +1946,7 @@ TokenStream* Preprocess(CompileInfo* compileInfo, TokenStream* inTokens){
 
 void PreprocContext::parseMacroDefinition() {
     using namespace engone;
-    ZoneScopedC(tracy::Color::Wheat);
+    ZoneScopedC(tracy::Color::Gold);
 
     bool multiline = false;
     
@@ -2305,13 +2305,13 @@ void PreprocContext::parseImport() {
         auto lexer_imp = lexer->getImport_unsafe(import_id);
         std::string orig_dir = TrimLastFile(lexer_imp->path);
         
-        u32 dep_id = compiler->addImport(path, orig_dir);
+        u32 dep_id = compiler->addOrFindImport(path, orig_dir);
         
         if(dep_id == 0) {
             Assert(false); // nocheckin, fix error   
         } else {
             // preprocessor->lock_imports.lock();
-            // preprocessor->imports.requestSpot(dep_id,nullptr);
+            // preprocessor->imports.requestSpot(dep_id-1,nullptr);
             // preprocessor->lock_imports.unlock();
             
             imp->import_dependencies.add(dep_id);
@@ -2655,7 +2655,7 @@ bool PreprocContext::parseOne() {
     return true;
 }
 u32 Preprocessor::process(u32 import_id, bool phase2) {
-    ZoneScopedC(tracy::Color::Wheat);
+    ZoneScopedC(tracy::Color::Gold3);
  
     PreprocContext context{};
     context.lexer = lexer;

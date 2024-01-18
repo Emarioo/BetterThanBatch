@@ -32,29 +32,33 @@ u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
 }
 u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 existing_import_id){
     using namespace engone;
-    ZoneScopedC(tracy::Color::Honeydew);
+    ZoneScopedC(tracy::Color::Gold);
 
-    Import* file=nullptr;
+    Import* lexer_import=nullptr;
     u32 file_id = 0;
     
     if(existing_import_id==0){
-        file_id = createImport(path_name, &file);
+        file_id = createImport(path_name, &lexer_import);
     } else {
         // use existing/prepared import
         file_id = existing_import_id;
         lock_imports.lock();
-        file = imports.get(existing_import_id-1);
+        lexer_import = imports.get(existing_import_id-1);
         lock_imports.unlock();
     }
+    Assert(lexer_import && file_id != 0);
     
-    Assert(file && file_id != 0);
+    
+    lexer_import->fileSize = length;
 
     // TODO: Optimize by keeping traack of chunks ids and their pointers here instead of using
     //  appendToken which queries file and chunk id every time.
 
     auto update_flags = [&](u32 set, u32 clear = 0){
-        if(file->chunk_indices.size()!=0) {
-            Chunk* chunk = chunks.get(file->chunk_indices.last());
+        if(lexer_import->chunk_indices.size()!=0) {
+            lock_imports.lock();
+            Chunk* chunk = chunks.get(lexer_import->chunk_indices.last());
+            lock_imports.unlock();
             chunk->tokens.last().flags = (chunk->tokens.last().flags&~clear) | set;
         }
     };
@@ -123,11 +127,11 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     // AND else where too. A bug is bound to happen by how spread out it is.
                     // Bug counter: 1
                     if(!foundNonSpaceOnLine) {
-                        file->blank_lines++;
+                        lexer_import->blank_lines++;
                         // outStream->blankLines++;
                         foundNonSpaceOnLine = false;
                     } else
-                        file->lines++;
+                        lexer_import->lines++;
                         // outStream->lines++;
                     update_flags(TOKEN_FLAG_NEWLINE);
                     // if(file->chunk_indices.size()!=0) {
@@ -152,69 +156,14 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     _TLOG(log::out << "// : End comment\n";)
                 }
             }else{
-                // MEASURE;
-
-                // #define OPTIMIZE_COMMENT
-                // I thought this code would be faster but it seems
-                // like it's slower.
-                #ifdef OPTIMIZE_COMMENT
+                // I tried to optimize comment parsing at one point but it wasn't any faster.
+                // Also, comments is not the slow part of the compiler so please don't waste time optimizing them.
                 if(chr=='\n'||index==length){
                     if(!foundNonSpaceOnLine)
-                        outStream->blankLines++;
-                    else
-                        outStream->lines++;
-                    if(outStream->length()!=0)
-                        outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
-                    inComment=false;
-                    _TLOG(log::out << "// : End comment\n";)
-                } else {
-                    index++;
-                    while(true){
-                        char chr = text[index];
-                        // do it in batches?
-                        // not worth because comments have
-                        // to few characters?
-                        // char ch1 = text[index];
-                        // char ch2 = text[index];
-                        // char ch3 = text[index];
-                        if(chr=='\t')
-                            column+=4;
-                        else
-                            column++;
-                        index++;
-                        if(chr=='\n'||index==length){
-                            line++;
-                            column=1;
-                            if(!foundNonSpaceOnLine)
-                                outStream->blankLines++;
-                            else
-                                outStream->lines++;
-                            foundNonSpaceOnLine=false;
-                            if(outStream->length()!=0)
-                                outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
-
-                            if(index + 1 < length){
-                                char chr = text[index];
-                                char chr2 = text[index+1];
-                                if(chr == '/' && chr2 == '/'){
-                                    // log::out << "ha\n";
-                                    index+=2;
-                                    continue;
-                                }
-                            }
-                            inComment=false;
-                            _TLOG(log::out << "// : End comment\n";)
-                            break;
-                        }
-                    }
-                }
-                #else
-                if(chr=='\n'||index==length){
-                    if(!foundNonSpaceOnLine)
-                        file->blank_lines++;
+                        lexer_import->blank_lines++;
                         // outStream->blankLines++;
                     else
-                        file->lines++;
+                        lexer_import->lines++;
                         // outStream->lines++;
                     foundNonSpaceOnLine=false;
                     // if(outStream->length()!=0)
@@ -223,7 +172,6 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     inComment=false;
                     _TLOG(log::out << "// : End comment\n";)
                 }
-                #endif
             }
             continue;
         } else if(inQuotes) {
@@ -336,11 +284,11 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         }
         if(chr == '\n' || index == length) {
             if(foundNonSpaceOnLine){
-                file->lines++;
+                lexer_import->lines++;
                 // outStream->lines++;
                 foundNonSpaceOnLine = false;
             } else
-                file->blank_lines++;
+                lexer_import->blank_lines++;
                 // outStream->blankLines++;
         }
         bool isSpecial = false;
@@ -434,12 +382,55 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             // TODO: Set token types, literals...
 
             token.type = TOKEN_IDENTIFIER;
-            Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
-            modifyTokenData(tok, text + str_start, str_end - str_start, true);
             
+            // Slow code
+            // Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
+            // modifyTokenData(tok, text + str_start, str_end - str_start, true);
+            
+            { // Faster code by inlining functions by hand
+                Chunk* chunk = nullptr;
+                u32 cindex = 0;
+                if(lexer_import->chunk_indices.size() > 0) {
+                    cindex = lexer_import->chunk_indices.last();
+                    
+                    lock_chunks.lock();
+                    chunk = chunks.get(cindex);
+                    lock_chunks.unlock();
+                    
+                    if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
+                        chunk = nullptr; // chunk is full!
+                        cindex = 0;
+                    }
+                }
+                if(!chunk) {
+                    lock_chunks.lock();
+                    cindex = chunks.add(nullptr,&chunk);
+                    lock_chunks.unlock();
+                    
+                    chunk->import_id = file_id;
+                    lexer_import->chunk_indices.add(cindex);
+                }
+                chunk->tokens.add({});
+                auto& info = chunk->tokens.last();
+                info.type = token.type;
+                info.flags = token.flags;
+                info.line = token_line;
+                info.column = token_column;
+                info.data_offset = 0;
+                
+                void* ptr = text+str_start;
+                int size = str_end - str_start;
+                Assert(size <= 0x100);
+                info.flags |= TOKEN_FLAG_HAS_DATA;
+                info.data_offset = chunk->aux_used;
+                
+                info.flags |= TOKEN_FLAG_NULL_TERMINATED;
+                chunk->alloc_aux_space(size + 2);
+                chunk->aux_data[info.data_offset] = size;
+                memcpy(chunk->aux_data + info.data_offset+1, ptr, size);
+                chunk->aux_data[info.data_offset + 1 + size] = '\0';
+            }
 
-            // outStream->addToken(token);
-            
             token = {};
             str_start = 0;
             str_end = 0;
@@ -453,7 +444,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             }
             token_line = ln;
             token_column = col;
-            file->comment_lines++;
+            lexer_import->comment_lines++;
             // outStream->commentCount++;
             index++; // skip the next slash
             _TLOG(log::out << "// : Begin comment\n";)
@@ -478,152 +469,6 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         if(isSpecial){
             if(chr=='#'){
                 foundHashtag=true; // if not found then preprocessor isn't necessary
-                
-                // static const char* const str_import = "import";
-                // static const int str_import_len = strlen(str_import);
-                // int correct = 0;
-                // int originalIndex = index;
-                // bool readingQuote = false;
-                // bool readingPath = false;
-                // bool readingAs = false;
-                // bool readingAsName = false;
-                // int startOfPath = 0;
-                // int endOfPath = 0;
-                // int startOfAsName = 0;
-                // int endOfAsName = 0;
-                // int prev_import_count = outStream->importList.size();
-                // while(index < length) {
-                //     char prevChr = 0;
-                //     char nextChr = 0;
-                //     if(index>0)
-                //         prevChr = text[index-1];
-                //     if(index+1<length)
-                //         nextChr = text[index+1];
-                //     char chr = text[index];
-                //     index++;
-                    
-                //     if(chr=='\t')
-                //         column+=4;
-                //     else
-                //         column++;
-                //     if(chr == '\n'){
-                //         line++;
-                //         column=1;
-                //     }
-                    
-                //     if(readingAsName) {
-                //         if(startOfAsName == 0) { // the name after as can never be at 0, we can therefore use it for another meaning
-                //             if(chr == ' ' || chr== '\t') {
-                //                 // whitespace is okay
-                //             } else if(chr == '\n') {
-                //                 const char* str = text + startOfPath;
-                //                 char prev = text[endOfPath];
-                //                 text[endOfPath] = '\0';
-                //                 outStream->addImport(str,"");
-                //                 text[endOfPath] = prev;
-                //                 break;
-                //             } else {
-                //                 if(((chr|32) >= 'a' && (chr|32) <= 'z') || chr == '_') {
-                //                     startOfAsName = index-1;
-                //                 } else {
-                //                     Assert(("bad as name, fix proper error",false));
-                //                     break;  
-                //                 }
-                //             }
-                //         } else {
-                //             if(((chr|32) >= 'a' && (chr|32) <= 'z') || (chr >= '0' && chr <= '9') || chr == '_') {
-                //                 // continue parsing
-                //             } else {
-                //                 // We are finally done
-                //                 const char* str = text + startOfPath;
-                //                 char prev = text[endOfPath];
-                //                 text[endOfPath] = '\0';
-                                
-                //                 endOfAsName = index-1;
-                //                 const char* str_as = text + startOfAsName;
-                //                 char prev2 = text[endOfAsName];
-                //                 text[endOfAsName] = '\0';
-                                
-                //                 outStream->addImport(str,str_as);
-                //                 text[endOfPath] = prev;
-                //                 text[endOfAsName] = prev2;
-                //                 break;
-                //             }
-                //         }
-                //     } else if (readingAs) {
-                //         if(chr == 'a') {
-                //             if(nextChr == 's') {
-                //                 index++;
-                //                 readingAsName = true;
-                //                 readingAs = false;
-                //                 continue;
-                //             }
-                //             const char* str = text + startOfPath;
-                //             char prev = text[endOfPath];
-                //             text[endOfPath] = '\0';
-                //             outStream->addImport(str,"");
-                //             text[endOfPath] = prev;
-                //             break;
-                //         } else if(chr == ' ' || chr== '\t') {
-                //             // whitespace is okay
-                //         } else if(chr == '\n') {
-                //             const char* str = text + startOfPath;
-                //             char prev = text[endOfPath];
-                //             text[endOfPath] = '\0';
-                //             outStream->addImport(str,"");
-                //             text[endOfPath] = prev;
-                //             break;
-                //         }
-                //     } else if(readingPath) {
-                //         if(chr == '"') {
-                //             endOfPath = index - 1;
-                //             readingAs = true;
-                //             readingPath = false;
-                //             if(index == length) {
-                //                 const char* str = text + startOfPath;
-                //                 char prev = text[endOfPath];
-                //                 text[endOfPath] = '\0';
-                //                 outStream->addImport(str,"");
-                //                 text[endOfPath] = prev;
-                //                 break;
-                //             }
-                //         }
-                //         if(chr == '\n') {
-                //             // TODO: Print error
-                //             break;
-                //         }
-                //     } else if(readingQuote) {
-                //         if (chr == '"') {
-                //             readingQuote = false;
-                //             readingPath = true;   
-                //             startOfPath = index;
-                //         } else if(chr == ' ' || chr== '\t' || chr == '\n') {
-                //             // whitespace is okay
-                //         } else {
-                //             break;   
-                //         }
-                //     } else {
-                //         if(str_import[correct] == chr) {
-                //             correct++;
-                //             if(correct == str_import_len) {
-                //                 readingQuote = true;
-                //             }
-                //         } else {
-                //             correct=0;
-                //             break;
-                //         }
-                //     }
-                    
-                //     if(chr=='\r'&&(nextChr=='\n'||prevChr=='\n')){
-                //         continue;// skip \r and process \n next time
-                //     }
-                // }
-                // if(prev_import_count == outStream->importList.size()) {
-                //     // revert reading
-                //     index = originalIndex;
-                // } else {
-                //     continue;
-                // }
             }
             if(chr=='@'){
                 Token anot = {};
@@ -862,16 +707,16 @@ Token Lexer::appendToken(u32 fileId, Token token) {
         const void* ptr=nullptr;
         u32 size = getDataFromToken(token, &ptr);
         
-        info->data_offset = chunk->auxiliary_data.size();
+        info->data_offset = chunk->aux_used;
         if(from_info->flags & TOKEN_FLAG_NULL_TERMINATED) {
-            chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size + 2);
-            chunk->auxiliary_data[info->data_offset] = size;
-            memcpy(chunk->auxiliary_data.data() + info->data_offset+1, ptr, size);
-            chunk->auxiliary_data[info->data_offset + 1 + size] = '\0';
+            chunk->alloc_aux_space(size + 2);
+            chunk->aux_data[info->data_offset] = size;
+            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+            chunk->aux_data[info->data_offset + 1 + size] = '\0';
         } else {
-            chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size + 1);
-            chunk->auxiliary_data[info->data_offset] = size;
-            memcpy(chunk->auxiliary_data.data() + info->data_offset+1, ptr, size);
+            chunk->alloc_aux_space(size + 1);
+            chunk->aux_data[info->data_offset] = size;
+            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
         }
     }
 
@@ -957,18 +802,19 @@ u32 Lexer::modifyTokenData(Token token, void* ptr, u32 size, bool with_null_term
     auto info = chunk->tokens.getPtr(tindex);
 
     if(info->flags & TOKEN_FLAG_HAS_DATA) {
-        u8 len = chunk->auxiliary_data[info->data_offset];
+        u8 len = chunk->aux_data[info->data_offset];
         // If we had null termination first time we added data then we should have specified it now to.
         // probably bug otherwise.
         Assert((bool)with_null_termination == (bool)(info->flags&TOKEN_FLAG_NULL_TERMINATED));
-        if(chunk->auxiliary_data.size() == info->data_offset + 1 + len + (info->flags&TOKEN_FLAG_NULL_TERMINATED?1:0)) {
+        if(chunk->aux_used == info->data_offset + 1 + len + (info->flags&TOKEN_FLAG_NULL_TERMINATED?1:0)) {
             Assert(len+size < 0x100); // check integer overflow
             // Previous data exists at the end so we can just append the new data.
-            chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size);
-            chunk->auxiliary_data[info->data_offset] = len + size;
-            memcpy(chunk->auxiliary_data.data() + info->data_offset + 1 + len, ptr, size);
+            chunk->alloc_aux_space(size);
+            // chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size);
+            chunk->aux_data[info->data_offset] = len + size;
+            memcpy(chunk->aux_data + info->data_offset + 1 + len, ptr, size);
             if(with_null_termination) {
-                chunk->auxiliary_data[info->data_offset + 1 + len + size] = '\0';
+                chunk->aux_data[info->data_offset + 1 + len + size] = '\0';
             }
         } else {
             // We have move memory because previous data wasn't at the end and there is probably not any space.
@@ -979,17 +825,17 @@ u32 Lexer::modifyTokenData(Token token, void* ptr, u32 size, bool with_null_term
     } else {
         Assert(size <= 0x100);
         info->flags |= TOKEN_FLAG_HAS_DATA;
-        info->data_offset = chunk->auxiliary_data.size();
+        info->data_offset = chunk->aux_used;
         if(with_null_termination) {
             info->flags |= TOKEN_FLAG_NULL_TERMINATED;
-            chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size + 2);
-            chunk->auxiliary_data[info->data_offset] = size;
-            memcpy(chunk->auxiliary_data.data() + info->data_offset+1, ptr, size);
-            chunk->auxiliary_data[info->data_offset + 1 + size] = '\0';
+            chunk->alloc_aux_space(size + 2);
+            chunk->aux_data[info->data_offset] = size;
+            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+            chunk->aux_data[info->data_offset + 1 + size] = '\0';
         } else {
-            chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size + 1);
-            chunk->auxiliary_data[info->data_offset] = size;
-            memcpy(chunk->auxiliary_data.data() + info->data_offset+1, ptr, size);
+            chunk->alloc_aux_space(size + 1);
+            chunk->aux_data[info->data_offset] = size;
+            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
         }
     }
     return 0; // TODO: Don't always return 0, what should we do?
@@ -1354,8 +1200,8 @@ u32 Lexer::getDataFromToken(Token tok, const void** ptr){
     Chunk* chunk = chunks.get(cindex);
     lock_chunks.unlock();
 
-    *ptr = chunk->auxiliary_data.data() + info->data_offset + 1;
-    u8 len = chunk->auxiliary_data[info->data_offset];
+    *ptr = chunk->aux_data + info->data_offset + 1;
+    u8 len = chunk->aux_data[info->data_offset];
     return len;
 }
 void Lexer::print(u32 fileid) {

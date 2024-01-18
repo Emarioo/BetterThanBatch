@@ -2152,18 +2152,21 @@ bool CompileAll(CompileOptions* options){
 }
 
 void Compiler::processImports() {
+    using namespace engone;
     lock_imports.lock();
     total_threads++;
     waiting_threads++;
     lock_imports.unlock();
     while(true) {
-        ZoneNamedNC(zone0,"processImport", tracy::Color::Azure1,true);
+        ZoneNamedNC(zone0,"processImport", tracy::Color::DarkSlateGray,true);
         
         lock_wait_for_imports.wait();
         
         lock_imports.lock();
         signaled=false;
         waiting_threads--;
+        
+        LOG(CAT_PROCESSING, log::GOLD<<"Process an import ("<<imports.getCount()<<" imports)\n")
         
         bool finished = true;
         Import* imp=nullptr;
@@ -2172,16 +2175,20 @@ void Compiler::processImports() {
             Import* im = iter.ptr;
             if(im->state & FLAG_BUSY) {
                 finished=false;
+                LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" busy: "<<im->import_id<<" ("<<TrimCWD(im->path)<<")\n")
                 continue;
             }
             if(im->state & FLAG_FINISHED) {
+                LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" finished: "<<im->import_id<<" ("<<TrimCWD(im->path)<<")\n")
                 continue;
             }
             
             bool missing_dependency = false;
             for(int j=0;j<im->dependencies.size();j++) {
                 Import* dep = imports.get(im->dependencies[j]-1);
-                if(!(dep->state&(FLAG_LEXED|FLAG_PREPROCESSED))) {
+                // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
+                if(!dep || !(dep->state&(FLAG_LEXED|FLAG_PREPROCESSED))) {
+                    LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j]<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                     missing_dependency = true;
                     break;
                 }
@@ -2195,6 +2202,7 @@ void Compiler::processImports() {
             break;
         }
         if(imp) {
+            // LOG(CAT_PROCESSING, log::GREEN<<"Processing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
             imp->state = (ImportFlags)(imp->state | FLAG_BUSY);
             if(!signaled) {
                 lock_wait_for_imports.signal();
@@ -2203,36 +2211,72 @@ void Compiler::processImports() {
         } else if(!finished && !signaled && waiting_threads+1 == total_threads) {
             Assert(false); // we are blocked?
         }
-        if(!imp && !finished) {
-            waiting_threads++;   
+        if(finished) {
+            if(!signaled) {
+                lock_wait_for_imports.signal();
+                signaled = true;
+            }
+            lock_imports.unlock();
+            break;
+        }
+        if(!imp) {
+            waiting_threads++;
         }
         
         lock_imports.unlock();
         
-        if(finished) {
-            break;
-        }
-        
         if(imp) {
             if(!(imp->state & FLAG_LEXED)) {
+                LOG(CAT_PROCESSING, log::GREEN<<" Lexing and preprocessing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 // imp->import_id may zero but may also be pre-created
-                imp->import_id = lexer.tokenize(imp->path, imp->import_id);
+                u32 old_id = imp->import_id;
+                imp->import_id = lexer.tokenize(imp->path, old_id);
                 preprocessor.process(imp->import_id,false);
-                // imp->preproc_import_id = preprocessor.process(imp->import_id);
+                
+                auto intern_imp = lexer.getImport_unsafe(imp->import_id);
+                
+                u32 tokens = 0;
+                if(intern_imp->chunk_indices.size() > 0) {
+                    tokens = (intern_imp->chunk_indices.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + lexer.getChunk_unsafe(intern_imp->chunk_indices.last())->tokens.size();
+                }
+                
+                LOG(CAT_PROCESSING_DETAILED, log::GRAY
+                    << " lines: "<<intern_imp->lines
+                    << ", tokens: "<<tokens
+                    << ", file_size: "<<FormatBytes(intern_imp->fileSize)
+                    << "\n")
                 
                 imp->state = (ImportFlags)(imp->state|FLAG_LEXED|FLAG_PREPROCESSED);
+                
+                imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
             } else if(!(imp->state & FLAG_PREPROCESSED)){
                 Assert(false); // if we lexed then we should also have preprocessed
             } else if(!(imp->state & FLAG_PREPROCESSED_2)) {
+                LOG(CAT_PROCESSING, log::GREEN<<" Final preprocessing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
+                
                 imp->preproc_import_id = preprocessor.process(imp->import_id, true);
                 
+                auto intern_imp = lexer.getImport_unsafe(imp->preproc_import_id);
+                
+                u32 tokens = 0;
+                if(intern_imp->chunk_indices.size() > 0) {
+                    tokens = (intern_imp->chunk_indices.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + lexer.getChunk_unsafe(intern_imp->chunk_indices.last())->tokens.size();
+                }
+                
+                LOG(CAT_PROCESSING_DETAILED, log::GRAY
+                    << ", tokens: "<<tokens
+                    << "\n")
+                
                 imp->state = (ImportFlags)(imp->state|FLAG_PREPROCESSED_2);
+                
+                LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
+                imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
             } else if(!(imp->state & FLAG_PARSED)) {
                 // imp->import_id = parser.process(imp->import_id);
                 
                 imp->state = (ImportFlags)(imp->state|FLAG_PARSED);
             } else {
-                // nocheckin, we're not actually done
+                LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 imp->state = (ImportFlags)(imp->state|FLAG_FINISHED);
             }
             
@@ -2252,8 +2296,14 @@ void Compiler::processImports() {
     total_threads--;
     lock_imports.unlock();
 }
+u32 Thread_process(void* self) {
+    ((Compiler*)self)->processImports();
+    return 0;
+}
 void Compiler::compileSource(const std::string& path) {
-    ZoneScopedC(tracy::Color::Azure1);
+    ZoneScopedC(tracy::Color::Gray19);
+    
+    auto tp = engone::StartMeasure();
     
     lock_wait_for_imports.init(1,1);
     signaled = true;
@@ -2262,10 +2312,55 @@ void Compiler::compileSource(const std::string& path) {
     bool yes = addImport(path);
     Assert(yes); // nocheckin
     
+    int thread_count = 1;
+    
+    DynamicArray<engone::Thread> threads{};
+    
+    for(int i=0;i<thread_count-1;i++) {
+        threads.add({});
+        threads.last().init(Thread_process, this);
+        // engone::log::out << " "<<threads.last().getId()<<"\n";
+    }
+    
     processImports();
+    
+    for(int i=0;i<thread_count-1;i++) {
+        // engone::log::out << " "<<threads.last().getId()<<"\n";
+        threads[i].join();
+        // engone::log::out << " "<<threads.last().getId()<<"\n";
+    }
+    
+    double time = engone::StopMeasure(tp);
+    engone::log::out << "Compiled in "<<FormatTime(time)<<"\n";
 }
 u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origin_file) {
+    Path abs_path = findSourceFile(path, dir_of_origin_file);
+    if(abs_path.text.empty()) {
+        return 0; // file does not exist? caller should throw error
+    }
+    Import imp{};
+    lock_imports.lock();
+    // BucketArray<Import>::Iterator iter{};
+    // while(imports.iterate(iter)) {
+    //     if(iter.ptr->path == abs_path.text) {
+    //         u32 id = iter.ptr->import_id;
+    //         lock_imports.unlock();
+    //         return id;
+    //     }
+    // }
+    imp.path = abs_path.text;
+    lexer::Lexer::Import* intern_imp;
+    imp.import_id = lexer.createImport(imp.path, &intern_imp);
+    Assert(imp.import_id!=0);
+    // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add import: "<<imp.import_id<<" ("<<path<<")\n")
     
+    auto yes = imports.requestSpot(imp.import_id-1, &imp);
+    Assert(yes);
+    lock_imports.unlock();
+    
+    return imp.import_id;
+}
+u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file) {
     Path abs_path = findSourceFile(path, dir_of_origin_file);
     if(abs_path.text.empty()) {
         return 0; // file does not exist? caller should throw error
@@ -2284,8 +2379,10 @@ u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origi
     imp.path = abs_path.text;
     lexer::Lexer::Import* intern_imp;
     imp.import_id = lexer.createImport(imp.path, &intern_imp);
+    Assert(imp.import_id!=0);
     
-    imports.add(&imp);
+    auto yes = imports.requestSpot(imp.import_id-1, &imp);
+    Assert(yes);
     lock_imports.unlock();
     
     return imp.import_id;
@@ -2294,8 +2391,10 @@ void Compiler::addDependency(u32 import_id, u32 dep_import_id) {
     lock_imports.lock();
     auto imp = imports.get(import_id-1);
     Assert(imp);
+    // imports.requestSpot(dep_import_id-1,nullptr);
     imp->dependencies.add(dep_import_id);
     lock_imports.unlock();
+    // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add depend: "<<import_id<<"->"<<dep_import_id<<" ("<<TrimCWD(imp->path)<<")\n")
 }
 void Compiler::addLinkDirective(const std::string& text){
     lock_miscellaneous.lock();

@@ -85,15 +85,25 @@ int main(int argc, const char** argv){
     compiler.importDirectories.add(Path("modules/").getAbsolute());
     compiler.compileSource("examples/dev.btb");
 
+    u32 lines=0;
+    u32 filesize=0;
+    
+
     auto iter = compiler.lexer.getImports().iterator();
     while(compiler.lexer.getImports().iterate(iter)) {
-        log::out << log::GOLD << "---- "<<TrimCWD(iter.ptr->path)<<" -----\n";
+        lines+=iter.ptr->lines;
+        filesize+=iter.ptr->fileSize;
+        // log::out << log::GOLD << "---- "<<TrimCWD(iter.ptr->path)<<" -----\n";
         
-        compiler.lexer.print(iter.index+1);
+        // compiler.lexer.print(iter.index+1);
     }
+    log::out << "size: "<<FormatBytes(filesize) << ", lines: "<<lines<<"\n";
     
+    {
+        ZoneNamedN(zone0,"sleep",true);
+        engone::Sleep(0.5); // give time for program to connect and send data to tracy profiler
+    }
     log::out << "Finished\n";
-
     return 0;
     
     // log::out << p.text << "\n";

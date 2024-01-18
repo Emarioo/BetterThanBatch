@@ -7,6 +7,8 @@
 #include "BetBat/PhaseContext.h"
 #include "Engone/Util/BucketArray.h"
 
+#include "BetBat/Util/Perf.h"
+
 struct TokenRef{
     uint16 index=0;
     uint16 flags=0;

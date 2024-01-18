@@ -162,7 +162,7 @@ namespace engone {
 	class Thread {
 	public:
 		Thread() = default;
-		~Thread(){ cleanup(); }
+		// ~Thread(){ cleanup(); } // no destructor, in case you resize arrays and cause move semantics BUT don't make
 		// The thread itself should not call this function
 		void cleanup();
 		
@@ -186,6 +186,7 @@ namespace engone {
 		static void* GetTLSValue(TLSIndex index);
 		static bool SetTLSValue(TLSIndex index, void* ptr);
 
+        
 
 	private:
 		static const int THREAD_SIZE = 8;

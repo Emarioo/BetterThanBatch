@@ -89,9 +89,27 @@ namespace lexer {
             u32 data_offset;
         };
         struct Chunk {
+            ~Chunk() {
+                engone::Allocator* allocator = engone::GlobalHeapAllocator();
+                allocator->allocate(0, aux_data, aux_max);
+            }
             u32 import_id;
             DynamicArray<TokenInfo> tokens;
-            DynamicArray<u8> auxiliary_data;
+            u8* aux_data=nullptr; // auxiliary
+            u32 aux_used=0;
+            u32 aux_max=0;
+            
+            void alloc_aux_space(u32 n) {
+                if(aux_used + n > aux_max) {
+                    engone::Allocator* allocator = engone::GlobalHeapAllocator();
+                    u32 new_max = 0x1000 + aux_max*1.5 + n;
+                    u8* new_ptr = (u8*)allocator->allocate(new_max, aux_data, aux_max);
+                    Assert(new_ptr);
+                    aux_data = new_ptr;
+                    aux_max = new_max;
+                }
+                aux_used+=n;
+            }
         };
         struct Import {
             std::string path;
@@ -143,6 +161,12 @@ namespace lexer {
             lock_imports.lock();
             auto imp = imports.get(import_id-1);
             lock_imports.unlock();
+            return imp;
+        }
+        Chunk* getChunk_unsafe(u32 chunk_index) {
+            lock_chunks.lock();
+            auto imp = chunks.get(chunk_index);
+            lock_chunks.unlock();
             return imp;
         }
         

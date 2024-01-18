@@ -313,6 +313,7 @@ struct Compiler {
     void compileSource(const std::string& path);
     
     // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
+    u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "");
     u32 addImport(const std::string& path, const std::string& dir_of_origin_file = "");
     void addDependency(u32 import_id, u32 dep_import_id);
     

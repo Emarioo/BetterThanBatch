@@ -1044,7 +1044,7 @@ namespace engone {
 		if (!m_internalHandle) {
 			// const uint32 stackSize = 1024*1024;
 			// Casting func to LPTHREAD_START_ROUTINE like this is questionable.
-			// func doesn't use a specific call convention while LPTHREAD uses __stdcall.
+			// func doesn't use a specific call convention while LPTHREAD uses   __stdcall.
 			// HANDLE handle = CreateThread(NULL, 0, (LPTHREAD_START_ROUTINE)func, arg, 0,(DWORD*)&m_threadId);
 
 			// SomeThreadProc is correct, we create a little struct to keep the func ptr and arg in.

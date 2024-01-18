@@ -6,6 +6,10 @@
 ############### */
 
 LoggingSection global_loggingSection = (LoggingSection)(0
+// | CAT_ALL
+// | CAT_PROCESSING
+// | CAT_PROCESSING_DETAILED | CAT_PROCESSING
+
 // | LOG_TOKENIZER    
 // | LOG_PREPROCESSOR 
 // | LOG_PARSER       
