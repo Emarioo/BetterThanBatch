@@ -341,8 +341,7 @@ bool CompileInfo::removeRootMacro(const Token& name) {
     return removed;
 }
 void CompileInfo::addStats(i32 errors, i32 warnings){
-    #ifdef OS_WINDOWS
-    _interlockedadd(&compileOptions->compileStats.errors, errors);
+    #ifdef COMPILER_MSVC
     _interlockedadd(&compileOptions->compileStats.warnings, warnings);
     #else
     otherLock.lock();
@@ -352,7 +351,7 @@ void CompileInfo::addStats(i32 errors, i32 warnings){
     #endif
 }
 void CompileInfo::addStats(i32 lines, i32 blankLines, i32 commentCount, i32 readBytes){
-    #ifdef OS_WINDOWS
+    #ifdef COMPILER_MSVC
     _interlockedadd(&compileOptions->compileStats.lines, lines);
     _interlockedadd(&compileOptions->compileStats.blankLines, blankLines);
     _interlockedadd(&compileOptions->compileStats.commentCount, commentCount);
@@ -2154,6 +2153,8 @@ bool CompileAll(CompileOptions* options){
     options->compileStats.printSuccess(options);
 
     if(options->executeOutput) {
+        engone::log::out << engone::log::GRAY<<"Running: "<<options->outputFile<<"...  ("<<bytecode->length()<<" bytecode instructions)\n";
+        engone::log::out.flush();
         ExecuteTarget(options, bytecode);
     } else {
         // Sometimes I wonder why the code isn't executing and that's because

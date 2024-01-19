@@ -64,8 +64,6 @@ bool streq(const char* a, const char* b) {
 int main(int argc, const char** argv){
     using namespace engone;
 
-    
-
     log::out.enableReport(false);
     // MeasureInit();
     ProfilerInitialize();

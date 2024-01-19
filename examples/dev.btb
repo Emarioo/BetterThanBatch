@@ -11,7 +11,7 @@
 // #import "examples/graphics/quad"
 
 // #import "examples/linecounter"
-#import "examples/binary_viewer/main.btb"
+// #import "examples/binary_viewer/main.btb"
 
 
 // k: Final;

@@ -132,23 +132,23 @@ struct DataFormat {
 void ProfilerExport(const char* path) {
     using namespace engone;
 
-    auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
+    auto file = engone::FileOpen(path, FILE_CLEAR_AND_WRITE);
 
     u32 contextCount = global_profilerSession.usedContexts;
-    FileWrite(file, &contextCount, sizeof(contextCount));
+    engone::FileWrite(file, &contextCount, sizeof(contextCount));
 
     for(int j=0;j<global_profilerSession.usedContexts;j++){
         auto& context = global_profilerSession.contexts[j];
         u32 zoneCount = context.used;
-        FileWrite(file, &zoneCount, sizeof(zoneCount));
+        engone::FileWrite(file, &zoneCount, sizeof(zoneCount));
     }
 
     for(int j=0;j<global_profilerSession.usedContexts;j++){
         auto& context = global_profilerSession.contexts[j];
 
         // TODO: Strings
-        FileWrite(file, context.zones, context.used * sizeof(ProfilerZone));
+        engone::FileWrite(file, context.zones, context.used * sizeof(ProfilerZone));
     }
 
-    FileClose(file);
+    engone::FileClose(file);
 }
