@@ -717,7 +717,7 @@ namespace engone {
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
         void* ptr = malloc(bytes);
 		if(!ptr) return nullptr;
-		
+		TracyAlloc(ptr,bytes);
 		// Pri+ntTracking(bytes,ENGONE_TRACK_ALLOC);
 		
 		// s_allocStatsMutex.lock();
@@ -761,7 +761,9 @@ namespace engone {
 					printf("Err %d\n",errno);
                     return nullptr;
 				}
-                
+                // if(newPtr == ptr) {
+                TracyFree(ptr);
+                TracyAlloc(newPtr,newBytes);
 				if(allocTracking.size()!=0)
 					printf("%s %llu -> %llu\n","realloc", oldBytes, newBytes);
 				// PrintTracking(newBytes,ENGONE_TRACK_REALLOC);
@@ -792,6 +794,7 @@ namespace engone {
 		// MEASURE
 		#endif
 		free(ptr);
+        TracyFree(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
 		// PrintTracking(bytes,ENGONE_TRACK_FREE);
 		// s_allocStatsMutex.lock();

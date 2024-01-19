@@ -1,5 +1,7 @@
 #include "BetBat/Lexer.h"
 
+#include "BetBat/Util/Perf.h"
+
 namespace lexer {
 u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
     u64 fileSize = 0;
@@ -54,21 +56,133 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     // TODO: Optimize by keeping traack of chunks ids and their pointers here instead of using
     //  appendToken which queries file and chunk id every time.
 
-    auto update_flags = [&](u32 set, u32 clear = 0){
-        if(lexer_import->chunk_indices.size()!=0) {
-            lock_imports.lock();
-            Chunk* chunk = chunks.get(lexer_import->chunk_indices.last());
-            lock_imports.unlock();
-            chunk->tokens.last().flags = (chunk->tokens.last().flags&~clear) | set;
-        }
-    };
 
-    Token token = {};
-    int token_line = 0;
-    int token_column = 0;
+    // Token token = {};
+    // int token_line = 0;
+    // int token_column = 0;
+    
     int str_start = 0;
     int str_end = 0;
-
+    
+    TokenInfo* prev_token = nullptr; // quite useful
+    TokenInfo* new_tokens = nullptr;
+    int new_tokens_len = 0;
+    Chunk* last_chunk = nullptr;
+    
+    {
+        lock_chunks.lock();
+        int cindex = chunks.add(nullptr,&last_chunk);
+        lock_chunks.unlock();
+        
+        last_chunk->chunk_index = cindex;
+        last_chunk->import_id = file_id;
+        lexer_import->chunk_indices.add(cindex);
+        lexer_import->chunks.add(last_chunk);
+    }
+    
+    auto update_flags = [&](u32 set, u32 clear = 0){
+        if(prev_token) {
+            prev_token->flags = (prev_token->flags&~clear) | set;
+        }
+        // if(lexer_import->chunk_indices.size()!=0) {
+        //     lock_imports.lock();
+        //     Chunk* chunk = chunks.get(lexer_import->chunk_indices.last());
+        //     lock_imports.unlock();
+        //     chunk->tokens.last().flags = (chunk->tokens.last().flags&~clear) | set;
+        // }
+    };
+    auto reserv_tokens=[&](){
+        Assert(last_chunk);
+        Assert(new_tokens_len == 0);
+        
+        int n = 20;
+        if(last_chunk->tokens.size() + n < last_chunk->tokens.max) {
+            // enough space
+        } else if(last_chunk->tokens.size() == TOKEN_ORIGIN_TOKEN_MAX) {
+            // chunk is full
+            lock_chunks.lock();
+            int cindex = chunks.add(nullptr,&last_chunk);
+            lock_chunks.unlock();
+            
+            last_chunk->chunk_index = cindex;
+            last_chunk->import_id = file_id;
+            lexer_import->chunk_indices.add(cindex);
+            lexer_import->chunks.add(last_chunk);
+            
+            last_chunk->tokens._reserve(TOKEN_ORIGIN_TOKEN_MAX);
+        } else {
+            int prev_index=0;
+            if(prev_token)
+                prev_index = prev_token - last_chunk->tokens.data(); 
+            last_chunk->tokens._reserve(TOKEN_ORIGIN_TOKEN_MAX);
+            if(prev_token)
+                prev_token = prev_index + last_chunk->tokens.data(); 
+        }
+        // we can't fit all N requested tokens so we clamp
+        if(last_chunk->tokens.used + n > TOKEN_ORIGIN_TOKEN_MAX) {
+            n = TOKEN_ORIGIN_TOKEN_MAX - last_chunk->tokens.used;   
+        }
+        
+        new_tokens = last_chunk->tokens.data() + last_chunk->tokens.used;
+        last_chunk->tokens.used += n;
+        new_tokens_len = n;
+        
+        *new_tokens = {};
+    };
+    
+    reserv_tokens(); // make sure we start with a token so that the lexer doesn't have to check if a token has been requested or not everytime it needs to modify the current/next token
+    auto INCREMENT_TOKEN = [&](){
+        prev_token = new_tokens;
+        new_tokens++;
+        new_tokens_len--;
+        if(new_tokens_len == 0)
+            reserv_tokens();
+        *new_tokens = {};
+    };
+    
+    auto APPEND_DATA = [&](void* ptr, int size) {
+        auto info = new_tokens;
+        // TODO: You can probably optimize this function
+        if(info->type & (TOKEN_LITERAL_STRING|TOKEN_ANNOTATION|TOKEN_IDENTIFIER))
+            info->flags |= TOKEN_FLAG_NULL_TERMINATED;
+        if(info->flags & TOKEN_FLAG_HAS_DATA) {
+            u8 len = last_chunk->aux_data[info->data_offset];
+            // If we had null termination first time we added data then we should have specified it now to.
+            // probably bug otherwise.
+            if(last_chunk->aux_used == info->data_offset + 1 + len + (info->flags&TOKEN_FLAG_NULL_TERMINATED?1:0)) {
+                Assert(len+size < 0x100); // check integer overflow
+                // Previous data exists at the end so we can just append the new data.
+                last_chunk->alloc_aux_space(size);
+                // chunk->auxiliary_data.resize(chunk->auxiliary_data.size() + size);
+                last_chunk->aux_data[info->data_offset] = len + size;
+                memcpy(last_chunk->aux_data + info->data_offset + 1 + len, ptr, size);
+                if(info->flags&TOKEN_FLAG_NULL_TERMINATED) {
+                    last_chunk->aux_data[info->data_offset + 1 + len + size] = '\0';
+                }
+            } else {
+                // We have move memory because previous data wasn't at the end and there is probably not any space.
+                // TODO: Just moving data to the end will cause fragmentation. Should we perhaps not allow this
+                //   or do we do something about it?
+                Assert(false);
+            }
+        } else {
+            Assert(size <= 0x100);
+            info->flags |= TOKEN_FLAG_HAS_DATA;
+            info->data_offset = last_chunk->aux_used;
+            if(info->flags&TOKEN_FLAG_NULL_TERMINATED) {
+                info->flags |= TOKEN_FLAG_NULL_TERMINATED;
+                last_chunk->alloc_aux_space(size + 2);
+                last_chunk->aux_data[info->data_offset] = size;
+                memcpy(last_chunk->aux_data + info->data_offset+1, ptr, size);
+                last_chunk->aux_data[info->data_offset + 1 + size] = '\0';
+            } else {
+                last_chunk->alloc_aux_space(size + 1);
+                last_chunk->aux_data[info->data_offset] = size;
+                memcpy(last_chunk->aux_data + info->data_offset+1, ptr, size);
+            }
+        }
+    };
+    
     u16 line=1; // TODO: TestSuite needs functionality to set line and column through function arguments.
     u16 column=1;
     
@@ -90,7 +204,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
 
     bool foundNonSpaceOnLine = false;
     
-    Token quote_token{};
+    // Token quote_token{};
 
     u64 index=0;
     while(index<length) {
@@ -180,15 +294,15 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 // Stop reading string token
                 inQuotes=false;
                 
-                token.flags = 0;
+                // new_tokens->flags = 0;
                 if(nextChr=='\n')
-                    token.flags |= TOKEN_FLAG_NEWLINE;
+                    new_tokens->flags |= TOKEN_FLAG_NEWLINE;
                 else if(nextChr==' ')
-                    token.flags |= TOKEN_FLAG_SPACE;
+                    new_tokens->flags |= TOKEN_FLAG_SPACE;
                 if(isSingleQuotes)
-                    token.flags |= TOKEN_FLAG_SINGLE_QUOTED;
+                    new_tokens->flags |= TOKEN_FLAG_SINGLE_QUOTED;
                 else
-                    token.flags |= TOKEN_FLAG_DOUBLE_QUOTED;
+                    new_tokens->flags |= TOKEN_FLAG_DOUBLE_QUOTED;
                 
                 // _TLOG(log::out << " : Add " << token << "\n";)
                 _TLOG(if(str_start != str_end) log::out << "\n"; log::out << (isSingleQuotes ? '\'' : '"') <<" : End quote\n";)
@@ -198,12 +312,16 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 // Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
                 // modifyTokenData(tok, text + str_start, str_end - str_start, true);
                 
-                auto info = getTokenInfo_unsafe(quote_token);
-                info->flags |= token.flags;
+                // new_tokens->flags |= ;
+                
+                // auto info = getTokenInfo_unsafe(quote_token);
+                // info->flags |= new_tokens->flags;
+                
+                INCREMENT_TOKEN();
 
                 // outStream->addToken(token);
 
-                token = {};
+                // token = {};
                 str_start = 0;
                 str_end = 0;
             } else {
@@ -268,7 +386,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     _TLOG(log::out << chr;)
                 }
                 // str_end++;
-                modifyTokenData(quote_token, &tmp, 1, true);
+                APPEND_DATA(&tmp,1);
+                // modifyTokenData(quote_token, &tmp, 1, true);
                 // Assert(false); // we need the ability to add new characters not from text with a range str_start,str_end
                 // outStream->addData(tmp);
                 // token.length++;
@@ -301,7 +420,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         
         if(chr=='\n'){
             if(str_start != str_end){
-               token.flags = (token.flags&(~TOKEN_FLAG_SPACE)) | TOKEN_FLAG_NEWLINE;
+               new_tokens->flags = (new_tokens->flags&(~TOKEN_FLAG_SPACE)) | TOKEN_FLAG_NEWLINE;
             }else {
                 update_flags(TOKEN_FLAG_NEWLINE,TOKEN_FLAG_SPACE);
             }
@@ -327,12 +446,12 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             if(str_start == str_end){
                 str_start = index-1;
                 str_end = str_start;
-                token_line = ln;
-                token_column = col;
+                new_tokens->line = ln;
+                new_tokens->column = col;
                 // token.str = (char*)outStream->tokenData.used;
                 // token.line = ln;
                 // token.column = col;
-                token.flags = 0;
+                new_tokens->flags = 0;
                 
                 if(chr>='0'&&chr<='9') {
                     canBeDot=true;
@@ -362,12 +481,12 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             }
         }
         if(str_start != str_end && (isDelim || isQuotes || isComment || isSpecial || nextLiteralSuffix || index==length)){
-            token.flags = 0;
+            new_tokens->flags = 0;
             // TODO: is checking line feed necessary? line feed flag of last token is set further up.
             if(chr=='\n')
-                token.flags |= TOKEN_FLAG_NEWLINE;
+                new_tokens->flags |= TOKEN_FLAG_NEWLINE;
             else if(chr==' ')
-                token.flags |= TOKEN_FLAG_SPACE;
+                new_tokens->flags |= TOKEN_FLAG_SPACE;
             // if(isAlpha)
             //     token.flags |= TOKEN_ALPHANUM;
             // if(isNumber)
@@ -381,57 +500,62 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             
             // TODO: Set token types, literals...
 
-            token.type = TOKEN_IDENTIFIER;
+            new_tokens->type = TOKEN_IDENTIFIER;
+            
+            // Even faster code
+            APPEND_DATA(text+str_start, str_end - str_start);
+            INCREMENT_TOKEN();
             
             // Slow code
             // Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
             // modifyTokenData(tok, text + str_start, str_end - str_start, true);
             
-            { // Faster code by inlining functions by hand
-                Chunk* chunk = nullptr;
-                u32 cindex = 0;
-                if(lexer_import->chunk_indices.size() > 0) {
-                    cindex = lexer_import->chunk_indices.last();
+            // { // Faster code by inlining functions by hand
+            //     Chunk* chunk = nullptr;
+            //     u32 cindex = 0;
+            //     if(lexer_import->chunk_indices.size() > 0) {
+            //         cindex = lexer_import->chunk_indices.last();
                     
-                    lock_chunks.lock();
-                    chunk = chunks.get(cindex);
-                    lock_chunks.unlock();
+            //         lock_chunks.lock();
+            //         chunk = chunks.get(cindex);
+            //         lock_chunks.unlock();
                     
-                    if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
-                        chunk = nullptr; // chunk is full!
-                        cindex = 0;
-                    }
-                }
-                if(!chunk) {
-                    lock_chunks.lock();
-                    cindex = chunks.add(nullptr,&chunk);
-                    lock_chunks.unlock();
+            //         if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
+            //             chunk = nullptr; // chunk is full!
+            //             cindex = 0;
+            //         }
+            //     }
+            //     if(!chunk) {
+            //         lock_chunks.lock();
+            //         cindex = chunks.add(nullptr,&chunk);
+            //         lock_chunks.unlock();
                     
-                    chunk->import_id = file_id;
-                    lexer_import->chunk_indices.add(cindex);
-                }
-                chunk->tokens.add({});
-                auto& info = chunk->tokens.last();
-                info.type = token.type;
-                info.flags = token.flags;
-                info.line = token_line;
-                info.column = token_column;
-                info.data_offset = 0;
+            //         chunk->chunk_index = cindex;
+            //         chunk->import_id = file_id;
+            //         lexer_import->chunk_indices.add(cindex);
+            //     }
+            //     chunk->tokens.add({});
+            //     auto& info = chunk->tokens.last();
+            //     info.type = token.type;
+            //     info.flags = token.flags;
+            //     info.line = token_line;
+            //     info.column = token_column;
+            //     info.data_offset = 0;
                 
-                void* ptr = text+str_start;
-                int size = str_end - str_start;
-                Assert(size <= 0x100);
-                info.flags |= TOKEN_FLAG_HAS_DATA;
-                info.data_offset = chunk->aux_used;
+            //     void* ptr = text+str_start;
+            //     int size = str_end - str_start;
+            //     Assert(size <= 0x100);
+            //     info.flags |= TOKEN_FLAG_HAS_DATA;
+            //     info.data_offset = chunk->aux_used;
                 
-                info.flags |= TOKEN_FLAG_NULL_TERMINATED;
-                chunk->alloc_aux_space(size + 2);
-                chunk->aux_data[info.data_offset] = size;
-                memcpy(chunk->aux_data + info.data_offset+1, ptr, size);
-                chunk->aux_data[info.data_offset + 1 + size] = '\0';
-            }
+            //     info.flags |= TOKEN_FLAG_NULL_TERMINATED;
+            //     chunk->alloc_aux_space(size + 2);
+            //     chunk->aux_data[info.data_offset] = size;
+            //     memcpy(chunk->aux_data + info.data_offset+1, ptr, size);
+            //     chunk->aux_data[info.data_offset + 1 + size] = '\0';
+            // }
 
-            token = {};
+            // token = {};
             str_start = 0;
             str_end = 0;
             _TLOG(log::out << "\n";)
@@ -442,8 +566,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             if(chr=='/' && nextChr=='*'){
                 inEnclosedComment=true;
             }
-            token_line = ln;
-            token_column = col;
+            new_tokens->line = ln;
+            new_tokens->column = col;
             lexer_import->comment_lines++;
             // outStream->commentCount++;
             index++; // skip the next slash
@@ -456,11 +580,11 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             // str_end = index-1+1; // we haven't parsed a character in the quotes yet
             // token.str = (char*)outStream->tokenData.used;
             // token.length = 0;
-            token_line = ln;
-            token_column = col;
+            new_tokens->line = ln;
+            new_tokens->column = col;
             
-            token.type = TOKEN_LITERAL_STRING;
-            quote_token = appendToken(file_id, token.type, token.flags, token_line, token_column);
+            new_tokens->type = TOKEN_LITERAL_STRING;
+            // quote_token = appendToken(file_id, token.type, token.flags, token_line, token_column);
             
             _TLOG(log::out << "\" : Begin quote\n";)
             continue;
@@ -519,10 +643,19 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                         break;
                     }
                 }
+                
+                new_tokens->type = TOKEN_ANNOTATION;
+                new_tokens->flags = anot.flags;
+                new_tokens->line = anot_line;
+                new_tokens->column = anot_column;
+                
+                APPEND_DATA(text+anot_start, anot_end - anot_start);
+                
+                INCREMENT_TOKEN();
 
-                anot.type = TOKEN_ANNOTATION;
-                Token tok = appendToken(file_id, anot.type, anot.flags, anot_line, anot_column);
-                modifyTokenData(tok, text + anot_start, anot_end - anot_start, true);
+                // anot.type = TOKEN_ANNOTATION;
+                // Token tok = appendToken(file_id, anot.type, anot.flags, anot_line, anot_column);
+                // modifyTokenData(tok, text + anot_start, anot_end - anot_start, true);
                 
                 // outStream->addToken(anot);
                 continue;
@@ -530,7 +663,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             
             // this scope only adds special token
             _TLOG(log::out << chr;)
-            token = {};
+            // token = {};
             str_start = index-1;
             str_end = str_start+1;
             // token.str = (char*)outStream->tokenData.used;
@@ -574,27 +707,71 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             else
                 nextChr = 0;
             
-            token_line = ln;
-            token_column = col;
+            new_tokens->line = ln;
+            new_tokens->column = col;
             if(nextChr =='\n')
-                token.flags = TOKEN_FLAG_NEWLINE;
+                new_tokens->flags = TOKEN_FLAG_NEWLINE;
             else if(nextChr==' ')
-                token.flags = TOKEN_FLAG_SPACE;
+                new_tokens->flags = TOKEN_FLAG_SPACE;
             // _TLOG(log::out << " : Add " << token <<"\n";)
             _TLOG(log::out << " : special\n";)
             // outStream->addToken(token);
             
             if(str_end - str_start == 1) {
-                token.type = (TokenType)chr;
-                Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
-                // modifyTokenData(tok, text + str_start, str_end - str_start, true);
+                new_tokens->type = (TokenType)chr;
+                
+                // Even faster code
+                INCREMENT_TOKEN();
+                
+                // Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
+                
+                // { // Manual inlined code, a bit faster (one profiler test showed 350ms -> 280ms)
+                //     Chunk* chunk = nullptr;
+                //     u32 cindex = 0;
+                //     if(lexer_import->chunk_indices.size() > 0) {
+                //         cindex = lexer_import->chunk_indices.last();
+                        
+                //         lock_chunks.lock();
+                //         chunk = chunks.get(cindex);
+                //         lock_chunks.unlock();
+                        
+                //         if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
+                //             chunk = nullptr; // chunk is full!
+                //             cindex = 0;
+                //         }
+                //     }
+                //     if(!chunk) {
+                //         lock_chunks.lock();
+                //         cindex = chunks.add(nullptr,&chunk);
+                //         lock_chunks.unlock();
+                        
+                //         chunk->chunk_index = cindex;
+                //         chunk->import_id = file_id;
+                //         lexer_import->chunk_indices.add(cindex);
+                //     }
+                    
+                //     chunk->tokens.add({});
+                //     auto& info = chunk->tokens.last();
+                //     info.type = token.type;
+                //     info.flags = token.flags;
+                //     info.line = token_line;
+                //     info.column = token_column;
+                //     info.data_offset = 0;
+                // }
+                
             } else {
-                token.type = TOKEN_IDENTIFIER;
-                Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
-                modifyTokenData(tok, text + str_start, str_end - str_start, true);
+                new_tokens->type = TOKEN_IDENTIFIER;
+                
+                APPEND_DATA(text+str_start, str_end - str_start);
+                
+                INCREMENT_TOKEN();
+                
+                // token.type = TOKEN_IDENTIFIER;
+                // Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
+                // modifyTokenData(tok, text + str_start, str_end - str_start, true);
             }
                 
-            token = {};
+            // token = {};
             str_start = 0;
             str_end = 0;
         }
@@ -624,14 +801,19 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     // README: Seemingly strange tokens can appear if you miss a quote somewhere.
     //  This is not a bug. It happens since quoted tokens are allowed across lines.
     
+    Assert(last_chunk->tokens.used >= new_tokens_len); // I have a feeling there is a bug here.
+    last_chunk->tokens.used -= new_tokens_len; // we didn't use all tokens we requested so we "give them back"
+    
+    TokenInfo* last_token = &last_chunk->tokens.last(); // TODO: can this crash?
+    
     if(inQuotes){
         // TODO: Improve error message for tokens
-        log::out<<log::RED<<"TokenError: Missing end quote at "<<path_name <<":"<< token_line<<":"<<token_column<<"\n";
+        log::out<<log::RED<<"TokenError: Missing end quote at "<<path_name <<":"<< last_token->line<<":"<<last_token->column<<"\n";
         // outStream->tokens.used--; // last token is corrupted and should be removed
         goto Tokenize_END;
     }
     if(inComment){
-        log::out<<log::RED<<"TokenError: Missing end comment for "<<token_line<<":"<<token_column<<"\n";
+        log::out<<log::RED<<"TokenError: Missing end comment for "<<last_token->line<<":"<<last_token->column<<"\n";
         // outStream->tokens.used--; // last token is corrupted and should be removed
         goto Tokenize_END;
     }
@@ -664,8 +846,70 @@ Tokenize_END:
     // log::out << "Last: "<<outStream->get(outStream->length()-1)<<"\n";
     return file_id;
 }
-
+void Lexer::appendToken(Import* imp, TokenInfo* from_info, StringView* string) {
+    // ZoneScoped;
+    Assert(imp);
+    
+    Chunk* chunk = nullptr;
+    u32 cindex = -1;
+    // Assert(imp->chunk_indices.size() > 0);
+    if(imp->chunk_indices.size() > 0) {
+        // cindex = imp->chunk_indices.last();
+        
+        // lock_chunks.lock();
+        // chunk = chunks.get(cindex);
+        // lock_chunks.unlock();
+        chunk = imp->chunks.last();
+        
+        if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
+            chunk = nullptr; // chunk is full!
+            cindex = 0;
+        }
+    }
+    if(!chunk) {
+        lock_chunks.lock();
+        cindex = chunks.add(nullptr,&chunk);
+        lock_chunks.unlock();
+        
+        chunk->chunk_index = cindex;
+        chunk->import_id = imp->file_id;
+        imp->chunk_indices.add(cindex);
+        imp->chunks.add(chunk);
+    }
+    
+    chunk->tokens.add({});
+    auto info = &chunk->tokens.last();
+    
+    *info = *from_info;
+    info->flags = from_info->flags;
+    info->data_offset = 0;
+    
+    if(from_info->flags & TOKEN_FLAG_HAS_DATA) {
+        Assert(string);
+        const void* ptr=string->ptr;
+        u32 size = string->len;
+        
+        info->data_offset = chunk->aux_used;
+        if(from_info->flags & TOKEN_FLAG_NULL_TERMINATED) {
+            chunk->alloc_aux_space(size + 2);
+            chunk->aux_data[info->data_offset] = size;
+            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+            chunk->aux_data[info->data_offset + 1 + size] = '\0';
+        } else {
+            chunk->alloc_aux_space(size + 1);
+            chunk->aux_data[info->data_offset] = size;
+            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+        }
+    }
+    Assert(cindex != 0);
+    // Token tok{};
+    // tok.type = info->type;
+    // tok.flags = info->flags;
+    // tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
+    // return tok;
+}
 Token Lexer::appendToken(u32 fileId, Token token) {
+    // ZoneScoped;
     lock_imports.lock();
     Import* imp = imports.get(fileId-1);
     lock_imports.unlock();
@@ -690,8 +934,10 @@ Token Lexer::appendToken(u32 fileId, Token token) {
         cindex = chunks.add(nullptr,&chunk);
         lock_chunks.unlock();
         
+        chunk->chunk_index = cindex;
         chunk->import_id = fileId;
         imp->chunk_indices.add(cindex);
+        imp->chunks.add(chunk);
     }
     
     chunk->tokens.add({});
@@ -727,6 +973,7 @@ Token Lexer::appendToken(u32 fileId, Token token) {
     return tok;
 }
 Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 column){
+    // ZoneScoped;
     Assert(flags < 0x10000 && line < 0x10000 && column < 0x10000);
 
     // Make sure we don't add an identifier that is quoted.
@@ -757,8 +1004,10 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
         cindex = chunks.add(nullptr,&chunk);
         lock_chunks.unlock();
         
+        chunk->chunk_index = cindex;
         chunk->import_id = fileId;
         imp->chunk_indices.add(cindex);
+        imp->chunks.add(chunk);
     }
     
     chunk->tokens.add({});
@@ -776,6 +1025,7 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
     return tok;
 }
 Lexer::TokenInfo* Lexer::getTokenInfo_unsafe(Token token){
+    // ZoneScoped;
     u32 cindex;
     u32 tindex;
     decode_origin(token.origin, &cindex, &tindex);
@@ -788,7 +1038,37 @@ Lexer::TokenInfo* Lexer::getTokenInfo_unsafe(Token token){
     if(!chunk) return nullptr;
     return chunk->tokens.getPtr(tindex);
 }
+// lexer::Token Lexer::Import::getToken(u32 token_index_into_import) {
+//     Assert(false); // incomplete, chunks pointers are not added to import.chunks
+//     u32 fcindex;
+//     u32 tindex;
+//     Lexer::decode_import_token_index(token_index_into_import, &fcindex, &tindex);
+    
+//     Assert(chunks.size() > fcindex);
+//     Chunk* chunk = chunks.get(fcindex);
+//     Assert(chunk);
+    
+//     Token out{};
+//     auto info = chunk->tokens.getPtr(tindex);
+//     if(!info) {
+//         out.type = TOKEN_EOF;
+//         return out;
+//     }
+    
+//     out.flags = info->flags;
+//     out.type = info->type;
+//     out.origin = encode_origin(chunk->chunk_index,tindex);
+//     #ifdef LEXER_DEBUG_DETAILS
+//     if(out.flags & TOKEN_FLAG_HAS_DATA) {
+//         u32 str_len = getStringFromToken(out,&out.s);
+//     } else if(out.type < 256) {
+//         out.c = (char)out.type;
+//     }
+//     #endif
+//     return out;
+// }
 u32 Lexer::modifyTokenData(Token token, void* ptr, u32 size, bool with_null_termination) {
+    ZoneScoped;
     u32 cindex;
     u32 tindex;
     decode_origin(token.origin, &cindex, &tindex);
@@ -853,10 +1133,12 @@ u32 Lexer::createImport(const std::string& path, Import** file) {
     }
     Import* _imp;
     u32 file_index = imports.add(nullptr, &_imp);
-    if(_imp)
+    if(_imp) {
         _imp->path = path;
+        _imp->file_id = file_index+1;
+    }
     if(file)
-        *file = _imp;    
+        *file = _imp;
     lock_imports.unlock();
 
     if(file_index+1 >= 0x10000) {
@@ -904,6 +1186,7 @@ bool Lexer::equals_identifier(Token token, const char* str) {
     }
 }
 Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
+    ZoneScoped;
     Token out{};
     
     // NOTE: We assume that the content inside the imports won't be modified.
@@ -938,9 +1221,9 @@ Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
     out.type = info->type;
     out.origin = encode_origin(cindex,tindex);
     #ifdef LEXER_DEBUG_DETAILS
-    if(out.flags & TOKEN_FLAG_HAS_DATA)
+    if(out.flags & TOKEN_FLAG_HAS_DATA) {
         u32 str_len = getStringFromToken(out,&out.s);
-    else if(out.type < 256) {
+    } else if(out.type < 256) {
         out.c = (char)out.type;
     }
     #endif
@@ -1192,6 +1475,7 @@ std::string Lexer::getStdStringFromToken(Token tok) {
     return std::string((const char*)ptr, len);
 }
 u32 Lexer::getDataFromToken(Token tok, const void** ptr){
+    // ZoneScoped;
     auto info = getTokenInfo_unsafe(tok);
     Assert(info->flags & TOKEN_FLAG_HAS_DATA);
     u32 cindex,tindex;

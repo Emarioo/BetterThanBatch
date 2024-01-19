@@ -1,16 +1,5 @@
+// OKay
+
+// "eaeae"
 
 #import "tests/fuzzer_gen/main"
-// #import "tests/fuzzer_gen/f19"
-
-// #import "dev2"
-
-// #macro okay(a,...) a + #okay(...)
-// #macro okay(a) a
-
-// #if from2
-// exists!
-// #else
-// does not exist!
-// #endif
-
-// #okay(2,5,#)

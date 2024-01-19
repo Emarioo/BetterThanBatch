@@ -2598,15 +2598,17 @@ bool PreprocContext::parseMacroEvaluation() {
 
 bool PreprocContext::parseOne() {
     // while(true) {
-        lexer::Token token = gettok();
-        if(token.type == lexer::TOKEN_EOF)
+        StringView string{};
+        // lexer::Token token = gettok();
+        lexer::Lexer::TokenInfo* token = getinfo(&string);
+        if(token->type == lexer::TOKEN_EOF)
             return false; // nocheckin, should we error? return false? or what do we do?
             // break;
         
-        if(token.type != '#' || (token.flags & (lexer::TOKEN_FLAG_NEWLINE|lexer::TOKEN_FLAG_SPACE))) {
+        if(token->type != '#' || (token->flags & (lexer::TOKEN_FLAG_NEWLINE|lexer::TOKEN_FLAG_SPACE))) {
             advance();
             if(evaluateTokens) {
-                lexer->appendToken(new_import_id, token);
+                lexer->appendToken(new_lexer_import, token, &string);
             }
             return true;
             // continue;
@@ -2615,10 +2617,10 @@ bool PreprocContext::parseOne() {
         advance(); // skip #
         
         // TODO: Create token types for non-user directives (#import, #include, #macro...)
-        token = gettok();
-        if(token.type == lexer::TOKEN_IDENTIFIER) {
-            const char* str = nullptr;
-            u32 len = lexer->getStringFromToken(token,&str);
+        auto macro_token = getinfo(&string);
+        if(macro_token->type == lexer::TOKEN_IDENTIFIER) {
+            const char* str = string.ptr;
+            u32 len = string.len; // lexer->getStringFromToken(token,&str);
             
             if(!strcmp(str, "macro")) {
                 advance();
@@ -2636,8 +2638,8 @@ bool PreprocContext::parseOne() {
                 bool yes = parseMacroEvaluation();
                 if(!yes) {
                     if(evaluateTokens) {
-                        lexer->appendToken(new_import_id, gettok(-1)); // hashtag
-                        lexer->appendToken(new_import_id, token);
+                        lexer->appendToken(new_lexer_import, token, nullptr); // hashtag
+                        lexer->appendToken(new_lexer_import, macro_token, &string);
                         advance();
                     }
                 }
@@ -2645,7 +2647,7 @@ bool PreprocContext::parseOne() {
         } else {
             advance();
             if(evaluateTokens) {
-                lexer->appendToken(new_import_id, token);
+                lexer->appendToken(new_lexer_import, token, &string);
             }
             return true;
             // advance();
@@ -2664,11 +2666,13 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
     context.import_id = import_id;
     context.evaluateTokens = phase2;
     
+    context.setup_token_iterator();
+    
     if(context.evaluateTokens) {
         auto old_imp = lexer->getImport_unsafe(import_id);
         std::string name = old_imp->path;
         
-        context.new_import_id = lexer->createImport(name, nullptr);
+        context.new_import_id = lexer->createImport(name, &context.new_lexer_import);
         Assert(context.new_import_id != 0);
         
         lock_imports.lock();

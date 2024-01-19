@@ -13,7 +13,7 @@
 #include "BetBat/Util/Utility.h"
 #include "BetBat/Util/Perf.h"
 
-#define LEXER_DEBUG_DETAILS
+// #define LEXER_DEBUG_DETAILS
 
 namespace lexer {
 
@@ -57,6 +57,10 @@ namespace lexer {
     //     u32 data[(TOKEN_ORIGIN_CHUNK_BITS + TOKEN_ORIGIN_TOKEN_BITS) / 32
     //         + ((TOKEN_ORIGIN_CHUNK_BITS + TOKEN_ORIGIN_TOKEN_BITS) % 32 == 0 ? 0 : 1)];
     // };
+    // struct TokenString {
+    //     char* str;
+    //     int len;  
+    // };
     struct Token {
         Token() = default;
         Token(TokenType type) : type(type) {}
@@ -94,7 +98,11 @@ namespace lexer {
                 allocator->allocate(0, aux_data, aux_max);
             }
             u32 import_id;
-            DynamicArray<TokenInfo> tokens;
+            u32 chunk_index; // handy when you only have a chunk pointer
+            QuickArray<TokenInfo> tokens; // tokenize function accesses ptr,len,max manually for optimizations, constructor destructor functionality of a DynamicArray would be ignored.
+            // TokenInfo* tokens_data=nullptr;
+            // u32 tokens_used=0;
+            // u32 tokens_max=0;
             u8* aux_data=nullptr; // auxiliary
             u32 aux_used=0;
             u32 aux_max=0;
@@ -112,8 +120,12 @@ namespace lexer {
             }
         };
         struct Import {
+            u32 file_id;
             std::string path;
             DynamicArray<u32> chunk_indices;
+            DynamicArray<Chunk*> chunks; // chunk pointers are stored here so we don't have to lock the chunks bucket array everytime we need a chunk.
+            
+            // Token getToken(u32 token_index_into_import);
 
             // interesting but not stricly necessary information
             int fileSize;
@@ -150,6 +162,7 @@ namespace lexer {
         // unsafe if you have an import_id reference hanging somewhere
         void destroyImport_unsafe(u32 import_id);
         
+        void appendToken(Import* imp, TokenInfo* token, StringView* string);
         Token appendToken(u32 fileId, Token token);
         Token appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 column);
         
@@ -170,6 +183,13 @@ namespace lexer {
             return imp;
         }
         
+        // handy functions, the implementation details of tokens per chunk, chunk index and token index may change in the future
+        // so we hide it behine encode and decode functions.
+        // u32 encode_origin(u32 token_index);
+        static TokenOrigin encode_origin(u32 chunk_index, u32 tiny_token_index);
+        static u32 encode_import_token_index(u32 file_chunk_index, u32 tiny_token_index);
+        static void decode_origin(TokenOrigin origin, u32* chunk_index, u32* tiny_token_index);
+        static void decode_import_token_index(u32 token_index_into_file, u32* file_chunk_index, u32* tiny_token_index);
     private:
         // TODO: Bucket array
         BucketArray<Import> imports{256};
@@ -184,12 +204,5 @@ namespace lexer {
         u32 modifyTokenData(Token token, void* ptr, u32 size, bool with_null_termination = false);
         TokenInfo* getTokenInfo_unsafe(Token token);
 
-        // handy functions, the implementation details of tokens per chunk, chunk index and token index may change in the future
-        // so we hide it behine encode and decode functions.
-        // u32 encode_origin(u32 token_index);
-        TokenOrigin encode_origin(u32 chunk_index, u32 tiny_token_index);
-        u32 encode_import_token_index(u32 file_chunk_index, u32 tiny_token_index);
-        void decode_origin(TokenOrigin origin, u32* chunk_index, u32* tiny_token_index);
-        void decode_import_token_index(u32 token_index_into_file, u32* file_chunk_index, u32* tiny_token_index);
     };
 }

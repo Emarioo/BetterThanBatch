@@ -93,8 +93,8 @@ int main(int argc, const char** argv){
     while(compiler.lexer.getImports().iterate(iter)) {
         lines+=iter.ptr->lines;
         filesize+=iter.ptr->fileSize;
-        // log::out << log::GOLD << "---- "<<TrimCWD(iter.ptr->path)<<" -----\n";
         
+        // log::out << log::GOLD << "---- "<<TrimCWD(iter.ptr->path)<<" -----\n";
         // compiler.lexer.print(iter.index+1);
     }
     log::out << "size: "<<FormatBytes(filesize) << ", lines: "<<lines<<"\n";

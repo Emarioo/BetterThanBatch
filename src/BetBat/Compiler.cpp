@@ -2248,7 +2248,7 @@ void Compiler::processImports() {
                 
                 imp->state = (ImportFlags)(imp->state|FLAG_LEXED|FLAG_PREPROCESSED);
                 
-                imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
+                // imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
             } else if(!(imp->state & FLAG_PREPROCESSED)){
                 Assert(false); // if we lexed then we should also have preprocessed
             } else if(!(imp->state & FLAG_PREPROCESSED_2)) {
@@ -2312,7 +2312,7 @@ void Compiler::compileSource(const std::string& path) {
     bool yes = addImport(path);
     Assert(yes); // nocheckin
     
-    int thread_count = 1;
+    int thread_count = 2;
     
     DynamicArray<engone::Thread> threads{};
     

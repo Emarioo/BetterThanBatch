@@ -227,14 +227,101 @@ struct PreprocContext {
     
     bool evaluateTokens=false;
     u32 new_import_id=0;
+    lexer::Lexer::Import* new_lexer_import = nullptr;
     u32 import_id=0;
     Preprocessor::Import* current_import = nullptr;
     u32 head=0;
     
+    bool quick_iterator = false;
+    lexer::Lexer::Import* lexer_import=nullptr;
+    DynamicArray<lexer::Lexer::Chunk*> lexer_chunks;
+    void setup_token_iterator() {
+        Assert(lexer);
+        Assert(import_id != 0);
+        quick_iterator = true;
+        lexer_import = lexer->getImport_unsafe(import_id);
+        FOR(lexer_import->chunk_indices) {
+            lexer_chunks.add(lexer->getChunk_unsafe(it));
+        }
+    }
+    
     // The token that will be returned is the one at index = head + off
     lexer::Token gettok(int off = 0) {
+        if(quick_iterator) {
+            u32 fcindex,tindex;
+            lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+        
+            lexer::Token out{};
+            if(lexer_chunks.size() <= fcindex) {
+                out.type = lexer::TOKEN_EOF;
+                return out;
+            }
+            lexer::Lexer::Chunk* chunk = lexer_chunks[fcindex];
+
+            auto info = chunk->tokens.getPtr(tindex);
+            if(!info) {
+                out.type = lexer::TOKEN_EOF;
+                return out;
+            }
+    
+            out.flags = info->flags;
+            out.type = info->type;
+            out.origin = lexer->encode_origin(chunk->chunk_index,tindex);
+            return out;
+        }
         return lexer->getTokenFromImport(import_id, head + off);
     }
+    lexer::Lexer::TokenInfo* getinfo(StringView* string = nullptr, int off = 0) {
+        static lexer::Lexer::TokenInfo eof{lexer::TOKEN_EOF};
+        Assert(quick_iterator);
+        if(quick_iterator) {
+            u32 fcindex,tindex;
+            lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+        
+        
+            lexer::Token out{};
+            if(lexer_chunks.size() <= fcindex) {
+                out.type = lexer::TOKEN_EOF;
+                if(string)
+                    *string = {"",1};
+                return &eof;
+            }
+            lexer::Lexer::Chunk* chunk = lexer_chunks[fcindex];
+
+            auto info = chunk->tokens.getPtr(tindex);
+            if(!info) {
+                if(string)
+                    *string = {"",1};
+                return &eof;
+            }
+            if(string)
+                *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+            return info;
+        }
+        // return lexer->getTokenFromImport(import_id, head + off);
+        return nullptr;
+    }
+    // StringView getstring(int off = 0) {
+    //     Assert(quick_iterator);
+        
+    //     if(quick_iterator) {
+    //         u32 fcindex,tindex;
+    //         lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+        
+    //         StringView out={"",0};
+    //         if(lexer_chunks.size() <= fcindex) {
+    //             return out;
+    //         }
+    //         lexer::Lexer::Chunk* chunk = lexer_chunks[fcindex];
+    //         auto info = chunk->tokens.getPtr(tindex);
+            
+    //         if(!info)
+    //             return out;
+    //         return info;
+    //     }
+    //     // return lexer->getTokenFromImport(import_id, head + off);
+    //     return nullptr;
+    // }
     void advance(int n = 1) {
         head += n;
     }
