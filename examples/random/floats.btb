@@ -115,11 +115,11 @@ fn @intrinsic rdtscp() -> u64, u32;
 
 // println("overhead ", oh)
 
-a = rdtscp();
+a := rdtscp();
 NativeSleep(1.0);
-b = rdtscp();
+b := rdtscp();
 
-tim = ((b-a))
+tim := ((b-a))
 // println("time ",tim);
 // println(cast<f32>90.0)
 // printd(cast<f32>2900000000)

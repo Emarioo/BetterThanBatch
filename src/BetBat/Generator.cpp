@@ -215,6 +215,7 @@ bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
             code->get(code->length()-1).opcode == BC_POP &&
             code->get(code->length()-1).op0 == BC_REG_FP));
     }
+    // BREAK(code->length()==71)
     indexOfNonImmediates.add(code->length());
     code->add_notabug(inst);
     // Assert(nodeStack.size()!=0); // can't assert because some instructions are added which doesn't link to any AST node.
@@ -272,7 +273,7 @@ void GenInfo::addPop(int reg) {
         }
         if(stackAlignment.size()!=0){
             auto align = stackAlignment.last();
-            if(!hasErrors() && align.size!=0){
+            if(!hasErrors() && !hasForeignErrors() && align.size!=0){
                 // size of 0 could mean extra alignment for between structs
                 Assert(("bug in compiler!", align.size == size));
             }
@@ -1729,7 +1730,10 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 BC_REG_XMM3d,
             };
             auto& argTypes = funcImpl->argumentTypes;
-            for(int i=fullArgs.size()-1;i>=0;i--) {
+            int rem_args = fullArgs.size();
+            if(fullArgs.size()>4)
+                rem_args = 4;
+            for(int i=rem_args-1;i>=0;i--) {
                 auto argType = argTypes[i].typeId;
                 if(AST::IsDecimal(argType)) {
                     info.addPop(float_regs[i]);
@@ -2877,8 +2881,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             if(lsize>1){
                 info.addLoadIm(BC_REG_EAX, lsize);
                 info.addInstruction({BC_MULI, ARITHMETIC_SINT, reg, BC_REG_EAX});
+                info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_EAX, BC_REG_RBX});
+            } else {
+                info.addInstruction({BC_ADDI, BC_REG_RBX, reg, BC_REG_RBX});
             }
-            info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_EAX, BC_REG_RBX});
 
             SignalDefault result = GeneratePush(info, BC_REG_RBX, 0, ltype);
 
@@ -3136,8 +3142,9 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     // IMPORTANT: Some instructions garble registers. Do not reuse mod and stuff
                     
                     bool compareOp = bytecodeOp == BC_LT || bytecodeOp == BC_LTE || bytecodeOp == BC_GT || bytecodeOp == BC_GTE;
+                    bool equalityOp = bytecodeOp == BC_EQ || bytecodeOp == BC_NEQ;
                     u8 cmpType = CMP_SINT_SINT;
-                    u8 arithmeticType = AST::IsSigned(ltype) ? ARITHMETIC_SINT : ARITHMETIC_UINT;
+                    u8 arithmeticType = AST::IsSigned(ltype) || AST::IsSigned(rtype) ? ARITHMETIC_SINT : ARITHMETIC_UINT;
                     if(bytecodeOp == BC_DIVI) {
                         FIRST_REG = BC_AX;
                         SECOND_REG = BC_DX;
@@ -3191,9 +3198,19 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         cmpType = CMP_DECODE(ltype,rtype,AST::IsSigned);
                         FIRST_REG = BC_AX;
                         SECOND_REG = BC_CX;
+                    } else if(equalityOp) {
+                        // if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
+                        //     ERR_SECTION(
+                        //         ERR_HEAD(expression->tokenRange)
+                        //         ERR_MSG("You cannot compare signed and unsigned integers. Both integers must be either signed or unsigned.")
+                        //         ERR_LINE(expression->left->tokenRange,(AST::IsSigned(ltype)?"signed":"unsigned"))
+                        //         ERR_LINE(expression->right->tokenRange,(AST::IsSigned(rtype)?"signed":"unsigned"))
+                        //     )
+                        // }
+                        // FIRST_REG = BC_AX;
+                        // SECOND_REG = BC_CX;
                     }
                     u8 outSize = lsize > rsize ? lsize : rsize;
-                    
                     
                     u8 reg1 = RegBySize(FIRST_REG, lsize); // get the appropriate registers
                     u8 reg2 = RegBySize(SECOND_REG, rsize);
@@ -3227,19 +3244,21 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if(compareOp) {
                         info.addInstruction({bytecodeOp, cmpType, reg1, reg2});
                         outTypeIds->add(AST_BOOL);
-                        // info.addPush(reg2);
                         reg_to_push = reg2;
+                    } else if(equalityOp) {
+                        info.addInstruction({bytecodeOp, reg1, reg2, regOut});
+                        outTypeIds->add(AST_BOOL);
+                        reg_to_push = regOut;
                     } else {
                         if(bytecodeOp == BC_DIVI || bytecodeOp == BC_MODI || bytecodeOp == BC_MULI) {
                             info.addInstruction({bytecodeOp, arithmeticType, reg1, reg2});
                         } else {
                             info.addInstruction({bytecodeOp, reg1, reg2, regOut});
                         }
-                        if(lsize < rsize)
-                            outTypeIds->add(rtype);
-                        else
+                        if(lsize > rsize)
                             outTypeIds->add(ltype);
-                        // info.addPush(regOut);
+                        else
+                            outTypeIds->add(rtype);
                         reg_to_push = regOut;
                     }
                     if(expression->typeId==AST_ASSIGN){
@@ -4623,6 +4642,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
             }
             if(statement->firstExpression){
+                // BREAK(statement->firstExpression->nodeId == 220);
                 SignalDefault result = GenerateExpression(info, statement->firstExpression, &rightTypes);
                 if (result != SignalDefault::SUCCESS) {
                     // assign fails and variable will not be declared potentially causing
@@ -4730,7 +4750,10 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             // }
             Assert(dtype.isValid()); // We expect a good type, otherwise result should have been a failure
             u32 size = info.ast->getTypeSize(dtype);
-            Assert(size != 0);
+            // Assert(size != 0);
+            if(size==0) {
+                Assert(info.hasForeignErrors());
+            }
 
             if(size > 8) {
                 ERR_SECTION(
@@ -5694,11 +5717,14 @@ SignalDefault GenerateData(GenInfo& info) {
     // IMPORTANT: TODO: Some data like 64-bit integers needs alignment.
     //   Strings don's so it's fine for now but don't forget about fixing this.
     for(auto& pair : info.ast->_constStringMap) {
-        Assert(pair.first.size()!=0);
+        // Assert(pair.first.size()!=0);
         int offset = 0;
-        if(pair.first.back()=='\0')
-            offset = info.code->appendData(pair.first.data(), pair.first.length());
-        else
+        if(pair.first.back()=='\0') {
+            if(pair.first.length()==0)
+                offset = info.code->dataSegment.used;
+            else
+                offset = info.code->appendData(pair.first.data(), pair.first.length());
+        } else
             offset = info.code->appendData(pair.first.data(), pair.first.length() + 1); // +1 to include null termination, this is to prevent mistakes when using C++ functions which expect it.
         if(offset == -1){
             continue;

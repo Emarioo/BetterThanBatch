@@ -83,7 +83,12 @@
         "memory_resource": "cpp",
         "numbers": "cpp",
         "cinttypes": "cpp",
-        "ya": "c"
+        "ya": "c",
+        "condition_variable": "cpp",
+        "queue": "cpp",
+        "ranges": "cpp",
+        "shared_mutex": "cpp",
+        "span": "cpp"
     },
     "cmake.configureOnOpen": false,
     "lldb.displayFormat": "auto",

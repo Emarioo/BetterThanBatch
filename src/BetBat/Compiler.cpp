@@ -300,7 +300,7 @@ engone::Logger& operator<<(engone::Logger& logger,TargetPlatform target){
 const char* ToString(LinkerChoice v) {
     #define CASE(X,N) case X: return N;
     switch(v){
-        CASE(LINKER_GCC,"gcc")
+        CASE(LINKER_GNU,"gnu")
         CASE(LINKER_MSVC,"msvc")
         CASE(LINKER_CLANG,"clang")
         CASE(LINKER_UNKNOWN,"unknown-linker")
@@ -311,7 +311,7 @@ const char* ToString(LinkerChoice v) {
 }
 LinkerChoice ToLinker(const std::string& str) {
     #define CASE(N,X) if (str==X) return N;
-    CASE(LINKER_GCC,"gcc")
+    CASE(LINKER_GNU,"gnu")
     CASE(LINKER_MSVC,"msvc")
     CASE(LINKER_CLANG,"clang")
     CASE(LINKER_UNKNOWN,"unknown-linker")
@@ -1025,8 +1025,15 @@ u32 ProcessSource(void* ptr) {
                             }
                         }
                         log::out << "\n";
+                        info->compileOptions->compileStats.errors++;
                         info->circularError = true;
                     }
+                    if(!info->signaled) {
+                        info->sourceWaitLock.signal(); // one stream was available there may be more
+                        info->signaled = true;
+                    }
+                    info->sourceLock.unlock();
+                    break;
                 }
 
                 info->waitingThreads++;
@@ -1319,7 +1326,7 @@ void CompileStats::printSuccess(CompileOptions* opts){
     log::out << "Compiled " << log::AQUA << FormatUnit((u64)lines)<<log::NO_COLOR << " non-blank lines ("<<log::AQUA<<FormatUnit((u64)lines + (u64)blankLines)<<log::NO_COLOR<<" total, "<<log::AQUA<<FormatBytes(readBytes)<<log::NO_COLOR<<")\n";
     if(opts) {
         /* Would it be nicer with this:
-            details: win-x64, gcc
+            details: win-x64, gnu
             files: examples/dev.btb, bin/dev.obj, dev.exe
         */
         if(opts->initialSourceBuffer.buffer) {
@@ -1515,7 +1522,7 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
     }
     break;
     }
-    case LINKER_GCC: {
+    case LINKER_GNU: {
     // HOLY CRAP THIS CODE IS BEAUTIFUL AND SIMPLE
     enum State {
         BEGIN, // beginning of a new error
@@ -1545,15 +1552,15 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, Program
                     index+=2;
                     hex_start = index;
                 }
-                // This catches the usr/bin/ld message which may contain good info such as: /usr/bin/ld: DWARF error: offset (4294967292) greater than or equal to .debug_abbrev size (117)
+                // This catches the usr/bin/ld (ld.exe on Windows) message which may contain good info such as: /usr/bin/ld: DWARF error: offset (4294967292) greater than or equal to .debug_abbrev size (117)
                 
-                if(chr == 'l' && chr1 == 'd' && chr2 == ':') {
+                if((chr == 'l' && chr1 == 'd' && chr2 == ':')||(chr == 'x' && chr1 == 'e' && chr2 == ':')) {
                     state = MESSAGE;
                     errorInfo.no_location = true;
                     index+=3; // skip "d: "
                     msg_start = index;
                 }
-                if(chr == ':') {
+                if(chr == ':' && chr1 == ' ') {
                     static const char* const func_msg = " in function";
                     static const int func_msg_len = strlen(func_msg);
                     int correct = 0;
@@ -1830,8 +1837,11 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
         
         // TEMPORARY
         if(options->useDebugInformation) {
-            log::out << log::RED << "You must use another linker than MSVC when compiling with debug information. Add the flag "<<log::LIME<<"--linker gcc"<<log::RED<<" (make sure to have gcc installed). The compiler does not support PDB debug information, it only supports DWARF. DWARF uses sections with long names but MSVC linker truncates those names. That's why you cannot use MVSC linker.\n";
-            return false;
+            log::out << log::RED << "NO DEBUG INFORMATION! "
+            "The compiler only supports DWARF (not .pdb) with GNU linker ("<<log::LIME<<"--linker gnu"<<log::RED<<"). "
+            "MSVC linker ("<<log::LIME<<"--linker msvc"<<log::RED<<") truncates the section names for DWARF debug information "
+            "and can therefore not be detected by a debugger. The compiler will support PDB debug info in the future.\n";
+            // return false;
         }
 
         cmd = "link /nologo /INCREMENTAL:NO ";
@@ -1866,9 +1876,9 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
         break;
     }
     case LINKER_CLANG:
-    case LINKER_GCC: {
+    case LINKER_GNU: {
         switch(options->linker) {
-            case LINKER_GCC: cmd += "g++ "; break;
+            case LINKER_GNU: cmd += "g++ "; break;
             case LINKER_CLANG: cmd += "clang++ "; break;
             default: break;
         }
@@ -1878,11 +1888,14 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
 
         cmd += objPath + " ";
         #ifndef MINIMAL_DEBUG
-        cmd += "bin/NativeLayer_gcc.lib "; // NOTE: Do we need one for clang too?
-        // cmd += "uuid.lib ";
-        // cmd += "shell32.lib ";
+        #ifdef OS_WINDOWS
+        cmd += "-Llibs/glfw-3.3.9/lib-mingw-w64 -Ilibs/glfw-3.3.9/include -Ilibs/glad/include -Lbin ";
+        cmd += "-lglfw3 -lglad -luuid -lkernel32 -lshell32 -luser32 -lgdi32 -lOpenGL32 -lAdvapi32 ";
+        #endif
+        cmd += "bin/NativeLayer_gcc.lib ";
         #endif
         // cmd += "/DEFAULTLIB:MSVCRT ";
+        // cmd += "/DEFAULTLIB:LIBCMT ";
         // cmd += "/DEFAULTLIB:LIBCMT ";
         
         for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
@@ -1936,7 +1949,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
         } else {
             if(errors > 100) {
                 log::out << log::YELLOW << "HEY! I (the compiler) noticed that you have "<<errors<<" linker errors. "
-                    "This is rare an usually caused by mixing libraries/code form different linkers.\n"
+                    "This is rare and usually caused by mixing libraries/code form different linkers.\n"
                     "Perhaps NativeLayer.lib was compiled with MSVC while you chose GCC for the .btb files? "
                     "You must use the same but in the future, NativeLayer.lib will be removed and compiled using .btb files\n"
                 ;
@@ -2034,7 +2047,7 @@ bool ExportTarget(CompileOptions* options, Bytecode* bytecode) {
                 cmd = "dumpbin /nologo /DISASM:BYTES ";
                 cmd += DUMP_ASM_OBJ;
                 break;
-            case LINKER_GCC:
+            case LINKER_GNU:
                     cmd = "objdump -Mintel -d ";
                 cmd += DUMP_ASM_OBJ;
                 break;

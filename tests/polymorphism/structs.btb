@@ -79,3 +79,29 @@ struct Main {
 ma: Main;
 
 test 24; ma.init();
+
+@TEST_CASE(poly_bug_2)
+{
+    k: Final;
+    struct Final {
+        b: Poly<Moveable>; // There was a bug here when Moveable struct is declared later
+    }
+    struct Poly<T> {
+        ptr: T*;
+    }
+    struct Moveable {
+        len: u32;
+    }
+}
+{
+    k: Final;
+    struct Moveable {
+        len: u32;
+    }
+    struct Final {
+        b: Poly<Moveable>; // no error because moveable was declared above
+    }
+    struct Poly<T> {
+        ptr: T*;
+    }
+}

@@ -104,8 +104,8 @@ namespace engone {
 
         UIArray m_frames{sizeof(Frame)};
         
-        uint32 m_valuesPerFrame = 0;
         uint32 m_typeSize = 0;
+        uint32 m_valuesPerFrame = 0;
     };
 
     // NOT THREAD SAFE

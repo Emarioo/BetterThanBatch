@@ -69,10 +69,10 @@ fn LINK_TYPE NativeSleep(seconds: f32);
 
 fn @import CmdLineArgs() -> Slice<Slice<char>>*; // const?
 
-// fn LINK_TYPE DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterator*;
-// fn LINK_TYPE DirectoryIteratorDestroy(iterator: DirectoryIterator*);
-// fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
-// fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);
+fn LINK_TYPE DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterator*;
+fn LINK_TYPE DirectoryIteratorDestroy(iterator: DirectoryIterator*);
+fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
 fn @import GetClockSpeed() -> u64;
 

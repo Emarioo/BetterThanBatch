@@ -1,0 +1,128 @@
+
+
+
+/*
+    OpenGL related code using GLFW and GLEW
+*/
+// #link "gdi32.lib user32.lib OpenGL32.lib"
+// #link "libs/glad/src/glad.c"
+// #link "/NODEFAULTLIB:MSVCRT"
+// #link "/DEFAULTLIB:LIBCMT"
+// #link "/NODEFAULTLIB:LIBCMT"
+
+#macro GL_COLOR_BUFFER_BIT 0x00004000
+#macro GLEW_VERSION 1
+#macro GL_STATIC_DRAW 0x88E4
+#macro GL_DYNAMIC_DRAW 0x88E8
+#macro GL_ARRAY_BUFFER 0x8892
+#macro GL_ELEMENT_ARRAY_BUFFER 0x8893
+
+#macro GL_COMPILE_STATUS 0x8B81
+#macro GL_LINK_STATUS 0x8B82
+#macro GL_FRAGMENT_SHADER 0x8B30
+#macro GL_VERTEX_SHADER 0x8B31
+
+#macro GL_FLOAT 0x1406
+#macro GL_UNSIGNED_INT 0x1405
+#macro GL_FALSE 0
+#macro GL_TRUE 1
+#macro GL_TRIANGLES 0x0004
+#macro GL_CULL_FACE 0x0B44
+
+#macro GL_BLEND 0x0BE2
+#macro GL_SRC_COLOR 0x0300
+#macro GL_ONE_MINUS_SRC_COLOR 0x0301
+#macro GL_SRC_ALPHA 0x0302
+#macro GL_ONE_MINUS_SRC_ALPHA 0x0303
+#macro GL_DST_ALPHA 0x0304
+#macro GL_ONE_MINUS_DST_ALPHA 0x0305
+#macro GL_DST_COLOR 0x0306
+#macro GL_ONE_MINUS_DST_COLOR 0x0307
+
+fn @import gladLoadGL() -> i32;
+
+fn @import glClear(mask: u32);
+fn @import glClearColor(red: f32, green: f32, blue: f32, alpha: f32);
+fn @import glViewport(x: i32, y: i32, w: i32, h: i32);
+
+#macro glGenBuffers(...) glad_glGenBuffers(...)
+fn @varimport glad_glGenBuffers(size: i32, buffers: u32*);
+#macro glDeleteBuffers(...) glad_glDeleteBuffers(...)
+fn @varimport glad_glDeleteBuffers(size: i32, buffers: u32*);
+#macro glBindBuffer(...) glad_glBindBuffer(...)
+fn @varimport glad_glBindBuffer(target: u32, buffer: u32);
+#macro glBufferData(...) glad_glBufferData(...)
+fn @varimport glad_glBufferData(target: u32, size: u64, data: void*, usage: u32);
+#macro glCreateShader(...) glad_glCreateShader(...)
+fn @varimport glad_glCreateShader(type: u32) -> u32;
+#macro glShaderSource(...) glad_glShaderSource(...)
+fn @varimport glad_glShaderSource(shader: u32, count: i32, string: char**, length: i32*);
+#macro glCompileShader(...) glad_glCompileShader(...)
+fn @varimport glad_glCompileShader(shader: u32);
+#macro glGetShaderiv(...) glad_glGetShaderiv(...)
+fn @varimport glad_glGetShaderiv(shader: u32, pname: u32, param: i32*);
+#macro glGetShaderInfoLog(...) glad_glGetShaderInfoLog(...)
+fn @varimport glad_glGetShaderInfoLog(shader: u32, bufSize: i32, length: i32*, infoLog: char*);
+#macro glCreateProgram(...) glad_glCreateProgram(...)
+fn @varimport glad_glCreateProgram() -> u32;
+#macro glAttachShader(...) glad_glAttachShader(...)
+fn @varimport glad_glAttachShader(program: u32, shader: u32);
+#macro glLinkProgram(...) glad_glLinkProgram(...)
+fn @varimport glad_glLinkProgram(program: u32);
+#macro glUseProgram(...) glad_glUseProgram(...)
+fn @varimport glad_glUseProgram(program: u32);
+#macro glGetProgramiv(...) glad_glGetProgramiv(...)
+fn @varimport glad_glGetProgramiv(program: u32, pname: u32, param: i32*);
+#macro glGetProgramInfoLog(...) glad_glGetProgramInfoLog(...)
+fn @varimport glad_glGetProgramInfoLog(program: u32, bufSize: i32, length: i32*, infoLog: char*);
+
+#macro glDeleteShader(...) glad_glDeleteShader(...)
+fn @varimport glad_glDeleteShader(shader: u32);
+
+#macro glVertexAttribPointer(...) glad_glVertexAttribPointer(...)
+fn @varimport glad_glVertexAttribPointer(index: u32, size: i32, type: u32, normalized: bool, stride: i32, pointer: void*);
+
+#macro glEnableVertexAttribArray(...) glad_glEnableVertexAttribArray(...)
+fn @varimport glad_glEnableVertexAttribArray(index: u32);
+#macro glGenVertexArrays(...) glad_glGenVertexArrays(...)
+fn @varimport glad_glGenVertexArrays(b: i32, arrays: u32*);
+#macro glBindVertexArray(...) glad_glBindVertexArray(...)
+fn @varimport glad_glBindVertexArray(array: u32);
+#macro glDeleteVertexArrays(...) glad_glDeleteVertexArrays(...)
+fn @varimport glad_glDeleteVertexArrays(n: i32, arrays: u32*);
+
+#macro glBufferSubData(...) glad_glBufferSubData(...)
+fn @varimport glad_glBufferSubData(target: u32, offset: i64, size: i64, data: void*);
+
+fn @import glDrawArrays(mode: u32, first: i32, count: i32);
+fn @import glDrawElements(mode: u32, count: i32, type: u32, indices: void*);
+// TODO: Add glPolygonMode, GL_FRONT_AND_BACK, GL_LINE, GL_FILL
+
+#macro glGetUniformLocation(...) glad_glGetUniformLocation(...)
+fn @varimport glad_glGetUniformLocation(program: u32, name: char*);
+
+fn @import glEnable(cap: u32);
+fn @import glDisable(cap: u32);
+fn @import glBlendFunc(sfactor: u32, dfactor: u32);
+
+#macro glUniform1i(...) glad_glUniform1i(...)
+#macro glUniform2i(...) glad_glUniform2i(...)
+#macro glUniform3i(...) glad_glUniform3i(...)
+#macro glUniform4i(...) glad_glUniform4i(...)
+#macro glUniform1f(...) glad_glUniform1f(...)
+#macro glUniform2f(...) glad_glUniform2f(...)
+#macro glUniform3f(...) glad_glUniform3f(...)
+#macro glUniform4f(...) glad_glUniform4f(...)
+fn @varimport glad_glUniform1i(location: i32, v0: i32);
+fn @varimport glad_glUniform2i(location: i32, v0: i32, v1: i32);
+fn @varimport glad_glUniform3i(location: i32, v0: i32, v1: i32, v2: i32);
+fn @varimport glad_glUniform4i(location: i32, v0: i32, v1: i32, v2: i32, v3: i32);
+fn @varimport glad_glUniform1f(location: i32, v0: f32);
+fn @varimport glad_glUniform2f(location: i32, v0: f32, v1: f32);
+fn @varimport glad_glUniform3f(location: i32, v0: f32, v1: f32, v2: f32);
+fn @varimport glad_glUniform4f(location: i32, v0: f32, v1: f32, v2: f32, v3: f32);
+
+
+// fn @import glewGetErrorString(error: u32) -> char*;
+// fn @import glewGetString(name: u32) -> char*;
+fn @import glGetError() -> u32;

@@ -2,7 +2,7 @@
 #import "OS"
 #import "Logger"
 
-#macro ARRAY_CLEANUP(ARR) for @ptr ARR.sliced() it.cleanup(); ARR.cleanup();
+#macro ARRAY_CLEANUP(ARR) for @ptr ARR.sliced_unsafe() it.cleanup(); ARR.cleanup();
 
 // TODO: Asserts
 // Note that memory is uninitialized

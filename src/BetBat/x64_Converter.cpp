@@ -553,7 +553,7 @@ void ReformatDumpbinAsm(LinkerChoice linker, QuickArray<char>& inBuffer, QuickAr
     // endIndex = index; endIndex is set in while loop
     break;
     }
-    case LINKER_GCC: {
+    case LINKER_GNU: {
     // Skip heading
     int index = 0;
     int lineCount = 0;

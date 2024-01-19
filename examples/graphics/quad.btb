@@ -13,7 +13,7 @@
 main();
 
 fn main(){
-    yes = glfwInit();
+    yes := glfwInit();
     if !yes {
         log("glfwInit failed");
         return;
@@ -21,10 +21,10 @@ fn main(){
     glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
     glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
     glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
-    title = @cstr "Yes sir"
-    width = 800;
-    height = 600;
-    window = glfwCreateWindow(width, height, title, null, null);
+    title := @cstr "Yes sir"
+    width := 800;
+    height := 600;
+    window := glfwCreateWindow(width, height, title, null, null);
     if !window {
         log("window failed");
         glfwTerminate();
@@ -33,10 +33,9 @@ fn main(){
 
     glfwMakeContextCurrent(window);
 
-    err = glewInit();
-    if err {
-        msg = glewGetErrorString(err);
-        log("glew failed: ",msg)
+    yes = gladLoadGL();
+    if !yes {
+        log("glad failed: ")
         glfwTerminate();
         return;
     }
@@ -44,7 +43,7 @@ fn main(){
     glViewport(0, 0, width, height);
     GLCHECK
 
-    vshader = "
+    vshader := "
         #version 330 core
         layout (location = 0) in vec3 aPos;
         void main()
@@ -53,7 +52,7 @@ fn main(){
         }
         ";
 
-    vertexShader = glCreateShader(GL_VERTEX_SHADER);
+    vertexShader := glCreateShader(GL_VERTEX_SHADER);
     GLCHECK
     glShaderSource(vertexShader, 1, &vshader.ptr, null);
     GLCHECK
@@ -68,7 +67,7 @@ fn main(){
         log("Vertex shader error: ",infoLog);
     }
 
-    fshader = "
+    fshader := "
         #version 330 core
         out vec4 FragColor;
 
@@ -78,7 +77,7 @@ fn main(){
         } 
         ";
 
-    fragmentShader = glCreateShader(GL_FRAGMENT_SHADER);
+    fragmentShader := glCreateShader(GL_FRAGMENT_SHADER);
     GLCHECK
     glShaderSource(fragmentShader, 1, &fshader.ptr, null);
     GLCHECK
@@ -93,7 +92,7 @@ fn main(){
         log("Fragment shader error: ",infoLog);
     }
 
-    shaderProgram = glCreateProgram();
+    shaderProgram := glCreateProgram();
     GLCHECK
     glAttachShader(shaderProgram, vertexShader);
     GLCHECK
@@ -148,8 +147,8 @@ fn main(){
         0.0,
     };
 
-    a = 0;
-    dir = 1;
+    a := 0;
+    dir := 1;
     while !glfwWindowShouldClose(window) {
         if a > 400
             dir = -1

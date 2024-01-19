@@ -20,7 +20,7 @@ operator | (a: vec2, b: vec2) -> vec2 {
 // t = vec2{3,7};
 // n = vec2{-4,2};
 
-f = vec2{3,7} | vec2{-4,2};
+f := vec2{3,7} | vec2{-4,2};
 
 // printi(f.x); NL
 // printi(f.y); NL
