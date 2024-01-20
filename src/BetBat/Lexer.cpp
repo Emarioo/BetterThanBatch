@@ -193,6 +193,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     
     bool isNumber = false;
     bool isAlpha = false; // alpha and then alphanumeric
+    bool isDecimal = false;
 
     bool inHexidecimal = false;
     // int commentNestDepth = 0; // C doesn't have this and it's not very good. /*/**/*/
@@ -437,6 +438,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         if(canBeDot && chr=='.' && nextChr != '.'){
             isSpecial = false;
             canBeDot=false;
+            isDecimal=true;
         }
         if(!isDelim&&!isSpecial&&!isQuotes&&!isComment){
             if(str_start != str_end){
@@ -475,9 +477,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         
         bool nextLiteralSuffix = false;
         {
-            char tmp = nextChr & ~32;
-            if(isNumber && !inHexidecimal) {
-                nextLiteralSuffix = !inHexidecimal && isNumber && ((tmp>='A'&&tmp<='Z') || nextChr == '_');
+            char tmp = nextChr | 32;
+            if(isNumber && isDecimal && !inHexidecimal) {
+                nextLiteralSuffix = !inHexidecimal && isNumber && ((tmp>='a'&&tmp<='z') || nextChr == '_');
             }
         }
         if(str_start != str_end && (isDelim || isQuotes || isComment || isSpecial || nextLiteralSuffix || index==length)){
@@ -493,19 +495,71 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             //     token.flags |= TOKEN_NUMERIC;
             // _TLOG(log::out << " : Add " << token << "\n";)
             
+            bool has_data = true;
+            if(isDecimal)
+                new_tokens->type = TOKEN_LITERAL_DECIMAL;
+            else if(isNumber)
+                new_tokens->type = TOKEN_LITERAL_INTEGER;
+            else if(inHexidecimal)
+                new_tokens->type = TOKEN_LITERAL_HEXIDECIMAL;
+            else {
+                new_tokens->type = TOKEN_IDENTIFIER;
+            
+                StringView temp{text + str_start, str_end - str_start};
+                // TODO: Optimize. For example, if first character isn't one of these 'tfsenu' then it's not a special token and we don't have to run all ifs.
+
+                if(temp == "null") {
+                    new_tokens->type = TOKEN_NULL;
+                    has_data = false;
+                } else if(temp == "true") {
+                    new_tokens->type = TOKEN_TRUE;
+                    has_data = false;
+                } else if(temp == "false") {
+                    new_tokens->type = TOKEN_FALSE;
+                    has_data = false;
+                } else if(temp == "struct") {
+                    new_tokens->type = TOKEN_STRUCT;
+                    has_data = false;
+                } else if(temp == "fn") {
+                    new_tokens->type = TOKEN_FUNCTION;
+                    has_data = false;
+                } else if(temp == "enum") {
+                    new_tokens->type = TOKEN_ENUM;
+                    has_data = false;
+                } else if(temp == "namespace") {
+                    new_tokens->type = TOKEN_NAMESPACE;
+                    has_data = false;
+                } else if(temp == "union") {
+                    new_tokens->type = TOKEN_UNION;
+                    has_data = false;
+                } else if(temp == "sizeof") {
+                    new_tokens->type = TOKEN_SIZEOF;
+                    has_data = false;
+                } else if(temp == "nameof") {
+                    new_tokens->type = TOKEN_NAMEOF;
+                    has_data = false;
+                } else if(temp == "typeid") {
+                    new_tokens->type = TOKEN_TYPEID;
+                    has_data = false;
+                } else if(temp == "asm") {
+                    new_tokens->type = TOKEN_ASM;
+                    has_data = false;
+                }
+                // TODO: Set token types. struct, fn, enum...
+            }
+            
+            // Even faster code
+            if(has_data) {
+                APPEND_DATA(text+str_start, str_end - str_start);
+            }
+            INCREMENT_TOKEN();
+            
             canBeDot=false;
             isNumber=false;
             isAlpha=false;
+            isDecimal=false;
             inHexidecimal = false;
-            
-            // TODO: Set token types, literals...
 
-            new_tokens->type = TOKEN_IDENTIFIER;
-            
-            // Even faster code
-            APPEND_DATA(text+str_start, str_end - str_start);
-            INCREMENT_TOKEN();
-            
             // Slow code
             // Token tok = appendToken(file_id, token.type, token.flags, token_line, token_column);
             // modifyTokenData(tok, text + str_start, str_end - str_start, true);
@@ -1024,7 +1078,7 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
     tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     return tok;
 }
-Lexer::TokenInfo* Lexer::getTokenInfo_unsafe(Token token){
+TokenInfo* Lexer::getTokenInfo_unsafe(Token token){
     // ZoneScoped;
     u32 cindex;
     u32 tindex;
@@ -1185,7 +1239,7 @@ bool Lexer::equals_identifier(Token token, const char* str) {
         return false;   
     }
 }
-Lexer::TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import) {
+TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import) {
     static TokenInfo eof{TOKEN_EOF};
     // NOTE: We assume that the content inside the imports won't be modified.
     //   Otherwise, we would need to lock the content too: file->lock_chunk_indices.lock().
@@ -1594,5 +1648,38 @@ u32 Lexer::encode_import_token_index(u32 file_chunk_index, u32 tiny_token_index)
 }
 void Lexer::decode_import_token_index(u32 token_index_into_file, u32* file_chunk_index, u32* tiny_token_index) {
     return decode_origin(TokenOrigin{token_index_into_file}, file_chunk_index, tiny_token_index);
+}
+
+double ConvertDecimal(const StringView& view) {
+    Assert(view.ptr + view.len == '\0');
+    double num = atof(view.ptr);
+    return num;
+}
+int ConvertInteger(const StringView& view) {
+    Assert(view.ptr + view.len == '\0');
+    int num = atoi(view.ptr);
+    return num;
+}
+u64 ConvertHexadecimal(const StringView& view) {
+    Assert(view.ptr[0]!='-'); // not handled here
+
+    int start = 0;
+    if(view.len >= 2 && view.ptr[0] == '0' || view.ptr[1] == 'x')
+        start = 2;
+    
+    u64 hex = 0;
+    for(int i=start;i<view.len;i++){
+        char chr = view.ptr[i];
+        if(chr>='0' && chr <='9'){
+            hex = 16*hex + chr-'0';
+            continue;
+        }
+        chr = chr&(~32); // what is this for? chr = chr&0x20 ?
+        if(chr>='A' && chr<='F'){
+            hex = 16*hex + chr-'A' + 10;
+            continue;
+        }
+    }
+    return hex;
 }
 }

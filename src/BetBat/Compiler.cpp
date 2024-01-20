@@ -2360,7 +2360,7 @@ u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origi
     //     }
     // }
     imp.path = abs_path.text;
-    lexer::Lexer::Import* intern_imp;
+    lexer::Import* intern_imp;
     imp.import_id = lexer.createImport(imp.path, &intern_imp);
     Assert(imp.import_id!=0);
     // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add import: "<<imp.import_id<<" ("<<path<<")\n")
@@ -2388,7 +2388,7 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     }
     
     imp.path = abs_path.text;
-    lexer::Lexer::Import* intern_imp;
+    lexer::Import* intern_imp;
     imp.import_id = lexer.createImport(imp.path, &intern_imp);
     Assert(imp.import_id!=0);
     

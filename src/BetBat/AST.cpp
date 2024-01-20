@@ -174,7 +174,7 @@ AST *AST::Create() {
     ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO, ast->mainBody)->id;
     ast->globalScopeId = scopeId;
     // initialize default data types
-    #define ADD(T, S) ast->createPredefinedType(Token(PRIM_NAME(T)), scopeId, T, S);
+    #define ADD(T, S) ast->createPredefinedType(PRIM_NAME(T), scopeId, T, S);
     ADD(AST_VOID,0);
     ADD(AST_UINT8, 1);
     ADD(AST_UINT16, 2);
@@ -219,7 +219,7 @@ AST *AST::Create() {
 }
 
 // VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, bool shadowPreviousVariables) {
-VariableInfo *AST::addVariable(ScopeId scopeId, const Token &name, ContentOrder contentOrder, Identifier** identifier, bool* out_reused_identical = nullptr) {
+VariableInfo *AST::addVariable(ScopeId scopeId, const StringView&name, ContentOrder contentOrder, Identifier** identifier, bool* out_reused_identical = nullptr) {
     using namespace engone;
     bool shadowPreviousVariables = false;
     auto id = addIdentifier(scopeId, name, contentOrder, out_reused_identical);
@@ -256,13 +256,13 @@ VariableInfo* AST::getVariableByIdentifier(Identifier* identifier) {
 //     return variables[identifier->varIndex];
 // }
 // Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, bool shadowPreviousIdentifiers) {
-Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, ContentOrder contentOrder, bool* out_reused_identical) {
+Identifier *AST::addIdentifier(ScopeId scopeId, const StringView &name, ContentOrder contentOrder, bool* out_reused_identical) {
     using namespace engone;
     bool shadowPreviousIdentifiers = false;
     ScopeInfo* si = getScope(scopeId);
     if(!si)
         return nullptr;
-    std::string sName = std::string(name); // string view?
+    std::string sName = std::string(name.ptr,name.len); // string view?
     auto pair = si->identifierMap.find(sName);
     if (pair != si->identifierMap.end()){
         if(out_reused_identical) {
@@ -326,28 +326,28 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const Token &name, ContentOrder 
 //     return nullptr;
 // }
 
-Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const Token& name, bool searchParentScopes){
+Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool searchParentScopes){
     using namespace engone;
     if(searchParentScopes){
-        // log::out << __func__<<": "<<name<<"\n";
-        Token ns={};
-        Token realName = TrimNamespace(Token(name), &ns);
+        StringView ns;
+        StringView real_name;
+        DecomposeNamespace(name, &ns, &real_name);
         ScopeId nextScopeId = startScopeId;
         ContentOrder nextOrder = contentOrder;
         WHILE_TRUE_N(1000) {
-            if(ns.str) {
+            if(ns.ptr) {
                 Assert(false); // broken with content order
-                ScopeInfo* nscope = getScope(ns, nextScopeId);
+                ScopeInfo* nscope = findScope(ns, nextScopeId);
                 Assert(nscope);
-                auto pair = nscope->identifierMap.find(realName);
+                auto pair = nscope->identifierMap.find(real_name);
                 if(pair != nscope->identifierMap.end()){
                     return &pair->second;
                 }
             }
             ScopeInfo* si = getScope(nextScopeId);
             Assert(si);
-            if(!ns.str) {
-                auto pair = si->identifierMap.find(realName);
+            if(!ns.ptr) {
+                auto pair = si->identifierMap.find(real_name);
                 if(pair != si->identifierMap.end() && pair->second.order <= nextOrder){
                 // if(pair != si->identifierMap.end() && pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
                     return &pair->second;
@@ -376,7 +376,7 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
     return nullptr;
 }
 
-void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
+void AST::removeIdentifier(ScopeId scopeId, const StringView &name) {
     auto si = getScope(scopeId);
     auto pair = si->identifierMap.find(name);
     if (pair != si->identifierMap.end()) {
@@ -391,10 +391,11 @@ void AST::removeIdentifier(ScopeId scopeId, const Token &name) {
         // Assert(("cannot remove non-existent identifier, compiler bug?",false));
     }
 }
-bool AST::findEnumMember(ScopeId scopeId, const Token& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member) {
-    Token ns={};
-    Token realName = TrimNamespace(Token(name), &ns);
-    Assert(!ns.str); // namespace stuff not implemented, see findIdentifier and convertTypeId for it's implementation
+bool AST::findEnumMember(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member) {
+    StringView ns;
+    StringView real_name;
+    DecomposeNamespace(name, &ns, &real_name);
+    Assert(!ns.ptr); // namespace stuff not implemented, see findIdentifier and convertTypeId for it's implementation
 
     Assert(out_enum && out_member);
 
@@ -412,7 +413,7 @@ bool AST::findEnumMember(ScopeId scopeId, const Token& name, ContentOrder conten
                     auto& mem = astEnum->members[i];
                     // NOTE: We still check enclosed enums because it is useful to know
                     //  which member/enum could have matched if it wasn't enclosed when no other enum/member matches.
-                    if(mem.name == name) {
+                    if(mem.name == real_name) {
                         *out_enum = astEnum;
                         *out_member = i;
                         if(astEnum->rules & ASTEnum::ENCLOSED) {
@@ -937,14 +938,14 @@ ASTStatement *AST::createStatement(ASTStatement::Type type) {
     ptr->type = type;
     return ptr;
 }
-ASTStruct *AST::createStruct(const Token &name) {
+ASTStruct *AST::createStruct(const StringView& name) {
     auto ptr = (ASTStruct *)allocate(sizeof(ASTStruct));
     new(ptr) ASTStruct();
     ptr->nodeId = getNextNodeId();
-    ptr->name = name;
+    ptr->base_name = name;
     return ptr;
 }
-ASTEnum *AST::createEnum(const Token &name) {
+ASTEnum *AST::createEnum(const StringView &name) {
     auto ptr = (ASTEnum *)allocate(sizeof(ASTEnum));
     new(ptr) ASTEnum();
     ptr->nodeId = getNextNodeId();
@@ -1183,46 +1184,48 @@ ScopeInfo* AST::getScope(ScopeId id){
         return nullptr; // out of bounds
     return _scopeInfos[id];
 }
-ScopeInfo* AST::getScope(Token name, ScopeId scopeId){
+ScopeInfo* AST::findScope(StringView name, ScopeId scopeId, bool search_parent_scopes){
     using namespace engone;
-    Token nextName = name;
+    StringView nextName = name;
     ScopeId nextScopeId = scopeId;
-    // int safetyLimit = 100;
+    
     WHILE_TRUE {
-        // if(!safetyLimit--) {
-        //     log::out << log::RED << __func__ << ": while safety limit broken\n";
-        //     break;
-        // }
         ScopeInfo* scope = getScope(nextScopeId);
         if(!scope) return nullptr;
         int splitIndex = -1;
-        for(int i=0;i<nextName.length-1;i++){
-            if(nextName.str[i] == ':' && nextName.str[i+1] == ':'){
+        for(int i=0;i<nextName.len-1;i++){
+            if(nextName.ptr[i] == ':' && nextName.ptr[i+1] == ':'){
                 splitIndex = i;
                 break;
             }
         }
         if(splitIndex == -1){
-            auto pair = scope->nameScopeMap.find(nextName);
+            auto pair = scope->nameScopeMap.find(std::string(nextName.ptr,nextName.len));
             if(pair != scope->nameScopeMap.end()){
                 return getScope(pair->second);
             }
             for(int i=0;i<(int)scope->usingScopes.size();i++){
                 ScopeInfo* usingScope = scope->usingScopes[i];
-                auto pair = usingScope->nameScopeMap.find(nextName);
+                auto pair = usingScope->nameScopeMap.find(std::string(nextName.ptr,nextName.len));
                 if(pair != usingScope->nameScopeMap.end()){
                     return getScope(pair->second);
                 }
             }
+            if(search_parent_scopes) {
+                if(nextScopeId != scope->parent) { // Check infinite loop. Mainly for global scope.
+                    nextScopeId = scope->parent;
+                    continue;
+                }
+            }
             return nullptr;
         } else {
-            Token first = {};
-            first.str = nextName.str;
-            first.length = splitIndex;
-            Token rest = {};
-            rest.str = nextName.str += splitIndex+2;
-            rest.length = nextName.length - (splitIndex + 2);
-            auto pair = scope->nameScopeMap.find(first);
+            StringView first = {};
+            first.ptr = nextName.ptr;
+            first.len = splitIndex;
+            StringView rest = {};
+            rest.ptr = nextName.ptr += splitIndex+2;
+            rest.len = nextName.len - (splitIndex + 2);
+            auto pair = scope->nameScopeMap.find(std::string(first.ptr,first.len));
             if(pair != scope->nameScopeMap.end()){
                 nextName = rest;
                 nextScopeId = pair->second;
@@ -1231,7 +1234,7 @@ ScopeInfo* AST::getScope(Token name, ScopeId scopeId){
             bool cont = false;
             for(int i=0;i<(int)scope->usingScopes.size();i++){
                 ScopeInfo* usingScope = scope->usingScopes[i];
-                auto pair = usingScope->nameScopeMap.find(first);
+                auto pair = usingScope->nameScopeMap.find(std::string(first.ptr,first.len));
                 if(pair != usingScope->nameScopeMap.end()){
                     nextName = rest;
                     nextScopeId = pair->second;
@@ -1240,80 +1243,19 @@ ScopeInfo* AST::getScope(Token name, ScopeId scopeId){
                 }
             }
             if(cont) continue;
+            if(search_parent_scopes) {
+                if(nextScopeId != scope->parent) {
+                    nextScopeId = scope->parent;
+                    continue;
+                }
+            }
             return nullptr;
         }
     }
     return nullptr;
 }
-ScopeInfo* AST::getScopeFromParents(Token name, ScopeId scopeId){
-    using namespace engone;
-
-    Token nextName = name;
-    ScopeId nextScopeId = scopeId;
-    // int safetyLimit = 100;
-    WHILE_TRUE {
-        // if(!safetyLimit--) {
-        //     log::out << log::RED << __func__ << ": while safety limit broken\n";
-        //     break;
-        // }
-        ScopeInfo* scope = getScope(nextScopeId);
-        if(!scope) return nullptr;
-        int splitIndex = -1;
-        for(int i=0;i<nextName.length-1;i++){
-            if(nextName.str[i] == ':' && nextName.str[i+1] == ':'){
-                splitIndex = i;
-                break;
-            }
-        }
-        if(splitIndex == -1){
-            auto pair = scope->nameScopeMap.find(nextName);
-            if(pair != scope->nameScopeMap.end()){
-                return getScope(pair->second);
-            }
-            for(int i=0;i<(int)scope->usingScopes.size();i++){
-                ScopeInfo* usingScope = scope->usingScopes[i];
-                auto pair = usingScope->nameScopeMap.find(nextName);
-                if(pair != usingScope->nameScopeMap.end()){
-                    return getScope(pair->second);
-                }
-            }
-            if(nextScopeId != scope->parent) { // Check infinite loop. Mainly for global scope.
-                nextScopeId = scope->parent;
-                continue;
-            }
-            return nullptr;
-        } else {
-            Token first = {};
-            first.str = nextName.str;
-            first.length = splitIndex;
-            Token rest = {};
-            rest.str = nextName.str += splitIndex+2;
-            rest.length = nextName.length - (splitIndex + 2);
-            auto pair = scope->nameScopeMap.find(first);
-            if(pair != scope->nameScopeMap.end()){
-                nextName = rest;
-                nextScopeId = pair->second;
-                continue;
-            }
-            bool cont = false;
-            for(int i=0;i<(int)scope->usingScopes.size();i++){
-                ScopeInfo* usingScope = scope->usingScopes[i];
-                auto pair = usingScope->nameScopeMap.find(nextName);
-                if(pair != usingScope->nameScopeMap.end()){
-                    nextName = rest;
-                    nextScopeId = pair->second;
-                    break;
-                }
-            }
-            if(cont) continue;
-            if(nextScopeId != scope->parent) {
-                nextScopeId = scope->parent;
-                continue;
-            }
-            return nullptr;
-        }
-    }
-    return nullptr;
+ScopeInfo* AST::findScopeFromParents(StringView name, ScopeId scopeId){
+    return findScope(name,scopeId,true);
 }
 
 TypeId AST::getTypeString(Token name){
@@ -1332,21 +1274,22 @@ TypeId AST::getTypeString(Token name){
     _typeTokens.add(name);
     return TypeId::CreateString(_typeTokens.size()-1);
 }
-Token AST::getTokenFromTypeString(TypeId typeId){
-    static const Token non={};
+StringView AST::getStringFromTypeString(TypeId typeId){
     Assert(typeId.isString());
     if(!typeId.isString())
-        return non;
+        return {};
 
     u32 index = typeId.getId();
     if(index >= _typeTokens.size())
-        return non;
+        return {};
     
-    return _typeTokens[index];
+    // return _typeTokens[index];
+    auto& s = _typeTokens[index];
+    return { s.c_str() };
 }
 TypeId AST::convertToTypeId(TypeId typeString, ScopeId scopeId, bool transformVirtual){
     Assert(typeString.isString());
-    Token tstring = getTokenFromTypeString(typeString);
+    StringView tstring = getStringFromTypeString(typeString);
     return convertToTypeId(tstring, scopeId, transformVirtual);
 }
 // void ll(AST* ast){
@@ -1365,7 +1308,7 @@ TypeId AST::convertToTypeId(TypeId typeString, ScopeId scopeId, bool transformVi
 //         // engone::Free(pair, sizeof(TypeInfo));
 //     }
 // }
-TypeInfo* AST::createType(Token name, ScopeId scopeId){
+TypeInfo* AST::createType(StringView name, ScopeId scopeId){
     using namespace engone;
     auto scope = getScope(scopeId);
     if(!scope) return nullptr;
@@ -1412,7 +1355,7 @@ engone::Logger& operator <<(engone::Logger& logger, TypeId typeId) {
     }
     return logger;
 }
-TypeInfo* AST::createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 size) {
+TypeInfo* AST::createPredefinedType(StringView name, ScopeId scopeId, TypeId id, u32 size) {
     auto ptr = (TypeInfo *)allocate(sizeof(TypeInfo));
     new(ptr) TypeInfo{name, id, size};
     ptr->scopeId = scopeId;
@@ -1459,16 +1402,13 @@ void AST::printTypesFromScope(ScopeId scopeId, int scopeLimit){
         nextScopeId = scope->parent;
     }
 }
-TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVirtual) {
+TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transformVirtual) {
     using namespace engone;
-    Token namespacing = {};
     u32 pointerLevel = 0;
-    // TINY_ARRAY(Token,polyTypes,4);
-    // std::vector<Token> polyTypes;
-    Token typeName = {}; // base name + poly names
-
-    typeName = TrimPointer(typeString, &pointerLevel);
-    typeName = TrimNamespace(typeName, &namespacing);
+    StringView namespacing = {};
+    StringView typeName;
+    DecomposePointer(typeString, &typeName, &pointerLevel);
+    DecomposeNamespace(typeName, &namespacing, &typeName);
     
     // Token baseType = TrimBaseType(typeString, &namespacing, &pointerLevel, &polyTypes, &typeName);
     // if(polyTypes.size()!=0)
@@ -1477,8 +1417,8 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVir
 
     ScopeInfo* scope = nullptr;
     TypeInfo* typeInfo = nullptr;
-    if(namespacing.str){
-        scope = getScopeFromParents(namespacing, scopeId);
+    if(namespacing.ptr){
+        scope = findScopeFromParents(namespacing, scopeId);
         if(!scope) return {};
         auto firstPair = scope->nameTypeMap.find(typeName);
         if(firstPair != scope->nameTypeMap.end()){
@@ -1589,7 +1529,7 @@ void ScopeInfo::print(AST* ast) {
 std::string AST::typeToString(TypeId typeId){
     using namespace engone;
     if(typeId.isString())
-        return std::string((Token)getTokenFromTypeString(typeId));
+        return std::string(getStringFromTypeString(typeId));
     const char* cstr = OP_NAME((OperationType)typeId.getId());
     if(cstr)
         return cstr;
@@ -1603,7 +1543,7 @@ std::string AST::typeToString(TypeId typeId){
     if(ns.empty()){
         out = ti->name;
     } else {
-        out = ns + "::" + ti->name;
+        out = ns + "::" + std::string(ti->name);
     }
     if(ti->astStruct && !ti->structImpl && ti->astStruct->polyArgs.size()!=0){
         out +="<";
@@ -1781,88 +1721,81 @@ u32 TypeInfo::alignedSize() {
     }
     return _size > 8 ? 8 : _size;
 }
-Token AST::TrimNamespace(Token typeString, Token* outNamespace){
-    if(outNamespace)
-        *outNamespace = {};
-    if(!typeString.str || typeString.length < 3) {
-        return typeString;
+void AST::DecomposeNamespace(StringView view, StringView* out_namespace, StringView* out_name){
+    out_namespace = {};
+    out_name = {};
+    if(!view.ptr || view.len < 3) {
+        *out_name = view;
+        return;
     }
-    // TODO: Line and column is ignored but it should also be separated properly.
-    // TODO: ":::" should cause an error but isn't considered at all here.
-    // TODO: This code doesn't work if poly names have namespaces.
-    // int index = -1; // index of the left colon
-    // for(int i=typeString.length-1;i>0;i--){
-    //     if(typeString.str[i-1] == ':' && typeString.str[i] == ':') {
-    //         index = i-1;
-    //         break;
-    //     }
-    // }
-    // if(index==-1){
-    //     if(outNamespace)
-    //         *outNamespace = {};
-    //     return typeString;
-    // }
-    // if(outNamespace){
-    //     outNamespace->str = typeString.str;
-    //     outNamespace->length = index;
-    // }
-    // out.str = typeString.str + (index+2);
-    // out.length = typeString.length - (index+2);
 
-    int lastColonIndex = -1;
+    // TODO: ":::" should cause an error but isn't considered at all here.
+    
+    // Works
+    // Math::Vector<Math::float32> -> Math  Vector<Math::float32>
+
+    // Should not work
+    // Math::Floats<Math::float32>::f32 -> Math::Floats<Math::float32>  f32
+    // Math::Floats<Math::float32>:::f32 -> Math::Floats<Math::float32>:  f32
+
+    int index_lastColon = -1;
     int depth = 0;
-    for(int i=typeString.length-1;i>=0;i--){
-        if(typeString.str[i] == '>'){
+    for(int i=view.len-1;i>=1;i--){
+        if(view.ptr[i] == '>'){
             depth++;
         }
-        if(typeString.str[i] == '<'){
+        if(view.ptr[i] == '<'){
             depth--;
         }
-        if(depth==0 && i < typeString.length - 1){
-            if(typeString.str[i] == ':' && typeString.str[i+1] == ':') {
-                lastColonIndex = i;
+        if(depth==0){
+            if(view.ptr[i-1] == ':' && view.ptr[i] == ':') {
+                index_lastColon = i;
                 break;
             }
         }
     }
-    if(lastColonIndex!=-1){
-        outNamespace->str = typeString.str;
-        outNamespace->length = lastColonIndex;
-        typeString.str = typeString.str + lastColonIndex + 2;
-        typeString.length = typeString.length - (lastColonIndex + 2);
+    if(index_lastColon!=-1){
+        out_namespace->ptr = view.ptr;
+        out_namespace->len = index_lastColon - 1;
+        out_name->ptr = view.ptr + index_lastColon + 1;
+        out_name->len = view.len - (index_lastColon + 1);
+    } else {
+        *out_name = view;
     }
-    return typeString;
+    return ;
 }
-Token AST::TrimPointer(Token& token, u32* outLevel){
-    Token out = token;
-    for(int i=token.length-1;i>=0;i--){
-        if(token.str[i]=='*') {
+void AST::DecomposePointer(StringView view, StringView* out_name, u32* outLevel){
+    out_name->ptr = view.ptr;
+    out_name->len = view.len;
+    *outLevel = 0;
+    
+    for(int i=view.len-1;i>=0;i--){
+        if(view.ptr[i]=='*') {
             if(outLevel)
                 (*outLevel)++;
             continue;
         } else {
-            out.length = i + 1;
+            out_name->len = i + 1;
             break;
         }
     }
-    return out;
 }
-Token AST::TrimBaseType(Token typeString, Token* outNamespace, 
-    u32* level, QuickArray<Token>* outPolyTypes, Token* typeName)
+StringView AST::TrimBaseType(StringView typeString, StringView* outNamespace, 
+    u32* level, QuickArray<StringView>* outPolyTypes, StringView* typeName)
 {
-    if(!typeString.str || !outNamespace || !level || !outPolyTypes) {
+    if(!typeString.ptr || !outNamespace || !level || !outPolyTypes) {
         return typeString;
     }
     // TODO: Line and column in tokens are ignored but should
     //   be seperated into the divided tokens.
 
     //-- Trim pointers
-    for(int i=typeString.length-1;i>=0;i--){
-        if(typeString.str[i]=='*') {
+    for(int i=typeString.len-1;i>=0;i--){
+        if(typeString.ptr[i]=='*') {
             (*level)++;
             continue;
         } else {
-            typeString.length = i + 1;
+            typeString.len = i + 1;
             break;
         }
     }
@@ -1870,41 +1803,41 @@ Token AST::TrimBaseType(Token typeString, Token* outNamespace,
     //-- Trim namespaces
     int lastColonIndex = -1;
     int depth = 0;
-    for(int i=typeString.length-1;i>=0;i--){
-        if(typeString.str[i] == '>'){
+    for(int i=typeString.len-1;i>=0;i--){
+        if(typeString.ptr[i] == '>'){
             depth++;
         }
-        if(typeString.str[i] == '<'){
+        if(typeString.ptr[i] == '<'){
             depth--;
         }
-        if(depth==0 && i < typeString.length - 1){
-            if(typeString.str[i] == ':' && typeString.str[i+1] == ':') {
+        if(depth==0 && i < typeString.len - 1){
+            if(typeString.ptr[i] == ':' && typeString.ptr[i+1] == ':') {
                 lastColonIndex = i;
                 break;
             }
         }
     }
     if(lastColonIndex!=-1){
-        outNamespace->str = typeString.str;
-        outNamespace->length = lastColonIndex;
-        typeString.str = typeString.str + lastColonIndex + 2;
-        typeString.length = typeString.length - (lastColonIndex + 2);
+        outNamespace->ptr = typeString.ptr;
+        outNamespace->len = lastColonIndex;
+        typeString.ptr = typeString.ptr + lastColonIndex + 2;
+        typeString.len = typeString.len - (lastColonIndex + 2);
     }
 
     *typeName = typeString;
 
     //-- Trim poly types
-    if(typeString.length < 2 || typeString.str[typeString.length-1] != '>') {
+    if(typeString.len < 2 || typeString.ptr[typeString.len-1] != '>') {
         return typeString;
     }
     int leftArrow = -1;
-    int rightArrow = typeString.length-1;
+    int rightArrow = typeString.len-1;
     // Right arrow must be at the end of typeString because we can't cut out
     // the polyTypes from typeString and then amend the two ends.
     // We would need to allocate a new string for typeString to reference
     // and we should avoid that if possible.
-    for(int i=0;i<typeString.length;i++) {
-        if(typeString.str[i] == '<'){
+    for(int i=0;i<typeString.len;i++) {
+        if(typeString.ptr[i] == '<'){
             leftArrow = i;
             break;
         }
@@ -1912,22 +1845,22 @@ Token AST::TrimBaseType(Token typeString, Token* outNamespace,
     if(leftArrow == -1){
         return typeString;
     }
-    typeString.length = leftArrow;
+    typeString.len = leftArrow;
 
-    Token acc = {};
+    StringView acc = {};
     for(int i=leftArrow + 1; i < rightArrow; i++){
-        if(typeString.str[i] != ',') {
-            if(!acc.str)
-                acc.str = typeString.str + i;
-            acc.length++;
+        if(typeString.ptr[i] != ',') {
+            if(!acc.ptr)
+                acc.ptr = typeString.ptr + i;
+            acc.len++;
         }
-        if(typeString.str[i] == ',' || i == rightArrow - 1){
+        if(typeString.ptr[i] == ',' || i == rightArrow - 1){
             // We don't push acc if it's empty because we can then
             // check the lengh of outPolyTypes to verify if we
             // have valid types. If empty types are allowed then
             // we would need to go through the array to find
             // empty tokens.
-            if(acc.str)
+            if(acc.ptr)
                 outPolyTypes->add(acc);
             acc = {};
         }
@@ -1935,20 +1868,20 @@ Token AST::TrimBaseType(Token typeString, Token* outNamespace,
     
     return typeString;
 }
-Token AST::TrimPolyTypes(Token typeString, QuickArray<Token>* outPolyTypes) {
+StringView AST::DecomposePolyTypes(StringView typeString, QuickArray<StringView>* outPolyTypes) {
     //-- Trim poly types
-    Assert(typeString.str[typeString.length-1] != '*');
-    if(typeString.length < 2 || typeString.str[typeString.length-1] != '>') {
+    Assert(typeString.ptr[typeString.len-1] != '*');
+    if(typeString.len < 2 || typeString.ptr[typeString.len-1] != '>') {
         return typeString;
     }
     int leftArrow = -1;
-    int rightArrow = typeString.length-1;
+    int rightArrow = typeString.len-1;
     // Right arrow must be at the end of typeString because we can't cut out
     // the polyTypes from typeString and then amend the two ends.
     // We would need to allocate a new string for typeString to reference
     // and we should avoid that if possible.
-    for(int i=0;i<typeString.length;i++) {
-        if(typeString.str[i] == '<'){
+    for(int i=0;i<typeString.len;i++) {
+        if(typeString.ptr[i] == '<'){
             leftArrow = i;
             break;
         }
@@ -1956,16 +1889,16 @@ Token AST::TrimPolyTypes(Token typeString, QuickArray<Token>* outPolyTypes) {
     if(leftArrow == -1){
         return typeString;
     }
-    typeString.length = leftArrow;
+    typeString.len = leftArrow;
 
-    Token acc = {};
+    StringView acc = {};
     int depth = 0;
     for(int i=leftArrow + 1; i < rightArrow; i++){
-        char chr = typeString.str[i];
+        char chr = typeString.ptr[i];
         if(depth!=0 || chr != ',') {
-            if(!acc.str)
-                acc.str = typeString.str + i;
-            acc.length++;
+            if(!acc.ptr)
+                acc.ptr = typeString.ptr + i;
+            acc.len++;
         }
         if(chr=='<'){
             depth++;
@@ -1979,7 +1912,7 @@ Token AST::TrimPolyTypes(Token typeString, QuickArray<Token>* outPolyTypes) {
             // have valid types. If empty types are allowed then
             // we would need to go through the array to find
             // empty tokens.
-            if(acc.str)
+            if(acc.ptr)
                 outPolyTypes->add(acc);
             acc = {};
         }
@@ -1987,21 +1920,21 @@ Token AST::TrimPolyTypes(Token typeString, QuickArray<Token>* outPolyTypes) {
     
     return typeString;
 
-    // if(!typeString.str || typeString.length < 2 || typeString.str[typeString.length-1] != '>') { // <>
+    // if(!typeString.ptr || typeString.len < 2 || typeString.ptr[typeString.len-1] != '>') { // <>
     //     return typeString;
     // }
     // // TODO: Line and column is ignored but it should also be separated properly.
     // // TODO: ":::" should cause an error but isn't considered at all here.
     // int leftArrow = -1;
-    // int rightArrow = typeString.length-1;
-    // for(int i=0;i<typeString.length;i++) {
-    //     if(typeString.str[i] == '<'){
+    // int rightArrow = typeString.len-1;
+    // for(int i=0;i<typeString.len;i++) {
+    //     if(typeString.ptr[i] == '<'){
     //         leftArrow = i;
     //         break;
     //     }
     // }
-    // // for(int i=typeString.length-1;i>=0;i--) {
-    // //     if(typeString.str[i] == '>'){
+    // // for(int i=typeString.len-1;i>=0;i--) {
+    // //     if(typeString.ptr[i] == '>'){
     // //         rightArrow = i;
     // //         break;
     // //     }
@@ -2014,12 +1947,12 @@ Token AST::TrimPolyTypes(Token typeString, QuickArray<Token>* outPolyTypes) {
 
     // Token acc = {};
     // for(int i=leftArrow + 1; i < rightArrow; i++){
-    //     if(typeString.str[i] != ',') {
+    //     if(typeString.ptr[i] != ',') {
     //         if(!acc.str)
-    //             acc.str = typeString.str + i;
+    //             acc.str = typeString.ptr + i;
     //         acc.length++;
     //     }
-    //     if(typeString.str[i] == ',' || i == rightArrow - 1){
+    //     if(typeString.ptr[i] == ',' || i == rightArrow - 1){
     //         // We don't push acc if it's empty because we can then
     //         // check the lengh of outPolyTypes to verify if we
     //         // have valid types. If empty types are allowed then
@@ -2062,7 +1995,7 @@ void ASTExpression::printArgTypes(AST* ast, QuickArray<TypeId>& argTypes){
     Assert(args.size() == argTypes.size());
     for(int i=0;i<(int)args.size();i++){
         if(i!=0) log::out << ", ";
-        if(args.get(i)->namedValue.str)
+        if(args.get(i)->namedValue.size()!=0)
             log::out << args.get(i)->namedValue <<"=";
         log::out << log::LIME << ast->typeToString(argTypes[i]) << log::NO_COLOR;
     }
@@ -2083,7 +2016,7 @@ StructImpl* AST::createStructImpl(){
 }
 void FuncImpl::print(AST* ast, ASTFunction* astFunc){
     using namespace engone;
-    log::out << name <<"(";
+    log::out << astFunction->name <<"(";
     for(int i=0;i<(int)argumentTypes.size();i++){
         if(i!=0) log::out << ", ";
         if(astFunc)
@@ -2118,10 +2051,10 @@ std::string ScopeInfo::getFullNamespace(AST* ast){
     std::string ns = "";
     ScopeInfo* scope = ast->getScope(id);
     while(scope){
-        if(ns.empty() && !scope->name.empty())
+        if(ns.empty() && scope->name.len!=0)
             ns = scope->name;
-        else if(!scope->name.empty())
-            ns = scope->name + "::"+ns;
+        else if(scope->name.len!=0)
+            ns = std::string(scope->name) + "::"+ns;
         if(scope->id == scope->parent)
             return ns;
         scope = ast->getScope(scope->parent);
@@ -2147,7 +2080,7 @@ TypeInfo::MemberData TypeInfo::getMember(int index) {
         return {{}, -1};
     }
 }
-bool ASTEnum::getMember(const Token&name, int *out) {
+bool ASTEnum::getMember(const StringView& name, int *out) {
     int index = -1;
     for (int i = 0; i < (int)members.size(); i++) {
         if (members[i].name == name) {
@@ -2291,7 +2224,7 @@ void ASTStruct::print(AST *ast, int depth) {
     using namespace engone;
     if(!isHidden()){
         PrintSpace(depth);
-        log::out << "Struct " << name;
+        log::out << "Struct " << base_name;
         if (polyArgs.size() != 0) {
             log::out << "<";
         }
@@ -2402,7 +2335,7 @@ void ASTExpression::print(AST *ast, int depth) {
     PrintSpace(depth);
 
     log::out << "Expr ";
-    if(namedValue.str){
+    if(namedValue.size()!=0){
         log::out << namedValue<<"= ";
     }
     if (isValue) {

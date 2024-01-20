@@ -1,7 +1,8 @@
 #pragma once
 
-#include "BetBat/Util/StringBuilder.h"
 #include "Engone/Util/Stream.h"
+#include "BetBat/Util/StringBuilder.h"
+#include "BetBat/Lexer.h"
 
 struct TokenRange;
 struct TokenStream;
@@ -75,11 +76,11 @@ void PrintCode(const TokenRange& tokenRange, const char* message,               
 
 void PrintExample(int line, const StringBuilder& stringBuilder);
 
-namespace lexer {
-    struct Token;
-    struct Lexer;
-    struct Lexer::Import;
-}
+// namespace lexer {
+//     struct Token;
+//     struct Lexer;
+//     struct Import;
+// }
 
 /*
     Old messaging code
@@ -138,13 +139,16 @@ struct Reporter {
     void start_report();
     void end_report();
 
-    lexer::Lexer::Import* prev_import=nullptr; // err_head resets this
+    lexer::Import* prev_import=nullptr; // err_head resets this
     int base_column = -1; // err_head resets this too
 
     void err_head(lexer::Token token, CompileError errcode = ERROR_NONE);
     // void err_desc(const StringBuilder& text);
     void err_mark(lexer::Token token, const StringBuilder& text);
     void err_mark(lexer::TokenRange range, const StringBuilder& text);
+    void err_mark(lexer::SourceLocation loc, const StringBuilder& text) {
+        err_mark(loc.tok, text);
+    }
 
 
     ByteStream stream{new engone::HeapAllocator()};

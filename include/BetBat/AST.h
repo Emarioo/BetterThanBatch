@@ -322,9 +322,9 @@ struct StructImpl {
     QuickArray<TypeId> polyArgs;
 };
 struct TypeInfo {
-    TypeInfo(const std::string& name, TypeId id, u32 size=0) :  name(name), id(id), originalId(id), _size(size) {}
+    TypeInfo(const StringView& name, TypeId id, u32 size=0) :  name(name), id(id), originalId(id), _size(size) {}
     TypeInfo(TypeId id, u32 size=0) : id(id), originalId(id), _size(size) {}
-    std::string name;
+    StringView name;
     TypeId id={}; // can be virtual and point to a different type
     
     TypeId originalId={};
@@ -353,7 +353,8 @@ struct TypeInfo {
     StructImpl* getImpl();
 };
 struct FuncImpl {
-    std::string name;
+    // std::string name;
+    ASTFunction* astFunction;
     struct Spot {
         TypeId typeId{};
         int offset=0;
@@ -378,7 +379,7 @@ struct Identifier {
         VARIABLE, FUNCTION
     };
     Type type=VARIABLE;
-    std::string name{};
+    StringView name{};
     ScopeId scopeId=0;
     // struct Pair {
     //     u32 polyVersion;
@@ -420,7 +421,7 @@ struct VariableInfo {
 };
 struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}
-    std::string name; // namespace
+    StringView name; // namespace
     ScopeId id = 0;
     ScopeId parent = 0;
     ContentOrder contentOrder = CONTENT_ORDER_ZERO; // the index of this scope in the parent content list
@@ -510,8 +511,8 @@ struct ASTExpression : ASTNode {
         char charValue;
     };
 
-    Token name{};
-    Token namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
+    std::string name{};
+    std::string namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
     ASTExpression* left=0; // FNCALL has arguments in order left to right
     ASTExpression* right=0;
     TypeId castType={};
@@ -575,7 +576,7 @@ struct ASTStatement : ASTNode {
     Type type = EXPRESSION;
     // int opType = 0;
     struct VarName {
-        Token name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
+        StringView name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
         int arrayLength=-1;
         bool declaration = false;
@@ -648,17 +649,22 @@ struct ASTStruct : ASTNode {
         TYPE_CREATED,
         TYPE_ERROR, 
     };
-    // std::string name{};
-    Token name{};
-    std::string polyName="";
+    // Token name{};
+    StringView base_name;
+    lexer::SourceLocation location;
+    std::string polyName;
     struct Member {
-        Token name;
+        StringView name;
+        lexer::SourceLocation location;
+        // Token name;
         ASTExpression* defaultValue=0;
         TypeId stringType{};
     };
     QuickArray<Member> members{};
     struct PolyArg {
-        Token name{};
+        lexer::SourceLocation location;
+        StringView name;
+        // Token name{};
         TypeInfo* virtualType = nullptr;
     };
     QuickArray<PolyArg> polyArgs;
@@ -701,9 +707,11 @@ struct ASTStruct : ASTNode {
 };
 struct ASTEnum : ASTNode {
     TokenRange tokenRange{};
-    Token name{};
+    StringView name{};
     struct Member {
-        Token name{};
+        // Token name{};
+        StringView name;
+        lexer::SourceLocation location;
         int enumValue=0;
         bool ignoreRules = false;
     };
@@ -722,20 +730,20 @@ struct ASTEnum : ASTNode {
     TypeId colonType = AST_UINT32; // may be a type string before the type checker, may be a type string after if checker failed.
     TypeId actualType = {};
     
-    bool getMember(const Token& name, int* out);
+    bool getMember(const StringView& name, int* out);
 
     void print(AST* ast, int depth);  
 };
 struct ASTFunction : ASTNode {
-    Token name{};
+    StringView name{};
     Identifier* identifier = nullptr;
     
     struct PolyArg {
-        Token name{};
+        StringView name{};
         TypeInfo* virtualType = nullptr;
     };
     struct Arg {
-        Token name{};
+        StringView name{};
         ASTExpression* defaultValue=0;
         TypeId stringType={};
         Identifier* identifier = nullptr;
@@ -832,31 +840,29 @@ struct AST {
     QuickArray<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
     ScopeInfo* createScope(ScopeId parentScope, ContentOrder contentOrder, ASTScope* astScope);
     ScopeInfo* getScope(ScopeId id);
-    // Searches specified scope for a scope with a certain name.
-    // Does not check parent scopes.
-    // Argument name can consist of multiple named scopes with :: (GameLib::Math::Vector)
-    // Returns nullptr pointer if named scope wasn't found or if scopeId isn't associated with a scope.
-    ScopeInfo* getScope(Token name, ScopeId scopeId);
-    // Same as getScope but searches curent and parent scopes in order. (scopeId -> scopeId.parent -> scopeId.parent.parent -> globalScope)
-    // Returns nullptr pointer if named scope wasn't found or if any encountered scopeId isn't associated with a scope.
-    ScopeInfo* getScopeFromParents(Token name, ScopeId scopeId);
+    // Searches scopes for a namespace. First the current scope (scopeId), then inherited/using scopes, and optionally parent scopes of the current scope. Example: "GameLib::Math".
+    // @return Nullptr when scope not found.
+    ScopeInfo* findScope(StringView name, ScopeId scopeId, bool search_parent_scopes = false);
+    // Same as findScope but always searches parents. This function has become redundant so maybe remove it?
+    ScopeInfo* findScopeFromParents(StringView name, ScopeId scopeId);
 
     //-- Types
-    QuickArray<Token> _typeTokens;
+    QuickArray<std::string> _typeTokens;
     TypeId getTypeString(Token name);
-    Token getTokenFromTypeString(TypeId typeString);
+    StringView getStringFromTypeString(TypeId typeString);
+    // Token getTokenFromTypeString(TypeId typeString);
     // typeString must be a string type id.
     TypeId convertToTypeId(TypeId typeString, ScopeId scopeId, bool transformVirtual);
 
     QuickArray<TypeInfo*> _typeInfos; // TODO: Use a bucket array, might not make a difference since typeInfos are allocated in a linear allocator
     // DynamicArray<TypeInfo*> _typeInfos; // TODO: Use a bucket array
-    TypeInfo* createType(Token name, ScopeId scopeId);
-    TypeInfo* createPredefinedType(Token name, ScopeId scopeId, TypeId id, u32 size=0);
+    TypeInfo* createType(StringView name, ScopeId scopeId);
+    TypeInfo* createPredefinedType(StringView name, ScopeId scopeId, TypeId id, u32 size=0);
     // isValid() of the returned TypeId will be false if
     // type couldn't be converted.
-    TypeId convertToTypeId(Token typeString, ScopeId scopeId, bool transformVirtual);
+    TypeId convertToTypeId(StringView typeString, ScopeId scopeId, bool transformVirtual);
     // pointers NOT allowed
-    TypeInfo* convertToTypeInfo(Token typeString, ScopeId scopeId, bool transformVirtual) {
+    TypeInfo* convertToTypeInfo(StringView typeString, ScopeId scopeId, bool transformVirtual) {
         return getTypeInfo(convertToTypeId(typeString, scopeId, transformVirtual).baseType());
     }
     // pointers are allowed
@@ -881,12 +887,12 @@ struct AST {
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
     // Identifier* findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes = true);
-    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const Token& name, bool searchParentScopes = true);
+    Identifier* findIdentifier(ScopeId startScopeId, ContentOrder, const StringView& name, bool searchParentScopes = true);
     // VariableInfo* identifierToVariable(Identifier* identifier);
 
     // Returns nullptr if variable already exists or if scopeId is invalid
     // If out_reused_identical isn't null then an identical variable can be returned it if exists. This can happen in polymorphic scopes.
-    VariableInfo* addVariable(ScopeId scopeId, const Token& name, ContentOrder contentOrder, Identifier** identifier, bool* out_reused_identical);
+    VariableInfo* addVariable(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, Identifier** identifier, bool* out_reused_identical);
     // We don't overload addVariable because we may want to change the name or 
     // behaviour of this function and it's very useful to have descriptive name
     // when we do.
@@ -894,14 +900,14 @@ struct AST {
     // VariableInfo* addVariable(ScopeId scopeId, const Token& name, bool shadowPreviousVariables=false, Identifier** identifier = nullptr);
     // Returns nullptr if variable already exists or if scopeId is invalid
     // If out_reused_identical isn't null then an identical identifier can be returned it if exists. This can happen in polymorphic scopes.
-    Identifier* addIdentifier(ScopeId scopeId, const Token& name, ContentOrder contentOrder, bool* out_reused_identical);
+    Identifier* addIdentifier(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, bool* out_reused_identical);
     // Identifier* addIdentifier(ScopeId scopeId, const Token& name, bool shadowPreviousIdentifier=false);
 
     // returns true if successful, out_enum/member contains what was found.
     // returns false if not found. This could also mean that the enum was enclosed, if so the out parameters may tell you the enum that would have matched if it wasn't enclosed (it allows you to be more specific with error messages).
-    bool findEnumMember(ScopeId scopeId, const Token& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member);
+    bool findEnumMember(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member);
 
-    void removeIdentifier(ScopeId scopeId, const Token& name);
+    void removeIdentifier(ScopeId scopeId, const StringView& name);
     void removeIdentifier(Identifier* identifier);
         
     u32 getTypeSize(TypeId typeId);
@@ -932,7 +938,7 @@ struct AST {
     u32 linearAllocationUsed = 0;
     void initLinear(){
         Assert(!linearAllocation);
-        linearAllocationMax = 0x10000000;
+        linearAllocationMax = 0x1000000;
         linearAllocationUsed = 0;
         linearAllocation = TRACK_ARRAY_ALLOC(char, linearAllocationMax);
          // (char*)engone::Allocate(linearAllocationMax);
@@ -959,10 +965,11 @@ struct AST {
     ConstString& getConstString(u32 index);
 
     // Must be used after TrimPointer
-    static Token TrimPolyTypes(Token token, QuickArray<Token>* outPolyTypes = nullptr);
-    static Token TrimNamespace(Token token, Token* outNamespace = nullptr);
-    static Token TrimPointer(Token& token, u32* level = nullptr);
-    static Token TrimBaseType(Token token, Token* outNamespace, u32* level, QuickArray<Token>* outPolyTypes, Token* typeName);
+    static StringView DecomposePolyTypes(StringView view, QuickArray<StringView>* outPolyTypes);
+    static void DecomposeNamespace(StringView view, StringView* out_namespace, StringView* out_name);
+    static void DecomposePointer(StringView view, StringView* out_name, u32* level);
+    // static StringView TrimPointer(StringView& view, u32* level = nullptr);
+    static StringView TrimBaseType(StringView view, StringView* outNamespace, u32* level, QuickArray<StringView>* outPolyTypes, StringView* typeName);
     // true if id is one of u8-64, i8-64
     static bool IsInteger(TypeId id);
     // will return false for non number types
@@ -980,8 +987,8 @@ struct AST {
 
     ASTScope* createBody();
     ASTFunction* createFunction();
-    ASTStruct* createStruct(const Token& name);
-    ASTEnum* createEnum(const Token& name);
+    ASTStruct* createStruct(const StringView& name);
+    ASTEnum* createEnum(const StringView& name);
     ASTStatement* createStatement(ASTStatement::Type type);
     ASTExpression* createExpression(TypeId type);
     // You may also want to call some additional functions to properly deal with

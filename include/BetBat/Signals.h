@@ -13,10 +13,10 @@
 #include "Engone/Typedefs.h"
 
 enum SignalIO : u64 {
-    NO_MATCH            = 0x0,
-    SUCCESS             = 0x1,
-    FAILURE             = 0x2,
-    COMPLETE_FAILURE    = 0x4, // quit immediately
+    SIGNAL_NO_MATCH            = 0x0,
+    SIGNAL_SUCCESS             = 0x1,
+    SIGNAL_FAILURE             = 0x2,
+    SIGNAL_COMPLETE_FAILURE    = 0x4, // quit immediately
 };
 
 // This is stupid. Use one enum. It's really annoying otherwise

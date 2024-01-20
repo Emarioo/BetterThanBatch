@@ -68,27 +68,12 @@ int main(int argc, const char** argv){
     // MeasureInit();
     ProfilerInitialize();
     
-    // lexer::Lexer lexer{};
-    // u32 import_id = lexer.tokenize("examples/dev.btb");
-
-    // lexer.print(import_id);
-    
-    
-    // Preprocessor preprocessor{};
-    // preprocessor.init(&lexer);
-    
-    // u32 preproc_import_id = preprocessor.process(import_id);
-
-    // lexer.print(preproc_import_id);
-    
     Compiler compiler{};
     compiler.importDirectories.add(Path("modules/").getAbsolute());
     compiler.compileSource("examples/dev.btb");
 
     u32 lines=0;
     u32 filesize=0;
-    
-
     auto iter = compiler.lexer.getImports().iterator();
     while(compiler.lexer.getImports().iterate(iter)) {
         lines+=iter.ptr->lines;
@@ -105,29 +90,6 @@ int main(int argc, const char** argv){
     }
     log::out << "Finished\n";
     return 0;
-    
-    // log::out << p.text << "\n";
-    // for(int i=0;i<10000;i++) {
-    //     log::out << i << "\r";
-    //     log::out.flush();
-    //     engone::Sleep(0.5);
-    // }
-    // u64 a = 0x8000'0000'0000'0001;
-    // double f = a;
-
-    // auto f = FileCOFF::DeconstructFile("wa.exe", false);
-    // auto f = FileCOFF::DeconstructFile("bin/dev.obj");
-
-    // log::out.print(f->stringTableData, f->stringTableSize);
-
-    // DynamicArray<std::string> files{};
-    // PatternMatchFiles("*main.cpp|*.h|!libs",&files);
-    // log::out << "RESULT:\n";
-    // FOR(files)
-    //     log::out << it<<"\n";
-
-    // dwarf::LEB128_test();
-    // return 0;
 
     CompileOptions compileOptions{};
     compileOptions.threadCount = 1;

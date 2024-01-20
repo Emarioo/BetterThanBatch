@@ -39,10 +39,26 @@ namespace lexer {
         TOKEN_ANNOTATION,
         TOKEN_LITERAL_STRING,
         TOKEN_LITERAL_INTEGER,
+        TOKEN_LITERAL_DECIMAL,
         TOKEN_LITERAL_HEXIDECIMAL,
         TOKEN_LITERAL_BINARY,
         TOKEN_LITERAL_NULL,
         TOKEN_LITERAL_BOOL,
+
+        TOKEN_NULL,
+        TOKEN_TRUE,
+        TOKEN_FALSE,
+
+        TOKEN_SIZEOF,
+        TOKEN_NAMEOF,
+        TOKEN_TYPEID,
+
+        TOKEN_STRUCT,
+        TOKEN_FUNCTION,
+        TOKEN_ENUM,
+        TOKEN_NAMESPACE,
+        TOKEN_UNION,
+        TOKEN_ASM,
 
         TOKEN_TYPE_END,
     };
@@ -79,11 +95,63 @@ namespace lexer {
         u32 token_index_end;
     };
     struct SourceLocation {
-        u32 import_id;
+        lexer::Token tok; // source location may not just be a token in the future
+        // TokenOrigin origin;
+        // u32 import_id;
+        // u16 line;
+        // u16 column;
+    };
+
+    struct TokenInfo {
+        TokenType type;
+        u16 flags;
+        u32 data_offset;
+
+        // TODO: Optimize by moving line and column out of TokenInfo to fit more tokens into cache lines when we parse/read tokens. However, the lexer and preprocessor would need to write two distant memory locations per token which would be slower. Perhaps that is worth since write is generally faster than read?
         u16 line;
         u16 column;
     };
+    struct Chunk {
+        ~Chunk() {
+            engone::Allocator* allocator = engone::GlobalHeapAllocator();
+            allocator->allocate(0, aux_data, aux_max);
+        }
+        u32 import_id;
+        u32 chunk_index; // handy when you only have a chunk pointer
+        QuickArray<TokenInfo> tokens; // tokenize function accesses ptr,len,max manually for optimizations, constructor destructor functionality of a DynamicArray would be ignored.
+        // TokenInfo* tokens_data=nullptr;
+        // u32 tokens_used=0;
+        // u32 tokens_max=0;
+        u8* aux_data=nullptr; // auxiliary
+        u32 aux_used=0;
+        u32 aux_max=0;
+        
+        void alloc_aux_space(u32 n) {
+            if(aux_used + n > aux_max) {
+                engone::Allocator* allocator = engone::GlobalHeapAllocator();
+                u32 new_max = 0x1000 + aux_max*1.5 + n;
+                u8* new_ptr = (u8*)allocator->allocate(new_max, aux_data, aux_max);
+                Assert(new_ptr);
+                aux_data = new_ptr;
+                aux_max = new_max;
+            }
+            aux_used+=n;
+        }
+    };
+    struct Import {
+        u32 file_id;
+        std::string path;
+        DynamicArray<u32> chunk_indices;
+        DynamicArray<Chunk*> chunks; // chunk pointers are stored here so we don't have to lock the chunks bucket array everytime we need a chunk.
+        
+        // Token getToken(u32 token_index_into_import);
 
+        // interesting but not stricly necessary information
+        int fileSize;
+        int lines; // non blank/comment lines
+        int comment_lines;
+        int blank_lines;
+    };
     /*
         The lexer class is responsible for managing memory and extra information about all tokens.
         
@@ -91,56 +159,6 @@ namespace lexer {
         lexed. After imports/chunks have been lexed you can read as many tokens as you want.
     */
     struct Lexer {
-        struct TokenInfo {
-            TokenType type;
-            u16 flags;
-            u32 data_offset;
-
-            // TODO: Optimize by moving line and column out of TokenInfo to fit more tokens into cache lines when we parse/read tokens. However, the lexer and preprocessor would need to write two distant memory locations per token which would be slower. Perhaps that is worth since write is generally faster than read?
-            u16 line;
-            u16 column;
-        };
-        struct Chunk {
-            ~Chunk() {
-                engone::Allocator* allocator = engone::GlobalHeapAllocator();
-                allocator->allocate(0, aux_data, aux_max);
-            }
-            u32 import_id;
-            u32 chunk_index; // handy when you only have a chunk pointer
-            QuickArray<TokenInfo> tokens; // tokenize function accesses ptr,len,max manually for optimizations, constructor destructor functionality of a DynamicArray would be ignored.
-            // TokenInfo* tokens_data=nullptr;
-            // u32 tokens_used=0;
-            // u32 tokens_max=0;
-            u8* aux_data=nullptr; // auxiliary
-            u32 aux_used=0;
-            u32 aux_max=0;
-            
-            void alloc_aux_space(u32 n) {
-                if(aux_used + n > aux_max) {
-                    engone::Allocator* allocator = engone::GlobalHeapAllocator();
-                    u32 new_max = 0x1000 + aux_max*1.5 + n;
-                    u8* new_ptr = (u8*)allocator->allocate(new_max, aux_data, aux_max);
-                    Assert(new_ptr);
-                    aux_data = new_ptr;
-                    aux_max = new_max;
-                }
-                aux_used+=n;
-            }
-        };
-        struct Import {
-            u32 file_id;
-            std::string path;
-            DynamicArray<u32> chunk_indices;
-            DynamicArray<Chunk*> chunks; // chunk pointers are stored here so we don't have to lock the chunks bucket array everytime we need a chunk.
-            
-            // Token getToken(u32 token_index_into_import);
-
-            // interesting but not stricly necessary information
-            int fileSize;
-            int lines; // non blank/comment lines
-            int comment_lines;
-            int blank_lines;
-        };
 
         // returns file id, 0 means failure
         u32 tokenize(char* text, u64 length, const std::string& path_name, u32 prepared_import_id = 0);
@@ -216,4 +234,9 @@ namespace lexer {
         TokenInfo* getTokenInfo_unsafe(Token token);
 
     };
+    
+    double ConvertDecimal(const StringView& view);
+    int ConvertInteger(const StringView& view);
+    // 0x is optional. Asserts if first character is minus
+    u64 ConvertHexadecimal(const StringView& view);
 }

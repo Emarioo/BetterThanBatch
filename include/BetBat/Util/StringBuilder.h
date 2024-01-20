@@ -16,15 +16,49 @@ struct Token;
 struct TokenRange;
 
 struct StringView {
-    const char* ptr;
-    int len;
-    bool equals(const char* str) {
+    StringView() = default;
+    StringView(const char* cstr) {
+        ptr = cstr;
+        len = strlen(cstr);
+    }
+    StringView(const char* cstr, int len) {
+        ptr = cstr;
+        this->len = len;
+    }
+
+    const char* ptr=nullptr;
+    u16 len=0;
+    u16 max=0;
+    bool owner=false;
+    bool equals(const char* str) const {
         int slen = strlen(str);
         if(len!=slen) return false;
         for(int i=0;i<len;i++) if(str[i] != ptr[i]) return false;
         return true;
     }
+    bool equals(const char* str, int size) const {
+        if(len!=size) return false;
+        for(int i=0;i<len;i++) if(str[i] != ptr[i]) return false;
+        return true;
+    }
+    operator std::string() const {
+        return std::string(ptr,len);
+    }
 };
+bool operator==(const std::string& str, const StringView& view) {
+    if(str.length() != view.len) return false;
+    return view.equals(str.c_str());
+}
+bool operator==(const StringView& view, const std::string& str) {
+    if(str.length() != view.len) return false;
+    return view.equals(str.c_str());
+}
+bool operator==(const StringView& str, const StringView& view) {
+    return str.equals(view.ptr,view.len);
+}
+bool operator==(const StringView& view, const char* str) {
+    return view.equals(str);
+}
 
 // String inside the builder is null terminated
 // TODO: Allocator which the builder uses

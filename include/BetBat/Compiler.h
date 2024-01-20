@@ -1,12 +1,14 @@
 #pragma once
 
+// Compiler v2
+#include "BetBat/Tokenizer.h"
 #include "BetBat/Preprocessor.h"
 #include "BetBat/Parser.h"
-#include "BetBat/Parser2.h"
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
 #include "BetBat/NativeRegistry.h"
+
 #include "BetBat/UserProfile.h"
 #include "BetBat/CompilerEnums.h"
 
@@ -14,7 +16,11 @@
 #include "BetBat/COFF.h"
 #include "BetBat/ELF.h"
 #include "BetBat/ObjectFile.h"
-// #include "BetBat/MessageTool.h"
+
+// Compiler v2.1
+#include "BetBat/Lexer.h"
+#include "BetBat/Preprocessor2.h"
+#include "BetBat/Parser2.h"
 
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.
@@ -282,7 +288,7 @@ bool CompileAll(CompileOptions* options);
 
 struct Compiler {
     lexer::Lexer lexer{};
-    Preprocessor preprocessor{};
+    preproc::Preprocessor preprocessor{};
     AST* ast = nullptr;
     Reporter reporter{};
     

@@ -2,6 +2,7 @@
 
 #include "BetBat/AST.h"
 #include "BetBat/PhaseContext.h"
+#include "BetBat/Lexer.h"
 
 struct CompileInfo;
 namespace parser {
@@ -45,8 +46,8 @@ struct ParseInfo : public PhaseContext {
 
     u32 import_id=0;
     u32 head=0;
-    lexer::Lexer::Import* lexer_import=nullptr;
-    DynamicArray<lexer::Lexer::Chunk*> lexer_chunks;
+    lexer::Import* lexer_import=nullptr;
+    DynamicArray<lexer::Chunk*> lexer_chunks;
     void setup_token_iterator() {
         Assert(lexer);
         Assert(import_id != 0);
@@ -55,8 +56,8 @@ struct ParseInfo : public PhaseContext {
             lexer_chunks.add(lexer->getChunk_unsafe(it));
         }
     }
-    lexer::Lexer::TokenInfo* getinfo(StringView* string = nullptr, int off = 0) {
-        static lexer::Lexer::TokenInfo eof{lexer::TOKEN_EOF};
+    lexer::TokenInfo* getinfo(StringView* string = nullptr, int off = 0) {
+        static lexer::TokenInfo eof{lexer::TOKEN_EOF};
         u32 fcindex,tindex;
         lexer->decode_import_token_index(head + off,&fcindex,&tindex);
 
@@ -67,7 +68,7 @@ struct ParseInfo : public PhaseContext {
                 *string = {"",1};
             return &eof;
         }
-        lexer::Lexer::Chunk* chunk = lexer_chunks[fcindex];
+        lexer::Chunk* chunk = lexer_chunks[fcindex];
 
         auto info = chunk->tokens.getPtr(tindex);
         if(!info) {
@@ -89,7 +90,7 @@ struct ParseInfo : public PhaseContext {
             out.type = lexer::TOKEN_EOF;
             return out;
         }
-        lexer::Lexer::Chunk* chunk = lexer_chunks[fcindex];
+        lexer::Chunk* chunk = lexer_chunks[fcindex];
 
         auto info = chunk->tokens.getPtr(tindex);
         if(!info) {
@@ -104,6 +105,9 @@ struct ParseInfo : public PhaseContext {
     }
     void advance(int n = 1) {
         head += n;
+    }
+    lexer::SourceLocation srcloc(lexer::Token tok) {
+        return {tok};
     }
     // returns token index into import of the next token to read
     // The token gettok will read.

@@ -256,7 +256,7 @@ SignalDefault ParseTypeId(ParseInfo& info, Token& outTypeId, int* tokensParsed){
             }
         }
         // TODO: Array<T,A> wouldn't work since comma is detected as end of data type.
-        //      tuples won't work with paranthesis.
+        //      tuples won't work with parenthesis.
         if(depth == 0) {
             if(Equal(tok,",") // (a: i32, b: i32)     struct {a: i32, b: i32}
                 ||Equal(tok,"=") // a: i32 = 9;
@@ -2219,7 +2219,7 @@ SignalAttempt ParseExpression(ParseInfo& info, ASTExpression*& expression, bool 
                 if(!tmp){
                     ERR_SECTION(
                         ERR_HEAD(token)
-                        ERR_MSG("Got nothing from paranthesis in expression.")
+                        ERR_MSG("Got nothing from parenthesis in expression.")
                         ERR_LINE(token,"bad")
                     )
                 }
