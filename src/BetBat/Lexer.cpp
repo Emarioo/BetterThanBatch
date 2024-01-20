@@ -1185,8 +1185,36 @@ bool Lexer::equals_identifier(Token token, const char* str) {
         return false;   
     }
 }
+Lexer::TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import) {
+    static TokenInfo eof{TOKEN_EOF};
+    // NOTE: We assume that the content inside the imports won't be modified.
+    //   Otherwise, we would need to lock the content too: file->lock_chunk_indices.lock().
+    lock_imports.lock();
+    Import* file = imports.get(fileid-1);
+    lock_imports.unlock();
+    Assert(file);
+
+    u32 fcindex,tindex;
+    decode_import_token_index(token_index_into_import, &fcindex,&tindex);
+
+    if(file->chunk_indices.size() <= fcindex) {
+        return &eof;
+    }
+
+    u32 cindex = file->chunk_indices.get(fcindex);
+    // NOTE: We assume that the chunk won't be modified. Only read.
+    lock_chunks.lock();
+    Chunk* chunk = chunks.get(cindex);
+    lock_chunks.unlock();
+    Assert(chunk);
+    
+    auto info = chunk->tokens.getPtr(tindex);
+    if(!info)
+        return &eof;
+    return info;
+}
 Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
-    ZoneScoped;
+    // ZoneScoped;
     Token out{};
     
     // NOTE: We assume that the content inside the imports won't be modified.
@@ -1515,6 +1543,17 @@ void Lexer::print(u32 fileid) {
     while((written = feed(buffer,sizeof(buffer),iter))) {
         log::out.print(buffer,written);
     }
+}
+std::string Lexer::tostring(Token token) {
+    auto iter = createFeedIterator(token);
+    std::string out{};
+    out.resize(15);
+    char buffer[256];
+    int written = 0;
+    while((written = feed(buffer,sizeof buffer,iter))) {
+        out.append(buffer,written);
+    }
+    return out;
 }
 #define TOK_NAME(TYPE) (TYPE < 256 ? (char)TYPE : lexer::token_type_names[TYPE - TOKEN_TYPE_BEGIN])
 const char* token_type_names[] {

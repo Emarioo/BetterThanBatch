@@ -2,6 +2,7 @@
 
 #include "BetBat/Preprocessor.h"
 #include "BetBat/Parser.h"
+#include "BetBat/Parser2.h"
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
@@ -282,6 +283,8 @@ bool CompileAll(CompileOptions* options);
 struct Compiler {
     lexer::Lexer lexer{};
     Preprocessor preprocessor{};
+    AST* ast = nullptr;
+    Reporter reporter{};
     
     enum ImportFlags {
         FLAG_NONE=0,

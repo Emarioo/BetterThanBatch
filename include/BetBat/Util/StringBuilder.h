@@ -15,6 +15,17 @@
 struct Token;
 struct TokenRange;
 
+struct StringView {
+    const char* ptr;
+    int len;
+    bool equals(const char* str) {
+        int slen = strlen(str);
+        if(len!=slen) return false;
+        for(int i=0;i<len;i++) if(str[i] != ptr[i]) return false;
+        return true;
+    }
+};
+
 // String inside the builder is null terminated
 // TODO: Allocator which the builder uses
 struct StringBuilder {
@@ -109,6 +120,7 @@ public:
         StringBuilder& operator +=(T t){append(t);return *this;}\
         StringBuilder& operator <<(T t){append(t);return *this;}
 
+    OP_METHOD_CREF(StringView)
     OP_METHOD_CREF(TokenRange)
     OP_METHOD_CREF(Token)
     OP_METHOD_CREF(std::string)
@@ -130,6 +142,9 @@ public:
     void append(const Token& token);
     void append(const std::string& str){
         append(str.c_str(), str.length());
+    }
+    void append(const StringView& str){
+        append(str.ptr, str.len);
     }
     void append(u8 num)  { append((u64)num); }
     void append(u16 num) { append((u64)num); }

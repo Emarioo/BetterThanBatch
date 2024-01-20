@@ -1,6 +1,7 @@
 #pragma once
 
 #include "BetBat/Tokenizer.h"
+#include "BetBat/Lexer.h"
 #include "BetBat/Signals.h"
 
 typedef u32 ScopeId;
@@ -647,6 +648,7 @@ struct ASTStruct : ASTNode {
         TYPE_CREATED,
         TYPE_ERROR, 
     };
+    // std::string name{};
     Token name{};
     std::string polyName="";
     struct Member {

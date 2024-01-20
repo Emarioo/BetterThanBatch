@@ -12,6 +12,7 @@
 #include "BetBat/Config.h"
 #include "BetBat/Util/Utility.h"
 #include "BetBat/Util/Perf.h"
+#include "BetBat/Util/StringBuilder.h"
 
 // #define LEXER_DEBUG_DETAILS
 
@@ -77,6 +78,11 @@ namespace lexer {
         u32 token_index_start;
         u32 token_index_end;
     };
+    struct SourceLocation {
+        u32 import_id;
+        u16 line;
+        u16 column;
+    };
 
     /*
         The lexer class is responsible for managing memory and extra information about all tokens.
@@ -88,9 +94,11 @@ namespace lexer {
         struct TokenInfo {
             TokenType type;
             u16 flags;
+            u32 data_offset;
+
+            // TODO: Optimize by moving line and column out of TokenInfo to fit more tokens into cache lines when we parse/read tokens. However, the lexer and preprocessor would need to write two distant memory locations per token which would be slower. Perhaps that is worth since write is generally faster than read?
             u16 line;
             u16 column;
-            u32 data_offset;
         };
         struct Chunk {
             ~Chunk() {
@@ -151,12 +159,15 @@ namespace lexer {
 
         void print(u32 fileid);
 
+        TokenInfo* getTokenInfoFromImport(u32 fileid, u32 token_index_into_import);
         Token getTokenFromImport(u32 fileid, u32 token_index_into_import);
         // same as getDataFromToken but char instead of void
         u32 getStringFromToken(Token tok, const char** ptr);
         u32 getDataFromToken(Token tok, const void** ptr);
         
         std::string getStdStringFromToken(Token tok);
+
+        std::string tostring(Token token);
 
         u32 createImport(const std::string& path, Import** out_import);
         // unsafe if you have an import_id reference hanging somewhere

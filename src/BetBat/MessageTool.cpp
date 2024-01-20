@@ -1,6 +1,6 @@
 #include "BetBat/MessageTool.h"
 #include "BetBat/Tokenizer.h"
-
+#include "BetBat/Lexer.h"
 
 void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode, TokenStream** prevStream) {
     // , const StringBuilder& stringBuilder) {
@@ -345,4 +345,225 @@ void Reporter::end_report() {
         engone::log::out.setInput(nullptr);
         engone::log::out.enableConsole(true);
     }
+}
+void Reporter::err_head(lexer::Token token, CompileError errcode){
+    using namespace engone;
+    log::out << log::RED;
+    
+    // NOTE: Stream name is an absolute path. If the path contains CWD then skip that part to reduce
+    //   the clutter on the screen. The user can probably deduce where the file is even if we drop the CWD part.
+    //   Make sure you can still click on the path in your editor/terminal to quick jump to the location. (at least in vscode)
+    std::string cwd = engone::GetWorkingDirectory() + "/";
+    ReplaceChar((char*)cwd.data(), cwd.length(), '\\','/');
+    int index = 0;
+    
+    u32 cindex,tindex;
+    lexer->decode_origin(token.origin, &cindex, &tindex);
+
+    auto chunk = lexer->getChunk_unsafe(cindex);
+    auto info = &chunk->tokens[tindex];
+    auto imp = lexer->getImport_unsafe(chunk->import_id);
+
+    prev_import = imp;
+    base_column = -1;
+
+    while(imp->path.size() > index && cwd.size() > index) {
+        if(imp->path[index] != cwd[index])
+            break;
+        index++;
+    }
+    if(index != 0)
+        log::out << "./" << imp->path.substr(index);
+    else
+        log::out << imp->path;
+    log::out <<":"<<(info->line)<<":"<<(info->column);
+
+    log::out << " ("<<ToCompileErrorString({true,errcode})<<")";
+    log::out << ": " <<  MESSAGE_COLOR;
+}
+// void Reporter::err_desc(const StringBuilder& text) {
+
+// }
+void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
+    using namespace engone;
+    
+    auto imp = lexer->getImport_unsafe(range.importId);
+
+    int start = range.token_index_start;
+    int end = range.token_index_end;
+    // If you call PrintCode multiple times in an error message and the file is the same
+    // then we don't need to print this.
+    // If the lines we print come from different files then we do need to print this because
+    // otherwise we will assume the line we print comes from the location the head of error message
+    // displayed.
+    if(!prev_import || prev_import != imp) {
+        log::out << log::GRAY << "-- "<<TrimDir(imp->path) << " --\n";
+        // if(prev_import) should we always set prev_import or not?
+        prev_import = imp;
+    }
+
+    // log::out <<"We " <<start << " "<<end<<"\n";
+    while(start>0){
+        auto prev = lexer->getTokenFromImport(imp->file_id, start-1);
+        if(prev.flags&lexer::TOKEN_FLAG_NEWLINE){
+            break;
+        }
+        start--;
+        // log::out << "start "<<start<<"\n";
+    }
+    // NOTE: end is exclusive
+    while(true){
+        auto next = lexer->getTokenFromImport(imp->file_id, end-1); // -1 since end is exclusive
+        if(next.type == lexer::TOKEN_EOF||(next.flags&lexer::TOKEN_FLAG_NEWLINE)){
+            break;
+        }
+        end++;
+        
+        // log::out << "end "<<end<<"\n";
+    }
+    const log::Color codeColor = log::NO_COLOR;
+    const log::Color markColor = log::CYAN;
+
+    int lineDigits = 0;
+    int baseColumn = base_column; // if you call err_mark without err_head then and old value for base_column will be used
+    for(int i=start;i<end;i++){
+        auto tok = lexer->getTokenInfoFromImport(imp->file_id,i);
+        int numlen = tok->line>0 ? ((int)log10(tok->line)+1) : 1;
+        if(numlen>lineDigits)
+            lineDigits = numlen;
+        if(tok->column<baseColumn || baseColumn == -1)
+            baseColumn = tok->column;
+    }
+    base_column = baseColumn;
+    const char* const line_sep_str = " | "; // text that separates the line number and the code
+    static const int line_sep_len = strlen(line_sep_str);
+    int line_number_width = lineDigits + line_sep_len;
+    // log::out << start << " - " <<end<<"\n";
+    int currentLine = -1;
+    int minPos = -1;
+    int maxPos = -1;
+    int pos = -1;
+    bool added_newline = false;
+    for(int i=start;i<end;i++){
+        auto tok = lexer->getTokenInfoFromImport(imp->file_id, i);
+        auto tok_tiny = lexer->getTokenFromImport(imp->file_id, i);
+        if(tok->line != currentLine){
+            currentLine = tok->line;
+            if(i!=start) {
+                if(!added_newline)
+                    log::out << "\n";
+                added_newline = false;
+            }
+            int numlen = currentLine>0 ? ((int)log10(currentLine)+1) : 1;
+            for(int j=0;j<lineDigits-numlen;j++)
+                log::out << " ";
+            log::out << codeColor << currentLine << line_sep_str;
+            pos = line_number_width + tok->column-baseColumn;
+            if(pos < minPos || minPos == -1)
+                minPos = pos;
+            for(int j=0;j<tok->column-baseColumn;j++) log::out << " ";
+        }
+        // log::out.flush();
+        char buffer[256];
+        auto iter = lexer->createFeedIterator(tok_tiny);
+        int written=0;
+        if(i<start){
+            // pos += tok.calcLength();
+            while((written = lexer->feed(buffer,sizeof(buffer),iter))){
+                pos += written;
+                log::out.print(buffer,written);
+            }
+            
+            // if(tok.flags&TOKEN_SUFFIX_SPACE)
+            //     pos += 1;
+            log::out << codeColor;
+            if(pos>minPos || minPos == -1)
+                minPos = pos;
+        } else if(i>=end){
+            // pos += tok.calcLength();
+            while((written = lexer->feed(buffer,sizeof(buffer),iter))){
+                pos += written;
+                log::out.print(buffer,written);
+            }
+            // if(tok.flags&TOKEN_SUFFIX_SPACE)
+            //     pos += 1;
+            // if(minPos>pos || minPos == -1)
+            //     minPos = pos;
+            log::out << codeColor;
+        } else {
+            log::out << markColor;
+            if(i==start)
+                pos = minPos;
+            // pos += tok.calcLength();
+            while((written = lexer->feed(buffer,sizeof(buffer),iter))){
+                pos += written;
+                log::out.print(buffer,written);
+            }
+            if(tok->flags&(lexer::TOKEN_FLAG_ANY_SUFFIX))
+                pos--;
+            if(pos>maxPos || maxPos==-1)
+                maxPos = pos;
+            if((tok->flags&lexer::TOKEN_FLAG_ANY_SUFFIX))
+                pos++;
+        }
+        // tok.print(false);
+        if(tok->flags&lexer::TOKEN_FLAG_NEWLINE)
+            added_newline = true;
+        // log::out.flush();
+    }
+    // log::out << "\n";
+
+    // for(int i=0;i<minPos;i++) log::out << " ";
+    // log::out << "<";
+    // for(int i=0;i<maxPos - minPos;i++) log::out << " ";
+    // log::out << ">\n";
+    // for(int i=0;i<maxPos-1;i++)
+    //     log::out << " ";
+    // log::out << ">\n";
+
+    int msglen = text.size();
+    // log::out << "len "<<msglen<<"\n";
+    log::out << markColor;
+    if(msglen+1<minPos){
+        // print message on left side of mark
+        for(int i=0;i<minPos-(msglen+1);i++)
+            log::out << " ";
+        if(text.size()!=0)
+            log::out << text<<" ";
+        if(maxPos-minPos>0){
+            log::out << "^";
+        }   
+        for(int i=0;i<maxPos-minPos - 1;i++)
+            log::out << "~";
+    } else {
+        // print msg on right side of mark
+        for(int i=0;i<minPos;i++)
+            log::out << " ";
+        if(maxPos-minPos>0){
+            log::out << "^";
+        }   
+        for(int i=0;i<maxPos-minPos - 1;i++)
+            log::out << "~";
+        if(text.size()!=0)
+            log::out << " " << text;
+    }
+    log::out << "\n";
+}
+void Reporter::err_mark(lexer::Token token, const StringBuilder& text) {
+    u32 cindex,tindex;
+    lexer->decode_origin(token.origin, &cindex, &tindex);
+
+    auto chunk = lexer->getChunk_unsafe(cindex);
+    auto imp = lexer->getImport_unsafe(chunk->import_id);
+    
+    lexer::TokenRange r{};
+    r.importId = chunk->import_id;
+    for(int i=0;i<imp->chunk_indices.size();i++) {
+        u32 ind = imp->chunk_indices[i];
+        if(ind == cindex) {
+            r.token_index_start = i * TOKEN_ORIGIN_TOKEN_MAX + tindex;
+            r.token_index_end = i * TOKEN_ORIGIN_TOKEN_MAX + tindex + 1;
+        }
+    }
+    err_mark(r, text);
 }

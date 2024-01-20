@@ -30,7 +30,15 @@ struct TokenStream;
 #define MSG_CODE_LOCATION2
 #define MSG_CODE_LOCATION
 #endif
+
 #define BASE_SECTION(CODE, CONTENT) { if(!info.ignoreErrors) info.errors++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
+
+#define BASE_SECTION2(CONTENT) { if(!info.ignoreErrors) info.errors++; info.reporter->start_report(); MSG_CODE_LOCATION; CONTENT; info.reporter->end_report(); }
+
+#define ERR_HEAD2(T, ...) info.reporter->err_head(T, __VA_ARGS__);
+// info.compileInfo->compileOptions->compileStats.addError(TR, __VA_ARGS__); nocheckin, we need to add error in ERR_HEAD!
+#define ERR_LINE2(T, STR) info.reporter->err_mark(T, StringBuilder{} << STR); 
+
 #define BASE_WARN_SECTION(CODE, CONTENT) { info.compileInfo->compileOptions->compileStats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
 
 // #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
@@ -59,13 +67,19 @@ struct TokenStream;
 // TODO: Color support in string builder?
 
 void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode , TokenStream** prevStream = nullptr);
-void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode, TokenStream** prevStream = nullptr);
+void PrintHead(engone::log::Color color, const Token& token,           const StringBuilder& errorCode, TokenStream** prevStream = nullptr);
 
 void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
-void PrintCode(const Token& token, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
-void PrintCode(const TokenRange& tokenRange, const char* message, TokenStream** prevStream);
+void PrintCode(const Token& token,           const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
+void PrintCode(const TokenRange& tokenRange, const char* message,                TokenStream** prevStream);
 
 void PrintExample(int line, const StringBuilder& stringBuilder);
+
+namespace lexer {
+    struct Token;
+    struct Lexer;
+    struct Lexer::Import;
+}
 
 /*
     Old messaging code
@@ -100,7 +114,7 @@ enum CompileError : u32 {
     ERROR_C_STYLED_DEFAULT_CASE = 2103,
     ERROR_BAD_TOKEN_IN_SWITCH = 2104,
     ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH = 2105,
-    ERROR_AMBIGUOUS_IF_ELSE = 2106,
+    ERROR_AMBIGUOUS_IF_ELSE = 2106, 
     
     ERROR_OVERLOAD_MISMATCH = 3001,
     
@@ -117,11 +131,21 @@ void PrintCode(const TokenRange& tokenRange, const char* message = nullptr);
 void PrintCode(int index, TokenStream* stream, const char* message = nullptr);
 
 struct Reporter {
-    
+    lexer::Lexer* lexer=nullptr;
+
     bool instant_report = true;
     
     void start_report();
     void end_report();
-    
+
+    lexer::Lexer::Import* prev_import=nullptr; // err_head resets this
+    int base_column = -1; // err_head resets this too
+
+    void err_head(lexer::Token token, CompileError errcode = ERROR_NONE);
+    // void err_desc(const StringBuilder& text);
+    void err_mark(lexer::Token token, const StringBuilder& text);
+    void err_mark(lexer::TokenRange range, const StringBuilder& text);
+
+
     ByteStream stream{new engone::HeapAllocator()};
 };

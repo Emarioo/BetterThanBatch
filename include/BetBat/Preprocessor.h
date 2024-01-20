@@ -301,27 +301,6 @@ struct PreprocContext {
         // return lexer->getTokenFromImport(import_id, head + off);
         return nullptr;
     }
-    // StringView getstring(int off = 0) {
-    //     Assert(quick_iterator);
-        
-    //     if(quick_iterator) {
-    //         u32 fcindex,tindex;
-    //         lexer->decode_import_token_index(head + off,&fcindex,&tindex);
-        
-    //         StringView out={"",0};
-    //         if(lexer_chunks.size() <= fcindex) {
-    //             return out;
-    //         }
-    //         lexer::Lexer::Chunk* chunk = lexer_chunks[fcindex];
-    //         auto info = chunk->tokens.getPtr(tindex);
-            
-    //         if(!info)
-    //             return out;
-    //         return info;
-    //     }
-    //     // return lexer->getTokenFromImport(import_id, head + off);
-    //     return nullptr;
-    // }
     void advance(int n = 1) {
         head += n;
     }

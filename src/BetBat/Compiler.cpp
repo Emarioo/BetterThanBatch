@@ -2256,6 +2256,15 @@ void Compiler::processImports() {
                 
                 imp->preproc_import_id = preprocessor.process(imp->import_id, true);
                 
+                // TODO: Free memory for old import since we don't need it anymore.
+                //   import_id is used in dependencies but I don't think we ever
+                //   query the import from the lexer so from the compilers
+                //   perspective the import_id still exists but the data from
+                //   it doesn't which is fine since the dependencies don't care
+                //   about the data of the import, just whether it was loaded
+                //   at some point in time. Double check this though.
+                // lexer.destroyImport_unsafe(imp->import_id);
+
                 auto intern_imp = lexer.getImport_unsafe(imp->preproc_import_id);
                 
                 u32 tokens = 0;
@@ -2272,7 +2281,8 @@ void Compiler::processImports() {
                 LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
             } else if(!(imp->state & FLAG_PARSED)) {
-                // imp->import_id = parser.process(imp->import_id);
+                auto what = parser::ParseImport(imp->import_id, this);
+                // TODO: Handle return value?
                 
                 imp->state = (ImportFlags)(imp->state|FLAG_PARSED);
             } else {
@@ -2308,11 +2318,12 @@ void Compiler::compileSource(const std::string& path) {
     lock_wait_for_imports.init(1,1);
     signaled = true;
     preprocessor.init(&lexer, this);
+    ast = AST::Create();
     
     bool yes = addImport(path);
     Assert(yes); // nocheckin
     
-    int thread_count = 2;
+    int thread_count = 1;
     
     DynamicArray<engone::Thread> threads{};
     

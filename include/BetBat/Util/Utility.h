@@ -31,11 +31,6 @@ const char* FormatBytes(u64 bytes);
 // not thread safe
 const char* FormatTime(double seconds);
 
-struct StringView {
-    const char* ptr;
-    int len;
-};
-
 // src/util/base.btb -> src/util/
 // base.btb -> /
 // src -> /
