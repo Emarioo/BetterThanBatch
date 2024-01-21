@@ -143,6 +143,9 @@ struct Reporter {
     int base_column = -1; // err_head resets this too
 
     void err_head(lexer::Token token, CompileError errcode = ERROR_NONE);
+    void err_head(lexer::SourceLocation loc, CompileError errcode = ERROR_NONE) {
+        err_head(loc.tok,errcode);
+    }
     // void err_desc(const StringBuilder& text);
     void err_mark(lexer::Token token, const StringBuilder& text);
     void err_mark(lexer::TokenRange range, const StringBuilder& text);

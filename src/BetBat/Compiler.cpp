@@ -2278,13 +2278,13 @@ void Compiler::processImports() {
                 
                 imp->state = (ImportFlags)(imp->state|FLAG_PREPROCESSED_2);
                 
-                // LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 // imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
             } else if(!(imp->state & FLAG_PARSED)) {
-                auto what = parser::ParseImport(imp->import_id, this);
+                auto what = parser::ParseImport(imp->preproc_import_id, this);
                 // TODO: Handle return value?
                 ast->appendToMainBody(what);
-                ast->print();
+                
+                // ast->print();
                 
                 imp->state = (ImportFlags)(imp->state|FLAG_PARSED);
             } else {

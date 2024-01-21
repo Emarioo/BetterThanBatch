@@ -141,7 +141,7 @@ struct PreprocContext {
                     *string = {"",1};
                 return &eof;
             }
-            if(string)
+            if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
                 *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
             return info;
         }

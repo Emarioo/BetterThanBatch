@@ -4,14 +4,25 @@
 
 // 2 + okay(1,3)
 
-struct okay {
-    nah: Math::Vec<Math::float32>;
-}
+// struct okay {
+//     nah: Math::Vec<Math::float32>;
+// }
 
-enum Soup : i32 {
-    Shoof = 923,
-    Hihi = 9,
-}
-fn yea(ad: N::i32){
+// enum Soup : i32 {
+//     Shoof = 923,
+//     Hihi = 9,
+// }
+// a :i32[32] = 9;
 
-// #import "tests/fuzzer_gen/main"
+// a[3] = 9
+
+// fn yea(ad: N::i32){
+//     a = 923
+// }
+
+// operator +(n: i32, k: i32) -> f32 {
+//     return n - k;
+// }
+
+#import "tests/fuzzer_gen/main"
+// #import "tests/fuzzer_gen/f19"

@@ -84,12 +84,6 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         if(prev_token) {
             prev_token->flags = (prev_token->flags&~clear) | set;
         }
-        // if(lexer_import->chunk_indices.size()!=0) {
-        //     lock_imports.lock();
-        //     Chunk* chunk = chunks.get(lexer_import->chunk_indices.last());
-        //     lock_imports.unlock();
-        //     chunk->tokens.last().flags = (chunk->tokens.last().flags&~clear) | set;
-        // }
     };
     auto reserv_tokens=[&](){
         Assert(last_chunk);
@@ -507,45 +501,77 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             
                 StringView temp{text + str_start, str_end - str_start};
                 // TODO: Optimize. For example, if first character isn't one of these 'tfsenu' then it's not a special token and we don't have to run all ifs.
+                
+                #define CASE(S, STR, TOK)  if(S-1 == temp.len && temp == STR+1) {\
+                    new_tokens->type = TOK; has_data = false; }
 
-                if(temp == "null") {
-                    new_tokens->type = TOKEN_NULL;
-                    has_data = false;
-                } else if(temp == "true") {
-                    new_tokens->type = TOKEN_TRUE;
-                    has_data = false;
-                } else if(temp == "false") {
-                    new_tokens->type = TOKEN_FALSE;
-                    has_data = false;
-                } else if(temp == "struct") {
-                    new_tokens->type = TOKEN_STRUCT;
-                    has_data = false;
-                } else if(temp == "fn") {
-                    new_tokens->type = TOKEN_FUNCTION;
-                    has_data = false;
-                } else if(temp == "enum") {
-                    new_tokens->type = TOKEN_ENUM;
-                    has_data = false;
-                } else if(temp == "namespace") {
-                    new_tokens->type = TOKEN_NAMESPACE;
-                    has_data = false;
-                } else if(temp == "union") {
-                    new_tokens->type = TOKEN_UNION;
-                    has_data = false;
-                } else if(temp == "sizeof") {
-                    new_tokens->type = TOKEN_SIZEOF;
-                    has_data = false;
-                } else if(temp == "nameof") {
-                    new_tokens->type = TOKEN_NAMEOF;
-                    has_data = false;
-                } else if(temp == "typeid") {
-                    new_tokens->type = TOKEN_TYPEID;
-                    has_data = false;
-                } else if(temp == "asm") {
-                    new_tokens->type = TOKEN_ASM;
-                    has_data = false;
+                char f = *(text+str_start);
+                temp.ptr++; // not need to check first character
+                temp.len--;
+                if(f == 'n') {
+                    CASE(4, "null",        TOKEN_NULL)
+                    else CASE(9, "namespace",   TOKEN_NAMESPACE)
+                    else CASE(6, "nameof",      TOKEN_NAMEOF)
+                } else if(f == 't') {
+                    CASE(4, "true",        TOKEN_TRUE)
+                    else CASE(6, "typeid",      TOKEN_TYPEID)
+                } else if(f == 'f') {
+                    CASE(5, "false",       TOKEN_FALSE)
+                    else CASE(3, "for",         TOKEN_FOR)
+                    else CASE(2, "fn",          TOKEN_FUNCTION)
+                } else if(f == 'i') {
+                    CASE(2, "if",          TOKEN_IF)
+                } else if(f == 'e') {
+                    CASE(4, "else",        TOKEN_ELSE)
+                    else CASE(4, "enum",        TOKEN_ENUM)
+                } else if(f == 'w') {
+                    CASE(5, "while",       TOKEN_WHILE)
+                } else if(f == 's') {
+                    CASE(6, "switch",      TOKEN_SWITCH)
+                    else CASE(6, "struct",      TOKEN_STRUCT)
+                    else CASE(6, "sizeof",      TOKEN_SIZEOF)
+                } else if(f == 'd') {
+                    CASE(5, "defer",       TOKEN_DEFER)
+                } else if(f == 'r') {
+                    CASE(6, "return",      TOKEN_RETURN)
+                } else if(f == 'b') {
+                    CASE(5, "break",       TOKEN_BREAK)
+                } else if(f == 'c') {
+                    CASE(8, "continue",    TOKEN_CONTINUE)
+                } else if(f == 'u') {
+                    CASE(5, "using",       TOKEN_USING)
+                    else CASE(5, "union",       TOKEN_UNION)
+                } else if(f == 'o') {
+                    CASE(8, "operator",    TOKEN_OPERATOR)
+                } else if(f == 'a') {
+                    CASE(3, "asm",         TOKEN_ASM)
                 }
-                // TODO: Set token types. struct, fn, enum...
+                // Non-optimize version
+                // #define CASE(STR, TOK)  if(temp == STR) { new_tokens->type = TOK; has_data = false; }
+                // CASE("null",        TOKEN_NULL)
+                // else CASE("true",        TOKEN_TRUE)
+                // else CASE("false",       TOKEN_FALSE)
+                // else CASE("if",          TOKEN_IF)
+                // else CASE("else",        TOKEN_ELSE)
+                // else CASE("while",       TOKEN_WHILE)
+                // else CASE("for",         TOKEN_FOR)
+                // else CASE("switch",      TOKEN_SWITCH)
+                // else CASE("defer",       TOKEN_DEFER)
+                // else CASE("return",      TOKEN_RETURN)
+                // else CASE("break",       TOKEN_BREAK)
+                // else CASE("continue",    TOKEN_CONTINUE)
+                // else CASE("using",       TOKEN_USING)
+                // else CASE("struct",      TOKEN_STRUCT)
+                // else CASE("fn",          TOKEN_FUNCTION)
+                // else CASE("operator",    TOKEN_OPERATOR)
+                // else CASE("enum",        TOKEN_ENUM)
+                // else CASE("namespace",   TOKEN_NAMESPACE)
+                // else CASE("union",       TOKEN_UNION)
+                // else CASE("sizeof",      TOKEN_SIZEOF)
+                // else CASE("nameof",      TOKEN_NAMEOF)
+                // else CASE("typeid",      TOKEN_TYPEID)
+                // else CASE("asm",         TOKEN_ASM)
+                #undef CASE
             }
             
             if(has_data) {
@@ -769,7 +795,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     Assert(last_chunk->tokens.used >= new_tokens_len); // I have a feeling there is a bug here.
     last_chunk->tokens.used -= new_tokens_len; // we didn't use all tokens we requested so we "give them back"
     
-    TokenInfo* last_token = &last_chunk->tokens.last(); // TODO: can this crash?
+    TokenInfo* last_token=nullptr;
+    if(last_chunk->tokens.size() > 0)
+        last_token = &last_chunk->tokens.last(); // TODO: can this crash?
     
     if(inQuotes){
         // TODO: Improve error message for tokens
@@ -1285,8 +1313,20 @@ const char* token_type_names[] {
     "nameof", // TOKEN_NAMEOF,
     "typeid", // TOKEN_TYPEID,
 
+    "if", // TOKEN_IF,
+    "else", // TOKEN_ELSE,
+    "while", // TOKEN_WHILE,
+    "for", // TOKEN_FOR,
+    "switch", // TOKEN_SWITCH,
+    "defer", // TOKEN_DEFER,
+    "return", // TOKEN_RETURN,
+    "break", // TOKEN_BREAK,
+    "continue", // TOKEN_CONTINUE,
+
+    "using", // TOKEN_USING,
     "struct", // TOKEN_STRUCT,
     "fn", // TOKEN_FUNCTION,
+    "operator", // TOKEN_OPERATOR,
     "enum", // TOKEN_ENUM,
     "namespace", // TOKEN_NAMESPACE,
     "union", // TOKEN_UNION,
@@ -1523,7 +1563,7 @@ Token Import::geteof(){
     Token out{};
     out.type = TOKEN_EOF;
     out.flags = 0;
-    out.origin = Lexer::encode_origin(chunk_indices.last(), chunks[chunk_indices.last()]->tokens.size());
+    out.origin = Lexer::encode_origin(chunk_indices.last(), chunks.last()->tokens.size());
     return out;
 }
 u32 Lexer::getStringFromToken(Token tok, const char** ptr) {

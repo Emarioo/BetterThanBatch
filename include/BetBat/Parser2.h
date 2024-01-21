@@ -56,6 +56,8 @@ struct ParseInfo : public PhaseContext {
             lexer_chunks.add(lexer->getChunk_unsafe(it));
         }
     }
+    // TODO: Optimize these functions by keeping track of the previously accessed chunk and tokens pointer
+    //  If head+off was the same as last time then you can just return the same token info as last time.
     lexer::TokenInfo* getinfo(StringView* string = nullptr, int off = 0) {
         static lexer::TokenInfo eof{lexer::TOKEN_EOF, };
         u32 fcindex,tindex;
@@ -76,7 +78,7 @@ struct ParseInfo : public PhaseContext {
                 *string = {"",1};
             return &eof;
         }
-        if(string)
+        if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
             *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
 
         return info;
@@ -98,6 +100,35 @@ struct ParseInfo : public PhaseContext {
             return lexer_import->geteof();
             // return out;
         }
+
+        out.flags = info->flags;
+        out.type = info->type;
+        out.origin = lexer->encode_origin(chunk->chunk_index,tindex);
+        return out;
+    }
+    lexer::Token gettok(StringView* string, int off = 0) {
+        u32 fcindex,tindex;
+        lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+    
+        lexer::Token out{};
+        if(lexer_chunks.size() <= fcindex) {
+            // out.type = lexer::TOKEN_EOF;
+            if(string)
+                *string = {"",1};
+            return lexer_import->geteof();
+        }
+        lexer::Chunk* chunk = lexer_chunks[fcindex];
+
+        auto info = chunk->tokens.getPtr(tindex);
+        if(!info) {
+            if(string)
+                *string = {"",1};
+            // out.type = lexer::TOKEN_EOF;
+            return lexer_import->geteof();
+            // return out;
+        }
+        if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
+            *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
 
         out.flags = info->flags;
         out.type = info->type;

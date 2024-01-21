@@ -576,7 +576,7 @@ struct ASTStatement : ASTNode {
     Type type = EXPRESSION;
     // int opType = 0;
     struct VarName {
-        StringView name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
+        std::string name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
         int arrayLength=-1;
         bool declaration = false;
@@ -591,6 +591,7 @@ struct ASTStatement : ASTNode {
         // Will be null in first polymorphic check, but will be set for later polymorphic checks
         Identifier* identifier = nullptr;
     };
+    lexer::SourceLocation location{};
     DynamicArray<VarName> varnames;
     std::string* alias = nullptr;
 
@@ -735,7 +736,7 @@ struct ASTEnum : ASTNode {
     void print(AST* ast, int depth);  
 };
 struct ASTFunction : ASTNode {
-    StringView name{};
+    std::string name{};
     Identifier* identifier = nullptr;
     
     struct PolyArg {
@@ -757,7 +758,7 @@ struct ASTFunction : ASTNode {
     QuickArray<Identifier*> memberIdentifiers; // only relevant with parent structs
 
     DynamicArray<PolyArg> polyArgs;
-    QuickArray<Arg> arguments; // you could rename to parameters
+    DynamicArray<Arg> arguments; // you could rename to parameters
     DynamicArray<Ret> returnValues; // string type
     u32 nonDefaults=0; // used when matching overload, having it here avoids recalculations of it
 
@@ -940,7 +941,7 @@ struct AST {
     u32 linearAllocationUsed = 0;
     void initLinear(){
         Assert(!linearAllocation);
-        linearAllocationMax = 0x1000000;
+        linearAllocationMax = 0x10000000;
         linearAllocationUsed = 0;
         linearAllocation = TRACK_ARRAY_ALLOC(char, linearAllocationMax);
          // (char*)engone::Allocate(linearAllocationMax);

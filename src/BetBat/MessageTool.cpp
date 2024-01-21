@@ -386,6 +386,7 @@ void Reporter::err_head(lexer::Token token, CompileError errcode){
     log::out << " ("<<ToCompileErrorString({true,errcode})<<")";
     log::out << ": " <<  MESSAGE_COLOR;
 }
+
 // void Reporter::err_desc(const StringBuilder& text) {
 
 // }
@@ -592,10 +593,7 @@ void Reporter::err_mark(lexer::Token token, const StringBuilder& text) {
     
     lexer::TokenRange r{};
     r.importId = chunk->import_id;
-    // if(token.type == lexer::TOKEN_EOF) {
-    //     r.token_index_start = imp->chunk_indices.last() * TOKEN_ORIGIN_TOKEN_MAX + imp->chunks[imp->chunk_indices.last()]->tokens.size()-1;
-    // } else {
-    // }
+    
     for(int i=0;i<imp->chunk_indices.size();i++) {
         u32 ind = imp->chunk_indices[i];
         if(ind == cindex) {

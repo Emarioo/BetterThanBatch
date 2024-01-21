@@ -196,15 +196,14 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct);
 SignalIO ParseNamespace(ParseInfo& info, ASTScope*& astNamespace);
 SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum);
 // out_arguments may be null to parse but ignore arguments
-SignalIO ParseAnnotationArguments(ParseInfo& info, TokenRange* out_arguments);
-SignalIO ParseAnnotation(ParseInfo& info, Token* out_annotation_name, TokenRange* out_arguments);
+SignalIO ParseAnnotationArguments(ParseInfo& info, lexer::TokenRange* out_arguments);
+SignalIO ParseAnnotation(ParseInfo& info, StringView* out_annotation_name, lexer::TokenRange* out_arguments);
 // parses arguments and puts them into fncall->left
 SignalIO ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count);
 SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression);
 SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement);
-SignalIO ParseOperator(ParseInfo& info, ASTFunction*& function);
 // returns 0 if syntax is wrong for flow parsing
-SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* parentStruct);
+SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* parentStruct, bool is_operator);
 SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement);
 // out token contains a newly allocated string. use delete[] on it
 SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags = PARSE_NO_FLAGS, ParseFlags* out_flags = nullptr);
@@ -212,8 +211,6 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
 /*###############################
     Code for parse functions
 #################################*/
-// #define PARSER_OFF
-#ifndef PARSER_OFF
 
 SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed){
     using namespace engone;
@@ -299,21 +296,20 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
         // TODO: Parse annotation parentheses
         if(name_view == "hide"){
             hideAnnotation=true;
-        // } else if(Equal(name,"@export")) {
         } else {
-            Assert(false); // nocheckin, fix error
-            // WARN_SECTION(
-            //     WARN_HEAD(name)
-            //     WARN_MSG("'"<< Token(name.str+1,name.length-1) << "' is not a known annotation for functions.")
-            //     WARN_LINE(info.get(info.at()),"unknown");
-            // )
+            ERR_SECTION(
+                ERR_HEAD2(name_token_tiny)
+                ERR_MSG("Unknown annotation for structs.")
+                ERR_LINE2(name_token_tiny,"unknown");
+            )
+            // TODO: List the available annotations
         }
         name_token = info.getinfo(&name_view);
+        name_token_tiny = info.gettok();
         continue;
     }
     
     if(name_token->type != lexer::TOKEN_IDENTIFIER){
-        Assert(false); // nocheckin, fix error
         auto bad = info.gettok();
         ERR_SECTION(
             ERR_HEAD2(bad)
@@ -735,7 +731,10 @@ SignalIO ParseNamespace(ParseInfo& info, ASTScope*& astNamespace){
 
         if(token->type == lexer::TOKEN_FUNCTION) {
             info.advance();
-            signal = ParseFunction(info,tempFunction, nullptr);
+            signal = ParseFunction(info,tempFunction, nullptr, false);
+        } else if(token->type == lexer::TOKEN_OPERATOR) {
+            info.advance();
+            signal = ParseFunction(info,tempFunction, nullptr, true);
         } else if(token->type == lexer::TOKEN_STRUCT) {
             info.advance();
             signal = ParseStruct(info,tempStruct);
@@ -1027,74 +1026,88 @@ SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum){
     _PLOG(log::out << "Parsed enum "<<log::LIME<< view_name <<log::NO_COLOR <<" with "<<astEnum->members.size()<<" members\n";)
     return error;
 }
-#ifdef gone
-SignalIO ParseAnnotationArguments(ParseInfo& info, TokenRange* out_arguments) {
+
+SignalIO ParseAnnotationArguments(ParseInfo& info, lexer::TokenRange* out_arguments) {
     // MEASURE;
 
     if(out_arguments)
         *out_arguments = {};
 
     // Can the previous token have a suffix? probably not?
-    Token& prev = info.get(info.at());
-    if(prev.flags & (TOKEN_MASK_SUFFIX)) {
-        return SignalDefault::SIGNAL_SUCCESS;
+    auto tok_prev = info.gettok(-1);
+    if(tok_prev.flags & lexer::TOKEN_FLAG_ANY_SUFFIX) {
+        return SIGNAL_SUCCESS;
     }
 
-    Token& tok = info.gettok();
-    if(!Equal(tok,"(")){
-        return SignalDefault::SIGNAL_SUCCESS;
+    auto tok = info.gettok();
+    if(tok.type != '('){
+        return SIGNAL_SUCCESS;
     }
     info.advance(); // skip (
 
     int depth = 0;
 
-    while(!info.end()) {
-        Token& tok = info.gettok();
-        if(Equal(tok,")")){
+    if(out_arguments) {
+        out_arguments->importId = info.import_id;
+        out_arguments->token_index_start = info.gethead();
+    }
+
+    while(true) {
+        auto tok = info.gettok();
+        if(tok.type == lexer::TOKEN_EOF) {
+            ERR_SUDDEN_EOF(tok_prev, "Sudden end of file when parsing annotation arguments", "this annotation")
+        }
+        if(tok.type == ')'){
             if(depth == 0) {
                 info.advance();
                 break;
             }
             depth--;
         }
-        if(Equal(tok,"(")){
+        if(tok.type == '('){
             depth++;
         }
 
-        if(out_arguments) {
-            if(!out_arguments->firstToken.str) {
-                *out_arguments = tok;
-            } else {
-                out_arguments->endIndex = info.at() + 1;
-            }
-        }
+        // if(out_arguments) {
+        //     if(!out_arguments->firstToken.str) {
+        //         *out_arguments = tok;
+        //     } else {
+        //         out_arguments->endIndex = info.at() + 1;
+        //     }
+        // }
 
         info.advance();
     }
+
+    if(out_arguments)
+        out_arguments->token_index_end = info.gethead();
     
-    return SignalDefault::SIGNAL_SUCCESS;
+    return SIGNAL_SUCCESS;
 }
-SignalIO ParseAnnotation(ParseInfo& info, Token* out_annotation_name, TokenRange* out_arguments) {
+SignalIO ParseAnnotation(ParseInfo& info, StringView* out_annotation_name, lexer::TokenRange* out_arguments) {
     // MEASURE;
 
     *out_annotation_name = {};
     *out_arguments = {};
 
-    Token& tok = info.gettok();
-    if(!IsAnnotation(tok)) {
-        return SignalDefault::SIGNAL_SUCCESS;
+    StringView view{};
+    auto token = info.getinfo(&view);
+    if(token->type != lexer::TOKEN_ANNOTATION) {
+        return SIGNAL_SUCCESS;
     }
 
-    *out_annotation_name = info.advance();
+    *out_annotation_name = view;
+    info.advance();
 
     // ParseAnnotationArguments check for suffix of the previous token
     // Args will not be parsed in cases like this: @hello (sad, arg) but will here: @hello(happy)
-    SignalDefault result = ParseAnnotationArguments(info, out_arguments);
+    auto signal = ParseAnnotationArguments(info, out_arguments);
 
-    Assert(result == SignalDefault::SIGNAL_SUCCESS); // what do we do if args fail?
-    return SignalDefault::SIGNAL_SUCCESS;
+    SIGNAL_SWITCH_LAZY()
+
+    return SIGNAL_SUCCESS;
 }
-#endif
+
 SignalIO ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
     ZoneScopedC(tracy::Color::OrangeRed1);
 
@@ -1346,14 +1359,10 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
 
                 ASTExpression* indexExpr=nullptr;
                 auto signal = ParseExpression(info, indexExpr);
-                switch(signal) {
-                case SIGNAL_SUCCESS: break;
-                case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
-                default: Assert(false);
-                }
+                SIGNAL_SWITCH_LAZY()
 
                 auto tok = info.gettok();
-                if(tok.type == ']'){
+                if(tok.type != ']'){
                     ERR_SECTION(
                         ERR_HEAD2(tok)
                         ERR_MSG("Expected an ']' to end the index operator.")
@@ -1421,7 +1430,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     // Token prev = info.now();
                     // // Token next = info.get(info.at()+2);
                     // if((prev.flags&lexer::TOKEN_FLAG_NEWLINE) == 0 
-                    //      && !Equal(token,"}") && !token.type == ',' && !token.type == '{' && !Equal(token,"]")
+                    //      && !Equal(token,"}") && token.type != ',' && token.type != '{' && !Equal(token,"]")
                     //      && !Equal(prev,")"))
                     // {
                     //     // WARN_HEAD3(token, "Did you forget the semi-colon to end the statement or was it intentional? Perhaps you mistyped a character? (put the next statement on a new line to silence this warning)\n\n"; 
@@ -1495,7 +1504,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 //     return SIGNAL_COMPLETE_FAILURE;
                 // }
                 tok = info.gettok();
-                if(tok.type == '>'){
+                if(tok.type != '>'){
                     ERR_SECTION(
                         ERR_HEAD2(tok)
                         ERR_MSG("expected > not "<< info.lexer->tostring(tok)<<".")
@@ -2352,190 +2361,175 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
     // shouldn't happen
     return SIGNAL_COMPLETE_FAILURE;
 }
-#ifdef gone
+
 SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
     
-    if(info.end()){
-        return SignalAttempt::FAILURE;
-    }
-    Token firstToken = info.gettok();
-    int startIndex = info.at()+1;
-    if(Equal(firstToken,"if")){
+    
+    auto tok = info.gettok();
+    StringView view{};
+    auto token = info.getinfo(&view); // used for "test"
+    // int startIndex = info.at()+1;
+    if(tok.type == lexer::TOKEN_IF){
+        auto tok_if = tok;
         info.advance();
         ASTExpression* expr=nullptr;
-        SignalAttempt result = ParseExpression(info,expr,false);
-        if(result!=SignalAttempt::SIGNAL_SUCCESS){
-            // TODO: should more stuff be done here?
-            return SignalAttempt::FAILURE;
-        }
+        auto signal = ParseExpression(info,expr);
 
-        int endIndex = info.at()+1;
+        SIGNAL_SWITCH_LAZY()
+
+        // int endIndex = info.at()+1;
 
         ASTScope* body=nullptr;
         ParseFlags parsed_flags = PARSE_NO_FLAGS;
-        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId, PARSE_NO_FLAGS, &parsed_flags);
-        if(resultBody!=SignalDefault::SIGNAL_SUCCESS){
-            return SignalAttempt::FAILURE;
-        }
+        signal = ParseBody(info,body, info.currentScopeId, PARSE_NO_FLAGS, &parsed_flags);
+
+        SIGNAL_SWITCH_LAZY()
 
         ASTScope* elseBody=nullptr;
-        Token token = info.gettok();
-        if(Equal(token,"else")){
+        tok = info.gettok();
+        if(tok.type == lexer::TOKEN_ELSE){
             info.advance();
-            resultBody = ParseBody(info,elseBody, info.currentScopeId);
-            if(resultBody!=SignalDefault::SIGNAL_SUCCESS){
-                return SignalAttempt::FAILURE;
-            }   
+            signal = ParseBody(info,elseBody, info.currentScopeId);
+
+            SIGNAL_SWITCH_LAZY()
         }
 
         statement = info.ast->createStatement(ASTStatement::IF);
         statement->firstExpression = expr;
         statement->firstBody = body;
         statement->secondBody = elseBody;
-        statement->tokenRange.firstToken = firstToken;
+        statement->location = info.srcloc(tok_if);
+        // statement->tokenRange.firstToken = firstToken;
         
         // statement->tokenRange.endIndex = info.at()+1;
-        statement->tokenRange.endIndex = endIndex;
+        // statement->tokenRange.endIndex = endIndex;
 
         if(!(parsed_flags&PARSE_HAS_CURLIES) && body->statements.size()>0) {
             if (body->statements[0]->type == ASTStatement::IF) {
                 ERR_SECTION(
-                    ERR_HEAD2(body->statements[0]->tokenRange, ERROR_AMBIGUOUS_IF_ELSE)
+                    ERR_HEAD2(body->statements[0]->location, ERROR_AMBIGUOUS_IF_ELSE)
                     ERR_MSG("Nested if statements without curly braces may be ambiguous with else statements and is therefore not allowed. Use curly braces on the \"highest\" if statement.")
-                    ERR_LINE2(statement->tokenRange, "use curly braces here")
-                    ERR_LINE2(body->statements[0]->tokenRange, "ambiguous when using else")
+                    ERR_LINE2(statement->location, "use curly braces here")
+                    ERR_LINE2(body->statements[0]->location, "ambiguous when using else")
                 )
             }
         }
         
-        return SignalAttempt::SIGNAL_SUCCESS;
-    }else if(Equal(firstToken,"while")){
+        return SIGNAL_SUCCESS;
+    }else if(tok.type == lexer::TOKEN_WHILE){
         info.advance();
 
         ASTExpression* expr=nullptr;
-        if(Equal(info.gettok(), "{")) {
+        tok = info.gettok();
+        if(tok.type == '{') {
             // no expression, infinite loop
         } else {
-            SignalAttempt result = ParseExpression(info,expr,false);
-            if(result!=SignalAttempt::SIGNAL_SUCCESS){
-                // TODO: should more stuff be done here?
-                return SignalAttempt::FAILURE;
-            }
+            auto signal = ParseExpression(info,expr);
+            SIGNAL_SWITCH_LAZY()
         }
 
-        int endIndex = info.at()+1;
+        // int endIndex = info.at()+1;
 
         info.functionScopes.last().loopScopes.add({});
         ASTScope* body=0;
-        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId);
+        auto signal = ParseBody(info,body, info.currentScopeId);
         info.functionScopes.last().loopScopes.pop();
-        if(resultBody!=SignalDefault::SIGNAL_SUCCESS){
-            return SignalAttempt::FAILURE;
-        }
+        SIGNAL_SWITCH_LAZY()
 
         statement = info.ast->createStatement(ASTStatement::WHILE);
         statement->firstExpression = expr;
         statement->firstBody = body;
-        statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.firstToken = firstToken;
         
-        statement->tokenRange.endIndex = endIndex;
+        // statement->tokenRange.endIndex = endIndex;
         
-        return SignalAttempt::SIGNAL_SUCCESS;
-    } else if(Equal(firstToken,"for")){
+        return SIGNAL_SUCCESS;
+    } else if(tok.type == lexer::TOKEN_FOR){
         info.advance();
         
-        Token token = info.gettok();
+        StringView view{};
+        auto token = info.getinfo(&view);
         bool reverseAnnotation = false;
         bool pointerAnnot = false;
-        while (IsAnnotation(token)){
-            info.advance();
-            if(Equal(token,"@reverse") || Equal(token,"@rev")){
+        while (tok.type == lexer::TOKEN_ANNOTATION){
+            auto tok = info.gettok();
+            if(view == "reverse" ||view == "rev"){
                 reverseAnnotation=true;
-            } else if(Equal(token,"@pointer") || Equal(token,"@ptr")){
+            } else if(view == "pointer" || view == "ptr"){
                 pointerAnnot=true;
             } else {
-                WARN_SECTION(
-                    WARN_HEAD(token)
-                    WARN_MSG("'"<< Token(token.str+1,token.length-1) << "' is not a known annotation for functions.")
-                    WARN_LINE(info.get(info.at()),"unknown")
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Unknown annotation for for loops.")
+                    ERR_LINE2(tok,"unknown")
                 )
             }
-            token = info.gettok();
+            info.advance();
+            token = info.getinfo(&view);
             continue;
         }
 
+        std::string varname = view;
         // NOTE: assuming array iteration
-        Token varname = info.gettok();
-        Token colon = info.get(info.at()+2);
-        if(Equal(colon,":") && IsName(varname)){
-            info.advance();
-            info.advance();
+        // Token varname = info.gettok();
+        auto tok_colon = info.gettok(1);
+        // Token colon = info.get(info.at()+2);
+        if(tok_colon.type == ':' && token->type == lexer::TOKEN_IDENTIFIER){
+            info.advance(2);
         } else {
-            std::string* str = info.ast->createString();
-            *str = "it";
-            varname = *str;
+            // std::string* str = info.ast->createString();
+            // *str = "it";
+
+            varname = "it";
         }
         
         ASTExpression* expr=0;
-        SignalAttempt result = ParseExpression(info,expr,false);
-        if(result!=SignalAttempt::SIGNAL_SUCCESS){
-            // TODO: should more stuff be done here?
-            return SignalAttempt::FAILURE;
-        }
+        auto signal = ParseExpression(info,expr);
+        SIGNAL_SWITCH_LAZY()
+
         ASTScope* body=0;
         info.functionScopes.last().loopScopes.add({});
-        SignalDefault resultBody = ParseBody(info,body, info.currentScopeId);
+        signal = ParseBody(info,body, info.currentScopeId);
         info.functionScopes.last().loopScopes.pop();
-        if(resultBody!=SignalDefault::SIGNAL_SUCCESS){
-            return SignalAttempt::FAILURE;
-        }
+        SIGNAL_SWITCH_LAZY()
+
         statement = info.ast->createStatement(ASTStatement::FOR);
         statement->varnames.add({varname});
-        std::string* strnr = info.ast->createString();
-        *strnr = "nr";
-        Token nrToken = *strnr;
-        statement->varnames.add({nrToken});
+        
+        // TODO: Allow user specified name for nr same as it
+        statement->varnames.add({"nr"});
         statement->setReverse(reverseAnnotation);
         statement->setPointer(pointerAnnot);
         statement->firstExpression = expr;
         statement->firstBody = body;
-        statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.firstToken = firstToken;
         
-        statement->tokenRange.endIndex = info.at()+1;
+        // statement->tokenRange.endIndex = info.at()+1;
         
-        return SignalAttempt::SIGNAL_SUCCESS;
-    } else if(Equal(firstToken,"return")){
+        return SIGNAL_SUCCESS;
+    } else if(tok.type == lexer::TOKEN_RETURN){
         info.advance();
         
         statement = info.ast->createStatement(ASTStatement::RETURN);
         
-        if((firstToken.flags & lexer::TOKEN_FLAG_NEWLINE) == 0) {
+        if((tok.flags & lexer::TOKEN_FLAG_NEWLINE) == 0) {
             WHILE_TRUE {
                 ASTExpression* expr=0;
-                Token token = info.gettok();
-                if(Equal(token,";")&&statement->arrayValues.size()==0){ // return 1,; should not be allowed, that's why we do &&!base
+                tok = info.gettok();
+                if(tok.type == ';' && statement->arrayValues.size()==0){ // return 1,; should not be allowed, that's why we do &&!base
                     info.advance();
                     break;
                 }
-                SignalAttempt result = ParseExpression(info,expr,true);
-                if(result!=SignalAttempt::SIGNAL_SUCCESS){
-                    break;
-                }
+                auto signal = ParseExpression(info,expr);
+                SIGNAL_SWITCH_LAZY()
                 statement->arrayValues.add(expr);
-                // if(!base){
-                //     base = expr;
-                //     prev = expr;
-                // }else{
-                //     prev->next = expr;
-                //     prev = expr;
-                // }
                 
-                Token tok = info.gettok();
-                if(!tok.type == ','){
-                    if(tok.type == '{')
+                tok = info.gettok();
+                if(tok.type != ','){
+                    if(tok.type == ';')
                         info.advance();
                     break;   
                 }
@@ -2544,29 +2538,27 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
         }
         
         // statement->rvalue = base;
-        statement->tokenRange.firstToken = firstToken;
-        statement->tokenRange.endIndex = info.at()+1;
-        return SignalAttempt::SIGNAL_SUCCESS;
-    } else if(Equal(firstToken,"switch")){
+        // statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.endIndex = info.at()+1;
+        return SIGNAL_SUCCESS;
+    } else if(tok.type == lexer::TOKEN_SWITCH){
         info.advance();
         ASTExpression* switchExpression=0;
-        SignalAttempt result = ParseExpression(info,switchExpression,false);
-        if(result!=SignalAttempt::SIGNAL_SUCCESS){
-            // TODO: should more stuff be done here?
-            return SignalAttempt::FAILURE;
-        }
+        auto signal = ParseExpression(info,switchExpression);
+        SIGNAL_SWITCH_LAZY()
         
-        Token tok = info.gettok();
-        if(!tok.type == '{') {
-            return SignalAttempt::FAILURE;
+        tok = info.gettok();
+        if(tok.type != '{') {
+            ERR_DEFAULT(tok, "Switch expect { after the expression.", "not this")
+            return SIGNAL_COMPLETE_FAILURE;
         }
         info.advance(); // {
         
         statement = info.ast->createStatement(ASTStatement::SWITCH);
         statement->firstExpression = switchExpression;
-        statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.firstToken = firstToken;
         
-        Token defaultCaseToken{};
+        lexer::Token prev_defaultCase{};
         
         bool errorsWasIgnored = info.ignoreErrors;
         defer {
@@ -2575,19 +2567,24 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
         
         bool mayRevertError = false;
         
-        while(!info.end()) {
-            tok = info.gettok();
-            if(Equal(tok,"}")) {
-                info.advance();
-                break;   
+        StringView view{};
+        while(true) {
+            auto token = info.getinfo(&view);
+            if(token->type == lexer::TOKEN_EOF) {
+                Assert(false);
+                break;
             }
-            if(tok.type == '{') {
+            if(token->type == '}') {
+                info.advance();
+                break;
+            }
+            if(token->type == ';') {
                 info.advance();
                 continue;
             }
             
-            if(IsAnnotation(tok)) {
-                if(Equal(tok,"@TEST_ERROR")) {
+            if(token->type == lexer::TOKEN_ANNOTATION) {
+                if(view == "TEST_ERROR") {
                     info.ignoreErrors = true;
                     if(mayRevertError)
                         info.errors--;
@@ -2596,7 +2593,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
                     
                     // TokenRange args;
                     // auto res = ParseAnnotationArguments(info, &args);
-                    auto res = ParseAnnotationArguments(info, nullptr);
+                    auto signal = ParseAnnotationArguments(info, nullptr);
 
                     continue;
                 }else {
@@ -2606,7 +2603,8 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             mayRevertError = false;
             
             bool badDefault = false;
-            if(Equal(tok,"default")) {
+            if(token->type == lexer::TOKEN_IDENTIFIER && view == "default") { // NOTE: This will break if default becomes a keyword
+                auto tok = info.gettok();
                 badDefault = true;
                 mayRevertError = info.ignoreErrors == 0;
                 ERR_SECTION(
@@ -2616,11 +2614,12 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
                 )
                 // info.advance();
                 // return SignalAttempt::FAILURE;
-            } else if(!Equal(tok,"case")) {
+            } else if(!(token->type == lexer::TOKEN_IDENTIFIER && view == "case")) { // TODO: case should perhaps be a keyword
+                auto tok = info.gettok();
                 mayRevertError = info.ignoreErrors == 0;
                 ERR_SECTION(
                     ERR_HEAD2(tok,ERROR_BAD_TOKEN_IN_SWITCH)
-                    ERR_MSG("'"<<tok<<"' is not allowed in switch statement where 'case' is supposed to be.")
+                    ERR_MSG("'"<<info.lexer->tostring(tok)<<"' is not allowed in switch statement where 'case' is supposed to be.")
                     ERR_LINE2(tok,"bad")
                 )
                 info.advance();
@@ -2631,64 +2630,54 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             info.advance(); // case
             
             bool defaultCase = false;
-            Token colonTok = info.gettok();
-            if(Equal(colonTok,":")) {
-                if(defaultCaseToken.str && !badDefault){
+            auto tok_colon = info.gettok();
+            if(tok_colon.type == ':') {
+                auto tok = info.gettok(-1);
+                if(prev_defaultCase.type != 0 && !badDefault){
                     mayRevertError = info.ignoreErrors == 0;
                     ERR_SECTION(
                         ERR_HEAD2(tok,ERROR_DUPLICATE_DEFAULT_CASE)
                         ERR_MSG("You cannot have two default cases in a switch statement.")
-                        ERR_LINE2(defaultCaseToken,"previous")
-                        ERR_LINE2(tok,"first default case")
+                        ERR_LINE2(prev_defaultCase,"previous")
+                        ERR_LINE2(tok,"another")
                     )
                 } else {
-                    defaultCaseToken = tok;
+                    prev_defaultCase = tok;
                 }
                 
                 defaultCase = true;
                 info.advance();
-                
-                // ERR_SECTION(
-                //     ERR_HEAD2(tok)
-                //     ERR_MSG("Default case has not been implemented yet.")
-                //     ERR_LINE2(tok,"bad")
-                // )
-                // return SignalAttempt::FAILURE;
             }
             
             ASTExpression* caseExpression=nullptr;
             if(!defaultCase){
-                SignalAttempt result = ParseExpression(info,caseExpression,false);
-                if(result!=SignalAttempt::SIGNAL_SUCCESS){
-                    // TODO: should more stuff be done here?
-                    return SignalAttempt::FAILURE;
-                }
-                colonTok = info.gettok();
-                if(!Equal(colonTok,":")) {
-                    // info.advance();
-                    // continue;
-                    return SignalAttempt::FAILURE;
+                auto signal = ParseExpression(info,caseExpression);
+                SIGNAL_SWITCH_LAZY()
+                auto tok_colon = info.gettok();
+                if(tok_colon.type != ':') {
+                    ERR_DEFAULT(tok_colon, "Unexepected token in case. ':' was expected.","here")
+                    
+                    return SIGNAL_COMPLETE_FAILURE;
                 }
                 info.advance(); // :
             }
             
             ParseFlags parsed_flags = PARSE_NO_FLAGS;
             ASTScope* caseBody=nullptr;
-            SignalDefault resultBody = ParseBody(info,caseBody, info.currentScopeId, PARSE_INSIDE_SWITCH, &parsed_flags);
-            if(resultBody!=SignalDefault::SIGNAL_SUCCESS){
-                return SignalAttempt::FAILURE;
-            }
+            auto signal = ParseBody(info,caseBody, info.currentScopeId, PARSE_INSIDE_SWITCH, &parsed_flags);
+            SIGNAL_SWITCH_LAZY()
             
-            Token& token2 = info.gettok();
-            if(IsAnnotation(token2)) {
-                if(Equal(token2,"@TEST_ERROR")) {
+            auto token2 = info.getinfo(&view);
+            if(token2->type == lexer::TOKEN_ANNOTATION) {
+                if(view == "TEST_ERROR") {
                     info.ignoreErrors = true;
                     if(mayRevertError)
                         info.errors--;
                     statement->setNoCode(true);
                     info.advance();
                     
-                    auto res = ParseAnnotationArguments(info, nullptr);
+                    auto signal = ParseAnnotationArguments(info, nullptr);
+                    
                 } else {
                     // TODO: ERR annotation not supported   
                 }
@@ -2713,78 +2702,76 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             }
         }
         
-        statement->tokenRange.endIndex = info.at()+1;
+        // statement->tokenRange.endIndex = info.at()+1;
         
-        return SignalAttempt::SIGNAL_SUCCESS;
-    } else  if(Equal(firstToken,"using")){
+        return SIGNAL_SUCCESS;
+    } else  if(tok.type == lexer::TOKEN_USING){
         info.advance();
-
+        Assert(false);
         // variable name
         // namespacing
         // type with polymorphism. not pointers
         // TODO: namespace environemnt, not just using X as Y
 
-        Token originToken={};
-        SignalDefault result = ParseTypeId(info, originToken, nullptr);
-        Assert(result == SignalDefault::SIGNAL_SUCCESS);
-        Token aliasToken = {};
-        Token token = info.gettok();
-        if(Equal(token,"as")) {
-            info.advance();
+        // Token originToken={};
+        // SignalDefault result = ParseTypeId(info, originToken, nullptr);
+        // Assert(result == SIGNAL_SUCCESS);
+        // Token aliasToken = {};
+        // Token token = info.gettok();
+        // if(Equal(token,"as")) {
+        //     info.advance();
             
-            SignalDefault result = ParseTypeId(info, aliasToken, nullptr);
-        }
+        //     SignalDefault result = ParseTypeId(info, aliasToken, nullptr);
+        // }
         
-        statement = info.ast->createStatement(ASTStatement::USING);
+        // statement = info.ast->createStatement(ASTStatement::USING);
         
-        statement->varnames.add({originToken});
-        if(aliasToken.str){
-            statement->alias = TRACK_ALLOC(std::string);
-            new(statement->alias)std::string(aliasToken);
-        }
+        // statement->varnames.add({originToken});
+        // if(aliasToken.str){
+        //     statement->alias = TRACK_ALLOC(std::string);
+        //     new(statement->alias)std::string(aliasToken);
+        // }
 
-        statement->tokenRange.firstToken = firstToken;
-        statement->tokenRange.endIndex = info.at()+1;
-        return SignalAttempt::SIGNAL_SUCCESS;        
-    } else if(Equal(firstToken,"defer")){
+        // statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.endIndex = info.at()+1;
+        return SIGNAL_SUCCESS;        
+    } else if(tok.type == lexer::TOKEN_DEFER){
         info.advance();
 
         ASTScope* body = nullptr;
-        SignalDefault result = ParseBody(info, body, info.currentScopeId);
-        if(result != SignalDefault::SIGNAL_SUCCESS) {
-            return SignalAttempt::FAILURE;
-        }
+        auto signal = ParseBody(info, body, info.currentScopeId);
+        SIGNAL_SWITCH_LAZY()
 
         statement = info.ast->createStatement(ASTStatement::DEFER);
         statement->firstBody = body;
 
-        statement->tokenRange.firstToken = firstToken;
-        statement->tokenRange.endIndex = info.at()+1;
-        return SignalAttempt::SIGNAL_SUCCESS;  
-    } else if(Equal(firstToken, "break")) {
+        // statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.endIndex = info.at()+1;
+        return SIGNAL_SUCCESS;  
+    } else if(tok.type == lexer::TOKEN_BREAK) {
         info.advance();
 
         // TODO: We must be in loop scope!
 
         statement = info.ast->createStatement(ASTStatement::BREAK);
 
-        statement->tokenRange.firstToken = firstToken;
-        statement->tokenRange.endIndex = info.at()+1;
-        return SignalAttempt::SIGNAL_SUCCESS;
-    } else if(Equal(firstToken, "continue")) {
+        // statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.endIndex = info.at()+1;
+        return SIGNAL_SUCCESS;
+    } else if(tok.type == lexer::TOKEN_CONTINUE) {
         info.advance();
 
         // TODO: We must be in loop scope!
 
         statement = info.ast->createStatement(ASTStatement::CONTINUE);
 
-        statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.firstToken = firstToken;
         
-        statement->tokenRange.endIndex = info.at()+1;
+        // statement->tokenRange.endIndex = info.at()+1;
         
-        return SignalAttempt::SIGNAL_SUCCESS;  
+        return SIGNAL_SUCCESS;  
     // } else if(!(firstToken.flags&TOKEN_MASK_QUOTED) && firstToken.length == 5 && !strncmp(firstToken.str, "test", 4) && firstToken.str[4]>='0' && firstToken.str[4] <= '9') {
-    } else if(Equal(firstToken,"test")) {
+    } else if(tok.type == lexer::TOKEN_IDENTIFIER && view == "test") {
         info.advance();
         
         // test4 {type} {value} {expression}
@@ -2818,40 +2805,33 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
         //     )
         // }
 
-        SignalAttempt result = ParseExpression(info, statement->testValue, false);
-        
-        if(Equal(info.gettok(),";")) info.advance();
-        
-        result = ParseExpression(info, statement->firstExpression, false);
+        auto signal = ParseExpression(info, statement->testValue);
+        SIGNAL_SWITCH_LAZY()
 
-        statement->tokenRange.firstToken = firstToken;
-        statement->tokenRange.endIndex = info.at()+1;
-
-        if(Equal(info.gettok(),";")) info.advance();
+        tok = info.gettok();
+        if(tok.type == ';')
+            info.advance();
         
-        return SignalAttempt::SIGNAL_SUCCESS;  
+        signal = ParseExpression(info, statement->firstExpression);
+        SIGNAL_SWITCH_LAZY()
+
+        // statement->tokenRange.firstToken = firstToken;
+        // statement->tokenRange.endIndex = info.at()+1;
+
+        tok = info.gettok();
+        if(tok.type == ';')
+            info.advance();
+        
+        return SIGNAL_SUCCESS;  
     }
-    if(attempt)
-        return SignalAttempt::BAD_ATTEMPT;
-    return SignalAttempt::FAILURE;
+    return SIGNAL_NO_MATCH;
 }
+#ifdef gone
 SignalIO ParseOperator(ParseInfo& info, ASTFunction*& function) {
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
-    Token beginToken = info.gettok();
-    // int startIndex = info.at()+1;
-    if(!Equal(beginToken,"operator")){
-        if(attempt) return SignalAttempt::BAD_ATTEMPT;
-        ERR_SECTION(
-            ERR_HEAD2(beginToken)
-            ERR_MSG("Expected 'operator' for operator overloading not '"<<beginToken<<"'.")
-        )
-            
-        return SignalAttempt::FAILURE;
-    }
-    info.advance();
-    attempt = false;
+    
 
     function = info.ast->createFunction();
     function->tokenRange.firstToken = beginToken;
@@ -2925,7 +2905,7 @@ SignalIO ParseOperator(ParseInfo& info, ASTFunction*& function) {
                 break;
             }
             SignalDefault result = ParseTypeId(info, tok, nullptr);
-            if(result == SignalDefault::SIGNAL_SUCCESS) {
+            if(result == SIGNAL_SUCCESS) {
                 function->polyArgs.add({tok});
             }
 
@@ -2995,7 +2975,7 @@ SignalIO ParseOperator(ParseInfo& info, ASTFunction*& function) {
 
         Token dataType{};
         SignalDefault result = ParseTypeId(info,dataType, nullptr);
-        Assert(result == SignalDefault::SIGNAL_SUCCESS);
+        Assert(result == SIGNAL_SUCCESS);
         // auto id = info.ast->getTypeInfo(info.currentScopeId,dataType)->id;
         TypeId strId = info.ast->getTypeString(dataType);
 
@@ -3042,13 +3022,13 @@ SignalIO ParseOperator(ParseInfo& info, ASTFunction*& function) {
         WHILE_TRUE {
             
             Token tok = info.gettok();
-            if(tok.type == '{' || tok.type == '{'){
+            if(tok.type == '{' || tok.type == ';'){
                 break;   
             }
             
             Token dt{};
             SignalDefault result = ParseTypeId(info,dt, nullptr);
-            if(result!=SignalDefault::SIGNAL_SUCCESS){
+            if(result!=SIGNAL_SUCCESS){
                 break; // prevent infinite loop
                 // info.advance();
                 // continue as we have
@@ -3064,7 +3044,7 @@ SignalIO ParseOperator(ParseInfo& info, ASTFunction*& function) {
                 printedErrors = false;
             }
             tok = info.gettok();
-            if(tok.type == '{' || tok.type == '{'){
+            if(tok.type == '{' || tok.type == ';'){
                 // info.advance(); { is parsed in ParseBody
                 break;   
             } else if(tok.type == ','){
@@ -3113,10 +3093,10 @@ SignalIO ParseOperator(ParseInfo& info, ASTFunction*& function) {
         )
     }
 
-    return SignalAttempt::SIGNAL_SUCCESS;
+    return SIGNAL_SUCCESS;
 }
 #endif
-SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* parentStruct){
+SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* parentStruct, bool is_operator){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
@@ -3129,97 +3109,157 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
     bool specifiedConvention = false;
     // Token linkToken{};
 
-    StringView view_fn_name{};
-    auto token_name = info.getinfo(&view_fn_name);
-    auto tok_name = info.gettok();
-    while (token_name->type == lexer::TOKEN_ANNOTATION){
-        // NOTE: The reason that @extern-stdcall is used instead of @extern @stdcall is to prevent
-        //   the programmer from making mistakes. With two annotations, they may forget to specify the calling convention.
-        //   Calling convention is very important. If extern and call convention is combined then they won't forget.
-        if(view_fn_name == "hide"){
-            function->setHidden(true);
-        } else if (view_fn_name == "dllimport"){
-            function->callConvention = CallConventions::STDCALL;
-            specifiedConvention = true;
-            function->linkConvention = LinkConventions::DLLIMPORT;
-            needsExplicitCallConvention = true;
-            // linkToken = name;
-        } else if (view_fn_name == "varimport"){
-            function->callConvention = CallConventions::STDCALL;
-            specifiedConvention = true;
-            function->linkConvention = LinkConventions::VARIMPORT;
-            needsExplicitCallConvention = true;
-            // linkToken = name;
-        } else if (view_fn_name == "import"){
-            function->callConvention = CallConventions::STDCALL;
-            specifiedConvention = true;
-            function->linkConvention = LinkConventions::IMPORT;
-            needsExplicitCallConvention = true;
-            // linkToken = name;
-        } else if (view_fn_name == "stdcall"){
-            function->callConvention = CallConventions::STDCALL;
-            specifiedConvention = true;
-        // } else if (Equal(name,"@cdecl")){
-        // cdecl has not been implemented. It doesn't seem important.
-        // default x64 calling convention is used.
-        //     Assert(false); // not implemented in type checker and generator. type checker might work as is.
-        //     function->callConvention = CallConventions::CDECL_CONVENTION;
-        //     specifiedConvention = true;
-        } else if (view_fn_name == "betcall"){
-            function->callConvention = CallConventions::BETCALL;
-            function->linkConvention = LinkConventions::NONE;
-            specifiedConvention = true;
-        // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
-        } else if (view_fn_name == "unixcall"){
-            function->callConvention = CallConventions::UNIXCALL;
-            specifiedConvention = true;
-        } else if (view_fn_name == "native"){
-            function->linkConvention = NATIVE;
-        } else if (view_fn_name == "intrinsic"){
-            function->callConvention = CallConventions::INTRINSIC;
-            function->linkConvention = NATIVE;
-        } else {
-            auto tok = info.gettok();
-            // It should not warn you because it is quite important that you use the right annotations with functions
-            // Mispelling external or the calling convention would be very bad.
-            ERR_SECTION(
-                ERR_HEAD2(tok)
-                ERR_MSG("Unknown annotation for functions.")
-                ERR_LINE2(tok,"unknown")
-
-                // if(StartsWith(name, "@extern")) {
-                //     log::out << log::YELLOW << "Did you mean @extern-stdcall or @extern-cdecl\n";
-                // }
-            )
-        }
-        info.advance();
-        token_name = info.getinfo();
+    lexer::Token tok_name{};
+    if(!is_operator) {
+        StringView view_fn_name{};
+        auto token_name = info.getinfo(&view_fn_name);
         tok_name = info.gettok();
-        continue;
-    }
-    if(function->linkConvention != LinkConventions::NONE){
-        function->setHidden(true);
-        // native doesn't use a calling convention
-        if(needsExplicitCallConvention && !specifiedConvention){
+        while (token_name->type == lexer::TOKEN_ANNOTATION){
+            // NOTE: The reason that @extern-stdcall is used instead of @extern @stdcall is to prevent
+            //   the programmer from making mistakes. With two annotations, they may forget to specify the calling convention.
+            //   Calling convention is very important. If extern and call convention is combined then they won't forget.
+            if(view_fn_name == "hide"){
+                function->setHidden(true);
+            } else if (view_fn_name == "dllimport"){
+                function->callConvention = CallConventions::STDCALL;
+                specifiedConvention = true;
+                function->linkConvention = LinkConventions::DLLIMPORT;
+                needsExplicitCallConvention = true;
+                // linkToken = name;
+            } else if (view_fn_name == "varimport"){
+                function->callConvention = CallConventions::STDCALL;
+                specifiedConvention = true;
+                function->linkConvention = LinkConventions::VARIMPORT;
+                needsExplicitCallConvention = true;
+                // linkToken = name;
+            } else if (view_fn_name == "import"){
+                function->callConvention = CallConventions::STDCALL;
+                specifiedConvention = true;
+                function->linkConvention = LinkConventions::IMPORT;
+                needsExplicitCallConvention = true;
+                // linkToken = name;
+            } else if (view_fn_name == "stdcall"){
+                function->callConvention = CallConventions::STDCALL;
+                specifiedConvention = true;
+            // } else if (Equal(name,"@cdecl")){
+            // cdecl has not been implemented. It doesn't seem important.
+            // default x64 calling convention is used.
+            //     Assert(false); // not implemented in type checker and generator. type checker might work as is.
+            //     function->callConvention = CallConventions::CDECL_CONVENTION;
+            //     specifiedConvention = true;
+            } else if (view_fn_name == "betcall"){
+                function->callConvention = CallConventions::BETCALL;
+                function->linkConvention = LinkConventions::NONE;
+                specifiedConvention = true;
+            // IMPORTANT: When adding calling convention, do not forget to add it to the "Did you mean" below!
+            } else if (view_fn_name == "unixcall"){
+                function->callConvention = CallConventions::UNIXCALL;
+                specifiedConvention = true;
+            } else if (view_fn_name == "native"){
+                function->linkConvention = NATIVE;
+            } else if (view_fn_name == "intrinsic"){
+                function->callConvention = CallConventions::INTRINSIC;
+                function->linkConvention = NATIVE;
+            } else {
+                auto tok = info.gettok();
+                // It should not warn you because it is quite important that you use the right annotations with functions
+                // Mispelling external or the calling convention would be very bad.
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Unknown annotation for functions.")
+                    ERR_LINE2(tok,"unknown")
+
+                    // if(StartsWith(name, "@extern")) {
+                    //     log::out << log::YELLOW << "Did you mean @extern-stdcall or @extern-cdecl\n";
+                    // }
+                )
+            }
+            info.advance();
+            token_name = info.getinfo();
+            tok_name = info.gettok();
+            continue;
+        }
+        if(function->linkConvention != LinkConventions::NONE){
+            function->setHidden(true);
+            // native doesn't use a calling convention
+            if(needsExplicitCallConvention && !specifiedConvention){
+                ERR_SECTION(
+                    ERR_HEAD2(tok_name)
+                    ERR_MSG("You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @unixcall.")
+                    ERR_LINE2(tok_name, "missing call convention")
+                )
+            }
+        }
+        
+        if(token_name->type != lexer::TOKEN_IDENTIFIER){
+            info.ast->destroy(function);
+            function = nullptr;
             ERR_SECTION(
                 ERR_HEAD2(tok_name)
-                ERR_MSG("You must specify a calling convention. The default is betcall which you probably don't want. Use @stdcall or @unixcall.")
-                ERR_LINE2(tok_name, "missing call convention")
+                ERR_MSG("Invalid name for function. Name must be alphabetical.")
+                ERR_LINE2(tok_name,"not valid")
             )
+            return SIGNAL_COMPLETE_FAILURE;
         }
+        function->name = view_fn_name;
+        info.advance();
+    } else {
+        StringView view{};
+        auto token = info.getinfo(&view);
+        while (token->type == lexer::TOKEN_ANNOTATION){
+            auto tok = info.gettok();
+            info.advance();
+            if(view == "hide"){
+                function->setHidden(true);
+            } else {
+                // It should not warn you because it is quite important that you use the right annotations with functions
+                // Mispelling external or the calling convention would be very bad.
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Unknown annotation for operators")
+                    ERR_LINE2(tok,"unknown")
+                )
+            }
+            token = info.getinfo(&view);
+            continue;
+        }
+        
+        OperationType op = (OperationType)0;
+        int extraNext = 0;
+        
+        // TODO: Improve parsing here. If the token is an operator but not allowed
+        //  then you can continue parsing, it's just that the function won't be
+        //  added to the tree and be usable. Parse and then throw away.
+        //  Stuff following the operator overload´syntax will then parse fine.
+        
+        std::string name = "";
+
+        tok_name = info.gettok();
+        auto token0 = info.getinfo(&view);
+        auto token1 = info.getinfo(nullptr,1);
+        // What about +=, -=?
+        if(token0->type == '[' && token1->type == ']') {
+            info.advance(2);
+            name = "[]";
+        } else if(!(op = parser::IsOp(token0, token1, view, extraNext))){
+            info.ast->destroy(function);
+            function = nullptr;
+            ERR_SECTION(
+                ERR_HEAD2(tok_name)
+                ERR_MSG("Operator overloading requires an operator as the name such as '+' or '[]'.")
+                ERR_LINE2(tok_name, "not an operator")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+        } else {
+            info.advance(1 + extraNext); // next is done above
+            name = OP_NAME(op);
+        }
+        if(op == AST_ASSIGN) {
+            ERR_DEFAULT(tok_name, "Assign operator is not allowed for operator overloading", "not allowed")
+        }
+
+        function->name = name;
     }
-    
-    if(token_name->type != lexer::TOKEN_IDENTIFIER){
-        info.ast->destroy(function);
-        function = nullptr;
-        ERR_SECTION(
-            ERR_HEAD2(tok_name)
-            ERR_MSG("Invalid name for function. Name must be alphabetical.")
-            ERR_LINE2(tok_name,"not valid")
-        )
-        return SIGNAL_COMPLETE_FAILURE;
-    }
-    function->name = view_fn_name;
 
     ScopeInfo* funcScope = info.ast->createScope(info.currentScopeId, info.getNextOrder(), nullptr);
     function->scopeId = funcScope->id;
@@ -3254,26 +3294,43 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 info.advance();
                 break;
             } else {
-                ERR_SECTION(
-                    ERR_HEAD2(tok)
-                    ERR_MSG("Unexpected token for polymorphic function arguments.")
-                    ERR_LINE2(tok,"bad token")
-                )
+                if(is_operator) {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Unexpected token for polymorphic function arguments.")
+                        ERR_LINE2(tok,"bad token")
+                    )
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Unexpected token for polymorphic operator overload arguments.")
+                        ERR_LINE2(tok,"bad token")
+                    )
+                }
                 return SIGNAL_COMPLETE_FAILURE;
             }
         }
     }
-    info.advance();
+    
     tok = info.gettok();
     if(tok.type != '('){
-        ERR_SECTION(
-            ERR_HEAD2(tok_name)
-            ERR_MSG("Function expects a parentheses after the name.")
-            ERR_LINE2(tok_name,"this function")
-        )
+        if(is_operator) {
+            ERR_SECTION(
+                ERR_HEAD2(tok_name)
+                ERR_MSG("Operator overload expects a parentheses after the operator type.")
+                ERR_LINE2(tok_name,"this function")
+            )
+        } else {
+            ERR_SECTION(
+                ERR_HEAD2(tok_name)
+                ERR_MSG("Function expects a parentheses after the name.")
+                ERR_LINE2(tok_name,"this function")
+            )
+        }
         return SIGNAL_COMPLETE_FAILURE;
     }
 
+    Assert(!is_operator || !parentStruct); // operator cannot have a parent struct, for now
     if(parentStruct) {
         function->arguments.add({});
         auto& argv = function->arguments[function->arguments.size()-1];
@@ -3306,11 +3363,19 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             info.advance();
             if(!printedErrors) {
                 printedErrors=true;
-                ERR_SECTION(
-                    ERR_HEAD2(tok)
-                    ERR_MSG("Invalid name for function parameter.")
-                    ERR_LINE2(tok,"bad name")
-                )
+                if(is_operator) {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Invalid name for operator overload parameter. A valid name may contain letters and digits ('a-Z', '_', '0-9') where the first character cannot be a digit.")
+                        ERR_LINE2(tok,"bad name")
+                    )
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(tok)
+                        ERR_MSG("Invalid name for function parameter.  A valid name may contain letters and digits ('a-Z', '_', '0-9') where the first character cannot be a digit.")
+                        ERR_LINE2(tok,"bad name")
+                    )
+                }
                 return SIGNAL_COMPLETE_FAILURE;
             }
             continue;
@@ -3356,6 +3421,18 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
         tok = info.gettok();
         if(tok.type == '='){
             info.advance();
+
+            if(is_operator) {
+                // NOTE: Default arguments may actually be fine. It's just that you can't
+                //   specify the value of them unless you use the automatic argument passing
+                //   feature which isn't implemented yet.
+                // ERR_SECTION(
+                //     ERR_HEAD2(tok)
+                //     ERR_MSG("Operator overloading cannot have default arguments.")
+                //     ERR_LINE2(tok,"not allowed")
+                // )
+                // This is a semantic error so we can continue parsing just fine.
+            }
             
             auto signal = ParseExpression(info,defaultValue);
             SIGNAL_SWITCH_LAZY()
@@ -3412,7 +3489,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
         
         WHILE_TRUE {
             auto tok = info.gettok();
-            if(tok.type == '{' || tok.type == '{'){
+            if(tok.type == '{' || tok.type == ';'){
                 break;   
             }
             
@@ -3429,7 +3506,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             printedErrors = false;
             
             tok = info.gettok();
-            if(tok.type == '{' || tok.type == '{'){
+            if(tok.type == '{' || tok.type == ';'){
                 // info.advance(); { is parsed in ParseBody
                 break;   
             } else if(tok.type == ','){
@@ -3459,15 +3536,24 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
     tok = info.gettok();
     if(tok.type == ';'){
         info.advance();
-        if(function->needsBody()){
+        if(is_operator) {
             ERR_SECTION(
                 ERR_HEAD2(tok)
-                ERR_MSG("Functions must have a body unless they are imported. Forward declarations are not necessary.")
+                ERR_MSG("Operator overloading must have a body!")
                 ERR_LINE2(tok,"replace with {}")
             )
+        } else {
+            if(function->needsBody()){
+                ERR_SECTION(
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Functions must have a body unless they are imported. Forward declarations are not necessary.")
+                    ERR_LINE2(tok,"replace with {}")
+                )
+            }
         }
     } else if(tok.type == '{'){
         if(!function->needsBody()) {
+            Assert(!is_operator);
             ERR_SECTION(
                 ERR_HEAD2(tok)
                 ERR_MSG("Native/external functions cannot have a body. Native functions are handled by the language. External functions link to functions outside your source code.")
@@ -3478,21 +3564,30 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
         info.functionScopes.add({});
         ASTScope* body = 0;
         auto signal = ParseBody(info,body, function->scopeId);
+        info.functionScopes.pop();
         SIGNAL_SWITCH_LAZY()
 
-        info.functionScopes.pop();
         function->body = body;
-    } else if(function->needsBody()) {
-        ERR_SECTION(
-            ERR_HEAD2(info.gettok(-1))
-            ERR_MSG("Function has no body! Did the return types parse incorrectly? Use curly braces to define the body.")
-            ERR_LINE2(info.gettok(-1),"expected '{' afterwards")
-        )
+    } else {
+        if(is_operator) {
+            ERR_SECTION(
+                ERR_HEAD2(info.gettok(-1))
+                ERR_MSG("Operator has no body! Did the return types parse incorrectly? Use curly braces to define the body.")
+                ERR_LINE2(info.gettok(-1),"expected '{' afterwards")
+            )
+        } else {
+            if(function->needsBody()) {
+                ERR_SECTION(
+                    ERR_HEAD2(info.gettok(-1))
+                    ERR_MSG("Function has no body! Did the return types parse incorrectly? Use curly braces to define the body.")
+                    ERR_LINE2(info.gettok(-1),"expected '{' afterwards")
+                )
+            }
+        }
     }
-
     return SIGNAL_SUCCESS;
 }
-#ifdef gone
+
 SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
@@ -3500,97 +3595,91 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
 
     bool globalAssignment = false;
 
-    int tokenAt = info.at();
-    Token globalToken = info.get(tokenAt+1);
-    if(Equal(globalToken,"global")){
+    StringView view{};
+    auto token0 = info.getinfo(&view);
+    auto token1 = info.getinfo(nullptr, 1);
+    if(token0->type != lexer::TOKEN_IDENTIFIER) {
+        return SIGNAL_NO_MATCH;
+    } else if(view == "global") {
         globalAssignment = true;
-        tokenAt++;
-    }
-
-    // to make things easier attempt is checked here
-    if(attempt && !(IsName(info.get(tokenAt+1)) && (Equal(info.get(tokenAt+2),",") || Equal(info.get(tokenAt+2),":") || Equal(info.get(tokenAt+2),"=") ))){
-    // if(attempt && !(IsName(info.get(tokenAt+1)) && (Equal(info.get(tokenAt+2),",") || Equal(info.get(tokenAt+2),":")))){
-        return SignalAttempt::BAD_ATTEMPT;
-    }
-    attempt = true;
-
-    if(globalAssignment)
         info.advance();
+    } else if (token1->type == ',' || token1->type == ':' || token1->type == '=') {
+        // Note that 'a, b: i32;' is a variable declaration.
+        // But 'a, 34, 9' may be some form of syntax for a list or something else in the future.
+    } else {
+        return SIGNAL_NO_MATCH;
+    }
 
     statement = info.ast->createStatement(ASTStatement::ASSIGN);
     // statement->varnames.stealFrom(varnames);
     statement->firstExpression = nullptr;
     statement->globalAssignment = globalAssignment;
 
-    Token lengthTokenOfLastVar{};
+    lexer::Token lengthTokenOfLastVar{};
 
     //-- Evaluate variables on the left side
-    int startIndex = info.at()+1;
+    // int startIndex = info.at()+1;
     // DynamicArray<ASTStatement::VarName> varnames{};
-    while(!info.end()){
-        Token name = info.gettok();
-        if(!IsName(name)){
+    while(true){
+        StringView view{};
+        auto token = info.getinfo(&view);
+        if(token->type != lexer::TOKEN_IDENTIFIER){
+            auto tok = info.gettok();
             ERR_SECTION(
-                ERR_HEAD2(name)
-                ERR_MSG("Expected a valid name for assignment ('"<<name<<"' is not).")
-                ERR_LINE2(info.gettok(),"cannot be a name");
+                ERR_HEAD2(tok)
+                ERR_MSG("Expected a valid name for assignment. A name may contain letters and digits (and underscore). However, the first character cannot be a digit.")
+                ERR_LINE2(tok,"not a valid name");
             )
-            return SignalAttempt::FAILURE;
+            return SIGNAL_COMPLETE_FAILURE;
         }
         info.advance();
 
-        statement->varnames.add({name});
-        Token token = info.gettok();
-        if(token.type == ':'){
+        statement->varnames.add({view});
+        auto tok = info.gettok();
+        if(tok.type == ':'){
             info.advance(); // :
-            attempt=false;
 
-
-            token = info.gettok();
-            if(token.type == '=') {
+            tok = info.gettok();
+            if(tok.type == '=') {
                 int index = statement->varnames.size()-1;
                 while(index>=0 && !statement->varnames[index].declaration){
                     statement->varnames[index].declaration = true;
                     index--;
                 }
             } else {
-                Token typeToken{};
-                SignalDefault result = ParseTypeId(info,typeToken, nullptr);
-                if(result!=SignalDefault::SIGNAL_SUCCESS)
-                    return CastSignal(result);
-                // Assert(result==SignalDefault::SIGNAL_SUCCESS);
-                int arrayLength = -1;
-                Token token1 = info.gettok();
-                Token token2 = info.get(info.at()+2);
-                Token token3 = info.get(info.at()+3);
-                if(Equal(token1,"[") && Equal(token3,"]")) {
-                    info.advance();
-                    info.advance();
-                    info.advance();
+                std::string typeToken{};
+                auto signal = ParseTypeId(info,typeToken, nullptr);
+                
+                SIGNAL_INVALID_DATATYPE(typeToken)
 
-                    if(IsInteger(token2)) {
-                        lengthTokenOfLastVar = token2;
-                        arrayLength = ConvertInteger(token2);
+                // Assert(result==SIGNAL_SUCCESS);
+                int arrayLength = -1;
+                StringView view_int{};
+                auto tok0 = info.gettok();
+                auto tok1 = info.gettok(&view_int,1);
+                auto tok2 = info.gettok(2);
+                if(tok0.type == '[' && tok2.type == ']') {
+                    info.advance(3);
+
+                    if(tok1.type == lexer::TOKEN_LITERAL_INTEGER) {
+                        lengthTokenOfLastVar = tok1;
+                        arrayLength = lexer::ConvertInteger(view_int);
                         if(arrayLength<0){
                             ERR_SECTION(
-                                ERR_HEAD2(token2)
+                                ERR_HEAD2(tok1)
                                 ERR_MSG("Array cannot have negative size.")
-                                ERR_LINE2(info.get(info.at()-1),"< 0")
+                                ERR_LINE2(tok1,"< 0")
                             )
                             arrayLength = 0;
                         }
                     } else {
                         ERR_SECTION(
-                            ERR_HEAD2(token2)
+                            ERR_HEAD2(tok1)
                             ERR_MSG("The length of an array can only be specified with number literals. Use macros to avoid magic numbers. Constants have not been implemented but when they have, they will work too.")
-                            ERR_LINE2(info.get(info.at()-1), "must be positive integer literal")
+                            ERR_LINE2(tok1, "must be positive integer literal")
                         )
                     }
-                    std::string* str = info.ast->createString();
-                    *str = "Slice<";
-                    *str += typeToken;
-                    *str += ">";
-                    typeToken = *str;
+                    typeToken = "Slice<" + typeToken + ">";
                 }
                 TypeId strId = info.ast->getTypeString(typeToken);
 
@@ -3603,16 +3692,17 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
                 }
             }
         } else {
+            auto tok = info.gettok();
             if(globalAssignment) {
                 ERR_SECTION(
-                    ERR_HEAD2(token)
+                    ERR_HEAD2(tok)
                     ERR_MSG("Global variables must use declaration syntax. You must use a ':' (':=' if you want the type to be inferred).")
-                    ERR_LINE2(token, "add a colon before this")
+                    ERR_LINE2(tok, "add a colon before this")
                 )
             }
         }
-        token = info.gettok();
-        if(token.type == ','){
+        tok = info.gettok();
+        if(tok.type == ','){
             info.advance();
             continue;
         }
@@ -3625,48 +3715,48 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
     // statement->globalAssignment = globalAssignment;
     
     // We usually don't want the tokenRange to include the expression.
-    statement->tokenRange.firstToken = info.get(startIndex);
-    statement->tokenRange.endIndex = info.at()+1;
+    // statement->tokenRange.firstToken = info.get(startIndex);
+    // statement->tokenRange.endIndex = info.at()+1;
 
-    Token token = info.gettok();
-    if(token.type == '=') {
+    auto tok = info.gettok();
+    if(tok.type == '=') {
         info.advance(); // =
 
-        SignalAttempt result = ParseExpression(info,statement->firstExpression,false);
+        auto signal = ParseExpression(info,statement->firstExpression);
+        SIGNAL_SWITCH_LAZY()
 
-    } else if(token.type == '{') {
+    } else if(tok.type == '{') {
         // array initializer
         info.advance(); // {
 
         while(true){
-            Token token = info.gettok();
-            if(token.type == '}') {
+            auto tok = info.gettok();
+            if(tok.type == '}') {
                 info.advance(); // }
                 break;
             }
             ASTExpression* expr = nullptr;
-            SignalAttempt result = ParseExpression(info, expr, false);
+            auto signal = ParseExpression(info, expr);
+            SIGNAL_SWITCH_LAZY()
             
-            if(result == SignalAttempt::SIGNAL_SUCCESS) {
-                Assert(expr);
-                statement->arrayValues.add(expr);
-            }
+            Assert(expr);
+            statement->arrayValues.add(expr);
 
-            token = info.gettok();
-            if(token.type == ',') {
+            tok = info.gettok();
+            if(tok.type == ',') {
                 info.advance(); // ,
                 // TODO: Error if you see consecutive commas
                 // Note that a trailing comma is allowed: { 1, 2, }
                 // It's convenient
-            } else if(token.type == '}') {
+            } else if(tok.type == '}') {
                 info.advance(); // }
                 break;
             } else {
                 info.advance(); // prevent infinite loop
                 ERR_SECTION(
-                    ERR_HEAD2(token)
-                    ERR_MSG("Unexpected token '"<<token<<"' at end of array initializer. Use comma for another element or ending curly brace to end initializer.")
-                    ERR_LINE2(token, "expected , or }")
+                    ERR_HEAD2(tok)
+                    ERR_MSG("Unexpected token '"<<info.lexer->tostring(tok)<<"' at end of array initializer. Use comma for another element or ending curly brace to end initializer.")
+                    ERR_LINE2(tok, "expected , or }")
                 )
             }
         }
@@ -3678,26 +3768,25 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
         }
         if(statement->arrayValues.size() > statement->varnames.last().arrayLength) {
             ERR_SECTION(
-                ERR_HEAD2(token) // token should be {
+                ERR_HEAD2(tok) // token should be {
                 ERR_MSG("You cannot have more expressions in the array initializer than the array length you specified.")
                 // TODO: Show which token defined the array length
                 ERR_LINE2(lengthTokenOfLastVar, "the maximum length")
                 // You could do a token range from the first expression to the last but that could spam the console
                 // with 100 expressions which would be annoying so maybe show 5 or 8 values and then do ...
-                ERR_LINE2(token, ""<<statement->arrayValues.size()<<" expressions")
+                ERR_LINE2(tok, ""<<statement->arrayValues.size()<<" expressions")
             )
         }
     }
-    token = info.gettok();
-    if(Equal(token,";")){
+    tok = info.gettok();
+    if(tok.type == ';'){
         info.advance(); // parse ';'. won't crash if at end
     }
 
     // statement->tokenRange.firstToken = info.get(startIndex);
     // statement->tokenRange.endIndex = info.at()+1;
-    return SignalAttempt::SIGNAL_SUCCESS;  
+    return SIGNAL_SUCCESS;  
 }
-#endif
 SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags, ParseFlags* out_flags){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
@@ -3832,25 +3921,6 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
         ASTFunction* tempFunction=0;
         ASTScope* tempNamespace=0;
         
-        SignalIO result = SIGNAL_NO_MATCH;
-
-        if(token->type == '{'){
-            ASTScope* body=0;
-            auto signal = ParseBody(info, body, info.currentScopeId);
-            switch(signal){
-            case SIGNAL_SUCCESS: break;
-            case SIGNAL_COMPLETE_FAILURE: return signal;
-            default: Assert(false);
-            }
-            // if(result2!=SignalDefault::SIGNAL_SUCCESS){
-            //     info.advance(); // skip { to avoid infinite loop
-            //     continue;
-            // }
-            // result = CastSignal(result2);
-            tempStatement = info.ast->createStatement(ASTStatement::BODY);
-            tempStatement->firstBody = body;
-            tempStatement->tokenRange = body->tokenRange;
-        }
         bool noCode = false;
         bool log_nodeid = false;
         while(true) {
@@ -3861,20 +3931,15 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
                     noCode = true;
                     info.advance();
                     
-                    Assert(false); // nocheckin
-                    // auto res = ParseAnnotationArguments(info, nullptr);
+                    auto signal = ParseAnnotationArguments(info, nullptr);
+                    SIGNAL_SWITCH_LAZY()
                     continue;
                 } else if(view == "@TEST_CASE") {
                     info.advance();
 
-                    Assert(false); // nocheckin
-                    // auto res = ParseAnnotationArguments(info, nullptr);
-                    // while(true) {
-                    //     token2 = info.advance(); // skip case name
-                    //     if(token2.flags & (lexer::TOKEN_FLAG_SPACE | lexer::TOKEN_FLAG_NEWLINE)) {
-                    //         break;   
-                    //     }
-                    // }
+                    auto signal = ParseAnnotationArguments(info, nullptr);
+                    SIGNAL_SWITCH_LAZY()
+
                     continue;
                 } else if(view == "@no_code") {
                     noCode = true;
@@ -3889,17 +3954,28 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
             break;
         }
 
+
         StringView view{};
         token = info.getinfo(&view);
         auto token_tiny = info.gettok();
 
         SignalIO signal=SIGNAL_NO_MATCH;
-        if(token->type == lexer::TOKEN_STRUCT) {
+        if(token->type == '{'){
+            ASTScope* body=nullptr;
+            signal = ParseBody(info, body, info.currentScopeId);
+            
+            tempStatement = info.ast->createStatement(ASTStatement::BODY);
+            tempStatement->firstBody = body;
+            tempStatement->tokenRange = body->tokenRange;
+        } else if(token->type == lexer::TOKEN_STRUCT) {
             info.advance();
             signal = ParseStruct(info,tempStruct);
         } else if(token->type == lexer::TOKEN_FUNCTION) {
             info.advance();
-            signal = ParseFunction(info,tempFunction, nullptr);
+            signal = ParseFunction(info,tempFunction, nullptr, false);
+        } else if(token->type == lexer::TOKEN_OPERATOR) {
+            info.advance();
+            signal = ParseFunction(info,tempFunction, nullptr, true);
         } else if(token->type == lexer::TOKEN_ENUM) {
             info.advance();
             signal = ParseEnum(info,tempEnum);
@@ -3907,13 +3983,10 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
             info.advance();
             signal = ParseNamespace(info,tempNamespace);
         }
-        // nocheckin
-        // if(signal==SIGNAL_NO_MATCH)
-        //     signal = ParseOperator(info,tempFunction);
-        // if(signal==SIGNAL_NO_MATCH)
-        //     signal = ParseAssignment(info,tempStatement);
-        // if(signal==SIGNAL_NO_MATCH)
-        //     signal = ParseFlow(info,tempStatement);
+        if(signal==SIGNAL_NO_MATCH)
+            signal = ParseAssignment(info,tempStatement);
+        if(signal==SIGNAL_NO_MATCH)
+            signal = ParseFlow(info,tempStatement);
         if(signal==SIGNAL_NO_MATCH){
             // bad name of function? it parses an expression
             // prop assignment or function call
@@ -3929,8 +4002,8 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
         switch(signal) {
         case SIGNAL_SUCCESS: break;
         case SIGNAL_NO_MATCH: {
-            Assert(false); // nocheckin, fix error
-            auto token = info.gettok();
+            // Assert(false); // nocheckin, fix error
+            // auto token = info.gettok();
             ERR_SECTION(
                 ERR_HEAD2(token_tiny)
                 ERR_MSG("Did not expect '"<<info.lexer->tostring(token_tiny)<<"' when parsing body. A new statement, struct or function was expected (or enum, namespace, ...).")
@@ -3938,6 +4011,7 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
             )
             // prevent infinite loop. Loop 'only occurs when scoped
             info.advance();
+            // fall through and signal complete failure
         }
         case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
         default: Assert(false);
@@ -4098,7 +4172,6 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
     // bodyLoc->tokenRange.endIndex = info.at()+1;
     return SIGNAL_SUCCESS;
 }
-#endif // PARSER_OFF
 /*
     Public function
 */
