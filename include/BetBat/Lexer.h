@@ -34,7 +34,7 @@ namespace lexer {
         // 0-255, ascii
         TOKEN_TYPE_BEGIN = 256,
 
-        TOKEN_EOF,
+        TOKEN_EOF = TOKEN_TYPE_BEGIN,
         TOKEN_IDENTIFIER,
         TOKEN_ANNOTATION,
         TOKEN_LITERAL_STRING,
@@ -42,10 +42,10 @@ namespace lexer {
         TOKEN_LITERAL_DECIMAL,
         TOKEN_LITERAL_HEXIDECIMAL,
         TOKEN_LITERAL_BINARY,
-        TOKEN_LITERAL_NULL,
-        TOKEN_LITERAL_BOOL,
 
-        TOKEN_NULL,
+        TOKEN_KEYWORD_BEGIN,
+
+        TOKEN_NULL = TOKEN_KEYWORD_BEGIN,
         TOKEN_TRUE,
         TOKEN_FALSE,
 
@@ -59,6 +59,8 @@ namespace lexer {
         TOKEN_NAMESPACE,
         TOKEN_UNION,
         TOKEN_ASM,
+
+        TOKEN_NAMESPACE_DELIM,
 
         TOKEN_TYPE_END,
     };
@@ -81,7 +83,10 @@ namespace lexer {
     struct Token {
         Token() = default;
         Token(TokenType type) : type(type) {}
-        TokenType type=TOKEN_NONE;
+        union {
+            TokenType type=TOKEN_NONE;
+            char c_type; // debug purpose
+        };
         u16 flags=0;
         TokenOrigin origin={}; // decode to get chunk and token index
         #ifdef LEXER_DEBUG_DETAILS
@@ -103,7 +108,10 @@ namespace lexer {
     };
 
     struct TokenInfo {
-        TokenType type;
+        union {
+            TokenType type;
+            char c_type; // debug purpose
+        };
         u16 flags;
         u32 data_offset;
 
@@ -143,6 +151,8 @@ namespace lexer {
         std::string path;
         DynamicArray<u32> chunk_indices;
         DynamicArray<Chunk*> chunks; // chunk pointers are stored here so we don't have to lock the chunks bucket array everytime we need a chunk.
+
+        Token geteof();
         
         // Token getToken(u32 token_index_into_import);
 
@@ -173,7 +183,7 @@ namespace lexer {
             u32 end_file_token_index=0; // exclusive
         };
         FeedIterator createFeedIterator(Token start_token, Token end_token = {});
-        u32 feed(char* buffer, u32 buffer_max, FeedIterator& iterator);
+        u32 feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipSuffix = false);
 
         void print(u32 fileid);
 

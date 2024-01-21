@@ -2278,11 +2278,13 @@ void Compiler::processImports() {
                 
                 imp->state = (ImportFlags)(imp->state|FLAG_PREPROCESSED_2);
                 
-                LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
-                imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
+                // LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
+                // imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
             } else if(!(imp->state & FLAG_PARSED)) {
                 auto what = parser::ParseImport(imp->import_id, this);
                 // TODO: Handle return value?
+                ast->appendToMainBody(what);
+                ast->print();
                 
                 imp->state = (ImportFlags)(imp->state|FLAG_PARSED);
             } else {
@@ -2319,6 +2321,7 @@ void Compiler::compileSource(const std::string& path) {
     signaled = true;
     preprocessor.init(&lexer, this);
     ast = AST::Create();
+    reporter.lexer = &lexer;
     
     bool yes = addImport(path);
     Assert(yes); // nocheckin

@@ -361,6 +361,7 @@ SignalIO PreprocContext::parseIf(){
         }
     }
     //  log::out << "     exit  ifdef loop\n";
+    return SIGNAL_SUCCESS;
 }
 SignalIO PreprocContext::parseImport() {
     
@@ -398,6 +399,7 @@ SignalIO PreprocContext::parseImport() {
             compiler->addDependency(import_id, dep_id);
         }
     }
+    return SIGNAL_SUCCESS;
 }
 SignalIO PreprocContext::parseMacroEvaluation() {
     ZoneScopedC(tracy::Color::Goldenrod2);
@@ -685,7 +687,7 @@ SignalIO PreprocContext::parseOne() {
     // lexer::Token token = gettok();
     auto token = getinfo(&string);
     if(token->type == lexer::TOKEN_EOF)
-        return SIGNAL_SUCCESS;
+        return SIGNAL_COMPLETE_FAILURE;
     
     if(token->type != '#' || (token->flags & (lexer::TOKEN_FLAG_NEWLINE|lexer::TOKEN_FLAG_SPACE))) {
         advance();

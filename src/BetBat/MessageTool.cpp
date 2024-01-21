@@ -361,7 +361,12 @@ void Reporter::err_head(lexer::Token token, CompileError errcode){
     lexer->decode_origin(token.origin, &cindex, &tindex);
 
     auto chunk = lexer->getChunk_unsafe(cindex);
-    auto info = &chunk->tokens[tindex];
+    lexer::TokenInfo* info=nullptr;
+    if(token.type == lexer::TOKEN_EOF) {
+        info = &chunk->tokens[tindex-1];
+    } else {
+        info = &chunk->tokens[tindex];
+    }
     auto imp = lexer->getImport_unsafe(chunk->import_id);
 
     prev_import = imp;
@@ -400,6 +405,12 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
         log::out << log::GRAY << "-- "<<TrimDir(imp->path) << " --\n";
         // if(prev_import) should we always set prev_import or not?
         prev_import = imp;
+    }
+    bool is_eof = false;
+    auto possible_eof = lexer->getTokenFromImport(imp->file_id, start);
+    if(possible_eof.type == lexer::TOKEN_EOF) {
+        start--;
+        is_eof = true;
     }
 
     // log::out <<"We " <<start << " "<<end<<"\n";
@@ -446,6 +457,26 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
     bool added_newline = false;
     for(int i=start;i<end;i++){
         auto tok = lexer->getTokenInfoFromImport(imp->file_id, i);
+        // bool is_eof = tok->type == lexer::TOKEN_EOF;
+        if(tok->type == lexer::TOKEN_EOF) {
+            minPos+=1; // +1 for the space before <EOF>
+            // This code is copied from the mark code below (with a few tweaks)
+            log::out << markColor;
+            if(i==start)
+                pos = minPos;
+            
+            pos += 5 + 1;
+            log::out << " <EOF>\n";
+            added_newline = true;
+
+            if(tok->flags&(lexer::TOKEN_FLAG_ANY_SUFFIX))
+                pos--;
+            if(pos>maxPos || maxPos==-1)
+                maxPos = pos;
+            if((tok->flags&lexer::TOKEN_FLAG_ANY_SUFFIX))
+                pos++;
+            break;
+        }
         auto tok_tiny = lexer->getTokenFromImport(imp->file_id, i);
         if(tok->line != currentLine){
             currentLine = tok->line;
@@ -467,20 +498,24 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
         char buffer[256];
         auto iter = lexer->createFeedIterator(tok_tiny);
         int written=0;
-        if(i<start){
+        if(i<range.token_index_start){
             // pos += tok.calcLength();
-            while((written = lexer->feed(buffer,sizeof(buffer),iter))){
+            log::out << codeColor;
+            bool skip_newline = false;
+            if(possible_eof.type == lexer::TOKEN_EOF)
+                skip_newline = true;
+            while((written = lexer->feed(buffer,sizeof(buffer),iter,skip_newline))){
                 pos += written;
                 log::out.print(buffer,written);
             }
             
             // if(tok.flags&TOKEN_SUFFIX_SPACE)
             //     pos += 1;
-            log::out << codeColor;
             if(pos>minPos || minPos == -1)
                 minPos = pos;
-        } else if(i>=end){
+        } else if(i>=range.token_index_end){
             // pos += tok.calcLength();
+            log::out << codeColor;
             while((written = lexer->feed(buffer,sizeof(buffer),iter))){
                 pos += written;
                 log::out.print(buffer,written);
@@ -489,7 +524,6 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
             //     pos += 1;
             // if(minPos>pos || minPos == -1)
             //     minPos = pos;
-            log::out << codeColor;
         } else {
             log::out << markColor;
             if(i==start)
@@ -558,12 +592,17 @@ void Reporter::err_mark(lexer::Token token, const StringBuilder& text) {
     
     lexer::TokenRange r{};
     r.importId = chunk->import_id;
+    // if(token.type == lexer::TOKEN_EOF) {
+    //     r.token_index_start = imp->chunk_indices.last() * TOKEN_ORIGIN_TOKEN_MAX + imp->chunks[imp->chunk_indices.last()]->tokens.size()-1;
+    // } else {
+    // }
     for(int i=0;i<imp->chunk_indices.size();i++) {
         u32 ind = imp->chunk_indices[i];
         if(ind == cindex) {
             r.token_index_start = i * TOKEN_ORIGIN_TOKEN_MAX + tindex;
-            r.token_index_end = i * TOKEN_ORIGIN_TOKEN_MAX + tindex + 1;
+            break;
         }
     }
+    r.token_index_end = r.token_index_start + 1;
     err_mark(r, text);
 }

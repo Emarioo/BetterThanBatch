@@ -15,6 +15,8 @@
 
 #define MAKE_NODE_SCOPE(X) info.pushNode(dynamic_cast<ASTNode*>(X));NodeScope nodeScope{&info};
 
+#ifdef gone
+
 /* #region  */
 GenInfo::LoopScope* GenInfo::pushLoop(){
     LoopScope* ptr = TRACK_ALLOC(LoopScope);
@@ -5843,6 +5845,7 @@ SignalDefault GenerateData(GenInfo& info) {
 
     return SignalDefault::SUCCESS;
 }
+#endif
 
 Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
     using namespace engone;
@@ -5864,7 +5867,9 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
     info.currentScopeId = ast->globalScopeId;
     // info.code->nativeRegistry = info.compileInfo->nativeRegistry;
 
-    SignalDefault result = GenerateData(info);
+    Assert(false); // see nocheckin
+    #ifdef gone
+    // SignalDefault result = GenerateData(info); // nocheckin
 
     // TODO: No need to create debug information if the compile options
     //  doesn't specify it.
@@ -5883,7 +5888,7 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
     //  compile time execution will need these functions to exist.
     //  There is still a dependency problem if you use compile time execution
     //  in a function which uses a function which hasn't been generated yet.
-    result = GenerateFunctions(info, info.ast->mainBody);
+    // result = GenerateFunctions(info, info.ast->mainBody); // nocheckin
     // if(skipIndex == info.code->length() -1) {
     //     // skip jump instruction if no functions where generated
     //     // info.popInstructions(2); // pop JMP and immediate
@@ -5940,10 +5945,10 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
         dfun->codeStart = info.code->length();
         dfun->entry_line = info.ast->mainBody->tokenRange.firstToken.line;
 
-        GeneratePreload(info);
+        // GeneratePreload(info); // nocheckin
 
         // TODO: What to do about result? nothing?
-        result = GenerateBody(info, info.ast->mainBody);
+        // result = GenerateBody(info, info.ast->mainBody); // nocheckin
         
         dfun->codeEnd = info.code->length();
 
@@ -5979,6 +5984,7 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
             log::out << log::RED << " "<<pair.first->name <<": "<<pair.second<<" bad address(es)\n";
         }
     }
+    #endif
     info.callsToResolve.cleanup();
 
     info.compileInfo->compileOptions->compileStats.errors += info.errors;

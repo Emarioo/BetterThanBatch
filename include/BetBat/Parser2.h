@@ -9,7 +9,7 @@ namespace parser {
 // TODO: Rename to ParseContext?
 struct ParseInfo : public PhaseContext {
     lexer::Lexer* lexer=nullptr;
-    Compiler* compiler=nullptr;
+    // Compiler* compiler=nullptr;
     AST* ast=nullptr;
     Reporter* reporter = nullptr;
 
@@ -57,13 +57,13 @@ struct ParseInfo : public PhaseContext {
         }
     }
     lexer::TokenInfo* getinfo(StringView* string = nullptr, int off = 0) {
-        static lexer::TokenInfo eof{lexer::TOKEN_EOF};
+        static lexer::TokenInfo eof{lexer::TOKEN_EOF, };
         u32 fcindex,tindex;
         lexer->decode_import_token_index(head + off,&fcindex,&tindex);
 
-        lexer::Token out{};
+        // lexer::Token out{};
         if(lexer_chunks.size() <= fcindex) {
-            out.type = lexer::TOKEN_EOF;
+            // out.type = lexer::TOKEN_EOF;
             if(string)
                 *string = {"",1};
             return &eof;
@@ -87,15 +87,16 @@ struct ParseInfo : public PhaseContext {
     
         lexer::Token out{};
         if(lexer_chunks.size() <= fcindex) {
-            out.type = lexer::TOKEN_EOF;
-            return out;
+            // out.type = lexer::TOKEN_EOF;
+            return lexer_import->geteof();
         }
         lexer::Chunk* chunk = lexer_chunks[fcindex];
 
         auto info = chunk->tokens.getPtr(tindex);
         if(!info) {
-            out.type = lexer::TOKEN_EOF;
-            return out;
+            // out.type = lexer::TOKEN_EOF;
+            return lexer_import->geteof();
+            // return out;
         }
 
         out.flags = info->flags;

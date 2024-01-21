@@ -351,7 +351,8 @@ namespace dwarf {
                         allType.reference[0] = stream->getWriteHead() - offset_section;
                         WRITE_LEB(abbrev_struct)
 
-                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        // stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
                         stream->write2(typeInfo->getSize());
 
                         u32* sibling_ref4 = nullptr;
@@ -363,7 +364,8 @@ namespace dwarf {
                             auto& memAst = typeInfo->astStruct->members[mi];
 
                             WRITE_LEB(abbrev_struct_member)
-                            stream->write(memAst.name.str, memAst.name.length);
+                            // stream->write(memAst.name.str, memAst.name.length);
+                            stream->write(memAst.name.ptr, memAst.name.len);
                             stream->write1('\0');
                             int typeref = getTypeRef(memImpl.typeId);
                             if(typeref == 0) {
@@ -387,7 +389,8 @@ namespace dwarf {
                         allType.reference[0] = stream->getWriteHead() - offset_section;
                         WRITE_LEB(abbrev_enum)
                         
-                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        // stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
                         Assert(typeInfo->getSize() < 256); // size should fit in one bye
                         stream->write1(typeInfo->getSize()); // size
                         
@@ -408,13 +411,15 @@ namespace dwarf {
                             
                             if (typeInfo->getSize() > 4) {
                                 WRITE_LEB(abbrev_enum_member_64)
-                                stream->write(mem.name.str, mem.name.length);
+                                stream->write(mem.name.ptr, mem.name.len);
+                                // stream->write(mem.name.str, mem.name.length);
                                 stream->write1('\0');
                                 
                                 stream->write8(mem.enumValue);
                             } else {
                                 WRITE_LEB(abbrev_enum_member_32)
-                                stream->write(mem.name.str, mem.name.length);
+                                // stream->write(mem.name.str, mem.name.length);
+                                stream->write(mem.name.ptr, mem.name.len);
                                 stream->write1('\0');
                                 
                                 stream->write4(mem.enumValue);   
@@ -433,7 +438,8 @@ namespace dwarf {
                         allType.reference[0] = stream->getWriteHead() - offset_section;
                         WRITE_LEB(abbrev_base_type)
                         
-                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
+                        // stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
                         stream->write1(typeInfo->getSize()); // size
 
                         switch(typeInfo->id.getId()) { // encoding (1 byte)
@@ -534,14 +540,16 @@ namespace dwarf {
                         auto& arg_ast = func.funcAst->arguments[pi];
                         auto& arg_impl = func.funcImpl->argumentTypes[pi];
                         WRITE_LEB(abbrev_param)
-                        stream->write(arg_ast.name.str, arg_ast.name.length); // arg_ast.name is a Token and not zero terminated
+                        stream->write(arg_ast.name.c_str(), arg_ast.name.length()); // arg_ast.name is a Token and not zero terminated
+                        // stream->write(arg_ast.name.ptr, arg_ast.name.len); // arg_ast.name is a Token and not zero terminated
                         stream->write1(0); // we must zero terminate here
 
-                        stream->write2((file_index)); // file
-                        Assert(arg_ast.name.line < 0x10000); // make sure we don't overflow
-                        stream->write2((arg_ast.name.line)); // line
-                        Assert(arg_ast.name.column < 0x10000); // make sure we don't overflow
-                        stream->write2((arg_ast.name.column)); // column
+                        INCOMPLETE // nocheckin, arg_ast.name.line doesn't exist!
+                        // stream->write2((file_index)); // file
+                        // Assert(arg_ast.name.line < 0x10000); // make sure we don't overflow
+                        // stream->write2((arg_ast.name.line)); // line
+                        // Assert(arg_ast.name.column < 0x10000); // make sure we don't overflow
+                        // stream->write2((arg_ast.name.column)); // column
 
                         int typeref = allTypes[arg_impl.typeId.getId()].reference[arg_impl.typeId.getPointerLevel()];
                         Assert(typeref != 0);

@@ -711,9 +711,9 @@ struct ASTEnum : ASTNode {
     struct Member {
         // Token name{};
         StringView name;
-        lexer::SourceLocation location;
         int enumValue=0;
         bool ignoreRules = false;
+        lexer::SourceLocation location;
     };
     QuickArray<Member> members{};
 
@@ -739,11 +739,12 @@ struct ASTFunction : ASTNode {
     Identifier* identifier = nullptr;
     
     struct PolyArg {
-        StringView name{};
+        std::string name{};
         TypeInfo* virtualType = nullptr;
     };
     struct Arg {
-        StringView name{};
+        std::string name{};
+        // StringView name{};
         ASTExpression* defaultValue=0;
         TypeId stringType={};
         Identifier* identifier = nullptr;
@@ -755,9 +756,9 @@ struct ASTFunction : ASTNode {
 
     QuickArray<Identifier*> memberIdentifiers; // only relevant with parent structs
 
-    QuickArray<PolyArg> polyArgs;
+    DynamicArray<PolyArg> polyArgs;
     QuickArray<Arg> arguments; // you could rename to parameters
-    QuickArray<Ret> returnValues; // string type
+    DynamicArray<Ret> returnValues; // string type
     u32 nonDefaults=0; // used when matching overload, having it here avoids recalculations of it
 
     QuickArray<FuncImpl*> _impls{};
@@ -847,8 +848,9 @@ struct AST {
     ScopeInfo* findScopeFromParents(StringView name, ScopeId scopeId);
 
     //-- Types
-    QuickArray<std::string> _typeTokens;
-    TypeId getTypeString(Token name);
+    DynamicArray<std::string> _typeTokens;
+    // TypeId getTypeString(Token name);
+    TypeId getTypeString(const std::string& name);
     StringView getStringFromTypeString(TypeId typeString);
     // Token getTokenFromTypeString(TypeId typeString);
     // typeString must be a string type id.
@@ -993,7 +995,7 @@ struct AST {
     ASTExpression* createExpression(TypeId type);
     // You may also want to call some additional functions to properly deal with
     // named scopes so types are properly evaluated. See ParseNamespace for an example.
-    ASTScope* createNamespace(const Token& name);
+    ASTScope* createNamespace(const StringView& name);
     
     void destroy(ASTScope* astScope);
     void destroy(ASTFunction* function);

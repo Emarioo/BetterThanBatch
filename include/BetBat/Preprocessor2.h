@@ -100,15 +100,15 @@ struct PreprocContext {
         
             lexer::Token out{};
             if(lexer_chunks.size() <= fcindex) {
-                out.type = lexer::TOKEN_EOF;
-                return out;
+                // out.type = lexer::TOKEN_EOF;
+                return lexer_import->geteof();
             }
             lexer::Chunk* chunk = lexer_chunks[fcindex];
 
             auto info = chunk->tokens.getPtr(tindex);
             if(!info) {
-                out.type = lexer::TOKEN_EOF;
-                return out;
+                // out.type = lexer::TOKEN_EOF;
+                return lexer_import->geteof();
             }
     
             out.flags = info->flags;

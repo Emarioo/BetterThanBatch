@@ -966,7 +966,7 @@ ASTExpression *AST::createExpression(TypeId type) {
     ptr->typeId = type;
     return ptr;
 }
-ASTScope *AST::createNamespace(const Token& name) {
+ASTScope *AST::createNamespace(const StringView& name) {
     auto ptr = (ASTScope *)allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
     ptr->nodeId = getNextNodeId();
@@ -1258,20 +1258,41 @@ ScopeInfo* AST::findScopeFromParents(StringView name, ScopeId scopeId){
     return findScope(name,scopeId,true);
 }
 
-TypeId AST::getTypeString(Token name){
+// TypeId AST::getTypeString(Token name){
+//     // converts char[] into Slice<char> (or any type, not just char)
+//     if(name.length>2&&!strncmp(name.str+name.length-2,"[]",2)){
+//         std::string* str = createString();
+//         *str = "Slice<";
+//         str->append(std::string(name.str,name.length-2));
+//         (*str)+=">";
+//         name = *str;
+//     }
+//     for(int i=0;i<(int)_typeTokens.size();i++){
+//         if(name == _typeTokens[i])
+//             return TypeId::CreateString(i);
+//     }
+//     _typeTokens.add(name);
+//     return TypeId::CreateString(_typeTokens.size()-1);
+// }
+TypeId AST::getTypeString(const std::string& name){
     // converts char[] into Slice<char> (or any type, not just char)
-    if(name.length>2&&!strncmp(name.str+name.length-2,"[]",2)){
+    if(name.length()>2&&!strncmp(name.c_str()+name.length()-2,"[]",2)){
         std::string* str = createString();
         *str = "Slice<";
-        str->append(std::string(name.str,name.length-2));
+        str->append(std::string(name.c_str(),name.length()-2));
         (*str)+=">";
-        name = *str;
+        for(int i=0;i<(int)_typeTokens.size();i++){
+            if(*str == _typeTokens[i])
+                return TypeId::CreateString(i);
+        }
+        _typeTokens.add(*str);
+    } else {
+        for(int i=0;i<(int)_typeTokens.size();i++){
+            if(name == _typeTokens[i])
+                return TypeId::CreateString(i);
+        }
+        _typeTokens.add(name);
     }
-    for(int i=0;i<(int)_typeTokens.size();i++){
-        if(name == _typeTokens[i])
-            return TypeId::CreateString(i);
-    }
-    _typeTokens.add(name);
     return TypeId::CreateString(_typeTokens.size()-1);
 }
 StringView AST::getStringFromTypeString(TypeId typeId){

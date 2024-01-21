@@ -16,6 +16,8 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const Toke
 TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);
 SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt);
 
+#ifdef gone
+
 SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     Assert(scope);
@@ -3263,6 +3265,8 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     }
     return SignalDefault::SUCCESS;
 }
+#endif
+
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     using namespace engone;
     // MEASURE;
@@ -3272,9 +3276,9 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     info.compileInfo = compileInfo;
 
     _VLOG(log::out << log::BLUE << "Type check:\n";)
-
+    Assert(false);
     // Check enums first since they don't depend on anything.
-    SignalDefault result = CheckEnums(info, scope);
+    // SignalDefault result = CheckEnums(info, scope); // nocheckin
 
     /*
         How to make global variables and using work with functions and structs
@@ -3325,7 +3329,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
         info.completedStructs = true;
         info.anotherTurn=false;
         
-        result = CheckStructs(info, scope);
+        // result = CheckStructs(info, scope); // nocheckin
         
         if(!info.anotherTurn && !info.completedStructs){
             if(!info.showErrors){
@@ -3342,11 +3346,11 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     // a referenced function may not exist yet (this is certain if the body of two functions reference each other).
     // If so we would have to stop checking that body and continue later until that reference have been cleared up.
     // So instead of that mess, we check headers first to ensure that all references will work.
-    result = CheckFunctions(info, scope);
+    // result = CheckFunctions(info, scope); // nocheckin
 
     // Check rest will go through scopes and create polymorphic implementations if necessary.
     // This includes structs and functions.
-    result = CheckRest(info, scope);
+    // result = CheckRest(info, scope); // nocheckin
 
 
     while(info.checkImpls.size()!=0){
@@ -3354,7 +3358,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
         info.checkImpls.pop();
         Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
         
-        CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl);
+        // CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
     }
     
     info.compileInfo->compileOptions->compileStats.errors += info.errors;

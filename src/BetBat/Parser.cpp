@@ -14,6 +14,8 @@
 #undef WARN_SECTION
 #define WARN_SECTION(CONTENT) BASE_WARN_SECTION("Parser, ", CONTENT)
 
+#ifdef gone
+
 /*
     Declaration of functions
 */
@@ -4102,6 +4104,7 @@ SignalDefault ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope
     bodyLoc->tokenRange.endIndex = info.at()+1;
     return SignalDefault::SUCCESS;
 }
+#endif
 
 ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileInfo, std::string theNamespace){
     using namespace engone;
@@ -4121,17 +4124,19 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
         // TODO: Should namespaced imports from a source file you import as a namespace
         //  have global has their parent? It does now, ast->globalScopeId is used.
 
-        body = info.ast->createNamespace(theNamespace);
+        // body = info.ast->createNamespace(theNamespace); // nocheckin
         ScopeInfo* newScope = info.ast->createScope(ast->globalScopeId, CONTENT_ORDER_ZERO, body);
 
         body->scopeId = newScope->id;
-        newScope->name = theNamespace;
+        Assert(false);
+        // newScope->name = theNamespace; // nocheckin
         info.ast->getScope(newScope->parent)->nameScopeMap[theNamespace] = newScope->id;
     }
     info.currentScopeId = body->scopeId;
 
     info.functionScopes.add({});
-    SignalDefault result = ParseBody(info, body, ast->globalScopeId, PARSE_TRULY_GLOBAL);
+    // nocheckin
+    // SignalDefault result = ParseBody(info, body, ast->globalScopeId, PARSE_TRULY_GLOBAL);
     info.functionScopes.pop();
     
     info.compileInfo->compileOptions->compileStats.errors += info.errors;
