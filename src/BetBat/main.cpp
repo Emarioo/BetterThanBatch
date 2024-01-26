@@ -68,6 +68,11 @@ int main(int argc, const char** argv){
     // MeasureInit();
     ProfilerInitialize();
     
+            // FuzzerOptions opts{};
+            // opts.node_iterations_per_file = 5000;
+            // opts.file_count = 20;
+            // GenerateFuzzedFiles(opts,"main.btb");
+
     Compiler compiler{};
     compiler.importDirectories.add(Path("modules/").getAbsolute());
     compiler.compileSource("examples/dev.btb");

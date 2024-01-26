@@ -105,3 +105,25 @@ fn create_random_generator(seed: u64 = StartMeasure()) -> RandomGenerator {
 //         }
 //     }
 // }
+
+// TODO: Move elsewhere?
+// TODO: Not tested
+// TODO: Optimize
+// Assumes the slice/array to be sorted
+// returns the index of the item. -1 if not found
+fn binary_search<T>(arr: T[], T item) -> i32 {
+    left: u32 = 0
+    right: u32 = arr.len // bad, casting u64 to u32
+    while {
+        mid := (left + right)/2 // integer overflow?
+        elem := arr.ptr[mid]
+        if item < elem {
+            right = mid - 1
+        } else item > elem {
+            left = mid + 1
+        } else {
+            return mid;
+        }
+
+    }
+}

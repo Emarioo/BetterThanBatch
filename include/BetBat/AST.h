@@ -138,7 +138,7 @@ extern const char* prim_op_names[];
 struct ASTNode {
     // TODO: Add a flag which you can check to know whether there are enums or not.
     //  If there aren't then you don't need to go through all the nodes.
-    TokenRange tokenRange{};
+    // TokenRange tokenRange{};
     // TODO: Some of these do not need to exist in
     // every type of node
     enum Flags : u16 {
@@ -152,8 +152,6 @@ struct ASTNode {
     };
     int nodeId = 0;
     u16 flags = 0;
-    LinkConventions linkConvention = LinkConventions::NONE;
-    CallConventions callConvention = BETCALL;
 
     #define SET_FLAG(N,F) void set##N(bool on) { flags = on ? flags | F : flags & ~F; } bool is##N() { return flags&F; }
     SET_FLAG(Pointer,POINTER)
@@ -161,11 +159,6 @@ struct ASTNode {
     SET_FLAG(Hidden,HIDDEN)
     SET_FLAG(NoCode,NO_CODE)
     #undef SET_FLAG
-    // A lot of places need to know whether a function has a body.
-    // When function should have a body or not has changed a lot recently
-    // and I have needed to rewrite a lot. Having the requirement abstracted in
-    // a function will prevent some of the changes you would need to make.
-    bool needsBody() { return linkConvention == LinkConventions::NONE;}
 };
 template<class T>
 struct PolyVersions {
@@ -461,7 +454,7 @@ struct ASTExpression : ASTNode {
         // *(char*)0 = 9;
     }
     ~ASTExpression() {
-        versions_outTypeSizeof.~PolyVersions();
+        // versions_outTypeSizeof.~PolyVersions();
         // versions_outTypeTypeid.~PolyVersions(); // union with ...Sizeof
     }
     // enum Type: u8 {
@@ -479,6 +472,7 @@ struct ASTExpression : ASTNode {
     //     NONE,
     //     CONSTANT
     // };
+    #ifdef gone
     bool isConstant() { return constantValue; }
     // TODO: Bit field for all the bools
     bool constantValue = false;
@@ -499,9 +493,12 @@ struct ASTExpression : ASTNode {
     
     bool isUnsafeCast() { return unsafeCast; }
     void setUnsafeCast(bool yes) { unsafeCast = yes; }
-
-    // bool isInlineAssembly() const { return expressionType & INLINE_ASSEMBLY; }
-    // void setInlineAssembly(bool yes) { expressionType = (Type)((expressionType&~INLINE_ASSEMBLY)); if (yes) expressionType = (Type)(expressionType|INLINE_ASSEMBLY); }
+    #endif
+    bool hasImplicitThis() const { return false; }
+    void setImplicitThis(bool yes){}
+    void setMemberCall(bool yes) { }
+    void setPostAction(bool yes) { }
+    void setUnsafeCast(bool yes) { }
 
     union {
         i64 i64Value=0;
@@ -510,26 +507,33 @@ struct ASTExpression : ASTNode {
         bool boolValue;
         char charValue;
     };
+    StringView name{};
+    // StringView name{};
+    // std::string namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
+    union {
+        StringView namedValue{};
+        TypeId castType;
+        OperationType assignOpType;
+        struct {
+            ASTExpression* left; // FNCALL has arguments in order left to right
+            ASTExpression* right;
+            // OperationType assignOpType = (OperationType)0;
+        };
+        struct {
+            QuickArray<ASTExpression*> args; // fncall or initialiser
+            // u32 nonNamedArgs = 0;
+            u32 nonNamedArgs;
+        };
+    };
 
-    std::string name{};
-    std::string namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
-    ASTExpression* left=0; // FNCALL has arguments in order left to right
-    ASTExpression* right=0;
-    TypeId castType={};
-    OperationType assignOpType = (OperationType)0;
-
+#ifdef gone
     // Used if expression type is AST_ID
     Identifier* identifier = nullptr;
-
     // TODO: Is okay to fill ASTExpression with more data? It's quite large already.
     //  How else would we store this information because we don't want to recalculate it
     //  in Generator. I guess some unions?
     ASTEnum* enum_ast = nullptr;
     int enum_member = -1;
-
-
-    QuickArray<ASTExpression*> args; // fncall or initialiser
-    u32 nonNamedArgs = 0;
 
     // PolyVersions<DynamicArray<TypeId>> versions_argTypes{};
 
@@ -545,12 +549,14 @@ struct ASTExpression : ASTNode {
         PolyVersions<TypeId> versions_outTypeTypeid;
     };
     PolyVersions<TypeId> versions_castType{};
-
+#endif
     void printArgTypes(AST* ast, QuickArray<TypeId>& argTypes);
 
     // ASTExpression* next=0;
     void print(AST* ast, int depth);
 };
+    static const int ko = sizeof ASTExpression;
+
 struct ASTStatement : ASTNode {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
     enum Type {
@@ -643,6 +649,7 @@ struct ASTStatement : ASTNode {
 
     void print(AST* ast, int depth);
 };
+
 struct ASTStruct : ASTNode {
     enum State {
         TYPE_EMPTY,
@@ -787,6 +794,14 @@ struct ASTFunction : ASTNode {
     bool isPolymorphic(){
         return polyArgs.size()!=0;
     }
+    
+    LinkConventions linkConvention = LinkConventions::NONE;
+    CallConventions callConvention = BETCALL;
+    // A lot of places need to know whether a function has a body.
+    // When function should have a body or not has changed a lot recently
+    // and I have needed to rewrite a lot. Having the requirement abstracted in
+    // a function will prevent some of the changes you would need to make.
+    bool needsBody() { return linkConvention == LinkConventions::NONE;}
 
     void print(AST* ast, int depth);
 };

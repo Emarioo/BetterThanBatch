@@ -7,7 +7,6 @@
 @REM  
 @REM ########
 
-
 SET arg=%1
 if !arg!==run (
     @REM Run compiler with compiling it

@@ -25,6 +25,14 @@ struct StringView {
         ptr = cstr;
         this->len = len;
     }
+    StringView(const std::string& str) {
+        ptr = (char*)malloc(str.length() + 1);
+        // len = strlen(cstr);
+        len = str.length();
+        strcpy((char*)ptr, str.c_str());
+        owner = true;
+    }
+
 
     const char* ptr=nullptr;
     u16 len=0;
@@ -44,6 +52,7 @@ struct StringView {
     operator std::string() const {
         return std::string(ptr,len);
     }
+    int size() const { return len; }
 };
 bool operator==(const std::string& str, const StringView& view) {
     if(str.length() != view.len) return false;

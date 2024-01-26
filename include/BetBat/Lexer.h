@@ -53,7 +53,8 @@ namespace lexer {
         TOKEN_NAMEOF,
         TOKEN_TYPEID,
 
-        TOKEN_IF,
+        TOKEN_KEYWORD_FLOW_BEGIN,
+        TOKEN_IF = TOKEN_KEYWORD_FLOW_BEGIN,
         TOKEN_ELSE,
         TOKEN_WHILE,
         TOKEN_FOR,
@@ -62,6 +63,7 @@ namespace lexer {
         TOKEN_RETURN,
         TOKEN_BREAK,
         TOKEN_CONTINUE,
+        TOKEN_KEYWORD_FLOW_END = TOKEN_CONTINUE, // inclusive
 
         TOKEN_USING,
         TOKEN_STRUCT,
@@ -95,6 +97,7 @@ namespace lexer {
     struct Token {
         Token() = default;
         Token(TokenType type) : type(type) {}
+        // Token(TokenType type, u16 flags, TokenOrigin origin) : type(type), flags(flags), origin(origin) {}
         union {
             TokenType type=TOKEN_NONE;
             char c_type; // debug purpose
@@ -125,9 +128,13 @@ namespace lexer {
             char c_type; // debug purpose
         };
         u16 flags;
-        u32 data_offset;
+        u32 data_offset; // can we move this elsewhere? hashmap with the token index? We use data_offset quite often (StringView) so it might slow us done?
 
         // TODO: Optimize by moving line and column out of TokenInfo to fit more tokens into cache lines when we parse/read tokens. However, the lexer and preprocessor would need to write two distant memory locations per token which would be slower. Perhaps that is worth since write is generally faster than read?
+        // u16 line;
+        // u16 column;
+    };
+    struct TokenSource {
         u16 line;
         u16 column;
     };
@@ -139,9 +146,7 @@ namespace lexer {
         u32 import_id;
         u32 chunk_index; // handy when you only have a chunk pointer
         QuickArray<TokenInfo> tokens; // tokenize function accesses ptr,len,max manually for optimizations, constructor destructor functionality of a DynamicArray would be ignored.
-        // TokenInfo* tokens_data=nullptr;
-        // u32 tokens_used=0;
-        // u32 tokens_max=0;
+        QuickArray<TokenSource> sources;
         u8* aux_data=nullptr; // auxiliary
         u32 aux_used=0;
         u32 aux_max=0;
@@ -199,7 +204,7 @@ namespace lexer {
 
         void print(u32 fileid);
 
-        TokenInfo* getTokenInfoFromImport(u32 fileid, u32 token_index_into_import);
+        TokenInfo* getTokenInfoFromImport(u32 fileid, u32 token_index_into_import, TokenSource** src);
         Token getTokenFromImport(u32 fileid, u32 token_index_into_import);
         // same as getDataFromToken but char instead of void
         u32 getStringFromToken(Token tok, const char** ptr);

@@ -56,36 +56,105 @@ struct ParseInfo : public PhaseContext {
             lexer_chunks.add(lexer->getChunk_unsafe(it));
         }
     }
+    u32 last_fcindex=-1;
+    lexer::Chunk* last_chunk = nullptr;
+    lexer::TokenInfo* tokens_base = nullptr;
     // TODO: Optimize these functions by keeping track of the previously accessed chunk and tokens pointer
     //  If head+off was the same as last time then you can just return the same token info as last time.
-    lexer::TokenInfo* getinfo(StringView* string = nullptr, int off = 0) {
+    lexer::TokenInfo* getinfo(int off = 0) {
         static lexer::TokenInfo eof{lexer::TOKEN_EOF, };
         u32 fcindex,tindex;
-        lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+
+        u32 ind = head + off;
+        fcindex = ind >> TOKEN_ORIGIN_TOKEN_BITS;
+        tindex = ind & ((1<<TOKEN_ORIGIN_TOKEN_BITS) - 1);
+        // lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+
+        // if(last_fcindex == fcindex) {
+        //     if(last_chunk->tokens.size() <= tindex)
+        //         return &eof;
+            
+        //     auto info = tokens_base + tindex;
+        //     return info;
+        // }
+
 
         // lexer::Token out{};
         if(lexer_chunks.size() <= fcindex) {
             // out.type = lexer::TOKEN_EOF;
-            if(string)
-                *string = {"",1};
             return &eof;
         }
-        lexer::Chunk* chunk = lexer_chunks[fcindex];
 
-        auto info = chunk->tokens.getPtr(tindex);
+        lexer::TokenInfo* info = nullptr;
+        lexer::Chunk* chunk = lexer_chunks[fcindex];
+        // last_fcindex = fcindex;
+        info = chunk->tokens.getPtr(tindex);
+        // last_chunk = chunk;
+        // tokens_base = chunk->tokens.data();
+
         if(!info) {
-            if(string)
-                *string = {"",1};
             return &eof;
         }
-        if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
+
+        return info;
+    }
+    lexer::TokenInfo* getinfo(StringView* string, int off = 0) {
+        static lexer::TokenInfo eof{lexer::TOKEN_EOF, };
+        u32 fcindex,tindex;
+
+        u32 ind = head + off;
+        fcindex = ind >> TOKEN_ORIGIN_TOKEN_BITS;
+        tindex = ind & ((1<<TOKEN_ORIGIN_TOKEN_BITS) - 1);
+        // lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+
+        // if(last_fcindex == fcindex) {
+        //     if(last_chunk->tokens.size() <= tindex)
+        //         return &eof;
+            
+        //     auto info = tokens_base + tindex;
+        //     if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
+        //         *string = {(char*)last_chunk->aux_data + info->data_offset + 1, last_chunk->aux_data[info->data_offset]};
+        //     return info;
+        // }
+
+
+        // lexer::Token out{};
+        if(lexer_chunks.size() <= fcindex) {
+            // out.type = lexer::TOKEN_EOF;
+            // if(string)
+            //     *string = {"",1};
+            return &eof;
+        }
+
+        lexer::TokenInfo* info = nullptr;
+        lexer::Chunk* chunk = lexer_chunks[fcindex];
+        // last_fcindex = fcindex;
+        info = chunk->tokens.getPtr(tindex);
+        // last_chunk = chunk;
+        // tokens_base = chunk->tokens.data();
+
+        if(!info) {
+            // if(string)
+            //     *string = {"",1};
+            return &eof;
+        }
+        if((info->flags & lexer::TOKEN_FLAG_HAS_DATA))
             *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
 
         return info;
     }
+    
+    lexer::Token prev_tok{};
+    u32 prev_index=-1;
     lexer::Token gettok(int off = 0) {
         u32 fcindex,tindex;
-        lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+        u32 ind = head + off;
+        // if(ind == prev_index)
+        //     return prev_tok;
+
+        // lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+        fcindex = ind >> TOKEN_ORIGIN_TOKEN_BITS;
+        tindex = ind & ((1<<TOKEN_ORIGIN_TOKEN_BITS) - 1);
     
         lexer::Token out{};
         if(lexer_chunks.size() <= fcindex) {
@@ -104,6 +173,8 @@ struct ParseInfo : public PhaseContext {
         out.flags = info->flags;
         out.type = info->type;
         out.origin = lexer->encode_origin(chunk->chunk_index,tindex);
+        prev_tok = out;
+        prev_index = ind;
         return out;
     }
     lexer::Token gettok(StringView* string, int off = 0) {
@@ -113,21 +184,21 @@ struct ParseInfo : public PhaseContext {
         lexer::Token out{};
         if(lexer_chunks.size() <= fcindex) {
             // out.type = lexer::TOKEN_EOF;
-            if(string)
-                *string = {"",1};
+            // if(string)
+            //     *string = {"",1};
             return lexer_import->geteof();
         }
         lexer::Chunk* chunk = lexer_chunks[fcindex];
 
         auto info = chunk->tokens.getPtr(tindex);
         if(!info) {
-            if(string)
-                *string = {"",1};
+            // if(string)
+            //     *string = {"",1};
             // out.type = lexer::TOKEN_EOF;
             return lexer_import->geteof();
             // return out;
         }
-        if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
+        if((info->flags & lexer::TOKEN_FLAG_HAS_DATA))
             *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
 
         out.flags = info->flags;

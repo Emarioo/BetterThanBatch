@@ -362,10 +362,13 @@ void Reporter::err_head(lexer::Token token, CompileError errcode){
 
     auto chunk = lexer->getChunk_unsafe(cindex);
     lexer::TokenInfo* info=nullptr;
+    lexer::TokenSource* src=nullptr;
     if(token.type == lexer::TOKEN_EOF) {
         info = &chunk->tokens[tindex-1];
+        src = &chunk->sources[tindex-1];
     } else {
         info = &chunk->tokens[tindex];
+        src = &chunk->sources[tindex];
     }
     auto imp = lexer->getImport_unsafe(chunk->import_id);
 
@@ -381,7 +384,7 @@ void Reporter::err_head(lexer::Token token, CompileError errcode){
         log::out << "./" << imp->path.substr(index);
     else
         log::out << imp->path;
-    log::out <<":"<<(info->line)<<":"<<(info->column);
+    log::out <<":"<<(src->line)<<":"<<(src->column);
 
     log::out << " ("<<ToCompileErrorString({true,errcode})<<")";
     log::out << ": " <<  MESSAGE_COLOR;
@@ -439,12 +442,13 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
     int lineDigits = 0;
     int baseColumn = base_column; // if you call err_mark without err_head then and old value for base_column will be used
     for(int i=start;i<end;i++){
-        auto tok = lexer->getTokenInfoFromImport(imp->file_id,i);
-        int numlen = tok->line>0 ? ((int)log10(tok->line)+1) : 1;
+        lexer::TokenSource* src;
+        auto tok = lexer->getTokenInfoFromImport(imp->file_id,i, &src);
+        int numlen = src->line>0 ? ((int)log10(src->line)+1) : 1;
         if(numlen>lineDigits)
             lineDigits = numlen;
-        if(tok->column<baseColumn || baseColumn == -1)
-            baseColumn = tok->column;
+        if(src->column<baseColumn || baseColumn == -1)
+            baseColumn = src->column;
     }
     base_column = baseColumn;
     const char* const line_sep_str = " | "; // text that separates the line number and the code
@@ -457,7 +461,8 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
     int pos = -1;
     bool added_newline = false;
     for(int i=start;i<end;i++){
-        auto tok = lexer->getTokenInfoFromImport(imp->file_id, i);
+        lexer::TokenSource* src;
+        auto tok = lexer->getTokenInfoFromImport(imp->file_id, i, &src);
         // bool is_eof = tok->type == lexer::TOKEN_EOF;
         if(tok->type == lexer::TOKEN_EOF) {
             minPos+=1; // +1 for the space before <EOF>
@@ -479,8 +484,8 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
             break;
         }
         auto tok_tiny = lexer->getTokenFromImport(imp->file_id, i);
-        if(tok->line != currentLine){
-            currentLine = tok->line;
+        if(src->line != currentLine){
+            currentLine = src->line;
             if(i!=start) {
                 if(!added_newline)
                     log::out << "\n";
@@ -490,10 +495,10 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
             for(int j=0;j<lineDigits-numlen;j++)
                 log::out << " ";
             log::out << codeColor << currentLine << line_sep_str;
-            pos = line_number_width + tok->column-baseColumn;
+            pos = line_number_width + src->column-baseColumn;
             if(pos < minPos || minPos == -1)
                 minPos = pos;
-            for(int j=0;j<tok->column-baseColumn;j++) log::out << " ";
+            for(int j=0;j<src->column-baseColumn;j++) log::out << " ";
         }
         // log::out.flush();
         char buffer[256];

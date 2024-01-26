@@ -306,11 +306,20 @@ bool GenerateSourceCode(FuzzerContext* context) {
         
         context->stream.resetHead();
         
-        if(i!=context->imports.size()-1) {
-            context->stream.write_no_null("#import \"");
-            context->stream.write_no_null(context->imports[i+1]->filename.c_str());
-            context->stream.write_no_null("\"\n");
+        // one to all other imports
+        if(i == 0) {
+            for(int j=1;j<context->imports.size();j++) {
+                context->stream.write_no_null("#import \"");
+                context->stream.write_no_null(context->imports[j]->filename.c_str());
+                context->stream.write_no_null("\"\n");
+            }
         }
+        // linear dependency
+        // if(i!=context->imports.size()-1) {
+        //     context->stream.write_no_null("#import \"");
+        //     context->stream.write_no_null(context->imports[i+1]->filename.c_str());
+        //     context->stream.write_no_null("\"\n");
+        // }
         GenerateNode(context, import->root, nullptr, 0);
         
         auto file = engone::FileOpen("tests/fuzzer_gen/"+import->filename, engone::FILE_CLEAR_AND_WRITE);

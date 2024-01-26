@@ -66,6 +66,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     
     TokenInfo* prev_token = nullptr; // quite useful
     TokenInfo* new_tokens = nullptr;
+    TokenSource* new_source_tokens = nullptr;
     int new_tokens_len = 0;
     Chunk* last_chunk = nullptr;
     
@@ -104,11 +105,13 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             lexer_import->chunks.add(last_chunk);
             
             last_chunk->tokens._reserve(TOKEN_ORIGIN_TOKEN_MAX);
+            last_chunk->sources._reserve(TOKEN_ORIGIN_TOKEN_MAX);
         } else {
             int prev_index=0;
             if(prev_token)
                 prev_index = prev_token - last_chunk->tokens.data(); 
             last_chunk->tokens._reserve(TOKEN_ORIGIN_TOKEN_MAX);
+            last_chunk->sources._reserve(TOKEN_ORIGIN_TOKEN_MAX);
             if(prev_token)
                 prev_token = prev_index + last_chunk->tokens.data(); 
         }
@@ -118,20 +121,31 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         }
         
         new_tokens = last_chunk->tokens.data() + last_chunk->tokens.used;
+        new_source_tokens = last_chunk->sources.data() + last_chunk->tokens.used;
         last_chunk->tokens.used += n;
         new_tokens_len = n;
         
         *new_tokens = {};
+        *new_source_tokens = {};
     };
     
     reserv_tokens(); // make sure we start with a token so that the lexer doesn't have to check if a token has been requested or not everytime it needs to modify the current/next token
     auto INCREMENT_TOKEN = [&](){
         prev_token = new_tokens;
         new_tokens++;
+        new_source_tokens++;
         new_tokens_len--;
         if(new_tokens_len == 0)
             reserv_tokens();
         *new_tokens = {};
+        *new_source_tokens = {};
+    };
+
+    auto UPDATE_SOURCE = [&](int line, int column){
+        // new_tokens->line = line;
+        // new_tokens->column = column;
+        new_source_tokens->line = line;
+        new_source_tokens->column = column;
     };
     
     auto APPEND_DATA = [&](void* ptr, int size) {
@@ -442,8 +456,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             if(str_start == str_end){
                 str_start = index-1;
                 str_end = str_start;
-                new_tokens->line = ln;
-                new_tokens->column = col;
+                UPDATE_SOURCE(ln,col);
                 // token.str = (char*)outStream->tokenData.used;
                 // token.line = ln;
                 // token.column = col;
@@ -596,8 +609,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             if(chr=='/' && nextChr=='*'){
                 inEnclosedComment=true;
             }
-            new_tokens->line = ln;
-            new_tokens->column = col;
+            UPDATE_SOURCE(ln,col);
+            // new_tokens->line = ln;
+            // new_tokens->column = col;
             lexer_import->comment_lines++;
             // outStream->commentCount++;
             index++; // skip the next slash
@@ -610,8 +624,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             // str_end = index-1+1; // we haven't parsed a character in the quotes yet
             // token.str = (char*)outStream->tokenData.used;
             // token.length = 0;
-            new_tokens->line = ln;
-            new_tokens->column = col;
+            UPDATE_SOURCE(ln,col);
+            // new_tokens->line = ln;
+            // new_tokens->column = col;
             
             new_tokens->type = TOKEN_LITERAL_STRING;
             // quote_token = appendToken(file_id, token.type, token.flags, token_line, token_column);
@@ -676,8 +691,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 
                 new_tokens->type = TOKEN_ANNOTATION;
                 new_tokens->flags = anot.flags;
-                new_tokens->line = anot_line;
-                new_tokens->column = anot_column;
+                UPDATE_SOURCE(anot_line, anot_column);
+                // new_tokens->line = anot_line;
+                // new_tokens->column = anot_column;
                 
                 APPEND_DATA(text+anot_start, anot_end - anot_start);
                 
@@ -743,8 +759,9 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             else
                 nextChr = 0;
             
-            new_tokens->line = ln;
-            new_tokens->column = col;
+            UPDATE_SOURCE(ln,col);
+            // new_tokens->line = ln;
+            // new_tokens->column = col;
             if(nextChr =='\n')
                 new_tokens->flags = TOKEN_FLAG_NEWLINE;
             else if(nextChr==' ')
@@ -795,9 +812,12 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     Assert(last_chunk->tokens.used >= new_tokens_len); // I have a feeling there is a bug here.
     last_chunk->tokens.used -= new_tokens_len; // we didn't use all tokens we requested so we "give them back"
     
-    TokenInfo* last_token=nullptr;
-    if(last_chunk->tokens.size() > 0)
-        last_token = &last_chunk->tokens.last(); // TODO: can this crash?
+    // TokenInfo* last_token=nullptr;
+    // if(last_chunk->tokens.size() > 0)
+    //     last_token = &last_chunk->tokens.size();
+    TokenSource* last_token=nullptr;
+    if(last_chunk->sources.size() > 0)
+        last_token = &last_chunk->sources.last();
     
     if(inQuotes){
         // TODO: Improve error message for tokens
@@ -1004,12 +1024,14 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
     }
     
     chunk->tokens.add({});
+    chunk->sources.add({});
     auto& info = chunk->tokens.last();
     info.type = type;
     info.flags = flags;
-    info.line = line;
-    info.column = column;
     info.data_offset = 0;
+    auto& src = chunk->sources.last();
+    src.line = line;
+    src.column = column;
 
     Token tok{};
     tok.type = type;
@@ -1178,7 +1200,7 @@ bool Lexer::equals_identifier(Token token, const char* str) {
         return false;   
     }
 }
-TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import) {
+TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import, TokenSource** src) {
     static TokenInfo eof{TOKEN_EOF};
     // NOTE: We assume that the content inside the imports won't be modified.
     //   Otherwise, we would need to lock the content too: file->lock_chunk_indices.lock().
@@ -1204,6 +1226,8 @@ TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import
     auto info = chunk->tokens.getPtr(tindex);
     if(!info)
         return &eof;
+    if(src)
+        *src = chunk->sources.getPtr(tindex);
     return info;
 }
 Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
@@ -1563,7 +1587,9 @@ Token Import::geteof(){
     Token out{};
     out.type = TOKEN_EOF;
     out.flags = 0;
-    out.origin = Lexer::encode_origin(chunk_indices.last(), chunks.last()->tokens.size());
+    if(chunk_indices.size()>0) {
+        out.origin = Lexer::encode_origin(chunk_indices.last(), chunks.last()->tokens.size());
+    }
     return out;
 }
 u32 Lexer::getStringFromToken(Token tok, const char** ptr) {
