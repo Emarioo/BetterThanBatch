@@ -2282,7 +2282,7 @@ void Compiler::processImports() {
             } else if(!(imp->state & FLAG_PARSED)) {
                 auto what = parser::ParseImport(imp->preproc_import_id, this);
                 // TODO: Handle return value?
-                ast->appendToMainBody(what);
+                // ast->appendToMainBody(what); // nocheckin
                 
                 // ast->print();
                 

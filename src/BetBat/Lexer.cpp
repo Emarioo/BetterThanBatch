@@ -72,7 +72,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
     
     {
         lock_chunks.lock();
-        int cindex = chunks.add(nullptr,&last_chunk);
+        int cindex = addChunk(&last_chunk);
+        // int cindex = chunks.add(nullptr,&last_chunk);
         lock_chunks.unlock();
         
         last_chunk->chunk_index = cindex;
@@ -96,7 +97,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         } else if(last_chunk->tokens.size() == TOKEN_ORIGIN_TOKEN_MAX) {
             // chunk is full
             lock_chunks.lock();
-            int cindex = chunks.add(nullptr,&last_chunk);
+            int cindex = addChunk(&last_chunk);
+            //  chunks.add(nullptr,&last_chunk);
             lock_chunks.unlock();
             
             last_chunk->chunk_index = cindex;
@@ -881,7 +883,8 @@ void Lexer::appendToken(Import* imp, TokenInfo* from_info, StringView* string) {
     }
     if(!chunk) {
         lock_chunks.lock();
-        cindex = chunks.add(nullptr,&chunk);
+        int cindex = addChunk(&chunk);
+        // cindex = chunks.add(nullptr,&chunk);
         lock_chunks.unlock();
         
         chunk->chunk_index = cindex;
@@ -934,7 +937,8 @@ Token Lexer::appendToken(u32 fileId, Token token) {
         cindex = imp->chunk_indices.last();
         
         lock_chunks.lock();
-        chunk = chunks.get(cindex);
+        chunk = _chunks.get(cindex);
+        // chunk = chunks.get(cindex);
         lock_chunks.unlock();
         
         if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
@@ -944,7 +948,8 @@ Token Lexer::appendToken(u32 fileId, Token token) {
     }
     if(!chunk) {
         lock_chunks.lock();
-        cindex = chunks.add(nullptr,&chunk);
+        cindex = addChunk(&chunk);
+        // cindex = chunks.add(nullptr,&chunk);
         lock_chunks.unlock();
         
         chunk->chunk_index = cindex;
@@ -1004,7 +1009,7 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
         cindex = imp->chunk_indices.last();
         
         lock_chunks.lock();
-        chunk = chunks.get(cindex);
+        chunk = _chunks.get(cindex);
         lock_chunks.unlock();
         
         if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
@@ -1014,7 +1019,8 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
     }
     if(!chunk) {
         lock_chunks.lock();
-        cindex = chunks.add(nullptr,&chunk);
+        cindex = addChunk(&chunk);
+        // cindex = chunks.add(nullptr,&chunk);
         lock_chunks.unlock();
         
         chunk->chunk_index = cindex;
@@ -1046,7 +1052,7 @@ TokenInfo* Lexer::getTokenInfo_unsafe(Token token){
     decode_origin(token.origin, &cindex, &tindex);
     
     lock_chunks.lock();
-    Chunk* chunk = chunks.get(cindex);
+    Chunk* chunk = _chunks.get(cindex);
     lock_chunks.unlock();
     
     Assert(chunk);
@@ -1089,7 +1095,7 @@ u32 Lexer::modifyTokenData(Token token, void* ptr, u32 size, bool with_null_term
     decode_origin(token.origin, &cindex, &tindex);
 
     lock_chunks.lock();
-    Chunk* chunk = chunks.get(cindex);
+    Chunk* chunk = _chunks.get(cindex);
     lock_chunks.unlock();
     Assert(chunk);
     
@@ -1170,6 +1176,7 @@ u32 Lexer::createImport(const std::string& path, Import** file) {
     return file_index+1;
 }
 void Lexer::destroyImport_unsafe(u32 import_id) {
+    Assert(false); // CAN'T ANYMORE BECAUSE WE USE DYNAMIC ARRAY INSTEAD OF BUCKET ARRAY!
     lock_imports.lock();
     Import* imp = imports.get(import_id-1);
     lock_imports.unlock();
@@ -1178,9 +1185,9 @@ void Lexer::destroyImport_unsafe(u32 import_id) {
     lock_chunks.lock();
     for(int i=0;i<imp->chunk_indices.size();i++) {
         u32 cindex = imp->chunk_indices[i];
-        Chunk* chunk = chunks.get(cindex);
+        Chunk* chunk = _chunks.get(cindex);
         chunk->~Chunk();
-        chunks.removeAt(cindex);
+        _chunks.removeAt(cindex);
     }
     lock_chunks.unlock();
     
@@ -1219,7 +1226,7 @@ TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import
     u32 cindex = file->chunk_indices.get(fcindex);
     // NOTE: We assume that the chunk won't be modified. Only read.
     lock_chunks.lock();
-    Chunk* chunk = chunks.get(cindex);
+    Chunk* chunk = _chunks.get(cindex);
     lock_chunks.unlock();
     Assert(chunk);
     
@@ -1252,7 +1259,7 @@ Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
     u32 cindex = imp->chunk_indices.get(fcindex);
     // NOTE: We assume that the chunk won't be modified. Only read.
     lock_chunks.lock();
-    Chunk* chunk = chunks.get(cindex);
+    Chunk* chunk = _chunks.get(cindex);
     lock_chunks.unlock();
     Assert(chunk);
     
@@ -1280,7 +1287,7 @@ Lexer::FeedIterator Lexer::createFeedIterator(Token start_token, Token end_token
     u32 cindex,tindex;
     decode_origin(start_token.origin,&cindex,&tindex);
 
-    Chunk* first_chunk = chunks.get(cindex);
+    Chunk* first_chunk = _chunks.get(cindex);
     Assert(first_chunk);
 
     iter.file_id = first_chunk->import_id;
@@ -1303,7 +1310,7 @@ Lexer::FeedIterator Lexer::createFeedIterator(Token start_token, Token end_token
         u32 cindex,tindex;
         decode_origin(start_token.origin,&cindex,&tindex);
 
-        Chunk* last_chunk = chunks.get(cindex);
+        Chunk* last_chunk = _chunks.get(cindex);
         Assert(("COMPILER BUG: tokens must come from the same file when iterating", last_chunk->import_id == first_chunk->import_id));
 
         bool found_id = false;
@@ -1607,7 +1614,7 @@ u32 Lexer::getDataFromToken(Token tok, const void** ptr){
     u32 cindex,tindex;
     decode_origin(tok.origin,&cindex,&tindex);
     lock_chunks.lock();
-    Chunk* chunk = chunks.get(cindex);
+    Chunk* chunk = _chunks.get(cindex);
     lock_chunks.unlock();
 
     *ptr = chunk->aux_data + info->data_offset + 1;
@@ -1626,7 +1633,7 @@ void Lexer::print(u32 fileid) {
     u32 cindex = imp->chunk_indices.last();
     
     lock_chunks.lock();
-    Chunk* last = chunks.get(cindex);
+    Chunk* last = _chunks.get(cindex);
     lock_chunks.unlock();
 
     FeedIterator iter{};

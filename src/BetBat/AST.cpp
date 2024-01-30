@@ -171,6 +171,8 @@ AST *AST::Create() {
 
     ast->mainBody = ast->createBody();
 
+    ast->_scopeInfos.resize(0x10000); // nocheckin
+
     ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO, ast->mainBody)->id;
     ast->globalScopeId = scopeId;
     // initialize default data types
@@ -240,14 +242,20 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const StringView&name, ContentOr
         id->order = contentOrder;
         varinfo = (VariableInfo*)allocate(sizeof(VariableInfo));
         new(varinfo)VariableInfo();
+        lock_variables.lock();
         variables.add(varinfo);
+        lock_variables.unlock();
     }
     return varinfo;
 }
 VariableInfo* AST::getVariableByIdentifier(Identifier* identifier) {
     Assert(identifier && identifier->type == Identifier::VARIABLE);
-    if(identifier->varIndex < variables.size())
-        return variables[identifier->varIndex];
+    VariableInfo* ptr = nullptr;
+    lock_variables.lock();
+    if(identifier->varIndex < variables.size()) {
+        ptr = variables[identifier->varIndex];
+    }
+    lock_variables.unlock();
     return nullptr;
 }
 // VariableInfo* AST::identifierToVariable(Identifier* identifier){
@@ -851,6 +859,9 @@ FnOverloads* ASTStruct::getMethod(const std::string& name, bool create){
     return &pair->second;
 }
 
+// void AST::appendToAST(ASTScope* body) {
+//     importScopes.add(body);
+// }
 void AST::appendToMainBody(ASTScope *body) {
     Assert(body);
     
@@ -869,7 +880,10 @@ void AST::appendToMainBody(ASTScope *body) {
     // How do we maintain it.
     // Content order of existing children don't need to be recalculated.
     // Content order of all child scopes must recalculated.
-
+    {
+        // ZoneNamedN(zone0, "lock_main", true);
+        lock_mainBody.lock();
+    }
     for(auto it : body->content) {
         switch(it.spotType) {
         case ASTScope::STRUCT: {
@@ -922,9 +936,11 @@ void AST::appendToMainBody(ASTScope *body) {
     // // for(auto it : body->namespaces) { mainBody->add(it, this); } body->namespaces.cleanup();
     // #undef ADD
     destroy(body);
+    lock_mainBody.unlock();
 }
 
 ASTScope *AST::createBody() {
+    ZoneScopedC(tracy::Color::Gold);
     auto ptr = (ASTScope *)allocate(sizeof(ASTScope));
     new(ptr) ASTScope();
     ptr->nodeId = getNextNodeId();
@@ -932,6 +948,7 @@ ASTScope *AST::createBody() {
     return ptr;
 }
 ASTStatement *AST::createStatement(ASTStatement::Type type) {
+    ZoneScopedC(tracy::Color::Gold);
     auto ptr = (ASTStatement *)allocate(sizeof(ASTStatement));
     new(ptr) ASTStatement();
     ptr->nodeId = getNextNodeId();
@@ -959,6 +976,7 @@ ASTFunction *AST::createFunction() {
     return ptr;
 }
 ASTExpression *AST::createExpression(TypeId type) {
+    ZoneScopedC(tracy::Color::Gold);
     auto ptr = (ASTExpression *)allocate(sizeof(ASTExpression));
     new(ptr) ASTExpression();
     ptr->nodeId = getNextNodeId();
@@ -1170,19 +1188,36 @@ void AST::cleanup() {
     linearAllocationUsed = 0;
 }
 ScopeInfo* AST::createScope(ScopeId parentScope, ContentOrder contentOrder, ASTScope* astScope) {
+    ZoneScopedC(tracy::Color::Gold);
+
     auto ptr = (ScopeInfo *)allocate(sizeof(ScopeInfo));
-    new(ptr) ScopeInfo{(u32)_scopeInfos.size()};
+    u32 id = 0;
+    
+    id = nextScopeInfoIndex++; // nocheckin
+    _scopeInfos[id] = ptr;
+
+    // id = engone::atomic_add((volatile i32*)&nextScopeInfoIndex, 1) - 1;
+    
+    // lock_scopes.lock(); // too slow
+    // id = _scopeInfos.size();
+    // _scopeInfos.add(ptr);
+    // lock_scopes.unlock();
+    
+    new(ptr) ScopeInfo{id};
+    
     ptr->parent = parentScope;
     ptr->contentOrder = contentOrder;
     ptr->astScope = astScope;
-    // engone::log::out << "Order: "<<contentOrder<<"\n";
-    _scopeInfos.add(ptr);
+
     return ptr;
 }
 ScopeInfo* AST::getScope(ScopeId id){
-    if(_scopeInfos.size() <= id)
-        return nullptr; // out of bounds
-    return _scopeInfos[id];
+    ScopeInfo* ptr = nullptr;
+    // lock_scopes.lock(); // too slow
+    if(_scopeInfos.size() > id)
+        ptr = _scopeInfos[id];
+    // lock_scopes.unlock();
+    return ptr;
 }
 ScopeInfo* AST::findScope(StringView name, ScopeId scopeId, bool search_parent_scopes){
     using namespace engone;
@@ -1275,25 +1310,36 @@ ScopeInfo* AST::findScopeFromParents(StringView name, ScopeId scopeId){
 //     return TypeId::CreateString(_typeTokens.size()-1);
 // }
 TypeId AST::getTypeString(const std::string& name){
+    return TypeId::Create(AST_INT32); // nocheckin
+    // ZoneScoped;
+
     // converts char[] into Slice<char> (or any type, not just char)
+    u32 index = 0;
     if(name.length()>2&&!strncmp(name.c_str()+name.length()-2,"[]",2)){
-        std::string* str = createString();
-        *str = "Slice<";
-        str->append(std::string(name.c_str(),name.length()-2));
-        (*str)+=">";
+        std::string str = "Slice<" + name + ">";
+        lock_typeTokens.lock(); // slow
         for(int i=0;i<(int)_typeTokens.size();i++){
-            if(*str == _typeTokens[i])
+            if(str == _typeTokens[i]) {
+                lock_typeTokens.unlock();
                 return TypeId::CreateString(i);
+            }
         }
-        _typeTokens.add(*str);
+        index = _typeTokens.size()-1;
+        _typeTokens.add(str);
+        lock_typeTokens.unlock();
     } else {
+        lock_typeTokens.lock(); // slow
         for(int i=0;i<(int)_typeTokens.size();i++){
-            if(name == _typeTokens[i])
+            if(name == _typeTokens[i]) {
+                lock_typeTokens.unlock();
                 return TypeId::CreateString(i);
+            }
         }
+        index = _typeTokens.size()-1;
         _typeTokens.add(name);
+        lock_typeTokens.unlock();
     }
-    return TypeId::CreateString(_typeTokens.size()-1);
+    return TypeId::CreateString(index);
 }
 StringView AST::getStringFromTypeString(TypeId typeId){
     Assert(typeId.isString());

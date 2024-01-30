@@ -30,7 +30,7 @@ if !arg!==run (
 @REM SET USE_GCC=1
 SET USE_DEBUG=1
 SET USE_MSVC=1
-@REM SET USE_OPTIMIZATIONS=1
+SET USE_OPTIMIZATIONS=1
 
 @REM Advapi is used for winreg which accesses the windows registry
 @REM to get cpu clock frequency which is used with rdtsc.

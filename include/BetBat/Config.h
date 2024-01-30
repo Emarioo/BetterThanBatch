@@ -65,7 +65,9 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 #define LOG_MEASURES
 // Silent is not used at the moment.
 #ifndef RELEASE
-#define ENABLE_TRACKER
+// Don't enable tracker when optimizing for performance, the tracker is
+// very slow (mutexes, fix thread local storage for speed improvement)
+// #define ENABLE_TRACKER
 // #define LOG_TRACKER
 #define LOG_MSG_LOCATION
 // #define DUMP_ALL_ASM

@@ -57,7 +57,7 @@ private:
     };
     
     BucketArray<Import> imports{256};
-    engone::Mutex lock_imports;
+    MUTEX(lock_imports);
     
     friend class PreprocContext;
 };

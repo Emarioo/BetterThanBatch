@@ -18,6 +18,13 @@
         C++ is really annoying because the two options is doing stupid stuff here or
         create a non-template definition for every template function where the tracker is used.
         Sigh.
+
+    HOLY SHIT!
+        The tracker should exist per thread (thread local storage?).
+        Otherwise we will use mutexes every time you allocate so that
+        the tracker isn't susceptible to race conditions.
+        THAT'S WHY THE PARSER IS SO F***** SLOW. (sorry for the swearing, i just got excited because this has been troubling me for a while)
+        -Emarioo, 2024-01-28
 */
 
 #define TRACK_ADDS(TYPE, COUNT)

@@ -2,6 +2,8 @@
 
 #ifndef NO_PERF
 #include "tracy/Tracy.hpp"
+// #define MUTEX(NAME) TracyLockable(engone::Mutex,NAME)
+#define MUTEX(NAME) engone::Mutex NAME
 #else
 // NativeLayer/Win32 needs this
 #define TracyAlloc(...)

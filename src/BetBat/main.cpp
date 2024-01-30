@@ -79,6 +79,10 @@ int main(int argc, const char** argv){
 
     u32 lines=0;
     u32 filesize=0;
+    // for(auto& it : compiler.lexer.getImports()) {
+    //     lines+=it->lines;
+    //     filesize+=it->fileSize;
+    // }
     auto iter = compiler.lexer.getImports().iterator();
     while(compiler.lexer.getImports().iterate(iter)) {
         lines+=iter.ptr->lines;

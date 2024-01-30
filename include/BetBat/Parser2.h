@@ -48,17 +48,20 @@ struct ParseInfo : public PhaseContext {
     u32 head=0;
     lexer::Import* lexer_import=nullptr;
     DynamicArray<lexer::Chunk*> lexer_chunks;
+    DynamicArray<QuickArray<lexer::TokenInfo>*> lexer_tokens;
     void setup_token_iterator() {
         Assert(lexer);
         Assert(import_id != 0);
         lexer_import = lexer->getImport_unsafe(import_id);
         FOR(lexer_import->chunk_indices) {
-            lexer_chunks.add(lexer->getChunk_unsafe(it));
+            auto chunk = lexer->getChunk_unsafe(it);
+            lexer_chunks.add(chunk);
+            lexer_tokens.add(&chunk->tokens);
         }
     }
-    u32 last_fcindex=-1;
-    lexer::Chunk* last_chunk = nullptr;
-    lexer::TokenInfo* tokens_base = nullptr;
+    // u32 last_fcindex=-1;
+    // lexer::Chunk* last_chunk = nullptr;
+    // lexer::TokenInfo* tokens_base = nullptr;
     // TODO: Optimize these functions by keeping track of the previously accessed chunk and tokens pointer
     //  If head+off was the same as last time then you can just return the same token info as last time.
     lexer::TokenInfo* getinfo(int off = 0) {
@@ -86,11 +89,10 @@ struct ParseInfo : public PhaseContext {
         }
 
         lexer::TokenInfo* info = nullptr;
-        lexer::Chunk* chunk = lexer_chunks[fcindex];
-        // last_fcindex = fcindex;
-        info = chunk->tokens.getPtr(tindex);
-        // last_chunk = chunk;
-        // tokens_base = chunk->tokens.data();
+
+        // lexer::Chunk* chunk = lexer_chunks[fcindex];
+        // info = chunk->tokens.getPtr(tindex);
+        info = lexer_tokens[fcindex]->getPtr(tindex);
 
         if(!info) {
             return &eof;
@@ -128,8 +130,8 @@ struct ParseInfo : public PhaseContext {
 
         lexer::TokenInfo* info = nullptr;
         lexer::Chunk* chunk = lexer_chunks[fcindex];
-        // last_fcindex = fcindex;
         info = chunk->tokens.getPtr(tindex);
+        // last_fcindex = fcindex;
         // last_chunk = chunk;
         // tokens_base = chunk->tokens.data();
 
@@ -162,8 +164,8 @@ struct ParseInfo : public PhaseContext {
             return lexer_import->geteof();
         }
         lexer::Chunk* chunk = lexer_chunks[fcindex];
-
         auto info = chunk->tokens.getPtr(tindex);
+
         if(!info) {
             // out.type = lexer::TOKEN_EOF;
             return lexer_import->geteof();

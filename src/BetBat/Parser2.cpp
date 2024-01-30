@@ -2042,9 +2042,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     }
                     ns += pure_name;
                     ns += polyTypes;
-                    std::string* nsp = info.ast->createString();
-                    *nsp = ns;
-                    initExpr->castType = info.ast->getTypeString(*nsp);
+                    initExpr->castType = info.ast->getTypeString(ns);
                     // TODO: A little odd to use castType. Renaming castType to something more
                     //  generic which works for AST_CAST and AST_INITIALIZER would be better.
                     // ASTExpression* tail=0;
@@ -2471,9 +2469,6 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             if(tok_colon.type == ':' && token->type == lexer::TOKEN_IDENTIFIER){
                 info.advance(2);
             } else {
-                // std::string* str = info.ast->createString();
-                // *str = "it";
-
                 varname = "it";
             }
             
@@ -3067,9 +3062,8 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
         argv.defaultValue = nullptr;
         function->nonDefaults++;
 
-        std::string* str = info.ast->createString();
-        *str = parentStruct->polyName + "*"; // TODO: doesn't work with polymorhpism
-        argv.stringType = info.ast->getTypeString(*str);;
+        std::string str = parentStruct->polyName + "*"; // TODO: doesn't work with polymorhpism?
+        argv.stringType = info.ast->getTypeString(str);;
     }
     info.advance(); // skip (
     bool printedErrors=false;
@@ -3883,7 +3877,8 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     ParseInfo info{};
     info.compiler = compiler;
     info.lexer = &compiler->lexer;
-    info.ast = compiler->ast;
+    // info.ast = compiler->ast;
+    info.ast = AST::Create(); // nocheckin
     info.reporter = &compiler->reporter;
     info.import_id = import_id;
 

@@ -225,16 +225,19 @@ namespace lexer {
         bool equals_identifier(Token token, const char* str);
         
         const BucketArray<Import>& getImports() { return imports; }
+        // const DynamicArray<Import*>& getImports() { return _imports; }
         
         Import* getImport_unsafe(u32 import_id) {
             lock_imports.lock();
             auto imp = imports.get(import_id-1);
+            // auto imp = _imports.get(import_id-1);
             lock_imports.unlock();
             return imp;
         }
         Chunk* getChunk_unsafe(u32 chunk_index) {
             lock_chunks.lock();
-            auto imp = chunks.get(chunk_index);
+            // auto imp = chunks.get(chunk_index);
+            auto imp = _chunks.get(chunk_index);
             lock_chunks.unlock();
             return imp;
         }
@@ -247,12 +250,31 @@ namespace lexer {
         static void decode_origin(TokenOrigin origin, u32* chunk_index, u32* tiny_token_index);
         static void decode_import_token_index(u32 token_index_into_file, u32* file_chunk_index, u32* tiny_token_index);
     private:
-        // TODO: Bucket array
         BucketArray<Import> imports{256};
-        BucketArray<Chunk> chunks{256};
+        BucketArray<Chunk> _chunks{256};
+
+        // NOTE: I read/heard something about false thread cache sharing which could drop performance
+        //  data in cache has to be shared between threads? I probably misunderstood BUT we shall
+        //  heap allocate chunk and see if anything happens. No, I totally misunderstood or this is
+        //  at least not a problem in slightest at this moment in time. -Emarioo, 2024-01-28
+
+        // DynamicArray<Chunk*> _chunks;
+        u32 addChunk(Chunk** out) {
+            // Assert(lock_chunks.getOwner() != 0); // make sure we locked first
+            return _chunks.add(nullptr, out);
+
+            // Chunk* ptr = new Chunk(); // nocheckin
+            // // lock_chunks.lock();
+            // u32 index = _chunks.size();
+            // _chunks.add(ptr);
+            // // lock_chunks.unlock();
+            // if(out)
+            //     *out = ptr;
+            // return index;
+        }
         
-        engone::Mutex lock_imports;
-        engone::Mutex lock_chunks;
+        MUTEX(lock_imports);
+        MUTEX(lock_chunks);
 
         // Extra data will be appended to the token. If the token had data previously then
         // the data will be appended to the previous data possibly changing the data offset

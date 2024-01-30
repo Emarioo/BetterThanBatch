@@ -854,6 +854,7 @@ struct AST {
     
     //-- Scope stuff
     ScopeId globalScopeId=0;
+    volatile u32 nextScopeInfoIndex = 0;
     QuickArray<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
     ScopeInfo* createScope(ScopeId parentScope, ContentOrder contentOrder, ASTScope* astScope);
     ScopeInfo* getScope(ScopeId id);
@@ -864,6 +865,7 @@ struct AST {
     ScopeInfo* findScopeFromParents(StringView name, ScopeId scopeId);
 
     //-- Types
+    MUTEX(lock_typeTokens);
     DynamicArray<std::string> _typeTokens;
     // TypeId getTypeString(Token name);
     TypeId getTypeString(const std::string& name);
@@ -893,6 +895,8 @@ struct AST {
 
     //-- OTHER
     ASTScope* mainBody=0;
+    MUTEX(lock_mainBody);
+    // QuickArray<ASTScope*> importScopes{};
 
     QuickArray<std::string*> tempStrings;
     std::string* createString();
@@ -901,6 +905,7 @@ struct AST {
     u32 nextTypeId=AST_OPERATION_COUNT;
     
     QuickArray<VariableInfo*> variables;
+    MUTEX(lock_variables);
 
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
@@ -950,10 +955,12 @@ struct AST {
     u32 preallocatedGlobalSpace() {
         return globalDataOffset;
     }
+    MUTEX(lock_linearAllocation);
+    MUTEX(lock_scopes);
 
     char* linearAllocation = nullptr;
     u32 linearAllocationMax = 0;
-    u32 linearAllocationUsed = 0;
+    volatile u32 linearAllocationUsed = 0;
     void initLinear(){
         Assert(!linearAllocation);
         linearAllocationMax = 0x10000000;
@@ -973,8 +980,17 @@ struct AST {
         // TODO: If we don't have enough space then create a new linear allocator
         //  and allocate stuff there. Buckets of linear allocators basically.
         Assert(linearAllocationUsed + size < linearAllocationMax);
-        void* ptr = linearAllocation + linearAllocationUsed;
+        // lock_linearAllocation.lock();
+        // u32 new_index = linearAllocationUsed;
+        // linearAllocationUsed+=size;
+        // lock_linearAllocation.unlock();
+        
+        // u32 new_index = engone::atomic_add((volatile i32*)&linearAllocationUsed, size) - size;
+
+        u32 new_index = linearAllocationUsed; // nocheckin
         linearAllocationUsed += size;
+        
+        void* ptr = linearAllocation + new_index;
         return ptr;
     }
 
@@ -996,6 +1012,7 @@ struct AST {
 
     // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
     void appendToMainBody(ASTScope* body);
+    // void appendToAST(ASTScope* body);
 
     int nextNodeId = 1; // start at 1, 0 indicates a non-set id for ASTNode, probably a bug if so
     int getNextNodeId() { return nextNodeId++; }
