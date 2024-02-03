@@ -16,7 +16,7 @@ struct Token;
 struct TokenRange;
 
 struct StringView {
-    StringView() = default;
+    StringView() {  }
     StringView(const char* cstr) {
         ptr = cstr;
         len = strlen(cstr);
@@ -53,6 +53,8 @@ struct StringView {
         return std::string(ptr,len);
     }
     int size() const { return len; }
+
+
 };
 bool operator==(const std::string& str, const StringView& view) {
     if(str.length() != view.len) return false;

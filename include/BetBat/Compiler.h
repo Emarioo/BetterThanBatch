@@ -2,8 +2,8 @@
 
 // Compiler v2
 #include "BetBat/Tokenizer.h"
-#include "BetBat/Preprocessor.h"
-#include "BetBat/Parser.h"
+#include "BetBat/old_Preprocessor.h"
+#include "BetBat/old_Parser.h"
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Generator.h"
 #include "BetBat/Interpreter.h"
@@ -19,8 +19,8 @@
 
 // Compiler v2.1
 #include "BetBat/Lexer.h"
-#include "BetBat/Preprocessor2.h"
-#include "BetBat/Parser2.h"
+#include "BetBat/Preprocessor.h"
+#include "BetBat/Parser.h"
 
 // This class is here to standardise the usage of paths.
 // It also provides a contained/maintained place with functions related to paths.

@@ -6,19 +6,30 @@
 #define WARN_HEAD3(R,M) info.compileInfo->compileOptions->compileStats.warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
 
 #undef ERR_SECTION
-#define ERR_SECTION(CONTENT) BASE_SECTION("Type checker, ", CONTENT)
+#define ERR_SECTION(CONTENT) BASE_SECTION2(CONTENT)
 
 #define _TCLOG_ENTER(...) FUNC_ENTER_IF(global_loggingSection & LOG_TYPECHECKER)
 // #define _TCLOG_ENTER(...) _TCLOG(__VA_ARGS__)
 // #define _TCLOG_ENTER(X)
 
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError);
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& tokenRange, bool* printedError);
-SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt);
+TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, lexer::SourceLocation location, bool* printedError);
+TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer::SourceLocation location, bool* printedError);
 
-#ifdef gone
+SignalIO CheckEnums(CheckInfo& info, ASTScope* scope);
 
-SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
+SignalIO CheckStructs(CheckInfo& info, ASTScope* scope);
+SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl);
+
+SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope);
+SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope);
+SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes);
+SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl);
+
+SignalIO CheckRest(CheckInfo& info, ASTScope* scope);
+SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt);
+SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs = nullptr);
+
+SignalIO CheckEnums(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     Assert(scope);
     ZoneScopedC(tracy::Color::Purple4);
@@ -29,18 +40,18 @@ SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
     // OPTIMIZE TODO: Parser should set a flag for whether a scope contains enums, structs and functions.
     //   We can do that per namespace, function or import scope. Don't have to do that for each if, while, for scope.
 
-    SignalDefault error = SignalDefault::SUCCESS;
+    SignalIO error = SIGNAL_SUCCESS;
     for(auto aenum : scope->enums){
         if(aenum->colonType.isString()) {
-            Token typeString = info.ast->getTokenFromTypeString(aenum->colonType);
+            auto typeString = info.ast->getStringFromTypeString(aenum->colonType);
             bool printedError = false;
-            TypeId colonType = CheckType(info, scope->scopeId, typeString, aenum->tokenRange, &printedError);
+            TypeId colonType = CheckType(info, scope->scopeId, typeString, aenum->location, &printedError);
             if(!colonType.isValid()) {
                 if(!printedError) {
                     ERR_SECTION(
-                        ERR_HEAD(aenum->name)
+                        ERR_HEAD2(aenum->location)
                         ERR_MSG("The type for the enum after : was not valid.")
-                        ERR_LINE(aenum->name, typeString<< " was invalid")
+                        ERR_LINE2(aenum->location, typeString<< " was invalid")
                     )
                 }
             } else {
@@ -60,43 +71,41 @@ SignalDefault CheckEnums(CheckInfo& info, ASTScope* scope){
             typeInfo->astEnum = aenum;
         } else {
             ERR_SECTION(
-                ERR_HEAD(aenum->name)
-                ERR_MSG(aenum->name << " is already a type. TODO: Show where the previous definition was.")
+                ERR_HEAD2(aenum->location)
+                ERR_MSG("'"<<aenum->name << "' is already a type. TODO: Show where the previous definition was.")
             )
         }
     }
     
     for(auto it : scope->namespaces){
-        SignalDefault result = CheckEnums(info,it);
-        if(result != SignalDefault::SUCCESS)
-            error = SignalDefault::FAILURE;
+        SignalIO result = CheckEnums(info,it);
+        if(result != SIGNAL_SUCCESS)
+            error = SIGNAL_FAILURE;
     }
     
     for(auto astate : scope->statements) {
         if(astate->firstBody){
-            SignalDefault result = CheckEnums(info, astate->firstBody);   
-            if(result != SignalDefault::SUCCESS)
-                error = SignalDefault::FAILURE;
+            SignalIO result = CheckEnums(info, astate->firstBody);   
+            if(result != SIGNAL_SUCCESS)
+                error = SIGNAL_FAILURE;
         }
         if(astate->secondBody){
-            SignalDefault result = CheckEnums(info, astate->secondBody);
-            if(result != SignalDefault::SUCCESS)
-                error = SignalDefault::FAILURE;
+            SignalIO result = CheckEnums(info, astate->secondBody);
+            if(result != SIGNAL_SUCCESS)
+                error = SIGNAL_FAILURE;
         }
     }
     
     for(auto afunc : scope->functions) {
         if(afunc->body){
-            SignalDefault result = CheckEnums(info, afunc->body);
-            if(result != SignalDefault::SUCCESS)
-                error = SignalDefault::FAILURE;
+            SignalIO result = CheckEnums(info, afunc->body);
+            if(result != SIGNAL_SUCCESS)
+                error = SIGNAL_FAILURE;
         }
     }
     return error;
 }
-
-
-SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
+SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* structInfo, StructImpl* structImpl){
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER)
     int offset=0;
@@ -135,13 +144,13 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
 
         Assert(member.stringType.isString());
         bool printedError = false;
-        TypeId tid = CheckType(info, astStruct->scopeId, member.stringType, astStruct->tokenRange, &printedError);
+        TypeId tid = CheckType(info, astStruct->scopeId, member.stringType, astStruct->location, &printedError);
         if(!tid.isValid() && !printedError){
             if(info.showErrors) {
                 ERR_SECTION(
-                    ERR_HEAD(astStruct->tokenRange)
-                    ERR_MSG("Type '"<< info.ast->getTokenFromTypeString(member.stringType) << "' in "<< astStruct->name<<"."<<member.name << " is not a type.")
-                    ERR_LINE(member.name,"bad type")
+                    ERR_HEAD2(astStruct->location)
+                    ERR_MSG("Type '"<< info.ast->getStringFromTypeString(member.stringType) << "' in "<< astStruct->name<<"."<<member.name << " is not a type.")
+                    ERR_LINE2(member.location,"bad type")
                 )
             }
             success = false;
@@ -158,10 +167,10 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
                 std::string deftype = info.ast->typeToString(tempTypes.last());
                 std::string memtype = info.ast->typeToString(implMem.typeId);
                 ERR_SECTION(
-                    ERR_HEAD(member.defaultValue->tokenRange)
+                    ERR_HEAD2(member.defaultValue->location) // nocheckin, message should mark the whole expression, not just some random token/operation inside it
                     ERR_MSG("Type of default value does not match member.")
-                    ERR_LINE(member.defaultValue->tokenRange,deftype.c_str())
-                    ERR_LINE(member.name,memtype.c_str())
+                    ERR_LINE2(member.defaultValue->location,deftype.c_str())
+                    ERR_LINE2(member.location,memtype.c_str())
                 )
                 continue; // continue when failing
             }
@@ -169,7 +178,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
         _TCLOG(log::out << " checked member["<<i<<"] "<<info.ast->typeToString(tid)<<"\n";)
     }
     if(!success){
-        return SignalDefault::FAILURE;
+        return SIGNAL_FAILURE;
     }
     for (int i = 0;i<(int)astStruct->members.size();i++) {
         auto& member = astStruct->members[i];
@@ -185,7 +194,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
                 if(info.showErrors) {
                     // NOTE: pointers to the same struct are okay.
                     ERR_SECTION(
-                        ERR_HEAD(astStruct->tokenRange)
+                        ERR_HEAD2(member.location)
                         ERR_MSG("Member "<<member.name << "'s type uses the parent struct. (recursive struct does not work).")
                     )
                 }
@@ -197,7 +206,7 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
                 // astStruct->state = ASTStruct::TYPE_ERROR;
                 if(info.showErrors) {
                     ERR_SECTION(
-                        ERR_HEAD(astStruct->tokenRange)
+                        ERR_HEAD2(member.location)
                         ERR_MSG("Type '"<< info.ast->typeToString(implMem.typeId) << "' in '"<< astStruct->name<<"."<<member.name << "' is not a type or an incomplete one. Do structs depend on each other recursively?")
                     )
                 }
@@ -281,20 +290,20 @@ SignalDefault CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* s
     // _TCLOG(log::out << info.ast->typeToString << " was evaluated to "<<offset<<" bytes\n";)
     // }
     if(success)
-        return SignalDefault::SUCCESS;
-    return SignalDefault::FAILURE;
+        return SIGNAL_SUCCESS;
+    return SIGNAL_FAILURE;
 }
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, const TokenRange& tokenRange, bool* printedError){
+TypeId CheckType(CheckInfo& info, ScopeId scopeId, TypeId typeString, lexer::SourceLocation err_location, bool* printedError){
     using namespace engone;
     Assert(typeString.isString());
     // if(!typeString.isString()) {
     //     _TCLOG(log::out << "check type typeid wasn't string type\n";)
     //     return typeString;
     // }
-    Token token = info.ast->getTokenFromTypeString(typeString);
-    return CheckType(info, scopeId, token, tokenRange, printedError);
+    auto token = info.ast->getStringFromTypeString(typeString);
+    return CheckType(info, scopeId, token, err_location, printedError);
 }
-TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const TokenRange& err_tokenRange, bool* printedError){
+TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer::SourceLocation err_location, bool* printedError){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -305,45 +314,46 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
     TypeId typeId = {};
 
     u32 plevel=0;
-    TINY_ARRAY(Token,polyTokens,4);
+    QuickArray<StringView> polyTokens;
     // TODO: namespace?
-    Token typeName = AST::TrimPointer(typeString, &plevel);
-    Token baseType = AST::TrimPolyTypes(typeName, &polyTokens);
+    StringView typeName{};
+    StringView baseType{};
+    AST::DecomposePointer(typeString, &typeName, &plevel);
+    AST::DecomposePolyTypes(typeName, &baseType, &polyTokens);
     // Token typeName = AST::TrimNamespace(noPointers, &ns);
     TINY_ARRAY(TypeId, polyArgs, 4);
-    std::string* realTypeName = nullptr;
+    std::string realTypeName{};
 
     if(polyTokens.size() != 0) {
         // We trim poly types and then put them back together to get the "official" names for the types
         // Maybe you used some aliasing or namespaces.
-        realTypeName = info.ast->createString();
-        *realTypeName += baseType;
-        *realTypeName += "<";
+        realTypeName += baseType;
+        realTypeName += "<";
         // TODO: Virtual poly arguments does not work with multithreading. Or you need mutexes at least.
         for(int i=0;i<(int)polyTokens.size();i++){
             // TypeInfo* polyInfo = info.ast->convertToTypeInfo(polyTokens[i], scopeId);
             // TypeId id = info.ast->convertToTypeId(polyTokens[i], scopeId);
             bool printedError = false;
-            TypeId id = CheckType(info, scopeId, polyTokens[i], err_tokenRange, &printedError);
+            TypeId id = CheckType(info, scopeId, polyTokens[i], err_location, &printedError);
             if(i!=0)
-                *realTypeName += ",";
-            *realTypeName += info.ast->typeToString(id);
+                realTypeName += ",";
+            realTypeName += info.ast->typeToString(id);
             polyArgs.add(id);
             if(id.isValid()){
 
             } else if(!printedError) {
             //     // ERR_SECTION(
-            // ERR_HEAD(err_tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
+            // ERR_HEAD2(err_location, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
                 ERR_SECTION(
-                    ERR_HEAD(err_tokenRange)
+                    ERR_HEAD2(err_location)
                     ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
-                    ERR_LINE(err_tokenRange,"here somewhere")
+                    ERR_LINE2(err_location,"here somewhere")
                 )
             }
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
         }
-        *realTypeName += ">";
-        typeId = info.ast->convertToTypeId(*realTypeName, scopeId, true);
+        realTypeName += ">";
+        typeId = info.ast->convertToTypeId(realTypeName, scopeId, true);
     } else {
         typeId = info.ast->convertToTypeId(typeName, scopeId, true);
     }
@@ -356,9 +366,9 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             return {};
         if(ti && ti->astStruct && ti->astStruct->polyArgs.size() != 0 && !ti->structImpl) {
             ERR_SECTION(
-                ERR_HEAD(err_tokenRange)
+                ERR_HEAD2(err_location)
                 ERR_MSG(info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>. (if in a function: compiler does not have knowledge of where).")
-                ERR_LINE(err_tokenRange,"")
+                ERR_LINE2(err_location,"")
             )
             if(printedError)
                 *printedError = true;
@@ -370,18 +380,18 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
 
     if(polyTokens.size() == 0) {
         // ERR_SECTION(
-        // ERR_HEAD(err_tokenRange) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
+        // ERR_HEAD2(err_location) << <<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // type isn't polymorphic and does just not exist
     }
     TypeInfo* baseInfo = info.ast->convertToTypeInfo(baseType, scopeId, true);
     if(!baseInfo) {
         // ERR_SECTION(
-        // ERR_HEAD(err_tokenRange) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
+        // ERR_HEAD2(err_location) << info.ast->typeToString(ti->id)<<" is polymorphic. You must specify poly. types like this: Struct<i32>\n";
         return {}; // print error? base type for polymorphic type doesn't exist
     }
     if(polyTokens.size() != baseInfo->astStruct->polyArgs.size()) {
         ERR_SECTION(
-            ERR_HEAD(err_tokenRange)
+            ERR_HEAD2(err_location)
             ERR_MSG("Polymorphic type "<<typeString << " has "<< (u32)polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<(u32)baseInfo->astStruct->polyArgs.size()<<".")
         )
         // ERR() << "Polymorphic type "<<typeString << " has "<< polyTokens.size() <<" poly. args but the base type "<<info.ast->typeToString(baseInfo->id)<<" needs "<<baseInfo->astStruct->polyArgs.size()<< "\n";
@@ -390,7 +400,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
         return {}; // type isn't polymorphic and does just not exist
     }
 
-    TypeInfo* typeInfo = info.ast->createType(*realTypeName, baseInfo->scopeId);
+    TypeInfo* typeInfo = info.ast->createType(realTypeName, baseInfo->scopeId);
     typeInfo->astStruct = baseInfo->astStruct;
     typeInfo->structImpl = info.ast->createStructImpl();
     // typeInfo->structImpl = baseInfo->astStruct->createImpl();
@@ -401,10 +411,10 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
         typeInfo->structImpl->polyArgs[i] = id;
     }
 
-    SignalDefault hm = CheckStructImpl(info, typeInfo->astStruct, baseInfo, typeInfo->structImpl);
-    if(hm != SignalDefault::SUCCESS) {
+    SignalIO hm = CheckStructImpl(info, typeInfo->astStruct, baseInfo, typeInfo->structImpl);
+    if(hm != SIGNAL_SUCCESS) {
         ERR_SECTION(
-            ERR_HEAD(err_tokenRange)
+            ERR_HEAD2(err_location)
             ERR_MSG(__FUNCTION__ <<": structImpl for type "<<typeString << " failed.")
         )
     } else {
@@ -414,7 +424,7 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
     outId.setPointerLevel(plevel);
     return outId;
 }
-SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
+SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
     using namespace engone;
     ZoneScopedC(tracy::Color::X11Purple);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -437,7 +447,7 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
             if(!structInfo){
                 astStruct->state = ASTStruct::TYPE_ERROR;
                 ERR_SECTION(
-                    ERR_HEAD(astStruct->tokenRange)
+                    ERR_HEAD2(astStruct->location)
                     ERR_MSG("'"<<astStruct->name<<"' is already defined.")
                 )
                 // TODO: Provide information (file, line, column) of the first definition.
@@ -467,7 +477,7 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
                     // structInfo->structImpl = astStruct->createImpl();
                     astStruct->nonPolyStruct = structInfo->structImpl;
                 }
-                yes = CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl) == SignalDefault::SUCCESS;
+                yes = CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl) == SIGNAL_SUCCESS;
                 if(!yes){
                     astStruct->state = ASTStruct::TYPE_CREATED;
                     info.completedStructs = false;
@@ -492,12 +502,12 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
         for(auto astate : scope->statements) {
             
             if(astate->firstBody){
-                SignalDefault result = CheckStructs(info, astate->firstBody);   
+                SignalIO result = CheckStructs(info, astate->firstBody);   
                 // if(!result)
                 //     error = false;
             }
             if(astate->secondBody){
-                SignalDefault result = CheckStructs(info, astate->secondBody);
+                SignalIO result = CheckStructs(info, astate->secondBody);
                 // if(!result)
                 //     error = false;
             }
@@ -505,16 +515,15 @@ SignalDefault CheckStructs(CheckInfo& info, ASTScope* scope) {
         
         for(auto afunc : scope->functions) {
             if(afunc->body){
-                SignalDefault result = CheckStructs(info, afunc->body);
+                SignalIO result = CheckStructs(info, afunc->body);
                 // if(!result)
                 //     error = false;
             }
         }
     // }
-    return SignalDefault::SUCCESS;
+    return SIGNAL_SUCCESS;
 }
-SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes);
-SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs = nullptr) {
+SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt, bool operatorOverloadAttempt, QuickArray<TypeId>* operatorArgs) {
     using namespace engone;
     Assert(!outTypes || outTypes->size()==0);
     #define FNCALL_SUCCESS \
@@ -532,25 +541,29 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     //-- Get poly args from the function call
     // DynamicArray<TypeId> fnPolyArgs;
     TINY_ARRAY(TypeId, fnPolyArgs, 4);
-    TINY_ARRAY(Token,polyTokens,4);
-    Token baseName{};
+    // TINY_ARRAY(Token,polyTokens,4);
+    QuickArray<StringView> polyTypes{};
+
+    // Token baseName{};
+    StringView baseName{};
     
     if(operatorOverloadAttempt) {
         baseName = OP_NAME((OperationType)expr->typeId.getId());
     } else {
-        baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
-        for(int i=0;i<(int)polyTokens.size();i++){
+        // baseName = AST::TrimPolyTypes(expr->name, &polyTokens);
+        AST::DecomposePolyTypes(expr->name, &baseName, &polyTypes);
+        for(int i=0;i<(int)polyTypes.size();i++){
             bool printedError = false;
-            TypeId id = CheckType(info, scopeId, polyTokens[i], expr->tokenRange, &printedError);
+            TypeId id = CheckType(info, scopeId, polyTypes[i], expr->location, &printedError);
             fnPolyArgs.add(id);
             // TODO: What about void?
             if(id.isValid()){
 
             } else if(!printedError) {
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange)
+                    ERR_HEAD2(expr->location) // nocheckin, mark all tokens in the expression,location is just one token
                     ERR_MSG("Type for polymorphic argument was not valid.")
-                    ERR_LINE(expr->tokenRange,"bad")
+                    ERR_LINE2(expr->location,"bad")
                 )
             }
         }
@@ -569,7 +582,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     if(operatorOverloadAttempt){
         Assert(operatorArgs);
         if(operatorArgs->size() != 2) {
-            return SignalAttempt::FAILURE;   
+            return SIGNAL_FAILURE;
         }
         argTypes.resize(operatorArgs->size());
         memcpy(argTypes.data(), operatorArgs->data(), operatorArgs->size() * sizeof(TypeId)); // TODO: Use TintArray::copyFrom() instead (function not implemented yet)
@@ -580,22 +593,22 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         //   we want to separate how many types we get from each expression.
         //   If an expression gives us more than one type then we throw away the other ones.
         //   We might throw an error instead haven't decided yet.
-        // SignalAttempt resultLeft = CheckExpression(info,scopeId,expr->left,&tempTypes, true);
+        // SignalIO resultLeft = CheckExpression(info,scopeId,expr->left,&tempTypes, true);
         // if(tempTypes.size()==0){
         //     argTypes.add(AST_VOID);
         // } else {
         //     argTypes.add(tempTypes[0]);
         // }
         // tempTypes.resize(0);
-        // SignalAttempt resultRight = CheckExpression(info,scopeId,expr->right,&tempTypes, true);
+        // SignalIO resultRight = CheckExpression(info,scopeId,expr->right,&tempTypes, true);
         // if(tempTypes.size()==0){
         //     argTypes.add(AST_VOID);
         // } else {
         //     argTypes.add(tempTypes[0]);
         // }
         // tempTypes.resize(0);
-        // if(resultLeft != SignalAttempt::SUCCESS || resultRight != SignalAttempt::SUCCESS)
-        //     return SignalAttempt::FAILURE; // should be a failure since the expressions actually failed
+        // if(resultLeft != SIGNAL_SUCCESS || resultRight != SIGNAL_SUCCESS)
+        //     return SIGNAL_FAILURE; // should be a failure since the expressions actually failed
         // Assert(argTypes.size() == 2);
 
     } else {
@@ -610,11 +623,17 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             tempTypes.resize(0);
             CheckExpression(info,scopeId,argExpr,&tempTypes, false);
             Assert(tempTypes.size()==1); // should be void at least
-            if(expr->isMemberCall() && i==0){
+            if(expr->hasImplicitThis() && i==0){
+                /* You can do this
+                    l: List;
+                    p := &l;
+                    list.add(1) // here, the type of "this" is not a pointer so we implicitly reference the variable
+                    p.add(2) // here, the type is a pointer so everything is fine
+                */
                 if(tempTypes[0].getPointerLevel()>1){
-                    thisFailed=true;
+                    thisFailed=true; // We do not allow calling function from type 'List**'
                 } else {
-                    tempTypes[0].setPointerLevel(1);
+                    tempTypes[0].setPointerLevel(1); // type is either 'List' or 'List*' both are fine
                 }
             }
             // log::out << "Yes "<< info.ast->typeToString(tempTypes[0])<<"\n";
@@ -623,7 +642,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         // cannot continue if we don't know which struct the method comes from
         if(thisFailed) {
             FNCALL_FAIL
-            return SignalAttempt::FAILURE;
+            return SIGNAL_FAILURE;
         }
     }
 
@@ -631,7 +650,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     FnOverloads* fnOverloads = nullptr;
     StructImpl* parentStructImpl = nullptr;
     ASTStruct* parentAstStruct = nullptr;
-    if(expr->isMemberCall()){
+    if(expr->hasImplicitThis()){
         // Assert(expr->args->size()>0);
         // ASTExpression* thisArg = expr->args->get(0);
         Assert(expr->args.size()>0);
@@ -640,32 +659,32 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         // CheckExpression(info,scope, thisArg, &structType);
         if(structType.getPointerLevel()>1){
             ERR_SECTION(
-                ERR_HEAD(thisArg->tokenRange)
+                ERR_HEAD2(thisArg->location) // nocheckin, badly marked token
                 ERR_MSG("'"<<info.ast->typeToString(structType)<<"' to much of a pointer.")
-                ERR_LINE(thisArg->tokenRange,"must be a reference to a struct")
+                ERR_LINE2(thisArg->location,"must be a reference to a struct")
             )
             FNCALL_FAIL
-            return SignalAttempt::FAILURE;
+            return SIGNAL_FAILURE;
         }
         TypeInfo* ti = info.ast->getTypeInfo(structType.baseType());
         
         if(!ti || !ti->astStruct){
             ERR_SECTION(
-                ERR_HEAD(expr->tokenRange)
+                ERR_HEAD2(expr->location)// nocheckin, badly marked token
                 ERR_MSG("'"<<info.ast->typeToString(structType)<<"' is not a struct. Method cannot be called.")
-                ERR_LINE(thisArg->tokenRange,"not a struct")
+                ERR_LINE2(thisArg->location,"not a struct")
             )
             FNCALL_FAIL
-            return SignalAttempt::FAILURE;
+            return SIGNAL_FAILURE;
         }
         if(!ti->getImpl()){
             ERR_SECTION(
-                ERR_HEAD(expr->tokenRange)
+                ERR_HEAD2(expr->location) // nocheckin, badly marked token
                 ERR_MSG("'"<<info.ast->typeToString(structType)<<"' is a polymorphic struct with not poly args specified.")
-                ERR_LINE(thisArg->tokenRange,"base polymorphic struct")
+                ERR_LINE2(thisArg->location,"base polymorphic struct")
             )
             FNCALL_FAIL
-            return SignalAttempt::FAILURE;
+            return SIGNAL_FAILURE;
         }
         parentStructImpl = ti->structImpl;
         parentAstStruct = ti->astStruct;
@@ -673,15 +692,15 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
 
         if(!fnOverloads) {
             if(operatorOverloadAttempt || attempt)
-                return SignalAttempt::BAD_ATTEMPT;
+                return SIGNAL_NO_MATCH;
 
             ERR_SECTION(
-                ERR_HEAD(expr->tokenRange)
+                ERR_HEAD2(expr->location) // nocheckin, badly marked token
                 ERR_MSG("Method '"<<baseName <<"' does not exist. Did you mispell the name?")
-                ERR_LINE(baseName,"undefined")
+                ERR_LINE2(expr->location,"undefined")
             )
             FNCALL_FAIL
-            return SignalAttempt::FAILURE;
+            return SIGNAL_NO_MATCH;
         }
     } else {
         if(info.currentAstFunc && info.currentAstFunc->parentStruct) {
@@ -698,15 +717,15 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             Identifier* iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), baseName);
             if(!iden || iden->type != Identifier::FUNCTION){
                 if(operatorOverloadAttempt || attempt)
-                    return SignalAttempt::BAD_ATTEMPT;
+                    return SIGNAL_NO_MATCH;
 
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange)
+                    ERR_HEAD2(expr->location)
                     ERR_MSG("Function '"<<baseName <<"' does not exist. Did you forget an import?")
-                    ERR_LINE(baseName,"undefined")
+                    ERR_LINE2(expr->location,"undefined")
                 )
                 FNCALL_FAIL
-                return SignalAttempt::FAILURE;
+                return SIGNAL_FAILURE;
             }
             fnOverloads = &iden->funcOverloads;
         }
@@ -720,7 +739,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         if(!overload)
             overload = fnOverloads->getOverload(info.ast, argTypes, expr, true);
         if(operatorOverloadAttempt && !overload)
-            return SignalAttempt::BAD_ATTEMPT;
+            return SIGNAL_NO_MATCH;
         if(overload){
             if(overload->astFunc->body && overload->funcImpl->usages == 0){
                 CheckInfo::CheckImpl checkImpl{};
@@ -734,7 +753,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                 auto& argImpl = overload->funcImpl->argumentTypes[i];
                 auto& arg = overload->astFunc->arguments[i];;
                 tempTypes.resize(0);
-                SignalAttempt result = CheckExpression(info, scopeId, arg.defaultValue,&tempTypes,false);
+                SignalIO result = CheckExpression(info, scopeId, arg.defaultValue,&tempTypes,false);
                 //  DynamicArray<TypeId> temp{};
                 // info.temp_defaultArgs.resize(0);
                 // CheckExpression(info,func->scopeId, arg.defaultValue, &info.temp_defaultArgs, false);
@@ -745,17 +764,17 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                     std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
                     std::string argtype = info.ast->typeToString(argImpl.typeId);
                     ERR_SECTION(
-                        ERR_HEAD(arg.defaultValue->tokenRange)
+                        ERR_HEAD2(arg.defaultValue->location)
                         ERR_MSG("Type of default value does not match type of argument.")
-                        ERR_LINE(arg.defaultValue->tokenRange,deftype.c_str())
-                        ERR_LINE(arg.name,argtype.c_str())
+                        ERR_LINE2(arg.defaultValue->location,deftype.c_str())
+                        ERR_LINE2(arg.location,argtype.c_str())
                     )
                     continue; // continue when failing
                 }
             }
 
             FNCALL_SUCCESS
-            return SignalAttempt::SUCCESS;
+            return SIGNAL_SUCCESS;
         }
         // TODO: Implicit call to polymorphic functions. Currently throwing error instead.
         //  Should be done in generator too.
@@ -763,10 +782,10 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             // Arguments for fname does not match an overload. These were the arguments:
             // These are the valid overloads: 
             ERR_SECTION(
-                ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
+                ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
                 // custom code for error message
                 log::out << "Arguments for '"<<baseName <<"' does not match an overload.\n";
-                ERR_LINE(expr->tokenRange, "bad");
+                ERR_LINE2(expr->location, "bad");
                 log::out << "These were the arguments: ";
                 if(argTypes.size()==0){
                     log::out << "zero arguments";
@@ -805,7 +824,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                 if(fnOverloads->polyOverloads.size()!=0){
                     log::out << log::YELLOW<<"(implicit call to polymorphic function is not implemented)\n";
                 }
-                if(expr->args.size()!=0 && expr->args.get(0)->namedValue.str){
+                if(expr->args.size()!=0 && expr->args.get(0)->namedValue.ptr){
                     log::out << log::YELLOW<<"(named arguments cannot identify overloads)\n";
                 }
                 // if(expr->args->size()!=0 && expr->args->get(0)->namedValue.str){
@@ -815,7 +834,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                 // TODO: show list of available overloaded function args
             ) 
             FNCALL_FAIL
-            return SignalAttempt::FAILURE;
+            return SIGNAL_FAILURE;
         }
         implicitPoly = true;
         // if implicit polymorphism then
@@ -833,10 +852,10 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     // if(expr->hasImplicitThis()) {
 
     //     ERR_SECTION(
-    //         ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
+    //         ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
     //         // custom code for error message
     //         log::out << "Arguments for '"<<baseName <<"' does not match an overload.\n";
-    //         ERR_LINE(expr->tokenRange, "bad");
+    //         ERR_LINE2(expr->location, "bad");
     //         log::out << "These were the arguments: ";
     //         if(argTypes.size()==0){
     //             log::out << "zero arguments";
@@ -885,7 +904,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     //         // TODO: show list of available overloaded function args
     //     ) 
     //     FNCALL_FAIL
-    //     return SignalAttempt::FAILURE;   
+    //     return SIGNAL_FAILURE;   
     // }
     
     // TODO: Allow implicit cast. Same as we do with normal functions.
@@ -895,14 +914,14 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     if(overload){
         overload->funcImpl->usages++;
         FNCALL_SUCCESS
-        return SignalAttempt::SUCCESS;
+        return SIGNAL_SUCCESS;
     }
     // bool useCanCast = false;
     overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, expr, implicitPoly, true);
     if(overload){
         overload->funcImpl->usages++;
         FNCALL_SUCCESS
-        return SignalAttempt::SUCCESS;
+        return SIGNAL_SUCCESS;
     }
 
     // Hello!
@@ -980,12 +999,13 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                 ScopeId argScope = overload.astFunc->scopeId;
 
                 TypeId stringType = overload.astFunc->arguments[j + lessArguments].stringType;
-                Token typeString = info.ast->getTokenFromTypeString(stringType);
+                auto typeString = info.ast->getStringFromTypeString(stringType);
 
                 u32 plevel=0;
-                polyTokens.resize(0);
-                Token typeName = AST::TrimPointer(typeString, &plevel);
-                Token baseToken = AST::TrimPolyTypes(typeName, &polyTokens);
+                polyTypes.resize(0);
+                StringView typeName, baseToken;
+                AST::DecomposePointer(typeString, &typeName, &plevel);
+                AST::DecomposePolyTypes(typeName, &baseToken, &polyTypes);
                 // namespace?
 
                 // TypeId baseType = info.ast->convertToTypeId(baseToken, argScope, false);
@@ -1001,7 +1021,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                     }
                 }
                 if(isVirtual) {
-                    if(polyTokens.size() != 0){
+                    if(polyTypes.size() != 0){
                         // This code should allow implicit calculation of incomplete polymorphic types.
                         // This sould be allowed: fn add<T>(a: T<i32>).
                         // But it's not so we get this: fn add<T>(a: T), no polymorphic types
@@ -1045,13 +1065,13 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                     // baseType isn't one of the polymorphic arguments
                     // we can't choose a polymorphic argument so things match
                     if(baseType.baseType() == typeToMatch.baseType()){
-                        if(typeToMatch.getPointerLevel() != plevel || polyTokens.size() != 0) {
+                        if(typeToMatch.getPointerLevel() != plevel || polyTypes.size() != 0) {
                             found = false; // pointers don't match or our baseType has some polyTokens which typeToMatch doesn't have.
                             break;
                         }
                         continue; // sweet, a simple match no polymorphic arguments to worry about
                     }
-                    if(polyTokens.size() == 0){
+                    if(polyTypes.size() == 0){
                         found = false; // alright, types can't possibly ever match no matter what polymorphic arguments we choose.
                         break;
                     }
@@ -1113,7 +1133,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             for (u32 j=0;j<expr->nonNamedArgs;j++){
                 // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
                 TypeId argType = CheckType(info, polyOverload->astFunc->scopeId,polyOverload->astFunc->arguments[j].stringType,
-                    polyOverload->astFunc->arguments[j].name,nullptr);
+                    polyOverload->astFunc->arguments[j].location,nullptr);
                 // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
                 // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
                 if(argType != argTypes[j]){
@@ -1166,7 +1186,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             for (u32 j=0;j<expr->nonNamedArgs;j++){
                 // log::out << "Arg:"<<info.ast->typeToString(overload.astFunc->arguments[j].stringType)<<"\n";
                 TypeId argType = CheckType(info, overload.astFunc->scopeId,overload.astFunc->arguments[j+lessArguments].stringType,
-                    overload.astFunc->arguments[j+lessArguments].name,nullptr);
+                    overload.astFunc->arguments[j+lessArguments].location,nullptr);
                 // TypeId argType = CheckType(info, scope->scopeId,overload.astFunc->arguments[j].stringType,
                 // log::out << "Arg: "<<info.ast->typeToString(argType)<<" = "<<info.ast->typeToString(argTypes[j])<<"\n";
                 if(!info.ast->castable(argTypes[j], argType)){
@@ -1195,7 +1215,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     }
     if(!polyFunc){
         ERR_SECTION(
-            ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
+            ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
             ERR_MSG_LOG(
                 "Overloads for function '"<< log::LIME<< baseName << log::NO_COLOR <<"' does not match these argument(s): ";
                 if(argTypes.size()==0){
@@ -1210,16 +1230,16 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
                 log::out << log::YELLOW<<"(polymorphic functions could not be generated if there are any)\nTODO: Show list of available functions.\n";
                 log::out << "\n"
             )
-            ERR_LINE(expr->tokenRange, "bad");
+            ERR_LINE2(expr->location, "bad");
             // TODO: show list of available overloaded function args
         )
         FNCALL_FAIL
-        return SignalAttempt::FAILURE;
+        return SIGNAL_FAILURE;
     }
     ScopeInfo* funcScope = info.ast->getScope(polyFunc->scopeId);
     FuncImpl* funcImpl = info.ast->createFuncImpl(polyFunc);
     // FuncImpl* funcImpl = polyFunc->createImpl();
-    funcImpl->name = expr->name;
+    // funcImpl->name = expr->name;
     funcImpl->structImpl = parentStructImpl;
 
     funcImpl->polyArgs.resize(fnPolyArgs.size());
@@ -1229,7 +1249,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
         funcImpl->polyArgs[i] = id;
     }
     // TODO: What you are calling a struct method?  if (expr->boolvalue) do structmethod
-    SignalDefault result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, nullptr);
+    SignalIO result = CheckFunctionImpl(info,polyFunc,funcImpl,parentAstStruct, nullptr);
     // outTypes->used = 0; // FNCALL_SUCCESS will fix the types later, we don't want to add them twice
 
     FnOverloads::Overload* newOverload = fnOverloads->addPolyImplOverload(polyFunc, funcImpl);
@@ -1247,7 +1267,7 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
     Assert(overload == newOverload);
     if(!overload){
         ERR_SECTION(
-            ERR_HEAD(expr->tokenRange, ERROR_OVERLOAD_MISMATCH)
+            ERR_HEAD2(expr->location, ERROR_OVERLOAD_MISMATCH)
             ERR_MSG_LOG("Specified polymorphic arguments does not match with passed arguments for call to '"<<baseName <<"'.\n";
                 log::out << log::CYAN<<"Generates args: "<<log::NO_COLOR;
                 if(argTypes.size()==0){
@@ -1269,12 +1289,12 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             // TODO: show list of available overloaded function args
         )
         FNCALL_FAIL
-        return SignalAttempt::FAILURE;
+        return SIGNAL_FAILURE;
     } 
     FNCALL_SUCCESS
-    return SignalAttempt::SUCCESS;
+    return SIGNAL_SUCCESS;
 }
-SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt){
+SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, QuickArray<TypeId>* outTypes, bool attempt){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple);
     Assert(expr);
@@ -1295,82 +1315,81 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
     if(expr->isValue) {
         if(expr->typeId == AST_ID){
             // NOTE: When changing this code, don't forget to do the same with AST_SIZEOF. It also has code for AST_ID.
-            if(IsName(expr->name)){
-                // ScopeInfo* sc = info.ast->getScope(scopeId);
-                // sc->print(info.ast);
-                // TODO: What about enum?
-                auto iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name);
-                if(iden){
-                    expr->identifier = iden;
-                    if(iden->type == Identifier::VARIABLE){
-                        auto varinfo = info.ast->getVariableByIdentifier(iden);
-                        if(varinfo){
-                            if(outTypes) outTypes->add(varinfo->versions_typeId[info.currentPolyVersion]);
-                        }
-                    } else if(iden->type == Identifier::FUNCTION) {
-                        if(iden->funcOverloads.overloads.size() == 1) {
-                            auto overload = &iden->funcOverloads.overloads[0];
-                            CallConventions expected_convention = CallConventions::UNIXCALL;
-                            if(info.compileInfo->compileOptions->target == TARGET_WINDOWS_x64)
-                                expected_convention = CallConventions::STDCALL;
-                            if(info.compileInfo->compileOptions->target == TARGET_UNIX_x64)
-                                expected_convention = CallConventions::UNIXCALL;
-                            if (overload->astFunc->callConvention != expected_convention) {
-                                ERR_SECTION(
-                                    ERR_HEAD(expr->tokenRange)
-                                    ERR_MSG("You can only take a reference from functions that use "<<ToString(expected_convention)<<" (calling convention). The system for function pointers is a temporary solution and can't support anything else. But it exists at least; making threads possible.")
-                                    ERR_LINE(expr->tokenRange, "function must use stdcall")
-                                )
-                                if(outTypes) outTypes->add(AST_VOID);
-                            } else {
-                                if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                                    CheckInfo::CheckImpl checkImpl{};
-                                    checkImpl.astFunc = overload->astFunc;
-                                    checkImpl.funcImpl = overload->funcImpl;
-                                    info.checkImpls.add(checkImpl);
-                                }
-                                overload->funcImpl->usages++;
-                                if(outTypes) outTypes->add(AST_FUNC_REFERENCE);
-                            }
-                        } else {
+            //   Some time later...
+            //   Oh, nice comment! Good job me. - Emarioo, 2024-02-03
+            
+            // ScopeInfo* sc = info.ast->getScope(scopeId);
+            // sc->print(info.ast);
+            // TODO: What about enum?
+            auto iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), expr->name);
+            if(iden){
+                expr->identifier = iden;
+                if(iden->type == Identifier::VARIABLE){
+                    auto varinfo = info.ast->getVariableByIdentifier(iden);
+                    if(varinfo){
+                        if(outTypes) outTypes->add(varinfo->versions_typeId[info.currentPolyVersion]);
+                    }
+                } else if(iden->type == Identifier::FUNCTION) {
+                    if(iden->funcOverloads.overloads.size() == 1) {
+                        auto overload = &iden->funcOverloads.overloads[0];
+                        CallConventions expected_convention = CallConventions::UNIXCALL;
+                        if(info.compileInfo->compileOptions->target == TARGET_WINDOWS_x64)
+                            expected_convention = CallConventions::STDCALL;
+                        if(info.compileInfo->compileOptions->target == TARGET_UNIX_x64)
+                            expected_convention = CallConventions::UNIXCALL;
+                        if (overload->astFunc->callConvention != expected_convention) {
                             ERR_SECTION(
-                                ERR_HEAD(expr->tokenRange)
-                                ERR_MSG("Function is overloaded. Taking a reference would therefore be ambiguous. You must rename the function so that it only has one overload. There will be a better way to solve this in the future.")
-                                ERR_LINE(expr->tokenRange, "ambiguous")
+                                ERR_HEAD2(expr->location)
+                                ERR_MSG("You can only take a reference from functions that use "<<ToString(expected_convention)<<" (calling convention). The system for function pointers is a temporary solution and can't support anything else. But it exists at least; making threads possible.")
+                                ERR_LINE2(expr->location, "function must use stdcall")
                             )
                             if(outTypes) outTypes->add(AST_VOID);
+                        } else {
+                            if(overload->astFunc->body && overload->funcImpl->usages == 0){
+                                CheckInfo::CheckImpl checkImpl{};
+                                checkImpl.astFunc = overload->astFunc;
+                                checkImpl.funcImpl = overload->funcImpl;
+                                info.checkImpls.add(checkImpl);
+                            }
+                            overload->funcImpl->usages++;
+                            if(outTypes) outTypes->add(AST_FUNC_REFERENCE);
                         }
                     } else {
-                        INCOMPLETE
+                        ERR_SECTION(
+                            ERR_HEAD2(expr->location)
+                            ERR_MSG("Function is overloaded. Taking a reference would therefore be ambiguous. You must rename the function so that it only has one overload. There will be a better way to solve this in the future.")
+                            ERR_LINE2(expr->location, "ambiguous")
+                        )
+                        if(outTypes) outTypes->add(AST_VOID);
                     }
                 } else {
-                    // Perhaps it's an enum member?
-                    int memberIndex = -1;
-                    ASTEnum* astEnum = nullptr;
-                    bool found = info.ast->findEnumMember(scopeId, expr->name, info.getCurrentOrder(), &astEnum, &memberIndex);
-                    if(found){
-                        expr->enum_ast = astEnum;
-                        expr->enum_member = memberIndex;
-                        if(outTypes) outTypes->add(astEnum->actualType);
-                        return SignalAttempt::SUCCESS;
-                    } else if(astEnum) {
-                        ERR_SECTION(
-                            ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
-                            ERR_MSG("'"<<expr->name<<"' is not declared but a member of the enum '"<<astEnum->name<<"' could have matched if it wasn't @enclosed.")
-                            ERR_LINE(astEnum->members[memberIndex].name,"could have matched")
-                            ERR_LINE(expr->tokenRange,"undeclared")
-                        )
-                    } else {
-                        ERR_SECTION(
-                            ERR_HEAD(expr->tokenRange, ERROR_UNDECLARED)
-                            ERR_MSG("'"<<expr->name<<"' is not a declared variable.")
-                            ERR_LINE(expr->tokenRange,"undeclared")
-                        )
-                    }
-                    return SignalAttempt::FAILURE;
+                    INCOMPLETE
                 }
             } else {
-                // TODO: What to do with type? Return some type object?
+                // Perhaps it's an enum member?
+                int memberIndex = -1;
+                ASTEnum* astEnum = nullptr;
+                bool found = info.ast->findEnumMember(scopeId, expr->name, info.getCurrentOrder(), &astEnum, &memberIndex);
+                if(found){
+                    expr->enum_ast = astEnum;
+                    expr->enum_member = memberIndex;
+                    if(outTypes) outTypes->add(astEnum->actualType);
+                    return SIGNAL_SUCCESS;
+                } else if(astEnum) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location, ERROR_UNDECLARED)
+                        ERR_MSG("'"<<expr->name<<"' is not declared but a member of the enum '"<<astEnum->name<<"' could have matched if it wasn't @enclosed.")
+                        ERR_LINE2(astEnum->members[memberIndex].location,"could have matched")
+                        ERR_LINE2(expr->location,"undeclared")
+                    )
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(expr->location, ERROR_UNDECLARED)
+                        ERR_MSG("'"<<expr->name<<"' is not a declared variable.")
+                        ERR_LINE2(expr->location,"undeclared")
+                    )
+                }
+                return SIGNAL_FAILURE;
             }
         } else if(expr->typeId == AST_FNCALL){
             CheckFncall(info,scopeId,expr, outTypes, attempt, false);
@@ -1381,10 +1400,10 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
             if(expr->flags & ASTNode::NULL_TERMINATED) {
-                TypeId theType = CheckType(info, scopeId, "char*", expr->tokenRange, nullptr);
+                TypeId theType = CheckType(info, scopeId, "char*", expr->location, nullptr);
                 Assert(theType.isValid()); if(outTypes) outTypes->add(theType);
             } else {
-                TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+                TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->location, nullptr);
                 Assert(theType.isValid());
                 if(outTypes) outTypes->add(theType);
             } 
@@ -1394,10 +1413,12 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             if(expr->left->typeId == AST_ID){
                 // AST_ID could result in a type or a variable
                 Identifier* iden = nullptr;
-                Token& name = expr->left->name;
+                auto& name = expr->left->name;
                 // TODO: Handle function pointer type
                 // This code may need to update when code for AST_ID does
-                if(IsName(name) && (iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name)) && iden->type==Identifier::VARIABLE){
+
+                // if(IsName(name) && (iden = ...   nocheckin, I REMOVED 'IsName', IN THE 2.1 REWRITE WAS THAT OKAY?
+                if((iden = info.ast->findIdentifier(scopeId, info.getCurrentOrder(), name)) && iden->type==Identifier::VARIABLE){
                     auto var = info.ast->getVariableByIdentifier(iden);
                     Assert(var);
                     if(var){
@@ -1406,13 +1427,13 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 } else {
                     // auto sc = info.ast->getScope(scopeId);
                     // sc->print(info.ast);
-                    finalType = CheckType(info, scopeId, name, expr->tokenRange, nullptr);
+                    finalType = CheckType(info, scopeId, name, expr->location, nullptr);
                 }
             }
             if(!finalType.isValid()) {
                 // DynamicArray<TypeId> temps{};
                 typeArray.resize(0);
-                SignalAttempt result = CheckExpression(info, scopeId, expr->left, &typeArray, attempt);
+                SignalIO result = CheckExpression(info, scopeId, expr->left, &typeArray, attempt);
                 finalType = typeArray.size()==0 ? AST_VOID : typeArray.last();
             }
             if(finalType.isValid()) {
@@ -1427,19 +1448,19 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                     expr->versions_constStrIndex[info.currentPolyVersion] = index;
                     // expr->constStrIndex = index;
 
-                    TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+                    TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->location, nullptr);
                     if(outTypes)  outTypes->add(theType);
                 } else if(expr->typeId == AST_TYPEID) {
                     
                     expr->versions_outTypeTypeid[info.currentPolyVersion] = finalType;
                     
                     const char* tname = "lang_TypeId";
-                    TypeId theType = CheckType(info, scopeId, tname, expr->tokenRange, nullptr);
+                    TypeId theType = CheckType(info, scopeId, tname, expr->location, nullptr);
                     if(!theType.isValid()) {
                         ERR_SECTION(
-                            ERR_HEAD(expr->tokenRange)
+                            ERR_HEAD2(expr->location)
                             ERR_MSG("'"<<tname << "' was not a valid type. Did you forget to #import \"Lang\".")
-                            ERR_LINE(expr->tokenRange, "bad")
+                            ERR_LINE2(expr->location, "bad")
                         )
                     }
                     if(outTypes)  outTypes->add(theType);
@@ -1459,7 +1480,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             // // Assert(constString);
             // expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
-            // TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->tokenRange, nullptr);
+            // TypeId theType = CheckType(info, scopeId, "Slice<char>", expr->location, nullptr);
             TypeId theType = AST_VOID;
             theType.setPointerLevel(1);
             if(outTypes)
@@ -1498,12 +1519,12 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             if(str && operatorArgs.size() == 2) {
                 
                 expr->nonNamedArgs = 2; // unless operator overloading <- what do i mean by this - Emarioo 2023-12-19
-                SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
+                SignalIO result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
                 
-                if(result == SignalAttempt::SUCCESS)
-                    return SignalAttempt::SUCCESS;
+                if(result == SIGNAL_SUCCESS)
+                    return SIGNAL_SUCCESS;
 
-                if(result != SignalAttempt::BAD_ATTEMPT)
+                if(result != SIGNAL_NO_MATCH)
                     return result;
             }
         }
@@ -1524,9 +1545,9 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 if(outTypes) {
                     if(outTypes->last().getPointerLevel()==0){
                         ERR_SECTION(
-                            ERR_HEAD(expr->left->tokenRange)
+                            ERR_HEAD2(expr->left->location)
                             ERR_MSG("Cannot dereference non-pointer.")
-                            ERR_LINE(expr->left->tokenRange,info.ast->typeToString(outTypes->last()));
+                            ERR_LINE2(expr->left->location,info.ast->typeToString(outTypes->last()));
                         )
                     }else{
                         outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
@@ -1547,14 +1568,14 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                     bool found = typeInfo->astEnum->getMember(expr->name, &enumValue);
                     if (!found) {
                         ERR_SECTION(
-                            ERR_HEAD(expr->tokenRange)
+                            ERR_HEAD2(expr->location)
                             ERR_MSG("'"<<expr->name << "' is not a member of enum " << typeInfo->astEnum->name <<".")
                         )
-                        return SignalAttempt::FAILURE;
+                        return SIGNAL_FAILURE;
                     }
 
                     if(outTypes) outTypes->add(typeInfo->id);
-                    return SignalAttempt::SUCCESS;
+                    return SIGNAL_SUCCESS;
                 }
             }
             // DynamicArray<TypeId> typeArray{};
@@ -1581,7 +1602,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 } else {
                     std::string msgtype = "not member of "+info.ast->typeToString(leftType);
                     ERR_SECTION(
-                        ERR_HEAD(expr->tokenRange)
+                        ERR_HEAD2(expr->location)
                         ERR_MSG_LOG("'"<<expr->name<<"' is not a member in struct '"<<info.ast->typeToString(leftType)<<"'.";
                             log::out << "These are the members: ";
                             for(int i=0;i<(int)ti->astStruct->members.size();i++){
@@ -1592,22 +1613,22 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                             log::out <<"\n";
                             log::out << "\n"
                         )
-                        ERR_LINE(expr->name,msgtype.c_str());
+                        ERR_LINE2(expr->location,msgtype.c_str());
                     )
                     if(outTypes)
                         outTypes->add(AST_VOID);
-                    return SignalAttempt::FAILURE;
+                    return SIGNAL_FAILURE;
                 }
             } else {
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange)
+                    ERR_HEAD2(expr->location)
                     ERR_MSG("Member access only works on variable with a struct type and enums. The type '" << info.ast->typeToString(typeArray.last()) << "' is neither (astStruct/astEnum were null).")
-                    ERR_LINE(expr->left->tokenRange,"cannot take a member from this")
-                    ERR_LINE(expr->name,"member to access")
+                    ERR_LINE2(expr->left->location,"cannot take a member from this")
+                    ERR_LINE2(expr->location,"member to access")
                 )
                 if(outTypes)
                     outTypes->add(AST_VOID);
-                return SignalAttempt::FAILURE;
+                return SIGNAL_FAILURE;
             }
             break;
         }
@@ -1647,12 +1668,12 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             // }
             // if(expr->left && expr->right) {
             //     expr->nonNamedArgs = 2; // unless operator overloading
-            //     SignalAttempt result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
+            //     SignalIO result = CheckFncall(info,scopeId,expr, outTypes, attempt, true, &operatorArgs);
                 
-            //     if(result == SignalAttempt::SUCCESS)
-            //         return SignalAttempt::SUCCESS;
+            //     if(result == SIGNAL_SUCCESS)
+            //         return SIGNAL_SUCCESS;
 
-            //     if(result != SignalAttempt::BAD_ATTEMPT)
+            //     if(result != SIGNAL_NO_MATCH)
             //         return result;
             // }
             // DynamicArray<TypeId> typeArray{};
@@ -1662,13 +1683,13 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             if(leftType.getPointerLevel()==0){
                 if(!attempt) {
                     ERR_SECTION(
-                        ERR_HEAD(expr->left->tokenRange)
+                        ERR_HEAD2(expr->left->location)
                         ERR_MSG("Cannot index non-pointer.")
-                        ERR_LINE(expr->left->tokenRange,info.ast->typeToString(leftType))
+                        ERR_LINE2(expr->left->location,info.ast->typeToString(leftType))
                     )
-                    return SignalAttempt::FAILURE;
+                    return SIGNAL_FAILURE;
                 }
-                return SignalAttempt::BAD_ATTEMPT;
+                return SIGNAL_NO_MATCH;
             }else{
                 if(outTypes){
                     outTypes->add(leftType);
@@ -1685,7 +1706,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             // if(expr->right) {
             //     CheckExpression(info,scopeId, expr->right, nullptr, attempt);
             // }
-            TypeId theType = CheckType(info, scopeId, "Range", expr->tokenRange, nullptr);
+            TypeId theType = CheckType(info, scopeId, "Range", expr->location, nullptr);
             if(outTypes) outTypes->add(theType);
             break;
         }
@@ -1696,14 +1717,14 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                 // DynamicArray<TypeId> temp={};
                 CheckExpression(info, scopeId, arg_expr, nullptr, attempt);
             }
-            auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, nullptr);
+            auto ti = CheckType(info, scopeId, expr->castType, expr->location, nullptr);
             if(!ti.isValid()) {
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange)
+                    ERR_HEAD2(expr->location)
                     ERR_MSG("'"<<info.ast->typeToString(expr->castType)<<"' is not a type.")
-                    ERR_LINE(expr->tokenRange,"bad")
+                    ERR_LINE2(expr->location,"bad")
                 )
-                return SignalAttempt::FAILURE;
+                return SIGNAL_FAILURE;
             }
             if(outTypes)
                 outTypes->add(ti);
@@ -1718,14 +1739,14 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
 
             Assert(expr->castType.isString());
             bool printedError = false;
-            auto ti = CheckType(info, scopeId, expr->castType, expr->tokenRange, &printedError);
+            auto ti = CheckType(info, scopeId, expr->castType, expr->location, &printedError);
             if (ti.isValid()) {
 
             } else if(!printedError){
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange)
-                    ERR_MSG("Type "<<info.ast->getTokenFromTypeString(expr->castType) << " does not exist.")
-                    ERR_LINE(expr->tokenRange,"bad")
+                    ERR_HEAD2(expr->location)
+                    ERR_MSG("Type "<<info.ast->getStringFromTypeString(expr->castType) << " does not exist.")
+                    ERR_LINE2(expr->location,"bad")
                 )
             }
             if(outTypes)
@@ -1751,29 +1772,29 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
                         std::string strleft = info.ast->typeToString(typeArray.last()) + " ("+std::to_string(ls)+")";
                         std::string strcast = info.ast->typeToString(ti)+ " ("+std::to_string(rs)+")";
                         ERR_SECTION(
-                            ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
+                            ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
                             ERR_MSG("cast_unsafe requires that both types have the same size. "<<ls << " != "<<rs<<"'.")
-                            ERR_LINE(expr->left->tokenRange,strleft)
-                            ERR_LINE(expr->tokenRange,strcast)
+                            ERR_LINE2(expr->left->location,strleft)
+                            ERR_LINE2(expr->location,strcast)
                             ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
                         )
                     }
                 }
             } else if (expr->left->typeId == AST_ASM) {
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange, )
+                    ERR_HEAD2(expr->location, )
                     ERR_MSG("You must use cast_unsafe to cast an inline assembly block. BE VERY careful as you are likely to make mistakes.")
-                    ERR_LINE(expr->tokenRange,"use cast_unsafe instead?")
+                    ERR_LINE2(expr->location,"use cast_unsafe instead?")
                     ERR_EXAMPLE_TINY("cast_unsafe<i32> asm { mov eax, 23 }")
                 )
             } else if(!info.ast->castable(typeArray.last(),ti)){
                 std::string strleft = info.ast->typeToString(typeArray.last());
                 std::string strcast = info.ast->typeToString(ti);
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange, ERROR_CASTING_TYPES)
+                    ERR_HEAD2(expr->location, ERROR_CASTING_TYPES)
                     ERR_MSG("'"<<strleft << "' cannot be casted to '"<<strcast<<"'. Perhaps you can cast to a type that can be casted to the type you want?")
-                    ERR_LINE(expr->left->tokenRange,strleft)
-                    ERR_LINE(expr->tokenRange,strcast)
+                    ERR_LINE2(expr->left->location,strleft)
+                    ERR_LINE2(expr->location,strcast)
                     ERR_EXAMPLE_TINY("cast<void*> cast<u64> number")
                 )
             }
@@ -1832,10 +1853,10 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         case AST_BXOR: {
             if(leftType != rightType) {
                 ERR_SECTION(
-                    ERR_HEAD(expr->tokenRange)
+                    ERR_HEAD2(expr->location)
                     ERR_MSG("Left and right type must be the same for binary AND, OR, XOR operations. The types were not the same.")
-                    ERR_LINE(expr->left->tokenRange, info.ast->typeToString(leftType))
-                    ERR_LINE(expr->right->tokenRange, info.ast->typeToString(rightType))
+                    ERR_LINE2(expr->left->location, info.ast->typeToString(leftType))
+                    ERR_LINE2(expr->right->location, info.ast->typeToString(rightType))
                 )
                 if(outTypes) {
                     // TODO: output poison type
@@ -1868,13 +1889,12 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
         }
         }
     }
-    return SignalAttempt::SUCCESS;
+    return SIGNAL_SUCCESS;
 }
 
-SignalDefault CheckRest(CheckInfo& info, ASTScope* scope);
 // Evaluates types and offset for the given function implementation
 // It does not modify ast func
-SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes){
+SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl, ASTStruct* parentStruct, QuickArray<TypeId>* outTypes){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -1910,7 +1930,7 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* fu
         // }
     };
 
-    _TCLOG(log::out << "Check func impl "<< funcImpl->name<<"\n";)
+    _TCLOG(log::out << "Check func impl "<< funcImpl->astFunction->name<<"\n";)
 
     // TODO: parentStruct argument may not be necessary since this function only calculates
     //  offsets of arguments and return values.
@@ -1928,16 +1948,16 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* fu
         auto& argImpl = funcImpl->argumentTypes[i];
         if(arg.stringType.isString()){
             bool printedError = false;
-            // Token token = info.ast->getTokenFromTypeString(arg.typeId);
-            auto ti = CheckType(info, func->scopeId, arg.stringType, func->tokenRange, &printedError);
+            // Token token = info.ast->getStringFromTypeString(arg.typeId);
+            auto ti = CheckType(info, func->scopeId, arg.stringType, func->location, &printedError);
             
             if(ti == AST_VOID){
                 if(!info.hasErrors()) { 
                     std::string msg = info.ast->typeToString(arg.stringType);
                     ERR_SECTION(
-                        ERR_HEAD(func->tokenRange)
+                        ERR_HEAD2(func->location)
                         ERR_MSG("Type '"<<msg<<"' is unknown. Did you misspell or forget to declare the type?")
-                        ERR_LINE(func->arguments[i].name,msg.c_str())
+                        ERR_LINE2(func->arguments[i].location,msg.c_str())
                     )
                 }
             } else if(ti.isValid()){
@@ -1946,9 +1966,9 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* fu
                 if(!info.hasErrors()) { 
                     std::string msg = info.ast->typeToString(arg.stringType);
                     ERR_SECTION(
-                        ERR_HEAD(func->tokenRange)
+                        ERR_HEAD2(func->location)
                         ERR_MSG("Type '"<<msg<<"' is unknown. Did you misspell it or is the compiler messing with you?")
-                        ERR_LINE(func->arguments[i].name,msg.c_str())
+                        ERR_LINE2(func->arguments[i].location,msg.c_str())
                     )
                 }
             }
@@ -1972,10 +1992,10 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* fu
         //         std::string deftype = info.ast->typeToString(info.temp_defaultArgs.last());
         //         std::string argtype = info.ast->typeToString(argImpl.typeId);
         //         ERR_SECTION(
-        //             ERR_HEAD(arg.defaultValue->tokenRange)
+        //             ERR_HEAD2(arg.defaultValue->location)
         //             ERR_MSG("Type of default value does not match type of argument.")
-        //             ERR_LINE(arg.defaultValue->tokenRange,deftype.c_str())
-        //             ERR_LINE(arg.name,argtype.c_str())
+        //             ERR_LINE2(arg.defaultValue->location,deftype.c_str())
+        //             ERR_LINE2(arg.name,argtype.c_str())
         //         )
         //         continue; // continue when failing
         //     }
@@ -2026,19 +2046,19 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* fu
         // TypeInfo* typeInfo = 0;
         if(retStringType.isString()){
             bool printedError = false;
-            auto ti = CheckType(info, func->scopeId, retStringType, func->tokenRange, &printedError);
+            auto ti = CheckType(info, func->scopeId, retStringType, func->location, &printedError);
             if(ti.isValid()){
             }else if(!printedError) {
                 ERR_SECTION(
-                    ERR_HEAD(func->returnValues[i].valueToken)
+                    ERR_HEAD2(func->returnValues[i].location)
                     ERR_MSG_LOG(
-                        "'"<<info.ast->getTokenFromTypeString(retStringType)<<"' is not a type.";
+                        "'"<<info.ast->getStringFromTypeString(retStringType)<<"' is not a type.";
                         // #ifdef DEBUG
                         log::out << " ("<<__func__<<")"; 
                         // #endif
                         log::out << "\n";
                     )
-                    ERR_LINE(func->returnValues[i].valueToken,"bad");
+                    ERR_LINE2(func->returnValues[i].location,"bad");
                 )
             }
             retImpl.typeId = ti;
@@ -2077,12 +2097,12 @@ SignalDefault CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* fu
     if(outTypes && funcImpl->returnTypes.size()==0){
         outTypes->add(AST_VOID);
     }
-    return SignalDefault::SUCCESS;
+    return SIGNAL_SUCCESS;
 }
 // Ensures that the function identifier exists.
 // Adds the overload for the function.
 // Checks if an existing overload would collide with the new overload.
-SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope){
+SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parentStruct, ASTScope* scope){
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER)
     
@@ -2092,10 +2112,10 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
             for(int j=0;j<(int)function->polyArgs.size();j++){
                 if(parentStruct->polyArgs[i].name == function->polyArgs[j].name){
                     ERR_SECTION(
-                        ERR_HEAD(function->polyArgs[j].name)
+                        ERR_HEAD2(function->polyArgs[j].location)
                         ERR_MSG("Name for polymorphic argument is already taken by the parent struct.")
-                        ERR_LINE(parentStruct->polyArgs[i].name,"taken")
-                        ERR_LINE(function->polyArgs[j].name,"unavailable")
+                        ERR_LINE2(parentStruct->polyArgs[i].location,"taken")
+                        ERR_LINE2(function->polyArgs[j].location,"unavailable")
                     )
                 }
             }
@@ -2127,10 +2147,10 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
         }
         if(iden->type != Identifier::FUNCTION){
             ERR_SECTION(
-                ERR_HEAD(function->tokenRange)
+                ERR_HEAD2(function->location)
                 ERR_MSG("'"<< function->name << "' is already defined as a non-function.")
             )
-            return SignalDefault::FAILURE;
+            return SIGNAL_FAILURE;
         }
         fnOverloads = &iden->funcOverloads;
         function->identifier = iden;
@@ -2159,23 +2179,23 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
         for(int i=0;i<(int)function->arguments.size();i++){
             // info.ast->printTypesFromScope(function->scopeId);
 
-            TypeId typeId = CheckType(info, function->scopeId, function->arguments[i].stringType, function->tokenRange, nullptr);
+            TypeId typeId = CheckType(info, function->scopeId, function->arguments[i].stringType, function->location, nullptr);
             // Assert(typeId.isValid());
             if(!typeId.isValid()){
                 std::string msg = info.ast->typeToString(function->arguments[i].stringType);
                 ERR_SECTION(
-                    ERR_HEAD(function->arguments[i].name)
+                    ERR_HEAD2(function->arguments[i].location)
                     ERR_MSG("Unknown type '"<<msg<<"' for parameter '"<<function->arguments[i].name<<"'" << ((function->parentStruct && i==0) ? " (this parameter is auto-generated for methods)" : "")<<".")
-                    ERR_LINE(function->arguments[i].name,msg.c_str())
+                    ERR_LINE2(function->arguments[i].location,msg.c_str())
                 )
                 // ERR_SECTION(
-            // ERR_HEAD(function->arguments[i].name.range(),
+            // ERR_HEAD2(function->arguments[i].name.range(),
                 //     "Unknown type '"<<msg<<"' for parameter '"<<function->arguments[i].name<<"'";
                 //     if(function->parentStruct && i==0){
                 //         log::out << " (this parameter is auto-generated for methods)";
                 //     }
                 //     log::out << ".\n\n";
-                //     ERR_LINE(function->arguments[i].name.range(),msg.c_str());
+                //     ERR_LINE2(function->arguments[i].name.range(),msg.c_str());
                 // )
             }
             argTypes.add(typeId);
@@ -2229,10 +2249,10 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
                     function->linkConvention != NATIVE) {
                 //  TODO: better error message which shows what and where the already defined variable/function is.
                 ERR_SECTION(
-                    ERR_HEAD(function->tokenRange)
+                    ERR_HEAD2(function->location)
                     ERR_MSG("Argument types are ambiguous with another overload of function '"<< function->name << "'.")
-                    ERR_LINE(ambiguousOverload->astFunc->tokenRange,"existing overload");
-                    ERR_LINE(function->tokenRange,"new ambiguous overload");
+                    ERR_LINE2(ambiguousOverload->astFunc->location,"existing overload");
+                    ERR_LINE2(function->location,"new ambiguous overload");
                 )
                 // print list of overloads?
             } else {
@@ -2241,24 +2261,24 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
         } else {
             if(iden && iden->funcOverloads.overloads.size()>0 && function->linkConvention == NATIVE) {
                 ERR_SECTION(
-                    ERR_HEAD(function->tokenRange)
+                    ERR_HEAD2(function->location)
                     ERR_MSG("There already is an overload of the native function '"<<function->name<<"'.")
-                    ERR_LINE(iden->funcOverloads.overloads[0].astFunc->tokenRange, "previous")
-                    ERR_LINE(function->tokenRange, "new")
+                    ERR_LINE2(iden->funcOverloads.overloads[0].astFunc->location, "previous")
+                    ERR_LINE2(function->location, "new")
                 )
             } else {
                 FuncImpl* funcImpl = info.ast->createFuncImpl(function);
                 // FuncImpl* funcImpl = function->createImpl();
-                funcImpl->name = function->name;
+                // funcImpl->name = function->name;
                 funcImpl->usages = 0;
                 fnOverloads->addOverload(function, funcImpl);
                 int overload_i = fnOverloads->overloads.size()-1;
                 if(parentStruct)
                     funcImpl->structImpl = parentStruct->nonPolyStruct;
                 // DynamicArray<TypeId> retTypes{}; // @unused
-                SignalDefault yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, nullptr);
+                SignalIO yes = CheckFunctionImpl(info, function, funcImpl, parentStruct, nullptr);
 
-                if(funcImpl->name == "main") {
+                if(function->name == "main") {
                     funcImpl->usages = 1;
                     CheckInfo::CheckImpl checkImpl{};
                     checkImpl.astFunc = fnOverloads->overloads[overload_i].astFunc;
@@ -2278,19 +2298,20 @@ SignalDefault CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* p
         }
     } else {
         if(fnOverloads->polyOverloads.size()!=0){
-            WARN_HEAD3(function->tokenRange,"Ambiguity for polymorphic overloads is not checked! '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n\n";)
+            log::out << log::YELLOW << "WARNING: Ambiguity for polymorphic overloads is not checked! (implementation incomplete) '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n";
+            // WARN_HEAD3(function->location,"Ambiguity for polymorphic overloads is not checked! '"<<log::LIME << function->name<<log::NO_COLOR<<"'\n\n";)
         }
         // Base poly overload is added without regard for ambiguity. It's hard to check ambiguity so to it later.
         fnOverloads->addPolyOverload(function);
     }
-    return SignalDefault::SUCCESS;
+    return SIGNAL_SUCCESS;
 }
-SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
+SignalIO CheckFunctions(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
     Assert(scope||info.errors!=0);
-    if(!scope) return SignalDefault::FAILURE;
+    if(!scope) return SIGNAL_FAILURE;
 
     // for(int index = 0; index < scope->contentOrder.size(); index++){
     //     auto& spot = scope->contentOrder[index];
@@ -2299,10 +2320,10 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     //             auto it = scope->statements[spot.index];
     //             if(it->hasNodes()){
     //                 if(it->firstBody){
-    //                     SignalDefault result = CheckFunctions(info, it->firstBody);   
+    //                     SignalIO result = CheckFunctions(info, it->firstBody);   
     //                 }
     //                 if(it->secondBody){
-    //                     SignalDefault result = CheckFunctions(info, it->secondBody);
+    //                     SignalIO result = CheckFunctions(info, it->secondBody);
     //                 }
     //             }
     //         }
@@ -2314,7 +2335,7 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     //             auto it = scope->functions[spot.index];
     //             CheckFunction(info, it, nullptr, scope);
     //             if(it->body){
-    //                 SignalDefault result = CheckFunctions(info, it->body);
+    //                 SignalIO result = CheckFunctions(info, it->body);
     //             }
     //         }
     //         break; case ASTScope::STRUCT: {
@@ -2322,7 +2343,7 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     //             for(auto fn : it->functions){
     //                 CheckFunction(info, fn , it, scope);
     //                 if(fn->body){ // external/native function do not have bodies
-    //                     SignalDefault result = CheckFunctions(info, fn->body);
+    //                     SignalIO result = CheckFunctions(info, fn->body);
     //                 }
     //             }
     //         }
@@ -2341,17 +2362,17 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     for(auto fn : scope->functions){
         CheckFunction(info, fn, nullptr, scope);
         if(fn->body){ // external/native function do not have bodies
-            SignalDefault result = CheckFunctions(info, fn->body);
+            SignalIO result = CheckFunctions(info, fn->body);
         }
     }
     for(auto it : scope->structs){
         for(auto fn : it->functions){
-            SignalDefault result = CheckFunction(info, fn , it, scope);
-            if(result != SignalDefault::SUCCESS) {
+            SignalIO result = CheckFunction(info, fn , it, scope);
+            if(result != SIGNAL_SUCCESS) {
                 log::out << log::RED <<  "Bad\n";
             }
             if(fn->body){ // external/native function do not have bodies
-                SignalDefault result = CheckFunctions(info, fn->body);
+                SignalIO result = CheckFunctions(info, fn->body);
             }
         }
     }
@@ -2359,18 +2380,18 @@ SignalDefault CheckFunctions(CheckInfo& info, ASTScope* scope){
     for(auto astate : scope->statements) {
         // if(astate->hasNodes()){
             if(astate->firstBody){
-                SignalDefault result = CheckFunctions(info, astate->firstBody);   
+                SignalIO result = CheckFunctions(info, astate->firstBody);   
             }
             if(astate->secondBody){
-                SignalDefault result = CheckFunctions(info, astate->secondBody);
+                SignalIO result = CheckFunctions(info, astate->secondBody);
             }
         // }
     }
     
-    return SignalDefault::SUCCESS;
+    return SIGNAL_SUCCESS;
 }
 
-SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
+SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcImpl){
     using namespace engone;
     _TCLOG_ENTER(FUNC_ENTER) // if(func->body->nativeCode)
     //     return true;
@@ -2383,7 +2404,7 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
     info.currentFuncImpl = funcImpl;
     info.currentAstFunc = func;
 
-    _TCLOG(log::out << "Impl scope: "<<funcImpl->name<<"\n";)
+    _TCLOG(log::out << "Impl scope: "<<funcImpl->astFunction->name<<"\n";)
 
     // if(func->parentStruct){
     //     for(int i=0;i<(int)func->parentStruct->polyArgs.size();i++){
@@ -2462,19 +2483,19 @@ SignalDefault CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* f
     }
     _TCLOG(log::out << "\n";)
 
-    // log::out << log::CYAN << "BODY " << log::NO_COLOR << func->body->tokenRange<<"\n";
+    // log::out << log::CYAN << "BODY " << log::NO_COLOR << func->body->location<<"\n";
     CheckRest(info, func->body);
     
     // for(auto& name : vars){
     //     info.ast->removeIdentifier(func->scopeId, name);
     // }
-    return SignalDefault::SUCCESS;
+    return SIGNAL_SUCCESS;
 }
-// SignalDefault CheckGlobals(CheckInfo& info, ASTScope* scope) {
+// SignalIO CheckGlobals(CheckInfo& info, ASTScope* scope) {
 
-//     return SignalDefault::SUCCESS;
+//     return SIGNAL_SUCCESS;
 // }
-SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
+SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
@@ -2539,7 +2560,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
         }
 
 
-        // #define print_t { auto ti = CheckType(info,scope->scopeId, "T", now->tokenRange, nullptr); log::out << "T = " << ti << "\n"; }
+        // #define print_t { auto ti = CheckType(info,scope->scopeId, "T", now->location, nullptr); log::out << "T = " << ti << "\n"; }
         // print_t
 
         //-- Check assign types in all varnames. The result is put in version_assignType for
@@ -2551,17 +2572,17 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 // log::out << "Check assign "<<varname.name<<"\n";
                 // info.ast->getScope(scope->scopeId)->print(info.ast);
                 bool printedError = false;
-                auto ti = CheckType(info, scope->scopeId, varname.assignString, now->tokenRange, &printedError);
+                auto ti = CheckType(info, scope->scopeId, varname.assignString, now->location, &printedError);
                 // NOTE: We don't care whether it's a pointer just that the type exists.
                 if (!ti.isValid() && !printedError) {
                     ERR_SECTION(
-                        ERR_HEAD(now->tokenRange)
-                        ERR_MSG("'"<<info.ast->getTokenFromTypeString(varname.assignString)<<"' is not a type (statement).")
-                        ERR_LINE(now->tokenRange,"bad")
+                        ERR_HEAD2(now->location)
+                        ERR_MSG("'"<<info.ast->getStringFromTypeString(varname.assignString)<<"' is not a type (statement).")
+                        ERR_LINE2(now->location,"bad")
                     )
                 } else {
                     // if(varname.arrayLength != 0){
-                    //     auto ti = CheckType(info, scope->scopeId, varname.assignString, now->tokenRange, &printedError);
+                    //     auto ti = CheckType(info, scope->scopeId, varname.assignString, now->location, &printedError);
                     // } else {
                         // If typeid is invalid we don't want to replace the invalid one with the type
                         // with the string. The generator won't see the names of the invalid types.
@@ -2575,7 +2596,7 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
         if(now->type == ASTStatement::CONTINUE || now->type == ASTStatement::BREAK){
             // nothing
         } else if(now->type == ASTStatement::BODY || now->type == ASTStatement::DEFER){
-            SignalDefault result = CheckRest(info, now->firstBody);
+            SignalIO result = CheckRest(info, now->firstBody);
         } else if(now->type == ASTStatement::EXPRESSION){
             CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
             // if(typeArray.size()==0)
@@ -2583,11 +2604,11 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
         } else if(now->type == ASTStatement::RETURN){
             for(auto ret : now->arrayValues){
                 typeArray.resize(0);
-                SignalAttempt result = CheckExpression(info, scope->scopeId, ret, &typeArray, false);
+                SignalIO result = CheckExpression(info, scope->scopeId, ret, &typeArray, false);
             }
         } else if(now->type == ASTStatement::IF){
-            SignalAttempt result1 = CheckExpression(info, scope->scopeId,now->firstExpression,&typeArray, false);
-            SignalDefault result = CheckRest(info, now->firstBody);
+            SignalIO result1 = CheckExpression(info, scope->scopeId,now->firstExpression,&typeArray, false);
+            SignalIO result = CheckRest(info, now->firstBody);
             if(now->secondBody){
                 result = CheckRest(info, now->secondBody);
             }
@@ -2606,18 +2627,18 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     // __debugbreak();
                     // log::out << "okay\n";
                 // }
-                SignalAttempt result = CheckExpression(info, scope->scopeId,now->firstExpression, &typeArray, false);
+                SignalIO result = CheckExpression(info, scope->scopeId,now->firstExpression, &typeArray, false);
                 for(int i=0;i<typeArray.size();i++){
                     if(typeArray[i].isValid() && typeArray[i] != AST_VOID)
                         continue;
                     ERR_SECTION(
-                        ERR_HEAD(now->firstExpression->tokenRange, ERROR_INVALID_TYPE)
+                        ERR_HEAD2(now->firstExpression->location, ERROR_INVALID_TYPE)
                         ERR_MSG("Expression must produce valid types for the assignment.")
-                        ERR_LINE(now->tokenRange, "this assignment")
+                        ERR_LINE2(now->location, "this assignment")
                         if(typeArray[i].isValid()) {
-                        ERR_LINE(now->firstExpression->tokenRange, info.ast->typeToString(typeArray[i]))
+                        ERR_LINE2(now->firstExpression->location, info.ast->typeToString(typeArray[i]))
                         } else {
-                        ERR_LINE(now->firstExpression->tokenRange, "no type?")
+                        ERR_LINE2(now->firstExpression->location, "no type?")
                         }
                     )
                 }
@@ -2629,10 +2650,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             if(now->firstExpression && poly_typeArray.size() < now->varnames.size()){
                 if(info.errors==0) {
                     ERR_SECTION(
-                        ERR_HEAD(now->tokenRange, ERROR_TOO_MANY_VARIABLES)
+                        ERR_HEAD2(now->location, ERROR_TOO_MANY_VARIABLES)
                         ERR_MSG("Too many variables were declared.")
-                        ERR_LINE(now->tokenRange, now->varnames.size() + " variables")
-                        ERR_LINE(now->firstExpression->tokenRange, poly_typeArray.size() + " return values")
+                        ERR_LINE2(now->location, now->varnames.size() + " variables")
+                        ERR_LINE2(now->firstExpression->location, poly_typeArray.size() + " return values")
                     )
                     hadError = true;
                 }
@@ -2646,9 +2667,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 const auto err_non_variable = [&]() {
                     // TODO: Print what type the identifier is. Don't just say non-variable
                     ERR_SECTION(
-                        ERR_HEAD(varname.name)
+                        ERR_HEAD2(varname.location)
                         ERR_MSG("'"<<varname.name<<"' is defined as a non-variable and cannot be used.")
-                        ERR_LINE(varname.name, "bad")
+                        ERR_LINE2(varname.location, "bad")
                     )
                 };
 
@@ -2662,9 +2683,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
                         if(!possible_identifier) {
                             ERR_SECTION(
-                                ERR_HEAD(varname.name)
+                                ERR_HEAD2(varname.location)
                                 ERR_MSG("'"<<varname.name<<"' is not a defined identifier. You have to declare the variable first.")
-                                ERR_LINE(varname.name, "undeclared")
+                                ERR_LINE2(varname.location, "undeclared")
                                 ERR_EXAMPLE(1,"var: i32 = 12;")
                                 ERR_EXAMPLE(2,"var := 23;  // inferred type")
                             )
@@ -2688,9 +2709,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             //  // out of bounds
                             // if(!hadError){ // error may have been printed above
                             //     ERR_SECTION(
-                            //         ERR_HEAD(varname.name)
+                            //         ERR_HEAD2(varname.name)
                             //         ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
-                            //         ERR_LINE(varname.name, "typeless");
+                            //         ERR_LINE2(varname.name, "typeless");
                             //     )
                             // }
                         }
@@ -2728,9 +2749,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                                 //  - Emarioo, 2023-12-29 (By the way, merry christmas and happy new year!)
                                 if(possible_identifier->order != contentOrder) {
                                     ERR_SECTION(
-                                        ERR_HEAD(varname.name)
+                                        ERR_HEAD2(varname.location)
                                         ERR_MSG("Cannot redeclare variables. Identifier shadowing not implemented yet\n")
-                                        ERR_LINE(varname.name,"");
+                                        ERR_LINE2(varname.location,"");
                                     )
                                     continue;
                                 } else {
@@ -2752,9 +2773,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                                 //  - Emarioo, 2024-1-03
                                 // if(now->globalAssignment && scope->scopeId != 0) {
                                 //     ERR_SECTION(
-                                //         ERR_HEAD(now->tokenRange)
+                                //         ERR_HEAD2(now->location)
                                 //         ERR_MSG("Global assignment in local scope not implemented. Move global variable to global scope or remove the global keyword. In the future, ")
-                                //         ERR_LINE(now->tokenRange, "can't be global")
+                                //         ERR_LINE2(now->location, "can't be global")
                                 //     )
                                 //     // TODO: Global assignment needs extra code.
                                 //     //  We should not add variable into 'scope->scopeId' like we do above
@@ -2837,9 +2858,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             //  - Emarioo, 2023-12-29 (By the way, merry christmas and happy new year!)
                             if(varname.identifier->order != contentOrder) {
                                 ERR_SECTION(
-                                    ERR_HEAD(varname.name)
+                                    ERR_HEAD2(varname.name)
                                     ERR_MSG("Cannot redeclare variables. Identifier shadowing not implemented yet\n")
-                                    ERR_LINE(varname.name,"");
+                                    ERR_LINE2(varname.name,"");
                                 )
                                 continue;
                             } else {
@@ -2869,18 +2890,18 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             std::string leftstr = info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]);
                             std::string rightstr = info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]);
                             ERR_SECTION(
-                                ERR_HEAD(now->tokenRange, ERROR_TYPE_MISMATCH)
+                                ERR_HEAD2(now->location, ERROR_TYPE_MISMATCH)
                                 ERR_MSG("Type mismatch '"<<leftstr<<"' <- '"<<rightstr<< "' in assignment.")
-                                ERR_LINE(varname.name, leftstr.c_str())
-                                ERR_LINE(now->firstExpression->tokenRange,rightstr.c_str())
+                                ERR_LINE2(varname.name, leftstr.c_str())
+                                ERR_LINE2(now->firstExpression->location,rightstr.c_str())
                             )
                         }
                     }
                 } else {
                     ERR_SECTION(
-                        ERR_HEAD(varname.name)
+                        ERR_HEAD2(varname.name)
                         ERR_MSG("'"<<varname.name<<"' is defined as a non-variable and cannot be used.")
-                        ERR_LINE(varname.name, "bad")
+                        ERR_LINE2(varname.name, "bad")
                     )
                 }
                 #endif
@@ -2890,10 +2911,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 if(vi < (int)poly_typeArray.size()){
                     if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
                         ERR_SECTION(
-                            ERR_HEAD(now->firstExpression->tokenRange, ERROR_TYPE_MISMATCH)
+                            ERR_HEAD2(now->firstExpression->location, ERROR_TYPE_MISMATCH)
                             ERR_MSG("Type mismatch " << info.ast->typeToString(poly_typeArray[vi]) << " - " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << ".")
-                            ERR_LINE(varname.name, info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]))
-                            ERR_LINE(now->firstExpression->tokenRange, info.ast->typeToString(poly_typeArray[vi]))
+                            ERR_LINE2(varname.location, info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]))
+                            ERR_LINE2(now->firstExpression->location, info.ast->typeToString(poly_typeArray[vi]))
                         )
                     }
                 }
@@ -2906,9 +2927,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     TypeInfo* arrTypeInfo = info.ast->getTypeInfo(now->varnames.last().versions_assignType[info.currentPolyVersion].baseType());
                     if(!arrTypeInfo->astStruct || arrTypeInfo->astStruct->name != "Slice") {
                         ERR_SECTION(
-                            ERR_HEAD(now->varnames.last().name)
+                            ERR_HEAD2(now->varnames.last().location)
                             ERR_MSG("Variables that use array initializers must use the 'Slice<T>' type")
-                            ERR_LINE(now->varnames.last().name, "must use Slice<T> not "<<info.ast->typeToString(arrTypeInfo->id))
+                            ERR_LINE2(now->varnames.last().location, "must use Slice<T> not "<<info.ast->typeToString(arrTypeInfo->id))
                             // TODO: Print the location of the type instead of the variable name
                         )
                     } else {
@@ -2916,23 +2937,23 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         for(int j=0;j<now->arrayValues.size();j++){
                             ASTExpression* value = now->arrayValues[j];
                             typeArray.resize(0);
-                            SignalAttempt result = CheckExpression(info, scope->scopeId, value, &typeArray, false);
-                            if(result != SignalAttempt::SUCCESS){
+                            SignalIO result = CheckExpression(info, scope->scopeId, value, &typeArray, false);
+                            if(result != SIGNAL_SUCCESS){
                                 continue;
                             }
                             if(typeArray.size()!=1) {
                                 if(typeArray.size()==0) {
                                     ERR_SECTION(
-                                        ERR_HEAD(value->tokenRange)
+                                        ERR_HEAD2(value->location)
                                         ERR_MSG("Expressions in array initializers cannot consist of of no values. Did you call a function that returns void?")
-                                        ERR_LINE(value->tokenRange, "bad")
+                                        ERR_LINE2(value->location, "bad")
                                     )
                                     continue;
                                 } else {
                                     ERR_SECTION(
-                                        ERR_HEAD(value->tokenRange)
+                                        ERR_HEAD2(value->location)
                                         ERR_MSG("Expressions in array initializers cannot consist of multiple values. Did you call a function that returns more than one value?")
-                                        ERR_LINE(value->tokenRange, "bad")
+                                        ERR_LINE2(value->location, "bad")
                                         // TODO: Print the types in rightTypes
                                     )
                                     continue;
@@ -2940,9 +2961,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                             }
                             if(!info.ast->castable(typeArray[0], elementType)) {
                                 ERR_SECTION(
-                                    ERR_HEAD(value->tokenRange)
+                                    ERR_HEAD2(value->location)
                                     ERR_MSG("Cannot cast '"<<info.ast->typeToString(typeArray[0])<<"' to '"<<info.ast->typeToString(elementType)<<"'.")
-                                    ERR_LINE(value->tokenRange, "cannot cast")
+                                    ERR_LINE2(value->location, "cannot cast")
                                 )
                             }
                         }
@@ -2953,13 +2974,13 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
         } else if(now->type == ASTStatement::WHILE){
             if(now->firstExpression) {
                 // no expresion represents infinite loop
-                SignalAttempt result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+                SignalIO result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
             }
-            SignalDefault result = CheckRest(info, now->firstBody);
+            SignalIO result = CheckRest(info, now->firstBody);
         } else if(now->type == ASTStatement::FOR){
             // DynamicArray<TypeId> temp{};
-            SignalAttempt result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
-            SignalDefault result=SignalDefault::FAILURE;
+            SignalIO result1 = CheckExpression(info, scope->scopeId, now->firstExpression, &typeArray, false);
+            SignalIO result=SIGNAL_FAILURE;
 
             Assert(now->varnames.size()==2);
             auto& varnameIt = now->varnames[0];
@@ -2973,9 +2994,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             auto varinfo_item = info.ast->addVariable(varScope, varnameIt.name, CONTENT_ORDER_ZERO, &varnameIt.identifier, &reused_item);
             if(!varinfo_index || !varinfo_item) {
                 ERR_SECTION(
-                    ERR_HEAD(now->tokenRange)
+                    ERR_HEAD2(now->location)
                     ERR_MSG("Cannot add variable '"<<varnameNr.name<<"' or '"<<varnameIt.name<<"' to use in for loop. Is it already defined?")
-                    ERR_LINE(now->tokenRange,"")
+                    ERR_LINE2(now->location,"")
                 )
                 continue;
             }
@@ -2989,9 +3010,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     varnameNr.versions_assignType[info.currentPolyVersion] = AST_INT64;
                     // } else {
                     //     ERR_SECTION(
-                    //         ERR_HEAD(now->tokenRange)
+                    //         ERR_HEAD2(now->location)
                     //         ERR_MSG("Cannot add '"<<varnameNr.name<<"' variable to use in for loop. Is it already defined?")
-                    //         ERR_LINE(now->tokenRange,"")
+                    //         ERR_LINE2(now->location,"")
                     //     )
                     // }
 
@@ -3009,13 +3030,13 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         varinfo_item->versions_typeId[info.currentPolyVersion] = vartype;
                     // } else {
                     //     ERR_SECTION(
-                    //         ERR_HEAD(now->tokenRange)
+                    //         ERR_HEAD2(now->location)
                     //         ERR_MSG("Cannot add '"<<varnameIt.name<<"' variable to use in for loop. Is it already defined?")
-                    //         ERR_LINE(now->tokenRange,"")
+                    //         ERR_LINE2(now->location,"")
                     //     )
                     // }
 
-                    SignalDefault result = CheckRest(info, now->firstBody);
+                    SignalIO result = CheckRest(info, now->firstBody);
                     // info.ast->removeIdentifier(varScope, varname.name);
                     // info.ast->removeIdentifier(varScope, "nr");
                     continue;
@@ -3025,9 +3046,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     if(mem0.typeId == mem1.typeId && AST::IsInteger(mem0.typeId)){
                         if(now->isPointer()){
                             ERR_SECTION(
-                                ERR_HEAD(now->tokenRange)
+                                ERR_HEAD2(now->location)
                                 ERR_MSG("@pointer annotation isn't allowed when Range is used in a for loop. @pointer only works with Slice.")
-                                ERR_LINE(now->tokenRange,"")
+                                ERR_LINE2(now->location,"")
                             )
                         }
                         TypeId inttype = mem0.typeId;
@@ -3038,9 +3059,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         varinfo_index->versions_typeId[info.currentPolyVersion] = inttype;
                         // } else {
                         //     ERR_SECTION(
-                        //         ERR_HEAD(now->tokenRange)
+                        //         ERR_HEAD2(now->location)
                         //         ERR_MSG("Cannot add '"<<varnameNr.name<<"' variable to use in for loop. Is it already defined?")
-                        //         ERR_LINE(now->tokenRange,"")
+                        //         ERR_LINE2(now->location,"")
                         //     )
                         // }
 
@@ -3051,13 +3072,13 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         varinfo_item->versions_typeId[info.currentPolyVersion] = inttype;
                         // } else {
                         //     ERR_SECTION(
-                        //         ERR_HEAD(now->tokenRange)
+                        //         ERR_HEAD2(now->location)
                         //         ERR_MSG("Cannot add '"<<varnameIt.name<<"' variable to use in for loop. Is it already defined?")
-                        //         ERR_LINE(now->tokenRange, "")
+                        //         ERR_LINE2(now->location, "")
                         //     )
                         // }
 
-                        SignalDefault result = CheckRest(info, now->firstBody);
+                        SignalIO result = CheckRest(info, now->firstBody);
                         // info.ast->removeIdentifier(varScope, varname.name);
                         // info.ast->removeIdentifier(varScope, "nr");
                         continue;
@@ -3066,9 +3087,9 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             }
             std::string strtype = info.ast->typeToString(typeArray.last());
             ERR_SECTION(
-                ERR_HEAD(now->firstExpression->tokenRange)
+                ERR_HEAD2(now->firstExpression->location)
                 ERR_MSG("The expression in for loop must be a Slice or Range.")
-                ERR_LINE(now->firstExpression->tokenRange,strtype.c_str())
+                ERR_LINE2(now->firstExpression->location,strtype.c_str())
             )
             continue;
         } else 
@@ -3081,8 +3102,8 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             Assert(("Broken code",false));
 
             if(now->varnames.size()==1 && now->alias){
-                Token& name = now->varnames[0].name;
-                TypeId originType = CheckType(info, scope->scopeId, name, now->tokenRange, nullptr);
+                auto& name = now->varnames[0].name;
+                TypeId originType = CheckType(info, scope->scopeId, name, now->location, nullptr);
                 TypeId aliasType = info.ast->convertToTypeId(*now->alias, scope->scopeId, true);
                 if(originType.isValid() && !aliasType.isValid()){
                     TypeInfo* aliasInfo = info.ast->createType(*now->alias, scope->scopeId);
@@ -3102,8 +3123,8 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     // }
                     continue;
                 }
-                ScopeInfo* originScope = info.ast->getScopeFromParents(name,scope->scopeId);
-                ScopeInfo* aliasScope = info.ast->getScopeFromParents(*now->alias,scope->scopeId);
+                ScopeInfo* originScope = info.ast->findScope(name,scope->scopeId, true);
+                ScopeInfo* aliasScope = info.ast->findScope(*now->alias,scope->scopeId, true);
                 if(originScope && !aliasScope) {
                     ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);
                     // TODO: Alias can't contain multiple namespaces. How to implement
@@ -3125,11 +3146,11 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
 
                 // if(!originType.isValid()){
                 //     ERR_SECTION(
-// ERR_HEAD(now->tokenRange) << *now->name<<" is not a type (using)\n";
+// ERR_HEAD2(now->location) << *now->name<<" is not a type (using)\n";
                 // }
                 // if(aliasType.isValid()){
                 //     ERR_SECTION(
-// ERR_HEAD(now->tokenRange) << *now->alias<<" is already a type (using)\n";
+// ERR_HEAD2(now->location) << *now->alias<<" is already a type (using)\n";
                 // }
                 // continue;
                 // CheckType may create a new type if polymorphic. We don't want that.
@@ -3138,10 +3159,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                 // TODO: How does polymorphism work here?
                 // Will it work if just left as is or should it be disallowed.
             } else if (now->varnames.size()==1) {
-                Token& name = now->varnames[0].name;
+                auto& name = now->varnames[0].name;
                 // ERR_SECTION(
-// ERR_HEAD(now->tokenRange) << "inheriting namespace with using doesn't work\n";
-                ScopeInfo* originInfo = info.ast->getScopeFromParents(name,scope->scopeId);
+// ERR_HEAD2(now->location) << "inheriting namespace with using doesn't work\n";
+                ScopeInfo* originInfo = info.ast->findScope(name,scope->scopeId,true);
                 if(originInfo){
                     ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);
                     scopeInfo->usingScopes.add(originInfo);
@@ -3211,10 +3232,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                         wasMember = true;
                         if(usedMembers[index]) {
                             ERR_SECTION(
-                                ERR_HEAD(it.caseExpr->tokenRange, ERROR_DUPLICATE_CASE)
+                                ERR_HEAD2(it.caseExpr->location, ERROR_DUPLICATE_CASE)
                                 ERR_MSG("Two cases handle the same enum member.")
-                                ERR_LINE(usedMembers[index]->tokenRange, "previous")
-                                ERR_LINE(it.caseExpr->tokenRange, "bad")
+                                ERR_LINE2(usedMembers[index]->location, "previous")
+                                ERR_LINE2(it.caseExpr->location, "bad")
                             )
                         } else {
                             usedMembers[index] = it.caseExpr;
@@ -3246,10 +3267,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
                     //  so that the user can decide how they want the error to work an on what members.
 
                     // ERR_SECTION(
-                    //     ERR_HEAD(now->tokenRange, ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+                    //     ERR_HEAD2(now->location, ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
                     //     ERR_MSG("You have forgotten these enum members in the switch statement:")
                         
-                    //     ERR_LINE(now->tokenRange, "this switch")
+                    //     ERR_LINE2(now->location, "this switch")
                     // )
                 }
             }
@@ -3261,11 +3282,10 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
     //     info.ast->removeIdentifier(scope->scopeId, name);
     // }
     for(auto now : scope->namespaces){
-        SignalDefault result = CheckRest(info, now);
+        SignalIO result = CheckRest(info, now);
     }
-    return SignalDefault::SUCCESS;
+    return SIGNAL_SUCCESS;
 }
-#endif
 
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     using namespace engone;
@@ -3278,7 +3298,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     _VLOG(log::out << log::BLUE << "Type check:\n";)
     Assert(false);
     // Check enums first since they don't depend on anything.
-    // SignalDefault result = CheckEnums(info, scope); // nocheckin
+    SignalIO result = CheckEnums(info, scope); // nocheckin
 
     /*
         How to make global variables and using work with functions and structs
@@ -3329,7 +3349,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
         info.completedStructs = true;
         info.anotherTurn=false;
         
-        // result = CheckStructs(info, scope); // nocheckin
+        result = CheckStructs(info, scope); // nocheckin
         
         if(!info.anotherTurn && !info.completedStructs){
             if(!info.showErrors){
@@ -3346,11 +3366,11 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     // a referenced function may not exist yet (this is certain if the body of two functions reference each other).
     // If so we would have to stop checking that body and continue later until that reference have been cleared up.
     // So instead of that mess, we check headers first to ensure that all references will work.
-    // result = CheckFunctions(info, scope); // nocheckin
+    result = CheckFunctions(info, scope); // nocheckin
 
     // Check rest will go through scopes and create polymorphic implementations if necessary.
     // This includes structs and functions.
-    // result = CheckRest(info, scope); // nocheckin
+    result = CheckRest(info, scope); // nocheckin
 
 
     while(info.checkImpls.size()!=0){
@@ -3358,7 +3378,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
         info.checkImpls.pop();
         Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
         
-        // CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
+        CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
     }
     
     info.compileInfo->compileOptions->compileStats.errors += info.errors;

@@ -19,6 +19,10 @@ enum SignalIO : u64 {
     SIGNAL_COMPLETE_FAILURE    = 0x4, // quit immediately
 };
 
+/*###############################
+    OLD DEPRECATED DO NOT USE
+#################################*/
+
 // This is stupid. Use one enum. It's really annoying otherwise
 enum class SignalDefault : u32 {
     SUCCESS = 0,

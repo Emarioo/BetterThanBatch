@@ -6,6 +6,7 @@
 struct CompileInfo;
 struct CheckInfo : public PhaseContext {
     AST* ast = nullptr;
+    Reporter* reporter = nullptr;
     
     struct CheckImpl {
         ASTFunction* astFunc=nullptr;

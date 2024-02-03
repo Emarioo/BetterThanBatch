@@ -465,6 +465,7 @@ struct ASTExpression : ASTNode {
     // ASTExpression() { memset(this,0,sizeof(*this)); }
     // ASTExpression() : left(0), right(0), castType(0) { }
     // Token token{};
+    lexer::SourceLocation location;
     bool isValue = false;
     TypeId typeId = {}; // not polymorphic, primitive or operation
     // Type expressionType = NORMAL;
@@ -478,28 +479,20 @@ struct ASTExpression : ASTNode {
     bool constantValue = false;
     bool computeWhenPossible = false;
 
-    bool implicitThisArg = false;
-    bool memberCall = false;
-    bool postAction = false;
+    #endif
+
     bool unsafeCast = false;
+    bool isUnsafeCast() { return unsafeCast; }
+    void setUnsafeCast(bool yes) { unsafeCast = yes; }
+
+    bool implicitThisArg = false;
     bool hasImplicitThis() const { return implicitThisArg; }
     void setImplicitThis(bool yes) { implicitThisArg = yes; }
 
-    bool isMemberCall() const { return memberCall; }
-    void setMemberCall(bool yes) { memberCall = yes; }
-
+    bool postAction = false;
     bool isPostAction() const { return postAction; }
     void setPostAction(bool yes) { postAction = yes; }
     
-    bool isUnsafeCast() { return unsafeCast; }
-    void setUnsafeCast(bool yes) { unsafeCast = yes; }
-    #endif
-    bool hasImplicitThis() const { return false; }
-    void setImplicitThis(bool yes){}
-    void setMemberCall(bool yes) { }
-    void setPostAction(bool yes) { }
-    void setUnsafeCast(bool yes) { }
-
     union {
         i64 i64Value=0;
         float f32Value;
@@ -526,7 +519,8 @@ struct ASTExpression : ASTNode {
         };
     };
 
-#ifdef gone
+    // THE FIELDS BELOW IS SET IN TYPE CHECKER
+
     // Used if expression type is AST_ID
     Identifier* identifier = nullptr;
     // TODO: Is okay to fill ASTExpression with more data? It's quite large already.
@@ -549,7 +543,7 @@ struct ASTExpression : ASTNode {
         PolyVersions<TypeId> versions_outTypeTypeid;
     };
     PolyVersions<TypeId> versions_castType{};
-#endif
+
     void printArgTypes(AST* ast, QuickArray<TypeId>& argTypes);
 
     // ASTExpression* next=0;
@@ -596,25 +590,14 @@ struct ASTStatement : ASTNode {
         // The corresponding identifier. Set in type checker.
         // Will be null in first polymorphic check, but will be set for later polymorphic checks
         Identifier* identifier = nullptr;
+        lexer::SourceLocation location;
     };
     lexer::SourceLocation location{};
     DynamicArray<VarName> varnames;
     std::string* alias = nullptr;
 
     ASTExpression* testValue = nullptr;
-    // Token testValueToken{};
-    // int bytesToTest = 0;
-    // TypeId typeId={};
-
-    // true if bodies and expressions can be used.
-    // false if returnValues should be used.
-    // use this to determine which part of a union to
-    // initialize or cleanup
-    // Not used!
-    // bool hasNodes(){
-    //     // Return is the only one that uses return values
-    //     return type != ASTStatement::RETURN;
-    // }
+   
     // with a union you have to use hasNodes before using the expressions.
     // this is annoying so I am not using a union but you might want to
     // to save 24 bytes.
@@ -658,9 +641,9 @@ struct ASTStruct : ASTNode {
         TYPE_ERROR, 
     };
     // Token name{};
-    StringView base_name;
+    // StringView base_name;
     lexer::SourceLocation location;
-    std::string polyName;
+    std::string name;
     struct Member {
         StringView name;
         lexer::SourceLocation location;
@@ -714,7 +697,8 @@ struct ASTStruct : ASTNode {
     void print(AST* ast, int depth);
 };
 struct ASTEnum : ASTNode {
-    TokenRange tokenRange{};
+    // TokenRange tokenRange{};
+    lexer::SourceLocation location; // name token
     StringView name{};
     struct Member {
         // Token name{};
@@ -743,14 +727,17 @@ struct ASTEnum : ASTNode {
     void print(AST* ast, int depth);  
 };
 struct ASTFunction : ASTNode {
+    lexer::SourceLocation location;
     std::string name{};
     Identifier* identifier = nullptr;
     
     struct PolyArg {
         std::string name{};
         TypeInfo* virtualType = nullptr;
+        lexer::SourceLocation location;
     };
     struct Arg {
+        lexer::SourceLocation location;
         std::string name{};
         // StringView name{};
         ASTExpression* defaultValue=0;
@@ -758,6 +745,7 @@ struct ASTFunction : ASTNode {
         Identifier* identifier = nullptr;
     };
     struct Ret {
+        lexer::SourceLocation location;
         TokenRange valueToken{}; // for error messages
         TypeId stringType;
     };
@@ -853,28 +841,22 @@ struct AST {
     void cleanup();
     
     //-- Scope stuff
-    ScopeId globalScopeId=0;
-    volatile u32 nextScopeInfoIndex = 0;
-    QuickArray<ScopeInfo*> _scopeInfos; // TODO: Use a bucket array
     ScopeInfo* createScope(ScopeId parentScope, ContentOrder contentOrder, ASTScope* astScope);
     ScopeInfo* getScope(ScopeId id);
-    // Searches scopes for a namespace. First the current scope (scopeId), then inherited/using scopes, and optionally parent scopes of the current scope. Example: "GameLib::Math".
+    // Searches scopes for a namespace. First the current scope (scopeId), then inherited/using scopes, and optionally parent scopes of the current scope. Example of name "GameLib::Math". search_parent_scopes SHOULD NOT default to false. You will use findScope thinking it searches parents and whoops, you got a bug.
     // @return Nullptr when scope not found.
-    ScopeInfo* findScope(StringView name, ScopeId scopeId, bool search_parent_scopes = false);
+    ScopeInfo* findScope(StringView name, ScopeId scopeId, bool search_parent_scopes);
     // Same as findScope but always searches parents. This function has become redundant so maybe remove it?
-    ScopeInfo* findScopeFromParents(StringView name, ScopeId scopeId);
+    // ScopeInfo* findScopeFromParents(StringView name, ScopeId scopeId);
 
     //-- Types
-    MUTEX(lock_typeTokens);
-    DynamicArray<std::string> _typeTokens;
-    // TypeId getTypeString(Token name);
+    
     TypeId getTypeString(const std::string& name);
     StringView getStringFromTypeString(TypeId typeString);
     // Token getTokenFromTypeString(TypeId typeString);
     // typeString must be a string type id.
     TypeId convertToTypeId(TypeId typeString, ScopeId scopeId, bool transformVirtual);
 
-    QuickArray<TypeInfo*> _typeInfos; // TODO: Use a bucket array, might not make a difference since typeInfos are allocated in a linear allocator
     // DynamicArray<TypeInfo*> _typeInfos; // TODO: Use a bucket array
     TypeInfo* createType(StringView name, ScopeId scopeId);
     TypeInfo* createPredefinedType(StringView name, ScopeId scopeId, TypeId id, u32 size=0);
@@ -898,14 +880,11 @@ struct AST {
     MUTEX(lock_mainBody);
     // QuickArray<ASTScope*> importScopes{};
 
-    QuickArray<std::string*> tempStrings;
-    std::string* createString();
+    // QuickArray<std::string*> tempStrings;
+    // std::string* createString();
 
     // static const u32 NEXT_ID = 0x100;
-    u32 nextTypeId=AST_OPERATION_COUNT;
     
-    QuickArray<VariableInfo*> variables;
-    MUTEX(lock_variables);
 
     //-- Identifiers and variables
     // Searches for identifier with some name. It does so recursively
@@ -938,14 +917,6 @@ struct AST {
 
     bool castable(TypeId from, TypeId to);
 
-    struct ConstString {
-        u32 length = 0;
-        u32 address = 0;
-    };
-    std::unordered_map<std::string, u32> _constStringMap;
-    QuickArray<ConstString> _constStrings;
-
-    u32 globalDataOffset = 0;
     u32 aquireGlobalSpace(int size) {
         u32 offset = globalDataOffset;
         globalDataOffset += size;
@@ -955,12 +926,8 @@ struct AST {
     u32 preallocatedGlobalSpace() {
         return globalDataOffset;
     }
-    MUTEX(lock_linearAllocation);
-    MUTEX(lock_scopes);
+    
 
-    char* linearAllocation = nullptr;
-    u32 linearAllocationMax = 0;
-    volatile u32 linearAllocationUsed = 0;
     void initLinear(){
         Assert(!linearAllocation);
         linearAllocationMax = 0x10000000;
@@ -994,12 +961,16 @@ struct AST {
         return ptr;
     }
 
+    struct ConstString {
+        u32 length = 0;
+        u32 address = 0;
+    };
     // outIndex is used with getConstString(u32)
     ConstString& getConstString(const std::string& str, u32* outIndex);
     ConstString& getConstString(u32 index);
 
     // Must be used after TrimPointer
-    static StringView DecomposePolyTypes(StringView view, QuickArray<StringView>* outPolyTypes);
+    static void DecomposePolyTypes(StringView view, StringView* out_base, QuickArray<StringView>* outPolyTypes);
     static void DecomposeNamespace(StringView view, StringView* out_namespace, StringView* out_name);
     static void DecomposePointer(StringView view, StringView* out_name, u32* level);
     // static StringView TrimPointer(StringView& view, u32* level = nullptr);
@@ -1039,5 +1010,35 @@ struct AST {
 
     void print(int depth = 0);
     void printTypesFromScope(ScopeId scopeId, int scopeLimit=-1);
+
+    ScopeId globalScopeId=0; // needs to be public, Parser needs it
+
+    u32 nextTypeId=AST_OPERATION_COUNT;
+    // TODO: Use a bucket array, might not make a difference since typeInfos are allocated in a linear allocator. 
+    QuickArray<TypeInfo*> _typeInfos; // not private because DWARF uses it and I don't want to use friend
+
+    MUTEX(lock_scopes);
+    volatile u32 nextScopeInfoIndex = 0;
+    // TODO: Use a bucket array
+    QuickArray<ScopeInfo*> _scopeInfos; // not private because x64_Converted needs it (once again, I don't want to use friend)
+private:
+    MUTEX(lock_linearAllocation);
+    char* linearAllocation = nullptr;
+    u32 linearAllocationMax = 0;
+    volatile u32 linearAllocationUsed = 0;
+
+
+    MUTEX(lock_strings);
+    std::unordered_map<std::string, u32> _constStringMap;
+    QuickArray<ConstString> _constStrings;
+
+    u32 globalDataOffset = 0;
+
+    MUTEX(lock_variables);
+    QuickArray<VariableInfo*> variables;
+
+    MUTEX(lock_typeTokens);
+    DynamicArray<std::string> _typeTokens;
+
 };
 const char* TypeIdToStr(int type);

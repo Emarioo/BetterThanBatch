@@ -345,7 +345,7 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
         WHILE_TRUE_N(1000) {
             if(ns.ptr) {
                 Assert(false); // broken with content order
-                ScopeInfo* nscope = findScope(ns, nextScopeId);
+                ScopeInfo* nscope = findScope(ns, nextScopeId, false);
                 Assert(nscope);
                 auto pair = nscope->identifierMap.find(real_name);
                 if(pair != nscope->identifierMap.end()){
@@ -959,7 +959,7 @@ ASTStruct *AST::createStruct(const StringView& name) {
     auto ptr = (ASTStruct *)allocate(sizeof(ASTStruct));
     new(ptr) ASTStruct();
     ptr->nodeId = getNextNodeId();
-    ptr->base_name = name;
+    ptr->name = name;
     return ptr;
 }
 ASTEnum *AST::createEnum(const StringView &name) {
@@ -1159,11 +1159,11 @@ void AST::cleanup() {
     _constStrings._reserve(0);
 
 
-    for(auto& str : tempStrings){
-        str->~basic_string<char>();
-        // engone::Free(str, sizeof(std::string));
-    }
-    tempStrings.cleanup();
+    // for(auto& str : tempStrings){
+    //     str->~basic_string<char>();
+    //     // engone::Free(str, sizeof(std::string));
+    // }
+    // tempStrings.cleanup();
 
     for(auto ptr : variables){
         ptr->~VariableInfo();
@@ -1289,9 +1289,9 @@ ScopeInfo* AST::findScope(StringView name, ScopeId scopeId, bool search_parent_s
     }
     return nullptr;
 }
-ScopeInfo* AST::findScopeFromParents(StringView name, ScopeId scopeId){
-    return findScope(name,scopeId,true);
-}
+// ScopeInfo* AST::findScopeFromParents(StringView name, ScopeId scopeId){
+//     return findScope(name,scopeId,true);
+// }
 
 // TypeId AST::getTypeString(Token name){
 //     // converts char[] into Slice<char> (or any type, not just char)
@@ -1485,7 +1485,7 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
     ScopeInfo* scope = nullptr;
     TypeInfo* typeInfo = nullptr;
     if(namespacing.ptr){
-        scope = findScopeFromParents(namespacing, scopeId);
+        scope = findScope(namespacing, scopeId, true);
         if(!scope) return {};
         auto firstPair = scope->nameTypeMap.find(typeName);
         if(firstPair != scope->nameTypeMap.end()){
@@ -1639,12 +1639,12 @@ TypeId AST::ensureNonVirtualId(TypeId id){
     id.setPointerLevel(level);
     return id;
 }
-std::string* AST::createString(){
-    std::string* ptr = (std::string*)allocate(sizeof(std::string));
-    new(ptr)std::string();
-    tempStrings.add(ptr);
-    return ptr;
-}
+// std::string* AST::createString(){
+//     std::string* ptr = (std::string*)allocate(sizeof(std::string));
+//     new(ptr)std::string();
+//     tempStrings.add(ptr);
+//     return ptr;
+// }
 void AST::destroy(ASTScope *scope) {
     // if (scope->next)
     //     destroy(scope->next);
@@ -1935,11 +1935,12 @@ StringView AST::TrimBaseType(StringView typeString, StringView* outNamespace,
     
     return typeString;
 }
-StringView AST::DecomposePolyTypes(StringView typeString, QuickArray<StringView>* outPolyTypes) {
+void AST::DecomposePolyTypes(StringView typeString, StringView* out_base, QuickArray<StringView>* outPolyTypes) {
     //-- Trim poly types
     Assert(typeString.ptr[typeString.len-1] != '*');
     if(typeString.len < 2 || typeString.ptr[typeString.len-1] != '>') {
-        return typeString;
+        *out_base = typeString;
+        return;
     }
     int leftArrow = -1;
     int rightArrow = typeString.len-1;
@@ -1954,7 +1955,8 @@ StringView AST::DecomposePolyTypes(StringView typeString, QuickArray<StringView>
         }
     }
     if(leftArrow == -1){
-        return typeString;
+        *out_base = typeString;
+        return;
     }
     typeString.len = leftArrow;
 
@@ -1985,7 +1987,8 @@ StringView AST::DecomposePolyTypes(StringView typeString, QuickArray<StringView>
         }
     }
     
-    return typeString;
+    *out_base = typeString;
+    return;
 
     // if(!typeString.ptr || typeString.len < 2 || typeString.ptr[typeString.len-1] != '>') { // <>
     //     return typeString;
@@ -2291,7 +2294,7 @@ void ASTStruct::print(AST *ast, int depth) {
     using namespace engone;
     if(!isHidden()){
         PrintSpace(depth);
-        log::out << "Struct " << base_name;
+        log::out << "Struct " << name;
         if (polyArgs.size() != 0) {
             log::out << "<";
         }
