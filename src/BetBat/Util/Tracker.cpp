@@ -20,7 +20,8 @@ struct Tracker_impl {
 
     std::unordered_map<size_t, TrackerType> m_trackedTypes{};
     engone::Mutex m_trackLock{};
-    bool m_enableTracking = true;
+    // bool m_enableTracking = true;
+    bool m_enableTracking = false;
     DynamicArray<TrackLocation> m_uniqueTrackLocations{};
 
     static Tracker_impl* Create();
