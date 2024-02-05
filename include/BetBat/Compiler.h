@@ -292,23 +292,36 @@ struct Compiler {
     AST* ast = nullptr;
     Reporter reporter{};
     
-    enum ImportFlags {
+    enum ImportFlags : u32 {
         FLAG_NONE=0,
-        FLAG_LEXED              = 0x1,
+        FLAG_LEXED              = 0x1, // lex and import-preprocess
         FLAG_PREPROCESSED       = 0x2,
-        FLAG_PREPROCESSED_2     = 0x4,
         FLAG_PARSED             = 0x8,
-        FLAG_BUSY               = 0x10,
-        FLAG_FINISHED           = 0x20,
+
+        FLAG_TYPED_ENUMS        = 0x10,
+        FLAG_TYPED_STRUCTS      = 0x20,
+        FLAG_TYPED_FUNCTIONS    = 0x40,
+        FLAG_TYPED_BODIES       = 0x80,
+
+        // FLAG_BUSY               = 0x4000,
+        // FLAG_FINISHED           = 0x8000,
     };
     struct Import {
+        bool busy = false;
+        bool finished = false;
         ImportFlags state = FLAG_NONE;
         std::string path; // file path (sometimes name for preloaded imports)
         
         u32 import_id=0;
         u32 preproc_import_id=0;
+
+        ScopeId scopeId = 0;
         
-        DynamicArray<u32> dependencies;
+        struct Dep {
+            u32 id;
+            std::string as_name;
+        };
+        DynamicArray<Dep> dependencies;
     };
     BucketArray<Import> imports{256};
     
@@ -324,7 +337,7 @@ struct Compiler {
     // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
     u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "");
     u32 addImport(const std::string& path, const std::string& dir_of_origin_file = "");
-    void addDependency(u32 import_id, u32 dep_import_id);
+    void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "");
     
     DynamicArray<Path> importDirectories;
     Path findSourceFile(const Path& path, const Path& sourceDirectory = "");

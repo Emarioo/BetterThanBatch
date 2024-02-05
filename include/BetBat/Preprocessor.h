@@ -119,6 +119,36 @@ struct PreprocContext {
         }
         return lexer->getTokenFromImport(import_id, head + off);
     }
+    lexer::Token gettok(StringView* string, int off = 0) {
+        if(quick_iterator) {
+            u32 fcindex,tindex;
+            lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+        
+            lexer::Token out{};
+            if(lexer_chunks.size() <= fcindex) {
+                if(string)
+                    *string = {"",1};
+                return lexer_import->geteof();
+            }
+            lexer::Chunk* chunk = lexer_chunks[fcindex];
+
+            auto info = chunk->tokens.getPtr(tindex);
+            if(!info) {
+                if(string)
+                    *string = {"",1};
+                return lexer_import->geteof();
+            }
+
+            if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
+                *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+    
+            out.flags = info->flags;
+            out.type = info->type;
+            out.origin = lexer->encode_origin(chunk->chunk_index,tindex);
+            return out;
+        }
+        return lexer->getTokenFromImport(import_id, head + off);
+    }
     lexer::TokenInfo* getinfo(StringView* string = nullptr, int off = 0) {
         static lexer::TokenInfo eof{lexer::TOKEN_EOF};
         Assert(quick_iterator);

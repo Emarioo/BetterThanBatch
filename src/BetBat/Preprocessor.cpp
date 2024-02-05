@@ -365,7 +365,8 @@ SignalIO PreprocContext::parseIf(){
 }
 SignalIO PreprocContext::parseImport() {
     
-    lexer::Token token = gettok();
+    StringView path;
+    lexer::Token token = gettok(&path);
     if(token.type != lexer::TOKEN_LITERAL_STRING) {
         ERR_SECTION(
             ERR_HEAD2(token)
@@ -374,10 +375,29 @@ SignalIO PreprocContext::parseImport() {
         return SIGNAL_COMPLETE_FAILURE;
     }
     advance();
+
+    StringView view_as{};
+    bool has_as = false;
+    token = gettok(&view_as);
+    if(token.type == lexer::TOKEN_IDENTIFIER && view_as == "as") {
+        advance();
+
+        token = gettok(&view_as);
+        if(token.type != lexer::TOKEN_IDENTIFIER) {
+            ERR_SECTION(
+                ERR_HEAD2(token)
+                ERR_MSG("Expected a string not "<<lexer->tostring(token)<<".")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+        } else {
+            has_as = true;
+            advance();
+        }
+    }
     
     if(!evaluateTokens) {
         // only if not in conditional directive
-        std::string path = lexer->getStdStringFromToken(token);
+        // std::string path = lexer->getStdStringFromToken(token);
         
         preprocessor->lock_imports.lock();
         auto imp = preprocessor->imports.get(import_id-1);
@@ -396,7 +416,10 @@ SignalIO PreprocContext::parseImport() {
             // preprocessor->lock_imports.unlock();
             
             imp->import_dependencies.add(dep_id);
-            compiler->addDependency(import_id, dep_id);
+            if(has_as)
+                compiler->addDependency(import_id, dep_id, view_as);
+            else
+                compiler->addDependency(import_id, dep_id);
         }
     }
     return SIGNAL_SUCCESS;

@@ -3887,8 +3887,8 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     ParseInfo info{};
     info.compiler = compiler;
     info.lexer = &compiler->lexer;
-    // info.ast = compiler->ast;
-    info.ast = AST::Create(); // nocheckin
+    info.ast = compiler->ast;
+    // info.ast = AST::Create(); // nocheckin
     info.reporter = &compiler->reporter;
     info.import_id = import_id;
 
@@ -3898,7 +3898,9 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     // nocheckin, what to do about 'import path as namespace'
     // if(theNamespace.size()==0){
         body = info.ast->createBody();
-        body->scopeId = info.ast->globalScopeId;
+        // body->scopeId = info.ast->globalScopeId;
+        auto newScope = info.ast->createScope(info.ast->globalScopeId, CONTENT_ORDER_ZERO, body);
+        body->scopeId = newScope->id;
     // } else {
     //     // TODO: Should namespaced imports from a source file you import as a namespace
     //     //  have global has their parent? It does now, ast->globalScopeId is used.

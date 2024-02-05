@@ -3165,7 +3165,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                 ScopeInfo* originInfo = info.ast->findScope(name,scope->scopeId,true);
                 if(originInfo){
                     ScopeInfo* scopeInfo = info.ast->getScope(scope->scopeId);
-                    scopeInfo->usingScopes.add(originInfo);
+                    scopeInfo->sharedScopes.add(originInfo);
                 }
 
                 // TODO: Inherit enum values.
@@ -3383,4 +3383,92 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     
     info.compileInfo->compileOptions->compileStats.errors += info.errors;
     return info.errors;
+}
+
+void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
+    using namespace engone;
+    ZoneScopedC(tracy::Color::Purple4);
+    CheckInfo info = {};
+    info.ast = ast;
+    info.compiler = compiler;
+
+    _VLOG(log::out << log::BLUE << "Type check enums:\n";)
+    // Check enums first since they don't depend on anything.
+    SignalIO result = CheckEnums(info, scope); // nocheckin
+    
+}
+SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool show_errors) {
+    using namespace engone;
+    ZoneScopedC(tracy::Color::Purple4);
+    CheckInfo info = {};
+    info.ast = ast;
+    info.compiler = compiler;
+    _VLOG(log::out << log::BLUE << "Type check structs:\n";)
+
+    info.completedStructs=false;
+    // An improvement here might be to create empty struct types first.
+    // Any usage of pointers to structs won't cause failures since we know the size of pointers.
+    // If a type isn't a pointer then we might fail if the struct hasn't been created yet.
+    // You could implement some dependency or priority queue.
+        
+    while(true) {
+        info.completedStructs = true;
+        info.anotherTurn = false;
+        info.showErrors = show_errors;
+        SignalIO result = CheckStructs(info, scope); // nocheckin
+        
+        if(info.completedStructs)
+            return SIGNAL_SUCCESS;
+
+        if(info.anotherTurn)
+            continue;
+
+        if(!show_errors)
+            return SIGNAL_NO_MATCH;
+        
+        // log::out << log::RED << "Some types could not be evaluated\n";
+        return SIGNAL_COMPLETE_FAILURE;
+    }
+    return SIGNAL_COMPLETE_FAILURE;
+}
+void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {
+    using namespace engone;
+    ZoneScopedC(tracy::Color::Purple4);
+    CheckInfo info = {};
+    info.ast = ast;
+    info.compiler = compiler;
+    _VLOG(log::out << log::BLUE << "Type check functions:\n";)
+
+    
+    // We check function "header" first and then later, we check the body.
+    // This is because bodies may reference other functions. If we check header and body at once,
+    // a referenced function may not exist yet (this is certain if the body of two functions reference each other).
+    // If so we would have to stop checking that body and continue later until that reference have been cleared up.
+    // So instead of that mess, we check headers first to ensure that all references will work.
+    SignalIO result = CheckFunctions(info, scope); // nocheckin
+}
+
+void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
+    using namespace engone;
+    ZoneScopedC(tracy::Color::Purple4);
+    CheckInfo info = {};
+    info.ast = ast;
+    info.compiler = compiler;
+    _VLOG(log::out << log::BLUE << "Type check functions:\n";)
+
+    // Check rest will go through scopes and create polymorphic implementations if necessary.
+    // This includes structs and functions.
+    SignalIO result = CheckRest(info, scope); // nocheckin
+
+
+    while(info.checkImpls.size()!=0){
+        auto checkImpl = info.checkImpls[info.checkImpls.size()-1];
+        info.checkImpls.pop();
+        Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
+        
+        CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
+    }
+    
+    info.compileInfo->compileOptions->compileStats.errors += info.errors;
+    // return info.errors;
 }

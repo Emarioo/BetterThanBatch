@@ -169,11 +169,11 @@ AST *AST::Create() {
 
     ast->initLinear();
 
-    ast->mainBody = ast->createBody();
+    ast->globalScope = ast->createBody();
 
     ast->_scopeInfos.resize(0x10000); // nocheckin
 
-    ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO, ast->mainBody)->id;
+    ScopeId scopeId = ast->createScope(0,CONTENT_ORDER_ZERO, ast->globalScope)->id;
     ast->globalScopeId = scopeId;
     // initialize default data types
     #define ADD(T, S) ast->createPredefinedType(PRIM_NAME(T), scopeId, T, S);
@@ -215,7 +215,7 @@ AST *AST::Create() {
     //     mem2.defaultValue = 0;
     //     mem2.polyIndex = -1;
     //     ast->getTypeString("Slice");
-    //     ast->mainBody->add(astStruct);
+    //     ast->globalScope->add(astStruct);
     // }
     return ast;
 }
@@ -859,85 +859,88 @@ FnOverloads* ASTStruct::getMethod(const std::string& name, bool create){
     return &pair->second;
 }
 
-// void AST::appendToAST(ASTScope* body) {
-//     importScopes.add(body);
-// }
-void AST::appendToMainBody(ASTScope *body) {
-    Assert(body);
-    
-    // if(mainBody->tokenRange.tokenStream() == nullptr) {
-    //     // IMPORTANT TODO: This is so horribly bad and I will regret this later.
-    //     //    The main body has multiple scopes appended to it. They all come from different token streams.
-    //     //    Adding to the madness, we assume that the preloaded import doesn't have a tokenStream to skip it.
-    //     //    We may not have a token stream if the import is empty.
-    //     if (body->tokenRange.tokenStream() && body->tokenRange.tokenStream()->streamName != "<base>") {
-    //         mainBody->tokenRange = body->tokenRange;
-    //     }
-    // }
-
-    // engone::log::out << engone::log::RED << "Content order is ruined in appendToMainBody\n";
-
-    // How do we maintain it.
-    // Content order of existing children don't need to be recalculated.
-    // Content order of all child scopes must recalculated.
-    {
-        // ZoneNamedN(zone0, "lock_main", true);
-        lock_mainBody.lock();
-    }
-    for(auto it : body->content) {
-        switch(it.spotType) {
-        case ASTScope::STRUCT: {
-            mainBody->add(this, body->structs[it.index]);
-            break;
-        }
-        case ASTScope::ENUM: {
-            mainBody->add(this, body->enums[it.index]);
-            break; 
-        }
-        case ASTScope::FUNCTION: {
-            mainBody->add(this, body->functions[it.index]);
-            break; 
-        }
-        case ASTScope::STATEMENT: {
-            mainBody->add(this, body->statements[it.index]);
-            // if(body->statements[it.index]->globalAssignment) {
-            //     mainBody->add_at(this, body->statements[it.index], CONTENT_ORDER_ZERO);
-            // } else {
-            // }
-            break; 
-        }
-        case ASTScope::NAMESPACE: {
-            mainBody->add(this, body->namespaces[it.index]);
-            break;
-        }
-        default: Assert(false);
-        }
-    }
-    body->structs.cleanup();
-    body->enums.cleanup();
-    body->functions.cleanup();
-    body->statements.cleanup();
-    body->namespaces.cleanup();
-    body->content.cleanup();
-    // #define _ADD(X) for(auto it : body->X) { mainBody->add(this, it); } body->X.cleanup();
-    // _ADD(enums)
-    // _ADD(functions)
-    // _ADD(structs)
-    // _ADD(statements)
-    // // for(auto it : body->statements) { 
-    // //     // if(it->firstBody) {
-
-    // //     // } else if() {
-
-    // //     // }
-    // //     mainBody->add(it);
-    // // }
-    // _ADD(namespaces)
-    // // for(auto it : body->namespaces) { mainBody->add(it, this); } body->namespaces.cleanup();
-    // #undef ADD
-    destroy(body);
-    lock_mainBody.unlock();
+void AST::shareWithGlobalScope(ASTScope* body) {
+    lock_globalScope.lock();
+    auto scope = getScope(globalScope->scopeId);
+    scope->sharedScopes.add(getScope(body->scopeId));
+    lock_globalScope.unlock();
 }
+// void AST::appendToMainBody(ASTScope *body) {
+//     Assert(body);
+    
+//     // if(globalScope->tokenRange.tokenStream() == nullptr) {
+//     //     // IMPORTANT TODO: This is so horribly bad and I will regret this later.
+//     //     //    The main body has multiple scopes appended to it. They all come from different token streams.
+//     //     //    Adding to the madness, we assume that the preloaded import doesn't have a tokenStream to skip it.
+//     //     //    We may not have a token stream if the import is empty.
+//     //     if (body->tokenRange.tokenStream() && body->tokenRange.tokenStream()->streamName != "<base>") {
+//     //         globalScope->tokenRange = body->tokenRange;
+//     //     }
+//     // }
+
+//     // engone::log::out << engone::log::RED << "Content order is ruined in appendToMainBody\n";
+
+//     // How do we maintain it.
+//     // Content order of existing children don't need to be recalculated.
+//     // Content order of all child scopes must recalculated.
+//     {
+//         // ZoneNamedN(zone0, "lock_main", true);
+//         lock_globalScope.lock();
+//     }
+//     for(auto it : body->content) {
+//         switch(it.spotType) {
+//         case ASTScope::STRUCT: {
+//             globalScope->add(this, body->structs[it.index]);
+//             break;
+//         }
+//         case ASTScope::ENUM: {
+//             globalScope->add(this, body->enums[it.index]);
+//             break; 
+//         }
+//         case ASTScope::FUNCTION: {
+//             globalScope->add(this, body->functions[it.index]);
+//             break; 
+//         }
+//         case ASTScope::STATEMENT: {
+//             globalScope->add(this, body->statements[it.index]);
+//             // if(body->statements[it.index]->globalAssignment) {
+//             //     globalScope->add_at(this, body->statements[it.index], CONTENT_ORDER_ZERO);
+//             // } else {
+//             // }
+//             break; 
+//         }
+//         case ASTScope::NAMESPACE: {
+//             globalScope->add(this, body->namespaces[it.index]);
+//             break;
+//         }
+//         default: Assert(false);
+//         }
+//     }
+//     body->structs.cleanup();
+//     body->enums.cleanup();
+//     body->functions.cleanup();
+//     body->statements.cleanup();
+//     body->namespaces.cleanup();
+//     body->content.cleanup();
+//     // #define _ADD(X) for(auto it : body->X) { globalScope->add(this, it); } body->X.cleanup();
+//     // _ADD(enums)
+//     // _ADD(functions)
+//     // _ADD(structs)
+//     // _ADD(statements)
+//     // // for(auto it : body->statements) { 
+//     // //     // if(it->firstBody) {
+
+//     // //     // } else if() {
+
+//     // //     // }
+//     // //     globalScope->add(it);
+//     // // }
+//     // _ADD(namespaces)
+//     // // for(auto it : body->namespaces) { globalScope->add(it, this); } body->namespaces.cleanup();
+//     // #undef ADD
+//     destroy(body);
+//     lock_globalScope.unlock();
+// }
 
 ASTScope *AST::createBody() {
     ZoneScopedC(tracy::Color::Gold);
@@ -1173,8 +1176,8 @@ void AST::cleanup() {
 
     nextTypeId = AST_OPERATION_COUNT;
 
-    destroy(mainBody);
-    mainBody = nullptr;
+    destroy(globalScope);
+    globalScope = nullptr;
 
     // make sure allocated nodes and other objects in linear allocator
     // have been destroyed before freeing it.
@@ -1239,8 +1242,8 @@ ScopeInfo* AST::findScope(StringView name, ScopeId scopeId, bool search_parent_s
             if(pair != scope->nameScopeMap.end()){
                 return getScope(pair->second);
             }
-            for(int i=0;i<(int)scope->usingScopes.size();i++){
-                ScopeInfo* usingScope = scope->usingScopes[i];
+            for(int i=0;i<(int)scope->sharedScopes.size();i++){
+                ScopeInfo* usingScope = scope->sharedScopes[i];
                 auto pair = usingScope->nameScopeMap.find(std::string(nextName.ptr,nextName.len));
                 if(pair != usingScope->nameScopeMap.end()){
                     return getScope(pair->second);
@@ -1267,8 +1270,8 @@ ScopeInfo* AST::findScope(StringView name, ScopeId scopeId, bool search_parent_s
                 continue;
             }
             bool cont = false;
-            for(int i=0;i<(int)scope->usingScopes.size();i++){
-                ScopeInfo* usingScope = scope->usingScopes[i];
+            for(int i=0;i<(int)scope->sharedScopes.size();i++){
+                ScopeInfo* usingScope = scope->sharedScopes[i];
                 auto pair = usingScope->nameScopeMap.find(std::string(first.ptr,first.len));
                 if(pair != usingScope->nameScopeMap.end()){
                     nextName = rest;
@@ -1453,7 +1456,7 @@ void AST::printTypesFromScope(ScopeId scopeId, int scopeLimit){
             log::out << "  "<<pair.first << ", \n";
         }
         // bool brea=false;
-        Assert(scope->usingScopes.size()==0);
+        Assert(scope->sharedScopes.size()==0);
         // for(int i=0;i<(int)scope->usingScopes.size();i++){
         //     ScopeInfo* usingScope = scope->usingScopes[i];
         //     auto pair = usingScope->nameTypeMap.find(typeName);
@@ -1507,8 +1510,8 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
                 break;
             }
             bool brea=false;
-            for(int i=0;i<(int)scope->usingScopes.size();i++){
-                ScopeInfo* usingScope = scope->usingScopes[i];
+            for(int i=0;i<(int)scope->sharedScopes.size();i++){
+                ScopeInfo* usingScope = scope->sharedScopes[i];
                 auto pair = usingScope->nameTypeMap.find(typeName);
                 if(pair != usingScope->nameTypeMap.end()){
                     typeInfo = pair->second;
@@ -2188,10 +2191,10 @@ void PrintSpace(int count) {
 
 void AST::print(int depth) {
     using namespace engone;
-    if (mainBody) {
+    if (globalScope) {
         PrintSpace(depth);
         log::out << "AST\n";
-        mainBody->print(this, depth + 1);
+        globalScope->print(this, depth + 1);
     }
 }
 void ASTScope::print(AST *ast, int depth) {

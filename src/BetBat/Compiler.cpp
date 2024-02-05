@@ -1177,9 +1177,10 @@ Bytecode* CompileSource(CompileOptions* options) {
             ASTScope* body = ParseTokenStream(procStream,compileInfo.ast, &compileInfo, stream->as);
             if(body){
                 if(stream->as.empty()){
-                    compileInfo.ast->appendToMainBody(body);
+                    Assert(false);
+                    // compileInfo.ast->appendToMainBody(body);
                 } else {
-                    compileInfo.ast->mainBody->add(compileInfo.ast, body);
+                    // compileInfo.ast->mainBody->add(compileInfo.ast, body);
                 }
             }
         }
@@ -1240,7 +1241,8 @@ Bytecode* CompileSource(CompileOptions* options) {
     // }
 
     _LOG(LOG_AST,log::out << log::BLUE<< "Final "; compileInfo.ast->print();)
-    TypeCheck(compileInfo.ast, compileInfo.ast->mainBody, &compileInfo);
+    Assert(false);
+    // TypeCheck(compileInfo.ast, compileInfo.ast->mainBody, &compileInfo);
     
     // if(compileInfo.errors==0){
     // }
@@ -2157,6 +2159,7 @@ void Compiler::processImports() {
     total_threads++;
     waiting_threads++;
     lock_imports.unlock();
+
     while(true) {
         ZoneNamedNC(zone0,"processImport", tracy::Color::DarkSlateGray,true);
         
@@ -2169,28 +2172,59 @@ void Compiler::processImports() {
         LOG(CAT_PROCESSING, log::GOLD<<"Process an import ("<<imports.getCount()<<" imports)\n")
         
         bool finished = true;
-        Import* imp=nullptr;
+        Import* imp = nullptr;
         BucketArray<Import>::Iterator iter{};
         while(imports.iterate(iter)) {
             Import* im = iter.ptr;
-            if(im->state & FLAG_BUSY) {
+            if(im->busy) {
                 finished=false;
                 LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" busy: "<<im->import_id<<" ("<<TrimCWD(im->path)<<")\n")
                 continue;
             }
-            if(im->state & FLAG_FINISHED) {
+            if(im->finished) {
                 LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" finished: "<<im->import_id<<" ("<<TrimCWD(im->path)<<")\n")
                 continue;
             }
-            
             bool missing_dependency = false;
-            for(int j=0;j<im->dependencies.size();j++) {
-                Import* dep = imports.get(im->dependencies[j]-1);
-                // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
-                if(!dep || !(dep->state&(FLAG_LEXED|FLAG_PREPROCESSED))) {
-                    LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j]<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
-                    missing_dependency = true;
-                    break;
+            if(im->state == FLAG_LEXED) {
+                for(int j=0;j<im->dependencies.size();j++) {
+                    Import* dep = imports.get(im->dependencies[j].id-1);
+                    // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
+                    if(!dep || !(dep->state < FLAG_PREPROCESSED)) {
+                        LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        missing_dependency = true;
+                        break;
+                    }
+                }
+            } else if (im->state == FLAG_PARSED) { // when we are about to check functions
+                for(int j=0;j<im->dependencies.size();j++) {
+                    Import* dep = imports.get(im->dependencies[j].id-1);
+                    // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
+                    if(!dep || dep->state < FLAG_PARSED) {
+                        LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        missing_dependency = true;
+                        break;
+                    }
+                }
+            } else if (im->state == FLAG_TYPED_STRUCTS) { // when we are about to check functions
+                for(int j=0;j<im->dependencies.size();j++) {
+                    Import* dep = imports.get(im->dependencies[j].id-1);
+                    // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
+                    if(!dep || dep->state < FLAG_TYPED_STRUCTS) {
+                        LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        missing_dependency = true;
+                        break;
+                    }
+                }
+            } else if (im->state == FLAG_TYPED_FUNCTIONS) { // when we should check bodies, functions must be available
+                for(int j=0;j<im->dependencies.size();j++) {
+                    Import* dep = imports.get(im->dependencies[j].id-1);
+                    // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
+                    if(!dep || dep->state < FLAG_TYPED_FUNCTIONS) {
+                        LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        missing_dependency = true;
+                        break;
+                    }
                 }
             }
             if(missing_dependency) {
@@ -2203,7 +2237,7 @@ void Compiler::processImports() {
         }
         if(imp) {
             // LOG(CAT_PROCESSING, log::GREEN<<"Processing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
-            imp->state = (ImportFlags)(imp->state | FLAG_BUSY);
+            imp->busy = true;
             if(!signaled) {
                 lock_wait_for_imports.signal();
                 signaled = true;
@@ -2226,7 +2260,7 @@ void Compiler::processImports() {
         lock_imports.unlock();
         
         if(imp) {
-            if(!(imp->state & FLAG_LEXED)) {
+            if(imp->state == FLAG_NONE) {
                 LOG(CAT_PROCESSING, log::GREEN<<" Lexing and preprocessing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 // imp->import_id may zero but may also be pre-created
                 u32 old_id = imp->import_id;
@@ -2246,12 +2280,10 @@ void Compiler::processImports() {
                     << ", file_size: "<<FormatBytes(intern_imp->fileSize)
                     << "\n")
                 
-                imp->state = (ImportFlags)(imp->state|FLAG_LEXED|FLAG_PREPROCESSED);
+                imp->state = FLAG_LEXED;
                 
-                // imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
-            } else if(!(imp->state & FLAG_PREPROCESSED)){
-                Assert(false); // if we lexed then we should also have preprocessed
-            } else if(!(imp->state & FLAG_PREPROCESSED_2)) {
+                // imp->finished = true; // nocheckin, we're not actually done
+            } else if(imp->state == FLAG_LEXED) {
                 LOG(CAT_PROCESSING, log::GREEN<<" Final preprocessing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 
                 imp->preproc_import_id = preprocessor.process(imp->import_id, true);
@@ -2276,24 +2308,66 @@ void Compiler::processImports() {
                     << ", tokens: "<<tokens
                     << "\n")
                 
-                imp->state = (ImportFlags)(imp->state|FLAG_PREPROCESSED_2);
+                imp->state = FLAG_PREPROCESSED;
                 
-                // imp->state = (ImportFlags)(imp->state|FLAG_FINISHED); // nocheckin, we're not actually done
-            } else if(!(imp->state & FLAG_PARSED)) {
                 auto what = parser::ParseImport(imp->preproc_import_id, this);
                 // TODO: Handle return value?
                 // ast->appendToMainBody(what); // nocheckin
-                
+                ast->shareWithGlobalScope(what);
                 // ast->print();
+                imp->scopeId = what->scopeId;
+
                 
-                imp->state = (ImportFlags)(imp->state|FLAG_PARSED);
+                imp->state = FLAG_PARSED;
+                // imp->finished = true; // nocheckin, we're not actually done
+            // } else if(imp->state == FLAG_PREPROCESSED) {
+            } else if(imp->state == FLAG_PARSED) {
+                auto my_scope = ast->getScope(imp->scopeId);
+
+                // nocheckin TODO: what if the dependencies haven't been parsed. This is ensured to happen with
+                //  circular dependencies
+                for(int i=0;i<imp->dependencies.size();i++) {
+                    auto dep = imports.get(imp->dependencies[i].id-1);
+                    Assert(dep->scopeId != 0); // can't possibly be global scope
+                    auto scope = ast->getScope(dep->scopeId);
+                    scope->sharedScopes.add(scope);
+                    // TODO: Handle named import. We can't just add it like this. nameScopeMap won't work either because it's
+                    //   not seen as a dependency I think.
+                }
+
+                TypeCheckEnums(ast, my_scope->astScope, this);
+
+                imp->state = FLAG_TYPED_ENUMS;
+
+            } else if(imp->state == FLAG_TYPED_ENUMS) {
+                auto my_scope = ast->getScope(imp->scopeId);
+                
+                bool yes = TypeCheckStructs(ast, my_scope->astScope, this, false);
+
+                if(yes) {
+                    imp->state = FLAG_TYPED_STRUCTS;
+                } else {
+                    // If we fail enough times we should print an error beacuse types don't exist.
+                }
+            } else if(imp->state == FLAG_TYPED_STRUCTS) {
+                auto my_scope = ast->getScope(imp->scopeId);
+                
+                TypeCheckFunctions(ast, my_scope->astScope, this);
+
+                imp->state = FLAG_TYPED_FUNCTIONS;
+            } else if(imp->state == FLAG_TYPED_FUNCTIONS) {
+                auto my_scope = ast->getScope(imp->scopeId);
+                
+                TypeCheckBodies(ast, my_scope->astScope, this);
+
+                imp->state = FLAG_TYPED_BODIES;
             } else {
                 LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
-                imp->state = (ImportFlags)(imp->state|FLAG_FINISHED);
+                imp->finished = true;
             }
             
             lock_imports.lock();
-            imp->state = (ImportFlags)(imp->state & ~FLAG_BUSY);
+            imp->busy = false;
             
             if(!signaled) {
                 lock_wait_for_imports.signal();
@@ -2401,12 +2475,12 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     
     return imp.import_id;
 }
-void Compiler::addDependency(u32 import_id, u32 dep_import_id) {
+void Compiler::addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name) {
     lock_imports.lock();
     auto imp = imports.get(import_id-1);
     Assert(imp);
     // imports.requestSpot(dep_import_id-1,nullptr);
-    imp->dependencies.add(dep_import_id);
+    imp->dependencies.add({dep_import_id, as_name});
     lock_imports.unlock();
     // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add depend: "<<import_id<<"->"<<dep_import_id<<" ("<<TrimCWD(imp->path)<<")\n")
 }

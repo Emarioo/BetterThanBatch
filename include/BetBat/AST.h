@@ -424,11 +424,11 @@ struct ScopeInfo {
 
     std::unordered_map<std::string, Identifier> identifierMap;
 
-    QuickArray<ScopeInfo*> usingScopes;
+    QuickArray<ScopeInfo*> sharedScopes;
 
-    ASTScope* astScope = nullptr; // some scopes don't belong to ASTScope
+    ASTScope* astScope = nullptr; // may be null, some scopes don't belong to ASTScope
 
-    // TODO: Move these elsewhere
+    // TODO: Move these elsewhere?
     u32 bc_start;
     u32 bc_end;
     u32 asm_start;
@@ -876,8 +876,8 @@ struct AST {
     TypeId ensureNonVirtualId(TypeId id);
 
     //-- OTHER
-    ASTScope* mainBody=0;
-    MUTEX(lock_mainBody);
+    ASTScope* globalScope=0;
+    MUTEX(lock_globalScope);
     // QuickArray<ASTScope*> importScopes{};
 
     // QuickArray<std::string*> tempStrings;
@@ -982,8 +982,8 @@ struct AST {
     static bool IsDecimal(TypeId id);
 
     // content in body is moved and the body is destroyed. DO NOT USE IT AFTERWARDS.
-    void appendToMainBody(ASTScope* body);
-    // void appendToAST(ASTScope* body);
+    // void appendToMainBody(ASTScope* body);
+    void shareWithGlobalScope(ASTScope* body);
 
     int nextNodeId = 1; // start at 1, 0 indicates a non-set id for ASTNode, probably a bug if so
     int getNextNodeId() { return nextNodeId++; }

@@ -35,3 +35,10 @@ struct CheckInfo : public PhaseContext {
 };
 
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);
+
+void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler);
+// may fail in which case we should try again
+SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool show_errors);
+void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler);
+
+void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler);
