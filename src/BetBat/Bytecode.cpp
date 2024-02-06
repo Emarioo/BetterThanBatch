@@ -550,3 +550,373 @@ Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 
 //     }
 //     return debugText[index].c_str();
 // }
+
+
+void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode) {
+    Assert(virtualStackPointer == 0);
+    Assert(stackAlignment.size() == 0);
+    virtualStackPointer = 0;
+    stackAlignment.cleanup();
+    
+    this->code = code;
+    this->tinycode = tinycode;
+}
+void BytecodeBuilder::emit_stack_space(int size) {
+    emit_li32(BC_REG_T1, size);
+    emit_add(BC_REG_SP, BC_REG_T1, false);
+    size = (size + 0x7) & ~0x7; // ensure 8-byte alignment
+    virtualStackPointer -= size;
+}
+void BytecodeBuilder::emit_push(BCRegister reg, bool without_instruction) {
+    if(!without_instruction) {
+        emit_opcode(BC_PUSH);
+        emit_operand(reg);
+    }
+    virtualStackPointer -= 8;
+}
+void BytecodeBuilder::emit_pop(BCRegister reg) {
+    if(index_of_last_instruction != -1 && tinycode->instructionSegment[index_of_last_instruction] == BC_PUSH && tinycode->instructionSegment[index_of_last_instruction+1] == reg) {
+        // remove redundant push and pop
+        index_of_last_instruction = -1;
+        tinycode->instructionSegment.pop();
+        tinycode->instructionSegment.pop();
+        virtualStackPointer -= 8;
+    } else {
+        emit_opcode(BC_POP);
+        emit_operand(reg);
+        virtualStackPointer += 8;
+    }
+    
+}
+void BytecodeBuilder::emit_li32(BCRegister reg, i32 imm){
+    emit_opcode(BC_LI);
+    emit_imm32(imm);
+}
+void BytecodeBuilder::emit_li64(BCRegister reg, i64 imm){
+    emit_opcode(BC_LI);
+    emit_imm64(imm);
+}
+void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm) {
+    emit_li32(BC_REG_T1, imm);
+    emit_add(reg, BC_REG_T1, false);
+    
+    if(reg == BC_REG_SP)
+        virtualStackPointer += imm;
+}
+void BytecodeBuilder::emit_integer_inst(InstructionType type, BCRegister out, BCRegister b) {
+    emit_opcode(type);
+    emit_operand(out);
+    emit_operand(b);
+    Assert(BC_MOD + 1 == BC_EQ); // make sure arithmetic and comparisons are close in enum list
+    if(type >= BC_ADD && type <= BC_GTE) {
+        emit_control(CONTROL_NONE);
+    }
+}
+void BytecodeBuilder::emit_float_inst(InstructionType type, BCRegister a, BCRegister b) {
+    emit_opcode(type);
+    emit_operand(a);
+    emit_operand(b);
+    emit_control(CONTROL_FLOAT_OP);
+}
+void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm) {
+    emit_opcode(BC_CALL);
+    emit_imm8(l);
+    emit_imm8(c);
+    *index_of_relocation = tinycode->instructionSegment.used;
+    emit_imm32(imm);
+}
+void BytecodeBuilder::emit_ret() {
+    emit_opcode(BC_RET);
+}
+void BytecodeBuilder::emit_mov_rr(BCRegister to, BCRegister from){
+    emit_opcode(BC_MOV_RR);
+    emit_operand(to);
+    emit_operand(from);
+}
+void BytecodeBuilder::emit_mov_rm(BCRegister to, BCRegister from, int size){
+    emit_opcode(BC_MOV_RM);
+    emit_operand(to);
+    emit_operand(from);
+    
+    if(size == 1) emit_control(CONTROL_8B);
+    else if(size == 2) emit_control(CONTROL_16B);
+    else if(size == 4) emit_control(CONTROL_32B);
+    else if(size == 8) emit_control(CONTROL_64B);
+    else Assert(false);
+}
+void BytecodeBuilder::emit_mov_mr(BCRegister to, BCRegister from, int size){
+    emit_opcode(BC_MOV_MR);
+    emit_operand(to);
+    emit_operand(from);
+    if(size == 1) emit_control(CONTROL_8B);
+    else if(size == 2) emit_control(CONTROL_16B);
+    else if(size == 4) emit_control(CONTROL_32B);
+    else if(size == 8) emit_control(CONTROL_64B);
+    else Assert(false);
+}
+
+void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size, int displacement){
+    Assert(to != BC_REG_T1 && from != BC_REG_T1);
+    // TODO: Create a displacement instruction instead of li + add
+    emit_li32(BC_REG_T1, displacement);
+    emit_add(BC_REG_T1, from, false);
+    from = BC_REG_T1;
+    
+    emit_opcode(BC_MOV_RM);
+    emit_operand(to);
+    emit_operand(from);
+    
+    if(size == 1) emit_control(CONTROL_8B);
+    else if(size == 2) emit_control(CONTROL_16B);
+    else if(size == 4) emit_control(CONTROL_32B);
+    else if(size == 8) emit_control(CONTROL_64B);
+    else Assert(false);
+}
+void BytecodeBuilder::emit_mov_mr_disp(BCRegister to, BCRegister from, int size, int displacement){
+    Assert(to != BC_REG_T1 && from != BC_REG_T1);
+    // TODO: Create a displacement instruction instead of li + add
+    emit_li32(BC_REG_T1, displacement);
+    emit_add(BC_REG_T1, to, false);
+    to = BC_REG_T1;
+    
+    emit_opcode(BC_MOV_MR);
+    emit_operand(to);
+    emit_operand(from);
+     
+    if(size == 1) emit_control(CONTROL_8B);
+    else if(size == 2) emit_control(CONTROL_16B);
+    else if(size == 4) emit_control(CONTROL_32B);
+    else if(size == 8) emit_control(CONTROL_64B);
+    else Assert(false);
+}
+
+void BytecodeBuilder::emit_add(BCRegister to, BCRegister from, bool is_float) {
+    emit_opcode(BC_ADD);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_sub(BCRegister to, BCRegister from, bool is_float) {
+    emit_opcode(BC_SUB);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_mul(BCRegister to, BCRegister from, bool is_float) {
+    emit_opcode(BC_MUL);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_div(BCRegister to, BCRegister from, bool is_float) {
+    emit_opcode(BC_DIV);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_mod(BCRegister to, BCRegister from, bool is_float) {
+    emit_opcode(BC_MOD);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+
+
+void BytecodeBuilder::emit_band(BCRegister to, BCRegister from) {
+    emit_opcode(BC_BAND);
+    emit_operand(to);
+    emit_operand(from);   
+}
+void BytecodeBuilder::emit_bor(BCRegister to, BCRegister from) {
+    emit_opcode(BC_BOR);
+    emit_operand(to);
+    emit_operand(from);   
+}
+void BytecodeBuilder::emit_bxor(BCRegister to, BCRegister from) {
+    emit_opcode(BC_BXOR);
+    emit_operand(to);
+    emit_operand(from);   
+}
+void BytecodeBuilder::emit_bnot(BCRegister to, BCRegister from) {
+    emit_opcode(BC_BNOT);
+    emit_operand(to);
+    emit_operand(from);   
+}
+void BytecodeBuilder::emit_blshift(BCRegister to, BCRegister from) {
+    emit_opcode(BC_BLSHIFT);
+    emit_operand(to);
+    emit_operand(from);   
+}
+void BytecodeBuilder::emit_brshift(BCRegister to, BCRegister from) {
+    emit_opcode(BC_BRSHIFT);
+    emit_operand(to);
+    emit_operand(from);   
+}
+
+void BytecodeBuilder::emit_eq(BCRegister to, BCRegister from, float is_float){
+    emit_opcode(BC_EQ);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_neq(BCRegister to, BCRegister from, float is_float){
+    emit_opcode(BC_NEQ);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_lt(BCRegister to, BCRegister from, float is_float){
+    emit_opcode(BC_LT);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_lte(BCRegister to, BCRegister from, float is_float){
+    emit_opcode(BC_LTE);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_gt(BCRegister to, BCRegister from, float is_float){
+    emit_opcode(BC_GT);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+void BytecodeBuilder::emit_gte(BCRegister to, BCRegister from, float is_float){
+    emit_opcode(BC_GTE);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+}
+ 
+void BytecodeBuilder::emit_land(BCRegister to, BCRegister from) {
+    emit_opcode(BC_LAND);
+    emit_operand(to);
+    emit_operand(from);
+}
+void BytecodeBuilder::emit_lor(BCRegister to, BCRegister from) {
+    emit_opcode(BC_LOR);
+    emit_operand(to);
+    emit_operand(from);
+}
+void BytecodeBuilder::emit_lnot(BCRegister to, BCRegister from) {
+    emit_opcode(BC_LNOT);
+    emit_operand(to);
+    emit_operand(from);
+}
+void BytecodeBuilder::emit_dataptr(BCRegister reg, i32 imm) {
+    emit_opcode(BC_DATAPTR);
+    emit_operand(reg);
+    emit_imm32(imm);
+}
+void BytecodeBuilder::emit_codeptr(BCRegister reg, i32 imm) {
+    emit_opcode(BC_CODEPTR);
+    emit_operand(reg);
+    emit_imm32(imm);
+}
+void BytecodeBuilder::emit_memzero(BCRegister ptr_reg, BCRegister size_reg, u8 batch) {
+    emit_opcode(BC_MEMZERO);
+    emit_operand(ptr_reg);
+    emit_operand(size_reg);   
+    emit_imm8(batch);
+}
+void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType) {
+    emit_opcode(BC_CAST);
+    emit_operand(reg);
+    emit_imm8(castType);
+}
+
+void BytecodeBuilder::emit_opcode(InstructionType type) {
+    index_of_last_instruction = tinycode->instructionSegment.size();
+    tinycode->instructionSegment.add((u8)type);
+}
+void BytecodeBuilder::emit_operand(BCRegister reg) {
+    tinycode->instructionSegment.add((u8)reg);
+}
+void BytecodeBuilder::emit_control(InstructionControl control) {
+    tinycode->instructionSegment.add((u8)control);
+}
+void BytecodeBuilder::emit_imm32(i32 imm) {
+    tinycode->instructionSegment.add(0); // TODO: OPTIMIZE
+    tinycode->instructionSegment.add(0);
+    tinycode->instructionSegment.add(0);
+    tinycode->instructionSegment.add(0);
+    i32* ptr = (i32*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 4);
+    *ptr = imm;
+}
+void BytecodeBuilder::emit_imm64(i64 imm) {
+    tinycode->instructionSegment.add(0); // TODO: OPTIMIZE
+    tinycode->instructionSegment.add(0);
+    tinycode->instructionSegment.add(0);
+    tinycode->instructionSegment.add(0);
+    tinycode->instructionSegment.add(0);
+    tinycode->instructionSegment.add(0);
+    tinycode->instructionSegment.add(0);
+    tinycode->instructionSegment.add(0);
+    i64* ptr = (i64*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 8);
+    *ptr = imm;
+}
+
+extern const char* instruction_names[] {
+    "halt", // BC_HALT
+    "nop", // BC_NOP
+    "mov_rr", // BC_MOV_RR
+    "mov_rm", // BC_MOV_RM
+    "mov_mr", // BC_MOV_MR
+    "push", // BC_PUSH
+    "pop", // BC_POP
+    "li", // BC_LI
+    "incr", // BC_INCR
+    "jmp", // BC_JMP
+    "call", // BC_CALL
+    "ret", // BC_RET
+    "jnz", // BC_JNZ
+    "jz", // BC_JZ
+    "dataptr", // BC_DATAPTR
+    "codeptr", // BC_CODEPTR
+    "add", // BC_ADD
+    "sub", // BC_SUB
+    "mul", // BC_MUL
+    "div", // BC_DIV
+    "mod", // BC_MOD
+    "eq", // BC_EQ
+    "neq", // BC_NEQ
+    "lt", // BC_LT
+    "lte", // BC_LTE
+    "gt", // BC_GT
+    "gte", // BC_GTE
+    "land", // BC_LAND
+    "lor", // BC_LOR
+    "lnot", // BC_LNOT
+    "bxor", // BC_BXOR
+    "bor", // BC_BOR
+    "band", // BC_BAND
+    "bnot", // BC_BNOT
+    "blshift", // BC_BLSHIFT
+    "brshift", // BC_BRSHIFT
+    "cast", // BC_CAST
+    "memzero", // BC_MEMZERO
+    "memcpy", // BC_MEMCPY
+    "strlen", // BC_STRLEN
+    "rdtsc", // BC_RDTSC
+    "cmp_swap", // BC_CMP_SWAP
+    "atom_add", // BC_ATOMIC_ADD
+    "sqrt", // BC_SQRT
+    "round", // BC_ROUND
+    "asm", // BC_ASM
+    "test", // BC_TEST_VALUE
+};
+extern const char* register_names[] {
+    "invalid", // BC_REG_INVALID
+    "a", // BC_REG_A
+    "b", // BC_REG_B
+    "c", // BC_REG_C
+    "d", // BC_REG_D
+    "e", // BC_REG_E
+    "f", // BC_REG_F
+    "t0", // BC_REG_T0
+    "t1", // BC_REG_T1
+    "sp", // BC_REG_SP
+    "bp", // BC_REG_BP
+};

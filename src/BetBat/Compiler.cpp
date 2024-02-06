@@ -2347,7 +2347,7 @@ void Compiler::processImports() {
                 if(yes) {
                     imp->state = FLAG_TYPED_STRUCTS;
                 } else {
-                    // If we fail enough times we should print an error beacuse types don't exist.
+                    // nocheckin, if we fail enough times we should print an error beacuse types don't exist.
                 }
             } else if(imp->state == FLAG_TYPED_STRUCTS) {
                 auto my_scope = ast->getScope(imp->scopeId);
@@ -2361,6 +2361,13 @@ void Compiler::processImports() {
                 TypeCheckBodies(ast, my_scope->astScope, this);
 
                 imp->state = FLAG_TYPED_BODIES;
+            } else if(imp->state == FLAG_TYPED_BODIES) {
+                auto my_scope = ast->getScope(imp->scopeId);
+                
+                auto tiny = GenerateScope(ast, my_scope->astScope, this);
+                
+                imp->state = FLAG_GENERATED;
+                
             } else {
                 LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 imp->finished = true;
@@ -2395,6 +2402,7 @@ void Compiler::compileSource(const std::string& path) {
     signaled = true;
     preprocessor.init(&lexer, this);
     ast = AST::Create();
+    code = Bytecode::Create();
     reporter.lexer = &lexer;
     
     bool yes = addImport(path);

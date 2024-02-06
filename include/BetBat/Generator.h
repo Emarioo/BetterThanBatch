@@ -6,30 +6,31 @@
 
 #include "BetBat/Lang.h"
 
-struct CompileInfo;
-struct GenInfo;
-struct GenInfo : public PhaseContext {
+struct GenContext : public PhaseContext {
+    TinyBytecode* tinycode = nullptr;
     Bytecode* code=nullptr;
     AST* ast=nullptr;
+    Reporter* reporter=nullptr;
+    
+    GenContext() : info(*this) { } // well this is dumb
+    GenContext& info;
 
-    struct AlignInfo {
-        int diff=0;
-        int size=0;
-    };
-    DynamicArray<AlignInfo> stackAlignment;
-    int virtualStackPointer = 0;
+    // struct AlignInfo {
+    //     int diff=0;
+    //     int size=0;
+    // };
+    // DynamicArray<AlignInfo> stackAlignment;
+    // int virtualStackPointer = 0;
     int currentFrameOffset = 0;
 
-    void addPop(int reg);
+    BytecodeBuilder builder{};
+
+    // void addPop(int reg);
     // DON'T USE withoutInstruction UNLESS YOU ARE 100% CERTAIN ABOUT WHAT YOU ARE DOING.
     // It's mainly used for cast with ast_asm.
-    void addPush(int reg, bool withoutInstruction = false);
-    void addIncrSp(i16 offset);
-    void addAlign(int alignment);
-    // Negative value to make some space for values
-    // Positive to remove values
-    // like push and pop but with a size
-    void addStackSpace(i32 size);
+    // void addPush(int reg, bool withoutInstruction = false);
+    // void addIncrSp(i16 offset);
+    // void addAlign(int alignment);
     int saveStackMoment();
     void restoreStackMoment(int moment, bool withoutModification = false, bool withoutInstruction = false);
 
@@ -43,12 +44,12 @@ struct GenInfo : public PhaseContext {
     void pushNode(ASTNode* node);
     void popNode();
     // returns false if a modified or different instruction was added
-    bool addInstruction(Instruction inst, bool bypassAsserts = false);
-    void addLoadIm(u8 reg, i32 value);
-    void addLoadIm2(u8 reg, i64 value);
+    // bool addInstruction(Instruction inst, bool bypassAsserts = false);
+    // void addLoadIm(u8 reg, i32 value);
+    // void addLoadIm2(u8 reg, i64 value);
     // different from load immediate
-    void addImm(i32 value);
-    void addCall(LinkConventions linkConvention, CallConventions callConvention);
+    // void addImm(i32 value);
+    // void addCall(LinkConventions linkConvention, CallConventions callConvention);
     void addExternalRelocation(const std::string name, u32 codeAddress) { if(!disableCodeGeneration) code->addExternalRelocation(name, codeAddress); }
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
@@ -104,20 +105,31 @@ struct GenInfo : public PhaseContext {
     // Extra details
     // FuncImpl* recentFuncImpl=nullptr; // used by fncall
 
-    /*
-        New bytecode instructions
-    */
-//    u8 requestRegister(); // 0 is failure
-//    void relinguishRegister(u8 registerNumber);
-//    void add_push(u8 registerNumber);
-//    void add_pop(u8 registerNumber);
 
+    SignalIO generatePush(BCRegister baseReg, int offset, TypeId typeId);
+    SignalIO generatePop(BCRegister baseReg, int offset, TypeId typeId);
+    SignalIO generateArtificialPush(TypeId typeId);
+    // Generate a push from pointer (baseReg) where a list of pushed values are stored. generatePush reads memory from a struct layout while this function "copies" pushed values from a pointer.
+    SignalIO generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr);
+    void genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size);
+    
+    SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);
+    SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr);
+    SignalIO generateFnCall(ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator);
+    SignalIO generateExpression(ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope = -1);
+    SignalIO generateFunction(ASTFunction* function, ASTStruct* astStruct = nullptr);
+    SignalIO generateFunctions(ASTScope* body);
+    SignalIO generateBody(ASTScope *body);
+    
+    bool performSafeCast(TypeId from, TypeId to);
 };
 struct NodeScope {
-    NodeScope(GenInfo* info) : info(info) {}
+    NodeScope(GenContext* info) : info(info) {}
     ~NodeScope() {
         info->popNode();
     }
-    GenInfo* info = nullptr;
+    GenContext* info = nullptr;
 };
 Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
+
+TinyBytecode* GenerateScope(AST* ast, ASTScope* scope, Compiler* compiler);

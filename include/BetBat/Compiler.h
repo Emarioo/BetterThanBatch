@@ -290,6 +290,7 @@ struct Compiler {
     lexer::Lexer lexer{};
     preproc::Preprocessor preprocessor{};
     AST* ast = nullptr;
+    Bytecode* code = nullptr;
     Reporter reporter{};
     
     enum ImportFlags : u32 {
@@ -302,6 +303,8 @@ struct Compiler {
         FLAG_TYPED_STRUCTS      = 0x20,
         FLAG_TYPED_FUNCTIONS    = 0x40,
         FLAG_TYPED_BODIES       = 0x80,
+        
+        FLAG_GENERATED          = 0x100,
 
         // FLAG_BUSY               = 0x4000,
         // FLAG_FINISHED           = 0x8000,

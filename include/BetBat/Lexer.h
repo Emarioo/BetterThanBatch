@@ -213,6 +213,7 @@ namespace lexer {
         std::string getStdStringFromToken(Token tok);
 
         std::string tostring(Token token);
+        std::string tostring(SourceLocation token) { return tostring(token.tok); }
 
         u32 createImport(const std::string& path, Import** out_import);
         // unsafe if you have an import_id reference hanging somewhere
@@ -227,6 +228,14 @@ namespace lexer {
         const BucketArray<Import>& getImports() { return imports; }
         // const DynamicArray<Import*>& getImports() { return _imports; }
         
+        
+        Import* getImport_unsafe(SourceLocation location) {
+            u32 cindex, tindex;
+            decode_origin(location.tok.origin, &cindex,&tindex);
+            auto chunk = getChunk_unsafe(cindex);
+            auto imp = getImport_unsafe(chunk->import_id);
+            return imp;
+        }
         Import* getImport_unsafe(u32 import_id) {
             lock_imports.lock();
             auto imp = imports.get(import_id-1);
@@ -241,6 +250,9 @@ namespace lexer {
             lock_chunks.unlock();
             return imp;
         }
+        TokenInfo* getTokenInfo_unsafe(Token token);
+        TokenInfo* getTokenInfo_unsafe(SourceLocation location);
+        TokenSource* getTokenSource_unsafe(SourceLocation location);
         
         // handy functions, the implementation details of tokens per chunk, chunk index and token index may change in the future
         // so we hide it behine encode and decode functions.
@@ -280,7 +292,6 @@ namespace lexer {
         // the data will be appended to the previous data possibly changing the data offset
         // if space isn't available.
         u32 modifyTokenData(Token token, void* ptr, u32 size, bool with_null_termination = false);
-        TokenInfo* getTokenInfo_unsafe(Token token);
 
     };
     

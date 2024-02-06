@@ -237,12 +237,14 @@ VariableInfo *AST::addVariable(ScopeId scopeId, const StringView&name, ContentOr
         // If we reused identifier then it must have been a variable
         // and it should have varinfo. Probably bug otherwise.
     } else {
-        id->type = Identifier::VARIABLE;
-        id->varIndex = variables.size();
-        id->order = contentOrder;
         varinfo = (VariableInfo*)allocate(sizeof(VariableInfo));
         new(varinfo)VariableInfo();
+        
+        id->type = Identifier::VARIABLE;
+        id->order = contentOrder;
+        
         lock_variables.lock();
+        id->varIndex = variables.size();
         variables.add(varinfo);
         lock_variables.unlock();
     }
@@ -271,6 +273,7 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const StringView &name, ContentO
     if(!si)
         return nullptr;
     std::string sName = std::string(name.ptr,name.len); // string view?
+    lock_variables.lock();
     auto pair = si->identifierMap.find(sName);
     if (pair != si->identifierMap.end()){
         if(out_reused_identical) {
@@ -291,49 +294,9 @@ Identifier *AST::addIdentifier(ScopeId scopeId, const StringView &name, ContentO
     id->name = name;
     id->scopeId = scopeId;
     id->order = contentOrder;
+    lock_variables.unlock();
     return id;
 }
-// Identifier* AST::findIdentifier(ScopeId startScopeId, const Token& name, bool searchParentScopes){
-//     using namespace engone;
-//     if(searchParentScopes){
-//         // log::out << __func__<<": "<<name<<"\n";
-//         Token ns={};
-//         Token realName = TrimNamespace(Token(name), &ns);
-//         ScopeId nextScopeId = startScopeId;
-//         WHILE_TRUE {
-//             if(ns.str) {
-//                 ScopeInfo* nscope = getScope(ns, nextScopeId);
-//                 Assert(nscope);
-//                 auto pair = nscope->identifierMap.find(realName);
-//                 if(pair != nscope->identifierMap.end()){
-//                     return &pair->second;
-//                 }
-//             }
-//             ScopeInfo* si = getScope(nextScopeId);
-//             Assert(si);
-//             if(!ns.str) {
-//                 auto pair = si->identifierMap.find(realName);
-//                 if(pair != si->identifierMap.end()){
-//                     return &pair->second;
-//                 }
-//             }
-//             if(nextScopeId == 0 && si->parent == 0){
-//                 // quit when we checked global
-//                 break;
-//             }
-//             nextScopeId = si->parent;
-//         }
-//     } else {
-//         ScopeInfo* si = getScope(startScopeId);
-//         Assert(si);
-//         auto pair = si->identifierMap.find(name);
-//         if(pair != si->identifierMap.end()){
-//             return &pair->second;
-//         }
-//     }
-//     return nullptr;
-// }
-
 Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder, const StringView& name, bool searchParentScopes){
     using namespace engone;
     if(searchParentScopes){
@@ -342,6 +305,8 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
         DecomposeNamespace(name, &ns, &real_name);
         ScopeId nextScopeId = startScopeId;
         ContentOrder nextOrder = contentOrder;
+        lock_variables.lock();
+        defer { lock_variables.unlock(); };
         WHILE_TRUE_N(1000) {
             if(ns.ptr) {
                 Assert(false); // broken with content order
@@ -371,6 +336,8 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
     } else {
         ScopeInfo* si = getScope(startScopeId);
         Assert(si);
+        lock_variables.lock();
+        defer { lock_variables.unlock(); };
         auto pair = si->identifierMap.find(name);
         if(pair == si->identifierMap.end()){
             return nullptr;
@@ -386,6 +353,8 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
 
 void AST::removeIdentifier(ScopeId scopeId, const StringView &name) {
     auto si = getScope(scopeId);
+    lock_variables.lock();
+    
     auto pair = si->identifierMap.find(name);
     if (pair != si->identifierMap.end()) {
         // TODO: The variable the identifier points to cannot be erased since
@@ -398,6 +367,7 @@ void AST::removeIdentifier(ScopeId scopeId, const StringView &name) {
         //   which we don't have at the moment.
         // Assert(("cannot remove non-existent identifier, compiler bug?",false));
     }
+    lock_variables.unlock();
 }
 bool AST::findEnumMember(ScopeId scopeId, const StringView& name, ContentOrder contentOrder, ASTEnum** out_enum, int* out_member) {
     StringView ns;
@@ -1196,10 +1166,10 @@ ScopeInfo* AST::createScope(ScopeId parentScope, ContentOrder contentOrder, ASTS
     auto ptr = (ScopeInfo *)allocate(sizeof(ScopeInfo));
     u32 id = 0;
     
-    id = nextScopeInfoIndex++; // nocheckin
-    _scopeInfos[id] = ptr;
+    // id = nextScopeInfoIndex++; // nocheckin
 
-    // id = engone::atomic_add((volatile i32*)&nextScopeInfoIndex, 1) - 1;
+    id = engone::atomic_add((volatile i32*)&nextScopeInfoIndex, 1) - 1;
+    _scopeInfos[id] = ptr;
     
     // lock_scopes.lock(); // too slow
     // id = _scopeInfos.size();
@@ -1792,8 +1762,8 @@ u32 TypeInfo::alignedSize() {
     return _size > 8 ? 8 : _size;
 }
 void AST::DecomposeNamespace(StringView view, StringView* out_namespace, StringView* out_name){
-    out_namespace = {};
-    out_name = {};
+    *out_namespace = {};
+    *out_name = {};
     if(!view.ptr || view.len < 3) {
         *out_name = view;
         return;

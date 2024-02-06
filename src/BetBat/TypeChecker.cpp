@@ -3469,6 +3469,7 @@ void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
         CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
     }
     
-    info.compileInfo->compileOptions->compileStats.errors += info.errors;
+    
+    // info.compileInfo->compileOptions->compileStats.errors += info.errors;
     // return info.errors;
 }

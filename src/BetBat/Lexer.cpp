@@ -1059,6 +1059,34 @@ TokenInfo* Lexer::getTokenInfo_unsafe(Token token){
     if(!chunk) return nullptr;
     return chunk->tokens.getPtr(tindex);
 }
+TokenInfo* Lexer::getTokenInfo_unsafe(SourceLocation location){
+    // ZoneScoped;
+    u32 cindex;
+    u32 tindex;
+    decode_origin(location.tok.origin, &cindex, &tindex);
+    
+    lock_chunks.lock();
+    Chunk* chunk = _chunks.get(cindex);
+    lock_chunks.unlock();
+    
+    Assert(chunk);
+    if(!chunk) return nullptr;
+    return chunk->tokens.getPtr(tindex);
+}
+TokenSource* Lexer::getTokenSource_unsafe(SourceLocation location){
+    // ZoneScoped;
+    u32 cindex;
+    u32 tindex;
+    decode_origin(location.tok.origin, &cindex, &tindex);
+    
+    lock_chunks.lock();
+    Chunk* chunk = _chunks.get(cindex);
+    lock_chunks.unlock();
+    
+    Assert(chunk);
+    if(!chunk) return nullptr;
+    return chunk->sources.getPtr(tindex);
+}
 // lexer::Token Lexer::Import::getToken(u32 token_index_into_import) {
 //     Assert(false); // incomplete, chunks pointers are not added to import.chunks
 //     u32 fcindex;

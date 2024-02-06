@@ -1898,29 +1898,30 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         }
                         break; 
                     }
-                    // These are a little special.
-                    case CMP_UINT_SINT:
-                    case CMP_SINT_UINT: {
-                        switch(opcode) {
-                            case BC_LT: {
-                                setType = OPCODE_2_SETB_RM8; 
-                                break; 
-                            }
-                            case BC_LTE: {
-                                setType = OPCODE_2_SETBE_RM8;
-                                break; 
-                            }
-                            case BC_GT: {
-                                setType = OPCODE_2_SETA_RM8;
-                                break;
-                            }
-                            case BC_GTE: {
-                                setType = OPCODE_2_SETAE_RM8;
-                                break;
-                            }
-                        }
-                        break;
-                    }
+                    // Are these possible?
+                    // case CMP_UINT_SINT:
+                    // case CMP_SINT_UINT: {
+                    //     switch(opcode) {
+                    //         case BC_LT: {
+                    //             setType = OPCODE_2_SETB_RM8; 
+                    //             break; 
+                    //         }
+                    //         case BC_LTE: {
+                    //             setType = OPCODE_2_SETBE_RM8;
+                    //             break; 
+                    //         }
+                    //         case BC_GT: {
+                    //             setType = OPCODE_2_SETA_RM8;
+                    //             break;
+                    //         }
+                    //         case BC_GTE: {
+                    //             setType = OPCODE_2_SETAE_RM8;
+                    //             break;
+                    //         }
+                    //     }
+                    //     break;
+                    // }
+                    Assert(false);
                 }
                 #ifdef newstuff
                 prefix = 0;
