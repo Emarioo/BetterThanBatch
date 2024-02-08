@@ -116,10 +116,14 @@ struct GenContext : public PhaseContext {
     SignalIO generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true);
     SignalIO generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr);
     SignalIO generateFnCall(ASTExpression* expression, DynamicArray<TypeId>* outTypeIds, bool isOperator);
+    SignalIO generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope = -1);
     SignalIO generateExpression(ASTExpression *expression, DynamicArray<TypeId> *outTypeIds, ScopeId idScope = -1);
     SignalIO generateFunction(ASTFunction* function, ASTStruct* astStruct = nullptr);
     SignalIO generateFunctions(ASTScope* body);
     SignalIO generateBody(ASTScope *body);
+    
+    SignalIO generatePreload();
+    SignalIO generateData();
     
     bool performSafeCast(TypeId from, TypeId to);
 };

@@ -1021,6 +1021,10 @@ struct AST {
     volatile u32 nextScopeInfoIndex = 0;
     // TODO: Use a bucket array
     QuickArray<ScopeInfo*> _scopeInfos; // not private because x64_Converted needs it (once again, I don't want to use friend)
+    
+    MUTEX(lock_strings);
+    std::unordered_map<std::string, u32> _constStringMap; // used in generator
+    QuickArray<ConstString> _constStrings;
 private:
     MUTEX(lock_linearAllocation);
     char* linearAllocation = nullptr;
@@ -1028,9 +1032,6 @@ private:
     volatile u32 linearAllocationUsed = 0;
 
 
-    MUTEX(lock_strings);
-    std::unordered_map<std::string, u32> _constStringMap;
-    QuickArray<ConstString> _constStrings;
 
     u32 globalDataOffset = 0;
 

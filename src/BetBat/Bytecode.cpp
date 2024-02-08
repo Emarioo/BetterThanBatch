@@ -567,6 +567,13 @@ void BytecodeBuilder::emit_stack_space(int size) {
     size = (size + 0x7) & ~0x7; // ensure 8-byte alignment
     virtualStackPointer -= size;
 }
+void BytecodeBuilder::emit_stack_alignment(int alignment) {
+    int dx = virtualStackPointer & alignment;
+    if(dx != 0) {
+        emit_li32(BC_REG_T1, alignment - dx);
+        emit_add(BC_REG_SP, BC_REG_T1, false);
+    }
+}
 void BytecodeBuilder::emit_push(BCRegister reg, bool without_instruction) {
     if(!without_instruction) {
         emit_opcode(BC_PUSH);
@@ -603,21 +610,21 @@ void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm) {
     if(reg == BC_REG_SP)
         virtualStackPointer += imm;
 }
-void BytecodeBuilder::emit_integer_inst(InstructionType type, BCRegister out, BCRegister b) {
-    emit_opcode(type);
-    emit_operand(out);
-    emit_operand(b);
-    Assert(BC_MOD + 1 == BC_EQ); // make sure arithmetic and comparisons are close in enum list
-    if(type >= BC_ADD && type <= BC_GTE) {
-        emit_control(CONTROL_NONE);
-    }
-}
-void BytecodeBuilder::emit_float_inst(InstructionType type, BCRegister a, BCRegister b) {
-    emit_opcode(type);
-    emit_operand(a);
-    emit_operand(b);
-    emit_control(CONTROL_FLOAT_OP);
-}
+// void BytecodeBuilder::emit_integer_inst(InstructionType type, BCRegister out, BCRegister b) {
+//     emit_opcode(type);
+//     emit_operand(out);
+//     emit_operand(b);
+//     Assert(BC_MOD + 1 == BC_EQ); // make sure arithmetic and comparisons are close in enum list
+//     if(type >= BC_ADD && type <= BC_GTE) {
+//         emit_control(CONTROL_NONE);
+//     }
+// }
+// void BytecodeBuilder::emit_float_inst(InstructionType type, BCRegister a, BCRegister b) {
+//     emit_opcode(type);
+//     emit_operand(a);
+//     emit_operand(b);
+//     emit_control(CONTROL_FLOAT_OP);
+// }
 void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm) {
     emit_opcode(BC_CALL);
     emit_imm8(l);
@@ -627,6 +634,40 @@ void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index
 }
 void BytecodeBuilder::emit_ret() {
     emit_opcode(BC_RET);
+}
+void BytecodeBuilder::emit_jmp(int pc) {
+    emit_opcode(BC_JMP);
+    emit_imm32(pc - get_pc());
+}
+void BytecodeBuilder::emit_jmp(int* out_index_of_imm) {
+    emit_opcode(BC_JMP);
+    *out_index_of_imm = get_pc();
+    emit_imm32(0);
+}
+void BytecodeBuilder::emit_jz(BCRegister reg, int pc) {
+    emit_opcode(BC_JZ);
+    emit_operand(reg);
+    emit_imm32(pc - get_pc());
+}
+void BytecodeBuilder::emit_jz(BCRegister reg, int* out_index_of_imm) {
+    emit_opcode(BC_JZ);
+    emit_operand(reg);
+    *out_index_of_imm = get_pc();
+    emit_imm32(0);
+}
+void BytecodeBuilder::emit_jnz(BCRegister reg, int pc) {
+    emit_opcode(BC_JNZ);
+    emit_operand(reg);
+    emit_imm32(pc - get_pc());
+}
+void BytecodeBuilder::emit_jnz(BCRegister reg, int* out_index_of_imm) {
+    emit_opcode(BC_JNZ);
+    emit_operand(reg);
+    *out_index_of_imm = get_pc();
+    emit_imm32(0);
+}
+void BytecodeBuilder::fix_jump_here(int imm_index) {
+    *(int*)&tinycode->instructionSegment[imm_index] = get_pc() - imm_index;
 }
 void BytecodeBuilder::emit_mov_rr(BCRegister to, BCRegister from){
     emit_opcode(BC_MOV_RR);
@@ -702,23 +743,23 @@ void BytecodeBuilder::emit_sub(BCRegister to, BCRegister from, bool is_float) {
     emit_operand(from);
     emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
 }
-void BytecodeBuilder::emit_mul(BCRegister to, BCRegister from, bool is_float) {
+void BytecodeBuilder::emit_mul(BCRegister to, BCRegister from, bool is_float, bool is_signed) {
     emit_opcode(BC_MUL);
     emit_operand(to);
     emit_operand(from);
-    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+    emit_control((InstructionControl)((is_float ? CONTROL_FLOAT_OP : CONTROL_NONE) | (!is_signed ? CONTROL_UNSIGNED_OP : CONTROL_NONE)));
 }
-void BytecodeBuilder::emit_div(BCRegister to, BCRegister from, bool is_float) {
+void BytecodeBuilder::emit_div(BCRegister to, BCRegister from, bool is_float, bool is_signed) {
     emit_opcode(BC_DIV);
     emit_operand(to);
     emit_operand(from);
-    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+    emit_control((InstructionControl)((is_float ? CONTROL_FLOAT_OP : CONTROL_NONE) | (!is_signed ? CONTROL_UNSIGNED_OP : CONTROL_NONE)));
 }
-void BytecodeBuilder::emit_mod(BCRegister to, BCRegister from, bool is_float) {
+void BytecodeBuilder::emit_mod(BCRegister to, BCRegister from, bool is_float, bool is_signed) {
     emit_opcode(BC_MOD);
     emit_operand(to);
     emit_operand(from);
-    emit_control(is_float ? CONTROL_FLOAT_OP : CONTROL_NONE);
+    emit_control((InstructionControl)((is_float ? CONTROL_FLOAT_OP : CONTROL_NONE) | (!is_signed ? CONTROL_UNSIGNED_OP : CONTROL_NONE)));
 }
 
 
@@ -821,10 +862,12 @@ void BytecodeBuilder::emit_memzero(BCRegister ptr_reg, BCRegister size_reg, u8 b
     emit_operand(size_reg);   
     emit_imm8(batch);
 }
-void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType) {
+void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType, u8 from_size, u8 to_size) {
     emit_opcode(BC_CAST);
     emit_operand(reg);
     emit_imm8(castType);
+    emit_imm8(from_size);
+    emit_imm8(to_size);
 }
 
 void BytecodeBuilder::emit_opcode(InstructionType type) {
