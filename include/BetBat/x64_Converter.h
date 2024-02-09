@@ -94,6 +94,6 @@ struct Program_x64 {
 
     bool _reserve(u32 newAllocationSize);
 };
-Program_x64* ConvertTox64(Bytecode* bytecode);
+// Program_x64* ConvertTox64(Bytecode* bytecode);
 // The function will print the reformatted content if outBuffer is null
 void ReformatDumpbinAsm(LinkerChoice linker, QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes);

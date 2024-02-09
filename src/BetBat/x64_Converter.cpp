@@ -733,6 +733,7 @@ void ReformatAssemblerError(Bytecode::ASM& asmInstance, QuickArray<char>& inBuff
         log::out << log::NO_COLOR << it.message << "\n";
     }
 }
+#ifdef gone
 // allowRX refers to the registers R8-R11
 u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool allowRX = false){
     u8 size = DECODE_REG_SIZE(bcreg);
@@ -3972,7 +3973,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     }
     return prog;
 }
-
+#endif
 void Program_x64::Destroy(Program_x64* program) {
     using namespace engone;
     Assert(program);

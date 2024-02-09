@@ -4,6 +4,13 @@
 #include "BetBat/NativeRegistry.h"
 #include "Native/NativeLayer.h"
 
+#ifdef gone
+
+/*
+    Interpreter may not be the accurate term for executing bytecode.
+    Interpreter is more executing high level code, statement by statement.
+    A virtual machine or bytecode runner would be more accurate.
+*/
 struct Interpreter {
     ~Interpreter(){
         cleanup();
@@ -52,3 +59,4 @@ struct Interpreter {
     void cleanup();
     void printRegisters();
 };
+#endif

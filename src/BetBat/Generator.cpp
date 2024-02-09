@@ -3,9 +3,9 @@
 
 #undef ERRTYPE
 #undef ERRTYPE1
-#define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD2(L, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE2(L,info.ast->typeToString(LT)) ERR_LINE2(R,info.ast->typeToString(RT)))
 #define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD2(R, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE2(R,"expects "+info.ast->typeToString(RT)))
 
+// #define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD2(L, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE2(L,info.ast->typeToString(LT)) ERR_LINE2(R,info.ast->typeToString(RT)))
 #define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD2(L, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << ast->typeToString(LT) << " - " << ast->typeToString(RT) << " " << M) ERR_LINE2(L,ast->typeToString(LT)) ERR_LINE2(R,ast->typeToString(RT)))
 
 #undef ERR_SECTION
@@ -366,41 +366,41 @@ void GenContext::addCallToResolve(int bcIndex, FuncImpl* funcImpl){
 //         // code->add({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
 //     }
 // }
-int GenContext::saveStackMoment() {
-    return virtualStackPointer;
-}
+// int GenContext::saveStackMoment() {
+//     return virtualStackPointer;
+// }
 
-void GenContext::restoreStackMoment(int moment, bool withoutModification, bool withoutInstruction) {
-    using namespace engone;
-    int offset = moment - virtualStackPointer;
-    if (offset == 0)
-        return;
-    if(!withoutModification || withoutInstruction) {
-        int at = moment - virtualStackPointer;
-        while (at > 0 && stackAlignment.size() > 0) {
-            auto align = stackAlignment.last();
-            // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
-            stackAlignment.pop();
-            at -= align.size;
-            at -= align.diff;
-            if(!hasErrors()) {
-                Assert(at >= 0);
-            }
-        }
-        virtualStackPointer = moment;
-    } 
-    // else {
-    //     _GLOG(log::out << "relsp "<<moment<<"\n";)
-    // }
-    if(!withoutInstruction){
-        addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
-    }
-    if(withoutModification) {
-        _GLOG(log::out << "relsp (temp) "<<moment<<"\n";)
-    } else {
-        _GLOG(log::out << "relsp "<<moment<<"\n";)
-    }
-}
+// void GenContext::restoreStackMoment(int moment, bool withoutModification, bool withoutInstruction) {
+//     using namespace engone;
+//     int offset = moment - virtualStackPointer;
+//     if (offset == 0)
+//         return;
+//     if(!withoutModification || withoutInstruction) {
+//         int at = moment - virtualStackPointer;
+//         while (at > 0 && stackAlignment.size() > 0) {
+//             auto align = stackAlignment.last();
+//             // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
+//             stackAlignment.pop();
+//             at -= align.size;
+//             at -= align.diff;
+//             if(!hasErrors()) {
+//                 Assert(at >= 0);
+//             }
+//         }
+//         virtualStackPointer = moment;
+//     } 
+//     // else {
+//     //     _GLOG(log::out << "relsp "<<moment<<"\n";)
+//     // }
+//     if(!withoutInstruction){
+//         addInstruction({BC_INCR, BC_REG_SP, (u8)(0xFF & offset), (u8)(offset >> 8)});
+//     }
+//     if(withoutModification) {
+//         _GLOG(log::out << "relsp (temp) "<<moment<<"\n";)
+//     } else {
+//         _GLOG(log::out << "relsp "<<moment<<"\n";)
+//     }
+// }
 /* #endregion */
 // Will perform cast on float and integers with pop, cast, push
 // uses register A
@@ -440,7 +440,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
     if (AST::IsDecimal(from) && AST::IsInteger(to)) {
         builder.emit_pop(reg);
         // if(AST::IsSigned(to))
-        builder.emit_cast(reg, CAST_FLOAT_SINT);
+        builder.emit_cast(reg, CAST_FLOAT_SINT, from_size, to_size);
             // builder.emit_({BC_CAST, CAST_FLOAT_UINT, reg0, reg1});
         builder.emit_push(reg);
         return true;
@@ -448,15 +448,15 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
     if (AST::IsInteger(from) && AST::IsDecimal(to)) {
         builder.emit_pop(reg);
         if(AST::IsSigned(from))
-            builder.emit_cast(reg, CAST_SINT_FLOAT);
+            builder.emit_cast(reg, CAST_SINT_FLOAT, from_size, to_size);
         else
-            builder.emit_cast(reg, CAST_UINT_FLOAT);
+            builder.emit_cast(reg, CAST_UINT_FLOAT, from_size, to_size);
         builder.emit_push(reg);
         return true;
     }
     if (AST::IsDecimal(from) && AST::IsDecimal(to)) {
         builder.emit_pop(reg);
-        builder.emit_cast(reg, CAST_FLOAT_FLOAT);
+        builder.emit_cast(reg, CAST_FLOAT_FLOAT, from_size, to_size);
         builder.emit_push(reg);
         return true;
     }
@@ -464,7 +464,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
         (from == AST_CHAR && AST::IsInteger(to))) {
         // if(fti->size() != tti->size()){
         builder.emit_pop(reg);
-        builder.emit_cast(reg, CAST_SINT_SINT);
+        builder.emit_cast(reg, CAST_SINT_SINT, from_size, to_size);
         builder.emit_push(reg);
         // }
         return true;
@@ -473,7 +473,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
         (from == AST_BOOL && AST::IsInteger(to))) {
         // if(fti->size() != tti->size()){
         builder.emit_pop(reg);
-        builder.emit_cast(reg, CAST_SINT_SINT);
+        builder.emit_cast(reg, CAST_SINT_SINT, from_size, to_size);
         builder.emit_push(reg);
         // }
         return true;
@@ -481,13 +481,13 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
     if (AST::IsInteger(from) && AST::IsInteger(to)) {
         builder.emit_pop(reg);
         if (AST::IsSigned(from) && AST::IsSigned(to))
-            builder.emit_cast(reg, CAST_SINT_SINT);
+            builder.emit_cast(reg, CAST_SINT_SINT, from_size, to_size);
         if (AST::IsSigned(from) && !AST::IsSigned(to))
-            builder.emit_cast(reg, CAST_SINT_UINT);
+            builder.emit_cast(reg, CAST_SINT_UINT, from_size, to_size);
         if (!AST::IsSigned(from) && AST::IsSigned(to))
-            builder.emit_cast(reg, CAST_UINT_SINT);
+            builder.emit_cast(reg, CAST_UINT_SINT, from_size, to_size);
         if (!AST::IsSigned(from) && !AST::IsSigned(to))
-            builder.emit_cast(reg, CAST_SINT_UINT);
+            builder.emit_cast(reg, CAST_SINT_UINT, from_size, to_size);
         builder.emit_push(reg);
         return true;
     }
@@ -568,7 +568,7 @@ InstructionType ASTOpToBytecode(TypeId astOp, bool floatVersion){
 #undef CASE
     return (InstructionType)0;
 }
-SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset = nullptr){
+SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
     using namespace engone;
     
     TypeInfo *typeInfo = 0;
@@ -695,7 +695,6 @@ SignalIO GenContext::generatePush(BCRegister baseReg, int offset, TypeId typeId)
     }
     return SIGNAL_SUCCESS;
 }
-SignalIO GeneratePreload(GenContext& info);
 // pop of structs
 SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
     using namespace engone;
@@ -761,7 +760,7 @@ void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
 }
 // baseReg as 0 will push default values to stack
 // non-zero as baseReg will mov default values to the pointer in baseReg
-SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location = nullptr, bool zeroInitialize=true) {
+SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId typeId, lexer::SourceLocation* location, bool zeroInitialize) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue2);
     // if(baseReg!=0) {
@@ -929,7 +928,7 @@ SignalIO FramePush(GenContext& info, TypeId typeId, i32* outFrameOffset, bool ge
 // outTypeId will represent the type (integer, struct...) but the value pushed on the stack will always
 // be a pointer. EVEN when the outType isn't a pointer. It is an implicit extra level of indirection commonly
 // used for assignment.
-SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope = -1, bool* wasNonReference = nullptr){
+SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTypeId, ScopeId idScope, bool* wasNonReference){
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue2);
     _GLOG(FUNC_ENTER)
@@ -991,7 +990,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, 8, GenContext::FRAME_SIZE);
                     
                     builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                    builder.emit_add(BC_REG_B, BC_REG_A. false);
+                    builder.emit_add(BC_REG_B, BC_REG_A, false);
                     break;
                 }
                 default: {
@@ -1299,7 +1298,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
     // I don't think there is anything to fix in there because conventions
     // are really about assembly instructions which type checker has nothing to do with.
     // log::out << log::YELLOW << "Fix call conventions in type checker\n";
-    int startSP = info.saveStackMoment();
+    int startSP = builder.saveStackMoment();
     switch(astFunc->callConvention){
         case BETCALL: {
             // Assert(0 == (-info.virtualStackPointer) % 8); // should be aligned
@@ -1579,7 +1578,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
 
             if (funcImpl->returnTypes.size()==0) {
                 _GLOG(log::out << "pop arguments\n");
-                info.restoreStackMoment(startSP);
+                builder.restoreStackMoment(startSP);
                 outTypeIds->add(AST_VOID);
             } else {
                 _GLOG(log::out << "extract return values\n";)
@@ -1599,7 +1598,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 
                 // we restore AFTER we got the stack pointer because it resets alignments and arg offset
                 // which we don't want to include when adding our offsets. Once again, it's complicated.
-                info.restoreStackMoment(startSP); // PLEASE FOR GOODNESS SAKE DO NOT REFACTOR THIS RESTORE ELSE WHERE!
+                builder.restoreStackMoment(startSP); // PLEASE FOR GOODNESS SAKE DO NOT REFACTOR THIS RESTORE ELSE WHERE!
                 
                 for (int i = 0;i<(int)funcImpl->returnTypes.size(); i++) {
                     auto &ret = funcImpl->returnTypes[i];
@@ -1628,22 +1627,23 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             // Hmmm... we don't have x64 registers.
             // The call instruction must store the calling convention and
             // somehow recognize which registers we use.
-            const int normal_regs[4]{
+            const BCRegister normal_regs[4]{
                 BC_REG_RCX,
                 BC_REG_RDX,
                 BC_REG_R8,
                 BC_REG_R9,
             };
-            const int float_regs[4] {
-                BC_REG_XMM0d,
-                BC_REG_XMM1d,
-                BC_REG_XMM2d,
-                BC_REG_XMM3d,
+            const BCRegister float_regs[4] {
+                BC_REG_XMM0, // nocheckin, 32-bit or 64-bit floats?
+                BC_REG_XMM1,
+                BC_REG_XMM2,
+                BC_REG_XMM3,
             };
             auto& argTypes = funcImpl->argumentTypes;
             for(int i=fullArgs.size()-1;i>=0;i--) {
                 auto argType = argTypes[i].typeId;
                 if(AST::IsDecimal(argType)) {
+                    Assert(false); // broken, 32-bit or 64-bit floats?
                     builder.emit_pop(float_regs[i]);
                 } else {
                     builder.emit_pop(normal_regs[i]);
@@ -1671,18 +1671,18 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
 
             if (funcImpl->returnTypes.size()==0) {
-                info.restoreStackMoment(startSP);
+                builder.restoreStackMoment(startSP);
                 outTypeIds->add(AST_VOID);
             } else {
                 // return type must fit in RAX
                 Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
                 
-                info.restoreStackMoment(startSP);
+                builder.restoreStackMoment(startSP);
                 
                 auto &ret = funcImpl->returnTypes[0];
                 int size = info.ast->getTypeSize(ret.typeId);
                 if(AST::IsDecimal(ret.typeId)) {
-                    builder.emit_push(ENCODE_REG_BITS(BC_XMM0, SIZE_TO_BITS(size)));
+                    builder.emit_push(BC_REG_XMM0); // nocheckin, 32-bit or 64-bit float?
                 } else {
                     BCRegister reg = BC_REG_A;
                     builder.emit_push(reg);
@@ -1708,7 +1708,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             // TODO IMPORTANT: Do we need to do something about the "red zone" (128 bytes below stack pointer).
             //   What does the red zone imply? No pushing, popping?
             auto& argTypes = funcImpl->argumentTypes;
-            const int normal_regs[6]{
+            const BCRegister normal_regs[6]{
                 BC_REG_RDI,
                 BC_REG_RSI,
                 BC_REG_RDX,
@@ -1716,15 +1716,15 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 BC_REG_R8,
                 BC_REG_R9,
             };
-            const int float_regs[8] {
-                BC_REG_XMM0d,
-                BC_REG_XMM1d,
-                BC_REG_XMM2d,
-                BC_REG_XMM3d,
-                BC_REG_XMM4d,
-                BC_REG_XMM5d,
-                BC_REG_XMM6d,
-                BC_REG_XMM7d,
+            const BCRegister float_regs[8] {
+                BC_REG_XMM0, // nocheckin, 32 or 64 bit floats?
+                BC_REG_XMM1,
+                BC_REG_XMM2,
+                BC_REG_XMM3,
+                // BC_REG_XMM4,
+                // BC_REG_XMM5,
+                // BC_REG_XMM6,
+                // BC_REG_XMM7,
             };
             int used_normals = 0;
             int used_floats = 0;
@@ -1740,7 +1740,8 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             // Then, from the back, we can pop and place arguments in the right register.
             for(int i=fullArgs.size()-1;i>=0;i--) {
                 if(AST::IsDecimal(argTypes[i].typeId)) {
-                    builder.emit_pop(float_regs[--used_floats]);
+                    Assert(false); // nocheckin, 32 or 64 bit floats?
+                    // builder.emit_pop(float_regs[--used_floats]);
                 } else {
                     builder.emit_pop(normal_regs[--used_normals]);
                 }
@@ -1748,14 +1749,14 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             int reloc = 0;
             if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
                 || astFunc->linkConvention == LinkConventions::VARIMPORT){
-                 builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, code->externalRelocations.size());
+                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, code->externalRelocations.size());
                 if(astFunc->linkConvention == DLLIMPORT){
-                    info.addExternalRelocation(funcImpl->astFunction->name, info.code->length());
+                    info.addExternalRelocation(funcImpl->astFunction->name, reloc);
                     // info.addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
                 } else if(astFunc->linkConvention == VARIMPORT){
-                    info.addExternalRelocation(funcImpl->astFunction->name, info.code->length());
+                    info.addExternalRelocation(funcImpl->astFunction->name, reloc);
                 } else {
-                    info.addExternalRelocation(funcImpl->astFunction->name, info.code->length());
+                    info.addExternalRelocation(funcImpl->astFunction->name, reloc);
                 }
             } else {
                 builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
@@ -1766,18 +1767,18 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             Assert(funcImpl->returnTypes.size() < 2); // stdcall can only have on return value
 
             if (funcImpl->returnTypes.size()==0) {
-                info.restoreStackMoment(startSP);
+                builder.restoreStackMoment(startSP);
                 outTypeIds->add(AST_VOID);
             } else {
                 // return type must fit in RAX
                 Assert(info.ast->getTypeSize(funcImpl->returnTypes[0].typeId) <= 8);
                 
-                info.restoreStackMoment(startSP);
+                builder.restoreStackMoment(startSP);
                 
                 auto &ret = funcImpl->returnTypes[0];
                 int size = info.ast->getTypeSize(ret.typeId);
                 if(AST::IsDecimal(ret.typeId)) {
-                    builder.emit_push(ENCODE_REG_BITS(BC_XMM0, SIZE_TO_BITS(size)));
+                    builder.emit_push(BC_REG_XMM0); // nocheckin, 32 or 64 bit floats?
                 } else {
                     BCRegister reg = BC_REG_A;
                     builder.emit_push(reg);
@@ -1792,7 +1793,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
     }
     return SIGNAL_SUCCESS;
 }
-SignalIO GenContext::generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope = -1) {
+SignalIO GenContext::generateExpression(ASTExpression *expression, TypeId *outTypeIds, ScopeId idScope) {
     *outTypeIds = AST_VOID;
     DynamicArray<TypeId> tmp_types{};
     auto signal = generateExpression(expression, &tmp_types, idScope);
@@ -1824,7 +1825,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
     //     if(expression->constantValue){
     //         u32 startInstruction = info.code->length();
 
-    //         int moment = info.saveStackMoment();
+    //         int moment = builder.saveStackMoment();
     //         int startVirual = info.virtualStackPointer;
             
     //         expression->computeWhenPossible = false; // temporarily disable to preven infinite loop
@@ -1834,7 +1835,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
     //         int endVirtual = info.virtualStackPointer;
     //         Assert(endVirtual < startVirual);
 
-    //         info.restoreStackMoment(moment, false, true);
+    //         builder.restoreStackMoment(moment, false, true);
 
     //         u32 endInstruction = info.code->length();
 
@@ -2021,9 +2022,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     _GLOG(log::out << " expr func push " << expression->name << "\n";)
 
                     if(id->funcOverloads.overloads.size()==1){
-                        builder.emit_codeptr(BC_REG_A, );
-                        info.addCallToResolve(info.code->length(), id->funcOverloads.overloads[0].funcImpl);
-                        info.addImm(id->funcOverloads.overloads[0].funcImpl->address);
+                        Assert(false); // nocheckin
+                        // builder.emit_codeptr(BC_REG_A, );
+                        // info.addCallToResolve(info.code->length(), id->funcOverloads.overloads[0].funcImpl);
+                        // info.addImm(id->funcOverloads.overloads[0].funcImpl->address);
 
                         // info.code->exportSymbol(expression->name, id->funcOverloads.overloads[0].funcImpl->address);
                     } else {
@@ -2153,6 +2155,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 u32 start = info.code->rawInlineAssembly.used;
                 Assert(false); // nocheckin, rewrite removed token range
                 // +2 and -1 to avoid adding "asm { }"
+                #ifdef gone
                 TokenRange range{};
                 range.firstToken = expression->tokenRange.tokenStream()->get(expression->tokenRange.startIndex()+2);
                 range.endIndex = expression->tokenRange.endIndex-1;
@@ -2199,6 +2202,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 // NOTE: ASM_ENCODE_INDEX result in 3 expression separated by comma
                 builder.emit_({BC_ASM, ASM_ENCODE_INDEX(asmInstanceIndex)}); // ASM_ENCODE_INDEX results in bytes separated by commas
                 // builder.emit_({BC_ASM, (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)});
+                #endif
             }
             outTypeIds->add(AST_VOID);
             return SIGNAL_SUCCESS;
@@ -2802,7 +2806,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             builder.emit_pop(BC_REG_B); // reference
             if(lsize>1){
                 builder.emit_li32(BC_REG_A, lsize);
-                builder.emit_mul(BC_REG_A, reg, false);
+                builder.emit_mul(BC_REG_A, reg, false, false);
             }
             builder.emit_add(BC_REG_B, BC_REG_A, false);
 
@@ -3167,23 +3171,23 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 ###########################*/
                 
                 switch(operationType) {
-                case AST_ADD: builder.emit_add(left_reg, right_reg, is_float); break;
-                case AST_SUB: builder.emit_sub(left_reg, right_reg, is_float); break;
-                case AST_MUL: builder.emit_mul(left_reg, right_reg, is_float, is_signed); break;
-                case AST_DIV: builder.emit_div(left_reg, right_reg, is_float, is_signed); break;
-                case AST_EQUAL: builder.emit_eq(left_reg, right_reg, is_float); break;
-                case AST_NOT_EQUAL: builder.emit_neq(left_reg, right_reg, is_float); break;
-                case AST_LESS: builder.emit_lt(left_reg, right_reg, is_float); break;
-                case AST_LESS_EQUAL: builder.emit_lte(left_reg, right_reg, is_float); break;
-                case AST_GREATER: builder.emit_gt(left_reg, right_reg, is_float); break;
-                case AST_GREATER_EQUAL: builder.emit_gte(left_reg, right_reg, is_float); break;
-                case AST_AND: builder.emit_land(left_reg, right_reg); break;
-                case AST_OR: builder.emit_lor(left_reg, right_reg); break;
-                case AST_BAND: builder.emit_band(left_reg, right_reg); break;
-                case AST_BOR: builder.emit_bor(left_reg, right_reg); break;
-                case AST_BXOR: builder.emit_bxor(left_reg, right_reg); break;
-                case AST_BLSHIFT: builder.emit_blshift(left_reg, right_reg); break;
-                case AST_BRSHIFT: builder.emit_blshift(left_reg, right_reg); break;
+                case AST_ADD:           builder.emit_add(    left_reg, right_reg, is_float); break;
+                case AST_SUB:           builder.emit_sub(    left_reg, right_reg, is_float); break;
+                case AST_MUL:           builder.emit_mul(    left_reg, right_reg, is_float, is_signed); break;
+                case AST_DIV:           builder.emit_div(    left_reg, right_reg, is_float, is_signed); break;
+                case AST_EQUAL:         builder.emit_eq(     left_reg, right_reg, is_float); break;
+                case AST_NOT_EQUAL:     builder.emit_neq(    left_reg, right_reg, is_float); break;
+                case AST_LESS:          builder.emit_lt(     left_reg, right_reg, is_float, is_signed); break;
+                case AST_LESS_EQUAL:    builder.emit_lte(    left_reg, right_reg, is_float, is_signed); break;
+                case AST_GREATER:       builder.emit_gt(     left_reg, right_reg, is_float, is_signed); break;
+                case AST_GREATER_EQUAL: builder.emit_gte(    left_reg, right_reg, is_float, is_signed); break;
+                case AST_AND:           builder.emit_land(   left_reg, right_reg); break;
+                case AST_OR:            builder.emit_lor(    left_reg, right_reg); break;
+                case AST_BAND:          builder.emit_band(   left_reg, right_reg); break;
+                case AST_BOR:           builder.emit_bor(    left_reg, right_reg); break;
+                case AST_BXOR:          builder.emit_bxor(   left_reg, right_reg); break;
+                case AST_BLSHIFT:       builder.emit_blshift(left_reg, right_reg); break;
+                case AST_BRSHIFT:       builder.emit_blshift(left_reg, right_reg); break;
                 default: Assert(("Operation not implemented",false));
                 }
                 
@@ -3218,7 +3222,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
     return SIGNAL_SUCCESS;
 }
 
-SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruct = nullptr){
+SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruct){
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue2);
 
@@ -3386,7 +3390,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
 
         _GLOG(log::out << "Function " << function->name << "\n";)
 
-        funcImpl->address = info.code->length();
+        funcImpl->address = 0; // nocheckin, always zero since every function has it's own tiny bytecode?
         info.currentPolyVersion = funcImpl->polyVersion;
 
         // TODO: Export function symbol if annotated with @export
@@ -3435,7 +3439,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             info.currentFuncImpl = prevFuncImpl;
             info.currentScopeId = prevScopeId; };
 
-        // info.functionStackMoment = info.saveStackMoment();
+        // info.functionStackMoment = builder.saveStackMoment();
         // -8 since the start of the frame is 0 and after the program counter is -8
         // info.virtualStackPointer = GenContext::VIRTUAL_STACK_START;
         
@@ -3445,8 +3449,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // reset frame offset at beginning of function
         currentFrameOffset = 0;
 
-        dfun->funcStart = info.code->length();
-        dfun->bc_start = info.code->length();
+        // dfun->funcStart = info.code->length(); // nocheckin
+        // dfun->bc_start = info.code->length();
         auto tokinfo = compiler->lexer.getTokenSource_unsafe(function->location);
         dfun->entry_line = tokinfo->line;
 
@@ -3623,17 +3627,17 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 arg.virtualType->id = funcImpl->polyArgs[i];
             }
 
-            const int normal_regs[4]{
+            const BCRegister normal_regs[4]{
                 BC_REG_RCX,
                 BC_REG_RDX,
                 BC_REG_R8,
                 BC_REG_R9,
             };
-            const int float_regs[4] {
-                BC_REG_XMM0d,
-                BC_REG_XMM1d,
-                BC_REG_XMM2d,
-                BC_REG_XMM3d,
+            const BCRegister float_regs[4] {
+                BC_REG_XMM0,
+                BC_REG_XMM1,
+                BC_REG_XMM2,
+                BC_REG_XMM3,
             };
             auto& argTypes = funcImpl->argumentTypes;
             for(int i=argTypes.size()-1;i>=0;i--) {
@@ -3641,11 +3645,11 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
 
                 u8 size = info.ast->getTypeSize(argType);
                 if(AST::IsDecimal(argType)) {
-                    builder.emit_({BC_MOV_RM_DISP32, ENCODE_REG_BITS(float_regs[i], SIZE_TO_BITS(size)), BC_REG_BP, size});
+                    Assert(false);
+                    builder.emit_mov_mr_disp(BC_REG_BP, float_regs[i], size, GenContext::FRAME_SIZE + i * 8);
                 } else {
-                    builder.emit_({BC_MOV_RM_DISP32, ENCODE_REG_BITS(normal_regs[i], SIZE_TO_BITS(size)), BC_REG_BP, size});
+                    builder.emit_mov_mr_disp(BC_REG_BP, normal_regs[i], size, GenContext::FRAME_SIZE + i * 8);
                 }
-                info.addImm(GenContext::FRAME_SIZE + i * 8);
             }
 
             // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES
@@ -3731,7 +3735,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
 
             auto& argTypes = funcImpl->argumentTypes;
-            const int normal_regs[6]{
+            const BCRegister normal_regs[6]{
                 BC_REG_RDI,
                 BC_REG_RSI,
                 BC_REG_RDX,
@@ -3739,15 +3743,15 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 BC_REG_R8,
                 BC_REG_R9,
             };
-            const int float_regs[8] {
-                BC_REG_XMM0f,
-                BC_REG_XMM1f,
-                BC_REG_XMM2f,
-                BC_REG_XMM3f,
-                BC_REG_XMM4f,
-                BC_REG_XMM5f,
-                BC_REG_XMM6f,
-                BC_REG_XMM7f,
+            const BCRegister float_regs[8] {
+                BC_REG_XMM0,
+                BC_REG_XMM1,
+                BC_REG_XMM2,
+                BC_REG_XMM3,
+                // BC_REG_XMM4,
+                // BC_REG_XMM5,
+                // BC_REG_XMM6,
+                // BC_REG_XMM7,
             };
             int used_normals = 0;
             int used_floats = 0;
@@ -3766,13 +3770,13 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             for(int i=argTypes.size()-1;i>=0;i--) {
                 u8 size = info.ast->getTypeSize(argTypes[i].typeId);
                 if(AST::IsDecimal(argTypes[i].typeId)) {
+                    Assert(false); // what size should the floats be?
                     // I am not sure if doubles work so we should test and not assume.
                     // This assert will prevent incorrect assumptions from causing trouble.
-                     builder.emit_({BC_MOV_RM_DISP32, (u8)ENCODE_REG_BITS(float_regs[--used_floats], SIZE_TO_BITS(size)), BC_REG_BP, size});
+                    builder.emit_mov_mr_disp(BC_REG_BP,float_regs[--used_floats], size, GenContext::FRAME_SIZE + i * 8);
                 } else {
-                    builder.emit_({BC_MOV_RM_DISP32, (u8)ENCODE_REG_BITS(normal_regs[--used_normals], SIZE_TO_BITS(size)), BC_REG_BP, size});
+                    builder.emit_mov_mr_disp(BC_REG_BP,normal_regs[--used_normals], size, GenContext::FRAME_SIZE + i * 8);
                 }
-                info.addImm(GenContext::FRAME_SIZE + i * 8);
             }
 
             // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES
@@ -3791,15 +3795,15 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         }
         }
         
-        dfun->codeStart = info.code->length();
+        // dfun->codeStart = info.code->length();
 
         if(funcImpl->astFunction->name == "main") {
-            GeneratePreload(info);
+            generatePreload();
         }
         
-        SignalIO result = GenerateBody(info, function->body);
+        SignalIO result = generateBody(function->body);
 
-        dfun->codeEnd = info.code->length();
+        // dfun->codeEnd = info.code->length();
 
         switch(function->callConvention) {
         case BETCALL: {
@@ -3817,9 +3821,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
             if (funcImpl->returnTypes.size() != 0) {
                 // check last statement for a return and "exit" early
-                bool foundReturn = function->body->statements.size()>0
-                    && function->body->statements.get(function->body->statements.size()-1)
-                    ->type == ASTStatement::RETURN;
+                bool foundReturn = function->body->statements.size()>0 && 
+                    function->body->statements.get(function->body->statements.size()-1) ->type == ASTStatement::RETURN;
                 // TODO: A return statement might be okay in an inner scope and not necessarily the
                 //  top scope.
                 if(!foundReturn){
@@ -3838,7 +3841,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     }
                 }
             }
-            if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
+            if(builder.get_last_opcode() != BC_RET) {
                 // add return with no return values if it doesn't exist
                 // this is only fine if the function doesn't return values
                 builder.emit_pop(BC_REG_BP);
@@ -3882,7 +3885,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     }
                 }
             }
-            if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
+            if(builder.get_last_opcode() != BC_RET) {
                 // add return with no return values if it doesn't exist
                 // this is only fine if the function doesn't return values
                 builder.emit_bxor(BC_REG_A, BC_REG_A);
@@ -3928,7 +3931,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     }
                 }
             }
-            if(info.code->length()<1 || info.code->get(info.code->length()-1).opcode!=BC_RET) {
+            if(builder.get_last_opcode() != BC_RET) {
                 // add return with no return values if it doesn't exist
                 // this is only fine if the function doesn't return values
                 builder.emit_bxor(BC_REG_A, BC_REG_A);
@@ -3942,13 +3945,13 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         }
         }
         
-        dfun->funcEnd = info.code->length();
-        dfun->bc_end = info.code->length();
+        // dfun->funcEnd = info.code->length();
+        // dfun->bc_end = info.code->length();
 
         // Assert(info.virtualStackPointer == GenContext::VIRTUAL_STACK_START);
         // Assert(info.currentFrameOffset == 0);
         // needs to be done after frame pop
-        // info.restoreStackMoment(info.functionStackMoment, false, true);
+        // builder.restoreStackMoment(info.functionStackMoment, false, true);
     }
     return SIGNAL_SUCCESS;
 }
@@ -4002,37 +4005,37 @@ SignalIO GenContext::generateBody(ASTScope *body) {
     if(body->flags & ASTNode::DUMP_BC) {
         debugDump.dumpBytecode = true;
     }
-    debugDump.bc_startIndex = info.code->length();
+    // debugDump.bc_startIndex = info.code->length();
     
     bool codeWasDisabled = info.disableCodeGeneration;
     bool errorsWasIgnored = info.ignoreErrors;
     ScopeId savedScope = info.currentScopeId;
     ScopeInfo* body_scope = info.ast->getScope(body->scopeId);
-    body_scope->bc_start = info.code->length();
+    // body_scope->bc_start = info.code->length();
     info.currentScopeDepth++;
 
     info.currentScopeId = body->scopeId;
 
     int lastOffset = info.currentFrameOffset;
-    int savedMoment = info.saveStackMoment();
+    int savedMoment = builder.saveStackMoment();
 
     defer {
         info.disableCodeGeneration = codeWasDisabled;
 
         if (lastOffset != info.currentFrameOffset) {
             _GLOG(log::out << "fix sp when exiting body\n";)
-            info.restoreStackMoment(savedMoment); // -8 to not include BC_REG_BP
+            builder.restoreStackMoment(savedMoment); // -8 to not include BC_REG_BP
             // info.code->addDebugText("fix sp when exiting body\n");
             // info.addIncrSp(info.currentFrameOffset);
             // info.addIncrSp(lastOffset - info.currentFrameOffset);
             // builder.emit_({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
             info.currentFrameOffset = lastOffset;
         } else {
-            info.restoreStackMoment(savedMoment, false, true);
+            builder.restoreStackMoment(savedMoment, false, true);
         }
 
         info.currentScopeDepth--;
-        body_scope->bc_end = info.code->length();
+        // body_scope->bc_end = info.code->length();
         info.currentScopeId = savedScope; 
         info.ignoreErrors = errorsWasIgnored;
         if(debugDump.dumpAsm || debugDump.dumpBytecode) {
@@ -4040,14 +4043,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             Assert(false); // nocheckin, no token range
             // debugDump.description = body->tokenRange.tokenStream()->streamName + ":"+std::to_string(body->tokenRange.firstToken.line);
             // debugDump.description = TrimDir(body->tokenRange.tokenStream()->streamName) + ":"+std::to_string(body->tokenRange.firstToken.line);
-            debugDump.bc_endIndex = info.code->length();
+            // debugDump.bc_endIndex = info.code->length();
             Assert(debugDump.bc_startIndex <= debugDump.bc_endIndex);
             info.code->debugDumps.add(debugDump);
         }
     };
 
     for(auto it : body->namespaces) {
-        SignalIO result = GenerateBody(info, it);
+        SignalIO result = generateBody(it);
     }
 
     for (auto statement : body->statements) {
@@ -4510,7 +4513,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             };
 
             _GLOG(log::out << "push loop\n");
-            loopScope->stackMoment = info.saveStackMoment();
+            loopScope->stackMoment = builder.saveStackMoment();
 
             TypeId exprType{};
             if(statement->versions_expressionTypes[info.currentPolyVersion].size()!=0)
@@ -4656,8 +4659,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // info.addImm(0);
                 }
             }
-            
-            info.code->getIm(noCaseJumpAddress) = info.code->length();
+            builder.fix_jump_here(noCaseJumpAddress);
                 
             for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
                 if(caseData[nr].caseBreakAddress != 0)
@@ -4682,7 +4684,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             _GLOG(log::out << "push loop\n");
             loopScope->continueAddress = builder.get_pc();
-            loopScope->stackMoment = info.saveStackMoment();
+            loopScope->stackMoment = builder.saveStackMoment();
 
             SignalIO result{};
             if(statement->firstExpression) {
@@ -4741,7 +4743,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             };
 
 
-            int stackBeforeLoop = info.saveStackMoment();
+            int stackBeforeLoop = builder.saveStackMoment();
             int frameBeforeLoop = info.currentFrameOffset;
 
             // TODO: Save stack moment here?
@@ -4818,8 +4820,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // i32 itemsize = info.ast->getTypeSize(varinfo_item->typeId);
 
                 _GLOG(log::out << "push loop\n");
-                loopScope->stackMoment = info.saveStackMoment();
-                loopScope->continueAddress = info.code->length();
+                loopScope->stackMoment = builder.saveStackMoment();
+                loopScope->continueAddress = builder.get_pc();
 
                 // log::out << "frame: "<<varinfo_index->frameOffset<<"\n";
                 // TODO: don't generate ptr and length everytime.
@@ -4932,8 +4934,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
 
                 _GLOG(log::out << "push loop\n");
-                loopScope->stackMoment = info.saveStackMoment();
-                loopScope->continueAddress = info.code->length();
+                loopScope->stackMoment = builder.saveStackMoment();
+                loopScope->continueAddress = builder.get_pc();
 
                 // TODO: don't generate ptr and length everytime.
                 // put them in a temporary variable or something.
@@ -5063,7 +5065,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // fun.localVariables.last().frameOffset = varinfo_index->versions_dataOffset[info.currentPolyVersion];
             // fun.localVariables.last().typeId = varinfo_index->versions_typeId[info.currentPolyVersion];
 
-            info.restoreStackMoment(stackBeforeLoop);
+            builder.restoreStackMoment(stackBeforeLoop);
             info.currentFrameOffset = frameBeforeLoop;
 
             // pop loop happens in defer
@@ -5077,7 +5079,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 )
                 continue;
             }
-            info.restoreStackMoment(loop->stackMoment, true);
+            builder.restoreStackMoment(loop->stackMoment, true);
             
             loop->resolveBreaks.add(builder.emit_jmp());
         } else if(statement->type == ASTStatement::CONTINUE) {
@@ -5090,7 +5092,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 )
                 continue;
             }
-            info.restoreStackMoment(loop->stackMoment, true);
+            builder.restoreStackMoment(loop->stackMoment, true);
 
             builder.emit_jmp(loop->continueAddress);
         } else if (statement->type == ASTStatement::RETURN) {
@@ -5174,7 +5176,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         u8 size = info.ast->getTypeSize(retType.typeId);
                         if(size<=8){
                             if(AST::IsDecimal(retType.typeId)) {
-                                builder.emit_pop(BC_REG_XMM0d);
+                                Assert(false); // what size on the float?
+                                builder.emit_pop(BC_REG_XMM0);
                             } else {
                                 builder.emit_pop(BC_REG_A);
                             }
@@ -5215,7 +5218,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         u8 size = info.ast->getTypeSize(retType.typeId);
                         if(size<=8){
                             if(AST::IsDecimal(retType.typeId)) {
-                                builder.emit_pop(BC_REG_XMM0d);
+                                Assert(false),
+                                builder.emit_pop(BC_REG_XMM0);
                             } else {
                                 builder.emit_pop(BC_REG_A);
                             }
@@ -5238,8 +5242,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             // fix stack pointer before returning
             // info.addIncrSp(-info.currentFrameOffset);
-            // info.restoreStackMoment(-8 - 8, true); // -8 to not include BC_REG_BP
-            info.restoreStackMoment(GenContext::VIRTUAL_STACK_START - 8, true); // -8 to not include BC_REG_BP
+            // builder.restoreStackMoment(-8 - 8, true); // -8 to not include BC_REG_BP
+            builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START - 8, true); // -8 to not include BC_REG_BP
             builder.emit_pop(BC_REG_BP);
             builder.emit_ret();
             info.currentFrameOffset = lastOffset;
@@ -5293,7 +5297,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             SignalIO result = generateBody(statement->firstBody);
             // Is it okay to do nothing with result?
         } else if (statement->type == ASTStatement::TEST) {
-            int moment = info.saveStackMoment();
+            int moment = builder.saveStackMoment();
             DynamicArray<TypeId> exprTypes{};
             SignalIO result = generateExpression(statement->testValue, &exprTypes);
             if(exprTypes.size() != 1) {
@@ -5342,21 +5346,21 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // int loc = info.compileInfo->compileOptions->addTestLocation(statement->location);
             // builder.emit_test(BC_REG_D, BC_REG_A, 8, loc);
             
-            info.restoreStackMoment(moment);
+            builder.restoreStackMoment(moment);
         } else {
             Assert(("You forgot to implement statement type!",false));
         }
     }
     // if (lastOffset != info.currentFrameOffset) {
     //     _GLOG(log::out << "fix sp when exiting body\n";)
-    //     info.restoreStackMoment(savedMoment); // -8 to not include BC_REG_BP
+    //     builder.restoreStackMoment(savedMoment); // -8 to not include BC_REG_BP
     //     // info.code->addDebugText("fix sp when exiting body\n");
     //     // info.addIncrSp(info.currentFrameOffset);
     //     // info.addIncrSp(lastOffset - info.currentFrameOffset);
     //     // builder.emit_({BC_ADDI,BC_REG_SP,BC_REG_RCX,BC_REG_SP});
     //     info.currentFrameOffset = lastOffset;
     // } else {
-    //     info.restoreStackMoment(savedMoment, false, true);
+    //     builder.restoreStackMoment(savedMoment, false, true);
     // }
     return SIGNAL_SUCCESS;
 }
@@ -5380,7 +5384,7 @@ SignalIO GenContext::generatePreload() {
 
     builder.emit_dataptr(src_reg, info.dataOffset_strings);
     builder.emit_dataptr(dst_reg, info.varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
-    builder.emit_mr(dst_reg, src_reg, 8);
+    builder.emit_mov_mr(dst_reg, src_reg, 8);
     return SIGNAL_SUCCESS;
 }
 // Generate data from the type checker
@@ -5433,12 +5437,12 @@ SignalIO GenContext::generateData() {
         for(int i=0;i<info.ast->_typeInfos.size();i++){
             auto ti = info.ast->_typeInfos[i];
             if(!ti)  continue;
-            count_stringdata += ti->name.len + 1; // +1 for null termination
+            count_stringdata += ti->name.length() + 1; // +1 for null termination
             if(ti->structImpl) {
                 count_members += ti->astStruct->members.size();
                 for(int mi=0;mi<ti->astStruct->members.size();mi++){
                     auto& mem = ti->astStruct->members[mi];
-                    count_stringdata += mem.name.len + 1; // +1 for null termination
+                    count_stringdata += mem.name.length() + 1; // +1 for null termination
                 }
             }
         }
@@ -5495,9 +5499,9 @@ SignalIO GenContext::generateData() {
 
                     memberdata[member_count].name.beg = string_offset;
 
-                    memcpy(stringdata + string_offset, ast_mem.name.str, ast_mem.name.length);
-                    stringdata[string_offset + ast_mem.name.length] = '\0';
-                    string_offset += ast_mem.name.length + 1;
+                    memcpy(stringdata + string_offset, ast_mem.name.c_str(), ast_mem.name.length());
+                    stringdata[string_offset + ast_mem.name.length()] = '\0';
+                    string_offset += ast_mem.name.length() + 1;
 
                     memberdata[member_count].name.end = string_offset - 1; // -1 won't include null termination
 
@@ -5709,10 +5713,22 @@ TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler) {
     
     context.tinycode = context.code->createTiny();
     
+    context.code->debugInformation = DebugInformation::Create(compiler->ast);
+    
     context.generateFunctions(scope);
     
     context.builder.init(context.code, context.tinycode);
+    
+    auto di = context.code->debugInformation;
+    context.debugFunctionIndex = di->functions.size();
+    DebugInformation::Function* dfun = di->addFunction("main");
+    context.code->addExportedSymbol("main", 0);
+    
     context.generateBody(scope);
+    
+    if(context.builder.get_last_opcode() != BC_RET) {
+        context.builder.emit_ret();
+    }
     
     // TODO: Relocations?
     

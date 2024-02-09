@@ -38,7 +38,8 @@ enum InstructionType : u8 {
     
     BC_PUSH,
     BC_POP,
-    BC_LI,
+    BC_LI32,
+    BC_LI64,
     BC_INCR, // usually used with stack pointer
 
     BC_JMP,
@@ -128,16 +129,43 @@ enum BCRegister : u8 {
     // special registers
     BC_REG_SP, // stack pointer
     BC_REG_BP, // base pointer
+    
+    // platform specific (we would prefer to be architecture independent but I am not sure how to deal with calling conventions without them here)
+    BC_REG_RAX,
+    BC_REG_RBX,
+    BC_REG_RCX,
+    BC_REG_RDX,
+    BC_REG_RSI,
+    BC_REG_RDI,
+    BC_REG_R8,
+    BC_REG_R9,
+    BC_REG_XMM0,
+    BC_REG_XMM1,
+    BC_REG_XMM2,
+    BC_REG_XMM3,
 };
 extern const char* instruction_names[];
 extern const char* register_names[];
 
 #define MISALIGNMENT(X,ALIGNMENT) ((ALIGNMENT - (X) % ALIGNMENT) % ALIGNMENT)
 
+struct Bytecode;
 // Look at me I'm tiny bytecode! 
 struct TinyBytecode {
     QuickArray<u8> instructionSegment{};
+    
+    // debug information
+    QuickArray<u32> index_of_lines{};
+    struct Line {
+        int line_number;
+        std::string text;  
+    };
+    DynamicArray<Line> lines{};
+    // QuickArray<u32> index_of_opcodes{};
+    
+    void print(int low_index, int high_index, Bytecode* code = nullptr);
 };
+
 struct Bytecode {
     static Bytecode* Create();
     static void Destroy(Bytecode*);
@@ -149,29 +177,28 @@ struct Bytecode {
         return ptr;
     }
     
-    uint32 getMemoryUsage();
+    u32 getMemoryUsage();
     
     DynamicArray<TinyBytecode*> tinyBytecodes;
 
-    QuickArray<u8> instructionSegment{};
     QuickArray<u8> dataSegment{};
 
     DebugInformation* debugInformation = nullptr;
 
     // This is debug data for interpreter
-    QuickArray<u32> debugSegment{}; // indices to debugLocations
+    // QuickArray<u32> debugSegment{}; // indices to debugLocations
     
-    struct Location {
-        u32 line=0;
-        u32 column=0;
-        std::string file{};
-        std::string desc{};
-        std::string preDesc{};
-        void* stream = nullptr;
-        // You are not supposed to access any content in the stream. It is just here to compare against other stream pointers.
-        // GenInfo::addInstruction needs the stream pointer.
-    };
-    DynamicArray<Location> debugLocations;
+    // struct Location {
+    //     u32 line=0;
+    //     u32 column=0;
+    //     std::string file{};
+    //     std::string desc{};
+    //     std::string preDesc{};
+    //     void* stream = nullptr;
+    //     // You are not supposed to access any content in the stream. It is just here to compare against other stream pointers.
+    //     // GenInfo::addInstruction needs the stream pointer.
+    // };
+    // DynamicArray<Location> debugLocations;
 
     DynamicArray<std::string> linkDirectives;
 
@@ -232,11 +259,11 @@ struct Bytecode {
     // DynamicArray<Symbol> exportedSymbols; // usually function names
     // bool exportSymbol(const std::string& name, u32 instructionIndex);
 
-    const Location* getLocation(u32 instructionIndex, u32* locationIndex = nullptr);
-    Location* setLocationInfo(const TokenRange& token, u32 InstructionIndex=-1, u32* locationIndex = nullptr);
-    Location* setLocationInfo(const char* preText, u32 InstructionIndex=-1);
-    // use same location as said register
-    Location* setLocationInfo(u32 locationIndex, u32 instructionIndex=-1);
+    // const Location* getLocation(u32 instructionIndex, u32* locationIndex = nullptr);
+    // Location* setLocationInfo(const TokenRange& token, u32 InstructionIndex=-1, u32* locationIndex = nullptr);
+    // Location* setLocationInfo(const char* preText, u32 InstructionIndex=-1);
+    // // use same location as said register
+    // Location* setLocationInfo(u32 locationIndex, u32 instructionIndex=-1);
     
     // -1 as index will add text to next instruction
     // void addDebugText(const char* str, int length, u32 instructionIndex=-1);
@@ -253,34 +280,38 @@ struct Bytecode {
 
     // int appendData_late(void** out_ptr, int size);
 
-    void printInstruction(u32 index, bool printImmediates);
+    // void printInstruction(u32 index, bool printImmediates);
     // Returns the number of immediates an instruction uses.
     // When getting the next instruction you should skip by the amount of 
     // immediates.
-    u32 immediatesOfInstruction(u32 index);
+    // u32 immediatesOfInstruction(u32 index);
 
-    bool add_notabug(Instruction inst);
-    bool addIm_notabug(i32 data);
-    inline Instruction& get(uint index){
-        return *((Instruction*)instructionSegment.data + index);
-    }
-    inline i32& getIm(u32 index){
-        return *((i32*)instructionSegment.data() + index);
-    }
+    // bool add_notabug(Instruction inst);
+    // bool addIm_notabug(i32 data);
+    // inline Instruction& get(uint index){
+    //     return *((Instruction*)instructionSegment.data + index);
+    // }
+    // inline i32& getIm(u32 index){
+    //     return *((i32*)instructionSegment.data() + index);
+    // }
 
-    inline int length(){
-        return instructionSegment.used;
-    }
+    // inline int length(){
+    //     return instructionSegment.used;
+    // }
     bool removeLast();
 
     void printStats();
+    
+    void print();
 };
-
 struct BytecodeBuilder {
     Bytecode* code=nullptr;
     TinyBytecode* tinycode=nullptr;
     
     int getStackPointer() const { return virtualStackPointer; }
+    // in the future, this function may differ from getStackPointer
+    int saveStackMoment() const { return virtualStackPointer; }
+    void restoreStackMoment(int saved_sp, bool no_modification = false, bool no_instruction = false);
     
     void init(Bytecode* code, TinyBytecode* tinycode);
     
@@ -324,12 +355,12 @@ struct BytecodeBuilder {
     void emit_blshift(BCRegister to, BCRegister from);
     void emit_brshift(BCRegister to, BCRegister from);
     
-    void emit_eq(BCRegister to, BCRegister from, float is_float);
-    void emit_neq(BCRegister to, BCRegister from, float is_float);
-    void emit_lt(BCRegister to, BCRegister from, float is_float, bool is_signed);
-    void emit_lte(BCRegister to, BCRegister from, float is_float, bool is_signed);
-    void emit_gt(BCRegister to, BCRegister from, float is_float, bool is_signed);
-    void emit_gte(BCRegister to, BCRegister from, float is_float, bool is_signed);
+    void emit_eq(BCRegister to, BCRegister from, bool is_float);
+    void emit_neq(BCRegister to, BCRegister from, bool is_float);
+    void emit_lt(BCRegister to, BCRegister from, bool is_float, bool is_signed);
+    void emit_lte(BCRegister to, BCRegister from, bool is_float, bool is_signed);
+    void emit_gt(BCRegister to, BCRegister from, bool is_float, bool is_signed);
+    void emit_gte(BCRegister to, BCRegister from, bool is_float, bool is_signed);
     
     void emit_land(BCRegister to, BCRegister from);
     void emit_lor(BCRegister to, BCRegister from);
@@ -341,7 +372,7 @@ struct BytecodeBuilder {
     void emit_cast(BCRegister reg, InstructionCast castType, u8 from_size, u8 to_size);
     
     void emit_memzero(BCRegister dst, BCRegister size_reg, u8 batch);
-    // void emit_memcpy(BCRegister dst, BCRegister src, BCRegister size_reg);
+    void emit_memcpy(BCRegister dst, BCRegister src, BCRegister size_reg);
     // void emit_strlen(BCRegister len_reg, BCRegister src_len);
     // void emit_rdtsc(BCRegister to, BCRegister from, u8 batch);
     
@@ -356,6 +387,14 @@ struct BytecodeBuilder {
     int get_pc() { return tinycode->instructionSegment.size(); }
     void fix_jump_here(int imm_index);
     
+    // int opcode_count() { return tinycode->index_of_opcodes.size(); }
+    // InstructionType get_opcode(int opcode_index) { return (InstructionType)tinycode->instructionSegment[tinycode->index_of_opcodes[opcode_index]]; }
+    InstructionType get_last_opcode() { return (InstructionType)tinycode->instructionSegment[index_of_last_instruction]; }
+    
+    void push_line(int line, std::string text) {
+        tinycode->lines.add({line, text});
+    }
+    
 private:
     // building blocks for every instruction
     void emit_opcode(InstructionType type);
@@ -366,150 +405,11 @@ private:
     void emit_imm32(i32 imm);
     void emit_imm64(i64 imm);
     
-    struct AlignInfo {
-        int diff=0;
-        int size=0;
-    };
-    DynamicArray<AlignInfo> stackAlignment;
+    // struct AlignInfo {
+    //     int diff=0;
+    //     int size=0;
+    // };
+    // DynamicArray<AlignInfo> stackAlignment;
     int virtualStackPointer = 0;
     int index_of_last_instruction = -1;
-};
-
-
-struct Bytecode {
-    static Bytecode* Create();
-    static void Destroy(Bytecode*);
-    void cleanup();
-    
-    TinyBytecode* createTiny() {
-        auto ptr = new TinyBytecode();
-        tinyBytecodes.add(ptr);
-        return ptr;
-    }
-    
-    uint32 getMemoryUsage();
-    
-    DynamicArray<TinyBytecode*> tinyBytecodes;
-
-    QuickArray<u8> instructionSegment{};
-    QuickArray<u8> dataSegment{};
-
-    DebugInformation* debugInformation = nullptr;
-
-    // This is debug data for interpreter
-    QuickArray<u32> debugSegment{}; // indices to debugLocations
-    
-    struct Location {
-        u32 line=0;
-        u32 column=0;
-        std::string file{};
-        std::string desc{};
-        std::string preDesc{};
-        void* stream = nullptr;
-        // You are not supposed to access any content in the stream. It is just here to compare against other stream pointers.
-        // GenInfo::addInstruction needs the stream pointer.
-    };
-    DynamicArray<Location> debugLocations;
-
-    DynamicArray<std::string> linkDirectives;
-
-    // Assembly or bytecode dump after the compilation is done.
-    struct Dump {
-        bool dumpBytecode = false;
-        bool dumpAsm = false;
-        int bc_startIndex = 0;
-        int bc_endIndex = 0;
-        int asm_startIndex = 0;
-        int asm_endIndex = 0;
-        std::string description;
-    };
-    DynamicArray<Dump> debugDumps;
-
-    QuickArray<char> rawInlineAssembly;
-    QuickArray<u8> rawInstructions; // modified when passed converter
-    struct ASM {
-        u32 start = 0; // points to raw inline assembly
-        u32 end = 0; // exclusive
-        u32 iStart = 0; // points to raw instructions
-        u32 iEnd = 0; // exclusive
-        
-        u32 lineStart = 0;
-        u32 lineEnd = 0;
-        std::string file;
-    };
-    DynamicArray<ASM> asmInstances;
-    // NativeRegistry* nativeRegistry = nullptr;
-
-    // usually a function like main
-    struct ExportedSymbol {
-        std::string name;
-        u32 location = 0;
-    };
-    DynamicArray<ExportedSymbol> exportedSymbols;
-    // returns false if a symbol with 'name' has been exported already
-    bool addExportedSymbol(const std::string& name,  u32 location);
-
-    struct ExternalRelocation {
-        std::string name;
-        u32 location=0;
-    };
-    // Relocation for external functions
-    DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,  u32 location);
-
-    // struct PtrDataRelocation {
-    //     u32 referer_dataOffset;
-    //     u32 target_dataOffset;
-    // };
-    // DynamicArray<PtrDataRelocation> ptrDataRelocations;
-
-    // struct Symbol {
-    //     std::string name;
-    //     u32 bcIndex=0;
-    // };
-    // DynamicArray<Symbol> exportedSymbols; // usually function names
-    // bool exportSymbol(const std::string& name, u32 instructionIndex);
-
-    const Location* getLocation(u32 instructionIndex, u32* locationIndex = nullptr);
-    Location* setLocationInfo(const TokenRange& token, u32 InstructionIndex=-1, u32* locationIndex = nullptr);
-    Location* setLocationInfo(const char* preText, u32 InstructionIndex=-1);
-    // use same location as said register
-    Location* setLocationInfo(u32 locationIndex, u32 instructionIndex=-1);
-    
-    // -1 as index will add text to next instruction
-    // void addDebugText(const char* str, int length, u32 instructionIndex=-1);
-    // void addDebugText(const std::string& text, u32 instructionIndex=-1);
-    // void addDebugText(Token& token, u32 instructionIndex=-1);
-    // const char* getDebugText(u32 instructionIndex);
-
-    // returns an offset relative to the beginning of the data segment where data was placed.
-    // data may be nullptr which will give you space with zero-initialized data.
-    int appendData(const void* data, int size);
-    void ensureAlignmentInData(int alignment);
-    // returns offset into data, also sets out_ptr which is a DANGEROUS pointer that may be invalidated.
-    // write to it before calling appendData again!
-
-    // int appendData_late(void** out_ptr, int size);
-
-    void printInstruction(u32 index, bool printImmediates);
-    // Returns the number of immediates an instruction uses.
-    // When getting the next instruction you should skip by the amount of 
-    // immediates.
-    u32 immediatesOfInstruction(u32 index);
-
-    bool add_notabug(Instruction inst);
-    bool addIm_notabug(i32 data);
-    inline Instruction& get(uint index){
-        return *((Instruction*)instructionSegment.data + index);
-    }
-    inline i32& getIm(u32 index){
-        return *((i32*)instructionSegment.data() + index);
-    }
-
-    inline int length(){
-        return instructionSegment.used;
-    }
-    bool removeLast();
-
-    void printStats();
 };

@@ -1,3 +1,6 @@
+
+a := 9;
+
 // OKay
 
 // "eaeae"
@@ -24,5 +27,5 @@
 //     return n - k;
 // }
 
-#import "tests/fuzzer_gen/main"
+// #import "tests/fuzzer_gen/main"
 // #import "tests/fuzzer_gen/f19"

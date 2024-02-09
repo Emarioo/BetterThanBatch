@@ -360,7 +360,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
     auto test_startTime = engone::StartMeasure();
     bool progress_bar = false;
 
-    Interpreter interpreter{};
+    // Interpreter interpreter{};
     for(int i=0;i<testCases.size();i++) {
         auto& testcase = testCases[i];
         results.add({});
@@ -459,9 +459,10 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             }
         } else {
             if(useInterp) {
-                interpreter.reset();
-                interpreter.silent = true;
-                interpreter.execute(bytecode);
+                Assert(false);
+                // interpreter.reset();
+                // interpreter.silent = true;
+                // interpreter.execute(bytecode);
             } else {
                 options.outputFile = "bin/temp.exe";
                 bool yes = ExportTarget(&options, bytecode);

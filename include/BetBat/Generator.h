@@ -31,8 +31,8 @@ struct GenContext : public PhaseContext {
     // void addPush(int reg, bool withoutInstruction = false);
     // void addIncrSp(i16 offset);
     // void addAlign(int alignment);
-    int saveStackMoment();
-    void restoreStackMoment(int moment, bool withoutModification = false, bool withoutInstruction = false);
+    // int saveStackMoment();
+    // void restoreStackMoment(int moment, bool withoutModification = false, bool withoutInstruction = false);
 
     void popInstructions(u32 count);
 
@@ -134,6 +134,6 @@ struct NodeScope {
     }
     GenContext* info = nullptr;
 };
-Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
+// Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
 
-TinyBytecode* GenerateScope(AST* ast, ASTScope* scope, Compiler* compiler);
+TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler);

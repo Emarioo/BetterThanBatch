@@ -317,7 +317,8 @@ struct StructImpl {
 struct TypeInfo {
     TypeInfo(const StringView& name, TypeId id, u32 size=0) :  name(name), id(id), originalId(id), _size(size) {}
     TypeInfo(TypeId id, u32 size=0) : id(id), originalId(id), _size(size) {}
-    StringView name;
+    // StringView name;
+    std::string name;
     TypeId id={}; // can be virtual and point to a different type
     
     TypeId originalId={};
@@ -372,7 +373,8 @@ struct Identifier {
         VARIABLE, FUNCTION
     };
     Type type=VARIABLE;
-    StringView name{};
+    std::string name;
+    // StringView name{};
     ScopeId scopeId=0;
     // struct Pair {
     //     u32 polyVersion;
@@ -414,7 +416,8 @@ struct VariableInfo {
 };
 struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}
-    StringView name; // namespace
+    // StringView name; // namespace
+    std::string name;
     ScopeId id = 0;
     ScopeId parent = 0;
     ContentOrder contentOrder = CONTENT_ORDER_ZERO; // the index of this scope in the parent content list
@@ -500,7 +503,7 @@ struct ASTExpression : ASTNode {
         bool boolValue;
         char charValue;
     };
-    StringView name{};
+    std::string name;
     // StringView name{};
     // std::string namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
     union {
@@ -645,7 +648,8 @@ struct ASTStruct : ASTNode {
     lexer::SourceLocation location;
     std::string name;
     struct Member {
-        StringView name;
+        std::string name;
+        // StringView name;
         lexer::SourceLocation location;
         // Token name;
         ASTExpression* defaultValue=0;
@@ -654,7 +658,8 @@ struct ASTStruct : ASTNode {
     QuickArray<Member> members{};
     struct PolyArg {
         lexer::SourceLocation location;
-        StringView name;
+        std::string name;
+        // StringView name;
         // Token name{};
         TypeInfo* virtualType = nullptr;
     };
@@ -699,10 +704,11 @@ struct ASTStruct : ASTNode {
 struct ASTEnum : ASTNode {
     // TokenRange tokenRange{};
     lexer::SourceLocation location; // name token
-    StringView name{};
+    std::string name{};
     struct Member {
         // Token name{};
-        StringView name;
+        std::string name;
+        // StringView name;
         int enumValue=0;
         bool ignoreRules = false;
         lexer::SourceLocation location;

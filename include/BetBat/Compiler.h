@@ -293,26 +293,22 @@ struct Compiler {
     Bytecode* code = nullptr;
     Reporter reporter{};
     
-    enum ImportFlags : u32 {
-        FLAG_NONE=0,
-        FLAG_LEXED              = 0x1, // lex and import-preprocess
-        FLAG_PREPROCESSED       = 0x2,
-        FLAG_PARSED             = 0x8,
+    enum TaskType : u32 {
+        TASK_NONE=0,
+        TASK_LEX              = 0x1, // lex and import-preprocess
+        TASK_PREPROCESS_AND_PARSE       = 0x2,
 
-        FLAG_TYPED_ENUMS        = 0x10,
-        FLAG_TYPED_STRUCTS      = 0x20,
-        FLAG_TYPED_FUNCTIONS    = 0x40,
-        FLAG_TYPED_BODIES       = 0x80,
+        TASK_TYPE_ENUMS        = 0x10,
+        TASK_TYPE_STRUCTS      = 0x20,
+        TASK_TYPE_FUNCTIONS    = 0x40,
+        TASK_TYPE_BODIES       = 0x80,
         
-        FLAG_GENERATED          = 0x100,
-
-        // FLAG_BUSY               = 0x4000,
-        // FLAG_FINISHED           = 0x8000,
+        TASK_GENERATE          = 0x100,
     };
     struct Import {
-        bool busy = false;
-        bool finished = false;
-        ImportFlags state = FLAG_NONE;
+        // bool busy = false;
+        // bool finished = false;
+        TaskType state = TASK_NONE;
         std::string path; // file path (sometimes name for preloaded imports)
         
         u32 import_id=0;
@@ -327,6 +323,15 @@ struct Compiler {
         DynamicArray<Dep> dependencies;
     };
     BucketArray<Import> imports{256};
+    
+    struct Task {
+        TaskType type;
+        union {
+            u32 import_id;
+            ScopeId scopeId;
+        };
+    };
+    DynamicArray<Task> tasks;
     
     // DynamicArray<u32> queue_import_ids;
         

@@ -258,7 +258,7 @@ VariableInfo* AST::getVariableByIdentifier(Identifier* identifier) {
         ptr = variables[identifier->varIndex];
     }
     lock_variables.unlock();
-    return nullptr;
+    return ptr;
 }
 // VariableInfo* AST::identifierToVariable(Identifier* identifier){
 //     Assert(identifier);
@@ -2094,9 +2094,9 @@ std::string ScopeInfo::getFullNamespace(AST* ast){
     std::string ns = "";
     ScopeInfo* scope = ast->getScope(id);
     while(scope){
-        if(ns.empty() && scope->name.len!=0)
+        if(ns.empty() && scope->name.size()!=0)
             ns = scope->name;
-        else if(scope->name.len!=0)
+        else if(scope->name.size()!=0)
             ns = std::string(scope->name) + "::"+ns;
         if(scope->id == scope->parent)
             return ns;

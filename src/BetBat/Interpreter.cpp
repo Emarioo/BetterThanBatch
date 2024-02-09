@@ -15,6 +15,8 @@
 
 // #define DECODE_TYPE(ptr) (*((u8*)ptr+1))
 
+#ifdef gone
+
 void Interpreter::cleanup(){
     stack.resize(0);
     cmdArgsBuffer.resize(0);
@@ -1417,3 +1419,4 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
         #endif
     }
 }
+#endif

@@ -351,8 +351,8 @@ namespace dwarf {
                         allType.reference[0] = stream->getWriteHead() - offset_section;
                         WRITE_LEB(abbrev_struct)
 
-                        // stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
-                        stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
+                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        // stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
                         stream->write2(typeInfo->getSize());
 
                         u32* sibling_ref4 = nullptr;
@@ -364,8 +364,8 @@ namespace dwarf {
                             auto& memAst = typeInfo->astStruct->members[mi];
 
                             WRITE_LEB(abbrev_struct_member)
-                            // stream->write(memAst.name.str, memAst.name.length);
-                            stream->write(memAst.name.ptr, memAst.name.len);
+                            stream->write(memAst.name.c_str(), memAst.name.length());
+                            // stream->write(memAst.name.ptr, memAst.name.len);
                             stream->write1('\0');
                             int typeref = getTypeRef(memImpl.typeId);
                             if(typeref == 0) {
@@ -389,8 +389,8 @@ namespace dwarf {
                         allType.reference[0] = stream->getWriteHead() - offset_section;
                         WRITE_LEB(abbrev_enum)
                         
-                        // stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
-                        stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
+                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        // stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
                         Assert(typeInfo->getSize() < 256); // size should fit in one bye
                         stream->write1(typeInfo->getSize()); // size
                         
@@ -411,15 +411,15 @@ namespace dwarf {
                             
                             if (typeInfo->getSize() > 4) {
                                 WRITE_LEB(abbrev_enum_member_64)
-                                stream->write(mem.name.ptr, mem.name.len);
-                                // stream->write(mem.name.str, mem.name.length);
+                                // stream->write(mem.name.ptr, mem.name.len);
+                                stream->write(mem.name.c_str(), mem.name.length());
                                 stream->write1('\0');
                                 
                                 stream->write8(mem.enumValue);
                             } else {
                                 WRITE_LEB(abbrev_enum_member_32)
-                                // stream->write(mem.name.str, mem.name.length);
-                                stream->write(mem.name.ptr, mem.name.len);
+                                stream->write(mem.name.c_str(), mem.name.length());
+                                // stream->write(mem.name.ptr, mem.name.len);
                                 stream->write1('\0');
                                 
                                 stream->write4(mem.enumValue);   
@@ -438,8 +438,8 @@ namespace dwarf {
                         allType.reference[0] = stream->getWriteHead() - offset_section;
                         WRITE_LEB(abbrev_base_type)
                         
-                        stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
-                        // stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
+                        // stream->write(typeInfo->name.ptr, typeInfo->name.len + 1);
+                        stream->write(typeInfo->name.c_str(), typeInfo->name.length() + 1);
                         stream->write1(typeInfo->getSize()); // size
 
                         switch(typeInfo->id.getId()) { // encoding (1 byte)
