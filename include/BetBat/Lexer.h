@@ -219,9 +219,11 @@ namespace lexer {
         // unsafe if you have an import_id reference hanging somewhere
         void destroyImport_unsafe(u32 import_id);
         
-        void appendToken(Import* imp, TokenInfo* token, StringView* string);
-        Token appendToken(u32 fileId, Token token);
-        Token appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 column);
+        // void appendToken(Import* imp, TokenInfo* token, StringView* string);
+        Token appendToken(Import* imp, Token token);
+        // Token appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column);
+        Token appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column);
+        void appendToken(Import* imp, Token tok, StringView* string);
         
         bool equals_identifier(Token token, const char* str);
         

@@ -4,8 +4,6 @@
 #include "BetBat/NativeRegistry.h"
 #include "Native/NativeLayer.h"
 
-#ifdef gone
-
 /*
     Interpreter may not be the accurate term for executing bytecode.
     Interpreter is more executing high level code, statement by statement.
@@ -19,21 +17,7 @@ struct Interpreter {
     Language::Slice<Language::Slice<char>> cmdArgs{};
     void setCmdArgs(const DynamicArray<std::string>& inCmdArgs);
     
-    volatile u64 rax=0;
-    volatile u64 rbx=0;
-    volatile u64 rcx=0;
-    volatile u64 rdx=0;
-
-    volatile u64 xmm0d=0;
-    volatile u64 xmm1d=0;
-    volatile u64 xmm2d=0;
-    volatile u64 xmm3d=0;
-    
-    u64 sp=0;
-    u64 fp=0;
-    u64 pc=0;
-    u64 rsi=0;
-    u64 rdi=0;
+    volatile i64 registers[BC_REG_MAX];
     
     bool expectValuesOnStack = false;
 
@@ -59,4 +43,3 @@ struct Interpreter {
     void cleanup();
     void printRegisters();
 };
-#endif

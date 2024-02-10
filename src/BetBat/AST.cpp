@@ -2071,6 +2071,7 @@ void FuncImpl::print(AST* ast, ASTFunction* astFunc){
 FuncImpl* AST::createFuncImpl(ASTFunction* astFunc){
     FuncImpl* ptr = (FuncImpl*)allocate(sizeof(FuncImpl));
     new(ptr)FuncImpl();
+    ptr->astFunction = astFunc;
     bool nonAllocationFailure = astFunc->_impls.add(ptr);
     Assert(nonAllocationFailure);
     return ptr;

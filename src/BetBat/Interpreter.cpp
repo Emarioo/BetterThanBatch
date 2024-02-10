@@ -15,7 +15,6 @@
 
 // #define DECODE_TYPE(ptr) (*((u8*)ptr+1))
 
-#ifdef gone
 
 void Interpreter::cleanup(){
     stack.resize(0);
@@ -23,21 +22,10 @@ void Interpreter::cleanup(){
     engone::Free(cmdArgs.ptr, sizeof(Language::Slice<char>)*cmdArgs.len);
     cmdArgs.ptr = nullptr;
     cmdArgs.len = 0;
+    reset();
 }
 void Interpreter::reset(){
-    rax=0;
-    rbx=0;
-    rcx=0;
-    rdx=0;
-    xmm0d=0;
-    xmm1d=0;
-    xmm2d=0;
-    xmm3d=0;
-    sp=0;
-    fp=0;
-    pc=0;
-    rsi=0;
-    rdi=0;
+    memset((void*)registers, 0, sizeof(registers));
     memset(stack.data, 0, stack.max);
 }
 void Interpreter::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
@@ -1419,4 +1407,3 @@ void Interpreter::executePart(Bytecode* bytecode, u32 startInstruction, u32 endI
         #endif
     }
 }
-#endif

@@ -292,6 +292,8 @@ struct Compiler {
     AST* ast = nullptr;
     Bytecode* code = nullptr;
     Reporter reporter{};
+
+    CompileOptions* compileOptions;
     
     enum TaskType : u32 {
         TASK_NONE=0,
@@ -340,7 +342,7 @@ struct Compiler {
     // processing faster.
     void processImports();
     
-    void compileSource(const std::string& path);
+    void compileSource(const std::string& path, CompileOptions* options);
     
     // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
     u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "");

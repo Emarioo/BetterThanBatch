@@ -684,11 +684,11 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     for(int i = real_index; i < real_index + real_count;i++) {
                         auto& list = layer->input_arguments[i];
                         for(int j=0;j<list.size();j++) {
-                            lexer->appendToken(new_import_id, list[j]);
+                            lexer->appendToken(new_lexer_import, list[j]);
                         }
                         if(i+1 != real_index + real_count && list.size() != 0) {
                             // nocheckin, fix line and column.
-                            lexer->appendToken(new_import_id, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE, 0, 0);
+                            lexer->appendToken(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE, 0, 0);
                             // lexer->appendToken(new_import_id, list[j]);
                         }
                     }
@@ -697,7 +697,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 }
             }
             layer->step();
-            lexer->appendToken(new_import_id, token);
+            lexer->appendToken(new_lexer_import, token);
         }
     }
     #undef gettok
@@ -708,14 +708,16 @@ SignalIO PreprocContext::parseMacroEvaluation() {
 SignalIO PreprocContext::parseOne() {
     StringView string{};
     // lexer::Token token = gettok();
-    auto token = getinfo(&string);
+    // auto token = getinfo(&string);
+    auto tok = gettok(&string);
+    auto token = &tok;
     if(token->type == lexer::TOKEN_EOF)
         return SIGNAL_COMPLETE_FAILURE;
     
     if(token->type != '#' || (token->flags & (lexer::TOKEN_FLAG_NEWLINE|lexer::TOKEN_FLAG_SPACE))) {
         advance();
         if(evaluateTokens) {
-            lexer->appendToken(new_lexer_import, token, &string);
+            lexer->appendToken(new_lexer_import, tok, &string);
         }
         return SIGNAL_SUCCESS;
     }
@@ -724,6 +726,7 @@ SignalIO PreprocContext::parseOne() {
     
     // TODO: Create token types for non-user directives (#import, #include, #macro...)
     auto macro_token = getinfo(&string);
+    auto macro_tok = gettok();
     if(macro_token->type == lexer::TOKEN_IDENTIFIER) {
         const char* str = string.ptr;
         u32 len = string.len; // lexer->getStringFromToken(token,&str);
@@ -746,8 +749,8 @@ SignalIO PreprocContext::parseOne() {
             if(signal != SIGNAL_SUCCESS) {
                 // the macro was not a macro
                 if(evaluateTokens) {
-                    lexer->appendToken(new_lexer_import, token, nullptr); // hashtag
-                    lexer->appendToken(new_lexer_import, macro_token, &string);
+                    lexer->appendToken(new_lexer_import, tok, nullptr); // hashtag
+                    lexer->appendToken(new_lexer_import, macro_tok, &string);
                     advance();
                 }
             }
@@ -760,7 +763,7 @@ SignalIO PreprocContext::parseOne() {
     } else {
         advance();
         if(evaluateTokens) {
-            lexer->appendToken(new_lexer_import, token, &string);
+            lexer->appendToken(new_lexer_import, tok, &string);
         }
     }
     return SIGNAL_SUCCESS;

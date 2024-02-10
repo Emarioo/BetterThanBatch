@@ -73,9 +73,10 @@ int main(int argc, const char** argv){
             // opts.file_count = 20;
             // GenerateFuzzedFiles(opts,"main.btb");
 
+    CompileOptions options{};
     Compiler compiler{};
     compiler.importDirectories.add(Path("modules/").getAbsolute());
-    compiler.compileSource("examples/dev.btb");
+    compiler.compileSource("examples/dev.btb", &options);
 
     u32 lines=0;
     u32 filesize=0;

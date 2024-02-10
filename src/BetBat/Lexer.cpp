@@ -125,6 +125,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
         new_tokens = last_chunk->tokens.data() + last_chunk->tokens.used;
         new_source_tokens = last_chunk->sources.data() + last_chunk->tokens.used;
         last_chunk->tokens.used += n;
+        last_chunk->sources.used += n;
         new_tokens_len = n;
         
         *new_tokens = {};
@@ -861,7 +862,7 @@ Tokenize_END:
     // log::out << "Last: "<<outStream->get(outStream->length()-1)<<"\n";
     return file_id;
 }
-void Lexer::appendToken(Import* imp, TokenInfo* from_info, StringView* string) {
+void Lexer::appendToken(Import* imp, Token tok, StringView* string) {
     // ZoneScoped;
     Assert(imp);
     
@@ -894,19 +895,29 @@ void Lexer::appendToken(Import* imp, TokenInfo* from_info, StringView* string) {
     }
     
     chunk->tokens.add({});
+    chunk->sources.add({});
+
     auto info = &chunk->tokens.last();
+    auto& source = chunk->sources.last();
     
-    *info = *from_info;
-    info->flags = from_info->flags;
+    info->type = tok.type;
+    info->c_type = tok.c_type;
+    info->flags = tok.flags;
     info->data_offset = 0;
-    
-    if(from_info->flags & TOKEN_FLAG_HAS_DATA) {
+
+    {
+        u32 cindex, tindex;
+        decode_origin(tok.origin, &cindex, &tindex);
+        Chunk* fc = getChunk_unsafe(cindex);
+        source = fc->sources[tindex];
+    }
+    if(tok.flags & TOKEN_FLAG_HAS_DATA) {
         Assert(string);
         const void* ptr=string->ptr;
         u32 size = string->len;
         
         info->data_offset = chunk->aux_used;
-        if(from_info->flags & TOKEN_FLAG_NULL_TERMINATED) {
+        if(tok.flags & TOKEN_FLAG_NULL_TERMINATED) {
             chunk->alloc_aux_space(size + 2);
             chunk->aux_data[info->data_offset] = size;
             memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
@@ -924,11 +935,11 @@ void Lexer::appendToken(Import* imp, TokenInfo* from_info, StringView* string) {
     // tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     // return tok;
 }
-Token Lexer::appendToken(u32 fileId, Token token) {
+Token Lexer::appendToken(Import* imp, Token token) {
     // ZoneScoped;
-    lock_imports.lock();
-    Import* imp = imports.get(fileId-1);
-    lock_imports.unlock();
+    // lock_imports.lock();
+    // Import* imp = imports.get(fileId-1);
+    // lock_imports.unlock();
     Assert(imp);
     
     Chunk* chunk = nullptr;
@@ -953,19 +964,27 @@ Token Lexer::appendToken(u32 fileId, Token token) {
         lock_chunks.unlock();
         
         chunk->chunk_index = cindex;
-        chunk->import_id = fileId;
+        chunk->import_id = imp->file_id;
         imp->chunk_indices.add(cindex);
         imp->chunks.add(chunk);
     }
     
     chunk->tokens.add({});
     auto info = &chunk->tokens.last();
+    auto& source = chunk->sources.last();
     auto from_info = getTokenInfo_unsafe(token);
     
     *info = *from_info;
     info->flags = (from_info->flags & (TOKEN_FLAG_HAS_DATA|TOKEN_FLAG_NULL_TERMINATED|TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED));
     info->flags |= token.flags&(TOKEN_FLAG_NEWLINE|TOKEN_FLAG_SPACE);
     info->data_offset = 0;
+
+    {
+        u32 cindex, tindex;
+        decode_origin(token.origin, &cindex, &tindex);
+        Chunk* fc = getChunk_unsafe(cindex);
+        source = fc->sources[tindex];
+    }
     
     if(from_info->flags & TOKEN_FLAG_HAS_DATA) {
         const void* ptr=nullptr;
@@ -990,7 +1009,7 @@ Token Lexer::appendToken(u32 fileId, Token token) {
     tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     return tok;
 }
-Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 column){
+Token Lexer::appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column){
     // ZoneScoped;
     Assert(flags < 0x10000 && line < 0x10000 && column < 0x10000);
 
@@ -998,9 +1017,9 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
     // shouldn't happen, bug in the code if it happens.
     Assert(type != TOKEN_IDENTIFIER || !(flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED)));
 
-    lock_imports.lock();
-    Import* imp = imports.get(fileId-1);
-    lock_imports.unlock();
+    // lock_imports.lock();
+    // Import* imp = imports.get(fileId-1);
+    // lock_imports.unlock();
     Assert(imp);
     
     Chunk* chunk = nullptr;
@@ -1024,7 +1043,7 @@ Token Lexer::appendToken(u32 fileId, TokenType type, u32 flags, u32 line, u32 co
         lock_chunks.unlock();
         
         chunk->chunk_index = cindex;
-        chunk->import_id = fileId;
+        chunk->import_id = imp->file_id;
         imp->chunk_indices.add(cindex);
         imp->chunks.add(chunk);
     }

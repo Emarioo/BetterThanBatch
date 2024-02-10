@@ -100,12 +100,13 @@ struct GenContext : public PhaseContext {
     static const int FRAME_SIZE=16; // pc, fp
     // what the relative stack pointer should be right after a funtion call.
     // frame pointer should be pushed afterwards which will result in -16 as virtualStackPointer
-    static const int VIRTUAL_STACK_START=-8; // pc
+    static const int VIRTUAL_STACK_START = 0;
 
     // Extra details
     // FuncImpl* recentFuncImpl=nullptr; // used by fncall
 
 
+    SignalIO framePush(TypeId typeId, i32* outFrameOffset, bool genDefault, bool staticData);
     SignalIO generatePush(BCRegister baseReg, int offset, TypeId typeId);
     SignalIO generatePop(BCRegister baseReg, int offset, TypeId typeId);
     SignalIO generateArtificialPush(TypeId typeId);

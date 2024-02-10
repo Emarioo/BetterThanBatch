@@ -143,6 +143,8 @@ enum BCRegister : u8 {
     BC_REG_XMM1,
     BC_REG_XMM2,
     BC_REG_XMM3,
+
+    BC_REG_MAX,
 };
 extern const char* instruction_names[];
 extern const char* register_names[];
@@ -152,6 +154,7 @@ extern const char* register_names[];
 struct Bytecode;
 // Look at me I'm tiny bytecode! 
 struct TinyBytecode {
+    std::string name;
     QuickArray<u8> instructionSegment{};
     
     // debug information
@@ -324,7 +327,7 @@ struct BytecodeBuilder {
     void emit_li32(BCRegister reg, i32 imm);
     void emit_li64(BCRegister reg, i64 imm);
     
-    void emit_incr(BCRegister reg, i32 imm);
+    void emit_incr(BCRegister reg, i32 imm, bool no_modification = false);
     
     void emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm = 0);
     void emit_ret();

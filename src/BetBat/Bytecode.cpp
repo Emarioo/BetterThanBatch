@@ -3,131 +3,8 @@
 // included to get CallConventions
 #include "BetBat/x64_Converter.h"
 
-// const char* InstToString(int type){
-//     #define CASE(x,y) case x: return y;
-//     switch(type){
-//         CASE(BC_MOV_RR,"mov")
-//         CASE(BC_MOV_RM,"mov")
-//         CASE(BC_MOV_RM_DISP32,"mov")
-//         CASE(BC_MOV_MR,"mov")
-//         CASE(BC_MOV_MR_DISP32,"mov")
-        
-//         CASE(BC_MODI,"mod")
-//         CASE(BC_FMOD,"mod")
-//         CASE(BC_ADDI,"add")
-//         CASE(BC_FADD,"add")
-//         CASE(BC_SUBI,"sub")
-//         CASE(BC_FSUB,"sub")
-//         CASE(BC_MULI,"mul")
-//         CASE(BC_FMUL,"mul")
-//         CASE(BC_DIVI,"div")
-//         CASE(BC_FDIV,"div")
-//         CASE(BC_INCR,"inc")
-        
-//         CASE(BC_JMP,"jmp")
-//         CASE(BC_CALL,"call")
-//         CASE(BC_RET,"ret")
-//         CASE(BC_JNZ,"je")
-//         CASE(BC_JZ,"jne")
-        
-//         CASE(BC_PUSH,"push")
-//         CASE(BC_POP,"pop")
-//         CASE(BC_LI,"li")
-//         CASE(BC_DATAPTR,"dataptr")
-//         CASE(BC_CODEPTR,"codeptr")
+// #define ENABLE_BYTECODE_OPTIMIZATIONS
 
-//         CASE(BC_EQ,"eq")
-//         CASE(BC_NEQ,"neq")
-        
-//         CASE(BC_LT,"lt") 
-//         CASE(BC_LTE,"lte")
-//         CASE(BC_GT,"gt") 
-//         CASE(BC_GTE,"gte")
-//         CASE(BC_ANDI,"and")
-//         CASE(BC_ORI,"or") 
-//         CASE(BC_NOT,"not")
-        
-//         CASE(BC_FEQ,"eq")
-//         CASE(BC_FNEQ,"neq")
-//         CASE(BC_FLT,"lt") 
-//         CASE(BC_FLTE,"lte")
-//         CASE(BC_FGT,"gt") 
-//         CASE(BC_FGTE,"gte")
-        
-//         CASE(BC_BAND,"band")
-//         CASE(BC_BOR,"bor")
-//         CASE(BC_BXOR,"bxor")
-//         CASE(BC_BNOT,"bnot")
-//         CASE(BC_BLSHIFT,"shl")
-//         CASE(BC_BRSHIFT,"shr")
-        
-//         CASE(BC_CAST,"cast")
-//         CASE(BC_ASM,"asm")
-
-//         CASE(BC_MEMZERO,"memzero")
-//         CASE(BC_MEMCPY,"memcpy")
-//         CASE(BC_RDTSC,"rdtsc")
-//         CASE(BC_STRLEN,"strlen")
-//         // CASE(BC_RDTSCP)
-//         CASE(BC_CMP_SWAP,"cmp_swap")
-//         CASE(BC_ATOMIC_ADD,"atomic_add")
-        
-//         CASE(BC_SQRT,"sqrt")
-//         CASE(BC_ROUND,"round")
-        
-//         CASE(BC_TEST_VALUE,"test_value")
-
-//         // CASE(BC_SIN)
-//         // CASE(BC_COS)
-//         // CASE(BC_TAN)
-//         default: {
-//             Assert(false);
-//         }
-//     }
-//     #undef CASE
-//     return "BC_?";
-// }
-#define MOV_SIZE_NAME(X) ((X) >= 1 && (X) <= 8 ? mov_size_names[(X)-1] : "?")
-const char* mov_size_names[]{
-    // "Byte",
-    // "Word",
-    // "?",
-    // "Dword",
-    // "?",
-    // "?",
-    // "?",
-    // "Qword",
-    "1b",
-    "2b",
-    "?",
-    "4b",
-    "?",
-    "?",
-    "?",
-    "8b",
-};
-// int RegBySize(u8 regName, int size){
-//     if(size==1) return ENCODE_REG_BITS(regName, BC_REG_8);
-//     else if(size==2) return ENCODE_REG_BITS(regName, BC_REG_16);
-//     else if(size==4) return ENCODE_REG_BITS(regName, BC_REG_32);
-//     else if(size==8) return ENCODE_REG_BITS(regName, BC_REG_64);
-//     else {
-//         // TypeChecker may fail and give an invalid type with size 0.
-//         // 
-//         // Assert(("Bad size, only 1,2,4,8 are allowed", false))
-//         return 0;
-//     }
-// }
-// bool Bytecode::removeLast(){
-//     if(instructionSegment.used>0)
-//         return false;
-//     instructionSegment.used--;
-//     return true;
-// }
-// engone::Logger& operator<<(engone::Logger& logger, Instruction& instruction){
-//     instruction.print(0);
-//     return logger;
-// }
 u32 Bytecode::getMemoryUsage(){
     Assert(false);
     return 0;
@@ -156,63 +33,6 @@ void Bytecode::addExternalRelocation(const std::string& name, u32 location){
     tmp.location = location;
     externalRelocations.add(tmp);
 }
-// bool Bytecode::add_notabug(Instruction instruction){
-//     if(instructionSegment.max == instructionSegment.used){
-//         if(!instructionSegment.resize(instructionSegment.max*2 + 25*sizeof(Instruction)))
-//             return false;   
-//     }
-//     *((Instruction*)instructionSegment.data + instructionSegment.used++) = instruction;
-//     _GLOG(printInstruction(length()-1, false);)
-//     return true;
-// }
-
-// void Bytecode::printInstruction(u32 index, bool printImmediates){
-//     using namespace engone;
-//     Assert(index < (u32)length());
-
-//     u8 opcode = get(index).opcode;
-//     log::out << index<< ": ";
-//     Instruction inst = get(index);
-//     i64 imm = 0;
-//     if(printImmediates){
-//         u8 immCount = immediatesOfInstruction(index);
-//         if(immCount>0) {
-//             if(opcode == BC_LI && get(index).op1 == 2) {
-//                 imm = (i64)getIm(index+1) | ((i64)getIm(index+2) << 32);
-//                 // log::out << imm;
-//             } else { 
-//                 // log::out << getIm(index + 1);
-//                 imm = (i64)getIm(index + 1);
-//             }
-//         }
-//     }
-//     inst.print(imm);
-//     log::out << " ";
-//     log::out<<"\n";
-// }
-// u32 Bytecode::immediatesOfInstruction(u32 index) {
-//     u8 opcode = get(index).opcode;
-//     if(opcode == BC_LI || opcode==BC_JMP || opcode==BC_JNZ || opcode==BC_JZ || opcode==BC_CALL || opcode==BC_DATAPTR||
-//         opcode == BC_MOV_MR_DISP32 || opcode == BC_MOV_RM_DISP32 || opcode == BC_CODEPTR || opcode==BC_TEST_VALUE){
-        
-//         if(opcode == BC_LI && get(index).op1 == 2){
-//             return 2;
-//         } else {
-//             return 1;
-//         }
-//     }
-//     return 0;
-// }
-// bool Bytecode::addIm_notabug(i32 data){
-//     if(instructionSegment.max == instructionSegment.used){
-//         if(!instructionSegment.resize(instructionSegment.max*2 + 25*sizeof(Instruction)))
-//             return false;
-//     }
-//     _GLOG(engone::log::out <<length()<< ": "<<data<<"\n";)
-//     // NOTE: This function works because sizeof Instruction == sizeof u32
-//     *((i32*)instructionSegment.data + instructionSegment.used++) = data;
-//     return true;
-// }
 void Bytecode::cleanup(){
     // instructionSegment.resize(0);
     dataSegment.resize(0);
@@ -229,127 +49,6 @@ void Bytecode::cleanup(){
     // debugText.clear();
     // debugText.shrink_to_fit();
 }
-// const char* RegToStr(u8 reg){
-//     #define CASE(K,V) case BC_REG_##K: return ""#V;
-//     #define CASER(K,V) case BC_REG_R##K##X: return "r"#V"x";\
-//     case BC_REG_E##K##X: return "e"#V "x";\
-//     case BC_REG_##K##X: return ""#V "x";\
-//     case BC_REG_##K##L: return ""#V "l";
-//     // case BC_REG_##K##H: return ""#V "h";
-//     switch(reg){
-//         CASER(A,a)
-//         CASER(B,b)
-//         CASER(C,c)
-//         CASER(D,d)
-
-//         CASE(SP,sp)
-//         CASE(FP,fp)
-//         // CASE(DP,dp)
-//         CASE(RDI,rdi)
-//         CASE(RSI,rsi)
-
-//         CASE(R8,r8)
-//         CASE(R9,r9)
-
-//         CASE(XMM0f,xmm0f)
-//         CASE(XMM1f,xmm1f)
-//         CASE(XMM2f,xmm2f)
-//         CASE(XMM3f,xmm3f)
-        
-//         CASE(XMM0d,xmm0d)
-//         CASE(XMM1d,xmm1d)
-//         CASE(XMM2d,xmm2d)
-//         CASE(XMM3d,xmm3d)
-
-//         case 0: return "";
-//     }
-//     #undef CASE
-//     #undef CASER
-//     return "$?";
-// }
-// void Instruction::print(i64 imm){
-//     using namespace engone;
-
-//     if(opcode==BC_INCR){
-//         i16 offset = (i16)((i16)op1 | ((i16)op2<<8));
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< offset  << log::NO_COLOR;
-//     // else if(opcode==BC_MEMZERO)
-//     //     log::out << log::PURPLE<<InstToStringX(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<< (u8)op1 << log::NO_COLOR;
-//     } else if(opcode==BC_CAST) {
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ";
-//         switch(op0){
-//             case CAST_FLOAT_SINT: log::out << "f->s"; break;
-//             case CAST_SINT_FLOAT: log::out << "s->f"; break;
-//             case CAST_UINT_FLOAT: log::out << "u->f"; break;
-//             case CAST_SINT_SINT: log::out << "s->s"; break;
-//             case CAST_UINT_SINT: log::out << "u->s"; break;
-//             case CAST_SINT_UINT: log::out << "s->u"; break;
-//             case CAST_FLOAT_FLOAT: log::out << "f->f"; break;
-//         }
-//         log::out<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::NO_COLOR;
-//     } else if(opcode==BC_LT || opcode==BC_LTE ||opcode==BC_GT ||opcode==BC_GTE) {
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ";
-//         switch(op0){
-//             case CMP_UINT_UINT: log::out << "u-u"; break;
-//             case CMP_UINT_SINT: log::out << "u-s"; break;
-//             case CMP_SINT_UINT: log::out << "s-u"; break;
-//             case CMP_SINT_SINT: log::out << "s-s"; break;
-//         }
-//         log::out<<" "<<RegToStr(op1) << " "<< RegToStr(op2) << log::NO_COLOR;
-//     }
-//     else if(opcode==BC_MOV_MR) {
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "] "<<RegToStr(op1)<< " "<<MOV_SIZE_NAME(op2)<<log::NO_COLOR;
-//     } else if(opcode==BC_MOV_MR_DISP32) {
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" ["<<RegToStr(op0) << "+"<<NumberToHex_signed(imm,true)<<"] "<<RegToStr(op1)<< " "<<MOV_SIZE_NAME(op2)<<log::NO_COLOR;
-//     } else if(opcode==BC_MOV_RM) {
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "] "<<MOV_SIZE_NAME(op2)<<log::NO_COLOR;
-//     } else if(opcode==BC_MOV_RM_DISP32){
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " ["<<RegToStr(op1)<< "+"<<NumberToHex_signed(imm,true)<<"] "<<MOV_SIZE_NAME(op2)<<log::NO_COLOR;
-//     } else if(opcode==BC_CALL) {
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY <<" "<< (LinkConventions)op0 << " "<< (CallConventions)op1 <<log::NO_COLOR;
-//     } else if(opcode==BC_ASM) {
-//         int index = ASM_DECODE_INDEX(op0,op1,op2);
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY <<" "<< index <<log::NO_COLOR;
-//     } else if(opcode==BC_LI) {
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0);
-//         if(op1 == 2)
-//             log::out << " qword";
-//         // if(op1 == 2)
-//         log::out << " "<<imm;
-//          log::out<<log::NO_COLOR;
-//     } else if(opcode==BC_TEST_VALUE) {
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<op0<<" " << RegToStr(op1)<< " "<<RegToStr(op2);
-//         log::out<<log::NO_COLOR;
-//     } else
-//         log::out << log::PURPLE<<InstToString(opcode) << log::GRAY<<" "<<RegToStr(op0) << " "<<RegToStr(op1)<< " "<<RegToStr(op2)<<log::NO_COLOR;
-    
-//     // auto color = log::out.getColor();
-//     // if(type==BC_NUM||type==BC_STR||type==BC_SUBSTR||type==BC_COPY)
-//     //     log::out << log::AQUA;
-//     // if(type==BC_DEL)
-//     //     log::out << log::PURPLE;
-//     // if(type==BC_LOADNC||type==BC_LOADSC||type==BC_LOADV||type==BC_STOREV){
-//     //     log::out << InstToString(type) << " $"<<RegToString(reg0) << " "<<((uint)reg1|((uint)reg2<<8));
-//     // } else if((type&BC_MASK) == BC_R1){
-//     //     log::out << InstToString(type);
-//     //     if(reg1==0&&reg2==0){
-//     //         log::out << " $"<<RegToString(reg0);
-//     //     }else{
-//     //         log::out << " "<<((uint)reg0|((uint)reg1<<8)|((uint)reg2<<8));
-//     //     }
-//     // }else if((type&BC_MASK) == BC_R2){
-//     //     log::out << InstToString(type)<<" $" <<RegToString(reg0);
-//     //     // if(reg2!=0||type==BC_LOADV){
-//     //     //     log::out << " "<<((uint)reg1|((uint)reg2<<8));
-//     //     // }else{
-//     //         log::out << " $"<<RegToString(reg1);
-//     //     // }
-//     // // if((type&BC_MASK) == BC_R3)
-//     // } else
-//     //     log::out<<InstToString(type)<<" $"<<RegToString(reg0)<<" $"<<RegToString(reg1)<<" $"<<RegToString(reg2);
-        
-//     // log::out << color;
-// }
 
 Bytecode* Bytecode::Create(){
     Bytecode* ptr = TRACK_ALLOC(Bytecode);
@@ -562,22 +261,20 @@ void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode) {
     Assert(virtualStackPointer == 0);
     // Assert(stackAlignment.size() == 0);
     virtualStackPointer = 0;
+    index_of_last_instruction = -1;
     // stackAlignment.cleanup();
     
     this->code = code;
     this->tinycode = tinycode;
 }
 void BytecodeBuilder::emit_stack_space(int size) {
-    emit_li32(BC_REG_T1, size);
-    emit_add(BC_REG_SP, BC_REG_T1, false);
     size = (size + 0x7) & ~0x7; // ensure 8-byte alignment
-    virtualStackPointer -= size;
+    emit_incr(BC_REG_SP, -size);
 }
 void BytecodeBuilder::emit_stack_alignment(int alignment) {
     int dx = virtualStackPointer & alignment;
     if(dx != 0) {
-        emit_li32(BC_REG_T1, alignment - dx);
-        emit_add(BC_REG_SP, BC_REG_T1, false);
+        emit_incr(BC_REG_SP, alignment - dx);
     }
 }
 void BytecodeBuilder::emit_push(BCRegister reg, bool without_instruction) {
@@ -588,18 +285,20 @@ void BytecodeBuilder::emit_push(BCRegister reg, bool without_instruction) {
     virtualStackPointer -= 8;
 }
 void BytecodeBuilder::emit_pop(BCRegister reg) {
+#ifdef ENABLE_BYTECODE_OPTIMIZATIONS
     if(index_of_last_instruction != -1 && tinycode->instructionSegment[index_of_last_instruction] == BC_PUSH && tinycode->instructionSegment[index_of_last_instruction+1] == reg) {
         // remove redundant push and pop
         index_of_last_instruction = -1;
         tinycode->instructionSegment.pop();
         tinycode->instructionSegment.pop();
         virtualStackPointer -= 8;
-    } else {
-        emit_opcode(BC_POP);
-        emit_operand(reg);
-        virtualStackPointer += 8;
+        return;
     }
-    
+#endif
+
+    emit_opcode(BC_POP);
+    emit_operand(reg);
+    virtualStackPointer += 8;
 }
 void BytecodeBuilder::emit_li32(BCRegister reg, i32 imm){
     emit_opcode(BC_LI32);
@@ -611,12 +310,32 @@ void BytecodeBuilder::emit_li64(BCRegister reg, i64 imm){
     emit_operand(reg);
     emit_imm64(imm);
 }
-void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm) {
+void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm, bool no_modification) {
+    Assert(imm != 0); // incrementing by 0 is dumb
+
+#ifdef ENABLE_BYTECODE_OPTIMIZATIONS
+    if(index_of_last_instruction != -1 && tinycode->instructionSegment[index_of_last_instruction] == BC_INCR && tinycode->instructionSegment[index_of_last_instruction+1] == reg) {
+        // modify immediate of previous incr
+        i32* prev_imm = (i32*)&tinycode->instructionSegment[index_of_last_instruction + 2];
+        *prev_imm += imm;
+
+        if(*prev_imm == 0) {
+            index_of_last_instruction = -1;
+            tinycode->instructionSegment.used -= 6;
+        }
+
+        Assert(no_modification); // we don't know if previous incr had modification or not, it probably did
+        if(reg == BC_REG_SP)
+            virtualStackPointer += imm;
+        return;
+    }
+#endif
+
     emit_opcode(BC_INCR);
     emit_operand(reg);
     emit_imm32(imm);
     
-    if(reg == BC_REG_SP)
+    if(reg == BC_REG_SP && !no_modification)
         virtualStackPointer += imm;
 }
 // void BytecodeBuilder::emit_integer_inst(InstructionType type, BCRegister out, BCRegister b) {
@@ -788,7 +507,7 @@ void BytecodeBuilder::emit_bor(BCRegister to, BCRegister from) {
 void BytecodeBuilder::emit_bxor(BCRegister to, BCRegister from) {
     emit_opcode(BC_BXOR);
     emit_operand(to);
-    emit_operand(from);   
+    emit_operand(from);
 }
 void BytecodeBuilder::emit_bnot(BCRegister to, BCRegister from) {
     emit_opcode(BC_BNOT);
@@ -949,13 +668,14 @@ void BytecodeBuilder::emit_imm64(i64 imm) {
         //         Assert(at >= 0);
         //     }
         // }
-        virtualStackPointer = saved_sp;
     } 
     // else {
     //     _GLOG(log::out << "relsp "<<moment<<"\n";)
     // }
     if(!no_instruction){
-        emit_incr(BC_REG_SP, offset);
+        emit_incr(BC_REG_SP, offset, no_modification);
+    } else {
+        virtualStackPointer = saved_sp;
     }
     if(no_modification) {
         _GLOG(log::out << "relsp (temp) "<<saved_sp<<"\n";)
@@ -996,10 +716,10 @@ extern const char* instruction_names[] {
     "land", // BC_LAND
     "lor", // BC_LOR
     "lnot", // BC_LNOT
-    "bxor", // BC_BXOR
-    "bor", // BC_BOR
     "band", // BC_BAND
+    "bor", // BC_BOR
     "bnot", // BC_BNOT
+    "bxor", // BC_BXOR
     "blshift", // BC_BLSHIFT
     "brshift", // BC_BRSHIFT
     "cast", // BC_CAST
@@ -1066,7 +786,6 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code) {
         case BC_MOV_RR: {
             op0 = (BCRegister)instructionSegment[pc++];
             op1 = (BCRegister)instructionSegment[pc++];
-            control = (InstructionControl)instructionSegment[pc++];
             
             log::out << " " << register_names[op0] << ", " << register_names[op1];
             break;
@@ -1216,7 +935,9 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code) {
     }
 }
 void Bytecode::print() {
+    using namespace engone;
     for(auto& t : tinyBytecodes) {
+        log::out <<log::GOLD<< "Tinycode: "<<t->name<<"\n";
         t->print(0,t->instructionSegment.size(),this);
     }
 }
