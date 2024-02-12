@@ -200,6 +200,7 @@ namespace lexer {
             u32 end_file_token_index=0; // exclusive
         };
         FeedIterator createFeedIterator(Token start_token, Token end_token = {});
+        FeedIterator createFeedIterator(Import* imp, u32 start, u32 end);
         u32 feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipSuffix = false);
 
         void print(u32 fileid);
@@ -211,6 +212,8 @@ namespace lexer {
         u32 getDataFromToken(Token tok, const void** ptr);
         
         std::string getStdStringFromToken(Token tok);
+
+        std::string getline(SourceLocation location);
 
         std::string tostring(Token token);
         std::string tostring(SourceLocation token) { return tostring(token.tok); }

@@ -2328,7 +2328,8 @@ void Compiler::processImports() {
                 // TODO: Handle return value?
                 // ast->appendToMainBody(what); // nocheckin
                 ast->shareWithGlobalScope(what);
-                // ast->print();
+                
+                ast->print();
                 imp->scopeId = what->scopeId;
 
                 imp->state = (TaskType)(imp->state | picked_task.type);
@@ -2466,6 +2467,9 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     engone::log::out << "Compiled in "<<FormatTime(time)<<"\n";
 
     code->print();
+
+    Interpreter interp{};
+    interp.execute(code, "main");
 }
 u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origin_file) {
     Path abs_path = findSourceFile(path, dir_of_origin_file);

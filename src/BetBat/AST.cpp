@@ -2165,8 +2165,13 @@ void AST::print(int depth) {
     if (globalScope) {
         PrintSpace(depth);
         log::out << "AST\n";
-        globalScope->print(this, depth + 1);
+        // globalScope->print(this, depth + 1);
+        auto s = getScope(globalScope->scopeId);
+        for(auto n : s->sharedScopes) {
+            n->astScope->print(this, depth+1);
+        }
     }
+
 }
 void ASTScope::print(AST *ast, int depth) {
     using namespace engone;

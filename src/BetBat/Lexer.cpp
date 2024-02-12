@@ -1328,6 +1328,14 @@ Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
     #endif
     return out;
 }
+Lexer::FeedIterator Lexer::createFeedIterator(Import* imp, u32 start, u32 end) {
+    FeedIterator iter{};
+    iter.file_id = imp->file_id;
+    iter.file_token_index = start;
+    iter.end_file_token_index = end;
+
+    return iter;
+}
 Lexer::FeedIterator Lexer::createFeedIterator(Token start_token, Token end_token) {
     FeedIterator iter{};
 
@@ -1529,9 +1537,9 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
                 }
             }
         }
-
         // TODO: Don't do suffix if we processed the last token or if suffix should be skipped (skipSuffix)
-        if(!skipSuffix) {
+        
+        if(!skipSuffix || iterator.file_token_index+1 != iterator.end_file_token_index) {
             if(tok.flags & TOKEN_FLAG_NEWLINE) {
                 ENSURE(1)
                 // TODO: Check iterator.char_index, we may already have written this suffix
@@ -1688,7 +1696,7 @@ void Lexer::print(u32 fileid) {
     iter.file_token_index = 0;
     // We don't encode_file_token_index because integer overflow. If you know how not to create a bug then
     // you are free to use the encode function instead.
-    iter.end_file_token_index = (imp->chunk_indices.size()-1) * 0x10000 + last->tokens.size();
+    iter.end_file_token_index = (imp->chunk_indices.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + last->tokens.size();
 
     char buffer[256];
     u32 written = 0;
@@ -1768,5 +1776,57 @@ u64 ConvertHexadecimal(const StringView& view) {
         }
     }
     return hex;
+}
+std::string Lexer::getline(SourceLocation location) {
+    auto imp = getImport_unsafe(location);
+
+    u32 cindex, tindex;
+    decode_origin(location.tok.origin, &cindex, &tindex);
+
+    int index = 0;
+    for(int i=0;i<imp->chunks.size();i++){
+        if(imp->chunk_indices[i] == cindex) {
+            index = TOKEN_ORIGIN_TOKEN_MAX * i + tindex;
+            break;
+        }
+    }
+
+    auto getsource = [&](u32 tokindex) {
+        return &imp->chunks[tokindex >> TOKEN_ORIGIN_TOKEN_BITS]->sources[tokindex & (TOKEN_ORIGIN_TOKEN_MAX-1)];
+    };
+    auto getinfo = [&](u32 tokindex) {
+        return &imp->chunks[tokindex >> TOKEN_ORIGIN_TOKEN_BITS]->tokens[tokindex & (TOKEN_ORIGIN_TOKEN_MAX-1)];
+    };
+
+    auto base_tok = getsource(index);
+    int line = base_tok->line;
+    
+    int start = index;
+    while(start - 1 >= 0) {
+        auto tok = getsource(start - 1);
+        if(tok->line != line)
+            break;
+        start--;
+    }
+    
+    int max = (imp->chunks.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + imp->chunks.last()->tokens.size();
+    int end = index;
+    while(end + 1 < max) {
+        auto tok = getsource(end + 1);
+        if(tok->line != line)
+            break;
+        end++;
+    }
+    end++; // exclusive
+    
+    // This is a stupid iterator but I am also lazy.
+    std::string yeet="";
+    auto iter = createFeedIterator(imp, start, end);
+    char crazybuffer[256];
+    int written = 0;
+    while((written = feed(crazybuffer, sizeof(crazybuffer), iter, true))) {
+        yeet.append(crazybuffer, written);
+    }
+    return yeet;
 }
 }

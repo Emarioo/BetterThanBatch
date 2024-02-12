@@ -156,7 +156,7 @@ struct Bytecode;
 struct TinyBytecode {
     std::string name;
     QuickArray<u8> instructionSegment{};
-    
+    int index = 0;
     // debug information
     QuickArray<u32> index_of_lines{};
     struct Line {
@@ -165,6 +165,24 @@ struct TinyBytecode {
     };
     DynamicArray<Line> lines{};
     // QuickArray<u32> index_of_opcodes{};
+
+    struct Relocation{
+        int pc=0;
+        FuncImpl* funcImpl = nullptr;
+        std::string func_name;
+    };
+    DynamicArray<Relocation> call_relocations;
+    bool applyRelocations(Bytecode* code);
+    void addRelocation(int pc, const std::string& name) {
+        call_relocations.add({});
+        call_relocations.last().pc = pc;
+        call_relocations.last().func_name = name;
+    }
+    void addRelocation(int pc, FuncImpl* impl) {
+        call_relocations.add({});
+        call_relocations.last().pc = pc;
+        call_relocations.last().funcImpl = impl;
+    }
     
     void print(int low_index, int high_index, Bytecode* code = nullptr);
 };
@@ -177,6 +195,7 @@ struct Bytecode {
     TinyBytecode* createTiny() {
         auto ptr = new TinyBytecode();
         tinyBytecodes.add(ptr);
+        ptr->index = tinyBytecodes.size()-1;
         return ptr;
     }
     
@@ -233,21 +252,22 @@ struct Bytecode {
     // NativeRegistry* nativeRegistry = nullptr;
 
     // usually a function like main
-    struct ExportedSymbol {
+    struct ExportedFunction {
         std::string name;
-        u32 location = 0;
+        int tinycode_index = 0;
     };
-    DynamicArray<ExportedSymbol> exportedSymbols;
+    DynamicArray<ExportedFunction> exportedFunctions;
     // returns false if a symbol with 'name' has been exported already
-    bool addExportedSymbol(const std::string& name,  u32 location);
+    bool addExportedFunction(const std::string& name, int tinycode_index);
 
     struct ExternalRelocation {
         std::string name;
-        u32 location=0;
+        int tinycode_index=0;
+        int pc=0;
     };
     // Relocation for external functions
     DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,  u32 location);
+    void addExternalRelocation(const std::string& name,  int tinycode_index, int pc);
 
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;
@@ -394,7 +414,7 @@ struct BytecodeBuilder {
     // InstructionType get_opcode(int opcode_index) { return (InstructionType)tinycode->instructionSegment[tinycode->index_of_opcodes[opcode_index]]; }
     InstructionType get_last_opcode() { return (InstructionType)tinycode->instructionSegment[index_of_last_instruction]; }
     
-    void push_line(int line, std::string text) {
+    void push_line(int line, const std::string& text) {
         tinycode->lines.add({line, text});
     }
     

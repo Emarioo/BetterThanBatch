@@ -1317,9 +1317,10 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
             } else if((opType = parser::IsOp(token,token1,view,extraOpNext))){
 
                 // if(Equal(token,"*") && (info.now().flags&lexer::TOKEN_FLAG_NEWLINE)){
-                if(info.getinfo(nullptr,-1)->flags&lexer::TOKEN_FLAG_NEWLINE){
+                if(info.getinfo(-1)->flags&lexer::TOKEN_FLAG_NEWLINE){
                     auto tok0 = info.gettok(-1);
                     auto tok1 = info.gettok();
+                    
                     ERR_SECTION(
                         ERR_HEAD2(tok1, ERROR_AMBIGUOUS_PARSING)
                         ERR_MSG("Possible ambiguous meaning! '"<<info.lexer->tostring(tok1) << "' is treated as a binary operation (operation with two expressions) but the operator was placed on a new line. "
@@ -3663,6 +3664,8 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
             token = info.getinfo(&view);
         }
 
+        lexer::Token stmt_loc = info.gettok();
+
         ASTNode* astNode = nullptr;
         SignalIO signal=SIGNAL_NO_MATCH;
         if(token->type == '{'){
@@ -3748,6 +3751,7 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
         // We add the AST structures even during error to
         // avoid leaking memory.
         if(tempStatement) {
+            tempStatement->location = info.srcloc(stmt_loc);
             astNode = (ASTNode*)tempStatement;
             // TODO: Optimize by performing the logic for defer, return, break, continue in flow instead of here. That way, all statements don't have to perform these checks.
             if(tempStatement->type == ASTStatement::DEFER) {

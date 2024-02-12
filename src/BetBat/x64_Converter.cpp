@@ -741,7 +741,7 @@ u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool 
     if(bcreg == BC_REG_SP){
         return REG_SP;
     }
-    if(bcreg == BC_REG_FP){
+    if(bcreg == BC_REG_BP){
         return REG_BP;
     }
 
@@ -2142,7 +2142,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                                 case BC_REG_RDX: regField = 2; break;
                                 case BC_REG_RBX: regField = 3; break;
                                 case BC_REG_SP: regField = 4; break;
-                                case BC_REG_FP: regField = 5; break;
+                                case BC_REG_BP: regField = 5; break;
                                 case BC_REG_RSI: regField = 6; break;
                                 case BC_REG_RDI: regField = 7;  break;
                                 // TODO: r8, r9, ...
@@ -3536,7 +3536,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
             }
             case BC_MEMZERO: {
                 // The operands we supplied will be modified. SP, FP should not be modified like we do in memzero.
-                Assert(op0 != BC_REG_SP && op0 != BC_REG_FP && op1 != BC_REG_SP && op1 != BC_REG_FP);
+                Assert(op0 != BC_REG_SP && op0 != BC_REG_BP && op1 != BC_REG_SP && op1 != BC_REG_BP);
 
                 // Assert(op0 == BC_REG_RDI && op1 == BC_REG_RBX);
                 // here so you can turn it off.

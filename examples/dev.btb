@@ -1,8 +1,8 @@
 
-a := ya();
+a := ya()*2;
 
 fn ya() -> i32 {
-    return 5;
+    return 5+2;
 }
 
 // OKay

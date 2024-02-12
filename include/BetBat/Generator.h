@@ -50,7 +50,10 @@ struct GenContext : public PhaseContext {
     // different from load immediate
     // void addImm(i32 value);
     // void addCall(LinkConventions linkConvention, CallConventions callConvention);
-    void addExternalRelocation(const std::string name, u32 codeAddress) { if(!disableCodeGeneration) code->addExternalRelocation(name, codeAddress); }
+    void addExternalRelocation(const std::string name, u32 codeAddress) {
+        if(!disableCodeGeneration)
+            code->addExternalRelocation(name, tinycode->index, codeAddress);
+    }
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
     u32 debugFunctionIndex = (u32)-1;

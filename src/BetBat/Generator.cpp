@@ -50,10 +50,12 @@ void GenContext::addCallToResolve(int bcIndex, FuncImpl* funcImpl){
     // if(bcIndex == 97) {
     //     __debugbreak();
     // }
-    ResolveCall tmp{};
-    tmp.bcIndex = bcIndex;
-    tmp.funcImpl = funcImpl;
-    callsToResolve.add(tmp);
+    // ResolveCall tmp{};
+    // tmp.bcIndex = bcIndex;
+    // tmp.funcImpl = funcImpl;
+    // callsToResolve.add(tmp);
+
+    tinycode->addRelocation(bcIndex, funcImpl);
 }
 // void GenContext::addCall(LinkConventions linkConvention, CallConventions callConvention){
 //     addInstruction({BC_CALL, (u8)linkConvention, (u8)callConvention},true);
@@ -1651,6 +1653,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 if(astFunc->linkConvention == DLLIMPORT){
                     addExternalRelocation("__imp_"+funcImpl->astFunction->name, reloc);
                 } else if(astFunc->linkConvention == VARIMPORT){
+                    Assert(false); // importing variables as function calls makes no since?
                     addExternalRelocation(funcImpl->astFunction->name, reloc);
                 } else {
                     addExternalRelocation(funcImpl->astFunction->name, reloc);
@@ -3038,8 +3041,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                 ERR_LINE2(expression->left->location,(AST::IsSigned(ltype)?"signed":"unsigned"))
                                 ERR_LINE2(expression->right->location,(AST::IsSigned(rtype)?"signed":"unsigned"))
                             )
+                            return SIGNAL_FAILURE;
                         }
-                        return SIGNAL_FAILURE;
                     } else if(operationType == AST_MUL) {
                         if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
                             ERR_SECTION(
@@ -3048,8 +3051,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                 ERR_LINE2(expression->left->location,(AST::IsSigned(ltype)?"signed":"unsigned"))
                                 ERR_LINE2(expression->right->location,(AST::IsSigned(rtype)?"signed":"unsigned"))
                             )
+                            return SIGNAL_FAILURE;
                         }
-                        return SIGNAL_FAILURE;
                     }  else if(operationType == AST_MODULUS) {
                         if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
                             ERR_SECTION(
@@ -3058,8 +3061,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                 ERR_LINE2(expression->left->location,(AST::IsSigned(ltype)?"signed":"unsigned"))
                                 ERR_LINE2(expression->right->location,(AST::IsSigned(rtype)?"signed":"unsigned"))
                             )
+                            return SIGNAL_FAILURE;
                         }
-                        return SIGNAL_FAILURE;
                     } else if(is_comparison) {
                         if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
                             ERR_SECTION(
@@ -3068,6 +3071,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                 ERR_LINE2(expression->left->location,(AST::IsSigned(ltype)?"signed":"unsigned"))
                                 ERR_LINE2(expression->right->location,(AST::IsSigned(rtype)?"signed":"unsigned"))
                             )
+                            return SIGNAL_FAILURE;
                         }
                     }
                     u8 outSize = lsize > rsize ? lsize : rsize;
@@ -3295,7 +3299,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     // impls may be zero if type checker found multiple definitions for native functions.
                     // we don't want to crash here when that happens and we don't need to throw an error
                     // because type checker already did.
-                    function->_impls.last()->address = nativeFunction->jumpAddress;
+                    Assert(false);
+                    // function->_impls.last()->address = nativeFunction->jumpAddress;
                 }
             } else {
                 if(function->linkConvention != NATIVE){
@@ -3336,7 +3341,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         if(!funcImpl->isUsed())
             // Skips implementation if it isn't used
             continue;
-        Assert(("func has already been generated!",funcImpl->address == FuncImpl::ADDRESS_INVALID));
+        Assert(("func has already been generated!",funcImpl->tinycode_id == 0));
         // This happens with functions inside of polymorphic function.
         // if(function->callConvention != BETCALL) {
         //     ERR_SECTION(
@@ -3383,7 +3388,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
 
         _GLOG(log::out << "Function " << function->name << "\n";)
 
-        funcImpl->address = 0; // nocheckin, always zero since every function has it's own tiny bytecode?
         info.currentPolyVersion = funcImpl->polyVersion;
 
         // TODO: Export function symbol if annotated with @export
@@ -3401,7 +3405,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 Assert(false);
                 break;
             }
-            bool yes = info.code->addExportedSymbol(funcImpl->astFunction->name, funcImpl->address);
+            bool yes = info.code->addExportedFunction(funcImpl->astFunction->name, funcImpl->tinycode_id);
             if(!yes) {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
@@ -3437,9 +3441,11 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // info.virtualStackPointer = GenContext::VIRTUAL_STACK_START;
         
         auto tiny = code->createTiny();
+        tinycode = tiny;
         builder.init(code, tiny);
         tiny->name = function->name; // what about poly types?
-        
+        funcImpl->tinycode_id = tiny->index + 1;
+
         // reset frame offset at beginning of function
         currentFrameOffset = 0;
 
@@ -4073,6 +4079,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // prev_stackAlignment_size = info.stackAlignment.size();
             // prev_virtualStackPointer = info.virtualStackPointer;
             // prev_currentFrameOffset = info.currentFrameOffset;
+        } else {
+            std::string line = compiler->lexer.getline(statement->location);
+            auto tokinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
+            builder.push_line(tokinfo->line, line);
         }
 
         defer {
@@ -5689,8 +5699,8 @@ TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler) {
     context.compiler = compiler;
     context.currentScopeId = context.ast->globalScopeId;
     
-    context.tinycode = context.code->createTiny();
-    context.tinycode->name = "main";
+    TinyBytecode* tb_main = context.code->createTiny();
+    tb_main->name = "main";
 
     
     context.code->debugInformation = DebugInformation::Create(compiler->ast);
@@ -5698,12 +5708,13 @@ TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler) {
     context.generateFunctions(scope);
     
     context.currentFrameOffset = 0;
+    context.tinycode = tb_main;
     context.builder.init(context.code, context.tinycode);
     
     auto di = context.code->debugInformation;
     context.debugFunctionIndex = di->functions.size();
     DebugInformation::Function* dfun = di->addFunction("main");
-    context.code->addExportedSymbol("main", 0);
+    context.code->addExportedFunction("main", context.tinycode->index);
     
     context.generateBody(scope);
     

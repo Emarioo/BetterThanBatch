@@ -359,12 +359,13 @@ struct FuncImpl {
     QuickArray<Spot> returnTypes;
     int argSize=0;
     int returnSize=0;
-    i64 address = ADDRESS_INVALID; // Set by generator
+    // i64 address = ADDRESS_INVALID; // Set by generator
+    int tinycode_id = 0; // 0 is invalid, set by generator
     u32 polyVersion=-1;
     QuickArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
     void print(AST* ast, ASTFunction* astFunc);
-    static const i64 ADDRESS_INVALID = -1; // undefined or not address that hasn't been set
+    // static const i64 ADDRESS_INVALID = -1; // undefined or not address that hasn't been set
     // static const u64 ADDRESS_EXTERNAL = -21;
 };
 struct Identifier {
