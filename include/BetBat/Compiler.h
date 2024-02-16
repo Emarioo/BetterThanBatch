@@ -12,7 +12,7 @@
 #include "BetBat/UserProfile.h"
 #include "BetBat/CompilerEnums.h"
 
-#include "BetBat/x64_Converter.h"
+#include "BetBat/x64_gen.h"
 #include "BetBat/COFF.h"
 #include "BetBat/ELF.h"
 #include "BetBat/ObjectFile.h"

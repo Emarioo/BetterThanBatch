@@ -2492,13 +2492,13 @@ void ASTExpression::print(AST *ast, int depth) {
             }
         }
     }
-    // if(args){
+    if(typeId == AST_FNCALL || typeId == AST_INITIALIZER){
         // for(ASTExpression* expr : *args){
         for(ASTExpression* expr : args){
             if (expr) {
                 expr->print(ast, depth+1);
             }
         }
-    // }
+    }
 }
 /* #endregion */

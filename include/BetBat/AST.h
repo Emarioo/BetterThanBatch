@@ -507,8 +507,8 @@ struct ASTExpression : ASTNode {
     std::string name;
     // StringView name{};
     // std::string namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
+    StringView namedValue{};
     union {
-        StringView namedValue{};
         TypeId castType;
         OperationType assignOpType;
         struct {

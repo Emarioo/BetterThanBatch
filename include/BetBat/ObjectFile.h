@@ -3,7 +3,7 @@
 */
 #pragma once
 
-#include "BetBat/x64_Converter.h"
+#include "BetBat/x64_gen.h"
 
 enum ObjectFileType {
     OBJ_NONE,

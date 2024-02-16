@@ -1,7 +1,7 @@
 #include "BetBat/Bytecode.h"
 
 // included to get CallConventions
-#include "BetBat/x64_Converter.h"
+#include "BetBat/x64_gen.h"
 
 // #define ENABLE_BYTECODE_OPTIMIZATIONS
 

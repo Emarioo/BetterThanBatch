@@ -3519,8 +3519,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 
                 // info.code->addDebugText("ZERO init return values\n");
                 #ifndef DISABLE_ZERO_INITIALIZATION
-                builder.emit_mov_rr(BC_REG_B, BC_REG_BP);
-                builder.emit_incr(BC_REG_B, -funcImpl->returnSize);
+                builder.emit_li32(BC_REG_B, -funcImpl->returnSize);
+                builder.emit_add(BC_REG_B, BC_REG_BP, false);
+                // builder.emit_mov_rr(BC_REG_B, BC_REG_BP);
+                // builder.emit_incr(BC_REG_B, -funcImpl->returnSize);
                 genMemzero(BC_REG_B, BC_REG_C, funcImpl->returnSize);
                 // builder.emit_({BC_MEMZERO, BC_REG_B, BC_REG_RCX});
                 #endif

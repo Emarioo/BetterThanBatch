@@ -1,4 +1,4 @@
-#include "BetBat/x64_Converter.h"
+#include "BetBat/x64_gen.h"
 
 #include "BetBat/COFF.h"
 #include "BetBat/ELF.h"
@@ -273,6 +273,106 @@
 #define REG_XMM6 0b110
 #define REG_XMM7 0b111
 
+Program_x64* GenerateX64(Bytecode* bytecode) {
+    using namespace engone;
+    Assert(bytecode);
+    ZoneScopedC(tracy::Color::SkyBlue1);
+
+    _VLOG(log::out <<log::BLUE<< "x64 Converter:\n";)
+
+    Program_x64* prog = Program_x64::Create();
+
+    // steal debug information
+    prog->debugInformation = bytecode->debugInformation;
+    bytecode->debugInformation = nullptr;
+    
+    
+    for(int bi=0;bi<bytecode->tinyBytecodes.size();bi++) {
+        auto tinycode = bytecode->tinyBytecodes[bi];
+        
+        prog->generateFromTinycode(bytecode, tinycode);
+    }
+    return prog;
+}
+void Program_x64::generateFromTinycode(Bytecode* code, TinyBytecode* tinycode) {
+    using namespace engone;
+    
+    struct Inst {
+        InstructionType opcode;
+        BCRegister op0;
+        BCRegister op1;
+        InstructionControl control;
+        i64 imm;
+    };
+    DynamicArray<Inst> insts{};
+    
+    struct Reg {
+        bool in_use = false; // occupied
+        bool used_at_least_once = false;
+    };
+    Reg registers[BC_REG_MAX];
+    registers[BC_REG_SP].in_use = true;
+    registers[BC_REG_BP].in_use = true;
+    
+    int pc = 0;
+    bool running = true;
+    while(running) {
+        i64 prev_pc = pc;
+        if(pc>=(u64)tinycode->instructionSegment.used)
+            break;
+
+        InstructionType opcode = (InstructionType)tinycode->instructionSegment[pc++];
+        
+        BCRegister op0=BC_REG_INVALID, op1, op2;
+        InstructionControl control;
+        InstructionCast cast;
+        i64 imm;
+        
+        if(opcode == BC_LI32) {
+            op0 = (BCRegister)tinycode->instructionSegment[pc++];
+            imm = *(i32*)&tinycode->instructionSegment[pc];
+            pc+=4;
+            insts.add({opcode, op0, BC_REG_INVALID, CONTROL_NONE, imm});
+            
+            registers[op0].in_use = true;
+        } else if(opcode == BC_PUSH) {
+            op0 = (BCRegister)tinycode->instructionSegment[pc++];
+            insts.add({opcode, op0});
+            registers[op0].used_at_least_once = true;
+        } else if(opcode == BC_MOV_RR) {
+            op0 = (BCRegister)tinycode->instructionSegment[pc++];
+            op1 = (BCRegister)tinycode->instructionSegment[pc++];
+            insts.add({opcode, op0, op1});
+            registers[op0].in_use = true;
+            registers[op1].used_at_least_once = true;
+            Assert(registers[op1].in_use);
+        } else if(opcode == BC_INCR) {
+            op0 = (BCRegister)tinycode->instructionSegment[pc++];
+            imm = *(i32*)&tinycode->instructionSegment[pc];
+            pc+=4;
+            insts.add({opcode, op0, BC_REG_INVALID, CONTROL_NONE, imm});
+            Assert(registers[op0].in_use);
+        } else if(opcode == BC_POP) {
+            op0 = (BCRegister)tinycode->instructionSegment[pc++];
+            
+            bool modified = false;
+            for(int i=insts.size()-1;i>=0;i--) {
+                auto& inst = insts[i];
+                if(inst.opcode == BC_PUSH) {
+                    modified = true;
+                    
+                    // inst.op0
+                    // break;
+                }
+            }
+            if(!modified) {
+                insts.add({ opcode, op0 });
+                Assert(registers[op0].in_use);
+            }
+        }
+    }
+    add2(OPCODE_2_CMOVZ_REG_RM);
+}
 
 bool Program_x64::_reserve(u32 newAllocationSize){
     if(newAllocationSize==0){
@@ -329,7 +429,8 @@ void Program_x64::add2(u16 word){
     *(text + head + 0) = *(ptr + 0);
     *(text + head + 1) = *(ptr + 1);
     head+=2;
-}void Program_x64::add3(u32 word){
+}
+void Program_x64::add3(u32 word){
     if(head>0){
         // This is not how you use rex prefix
         // cvtsi2ss instructions use smashed in between it's other opcode bytes

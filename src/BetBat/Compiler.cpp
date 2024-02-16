@@ -2470,6 +2470,10 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
 
     Interpreter interp{};
     interp.execute(code, "main");
+    
+    auto prog = GenerateX64(code);
+    
+    ObjectFile::WriteFile(OBJ_COFF, "test.o", prog);
 }
 u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origin_file) {
     Path abs_path = findSourceFile(path, dir_of_origin_file);

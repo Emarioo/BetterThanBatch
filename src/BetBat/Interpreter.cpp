@@ -225,7 +225,7 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
 
         InstructionType opcode = (InstructionType)instructions[pc++];
         
-        BCRegister op0, op1, op2;
+        BCRegister op0=BC_REG_INVALID, op1, op2;
         InstructionControl control;
         InstructionCast cast;
         i64 imm;
@@ -310,45 +310,37 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
             registers[BC_REG_SP] -= 8;
             CHECK_STACK();
             *(i64*)registers[BC_REG_SP] = registers[op0];
-
-            break;
-        }
+        } break;
         case BC_POP: {
             op0 = (BCRegister)instructions[pc++];
             
             registers[op0] = *(i64*)registers[BC_REG_SP];
             registers[BC_REG_SP] += 8;
             CHECK_STACK();
-
-            break;
-        }
+        } break;
         case BC_LI32: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
             registers[op0] = imm;
-            break;
-        }
+        } break;
         case BC_LI64: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(i64*)&instructions[pc];
             pc+=8;
             registers[op0] = imm;
-            break;
-        }
+        } break;
         case BC_INCR: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
             registers[op0] += imm;
-            break;
-        }
+        } break;
         case BC_JMP: {
             imm = *(i32*)&instructions[pc];
             pc+=4;
             pc += imm;
-            break;
-        }
+        } break;
         case BC_JZ: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
@@ -378,6 +370,8 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
             registers[BC_REG_SP] -= 8;
             CHECK_STACK();
             *(i64*)registers[BC_REG_SP] = registers[BC_REG_BP];
+            
+            registers[BC_REG_BP] = registers[BC_REG_SP];
 
             pc = 0;
             tiny_index = imm-1;
@@ -912,7 +906,14 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
         } // switch
 
         if(op0) {
-            log::out << log::GRAY << ", "<<registers[op0];
+            if(opcode == BC_MOV_MR) {
+                     if(control & CONTROL_8B)  log::out << log::GRAY << ", "<<*(i8*)registers[op0];
+                else if(control & CONTROL_16B) log::out << log::GRAY << ", "<<*(i16*)registers[op0];
+                else if(control & CONTROL_32B) log::out << log::GRAY << ", "<<*(i32*)registers[op0];
+                else if(control & CONTROL_64B) log::out << log::GRAY << ", "<<*(i64*)registers[op0];
+            } else {
+                log::out << log::GRAY << ", "<<registers[op0];
+            }
         }
 
         log::out << "\n";
