@@ -19,6 +19,35 @@ x64 operands
 
 */
 
+struct Builder_x64 {
+    Program_x64* prog = nullptr;
+
+    void init(Program_x64* p) {
+        prog = p;
+    }
+
+    void emit1(u8 byte);
+    void emit2(u16 word);
+    void emit3(u32 word);
+    void emit4(u32 dword);
+    void emit_modrm(u8 mod, u8 reg, u8 rm);
+    // RIP-relative addressing
+    void emit_modrm_rip(u8 reg, u32 disp32);
+    void emit_modrm_sib(u8 mod, u8 reg, u8 scale, u8 index, u8 base);
+
+    void emit_bytes(u8* arr, u64 len);
+
+    // These are here to prevent implicit casting
+    // of arguments which causes mistakes.
+    void emit1(i64 byte);
+    void emit2(i64 word);
+    void emit3(i64 word);
+    void emit4(i64 dword);
+    void emit_modrm_rip(u8, i64);
+
+    
+};
+
 struct Program_x64 {
     ~Program_x64(){
         _reserve(0);
@@ -31,6 +60,8 @@ struct Program_x64 {
             debugInformation = nullptr;
         }
     }
+
+    Builder_x64 builder;
     
     u8* text=nullptr;
     u64 _allocationSize=0;
@@ -95,6 +126,8 @@ struct Program_x64 {
     bool _reserve(u32 newAllocationSize);
     
     void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
+
+    static Program_x64* ConvertFromBytecode(Bytecode* code);
 private:
     
     

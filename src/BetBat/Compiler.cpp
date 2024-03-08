@@ -2471,7 +2471,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     Interpreter interp{};
     interp.execute(code, "main");
     
-    auto prog = GenerateX64(code);
+    auto prog = Program_x64::ConvertFromBytecode(code);
     
     ObjectFile::WriteFile(OBJ_COFF, "test.o", prog);
 }

@@ -273,7 +273,8 @@
 #define REG_XMM6 0b110
 #define REG_XMM7 0b111
 
-Program_x64* GenerateX64(Bytecode* bytecode) {
+
+Program_x64* Program_x64::ConvertFromBytecode(Bytecode* bytecode) {
     using namespace engone;
     Assert(bytecode);
     ZoneScopedC(tracy::Color::SkyBlue1);
@@ -286,7 +287,16 @@ Program_x64* GenerateX64(Bytecode* bytecode) {
     prog->debugInformation = bytecode->debugInformation;
     bytecode->debugInformation = nullptr;
     
-    
+    for(auto& t : bytecode->tinyBytecodes) {
+        bool yes = t->applyRelocations(bytecode);
+        if(!yes) {
+            log::out << "Incomplete call relocation\n";
+            return;
+        }
+    }
+
+    prog->builder.init(prog);
+
     for(int bi=0;bi<bytecode->tinyBytecodes.size();bi++) {
         auto tinycode = bytecode->tinyBytecodes[bi];
         
@@ -294,6 +304,341 @@ Program_x64* GenerateX64(Bytecode* bytecode) {
     }
     return prog;
 }
+void Program_x64::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode) {
+    i64 pc = 0;
+    while(pc < tinycode->instructionSegment.size()) {
+        i64 prev_pc = pc;
+
+        InstructionType opcode = (InstructionType)tinycode->instructionSegment[pc];
+        pc++;
+
+        auto& instructions = tinycode->instructionSegment;
+        
+        BCRegister op0=BC_REG_INVALID, op1=BC_REG_INVALID, op2=BC_REG_INVALID;
+        InstructionControl control;
+        InstructionCast cast;
+        i64 imm;
+        
+        // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
+        // tinycode->print(prev_pc, prev_pc + 1, bytecode);
+
+        switch (opcode) {
+        case BC_HALT: {
+            INCOMPLETE
+        } break;
+        case BC_NOP: {
+            INCOMPLETE
+        } break;
+        case BC_MOV_RR: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            
+            auto reg0 = builder.allocate_register();
+            auto reg1 = builder.allocate_register();
+
+            builder.emit1(PREFIX_REX);
+            builder.emit1(OPCODE_MOV_REG_RM);
+            builder.emit_modrm(MODE_REG, reg0, reg1);
+
+            // values in registers
+            // values on stack
+            // values in memory
+
+
+            // registers[op0] = registers[op1];
+        } break;
+        case BC_MOV_RM: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            
+            if(control & CONTROL_8B) registers[op0] = *(i8*)registers[op1];
+            else if(control & CONTROL_16B) registers[op0] = *(i16*)registers[op1];
+            else if(control & CONTROL_32B) registers[op0] = *(i32*)registers[op1];
+            else if(control & CONTROL_64B) registers[op0] = *(i64*)registers[op1];
+        } break;
+        case BC_MOV_MR: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            
+            if(control & CONTROL_8B) *(i8*)registers[op0] = registers[op1];
+            else if(control & CONTROL_16B) *(i16*)registers[op0] = registers[op1];
+            else if(control & CONTROL_32B) *(i32*)registers[op0] = registers[op1];
+            else if(control & CONTROL_64B) *(i64*)registers[op0] = registers[op1];
+        } break;
+        case BC_PUSH: {
+            op0 = (BCRegister)instructions[pc++];
+            
+            registers[BC_REG_SP] -= 8;
+            CHECK_STACK();
+            *(i64*)registers[BC_REG_SP] = registers[op0];
+        } break;
+        case BC_POP: {
+            op0 = (BCRegister)instructions[pc++];
+            
+            registers[op0] = *(i64*)registers[BC_REG_SP];
+            registers[BC_REG_SP] += 8;
+            CHECK_STACK();
+        } break;
+        case BC_LI32: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+            registers[op0] = imm;
+        } break;
+        case BC_LI64: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i64*)&instructions[pc];
+            pc+=8;
+            registers[op0] = imm;
+        } break;
+        case BC_INCR: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+            registers[op0] += imm;
+        } break;
+        case BC_JMP: {
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+            pc += imm;
+        } break;
+        case BC_JZ: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+            
+            if(op0 == 0)
+                pc += imm;
+        } break;
+        case BC_JNZ: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+            
+            if(op0 != 0)
+                pc += imm;
+        } break;
+        case BC_CALL: {
+            LinkConventions l = (LinkConventions)instructions[pc++];
+            CallConventions c = (CallConventions)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+
+            registers[BC_REG_SP] -= 8;
+            CHECK_STACK();
+            *(i64*)registers[BC_REG_SP] = pc | ((i64)tiny_index << 32);
+
+            registers[BC_REG_SP] -= 8;
+            CHECK_STACK();
+            *(i64*)registers[BC_REG_SP] = registers[BC_REG_BP];
+            
+            registers[BC_REG_BP] = registers[BC_REG_SP];
+
+            pc = 0;
+            tiny_index = imm-1;
+            tinycode = bytecode->tinyBytecodes[tiny_index];
+        } break;
+        case BC_RET: {
+            i64 diff = registers[BC_REG_SP] - (i64)stack.data;
+            if(diff == (i64)(stack.max)) {
+                running = false;
+                break;
+            }
+
+            registers[BC_REG_BP] = *(i64*)registers[BC_REG_SP];
+            registers[BC_REG_SP] += 8;
+            CHECK_STACK();
+
+            i64 encoded_pc = *(i64*)registers[BC_REG_SP];
+            registers[BC_REG_SP] += 8;
+            CHECK_STACK();
+
+            pc = encoded_pc & 0xFFFF'FFFF;
+            tiny_index = encoded_pc >> 32;
+            tinycode = bytecode->tinyBytecodes[tiny_index];
+        } break;
+        case BC_DATAPTR: {
+            Assert(false);
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+        } break;
+        case BC_CODEPTR: {
+            Assert(false);
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
+            pc+=4;
+        } break;
+        case BC_CAST: {
+            op0 = (BCRegister)instructions[pc++];
+            InstructionCast cast = (InstructionCast)instructions[pc++];
+            u8 fsize = (u8)instructions[pc++];
+            u8 tsize = (u8)instructions[pc++];
+
+            switch(cast){
+            case CAST_UINT_UINT:
+            case CAST_UINT_SINT:
+            case CAST_SINT_UINT:
+            case CAST_SINT_SINT: {
+                u64 tmp = registers[op0];
+                if(tsize == 1) *(u8*)&registers[op0] = tmp;
+                else if(tsize == 2) *(u16*)&registers[op0] = tmp;
+                else if(tsize == 4) *(u32*)&registers[op0] = tmp;
+                else if(tsize == 8) *(u64*)&registers[op0] = tmp;
+                else Assert(false);
+            } break;
+            case CAST_UINT_FLOAT: {
+                u64 tmp = registers[op0];
+                if(tsize == 4) *(float*)&registers[op0] = tmp;
+                else if(tsize == 8) *(double*)&registers[op0] = tmp;
+                else Assert(false);
+            } break;
+            case CAST_SINT_FLOAT: {
+                i64 tmp = registers[op0];
+                if(tsize == 4) *(float*)&registers[op0] = tmp;
+                else if(tsize == 8) *(double*)&registers[op0] = tmp;
+                else Assert(false);
+            } break;
+            case CAST_FLOAT_UINT: {
+                if(fsize == 4){
+                    float tmp = *(float*)&registers[op0];
+                    if(tsize == 1) *(u8*)&registers[op0] = tmp;
+                    else if(tsize == 2) *(u16*)&registers[op0] = tmp;
+                    else if(tsize == 4) *(u32*)&registers[op0] = tmp;
+                    else if(tsize == 8) *(u64*)&registers[op0] = tmp;
+                    else Assert(false);
+                } else if(fsize == 8) {
+                    double tmp = *(double*)&registers[op0];
+                    if(tsize == 1) *(u8*)&registers[op0] = tmp;
+                    else if(tsize == 2) *(u16*)&registers[op0] = tmp;
+                    else if(tsize == 4) *(u32*)&registers[op0] = tmp;
+                    else if(tsize == 8) *(u64*)&registers[op0] = tmp;
+                    else Assert(false);
+                } else Assert(false);
+            } break;
+            case CAST_FLOAT_SINT: {
+                if(fsize == 4){
+                    float tmp = *(float*)&registers[op0];
+                    if(tsize == 1) *(i8*)&registers[op0] = tmp;
+                    else if(tsize == 2) *(i16*)&registers[op0] = tmp;
+                    else if(tsize == 4) *(i32*)&registers[op0] = tmp;
+                    else if(tsize == 8) *(i64*)&registers[op0] = tmp;
+                    else Assert(false);
+                } else if(fsize == 8) {
+                    double tmp = *(double*)&registers[op0];
+                    if(tsize == 1) *(i8*)&registers[op0] = tmp;
+                    else if(tsize == 2) *(i16*)&registers[op0] = tmp;
+                    else if(tsize == 4) *(i32*)&registers[op0] = tmp;
+                    else if(tsize == 8) *(i64*)&registers[op0] = tmp;
+                    else Assert(false);
+                } else Assert(false);
+            } break;
+            case CAST_FLOAT_FLOAT: {
+                if(fsize == 4 && tsize == 4) *(float*)&registers[op0] = *(float*)registers[op0];
+                else if(fsize == 4 && tsize == 8) *(double*)&registers[op0] = *(float*)registers[op0];
+                else if(fsize == 8 && tsize == 4) *(float*)&registers[op0] = *(double*)registers[op0];
+                else if(fsize == 8 && tsize == 8) *(double*)&registers[op0] = *(double*)registers[op0];
+                else Assert(false);
+            } break;
+            default: Assert(false);
+            }
+            
+        } break;
+        case BC_MEMZERO: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            memset((void*)op0,0, op1);
+        } break;
+        case BC_MEMCPY: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            op2 = (BCRegister)instructions[pc++];
+            memcpy((void*)op0,(void*)op1, op2);
+        } break;
+        case BC_ADD:
+        case BC_SUB:
+        case BC_MUL:
+        case BC_DIV:
+        case BC_MOD:
+        case BC_EQ:
+        case BC_NEQ:
+        case BC_LT:
+        case BC_LTE:
+        case BC_GT:
+        case BC_GTE: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+
+            // nocheckin, we assume 32 bit float operation
+            
+            if(control & CONTROL_FLOAT_OP) {
+                switch(opcode){
+                    #define OP(P) *(float*)&registers[op0] = *(float*)&registers[op0] P *(float*)&registers[op1]; break;
+                    case BC_ADD: OP(+)
+                    case BC_SUB: OP(-)
+                    case BC_MUL: OP(*)
+                    case BC_DIV: OP(/)
+                    case BC_MOD: *(float*)&registers[op0] = fmodf(*(float*)&registers[op0], *(float*)&registers[op1]); break;
+                    case BC_EQ:  OP(==)
+                    case BC_NEQ: OP(!=)
+                    case BC_LT:  OP(<)
+                    case BC_LTE: OP(<=)
+                    case BC_GT:  OP(>)
+                    case BC_GTE: OP(>=)
+                    default: Assert(false);
+                    #undef OP
+                }
+            } else {
+                switch(opcode){
+                    #define OP(P) registers[op0] = registers[op0] P registers[op1]; break;
+                    case BC_ADD: OP(+)
+                    case BC_SUB: OP(-)
+                    case BC_MUL: OP(*)
+                    case BC_DIV: OP(/)
+                    case BC_MOD: OP(%)
+                    case BC_EQ:  OP(==)
+                    case BC_NEQ: OP(!=)
+                    case BC_LT:  OP(<)
+                    case BC_LTE: OP(<=)
+                    case BC_GT:  OP(>)
+                    case BC_GTE: OP(>=)
+                    default: Assert(false);
+                    #undef OP
+                }
+            }
+        } break;
+        case BC_LAND:
+        case BC_LOR:
+        case BC_LNOT:
+        case BC_BAND:
+        case BC_BOR:
+        case BC_BXOR:
+        case BC_BLSHIFT:
+        case BC_BRSHIFT: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            
+            switch(opcode){
+                #define OP(P) registers[op0] = registers[op0] P registers[op1]; break;
+                case BC_BXOR: OP(^)
+                case BC_BOR: OP(|)
+                case BC_BAND: OP(&)
+                case BC_BLSHIFT: OP(<<)
+                case BC_BRSHIFT: OP(>>)
+                case BC_LAND: OP(&&)
+                case BC_LOR: OP(||)
+                case BC_LNOT: registers[op0] = !registers[op1];
+                default: Assert(false);
+                #undef OP
+            }
+        } break;
+        }
+    }
+}
+#ifdef gone
 void Program_x64::generateFromTinycode(Bytecode* code, TinyBytecode* tinycode) {
     using namespace engone;
     
@@ -371,9 +716,8 @@ void Program_x64::generateFromTinycode(Bytecode* code, TinyBytecode* tinycode) {
             }
         }
     }
-    add2(OPCODE_2_CMOVZ_REG_RM);
 }
-
+#endif
 bool Program_x64::_reserve(u32 newAllocationSize){
     if(newAllocationSize==0){
         if(_allocationSize!=0){
@@ -411,85 +755,85 @@ bool Program_x64::_reserve(u32 newAllocationSize){
     return false;
 }
 
-void Program_x64::add(u8 byte){
-    if(head+1 >= _allocationSize ){
-        bool yes = _reserve(_allocationSize*2 + 100);
+void Builder_x64::emit1(u8 byte){
+    if(prog->head+1 >= prog->_allocationSize ){
+        bool yes = prog->_reserve(prog->_allocationSize*2 + 100);
         Assert(yes);
     }
-    *(text + head) = byte;
-    head++;
+    *(prog->text + prog->head) = byte;
+    prog->head++;
 }
-void Program_x64::add2(u16 word){
-    if(head+2 >= _allocationSize ){
-        bool yes = _reserve(_allocationSize*2 + 100);
+void Builder_x64::emit2(u16 word){
+    if(prog->head+2 >= prog->_allocationSize ){
+        bool yes = prog->_reserve(prog->_allocationSize*2 + 100);
         Assert(yes);
     }
     
     auto ptr = (u8*)&word;
-    *(text + head + 0) = *(ptr + 0);
-    *(text + head + 1) = *(ptr + 1);
-    head+=2;
+    *(prog->text + prog->head + 0) = *(ptr + 0);
+    *(prog->text + prog->head + 1) = *(ptr + 1);
+    prog->head+=2;
 }
-void Program_x64::add3(u32 word){
-    if(head>0){
+void Builder_x64::emit3(u32 word){
+    if(prog->head>0){
         // This is not how you use rex prefix
         // cvtsi2ss instructions use smashed in between it's other opcode bytes
-        Assert(*(text + head - 1) != PREFIX_REXW);
+        Assert(*(prog->text + prog->head - 1) != PREFIX_REXW);
     }
     Assert(0==(word&0xFF000000));
-    if(head+3 >= _allocationSize ){
-        bool yes = _reserve(_allocationSize*3 + 100);
+    if(prog->head+3 >= prog->_allocationSize ){
+        bool yes = prog->_reserve(prog->_allocationSize*3 + 100);
         Assert(yes);
     }
     
     auto ptr = (u8*)&word;
-    *(text + head + 0) = *(ptr + 0);
-    *(text + head + 1) = *(ptr + 1);
-    *(text + head + 2) = *(ptr + 2);
-    head+=3;
+    *(prog->text + prog->head + 0) = *(ptr + 0);
+    *(prog->text + prog->head + 1) = *(ptr + 1);
+    *(prog->text + prog->head + 2) = *(ptr + 2);
+    prog->head+=3;
 }
-void Program_x64::add4(u32 dword){
+void Builder_x64::emit4(u32 dword){
     // wish we could assert to find bugs but immediates may be zero and won't work.
     // we could make a nother functionn specifcially for immediates though.
     // Assert(dword & 0xFF00'0000);
-    if(head+4 >= _allocationSize ){
-        bool yes = _reserve(_allocationSize*2 + 100);
+    if(prog->head+4 >= prog->_allocationSize ){
+        bool yes = prog->_reserve(prog->_allocationSize*2 + 100);
         Assert(yes);
     }
     auto ptr = (u8*)&dword;
 
     // deals with non-alignment
-    *(text + head + 0) = *(ptr + 0);
-    *(text + head + 1) = *(ptr + 1);
-    *(text + head + 2) = *(ptr + 2);
-    *(text + head + 3) = *(ptr + 3);
-    head+=4;
+    *(prog->text + prog->head + 0) = *(ptr + 0);
+    *(prog->text + prog->head + 1) = *(ptr + 1);
+    *(prog->text + prog->head + 2) = *(ptr + 2);
+    *(prog->text + prog->head + 3) = *(ptr + 3);
+    prog->head+=4;
 }
-void Program_x64::addRaw(u8* arr, u64 len){
-    if(head+len >= _allocationSize ){
-        bool yes = _reserve(_allocationSize*1.2 + 10 + len);
+void Builder_x64::emit_bytes(u8* arr, u64 len){
+    if(prog->head+len >= prog->_allocationSize ){
+        bool yes = prog->_reserve(prog->_allocationSize*1.2 + 10 + len);
         Assert(yes);
     }
-    memcpy(text + head, arr, len);
-    head += len;
+    memcpy(prog->text + prog->head, arr, len);
+    prog->head += len;
 }
-void Program_x64::addModRM(u8 mod, u8 reg, u8 rm){
+void Builder_x64::emit_modrm(u8 mod, u8 reg, u8 rm){
     Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);
     // You probably made a mistake and used REG_BP thinking it works with just ModRM byte.
     Assert(("Use addModRM_SIB instead",!(mod!=0b11 && rm==0b100)));
     // REG_SP isn't available with mod=0b00, see intel x64 manual about 32 bit addressing for more details
     Assert(("Use addModRM_disp32 instead",!(mod==0b00 && rm==0b101)));
     // Assert(("Use addModRM_disp32 instead",(mod!=0b10)));
-    add((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
+    emit1((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
 }
-void Program_x64::addModRM_rip(u8 reg, u32 disp32){
+void Builder_x64::emit_modrm_rip(u8 reg, u32 disp32){
     u8 mod = 0b00;
     u8 rm = 0b101;
     Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);
-    add((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
-    add4(disp32);
+    emit1((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
+    emit4(disp32);
 }
-void Program_x64::addModRM_SIB(u8 mod, u8 reg, u8 scale, u8 index, u8 base){
+void Builder_x64::emit_modrm_sib(u8 mod, u8 reg, u8 scale, u8 index, u8 base){
     //  register to register (mod = 0b11) doesn't work with SIB byte
     Assert(("Use addModRM instead",mod!=0b11));
 
@@ -499,8 +843,8 @@ void Program_x64::addModRM_SIB(u8 mod, u8 reg, u8 scale, u8 index, u8 base){
     Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);
     Assert((scale&~3) == 0 && (index&~7)==0 && (base&~7)==0);
 
-    add((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
-    add((u8)(base | (index << (u8)3) | (scale << (u8)6)));
+    emit1((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
+    emit1((u8)(base | (index << (u8)3) | (scale << (u8)6)));
 }
 
 void Program_x64::printHex(const char* path){
