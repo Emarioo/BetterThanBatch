@@ -35,6 +35,8 @@ enum InstructionType : u8 {
     BC_MOV_RR,
     BC_MOV_RM,
     BC_MOV_MR,
+    BC_MOV_RM_DISP16,
+    BC_MOV_MR_DISP16,
     
     BC_PUSH,
     BC_POP,
@@ -436,3 +438,73 @@ private:
     int virtualStackPointer = 0;
     int index_of_last_instruction = -1;
 };
+
+// BC FILE FORMAT
+
+// struct BTBCHeader{
+//     u32 magicNumber = 0x13579BDF;
+//     char humanChars[4] = {'B','T','B','C'};
+//     // TODO: Version number for interpreter?
+//     // TODO: Version number for bytecode format?
+//     u32 codeSize = 0;
+//     u32 dataSize = 0;
+// };
+// bool ExportBytecode(CompileOptions* options, Bytecode* bytecode){
+//     using namespace engone;
+//     Assert(bytecode);
+//     auto file = FileOpen(options->outputFile.text, 0, engone::FILE_CLEAR_AND_WRITE);
+//     if(!file)
+//         return false;
+//     BTBCHeader header{};
+
+//     Assert(bytecode->instructionSegment.used*bytecode->instructionSegment.getTypeSize() < ((u64)1<<32));
+//     header.codeSize = bytecode->instructionSegment.used*bytecode->instructionSegment.getTypeSize();
+//     Assert(bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize() < ((u64)1<<32));
+//     header.dataSize = bytecode->dataSegment.used*bytecode->dataSegment.getTypeSize();
+
+//     // TOOD: Check error when writing files
+//     int err = FileWrite(file, &header, sizeof(header));
+//     if(err!=-1 && bytecode->instructionSegment.data){
+//         err = FileWrite(file, bytecode->instructionSegment.data, header.codeSize);
+//     }
+//     if(err!=-1 && bytecode->dataSegment.data) {
+//         err = FileWrite(file, bytecode->dataSegment.data, header.dataSize);
+//     }
+//     // debugSegment is ignored
+
+//     FileClose(file);
+//     return true;
+// }
+// Bytecode* ImportBytecode(Path filePath){
+//     using namespace engone;
+//     u64 fileSize = 0;
+//     auto file = FileOpen(filePath.text, &fileSize, engone::FILE_ONLY_READ);
+
+//     if(fileSize < sizeof(BTBCHeader))
+//         return nullptr; // File is to small for a bytecode file
+
+//     BTBCHeader baseHeader{};
+//     BTBCHeader header{};
+
+//     // TOOD: Check error when writing files
+//     FileRead(file, &header, sizeof(header));
+    
+//     if(strncmp((char*)&baseHeader,(char*)&header,8)) // TODO: Don't use hardcoded 8?
+//         return nullptr; // Magic number and human characters is incorrect. Meaning not a bytecode file.
+
+//     if(fileSize != sizeof(BTBCHeader) + header.codeSize + header.dataSize)
+//         return nullptr; // Corrupt file. Sizes does not match.
+    
+//     Bytecode* bc = Bytecode::Create();
+//     bc->instructionSegment.resize(header.codeSize/bc->instructionSegment.getTypeSize());
+//     bc->instructionSegment.used = header.codeSize/bc->instructionSegment.getTypeSize();
+//     bc->dataSegment.resize(header.dataSize/bc->dataSegment.getTypeSize());
+//     bc->dataSegment.used = header.dataSize/bc->dataSegment.getTypeSize();
+//     FileRead(file, bc->instructionSegment.data, header.codeSize);
+//     FileRead(file, bc->dataSegment.data, header.dataSize);
+
+//     // debugSegment is ignored
+
+//     FileClose(file);
+//     return bc;
+// }

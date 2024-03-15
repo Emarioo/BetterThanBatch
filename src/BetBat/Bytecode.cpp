@@ -430,11 +430,11 @@ void BytecodeBuilder::emit_mov_mr(BCRegister to, BCRegister from, int size){
 void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size, int displacement){
     Assert(to != BC_REG_T1 && from != BC_REG_T1);
     // TODO: Create a displacement instruction instead of li + add
-    emit_li32(BC_REG_T1, displacement);
-    emit_add(BC_REG_T1, from, false);
-    from = BC_REG_T1;
+    // emit_li32(BC_REG_T1, displacement);
+    // emit_add(BC_REG_T1, from, false);
+    // from = BC_REG_T1;
     
-    emit_opcode(BC_MOV_RM);
+    emit_opcode(BC_MOV_RM_DISP16);
     emit_operand(to);
     emit_operand(from);
     
@@ -443,15 +443,18 @@ void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size,
     else if(size == 4) emit_control(CONTROL_32B);
     else if(size == 8) emit_control(CONTROL_64B);
     else Assert(false);
+    
+    Assert(displacement < 0x8000 && displacement >= -0x8000);
+    emit_imm16(displacement);
 }
 void BytecodeBuilder::emit_mov_mr_disp(BCRegister to, BCRegister from, int size, int displacement){
     Assert(to != BC_REG_T1 && from != BC_REG_T1);
     // TODO: Create a displacement instruction instead of li + add
-    emit_li32(BC_REG_T1, displacement);
-    emit_add(BC_REG_T1, to, false);
-    to = BC_REG_T1;
+    // emit_li32(BC_REG_T1, displacement);
+    // emit_add(BC_REG_T1, to, false);
+    // to = BC_REG_T1;
     
-    emit_opcode(BC_MOV_MR);
+    emit_opcode(BC_MOV_MR_DISP16);
     emit_operand(to);
     emit_operand(from);
      
@@ -460,6 +463,9 @@ void BytecodeBuilder::emit_mov_mr_disp(BCRegister to, BCRegister from, int size,
     else if(size == 4) emit_control(CONTROL_32B);
     else if(size == 8) emit_control(CONTROL_64B);
     else Assert(false);
+    
+    Assert(displacement < 0x8000 && displacement >= -0x8000);
+    emit_imm16(displacement);
 }
 
 void BytecodeBuilder::emit_add(BCRegister to, BCRegister from, bool is_float) {
@@ -622,13 +628,15 @@ void BytecodeBuilder::emit_control(InstructionControl control) {
 
 void BytecodeBuilder::emit_imm8(i8 imm) {
     tinycode->instructionSegment.add(0);
+    // get the pointer after add() because of reallocations
     i8* ptr = (i8*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 1);
     *ptr = imm;
 }
 void BytecodeBuilder::emit_imm16(i16 imm) {
     tinycode->instructionSegment.add(0);
     tinycode->instructionSegment.add(0);
-    i16* ptr = (i16*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 1);
+    // get the pointer after add() because of reallocations
+    i16* ptr = (i16*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 2);
     *ptr = imm;
 }
 void BytecodeBuilder::emit_imm32(i32 imm) {
@@ -636,6 +644,7 @@ void BytecodeBuilder::emit_imm32(i32 imm) {
     tinycode->instructionSegment.add(0);
     tinycode->instructionSegment.add(0);
     tinycode->instructionSegment.add(0);
+    // get the pointer after add() because of reallocations
     i32* ptr = (i32*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 4);
     *ptr = imm;
 }
@@ -648,6 +657,7 @@ void BytecodeBuilder::emit_imm64(i64 imm) {
     tinycode->instructionSegment.add(0);
     tinycode->instructionSegment.add(0);
     tinycode->instructionSegment.add(0);
+    // get the pointer after add() because of reallocations
     i64* ptr = (i64*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 8);
     *ptr = imm;
 }
@@ -712,6 +722,8 @@ extern const char* instruction_names[] {
     "mov_rr", // BC_MOV_RR
     "mov_rm", // BC_MOV_RM
     "mov_mr", // BC_MOV_MR
+    "mov_rm_disp", // BC_MOV_RM_DISP16
+    "mov_mr_disp", // BC_MOV_MR_DISP16
     "push", // BC_PUSH
     "pop", // BC_POP
     "li32", // BC_LI
@@ -813,12 +825,25 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code) {
             break;
         }
         case BC_MOV_RM:
-        case BC_MOV_MR: {
+        case BC_MOV_MR:
+        case BC_MOV_RM_DISP16:
+        case BC_MOV_MR_DISP16: {
             op0 = (BCRegister)instructionSegment[pc++];
             op1 = (BCRegister)instructionSegment[pc++];
             control = (InstructionControl)instructionSegment[pc++];
             
-            log::out << " " << register_names[op0] << ", " << register_names[op1];
+            if(opcode == BC_MOV_RM_DISP16 || opcode == BC_MOV_MR_DISP16) {
+                imm = *(i16*)(instructionSegment.data() + pc);
+                pc += 2;
+            }
+            
+            switch(opcode) {
+                case BC_MOV_RM: log::out << " " << register_names[op0] << ", [" << register_names[op1] << "]"; break;
+                case BC_MOV_MR: log::out << " [" << register_names[op0] << "], " << register_names[op1]; break;
+                case BC_MOV_RM_DISP16: log::out << " " << register_names[op0] << ", [" << register_names[op1]; if(imm >= 0) log::out << "+"; log::out << imm << "]"; break;
+                case BC_MOV_MR_DISP16: log::out << " [" << register_names[op0]; if(imm >= 0) log::out << "+"; log::out << imm << "], " << register_names[op1]; break;
+            }
+            
             if(control & CONTROL_8B)       log::out << ", byte";
             else if(control & CONTROL_16B) log::out << ", word";
             else if(control & CONTROL_32B) log::out << ", dword";

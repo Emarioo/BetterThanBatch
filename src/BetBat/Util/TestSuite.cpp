@@ -407,7 +407,9 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         // TODO: Run bytecode and x64 version by default.
         //   An argument can be passed to this function if you just want one target.
 
-        Bytecode* bytecode = CompileSource(&options);
+        Bytecode* bytecode = nullptr;
+        Assert(false);
+        // CompileSource(&options);
         defer {
             if(bytecode) {
                 Bytecode::Destroy(bytecode);
@@ -465,7 +467,10 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                 // interpreter.execute(bytecode);
             } else {
                 options.outputFile = "bin/temp.exe";
-                bool yes = ExportTarget(&options, bytecode);
+                bool yes = false;
+                Assert(false);
+                // bool yes = ExportTarget(&options, bytecode);
+                
                 if(!yes)
                     continue;
 

@@ -31,6 +31,8 @@ const char* FormatBytes(u64 bytes);
 // not thread safe
 const char* FormatTime(double seconds);
 
+bool streq(const char* a, const char* b);
+
 // src/util/base.btb -> src/util/
 // base.btb -> /
 // src -> /

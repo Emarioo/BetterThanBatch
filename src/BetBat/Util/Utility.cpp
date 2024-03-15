@@ -1,5 +1,17 @@
 #include "BetBat/Util/Utility.h"
 
+bool streq(const char* a, const char* b) {
+    int len_a = strlen(a);
+    int len_b = strlen(b);
+    if(len_a != len_b)
+        return false;
+    for(int i=0;i<len_a;i++) {
+        if(a[i] != b[i])
+            return false;
+    }
+    return true;
+}
+
 engone::Memory<char> ReadFile(const char* path){
     engone::Memory<char> buffer{};
     u64 fileSize;

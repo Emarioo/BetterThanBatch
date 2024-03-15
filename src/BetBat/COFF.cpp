@@ -614,10 +614,13 @@ void FileCOFF::writeFile(const std::string& path) {
     engone::FileClose(file);
 }
 
-bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from, u32 to){
+bool FileCOFF::WriteFile(const std::string& path, X64Program* program, u32 from, u32 to){
     using namespace engone;
     using namespace coff;
     Assert(program);
+
+    Assert(false); // function needs to be reworked
+    #ifdef gone
 
     if(to==-1){
         to = program->size();
@@ -1415,5 +1418,6 @@ bool FileCOFF::WriteFile(const std::string& path, Program_x64* program, u32 from
     obj_stream = nullptr;
     
     #undef CHECK
+    #endif
     return true;
 }

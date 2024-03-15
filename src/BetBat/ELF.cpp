@@ -6,9 +6,11 @@ namespace elf {
     
 }
 
-bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from, u32 to) {
+bool FileELF::WriteFile(const std::string& name, X64Program* program, u32 from, u32 to) {
     using namespace elf;
     Assert(program);
+    Assert(false);
+    #ifdef gone
     if(to==-1){
         to = program->size();
     }
@@ -341,7 +343,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         // IMPORTANT: THIS TYPE OF RELOCATION IS USED FOR call rel32!
         //  IT WON'T WORK WITH call FAR or ABSOLUTE.
         for(int i=0;i<program->namedUndefinedRelocations.size();i++) {
-            Program_x64::NamedUndefinedRelocation* nrel = &program->namedUndefinedRelocations[i];
+            X64Program::NamedUndefinedRelocation* nrel = &program->namedUndefinedRelocations[i];
             
             Elf64_Rela* rel = nullptr;
             suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
@@ -357,7 +359,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
         }
 
         for(int i=0;i<program->dataRelocations.size();i++) {
-            Program_x64::DataRelocation* drel = &program->dataRelocations[i];
+            X64Program::DataRelocation* drel = &program->dataRelocations[i];
             
             Elf64_Rela* rel = nullptr;
             suc = obj_stream->write_late((void**)&rel, sizeof(*rel));
@@ -489,6 +491,7 @@ bool FileELF::WriteFile(const std::string& name, Program_x64* program, u32 from,
     CHECK
     engone::FileClose(file);
     
+    #endif
     return true;
 }
 

@@ -304,6 +304,30 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
             else if(control & CONTROL_32B) *(i32*)registers[op0] = registers[op1];
             else if(control & CONTROL_64B) *(i64*)registers[op0] = registers[op1];
         } break;
+        case BC_MOV_RM_DISP16: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            imm = *(i16*)(instructions.data() + pc);
+            pc += 2;
+            
+            if(control & CONTROL_8B) registers[op0] = *(i8*)(registers[op1] + imm);
+            else if(control & CONTROL_16B) registers[op0] = *(i16*)(registers[op1] + imm);
+            else if(control & CONTROL_32B) registers[op0] = *(i32*)(registers[op1] + imm);
+            else if(control & CONTROL_64B) registers[op0] = *(i64*)(registers[op1] + imm);
+        } break;
+        case BC_MOV_MR_DISP16: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            imm = *(i16*)(instructions.data() + pc);
+            pc += 2;
+            
+            if(control & CONTROL_8B) *(i8*)(registers[op0] + imm) = registers[op1];
+            else if(control & CONTROL_16B) *(i16*)(registers[op0] + imm) = registers[op1];
+            else if(control & CONTROL_32B) *(i32*)(registers[op0] + imm) = registers[op1];
+            else if(control & CONTROL_64B) *(i64*)(registers[op0] + imm) = registers[op1];
+        } break;
         case BC_PUSH: {
             op0 = (BCRegister)instructions[pc++];
             
@@ -486,13 +510,13 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
         case BC_MEMZERO: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
-            memset((void*)op0,0, op1);
+            memset((void*)registers[op0],0, registers[op1]);
         } break;
         case BC_MEMCPY: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             op2 = (BCRegister)instructions[pc++];
-            memcpy((void*)op0,(void*)op1, op2);
+            memcpy((void*)registers[op0],(void*)registers[op1], registers[op2]);
         } break;
         case BC_ADD:
         case BC_SUB:

@@ -6,8 +6,8 @@ bool PhaseContext::hasErrors() {
     if(compiler) {
         return errors != 0; // nocheckin, incomplete
     } else {
-        Assert(compileInfo);
-        return errors != 0 || compileInfo->compileOptions->compileStats.errors != 0; 
+        Assert(compiler);
+        return errors != 0 || compiler->compileOptions->compileStats.errors != 0; 
     }
 }
 // Type checker used this for it's foreign function but Generator used the other one.
@@ -17,7 +17,7 @@ bool PhaseContext::hasForeignErrors() {
     if(compiler) {
         return false; // nocheckin, incomplete
     } else {
-        Assert(compileInfo);
-        return compileInfo->compileOptions->compileStats.errorTypes.size() != 0;
+        Assert(compiler);
+        return compiler->compileOptions->compileStats.errorTypes.size() != 0;
     }
 }

@@ -5,7 +5,12 @@
 # Introduction
 This is a project about a compiler for a new programming language. The idea for the language is strong fundamental concepts that gives the programmer power to do what they want with what the language offers without the language having a large feature set for every specific little thing a programmer might want.
 
-The language is planned to be used for visualizing data, games, and file formats. The second thing is smaller scripts for every day tasks like renaming files in a directory or doing complicated math which is difficult on a calculator.
+The language is planned to be used for visualizing data, games, and file formats. The second thing is smaller scripts for every day tasks like renaming files in a directory or doing complicated math which is inconvenient on a calculator.
+
+The name of the language ("Better than batch") is temporary. These are some other ideas.
+- Tin (the metal)
+- Son (?)
+- Compound (language is mix of fundamental features? a compound)
 
 ## Summary of interesting features (last updated on 2024-01-13)
 - Polymorphism (structs, functions)

@@ -1,7 +1,7 @@
 #include "BetBat/DWARF.h"
 
 namespace dwarf {
-    void ProvideSections(ObjectFile* objectFile, Program_x64* program) {
+    void ProvideSections(ObjectFile* objectFile, X64Program* program) {
         using namespace engone;
         SectionNr section_info = objectFile->createSection(".debug_info", ObjectFile::FLAG_DEBUG);  
         SectionNr section_line = objectFile->createSection(".debug_line", ObjectFile::FLAG_DEBUG);  
@@ -258,6 +258,10 @@ namespace dwarf {
             WRITE_LEB(abbrev_compUnit) // abbrev code
             stream->write("BTB Compiler 0.2.0");
             // stream->write1(0); // language
+            if(debug->files.size() == 0) {
+                log::out << "debug->files is zero, can't correctly generate DWARF\n";
+                return;
+            }
             std::string path = debug->files[0];
             std::string proj_dir = TrimLastFile(path);
             proj_dir = proj_dir.substr(0,proj_dir.length()-1);
@@ -268,8 +272,9 @@ namespace dwarf {
             // stream->write("project/src"); // project dir
             relocs.add({ stream->getWriteHead() - offset_section, 0 });
             stream->write8(0); // start address of code
-            relocs.add({ stream->getWriteHead() - offset_section, (u32)program->size() });
-            stream->write8(program->size()); // end address of text code
+            Assert(false);
+            // relocs.add({ stream->getWriteHead() - offset_section, (u32)program->size() });
+            // stream->write8(program->size()); // end address of text code
             int reloc_statement_list = stream->getWriteHead() - offset_section;
             stream->write4(0); // statement list, address/pointer to reloc thing
 
@@ -969,7 +974,9 @@ namespace dwarf {
                 // add_row(fun.funcEnd, fun.lines.last().lineNumber);
             }
 
-            int dt = program->size() - reg_address;
+            Assert(false);
+            // int dt = program->size() - reg_address;
+            int dt = 0;
             if(dt) {
                 WRITE_LEB(DW_LNS_advance_pc)
                 reg_address += dt;
@@ -1011,7 +1018,8 @@ namespace dwarf {
             
             int reloc_text_start = stream->getWriteHead() - offset_section;
             stream->write8(0);
-            stream->write8(program->size());
+            Assert(false);
+            // stream->write8(program->size());
 
             stream->write8(0);
             stream->write8(0);

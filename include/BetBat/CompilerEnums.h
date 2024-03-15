@@ -7,6 +7,7 @@ enum TargetPlatform : u32 {
     // TODO: Add some option for COFF or ELF format? Probably not here.
     TARGET_WINDOWS_x64,
     TARGET_UNIX_x64,
+    // TARGET_WASM_v1_0,
 
     TARGET_END,
     TARGET_START = TARGET_UNKNOWN + 1,

@@ -275,7 +275,7 @@
 #define REG_XMM7 0b111
 
 
-bool Program_x64::_reserve(u32 newAllocationSize){
+bool X64Program::_reserve(u32 newAllocationSize){
     if(newAllocationSize==0){
         if(_allocationSize!=0){
             TRACK_ARRAY_FREE(text, u8, _allocationSize);
@@ -312,7 +312,7 @@ bool Program_x64::_reserve(u32 newAllocationSize){
     return false;
 }
 
-void Program_x64::add(u8 byte){
+void X64Program::add(u8 byte){
     if(head+1 >= _allocationSize ){
         bool yes = _reserve(_allocationSize*2 + 100);
         Assert(yes);
@@ -320,7 +320,7 @@ void Program_x64::add(u8 byte){
     *(text + head) = byte;
     head++;
 }
-void Program_x64::add2(u16 word){
+void X64Program::add2(u16 word){
     if(head+2 >= _allocationSize ){
         bool yes = _reserve(_allocationSize*2 + 100);
         Assert(yes);
@@ -330,7 +330,7 @@ void Program_x64::add2(u16 word){
     *(text + head + 0) = *(ptr + 0);
     *(text + head + 1) = *(ptr + 1);
     head+=2;
-}void Program_x64::add3(u32 word){
+}void X64Program::add3(u32 word){
     if(head>0){
         // This is not how you use rex prefix
         // cvtsi2ss instructions use smashed in between it's other opcode bytes
@@ -348,7 +348,7 @@ void Program_x64::add2(u16 word){
     *(text + head + 2) = *(ptr + 2);
     head+=3;
 }
-void Program_x64::add4(u32 dword){
+void X64Program::add4(u32 dword){
     // wish we could assert to find bugs but immediates may be zero and won't work.
     // we could make a nother functionn specifcially for immediates though.
     // Assert(dword & 0xFF00'0000);
@@ -365,7 +365,7 @@ void Program_x64::add4(u32 dword){
     *(text + head + 3) = *(ptr + 3);
     head+=4;
 }
-void Program_x64::addRaw(u8* arr, u64 len){
+void X64Program::addRaw(u8* arr, u64 len){
     if(head+len >= _allocationSize ){
         bool yes = _reserve(_allocationSize*1.2 + 10 + len);
         Assert(yes);
@@ -373,7 +373,7 @@ void Program_x64::addRaw(u8* arr, u64 len){
     memcpy(text + head, arr, len);
     head += len;
 }
-void Program_x64::addModRM(u8 mod, u8 reg, u8 rm){
+void X64Program::addModRM(u8 mod, u8 reg, u8 rm){
     Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);
     // You probably made a mistake and used REG_BP thinking it works with just ModRM byte.
     Assert(("Use addModRM_SIB instead",!(mod!=0b11 && rm==0b100)));
@@ -382,14 +382,14 @@ void Program_x64::addModRM(u8 mod, u8 reg, u8 rm){
     // Assert(("Use addModRM_disp32 instead",(mod!=0b10)));
     add((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
 }
-void Program_x64::addModRM_rip(u8 reg, u32 disp32){
+void X64Program::addModRM_rip(u8 reg, u32 disp32){
     u8 mod = 0b00;
     u8 rm = 0b101;
     Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);
     add((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
     add4(disp32);
 }
-void Program_x64::addModRM_SIB(u8 mod, u8 reg, u8 scale, u8 index, u8 base){
+void X64Program::addModRM_SIB(u8 mod, u8 reg, u8 scale, u8 index, u8 base){
     //  register to register (mod = 0b11) doesn't work with SIB byte
     Assert(("Use addModRM instead",mod!=0b11));
 
@@ -403,7 +403,7 @@ void Program_x64::addModRM_SIB(u8 mod, u8 reg, u8 scale, u8 index, u8 base){
     add((u8)(base | (index << (u8)3) | (scale << (u8)6)));
 }
 
-void Program_x64::printHex(const char* path){
+void X64Program::printHex(const char* path){
     using namespace engone;
     Assert(this);
     if(path) {
@@ -420,7 +420,7 @@ void Program_x64::printHex(const char* path){
         #undef HEXIFY
     }
 }
-void Program_x64::printAsm(const char* path, const char* objpath){
+void X64Program::printAsm(const char* path, const char* objpath){
     using namespace engone;
     Assert(this);
     if(!objpath) {
@@ -760,14 +760,14 @@ u8 BCToProgramReg(u8 bcreg, int handlingSizes = 4, bool allowXMM = false,  bool 
     return id;
 }
 
-Program_x64* ConvertTox64(Bytecode* bytecode){
+X64Program* ConvertTox64(Bytecode* bytecode){
     using namespace engone;
     Assert(bytecode);
     ZoneScopedC(tracy::Color::SkyBlue1);
 
     _VLOG(log::out <<log::BLUE<< "x64 Converter:\n";)
 
-    Program_x64* prog = Program_x64::Create();
+    X64Program* prog = X64Program::Create();
 
     // steal debug information
     prog->debugInformation = bytecode->debugInformation;
@@ -2188,7 +2188,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 prog->add(PREFIX_REXW);
                 prog->add(OPCODE_LEA_REG_M);
                 prog->addModRM_rip(BCToProgramReg(op0,8), (u32)0);
-                Program_x64::DataRelocation reloc{};
+                X64Program::DataRelocation reloc{};
                 reloc.dataOffset = imm;
                 reloc.textOffset = prog->size() - 4;
                 prog->dataRelocations.add(reloc);
@@ -3159,14 +3159,14 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     Assert(bytecode->externalRelocations[imm].location == bcIndex);
                     prog->add(OPCODE_CALL_RM_SLASH_2);
                     prog->addModRM_rip(2,(u32)0);
-                    Program_x64::NamedUndefinedRelocation namedReloc{};
+                    X64Program::NamedUndefinedRelocation namedReloc{};
                     namedReloc.name = bytecode->externalRelocations[imm].name;
                     namedReloc.textOffset = prog->size() - 4;
                     prog->namedUndefinedRelocations.add(namedReloc);
                 } else if(linkConvention == LinkConventions::IMPORT) {
                     Assert(bytecode->externalRelocations[imm].location == bcIndex);
                     prog->add(OPCODE_CALL_IMM);
-                    Program_x64::NamedUndefinedRelocation namedReloc{};
+                    X64Program::NamedUndefinedRelocation namedReloc{};
                     namedReloc.name = bytecode->externalRelocations[imm].name;
                     namedReloc.textOffset = prog->size();
                     prog->namedUndefinedRelocations.add(namedReloc);
@@ -3222,10 +3222,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         */
                         // Assert(false); // is the assembly wrong?
                         // rdx should be buffer and r8 length
-                        Program_x64::NamedUndefinedRelocation reloc0{};
+                        X64Program::NamedUndefinedRelocation reloc0{};
                         reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
                         reloc0.textOffset = prog->size() + 0xB;
-                        Program_x64::NamedUndefinedRelocation reloc1{};
+                        X64Program::NamedUndefinedRelocation reloc1{};
                         reloc1.name = "__imp_WriteFile";
                         reloc1.textOffset = prog->size() + 0x26;
                         u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xD8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
@@ -3256,7 +3256,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add4((u32)0);
 
                         // We call the Unix write system call, altough not directly
-                        Program_x64::NamedUndefinedRelocation reloc0{};
+                        X64Program::NamedUndefinedRelocation reloc0{};
                         reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
                         reloc0.textOffset = reloc_pos;
                         prog->namedUndefinedRelocations.add(reloc0);
@@ -3295,10 +3295,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         call   QWORD PTR [rip+0x0]          # WriteFile(...)
                         add    rsp,0x38
                         */
-                        Program_x64::NamedUndefinedRelocation reloc0{};
+                        X64Program::NamedUndefinedRelocation reloc0{};
                         reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
                         reloc0.textOffset = prog->size() + 0xB;
-                        Program_x64::NamedUndefinedRelocation reloc1{};
+                        X64Program::NamedUndefinedRelocation reloc1{};
                         reloc1.name = "__imp_WriteFile";
                         reloc1.textOffset = prog->size() + 0x26;
                         u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xD8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
@@ -3338,7 +3338,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                         prog->add4((u32)0);
 
                         // We call the Unix write system call, altough not directly
-                        Program_x64::NamedUndefinedRelocation reloc0{};
+                        X64Program::NamedUndefinedRelocation reloc0{};
                         reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
                         reloc0.textOffset = reloc_pos;
                         prog->namedUndefinedRelocations.add(reloc0);
@@ -3477,10 +3477,10 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 // 4600 bytes of machine code. With a subroutine you would get less than 1500 (100*12 + 46) which scales well
                 // when using even more test intstructions.
 
-                Program_x64::NamedUndefinedRelocation reloc0{};
+                X64Program::NamedUndefinedRelocation reloc0{};
                 reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
                 reloc0.textOffset = prog->size() + 0x20;
-                Program_x64::NamedUndefinedRelocation reloc1{};
+                X64Program::NamedUndefinedRelocation reloc1{};
                 reloc1.name = "__imp_WriteFile";
                 reloc1.textOffset = prog->size() + 0x3F;
                 u8 arr[]= {
@@ -3524,7 +3524,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                     0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x10 
                 };
 
-                Program_x64::NamedUndefinedRelocation reloc0{};
+                X64Program::NamedUndefinedRelocation reloc0{};
                 reloc0.name = "write"; // symbol name, gcc (or other linker) knows how to relocate it
                 reloc0.textOffset = prog->size() + 0x27;
                 prog->namedUndefinedRelocations.add(reloc0);
@@ -3905,7 +3905,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
         }
     }
 
-    // Assert(sizeof(Bytecode::PtrDataRelocation) == sizeof(Program_x64::PtrDataRelocation));
+    // Assert(sizeof(Bytecode::PtrDataRelocation) == sizeof(X64Program::PtrDataRelocation));
     // prog->ptrDataRelocations.resize(bytecode->ptrDataRelocations.size());
     // memcpy(prog->ptrDataRelocations.data(), bytecode->ptrDataRelocations.data(), bytecode->ptrDataRelocations.size() * sizeof(Bytecode::PtrDataRelocation));
 
@@ -3917,7 +3917,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
 
     for(int i=0;i<bytecode->exportedSymbols.size();i++) {
         auto& sym = bytecode->exportedSymbols[i];
-        Program_x64::ExportedSymbol tmp{};
+        X64Program::ExportedSymbol tmp{};
         tmp.name = sym.name;
         tmp.textOffset = addressTranslation[sym.location];
         prog->exportedSymbols.add(tmp);
@@ -3967,7 +3967,7 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     
     if(failure){
         log::out << log::RED << "x64 conversion failed\n";
-        Program_x64::Destroy(prog);
+        X64Program::Destroy(prog);
         prog = nullptr;
     } else {
         // prog->printHex();
@@ -3975,19 +3975,19 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
     return prog;
 }
 #endif
-void Program_x64::Destroy(Program_x64* program) {
+void X64Program::Destroy(X64Program* program) {
     using namespace engone;
     Assert(program);
-    program->~Program_x64();
-    TRACK_FREE(program, Program_x64);
-    // engone::Free(program,sizeof(Program_x64));
+    program->~X64Program();
+    TRACK_FREE(program, X64Program);
+    // engone::Free(program,sizeof(X64Program));
 }
-Program_x64* Program_x64::Create() {
+X64Program* X64Program::Create() {
     using namespace engone;
 
-    // auto program = (Program_x64*)engone::Allocate(sizeof(Program_x64));
-    auto program = TRACK_ALLOC(Program_x64);
-    new(program)Program_x64();
+    // auto program = (X64Program*)engone::Allocate(sizeof(X64Program));
+    auto program = TRACK_ALLOC(X64Program);
+    new(program)X64Program();
     return program;
 }
 #endif

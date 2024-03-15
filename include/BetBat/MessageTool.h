@@ -32,7 +32,7 @@ struct TokenStream;
 #define MSG_CODE_LOCATION
 #endif
 
-#define BASE_SECTION(CODE, CONTENT) { if(!info.ignoreErrors) info.errors++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
+#define BASE_SECTION(CODE, CONTENT) { if(!info.ignoreErrors) info.errors++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder err_type{}; err_type += CODE; if(info.compiler) info.compiler->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compiler) info.compiler->reporter.end_report(); }
 
 #define BASE_SECTION2(CONTENT) { if(!info.ignoreErrors) info.errors++; info.reporter->start_report(); MSG_CODE_LOCATION; CONTENT; info.reporter->end_report(); }
 
@@ -40,12 +40,12 @@ struct TokenStream;
 // info.compileInfo->compileOptions->compileStats.addError(TR, __VA_ARGS__); nocheckin, we need to add error in ERR_HEAD!
 #define ERR_LINE2(T, STR) info.reporter->err_mark(T, StringBuilder{} << STR); 
 
-#define BASE_WARN_SECTION(CODE, CONTENT) { info.compileInfo->compileOptions->compileStats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compileInfo) info.compileInfo->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compileInfo) info.compileInfo->reporter.end_report(); }
+#define BASE_WARN_SECTION(CODE, CONTENT) { info.compiler->compileOptions->compileStats.warnings++; int base_column = -1; TokenStream* prevStream = nullptr; StringBuilder warn_type{}; warn_type += CODE; if(info.compiler) info.compiler->reporter.start_report(); MSG_CODE_LOCATION; CONTENT; if(info.compiler) info.compiler->reporter.end_report(); }
 
 // #define ERR_TYPE(STR) err_type = StringBuilder{} + STR;
 // #define ERR_HEAD(TR) PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream);
 #ifdef OS_WINDOWS
-#define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true, __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->compileOptions->compileStats.addError(TR, __VA_ARGS__);
+#define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true, __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compiler->compileOptions->compileStats.addError(TR, __VA_ARGS__);
 #else
 #define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true __VA_OPT__(,) __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->compileOptions->compileStats.addError(TR __VA_OPT__(,) __VA_ARGS__);
 #endif

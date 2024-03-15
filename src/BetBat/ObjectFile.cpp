@@ -4,7 +4,7 @@
 #include "BetBat/ELF.h"
 #include "BetBat/COFF.h"
 
-bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Program_x64* program, u32 from, u32 to) {
+bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64Program* program, u32 from, u32 to) {
     ZoneScopedC(tracy::Color::Blue4);
     ObjectFile objectFile{};
     objectFile.init(objType);
@@ -26,10 +26,19 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, Prog
 
     if(to - from > 0) {
         auto stream = objectFile.getStreamFromSection(section_text);
-        if(to > program->size())
-            to = program->size();
-        suc = stream->write(program->text + from, to - from);
-        CHECK
+        
+        Assert(from == 0 && to == -1);
+        
+        for(int i=0;i<program->tinyPrograms.size(); i++) {
+            auto p = program->tinyPrograms[i];
+            stream->write(p->text, p->head);
+        }
+        
+        // Old code
+        // if(to > program->size())
+        //     to = program->size();
+        // suc = stream->write(program->text + from, to - from);
+        // CHECK
     }
     
     for(int i=0;i<program->dataRelocations.size();i++){

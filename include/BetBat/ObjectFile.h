@@ -122,7 +122,7 @@ struct ObjectFile {
     // writes file based on objType from init
     bool writeFile(const std::string& path);
 
-    static bool WriteFile(ObjectFileType objType, const std::string& path, Program_x64* program, u32 from = 0, u32 to = (u32)-1);
+    static bool WriteFile(ObjectFileType objType, const std::string& path, X64Program* program, u32 from = 0, u32 to = (u32)-1);
 
 private:
     // ELF and COFF has some trickery with the string table which can't just be

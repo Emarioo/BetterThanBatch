@@ -19,38 +19,46 @@ x64 operands
 
 */
 
-struct Builder_x64 {
-    Program_x64* prog = nullptr;
-
-    void init(Program_x64* p) {
-        prog = p;
-    }
-
-    void emit1(u8 byte);
-    void emit2(u16 word);
-    void emit3(u32 word);
-    void emit4(u32 dword);
-    void emit_modrm(u8 mod, u8 reg, u8 rm);
-    // RIP-relative addressing
-    void emit_modrm_rip(u8 reg, u32 disp32);
-    void emit_modrm_sib(u8 mod, u8 reg, u8 scale, u8 index, u8 base);
-
-    void emit_bytes(u8* arr, u64 len);
-
-    // These are here to prevent implicit casting
-    // of arguments which causes mistakes.
-    void emit1(i64 byte);
-    void emit2(i64 word);
-    void emit3(i64 word);
-    void emit4(i64 dword);
-    void emit_modrm_rip(u8, i64);
-
+enum X64Register : u8 {
+    X64_REG_INVALID = 0,
     
+    X64_REG_BEGIN,
+    X64_REG_A = X64_REG_BEGIN,
+    X64_REG_C,
+    X64_REG_D,
+    X64_REG_B,
+    X64_REG_SP,
+    X64_REG_BP,
+    X64_REG_SI,
+    X64_REG_DI,
+
+    X64_REG_R8, 
+    X64_REG_R9, 
+    X64_REG_R10,
+    X64_REG_R11,
+    X64_REG_R12,
+    X64_REG_R13,
+    X64_REG_R14,
+    X64_REG_R15,
+
+    X64_REG_XMM0,
+    X64_REG_XMM1,
+    X64_REG_XMM2,
+    X64_REG_XMM3,
+    X64_REG_XMM4,
+    X64_REG_XMM5,
+    X64_REG_XMM6,
+    X64_REG_XMM7,
+    X64_REG_END,
 };
 
-struct Program_x64 {
-    ~Program_x64(){
-        _reserve(0);
+struct X64TinyProgram {
+    u8* text=nullptr;
+    u64 _allocationSize=0;
+    u64 head=0;
+};
+struct X64Program {
+    ~X64Program(){
         TRACK_ARRAY_FREE(globalData, u8, globalSize);
         // engone::Free(globalData, globalSize);
         dataRelocations.cleanup();
@@ -60,12 +68,15 @@ struct Program_x64 {
             debugInformation = nullptr;
         }
     }
-
-    Builder_x64 builder;
     
-    u8* text=nullptr;
-    u64 _allocationSize=0;
-    u64 head=0;
+    DynamicArray<X64TinyProgram*> tinyPrograms;
+    X64TinyProgram* createProgram() {
+        auto ptr = new X64TinyProgram();
+        tinyPrograms.add(ptr);
+        return ptr;
+    }
+    
+    // u64 size() const { return head; }
 
     u8* globalData = nullptr;
     u64 globalSize = 0;
@@ -94,46 +105,121 @@ struct Program_x64 {
 
     DebugInformation* debugInformation = nullptr;
 
-    u64 size() { return head; }
- 
-    void add(u8 byte);
-    void add2(u16 word);
-    void add3(u32 word);
-    void add4(u32 dword);
-    void addModRM(u8 mod, u8 reg, u8 rm);
-    // RIP-relative addressing
-    void addModRM_rip(u8 reg, u32 disp32);
-    void addModRM_rip(u8 reg, i64 disp32);
-    void addModRM_SIB(u8 mod, u8 reg, u8 scale, u8 index, u8 base);
-
-    void addRaw(u8* arr, u64 len);
-
-    // These are here to prevent implicit casting
-    // of arguments which causes mistakes.
-    void add(i64 byte);
-    void add2(i64 word);
-    void add3(i64 word);
-    void add4(i64 dword);
-
     void printHex(const char* path = nullptr);
     void printAsm(const char* path, const char* objpath = nullptr);
 
-    void set(u32 index, u8 byte) { Assert(index < head); text[index] = byte; }
+    static void Destroy(X64Program* program);
+    static X64Program* Create();
 
-    static void Destroy(Program_x64* program);
-    static Program_x64* Create();
+    // void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
 
-    bool _reserve(u32 newAllocationSize);
+    // static X64Program* ConvertFromBytecode(Bytecode* code);
+private:
+    
+};
+
+struct OPNode {
+    InstructionType opcode;
+    InstructionControl control;
+    InstructionCast cast;
+    i64 imm;
+    BCRegister op0;
+    BCRegister op1;
+    BCRegister op2;
+    LinkConventions link;
+    CallConventions call;
+    u8 fsize;
+    u8 tsize;
+    
+    OPNode* in0;
+    OPNode* in1;
+    OPNode* in2;
+};
+
+struct X64Builder {
+    X64Program* prog = nullptr;
+    X64TinyProgram* tinyprog = nullptr;
+    Bytecode* bytecode = nullptr;
+    TinyBytecode* tinycode = nullptr;
+    
+    QuickArray<OPNode*> nodes;
+    
+    QuickArray<u32> instruction_indices;
+    
+    // struct ValueLocation {
+    //     enum Kind {
+    //         NONE,
+    //         IN_REGISTER,
+    //         IN_STACK,
+    //     };
+    //     Kind kind = NONE;
+    //     int reg; // which register
+    //     int stack_offset; // where in stack
+    // };
+    // std::unordered_map<BCRegister, ValueLocation*> valueLocations;
+    
+    struct RegisterInfo {
+        bool used = false;
+        
+        // OPNode* node = nullptr;
+    };
+    std::unordered_map<X64Register, RegisterInfo> registers;
+    
+    std::unordered_map<BCRegister, OPNode*> reg_values;
+    QuickArray<OPNode*> stack_values;
+    
+    X64Register alloc_register(X64Register reg = X64_REG_INVALID, bool is_float = false);
+    void free_register(X64Register reg);
+    
+    int size() const { return tinyprog->head; }
+    void ensure_bytes(int size) {
+        if(tinyprog->head + size >= tinyprog->_allocationSize ){
+            bool yes = _reserve(tinyprog->_allocationSize * 2 + 50 + size);
+            Assert(yes);
+        }
+    }
+
+    void init(X64Program* p) {
+        prog = p;
+    }
+
+    void emit1(u8 byte);
+    void emit2(u16 word);
+    void emit3(u32 word);
+    void emit4(u32 dword);
+    void emit_modrm(u8 mod, X64Register reg, X64Register rm);
+    void emit_modrm_slash(u8 mod, u8 reg, X64Register rm);
+    // RIP-relative addressing
+    void emit_modrm_rip(X64Register reg, u32 disp32);
+    void emit_modrm_sib(u8 mod, X64Register reg, u8 scale, u8 index, X64Register base_reg);
+
+    void emit_bytes(u8* arr, u64 len);
+
+    // These are here to prevent implicit casting
+    // of arguments which causes mistakes.
+    void emit1(i64 byte);
+    void emit2(i64 word);
+    void emit3(i64 word);
+    void emit4(i64 dword);
+    void emit_modrm_rip(u8, i64);
+    
+    bool _reserve(u32 size);
     
     void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
 
-    static Program_x64* ConvertFromBytecode(Bytecode* code);
+    void generateInstructions_slow();
+    
+    static const X64Register RESERVED_REG0 = X64_REG_A;
+    static const X64Register RESERVED_REG1 = X64_REG_D;
+    
 private:
-    
-    
+    // recursively
+    void generateInstructions(int depth = 0, BCRegister find_reg = BC_REG_INVALID, int inst_index = 0, X64Register* out_reg = nullptr);
 };
-// Program_x64* ConvertTox64(Bytecode* bytecode);
+
+// X64Program* ConvertTox64(Bytecode* bytecode);
 // The function will print the reformatted content if outBuffer is null
 void ReformatDumpbinAsm(LinkerChoice linker, QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes);
 
-Program_x64* GenerateX64(Bytecode* bytecode);
+struct Compiler;
+void GenerateX64(Compiler* compiler, TinyBytecode* tinycode);

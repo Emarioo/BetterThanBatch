@@ -20,8 +20,8 @@ x64 operands
 
 */
 
-struct Program_x64 {
-    ~Program_x64(){
+struct X64Program {
+    ~X64Program(){
         _reserve(0);
         TRACK_ARRAY_FREE(globalData, u8, globalSize);
         // engone::Free(globalData, globalSize);
@@ -90,12 +90,12 @@ struct Program_x64 {
 
     void set(u32 index, u8 byte) { Assert(index < head); text[index] = byte; }
 
-    static void Destroy(Program_x64* program);
-    static Program_x64* Create();
+    static void Destroy(X64Program* program);
+    static X64Program* Create();
 
     bool _reserve(u32 newAllocationSize);
 };
-// Program_x64* ConvertTox64(Bytecode* bytecode);
+// X64Program* ConvertTox64(Bytecode* bytecode);
 // The function will print the reformatted content if outBuffer is null
 void ReformatDumpbinAsm(LinkerChoice linker, QuickArray<char>& inBuffer, QuickArray<char>* outBuffer, bool includeBytes);
 #endif

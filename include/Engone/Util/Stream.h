@@ -218,6 +218,9 @@ struct ByteStream {
         }
     }
     bool steal_from(ByteStream* stream) {
+        if(stream->allocations.size() == 0)
+            return true;
+            
         Assert(stream);
         Assert(m_allocator == stream->m_allocator);
         // TODO: The last allocation of "this" and the first allocation of "stream" can be combined somewhat

@@ -1333,9 +1333,9 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     if(iden->funcOverloads.overloads.size() == 1) {
                         auto overload = &iden->funcOverloads.overloads[0];
                         CallConventions expected_convention = CallConventions::UNIXCALL;
-                        if(info.compileInfo->compileOptions->target == TARGET_WINDOWS_x64)
+                        if(info.compiler->compileOptions->target == TARGET_WINDOWS_x64)
                             expected_convention = CallConventions::STDCALL;
-                        if(info.compileInfo->compileOptions->target == TARGET_UNIX_x64)
+                        if(info.compiler->compileOptions->target == TARGET_UNIX_x64)
                             expected_convention = CallConventions::UNIXCALL;
                         if (overload->astFunc->callConvention != expected_convention) {
                             ERR_SECTION(
@@ -3286,7 +3286,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
     }
     return SIGNAL_SUCCESS;
 }
-
+#ifdef gone
 int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     using namespace engone;
     // MEASURE;
@@ -3384,6 +3384,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
     info.compileInfo->compileOptions->compileStats.errors += info.errors;
     return info.errors;
 }
+#endif
 
 void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
     using namespace engone;

@@ -806,6 +806,7 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
                 
                 if(tempTypes.size() == 1){
                     if (!performSafeCast(tempTypes[0], memdata.typeId)) {
+                        // info.comp
                         ERRTYPE(member.location, member.defaultValue->location, tempTypes[0], memdata.typeId, "(default member)\n");
                     }
                     if(baseReg!=0){
@@ -3288,7 +3289,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         //     Assert(function->_impls.size()==1);
         // }
         if(function->linkConvention == NATIVE ||
-            info.compileInfo->compileOptions->target == TARGET_BYTECODE
+            info.compiler->compileOptions->target == TARGET_BYTECODE
         ){
             // Assert(info.compileInfo->nativeRegistry);
             auto nativeRegistry = NativeRegistry::GetGlobal();
@@ -3378,7 +3379,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             auto imp = compiler->lexer.getImport_unsafe(function->body->statements[0]->location);
             dfun->fileIndex = di->addOrGetFile(imp->path);
         } else {
-            dfun->fileIndex = di->addOrGetFile(info.compileInfo->compileOptions->sourceFile.text);
+            dfun->fileIndex = di->addOrGetFile(info.compiler->compileOptions->sourceFile.text);
         }
         dfun->funcImpl = funcImpl;
         dfun->funcAst = function;
@@ -3394,7 +3395,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         //  Perhaps force functions named main to be annotated with @export in parser
         //  instead of handling the special case for main here?
         if(funcImpl->astFunction->name == "main") {
-            switch(info.compileInfo->compileOptions->target) { // this is really cheeky
+            switch(info.compiler->compileOptions->target) { // this is really cheeky
             case TARGET_WINDOWS_x64:
                 function->callConvention = STDCALL;
                 break;
@@ -5729,5 +5730,5 @@ TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler) {
     
     // TODO: Relocations?
     
-    return nullptr;
+    return tb_main;
 }

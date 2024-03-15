@@ -23,47 +23,20 @@
 #define EXIT_CODE_SUCCESS 0
 #define EXIT_CODE_FAILURE 1
 
-void test_garbage() {
-    using namespace engone;
-    dwarf::LEB128_test();
-    ByteStream::Test_iterator();
+int hm() {
+    int a[20];
+    int b = a[1] + (a[2] + (a[3] + (a[4] + (4 + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (2 + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
     
-    u32 a = 1;
-    u32 b = 32;
-    u32 c = a << b;
-    
-    #define A(a,...) a + __VA_ARGS__ + __VA_ARGS__
-    
-    A(a,0,2);
-
-
-    // auto f = PDBFile::Deconstruct("wa.pdb");
-    // log::out << "---\n";
-    // f->writeFile("wa.pdb");
-    
-    // PDBFile::Destroy(f);
-    // DeconstructDebugSymbols(obj->
-    // DeconstructPDB("test.pdb");
-    // DeconstructPDB("bin/compiler.pdb");
-    // DeconstructPDB("bin/dev.pdb");
-
-    Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
+    return b;
 }
-bool streq(const char* a, const char* b) {
-    int len_a = strlen(a);
-    int len_b = strlen(b);
-    if(len_a != len_b)
-        return false;
-    for(int i=0;i<len_a;i++) {
-        if(a[i] != b[i])
-            return false;
-    }
-    return true;
-}
-// #include "Bcrypt.h"
-// #include "unistd.h"
+
 int main(int argc, const char** argv){
     using namespace engone;
+    
+    int a[20];
+    int b = a[1] + (a[2] + (a[3] + (a[4] + (hm() + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (hm() + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
+    
+    
     log::out.enableReport(false);
     // MeasureInit();
     ProfilerInitialize();
@@ -74,6 +47,8 @@ int main(int argc, const char** argv){
             // GenerateFuzzedFiles(opts,"main.btb");
 
     CompileOptions options{};
+    options.target = TARGET_WINDOWS_x64;
+    
     Compiler compiler{};
     compiler.importDirectories.add(Path("modules/").getAbsolute());
     compiler.compileSource("examples/dev.btb", &options);
@@ -338,23 +313,24 @@ int main(int argc, const char** argv){
                     }
                     log::out<<"\n";
                 }
-                CompileInfo compileInfo{};
-                compileInfo.compileOptions = &compileOptions;
-                auto stream2 = Preprocess(&compileInfo, stream);
-                Assert(stream2);
-                if(compileOptions.outputFile.text.size() == 0) {
-                    log::out << log::AQUA << "## "<<compileOptions.sourceFile.text<<" ##\n";
-                    stream2->print();
-                    // TODO: Output to a default file like preproc.btb
-                    // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
-                    compilerExitCode = compileOptions.compileStats.errors;
-                } else{
-                    log::out << "Preprocessor output written to '"<<compileOptions.outputFile.text<<"'\n";
-                    stream2->writeToFile(compileOptions.outputFile.text);
-                    compilerExitCode = compileOptions.compileStats.errors;
-                }
-                TokenStream::Destroy(stream);
-                TokenStream::Destroy(stream2);
+                Assert(false);
+                // CompileInfo compileInfo{};
+                // compileInfo.compileOptions = &compileOptions;
+                // auto stream2 = Preprocess(&compileInfo, stream);
+                // Assert(stream2);
+                // if(compileOptions.outputFile.text.size() == 0) {
+                //     log::out << log::AQUA << "## "<<compileOptions.sourceFile.text<<" ##\n";
+                //     stream2->print();
+                //     // TODO: Output to a default file like preproc.btb
+                //     // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
+                //     compilerExitCode = compileOptions.compileStats.errors;
+                // } else{
+                //     log::out << "Preprocessor output written to '"<<compileOptions.outputFile.text<<"'\n";
+                //     stream2->writeToFile(compileOptions.outputFile.text);
+                //     compilerExitCode = compileOptions.compileStats.errors;
+                // }
+                // TokenStream::Destroy(stream);
+                // TokenStream::Destroy(stream2);
             }
         }
     } else if(performTests) {
@@ -376,9 +352,9 @@ int main(int argc, const char** argv){
         }
     } else if(!devmode){
         if(compileOptions.outputFile.text.size()==0) {
-            CompileAll(&compileOptions);
+            // CompileAll(&compileOptions);
         } else {
-            CompileAll(&compileOptions);
+            // CompileAll(&compileOptions);
         }
         compilerExitCode = compileOptions.compileStats.errors;
     } else if(devmode){
@@ -419,7 +395,7 @@ int main(int argc, const char** argv){
         #else
         if(compileOptions.target == TARGET_BYTECODE){
             compileOptions.executeOutput = true;
-            CompileAll(&compileOptions);
+            // CompileAll(&compileOptions);
         } else {
             #define EXE_FILE "dev.exe"
             
@@ -431,7 +407,7 @@ int main(int argc, const char** argv){
             compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
             compileOptions.outputFile = EXE_FILE;
-            CompileAll(&compileOptions);
+            // CompileAll(&compileOptions);
         }
         compilerExitCode = compileOptions.compileStats.errors;
         #endif

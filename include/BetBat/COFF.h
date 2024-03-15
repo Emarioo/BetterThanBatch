@@ -242,5 +242,5 @@ struct FileCOFF {
     static FileCOFF* DeconstructFile(const std::string& path, bool silent = true);
 
     static void Destroy(FileCOFF* objectFile);
-    static bool WriteFile(const std::string& name, Program_x64* program, u32 from = 0, u32 to = (u32)-1);
+    static bool WriteFile(const std::string& name, X64Program* program, u32 from = 0, u32 to = (u32)-1);
 };
