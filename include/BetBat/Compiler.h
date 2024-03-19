@@ -210,10 +210,9 @@ struct Compiler {
     
     struct Task {
         TaskType type;
-        union {
-            u32 import_id;
-            ScopeId scopeId;
-        };
+        u32 import_id;
+        ScopeId scopeId;
+        bool no_change = false;
     };
     DynamicArray<Task> tasks;
     

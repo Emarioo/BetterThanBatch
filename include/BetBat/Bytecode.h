@@ -7,15 +7,18 @@
 
 enum InstructionControl : u8 {
     CONTROL_NONE,
-    CONTROL_MASK_SIZE = 0xF,
+    CONTROL_MASK_SIZE = 0x03,
+    CONTROL_MASK_OTHER = 0xF0,
     CONTROL_8B = 0,
     CONTROL_16B = 1,
     CONTROL_32B = 2,
     CONTROL_64B = 3,
-    CONTROL_MASK_OTHER = 0xF0,
     CONTROL_FLOAT_OP = 0x10,
     CONTROL_UNSIGNED_OP = 0x20,
 };
+#define GET_CONTROL_SIZE(x) (CONTROL_MASK_SIZE & x)
+#define IS_CONTROL_SIGNED(x) (!(CONTROL_UNSIGNED_OP & x))
+#define IS_CONTROL_FLOAT(x) (CONTROL_FLOAT_OP & x)
 // from -> to (CAST_FROM_TO)
 enum InstructionCast : u8 {
     CAST_UINT_UINT,
@@ -186,7 +189,7 @@ struct TinyBytecode {
         call_relocations.last().funcImpl = impl;
     }
     
-    void print(int low_index, int high_index, Bytecode* code = nullptr);
+    void print(int low_index, int high_index, Bytecode* code = nullptr, bool force_newline = false);
 };
 
 struct Bytecode {
@@ -414,7 +417,7 @@ struct BytecodeBuilder {
     
     // int opcode_count() { return tinycode->index_of_opcodes.size(); }
     // InstructionType get_opcode(int opcode_index) { return (InstructionType)tinycode->instructionSegment[tinycode->index_of_opcodes[opcode_index]]; }
-    InstructionType get_last_opcode() { return (InstructionType)tinycode->instructionSegment[index_of_last_instruction]; }
+    InstructionType get_last_opcode() { if(tinycode->instructionSegment.size() == 0) return (InstructionType)0; return (InstructionType)tinycode->instructionSegment[index_of_last_instruction]; }
     
     void push_line(int line, const std::string& text) {
         tinycode->lines.add({line, text});

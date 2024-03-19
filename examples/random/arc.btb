@@ -1,0 +1,14 @@
+
+#import "Logger"
+
+// coordinates for an arc of inventory slots
+@inline fn xy_of_slot(slot_x: i32, slot_y: i32) -> f32, f32 {
+    arc_length := 10. // unit of slots
+    arc_height := 1.
+    wh := 20. // slot size in pixels
+    y := slot_y * wh
+    return slot_x * wh, (arc_height / max_slots * slot_y * (-y + max_slots)) * wh
+}
+
+x, y := xy_of_slot(1, 3)
+std_prints("x: ", x, "y: ", y, "\n")

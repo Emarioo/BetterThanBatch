@@ -578,6 +578,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
                     mem.name = name_view;
                     mem.defaultValue = defaultValue;
                     mem.stringType = typeId;
+                    mem.location = info.srcloc(name_tok);
                     break;
                 }
                 case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
@@ -1196,6 +1197,8 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
     TINY_ARRAY(TypeId, castTypes, 5);
     TINY_ARRAY(std::string, namespaceNames, 5);
 
+    DynamicArray<lexer::SourceLocation> saved_locations;
+
     defer { for(auto e : values) info.ast->destroy(e); };
 
     bool shouldComputeExpression = false;
@@ -1225,6 +1228,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 ending = true;
             } else if(token->type == '.'){
                 info.advance();
+                auto mem_loc = info.getloc();
                 
                 StringView member_view{};
                 auto member_tok = info.getinfo(&member_view);
@@ -1249,8 +1253,9 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 auto tok_paren_tiny = info.gettok();
                 if(token->type == '('){
                     info.advance();
-                    // fncall for strucy methods
+                    // fncall for methods
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
+                    tmp->location = mem_loc; // TODO: Scuffed source location
                     tmp->name = std::string(member_view) + polyTypes;
 
                     // Create "this" argument in methods
@@ -1291,6 +1296,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 }
                 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_MEMBER));
+                tmp->location = mem_loc;
                 tmp->name = member_view;
                 tmp->left = values.last();
                 values.pop();
@@ -1301,6 +1307,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 values.add(tmp);
                 continue;
             } else if (token->type == '=') {
+                saved_locations.add(info.getloc());
                 info.advance();
 
                 ops.add(AST_ASSIGN);
@@ -1308,6 +1315,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
             } else if((opType = IsAssignOp(token)) && info.gettok(1).type  == '=') {
+                saved_locations.add(info.getloc());
                 info.advance(2);
 
                 ops.add(AST_ASSIGN);
@@ -1315,6 +1323,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
             } else if((opType = parser::IsOp(token,token1,view,extraOpNext))){
+                saved_locations.add(info.getloc());
 
                 // if(Equal(token,"*") && (info.now().flags&lexer::TOKEN_FLAG_NEWLINE)){
                 if(info.getinfo(-1)->flags&lexer::TOKEN_FLAG_NEWLINE){
@@ -1380,6 +1389,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 }
 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INDEX));
+                tmp->location = info.srcloc(token_tiny);
                 // tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = startIndex;
                 // tmp->tokenRange.endIndex = info.at()+1;
@@ -1392,13 +1402,11 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // tmp->constantValue = tmp->left->constantValue && tmp->right->constantValue; // nocheckin
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "++"){ // TODO: Optimize
-                info.advance();
 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_INCREMENT));
-                // tmp->tokenRange.firstToken = token;
-                // tmp->tokenRange.startIndex = info.at();
-                // tmp->tokenRange.endIndex = info.at()+1;
-                // tmp->tokenRange.tokenStream = info.tokens;
+                tmp->location = info.getloc();
+                info.advance();
+
                 tmp->setPostAction(true);
 
                 tmp->left = values.last();
@@ -1408,14 +1416,11 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
 
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "++"){ // TODO: Optimize
-                info.advance();
-                // attempt = false;
 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_DECREMENT));
-                // tmp->tokenRange.firstToken = token;
-                // tmp->tokenRange.startIndex = info.at();
-                // tmp->tokenRange.endIndex = info.at()+1;
-                // tmp->tokenRange.tokenStream = info.tokens;
+                tmp->location = info.getloc();
+
+                info.advance();
                 tmp->setPostAction(true);
 
                 tmp->left = values.last();
@@ -1459,23 +1464,28 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     cstring = true;
                 }
             } else if(token->type == '&') {
+                saved_locations.add(info.getloc());
                 info.advance();
                 ops.add(AST_REFER);
                 continue;
             }else if(token->type == '*'){
+                saved_locations.add(info.getloc());
                 info.advance();
                 ops.add(AST_DEREF);
                 continue;
             } else if(token->type == '!'){
+                saved_locations.add(info.getloc());
                 info.advance();
                 ops.add(AST_NOT);
                 continue;
             } else if(token->type == '~'){
+                saved_locations.add(info.getloc());
                 info.advance();
                 ops.add(AST_BNOT);
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && (view == "cast" || view == "cast_unsafe") ){
                 auto token_tiny = info.gettok();
+                saved_locations.add(info.getloc());
                 info.advance();
                 auto tok = info.gettok();
                 if(tok.type != '<'){
@@ -1526,14 +1536,17 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 extraTokens.add(token_tiny);
                 continue;
             } else if(token->type == '-'){
+                saved_locations.add(info.getloc());
                 info.advance();
                 ops.add(AST_UNARY_SUB);
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "++"){
+                saved_locations.add(info.getloc());
                 info.advance();
                 ops.add(AST_INCREMENT);
                 continue;
             } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "--"){
+                saved_locations.add(info.getloc());
                 info.advance();
                 ops.add(AST_DECREMENT);
                 continue;
@@ -1672,6 +1685,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 //         }
                 //     }
                 // }
+                tmp->location = info.srcloc(token_tiny);
                 tmp->i64Value = negativeNumber ? -num : num;
                 
                 // tmp->constantValue = true;// nocheckin
@@ -1681,7 +1695,9 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_LITERAL_DECIMAL){
-                auto tok_suffix = info.gettok();
+                auto loc = info.getloc();
+
+                auto tok_suffix = info.gettok(1);
                 ASTExpression* tmp = nullptr;
                 Assert(view.ptr[0]!='-');// ensure that the tokenizer hasn't been changed
                 // to clump the - together with the number token
@@ -1702,7 +1718,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         tmp->f32Value = -tmp->f32Value;
                     }
                 }
-
+                tmp->location = loc;
                 values.add(tmp);
                 // tmp->constantValue = true;// nocheckin
                 // tmp->tokenRange.firstToken = token;
@@ -1740,6 +1756,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         ERR_LINE2(token_tiny,"to large!");
                     )
                 }
+                tmp->location = info.srcloc(token_tiny);
                 tmp->i64Value =  lexer::ConvertHexadecimal(view);
                 values.add(tmp);
                 // tmp->constantValue = true;// nocheckin
@@ -1749,6 +1766,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_LITERAL_STRING) {
+                auto loc = info.getloc();
                 info.advance();
                 
                 ASTExpression* tmp = 0;
@@ -1773,15 +1791,17 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         // we don't need to return PARSE_ERROR. We could but things will be fine.
                     // }
                 }
+                tmp->location = loc;
                 values.add(tmp);
                 // tmp->tokenRange.firstToken = token;
                 // tmp->tokenRange.startIndex = info.at();
                 // tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_TRUE || token->type == lexer::TOKEN_FALSE){
-                info.advance();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_BOOL));
                 tmp->boolValue = token->type == lexer::TOKEN_TRUE;
+                tmp->location = info.getloc();
+                info.advance();
                 // tmp->constantValue = true;// nocheckin
                 values.add(tmp);
                 // tmp->tokenRange.firstToken = token;
@@ -1836,8 +1856,9 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
             //     tmp->tokenRange.tokenStream = info.tokens;
             // } 
             else if(token->type == lexer::TOKEN_NULL){
-                info.advance();
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_NULL));
+                tmp->location = info.getloc();
+                info.advance();
                 values.add(tmp);
                 // tmp->constantValue = true;// nocheckin
                 // tmp->tokenRange.firstToken = token;
@@ -1845,15 +1866,17 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // tmp->tokenRange.endIndex = info.at()+1;
                 // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_SIZEOF || token->type == lexer::TOKEN_NAMEOF || token->type == lexer::TOKEN_TYPEID) {
-                info.advance();
                 ASTExpression* tmp = nullptr;
                 if(token->type == lexer::TOKEN_SIZEOF)
                     tmp = info.ast->createExpression(TypeId(AST_SIZEOF));
-                if(token->type == lexer::TOKEN_NAMEOF)
+                else if(token->type == lexer::TOKEN_NAMEOF)
                     tmp = info.ast->createExpression(TypeId(AST_NAMEOF));
-                if(token->type == lexer::TOKEN_TYPEID)
+                else if(token->type == lexer::TOKEN_TYPEID)
                     tmp = info.ast->createExpression(TypeId(AST_TYPEID));
+                else Assert(false);
+                tmp->location = info.getloc();
 
+                info.advance();
                 // Token token = {}; 
                 // int result = ParseTypeId(info,token);
                 // tmp->name = token;
@@ -1890,9 +1913,10 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 values.add(tmp);
             }  else if(token->type == lexer::TOKEN_ASM) {
                 auto token_tiny = info.gettok();
+                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ASM));
+                tmp->location = info.getloc();
                 info.advance();
 
-                ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ASM));
                 // tmp->tokenRange.firstToken = token;
 
                 // TODO: asm<i32>{...} casting
@@ -1953,7 +1977,8 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // tmp->tokenRange.endIndex = info.at()+1;
                 values.add(tmp);
             } else if(token->type == lexer::TOKEN_IDENTIFIER){
-                info.advance();
+                auto loc = info.getloc();
+                // info.advance();
                 // int startToken=info.gethead();
                 
                 std::string pure_name = view;
@@ -2005,6 +2030,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     ns += polyTypes;
 
                     ASTExpression* tmp = info.ast->createExpression(TypeId(AST_FNCALL));
+                    tmp->location = loc;
                     // tmp->name = pure_name + polyTypes;
                     tmp->name = ns;
 
@@ -2027,8 +2053,9 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     // tmp->tokenRange.tokenStream = info.tokens;
                 } else if(tok.type=='{' && 0 == (token->flags & lexer::TOKEN_FLAG_ANY_SUFFIX)){
                     // initializer
-                    info.advance();
                     ASTExpression* initExpr = info.ast->createExpression(TypeId(AST_INITIALIZER));
+                    initExpr->location = info.getloc();
+                    info.advance();
                     // NOTE: Type checker works on TypeIds not AST_FROM_NAMESPACE.
                     //  AST_FROM... is used for functions and variables.
                     std::string ns = "";
@@ -2139,6 +2166,8 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         // TODO: detect more ::
                     } else {
                         ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ID));
+                        tmp->location = info.getloc();
+                        info.advance();
 
                         std::string nsToken = "";
                         int nsOps = 0;
@@ -2162,7 +2191,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         if(polyTypes.size() != 0) {
                             ERR_SECTION(
                                 ERR_HEAD2(poly_tok)
-                                ERR_MSG("Why have you done 'id<i32>' in an expression? Don't do that.")
+                                ERR_MSG("Why have you done 'id<type>'? Are you trying to make a polymorphic variable or what? Don't do that.")
                                 ERR_LINE2(poly_tok,"bad programmer")
                             )
                         }
@@ -2286,6 +2315,9 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     // val->tokenRange.firstToken = tok;
                     // val->tokenRange.startIndex -= 2; // -{namespace name} -{::}
                     namespaceNames.pop();
+                    
+                    // val->location = saved_locations.last();
+                    // saved_locations.pop();
                 } else if(nowOp == AST_CAST){
                     val->castType = castTypes.last();
                     castTypes.pop();
@@ -2295,6 +2327,8 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     if(str == "cast_unsafe") {
                         val->setUnsafeCast(true);
                     }
+                    // val->location = saved_locations.last();
+                    // saved_locations.pop();
                     // val->tokenRange.firstToken = extraToken;
                     // val->tokenRange.endIndex = er->tokenRange.firstToken.tokenIndex;
                 } else if(nowOp == AST_UNARY_SUB){
@@ -2307,11 +2341,16 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 } else {
                     // val->tokenRange.startIndex--;
                 }
+                val->location = saved_locations.last();
+                saved_locations.pop();
                 val->left = er;
                 if(val->typeId != AST_REFER) {
                     // val->constantValue = er->constantValue;// nocheckin
                 }
             } else if(values.size()>0){
+                val->location = saved_locations.last();
+                saved_locations.pop();
+
                 auto el = values.last();
                 values.pop();
                 // val->tokenRange.firstToken = el->tokenRange.firstToken;
@@ -2341,6 +2380,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
             if(!info.hasErrors()) {
                 Assert(values.size()==1);
             }
+            Assert(saved_locations.size() == 0);
 
             // we have a defer above which destroys expressions which is why we
             // clear the list to prevent it
@@ -3919,13 +3959,13 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     info.currentScopeId = body->scopeId;
 
     info.functionScopes.add({});
-    #ifndef PARSER_OFF
+    // log::out << "Yoo\n";
     auto signal = ParseBody(info, body, info.ast->globalScopeId, PARSE_TRULY_GLOBAL);
-    #endif
+    // log::out << "Yoo2\n";
+    
     info.functionScopes.pop();
     
-    // nocheckin
-    // info.compileInfo->compileOptions->compileStats.errors += info.errors;
+    info.compiler->compileOptions->compileStats.errors += info.errors;
     
     return body;
 }

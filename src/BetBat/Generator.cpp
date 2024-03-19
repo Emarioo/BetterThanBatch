@@ -665,6 +665,11 @@ SignalIO GenContext::generatePush(BCRegister baseReg, int offset, TypeId typeId)
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
     u32 size = ast->getTypeSize(typeId);
+    if(size == 0) {
+        Assert(hasForeignErrors());
+        return SIGNAL_FAILURE;
+    }
+
     if(!typeInfo || !typeInfo->astStruct) {
         // enum works here too
         BCRegister reg = BC_REG_T0;
@@ -3173,6 +3178,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 case AST_SUB:           builder.emit_sub(    left_reg, right_reg, is_float); break;
                 case AST_MUL:           builder.emit_mul(    left_reg, right_reg, is_float, is_signed); break;
                 case AST_DIV:           builder.emit_div(    left_reg, right_reg, is_float, is_signed); break;
+                case AST_MODULUS:       builder.emit_mod(    left_reg, right_reg, is_float, is_signed); break;
                 case AST_EQUAL:         builder.emit_eq(     left_reg, right_reg, is_float); break;
                 case AST_NOT_EQUAL:     builder.emit_neq(    left_reg, right_reg, is_float); break;
                 case AST_LESS:          builder.emit_lt(     left_reg, right_reg, is_float, is_signed); break;
@@ -5700,6 +5706,7 @@ TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler) {
     context.ast = compiler->ast;
     context.code = compiler->code;
     context.compiler = compiler;
+    context.reporter = &compiler->reporter;
     context.currentScopeId = context.ast->globalScopeId;
     
     TinyBytecode* tb_main = context.code->createTiny();
@@ -5730,5 +5737,7 @@ TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler) {
     
     // TODO: Relocations?
     
+    context.compiler->compileOptions->compileStats.errors += context.errors;
+
     return tb_main;
 }

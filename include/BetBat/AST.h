@@ -133,7 +133,7 @@ extern const char* prim_op_names[];
 // the names may change. Perhaps prim and op will be split into
 // their own tables.
 #define PRIM_NAME(X) ((X) >= 0 && (X) < AST_PRIMITIVE_COUNT ? prim_op_names[X] : nullptr)
-#define OP_NAME(X) (((PrimitiveType)X) >= AST_PRIMITIVE_COUNT && (X) < AST_OPERATION_COUNT ? prim_op_names[X] : nullptr)
+#define OP_NAME(X) (((X) >= AST_PRIMITIVE_COUNT && (X) < AST_OPERATION_COUNT) ? prim_op_names[X] : nullptr)
 #define STATEMENT_NAME(X) ((X) >= 0 && (X) < ASTStatement::STATEMENT_COUNT ? statement_names[X] : nullptr)
 struct ASTNode {
     // TODO: Add a flag which you can check to know whether there are enums or not.
@@ -508,20 +508,20 @@ struct ASTExpression : ASTNode {
     // StringView name{};
     // std::string namedValue={}; // Used for named arguments (fncall or initializer). Empty means never specified or used.
     StringView namedValue{};
-    union {
-        TypeId castType;
-        OperationType assignOpType;
-        struct {
-            ASTExpression* left; // FNCALL has arguments in order left to right
+    // union {
+    //     struct {
+            TypeId castType;
+            OperationType assignOpType;
+            ASTExpression* left;
             ASTExpression* right;
             // OperationType assignOpType = (OperationType)0;
-        };
-        struct {
+        // };
+        // struct {
             QuickArray<ASTExpression*> args; // fncall or initialiser
             // u32 nonNamedArgs = 0;
             u32 nonNamedArgs;
-        };
-    };
+    //     };
+    // };
 
     // THE FIELDS BELOW IS SET IN TYPE CHECKER
 
@@ -618,7 +618,7 @@ struct ASTStatement : ASTNode {
         ASTScope* caseBody = nullptr;
         bool fall = false;
     };
-    QuickArray<SwitchCase> switchCases; // used with switch statement
+    DynamicArray<SwitchCase> switchCases; // used with switch statement
     
     // IMPORTANT: If you put an array in a union then you must explicitly
     // do cleanup in the destructor. Destructor in unions isn't called since
@@ -656,7 +656,7 @@ struct ASTStruct : ASTNode {
         ASTExpression* defaultValue=0;
         TypeId stringType{};
     };
-    QuickArray<Member> members{};
+    DynamicArray<Member> members{};
     struct PolyArg {
         lexer::SourceLocation location;
         std::string name;
@@ -664,7 +664,7 @@ struct ASTStruct : ASTNode {
         // Token name{};
         TypeInfo* virtualType = nullptr;
     };
-    QuickArray<PolyArg> polyArgs;
+    DynamicArray<PolyArg> polyArgs;
 
     // StructImpl* createImpl();
     

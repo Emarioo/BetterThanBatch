@@ -22,9 +22,9 @@ struct CheckInfo : public PhaseContext {
     ASTFunction* currentAstFunc = nullptr;
     
     // struct step    
-    bool completedStructs = false;
+    bool incompleteStruct = false;
+    bool completedStruct = false;
     bool showErrors = false;
-    bool anotherTurn = false;
 
     u32 currentPolyVersion=0;
     QuickArray<ContentOrder> currentContentOrder;
@@ -38,7 +38,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo);
 
 void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler);
 // may fail in which case we should try again
-SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool show_errors);
+SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ignore_errors, bool* changed);
 void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler);
 
 void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler);

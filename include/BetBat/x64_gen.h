@@ -169,6 +169,7 @@ struct X64Builder {
     QuickArray<OPNode*> stack_values;
     
     X64Register alloc_register(X64Register reg = X64_REG_INVALID, bool is_float = false);
+    bool is_register_free(X64Register reg);
     void free_register(X64Register reg);
     
     int size() const { return tinyprog->head; }
@@ -187,6 +188,7 @@ struct X64Builder {
     void emit2(u16 word);
     void emit3(u32 word);
     void emit4(u32 dword);
+    void emit8(u64 dword);
     void emit_modrm(u8 mod, X64Register reg, X64Register rm);
     void emit_modrm_slash(u8 mod, u8 reg, X64Register rm);
     // RIP-relative addressing
@@ -197,20 +199,33 @@ struct X64Builder {
 
     // These are here to prevent implicit casting
     // of arguments which causes mistakes.
-    void emit1(i64 byte);
-    void emit2(i64 word);
-    void emit3(i64 word);
-    void emit4(i64 dword);
+    void emit1(i64 _);
+    void emit2(i64 _);
+    void emit3(i64 _);
+    void emit4(i64 _);
+    void emit8(i8 _);
     void emit_modrm_rip(u8, i64);
     
     bool _reserve(u32 size);
     
+
     void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
 
     void generateInstructions_slow();
+
+    int get_node_depth(OPNode* n) {
+        if(!n) return 0;
+        
+        int a = get_node_depth(n->in0);
+        int b = get_node_depth(n->in1);
+
+        if (a > b)
+            return a + 1;
+        return b + 1;
+    }
     
-    static const X64Register RESERVED_REG0 = X64_REG_A;
-    static const X64Register RESERVED_REG1 = X64_REG_D;
+    static const X64Register RESERVED_REG0 = X64_REG_DI;
+    static const X64Register RESERVED_REG1 = X64_REG_SI;
     
 private:
     // recursively

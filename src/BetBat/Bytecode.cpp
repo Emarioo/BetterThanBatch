@@ -794,7 +794,7 @@ extern const char* register_names[] {
     "xmm3", // BC_REG_XMM3
 };
 
-void TinyBytecode::print(int low_index, int high_index, Bytecode* code) {
+void TinyBytecode::print(int low_index, int high_index, Bytecode* code, bool force_newline) {
     using namespace engone;
     if(high_index == -1 || high_index > instructionSegment.size())
         high_index = instructionSegment.size();
@@ -977,7 +977,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code) {
         default: Assert(false);
         }
         
-        if(high_index - low_index > 1)
+        if(high_index - low_index > 1 || force_newline)
             log::out << "\n";
     }
 }
@@ -985,6 +985,6 @@ void Bytecode::print() {
     using namespace engone;
     for(auto& t : tinyBytecodes) {
         log::out <<log::GOLD<< "Tinycode: "<<t->name<<"\n";
-        t->print(0,t->instructionSegment.size(),this);
+        t->print(0,t->instructionSegment.size(),this, true);
     }
 }

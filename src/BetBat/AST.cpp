@@ -1283,7 +1283,7 @@ ScopeInfo* AST::findScope(StringView name, ScopeId scopeId, bool search_parent_s
 //     return TypeId::CreateString(_typeTokens.size()-1);
 // }
 TypeId AST::getTypeString(const std::string& name){
-    return TypeId::Create(AST_INT32); // nocheckin
+    // return TypeId::Create(AST_INT32); // nocheckin
     // ZoneScoped;
 
     // converts char[] into Slice<char> (or any type, not just char)
@@ -1297,7 +1297,7 @@ TypeId AST::getTypeString(const std::string& name){
                 return TypeId::CreateString(i);
             }
         }
-        index = _typeTokens.size()-1;
+        index = _typeTokens.size();
         _typeTokens.add(str);
         lock_typeTokens.unlock();
     } else {
@@ -1308,7 +1308,7 @@ TypeId AST::getTypeString(const std::string& name){
                 return TypeId::CreateString(i);
             }
         }
-        index = _typeTokens.size()-1;
+        index = _typeTokens.size();
         _typeTokens.add(name);
         lock_typeTokens.unlock();
     }
@@ -1570,7 +1570,10 @@ std::string AST::typeToString(TypeId typeId){
     using namespace engone;
     if(typeId.isString())
         return std::string(getStringFromTypeString(typeId));
-    const char* cstr = OP_NAME((OperationType)typeId.getId());
+    const char* cstr = OP_NAME(typeId.getId());
+    if(cstr)
+        return cstr;
+    cstr = PRIM_NAME(typeId.getId());
     if(cstr)
         return cstr;
     std::string out="";

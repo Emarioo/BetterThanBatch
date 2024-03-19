@@ -897,7 +897,9 @@ void Compiler::processImports() {
                 Import* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
                 
-                bool yes = TypeCheckStructs(ast, my_scope->astScope, this, false);
+                bool ignore_errors = true;
+                bool changed = false;
+                bool yes = SIGNAL_SUCCESS == TypeCheckStructs(ast, my_scope->astScope, this, ignore_errors, &changed);
 
                 if(yes) {
                     imp->state = (TaskType)(imp->state | picked_task.type);
@@ -905,7 +907,15 @@ void Compiler::processImports() {
                     picked_task.import_id = imp->import_id;
                     tasks.add(picked_task); // nocheckin, lock tasks
                 } else {
-                    // nocheckin, if we fail enough times we should print an error beacuse types don't exist.
+                    if(!changed) {
+                        if(picked_task.no_change) {
+                            ignore_errors = false;
+                            TypeCheckStructs(ast, my_scope->astScope, this, ignore_errors, &changed);
+                        }
+                    }
+                    picked_task.no_change = !changed;
+                    if(ignore_errors)
+                        tasks.add(picked_task); // nocheckin, lock tasks
                 }
             } else if(picked_task.type == TASK_TYPE_FUNCTIONS) {
                 Import* imp = imports.get(picked_task.import_id-1);
@@ -1019,10 +1029,21 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         // engone::log::out << " "<<threads.last().getId()<<"\n";
     }
     
+    if(compileOptions->compileStats.errors!=0){ 
+        if(!options->silent)
+            compileOptions->compileStats.printFailed();
+        return;
+    }
+    if(compileOptions->compileStats.warnings!=0){
+        if(!options->silent)
+            compileOptions->compileStats.printWarnings();
+    }
+
     double time = engone::StopMeasure(tp);
     engone::log::out << "Compiled in "<<FormatTime(time)<<"\n";
 
     code->print();
+
 
     // Interpreter interp{};
     // interp.execute(code, "main");
@@ -1044,6 +1065,10 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         Assert(false);
     }
     // auto prog = X64Program::ConvertFromBytecode(code);
+
+    if(compileOptions->compileStats.errors==0) {
+        options->compileStats.printSuccess(options);
+    }
 }
 u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origin_file) {
     Path abs_path = findSourceFile(path, dir_of_origin_file);

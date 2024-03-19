@@ -480,14 +480,14 @@ SignalIO CheckStructs(CheckInfo& info, ASTScope* scope) {
                 yes = CheckStructImpl(info, astStruct, structInfo, structInfo->structImpl) == SIGNAL_SUCCESS;
                 if(!yes){
                     astStruct->state = ASTStruct::TYPE_CREATED;
-                    info.completedStructs = false;
+                    info.incompleteStruct = true;
                 } else {
                     // _TCLOG(log::out << astStruct->name << " was evaluated to "<<astStruct->baseImpl.size<<" bytes\n";)
                 }
             }
             if(yes){
                 astStruct->state = ASTStruct::TYPE_COMPLETE;
-                info.anotherTurn=true;
+                info.completedStruct = true;
             }
         }
     }
@@ -2673,6 +2673,10 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                     )
                 };
 
+                if(!varname.versions_assignType[info.currentPolyVersion].isValid() && info.hasErrors()) {
+                    // Assert(info.hasErrors());
+                    continue;
+                }
                 
                 // We begin by matching the varname in ASTStatement with an identifier and VariableInfo
 
@@ -2750,8 +2754,9 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                                 if(possible_identifier->order != contentOrder) {
                                     ERR_SECTION(
                                         ERR_HEAD2(varname.location)
-                                        ERR_MSG("Cannot redeclare variables. Identifier shadowing not implemented yet\n")
+                                        ERR_MSG("Cannot redeclare variables. Identifier shadowing may or may not be a feature in the future.\n")
                                         ERR_LINE2(varname.location,"");
+                                        // TODO: Print the llocation of the previous varable
                                     )
                                     continue;
                                 } else {
@@ -2910,10 +2915,12 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                 // find more errors. That is why we need vi < ...
                 if(vi < (int)poly_typeArray.size()){
                     if(!info.ast->castable(poly_typeArray[vi], varinfo->versions_typeId[info.currentPolyVersion])) {
+                        auto badtype = info.ast->typeToString(varname.assignString);
                         ERR_SECTION(
                             ERR_HEAD2(now->firstExpression->location, ERROR_TYPE_MISMATCH)
-                            ERR_MSG("Type mismatch " << info.ast->typeToString(poly_typeArray[vi]) << " - " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << ".")
-                            ERR_LINE2(varname.location, info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]))
+                            ERR_MSG("Type mismatch " << info.ast->typeToString(poly_typeArray[vi]) << " - " << badtype << ".")
+                            // varinfo->versions_typeId[info.currentPolyVersion]
+                            ERR_LINE2(varname.location, badtype)
                             ERR_LINE2(now->firstExpression->location, info.ast->typeToString(poly_typeArray[vi]))
                         )
                     }
@@ -3392,45 +3399,60 @@ void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
     CheckInfo info = {};
     info.ast = ast;
     info.compiler = compiler;
+    info.reporter = &compiler->reporter;
 
     _VLOG(log::out << log::BLUE << "Type check enums:\n";)
     // Check enums first since they don't depend on anything.
     SignalIO result = CheckEnums(info, scope); // nocheckin
-    
+    info.compiler->compileOptions->compileStats.errors += info.errors;
 }
-SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool show_errors) {
+SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ignore_errors, bool* changed) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Purple4);
     CheckInfo info = {};
     info.ast = ast;
     info.compiler = compiler;
+    info.reporter = &compiler->reporter;
     _VLOG(log::out << log::BLUE << "Type check structs:\n";)
 
-    info.completedStructs=false;
+    
+    *changed = false;
     // An improvement here might be to create empty struct types first.
     // Any usage of pointers to structs won't cause failures since we know the size of pointers.
     // If a type isn't a pointer then we might fail if the struct hasn't been created yet.
     // You could implement some dependency or priority queue.
         
-    while(true) {
-        info.completedStructs = true;
-        info.anotherTurn = false;
-        info.showErrors = show_errors;
-        SignalIO result = CheckStructs(info, scope); // nocheckin
-        
-        if(info.completedStructs)
-            return SIGNAL_SUCCESS;
+    // while(true) {
+    info.incompleteStruct = true;
+    info.completedStruct = false;
+    info.showErrors = !ignore_errors;
+    CheckStructs(info, scope); // nocheckin
+    
+    if(!info.showErrors)
+        info.compiler->compileOptions->compileStats.errors += info.errors;
 
-        if(info.anotherTurn)
-            continue;
-
-        if(!show_errors)
-            return SIGNAL_NO_MATCH;
-        
-        // log::out << log::RED << "Some types could not be evaluated\n";
-        return SIGNAL_COMPLETE_FAILURE;
+    if(info.completedStruct) {
+        *changed = true;
+        // return SIGNAL_FAILURE;
     }
-    return SIGNAL_COMPLETE_FAILURE;
+
+    if(info.incompleteStruct) {
+        return SIGNAL_FAILURE;
+    }
+
+
+    //         return SIGNAL_SUCCESS;
+
+    //     if(info.anotherTurn)
+    //         continue;
+
+    //     if(!ignore_errors)
+    //         return SIGNAL_NO_MATCH;
+        
+    //     // log::out << log::RED << "Some types could not be evaluated\n";
+    //     break;
+    // // }
+    return SIGNAL_SUCCESS;
 }
 void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {
     using namespace engone;
@@ -3438,6 +3460,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {
     CheckInfo info = {};
     info.ast = ast;
     info.compiler = compiler;
+    info.reporter = &compiler->reporter;
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 
     
@@ -3447,6 +3470,8 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {
     // If so we would have to stop checking that body and continue later until that reference have been cleared up.
     // So instead of that mess, we check headers first to ensure that all references will work.
     SignalIO result = CheckFunctions(info, scope); // nocheckin
+
+    info.compiler->compileOptions->compileStats.errors += info.errors;
 }
 
 void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
@@ -3455,6 +3480,7 @@ void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
     CheckInfo info = {};
     info.ast = ast;
     info.compiler = compiler;
+    info.reporter = &compiler->reporter;
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 
     // Check rest will go through scopes and create polymorphic implementations if necessary.
@@ -3471,6 +3497,6 @@ void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
     }
     
     
-    // info.compileInfo->compileOptions->compileStats.errors += info.errors;
+    info.compiler->compileOptions->compileStats.errors += info.errors;
     // return info.errors;
 }

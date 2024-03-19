@@ -335,6 +335,7 @@ void PrintExample(int line, const StringBuilder& stringBuilder){
 }
 
 void Reporter::start_report() {
+    // TODO: Mutex
     if(!instant_report) {
         engone::log::out.setInput(&stream);
         engone::log::out.enableConsole(false);

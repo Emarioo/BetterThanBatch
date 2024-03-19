@@ -208,6 +208,9 @@ struct ParseInfo : public PhaseContext {
         out.origin = lexer->encode_origin(chunk->chunk_index,tindex);
         return out;
     }
+    lexer::SourceLocation getloc(int off = 0) {
+        return { gettok(off) };
+    }
     void advance(int n = 1) {
         head += n;
     }

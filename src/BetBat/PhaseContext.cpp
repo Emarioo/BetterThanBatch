@@ -15,7 +15,7 @@ bool PhaseContext::hasErrors() {
 // bool PhaseContext::hasForeignErrors() { Assert(compileInfo); return compileInfo->compileOptions->compileStats.errors != 0; }
 bool PhaseContext::hasForeignErrors() {
     if(compiler) {
-        return false; // nocheckin, incomplete
+        return compiler->compileOptions->compileStats.errors != 0;
     } else {
         Assert(compiler);
         return compiler->compileOptions->compileStats.errorTypes.size() != 0;

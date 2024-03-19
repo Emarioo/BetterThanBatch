@@ -160,8 +160,6 @@ if !compileSuccess! == 0 (
     echo f | XCOPY /y /q !output! btb.exe > nul
 :RUN_COMPILER
     rem
-    
-
 
     @REM cl /c /TP src/Other/test.cpp /Fo: bin/test2.obj /nologo
 
