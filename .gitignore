@@ -4,6 +4,7 @@ logs
 .vs
 *.ilk
 *.obj
+*.o
 *.pdb
 tracy
 !libs/tracy-0.10/**

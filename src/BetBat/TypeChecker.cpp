@@ -148,7 +148,7 @@ SignalIO CheckStructImpl(CheckInfo& info, ASTStruct* astStruct, TypeInfo* struct
         if(!tid.isValid() && !printedError){
             if(info.showErrors) {
                 ERR_SECTION(
-                    ERR_HEAD2(astStruct->location)
+                    ERR_HEAD2(member.location)
                     ERR_MSG("Type '"<< info.ast->getStringFromTypeString(member.stringType) << "' in "<< astStruct->name<<"."<<member.name << " is not a type.")
                     ERR_LINE2(member.location,"bad type")
                 )
@@ -1822,7 +1822,13 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                 } else if ((AST::IsInteger(leftType) || leftType == AST_CHAR) && (AST::IsInteger(rightType) || rightType == AST_CHAR)){
                     u8 lsize = info.ast->getTypeSize(leftType);
                     u8 rsize = info.ast->getTypeSize(rightType);
-                    outTypes->add(lsize > rsize ? leftType : rightType);
+                    auto outtype = lsize > rsize ? leftType : rightType;
+                    if(AST::IsSigned(leftType) || AST::IsSigned(rightType)) {
+                        if(!AST::IsSigned(outtype))
+                            outtype._infoIndex0 += 4;
+                        Assert(AST::IsSigned(outtype) && AST::IsInteger(outtype));
+                    }
+                    outTypes->add(outtype);
                 } else if ((AST::IsDecimal(leftType) || AST::IsInteger(leftType)) && (AST::IsDecimal(rightType) || AST::IsInteger(rightType))){
                     if(AST::IsDecimal(leftType))
                         outTypes->add(leftType);
@@ -2550,7 +2556,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
         auto now = scope->statements[scope->content[contentOrder].index];
 
         if(perform_global_check) {
-            if(now->type != ASTStatement::ASSIGN || !now->globalAssignment)
+            if(now->type != ASTStatement::DECLARATION || !now->globalDeclaration)
                 continue;
         }
         typeArray.resize(0);
@@ -2612,8 +2618,8 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
             if(now->secondBody){
                 result = CheckRest(info, now->secondBody);
             }
-        } else if(now->type == ASTStatement::ASSIGN){
-            if(!perform_global_check && now->globalAssignment)
+        } else if(now->type == ASTStatement::DECLARATION){
+            if(!perform_global_check && now->globalDeclaration)
                 continue;; // We already checked globals
 
             // log::out << now->varnames[0].name << " checked\n";
@@ -2681,140 +2687,141 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                 // We begin by matching the varname in ASTStatement with an identifier and VariableInfo
 
                 VariableInfo* varinfo = nullptr;
-                if(!varname.declaration) {
-                    if(!varname.identifier) {
-                        // info.ast->getScope(scope->scopeId)->print(info.ast);
-                        Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
-                        if(!possible_identifier) {
-                            ERR_SECTION(
-                                ERR_HEAD2(varname.location)
-                                ERR_MSG("'"<<varname.name<<"' is not a defined identifier. You have to declare the variable first.")
-                                ERR_LINE2(varname.location, "undeclared")
-                                ERR_EXAMPLE(1,"var: i32 = 12;")
-                                ERR_EXAMPLE(2,"var := 23;  // inferred type")
-                            )
-                            continue;
-                        } else if(possible_identifier->type != Identifier::VARIABLE) {
-                            err_non_variable();
-                            continue;
-                        } else {
-                            varname.identifier = possible_identifier;
-                        }
+                        // DELETE THIS:
+                            // if(!varname.declaration) {
+                            //     if(!varname.identifier) {
+                            //         // info.ast->getScope(scope->scopeId)->print(info.ast);
+                            //         Identifier* possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                            //         if(!possible_identifier) {
+                            //             ERR_SECTION(
+                            //                 ERR_HEAD2(varname.location)
+                            //                 ERR_MSG("'"<<varname.name<<"' is not a defined identifier. You have to declare the variable first.")
+                            //                 ERR_LINE2(varname.location, "undeclared")
+                            //                 ERR_EXAMPLE(1,"var: i32 = 12;")
+                            //                 ERR_EXAMPLE(2,"var := 23;  // inferred type")
+                            //             )
+                            //             continue;
+                            //         } else if(possible_identifier->type != Identifier::VARIABLE) {
+                            //             err_non_variable();
+                            //             continue;
+                            //         } else {
+                            //             varname.identifier = possible_identifier;
+                            //         }
+                            //     }
+                            //     varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                            // } else {
+                // Infer type
+                if(!varname.assignString.isValid()) {
+                    if(vi < poly_typeArray.size()){
+                        varname.versions_assignType[info.currentPolyVersion] = poly_typeArray[vi];
+                    } else {
+                        Assert(hadError);
+                        // Do we need this err section? do we not always check the out of bounds above
+                        //  // out of bounds
+                        // if(!hadError){ // error may have been printed above
+                        //     ERR_SECTION(
+                        //         ERR_HEAD2(varname.name)
+                        //         ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
+                        //         ERR_LINE2(varname.name, "typeless");
+                        //     )
+                        // }
                     }
-                    varinfo = info.ast->getVariableByIdentifier(varname.identifier);
-                } else {
-                    // Infer type
-                    if(!varname.assignString.isValid()) {
-                        if(vi < poly_typeArray.size()){
-                            varname.versions_assignType[info.currentPolyVersion] = poly_typeArray[vi];
+                }
+                // Logic if identifier exists or not and whether the identifier is of a variable type or not AND which scope the identifier was found in.
+                // Based on all that, we may use the one we found or create a new variable identifier.
+                Identifier* possible_identifier = nullptr;
+                if(!varname.identifier) {
+                    possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
+                    if(!possible_identifier) {
+                        // identifier does not exist, we should create it.
+                        if(now->globalDeclaration) {
+                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, CONTENT_ORDER_ZERO, &varname.identifier, nullptr);
                         } else {
-                            Assert(hadError);
-                            // Do we need this err section? do we not always check the out of bounds above
-                            //  // out of bounds
-                            // if(!hadError){ // error may have been printed above
-                            //     ERR_SECTION(
-                            //         ERR_HEAD2(varname.name)
-                            //         ERR_MSG_LOG("Variable '"<<log::LIME<<varname.name<<log::NO_COLOR<<"' does not have a type. You either define it explicitly (var: i32) or let the type be inferred from the expression. Neither case happens.\n")
-                            //         ERR_LINE2(varname.name, "typeless");
-                            //     )
-                            // }
+                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
                         }
-                    }
-                    // Logic if identifier exists or not and whether the identifier is of a variable type or not AND which scope the identifier was found in.
-                    // Based on all that, we may use the one we found or create a new variable identifier.
-                    Identifier* possible_identifier = nullptr;
-                    if(!varname.identifier) {
-                        possible_identifier = info.ast->findIdentifier(scope->scopeId, contentOrder, varname.name);
-                        if(!possible_identifier) {
-                            // identifier does not exist, we should create it.
-                            if(now->globalAssignment) {
-                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, CONTENT_ORDER_ZERO, &varname.identifier, nullptr);
-                            } else {
-                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
-                            }
-                            Assert(varinfo);
-                            varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
-                        } else if(possible_identifier->type == Identifier::VARIABLE) {
-                            // Identifier does exist but we can still declare it if is in a parent scope.
+                        Assert(varinfo);
+                        varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+                    } else if(possible_identifier->type == Identifier::VARIABLE) {
+                        // Identifier does exist but we can still declare it if is in a parent scope.
 
-                            // An identifier would have to allow multiple variables with different content orders.
-                            if(possible_identifier->scopeId == scope->scopeId) {
-                                // variable may already exist if we are in a polymorphic scope.
-                                // if we are in the same scope with the same content order then we have
-                                // already touched this statement. we can set the versionTypeID just fine.
-                                // The other scenario has to do with declaring a new variable but the 
-                                // name already exists. If you allow this then it's called shadowing.
-                                // This should be allowed but the current system can't support it so we
-                                // don't allow it for now.
+                        // An identifier would have to allow multiple variables with different content orders.
+                        if(possible_identifier->scopeId == scope->scopeId) {
+                            // variable may already exist if we are in a polymorphic scope.
+                            // if we are in the same scope with the same content order then we have
+                            // already touched this statement. we can set the versionTypeID just fine.
+                            // The other scenario has to do with declaring a new variable but the 
+                            // name already exists. If you allow this then it's called shadowing.
+                            // This should be allowed but the current system can't support it so we
+                            // don't allow it for now.
 
-                                // NOTE: I had some issues with polymorphic structs and local variables in methods.
-                                //  As a quick fix I added this. Whether this does what I think it does or if we have
-                                //  to add something else for edge cases to be taken care of is another matter.
-                                //  - Emarioo, 2023-12-29 (By the way, merry christmas and happy new year!)
-                                if(possible_identifier->order != contentOrder) {
-                                    ERR_SECTION(
-                                        ERR_HEAD2(varname.location)
-                                        ERR_MSG("Cannot redeclare variables. Identifier shadowing may or may not be a feature in the future.\n")
-                                        ERR_LINE2(varname.location,"");
-                                        // TODO: Print the llocation of the previous varable
-                                    )
-                                    continue;
-                                } else {
-                                    varname.identifier = possible_identifier;
-                                    // We should only be here if the scope is polymorphic.
-                                    varinfo = info.ast->getVariableByIdentifier(varname.identifier);
-                                    // The 'now' statement was checked to be global and thus made varinfo global. varinfo->type will always be the same as now->globalAssignment
-                                    // The assert will fire if we have a bug in the code.
-                                    Assert(varinfo->type == (now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
-                                }
+                            // NOTE: I had some issues with polymorphic structs and local variables in methods.
+                            //  As a quick fix I added this. Whether this does what I think it does or if we have
+                            //  to add something else for edge cases to be taken care of is another matter.
+                            //  - Emarioo, 2023-12-29 (By the way, merry christmas and happy new year!)
+                            if(possible_identifier->order != contentOrder) {
+                                ERR_SECTION(
+                                    ERR_HEAD2(varname.location)
+                                    ERR_MSG("Cannot redeclare variables. Identifier shadowing may or may not be a feature in the future.\n")
+                                    ERR_LINE2(varname.location,"");
+                                    // TODO: Print the llocation of the previous varable
+                                )
+                                continue;
                             } else {
                                 varname.identifier = possible_identifier;
-                                // variable does not exist in scope, we can therefore create it
-                                varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
-                                Assert(varinfo);
-                                // ACTUALLY! I thought global assignment in local scopes didn't work but I believe it does.
-                                //  The code here just handles where the variable is visible. That should be the local scope which is correct.
-                                //  The VariableInfo::GLOBAL type is what puts the data into the global data section. Silly me.
-                                //  - Emarioo, 2024-1-03
-                                // if(now->globalAssignment && scope->scopeId != 0) {
-                                //     ERR_SECTION(
-                                //         ERR_HEAD2(now->location)
-                                //         ERR_MSG("Global assignment in local scope not implemented. Move global variable to global scope or remove the global keyword. In the future, ")
-                                //         ERR_LINE2(now->location, "can't be global")
-                                //     )
-                                //     // TODO: Global assignment needs extra code.
-                                //     //  We should not add variable into 'scope->scopeId' like we do above
-                                //     //  We also need to check the identifier against the global scope not 'scope->scopeId'
-                                //     //  Basically, global assignment could use it's own code path.
-                                // }
-                                varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+                                // We should only be here if the scope is polymorphic.
+                                varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                                // The 'now' statement was checked to be global and thus made varinfo global. varinfo->type will always be the same as now->globalDeclaration
+                                // The assert will fire if we have a bug in the code.
+                                Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
                             }
                         } else {
-                            err_non_variable();
-                            continue;
+                            varname.identifier = possible_identifier;
+                            // variable does not exist in scope, we can therefore create it
+                            varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier, nullptr);
+                            Assert(varinfo);
+                            // ACTUALLY! I thought global assignment in local scopes didn't work but I believe it does.
+                            //  The code here just handles where the variable is visible. That should be the local scope which is correct.
+                            //  The VariableInfo::GLOBAL type is what puts the data into the global data section. Silly me.
+                            //  - Emarioo, 2024-1-03
+                            // if(now->globalDeclaration && scope->scopeId != 0) {
+                            //     ERR_SECTION(
+                            //         ERR_HEAD2(now->location)
+                            //         ERR_MSG("Global assignment in local scope not implemented. Move global variable to global scope or remove the global keyword. In the future, ")
+                            //         ERR_LINE2(now->location, "can't be global")
+                            //     )
+                            //     // TODO: Global assignment needs extra code.
+                            //     //  We should not add variable into 'scope->scopeId' like we do above
+                            //     //  We also need to check the identifier against the global scope not 'scope->scopeId'
+                            //     //  Basically, global assignment could use it's own code path.
+                            // }
+                            varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
                         }
                     } else {
-                        // We should only be here if we are in a polymorphic scope/check.
-                        Assert(varname.identifier->type == Identifier::VARIABLE);
-                        varinfo = info.ast->getVariableByIdentifier(varname.identifier);
-                        Assert(varinfo);
-                        Assert(varinfo->type == (now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
+                        err_non_variable();
+                        continue;
                     }
-                    Assert(varinfo);
-
-                    // O don't think this will ever fire. But just in case.
-                    // HAHA, IT DID FIRE! Globals were checked twice! -Emarioo, 2024-01-06
-                    Assert(!varinfo->versions_typeId[info.currentPolyVersion].isValid());
-
-                    // FINALLY we can set the declaration type
-                    varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
-                }
-
-                if(varname.declaration) {
-                    _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
                 } else {
-                    _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
+                    // We should only be here if we are in a polymorphic scope/check.
+                    Assert(varname.identifier->type == Identifier::VARIABLE);
+                    varinfo = info.ast->getVariableByIdentifier(varname.identifier);
+                    Assert(varinfo);
+                    Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
                 }
+                Assert(varinfo);
+
+                // O don't think this will ever fire. But just in case.
+                // HAHA, IT DID FIRE! Globals were checked twice! -Emarioo, 2024-01-06
+                Assert(!varinfo->versions_typeId[info.currentPolyVersion].isValid());
+
+                // FINALLY we can set the declaration type
+                varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
+                // }
+
+                // if(varname.declaration) {
+                    _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varname.versions_assignType[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
+                // } else {
+                //     _TCLOG(log::out << " " << varname.name<<": "<< info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << " scope: "<<scope->scopeId << " order: "<<contentOrder<< "\n";)
+                // }
 
                 // We continue by checking the expression with the variable/identifier info type
 
@@ -2830,7 +2837,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                         // identifier does not exist, we should create it.
                         varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
                         Assert(varinfo);
-                        varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+                        varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
 
                         // Can we move these down? Are they similar to code below?
                         varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
@@ -2876,13 +2883,13 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                             // Assert(varinfo);
                             // // Double checking these becuase they should have been set last time.
                             // Assert(varname.declaration);
-                            // Assert(varinfo->type == (now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
+                            // Assert(varinfo->type == (now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL));
                         } else {
                             // variable does not exist in scope, we can therefore create it
                             varinfo = info.ast->addVariable(scope->scopeId, varname.name, contentOrder, &varname.identifier);
                             Assert(varinfo);
                             varname.declaration = true;
-                            varinfo->type = now->globalAssignment ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
+                            varinfo->type = now->globalDeclaration ? VariableInfo::GLOBAL : VariableInfo::LOCAL;
                         }
                         varinfo->versions_typeId[info.currentPolyVersion] = varname.versions_assignType[info.currentPolyVersion];
                     } else {
@@ -2925,7 +2932,7 @@ SignalIO CheckRest(CheckInfo& info, ASTScope* scope){
                         )
                     }
                 }
-                if(varname.declaration && varinfo->isGlobal()) {
+                if(varinfo->isGlobal()) {
                     u32 size = info.ast->getTypeSize(varinfo->versions_typeId[info.currentPolyVersion]);
                     u32 offset = info.ast->aquireGlobalSpace(size);
                     varinfo->versions_dataOffset[info.currentPolyVersion] = offset;
@@ -3422,36 +3429,21 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     // If a type isn't a pointer then we might fail if the struct hasn't been created yet.
     // You could implement some dependency or priority queue.
         
-    // while(true) {
-    info.incompleteStruct = true;
+    info.incompleteStruct = false;
     info.completedStruct = false;
     info.showErrors = !ignore_errors;
-    CheckStructs(info, scope); // nocheckin
+    CheckStructs(info, scope);
     
     if(!info.showErrors)
         info.compiler->compileOptions->compileStats.errors += info.errors;
 
     if(info.completedStruct) {
         *changed = true;
-        // return SIGNAL_FAILURE;
     }
 
     if(info.incompleteStruct) {
         return SIGNAL_FAILURE;
     }
-
-
-    //         return SIGNAL_SUCCESS;
-
-    //     if(info.anotherTurn)
-    //         continue;
-
-    //     if(!ignore_errors)
-    //         return SIGNAL_NO_MATCH;
-        
-    //     // log::out << log::RED << "Some types could not be evaluated\n";
-    //     break;
-    // // }
     return SIGNAL_SUCCESS;
 }
 void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {

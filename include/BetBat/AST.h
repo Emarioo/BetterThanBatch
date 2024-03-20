@@ -559,7 +559,7 @@ struct ASTStatement : ASTNode {
     // ASTStatement() { memset(this,0,sizeof(*this)); }
     enum Type {
         EXPRESSION=0,
-        ASSIGN,
+        DECLARATION, // const, global, variable
         IF,
         WHILE,
         FOR,
@@ -583,7 +583,7 @@ struct ASTStatement : ASTNode {
         std::string name{}; // TODO: Does not store info about multiple tokens, error message won't display full string
         TypeId assignString{};
         int arrayLength=-1;
-        bool declaration = false;
+        // bool declaration = false;
         PolyVersions<TypeId> versions_assignType{}; // is inferred from expression in type checker
         // true if variable declares a new variable (it does if it has a type)
         // false if variable implicitly declares a new type OR assigns to an existing variable
@@ -631,7 +631,7 @@ struct ASTStatement : ASTNode {
 
 
     bool rangedForLoop=false; // otherwise sliced for loop
-    bool globalAssignment=false; // for variables, indicates whether variable refers to global data in data segment
+    bool globalDeclaration=false; // for variables, indicates whether variable refers to global data in data segment
     bool sharedContents = false; // this node is not the owner of it's nodes.
 
     void print(AST* ast, int depth);

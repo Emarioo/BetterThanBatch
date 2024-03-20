@@ -358,8 +358,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->op1 = op1;
             
@@ -373,8 +372,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->op1 = op1;
             node->control = control;
@@ -388,8 +386,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->op1 = op1;
             node->control = control;
@@ -410,8 +407,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i16*)&instructions[pc];
             pc += 2;
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->op1 = op1;
             node->control = control;
@@ -432,8 +428,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             Assert(control == CONTROL_32B);
             // TODO: op0, op1 as stack or base pointer requires special handling
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->op1 = op1;
             node->control = control;
@@ -467,28 +462,25 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            auto n = new OPNode();
-            n->opcode = opcode;
-            n->imm = imm;
-            reg_values[op0] = n;
+            auto node = createNode(prev_pc, opcode);
+            node->imm = imm;
+            reg_values[op0] = node;
         } break;
         case BC_LI64: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(i64*)&instructions[pc];
             pc+=8;
             
-            auto n = new OPNode();
-            n->opcode = opcode;
-            n->imm = imm;
-            reg_values[op0] = n;
+            auto node = createNode(prev_pc, opcode);
+            node->imm = imm;
+            reg_values[op0] = node;
         } break;
         case BC_INCR: {
             op0 = (BCRegister)instructions[pc++];
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->imm = imm;
             
@@ -503,8 +495,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i32*)&instructions[pc];
             pc+=4;
               
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->imm = imm;
             nodes.add(node);
         } break;
@@ -513,8 +504,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->imm = imm;
             
@@ -527,8 +517,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->imm = imm;
             
@@ -542,8 +531,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i32*)&instructions[pc];
             pc+=4;
 
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->link = l;
             node->call = c;
             node->imm = imm;
@@ -551,8 +539,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             nodes.add(node);
         } break;
         case BC_RET: {
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             
             nodes.add(node);
         } break;
@@ -561,8 +548,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->imm = imm;
             
@@ -573,8 +559,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->imm = imm;
             
@@ -582,16 +567,13 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
-            InstructionCast cast = (InstructionCast)instructions[pc++];
-            u8 fsize = (u8)instructions[pc++];
-            u8 tsize = (u8)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            cast = (InstructionCast)instructions[pc++];
 
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
+            node->control = control;
             node->cast = cast;
-            node->fsize = fsize;
-            node->tsize = tsize;
             
             node->in0 = reg_values[op0];
             reg_values[op0] = node;
@@ -599,11 +581,12 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
         case BC_MEMZERO: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
+            imm = (u8)instructions[pc++];
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->op1 = op1;
+            node->imm = imm;
             
             node->in0 = reg_values[op0];
             node->in1 = reg_values[op1];
@@ -615,8 +598,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             op1 = (BCRegister)instructions[pc++];
             op2 = (BCRegister)instructions[pc++];
             
-            auto node = new OPNode();
-            node->opcode = opcode;
+            auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->op1 = op1;
             node->op2 = op2;
@@ -642,15 +624,14 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
             
-            auto n = new OPNode();
-            n->opcode = opcode;
-            n->op0 = op0;
-            n->op1 = op1;
-            n->control = control;
-            n->in0 = reg_values[op0];
-            n->in1 = reg_values[op1];
+            auto node = createNode(prev_pc, opcode);
+            node->op0 = op0;
+            node->op1 = op1;
+            node->control = control;
+            node->in0 = reg_values[op0];
+            node->in1 = reg_values[op1];
             
-            reg_values[op0] = n;
+            reg_values[op0] = node;
         } break;
         case BC_LAND:
         case BC_LOR:
@@ -662,21 +643,21 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             
-            auto n = new OPNode();
-            n->opcode = opcode;
-            n->op0 = op0;
-            n->op1 = op1;
-            n->in0 = reg_values[op0];
-            n->in1 = reg_values[op1];
+            auto node = createNode(prev_pc, opcode);
+            node->opcode = opcode;
+            node->op0 = op0;
+            node->op1 = op1;
+            node->in0 = reg_values[op0];
+            node->in1 = reg_values[op1];
             
-            reg_values[op0] = n;
+            reg_values[op0] = node;
         } break;
         case BC_LNOT:
         case BC_BNOT: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             
-            auto n = new OPNode();
+            auto n = createNode(prev_pc, opcode);
             n->opcode = opcode;
             n->op0 = op0;
             n->op1 = op1;
@@ -691,10 +672,20 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
     
     // Generate x64 from OPNode tree
     
-    // struct Operand {
-    //     X64Register reg{};
-    //     bool stacked = false;
-    // };
+    DynamicArray<i32> bc_to_x64_translation;
+    bc_to_x64_translation.resize(tinycode->instructionSegment.size());
+
+    struct RelativeRelocation {
+        // RelativeRelocation(i32 ip, i32 x64, i32 bc) : currentIP(ip), immediateToModify(x64), bcAddress(bc) {}
+        i32 currentIP=0; // It's more of a nextIP rarther than current. Needed when calculating relative offset
+        // Address MUST point to an immediate (or displacement?) with 4 bytes.
+        // You can add some flags to this struct for more variation.
+        i32 immediateToModify=0; // dword/i32 to modify with correct value
+        i32 bcAddress=0; // address in bytecode, needed when looking up absolute offset in bc_to_x64_translation
+    };
+    DynamicArray<RelativeRelocation> relativeRelocations;
+    relativeRelocations._reserve(40);
+    
     struct Env {
         OPNode* node=nullptr;
 
@@ -756,6 +747,10 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
         env = envs.last();
         n = env->node;
         pop_env = true;
+        
+        // TODO: I quickly threw this here, is that fine? some nodes in ENV will run twice and set the wrong
+        //  address first BUT it should all be correct in the end.
+        bc_to_x64_translation[n->bc_index] = size();
 
         if(IsNativeRegister(n->op0)) {
             env->reg0 = ToNativeRegister(n->op0);
@@ -1000,7 +995,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                         
                         // do we need more stuff or no? I don't think so?
                         // prog->add2(OPCODE_2_MOVZX_REG_RM8);
-                        // prog->addModRM(MODE_REG, reg2, reg2);
+                        // emit_modrm(MODE_REG, reg2, reg2);
 
                     } break;
                     default: Assert(false);
@@ -1237,12 +1232,11 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                 env->out = env->reg0;
                 env->out_stack = env->reg0_stack;
             } break;
-            
             case BC_MOV_RM:
             case BC_MOV_RM_DISP16: {
                 Assert(!ToNativeRegister(n->op0));
 
-                Assert(n->op1 != BC_REG_SP && n->op1 != BC_REG_BP);
+                // Assert(n->op1 != BC_REG_SP && n->op1 != BC_REG_BP);
                 Assert(n->control == CONTROL_32B);
                 
                 env->reg1 = ToNativeRegister(n->op1);
@@ -1276,15 +1270,15 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                 }
 
                 if(GET_CONTROL_SIZE(n->control) == CONTROL_8B) {
-                    emit1(OPCODE_MOV_RM_REG8);
+                    emit1(OPCODE_MOV_REG8_RM);
                 } else if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
                     emit1(PREFIX_16BIT);
-                    emit1(OPCODE_MOV_RM_REG);
+                    emit1(OPCODE_MOV_REG_RM);
                 } else if(GET_CONTROL_SIZE(n->control) == CONTROL_32B) {
-                    emit1(OPCODE_MOV_RM_REG);
+                    emit1(OPCODE_MOV_REG_RM);
                 } else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
                     emit1(PREFIX_REXW);
-                    emit1(OPCODE_MOV_RM_REG);
+                    emit1(OPCODE_MOV_REG_RM);
                 }
 
                 u8 mode = MODE_DEREF_DISP32;
@@ -1306,6 +1300,11 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                 if(!env->reg1_stack && !IsNativeRegister(env->reg1))
                     free_register(env->reg1);
                 
+                if(env->reg0_stack) {
+                    emit1(OPCODE_PUSH_RM_SLASH_6);
+                    emit_modrm_slash(MODE_REG, 6, env->reg0);
+                }
+                
                 env->out = env->reg0;
                 env->out_stack = env->reg0_stack;
             } break;
@@ -1315,10 +1314,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                 Assert(n->control == CONTROL_32B);
                 
                 env->reg0 = ToNativeRegister(n->op0);
-                // Assert(env->reg0 != X64_REG_INVALID);
-                
                 env->reg1 = ToNativeRegister(n->op1);
-                // Assert(env->reg1 == X64_REG_INVALID);
                 
                 // TODO: Check node depth, do the most register allocs first
                 if(!env->env_in0 && !IsNativeRegister(n->op0)) {
@@ -1464,513 +1460,1066 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
 
                 emit1(OPCODE_RET);
             } break;
+            case BC_MEMZERO: {
+                Assert(n->op1 != BC_REG_SP && n->op1 != BC_REG_BP);
+                
+                env->reg0 = ToNativeRegister(n->op0);
+                
+                // TODO: Check node depth, do the most register allocs first
+                if(!env->env_in0 && !IsNativeRegister(n->op0)) {
+                    push_env0();
+                    break;
+                }
+
+                if(!env->env_in1 && !IsNativeRegister(n->op1)) {
+                    push_env1();
+                    break;
+                }
+
+                if(!IsNativeRegister(n->op1)) {
+                    env->reg1_stack = env->env_in1->out_stack;
+                    env->reg1 = env->env_in1->out;
+                }
+                
+                if(!IsNativeRegister(n->op0)) {
+                    env->reg0_stack = env->env_in0->out_stack;
+                    env->reg0 = env->env_in0->out;
+                }
+                
+                if(env->reg1_stack) {
+                    env->reg1 = RESERVED_REG0;
+                    emit1(OPCODE_POP_RM_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, env->reg1);
+                }
+
+                if(env->reg0_stack) {
+                    env->reg0 = RESERVED_REG1;
+                    emit1(OPCODE_POP_RM_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, env->reg0);
+                }
+
+                // ##########################
+                //   MEMZERO implementation
+                // ##########################
+                {
+                    u8 batch_size = n->imm;
+                    if(batch_size == 0)
+                        batch_size = 1;
+
+                    X64Register reg_cur = env->reg0;
+                    X64Register reg_fin = env->reg1;
+
+                    emit1(PREFIX_REXW);
+                    emit1(OPCODE_ADD_RM_REG);
+                    emit_modrm(MODE_REG, reg_cur, reg_fin);
+
+                    int offset_loop = size();
+
+                    emit1(PREFIX_REXW);
+                    emit1(OPCODE_CMP_REG_RM);
+                    emit_modrm(MODE_REG, reg_fin, reg_cur);
+
+                    emit1(OPCODE_JE_IMM8);
+                    int offset_jmp_imm = size();
+                    emit1((u8)0);
+
+                    switch(batch_size) {
+                    case 1:
+                        emit1(OPCODE_MOV_RM_IMM8_SLASH_0);
+                        break;
+                    case 2:
+                        Assert(("Memzero conversion incomplete for 2-byte batch size",false));
+                        break;
+                    case 4:
+                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        break;
+                    case 8:
+                        emit1(PREFIX_REXW);
+                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        break;
+                    default: Assert(false);
+                    }
+
+                    if(reg_cur == X64_REG_SP) {
+                        // emit_modrm_sib(MODE_DEREF, 0, SIB_SCALE_1, SIB_INDEX_NONE, reg_cur);
+                        emit_modrm_sib_slash(MODE_DEREF, 0, SIB_SCALE_1, SIB_INDEX_NONE, reg_cur);
+                    } else {
+                        emit_modrm_slash(MODE_DEREF, 0, reg_cur);
+                    }
+
+                    switch(batch_size) {
+                    case 1:
+                        emit1((u8)0);
+                        break;
+                    case 2:
+                        Assert(("Memzero conversion incomplete for 2-byte batch size",false));
+                        break;
+                    case 4:
+                        emit4((u32)0);
+                        break;
+                    case 8:
+                        emit4((u32)0);
+                        break;
+                    default: Assert(false);
+                    }
+
+                    emit1(PREFIX_REXW);
+                    emit1(OPCODE_ADD_RM_IMM8_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, reg_cur);
+                    emit1((u8)batch_size);
+
+                    emit1(OPCODE_JMP_IMM8);
+                    emit1((u8)(offset_loop - (size()+1)));
+
+                    fix_relative_jump_imm8(offset_jmp_imm, (u8)(size() - (offset_jmp_imm + 1)));
+                    break;
+                }
+                
+                if(!env->reg0_stack && !IsNativeRegister(env->reg0))
+                    free_register(env->reg0);
+
+                if(!env->reg1_stack && !IsNativeRegister(env->reg1))
+                    free_register(env->reg1);
+            } break;
+            case BC_JZ: {
+                Assert(n->op1 != BC_REG_SP && n->op1 != BC_REG_BP);
+                
+                env->reg0 = ToNativeRegister(n->op0);
+                
+                // TODO: Check node depth, do the most register allocs first
+                if(!env->env_in0 && !IsNativeRegister(n->op0)) {
+                    push_env0();
+                    break;
+                }
+                
+                if(!IsNativeRegister(n->op0)) {
+                    env->reg0_stack = env->env_in0->out_stack;
+                    env->reg0 = env->env_in0->out;
+                }
+
+                if(env->reg0_stack) {
+                    env->reg0 = RESERVED_REG1;
+                    emit1(OPCODE_POP_RM_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, env->reg0);
+                }
+                
+                emit1(PREFIX_REXW);
+                emit1(OPCODE_CMP_RM_IMM8_SLASH_7);
+                emit_modrm_slash(MODE_REG, 7, env->reg0);
+                emit1((u8)0);
+                
+                emit2(OPCODE_2_JE_IMM32);
+                emit4((u32)0);
+                
+                /*
+                  Immediates in bytecode jump instructions are relative to
+                    the byte after the final byte in the instruction. That byte offset from
+                    start of bytecode instructions PLUS the immediate results in the first
+                    byte to execute next cycle. HOWEVER, OPNodes store bc_index based on
+                    the first byte in the instruction and we don't have
+                    a table of number of bytes per opcode.
+                    
+                    Either we create a table or use a sneaky hardcoded value here.
+                    I am sorry but I choose the lazy option. I have been working on the x64_gen
+                    for a while and just want to see it done right now. I will come back
+                    and clean it upp later.
+                    
+                    I do want to add that the hardcoded solution is probably faster than a table
+                    unless the compiler does some optimizations on a static const table.
+                */
+                
+                const u8 BYTE_OF_BC_JZ = 1 + 1 + 4; // nocheckin TODO: DON'T HARDCODE VALUES!
+               
+                RelativeRelocation reloc{};
+                reloc.currentIP = size();
+                reloc.bcAddress = n->bc_index + n->imm + BYTE_OF_BC_JZ;
+                reloc.immediateToModify = size()-4; // NOTE: RelativeRelocation assumes 32-bit integer JMP_IMM8 would not work without changes
+                relativeRelocations.add(reloc);
+                
+                if(!env->reg0_stack && !IsNativeRegister(env->reg0))
+                    free_register(env->reg0);
+            } break;
+            case BC_JNZ: {
+                Assert(n->op1 != BC_REG_SP && n->op1 != BC_REG_BP);
+                
+                env->reg0 = ToNativeRegister(n->op0);
+                
+                // TODO: Check node depth, do the most register allocs first
+                if(!env->env_in0 && !IsNativeRegister(n->op0)) {
+                    push_env0();
+                    break;
+                }
+                
+                if(!IsNativeRegister(n->op0)) {
+                    env->reg0_stack = env->env_in0->out_stack;
+                    env->reg0 = env->env_in0->out;
+                }
+
+                if(env->reg0_stack) {
+                    env->reg0 = RESERVED_REG1;
+                    emit1(OPCODE_POP_RM_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, env->reg0);
+                }
+                
+                emit1(PREFIX_REXW);
+                emit1(OPCODE_CMP_RM_IMM8_SLASH_7);
+                emit_modrm_slash(MODE_REG, 7, env->reg0);
+                emit1((u8)0);
+                
+                emit2(OPCODE_2_JNE_IMM32);
+                emit4((u32)0);
+                
+                const u8 BYTE_OF_BC_JNZ = 1 + 1 + 4; // nocheckin TODO: DON'T HARDCODE VALUES!
+                
+                RelativeRelocation reloc{};
+                reloc.currentIP = size();
+                reloc.bcAddress = n->bc_index + n->imm + BYTE_OF_BC_JNZ;
+                reloc.immediateToModify = size()-4;
+                relativeRelocations.add(reloc);
+                
+                if(!env->reg0_stack && !IsNativeRegister(env->reg0))
+                    free_register(env->reg0);
+            } break;
+            case BC_JMP: {
+                emit1(OPCODE_JMP_IMM32);
+                emit4((u32)0);
+                
+                const u8 BYTE_OF_BC_JMP = 1 + 4; // nocheckin TODO: DON'T HARDCODE VALUES!
+                
+                RelativeRelocation reloc{};
+                reloc.currentIP = size();
+                reloc.bcAddress = n->bc_index + n->imm + BYTE_OF_BC_JMP;
+                reloc.immediateToModify = size()-4;
+                relativeRelocations.add(reloc);
+            } break;
+            case BC_CAST: {
+                Assert(n->op0 != BC_REG_SP && n->op0 != BC_REG_BP);
+                env->reg0 = ToNativeRegister(n->op0);
+                
+                // TODO: Check node depth, do the most register allocs first
+                if(!env->env_in0 && !IsNativeRegister(n->op0)) {
+                    push_env0();
+                    break;
+                }
+                
+                if(!IsNativeRegister(n->op0)) {
+                    env->reg0_stack = env->env_in0->out_stack;
+                    env->reg0 = env->env_in0->out;
+                }
+
+                if(env->reg0_stack) {
+                    env->reg0 = RESERVED_REG1;
+                    emit1(OPCODE_POP_RM_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, env->reg0);
+                }
+
+                int fsize = 1 << GET_CONTROL_SIZE(n->control);
+                int tsize = 1 << GET_CONTROL_CONVERT_SIZE(n->control);
+
+                u8 minSize = fsize < tsize ? fsize : tsize;
+                
+                X64Register origin_reg = env->reg0;
+
+                switch(n->cast) {
+                    #ifdef gone
+                    case CAST_FLOAT_SINT: {
+                        Assert(false);
+                        // Assert(fsize == 4 || fsize == 8);
+                        // Assert(!toXmm);
+
+                        // if(!fromXmm) {
+                        //     if(fsize == 8)
+                        //         emit1(PREFIX_REXW);
+                        //     emit1(OPCODE_MOV_RM_REG);
+                        //     prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        //     emit1((u8)-8);
+                        // }
+                        // if        (fsize == 4 && tsize == 4) {
+                        //     prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                        // } else if (fsize == 4 && tsize == 8) {
+                        //     prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
+                        // } else if (fsize == 8 && tsize == 4) {
+                        //     prog->add3(OPCODE_3_CVTTSD2SI_REG_RM);
+                        // } else if (fsize == 8 && tsize == 8) {
+                        //     prog->add4(OPCODE_4_REXW_CVTTSD2SI_REG_RM);
+                        // } else {
+                        //     Assert(false);
+                        // }
+                        // if(fromXmm) {
+                        //     emit_modrm(MODE_REG, treg, freg);
+                        // } else {
+                        //     prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                        //     emit1((u8)-8);
+                        // }
+                    } break;
+                    case CAST_FLOAT_UINT: {
+                        Assert(fsize == 4 || fsize == 8);
+
+                        Assert(false); // TODO: float to uint64 is very special, needs to be handled properly
+
+                        if(tsize == 8) {
+                            if(fsize == 4) {
+                                /*
+                                movss  xmm0,DWORD PTR [rip+0x0]        # 10 <main+0x10>
+
+                                movss  DWORD PTR [rbp-0xc],xmm0
+                                movss  xmm0,DWORD PTR [rbp-0xc]
+                                comiss xmm0,DWORD PTR [rip+0x0]        # 21 <main+0x21>
+                                jae    unsigned
+                                movss  xmm0,DWORD PTR [rbp-0xc]
+                                cvttss2si rax,xmm0
+                                mov    QWORD PTR [rbp-0x8],rax
+                                jmp    end
+                            unsigned:
+                                movss  xmm0,DWORD PTR [rbp-0xc]
+                                movss  xmm1,DWORD PTR [rip+0x0]        # 40 <main+0x40>
+
+                                subss  xmm0,xmm1
+                                cvttss2si rax,xmm0
+                                mov    QWORD PTR [rbp-0x8],rax
+                                movabs rax,0x8000000000000000
+
+                                xor    QWORD PTR [rbp-0x8],rax
+                            end:
+                                mov    rax,QWORD PTR [rbp-0x8]
+                                mov    QWORD PTR [rbp-0x8],rax
+                                */
+                            } else if(fsize == 8) {
+                                /*
+                                movsd  xmm0,QWORD PTR [rip+0x0]        # 10 <main+0x10>
+
+                                movsd  QWORD PTR [rbp-0x10],xmm0
+                                movsd  xmm0,QWORD PTR [rbp-0x10]
+                                comisd xmm0,QWORD PTR [rip+0x0]        # 22 <main+0x22>
+
+                                jae    unsigned
+                                movsd  xmm0,QWORD PTR [rbp-0x10]
+                                cvttsd2si rax,xmm0
+                                mov    QWORD PTR [rbp-0x8],rax
+                                jmp    end
+                            unsigned:
+                                movsd  xmm0,QWORD PTR [rbp-0x10]
+                                movsd  xmm1,QWORD PTR [rip+0x0]        # 41 <main+0x41>
+
+                                subsd  xmm0,xmm1
+                                cvttsd2si rax,xmm0
+                                mov    QWORD PTR [rbp-0x8],rax
+                                movabs rax,0x8000000000000000
+                            end:
+                                xor    QWORD PTR [rbp-0x8],rax
+                                mov    rax,QWORD PTR [rbp-0x8]
+                                mov    QWORD PTR [rbp-0x8],rax
+                                */
+                            }
+                        } else {
+
+                        }
+
+                        if(fromXmm) {
+                            prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+                            emit_modrm(MODE_REG, treg, freg);
+                        } else {
+                            emit1(OPCODE_MOV_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            emit1((u8)-8);
+
+                            if(tsize == 8)
+                                prog->add4(OPCODE_4_REXW_CVTTSS2SI_REG_RM);
+                            else
+                                prog->add3(OPCODE_3_CVTTSS2SI_REG_RM);
+
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            emit1((u8)-8);
+                        }
+                    } break;
+                    case CAST_SINT_FLOAT: {
+                        Assert(false);
+                        Assert(tsize == 4 || tsize == 8);
+                        Assert(!fromXmm);
+                        if(fsize == 1){
+                            Assert(false); // we might need to sign extend
+                            // emit1(PREFIX_REXW);
+                            // emit1(OPCODE_AND_RM_IMM_SLASH_4);
+                            // emit_modrm(MODE_REG, 4, freg);
+                            // prog->add4((u32)0xFF);
+                            if(tsize == 4)
+                                prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                            else
+                                prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
+                        } else if(fsize == 2){
+                            Assert(false); // we might need to sign extend
+                            // emit1(PREFIX_REXW);
+                            // emit1(OPCODE_AND_RM_IMM_SLASH_4);
+                            // emit_modrm(MODE_REG, 4, freg);
+                            // prog->add4((u32)0xFFFF);
+                            if(tsize == 4)
+                                prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                            else
+                                prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
+                        } else if(fsize == 4) {
+                            if(tsize == 4)
+                                prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                            else
+                                prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
+                        } else if(fsize == 8) {
+                            if(tsize == 4)
+                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                            else
+                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                        }
+                        if(toXmm) {
+                            emit_modrm(MODE_REG, treg, freg);
+                            // emit1(OPCODE_NOP);
+                        } else {
+                            // BUG: Hoping that xmm7 isn't used is considered bad programming.
+                            emit_modrm(MODE_REG, REG_XMM7, freg);
+
+                            if(tsize == 4)
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                            else
+                                prog->add3(OPCODE_3_MOVSD_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM7, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            emit1((u8)-8);
+
+                            if(tsize == 8)
+                                emit1(PREFIX_REXW);
+                            emit1(OPCODE_MOV_REG_RM);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            emit1((u8)-8);
+                        }
+                    } break;
+                    case CAST_UINT_FLOAT: {
+                        Assert(false);
+                        Assert(tsize == 4 || tsize == 8);
+                        Assert(!fromXmm);
+                        
+                        if(fsize == 8) {
+                            // We have freg but the code may change so to ensure no future bugs we get
+                            // the register again with BCToReg and ensure that it isn't extended (with R8-R11) and that
+                            // it is a 64-bit register.
+                            u8 from_reg = BCToProgramReg(op1, 8);
+
+                            u8 xmm_reg = REG_XMM7; // nocheckin, use xmm7 if treg is rax,rbx.. otherwise we can actually just use xmm register
+
+                            if(toXmm) {
+                                xmm_reg = treg;
+                            }
+
+                            if(tsize == 4) {
+                                /*
+                                test   rax,rax
+                                js     unsigned
+                                pxor   xmm0,xmm0
+                                cvtsi2ss xmm0,rax
+                                jmp    end
+                            unsigned:
+                                mov    rdx,rax
+                                shr    rdx,1
+                                and    eax,0x1
+                                or     rdx,rax
+                                pxor   xmm0,xmm0
+                                cvtsi2ss xmm0,rdx
+                                addss  xmm0,xmm0
+                            end:
+                                */
+
+                                u8 temp_reg = REG_DI;
+                                emit1(OPCODE_PUSH_RM_SLASH_6);
+                                emit_modrm(MODE_REG, 6, temp_reg);
+
+                                // Check signed bit
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_TEST_RM_REG);
+                                emit_modrm(MODE_REG, from_reg, from_reg);
+
+                                emit1(OPCODE_JS_REL8);
+                                int jmp_offset_unsigned = prog->size();
+                                emit1((u8)0); // set later
+
+                                // Normal conversion since the signed bit is off
+                                prog->add3(OPCODE_3_PXOR_RM_REG);
+                                emit_modrm(MODE_REG, xmm_reg, xmm_reg);
+
+                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                                emit_modrm(MODE_REG, xmm_reg, from_reg);
+
+                                emit1(OPCODE_JMP_IMM8);
+                                int jmp_offset_end = prog->size();
+                                emit1((u8)0);
+
+                                prog->set(jmp_offset_unsigned, prog->size() - (jmp_offset_unsigned +1)); // +1 gives the offset after the jump instruction (immediate is one byte)
+                                
+                                // Special conversion because the signed bit is on but since our conversion is unsigned
+                                // we need some special stuff so that our float isn't negative and half the number we except
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, temp_reg, from_reg);
+
+                                emit1(PREFIX_REXW);    
+                                emit1(OPCODE_SHR_RM_ONCE_SLASH_5);
+                                emit_modrm(MODE_REG, 5, temp_reg);
+
+                                emit1(OPCODE_AND_RM_IMM8_SLASH_4);
+                                emit_modrm(MODE_REG, 4, from_reg);
+                                emit1((u8)1);
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_OR_RM_REG);
+                                emit_modrm(MODE_REG, from_reg, temp_reg);
+
+                                prog->add3(OPCODE_3_PXOR_RM_REG);
+                                emit_modrm(MODE_REG, xmm_reg, xmm_reg);
+
+                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                                emit_modrm(MODE_REG, xmm_reg, temp_reg);
+
+                                prog->add3(OPCODE_3_ADDSS_REG_RM);
+                                emit_modrm(MODE_REG, xmm_reg, xmm_reg);
+
+                                prog->set(jmp_offset_end, prog->size() - (jmp_offset_end +1));
+
+                                emit1(OPCODE_POP_RM_SLASH_0);
+                                emit_modrm(MODE_REG, 0, temp_reg);
+
+                                if(!toXmm) {
+                                    prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                    prog->addModRM_SIB(MODE_DEREF_DISP8, xmm_reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                    emit1((u8)-8);
+
+                                    emit1(OPCODE_MOV_REG_RM);
+                                    prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                    emit1((u8)-8);
+                                }
+                            } else if(tsize == 8) {
+                                /*
+                                test   rax,rax
+                                js     unsigned
+                                pxor   xmm0,xmm0
+                                cvtsi2sd xmm0,rax
+                                jmp    end
+                            unsigned:
+                                mov    rdx,rax
+                                shr    rdx,1
+                                and    eax,0x1
+                                or     rdx,rax
+                                pxor   xmm0,xmm0
+                                cvtsi2sd xmm0,rdx
+                                addsd  xmm0,xmm0
+                            end:
+                                */
+                                u8 temp_reg = REG_DI;
+                                emit1(OPCODE_PUSH_RM_SLASH_6);
+                                emit_modrm(MODE_REG, 6, temp_reg);
+
+                                // Check signed bit
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_TEST_RM_REG);
+                                emit_modrm(MODE_REG, from_reg, from_reg);
+
+                                emit1(OPCODE_JS_REL8);
+                                int jmp_offset_unsigned = prog->size();
+                                emit1((u8)0); // set later
+
+                                // Normal conversion since the signed bit is off
+                                prog->add3(OPCODE_3_PXOR_RM_REG);
+                                emit_modrm(MODE_REG, xmm_reg, xmm_reg);
+
+                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                                emit_modrm(MODE_REG, xmm_reg, from_reg);
+
+                                emit1(OPCODE_JMP_IMM8);
+                                int jmp_offset_end = prog->size();
+                                emit1((u8)0);
+
+                                prog->set(jmp_offset_unsigned, prog->size() - (jmp_offset_unsigned +1)); // +1 gives the offset after the jump instruction (immediate is one byte)
+                                
+                                // Special conversion because the signed bit is on but since our conversion is unsigned
+                                // we need some special stuff so that our float isn't negative and half the number we except
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, temp_reg, from_reg);
+
+                                emit1(PREFIX_REXW);    
+                                emit1(OPCODE_SHR_RM_ONCE_SLASH_5);
+                                emit_modrm(MODE_REG, 5, temp_reg);
+
+                                emit1(OPCODE_AND_RM_IMM8_SLASH_4);
+                                emit_modrm(MODE_REG, 4, from_reg);
+                                emit1((u8)1);
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_OR_RM_REG);
+                                emit_modrm(MODE_REG, from_reg, temp_reg);
+
+                                prog->add3(OPCODE_3_PXOR_RM_REG);
+                                emit_modrm(MODE_REG, xmm_reg, xmm_reg);
+
+                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                                emit_modrm(MODE_REG, xmm_reg, temp_reg);
+
+                                prog->add3(OPCODE_3_ADDSD_REG_RM);
+                                emit_modrm(MODE_REG, xmm_reg, xmm_reg);
+
+                                prog->set(jmp_offset_end, prog->size() - (jmp_offset_end +1));
+
+                                emit1(OPCODE_POP_RM_SLASH_0);
+                                emit_modrm(MODE_REG, 0, temp_reg);
+
+                                if(!toXmm) {
+                                    prog->add3(OPCODE_3_MOVSD_RM_REG);
+                                    prog->addModRM_SIB(MODE_DEREF_DISP8, xmm_reg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                    emit1((u8)-8);
+
+                                    emit1(PREFIX_REXW);
+                                    emit1(OPCODE_MOV_REG_RM);
+                                    prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                    emit1((u8)-8);
+                                }
+                            }
+
+
+                            #ifdef gone
+                            // TODO: THIS IS FLAWED! The convert int to float instruction assumes signed integers but
+                            //  we are dealing with unsigned ones. That means that large unsigned 64-bit numbers would
+                            //  be converted to negative slighly smaller numbers.
+                            if(tsize==4)
+                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                            else
+                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+
+                            if(toXmm) {
+                                emit_modrm(MODE_REG, treg, freg);
+                            } else {
+                                emit_modrm(MODE_REG, REG_XMM7, freg);
+
+                                if(tsize==4)
+                                    prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                else
+                                    prog->add3(OPCODE_3_MOVSD_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM7, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+                                if(tsize==8)
+                                    emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                            }
+
+                            // Assert(false);
+                            // This code is bugged, doesn't work.
+                            /*
+                            t = cast<f32>cast<u64>23
+                            println(t)
+                            */
+                            
+
+                            /*
+                            test rax, rax
+                            jl signed
+                            cvtsi2ss xmm0, r13
+                            jmp end
+                            signed:
+                            mov r13d, eax
+                            and r13d, 1
+                            shr rax, 1
+                            or r13, rax
+                            cvtsi2ss xmm0, r13
+                            mulss xmm0, 2
+                            end:
+                            */
+
+                        // TODO: This is way to many instructions to convert an unsigned integer to a float.
+                        //   Users who don't realize this will unknowningly have slow code because of casts
+                        //   they didn't pay attention to. Can we minimize the amount of instructions?
+                        //   Can we be less correct and generate fewer instructions?
+
+                            // Assert(false);
+                            // We have to do some extra work since we use unsigned 64-bit integer but
+                            // the x64 instruction expects a signed 64-bit integer.
+
+                            // TODO: C/C++ compilers use a jump instruction to differentiate between
+                            //  the negative and non-negative case. We don't at the moment but probably should.
+
+                            // IMPORTANT: USING A TEMPORARY REG LIKE THIS IS BAD IF OTHER INSTRUCTIONS USES IT.
+                            //  You won't expect this register to be modified when you look at the bytecode instructions.
+                            // IMPORTANT: The code below modifies the input register!
+                            u8 tempReg = REG_R15;
+                            u8 xmm = REG_XMM6;
+                            if(toXmm) {
+                                xmm = treg;
+                                Assert(treg != REG_XMM7);
+                                // IMPORTANT: XMM7 is in use. More importantly, we assume registers
+                                // above xmm3 are unused by the bytecode. We will have many bugs
+                                // if the assumption is wrong.
+                            }
+
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_TEST_RM_REG);
+                            emit_modrm(MODE_REG, freg, freg);
+
+                            emit1(OPCODE_JL_REL8);
+                            u32 jumpSign = prog->size();
+                            emit1((u8)0);
+
+                            // emit1((u8)0xF3);
+                            // emit1((u8)(PREFIX_REXW));
+                            // prog->add2((u16)0x2A0F);
+                            if(tsize == 4) {
+                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                            } else {
+                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                            }
+                            emit_modrm(MODE_REG, xmm, freg);
+
+                            emit1(OPCODE_JMP_IMM8);
+                            u32 jumpEnd = prog->size();
+                            emit1((u8)0);
+
+                            prog->set(jumpSign, prog->size() - (jumpSign+1)); // +1 because jumpSign points to the byte to change in the jump instruction, we want the end of the instruction.
+
+                            // emit1((u8)(PREFIX_REXW|PREFIX_REXR));
+                            emit1((u8)(PREFIX_REXR)); // 64-bit operands not needed, we just want 1 bit from freg
+                            emit1(OPCODE_MOV_REG_RM);
+                            emit_modrm(MODE_REG, tempReg, freg);
+
+                            emit1((u8)(PREFIX_REXW|PREFIX_REXB));
+                            emit1(OPCODE_AND_RM_IMM8_SLASH_4);
+                            emit_modrm(MODE_REG, 4, tempReg);
+                            emit1((u8)1);
+
+
+                            emit1((u8)(PREFIX_REXW));
+                            emit1(OPCODE_SHR_RM_IMM8_SLASH_5);
+                            emit_modrm(MODE_REG, 5, freg);
+                            emit1((u8)1);
+
+                            emit1((u8)(PREFIX_REXW|PREFIX_REXB));
+                            emit1(OPCODE_OR_RM_REG);
+                            emit_modrm(MODE_REG, freg, tempReg);
+                            
+                            // F3 REX.W 0F 2A  <- the CVTSI2SS_REG_RM requires the rex byte smashed inside it
+                            if(tsize == 4) {
+                                emit1((u8)0xF3);
+                                emit1((u8)(PREFIX_REXW|PREFIX_REXB));
+                                prog->add2((u16)0x2A0F);
+                            } else {
+                                emit1((u8)0xF2);
+                                emit1((u8)(PREFIX_REXW|PREFIX_REXB));
+                                prog->add2((u16)0x2A0F);
+                            }
+                            emit_modrm(MODE_REG, xmm, tempReg);
+                            
+                            emit1((u8)(PREFIX_REXW|PREFIX_REXB|PREFIX_REXR));
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, tempReg, tempReg);
+
+                            // TODO: REXW may be needed here
+                            emit1(PREFIX_REXB);
+                            emit1(OPCODE_MOV_RM_IMM8_SLASH_0);
+                            emit_modrm(MODE_REG, 0, tempReg);
+                            emit1((u8)2);
+
+                            if(tsize == 4)
+                                prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                            else
+                                prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                            emit_modrm(MODE_REG, REG_XMM7, tempReg);
+                            if(tsize == 4) 
+                                prog->add3(OPCODE_3_MULSS_REG_RM);
+                            else
+                                prog->add3(OPCODE_3_MULSD_REG_RM);
+                            emit_modrm(MODE_REG, xmm, REG_XMM7);
+
+                            // END
+                            prog->set(jumpEnd, prog->size() - (jumpEnd+1)); // +1 because jumpEnd points to the byte to change in the jump instruction, we want the end of the instruction.
+
+                            if (!toXmm) {
+                                if(tsize==4)
+                                    prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                else
+                                    prog->add3(OPCODE_3_MOVSD_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, xmm, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                            } else {
+                                // xmm register is already loaded with correct value
+                            }
+                            #endif
+                        } else {
+                            // nocheckin, rexw when converting u32 to f32/f64 otherwise the last bit will
+                            // be treated as a signed bit by CVTSI2SS
+                            if(fsize == 1){
+                                // emit1(PREFIX_REXW);
+                                // emit1(OPCODE_AND_RM_IMM_SLASH_4);
+                                // emit_modrm(MODE_REG, 4, freg);
+                                // prog->add4((u32)0xFF);
+                                if(tsize==4)
+                                    prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                                else
+                                    prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
+                            } else if(fsize == 2){
+                                // emit1(PREFIX_REXW);
+                                // emit1(OPCODE_AND_RM_IMM_SLASH_4);
+                                // emit_modrm(MODE_REG, 4, freg);
+                                // prog->add4((u32)0xFFFF);
+                                if(tsize==4)
+                                    prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                                else
+                                    prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
+                            } else if(fsize == 4) {
+                                // It is probably safe to use rexw so that rax is used
+                                // when eax was specified. Most instructions zero the upper bits.
+                                // There may be an edge case though.
+                                // We must use rexw with this operation since it assumes signed values
+                                // but we have an unsigned so we must use 64-bit values.
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, freg, freg); // clear upper 32 bits
+                                if(tsize==4)
+                                    prog->add4(OPCODE_4_REXW_CVTSI2SS_REG_RM);
+                                else
+                                    prog->add4(OPCODE_4_REXW_CVTSI2SD_REG_RM);
+                                // if(tsize==4)
+                                //     prog->add3(OPCODE_3_CVTSI2SS_REG_RM);
+                                // else
+                                //     prog->add3(OPCODE_3_CVTSI2SD_REG_RM);
+                            }
+
+                            if(toXmm) {
+                                emit_modrm(MODE_REG, treg, freg);
+                            } else {
+                                emit_modrm(MODE_REG, REG_XMM7, freg);
+
+                                if(tsize==4)
+                                    prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                else
+                                    prog->add3(OPCODE_3_MOVSD_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, REG_XMM7, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+                                if(tsize==8)
+                                    emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+                                // emit1(OPCODE_NOP);
+                            }
+                        }
+                    } break;
+                    #endif
+                    case CAST_UINT_SINT:
+                    case CAST_SINT_UINT: {
+                        if(minSize==1){
+                            emit1(PREFIX_REXW);
+                            emit2(OPCODE_2_MOVZX_REG_RM8);
+                            emit_modrm(MODE_REG, origin_reg, origin_reg);
+                        } else if(minSize == 2) {
+                            emit1(PREFIX_REXW);
+                            emit2(OPCODE_2_MOVZX_REG_RM16);
+                            emit_modrm(MODE_REG, origin_reg, origin_reg);
+                        } else if(minSize == 4) {
+                            
+                            emit1(OPCODE_MOV_REG_RM);
+                            emit_modrm(MODE_REG, origin_reg, origin_reg);
+                            
+                        } else if(minSize == 8) {
+                            // nothing needs to be done
+                        }
+                    } break;
+                    case CAST_SINT_SINT: {
+                        // i8 -> i16,i32,i64
+                        // i64 -> i32,i16,i8
+
+                        // TODO: Sign extend properly
+                        // emit1(PREFIX_REXW);
+                        // emit1(OPCODE_MOV_REG_RM);
+                        // emit_modrm(MODE_REG, treg, freg);
+                        if(minSize==1){
+                            emit1(PREFIX_REXW);
+                            emit2(OPCODE_2_MOVSX_REG_RM8);
+                            emit_modrm(MODE_REG, origin_reg, origin_reg);
+                        } else if(minSize == 2) {
+                            emit1(PREFIX_REXW);
+                            emit2(OPCODE_2_MOVSX_REG_RM16);
+                            emit_modrm(MODE_REG, origin_reg, origin_reg);
+                        } else if(minSize == 4) {
+                            // Assert(freg == treg);
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_MOVSXD_REG_RM);
+                            emit_modrm(MODE_REG, origin_reg, origin_reg);
+                            // emit1(OPCODE_NOP); // this might just work
+                            // emit1(PREFIX_REXW);
+                            // emit1(OPCODE_AND_RM_IMM_SLASH_4);
+                            // emit_modrm(MODE_REG, 4, treg);
+                            // prog->add4((u32)0xFFFFFFFF);
+                        } else if(minSize == 8) {
+                            // nothing needs to be done
+                        }
+                    } break;
+                    case CAST_FLOAT_FLOAT: {
+                        Assert(false);
+                        #ifdef gone
+                        Assert((fsize == 4 || fsize == 8) && (tsize == 4 || tsize == 8));
+
+                        if(fromXmm && toXmm) {
+                            if(fsize == 4 && tsize == 8) {
+                                prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
+                                emit_modrm(MODE_REG, treg, freg);
+                            } else if(fsize == 8 && tsize == 4) {
+                                prog->add3(OPCODE_3_CVTSD2SS_REG_RM);
+                                emit_modrm(MODE_REG, treg, freg);
+                            } else {
+                                // do nothing
+                            }
+                        } else if(!fromXmm && toXmm) {
+                            u8 temp = REG_XMM7;
+                            if(fsize == 8)
+                                emit1(PREFIX_REXW);
+                            emit1(OPCODE_MOV_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            emit1((u8)-8);
+
+                            // NOTE: Do we need REXW one some of these?
+                            if(fsize == 4 && tsize == 8) {
+                                prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
+                            } else if(fsize == 8 && tsize == 4) {
+                                prog->add3(OPCODE_3_CVTSD2SS_REG_RM);
+                            } else if(fsize == 4 && tsize == 4){
+                                prog->add3(OPCODE_3_MOVSS_REG_RM);
+                            } else if(fsize == 8 && tsize == 8) {
+                                prog->add3(OPCODE_3_MOVSD_REG_RM);
+                            }
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            emit1((u8)-8);
+                        } else if(fromXmm && !toXmm) {
+                            u8 temp = REG_XMM7;
+                            if(fsize == 4 && tsize == 8) {
+                                prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
+                                emit_modrm(MODE_REG, temp, freg);
+
+                                prog->add3(OPCODE_3_MOVSD_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                            } else if(fsize == 8 && tsize == 4) {
+                                prog->add3(OPCODE_3_CVTSD2SS_REG_RM);
+                                emit_modrm(MODE_REG, temp, freg);
+
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                            } else if(fsize == 4 && tsize == 4){
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                            } else if(fsize == 8 && tsize == 8) {
+                                prog->add3(OPCODE_3_MOVSD_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                            }
+                        } else if(!fromXmm && !toXmm) {
+                            u8 temp = REG_XMM7;
+                            if(fsize == 8)
+                                emit1(PREFIX_REXW);
+                            emit1(OPCODE_MOV_RM_REG);
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, freg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            emit1((u8)-8);
+
+                            // NOTE: Do we need REXW here?
+                            if(fsize == 4 && tsize == 8) {
+                                prog->add3(OPCODE_3_CVTSS2SD_REG_RM);
+                            } else if(fsize == 8 && tsize == 4) {
+                                prog->add3(OPCODE_3_CVTSD2SS_REG_RM);
+                            } else if(fsize == 4 && tsize == 4){
+                                prog->add3(OPCODE_3_MOVSS_REG_RM);
+                            } else if(fsize == 8 && tsize == 8) {
+                                prog->add3(OPCODE_3_MOVSD_REG_RM);
+                            }
+                            prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                            emit1((u8)-8);
+
+                            if(tsize == 4) {
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                                
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                            } else if(tsize == 8) {
+                                prog->add3(OPCODE_3_MOVSS_RM_REG);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, temp, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                prog->addModRM_SIB(MODE_DEREF_DISP8, treg, SIB_SCALE_1, SIB_INDEX_NONE, REG_SP);
+                                emit1((u8)-8);
+                            }
+                        }
+                        #endif
+                    } break;
+                    default: Assert(("Cast type not implemented in x64 backend, Compiler bug",false));
+                }
+                
+                if(env->reg0_stack) {
+                    emit1(OPCODE_PUSH_RM_SLASH_6);
+                    emit_modrm_slash(MODE_REG, 6, env->reg0);
+                }
+                
+                env->out = env->reg0;
+                env->out_stack = env->reg0_stack;
+            } break;
             default: Assert(false);
         }
         if(pop_env) {
             envs.pop();   
         }
     }
-}
-#ifdef gone
-void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin_inst_index, X64Register* out_reg) {
-    using namespace engone;
-    auto& instructions = tinycode->instructionSegment;
-    bool logging = false;
-    bool gen_forward = depth == 0;
     
-    if(logging && gen_forward)
-        log::out << log::GOLD << "Code gen\n";
-    
-    // log::out << "GEN depth: "<<depth << " " << find_reg << "\n"; 
-    
-    bool find_push = false;
-    int push_level = 0;
-    bool complete = false;
-    i64 pc = 0;
-    int next_inst_index = origin_inst_index;
-    while(!complete) {
-        if(!(pc < instructions.size()))
-            break;
-        i64 prev_pc = pc;
-        i64 inst_index = next_inst_index;
-        
-        InstructionType opcode{};
-        if(gen_forward) {
-            opcode = (InstructionType)instructions[pc];
-            pc++;
-            instruction_indices.push_back(prev_pc);
-        } else {
-            opcode = (InstructionType)instructions[instruction_indices[inst_index]];
-            next_inst_index--;
-        }
-        
-        BCRegister op0=BC_REG_INVALID, op1=BC_REG_INVALID, op2=BC_REG_INVALID;
-        InstructionControl control;
-        InstructionCast cast;
-        i64 imm;
-        
-        // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
-        if(logging) {
-            tinycode->print(prev_pc, prev_pc + 1, bytecode);
-            log::out << "\n";
-        }
-
-        switch (opcode) {
-        case BC_HALT: {
-            INCOMPLETE
-        } break;
-        case BC_NOP: {
-            INCOMPLETE
-        } break;
-        case BC_MOV_RR: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            
-            // auto reg0 = builder.allocate_register();
-            // auto reg1 = builder.allocate_register();
-
-            // builder.emit1(PREFIX_REX);
-            // builder.emit1(OPCODE_MOV_REG_RM);
-            // builder.emit_modrm(MODE_REG, reg0, reg1);
-
-            // values in registers
-            // values on stack
-            // values in memory
-
-
-            // registers[op0] = registers[op1];
-        } break;
-        case BC_MOV_RM: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            
-            // if(control & CONTROL_8B) registers[op0] = *(i8*)registers[op1];
-            // else if(control & CONTROL_16B) registers[op0] = *(i16*)registers[op1];
-            // else if(control & CONTROL_32B) registers[op0] = *(i32*)registers[op1];
-            // else if(control & CONTROL_64B) registers[op0] = *(i64*)registers[op1];
-        } break;
-        case BC_MOV_MR: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            
-            // 1 + 2 + 3 + 4 + (5 + 6 + 7 + 8)
-            
-            // if(control & CONTROL_8B) *(i8*)registers[op0] = registers[op1];
-            // else if(control & CONTROL_16B) *(i16*)registers[op0] = registers[op1];
-            // else if(control & CONTROL_32B) *(i32*)registers[op0] = registers[op1];
-            // else if(control & CONTROL_64B) *(i64*)registers[op0] = registers[op1];
-        } break;
-        case BC_MOV_RM_DISP16: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            pc += 2;
-            // INCOMPLETE
-        } break;
-        case BC_MOV_MR_DISP16: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            imm = *(i16*)&instructions[pc];
-            pc += 2;
-            
-            Assert(op1 != BC_REG_SP && op1 != BC_REG_BP);
-            Assert(control == CONTROL_32B);
-            // TODO: op0, op1 as stack or base pointer requires special handling
-            
-            
-            X64Register reg_op0{};
-            reg_op0 = ToNativeRegister(op0);
-            if(reg_op0 == X64_REG_INVALID) {
-                generateInstructions(depth + 1, op0, instruction_indices.size() - 2, &reg_op0);
-            }
-            
-            X64Register reg_op1{};
-            reg_op1 = ToNativeRegister(op1);
-            if(reg_op1 == X64_REG_INVALID) {
-                generateInstructions(depth + 1, op1, instruction_indices.size() - 2, &reg_op1);
-            }
-            u8 mode = MODE_DEREF_DISP32;
-            if(imm < 0x80 && imm >= -0x80)
-                mode = MODE_DEREF_DISP8;
-            emit1(OPCODE_MOV_RM_REG);
-            if(reg_op0 == X64_REG_SP) {
-                emit_modrm_sib(mode, reg_op1, SIB_SCALE_1, SIB_INDEX_NONE, reg_op0);
-            } else {
-                emit_modrm(mode, reg_op1, reg_op0);
-            }
-            if(mode == MODE_DEREF_DISP8)
-                emit1((u8)(i8)imm);
-            else
-                emit4((u32)(i32)imm);
-            
-            // generate op0 (address) (not needed if sp or bp)
-            // generate op1 (value) (not needed if sp or bp, maybe same with rax?)
-        } break;
-        case BC_PUSH: {
-            if(!gen_forward) {
-                op0 = (BCRegister)instructions[instruction_indices[inst_index] + 1];
-                if(find_push) {
-                    if(push_level == 0) {
-                        find_reg = op0;
-                        find_push = false;
-                    } else {
-                        push_level--;
-                    }
-                }
-            } else {
-                // ignore   
-                op0 = (BCRegister)instructions[pc++];
-            }
-        } break;
-        case BC_POP: {
-            if(!gen_forward) {
-                op0 = (BCRegister)instructions[instruction_indices[inst_index] + 1];
-                            
-                if(find_push) {
-                    push_level++;
-                } else if (!find_push && find_reg == op0) {
-                    // Value we are looking for, is on the stack.
-                    // Now we must find the push instruction
-                    // Assert(false);
-                    find_push = true;
-                }
-            } else {
-                // ignore
-                op0 = (BCRegister)instructions[pc++];
-            }
-        } break;
-        case BC_LI32: {
-            if(!gen_forward) {
-                op0 = (BCRegister)instructions[instruction_indices[inst_index] + 1];
-                imm = *(i32*)&instructions[instruction_indices[inst_index] + 2];
-                
-                if(!find_push && find_reg == op0) {
-                    X64Register reg = alloc_register(false);
-                    // Assert(reg != X64_REG_INVALID);
-                    
-                    if(reg == X64_REG_INVALID) {
-                        reg = X64_REG_A;
-                        
-                        emit1(OPCODE_PUSH_RM_SLASH_6);
-                        emit_modrm_slash(MODE_REG, 6, reg);
-                        
-                    }
-                    
-                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                    emit_modrm_slash(MODE_REG, 0, reg);
-                    emit4((u32)(i32)imm);
-                    complete = true;
-                    
-                    Assert(out_reg);
-                    *out_reg = reg;
-                }
-            } else {
-                // ignore
-                op0 = (BCRegister)instructions[pc++];
-                imm = *(i32*)&instructions[pc];
-                pc+=4;
-            }
-        } break;
-        case BC_LI64: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i64*)&instructions[pc];
-            pc+=8;
-            // registers[op0] = imm;
-        } break;
-        case BC_INCR: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-            // registers[op0] += imm;
-        } break;
-        case BC_JMP: {
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-            // pc += imm;
-        } break;
-        case BC_JZ: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-            
-            // if(op0 == 0)
-            //     pc += imm;
-        } break;
-        case BC_JNZ: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-            
-            // if(op0 != 0)
-            //     pc += imm;
-        } break;
-        case BC_CALL: {
-            LinkConventions l = (LinkConventions)instructions[pc++];
-            CallConventions c = (CallConventions)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-
-            // registers[BC_REG_SP] -= 8;
-            // CHECK_STACK();
-            // *(i64*)registers[BC_REG_SP] = pc | ((i64)tiny_index << 32);
-
-            // registers[BC_REG_SP] -= 8;
-            // CHECK_STACK();
-            // *(i64*)registers[BC_REG_SP] = registers[BC_REG_BP];
-            
-            // registers[BC_REG_BP] = registers[BC_REG_SP];
-
-        } break;
-        case BC_RET: {
-            // i64 diff = registers[BC_REG_SP] - (i64)stack.data;
-            // if(diff == (i64)(stack.max)) {
-            //     running = false;
-            //     break;
-            // }
-
-            // registers[BC_REG_BP] = *(i64*)registers[BC_REG_SP];
-            // registers[BC_REG_SP] += 8;
-            // CHECK_STACK();
-
-            // i64 encoded_pc = *(i64*)registers[BC_REG_SP];
-            // registers[BC_REG_SP] += 8;
-            // CHECK_STACK();
-
-            // pc = encoded_pc & 0xFFFF'FFFF;
-            // tiny_index = encoded_pc >> 32;
-            // tinycode = bytecode->tinyBytecodes[tiny_index];
-        } break;
-        case BC_DATAPTR: {
-            Assert(false);
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-        } break;
-        case BC_CODEPTR: {
-            Assert(false);
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-        } break;
-        case BC_CAST: {
-            op0 = (BCRegister)instructions[pc++];
-            InstructionCast cast = (InstructionCast)instructions[pc++];
-            u8 fsize = (u8)instructions[pc++];
-            u8 tsize = (u8)instructions[pc++];
-
-            // switch(cast){
-            // case CAST_UINT_UINT:
-            // case CAST_UINT_SINT:
-            // case CAST_SINT_UINT:
-            // case CAST_SINT_SINT: {
-            //     u64 tmp = registers[op0];
-            //     if(tsize == 1) *(u8*)&registers[op0] = tmp;
-            //     else if(tsize == 2) *(u16*)&registers[op0] = tmp;
-            //     else if(tsize == 4) *(u32*)&registers[op0] = tmp;
-            //     else if(tsize == 8) *(u64*)&registers[op0] = tmp;
-            //     else Assert(false);
-            // } break;
-            // case CAST_UINT_FLOAT: {
-            //     u64 tmp = registers[op0];
-            //     if(tsize == 4) *(float*)&registers[op0] = tmp;
-            //     else if(tsize == 8) *(double*)&registers[op0] = tmp;
-            //     else Assert(false);
-            // } break;
-            // case CAST_SINT_FLOAT: {
-            //     i64 tmp = registers[op0];
-            //     if(tsize == 4) *(float*)&registers[op0] = tmp;
-            //     else if(tsize == 8) *(double*)&registers[op0] = tmp;
-            //     else Assert(false);
-            // } break;
-            // case CAST_FLOAT_UINT: {
-            //     if(fsize == 4){
-            //         float tmp = *(float*)&registers[op0];
-            //         if(tsize == 1) *(u8*)&registers[op0] = tmp;
-            //         else if(tsize == 2) *(u16*)&registers[op0] = tmp;
-            //         else if(tsize == 4) *(u32*)&registers[op0] = tmp;
-            //         else if(tsize == 8) *(u64*)&registers[op0] = tmp;
-            //         else Assert(false);
-            //     } else if(fsize == 8) {
-            //         double tmp = *(double*)&registers[op0];
-            //         if(tsize == 1) *(u8*)&registers[op0] = tmp;
-            //         else if(tsize == 2) *(u16*)&registers[op0] = tmp;
-            //         else if(tsize == 4) *(u32*)&registers[op0] = tmp;
-            //         else if(tsize == 8) *(u64*)&registers[op0] = tmp;
-            //         else Assert(false);
-            //     } else Assert(false);
-            // } break;
-            // case CAST_FLOAT_SINT: {
-            //     if(fsize == 4){
-            //         float tmp = *(float*)&registers[op0];
-            //         if(tsize == 1) *(i8*)&registers[op0] = tmp;
-            //         else if(tsize == 2) *(i16*)&registers[op0] = tmp;
-            //         else if(tsize == 4) *(i32*)&registers[op0] = tmp;
-            //         else if(tsize == 8) *(i64*)&registers[op0] = tmp;
-            //         else Assert(false);
-            //     } else if(fsize == 8) {
-            //         double tmp = *(double*)&registers[op0];
-            //         if(tsize == 1) *(i8*)&registers[op0] = tmp;
-            //         else if(tsize == 2) *(i16*)&registers[op0] = tmp;
-            //         else if(tsize == 4) *(i32*)&registers[op0] = tmp;
-            //         else if(tsize == 8) *(i64*)&registers[op0] = tmp;
-            //         else Assert(false);
-            //     } else Assert(false);
-            // } break;
-            // case CAST_FLOAT_FLOAT: {
-            //     if(fsize == 4 && tsize == 4) *(float*)&registers[op0] = *(float*)registers[op0];
-            //     else if(fsize == 4 && tsize == 8) *(double*)&registers[op0] = *(float*)registers[op0];
-            //     else if(fsize == 8 && tsize == 4) *(float*)&registers[op0] = *(double*)registers[op0];
-            //     else if(fsize == 8 && tsize == 8) *(double*)&registers[op0] = *(double*)registers[op0];
-            //     else Assert(false);
-            // } break;
-            // default: Assert(false);
-            // }
-            
-        } break;
-        case BC_MEMZERO: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            memset((void*)op0,0, op1);
-        } break;
-        case BC_MEMCPY: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            op2 = (BCRegister)instructions[pc++];
-            memcpy((void*)op0,(void*)op1, op2);
-        } break;
-        case BC_ADD:
-        case BC_SUB:
-        case BC_MUL:
-        case BC_DIV:
-        case BC_MOD:
-        case BC_EQ:
-        case BC_NEQ:
-        case BC_LT:
-        case BC_LTE:
-        case BC_GT:
-        case BC_GTE: {
-            if(!gen_forward) {
-                op0 = (BCRegister)instructions[instruction_indices[inst_index] + 1];
-                op1 = (BCRegister)instructions[instruction_indices[inst_index] + 2];
-                control = (InstructionControl)instructions[instruction_indices[inst_index] + 3];
-                
-                if(!find_push && find_reg == op0) {
-                    // It is time to generate add instruction.
-                    // But first we must generate values for operands.
-                    
-                    X64Register reg0 = ToNativeRegister(op0);
-                    if(reg0 == X64_REG_INVALID) {
-                        generateInstructions(depth + 1, op0, inst_index - 1, &reg0);
-                    }
-                    
-                    X64Register reg1 = ToNativeRegister(op1);
-                    if(reg1 == X64_REG_INVALID) {
-                        generateInstructions(depth + 1, op1, inst_index - 1, &reg1);
-                    }
-                    
-                    switch(opcode) {
-                        case BC_ADD: {
-                            // emit1(PREFIX_REXW);
-                            emit1(OPCODE_ADD_RM_REG);
-                            emit_modrm(MODE_REG, reg1, reg0);
-                        } break;
-                        case BC_SUB: {
-                            // emit1(PREFIX_REXW);
-                            emit1(OPCODE_SUB_REG_RM);
-                            emit_modrm(MODE_REG, reg0, reg1);
-                        } break;
-                        case BC_MUL: {
-                            // TODO: Handle signed/unsigned multiplication (using InstructionControl)
-                            emit2(OPCODE_2_IMUL_REG_RM);
-                            emit_modrm(MODE_REG, reg1, reg0);
-                        } break;
-                        default: Assert(false);
-                    }
-                    
-                    free_register(reg1);
-                    
-                    Assert(out_reg);
-                    *out_reg = reg0;
-                    
-                    complete = true;
-                }
-            } else {
-                // ignore
-                op0 = (BCRegister)instructions[pc++];
-                op1 = (BCRegister)instructions[pc++];
-                control = (InstructionControl)instructions[pc++];
-            }
-
-            // nocheckin, we assume 32 bit float operation
-            
-            // if(control & CONTROL_FLOAT_OP) {
-            //     switch(opcode){
-            //         #define OP(P) *(float*)&registers[op0] = *(float*)&registers[op0] P *(float*)&registers[op1]; break;
-            //         case BC_ADD: OP(+)
-            //         case BC_SUB: OP(-)
-            //         case BC_MUL: OP(*)
-            //         case BC_DIV: OP(/)
-            //         case BC_MOD: *(float*)&registers[op0] = fmodf(*(float*)&registers[op0], *(float*)&registers[op1]); break;
-            //         case BC_EQ:  OP(==)
-            //         case BC_NEQ: OP(!=)
-            //         case BC_LT:  OP(<)
-            //         case BC_LTE: OP(<=)
-            //         case BC_GT:  OP(>)
-            //         case BC_GTE: OP(>=)
-            //         default: Assert(false);
-            //         #undef OP
-            //     }
-            // } else {
-            //     switch(opcode){
-            //         #define OP(P) registers[op0] = registers[op0] P registers[op1]; break;
-            //         case BC_ADD: OP(+)
-            //         case BC_SUB: OP(-)
-            //         case BC_MUL: OP(*)
-            //         case BC_DIV: OP(/)
-            //         case BC_MOD: OP(%)
-            //         case BC_EQ:  OP(==)
-            //         case BC_NEQ: OP(!=)
-            //         case BC_LT:  OP(<)
-            //         case BC_LTE: OP(<=)
-            //         case BC_GT:  OP(>)
-            //         case BC_GTE: OP(>=)
-            //         default: Assert(false);
-            //         #undef OP
-            //     }
-            // }
-        } break;
-        case BC_LAND:
-        case BC_LOR:
-        case BC_LNOT:
-        case BC_BAND:
-        case BC_BOR:
-        case BC_BXOR:
-        case BC_BLSHIFT:
-        case BC_BRSHIFT: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            
-            // switch(opcode){
-            //     #define OP(P) registers[op0] = registers[op0] P registers[op1]; break;
-            //     case BC_BXOR: OP(^)
-            //     case BC_BOR: OP(|)
-            //     case BC_BAND: OP(&)
-            //     case BC_BLSHIFT: OP(<<)
-            //     case BC_BRSHIFT: OP(>>)
-            //     case BC_LAND: OP(&&)
-            //     case BC_LOR: OP(||)
-            //     case BC_LNOT: registers[op0] = !registers[op1];
-            //     default: Assert(false);
-            //     #undef OP
-            // }
-        } break;
+    // TODO: If you have many relocations you can use process them using multiple threads.
+    //  It can't be too few because the overhead of managing the threads would be worse
+    //  than the performance gain.
+    for(int i=0;i<relativeRelocations.size();i++) {
+        auto& rel = relativeRelocations[i];
+        if(rel.bcAddress == tinycode->instructionSegment.size())
+            set_imm32(rel.immediateToModify, size() - rel.currentIP);
+        else {
+            Assert(rel.bcAddress>=0); // native functions not implemented
+            i32 value = bc_to_x64_translation[rel.bcAddress] - rel.currentIP;
+            set_imm32(rel.immediateToModify, value);
+            // If you are wondering why the relocation is zero then it is because it
+            // is relative and will jump to the next instruction. This isn't necessary so
+            // they should be optimised away. Don't do this now since it makes the conversion
+            // confusing.
         }
     }
 }
-#endif
 X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
     if(!is_float) {
         if(reg != X64_REG_INVALID) {
@@ -2034,485 +2583,6 @@ void X64Builder::free_register(X64Register reg) {
     }
     pair->second.used = false;
 }
-
-void X64Builder::generateInstructions_slow() {
-    using namespace engone;
-    auto& instructions = tinycode->instructionSegment;
-    bool logging = false;
-    
-    if(logging)
-        log::out << log::GOLD << "Code gen\n";
-    
-    // log::out << "GEN depth: "<<depth << " " << find_reg << "\n"; 
-    
-    i64 pc = 0;
-    while(true) {
-        if(!(pc < instructions.size()))
-            break;
-        i64 prev_pc = pc;
-        
-        InstructionType opcode{};
-        opcode = (InstructionType)instructions[pc++];
-        
-        BCRegister op0=BC_REG_INVALID, op1=BC_REG_INVALID, op2=BC_REG_INVALID;
-        InstructionControl control;
-        InstructionCast cast;
-        i64 imm;
-        
-        // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
-        if(logging) {
-            tinycode->print(prev_pc, prev_pc + 1, bytecode);
-            log::out << "\n";
-        }
-
-        switch (opcode) {
-        case BC_HALT: {
-            INCOMPLETE
-        } break;
-        case BC_NOP: {
-            INCOMPLETE
-        } break;
-        case BC_MOV_RR: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            
-            // auto reg0 = builder.allocate_register();
-            // auto reg1 = builder.allocate_register();
-
-            // builder.emit1(PREFIX_REX);
-            // builder.emit1(OPCODE_MOV_REG_RM);
-            // builder.emit_modrm(MODE_REG, reg0, reg1);
-
-            // values in registers
-            // values on stack
-            // values in memory
-
-
-            // registers[op0] = registers[op1];
-        } break;
-        case BC_MOV_RM: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            
-            // if(control & CONTROL_8B) registers[op0] = *(i8*)registers[op1];
-            // else if(control & CONTROL_16B) registers[op0] = *(i16*)registers[op1];
-            // else if(control & CONTROL_32B) registers[op0] = *(i32*)registers[op1];
-            // else if(control & CONTROL_64B) registers[op0] = *(i64*)registers[op1];
-        } break;
-        case BC_MOV_MR: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            
-            // 1 + 2 + 3 + 4 + (5 + 6 + 7 + 8)
-            
-            // if(control & CONTROL_8B) *(i8*)registers[op0] = registers[op1];
-            // else if(control & CONTROL_16B) *(i16*)registers[op0] = registers[op1];
-            // else if(control & CONTROL_32B) *(i32*)registers[op0] = registers[op1];
-            // else if(control & CONTROL_64B) *(i64*)registers[op0] = registers[op1];
-        } break;
-        case BC_MOV_RM_DISP16: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            pc += 2;
-            // INCOMPLETE
-        } break;
-        case BC_MOV_MR_DISP16: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            imm = *(i16*)&instructions[pc];
-            pc += 2;
-            
-            Assert(op1 != BC_REG_SP && op1 != BC_REG_BP);
-            Assert(control == CONTROL_32B);
-            // TODO: op0, op1 as stack or base pointer requires special handling
-            
-            
-            X64Register reg_op0{};
-            X64Register reg_op1{};
-            u8 mode = MODE_DEREF_DISP32;
-            if(imm < 0x80 && imm >= -0x80)
-                mode = MODE_DEREF_DISP8;
-            emit1(PREFIX_REXW);
-            emit1(OPCODE_MOV_RM_REG);
-            if(reg_op0 == X64_REG_SP) {
-                emit_modrm_sib(mode, reg_op1, SIB_SCALE_1, SIB_INDEX_NONE, reg_op0);
-            } else {
-                emit_modrm(mode, reg_op1, reg_op0);
-            }
-            if(mode == MODE_DEREF_DISP8)
-                emit1((u8)(i8)imm);
-            else
-                emit4((u32)(i32)imm);
-            
-            // generate op0 (address) (not needed if sp or bp)
-            // generate op1 (value) (not needed if sp or bp, maybe same with rax?)
-        } break;
-        case BC_PUSH: {
-            op0 = (BCRegister)instructions[pc++];
-        } break;
-        case BC_POP: {
-            op0 = (BCRegister)instructions[pc++];
-        } break;
-        case BC_LI32: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-        } break;
-        case BC_LI64: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i64*)&instructions[pc];
-            pc+=8;
-            // registers[op0] = imm;
-        } break;
-        case BC_INCR: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-            // registers[op0] += imm;
-        } break;
-        case BC_JMP: {
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-            // pc += imm;
-        } break;
-        case BC_JZ: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-            
-            // if(op0 == 0)
-            //     pc += imm;
-        } break;
-        case BC_JNZ: {
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-            
-            // if(op0 != 0)
-            //     pc += imm;
-        } break;
-        case BC_CALL: {
-            LinkConventions l = (LinkConventions)instructions[pc++];
-            CallConventions c = (CallConventions)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-
-            // registers[BC_REG_SP] -= 8;
-            // CHECK_STACK();
-            // *(i64*)registers[BC_REG_SP] = pc | ((i64)tiny_index << 32);
-
-            // registers[BC_REG_SP] -= 8;
-            // CHECK_STACK();
-            // *(i64*)registers[BC_REG_SP] = registers[BC_REG_BP];
-            
-            // registers[BC_REG_BP] = registers[BC_REG_SP];
-
-        } break;
-        case BC_RET: {
-            // i64 diff = registers[BC_REG_SP] - (i64)stack.data;
-            // if(diff == (i64)(stack.max)) {
-            //     running = false;
-            //     break;
-            // }
-
-            // registers[BC_REG_BP] = *(i64*)registers[BC_REG_SP];
-            // registers[BC_REG_SP] += 8;
-            // CHECK_STACK();
-
-            // i64 encoded_pc = *(i64*)registers[BC_REG_SP];
-            // registers[BC_REG_SP] += 8;
-            // CHECK_STACK();
-
-            // pc = encoded_pc & 0xFFFF'FFFF;
-            // tiny_index = encoded_pc >> 32;
-            // tinycode = bytecode->tinyBytecodes[tiny_index];
-        } break;
-        case BC_DATAPTR: {
-            Assert(false);
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-        } break;
-        case BC_CODEPTR: {
-            Assert(false);
-            op0 = (BCRegister)instructions[pc++];
-            imm = *(i32*)&instructions[pc];
-            pc+=4;
-        } break;
-        case BC_CAST: {
-            op0 = (BCRegister)instructions[pc++];
-            InstructionCast cast = (InstructionCast)instructions[pc++];
-            u8 fsize = (u8)instructions[pc++];
-            u8 tsize = (u8)instructions[pc++];
-
-            // switch(cast){
-            // case CAST_UINT_UINT:
-            // case CAST_UINT_SINT:
-            // case CAST_SINT_UINT:
-            // case CAST_SINT_SINT: {
-            //     u64 tmp = registers[op0];
-            //     if(tsize == 1) *(u8*)&registers[op0] = tmp;
-            //     else if(tsize == 2) *(u16*)&registers[op0] = tmp;
-            //     else if(tsize == 4) *(u32*)&registers[op0] = tmp;
-            //     else if(tsize == 8) *(u64*)&registers[op0] = tmp;
-            //     else Assert(false);
-            // } break;
-            // case CAST_UINT_FLOAT: {
-            //     u64 tmp = registers[op0];
-            //     if(tsize == 4) *(float*)&registers[op0] = tmp;
-            //     else if(tsize == 8) *(double*)&registers[op0] = tmp;
-            //     else Assert(false);
-            // } break;
-            // case CAST_SINT_FLOAT: {
-            //     i64 tmp = registers[op0];
-            //     if(tsize == 4) *(float*)&registers[op0] = tmp;
-            //     else if(tsize == 8) *(double*)&registers[op0] = tmp;
-            //     else Assert(false);
-            // } break;
-            // case CAST_FLOAT_UINT: {
-            //     if(fsize == 4){
-            //         float tmp = *(float*)&registers[op0];
-            //         if(tsize == 1) *(u8*)&registers[op0] = tmp;
-            //         else if(tsize == 2) *(u16*)&registers[op0] = tmp;
-            //         else if(tsize == 4) *(u32*)&registers[op0] = tmp;
-            //         else if(tsize == 8) *(u64*)&registers[op0] = tmp;
-            //         else Assert(false);
-            //     } else if(fsize == 8) {
-            //         double tmp = *(double*)&registers[op0];
-            //         if(tsize == 1) *(u8*)&registers[op0] = tmp;
-            //         else if(tsize == 2) *(u16*)&registers[op0] = tmp;
-            //         else if(tsize == 4) *(u32*)&registers[op0] = tmp;
-            //         else if(tsize == 8) *(u64*)&registers[op0] = tmp;
-            //         else Assert(false);
-            //     } else Assert(false);
-            // } break;
-            // case CAST_FLOAT_SINT: {
-            //     if(fsize == 4){
-            //         float tmp = *(float*)&registers[op0];
-            //         if(tsize == 1) *(i8*)&registers[op0] = tmp;
-            //         else if(tsize == 2) *(i16*)&registers[op0] = tmp;
-            //         else if(tsize == 4) *(i32*)&registers[op0] = tmp;
-            //         else if(tsize == 8) *(i64*)&registers[op0] = tmp;
-            //         else Assert(false);
-            //     } else if(fsize == 8) {
-            //         double tmp = *(double*)&registers[op0];
-            //         if(tsize == 1) *(i8*)&registers[op0] = tmp;
-            //         else if(tsize == 2) *(i16*)&registers[op0] = tmp;
-            //         else if(tsize == 4) *(i32*)&registers[op0] = tmp;
-            //         else if(tsize == 8) *(i64*)&registers[op0] = tmp;
-            //         else Assert(false);
-            //     } else Assert(false);
-            // } break;
-            // case CAST_FLOAT_FLOAT: {
-            //     if(fsize == 4 && tsize == 4) *(float*)&registers[op0] = *(float*)registers[op0];
-            //     else if(fsize == 4 && tsize == 8) *(double*)&registers[op0] = *(float*)registers[op0];
-            //     else if(fsize == 8 && tsize == 4) *(float*)&registers[op0] = *(double*)registers[op0];
-            //     else if(fsize == 8 && tsize == 8) *(double*)&registers[op0] = *(double*)registers[op0];
-            //     else Assert(false);
-            // } break;
-            // default: Assert(false);
-            // }
-            
-        } break;
-        case BC_MEMZERO: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-        } break;
-        case BC_MEMCPY: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            op2 = (BCRegister)instructions[pc++];
-        } break;
-        case BC_ADD:
-        case BC_SUB:
-        case BC_MUL:
-        case BC_DIV:
-        case BC_MOD:
-        case BC_EQ:
-        case BC_NEQ:
-        case BC_LT:
-        case BC_LTE:
-        case BC_GT:
-        case BC_GTE: {
-                   
-                op0 = (BCRegister)instructions[pc++];
-                op1 = (BCRegister)instructions[pc++];
-                control = (InstructionControl)instructions[pc++];
-            
-
-
-            // nocheckin, we assume 32 bit float operation
-            
-            // if(control & CONTROL_FLOAT_OP) {
-            //     switch(opcode){
-            //         #define OP(P) *(float*)&registers[op0] = *(float*)&registers[op0] P *(float*)&registers[op1]; break;
-            //         case BC_ADD: OP(+)
-            //         case BC_SUB: OP(-)
-            //         case BC_MUL: OP(*)
-            //         case BC_DIV: OP(/)
-            //         case BC_MOD: *(float*)&registers[op0] = fmodf(*(float*)&registers[op0], *(float*)&registers[op1]); break;
-            //         case BC_EQ:  OP(==)
-            //         case BC_NEQ: OP(!=)
-            //         case BC_LT:  OP(<)
-            //         case BC_LTE: OP(<=)
-            //         case BC_GT:  OP(>)
-            //         case BC_GTE: OP(>=)
-            //         default: Assert(false);
-            //         #undef OP
-            //     }
-            // } else {
-            //     switch(opcode){
-            //         #define OP(P) registers[op0] = registers[op0] P registers[op1]; break;
-            //         case BC_ADD: OP(+)
-            //         case BC_SUB: OP(-)
-            //         case BC_MUL: OP(*)
-            //         case BC_DIV: OP(/)
-            //         case BC_MOD: OP(%)
-            //         case BC_EQ:  OP(==)
-            //         case BC_NEQ: OP(!=)
-            //         case BC_LT:  OP(<)
-            //         case BC_LTE: OP(<=)
-            //         case BC_GT:  OP(>)
-            //         case BC_GTE: OP(>=)
-            //         default: Assert(false);
-            //         #undef OP
-            //     }
-            // }
-        } break;
-        case BC_LAND:
-        case BC_LOR:
-        case BC_LNOT:
-        case BC_BAND:
-        case BC_BOR:
-        case BC_BXOR:
-        case BC_BLSHIFT:
-        case BC_BRSHIFT: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            
-            // switch(opcode){
-            //     #define OP(P) registers[op0] = registers[op0] P registers[op1]; break;
-            //     case BC_BXOR: OP(^)
-            //     case BC_BOR: OP(|)
-            //     case BC_BAND: OP(&)
-            //     case BC_BLSHIFT: OP(<<)
-            //     case BC_BRSHIFT: OP(>>)
-            //     case BC_LAND: OP(&&)
-            //     case BC_LOR: OP(||)
-            //     case BC_LNOT: registers[op0] = !registers[op1];
-            //     default: Assert(false);
-            //     #undef OP
-            // }
-        } break;
-        }
-    }
-}
-
-#ifdef gone
-void X64Program::generateFromTinycode(Bytecode* code, TinyBytecode* tinycode) {
-    using namespace engone;
-    
-    struct Inst {
-        InstructionType opcode;
-        BCRegister op0;
-        BCRegister op1;
-        InstructionControl control;
-        i64 imm;
-    };
-    DynamicArray<Inst> insts{};
-    
-    struct Reg {
-        bool in_use = false; // occupied
-        bool used_at_least_once = false;
-    };
-    Reg registers[BC_REG_MAX];
-    registers[BC_REG_SP].in_use = true;
-    registers[BC_REG_BP].in_use = true;
-    
-    int pc = 0;
-    bool running = true;
-    while(running) {
-        i64 prev_pc = pc;
-        if(pc>=(u64)tinycode->instructionSegment.used)
-            break;
-
-        InstructionType opcode = (InstructionType)tinycode->instructionSegment[pc++];
-        
-        BCRegister op0=BC_REG_INVALID, op1, op2;
-        InstructionControl control;
-        InstructionCast cast;
-        i64 imm;
-        
-        if(opcode == BC_LI32) {
-            op0 = (BCRegister)tinycode->instructionSegment[pc++];
-            imm = *(i32*)&tinycode->instructionSegment[pc];
-            pc+=4;
-            insts.add({opcode, op0, BC_REG_INVALID, CONTROL_NONE, imm});
-            
-            registers[op0].in_use = true;
-        } else if(opcode == BC_PUSH) {
-            op0 = (BCRegister)tinycode->instructionSegment[pc++];
-            insts.add({opcode, op0});
-            registers[op0].used_at_least_once = true;
-        } else if(opcode == BC_MOV_RR) {
-            op0 = (BCRegister)tinycode->instructionSegment[pc++];
-            op1 = (BCRegister)tinycode->instructionSegment[pc++];
-            insts.add({opcode, op0, op1});
-            registers[op0].in_use = true;
-            registers[op1].used_at_least_once = true;
-            Assert(registers[op1].in_use);
-        } else if(opcode == BC_INCR) {
-            op0 = (BCRegister)tinycode->instructionSegment[pc++];
-            imm = *(i32*)&tinycode->instructionSegment[pc];
-            pc+=4;
-            insts.add({opcode, op0, BC_REG_INVALID, CONTROL_NONE, imm});
-            Assert(registers[op0].in_use);
-        } else if(opcode == BC_POP) {
-            op0 = (BCRegister)tinycode->instructionSegment[pc++];
-            
-            bool modified = false;
-            for(int i=insts.size()-1;i>=0;i--) {
-                auto& inst = insts[i];
-                if(inst.opcode == BC_PUSH) {
-                    modified = true;
-                    
-                    /*
-                    li a, 5
-                    push a
-                    li a, 5
-                    push a
-                    pop a
-                    pop b
-                    add a, b
-                    push a
-                    pop a
-                    mov_mr bp, a
-                    
-                    li a, 5
-                    add a, 5
-                    mov mr bp, a
-                    
-                    a, b
-                    [0, 0]
-                    */
-                    
-                    // inst.op0
-                    // break;
-                }
-            }
-            if(!modified) {
-                insts.add({ opcode, op0 });
-                Assert(registers[op0].in_use);
-            }
-        }
-    }
-}
-
-#endif
 bool X64Builder::_reserve(u32 newAllocationSize){
     if(newAllocationSize==0){
         if(tinyprog->_allocationSize!=0){
@@ -2610,6 +2680,12 @@ void X64Builder::emit8(u64 qword){
     *(tinyprog->text + tinyprog->head + 7) = *(ptr + 7);
     tinyprog->head += 8;
 }
+void X64Builder::fix_relative_jump_imm8(u32 offset, u8 value) {
+    *(u8*)(tinyprog->text + offset) = value;
+}
+void X64Builder::set_imm32(u32 offset, u32 value) {
+    *(u32*)(tinyprog->text + offset) = value;
+}
 void X64Builder::emit_bytes(u8* arr, u64 len){
     ensure_bytes(len);
     
@@ -2648,6 +2724,20 @@ void X64Builder::emit_modrm_rip(X64Register _reg, u32 disp32){
 void X64Builder::emit_modrm_sib(u8 mod, X64Register _reg, u8 scale, u8 index, X64Register _base){
     u8 base = _base - 1;
     u8 reg = _reg - 1;
+    //  register to register (mod = 0b11) doesn't work with SIB byte
+    Assert(("Use addModRM instead",mod!=0b11));
+
+    Assert(("Ignored meaning in SIB byte. Look at intel x64 manual and fix it.",base != 0b101));
+
+    u8 rm = 0b100;
+    Assert((mod&~3) == 0 && (reg&~7)==0 && (rm&~7)==0);
+    Assert((scale&~3) == 0 && (index&~7)==0 && (base&~7)==0);
+
+    emit1((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
+    emit1((u8)(base | (index << (u8)3) | (scale << (u8)6)));
+}
+void X64Builder::emit_modrm_sib_slash(u8 mod, u8 reg, u8 scale, u8 index, X64Register _base){
+    u8 base = _base - 1;
     //  register to register (mod = 0b11) doesn't work with SIB byte
     Assert(("Use addModRM instead",mod!=0b11));
 

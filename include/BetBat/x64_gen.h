@@ -118,22 +118,26 @@ private:
     
 };
 
+// This structure is WAY to large, how to minimize it?
 struct OPNode {
-    InstructionType opcode;
-    InstructionControl control;
-    InstructionCast cast;
-    i64 imm;
-    BCRegister op0;
-    BCRegister op1;
-    BCRegister op2;
-    LinkConventions link;
-    CallConventions call;
-    u8 fsize;
-    u8 tsize;
+    OPNode(u32 bc_index, InstructionType type) : bc_index(bc_index), opcode(type) {}
+    u32 bc_index = 0;
+    InstructionType opcode = BC_HALT;
+    i64 imm = 0;
+    BCRegister op0 = BC_REG_INVALID;
+    BCRegister op1 = BC_REG_INVALID;
+    BCRegister op2 = BC_REG_INVALID;
     
-    OPNode* in0;
-    OPNode* in1;
-    OPNode* in2;
+    // TODO: Union on these?
+    InstructionControl control = CONTROL_NONE;
+    InstructionCast cast = CAST_FLOAT_FLOAT;
+    
+    LinkConventions link = LinkConventions::NONE;
+    CallConventions call = CallConventions::BETCALL;
+    
+    OPNode* in0 = nullptr;
+    OPNode* in1 = nullptr;
+    OPNode* in2 = nullptr;
 };
 
 struct X64Builder {
@@ -144,7 +148,12 @@ struct X64Builder {
     
     QuickArray<OPNode*> nodes;
     
-    QuickArray<u32> instruction_indices;
+    // QuickArray<u32> instruction_indices;
+    
+    OPNode* createNode(u32 bc_index, InstructionType opcode) {
+        auto ptr = new OPNode(bc_index, opcode);
+        return ptr;
+    }
     
     // struct ValueLocation {
     //     enum Kind {
@@ -194,6 +203,7 @@ struct X64Builder {
     // RIP-relative addressing
     void emit_modrm_rip(X64Register reg, u32 disp32);
     void emit_modrm_sib(u8 mod, X64Register reg, u8 scale, u8 index, X64Register base_reg);
+    void emit_modrm_sib_slash(u8 mod, u8 reg, u8 scale, u8 index, X64Register base_reg);
 
     void emit_bytes(u8* arr, u64 len);
 
@@ -205,6 +215,9 @@ struct X64Builder {
     void emit4(i64 _);
     void emit8(i8 _);
     void emit_modrm_rip(u8, i64);
+    
+    void fix_relative_jump_imm8(u32 offset, u8 value);
+    void set_imm32(u32 offset, u32 value);
     
     bool _reserve(u32 size);
     

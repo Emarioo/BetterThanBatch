@@ -873,7 +873,7 @@ void AST::shareWithGlobalScope(ASTScope* body) {
 //         }
 //         case ASTScope::STATEMENT: {
 //             globalScope->add(this, body->statements[it.index]);
-//             // if(body->statements[it.index]->globalAssignment) {
+//             // if(body->statements[it.index]->globalDeclaration) {
 //             //     globalScope->add_at(this, body->statements[it.index], CONTENT_ORDER_ZERO);
 //             // } else {
 //             // }

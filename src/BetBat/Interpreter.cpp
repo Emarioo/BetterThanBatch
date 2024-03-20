@@ -434,9 +434,10 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
-            InstructionCast cast = (InstructionCast)instructions[pc++];
-            u8 fsize = (u8)instructions[pc++];
-            u8 tsize = (u8)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            cast = (InstructionCast)instructions[pc++];
+            u8 fsize = 1 << (control & CONTROL_MASK_SIZE);
+            u8 tsize = 1 << (control & CONTROL_MASK_CONVERT_SIZE);
 
             switch(cast){
             case CAST_UINT_UINT:

@@ -365,30 +365,30 @@ void BytecodeBuilder::emit_ret() {
 }
 void BytecodeBuilder::emit_jmp(int pc) {
     emit_opcode(BC_JMP);
-    emit_imm32(pc - get_pc());
+    emit_imm32(pc - (get_pc() + 4)); // +4 because of immediate
 }
 int BytecodeBuilder::emit_jmp() {
     emit_opcode(BC_JMP);
-    int tmp  = get_pc();
+    int imm_offset  = get_pc();
     emit_imm32(0);
-    return tmp;
+    return imm_offset;
 }
 void BytecodeBuilder::emit_jz(BCRegister reg, int pc) {
     emit_opcode(BC_JZ);
     emit_operand(reg);
-    emit_imm32(pc - get_pc());
+    emit_imm32(pc - (get_pc() + 4));  // +4 because of immediate
 }
 int BytecodeBuilder::emit_jz(BCRegister reg) {
     emit_opcode(BC_JZ);
     emit_operand(reg);
-    int tmp  = get_pc();
+    int imm_offset = get_pc();
     emit_imm32(0);
-    return tmp;
+    return imm_offset;
 }
 void BytecodeBuilder::emit_jnz(BCRegister reg, int pc) {
     emit_opcode(BC_JNZ);
     emit_operand(reg);
-    emit_imm32(pc - get_pc());
+    emit_imm32(pc - (get_pc() + 4)); // +4 because of immediate
 }
 int BytecodeBuilder::emit_jnz(BCRegister reg) {
     emit_opcode(BC_JNZ);
@@ -397,8 +397,8 @@ int BytecodeBuilder::emit_jnz(BCRegister reg) {
     emit_imm32(0);
     return tmp;
 }
-void BytecodeBuilder::fix_jump_here(int imm_index) {
-    *(int*)&tinycode->instructionSegment[imm_index] = get_pc() - imm_index;
+void BytecodeBuilder::fix_jump_imm32_here(int imm_index) {
+    *(int*)&tinycode->instructionSegment[imm_index] = get_pc() - (imm_index + 4); // +4 because immediate should be relative to the end of the instruction, not relative to the offset within the instruction
 }
 void BytecodeBuilder::emit_mov_rr(BCRegister to, BCRegister from){
     emit_opcode(BC_MOV_RR);
@@ -606,11 +606,26 @@ void BytecodeBuilder::emit_memcpy(BCRegister dst, BCRegister src, BCRegister siz
     emit_operand(size_reg);
 }
 void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType, u8 from_size, u8 to_size) {
+    InstructionControl control = InstructionControl::CONTROL_NONE;
+    switch(from_size) {
+        case 1: control = (InstructionControl)(control | CONTROL_8B); break;
+        case 2: control = (InstructionControl)(control | CONTROL_16B); break;
+        case 4: control = (InstructionControl)(control | CONTROL_32B); break;
+        case 8: control = (InstructionControl)(control | CONTROL_64B); break;
+        Assert(false);
+    }
+    switch(to_size) {
+        case 1: control = (InstructionControl)(control | CONTROL_CONVERT_8B); break;
+        case 2: control = (InstructionControl)(control | CONTROL_CONVERT_16B); break;
+        case 4: control = (InstructionControl)(control | CONTROL_CONVERT_32B); break;
+        case 8: control = (InstructionControl)(control | CONTROL_CONVERT_64B); break;
+        Assert(false);
+    }
+    
     emit_opcode(BC_CAST);
     emit_operand(reg);
+    emit_imm8(control);
     emit_imm8(castType);
-    emit_imm8(from_size);
-    emit_imm8(to_size);
 }
 
 void BytecodeBuilder::emit_opcode(InstructionType type) {
@@ -716,6 +731,20 @@ bool TinyBytecode::applyRelocations(Bytecode* code) {
     return suc;
 }
 
+// extern const char* control_names[] {
+    
+// };
+extern const char* cast_names[] {
+    "uint->uint",
+    "uint->sint",
+    "sint->uint",
+    "sint->sint",
+    "float->uint",
+    "float->sint",
+    "uint->float",
+    "sint->float",
+    "float->float",
+};
 extern const char* instruction_names[] {
     "halt", // BC_HALT
     "nop", // BC_NOP
@@ -801,6 +830,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, bool for
       
     int pc=low_index;
     while(pc<high_index) {
+        int prev_pc = pc;
         InstructionType opcode = (InstructionType)instructionSegment[pc++];
         
         BCRegister op0, op1, op2;
@@ -809,7 +839,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, bool for
         i64 imm;
         
         char buf[8];
-        sprintf(buf, "%3d", pc);
+        sprintf(buf, "%3d", prev_pc);
         log::out << log::GRAY << " " << buf << log::PURPLE << " " << instruction_names[opcode];
         log::out << log::NO_COLOR;
         
@@ -953,11 +983,13 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, bool for
         }
         case BC_CAST: {
             op0 = (BCRegister)instructionSegment[pc++];
+            control = (InstructionControl)instructionSegment[pc++];
             cast = (InstructionCast)instructionSegment[pc++];
-            u8 from_size = (u8)instructionSegment[pc++];
-            u8 to_size = (u8)instructionSegment[pc++];
             
-            log::out << " " << register_names[op0] << ", cast:"<< cast <<", from_size:"<<from_size<<" to_size:"<<to_size;
+            u8 from_size = 1 << GET_CONTROL_SIZE(control);
+            u8 to_size = 1 << GET_CONTROL_CONVERT_SIZE(control);
+            
+            log::out << " " << register_names[op0] << ", "<< cast_names[cast] <<", "<<from_size<<"b->"<<to_size<<"b";
             break;
         }
         case BC_MEMZERO: {

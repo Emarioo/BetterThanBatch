@@ -204,7 +204,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression);
 SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement);
 // returns 0 if syntax is wrong for flow parsing
 SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* parentStruct, bool is_operator);
-SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement);
+SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement);
 // out token contains a newly allocated string. use delete[] on it
 SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags = PARSE_NO_FLAGS, ParseFlags* out_flags = nullptr);
 
@@ -579,6 +579,10 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
                     mem.defaultValue = defaultValue;
                     mem.stringType = typeId;
                     mem.location = info.srcloc(name_tok);
+                    
+                    // auto l = info.lexer->getTokenSource_unsafe(mem.location);
+                    // log::out << l->line << " " << l->column<<"\n";
+                    
                     break;
                 }
                 case SIGNAL_COMPLETE_FAILURE: return SIGNAL_COMPLETE_FAILURE;
@@ -1559,6 +1563,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 bool negativeNumber = false;
                 if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                     ops.pop();
+                    saved_locations.pop();
                     negativeNumber = true;
                 }
                 Assert(view.ptr[0]!='-');// ensure that the tokenizer hasn't been changed
@@ -1707,6 +1712,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     tmp->f64Value = lexer::ConvertDecimal(view);
                     if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                         ops.pop();
+                        saved_locations.pop();
                         tmp->f64Value = -tmp->f64Value;
                     }
                 } else {
@@ -1715,6 +1721,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                     tmp->f32Value = lexer::ConvertDecimal(view);
                     if (ops.size()>0 && ops.last() == AST_UNARY_SUB){
                         ops.pop();
+                        saved_locations.pop();
                         tmp->f32Value = -tmp->f32Value;
                     }
                 }
@@ -2022,6 +2029,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                             ns += "::";
                             namespaceNames.pop();
                             ops.pop();
+                            saved_locations.pop();
                         } else {
                             break;
                         }
@@ -2066,6 +2074,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                             ns += "::";
                             namespaceNames.pop();
                             ops.pop();
+                            saved_locations.pop();
                         } else {
                             break;
                         }
@@ -2176,6 +2185,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                             if(op == AST_FROM_NAMESPACE) {
                                 nsOps++;
                                 ops.pop();
+                                saved_locations.pop();
                             } else {
                                 break;
                             }
@@ -3355,20 +3365,20 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
     return SIGNAL_SUCCESS;
 }
 
-SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
+SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
     _PLOG(FUNC_ENTER)
 
-    bool globalAssignment = false;
+    bool globalDeclaration = false;
 
     StringView view{};
     auto token0 = info.getinfo(&view);
-    auto token1 = info.getinfo(nullptr, 1);
+    auto token1 = info.getinfo(1);
     if(token0->type != lexer::TOKEN_IDENTIFIER) {
         return SIGNAL_NO_MATCH;
     } else if(view == "global") {
-        globalAssignment = true;
+        globalDeclaration = true;
         info.advance();
     } else if (token1->type == ',' || token1->type == ':' || token1->type == '=') {
         // Note that 'a, b: i32;' is a variable declaration.
@@ -3377,10 +3387,10 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
         return SIGNAL_NO_MATCH;
     }
 
-    statement = info.ast->createStatement(ASTStatement::ASSIGN);
+    statement = info.ast->createStatement(ASTStatement::DECLARATION);
     // statement->varnames.stealFrom(varnames);
     statement->firstExpression = nullptr;
-    statement->globalAssignment = globalAssignment;
+    statement->globalDeclaration = globalDeclaration;
 
     lexer::Token lengthTokenOfLastVar{};
 
@@ -3410,11 +3420,11 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
 
             tok = info.gettok();
             if(tok.type == '=') {
-                int index = statement->varnames.size()-1;
-                while(index>=0 && !statement->varnames[index].declaration){
-                    statement->varnames[index].declaration = true;
-                    index--;
-                }
+                // int index = statement->varnames.size()-1;
+                // while(index>=0 && !statement->varnames[index].declaration){
+                //     statement->varnames[index].declaration = true;
+                //     index--;
+                // }
             } else {
                 std::string typeToken{};
                 auto signal = ParseTypeId(info,typeToken, nullptr);
@@ -3453,16 +3463,17 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
                 TypeId strId = info.ast->getTypeString(typeToken);
 
                 int index = statement->varnames.size()-1;
-                while(index>=0 && !statement->varnames[index].declaration){
+                while(index>=0 && !statement->varnames[index].assignString.isString()){
+                // while(index>=0 && !statement->varnames[index].declaration){
+                    // statement->varnames[index].declaration = true;
                     statement->varnames[index].assignString = strId;
-                    statement->varnames[index].declaration = true;
                     statement->varnames[index].arrayLength = arrayLength;
                     index--;
                 }
             }
         } else {
             auto tok = info.gettok();
-            if(globalAssignment) {
+            if(globalDeclaration) {
                 ERR_SECTION(
                     ERR_HEAD2(tok)
                     ERR_MSG("Global variables must use declaration syntax. You must use a ':' (':=' if you want the type to be inferred).")
@@ -3481,7 +3492,7 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
     // statement = info.ast->createStatement(ASTStatement::ASSIGN);
     // // statement->varnames.stealFrom(varnames);
     // statement->firstExpression = nullptr;
-    // statement->globalAssignment = globalAssignment;
+    // statement->globalDeclaration = globalDeclaration;
     
     // We usually don't want the tokenRange to include the expression.
     // statement->tokenRange.firstToken = info.get(startIndex);
@@ -3559,7 +3570,7 @@ SignalIO ParseAssignment(ParseInfo& info, ASTStatement*& statement){
 SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, ParseFlags in_flags, ParseFlags* out_flags){
     using namespace engone;
     ZoneScopedC(tracy::Color::OrangeRed1);
-    // Note: two infos in case ParseAssignment modifies it and then fails.
+    // Note: two infos in case ParseDeclaration modifies it and then fails.
     //  without two, ParseCommand would work with a modified info.
     _PLOG(FUNC_ENTER)
     // _PLOG(ENTER)
@@ -3749,7 +3760,7 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
         if(signal==SIGNAL_NO_MATCH)
             signal = ParseFlow(info,tempStatement);
         if(signal==SIGNAL_NO_MATCH) {
-            signal = ParseAssignment(info,tempStatement);
+            signal = ParseDeclaration(info,tempStatement);
         }
         if(signal==SIGNAL_NO_MATCH){
             // bad name of function? it parses an expression

@@ -779,7 +779,7 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
     if(typeId.isNormalType())
         typeInfo = ast->getTypeInfo(typeId);
     u8 size = ast->getTypeSize(typeId);
-    if(baseReg != 0) {
+    if(baseReg != 0 && zeroInitialize) {
         #ifndef DISABLE_ZERO_INITIALIZATION
         
         builder.emit_li32(BC_REG_T1, offset);
@@ -843,12 +843,14 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
         Assert(size <= 8);
         #ifndef DISABLE_ZERO_INITIALIZATION
         // only structs have default values, otherwise zero is the default
-        builder.emit_bxor(BC_REG_A, BC_REG_A);
         if(baseReg == 0){
+            builder.emit_bxor(BC_REG_A, BC_REG_A);
             builder.emit_push(BC_REG_A);
         } else {
-            BCRegister reg = BC_REG_A;
-            builder.emit_mov_mr_disp(baseReg, reg, size, offset);
+            // we generate memzero above which zero initializes
+            // builder.emit_bxor(BC_REG_A, BC_REG_A);
+            // BCRegister reg = BC_REG_A;
+            // builder.emit_mov_mr_disp(baseReg, reg, size, offset);
         }
         #else
         // Not setting zero here is certainly a bad idea
@@ -3082,7 +3084,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     }
                     u8 outSize = lsize > rsize ? lsize : rsize;
                     
-                    if(lsize != outSize || !AST::IsSigned(ltype) == AST::IsSigned(rtype)) {
+                    if(lsize != outSize || (!AST::IsSigned(ltype) && AST::IsSigned(rtype))) {
                         if(!AST::IsSigned(ltype) && !AST::IsSigned(rtype))
                             builder.emit_cast(left_reg, CAST_UINT_UINT, lsize, outSize);
                         if(!AST::IsSigned(ltype) && AST::IsSigned(rtype))
@@ -3092,7 +3094,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                         if(AST::IsSigned(ltype) && AST::IsSigned(rtype))
                             builder.emit_cast(left_reg, CAST_SINT_SINT, lsize, outSize);
                     }
-                      if(lsize != outSize || !AST::IsSigned(rtype) == AST::IsSigned(ltype)) {
+                    if(rsize != outSize || (!AST::IsSigned(rtype) && AST::IsSigned(ltype))) {
                         if(!AST::IsSigned(rtype) && !AST::IsSigned(ltype))
                             builder.emit_cast(right_reg, CAST_UINT_UINT, rsize, outSize);
                         if(!AST::IsSigned(rtype) && AST::IsSigned(ltype))
@@ -3109,7 +3111,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     }
                     if(AST::IsSigned(ltype) || AST::IsSigned(rtype)) {
                         if(!AST::IsSigned(outType))
-                            *(u32*)&outType = outType.getId() + 4;
+                            outType._infoIndex0 += 4;
                         Assert(AST::IsSigned(outType));
                     }
                 } else if ((AST::IsDecimal(ltype) || AST::IsInteger(ltype)) && (AST::IsDecimal(rtype) || AST::IsInteger(rtype))){
@@ -4104,7 +4106,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }
         };
 
-        if (statement->type == ASTStatement::ASSIGN) {
+        if (statement->type == ASTStatement::DECLARATION) {
             _GLOG(SCOPE_LOG("ASSIGN"))
             
             auto& typesFromExpr = statement->versions_expressionTypes[info.currentPolyVersion];
@@ -4124,7 +4126,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }
 
             // This is not an error we want. You should be able to do this.
-            // if(statement->globalAssignment && statement->firstExpression && info.currentScopeId != info.ast->globalScopeId) {
+            // if(statement->globalDeclaration && statement->firstExpression && info.currentScopeId != info.ast->globalScopeId) {
             //     ERR_SECTION(
             //         ERR_HEAD2(statement->location)
             //         ERR_MSG("Assigning a value to a global variable inside a local scope is not allowed. Either move the variable to the global scope or separate the declaration and assignment with expression.")
@@ -4181,9 +4183,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // i32 asize = info.ast->getTypeAlignedSize(var->typeId);
 
                 int alignment = 0;
-                if (varname.declaration) {
+                // if (varname.declaration) {
                     if (varname.arrayLength>0){
-                        Assert(("global arrays not implemented",!statement->globalAssignment));
+                        Assert(("global arrays not implemented",!statement->globalDeclaration));
                         // TODO: Fix arrays with static data
                         if(statement->firstExpression) {
                             ERR_SECTION(
@@ -4304,7 +4306,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // char buf[100];
                     // int len = sprintf(buf," ^ was assigned %s",statement->name->c_str());
                     // info.code->addDebugText(buf,len);
-                }
+                // }
                 if(varinfo){
                     _GLOG(log::out << " " << varname.name << " : " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << "\n";)
                 }
@@ -4510,14 +4512,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             }
 
             // fix address for jump instruction
-            builder.fix_jump_here(skipIfBodyIndex);
+            builder.fix_jump_imm32_here(skipIfBodyIndex);
 
             if (statement->secondBody) {
                 result = generateBody(statement->secondBody);
                 if (result != SIGNAL_SUCCESS)
                     continue;
 
-                builder.fix_jump_here(skipIfBodyIndex);
+                builder.fix_jump_imm32_here(skipIfBodyIndex);
             }
         } else if (statement->type == ASTStatement::SWITCH) {
             _GLOG(SCOPE_LOG("SWITCH"))
@@ -4652,7 +4654,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             auto& list = statement->switchCases;
             for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
                 auto it = &statement->switchCases[nr];
-                builder.fix_jump_here(caseData[nr].caseJumpAddress);
+                builder.fix_jump_imm32_here(caseData[nr].caseJumpAddress);
                
                 // if(address_prevFallJump != -1) {
                 //     info.code->getIm(address_prevFallJump) = info.code->length();
@@ -4678,15 +4680,15 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // info.addImm(0);
                 }
             }
-            builder.fix_jump_here(noCaseJumpAddress);
+            builder.fix_jump_imm32_here(noCaseJumpAddress);
                 
             for(int nr=0;nr<(int)statement->switchCases.size();nr++) {
                 if(caseData[nr].caseBreakAddress != 0)
-                    builder.fix_jump_here(caseData[nr].caseBreakAddress);
+                    builder.fix_jump_imm32_here(caseData[nr].caseBreakAddress);
             }
             
             for (auto ind : loopScope->resolveBreaks) {
-                builder.fix_jump_here(ind);
+                builder.fix_jump_imm32_here(ind);
             }
             
         } else if (statement->type == ASTStatement::WHILE) {
@@ -4719,7 +4721,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 BCRegister reg = BC_REG_A;
 
                 builder.emit_pop(reg);
-                loopScope->resolveBreaks.add(builder.emit_jz(reg));
+                int imm_offset = builder.emit_jz(reg);
+                loopScope->resolveBreaks.add(imm_offset);
             } else {
                 // infinite loop
             }
@@ -4731,7 +4734,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             builder.emit_jmp(loopScope->continueAddress);
 
             for (auto ind : loopScope->resolveBreaks) {
-                builder.fix_jump_here(ind);
+                builder.fix_jump_imm32_here(ind);
             }
             
             // TODO: Should this error exist? We need to check for returns too.
@@ -4890,7 +4893,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 builder.emit_jmp(loopScope->continueAddress);
 
                 for (auto ind : loopScope->resolveBreaks) {
-                    builder.fix_jump_here(ind);
+                    builder.fix_jump_imm32_here(ind);
                 }
             }else{
                 {
@@ -5052,7 +5055,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 builder.emit_jmp(loopScope->continueAddress);
 
                 for (auto ind : loopScope->resolveBreaks) {
-                    builder.fix_jump_here(ind);
+                    builder.fix_jump_imm32_here(ind);
                 }
                 
                 // delete nr, frameoffset needs to be changed to if so

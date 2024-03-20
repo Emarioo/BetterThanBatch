@@ -7,21 +7,31 @@
 
 enum InstructionControl : u8 {
     CONTROL_NONE,
-    CONTROL_MASK_SIZE = 0x03,
-    CONTROL_MASK_OTHER = 0xF0,
-    CONTROL_8B = 0,
-    CONTROL_16B = 1,
-    CONTROL_32B = 2,
-    CONTROL_64B = 3,
-    CONTROL_FLOAT_OP = 0x10,
+    CONTROL_MASK_SIZE         = 0x3,
+    CONTROL_MASK_CONVERT_SIZE = 0xC,
+    CONTROL_MASK_OTHER        = 0xF0,
+    
+    CONTROL_8B  = 0x0,
+    CONTROL_16B = 0x1,
+    CONTROL_32B = 0x2,
+    CONTROL_64B = 0x3,
+    
+    CONTROL_CONVERT_8B  = 0x0,
+    CONTROL_CONVERT_16B = 0x4,
+    CONTROL_CONVERT_32B = 0x8,
+    CONTROL_CONVERT_64B = 0xC,
+    
+    CONTROL_FLOAT_OP    = 0x10,
     CONTROL_UNSIGNED_OP = 0x20,
 };
+
 #define GET_CONTROL_SIZE(x) (CONTROL_MASK_SIZE & x)
+#define GET_CONTROL_CONVERT_SIZE(x) ((CONTROL_MASK_CONVERT_SIZE & x) >> 2)
 #define IS_CONTROL_SIGNED(x) (!(CONTROL_UNSIGNED_OP & x))
 #define IS_CONTROL_FLOAT(x) (CONTROL_FLOAT_OP & x)
 // from -> to (CAST_FROM_TO)
 enum InstructionCast : u8 {
-    CAST_UINT_UINT,
+    CAST_UINT_UINT = 0,
     CAST_UINT_SINT,
     CAST_SINT_UINT,
     CAST_SINT_SINT,
@@ -151,6 +161,8 @@ enum BCRegister : u8 {
 
     BC_REG_MAX,
 };
+extern const char* control_names[];
+extern const char* cast_names[];
 extern const char* instruction_names[];
 extern const char* register_names[];
 
@@ -413,7 +425,7 @@ struct BytecodeBuilder {
     // void emit_test(BCRegister to, BCRegister from, u8 size);
     
     int get_pc() { return tinycode->instructionSegment.size(); }
-    void fix_jump_here(int imm_index);
+    void fix_jump_imm32_here(int imm_index);
     
     // int opcode_count() { return tinycode->index_of_opcodes.size(); }
     // InstructionType get_opcode(int opcode_index) { return (InstructionType)tinycode->instructionSegment[tinycode->index_of_opcodes[opcode_index]]; }
