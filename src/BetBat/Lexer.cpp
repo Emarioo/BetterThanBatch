@@ -1746,7 +1746,7 @@ void Lexer::decode_import_token_index(u32 token_index_into_file, u32* file_chunk
 }
 
 double ConvertDecimal(const StringView& view) {
-    Assert(view.ptr + view.len == '\0');
+    Assert(view.ptr[view.len] == '\0');
     double num = atof(view.ptr);
     return num;
 }

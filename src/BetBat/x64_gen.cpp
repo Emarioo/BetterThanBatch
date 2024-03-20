@@ -852,153 +852,376 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     emit_modrm_slash(MODE_REG, 0, env->reg0);
                 }
                 
-                switch(n->opcode) {
-                    case BC_ADD: {
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_ADD_RM_REG);
-                        emit_modrm(MODE_REG, env->reg1, env->reg0);
-                    } break;
-                    case BC_SUB: {
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_SUB_REG_RM);
-                        emit_modrm(MODE_REG, env->reg0, env->reg1);
-                    } break;
-                    case BC_MUL: {
-                        // TODO: Handle signed/unsigned multiplication (using InstructionControl)
-                        emit1(PREFIX_REXW);
-                        emit2(OPCODE_2_IMUL_REG_RM);
-                        emit_modrm(MODE_REG, env->reg1, env->reg0);
-                    } break;
-                     case BC_LAND: {
-                        Assert(false);
-                    } break;
-                    case BC_LOR: {
-                        Assert(false);
-                    } break;
-                    case BC_LNOT: {
-                        Assert(false);
-                    } break;
-                    case BC_BAND: {
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_AND_RM_REG);
-                        emit_modrm(MODE_REG, env->reg1, env->reg0);
-                    } break;
-                    case BC_BOR: {
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_OR_RM_REG);
-                        emit_modrm(MODE_REG, env->reg1, env->reg0);
-                    } break;
-                    case BC_BXOR: {
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_XOR_REG_RM);
-                        emit_modrm(MODE_REG, env->reg0, env->reg1);
-                    } break;
-                    case BC_BLSHIFT:
-                    case BC_BRSHIFT: {
-                        bool c_was_used = false;
-                        if(!is_register_free(X64_REG_C)) {
-                            c_was_used = true;
-                            emit1(OPCODE_PUSH_RM_SLASH_6);
-                            emit_modrm_slash(MODE_REG, 6, X64_REG_C);
+                // Assert((n->control & CONTROL_FLOAT_OP) == 0);
+                // Assert((n->control & CONTROL_UNSIGNED_OP) == 0);
+                
+                bool is_unsigned = !IS_CONTROL_SIGNED(n->control);
+                if(IS_CONTROL_FLOAT(n->control)) {
+                    switch(n->opcode) {
+                        case BC_ADD: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_ADD_RM_REG);
+                            emit_modrm(MODE_REG, env->reg1, env->reg0);
+                        } break;
+                        case BC_SUB: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_SUB_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+                        } break;
+                        case BC_MUL: {
+                            // TODO: Handle signed/unsigned multiplication (using InstructionControl)
+                            if(is_unsigned) {
+                                bool d_is_free = is_register_free(X64_REG_D);
+                                bool a_is_free = is_register_free(X64_REG_A);
+                                if(!d_is_free) {
+                                    emit1(OPCODE_PUSH_RM_SLASH_6);
+                                    emit_modrm_slash(MODE_REG, 6, X64_REG_D);
+                                }
+                                if(!a_is_free) {
+                                    emit1(OPCODE_PUSH_RM_SLASH_6);
+                                    emit_modrm_slash(MODE_REG, 6, X64_REG_A);
+                                }
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, X64_REG_A, env->reg0);
+                                
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MUL_AX_RM_SLASH_4);
+                                emit_modrm_slash(MODE_REG, 4, env->reg1);
+                                
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, env->reg0, X64_REG_A);
+                                
+                                if(!a_is_free) {
+                                    emit1(OPCODE_POP_RM_SLASH_0);
+                                    emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                                }
+                                if(!d_is_free) {
+                                    emit1(OPCODE_POP_RM_SLASH_0);
+                                    emit_modrm_slash(MODE_REG, 0, X64_REG_D);
+                                }
+                            } else {
+                                emit1(PREFIX_REXW);
+                                emit2(OPCODE_2_IMUL_REG_RM);
+                                emit_modrm(MODE_REG, env->reg1, env->reg0);
+                            }
+                        } break;
+                        case BC_LAND: {
+                            Assert(false);
+                        } break;
+                        case BC_LOR: {
+                            Assert(false);
+                        } break;
+                        case BC_LNOT: {
+                            Assert(false);
+                        } break;
+                        case BC_BAND: {
+                            Assert(false); // how does this work with float?
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_AND_RM_REG);
+                            emit_modrm(MODE_REG, env->reg1, env->reg0);
+                        } break;
+                        case BC_BOR: {
+                            Assert(false);
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_OR_RM_REG);
+                            emit_modrm(MODE_REG, env->reg1, env->reg0);
+                        } break;
+                        case BC_BXOR: {
+                            Assert(false);
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+                        } break;
+                        case BC_BLSHIFT:
+                        case BC_BRSHIFT: {
+                            Assert(false);
+                            bool c_was_used = false;
+                            if(!is_register_free(X64_REG_C)) {
+                                c_was_used = true;
+                                emit1(OPCODE_PUSH_RM_SLASH_6);
+                                emit_modrm_slash(MODE_REG, 6, X64_REG_C);
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, X64_REG_C, env->reg1);
+                            }
 
                             emit1(PREFIX_REXW);
-                            emit1(OPCODE_MOV_REG_RM);
-                            emit_modrm(MODE_REG, X64_REG_C, env->reg1);
-                        }
-
-                        emit1(PREFIX_REXW);
-                        switch(n->opcode) {
-                            case BC_BLSHIFT: {
-                                emit1(PREFIX_REXW);
-                                emit1(OPCODE_SHL_RM_CL_SLASH_4);
-                                emit_modrm_slash(MODE_REG, 4, env->reg0);
-                            } break;
-                            case BC_BRSHIFT: {
-                                emit1(PREFIX_REXW);
-                                emit1(OPCODE_SHR_RM_CL_SLASH_5);
-                                emit_modrm_slash(MODE_REG, 5, env->reg0);
-                            } break;
-                            default: Assert(false);
-                        }
-
-                        if(c_was_used) {
-                            emit1(OPCODE_POP_RM_SLASH_0);
-                            emit_modrm_slash(MODE_REG, 0, X64_REG_C);
-                        }
-                    } break;
-                    case BC_EQ: {
-                        
-                        // TODO: Test if this is okay? is cmp better?
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_XOR_REG_RM);
-                        emit_modrm(MODE_REG, env->reg0, env->reg1);
-                        
-                        emit2(OPCODE_2_SETE_RM8);
-                        emit_modrm_slash(MODE_REG, 0, env->reg0);
-
-                        emit1(PREFIX_REXW);
-                        emit2(OPCODE_2_MOVZX_REG_RM8);
-                        emit_modrm_slash(MODE_REG, env->reg0, env->reg0);
-                    } break;
-                    case BC_NEQ: {
-                        // IMPORTANT: THERE MAY BE BUGS IF YOU COMPARE OPERANDS OF DIFFERENT SIZES.
-                        //  SOME BITS MAY BE UNINITIALZIED.
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_XOR_REG_RM);
-                        emit_modrm(MODE_REG, env->reg0, env->reg1);
-                    } break;
-                    case BC_LT:
-                    case BC_LTE:
-                    case BC_GT:
-                    case BC_GTE: {
-                        emit1(PREFIX_REXW);
-                        emit1(OPCODE_CMP_REG_RM);
-                        emit_modrm(MODE_REG, env->reg0, env->reg1);
-
-                        u16 setType = 0;
-                        if(IS_CONTROL_SIGNED(n->control)) {
                             switch(n->opcode) {
-                                case BC_LT: {
-                                    setType = OPCODE_2_SETL_RM8;
+                                case BC_BLSHIFT: {
+                                    emit1(PREFIX_REXW);
+                                    emit1(OPCODE_SHL_RM_CL_SLASH_4);
+                                    emit_modrm_slash(MODE_REG, 4, env->reg0);
                                 } break;
-                                case BC_LTE: {
-                                    setType = OPCODE_2_SETLE_RM8;
-                                } break;
-                                case BC_GT: {
-                                    setType = OPCODE_2_SETG_RM8;
-                                } break;
-                                case BC_GTE: {
-                                    setType = OPCODE_2_SETGE_RM8;
+                                case BC_BRSHIFT: {
+                                    emit1(PREFIX_REXW);
+                                    emit1(OPCODE_SHR_RM_CL_SLASH_5);
+                                    emit_modrm_slash(MODE_REG, 5, env->reg0);
                                 } break;
                                 default: Assert(false);
                             }
-                        } else {
+
+                            if(c_was_used) {
+                                emit1(OPCODE_POP_RM_SLASH_0);
+                                emit_modrm_slash(MODE_REG, 0, X64_REG_C);
+                            }
+                        } break;
+                        case BC_EQ: {
+                            // TODO: Test if this is okay? is cmp better?
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+                            
+                            emit2(OPCODE_2_SETE_RM8);
+                            emit_modrm_slash(MODE_REG, 0, env->reg0);
+
+                            emit1(PREFIX_REXW);
+                            emit2(OPCODE_2_MOVZX_REG_RM8);
+                            emit_modrm_slash(MODE_REG, env->reg0, env->reg0);
+                        } break;
+                        case BC_NEQ: {
+                            // IMPORTANT: THERE MAY BE BUGS IF YOU COMPARE OPERANDS OF DIFFERENT SIZES.
+                            //  SOME BITS MAY BE UNINITIALZIED.
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+                        } break;
+                        case BC_LT:
+                        case BC_LTE:
+                        case BC_GT:
+                        case BC_GTE: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_CMP_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+
+                            u16 setType = 0;
+                            if(!is_unsigned) {
+                                switch(n->opcode) {
+                                    case BC_LT: {
+                                        setType = OPCODE_2_SETL_RM8;
+                                    } break;
+                                    case BC_LTE: {
+                                        setType = OPCODE_2_SETLE_RM8;
+                                    } break;
+                                    case BC_GT: {
+                                        setType = OPCODE_2_SETG_RM8;
+                                    } break;
+                                    case BC_GTE: {
+                                        setType = OPCODE_2_SETGE_RM8;
+                                    } break;
+                                    default: Assert(false);
+                                }
+                            } else {
+                                switch(n->opcode) {
+                                    case BC_LT: {
+                                        setType = OPCODE_2_SETB_RM8;
+                                    } break;
+                                    case BC_LTE: {
+                                        setType = OPCODE_2_SETBE_RM8;
+                                    } break;
+                                    case BC_GT: {
+                                        setType = OPCODE_2_SETA_RM8;
+                                    } break;
+                                    case BC_GTE: {
+                                        setType = OPCODE_2_SETAE_RM8;
+                                    } break;
+                                    default: Assert(false);
+                                }
+                            }
+                            
+                            emit2(setType);
+                            emit_modrm_slash(MODE_REG, 0, env->reg0);
+                            
+                            // do we need more stuff or no? I don't think so?
+                            // prog->add2(OPCODE_2_MOVZX_REG_RM8);
+                            // emit_modrm(MODE_REG, reg2, reg2);
+
+                        } break;
+                        default: Assert(false);
+                    }
+                } else {
+                    switch(n->opcode) {
+                        case BC_ADD: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_ADD_RM_REG);
+                            emit_modrm(MODE_REG, env->reg1, env->reg0);
+                        } break;
+                        case BC_SUB: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_SUB_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+                        } break;
+                        case BC_MUL: {
+                            // TODO: Handle signed/unsigned multiplication (using InstructionControl)
+                            if(is_unsigned) {
+                                bool d_is_free = is_register_free(X64_REG_D);
+                                bool a_is_free = is_register_free(X64_REG_A);
+                                if(!d_is_free) {
+                                    emit1(OPCODE_PUSH_RM_SLASH_6);
+                                    emit_modrm_slash(MODE_REG, 6, X64_REG_D);
+                                }
+                                if(!a_is_free) {
+                                    emit1(OPCODE_PUSH_RM_SLASH_6);
+                                    emit_modrm_slash(MODE_REG, 6, X64_REG_A);
+                                }
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, X64_REG_A, env->reg0);
+                                
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MUL_AX_RM_SLASH_4);
+                                emit_modrm_slash(MODE_REG, 4, env->reg1);
+                                
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, env->reg0, X64_REG_A);
+                                
+                                if(!a_is_free) {
+                                    emit1(OPCODE_POP_RM_SLASH_0);
+                                    emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                                }
+                                if(!d_is_free) {
+                                    emit1(OPCODE_POP_RM_SLASH_0);
+                                    emit_modrm_slash(MODE_REG, 0, X64_REG_D);
+                                }
+                            } else {
+                                emit1(PREFIX_REXW);
+                                emit2(OPCODE_2_IMUL_REG_RM);
+                                emit_modrm(MODE_REG, env->reg1, env->reg0);
+                            }
+                        } break;
+                        case BC_LAND: {
+                            Assert(false);
+                        } break;
+                        case BC_LOR: {
+                            Assert(false);
+                        } break;
+                        case BC_LNOT: {
+                            Assert(false);
+                        } break;
+                        case BC_BAND: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_AND_RM_REG);
+                            emit_modrm(MODE_REG, env->reg1, env->reg0);
+                        } break;
+                        case BC_BOR: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_OR_RM_REG);
+                            emit_modrm(MODE_REG, env->reg1, env->reg0);
+                        } break;
+                        case BC_BXOR: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+                        } break;
+                        case BC_BLSHIFT:
+                        case BC_BRSHIFT: {
+                            bool c_was_used = false;
+                            if(!is_register_free(X64_REG_C)) {
+                                c_was_used = true;
+                                emit1(OPCODE_PUSH_RM_SLASH_6);
+                                emit_modrm_slash(MODE_REG, 6, X64_REG_C);
+
+                                emit1(PREFIX_REXW);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, X64_REG_C, env->reg1);
+                            }
+
+                            emit1(PREFIX_REXW);
                             switch(n->opcode) {
-                                case BC_LT: {
-                                    setType = OPCODE_2_SETB_RM8;
+                                case BC_BLSHIFT: {
+                                    emit1(PREFIX_REXW);
+                                    emit1(OPCODE_SHL_RM_CL_SLASH_4);
+                                    emit_modrm_slash(MODE_REG, 4, env->reg0);
                                 } break;
-                                case BC_LTE: {
-                                    setType = OPCODE_2_SETBE_RM8;
-                                } break;
-                                case BC_GT: {
-                                    setType = OPCODE_2_SETA_RM8;
-                                } break;
-                                case BC_GTE: {
-                                    setType = OPCODE_2_SETAE_RM8;
+                                case BC_BRSHIFT: {
+                                    emit1(PREFIX_REXW);
+                                    emit1(OPCODE_SHR_RM_CL_SLASH_5);
+                                    emit_modrm_slash(MODE_REG, 5, env->reg0);
                                 } break;
                                 default: Assert(false);
                             }
-                        }
-                        
-                        emit2(setType);
-                        emit_modrm_slash(MODE_REG, 0, env->reg0);
-                        
-                        // do we need more stuff or no? I don't think so?
-                        // prog->add2(OPCODE_2_MOVZX_REG_RM8);
-                        // emit_modrm(MODE_REG, reg2, reg2);
 
-                    } break;
-                    default: Assert(false);
+                            if(c_was_used) {
+                                emit1(OPCODE_POP_RM_SLASH_0);
+                                emit_modrm_slash(MODE_REG, 0, X64_REG_C);
+                            }
+                        } break;
+                        case BC_EQ: {
+                            // TODO: Test if this is okay? is cmp better?
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+                            
+                            emit2(OPCODE_2_SETE_RM8);
+                            emit_modrm_slash(MODE_REG, 0, env->reg0);
+
+                            emit1(PREFIX_REXW);
+                            emit2(OPCODE_2_MOVZX_REG_RM8);
+                            emit_modrm_slash(MODE_REG, env->reg0, env->reg0);
+                        } break;
+                        case BC_NEQ: {
+                            // IMPORTANT: THERE MAY BE BUGS IF YOU COMPARE OPERANDS OF DIFFERENT SIZES.
+                            //  SOME BITS MAY BE UNINITIALZIED.
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+                        } break;
+                        case BC_LT:
+                        case BC_LTE:
+                        case BC_GT:
+                        case BC_GTE: {
+                            emit1(PREFIX_REXW);
+                            emit1(OPCODE_CMP_REG_RM);
+                            emit_modrm(MODE_REG, env->reg0, env->reg1);
+
+                            u16 setType = 0;
+                            if(!is_unsigned) {
+                                switch(n->opcode) {
+                                    case BC_LT: {
+                                        setType = OPCODE_2_SETL_RM8;
+                                    } break;
+                                    case BC_LTE: {
+                                        setType = OPCODE_2_SETLE_RM8;
+                                    } break;
+                                    case BC_GT: {
+                                        setType = OPCODE_2_SETG_RM8;
+                                    } break;
+                                    case BC_GTE: {
+                                        setType = OPCODE_2_SETGE_RM8;
+                                    } break;
+                                    default: Assert(false);
+                                }
+                            } else {
+                                switch(n->opcode) {
+                                    case BC_LT: {
+                                        setType = OPCODE_2_SETB_RM8;
+                                    } break;
+                                    case BC_LTE: {
+                                        setType = OPCODE_2_SETBE_RM8;
+                                    } break;
+                                    case BC_GT: {
+                                        setType = OPCODE_2_SETA_RM8;
+                                    } break;
+                                    case BC_GTE: {
+                                        setType = OPCODE_2_SETAE_RM8;
+                                    } break;
+                                    default: Assert(false);
+                                }
+                            }
+                            
+                            emit2(setType);
+                            emit_modrm_slash(MODE_REG, 0, env->reg0);
+                            
+                            // do we need more stuff or no? I don't think so?
+                            // prog->add2(OPCODE_2_MOVZX_REG_RM8);
+                            // emit_modrm(MODE_REG, reg2, reg2);
+
+                        } break;
+                        default: Assert(false);
+                    }
                 }
                 
                 if(!env->reg1_stack && !IsNativeRegister(n->op1))

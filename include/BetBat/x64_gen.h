@@ -130,7 +130,7 @@ struct OPNode {
     
     // TODO: Union on these?
     InstructionControl control = CONTROL_NONE;
-    InstructionCast cast = CAST_FLOAT_FLOAT;
+    InstructionCast cast = CAST_UINT_UINT;
     
     LinkConventions link = LinkConventions::NONE;
     CallConventions call = CallConventions::BETCALL;
