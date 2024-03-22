@@ -14,8 +14,8 @@ namespace engone{
 
     enum AllocatorType : u8 {
         ALLOCATOR_BASE = 0,
-        ALLOCATOR_LINEAR,
 
+        ALLOCATOR_LINEAR,
         ALLOCATOR_NON_VOLATILE,
         ALLOCATOR_HEAP,
         ALLOCATOR_STATE,

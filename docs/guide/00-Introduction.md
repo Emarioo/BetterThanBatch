@@ -12,20 +12,8 @@ The name of the language ("Better than batch") is temporary. These are some othe
 - Son (?)
 - Compound (language is mix of fundamental features? a compound)
 
-## Summary of interesting features (last updated on 2024-01-13)
-- Polymorphism (structs, functions)
-- Macros (preprocessor)
-- Type information (usable by source code)
-- Operator overload (also function overloading)
-- Imports and namespaces (no headers)
-- Code compiles the same and performs the same on all supported operating systems (only 64-bit Windows and Unix at the moment)
-- Standard library with every common thing you need (graphics, sound, networking, hash maps, logging, allocators)
-- DWARF debug information
-- Inline assembly (intel syntax)
-
-**On the way**
-- Bytecode execution at compile time
-- Some form of metaprogramming
+## Language Server
+**TODO:** Guide on how to setup extension syntax highlighting, suggestions and so on.
 
 ## Compiling code
 TODO: How to compile code.
@@ -51,3 +39,18 @@ you must make sure `cl`, `link` is available in environment variables. Look into
 The original idea was a scripting language similar to shell code which you would use instead of Make, CMAKE, bash, and batch. The difference being a general purpose language without the constraints and difficulties of those build systems and shell scripts. Over time I realized that my goals were set to low. Why a scripting language? Why not a real programming language like C/C++, Jai, Rust and Odin that compiles to machine code and that you can use to create games and all kinds of applications. And so the new goal was set and here we are now with a decent programming language with many bugs, issues in the compiler's architecture design, and way more todos than a single person can handle in a small amount of time. Yet, I have not given up and still intend to turn this compiler into high quality software and a programming language that has legitimate proven reasons for why it's designed the way it is. And I will not neglect the documentation.
 
 Will I achieve my goals? Probably not, but I do believe in my ability to create  something that is close to the goals that really matter.
+
+## Summary of interesting features (last updated on 2024-01-13)
+- Polymorphism (structs, functions)
+- Macros (preprocessor)
+- Type information (usable by source code)
+- Operator overload (also function overloading)
+- Imports and namespaces (no headers)
+- Code compiles the same and performs the same on all supported operating systems (only 64-bit Windows and Unix at the moment)
+- Standard library with every common thing you need (graphics, sound, networking, hash maps, logging, allocators)
+- DWARF debug information
+- Inline assembly (intel syntax)
+
+**On the way**
+- Bytecode execution at compile time
+- Some form of metaprogramming

@@ -20,7 +20,10 @@
             "compilerPath": "cl.exe",
             "cStandard": "c11",
             "cppStandard": "c++14",
-            "intelliSenseMode": "windows-msvc-x64"
+            "intelliSenseMode": "windows-msvc-x64",
+            "forcedInclude": [
+                "include/pch.h"
+            ]
         },
         {
             "name": "UNIX",

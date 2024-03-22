@@ -10,7 +10,7 @@
 // #include "BetBat/glfwtest.h"
 
 #include "BetBat/Fuzzer.h"
-#include "BetBat/Lexer.h"
+#include "BetBat/Util/JSON.h"
 
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
@@ -33,13 +33,16 @@ int hm() {
 int main(int argc, const char** argv){
     using namespace engone;
     
-    int a[20];
-    int b = a[1] + (a[2] + (a[3] + (a[4] + (hm() + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (hm() + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
+    // int a[20];
+    // int b = a[1] + (a[2] + (a[3] + (a[4] + (hm() + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (hm() + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
     
+    TestJSON();
     
     log::out.enableReport(false);
     // MeasureInit();
     ProfilerInitialize();
+    
+    return 0;
     
             // FuzzerOptions opts{};
             // opts.node_iterations_per_file = 5000;
