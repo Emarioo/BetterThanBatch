@@ -23,7 +23,7 @@ enum X64Register : u8 {
     X64_REG_INVALID = 0,
     
     X64_REG_BEGIN,
-    X64_REG_A = X64_REG_BEGIN,
+    X64_REG_A = X64_REG_BEGIN, // DO NOT CHANGE THE ORDER OF THE REGISTERS! intel manual specifies this specific order!
     X64_REG_C,
     X64_REG_D,
     X64_REG_B,
@@ -51,6 +51,12 @@ enum X64Register : u8 {
     X64_REG_XMM7,
     X64_REG_END,
 };
+#define IS_REG_XMM(R) (R >= X64_REG_XMM0 && R <= X64_REG_XMM7)
+#define IS_REG_EXTENDED(R) (R >= X64_REG_R8 && R <= X64_REG_R15)
+#define IS_REG_NORM(R) (R >= X64_REG_A && R <= X64_REG_DI)
+
+#define CLAMP_XMM(R) (Assert(IS_REG_XMM(R)), (X64Register)(((R-1) & 7) + 1))
+#define CLAMP_EXT_REG(R) (Assert(IS_REG_EXTENDED(R)||IS_REG_NORM(R)), (X64Register)(((R-1) & 7) + 1))
 
 struct X64TinyProgram {
     u8* text=nullptr;

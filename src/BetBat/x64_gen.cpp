@@ -8,11 +8,26 @@
 #include "BetBat/Compiler.h"
 
 /*
+Hello:
+    The x64 generator is based on SSA (static single-assignment). I tried to think of a linear
+    approach where you can perform optimizations (dead code elimination, efficient usage of registers)
+    but I could not make it work. A bottom-up and then top-down approach with a tree is much easier.
+    The bytecode is converted to a tree of nodes where registers and the value on the
+    stack determines the relations between the nodes.
+    This results in a couple of root nodes which are instructions with side effects such as "mov [rbp], eax" or "add rsp, 8".
+    x64 registers are allocated and freed when traversing the nodes and generating x64 instructions.
+
+    The code for the generator is messy since this is a first proper
+    implementation of a decent generator. There will probably be a
+    refactor in the future to simplify the code but I don't know how
+    it will look like yet so we will see what happens.
+
+About x64:
     x86/x64 instructions are complicated and it's not really my fault
     if things seem confusing. I have tried my best to keep it simple.
 
-    Incomplete layout:    
-    [Prefix] [Opcode] [Mod|REG|R/M] [Displacement] [Immediate]
+    x64 instruction layout:
+    [Prefix] [Opcode] [Mod|REG|R/M] [SIB-byte] [Displacement] [Immediate]
 
     Opcode tells you about which instruction to run (add, mul, push, ...)
     ModRM tells you about which register or memory location to use and how (reg to reg, mem to reg, reg to mem).
@@ -23,8 +38,6 @@
     Mod refers to addressing modes (or forms?). There are 4 values
     0b11 means register to register.
     The other 3 values means memory to register (or vice versa)
-    
-
 */
 
 // https://www.felixcloutier.com/x86/index.html
@@ -686,19 +699,23 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
     DynamicArray<RelativeRelocation> relativeRelocations;
     relativeRelocations._reserve(40);
     
+    struct Operand {
+        X64Register reg{};
+        bool on_stack = false;
+
+        bool invalid() const { return reg != X64_REG_INVALID || on_stack; }
+    };
     struct Env {
         OPNode* node=nullptr;
 
         Env* env_in0=nullptr;
         Env* env_in1=nullptr;
 
-        X64Register reg0{};
-        X64Register reg1{};
-        X64Register out{};
-        
-        bool reg0_stack = false;
-        bool reg1_stack = false;
-        bool out_stack = false;
+        union {
+            Operand reg0{};
+            Operand out;
+        };
+        Operand reg1{};
     };
     QuickArray<Env*> envs;
     
@@ -716,6 +733,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
 
         envs.add(e);
         pop_env = false;
+        return e;
     };
     auto push_env1 = [&]() {
         Assert(n->in1);
@@ -725,6 +743,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
 
         envs.add(e);
         pop_env = false;
+        return e;
     };
 
     emit1(OPCODE_PUSH_RM_SLASH_6);
@@ -753,10 +772,10 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
         bc_to_x64_translation[n->bc_index] = size();
 
         if(IsNativeRegister(n->op0)) {
-            env->reg0 = ToNativeRegister(n->op0);
+            env->reg0.reg = ToNativeRegister(n->op0);
         }
         if(IsNativeRegister(n->op1)) {
-            env->reg1 = ToNativeRegister(n->op1);
+            env->reg1.reg = ToNativeRegister(n->op1);
         }
         
         switch(n->opcode) {
@@ -765,18 +784,18 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     // xor clear on register
                     Assert(!IsNativeRegister(n->op0));
 
-                    env->out = alloc_register();
-                    if(env->out == X64_REG_INVALID) {
-                        env->out_stack = true;
-                        env->out = RESERVED_REG0;
+                    env->out.reg = alloc_register();
+                    if(env->out.reg == X64_REG_INVALID) {
+                        env->out.on_stack = true;
+                        env->out.reg = RESERVED_REG0;
                     }
                     emit1(PREFIX_REXW);
                     emit1(OPCODE_XOR_REG_RM);
-                    emit_modrm(MODE_REG, env->out, env->out);
+                    emit_modrm(MODE_REG, env->out.reg, env->out.reg);
                     
-                    if(env->out_stack) {
+                    if(env->out.on_stack) {
                         emit1(OPCODE_PUSH_RM_SLASH_6);
-                        emit_modrm_slash(MODE_REG, 6, env->out);
+                        emit_modrm_slash(MODE_REG, 6, env->out.reg);
                     }
                     break;
                 }
@@ -811,17 +830,45 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
 
                     if(depth0 < depth1) {
                         if(!env->env_in0 && !IsNativeRegister(n->op0)) {
-                            push_env0();
+                            auto e = push_env0(); // TODO: request xmm register on floats
+                            if(IS_CONTROL_FLOAT(n->control)) {
+                                e->out.reg = alloc_register(X64_REG_INVALID, true);
+                                if(e->out.reg == X64_REG_INVALID)
+                                    e->out.on_stack = true;
+                            } else {
+                                // let someone else allocate register
+                            }
                         }
                         if(!env->env_in1 && !IsNativeRegister(n->op1)) {
-                            push_env1();
+                            auto e = push_env1();
+                            if(IS_CONTROL_FLOAT(n->control)) {
+                                e->out.reg = alloc_register(X64_REG_INVALID, true);
+                                if(e->out.reg == X64_REG_INVALID)
+                                    e->out.on_stack = true;
+                            } else {
+                                // let someone else allocate register
+                            }
                         }
                     } else {
                         if(!env->env_in1 && !IsNativeRegister(n->op1)) {
                             push_env1();
+                            if(IS_CONTROL_FLOAT(n->control)) {
+                                e->out.reg = alloc_register(X64_REG_INVALID, true);
+                                if(e->out.reg == X64_REG_INVALID)
+                                    e->out.on_stack = true;
+                            } else {
+                                // let someone else allocate register
+                            }
                         }
                         if(!env->env_in0 && !IsNativeRegister(n->op0)) {
                             push_env0();
+                            if(IS_CONTROL_FLOAT(n->control)) {
+                                e->out.reg = alloc_register(X64_REG_INVALID, true);
+                                if(e->out.reg == X64_REG_INVALID)
+                                    e->out.on_stack = true;
+                            } else {
+                                // let someone else allocate register
+                            }
                         }
                     }
                     Assert(!pop_env);
@@ -852,15 +899,15 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     emit_modrm_slash(MODE_REG, 0, env->reg0);
                 }
                 
-                // Assert((n->control & CONTROL_FLOAT_OP) == 0);
-                // Assert((n->control & CONTROL_UNSIGNED_OP) == 0);
-                
                 bool is_unsigned = !IS_CONTROL_SIGNED(n->control);
                 if(IS_CONTROL_FLOAT(n->control)) {
                     switch(n->opcode) {
                         case BC_ADD: {
-                            emit1(PREFIX_REXW);
-                            emit1(OPCODE_ADD_RM_REG);
+                            int size = GET_CONTROL_SIZE(n->control);
+                            Assert(size == 4 || size == 8);
+                            // TODO: We assume 32-bit float NOT GOOD
+                            emit3(OPCODE_3_ADDSS_REG_RM);
+                            // TODO: verify float register
                             emit_modrm(MODE_REG, env->reg1, env->reg0);
                         } break;
                         case BC_SUB: {
@@ -1609,13 +1656,12 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     free_register(env->reg1);
             } break;
             case BC_INCR: {
-                env->reg0 = ToNativeRegister(n->op0);
+                env->reg0.reg = ToNativeRegister(n->op0);
                 if(env->reg0 == X64_REG_INVALID) {
                     if(!env->env_in0) {
                         push_env0();
                         break;
                     }
-                    env->reg0_stack = env->env_in0->out_stack;
                     env->reg0 = env->env_in0->out;
                 }
 
@@ -1641,38 +1687,95 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                 break;
             } break;
             case BC_LI32: {
-                env->out = alloc_register();
-                if(env->out == X64_REG_INVALID) {
-                    env->out_stack = true;
-                    env->out = RESERVED_REG0;
+                if(env->out.invalid()) {
+                    env->out.reg = alloc_register();
+                    if(env->out.reg == X64_REG_INVALID) {
+                        env->out.on_stack = true;
+                        env->out.reg = RESERVED_REG0;
+                    }
+                } else {
+                    // already allocated
                 }
-                emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
-                emit_modrm_slash(MODE_REG, 0, env->out);
-                emit4((u32)(i32)n->imm);
-                
-                if(env->out_stack) {
-                    emit1(OPCODE_PUSH_RM_SLASH_6);
-                    emit_modrm_slash(MODE_REG, 6, env->out);
+                if(IS_REG_XMM(env->out.reg)) {
+                    Assert(!env->out.on_stack);
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_sib_slash(MODE_DEREF_DISP8, 0, SIB_SCALE_1, SIB_INDEX_NONE, X64_REG_SP);
+                    emit1((u8)-8);
+                    emit4((u32)(i32)n->imm);
+
+                    emit3(OPCODE_3_MOVSS_REG_RM);
+                    emit_modrm_sib(MODE_DEREF_DISP8, CLAMP_XMM(env->out.reg), SIB_SCALE_1, SIB_INDEX_NONE, X64_REG_SP);
+                    emit1((u8)-8);
+                } else {
+                    if(IS_REG_EXTENDED(env->out.reg)) {
+                        emit1(PREFIX_REXB);
+                    }
+                    emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                    emit_modrm_slash(MODE_REG, 0, env->out.reg);
+                    emit4((u32)(i32)n->imm);
+
+                    if(env->out.on_stack) {
+                        if(IS_REG_EXTENDED(env->out.reg)) {
+                            emit1(PREFIX_REXB);
+                        }
+                        emit1(OPCODE_PUSH_RM_SLASH_6);
+                        emit_modrm_slash(MODE_REG, 6, env->out.reg);
+                    }
                 }
             } break;
             case BC_LI64: {
-                env->out = alloc_register();
-                if(env->out == X64_REG_INVALID) {
-                    env->out_stack = true;
-                    env->out = RESERVED_REG0;
+                if(env->out.invalid()) {
+                    env->out.reg = alloc_register();
+                    if(env->out.reg == X64_REG_INVALID) {
+                        env->out.on_stack = true;
+                        env->out.reg = RESERVED_REG0;
+                    }
+                } else {
+                    // already allocated
                 }
-                u8 reg_field = env->out - 1;
-                Assert(reg_field >= 0 && reg_field <= 7);
+                if(IS_REG_XMM(env->out.reg)) {
+                    Assert(!env->out.on_stack);
 
-                emit1(PREFIX_REXW);
-                emit1((u8)(OPCODE_MOV_REG_IMM_RD_IO | reg_field));
-                emit_modrm_slash(MODE_REG, 0, env->out);
-                emit8((u64)n->imm);
-                
-                if(env->out_stack) {
-                    emit1(OPCODE_PUSH_RM_SLASH_6);
-                    emit_modrm_slash(MODE_REG, 6, env->out);
+                    Assert(is_register_free(RESERVED_REG0));
+                    X64Register tmp_reg = RESERVED_REG0;
+
+                    u8 reg_field = tmp_reg - 1;
+                    Assert(reg_field >= 0 && reg_field <= 7);
+
+                    emit1(PREFIX_REXW);
+                    emit1((u8)(OPCODE_MOV_REG_IMM_RD_IO | reg_field));
+                    emit8((u64)n->imm);
+
+                    emit1(PREFIX_REXW);
+                    emit1(OPCODE_MOV_RM_REG);
+                    emit_modrm_sib_slash(MODE_DEREF_DISP8, tmp_reg, SIB_SCALE_1, SIB_INDEX_NONE, X64_REG_SP);
+                    emit1((u8)-8);
+
+                    emit3(OPCODE_3_MOVSD_REG_RM);
+                    emit_modrm_sib(MODE_DEREF_DISP8, CLAMP_EXT_REG(env->out.reg), SIB_SCALE_1, SIB_INDEX_NONE, X64_REG_SP);
+                    emit1((u8)-8);
+                } else {
+                    u8 reg_field = CLAMP_EXT_REG(env->out.reg) - 1;
+                    Assert(reg_field >= 0 && reg_field <= 7);
+
+                    u8 prefix = PREFIX_REXW;
+                    if(IS_REG_EXTENDED(env->out.reg)) {
+                        emit1(PREFIX_REXB);
+                    }
+                    
+                    emit1(prefix);
+                    emit1((u8)(OPCODE_MOV_REG_IMM_RD_IO | reg_field));
+                    emit8((u64)n->imm);
+
+                    if(env->out.on_stack) {
+                        if(IS_REG_EXTENDED(env->out.reg)) {
+                            emit1(PREFIX_REXB);
+                        }
+                        emit1(OPCODE_PUSH_RM_SLASH_6);
+                        emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(env->out.reg));
+                    }
                 }
+                
             } break;
             case BC_CALL: {
                 Assert(false);
