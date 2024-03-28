@@ -6,7 +6,7 @@ verbose := 0
 GCC_COMPILE_OPTIONS := -std=c++14 -g
 # GCC_COMPILE_OPTIONS="-std=c++14 -O3"
 GCC_INCLUDE_DIRS := -Iinclude -Ilibs/stb/include -Ilibs/glfw-3.3.8/include -Ilibs/glew-2.1.0/include -Ilibs/tracy-0.10/public -include include/pch.h 
-GCC_DEFINITIONS := -DOS_UNIX -DNO_UIMODULE
+GCC_DEFINITIONS := -DOS_UNIX -DNO_UIMODULE -DCOMPILER_GNU
 GCC_WARN := -Wall -Wno-unused-variable -Wno-attributes -Wno-unused-value -Wno-null-dereference -Wno-missing-braces -Wno-unused-private-field -Wno-unknown-warning-option -Wno-unused-but-set-variable -Wno-nonnull-compare 
 GCC_WARN := $(GCC_WARN) -Wno-sign-compare 
 

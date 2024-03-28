@@ -5,8 +5,10 @@
 
 
 // You should define this when compiling
-#define GLEW_STATIC
-#include <GL/glew.h>
+#include <glad/glad.h>
+#undef APIENTRY // collision with minwindef
+// #define GLEW_STATIC
+// #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #undef APIENTRY // collision with minwindef
 
@@ -16,7 +18,8 @@
 
 // #include "Engone/Window.h"
 
-#define GL_CHECK_UI()  {int err = glGetError();if(err) {printf("UIMod GLError: %d %s\n",err,(const char*)glewGetErrorString(err));}}
+#define GL_CHECK_UI()  {int err = glGetError();if(err) {printf("UIMod GLError: %d ?\n",err);}}
+// #define GL_CHECK_UI()  {int err = glGetError();if(err) {printf("UIMod GLError: %d %s\n",err,(const char*)glewGetErrorString(err));}}
 
 
 namespace engone{
@@ -942,7 +945,7 @@ void TestUIMaintain(UIModule& ui){
         auto& p = *ui.makeText(i);
         // p = {i*10.f+10,200,8,8,{i/32.f,1,1,1}};
         if(p.x==0)
-            p = {i*10.f+10,200,15,3,"Sup",{i/32.f,1-i/32.f,i*i/(32.f*32.f)-2*i/32.f,1}};
+            p = {i*10.f+10,200,15,3,(char*)"Sup",{i/32.f,1-i/32.f,i*i/(32.f*32.f)-2*i/32.f,1}};
             // p = {i*10.f+10,200,8,8,{i/32.f,1-i/32.f,i*i/(32.f*32.f)-2*i/32.f,1}};
         else{
             p.x += 0.5*(i%2)*(32-i)/32.f;

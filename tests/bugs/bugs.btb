@@ -1,0 +1,8 @@
+@TEST_CASE(bug_0)
+
+a := 2
+b := 6
+c := 3
+str := "ABCDEFG";
+
+test 'F'; str.ptr[b - c + a];
