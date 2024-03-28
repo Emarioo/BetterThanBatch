@@ -56,6 +56,7 @@ namespace engone {
 			u64 namelen = 0;
 		};
 		u64 fileSize = 0;
+		u64 lastModified = 0;
 		float lastWriteSeconds = 0.0;
 		bool isDirectory = false;
 	};

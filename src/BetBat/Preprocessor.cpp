@@ -737,7 +737,7 @@ SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
     
     bool complete_inactive = false;
     
-    int depth = 0;
+    int depth = 0; // used on inactive sections
     SignalAttempt error = SignalAttempt::SUCCESS;
     // bool hadElse=false;
     _MLOG(log::out << log::GRAY<< "   ifdef - "<<name<<"\n";)
@@ -790,6 +790,7 @@ SignalAttempt ParseIfdef(PreprocInfo& info, bool attempt){
                     }
                 }
                 notDefined = false; // reset for later
+                continue;
             } else if(token=="endif"){
                 if(depth==0){
                     info.next();

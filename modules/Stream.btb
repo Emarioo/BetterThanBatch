@@ -24,12 +24,27 @@ struct ByteStream {
         size += len;
         return true;
     }
+    // fn write_slice<T>(slice: Slice<T>) -> bool {
+    //     return write(slice.ptr, slice.len)
+    // }
     fn write<T>(value: T) -> bool {
         t_size := sizeof(T);
         if t_size == 1 || t_size == 2 || t_size == 4 || t_size == 8 {
             return write(&value, t_size);
         }
         return false;
+    }
+    fn read(ptr: void*, len: u64) -> bool {
+        if size + len > max {
+            return false
+        }
+        if ptr
+            memcpy(ptr, data + size, len);
+        size += len;
+        return true;
+    }
+    fn read<T>(ptr: T*) -> bool {
+        return read(ptr, sizeof T)
     }
     // Marked unsafe because the pointer in the returned slice
     // may be invalidated if the stream is cleaned up.

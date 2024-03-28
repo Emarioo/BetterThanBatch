@@ -330,13 +330,16 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, Token typeString, const Token
             if(id.isValid()){
 
             } else if(!printedError) {
-            //     // ERR_SECTION(
-            // ERR_HEAD(err_tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
-                ERR_SECTION(
-                    ERR_HEAD(err_tokenRange)
-                    ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
-                    ERR_LINE(err_tokenRange,"here somewhere")
-                )
+                if(info.showErrors) {
+                //     // ERR_SECTION(
+                // ERR_HEAD(err_tokenRange, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
+                    ERR_SECTION(
+                        ERR_HEAD(err_tokenRange)
+                        ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
+                        ERR_LINE(err_tokenRange,"here somewhere")
+                    )
+                }
+                return AST_VOID;
             }
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
         }
@@ -728,7 +731,10 @@ SignalAttempt CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr,
             }
             overload->funcImpl->usages++;
 
-            for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
+            // BREAK(overload->astFunc->name == "create_snapshot")
+
+            for(int i=argTypes.size() + (expr->hasImplicitThis()?1:0); i<overload->astFunc->arguments.size();i++) {
+            // for(int i=argTypes.size(); i<overload->astFunc->arguments.size();i++) {
                 auto& argImpl = overload->funcImpl->argumentTypes[i];
                 auto& arg = overload->astFunc->arguments[i];;
                 tempTypes.resize(0);
@@ -1374,8 +1380,10 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             CheckFncall(info,scopeId,expr, outTypes, attempt, false);
         } else if(expr->typeId == AST_STRING){
             u32 index=0;
+            
             auto constString = info.ast->getConstString(expr->name,&index);
             // Assert(constString);
+            // log::out << " "<<expr->name << " "<<index<<"\n";
             expr->versions_constStrIndex[info.currentPolyVersion] = index;
 
             if(expr->flags & ASTNode::NULL_TERMINATED) {
@@ -2585,6 +2593,36 @@ SignalDefault CheckRest(CheckInfo& info, ASTScope* scope){
             }
         } else if(now->type == ASTStatement::IF){
             SignalAttempt result1 = CheckExpression(info, scope->scopeId,now->firstExpression,&typeArray, false);
+            
+            if(typeArray.size() != 1) {
+                // TODO: Improve error message
+                ERR_SECTION(
+                    ERR_HEAD(now->firstExpression->tokenRange)
+                    ERR_MSG("The expression in if-statement must result in 1 type but it does not.")
+                    ERR_LINE(now->firstExpression->tokenRange, "here")
+                )
+                continue;
+            } else {
+                TypeId dtype = typeArray[0];
+                u32 size = info.ast->getTypeSize(dtype);
+                if(size > 8) {
+                    ERR_SECTION(
+                        ERR_HEAD(now->firstExpression->tokenRange)
+                        ERR_MSG("The type '"<<info.ast->typeToString(dtype)<<"' in this expression was bigger than 8 bytes and can't be used in an if statement.")
+                        ERR_LINE(now->firstExpression->tokenRange, size << " bytes is to much")
+                    )
+                    continue;
+                }
+                if(size == 0) {
+                    ERR_SECTION(
+                        ERR_HEAD(now->firstExpression->tokenRange)
+                        ERR_MSG("The type '"<<info.ast->typeToString(dtype)<<"' in this expression is of size zero. The type should preferably be a boolean or a type of size 1-8.")
+                        ERR_LINE(now->firstExpression->tokenRange, "here")
+                    )
+                    continue;
+                }
+            }
+            
             SignalDefault result = CheckRest(info, now->firstBody);
             if(now->secondBody){
                 result = CheckRest(info, now->secondBody);

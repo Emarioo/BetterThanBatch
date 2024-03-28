@@ -173,6 +173,7 @@ if !compileSuccess! == 0 (
 
     @REM btb -twe *switch.btb
     btb -dev
+    @REM btb examples/version_control/main.btb
     @REM btb -pm *typeinfo.btb -o dev.exe -g -r
 
     @REM btb dev.btb -p

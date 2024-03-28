@@ -16,11 +16,18 @@ struct StringBuilder {
         _reserve(0)
     }
 
+    fn size() -> u32 { return len }
     fn sliced() -> Slice<char> {
         return Slice<char>{ptr, len};
     }
     fn clear() { len = 0; }
     fn append(value: i64) {
+        if len + 20 > max {
+            _reserve(len + 20);
+        }
+        len += swrite_unsafe(ptr + len, value);
+    }
+    fn append(value: u64) {
         if len + 20 > max {
             _reserve(len + 20);
         }
@@ -33,6 +40,8 @@ struct StringBuilder {
         len += swrite_unsafe(ptr + len, value);
     }
     fn append(str: char[]) {
+        if str.len == 0   return
+        
         if len + str.len > max {
             if !_reserve(str.len + max * 2u) {
                 return;
@@ -41,6 +50,9 @@ struct StringBuilder {
         memcpy(ptr + len, str.ptr, str.len);
         len += str.len;
         ptr[len] = '\0';
+    }
+    fn append(str: StringBuilder) {
+        append(str.sliced())
     }
     
     // TODO: Some useful functions
@@ -85,24 +97,11 @@ struct StringBuilder {
     }
 }
 
-// #import "String"
-// #import "Logger"
-
-// a0 = "my"
-// a1 = "stuff"
-
-// str: String;
-// defer str.cleanup();
-
-// str.append(a0)
-// str.append(a1)
-// str.append(a0)
-
-// log(str.sliced())
-
-// #import "OS"
-
 fn @intrinsic strlen(str: char*) -> u32;
+
+fn @hide std_print(t: StringBuilder){
+    std_print(t.sliced())
+}
 
 operator ==(a: Slice<char>, b: Slice<char>) -> bool {
     if a.len != b.len  return false;
@@ -154,6 +153,33 @@ fn @hide swrite_unsafe(buffer: char*, value: i64) -> u32 {
     while value > 0 && used > 0 {
         num := value % 10;
         value = value / 10;
+        str.ptr[used] = num + '0';
+        used--;
+    }
+    // LN
+    str.ptr += used + 1;
+    str.len -= used + 1;
+
+    memcpy(buffer, str.ptr, str.len);
+    buffer += str.len;
+    *buffer = '\0'; // not include in written bytes
+
+    return cast<u64>(buffer - start);
+}
+fn @hide swrite_unsafe(buffer: char*, value: u64) -> u32 {
+    // LN
+    start := buffer;
+    if value == 0 {
+        buffer[0] = '0';
+        buffer[1] = '\0';
+        return 1;
+    }
+    // LN
+    str: char[21];
+    used := 20;
+    while value > 0u && used > 0 {
+        num := value % 10u;
+        value = value / 10u;
         str.ptr[used] = num + '0';
         used--;
     }

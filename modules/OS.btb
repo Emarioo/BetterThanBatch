@@ -38,6 +38,9 @@ fn LINK_TYPE Allocate(size: u64) -> void*;
 fn LINK_TYPE Reallocate(ptr: void*, oldSize: u64, newSize: u64) -> void* ;
 fn LINK_TYPE Free(ptr: void*, size: u64) ;
 
+#macro HANDLE_TO_INTERNAL(H) cast<u64>(H + 1)
+#macro INTERNAL_TO_HANDLE(H) cast<void*>(H - 1)
+
 #macro FileHandle u64
 // struct FileHandle { // not named File because someone might want that name for other things
 //     handle: u64;
@@ -48,12 +51,168 @@ enum @specified FileOpenFlags {
     FILE_READ_AND_WRITE     = 0x4,
 }
 // returns file handle and file size
-fn LINK_TYPE FileOpen(path: Slice<char>*, flags: FileOpenFlags, outFileSize: u64* = null) -> FileHandle;
+fn FileOpen(path: Slice<char>, flags: FileOpenFlags, outFileSize: u64* = null) -> FileHandle {
+#ifdef OS_WINDOWS
+    fn @dllimport @stdcall CreateFileA(
+        lpFileName: char*,
+        dwDesiredAccess: u32,
+        dwShareMode: u32,
+        lpSecurityAttributes: void*, //LPSECURITY_ATTRIBUTES,
+        dwCreationDisposition: u32,
+        dwFlagsAndAttributes: u32,
+        hTemplateFil: void* // HANDLE
+    ) -> void*;
+    fn @dllimport @stdcall GetFileSizeEx(
+        hFile: void*, // HANDLE
+        lpFileSize: u64*
+    ) -> bool;
+    // fn @dllimport @stdcall GetLastError() -> u32
+    
+    #macro GENERIC_WRITE cast<u32>0x4000_0000
+    #macro GENERIC_READ cast<u32>0x8000_0000
+    #macro FILE_SHARE_READ cast<u32>0x1
+    #macro FILE_SHARE_WRITE cast<u32>0x2
+    #macro CREATE_ALWAYS 2u
+    #macro OPEN_EXISTING 3u
+    #macro OPEN_ALWAYS 4u
+    #macro FILE_ATTRIBUTE_NORMAL cast<u32>0x80
+    #macro INVALID_HANDLE_VALUE cast<u64>0xFFFF_FFFF_FFFF_FFFF
+
+    if path.ptr[path.len] != '\0'
+        // TODO: allocate null terminated string
+        return null
+
+    access: u32 = GENERIC_READ|GENERIC_WRITE;
+    sharing: u32 = FILE_SHARE_READ|FILE_SHARE_WRITE;
+    Assert(flags != 0);
+    
+    if(flags & FILE_READ_ONLY){
+        access = GENERIC_READ;
+    }
+    
+    creation: u32 = OPEN_EXISTING;
+    // if(flags&FILE_CAN_CREATE)
+    // 	creation = OPEN_ALWAYS;
+    if(flags&FILE_CLEAR_AND_WRITE)
+        creation = CREATE_ALWAYS;
+    
+    if((creation&OPEN_ALWAYS) || (creation&CREATE_ALWAYS)){
+        // TODO: create missing directories
+        // std::string temp;
+        // uint i=0;
+        // int at = path.find_first_of(':');
+        // if(at!=-1){
+        //     i = at+1;
+        //     temp+=path.substr(0,i);
+        // }
+        // for(;i<path.length();i++){
+        //     char chr = path[i];
+        //     if(chr=='/'||chr=='\\'){
+        //         // printf("exist %s\n",temp.c_str());
+        //         if(!DirectoryExist(temp)){
+        //             // printf(" create\n");
+        //             bool success = DirectoryCreate(temp);
+        //             if(!success)
+        //                 break;
+        //         }
+        //     }
+        //     temp+=chr;
+        // }
+    }
+    
+    // TODO: Security attributes so that a child process can inherit the file handle. (useful replacing or messsing with stdout, stdin?)
+    // SECURITY_ATTRIBUTES sa;
+    // ZeroMemory(&sa, sizeof(SECURITY_ATTRIBUTES));
+    // sa.nLength = sizeof(sa);
+    // sa.bInheritHandle = true;
+    
+    handle := CreateFileA(path.ptr, access, sharing, null, creation, FILE_ATTRIBUTE_NORMAL, null);
+    
+    if(handle==INVALID_HANDLE_VALUE){
+        return null
+        // DWORD err = GetLastError();
+        // if(err == ERROR_FILE_NOT_FOUND || err == ERROR_PATH_NOT_FOUND){
+        //     // this can happen, it's not really an error, no need to print.
+        //     // denied access to some more fundamental error is important however.
+        //     // PL_PRINTF("[WinError %lu] Cannot find '%s'\n",err,path.c_str());
+        // }else if(err == ERROR_ACCESS_DENIED){
+        //     PL_PRINTF("[WinError %lu] Denied access to '%s'\n",err,path.c_str()); // tried to open a directory?
+        // }else {
+        //     PL_PRINTF("[WinError %lu] Error opening '%s'\n",err,path.c_str());
+        // }
+        // return {};
+    } else if (outFileSize){
+        success := GetFileSizeEx(handle, outFileSize);
+        if (!success) {
+            // GetFileSizeEx will probably not fail if CreateFile succeeded. But just in case it does.
+            // DWORD err = GetLastError();
+            // printf("[WinError %lu] Error aquiring file size from '%s'",err,path.c_str());
+            *outFileSize = 0;
+            // Assert(outFileSize);
+        }
+    }
+    return HANDLE_TO_INTERNAL(handle)
+#elif OS_UNIX
+    // incomplete
+#endif
+}
 // returns read bytes
 fn LINK_TYPE FileRead(file: FileHandle, buffer: void*, readBytes: u64) -> u64;
 // returns written bytes
 fn LINK_TYPE FileWrite(file: FileHandle, buffer: void*, writeBytes: u64) -> u64;
 fn LINK_TYPE FileClose(file: FileHandle);
+
+fn FileExist(path: Slice<char>, is_dir: bool* = null, is_file: bool* = null) -> bool {
+    // #import "Logger"
+    
+    #macro FILE_ATTRIBUTE_DIRECTORY 0x10
+    #macro FILE_ATTRIBUTE_NORMAL 0x80
+    #macro INVALID_FILE_ATTRIBUTES (-1)
+    #ifdef OS_WINDOWS
+    fn @dllimport @stdcall GetFileAttributesA(lpFileName: char*) -> u32
+    fn @dllimport @stdcall GetLastError() -> u32
+    
+    if path.ptr[path.len] != '\0'
+        // TODO: allocate null terminated string
+        return false
+        
+    
+    attributes := GetFileAttributesA(path.ptr)
+    
+    if attributes == INVALID_FILE_ATTRIBUTES {
+        err := GetLastError()
+        // if err == 3 // path not found
+        // log("Windows error (GetFileAttributesA): ",err);
+    }
+    
+    // log("Hello: ",attributes)
+    if is_dir;
+        *is_dir = 0 != (attributes & FILE_ATTRIBUTE_DIRECTORY);
+    if is_file;
+        *is_file = 0 != (attributes & FILE_ATTRIBUTE_NORMAL)
+    
+    return attributes != INVALID_FILE_ATTRIBUTES
+    #elif OS_UNIX
+    // incomplete
+    #endif
+    #undef FILE_ATTRIBUTE_DIRECTORY
+    #undef FILE_ATTRIBUTE_NORMAL
+    #undef INVALID_FILE_ATTRIBUTES
+}
+fn DirCreate(path: Slice<char>) -> bool {
+    #ifdef OS_WINDOWS
+    fn @dllimport @stdcall CreateDirectoryA(lpPathName: char*, lpSecurityAttributes: void*) -> bool
+       
+    if path.ptr[path.len] != '\0'
+        // TODO: allocate null terminated string
+        return false
+    
+    yes := CreateDirectoryA(path.ptr, null)
+    return yes
+    #else
+    // incomplete    
+    #endif
+}
 
 // // The returned string is heap allocated in the interpreter.
 // // This allocation is freed when the interpreter finishes.
@@ -69,10 +228,10 @@ fn LINK_TYPE NativeSleep(seconds: f32);
 
 fn @import CmdLineArgs() -> Slice<Slice<char>>*; // const?
 
-// fn LINK_TYPE DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterator*;
-// fn LINK_TYPE DirectoryIteratorDestroy(iterator: DirectoryIterator*);
-// fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
-// fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);
+fn LINK_TYPE DirectoryIteratorCreate(rootPath: Slice<char>*) -> DirectoryIterator*;
+fn LINK_TYPE DirectoryIteratorDestroy(iterator: DirectoryIterator*);
+fn LINK_TYPE DirectoryIteratorNext(iterator: DirectoryIterator*) -> DirectoryIteratorData*;
+fn LINK_TYPE DirectoryIteratorSkip(iterator: DirectoryIterator*);
 
 fn @import GetClockSpeed() -> u64;
 
@@ -81,6 +240,7 @@ fn @import ExecuteCommand(path: Slice<char>*, asynchronous: bool = false, exitCo
 struct DirectoryIteratorData {
     name: char[]; // Allocated by interpreter; can't be String because of that. The ptr should be const (char* const NOT const char*)
     fileSize: u64;
+    lastModified: u64;
     lastWriteSeconds: f32;
     isDirectory: bool;
 }

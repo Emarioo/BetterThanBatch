@@ -14,7 +14,8 @@ fn @intrinsic strlen(str: char*) -> u32;
 */
 
 #macro log(...) { log_inner(...) }
-#macro log_inner(X, ...) std_print(X); std_print(' '); log_inner(...)
+#macro log_inner(X, ...) std_print(X); log_inner(...)
+// #macro log_inner(X, ...) std_print(X); std_print(' '); log_inner(...)
 #macro log_inner(X) std_print(X); std_print('\n')
 
 #macro std_prints(X,...) std_print(X); std_prints(...)

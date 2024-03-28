@@ -67,6 +67,7 @@ struct DynamicArray<T> {
         len = newLen;
         return true;
     }
+    // new memory is zero-initialized (DO NOT CHANGE THIS IN THE FUTURE BECAUSE CODE DEPEND ON THIS)
     fn reserve(newMax: u32) -> bool {
         // log("newMax",newMax)
         // log("size",sizeof T)

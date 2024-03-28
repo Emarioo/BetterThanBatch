@@ -1267,8 +1267,10 @@ SignalDefault GenerateReference(GenInfo& info, ASTExpression* _expression, TypeI
                 if(typesize>1){
                     info.addLoadIm(BC_REG_EAX, typesize);
                     info.addInstruction({BC_MULI, ARITHMETIC_SINT, reg, BC_REG_EAX});
+                    info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_EAX, BC_REG_RBX});
+                } else {
+                    info.addInstruction({BC_ADDI, BC_REG_RBX, reg, BC_REG_RBX});
                 }
-                info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_EAX, BC_REG_RBX});
 
                 info.addPush(BC_REG_RBX);
                 continue;
@@ -1729,7 +1731,8 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
                 BC_REG_XMM3d,
             };
             auto& argTypes = funcImpl->argumentTypes;
-            for(int i=fullArgs.size()-1;i>=0;i--) {
+            int early_args = fullArgs.size() >= 4 ? 4 : fullArgs.size();
+            for(int i=early_args-1;i>=0;i--) {
                 auto argType = argTypes[i].typeId;
                 if(AST::IsDecimal(argType)) {
                     info.addPop(float_regs[i]);
@@ -1818,6 +1821,7 @@ SignalDefault GenerateFnCall(GenInfo& info, ASTExpression* expression, DynamicAr
             int used_floats = 0;
             // Because we need to pop arguments in reverse, we must first know how many
             // integer/pointer and float type arguments we have.
+            Assert(fullArgs.size() <= sizeof(normal_regs)/sizeof(*normal_regs)); // what about float registers
             for(int i=fullArgs.size()-1;i>=0;i--) {
                 if(AST::IsDecimal(argTypes[i].typeId)) {
                     used_floats++;
@@ -2141,7 +2145,7 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             // Assert(expression->constStrIndex!=-1);
             int& constIndex = expression->versions_constStrIndex[info.currentPolyVersion];
             auto& constString = info.ast->getConstString(constIndex);
-
+            
             TypeInfo* typeInfo = nullptr;
             if (expression->flags & ASTNode::NULL_TERMINATED) {
                 typeInfo = info.ast->convertToTypeInfo(Token("char*"), info.ast->globalScopeId, true);
@@ -2877,8 +2881,10 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
             if(lsize>1){
                 info.addLoadIm(BC_REG_EAX, lsize);
                 info.addInstruction({BC_MULI, ARITHMETIC_SINT, reg, BC_REG_EAX});
+                info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_EAX, BC_REG_RBX});
+            } else {
+                info.addInstruction({BC_ADDI, BC_REG_RBX, reg, BC_REG_RBX});
             }
-            info.addInstruction({BC_ADDI, BC_REG_RBX, BC_REG_EAX, BC_REG_RBX});
 
             SignalDefault result = GeneratePush(info, BC_REG_RBX, 0, ltype);
 
@@ -4718,6 +4724,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
         else if (statement->type == ASTStatement::IF) {
             _GLOG(SCOPE_LOG("IF"))
 
+            // BREAK(statement->firstExpression->nodeId == 67)
             TypeId dtype = {};
             SignalDefault result = GenerateExpression(info, statement->firstExpression, &dtype);
             if (result != SignalDefault::SUCCESS) {
@@ -4730,15 +4737,15 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
             // }
             Assert(dtype.isValid()); // We expect a good type, otherwise result should have been a failure
             u32 size = info.ast->getTypeSize(dtype);
-            Assert(size != 0);
-
-            if(size > 8) {
-                ERR_SECTION(
-                    ERR_HEAD(statement->firstExpression->tokenRange)
-                    ERR_MSG("The type '"<<info.ast->typeToString(dtype)<<"' in this expression was bigger than 8 bytes and can't be used in an if statement.")
-                    ERR_LINE(statement->firstExpression->tokenRange, size << " bytes is to much")
-                )
-                GeneratePop(info, 0, 0, dtype);
+            if(size == 0 || size > 8) {
+                if(!info.hasErrors()) {
+                    ERR_SECTION(
+                        ERR_HEAD(statement->firstExpression->tokenRange)
+                        ERR_MSG("The type '"<<info.ast->typeToString(dtype)<<"' in this expression was bigger than 8 bytes and can't be used in an if statement.")
+                        ERR_LINE(statement->firstExpression->tokenRange, size << " bytes is to much")
+                    )
+                    // GeneratePop(info, 0, 0, dtype);
+                }
                 continue;
             }
 
@@ -5694,12 +5701,18 @@ SignalDefault GenerateData(GenInfo& info) {
     // IMPORTANT: TODO: Some data like 64-bit integers needs alignment.
     //   Strings don's so it's fine for now but don't forget about fixing this.
     for(auto& pair : info.ast->_constStringMap) {
-        Assert(pair.first.size()!=0);
+        // Assert(pair.first.size()!=0);
+        
         int offset = 0;
-        if(pair.first.back()=='\0')
-            offset = info.code->appendData(pair.first.data(), pair.first.length());
-        else
-            offset = info.code->appendData(pair.first.data(), pair.first.length() + 1); // +1 to include null termination, this is to prevent mistakes when using C++ functions which expect it.
+        if(pair.first.size() == 0) {
+            char empty_str = '\0';
+            offset = info.code->appendData(&empty_str, 1);
+        } else {
+            if(pair.first.back()=='\0')
+                offset = info.code->appendData(pair.first.data(), pair.first.length());
+            else
+                offset = info.code->appendData(pair.first.data(), pair.first.length() + 1); // +1 to include null termination, this is to prevent mistakes when using C++ functions which expect it.
+        }
         if(offset == -1){
             continue;
         }

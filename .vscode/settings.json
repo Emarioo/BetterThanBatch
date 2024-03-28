@@ -1,6 +1,7 @@
 {
     "disasexpl.useBinaryParsing":true,
     "files.associations": {
+        "*.cpp": "cpp",
         "vector": "cpp",
         "xstring": "cpp",
         "xutility": "cpp",
@@ -83,11 +84,11 @@
         "memory_resource": "cpp",
         "numbers": "cpp",
         "cinttypes": "cpp",
-        "ya": "c"
+        "ya": "c",
+        "queue": "cpp"
     },
     "cmake.configureOnOpen": false,
     "lldb.displayFormat": "auto",
-    "lldb.showDisassembly": "auto",
     "lldb.dereferencePointers": true,
     "lldb.consoleMode": "commands"
 }
