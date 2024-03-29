@@ -963,6 +963,7 @@ ASTExpression *AST::createExpression(TypeId type) {
     ptr->nodeId = getNextNodeId();
     ptr->isValue = (u32)type.getId() < AST_PRIMITIVE_COUNT;
     ptr->typeId = type;
+    // BREAK(ptr->nodeId == 290)
     return ptr;
 }
 ASTScope *AST::createNamespace(const Token& name) {

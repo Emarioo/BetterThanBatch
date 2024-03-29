@@ -1491,6 +1491,7 @@ SignalAttempt CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* e
             }
             if(expr->right) {
                 typeArray.resize(0);
+                // BREAK(expr->nodeId == 291)
                 CheckExpression(info,scopeId, expr->right, &typeArray, attempt);
                 Assert(typeArray.size()<2); // error message
                 if(typeArray.size()>0) {

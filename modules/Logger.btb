@@ -17,6 +17,7 @@ fn @intrinsic strlen(str: char*) -> u32;
 #macro log_inner(X, ...) std_print(X); log_inner(...)
 // #macro log_inner(X, ...) std_print(X); std_print(' '); log_inner(...)
 #macro log_inner(X) std_print(X); std_print('\n')
+#macro log_inner() std_print('\n')
 
 #macro std_prints(X,...) std_print(X); std_prints(...)
 
@@ -221,4 +222,46 @@ fn @hide std_print(t: char[]){
 }
 fn @hide std_print(ptr: char*, len: u64){
     prints(Slice<char>(ptr, len));
+}
+
+fn std_print_hex(ptr: void*, len: u32, big_endian: bool = false) {
+    bytes := cast<u8*>cast<void*>ptr
+
+    if big_endian {
+        for @rev 0..len {
+            if len > 20u && nr % 4 == 3 {
+                if nr % 16 != 15
+                    std_print(' ')
+            }
+            if len > 20u && nr % 16 == 15 {
+                if nr != len-1
+                    std_print('\n')
+                std_prints(nr,": ")
+            }
+            hex0 := bytes[nr] & cast<u8>0x0F
+            hex1 := bytes[nr] >> cast<u8>4
+            if hex1 < 10u   printc('0' + hex1)
+            else            printc('a' + hex1 - 10)
+            if hex0 < 10u   printc('0' + hex0)
+            else            printc('a' + hex0 - 10)
+        }
+    } else {
+        for 0..len {
+            if len > 20u && nr % 16 == 0 {
+                if nr != 0
+                    std_print('\n')
+                std_prints(nr,": ")
+            }
+            if len > 20u && nr % 4 == 0 {
+                if nr % 16 != 0
+                    std_print(' ')
+            }
+            hex0 := bytes[nr] & cast<u8>0x0F
+            hex1 := bytes[nr] >> cast<u8>4
+            if hex1 < 10u   printc('0' + hex1)
+            else            printc('a' + hex1 - 10)
+            if hex0 < 10u   printc('0' + hex0)
+            else            printc('a' + hex0 - 10)
+        }
+    }
 }

@@ -382,6 +382,15 @@ Path CompileInfo::findSourceFile(const Path& path, const Path& sourceDirectory) 
         fullPath = path.text;
     }
 
+    bool keep_searching = true;
+
+    // TODO IMPORTANT: If you import Array.btb or Macros.btb which are standard
+    //   libraries/modules then you expect certain macros or structs to exist.
+    //   But if you have files that match those modules in the current path or
+    //   somewhere else then those may be imported instead. Whoops, you now
+    //   spend time scratching your head over why DynamicArray isn't defined.
+    //   (this may be fixed now but more thought needs to be put into how imports are found)
+
     //-- Search directory of current source file
     if(fullPath.text.find("./")==0) {
         Assert(!sourceDirectory.text.empty());
@@ -392,42 +401,47 @@ Path CompileInfo::findSourceFile(const Path& path, const Path& sourceDirectory) 
         }
         fullPath = fullPath.getAbsolute();
     } 
-    //-- Search cwd or absolute path
-    else if(engone::FileExist(fullPath.text)){
-        // if(!fullPath.isAbsolute())
-        fullPath = fullPath.getAbsolute();
+    if(keep_searching) {
+        Path temp = sourceDirectory.text;
+        if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
+            temp.text += "/";
+        temp.text += fullPath.text;
+        for(int i=0;i<(int)importDirectories.size();i++){
+            const Path& dir = importDirectories[i];
+            Assert(dir.isDir() && dir.isAbsolute());
+            if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
+                temp = dir.text + fullPath.text;
+            else
+                temp = dir.text + "/" + fullPath.text;
+
+            if(FileExist(temp.text)) {
+                fullPath = temp.getAbsolute();
+                keep_searching = false;
+                break;
+            }
+        }
     }
-    else {
+    //-- Search cwd or absolute path
+    if (keep_searching) {
+        if(engone::FileExist(fullPath.text)){
+            // if(!fullPath.isAbsolute())
+            fullPath = fullPath.getAbsolute();
+            keep_searching = false;
+        }
+    }
+    //-- Search source files directory
+    if (keep_searching) {
         Path temp = sourceDirectory.text;
         if(!sourceDirectory.text.empty() && sourceDirectory.text[sourceDirectory.text.size()-1]!='/')
             temp.text += "/";
         temp.text += fullPath.text;
         if(FileExist(temp.text)){ // search directory of current source file again but implicit ./
             fullPath = temp.getAbsolute();
-        } else {
-            //-- Search additional import directories.
-            // TODO: DO THIS WITH #INCLUDE TOO!
-            // We only read importDirectories which makes this thread safe
-            // if we had modified it in anyway then it wouldn't have been.
-            bool yes = false;
-            for(int i=0;i<(int)importDirectories.size();i++){
-                const Path& dir = importDirectories[i];
-                Assert(dir.isDir() && dir.isAbsolute());
-                if(dir.text.size()>0 && dir.text[dir.text.size()-1] == '/')
-                    temp = dir.text + fullPath.text;
-                else
-                    temp = dir.text + "/" + fullPath.text;
-
-                if(FileExist(temp.text)) {
-                    fullPath = temp.getAbsolute();
-                    yes = true;
-                    break;
-                }
-            }
-            if(!yes) {
-                fullPath = "";
-            }
+            keep_searching = false;
         }
+    }
+    if(keep_searching) {
+        fullPath = ""; // failure, file not found
     }
     return fullPath;
 }

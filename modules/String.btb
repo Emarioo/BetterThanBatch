@@ -103,6 +103,10 @@ fn @hide std_print(t: StringBuilder){
     std_print(t.sliced())
 }
 
+
+operator ==(a: StringBuilder, b: Slice<char>) -> bool {
+    return a.sliced() == b
+}
 operator ==(a: Slice<char>, b: Slice<char>) -> bool {
     if a.len != b.len  return false;
     for a
@@ -392,4 +396,30 @@ fn parse_i64(slice: Slice<char>, read_chars: u32* = null) -> i64 {
         *read_chars = i;
     }
     return result;
+}
+// function assumes the text is a correct hexidecimal string
+// even length, characters which are digits or A-F
+fn parse_hex(text: Slice<char>, data: Slice<u8>*) {
+    Assert(text.len/2u == data.len)
+    for 0..text.len/2u {
+        tmp: u8 = 0
+        hex0 := text.ptr[2*nr]
+        hex1 := text.ptr[2*nr+1]
+        if hex0 <= '9' {
+            tmp = hex0 - '0'
+        } else if hex0 >= 'a' && hex0 <= 'f' {
+            tmp = hex0 - 'a' + 10
+        } else if hex0 >= 'A' && hex0 <= 'F' {
+            tmp = hex0 - 'A' + 10
+        }
+        tmp = tmp << cast<u8>4
+        if hex1 <= '9' {
+            tmp |= hex1 - '0'
+        } else if hex1 >= 'a' && hex1 <= 'f' {
+            tmp |= hex1 - 'a' + 10
+        } else if hex1 >= 'A' && hex1 <= 'F' {
+            tmp |= hex1 - 'A' + 10
+        }
+        data.ptr[nr] = tmp
+    }
 }

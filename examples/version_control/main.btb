@@ -585,25 +585,71 @@ struct Workspace {
             tmp.append("branch #")
             tmp.append(id.n)
             tmp.append(" (missing branch name)")
-        } else {
-            b := branches.get_unsafe(found)
-            tmp.append("branch ")
-            tmp.append(b.name)
-            tmp.append(" (#")
-            tmp.append(id.n)
-            tmp.append(")")
+            return false
         }
-        add_history(tmp.sliced())
+        b := branches.get_unsafe(found)
         
         // we need to switch snapshots, delete, create files
-        
+        switch_snapshot(b.snapshot)
         
         active_branch = id
+
+        tmp.append("branch ")
+        tmp.append(b.name)
+        tmp.append(" (#")
+        tmp.append(id.n)
+        tmp.append(")")
+
+        add_history(tmp.sliced())
         
         return true
     }
     fn switch_snapshot(id: SnapshotID) -> bool {
-        // replace files
+        /*
+        We are in snapshot A but we want snapshot B
+        In the workspace, we have files from A but we want files from B
+        How to we remove and add the files?
+
+        We begin with a simple case:
+            Snapshot A has zero files (empty workspace)
+            Snapshot B has some files
+        In this case we only need to add some files to the workspace (no files to delete).
+        So how do we store and get that file data efficiently?
+
+        Solution 1:
+            Each snapshot stores all files as it's own copy in a directory ".cvc/data/snapshot_a/<files>".
+            Not good, snapshots may store the same files we would waste storage by storing duplicates.
+
+        Solution 2:
+            We store unique files in one directory ".cvc/data/files/<files>".
+            We name the files by their SHA-1 hash.
+            Snapshots have a list of files (hashes + file paths).
+            To improve things further snapshots don't store all it's files in the list. It fetches unchanged files from previous snapshot.
+        */
+
+        now := find_snapshot(id)
+
+        loaded_files: DynamicArray<Slice<char>>;
+        defer loaded_files.cleanup()
+
+        while now {
+            for now_file: now.fileChanges {
+                found := false
+                // we don't want to load old version of files we already loaded
+                for prev_file: loaded_files.sliced_unsafe() {
+                    if now_file.path == prev_file {
+                        found = true
+                        break
+                    }
+                }
+                if !found {
+                    log("Load ", it.path)
+                    loaded_files.add(it.path.sliced())
+                }
+            }
+
+            now = find_snapshot(now.parent)
+        }
     }
     
     fn create_snapshot(desc: char[] = "") -> SnapshotID {
@@ -736,12 +782,6 @@ struct Workspace {
         f.lastModified = lastModified
         f.marked = true
     }
-    // fn untrack_file(path: char[], lastModified: u64) {
-    //     files.add(WorkspaceFile{})
-    //     f := files.get_unsafe(files.size() - 1)
-    //     f.path.append(path)
-    //     f.lastModified = lastModified
-    // }
     
     // returns -1 if not found
     fn find_index_of_branch(id: BranchID) -> i32 {
@@ -799,15 +839,22 @@ enum ChangeType : u8 {
     CHANGE_MODIFICATION,
 }
 struct FileChange {
-    file: StringBuilder;
+    path: StringBuilder;
     changeType: ChangeType;
-    changes: DynamicArray<TextChange>;
+    hash: DynamicArray<u8>;
+
+    // changes: DynamicArray<TextChange>;
 }
-struct TextChange {
-    line_start: i32;
-    line_end: i32;
-    text: StringBuilder;
+struct FileHash {
+    arr: DynamicArray<u8>; // TODO: u8[20] when structs support static arrays
+
+
 }
+// struct TextChange {
+//     line_start: i32;
+//     line_end: i32;
+//     text: StringBuilder;
+// }
 struct SnapshotID {
     n: u64; // zero is invalid snapshot
 }
