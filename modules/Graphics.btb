@@ -1,160 +1,23 @@
 
-
-
-/*
-    OpenGL related code using GLFW and GLEW
-*/
-// #link "gdi32.lib user32.lib OpenGL32.lib"
-// #link "libs/glew-2.1.0/lib/glew32s.lib"
-// #link "libs/glfw-3.3.8/lib/glfw3_mt.lib"
+// TODO: Linking with the right libraries is annoying, how do we improve it?
+#ifdef LINKER_MSVC
+    #link "gdi32.lib user32.lib OpenGL32.lib"
+    #link "libs/glew-2.1.0/lib/glew32s.lib"
+    #link "libs/glfw-3.3.8/lib/glfw3_mt.lib"
+#elif LINKER_GCC
+    // not sure how to compile with glfw and gcc
+    #link "-Llibs/glew-2.1.0/lib -Llibs/glfw-3.3.8/lib-mingw"
+    #link "-lgdi32 -luser32 -lOpenGL32 -lglew32s -lglfw3 -lkernel32 -ladvapi32 -lshell32 -lwinspool -lcomdlg32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32"
+#endif
 // #link "/NODEFAULTLIB:MSVCRT"
 // #link "/DEFAULTLIB:LIBCMT"
 // #link "/NODEFAULTLIB:LIBCMT"
 
-/*
-    Imports
-*/
-
-#macro GLFW_CONTEXT_VERSION_MAJOR  0x00022002
-#macro GLFW_CONTEXT_VERSION_MINOR  0x00022003
-#macro GLFW_OPENGL_PROFILE         0x00022008
-#macro GLFW_OPENGL_CORE_PROFILE    0x00032001
-fn @import glfwInit() -> i32;
-fn @import glfwCreateWindow(width: i32, height: i32, title: char*, monitor: void*, share: void*) -> void*;
-fn @import glfwTerminate();
-fn @import glfwMakeContextCurrent(window: void*);
-fn @import glfwWindowShouldClose(window: void*) -> i32;
-fn @import glfwSwapBuffers(window: void*);
-fn @import glfwPollEvents();
-fn @import glfwWindowHint(target: i32, hint: i32);
-fn @import glfwGetWindowSize(window: void*, width: i32*, height: i32*);
-
-#macro GL_COLOR_BUFFER_BIT 0x00004000
-#macro GLEW_VERSION 1
-#macro GL_STATIC_DRAW 0x88E4
-#macro GL_DYNAMIC_DRAW 0x88E8
-#macro GL_ARRAY_BUFFER 0x8892
-#macro GL_ELEMENT_ARRAY_BUFFER 0x8893
-
-#macro GL_COMPILE_STATUS 0x8B81
-#macro GL_LINK_STATUS 0x8B82
-#macro GL_FRAGMENT_SHADER 0x8B30
-#macro GL_VERTEX_SHADER 0x8B31
-
-#macro GL_FLOAT 0x1406
-#macro GL_UNSIGNED_INT 0x1405
-#macro GL_FALSE 0
-#macro GL_TRUE 1
-#macro GL_TRIANGLES 0x0004
-#macro GL_CULL_FACE 0x0B44
-
-#macro GL_BLEND 0x0BE2
-#macro GL_SRC_COLOR 0x0300
-#macro GL_ONE_MINUS_SRC_COLOR 0x0301
-#macro GL_SRC_ALPHA 0x0302
-#macro GL_ONE_MINUS_SRC_ALPHA 0x0303
-#macro GL_DST_ALPHA 0x0304
-#macro GL_ONE_MINUS_DST_ALPHA 0x0305
-#macro GL_DST_COLOR 0x0306
-#macro GL_ONE_MINUS_DST_COLOR 0x0307
-
-fn @import glClear(mask: u32);
-fn @import glewInit() -> i32;
-fn @import glClearColor(red: f32, green: f32, blue: f32, alpha: f32);
-fn @import glViewport(x: i32, y: i32, w: i32, h: i32);
-
-#macro glGenBuffers(...) __glewGenBuffers(...)
-fn @varimport __glewGenBuffers(size: i32, buffers: u32*);
-
-#macro glDeleteBuffers(...) __glewDeleteBuffers(...)
-fn @varimport __glewDeleteBuffers(size: i32, buffers: u32*);
-#macro glBindBuffer(...) __glewBindBuffer(...)
-fn @varimport __glewBindBuffer(target: u32, buffer: u32);
-#macro glBufferData(...) __glewBufferData(...)
-fn @varimport __glewBufferData(target: u32, size: u64, data: void*, usage: u32);
-#macro glCreateShader(...) __glewCreateShader(...)
-fn @varimport __glewCreateShader(type: u32) -> u32;
-#macro glShaderSource(...) __glewShaderSource(...)
-fn @varimport __glewShaderSource(shader: u32, count: i32, string: char**, length: i32*);
-#macro glCompileShader(...) __glewCompileShader(...)
-fn @varimport __glewCompileShader(shader: u32);
-#macro glGetShaderiv(...) __glewGetShaderiv(...)
-fn @varimport __glewGetShaderiv(shader: u32, pname: u32, param: i32*);
-#macro glGetShaderInfoLog(...) __glewGetShaderInfoLog(...)
-fn @varimport __glewGetShaderInfoLog(shader: u32, bufSize: i32, length: i32*, infoLog: char*);
-#macro glCreateProgram(...) __glewCreateProgram(...)
-fn @varimport __glewCreateProgram() -> u32;
-#macro glAttachShader(...) __glewAttachShader(...)
-fn @varimport __glewAttachShader(program: u32, shader: u32);
-#macro glLinkProgram(...) __glewLinkProgram(...)
-fn @varimport __glewLinkProgram(program: u32);
-#macro glUseProgram(...) __glewUseProgram(...)
-fn @varimport __glewUseProgram(program: u32);
-#macro glGetProgramiv(...) __glewGetProgramiv(...)
-fn @varimport __glewGetProgramiv(program: u32, pname: u32, param: i32*);
-#macro glGetProgramInfoLog(...) __glewGetProgramInfoLog(...)
-fn @varimport __glewGetProgramInfoLog(program: u32, bufSize: i32, length: i32*, infoLog: char*);
-
-#macro glDeleteShader(...) __glewDeleteShader(...)
-fn @varimport __glewDeleteShader(shader: u32);
-
-#macro glVertexAttribPointer(...) __glewVertexAttribPointer(...)
-fn @varimport __glewVertexAttribPointer(index: u32, size: i32, type: u32, normalized: bool, stride: i32, pointer: void*);
-
-#macro glEnableVertexAttribArray(...) __glewEnableVertexAttribArray(...)
-fn @varimport __glewEnableVertexAttribArray(index: u32);
-
-#macro glGenVertexArrays(...) __glewGenVertexArrays(...)
-fn @varimport __glewGenVertexArrays(b: i32, arrays: u32*);
-
-#macro glBindVertexArray(...) __glewBindVertexArray(...)
-fn @varimport __glewBindVertexArray(array: u32);
-
-#macro glDeleteVertexArrays(...) __glewDeleteVertexArrays(...)
-fn @varimport __glewDeleteVertexArrays(n: i32, arrays: u32*);
-
-#macro glBufferSubData(...) __glewBufferSubData(...)
-fn @varimport __glewBufferSubData(target: u32, offset: i64, size: i64, data: void*);
-
-fn @import glDrawArrays(mode: u32, first: i32, count: i32);
-fn @import glDrawElements(mode: u32, count: i32, type: u32, indices: void*);
-// TODO: Add glPolygonMode, GL_FRONT_AND_BACK, GL_LINE, GL_FILL
-
-#macro glGetUniformLocation(...) __glewGetUniformLocation(...)
-fn @varimport __glewGetUniformLocation(program: u32, name: char*);
-
-fn @import glEnable(cap: u32);
-fn @import glDisable(cap: u32);
-fn @import glBlendFunc(sfactor: u32, dfactor: u32);
-
-#macro glUniform1i(...) __glewUniform1i(...)
-#macro glUniform2i(...) __glewUniform2i(...)
-#macro glUniform3i(...) __glewUniform3i(...)
-#macro glUniform4i(...) __glewUniform4i(...)
-#macro glUniform1f(...) __glewUniform1f(...)
-#macro glUniform2f(...) __glewUniform2f(...)
-#macro glUniform3f(...) __glewUniform3f(...)
-#macro glUniform4f(...) __glewUniform4f(...)
-fn @varimport __glewUniform1i(location: i32, v0: i32);
-fn @varimport __glewUniform2i(location: i32, v0: i32, v1: i32);
-fn @varimport __glewUniform3i(location: i32, v0: i32, v1: i32, v2: i32);
-fn @varimport __glewUniform4i(location: i32, v0: i32, v1: i32, v2: i32, v3: i32);
-fn @varimport __glewUniform1f(location: i32, v0: f32);
-fn @varimport __glewUniform2f(location: i32, v0: f32, v1: f32);
-fn @varimport __glewUniform3f(location: i32, v0: f32, v1: f32, v2: f32);
-fn @varimport __glewUniform4f(location: i32, v0: f32, v1: f32, v2: f32, v3: f32);
-
-
-fn @import glewGetErrorString(error: u32) -> char*;
-fn @import glewGetString(name: u32) -> char*;
-fn @import glGetError() -> u32;
-
-
-/*
-    Language specific
-*/
-
+#import "GLFW"
+#import "GLEW"
 #import "Logger"
+#import "Lang"
+#import "Array" // used by GUIEnvironment.m_inputs
 
 fn @import Sleep(ms: i32); // windows sleep, remove this later
 
@@ -285,7 +148,7 @@ struct UIText {
 };
 
 struct UIModule {
-     /* ... */ 
+    /* ... */
     fn makeBox(id: u64 = 0) -> UIBox* {
         return MakeBox(this, id);
     }
@@ -302,3 +165,348 @@ fn @import RenderUIModule(ptr: UIModule*, width: f32, height: f32);
 fn @import GetWidthOfText(ptr: UIModule*, text: UIText*) -> f32;
 fn @import MakeBox(ptr: UIModule*, id: u64 = 0) -> UIBox*;
 fn @import MakeText(ptr: UIModule*, id: u64 = 0) -> UIText*;
+
+
+
+// ############################################
+//   GRAPHICS USER INTERFACE LIBRARY/WRAPPER
+//        (rendering, events)
+// ############################################
+
+/*
+    Initialize graphics environment
+*/
+// TODO: namespace gui when namespaces work
+enum GUIBackend {
+    BACKEND_GLFW_AND_OPENGL
+}
+struct GUIEnvironment {
+    fn init(backend: GUIBackend = BACKEND_GLFW_AND_OPENGL) {
+        Assert(backend != BACKEND_GLFW_AND_OPENGL)
+
+        yes := glfwInit();
+        if !yes {
+            log("glfwInit failed");
+            return;
+        }
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 3);
+        glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 3);
+        glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
+
+        global_active_gui = this
+    }
+    fn cleanup() {
+        glfwTerminate();
+    }
+    fn createWindow(width: i32, height: i32, title: char[] = "GUI") -> void* {
+        window := glfwCreateWindow(width, height, title.ptr, null, null);
+        if !window {
+            log("window failed");
+            glfwTerminate();
+            return null;
+        }
+
+        glfwMakeContextCurrent(window);
+        
+        // glfwSetKeyCallback(window, KeyCallback);
+		glfwSetMouseButtonCallback(window, MouseCallback);
+		// glfwSetCursorPosCallback(window, CursorPosCallback);
+		// glfwSetScrollCallback(window, ScrollCallback);
+		// glfwSetWindowFocusCallback(window, FocusCallback);
+		// glfwSetWindowSizeCallback(window, ResizeCallback);
+		// glfwSetWindowCloseCallback(window, CloseCallback);
+		// glfwSetWindowPosCallback(window, PosCallback);
+		// glfwSetCharCallback(window, CharCallback);
+		// glfwSetDropCallback(window, DropCallback);
+
+        err := glewInit();
+        if err {
+            msg := glewGetErrorString(err);
+            log("glew failed: ",msg)
+            glfwDestroyWindow(window)
+            return null;
+        }
+
+        glViewport(0, 0, width, height);
+        GLCHECK
+
+        // glEnable(GL_BLEND)
+        // glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+
+
+        // glEnable(GL_CULL)
+        return window;
+    }
+
+    // True if cursor is visible.
+    // bool isCursorVisible() const { return m_cursorVisible; }
+
+    fn getMouseX() -> f32 { return m_mouseX; }
+    fn getMouseY() -> f32 { return m_mouseY; }
+    // raw input from first person
+    // float getRawMouseX() const;
+    // float getRawMouseY() const;
+    fn setMouseX(x: f32) { m_mouseX=x; }
+    fn setMouseY(y: f32) { m_mouseY=y; }
+    fn getScrollX() -> f32 {
+        return m_tickScrollX;
+	}
+    fn getScrollY() -> f32 {
+        return m_tickScrollY;
+    }
+    fn setScrollX(x: f32) { m_frameScrollX += x; m_tickScrollX += x;}
+    fn setScrollY(y: f32) { m_frameScrollY += y; m_tickScrollY += y; }
+
+    fn setInput(code: i32, down: bool) {
+        index: i32 = -1;
+		for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code) {
+				index = nr;
+				break;
+			}
+		}
+        input: GUIInput*;
+		if index==-1 {
+			index = m_inputs.size();
+			m_inputs.add(GUIInput{});
+            input = m_inputs.get_unsafe(index)
+            input.code = code;
+		} else {
+            input = m_inputs.get_unsafe(index)
+        }
+		if (down) {
+			if (!input.down) {
+				// printf("PRESSED %c (%d)\n",(char)code,code);
+				// log::out << "PRESSED "<<(char)code << " ("<<code << ")\n";
+				input.down = true;
+				input.tickPressed++;
+				input.framePressed++;
+			}
+		}else{
+			// log::out << "RELEASED "<<(char)code << " ("<<code << ")\n";
+			// printf("RELEASED %c (%d)\n",(char)code,code);
+			input.down = false;
+			input.tickReleased++;
+			input.frameReleased++;
+		}
+    }
+
+    // std::string pollPathDrop();
+    // u32 pollChar();
+    // void resetPollChar();
+
+    fn isKeyDown(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code)
+				return inp.down;
+		}
+		return false;
+    }
+    fn isKeyPressed(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code) {
+				// log::out << "IS "<<(char)code<<"\n";
+				// if (m_parent->isRenderingWindow()) {
+				// 	if (m_inputs[i].framePressed > 0) {
+				// 		return true;
+				// 	}
+				// } else {
+					if (inp.tickPressed > 0) {
+						// log::out << " Done\n";
+						return true;
+					}
+				// }
+				return false;
+			}
+		}
+		return false;
+    }
+    fn isKeyReleased(code: i32) -> bool {
+        for @ptr inp: m_inputs.sliced_unsafe() {
+			if (inp.code == code) {
+				// if (m_parent->isRenderingWindow()) {
+				// 	if (m_inputs[i].frameReleased > 0) {
+				// 		return true;
+				// 	}
+				// }
+				// else {
+					if (inp.tickReleased > 0) {
+						return true;
+					}
+				// }
+				return false;
+			}
+		}
+		return false;
+    }
+    
+    // void enableFirstPerson(bool yes);
+    // bool isFirstPerson() const { return m_enabledFirstPerson; }
+    
+    // std::string pollClipboard();
+    // void setClipboard(const std::string& str);
+
+    // // If true, the cursor will be made visible.
+    // void setCursorVisible(bool visible);
+    // // Whether the cursor is locked to the window.
+    // bool isCursorLocked() const { return m_cursorLocked;}
+    // // If true, the cursor will be made invisible and locked to the window. Use this when you want the player to lock around.
+    // void lockCursor(bool locked);
+
+    fn resetEvents(resetFrameInput: bool) {
+        resetFrameInput = false;
+        if (resetFrameInput) {
+            m_frameScrollX = 0;
+            m_frameScrollY = 0;
+            // m_frameRawMouseX = 0;
+            // m_frameRawMouseY = 0;
+            for @ptr inp: m_inputs.sliced_unsafe() {
+                inp.framePressed = 0;
+                inp.frameReleased = 0;
+            }
+        } else {
+            m_tickScrollX = 0;
+            m_tickScrollY = 0;
+            // m_tickRawMouseX = 0;
+            // m_tickRawMouseY = 0;
+            for @ptr inp: m_inputs.sliced_unsafe() {
+                if(inp.tickPressed!=0){
+                    code := inp.code;
+                    // log::out << "RESET "<<(char)code << " ("<<code << ")\n";
+                    // printf("RESET %c (%d)\n",(char)code,code);
+                }
+                inp.tickPressed = 0;
+                inp.tickReleased = 0;
+            }
+        }
+    }
+
+    // GLFWwindow* m_glfwWindow=nullptr;
+    
+    m_inputs: DynamicArray<GUIInput>;
+    // std::vector<std::string> m_pathDrops;
+    
+    // u32 m_charIn = 0;
+    // u32 m_charOut = 0;
+    // bool m_emptyCharArray = true;
+    // static const u32 CHAR_ARRAY_SIZE = 20;
+    // u32 m_charArray[CHAR_ARRAY_SIZE];
+
+    // bool m_enabledFirstPerson = false;
+
+    m_mouseX: f32 = 0;
+    m_mouseY:  f32 = 0;
+    m_lastMouseX: f32 = -1;
+    m_lastMouseY: f32 = -1;
+    // float m_tickRawMouseX = 0, m_tickRawMouseY = 0, m_frameRawMouseX = 0, m_frameRawMouseY = 0;
+    m_tickScrollX: f32 =0;
+    m_tickScrollY: f32 = 0;
+    m_frameScrollX: f32 = 0;
+    m_frameScrollY: f32 = 0;
+
+    // bool m_cursorVisible = true, m_cursorLocked = false, m_focus = true;
+}
+struct GUIInput {
+    code: i32 = 0;
+    down: bool = false;
+    tickPressed: u8 = 0;
+    framePressed: u8 = 0;
+    tickReleased: u8 = 0;
+    frameReleased: u8 = 0;
+};
+global global_active_gui: GUIEnvironment* = null
+
+// global map<GLFWwindow*, InputModule*> moduleMapping; // Todo: doesn't work with dlls
+fn GetMappedModule(window: void*) -> GUIEnvironment* {
+    return global_active_gui
+    // auto win = moduleMapping.find(window);
+    // if (win != moduleMapping.end())
+    //     return win->second;
+    // return nullptr;
+}
+// fn @stdcall CharCallback(window: void*, chr: u32) {
+//     gui := GetMappedModule(window);
+//     if (!gui) {
+//         log::out << "InputModule isn't mapped\n";
+//         return;
+//     }
+//     // if (input->m_charIn == input->m_charOut && !input->m_emptyCharArray) {
+//     //     log::out << log::RED << "CharCallback : m_charArray["<<InputModule::CHAR_ARRAY_SIZE<<"] of InputModule is full, skipping "<<chr<<" (increase size to prevent this).\n";
+//     //     return; // list is full
+//     // }
+
+//     // input->m_charArray[input->m_charIn] = chr;
+//     // input->m_charIn = (input->m_charIn+1)% InputModule::CHAR_ARRAY_SIZE;
+//     // input->m_emptyCharArray = false;
+// }
+// fn @stdcall DropCallback(window: void*, count: i32, paths: char**) {
+//     gui := GetMappedModule(window);
+//     if (!gui) {
+//         log::out << "InputModule isn't mapped\n";
+//         return;
+//     }
+//     // for (int i = 0; i < count; ++i) {
+//     //     input->m_pathDrops.push_back(paths[i]);
+//     // }
+// }
+#macro GLFW_CALLBACK_ATTR @stdcall
+fn GLFW_CALLBACK_ATTR KeyCallback(window: void*, key: i32, scancode: i32, action: i32, mods: i32) {
+    gui := GetMappedModule(window);
+    if (!gui) {
+        log("InputModule isn't mapped")
+        return;
+    }
+    log("key ",cast<char>key, " ", scancode, " ", action)
+
+    gui.setInput(key, action != 0); // if not 0 means if pressed or repeating
+
+    if (action != 0 && (key == GLFW_KEY_BACKSPACE || key == GLFW_KEY_DELETE || key == GLFW_KEY_ENTER || key == GLFW_KEY_LEFT || key == GLFW_KEY_RIGHT)) {
+        // CharCallback(window, key);
+    }
+}
+
+fn GLFW_CALLBACK_ATTR MouseCallback(window: void*, button: i32, action: i32, mods: i32) {
+    // gui := GetMappedModule(window);
+
+    // if (!gui) {
+    //     log("InputModule isn't mapped")
+    //     return;
+    // }
+
+    // 
+    mx: f64;
+    my: f64;
+    fn wa(t: char){
+        // log("sp ", a)
+        // printc(t);
+        printc('\n');
+    }
+    wa('a');
+    // glfwGetCursorPos(window, &mx, &my);
+    // gui.setMouseX(cast<f32>mx);
+    // gui.setMouseY(cast<f32>my);
+    // gui.setInput(button, action != 0);
+    //log("click ", button, " ", action)
+}
+fn GLFW_CALLBACK_ATTR CursorPosCallback(window: void*, mx: f64, my: f64) {
+    gui := GetMappedModule(window);
+    if (!gui) {
+        log("InputModule isn't mapped")
+        return;
+    }
+    gui.setMouseX(cast<f32>mx);
+    gui.setMouseY(cast<f32>my);
+    log("cursor pos ", mx," ", my)
+}
+fn GLFW_CALLBACK_ATTR ScrollCallback(window: void*, xoffset: f64, yoffset: f64) {
+    gui := GetMappedModule(window);
+    if (!gui) {
+        log("InputModule isn't mapped")
+        return;
+    }
+    gui.setScrollX(cast<f32>xoffset);
+    gui.setScrollY(cast<f32>yoffset);
+
+    log("scroll ",xoffset, " ", yoffset)
+}

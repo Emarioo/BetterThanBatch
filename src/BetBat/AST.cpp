@@ -1522,11 +1522,21 @@ TypeId AST::convertToTypeId(Token typeString, ScopeId scopeId, bool transformVir
     if(transformVirtual) {
         if(typeInfo->id != typeInfo->originalId) {
             WHILE_TRUE {
-                TypeInfo* virtualInfo = getTypeInfo(typeInfo->id);
-                if(virtualInfo && typeInfo != virtualInfo){
-                    typeInfo = virtualInfo;
+                if (typeInfo->id.isPointer()) {
+                    pointerLevel+=typeInfo->id.getPointerLevel();
+                    TypeInfo* virtualInfo = getTypeInfo(typeInfo->id.baseType());
+                    if(virtualInfo && typeInfo != virtualInfo){
+                        typeInfo = virtualInfo;
+                    } else {
+                        break;
+                    }
                 } else {
-                    break;
+                    TypeInfo* virtualInfo = getTypeInfo(typeInfo->id);
+                    if(virtualInfo && typeInfo != virtualInfo){
+                        typeInfo = virtualInfo;
+                    } else {
+                        break;
+                    }
                 }
             }
             if(!typeInfo->id.isValid()) {

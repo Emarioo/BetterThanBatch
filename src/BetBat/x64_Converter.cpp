@@ -41,9 +41,11 @@
 #define OPCODE_ADD_RM_REG (u8)0x01
 #define OPCODE_ADD_RM_IMM_SLASH_0 (u8)0x81
 #define OPCODE_ADD_RM_IMM8_SLASH_0 (u8)0x83
+#define OPCODE_ADD_RM8_IMM8_SLASH_0 (u8)0x80
 
 #define OPCODE_SUB_REG_RM (u8)0x2B
 #define OPCODE_SUB_RM_IMM_SLASH_5 (u8)0x81
+#define OPCODE_SUB_RM8_IMM8_SLASH_5 (u8)0x80
 
 // This instruction has reg field in opcode.
 // See x64 manual.
@@ -1310,14 +1312,29 @@ Program_x64* ConvertTox64(Bytecode* bytecode){
                 if(size == 8){
                     prog->add(PREFIX_REXW);
                 }
+                if(size == 2)
+                    prog->add(PREFIX_16BIT);
+
                 if(offset>0) {
-                    prog->add(OPCODE_ADD_RM_IMM_SLASH_0);
-                    prog->addModRM(MODE_REG, 0, BCToProgramReg(op0,4|8));
-                    prog->add4((u32)(i32)offset); // NOTE: cast from i16 to i32 to u32, should be fine
+                    if(size == 1)
+                        prog->add(OPCODE_ADD_RM8_IMM8_SLASH_0);
+                    else
+                        prog->add(OPCODE_ADD_RM_IMM_SLASH_0);
+                    prog->addModRM(MODE_REG, 0, BCToProgramReg(op0,1|2|4|8));
+                    if(size == 1)
+                        prog->add((u8)(i8)offset); // NOTE: cast from i16 to i32 to u32, should be fine
+                    else
+                        prog->add4((u32)(i32)offset); // NOTE: cast from i16 to i32 to u32, should be fine
                 } else {
-                    prog->add(OPCODE_SUB_RM_IMM_SLASH_5);
-                    prog->addModRM(MODE_REG, 5, BCToProgramReg(op0,4|8));
-                    prog->add4((u32)(i32)-offset); // NOTE: cast from i16 to i32 to u32, should be fine
+                    if(size == 1)
+                        prog->add(OPCODE_SUB_RM8_IMM8_SLASH_5);
+                    else
+                        prog->add(OPCODE_SUB_RM_IMM_SLASH_5);
+                    prog->addModRM(MODE_REG, 5, BCToProgramReg(op0,1|2|4|8));
+                    if(size == 1)
+                        prog->add((u8)(i8)-offset); // NOTE: cast from i16 to i32 to u32, should be fine
+                    else
+                        prog->add4((u32)(i32)-offset); // NOTE: cast from i16 to i32 to u32, should be fine
                 }
                 break;
             }

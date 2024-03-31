@@ -211,7 +211,7 @@ unsigned int CreateUIShader(){
     return program;
 }
 UIFrameArray::UIFrameArray(uint32 typeSize, uint32 valuesPerFrame) :
-    m_typeSize(typeSize), m_valuesPerFrame(valuesPerFrame) {
+    m_valuesPerFrame(valuesPerFrame), m_typeSize(typeSize) {
     //uint32 off = valuesPerFrame & 63;
     //if(off!=0)
     //	m_valuesPerFrame += 64 - off;
@@ -612,7 +612,7 @@ unsigned int UIModule::location(const std::string& name){
     }
 }
 void UIModule::init(){
-      if(!initialized){
+    if(!initialized){
         shaderId = CreateUIShader();
         
         glGenVertexArrays(1,&vertexArrayId);
@@ -942,7 +942,7 @@ void TestUIMaintain(UIModule& ui){
         auto& p = *ui.makeText(i);
         // p = {i*10.f+10,200,8,8,{i/32.f,1,1,1}};
         if(p.x==0)
-            p = {i*10.f+10,200,15,3,"Sup",{i/32.f,1-i/32.f,i*i/(32.f*32.f)-2*i/32.f,1}};
+            p = {i*10.f+10,200,15,3,(char*)"Sup",{i/32.f,1-i/32.f,i*i/(32.f*32.f)-2*i/32.f,1}};
             // p = {i*10.f+10,200,8,8,{i/32.f,1-i/32.f,i*i/(32.f*32.f)-2*i/32.f,1}};
         else{
             p.x += 0.5*(i%2)*(32-i)/32.f;

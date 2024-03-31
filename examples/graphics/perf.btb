@@ -43,7 +43,7 @@ fn ReadPerfData(path: char[]) -> ProfiledData* {
     memzero(ptr, sizeof ProfiledData);
 
     fileSize: u64;
-    file := FileOpen(&path, FILE_READ_ONLY, &fileSize);
+    file := FileOpen(path, FILE_READ_ONLY, &fileSize);
     if(!file)
         return null;
     data: void* = Allocate(fileSize);
@@ -234,7 +234,7 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
             // box.color = UIColor{0.5,0.5,0.5,1};
             box.color = UIColor{1,1,1,1};
 
-            timeText = module.makeText();
+            timeText := module.makeText();
             timeText.color = UIColor{0.1,0,0.08,1};
             timeText.x = box.x;
             timeText.h = box.h*0.8;
@@ -244,7 +244,7 @@ fn RenderProfiledData(module: UIModule*, profiledData: ProfiledData*) {
             len: u32;
             timeText.string = tempStringData + strOffset;
             // log("data:",(cast<i64>tempStringData)," off:",cast<i64>strOffset," time:",time);
-            len := swrite_unsafe(tempStringData + strOffset, time);
+            len = swrite_unsafe(tempStringData + strOffset, time);
             // if len > 8
             //     len = 8;
             strOffset += len;

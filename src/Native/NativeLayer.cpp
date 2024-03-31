@@ -2,7 +2,7 @@
 
 #ifdef OS_WINDOWS
 // nocheckin, skip uimodule because there is some strange bug
-#define NO_UIMODULE
+// #define NO_UIMODULE
 #else
 // skip ui module on linux for now
 #define NO_UIMODULE

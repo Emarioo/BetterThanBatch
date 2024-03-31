@@ -79,7 +79,7 @@
             "request": "launch",
             // "program": "${workspaceFolder}/bin/temp.exe",
             "program": "${workspaceFolder}/dev.exe",
-            "args": ["snap","add"],
+            "args": ["gui"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

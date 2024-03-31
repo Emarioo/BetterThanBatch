@@ -1,38 +1,41 @@
 /*
     A crude version control tool
+
+    TODO: Fix memory leaks. It's not such a big deal since the program will
+      start, perform an operation, and quit. If the tool is incorporated into a GUI application then we will need to fix memory leaks.
+
+    TODO: Split main into multiple files.
+        One for serialization and file formats.
+        One main for command line options and setup
+        One for workspace and operations on it
+
+    TODO: When reading file and array lengths, check if the
+        length is reasonable.
+        100000 is not reasonable, probably a corruption
 */
 
 #import "String"
 #import "Array"
 #import "Logger"
 #import "OS"
-#import "Stream"
-#import "Math"
 #import "Basic"
-
-/*
-No files
-
-branch add A
-branch A
-Add a.txt
-snap add
-
-branch add B
-branch B
-Add b.txt
-snap add
-
-switch between branches and see respective text file
-
-*/
-
+#import "./gui.btb"
+#import "./workspace.btb"
 
 fn main(argc: i32, argv: char**) {
+
     workspace: Workspace
     path: StringBuilder
     path.append("examples/version_control/workspace_a")
     workspace.init(&path)
+
+    // t: StringBuilder
+    // i: SnapshotID
+    // i.n = 0xFFFF_FFFF_FFFF_FFFF
+    // t.append_hex(&i)
+    // log(t)
+    // start_gui(&workspace)
+    // return
 
     if argc < 2 {
         log("Crude version control v0.0.1")
@@ -125,8 +128,13 @@ fn main(argc: i32, argv: char**) {
                     return
                 }
                 while snapshot {
-                    log(" #",snapshot.id.n,": ", snapshot.description.sliced())
+                    log(" #",snapshot.id,": ", snapshot.description.sliced())
                     
+                    if snapshot.id == snapshot.parent {
+                        log("Snapshot is its own parent?")
+                        break
+                    }
+
                     snapshot = workspace.find_snapshot(snapshot.parent)
                 }
             } else if equal(argv[2], "del") {
@@ -151,6 +159,12 @@ fn main(argc: i32, argv: char**) {
                 //     }
                 // }
             } else if equal(argv[2], "add") {
+                if argc < 4 {
+                    log("Description is required when adding snapshot")
+                    log("Usage: snap add [description]")
+                    return
+                }
+
                 id: SnapshotID
                 if argc > 3 {
                     desc := Slice<char>{argv[3], strlen(argv[3])}
@@ -172,7 +186,7 @@ fn main(argc: i32, argv: char**) {
                     }
                     branch := workspace.find_branch(workspace.active_branch)
                     if !branch {
-                        log("Branch was null!")   
+                        log("Branch was null!")
                         return
                     }
                     
@@ -180,7 +194,7 @@ fn main(argc: i32, argv: char**) {
                     yes := workspace.rename_snapshot(branch.snapshot, text)
                     
                     if yes {
-                        log("Description of #",branch.snapshot.n, " was replaced")
+                        log("Description of #",branch.snapshot, " was replaced")
                     }
                 }
             } else if equal(argv[2], "help") {
@@ -218,666 +232,37 @@ fn main(argc: i32, argv: char**) {
         } else if equal(argv[1], "status") {
             if workspace.files.size() == 0 {
                 log("No tracked files")
-                return
+            } else {
+                log("Tracked workspace files:")
+                for @ptr workspace.files.sliced_unsafe() {
+                    log(" ", it.path.sliced())
+                }
             }
-            
-            for @ptr workspace.files.sliced_unsafe() {
-                log(" ", it.path.sliced())
+            b := workspace.find_branch(workspace.active_branch)
+            s := workspace.find_snapshot(b.snapshot)
+            // log("id: ",b.snapshot.n)
+            if s.fileChanges.size() == 0 {
+                log("No snapshot changes")
+            } else {
+                log("Snapshot changes:")
+                for @ptr s.fileChanges.sliced_unsafe() {
+                    log(" ",nr,": ",it.path)
+                }
             }
-        }else {
+        } else if equal(argv[1], "graph") {
+            // graph of all branches, all snapshots, how they depend on each other, their messages, their file changes
+            // you can do "graph [branch]" for specifics
+
+            return
+        } else if equal(argv[1], "gui") {
+            // log("GUI is incomplete")
+            start_gui(&workspace)
+            return
+        } else {
             log("Unknown argument: ",argv[1])
             return
         }
     }
-    // cvc branch
-    // cvc del branch main
-    // cvc rename branch main dev
-    // cvc commit
-    
-    // for 0..argc {
-    //     log(argv[nr])
-    // }
-    
-    
-    // workspace.create_branch("v0.1");
-    // workspace.create_snapshot("First version");
     
     workspace.save_all()
-}
-
-struct WorkspaceFile {
-    path: StringBuilder;
-    lastModified: u64;
-    
-    marked: bool; // used when comparing files to know which ones are missing
-}
-struct Workspace {
-    root_dir: StringBuilder;
-    workspace_dir: StringBuilder;
-    snapshots_dir: StringBuilder;
-    config_dir: StringBuilder;
-    history_dir: StringBuilder;
-    
-    snapshots: DynamicArray<Snapshot>;
-    branches: DynamicArray<Branch>;
-    history: DynamicArray<LogOperation>;
-    
-    active_branch: BranchID;
-    active_snapshot: SnapshotID;
-    
-    files: DynamicArray<WorkspaceFile>;
-    #macro WORKSPACE_SUB_DIR ".cvc"
-    
-    // initialize the workspace
-    // if the directory has a workspace directory then we
-    // setup things up based on it.
-    // otherwise we create a new workspace.
-    fn init(path: StringBuilder*) -> bool {
-        is_dir: bool;
-        found_path := FileExist(path.sliced(), is_dir = &is_dir)
-        if !found_path || !is_dir {
-            log("Cannot initialized workspace at '", path.sliced(), "'. It is not a valid path to a directory.")
-            return false
-        }
-        
-        root_dir = *path
-        
-        
-        workspace_dir.clear()
-        workspace_dir.append(root_dir.sliced());
-        workspace_dir.append("/");
-        workspace_dir.append(WORKSPACE_SUB_DIR);
-        
-        found := FileExist(workspace_dir.sliced(), is_dir = &is_dir)
-        if found && !is_dir {
-            log("Cannot initialized workspace at '", path.sliced(), "'. A file named '", WORKSPACE_SUB_DIR, "' is not allowed. It is reserved for workspace content. Consider removing the file if you want a workspace in the directory.")
-            return false
-        }
-        
-        if found {
-            // log("Loading existing workspace")
-            // load existing workspace
-        } else {
-            // log("Creating new workspace")
-            // create new workspace
-            
-            yes := DirCreate(workspace_dir.sliced())
-            if !yes {
-                log("Failed creating directory '",workspace_dir.sliced(),"'")
-                return false
-            }
-        }
-        
-        snapshots_dir.append(workspace_dir)
-        snapshots_dir.append("/snapshots")
-        config_dir.append(workspace_dir)
-        config_dir.append("/config")
-        history_dir.append(workspace_dir)
-        history_dir.append("/history")
-        
-        load_config()
-        load_snapshots()
-        load_history()
-        
-        
-        
-        return true
-    }
-    fn save_all() {
-        save_config()
-        save_snapshots()
-        save_history()
-    }
-    
-    // SAVING AND LOADING VERSION CONTROL INFORMATION
-    
-    fn load_config() -> bool {
-        file_size: u64;
-        file := FileOpen(config_dir.sliced(), FILE_READ_ONLY, &file_size)
-        if !file   return false
-        // defer FileClose(file)
-        
-        stream: ByteStream
-        yes := stream.reserve(file_size)
-        
-        if !yes
-            return false
-        FileRead(file, stream.data, file_size)
-        FileClose(file) // close file as soon as we are done instead of defering to the end of the function
-        
-        stream.read(&active_branch, sizeof active_branch)
-        stream.read(&active_snapshot, sizeof active_snapshot)
-        
-        branch_count: u32;
-        stream.read<u32>(&branch_count)
-        
-        branches.resize(branch_count)
-        
-        for @ptr branches.sliced_unsafe() {
-            stream.read(&it.id, sizeof it.id)
-            desc_len: u16;
-            stream.read<u16>(&desc_len)
-            if desc_len != 0 {
-                it.name._reserve(desc_len)
-                it.name.len = desc_len
-                stream.read(it.name.ptr, it.name.len)
-            }
-            stream.read(&it.snapshot, sizeof it.snapshot)
-        }
-        
-        file_count: u32;
-        stream.read<u32>(&file_count)
-        files.resize(file_count)
-        
-        for @ptr files.sliced_unsafe() {
-            len: u16
-            stream.read<u16>(&len)
-            if len != 0 {
-                it.path._reserve(len)
-                it.path.len = len
-                stream.read(it.path.ptr, it.path.len)
-            }
-            stream.read<u64>(&it.lastModified)
-        }
-        
-        return true
-    }
-    fn save_config() -> bool {
-        stream: ByteStream
-        
-        stream.write(&active_branch, sizeof active_branch)
-        stream.write(&active_snapshot, sizeof active_snapshot)
-        
-        stream.write<u32>(branches.size())
-        
-        for @ptr branches.sliced_unsafe() {
-            stream.write(&it.id, sizeof it.id)
-            stream.write<u16>(it.name.size())
-            if it.name.size() != 0 {
-                slice := it.name.sliced()
-                stream.write(slice.ptr, slice.len)
-            }
-            stream.write(&it.snapshot, sizeof it.snapshot)
-        }
-        
-        stream.write<u32>(files.size())
-        
-        for @ptr files.sliced_unsafe() {
-            stream.write<u16>(it.path.size())
-            if it.path.size() != 0 {
-                slice := it.path.sliced()
-                stream.write(slice.ptr, slice.len)
-            }
-            stream.write<u64>(it.lastModified)
-        }
-        
-        file := FileOpen(config_dir.sliced(), FILE_CLEAR_AND_WRITE)
-        if !file   return false
-        defer FileClose(file)
-        
-        slice := stream.sliced_unsafe()
-        FileWrite(file, slice.ptr, slice.len)
-        
-        return true
-    }
-    fn load_snapshots() -> bool {
-        file_size: u64;
-        file := FileOpen(snapshots_dir.sliced(), FILE_READ_ONLY, &file_size)
-        if !file   return false
-        // defer FileClose(file)
-        
-        stream: ByteStream
-        yes := stream.reserve(file_size)
-        
-        if !yes
-            return false
-        FileRead(file, stream.data, file_size)
-        FileClose(file) // close file as soon as we are done instead of defering to the end of the function
-        
-        snapshot_count: u32;
-        stream.read<u32>(&snapshot_count)
-        
-        snapshots.resize(snapshot_count)
-        
-        for @ptr snapshots.sliced_unsafe() {
-            stream.read(&it.id, sizeof it.id)
-            desc_len: u16;
-            stream.read<u16>(&desc_len)
-            if desc_len != 0 {
-                it.description._reserve(desc_len)
-                it.description.len = desc_len
-                stream.read(it.description.ptr, it.description.len)
-            }
-            stream.read(&it.parent, sizeof it.parent)
-        }
-        
-        return true
-    }
-    fn save_snapshots() -> bool {
-        stream: ByteStream
-        
-        stream.write<u32>(snapshots.size())
-        
-        for @ptr snapshots.sliced_unsafe() {
-            stream.write(&it.id, sizeof it.id)
-            stream.write<u16>(it.description.size())
-            if it.description.size() != 0 {
-                slice := it.description.sliced()
-                stream.write(slice.ptr, slice.len)
-            }
-            stream.write(&it.parent, sizeof it.parent)
-        }
-        
-        
-        file := FileOpen(snapshots_dir.sliced(), FILE_CLEAR_AND_WRITE)
-        if !file   return false
-        defer FileClose(file)
-        
-        slice := stream.sliced_unsafe()
-        FileWrite(file, slice.ptr, slice.len)
-        
-        return true
-    }
-    fn load_history() -> bool {
-        file_size: u64;
-        file := FileOpen(history_dir.sliced(), FILE_READ_ONLY, &file_size)
-        if !file   return false
-        // defer FileClose(file)
-        
-        stream: ByteStream
-        yes := stream.reserve(file_size)
-        
-        if !yes
-            return false
-        FileRead(file, stream.data, file_size)
-        FileClose(file) // close file as soon as we are done instead of defering to the end of the function
-        
-        history_count: u32;
-        stream.read<u32>(&history_count)
-        history.resize(history_count)
-        
-        stream.read<char>(null) // skip newline
-        
-        for @ptr history.sliced_unsafe() {
-            content_len: u16;
-            stream.read<u16>(&content_len)
-            if content_len != 0 {
-                it.content._reserve(content_len)
-                it.content.len = content_len
-                stream.read(it.content.ptr, it.content.len)
-            }
-            stream.read<char>(null) // skip newline
-        }
-        
-        return true
-    }
-    fn save_history() -> bool {
-        stream: ByteStream
-        
-        stream.write<u32>(history.size())
-        stream.write<char>('\n')
-        
-        for @ptr history.sliced_unsafe() {
-            stream.write<u16>(it.content.size())
-            if it.content.size() != 0 {
-                slice := it.content.sliced()
-                stream.write(slice.ptr, slice.len)
-            }
-            stream.write<char>('\n')
-        }
-        
-        file := FileOpen(history_dir.sliced(), FILE_CLEAR_AND_WRITE)
-        if !file   return false
-        defer FileClose(file)
-        
-        slice := stream.sliced_unsafe()
-        FileWrite(file, slice.ptr, slice.len)
-        
-        return true
-    }
-    
-    // OPERATIONS ON THE WORKSPACE
-    
-    fn create_branch(name: char[]) -> BranchID {
-        branches.add(Branch{})
-        b := branches.get_unsafe(branches.size()-1)
-        
-        b.id.n = random64()
-        b.name.append(name)
-        // b.snapshot = 
-        
-        tmp: StringBuilder
-        tmp.append("branch add ")
-        tmp.append(name)
-        tmp.append(" (#")
-        tmp.append(b.id.n)
-        tmp.append(")")
-        add_history(tmp.sliced())
-        return b.id
-    }
-    fn remove_branch(id: BranchID) -> bool {
-        if active_branch == id {
-            return false
-        }
-        
-        found := find_index_of_branch(id)
-        if found == -1
-            return false
-            
-        b := branches.get_unsafe(found)
-        
-        tmp: StringBuilder
-        tmp.append("branch del ")
-        tmp.append(b.name)
-        tmp.append(" (#")
-        tmp.append(b.id.n)
-        tmp.append(")")
-        add_history(tmp.sliced())
-        
-        branches.remove(found)
-    }
-    fn switch_branch(id: BranchID) -> bool {
-        tmp: StringBuilder
-        
-        found := find_index_of_branch(id)
-        
-        if found == -1 {
-            tmp.append("branch #")
-            tmp.append(id.n)
-            tmp.append(" (missing branch name)")
-            return false
-        }
-        b := branches.get_unsafe(found)
-        
-        // we need to switch snapshots, delete, create files
-        switch_snapshot(b.snapshot)
-        
-        active_branch = id
-
-        tmp.append("branch ")
-        tmp.append(b.name)
-        tmp.append(" (#")
-        tmp.append(id.n)
-        tmp.append(")")
-
-        add_history(tmp.sliced())
-        
-        return true
-    }
-    fn switch_snapshot(id: SnapshotID) -> bool {
-        /*
-        We are in snapshot A but we want snapshot B
-        In the workspace, we have files from A but we want files from B
-        How to we remove and add the files?
-
-        We begin with a simple case:
-            Snapshot A has zero files (empty workspace)
-            Snapshot B has some files
-        In this case we only need to add some files to the workspace (no files to delete).
-        So how do we store and get that file data efficiently?
-
-        Solution 1:
-            Each snapshot stores all files as it's own copy in a directory ".cvc/data/snapshot_a/<files>".
-            Not good, snapshots may store the same files we would waste storage by storing duplicates.
-
-        Solution 2:
-            We store unique files in one directory ".cvc/data/files/<files>".
-            We name the files by their SHA-1 hash.
-            Snapshots have a list of files (hashes + file paths).
-            To improve things further snapshots don't store all it's files in the list. It fetches unchanged files from previous snapshot.
-        */
-
-        now := find_snapshot(id)
-
-        loaded_files: DynamicArray<Slice<char>>;
-        defer loaded_files.cleanup()
-
-        while now {
-            for now_file: now.fileChanges {
-                found := false
-                // we don't want to load old version of files we already loaded
-                for prev_file: loaded_files.sliced_unsafe() {
-                    if now_file.path == prev_file {
-                        found = true
-                        break
-                    }
-                }
-                if !found {
-                    log("Load ", it.path)
-                    loaded_files.add(it.path.sliced())
-                }
-            }
-
-            now = find_snapshot(now.parent)
-        }
-    }
-    
-    fn create_snapshot(desc: char[] = "") -> SnapshotID {
-        branch := find_branch(active_branch)
-        if !branch {
-            log("No active branch!")   
-            return SnapshotID{}
-        }
-        prev_snaphot := find_snapshot(branch.snapshot)        
-        
-        // ##### Check file changes ############
-        
-        has_change := false
-        
-        tmp_slice := root_dir.sliced()
-        iterator := DirectoryIteratorCreate(&tmp_slice)
-        
-        // If we ensure that files aren't marked then we don't need this loop
-        // This is not the case right now though
-        for @ptr files.sliced_unsafe() {
-            it.marked = false
-        }
-        
-        while iterator.next() {
-            if iterator.result.isDirectory {
-                if matchEnd(iterator.result.name, "/.cvc") {
-                    iterator.skip()
-                }
-                continue
-            }
-            
-            relative_path := Slice<char>{iterator.result.name.ptr + tmp_slice.len + 1, iterator.result.name.len - tmp_slice.len - 1}
-            
-            found := -1
-            for @ptr files.sliced_unsafe() {
-                if equal(it.path.sliced(), relative_path) {
-                    it.marked = true
-                    found = nr
-                    break
-                }
-            }
-            if found == -1 {
-                // creation
-                log("New ", relative_path)
-                has_change = true
-                track_file(relative_path, iterator.result.lastModified)
-            } else {
-                // modified
-                f := files.get_unsafe(found)
-                if iterator.result.lastModified > f.lastModified {
-                    log("Modified ", relative_path)
-                    has_change = true
-                    track_file(relative_path, iterator.result.lastModified, found)
-                }
-            }
-            // log(relative_path)
-            // log(iterator.result.name)
-        }        
-        DirectoryIteratorDestroy(iterator)
-        
-        for files.sliced_unsafe() { // can't do "for files.sliced()" because we modify files inside the loop
-            if !it.marked {
-                // deletion
-                log("Deleted ", it.path)
-                has_change = true
-                files.remove(nr) // is this safe?
-                nr--
-            } else {
-                it.marked = false
-            }
-        }
-        
-        if !has_change {
-            log("No file changes, snapshot will not be created")
-            return SnapshotID{}
-        }
-        
-        // #### Create snapshot ####
-        
-        snapshots.add(Snapshot{})
-        s := snapshots.get_unsafe(snapshots.size()-1)
-        
-        s.id.n = random64()
-        s.description.append(desc)
-        
-        if prev_snaphot {
-            s.parent = prev_snaphot.id
-            branch.snapshot = s.id
-        } else {
-            branch.snapshot = s.id
-        }
-        active_snapshot = s.id
-        
-        tmp: StringBuilder
-        tmp.append("snap add ")
-        tmp.append(desc)
-        tmp.append(" (#")
-        tmp.append(s.id.n)
-        tmp.append(")")
-        
-        add_history(tmp.sliced())
-        return s.id
-    }
-    fn rename_snapshot(id: SnapshotID, text: char[]) -> bool {
-        snapshot := find_snapshot(id)
-        if !snapshot {
-            return false
-        }
-        
-        snapshot.description.clear()
-        snapshot.description.append(text)
-        
-        return true
-    }
-    
-    fn add_history(text: char[]) {
-        history.add(LogOperation{})
-        h := history.get_unsafe(history.size()-1)
-        h.content.append(text)
-    }
-    
-    fn track_file(path: char[], lastModified: u64, workspace_file_index: i32 = -1) {
-        if workspace_file_index == -1 {
-            files.add(WorkspaceFile{})
-            workspace_file_index = cast<i32>files.size() - 1
-        }
-        f := files.get_unsafe(workspace_file_index)
-        if f.path.len == 0
-            f.path.append(path)
-        f.lastModified = lastModified
-        f.marked = true
-    }
-    
-    // returns -1 if not found
-    fn find_index_of_branch(id: BranchID) -> i32 {
-        found: i32 = -1
-        for @ptr branches.sliced_unsafe() {
-            if it.id == id {
-                found = nr
-                break
-            }
-        }
-        return found
-    }
-    fn find_index_of_branch(name: char[]) -> i32 {
-        found: i32 = -1
-        for @ptr branches.sliced_unsafe() {
-            if equal(it.name.sliced(), name) {
-                found = nr
-                break
-            }
-        }
-        return found
-    }
-    fn find_branch(id: BranchID) -> Branch* {
-        for @ptr branches.sliced_unsafe() {
-            if it.id == id {
-                return it
-            }
-        }
-        return null
-    }
-    fn find_snapshot(id: SnapshotID) -> Snapshot* {
-        for @ptr snapshots.sliced_unsafe() {
-            if it.id == id {
-                return it
-            }
-        }
-        return null
-    }
-}
-struct LogOperation {
-    content: StringBuilder;
-}
-struct Snapshot {
-    id: SnapshotID;
-    description: StringBuilder;
-    
-    parent: SnapshotID; // is multiple parents possible
-    
-    // data, files
-    fileChanges: DynamicArray<FileChange>;
-}
-enum ChangeType : u8 {
-    CHANGE_CREATION,
-    CHANGE_DELETION,
-    CHANGE_MODIFICATION,
-}
-struct FileChange {
-    path: StringBuilder;
-    changeType: ChangeType;
-    hash: DynamicArray<u8>;
-
-    // changes: DynamicArray<TextChange>;
-}
-struct FileHash {
-    arr: DynamicArray<u8>; // TODO: u8[20] when structs support static arrays
-
-
-}
-// struct TextChange {
-//     line_start: i32;
-//     line_end: i32;
-//     text: StringBuilder;
-// }
-struct SnapshotID {
-    n: u64; // zero is invalid snapshot
-}
-struct BranchID {
-    n: u64; // zero is invalid snapshot
-}
-operator ==(a: BranchID, b: i32) -> bool {
-    return a.n == b
-}
-operator !=(a: BranchID, b: i32) -> bool {
-    return a.n != b
-}
-operator ==(a: BranchID, b: BranchID) -> bool {
-    return a.n == b.n
-}
-operator !=(a: BranchID, b: BranchID) -> bool {
-    return a.n != b.n
-}
-operator ==(a: SnapshotID, b: SnapshotID) -> bool {
-    return a.n == b.n
-}
-struct Branch {
-    id: BranchID;
-    name: StringBuilder;
-    snapshot: SnapshotID;
 }

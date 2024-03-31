@@ -24,10 +24,11 @@ fn random64() -> u64 {
     // [in]      ULONG             cbBuffer,
     // [in]      ULONG             dwFlags
     // );
-    // MSVC linker
-    // #link "Bcrypt.lib"
-    // g++ linker
-    #link "-lBcrypt"
+    #ifdef LINKER_MSVC
+        #link "Bcrypt.lib"
+    #else
+        #link "-lBcrypt"
+    #endif
     fn @dllimport @stdcall BCryptGenRandom(_: void*, buf: void*, len: u32, flags: u32) -> i32;
     #macro BCRYPT_USE_SYSTEM_PREFERRED_RNG cast<u32>0x00000002
     

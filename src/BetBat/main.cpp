@@ -59,17 +59,19 @@ bool streq(const char* a, const char* b) {
     }
     return true;
 }
+void TestWindow();
 // #include "Bcrypt.h"
 // #include "unistd.h"
 int main(int argc, const char** argv){
     using namespace engone;
 
     
+    // TestWindow();
 
     log::out.enableReport(false);
     // MeasureInit();
     ProfilerInitialize();
-    
+    // return 0;
     // FuzzerOptions opts{};
     // opts.requested_size = 10000;
     // GenerateFuzzedFile(opts,"oi.btb");
@@ -430,10 +432,12 @@ int main(int argc, const char** argv){
             // opts.node_iterations_per_file = 5000;
             // opts.file_count = 20;
             // GenerateFuzzedFiles(opts,"main.btb");
-            
-            compileOptions.useDebugInformation = true;
+            compileOptions.linker = LINKER_MSVC;
+            // compileOptions.linker = LINKER_GCC;
+            // compileOptions.useDebugInformation = true;
             compileOptions.executeOutput = true;
             compileOptions.outputFile = EXE_FILE;
+            
             CompileAll(&compileOptions);
         }
         compilerExitCode = compileOptions.compileStats.errors;

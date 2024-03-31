@@ -40,9 +40,11 @@ fn @hide std_print(t: u64){
         printc('0')
         return;
     }
-    str: char[20];
-    used := 19;
-    while t > 0u && used > 0 {
+
+    // max_int_64: 18446744073709551615
+    str: char[21];
+    used := 20;
+    while t > 0u && used >= 0 {
         num: u32 = t % 10u;
         // log('A','0'+num)
         // log(,num)
@@ -208,8 +210,8 @@ fn std_print<T>(p: T*) {
         printc('0'); // we want at least one zero
 }
 fn @hide std_print(t: char){
-    printc(t);
-    // prints(Slice<char>{&t, 1})
+    // printc(t);
+    prints(Slice<char>{&t, 1})
 }
 fn @hide std_print(t: bool){
     if t

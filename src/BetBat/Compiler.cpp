@@ -1138,6 +1138,13 @@ Bytecode* CompileSource(CompileOptions* options) {
     // "#macro Assert(X) { prints(#quoted X); }"
     // "#macro Assert(X) { prints(#quoted X); *cast<char>null; }"
     ;
+    if (options->linker == LINKER_MSVC) {
+        essentialStructs += "#macro LINKER_MSVC\n";
+    } else {
+        essentialStructs += "#macro LINKER_GCC\n";
+    }
+
+
     essentialStructs += (options->target == TARGET_BYTECODE ? "#macro LINK_BYTECODE #endmacro\n" : "");
     TextBuffer essentialBuffer{};
     essentialBuffer.origin = "<base>";
