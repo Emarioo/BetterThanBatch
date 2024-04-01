@@ -5,8 +5,10 @@
 
 
 // You should define this when compiling
-#define GLEW_STATIC
-#include <GL/glew.h>
+#include <glad/glad.h>
+#undef APIENTRY // collision with minwindef
+// #define GLEW_STATIC
+// #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #undef APIENTRY // collision with minwindef
 
@@ -16,7 +18,8 @@
 
 // #include "Engone/Window.h"
 
-#define GL_CHECK_UI()  {int err = glGetError();if(err) {printf("UIMod GLError: %d %s\n",err,(const char*)glewGetErrorString(err));}}
+#define GL_CHECK_UI()  {int err = glGetError();if(err) {printf("UIMod GLError: %d ?\n",err);}}
+// #define GL_CHECK_UI()  {int err = glGetError();if(err) {printf("UIMod GLError: %d %s\n",err,(const char*)glewGetErrorString(err));}}
 
 
 namespace engone{
@@ -211,7 +214,7 @@ unsigned int CreateUIShader(){
     return program;
 }
 UIFrameArray::UIFrameArray(uint32 typeSize, uint32 valuesPerFrame) :
-    m_valuesPerFrame(valuesPerFrame), m_typeSize(typeSize) {
+    m_typeSize(typeSize), m_valuesPerFrame(valuesPerFrame) {
     //uint32 off = valuesPerFrame & 63;
     //if(off!=0)
     //	m_valuesPerFrame += 64 - off;

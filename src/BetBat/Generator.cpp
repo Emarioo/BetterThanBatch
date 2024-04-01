@@ -215,6 +215,7 @@ bool GenInfo::addInstruction(Instruction inst, bool bypassAsserts){
             code->get(code->length()-1).opcode == BC_POP &&
             code->get(code->length()-1).op0 == BC_REG_FP));
     }
+    // BREAK(code->length()==71)
     indexOfNonImmediates.add(code->length());
     code->add_notabug(inst);
     // Assert(nodeStack.size()!=0); // can't assert because some instructions are added which doesn't link to any AST node.
@@ -272,7 +273,7 @@ void GenInfo::addPop(int reg) {
         }
         if(stackAlignment.size()!=0){
             auto align = stackAlignment.last();
-            if(!hasErrors() && align.size!=0){
+            if(!hasErrors() && !hasForeignErrors() && align.size!=0){
                 // size of 0 could mean extra alignment for between structs
                 Assert(("bug in compiler!", align.size == size));
             }
@@ -3142,8 +3143,9 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     // IMPORTANT: Some instructions garble registers. Do not reuse mod and stuff
                     
                     bool compareOp = bytecodeOp == BC_LT || bytecodeOp == BC_LTE || bytecodeOp == BC_GT || bytecodeOp == BC_GTE;
+                    bool equalityOp = bytecodeOp == BC_EQ || bytecodeOp == BC_NEQ;
                     u8 cmpType = CMP_SINT_SINT;
-                    u8 arithmeticType = AST::IsSigned(ltype) ? ARITHMETIC_SINT : ARITHMETIC_UINT;
+                    u8 arithmeticType = AST::IsSigned(ltype) || AST::IsSigned(rtype) ? ARITHMETIC_SINT : ARITHMETIC_UINT;
                     if(bytecodeOp == BC_DIVI) {
                         FIRST_REG = BC_AX;
                         SECOND_REG = BC_DX;
@@ -3197,9 +3199,19 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                         cmpType = CMP_DECODE(ltype,rtype,AST::IsSigned);
                         FIRST_REG = BC_AX;
                         SECOND_REG = BC_CX;
+                    } else if(equalityOp) {
+                        // if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
+                        //     ERR_SECTION(
+                        //         ERR_HEAD(expression->tokenRange)
+                        //         ERR_MSG("You cannot compare signed and unsigned integers. Both integers must be either signed or unsigned.")
+                        //         ERR_LINE(expression->left->tokenRange,(AST::IsSigned(ltype)?"signed":"unsigned"))
+                        //         ERR_LINE(expression->right->tokenRange,(AST::IsSigned(rtype)?"signed":"unsigned"))
+                        //     )
+                        // }
+                        // FIRST_REG = BC_AX;
+                        // SECOND_REG = BC_CX;
                     }
                     u8 outSize = lsize > rsize ? lsize : rsize;
-                    
                     
                     u8 reg1 = RegBySize(FIRST_REG, lsize); // get the appropriate registers
                     u8 reg2 = RegBySize(SECOND_REG, rsize);
@@ -3233,19 +3245,21 @@ SignalDefault GenerateExpression(GenInfo &info, ASTExpression *expression, Dynam
                     if(compareOp) {
                         info.addInstruction({bytecodeOp, cmpType, reg1, reg2});
                         outTypeIds->add(AST_BOOL);
-                        // info.addPush(reg2);
                         reg_to_push = reg2;
+                    } else if(equalityOp) {
+                        info.addInstruction({bytecodeOp, reg1, reg2, regOut});
+                        outTypeIds->add(AST_BOOL);
+                        reg_to_push = regOut;
                     } else {
                         if(bytecodeOp == BC_DIVI || bytecodeOp == BC_MODI || bytecodeOp == BC_MULI) {
                             info.addInstruction({bytecodeOp, arithmeticType, reg1, reg2});
                         } else {
                             info.addInstruction({bytecodeOp, reg1, reg2, regOut});
                         }
-                        if(lsize < rsize)
-                            outTypeIds->add(rtype);
-                        else
+                        if(lsize > rsize)
                             outTypeIds->add(ltype);
-                        // info.addPush(regOut);
+                        else
+                            outTypeIds->add(rtype);
                         reg_to_push = regOut;
                     }
                     if(expression->typeId==AST_ASSIGN){
@@ -4629,6 +4643,7 @@ SignalDefault GenerateBody(GenInfo &info, ASTScope *body) {
                 }
             }
             if(statement->firstExpression){
+                // BREAK(statement->firstExpression->nodeId == 220);
                 SignalDefault result = GenerateExpression(info, statement->firstExpression, &rightTypes);
                 if (result != SignalDefault::SUCCESS) {
                     // assign fails and variable will not be declared potentially causing
@@ -5977,6 +5992,7 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
             ERR_SECTION(
                 log::out << log::RED << "Invalid function address for instruction["<<e.bcIndex << "]\n"
             )
+            
             auto pair = resolveFailures.find(e.funcImpl);
             if(pair == resolveFailures.end())
                 resolveFailures[e.funcImpl] = 1;

@@ -38,6 +38,7 @@ Example of errors with named arguments
 - Shell-like way of calling executables
 - Thorough documentation
 - Constant evaluation and compile time execution
+- Some examples: Astroids like game
 
 ## Disclaimer
 The compiler has mysterious bugs and as such is very unstable and should not be used for serious projects. Recently, proper tests have been implemented and some major bugs have been resolved making the compiler a little more useful.

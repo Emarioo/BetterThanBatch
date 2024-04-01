@@ -32,10 +32,10 @@ fn print_state(contexts: ThreadContext[], initial: bool = false) {
 
 print_state(contexts, true);
 
-start_time = StartMeasure()
+start_time := StartMeasure()
 
-i = 0;
-running_any = false;
+i := 0;
+running_any := false;
 while true {
     if i == 0 {
         running_any = false;
@@ -56,10 +56,10 @@ for @ptr contexts {
     ThreadJoin(it.thread);
 }
 
-end_time = StopMeasure(start_time);
+end_time := StopMeasure(start_time);
 log("Time",end_time)
 
-sum = 0
+sum := 0
 for @ptr contexts {
     sum += cast<i64>it.sum;
 }

@@ -1,6 +1,7 @@
 // #import "OS"
 // #import "Logger"
 // #import "tests/fuzzer_gen/main"
+// #import "tests/fuzzer_gen/main"
 #import "examples/version_control/main"
 // #import "examples/graphics/quad"
 
@@ -8,6 +9,39 @@
 // NativeSleep(0.383);
 // t := StopMeasure(tp)
 // log("Time: ",t)
+// tp := StartMeasure()
+// NativeSleep(0.383);
+// t := StopMeasure(tp)
+// log("Time: ",t)
+
+// #import "examples/graphics/perf"
+// #import "examples/graphics/quad"
+
+// #import "examples/linecounter"
+// #import "examples/binary_viewer/main.btb"
+
+
+// k: Final;
+// struct Final {
+//     b: Poly<Moveable>;
+// }
+// struct Poly<T> {
+//     ptr: T*;
+// }
+// struct Moveable {
+//     len: u32;
+// }
+// a := 2
+// b := 6
+// c := 3
+// str := "ABCDEFG";
+// chr: char;
+// { @dump_bc
+//     chr = str.ptr[b - c + a];
+// }
+
+// k := 23;
+// // #import "examples/random/test_randoms.btb"
 
 // #import "examples/random/test_randoms.btb"
 

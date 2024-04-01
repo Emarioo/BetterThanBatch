@@ -217,28 +217,28 @@ fn start_gui(workspace: Workspace*) {
     // }
 
 
-    // vshader := "
-    //     #version 330 core
-    //     layout (location = 0) in vec3 aPos;
-    //     void main()
-    //     {
-    //         gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
-    //     }
-    //     ";
+    vshader := "
+        #version 330 core
+        layout (location = 0) in vec3 aPos;
+        void main()
+        {
+            gl_Position = vec4(aPos.x, aPos.y, aPos.z, 1.0);
+        }
+        ";
 
-    // fshader := "
-    //     #version 330 core
-    //     out vec4 FragColor;
+    fshader := "
+        #version 330 core
+        out vec4 FragColor;
 
-    //     void main()
-    //     {
-    //         FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
-    //     } 
-    //     ";
+        void main()
+        {
+            FragColor = vec4(1.0f, 0.5f, 0.2f, 1.0f);
+        } 
+        ";
 
-    // shaderProgram := CreateShaderProgram(vshader, fshader)
+    shaderProgram := CreateShaderProgram(vshader, fshader)
 
-    // glUseProgram(shaderProgram);
+    glUseProgram(shaderProgram);
     GLCHECK
 
     // gui.setInput(GLFW_KEY_B, true)

@@ -85,7 +85,12 @@
         "numbers": "cpp",
         "cinttypes": "cpp",
         "ya": "c",
-        "queue": "cpp"
+        "queue": "cpp",
+        "condition_variable": "cpp",
+        "queue": "cpp",
+        "ranges": "cpp",
+        "shared_mutex": "cpp",
+        "span": "cpp"
     },
     "cmake.configureOnOpen": false,
     "lldb.displayFormat": "auto",

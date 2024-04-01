@@ -14,7 +14,11 @@
 #else
 #include "../src/Engone/Unix.cpp"
 #endif
+#ifndef NO_UIMODULE
+#include "../libs/glad/src/glad.c"
+#undef APIENTRY // collision with minwindef
 #include "../src/Engone/UIModule.cpp"
+#endif
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image.h"

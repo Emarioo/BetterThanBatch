@@ -5,7 +5,8 @@
             "includePath": [
                 "${workspaceFolder}/include/**",
                 "${workspaceFolder}/libs/glew-2.1.0/include/**",
-                "${workspaceFolder}/libs/glfw-3.3.8/include/**",
+                "${workspaceFolder}/libs/glad/include/**",
+                "${workspaceFolder}/libs/glfw-3.3.9/include/**",
                 "${workspaceFolder}/libs/stb/include/**",
                 "${workspaceFolder}/libs/tracy-0.10/public/**"
             ],
@@ -14,7 +15,8 @@
                 "UNICODE",
                 "_UNICODE",
                 "OS_WINDOWS",
-                "TRACY_ENABLE"
+                "TRACY_ENABLE",
+                "COMPILER_MSVC"
             ],
             "windowsSdkVersion": "10.0.20348.0",
             "compilerPath": "cl.exe",
@@ -25,13 +27,14 @@
         {
             "name": "UNIX",
             "includePath": [
-                "${workspaceFolder}/**"
+                "c:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/**"
             ],
             "defines": [
                 "_DEBUG",
                 "UNICODE",
                 "_UNICODE",
-                "OS_UNIX"
+                "OS_UNIX",
+                "COMPILER_GCC"
             ],
             "windowsSdkVersion": "10.0.19041.0",
             "compilerPath": "C:\\Program Files\\mingw-w64\\x86_64-12.2.0-release-posix-seh-ucrt-rt_v10-rev2\\mingw64\\bin\\g++.exe",
@@ -39,8 +42,17 @@
             "cppStandard": "c++17",
             "intelliSenseMode": "linux-gcc-x64",
             "forcedInclude": [
-                "include/pch.h"
-            ]
+                "c:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/include/pch.h"
+            ],
+            "compilerPathInCppPropertiesJson": "C:\\Program Files\\mingw-w64\\x86_64-12.2.0-release-posix-seh-ucrt-rt_v10-rev2\\mingw64\\bin\\g++.exe",
+            "mergeConfigurations": false,
+            "browse": {
+                "path": [
+                    "c:/Users/datao/Desktop/Backup/CodeProjects/BetterThanBatch/**",
+                    "${workspaceFolder}"
+                ],
+                "limitSymbolsToIncludedHeaders": true
+            }
         }
     ],
     "version": 4

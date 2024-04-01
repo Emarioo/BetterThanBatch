@@ -35,10 +35,9 @@ fn main(){
 
     glfwSetMouseButtonCallback(window, MouseCallback2)
 
-    err := glewInit();
-    if err {
-        msg := glewGetErrorString(err);
-        log("glew failed: ",msg)
+    yes = gladLoadGL();
+    if !yes {
+        log("glad failed: ")
         glfwTerminate();
         return;
     }

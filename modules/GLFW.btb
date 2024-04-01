@@ -21,6 +21,8 @@ fn @import glfwSetMouseButtonCallback(window: void*, callback: fn_ref);
 fn @import glfwSetCursorPosCallback(window: void*, callback: fn_ref);
 fn @import glfwSetScrollCallback(window: void*, callback: fn_ref);
 
+fn @import glfwGetProcAddress(procname: char*) -> fn_ref;
+
 /*
     COPY PASTED TEXT FROM glfw3.h
 */

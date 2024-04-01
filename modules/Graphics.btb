@@ -2,19 +2,23 @@
 // TODO: Linking with the right libraries is annoying, how do we improve it?
 #ifdef LINKER_MSVC
     #link "gdi32.lib user32.lib OpenGL32.lib"
-    #link "libs/glew-2.1.0/lib/glew32s.lib"
-    #link "libs/glfw-3.3.8/lib/glfw3_mt.lib"
+    #link "libs/glfw-3.3.9/lib-vc2022/glfw3_mt.lib"
+    // #link "libs/glew-2.1.0/lib/glew32s.lib"
 #elif LINKER_GCC
     // not sure how to compile with glfw and gcc
-    #link "-Llibs/glew-2.1.0/lib -Llibs/glfw-3.3.8/lib-mingw"
-    #link "-lgdi32 -luser32 -lOpenGL32 -lglew32s -lglfw3 -lkernel32 -ladvapi32 -lshell32 -lwinspool -lcomdlg32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32"
+    #link "-Llibs/glew-2.1.0/lib -Llibs/glfw-3.3.9/lib-mingw-w64"
+    #link "-lgdi32 -luser32 -lOpenGL32 -lglfw3 -lkernel32 -ladvapi32 -lshell32 -lwinspool -lcomdlg32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32"
+    // GLEW
+    // #link "-lgdi32 -luser32 -lOpenGL32 -lglew32s -lglfw3 -lkernel32 -ladvapi32 -lshell32 -lwinspool -lcomdlg32 -lole32 -loleaut32 -luuid -lodbc32 -lodbccp32"
 #endif
 // #link "/NODEFAULTLIB:MSVCRT"
 // #link "/DEFAULTLIB:LIBCMT"
 // #link "/NODEFAULTLIB:LIBCMT"
 
 #import "GLFW"
-#import "GLEW"
+#import "GLAD"
+// #import "GLEW"
+
 #import "Logger"
 #import "Lang"
 #import "Array" // used by GUIEnvironment.m_inputs
@@ -22,7 +26,8 @@
 fn @import Sleep(ms: i32); // windows sleep, remove this later
 
 global glErrCode: bool = false;
-#macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",cast<i64>#line,cast<i64>glErrCode,":",glewGetErrorString(glErrCode)); }
+// #macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error",cast<i64>#line,cast<i64>glErrCode,":",glewGetErrorString(glErrCode)); }
+#macro GLCHECK glErrCode = glGetError(); if glErrCode { log("Error ",#file,":",cast<i64>#line," code: ",cast<i64>glErrCode); }
 #ifndef GLCHECK
 #macro GLCHECK
 #endif
@@ -47,10 +52,16 @@ fn InitGLFWAndCreateWindow(width: i32, height: i32) -> void* {
 
     glfwMakeContextCurrent(window);
 
-    err := glewInit();
-    if err {
-        msg := glewGetErrorString(err);
-        log("glew failed: ",msg)
+    // err := glewInit();
+    // if err {
+        // msg := glewGetErrorString(err);
+        // log("glew failed",msg)
+        // glfwTerminate();
+        // return null;
+    // }
+    yes = gladLoadGLLoader(glfwGetProcAddress);
+    if !yes {
+        log("gladLoadGL failed")
         glfwTerminate();
         return null;
     }
@@ -219,10 +230,12 @@ struct GUIEnvironment {
 		// glfwSetCharCallback(window, CharCallback);
 		// glfwSetDropCallback(window, DropCallback);
 
-        err := glewInit();
+        // err := glewInit();
+        err := gladLoadGLLoader(glfwGetProcAddress);
         if err {
-            msg := glewGetErrorString(err);
-            log("glew failed: ",msg)
+            // msg := glewGetErrorString(err);
+            // log("glew failed: ",msg)
+            log("glad failed")
             glfwDestroyWindow(window)
             return null;
         }

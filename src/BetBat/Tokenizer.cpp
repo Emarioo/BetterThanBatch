@@ -796,10 +796,10 @@ void TokenStream::printTokens(int tokensPerLine, bool showlncol){
 }
 void TokenStream::writeToFile(const std::string& path){
     using namespace engone;
-    auto file = FileOpen(path, FILE_CLEAR_AND_WRITE);
+    auto file = engone::FileOpen(path, FILE_CLEAR_AND_WRITE);
     Assert(file);
     #undef WRITE
-    #define WRITE(X, L) FileWrite(file, X, L);
+    #define WRITE(X, L) engone::FileWrite(file, X, L);
     for(int j=0;j<(int)tokens.used;j++){
         Token& token = *((Token*)tokens.data + j);
         

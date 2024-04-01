@@ -29,7 +29,7 @@ struct StringBuilder {
         len += swrite_unsafe(ptr + len, value);
     }
     fn append(value: char) {
-        if len + 1 > max {
+        if len + 1u > max {
             if !_reserve(len + 5)
                 return
         }

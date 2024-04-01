@@ -1,5 +1,5 @@
-#define GLEW_STATIC
-#include "GL/glew.h"
+// #define GLEW_STATIC
+#include "glad/glad.h"
 #include "GLFW/glfw3.h"
 
 #include "Engone/PlatformLayer.h"
@@ -45,7 +45,7 @@ void TestWindow(){
     // Yeah I can't find it. I have no idea what's wrong.
     // Try doing the same in C++.
 
-    int err = glewInit();
+    int err = gladLoadGL();
     // msg = glewGetErrorString(err);
     if (err) {
         // msg = 0
