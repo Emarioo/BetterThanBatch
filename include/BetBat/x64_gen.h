@@ -227,6 +227,11 @@ struct X64Builder {
     
     bool _reserve(u32 size);
     
+    void emit_push(X64Register reg);
+    void emit_pop(X64Register reg);
+    void emit_add_imm32(X64Register reg, i32 imm32);
+    void emit_sub_imm32(X64Register reg, i32 imm32);
+
 
     void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
 

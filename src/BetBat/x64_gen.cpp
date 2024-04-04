@@ -1649,15 +1649,15 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                 else
                     emit4((u32)(i32)n->imm);
                 
-                if(!env->reg0_stack && !IsNativeRegister(env->reg0))
-                    free_register(env->reg0);
+                if(!env->reg0.on_stack && !IsNativeRegister(env->reg0.reg))
+                    free_register(env->reg0.reg);
 
-                if(!env->reg1_stack && !IsNativeRegister(env->reg1))
-                    free_register(env->reg1);
+                if(!env->reg1.on_stack && !IsNativeRegister(env->reg1.reg))
+                    free_register(env->reg1.reg);
             } break;
             case BC_INCR: {
                 env->reg0.reg = ToNativeRegister(n->op0);
-                if(env->reg0 == X64_REG_INVALID) {
+                if(env->reg0.reg == X64_REG_INVALID) {
                     if(!env->env_in0) {
                         push_env0();
                         break;
@@ -1665,24 +1665,27 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     env->reg0 = env->env_in0->out;
                 }
 
-                if(env->reg0_stack) {
-                    env->reg0 = RESERVED_REG0;
-                    emit1(OPCODE_POP_RM_SLASH_0);
-                    emit_modrm_slash(MODE_REG, 0, env->reg0);
+                if(env->reg0.on_stack) {
+                    env->reg0.reg = RESERVED_REG0;
+                    emit_pop(env->reg0.reg);
+                    // emit1(OPCODE_POP_RM_SLASH_0);
+                    // emit_modrm_slash(MODE_REG, 0, env->reg0.reg);
                 }
                 if(n->imm < 0) {
-                    emit1(PREFIX_REXW);
-                    emit1(OPCODE_SUB_RM_IMM_SLASH_5);
-                    emit_modrm_slash(MODE_REG, 5, env->reg0);
-                    emit4((u32)(i32)-n->imm); // NOTE: cast from i16 to i32 to u32, should be fine
+                    emit_sub_imm32(env->reg0.reg, (i32)-n->imm);
+                    // emit1(PREFIX_REXW);
+                    // emit1(OPCODE_SUB_RM_IMM_SLASH_5);
+                    // emit_modrm_slash(MODE_REG, 5, env->reg0.reg);
+                    // emit4((u32)(i32)-n->imm); // NOTE: cast from i16 to i32 to u32, should be fine
                 } else {
-                    emit1(PREFIX_REXW);
-                    emit1(OPCODE_ADD_RM_IMM_SLASH_0);
-                    emit_modrm_slash(MODE_REG, 0, env->reg0);
-                    emit4((u32)(i32)n->imm); // NOTE: cast from i16 to i32 to u32, should be fine
+                    emit_sub_imm32(env->reg0.reg, (i32)n->imm);
+                    // emit1(PREFIX_REXW);
+                    // emit1(OPCODE_ADD_RM_IMM_SLASH_0);
+                    // emit_modrm_slash(MODE_REG, 0, env->reg0.reg);
+                    // emit4((u32)(i32)n->imm); // NOTE: cast from i16 to i32 to u32, should be fine
                 }
-                if(!env->reg0_stack && !IsNativeRegister(env->reg0))
-                    free_register(env->reg0);
+                if(!env->reg0.on_stack && !IsNativeRegister(env->reg0.reg))
+                    free_register(env->reg0.reg);
 
                 break;
             } break;
@@ -1715,11 +1718,12 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     emit4((u32)(i32)n->imm);
 
                     if(env->out.on_stack) {
-                        if(IS_REG_EXTENDED(env->out.reg)) {
-                            emit1(PREFIX_REXB);
-                        }
-                        emit1(OPCODE_PUSH_RM_SLASH_6);
-                        emit_modrm_slash(MODE_REG, 6, env->out.reg);
+                        emit_push(env->out.reg);
+                        // if(IS_REG_EXTENDED(env->out.reg)) {
+                        //     emit1(PREFIX_REXB);
+                        // }
+                        // emit1(OPCODE_PUSH_RM_SLASH_6);
+                        // emit_modrm_slash(MODE_REG, 6, env->out.reg);
                     }
                 }
             } break;
@@ -1768,11 +1772,12 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     emit8((u64)n->imm);
 
                     if(env->out.on_stack) {
-                        if(IS_REG_EXTENDED(env->out.reg)) {
-                            emit1(PREFIX_REXB);
-                        }
-                        emit1(OPCODE_PUSH_RM_SLASH_6);
-                        emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(env->out.reg));
+                        emit_push(env->out.reg);
+                        // if(IS_REG_EXTENDED(env->out.reg)) {
+                        //     emit1(PREFIX_REXB);
+                        // }
+                        // emit1(OPCODE_PUSH_RM_SLASH_6);
+                        // emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(env->out.reg));
                     }
                 }
                 
@@ -3424,4 +3429,48 @@ X64Program* X64Program::Create() {
     auto program = TRACK_ALLOC(X64Program);
     new(program)X64Program();
     return program;
+}
+
+
+void X64Builder::emit_push(X64Register reg) {
+    if (IS_REG_EXTENDED(reg)) {
+        emit1(PREFIX_REXB);
+    } else if(IS_REG_NORM(reg)) {
+
+    } else Assert(false); // XMM not fixed
+    emit1(OPCODE_PUSH_RM_SLASH_6);
+    emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
+}
+void X64Builder::emit_pop(X64Register reg) {
+    if (IS_REG_EXTENDED(reg)) {
+        emit1(PREFIX_REXB);
+    } else if(IS_REG_NORM(reg)) {
+
+    } else Assert(false); // XMM not fixed
+    emit1(OPCODE_POP_RM_SLASH_0);
+    emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
+}
+void X64Builder::emit_add_imm32(X64Register reg, i32 imm32) {
+      u8 prefix = PREFIX_REXW;
+    if (IS_REG_EXTENDED(reg)) {
+        prefix |= PREFIX_REXB;
+    } else if(IS_REG_NORM(reg)) {
+
+    } else Assert(false); // XMM not fixed
+    emit1(prefix);
+    emit1(OPCODE_ADD_RM_IMM_SLASH_0);
+    emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
+    emit4((u32)imm32); // NOTE: cast from i16 to i32 to u32, should be fine
+}
+void X64Builder::emit_sub_imm32(X64Register reg, i32 imm32) {
+    u8 prefix = PREFIX_REXW;
+    if (IS_REG_EXTENDED(reg)) {
+        prefix |= PREFIX_REXB;
+    } else if(IS_REG_NORM(reg)) {
+
+    } else Assert(false); // XMM not fixed
+    emit1(prefix);
+    emit1(OPCODE_SUB_RM_IMM_SLASH_5);
+    emit_modrm_slash(MODE_REG, 5, CLAMP_EXT_REG(reg));
+    emit4((u32)imm32);
 }
