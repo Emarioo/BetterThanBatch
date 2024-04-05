@@ -226,7 +226,9 @@ struct X64Builder {
     void set_imm32(u32 offset, u32 value);
     
     bool _reserve(u32 size);
-    
+
+    // only emits if non-zero
+    void emit_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
     void emit_push(X64Register reg);
     void emit_pop(X64Register reg);
     void emit_add_imm32(X64Register reg, i32 imm32);
@@ -254,6 +256,26 @@ struct X64Builder {
 private:
     // recursively
     void generateInstructions(int depth = 0, BCRegister find_reg = BC_REG_INVALID, int inst_index = 0, X64Register* out_reg = nullptr);
+    
+    struct Operand {
+        X64Register reg{};
+        bool on_stack = false;
+
+        // meaning no register/value is set
+        bool invalid() const { return reg == X64_REG_INVALID && !on_stack; }
+    };
+    struct Env {
+        OPNode* node=nullptr;
+
+        Env* env_in0=nullptr;
+        Env* env_in1=nullptr;
+
+        union {
+            Operand reg0{};
+            // Operand out;
+        };
+        Operand reg1{};
+    };
 };
 
 // X64Program* ConvertTox64(Bytecode* bytecode);

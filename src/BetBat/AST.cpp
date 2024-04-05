@@ -112,7 +112,7 @@ const char* prim_op_names[]{
 };
 const char* statement_names[] {
     "expression",     // EXPRESSION
-    "assign",         // ASSIGN  
+    "decl",         // ASSIGN  
     "if",             // IF
 
     "while",          // WHILE
@@ -307,31 +307,32 @@ Identifier* AST::findIdentifier(ScopeId startScopeId, ContentOrder contentOrder,
         ContentOrder nextOrder = contentOrder;
         lock_variables.lock();
         defer { lock_variables.unlock(); };
-        WHILE_TRUE_N(1000) {
-            if(ns.ptr) {
-                Assert(false); // broken with content order
-                ScopeInfo* nscope = findScope(ns, nextScopeId, false);
-                Assert(nscope);
-                auto pair = nscope->identifierMap.find(real_name);
-                if(pair != nscope->identifierMap.end()){
-                    return &pair->second;
-                }
-            }
-            ScopeInfo* si = getScope(nextScopeId);
-            Assert(si);
-            if(!ns.ptr) {
+        if(ns.len == 0) {
+            WHILE_TRUE_N(1000) {
+                ScopeInfo* si = getScope(nextScopeId);
+                Assert(si);
                 auto pair = si->identifierMap.find(real_name);
                 if(pair != si->identifierMap.end() && pair->second.order <= nextOrder){
                 // if(pair != si->identifierMap.end() && pair->second.type == Identifier::VARIABLE && pair->second.order < nextOrder){
                     return &pair->second;
                 }
+                for(int i=0;i<(int)si->sharedScopes.size();i++){
+                    ScopeInfo* usingScope = si->sharedScopes[i];
+                    auto pair = usingScope->identifierMap.find(real_name);
+                    // TODO: Check used scope recursively
+                    if(pair != usingScope->identifierMap.end()){
+                        return &pair->second;
+                    }
+                }
+                if(nextScopeId == 0 && si->parent == 0){
+                    // quit when we checked global
+                    break;
+                }
+                nextScopeId = si->parent;
+                nextOrder = si->contentOrder;
             }
-            if(nextScopeId == 0 && si->parent == 0){
-                // quit when we checked global
-                break;
-            }
-            nextScopeId = si->parent;
-            nextOrder = si->contentOrder;
+        } else {
+            Assert(false); // namespace broken   
         }
     } else {
         ScopeInfo* si = getScope(startScopeId);
@@ -1463,7 +1464,7 @@ TypeId AST::convertToTypeId(StringView typeString, ScopeId scopeId, bool transfo
         auto firstPair = scope->nameTypeMap.find(typeName);
         if(firstPair != scope->nameTypeMap.end()){
             typeInfo = firstPair->second;
-        }
+        } Assert(false); // incomplete here
     } else {
         // Find base type in parent scopes
         ScopeId nextScopeId = scopeId;
@@ -2197,17 +2198,17 @@ void ASTScope::print(AST *ast, int depth) {
         switch(it.spotType) {
         case STRUCT: {
             structs[it.index]->print(ast, depth+1);
-        }
-        break; case ENUM: {
+        } break;
+        case ENUM: {
             enums[it.index]->print(ast, depth+1);
-        }
-        break; case FUNCTION: {
+        } break;
+        case FUNCTION: {
             functions[it.index]->print(ast, depth+1);
-        }
-        break; case STATEMENT: {
+        } break;
+        case STATEMENT: {
             statements[it.index]->print(ast, depth+1);
-        }
-        break; case NAMESPACE: {
+        } break;
+        case NAMESPACE: {
             namespaces[it.index]->print(ast, depth+1);
         }
         }

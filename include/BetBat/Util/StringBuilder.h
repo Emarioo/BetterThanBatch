@@ -90,12 +90,12 @@ struct StringBuilder {
         _ptr = builder._ptr;
         len = builder.len;
         max = builder.max;
-        owner = builder.owner;
+        borrowing = builder.borrowing;
         
         builder._ptr=nullptr;
         builder.len=0;
         builder.max=0;
-        builder.owner=true;
+        builder.borrowing=false;
         // bool yes = _reserve(arr.max);
         // Assert(yes);
         // yes = resize(arr.used);
@@ -114,12 +114,12 @@ struct StringBuilder {
         _ptr = builder._ptr;
         len = builder.len;
         max = builder.max;
-        owner = builder.owner;
+        borrowing = builder.borrowing;
         
         builder._ptr=nullptr;
         builder.len=0;
         builder.max=0;
-        builder.owner=true;
+        builder.borrowing=false;
         // Assert(bool yes = _reserve(arr.max));
         // Assert(yes = resize(arr.used));
         // for(int i=0;i<used;i++){
@@ -127,24 +127,15 @@ struct StringBuilder {
         // }
     }
     void cleanup(){
-        if(owner)
+        if(!borrowing)
             _reserve(0);
         else {
             _ptr = nullptr;
             max = 0;
             len = 0;
-            owner = true;
+            borrowing = false;
         }
     }
-    
-private:
-    // These are private in case of dramatic changes
-    // to how the builder works internally
-    char* _ptr = nullptr; // null terminatet
-    u32 max = 0; // null termination is excluded
-    u32 len = 0; // null termination is excluded
-    bool owner=true; // false if the pointer is borrowed
-public:
 
     char* data() const { return _ptr; }
     u32 size() const { return len; }
@@ -265,7 +256,7 @@ public:
         Assert(yes);
     }
     bool _reserve(u32 newMax) {
-        Assert(owner);
+        Assert(!borrowing);
         if(newMax==0){
             if(max!=0){
                 TRACK_ARRAY_FREE(_ptr, char, max+1);
@@ -308,7 +299,29 @@ public:
         _ptr = (char*)str;
         len = strlen(str);
         max = len;
-        owner = false;
+        borrowing = true;
     }
+    
+    void steal(StringBuilder* builder) {
+        cleanup();
+        if(builder->borrowing) // can't steal from someone who is borrowing
+            return;
+        
+        _ptr = (char*)builder->_ptr;
+        len = builder->len;
+        max = builder->max;
+        borrowing = false;
+        
+        builder->_ptr = nullptr;
+        builder->len = 0;
+        builder->max = 0;
+    }
+private:
+    // These are private in case of dramatic changes
+    // to how the builder works internally
+    char* _ptr = nullptr; // null terminatet
+    u32 max = 0; // null termination is excluded
+    u32 len = 0; // null termination is excluded
+    bool borrowing=false;
 };
 engone::Logger& operator<<(engone::Logger& logger, const StringBuilder& stringBuilder);

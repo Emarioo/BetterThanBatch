@@ -731,7 +731,7 @@ void Compiler::processImports() {
                 for(int j=0;j<im->dependencies.size();j++) {
                     Import* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
-                    if(!dep || !(dep->state <= TASK_LEX)) {
+                    if(!dep || !(dep->state & TASK_LEX)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
                         break;
@@ -742,7 +742,7 @@ void Compiler::processImports() {
                 for(int j=0;j<im->dependencies.size();j++) {
                     Import* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
-                    if(!dep || dep->state <= TASK_PREPROCESS_AND_PARSE) {
+                    if(!dep || !(dep->state & TASK_PREPROCESS_AND_PARSE)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
                         break;
@@ -753,7 +753,7 @@ void Compiler::processImports() {
                 for(int j=0;j<im->dependencies.size();j++) {
                     Import* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
-                    if(!dep || dep->state <= TASK_TYPE_STRUCTS) {
+                    if(!dep || !(dep->state & TASK_TYPE_STRUCTS)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
                         break;
@@ -764,7 +764,7 @@ void Compiler::processImports() {
                 for(int j=0;j<im->dependencies.size();j++) {
                     Import* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
-                    if(!dep || dep->state <= TASK_TYPE_FUNCTIONS) {
+                    if(!dep || !(dep->state & TASK_TYPE_FUNCTIONS)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
                         break;
@@ -775,8 +775,8 @@ void Compiler::processImports() {
                 finished=false;
                 continue;
             }
-            tasks.removeAt(task_index);
             picked_task = task;
+            tasks.removeAt(task_index);
             finished=false;
             found = true;
             break;
@@ -812,7 +812,10 @@ void Compiler::processImports() {
                 // imp->import_id may zero but may also be pre-created
                 u32 old_id = imp->import_id;
                 imp->import_id = lexer.tokenize(imp->path, old_id);
-                preprocessor.process(imp->import_id,false);
+                u32 new_id = preprocessor.process(imp->import_id,false);
+                Assert(new_id == 0); // first preprocessor phase should not create an import
+                
+                lexer.print(old_id);
                 
                 auto intern_imp = lexer.getImport_unsafe(imp->import_id);
                 
@@ -982,7 +985,6 @@ u32 Thread_process(void* self) {
 }
 void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     ZoneScopedC(tracy::Color::Gray19);
-    
     auto tp = engone::StartMeasure();
     
     lock_wait_for_imports.init(1,1);
@@ -1006,6 +1008,51 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
 
     u32 import_id = addImport(path);
     Assert(import_id); // nocheckin
+    
+    u32 preload_import_id = 0;
+    {
+        StringBuilder preload{};
+        preload +=
+        "struct Slice<T> {"
+        // "struct @hide Slice<T> {"
+            "ptr: T*;"
+            "len: u64;"
+        "}\n"
+        // "operator [](slice: Slice<char>, index: u32) -> char {"
+        //     "return slice.ptr[index];"
+        // "}\n"
+        "struct Range {" 
+        // "struct @hide Range {" 
+            "beg: i32;"
+            "end: i32;"
+        "}\n"
+        "fn @native prints(str: char[]);\n"
+        "fn @native printc(str: char);\n"
+        // "#macro Assert(X) { prints(#quoted X); }"
+        // "#macro Assert(X) { prints(#quoted X); *cast<char>null; }"
+        ;
+        if(options->target == TARGET_WINDOWS_x64) {
+            preload += "#macro OS_WINDOWS #endmacro\n";
+        } else if(options->target == TARGET_UNIX_x64) {
+            preload += "#macro OS_UNIX #endmacro\n";
+        }
+        if(options->linker == LINKER_MSVC) {
+            preload += "#macro LINKER_MSVC #endmacro\n";
+        } else if(options->linker == LINKER_GCC) {
+            preload += "#macro LINKER_GCC #endmacro\n";
+        }
+        
+        auto virtual_path = "<preload>";
+        lexer.createVirtualFile(virtual_path, &preload); // add before creating import
+        preload_import_id = addImport(virtual_path);
+        Assert(preload_import_id); // nocheckin
+        
+        Task task{TASK_LEX};
+        task.import_id = preload_import_id;
+        tasks.add(task);
+        
+        addDependency(import_id, preload_import_id);
+    }
     
     Task task{TASK_LEX};
     task.import_id = import_id;
@@ -1152,6 +1199,10 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory) {
     // relative to cwd OR import directories
     // .btb is implicit
 
+    auto vfile = lexer.findVirtualFile(path.text);
+    if(vfile)
+        return path; // we don't want to search the file system for a virtual file
+        
     Path fullPath = {};
     int dotindex = path.text.find_last_of(".");
     int slashindex = path.text.find_last_of("/");

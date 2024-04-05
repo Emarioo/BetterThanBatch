@@ -74,8 +74,6 @@ TODO: Update these!
 ```
 
 ## Namespaces
-Broken at the moment.
-
-
+**NAMESPACES ARE BROKEN RIGHT NOW**
 
 TODO: import file as namespace

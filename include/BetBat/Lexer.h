@@ -259,6 +259,13 @@ namespace lexer {
         TokenInfo* getTokenInfo_unsafe(SourceLocation location);
         TokenSource* getTokenSource_unsafe(SourceLocation location);
         
+        struct VirtualFile {
+            std::string virtual_path;
+            StringBuilder builder;
+        };
+        bool createVirtualFile(const std::string& virtual_path, StringBuilder* builder);
+        VirtualFile* findVirtualFile(const std::string& virtual_path);
+        
         // handy functions, the implementation details of tokens per chunk, chunk index and token index may change in the future
         // so we hide it behine encode and decode functions.
         // u32 encode_origin(u32 token_index);
@@ -269,6 +276,7 @@ namespace lexer {
     private:
         BucketArray<Import> imports{256};
         BucketArray<Chunk> _chunks{256};
+        DynamicArray<VirtualFile*> virtual_files;
 
         // NOTE: I read/heard something about false thread cache sharing which could drop performance
         //  data in cache has to be shared between threads? I probably misunderstood BUT we shall

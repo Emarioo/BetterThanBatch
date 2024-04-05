@@ -45,7 +45,7 @@ void GenContext::pushNode(ASTNode* node){
 void GenContext::popNode(){
     nodeStack.pop();
 }
-void GenContext::addCallToResolve(int bcIndex, FuncImpl* funcImpl){
+void GenContext::addCallToResolve(i32 bcIndex, FuncImpl* funcImpl){
     if(disableCodeGeneration) return;
     // if(bcIndex == 97) {
     //     __debugbreak();
@@ -783,7 +783,7 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
         #ifndef DISABLE_ZERO_INITIALIZATION
         
         builder.emit_li32(BC_REG_T1, offset);
-        builder.emit_add(BC_REG_T1, baseReg, false);
+        builder.emit_add(BC_REG_T1, baseReg, false, 8);
         genMemzero(BC_REG_T1, BC_REG_T0, size);
         
         #endif
@@ -988,7 +988,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 }
                 case VariableInfo::LOCAL: {
                     builder.emit_li32(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                    builder.emit_add(BC_REG_B, BC_REG_BP, false);
+                    builder.emit_add(BC_REG_B, BC_REG_BP, false, 8);
                     break; 
                 }
                 case VariableInfo::MEMBER: {
@@ -997,7 +997,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, 8, GenContext::FRAME_SIZE);
                     
                     builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                    builder.emit_add(BC_REG_B, BC_REG_A, false);
+                    builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
                     break;
                 }
                 default: {
@@ -1104,7 +1104,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 popped = true;
                 
                 builder.emit_li32(BC_REG_A, memberData.offset);
-                builder.emit_add(reg, BC_REG_A, false);
+                builder.emit_add(reg, BC_REG_A, false, 8);
             }
             if(popped)
                 builder.emit_push(reg);
@@ -1168,10 +1168,10 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 if(typesize>1){
                     builder.emit_li32(BC_REG_A, typesize);
                     // builder.emit_li32(BC_REG_A, typesize);
-                    builder.emit_mul(BC_REG_A, reg, false, false);
+                    builder.emit_mul(BC_REG_A, reg, false, 8, false);
                     // builder.emit_({BC_MULI, ARITHMETIC_SINT, reg, BC_REG_A});
                 }
-                builder.emit_add(BC_REG_B, BC_REG_A, false);
+                builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
                 // builder.emit_({BC_ADDI, BC_REG_B, BC_REG_A, BC_REG_B});
                 builder.emit_push(BC_REG_B);
                 // builder.emit_push(BC_REG_B);
@@ -1202,9 +1202,9 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             
             if(typesize>1){
                 builder.emit_li32(BC_REG_A, typesize);
-                builder.emit_mul(BC_REG_A, reg, false, false);
+                builder.emit_mul(BC_REG_A, reg, false, 8, false);
             }
-            builder.emit_add(BC_REG_C, BC_REG_A, false);
+            builder.emit_add(BC_REG_C, BC_REG_A, false, 8);
             // builder.emit_({BC_ADDI, BC_REG_RCX, BC_REG_A, BC_REG_RCX});
 
             builder.emit_push(BC_REG_C);
@@ -1568,7 +1568,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 }
             }
             
-            int reloc = 0;
+            i32 reloc = 0;
             if(compiler->compileOptions->target == TARGET_BYTECODE &&
                 (astFunc->linkConvention == IMPORT || astFunc->linkConvention == DLLIMPORT)) {
                 // info.addCall(NATIVE, astFunc->callConvention);
@@ -2810,9 +2810,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             builder.emit_pop(BC_REG_B); // reference
             if(lsize>1){
                 builder.emit_li32(BC_REG_A, lsize);
-                builder.emit_mul(BC_REG_A, reg, false, false);
+                builder.emit_mul(BC_REG_A, reg, false, 8, false);
             }
-            builder.emit_add(BC_REG_B, BC_REG_A, false);
+            builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
 
             SignalIO result = generatePush(BC_REG_B, 0, ltype);
 
@@ -2868,7 +2868,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
                 builder.emit_bxor(regFinal, regFinal);
                 builder.emit_pop(regValue);
-                builder.emit_sub(regFinal, regValue, false);
+                builder.emit_sub(regFinal, regValue, false, 8); // assuming 64-bit integer
                 builder.emit_push(regFinal);
                 outTypeIds->add(ltype);
             } else if (AST::IsDecimal(ltype)) {
@@ -3001,6 +3001,8 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 builder.emit_pop(right_reg);
                 builder.emit_pop(left_reg);
                 
+                u8 outSize = 0;
+                
                 /*###########################
                  Validation operations on types
                 ################################*/
@@ -3036,6 +3038,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     }
                     if(rtype.isPointer()) {
                         outType = rtype; // Make sure '1 + ptr' results in a pointer type and not an int while 'ptr + 1' would be a pointer.
+                        outSize = ast->getTypeSize(outType);
                     }
                 } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR || left_info->astEnum) && (AST::IsInteger(rtype) || rtype == AST_CHAR || right_info->astEnum)){
                     // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
@@ -3170,17 +3173,19 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 if(is_comparison || is_equality) {
                     outType = AST_BOOL;
                 }
+                
+                outSize = ast->getTypeSize(outType);
 
                 /*#########################
                         Code generation
                 ###########################*/
                 
                 switch(operationType) {
-                case AST_ADD:           builder.emit_add(    left_reg, right_reg, is_float); break;
-                case AST_SUB:           builder.emit_sub(    left_reg, right_reg, is_float); break;
-                case AST_MUL:           builder.emit_mul(    left_reg, right_reg, is_float, is_signed); break;
-                case AST_DIV:           builder.emit_div(    left_reg, right_reg, is_float, is_signed); break;
-                case AST_MODULUS:       builder.emit_mod(    left_reg, right_reg, is_float, is_signed); break;
+                case AST_ADD:           builder.emit_add(    left_reg, right_reg, is_float, outSize); break;
+                case AST_SUB:           builder.emit_sub(    left_reg, right_reg, is_float, outSize); break;
+                case AST_MUL:           builder.emit_mul(    left_reg, right_reg, is_float, outSize, is_signed); break;
+                case AST_DIV:           builder.emit_div(    left_reg, right_reg, is_float, outSize, is_signed); break;
+                case AST_MODULUS:       builder.emit_mod(    left_reg, right_reg, is_float, outSize, is_signed); break;
                 case AST_EQUAL:         builder.emit_eq(     left_reg, right_reg, is_float); break;
                 case AST_NOT_EQUAL:     builder.emit_neq(    left_reg, right_reg, is_float); break;
                 case AST_LESS:          builder.emit_lt(     left_reg, right_reg, is_float, is_signed); break;
@@ -3308,8 +3313,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     // impls may be zero if type checker found multiple definitions for native functions.
                     // we don't want to crash here when that happens and we don't need to throw an error
                     // because type checker already did.
-                    Assert(false);
-                    // function->_impls.last()->address = nativeFunction->jumpAddress;
+                    // Assert(false);
+                    function->_impls.last()->tinycode_id = nativeFunction->jumpAddress;
                 }
             } else {
                 if(function->linkConvention != NATIVE){
@@ -3529,7 +3534,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 // info.code->addDebugText("ZERO init return values\n");
                 #ifndef DISABLE_ZERO_INITIALIZATION
                 builder.emit_li32(BC_REG_B, -funcImpl->returnSize);
-                builder.emit_add(BC_REG_B, BC_REG_BP, false);
+                builder.emit_add(BC_REG_B, BC_REG_BP, false, 8);
                 // builder.emit_mov_rr(BC_REG_B, BC_REG_BP);
                 // builder.emit_incr(BC_REG_B, -funcImpl->returnSize);
                 genMemzero(BC_REG_B, BC_REG_C, funcImpl->returnSize);
@@ -4276,7 +4281,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
                         // push ptr
                         builder.emit_li32(BC_REG_B,arrayFrameOffset);
-                        builder.emit_add(BC_REG_B, BC_REG_BP, false);
+                        builder.emit_add(BC_REG_B, BC_REG_BP, false, 8);
                         builder.emit_push(BC_REG_B);
 
                         generatePop(BC_REG_BP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
@@ -5018,24 +5023,24 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 if(statement->isPointer()){
                     if(itemsize>1){
                         builder.emit_li32(BC_REG_A,itemsize);
-                        builder.emit_mul(BC_REG_A, index_reg, false, true);
+                        builder.emit_mul(BC_REG_A, index_reg, false, 4, true);
                     } else {
                         builder.emit_mov_rr(BC_REG_A, index_reg);
                     }
-                    builder.emit_add(ptr_reg, BC_REG_A, false);
+                    builder.emit_add(ptr_reg, BC_REG_A, false, 8);
 
                     builder.emit_mov_mr_disp(BC_REG_BP, ptr_reg, 8, varinfo_item->versions_dataOffset[info.currentPolyVersion]);
                 } else {
                     if(itemsize>1){
                         builder.emit_li32(BC_REG_A,itemsize);
-                        builder.emit_mul(BC_REG_A, index_reg, false, true);
+                        builder.emit_mul(BC_REG_A, index_reg, false, 4, true);
                     } else {
                         builder.emit_mov_rr(BC_REG_A, index_reg);
                     }
-                    builder.emit_add(ptr_reg, BC_REG_A, false);
+                    builder.emit_add(ptr_reg, BC_REG_A, false, 8);
 
                     builder.emit_li32(BC_REG_E,varinfo_item->versions_dataOffset[info.currentPolyVersion]);
-                    builder.emit_add(BC_REG_E, BC_REG_BP, false);
+                    builder.emit_add(BC_REG_E, BC_REG_BP, false, 8);
                     
                     // builder.emit_({BC_BXOR, BC_REG_A, BC_REG_A}); // BC_MEMCPY USES AL
                     

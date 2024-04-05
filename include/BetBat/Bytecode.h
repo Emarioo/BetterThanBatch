@@ -25,8 +25,8 @@ enum InstructionControl : u8 {
     CONTROL_UNSIGNED_OP = 0x20,
 };
 
-#define GET_CONTROL_SIZE(x) (CONTROL_MASK_SIZE & x)
-#define GET_CONTROL_CONVERT_SIZE(x) ((CONTROL_MASK_CONVERT_SIZE & x) >> 2)
+#define GET_CONTROL_SIZE(x) (InstructionControl)(CONTROL_MASK_SIZE & x)
+#define GET_CONTROL_CONVERT_SIZE(x) (InstructionControl)((CONTROL_MASK_CONVERT_SIZE & x) >> 2)
 #define IS_CONTROL_SIGNED(x) (!(CONTROL_UNSIGNED_OP & x))
 #define IS_CONTROL_FLOAT(x) (CONTROL_FLOAT_OP & x)
 // from -> to (CAST_FROM_TO)
@@ -184,7 +184,7 @@ struct TinyBytecode {
     // QuickArray<u32> index_of_opcodes{};
 
     struct Relocation{
-        int pc=0;
+        i32 pc=0; // index of the 32-bit integer to relocate
         FuncImpl* funcImpl = nullptr;
         std::string func_name;
     };
@@ -382,12 +382,13 @@ struct BytecodeBuilder {
     void emit_mov_rm_disp(BCRegister to, BCRegister from, int size, int displacement);
     void emit_mov_mr_disp(BCRegister to, BCRegister from, int size, int displacement);
     
-    void emit_add(BCRegister to, BCRegister from, bool is_float);
-    void emit_sub(BCRegister to, BCRegister from, bool is_float);
-    void emit_mul(BCRegister to, BCRegister from, bool is_float, bool is_signed);
-    void emit_div(BCRegister to, BCRegister from, bool is_float, bool is_signed);
-    void emit_mod(BCRegister to, BCRegister from, bool is_float, bool is_signed);
+    void emit_add(BCRegister to, BCRegister from, bool is_float, int size);
+    void emit_sub(BCRegister to, BCRegister from, bool is_float, int size);
+    void emit_mul(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
+    void emit_div(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
+    void emit_mod(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     
+    // nocheckin TODO: These should have size arguments too!
     void emit_band(BCRegister to, BCRegister from);
     void emit_bor(BCRegister to, BCRegister from);
     void emit_bxor(BCRegister to, BCRegister from);

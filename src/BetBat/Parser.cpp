@@ -217,6 +217,19 @@ SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed)
     
     int startToken = info.gethead();
     
+    // char[][]
+    // Array<char[],Array<char[],char[]>>[]
+    // Array < char [
+        
+
+        
+    // TODO: Optimize
+    DynamicArray<std::string> strings;
+    strings.add({});
+    
+    // Invalid syntax for types is not properly handled such as "Math::*[]"
+    // But such syntax is caught in the type checker even if it is allowed here.
+    
     int depth = 0;
     bool wasName = false;
     outTypeId = {};
@@ -232,26 +245,47 @@ SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed)
             }
             info.advance();
             wasName = true;
-            outTypeId.append(view.ptr,view.len);
+            strings.last().append(view.ptr,view.len);
+            // outTypeId.append(view.ptr,view.len);
+        } else if(token->type == ',') {
+            if(depth == 0) {
+                break;
+            }
+            Assert(strings.size() >= 2);
+            strings[strings.size()-2].append(strings.last());
+            strings.last().clear();
+            strings[strings.size()-2].append(",");
         } else if(token->type == '<') {
             info.advance();
             depth++;
-            outTypeId.append("<");
-         }else if(token->type == '>') {
+            strings.last().append("<");
+            strings.add({});
+            // outTypeId.append("<");
+         } else if(token->type == '>') {
             if(depth == 0){
                 break;
             }
             info.advance();
             depth--;
-            outTypeId.append(">");
+            Assert(strings.size() >= 2);
+            strings[strings.size()-2].append(strings.last());
+            strings.pop();
+            strings.last().append(">");
+            // outTypeId.append(">");
             
             if(depth == 0){
                 break;
             }
+        } else if(token->type == '*') {
+            info.advance();
+            strings.last().append("*");
         } else if(token->type == '[') {
             auto token = info.getinfo(&view, 1);
             if(token->type == ']') {
                 info.advance(2);
+                std::string tmp = strings.last();
+                strings.last() = "Slice<" + tmp + ">";
+                // outTypeId.append("[]");
                 if(depth == 0)
                     break;
             } else {
@@ -259,22 +293,25 @@ SignalIO ParseTypeId(ParseInfo& info, std::string& outTypeId, int* tokensParsed)
             }
         } else if(token->type == lexer::TOKEN_NAMESPACE_DELIM) {
             info.advance();
-            outTypeId.append("::");
+            strings.last().append("::");
+            // outTypeId.append("::");
         } else {
             // invalid token for types, we stop
             break;
         }
     }
-    while(true) {
-        auto tok = info.gettok();
-        if(tok.type == '*') {
-            info.advance();
-            outTypeId.append("*");
-        } else {
-            break;
-        }
-
-    }
+    Assert(strings.size() == 1);
+    outTypeId = strings.last();
+    // TODO: Pointers should be handled inside the loop
+    // while(true) {
+    //     auto tok = info.gettok();
+    //     if(tok.type == '*') {
+    //         info.advance();
+    //         outTypeId.append("*");
+    //     } else {
+    //         break;
+    //     }
+    // }
     if(tokensParsed)
         *tokensParsed = info.gethead() - startToken;
     return SIGNAL_SUCCESS;
@@ -333,7 +370,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
     if(token->type == '<'){
         info.advance();
         // polymorphic type
-        astStruct->name += "<";
+        // astStruct->name += "<";
     
         WHILE_TRUE {
             token = info.getinfo(&view);
@@ -357,13 +394,13 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
                 ASTStruct::PolyArg arg={};
                 arg.name = view;
                 astStruct->polyArgs.add(arg);
-                astStruct->name += view;
+                // astStruct->name += view;
             }
             
             token = info.getinfo();
             if(token->type == ','){
                 info.advance();
-                astStruct->name += ",";
+                // astStruct->name += ",";
                 continue;
             }else if(token->type == '>'){
                 info.advance();
@@ -374,7 +411,7 @@ SignalIO ParseStruct(ParseInfo& info, ASTStruct*& astStruct){
                 continue;
             }
         }
-        astStruct->name += ">";
+        // astStruct->name += ">";
     }
     
     token = info.getinfo(&view);
@@ -1985,7 +2022,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 values.add(tmp);
             } else if(token->type == lexer::TOKEN_IDENTIFIER){
                 auto loc = info.getloc();
-                // info.advance();
+                info.advance();
                 // int startToken=info.gethead();
                 
                 std::string pure_name = view;
@@ -2016,6 +2053,8 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
 
                 // NOTE: I removed code that parsed poly types and replaced it with ParseTypeId.
                 //   The code was scuffed anyway so even if it broke things you should rewrite it.
+                //   (some time later)
+                //   Yes, function parsing is now broken. - Emarioo, 2024-04-05
                 
                 if(tok.type == '('){
                     // function call
@@ -2947,12 +2986,12 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 )
             }
             info.advance();
-            token_name = info.getinfo();
+            token_name = info.getinfo(&view_fn_name);
             tok_name = info.gettok();
             continue;
         }
         if(function->linkConvention != LinkConventions::NONE){
-            function->setHidden(true);
+            // function->setHidden(true);
             // native doesn't use a calling convention
             if(needsExplicitCallConvention && !specifiedConvention){
                 ERR_SECTION(

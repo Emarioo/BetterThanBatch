@@ -4,31 +4,39 @@
 
 namespace lexer {
 u32 Lexer::tokenize(const std::string& path, u32 existing_import_id){
-    u64 fileSize = 0;
-    auto file = engone::FileOpen(path, engone::FILE_READ_ONLY, &fileSize);
-    if(!file) return 0;
-    defer {
-        if(file)
-            engone::FileClose(file);
-    };
+    u64 size = 0;
+    char* buffer = nullptr;
+    
+    VirtualFile* vfile = findVirtualFile(path);
+    
+    if(vfile) {
+        size = vfile->builder.size();
+        buffer = vfile->builder.data();
+    } else {
+        auto file = engone::FileOpen(path, engone::FILE_READ_ONLY, &size);
+        if(!file) return 0;
+        defer {
+            if(file)
+                engone::FileClose(file);
+        };
 
-    // TODO: Reuse buffers
-    char* buffer = TRACK_ARRAY_ALLOC(char, fileSize);
-    u64 size = fileSize;
-    if(!buffer) return 0;
+        // TODO: Reuse buffers
+        buffer = TRACK_ARRAY_ALLOC(char, size);
+        if(!buffer) return 0;
 
-    defer {
-        TRACK_ARRAY_FREE(buffer, char, size);
-    };
+        u64 readBytes = engone::FileRead(file, buffer, size);
+        Assert(readBytes != -1); // TODO: Handle this better
+        Assert(readBytes == size);
 
-    u64 readBytes = engone::FileRead(file, buffer, size);
-    Assert(readBytes != -1);
-    Assert(readBytes == fileSize);
-
-    engone::FileClose(file); // close file as soon as possible so that other code can read or write to it if they want
-    file = {};
+        engone::FileClose(file); // close file as soon as possible so that other code can read or write to it if they want
+        file = {};
+    }
         
     u32 file_id = tokenize(buffer,size,path, existing_import_id);
+
+    if(!vfile && buffer) {
+        TRACK_ARRAY_FREE(buffer, char, size);
+    }
 
     return file_id;
 }
@@ -648,7 +656,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 // anot.str = (char*)outStream->tokenData.used;
                 int anot_line = ln;
                 int anot_column = col;
-                int anot_end = index+1;
+                int anot_end = index;
                 // anot.length = 1;
                 // anot.flags = TOKEN_SUFFIX_SPACE;
                 
@@ -701,12 +709,6 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                 APPEND_DATA(text+anot_start, anot_end - anot_start);
                 
                 INCREMENT_TOKEN();
-
-                // anot.type = TOKEN_ANNOTATION;
-                // Token tok = appendToken(file_id, anot.type, anot.flags, anot_line, anot_column);
-                // modifyTokenData(tok, text + anot_start, anot_end - anot_start, true);
-                
-                // outStream->addToken(anot);
                 continue;
             }
             
@@ -1488,6 +1490,35 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
                 *(buffer + written) = '"';
             iterator.char_index++;
             written++;
+        } else if(tok.type == TOKEN_ANNOTATION) {
+            ENSURE(1)
+            *(buffer + written) = '@';
+            written++;
+            iterator.char_index++;
+            
+            const char* str;
+            u8 real_len = getStringFromToken(tok,&str);
+            
+            if(iterator.char_index >= real_len + 1) { // +1 because @
+                // we wrote the content last feed
+                // len = 0;
+            } else {
+                u8 len = real_len - (iterator.char_index-1); // -1 because @
+                str += (iterator.char_index-1);
+                if(written + len > buffer_max) {
+                    // clamp, not enough space in buffer
+                    len = buffer_max - written;
+                }
+                if(len!=0){
+                    memcpy(buffer + written, str, len);
+                    iterator.char_index += len;
+                    written += len;
+                }
+                if(len != real_len) {
+                    // return, caller needs to try again, buffer too small
+                    return written;
+                }
+            }
         } else if(tok.type == TOKEN_IDENTIFIER || tok.type == TOKEN_LITERAL_INTEGER || tok.type == TOKEN_LITERAL_HEXIDECIMAL || tok.type == TOKEN_LITERAL_DECIMAL) {
             const char* str;
             u8 real_len = getStringFromToken(tok,&str);
@@ -1536,6 +1567,8 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
                     return written;
                 }
             }
+        } else {
+            Assert(false);
         }
         // TODO: Don't do suffix if we processed the last token or if suffix should be skipped (skipSuffix)
         
@@ -1829,4 +1862,21 @@ std::string Lexer::getline(SourceLocation location) {
     }
     return yeet;
 }
+
+bool Lexer::createVirtualFile(const std::string& virtual_path, StringBuilder* builder) {
+    auto vfile = new VirtualFile();
+    vfile->virtual_path = virtual_path;
+    vfile->builder.steal(builder);
+    virtual_files.add(vfile);
+    return true;
 }
+Lexer::VirtualFile* Lexer::findVirtualFile(const std::string& virtual_path) {
+    for(auto f : virtual_files) {
+        if(f->virtual_path == virtual_path) {
+            return f;
+        }
+    }
+    return nullptr;
+}
+}
+
