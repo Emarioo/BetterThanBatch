@@ -11,6 +11,7 @@ struct GenContext : public PhaseContext {
     Bytecode* code=nullptr;
     AST* ast=nullptr;
     Reporter* reporter=nullptr;
+    DynamicArray<TinyBytecode*>* out_codes = nullptr;
     
     GenContext() : info(*this) { } // well this is dumb
     GenContext& info;
@@ -140,4 +141,4 @@ struct NodeScope {
 };
 // Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
 
-TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler);
+bool GenerateScope(ASTScope* scope, Compiler* compiler, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import);

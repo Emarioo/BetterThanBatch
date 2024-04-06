@@ -24,14 +24,23 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         dwarf::ProvideSections(&objectFile, program);
     }
 
+    DynamicArray<u32> tinyprog_offsets;
     if(to - from > 0) {
         auto stream = objectFile.getStreamFromSection(section_text);
         
         Assert(from == 0 && to == -1);
         
+        bool messaged = false;
+        tinyprog_offsets.resize(program->tinyPrograms.size());
         for(int i=0;i<program->tinyPrograms.size(); i++) {
             auto p = program->tinyPrograms[i];
+            tinyprog_offsets[i] = stream->getWriteHead();
             stream->write(p->text, p->head);
+
+            if(stream->getWriteHead() > 0x4000'0000 && !messaged) {
+                messaged = true;
+                engone::log::out << engone::log::RED << "ABOUT TO REACH 4 GB LIMIT IN TEXT SECTION. THE COMPILER ASSUMES THAT 32-bit INTEGERS IS ENOUGH.\n";
+            }
         }
         
         // Old code
@@ -43,7 +52,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
     
     for(int i=0;i<program->dataRelocations.size();i++){
         auto& rel = program->dataRelocations[i];
-        objectFile.addRelocation_data(section_text, rel.textOffset, section_data, rel.dataOffset);
+        u32 real_offset = tinyprog_offsets[rel.tinyprog_index] + rel.textOffset;
+        objectFile.addRelocation_data(section_text, real_offset, section_data, rel.dataOffset);
     }
     // for(int i=0;i<program->ptrDataRelocations.size();i++){
     //     auto& rel = program->ptrDataRelocations[i];
@@ -57,18 +67,27 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         if(sym == -1)
             sym = objectFile.addSymbol(SYM_FUNCTION, namedRelocation.name, 0, 0);
 
-        objectFile.addRelocation(section_text, RELOCA_REL32, namedRelocation.textOffset, sym, 0);
+        u32 real_offset = tinyprog_offsets[namedRelocation.tinyprog_index] + namedRelocation.textOffset;
+        objectFile.addRelocation(section_text, RELOCA_REL32, real_offset, sym, 0);
     }
 
     for(int i=0;i<program->exportedSymbols.size();i++) {
         auto& sym = program->exportedSymbols[i];
-        objectFile.addSymbol(SYM_FUNCTION, sym.name, section_text, sym.textOffset);
+
+        // Assert(false); // text offset was broken in rewrite 0.2.1, we use text offset + offset of tiny program
+        // u32 real_offset = tinyprog_offsets[sym.tinyprog_index] + sym.textOffset;
+        u32 real_offset = tinyprog_offsets[sym.tinyprog_index];
+        objectFile.addSymbol(SYM_FUNCTION, sym.name, section_text, real_offset);
     }
 
     if(program->globalSize != 0) {
         auto stream = objectFile.getStreamFromSection(section_data);
         suc = stream->write(program->globalData, program->globalSize);
         CHECK
+
+        if(program->globalSize > 8000'0000) {
+            engone::log::out << engone::log::RED << "THE COMPILER CANNOT HANDLE GLOBAL DATA OF MORE THAN 2 GB (maybe 4 GB, haven't checked thoroughly)\n";
+        }
     }
 
     // if(program->debugInformation) {

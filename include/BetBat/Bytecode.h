@@ -221,6 +221,7 @@ struct Bytecode {
     DynamicArray<TinyBytecode*> tinyBytecodes;
 
     QuickArray<u8> dataSegment{};
+    engone::Mutex lock_global_data;
 
     DebugInformation* debugInformation = nullptr;
 

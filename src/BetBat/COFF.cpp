@@ -619,6 +619,9 @@ bool FileCOFF::WriteFile(const std::string& path, X64Program* program, u32 from,
     using namespace coff;
     Assert(program);
 
+    // function needs some fixing (MAKE SURE YOU FULLY FIX IT WHEN YOU DECIDE TO!)
+    // perhaps this function isn't needed (ObjectFile::writeFile_coff) does something similar
+    // BUT some old print asm function USED to create an object file and then do dumpbin/objdump on that object file.
     Assert(false); // function needs to be reworked
     #ifdef gone
 

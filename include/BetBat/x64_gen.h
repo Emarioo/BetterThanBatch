@@ -69,10 +69,13 @@ struct X64Program {
         // engone::Free(globalData, globalSize);
         dataRelocations.cleanup();
         namedUndefinedRelocations.cleanup();
-        if(debugInformation) {
-            DebugInformation::Destroy(debugInformation);
-            debugInformation = nullptr;
-        }
+
+        // compiler->program borrows debugInformation from compiler->code
+        // and it is unclear who should destroy it so we don't.
+        // if(debugInformation) {
+        //     DebugInformation::Destroy(debugInformation);
+        //     debugInformation = nullptr;
+        // }
     }
     
     DynamicArray<X64TinyProgram*> tinyPrograms;
@@ -89,7 +92,8 @@ struct X64Program {
 
     struct DataRelocation {
         u32 dataOffset; // offset in data segment
-        u32 textOffset; // where to modify        
+        u32 textOffset; // where to modify       
+        i32 tinyprog_index; 
     };
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;
@@ -98,16 +102,30 @@ struct X64Program {
     struct NamedUndefinedRelocation {
         std::string name; // name of symbol
         u32 textOffset; // where to modify
+        i32 tinyprog_index;
     };
+    // exported functions
     struct ExportedSymbol {
         std::string name; // name of symbol
-        u32 textOffset; // where to modify?
+        // u32 textOffset; // where to modify?
+        i32 tinyprog_index;
     };
 
     // DynamicArray<PtrDataRelocation> ptrDataRelocations;
     DynamicArray<DataRelocation> dataRelocations;
-    DynamicArray<NamedUndefinedRelocation> namedUndefinedRelocations;
     DynamicArray<ExportedSymbol> exportedSymbols;
+    DynamicArray<NamedUndefinedRelocation> namedUndefinedRelocations;
+
+    void addDataRelocation(u32 dataOffset, u32 textOffset, i32 tinyprog_index) {
+        dataRelocations.add({dataOffset, textOffset, tinyprog_index});
+    }
+    void addNamedUndefinedRelocation(const std::string& name, u32 textOffset, i32 tinyprog_index) {
+        namedUndefinedRelocations.add({name, textOffset, tinyprog_index});
+    }
+    void addExportedSymbol(const std::string& name, i32 tinyprog_index) {
+        exportedSymbols.add({name, tinyprog_index});
+    }
+
 
     DebugInformation* debugInformation = nullptr;
 
@@ -149,6 +167,7 @@ struct OPNode {
 struct X64Builder {
     X64Program* prog = nullptr;
     X64TinyProgram* tinyprog = nullptr;
+    i32 current_tinyprog_index = 0;
     Bytecode* bytecode = nullptr;
     TinyBytecode* tinycode = nullptr;
     
@@ -207,7 +226,7 @@ struct X64Builder {
     void emit_modrm(u8 mod, X64Register reg, X64Register rm);
     void emit_modrm_slash(u8 mod, u8 reg, X64Register rm);
     // RIP-relative addressing
-    void emit_modrm_rip(X64Register reg, u32 disp32);
+    void emit_modrm_rip32(X64Register reg, u32 disp32);
     void emit_modrm_sib(u8 mod, X64Register reg, u8 scale, u8 index, X64Register base_reg);
     void emit_modrm_sib_slash(u8 mod, u8 reg, u8 scale, u8 index, X64Register base_reg);
 
@@ -284,3 +303,6 @@ void ReformatDumpbinAsm(LinkerChoice linker, QuickArray<char>& inBuffer, QuickAr
 
 struct Compiler;
 void GenerateX64(Compiler* compiler, TinyBytecode* tinycode);
+
+// Process some final things such as exports, symbols from bytecode program to the x64 program
+void GenerateX64_finalize(Compiler* compiler);

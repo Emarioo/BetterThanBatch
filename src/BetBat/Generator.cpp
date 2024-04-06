@@ -3455,6 +3455,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // info.virtualStackPointer = GenContext::VIRTUAL_STACK_START;
         
         auto tiny = code->createTiny();
+        out_codes->add(tiny);
         tinycode = tiny;
         builder.init(code, tiny);
         tiny->name = function->name; // what about poly types?
@@ -5703,49 +5704,63 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
 }
 #endif
 
-TinyBytecode* GenerateScope(ASTScope* scope, Compiler* compiler) {
+bool GenerateScope(ASTScope* scope, Compiler* compiler, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue);
 
     // _VLOG(log::out <<log::BLUE<<  "##   Generator   ##\n";)
 
     GenContext context{};
-    context.code = Bytecode::Create();
+    // 
     context.ast = compiler->ast;
     context.code = compiler->code;
     context.compiler = compiler;
     context.reporter = &compiler->reporter;
-    context.currentScopeId = context.ast->globalScopeId;
-    
-    TinyBytecode* tb_main = context.code->createTiny();
-    tb_main->name = "main";
-
-    
-    context.code->debugInformation = DebugInformation::Create(compiler->ast);
+    context.out_codes = out_codes;
     
     context.generateFunctions(scope);
     
-    context.currentFrameOffset = 0;
-    context.tinycode = tb_main;
-    context.builder.init(context.code, context.tinycode);
-    
-    auto di = context.code->debugInformation;
-    context.debugFunctionIndex = di->functions.size();
-    DebugInformation::Function* dfun = di->addFunction("main");
-    context.code->addExportedFunction("main", context.tinycode->index);
-    
-    context.generateBody(scope);
-    
-    if(context.builder.get_last_opcode() != BC_RET) {
-        context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, true);
-        context.builder.emit_ret();
-    } else {
-        context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
+    if(is_initial_import) {
+        auto iden = compiler->ast->findIdentifier(compiler->ast->globalScopeId,0,"main");
+        if(!iden) {
+            // If no main function exists then the code in global scope of
+            // initial import will be the main function.
+
+            // TODO: Code here
+            TinyBytecode* tb_main = context.code->createTiny();
+            tb_main->name = "main";
+
+            // TODO: Code below should be the same as the one in generateFunction.
+            //   If we change the code in generateFunction but forget to here then
+            //   we will be in trouble. So, how do we combine the code?
+
+            context.tinycode = tb_main;
+            context.builder.init(context.code, context.tinycode);
+            context.currentScopeId = context.ast->globalScopeId;
+            context.currentFrameOffset = 0;
+
+            out_codes->add(tb_main);
+
+            auto di = context.code->debugInformation;
+            context.debugFunctionIndex = di->functions.size();
+            DebugInformation::Function* dfun = di->addFunction(context.tinycode->name);
+            context.code->addExportedFunction("main", context.tinycode->index);
+            
+            context.generateBody(scope);
+            
+            if(context.builder.get_last_opcode() != BC_RET) {
+                context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, true);
+                context.builder.emit_ret();
+            } else {
+                context.builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
+            }
+        }
     }
     
     // TODO: Relocations?
     
     context.compiler->compileOptions->compileStats.errors += context.errors;
 
-    return tb_main;
+    // return tb_main;
+    return true;
 }

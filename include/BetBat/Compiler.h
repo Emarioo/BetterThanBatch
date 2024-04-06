@@ -174,6 +174,10 @@ struct Compiler {
     Reporter reporter{};
 
     CompileOptions* compileOptions;
+
+    u32 initial_import_id = 0;
+
+    bool have_generated_global_data = false; // move elsewhere?
     
     enum TaskType : u32 {
         TASK_NONE = 0,

@@ -76,32 +76,36 @@ void Bytecode::Destroy(Bytecode* code){
 void Bytecode::ensureAlignmentInData(int alignment){
     Assert(alignment > 0);
     // TODO: Check that alignment is a power of 2
-    // int misalign = alignment - (dataSegment.used % alignment);
-    // if(misalign == alignment) return;
-    // if(dataSegment.max < dataSegment.used + misalign){
-    //     int oldMax = dataSegment.max;
-    //     bool yes = dataSegment.resize(dataSegment.max*2 + 100);
-    //     Assert(yes);
-    //     memset(dataSegment.data + oldMax, '_', dataSegment.max - oldMax);
-    // }
-    // int index = dataSegment.used;
-    // memset((char*)dataSegment.data + index,'_',misalign);
-    // dataSegment.used+=misalign;
+    lock_global_data.lock();
+    int misalign = alignment - (dataSegment.used % alignment);
+    if(misalign == alignment) return;
+    if(dataSegment.max < dataSegment.used + misalign){
+        int oldMax = dataSegment.max;
+        bool yes = dataSegment.resize(dataSegment.max*2 + 100);
+        Assert(yes);
+        memset(dataSegment.data() + oldMax, '_', dataSegment.max - oldMax);
+    }
+    int index = dataSegment.used;
+    memset((char*)dataSegment.data() + index,'_',misalign);
+    dataSegment.used+=misalign;
+    lock_global_data.unlock();
 }
 int Bytecode::appendData(const void* data, int size){
     Assert(size > 0);
-    // if(dataSegment.max < dataSegment.used + size){
-    //     int oldMax = dataSegment.max;
-    //     dataSegment.resize(dataSegment.max*2 + 2*size);
-    //     memset(dataSegment.data + oldMax, '_', dataSegment.max - oldMax);
-    // }
+    lock_global_data.lock();
+    if(dataSegment.max < dataSegment.used + size){
+        int oldMax = dataSegment.max;
+        dataSegment.resize(dataSegment.max*2 + 2*size);
+        memset(dataSegment.data() + oldMax, '_', dataSegment.max - oldMax);
+    }
     int index = dataSegment.used;
-    // if(data) {
-    //     memcpy((char*)dataSegment.data + index,data,size);
-    // } else {
-    //     memset((char*)dataSegment.data + index,'_',size);
-    // }
-    // dataSegment.used+=size;
+    if(data) {
+        memcpy((char*)dataSegment.data() + index,data,size);
+    } else {
+        memset((char*)dataSegment.data() + index,'_',size);
+    }
+    dataSegment.used+=size;
+    lock_global_data.unlock();
     return index;
 }
 // int Bytecode::appendData_late(void** out_ptr, int size) {

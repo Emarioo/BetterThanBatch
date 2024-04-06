@@ -8,19 +8,30 @@
 #include "BetBat/Compiler.h"
 
 /*
-Hello:
-    The x64 generator is based on SSA (static single-assignment). I tried to think of a linear
-    approach where you can perform optimizations (dead code elimination, efficient usage of registers)
-    but I could not make it work. A bottom-up and then top-down approach with a tree is much easier.
-    The bytecode is converted to a tree of nodes where registers and the value on the
-    stack determines the relations between the nodes.
-    This results in a couple of root nodes which are instructions with side effects such as "mov [rbp], eax" or "add rsp, 8".
+Hello!
+    The x64 generator is based on SSA (static single-assignment).
+    The bytecode is converted to a tree of nodes where registers and
+    the value on the stack determines the relations between the nodes.
+    This results in a couple of root nodes which are instructions with
+    side effects such as "mov [rbp], eax" or "add rsp, 8".
     x64 registers are allocated and freed when traversing the nodes and generating x64 instructions.
+    There will probably be a refactor in the future for further 
+    optimized code generation (reuse of values in registers).
 
+When writing code in this file:
     The code for the generator is messy since this is a first proper
-    implementation of a decent generator. There will probably be a
-    refactor in the future to simplify the code but I don't know how
-    it will look like yet so we will see what happens.
+    implementation of a decent generator (x64 is also a bit scuffed,
+    but with good documentation).
+
+    I urge you to be in a smart and consistent mood when changing the code.
+    It is easy to accidently emit the wrong instruction SO be sure to 
+    create GREAT test cases so that all edge cases are covered.
+
+    Good luck!
+
+Notes:
+    I tried to think of a linear approach (instead of SSA) where you can perform optimizations (dead code elimination, efficient usage of registers)
+    but I could not make it work. A bottom-up and then top-down approach with a tree is much easier.
 
 About x64:
     x86/x64 instructions are complicated and it's not really my fault
@@ -273,6 +284,36 @@ bool IsNativeRegister(X64Register reg) {
     return reg == X64_REG_BP || reg == X64_REG_SP;
 }
 
+void GenerateX64_finalize(Compiler* compiler) {
+    Assert(compiler->program); // don't call this function if there is no program
+    Assert(compiler->program->debugInformation); // we expect debug information?
+
+    auto prog = compiler->program;
+    auto bytecode = compiler->code;
+
+    // prog->debugInformation = bytecode->debugInformation;
+    // bytecode->debugInformation = nullptr;
+
+    if(bytecode->dataSegment.size() != 0) {
+        prog->globalData = TRACK_ARRAY_ALLOC(u8, bytecode->dataSegment.size());
+        // prog->globalData = (u8*)engone::Allocate(bytecode->dataSegment.used);
+        Assert(prog->globalData);
+        prog->globalSize = bytecode->dataSegment.size();
+        memcpy(prog->globalData, bytecode->dataSegment.data(), prog->globalSize);
+
+        // OutputAsHex("data.txt", (char*)prog->globalData, prog->globalSize);
+    }
+
+    for(int i=0;i<compiler->code->exportedFunctions.size();i++) {
+        auto& sym = compiler->code->exportedFunctions[i];
+        prog->addExportedSymbol(sym.name, sym.tinycode_index);
+        // X64Program::ExportedSymbol tmp{};
+        // tmp.name = sym.name;
+        // tmp.textOffset = addressTranslation[sym.location];
+        // prog->exportedSymbols.add(tmp);
+    }
+}
+
 void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
     using namespace engone;
     ZoneScopedC(tracy::Color::SkyBlue1);
@@ -374,11 +415,21 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->op1 = op1;
-            
-            if(!IsNativeRegister(op1)) {
-                node->in1 = reg_values[op1];
+
+            if(IsNativeRegister(op0)) {
+                // setting a native register is a side effect
+                // we can't use reorder the action
+                
+                if(!IsNativeRegister(op1)) {
+                    node->in1 = reg_values[op1];
+                }
+                nodes.add(node);
+            } else {
+                if(!IsNativeRegister(op1)) {
+                    node->in1 = reg_values[op1];
+                }
+                reg_values[op0] = node;
             }
-            reg_values[op0] = node;
         } break;
         case BC_MOV_RM: {
             op0 = (BCRegister)instructions[pc++];
@@ -437,8 +488,8 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             imm = *(i16*)&instructions[pc];
             pc += 2;
             
-            Assert(op1 != BC_REG_SP && op1 != BC_REG_BP);
-            Assert(control == CONTROL_32B);
+            // Assert(op1 != BC_REG_SP && op1 != BC_REG_BP);
+            // Assert(control == CONTROL_32B);
             // TODO: op0, op1 as stack or base pointer requires special handling
             
             auto node = createNode(prev_pc, opcode);
@@ -456,7 +507,6 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
         } break;
         case BC_PUSH: {
             op0 = (BCRegister)instructions[pc++];
-            
             Assert(!IsNativeRegister(op0));
             
             auto n = reg_values[op0];
@@ -1394,10 +1444,8 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             case BC_BNOT: {
                 Assert(!ToNativeRegister(n->op0));
 
-                if(!env->env_in1) {
-                    if(!env->env_in1 && !IsNativeRegister(n->op1)) {
-                        push_env1();
-                    }
+                if(!env->env_in1 && !IsNativeRegister(n->op1)) {
+                    push_env1();
                     break;
                 }
                 if(env->reg0.invalid()) {
@@ -1450,6 +1498,60 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     
                 if(env->reg0.on_stack) {
                     emit_push(env->reg0.reg);
+                }
+            } break;
+            case BC_MOV_RR: {
+                Assert(IsNativeRegister(n->op0) || IsNativeRegister(n->op1)); // if a native register is involved then we have a side effect, otherwise the register move instruction should have been abstracted.
+                
+                if(!env->env_in1 && !IsNativeRegister(n->op1)) {
+                    push_env1();
+                    break;
+                }
+
+                if(IsNativeRegister(n->op0)) {
+                    env->reg0.reg = ToNativeRegister(n->op0);
+                }
+
+                if(env->reg0.invalid()) {
+                    env->reg0.reg = alloc_register();
+                    if(env->reg0.invalid()) {
+                        env->reg0.on_stack = true;
+                        env->reg0.reg = RESERVED_REG0;
+                    }
+                }
+
+                if(!IsNativeRegister(n->op1)) {
+                    env->reg1 = env->env_in1->reg0;
+                }
+
+                if(env->reg1.on_stack) {
+                    env->reg1.reg = RESERVED_REG0;
+                    emit_pop(env->reg1.reg);
+                }
+
+                if(IS_REG_XMM(env->reg0.reg)) {
+                    if(IS_REG_XMM(env->reg1.reg)) {
+                        Assert(false);
+                        // How do we know whether a 32-bit float
+                        // or 64-bit float should be moved
+                        // emit3(OPCODE_3_MOVSS_REG_RM);
+                        // emit3(OPCODE_3_MOVSD_REG_RM);
+                    } else {
+                        Assert(false);
+                    }
+                } else {
+                    if(IS_REG_XMM(env->reg1.reg)) {
+                        Assert(false);
+                    } else {
+                        emit_prefix(PREFIX_REXW, env->reg0.reg, env->reg1.reg);
+                        emit1(OPCODE_MOV_REG_RM);
+                        emit_modrm(MODE_REG, CLAMP_EXT_REG(env->reg0.reg), CLAMP_EXT_REG(env->reg1.reg));
+
+                        if(env->reg0.on_stack) {
+                            emit_push(env->reg0.reg);
+                        }
+                    }
+
                 }
             } break;
             case BC_MOV_RM:
@@ -1539,7 +1641,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             case BC_MOV_MR:
             case BC_MOV_MR_DISP16: {
                 Assert(n->op1 != BC_REG_SP && n->op1 != BC_REG_BP);
-                Assert(n->control == CONTROL_32B);
+                // Assert(n->control == CONTROL_32B);
                 
                 // Pre-work
                 
@@ -1690,6 +1792,8 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     emit_modrm_sib(MODE_DEREF_DISP8, CLAMP_XMM(env->reg0.reg), SIB_SCALE_1, SIB_INDEX_NONE, X64_REG_SP);
                     emit1((u8)-8);
                 } else {
+                    // We do not need a 64-bit move to load a 32-bit into a 64-bit register and ensure that the register is cleared.
+                    // A 32-bit move will actually clear the upper bits.
                     if(IS_REG_EXTENDED(env->reg0.reg)) {
                         emit1(PREFIX_REXB);
                     }
@@ -1822,17 +1926,21 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                         */
                         // Assert(false); // is the assembly wrong?
                         // rdx should be buffer and r8 length
-                        X64Program::NamedUndefinedRelocation reloc0{};
-                        reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
-                        reloc0.textOffset = prog->size() + 0xB;
-                        X64Program::NamedUndefinedRelocation reloc1{};
-                        reloc1.name = "__imp_WriteFile";
-                        reloc1.textOffset = prog->size() + 0x26;
+                        // X64Program::NamedUndefinedRelocation reloc0{};
+                        // reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
+                        // reloc0.textOffset = prog->size() + 0xB;
+                        // X64Program::NamedUndefinedRelocation reloc1{};
+                        // reloc1.name = "__imp_WriteFile";
+                        // reloc1.textOffset = prog->size() + 0x26;
+                        u32 start_addr = size();
                         u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xD8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
-                        prog->addRaw(arr,sizeof(arr));
+                        emit_bytes(arr,sizeof(arr));
 
-                        prog->namedUndefinedRelocations.add(reloc0);
-                        prog->namedUndefinedRelocations.add(reloc1);
+                        // C creates these symbol names in it's object file
+                        prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0xB, current_tinyprog_index);
+                        prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x26, current_tinyprog_index);
+                        // prog->namedUndefinedRelocations.add(reloc0);
+                        // prog->namedUndefinedRelocations.add(reloc1);
                     #else
                         // ptr = [rsp + 0]
                         // len = [rsp + 8]
@@ -1849,7 +1957,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
 
                         prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
                         prog->addModRM(MODE_REG, 0, REG_DI);
-                        prog->add4((u32)1); // stdout
+                        prog->add4((u32)1); // 1 = stdout
 
                         prog->add(OPCODE_CALL_IMM);
                         int reloc_pos = prog->size();
@@ -2996,6 +3104,48 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     emit_push(env->reg0.reg);
                 }
             } break;
+            case BC_DATAPTR: {
+                if(env->reg0.invalid()) {
+                    env->reg0.reg = alloc_register();
+                    if(env->reg0.reg == X64_REG_INVALID) {
+                        env->reg0.on_stack = true;
+                        env->reg0.reg = RESERVED_REG0;
+                    }
+                } else {
+                    // already allocated
+                }
+                Assert(!IS_REG_XMM(env->reg0.reg)); // loading pointer into xmm makes no sense, it's a compiler bug
+
+                emit_prefix(PREFIX_REXW, env->reg0.reg, X64_REG_INVALID);
+                emit1(OPCODE_LEA_REG_M);
+                emit_modrm_rip32(CLAMP_EXT_REG(env->reg0.reg), (u32)0);
+                i32 disp32_offset = size() - 4; // -4 to refer to the 32-bit immediate in modrm_rip
+                prog->addDataRelocation(n->imm, disp32_offset, current_tinyprog_index);
+
+                if(env->reg0.on_stack) {
+                    emit_push(env->reg0.reg);
+                }
+            } break;
+            case BC_CODEPTR: {
+                Assert(false);
+                // u8 size = DECODE_REG_SIZE(op0);
+                // Assert(size==8);
+
+                // prog->add(PREFIX_REXW);
+                // prog->add(OPCODE_LEA_REG_M);
+                // prog->addModRM_rip(BCToProgramReg(op0,8), (u32)0);
+                // RelativeRelocation reloc{};
+                // reloc.immediateToModify = prog->size()-4;
+                // reloc.currentIP = prog->size();
+                // reloc.bcAddress = imm;
+                // relativeRelocations.add(reloc);
+                // // NamedRelocation reloc{};
+                // // reloc.dataOffset = imm;
+                // // reloc.
+                // // reloc.textOffset = prog->size() - 4;
+                // // prog->dataRelocations.add(reloc);
+                // // prog->namedRelocations.add();
+            } break;
             default: Assert(false);
         }
         if(pop_env) {
@@ -3020,6 +3170,9 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             // confusing.
         }
     }
+
+    // last instruction should be a return
+    Assert(tinyprog->text[tinyprog->head-1] == OPCODE_RET);
 }
 X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
     if(!is_float) {
@@ -3248,7 +3401,7 @@ void X64Builder::emit_modrm(u8 mod, X64Register _reg, X64Register _rm){
     // Assert(("Use addModRM_disp32 instead",(mod!=0b10)));
     emit1((u8)(rm | (reg << (u8)3) | (mod << (u8)6)));
 }
-void X64Builder::emit_modrm_rip(X64Register _reg, u32 disp32){
+void X64Builder::emit_modrm_rip32(X64Register _reg, u32 disp32){
     u8 reg = _reg - 1;
     u8 mod = 0b00;
     u8 rm = 0b101;

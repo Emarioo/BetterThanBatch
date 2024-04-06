@@ -770,6 +770,22 @@ void Compiler::processImports() {
                         break;
                     }
                 }
+            } else if (task.type == TASK_GEN_BYTECODE) {
+                // global data must have been generated before we can generate data
+                // (in the current implementation)
+
+                // TODO: Optimize, store an integer of how many non-type checked tasks
+                //   we have left instead of iterating all tasks every time.
+                for(int i=0;i<tasks.size();i++) {
+                    Task& t = tasks[i];
+                    if(t.type != TASK_GEN_BYTECODE) {
+                        // LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
+                        missing_dependency = true;
+                        // we miss a dependency in that all other imports have
+                        // not been type checked yet
+                        break;
+                    }
+                }
             }
             if(missing_dependency) {
                 finished=false;
@@ -815,7 +831,7 @@ void Compiler::processImports() {
                 u32 new_id = preprocessor.process(imp->import_id,false);
                 Assert(new_id == 0); // first preprocessor phase should not create an import
                 
-                lexer.print(old_id);
+                // lexer.print(old_id);
                 
                 auto intern_imp = lexer.getImport_unsafe(imp->import_id);
                 
@@ -867,7 +883,7 @@ void Compiler::processImports() {
                 // ast->appendToMainBody(what); // nocheckin
                 ast->shareWithGlobalScope(what);
                 
-                ast->print();
+                // ast->print();
                 imp->scopeId = what->scopeId;
 
                 imp->state = (TaskType)(imp->state | picked_task.type);
@@ -943,8 +959,28 @@ void Compiler::processImports() {
             } else if(picked_task.type == TASK_GEN_BYTECODE) {
                 Import* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
+
+                if(!have_generated_global_data) { // cheap quick check
+                    lock_miscellaneous.lock();
+                    if(!have_generated_global_data) { // thread safe check
+                        have_generated_global_data = true;
+                        GenContext c{};
+                        c.ast = ast;
+                        c.code = code;
+                        c.reporter = &reporter;
+                        c.compiler = this;
+                        c.generateData(); // make sure this function doesn't call lock_miscellaneous
+                    }
+                    lock_miscellaneous.unlock();
+                }
+
+                DynamicArray<TinyBytecode*> tinycodes{};
+                if(initial_import_id == imp->import_id) {
+                    auto yes = GenerateScope(my_scope->astScope, this, &tinycodes, true);
+                } else {
+                    auto yes = GenerateScope(my_scope->astScope, this, &tinycodes, false);
+                }
                 
-                auto tiny = GenerateScope(my_scope->astScope, this);
                 
                 switch(compileOptions->target) {
                     case TARGET_BYTECODE: {
@@ -952,7 +988,8 @@ void Compiler::processImports() {
                     } break;
                     case TARGET_WINDOWS_x64:
                     case TARGET_UNIX_x64: {
-                        GenerateX64(this, tiny);
+                        for(auto t : tinycodes)
+                            GenerateX64(this, t);
                     } break;
                 }
                 
@@ -992,6 +1029,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     preprocessor.init(&lexer, this);
     ast = AST::Create();
     code = Bytecode::Create();
+    code->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;
     compileOptions = options;
     
@@ -1002,12 +1040,15 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         case TARGET_WINDOWS_x64:
         case TARGET_UNIX_x64: {
             program = X64Program::Create();
+            program->debugInformation = code->debugInformation;
         } break;
         default: Assert(false);
     }
 
     u32 import_id = addImport(path);
     Assert(import_id); // nocheckin
+
+    initial_import_id = import_id;
     
     u32 preload_import_id = 0;
     {
@@ -1059,21 +1100,27 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     tasks.add(task);
     
     int thread_count = 1;
-    
     DynamicArray<engone::Thread> threads{};
+    threads.resize(thread_count-1);
     
+    // Threaded compilation section
     for(int i=0;i<thread_count-1;i++) {
-        threads.add({});
-        threads.last().init(Thread_process, this);
-        // engone::log::out << " "<<threads.last().getId()<<"\n";
+        threads[i].init(Thread_process, this); // Thread_process just calls processImports
     }
-    
     processImports();
-    
     for(int i=0;i<thread_count-1;i++) {
-        // engone::log::out << " "<<threads.last().getId()<<"\n";
         threads[i].join();
-        // engone::log::out << " "<<threads.last().getId()<<"\n";
+    }
+
+    switch(compileOptions->target) {
+        case TARGET_BYTECODE: {
+            // do nothing
+        } break;
+        case TARGET_WINDOWS_x64:
+        case TARGET_UNIX_x64: {
+            GenerateX64_finalize(this);
+        } break;
+        default: Assert(false);
     }
     
     if(compileOptions->compileStats.errors!=0){ 
@@ -1090,7 +1137,6 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     engone::log::out << "Compiled in "<<FormatTime(time)<<"\n";
 
     code->print();
-
 
     // Interpreter interp{};
     // interp.execute(code, "main");
