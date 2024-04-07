@@ -334,7 +334,7 @@ void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm, bool no_modification) {
         return;
     }
 #endif
-
+    // Assert(reg != BC_REG_SP && reg != BC_REG_BP); // these are deprecated
     emit_opcode(BC_INCR);
     emit_operand(reg);
     emit_imm32(imm);
@@ -342,20 +342,45 @@ void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm, bool no_modification) {
     if(reg == BC_REG_SP && !no_modification)
         virtualStackPointer += imm;
 }
-// void BytecodeBuilder::emit_integer_inst(InstructionType type, BCRegister out, BCRegister b) {
-//     emit_opcode(type);
-//     emit_operand(out);
-//     emit_operand(b);
-//     Assert(BC_MOD + 1 == BC_EQ); // make sure arithmetic and comparisons are close in enum list
-//     if(type >= BC_ADD && type <= BC_GTE) {
-//         emit_control(CONTROL_NONE);
-//     }
+void BytecodeBuilder::emit_alloc_local(u16 size) {
+    Assert(size > 0);
+    // LocalRef ref = LOCAL_REF_INVALID;
+    // for(int i = 1; i < local_references.size();i++) {
+    //     if (!local_references[i]) {
+    //         ref = (LocalRef)i;
+    //     }
+    // }
+    // if(ref == LOCAL_REF_INVALID) {
+    //     Assert(local_references.size() <= 0xFFFF);
+    //     if(local_references.size() == 0) // first local ref is interpreted as invalid
+    //         local_references.add(true);
+    //     ref = (LocalRef)local_references.size();
+    //     local_references.add(true);
+    // }
+    emit_opcode(BC_ALLOC_LOCAL);
+    // emit_imm16(ref);
+    emit_imm16(size);
+    // return ref;
+}
+// void BytecodeBuilder::emit_free_local(LocalRef ref) {
+//     Assert(ref < local_references.size());
+//     Assert(local_references[ref]);
+//     emit_opcode(BC_FREE_LOCAL);
+//     emit_imm16(ref);
+//     local_references[ref] = false;
 // }
-// void BytecodeBuilder::emit_float_inst(InstructionType type, BCRegister a, BCRegister b) {
-//     emit_opcode(type);
-//     emit_operand(a);
-//     emit_operand(b);
-//     emit_control(CONTROL_FLOAT_OP);
+// void BytecodeBuilder::emit_localptr(BCRegister reg, LocalRef ref) {
+//     Assert(local_references[ref]);
+//     emit_opcode(BC_LOCALPTR);
+//     emit_operand(reg);
+//     emit_imm16(ref);
+// }
+// void BytecodeBuilder::emit_localptr_disp16(BCRegister reg, LocalRef ref, u16 disp) {
+//     Assert(local_references[ref]);
+//     emit_opcode(BC_LOCALPTR);
+//     emit_operand(reg);
+//     emit_imm16(ref);
+//     emit_imm16(disp);
 // }
 void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm) {
     emit_opcode(BC_CALL);
@@ -794,6 +819,10 @@ extern const char* instruction_names[] {
     "li32", // BC_LI
     "li64", // BC_LI
     "incr", // BC_INCR
+    "alloc_local", // BC_ALLOC_LOCAL
+    "free_local", // BC_FREE_LOCAL
+    "localptr", // BC_LOCALPTR
+    "localptr_disp", // BC_LOCALPTR_DISP16
     "jmp", // BC_JMP
     "call", // BC_CALL
     "ret", // BC_RET

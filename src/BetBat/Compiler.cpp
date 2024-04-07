@@ -966,7 +966,7 @@ void Compiler::processImports() {
                         have_generated_global_data = true;
                         GenContext c{};
                         c.ast = ast;
-                        c.code = code;
+                        c.code = bytecode;
                         c.reporter = &reporter;
                         c.compiler = this;
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
@@ -1021,6 +1021,7 @@ u32 Thread_process(void* self) {
     return 0;
 }
 void Compiler::compileSource(const std::string& path, CompileOptions* options) {
+    using namespace engone;
     ZoneScopedC(tracy::Color::Gray19);
     auto tp = engone::StartMeasure();
     
@@ -1028,8 +1029,8 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     signaled = true;
     preprocessor.init(&lexer, this);
     ast = AST::Create();
-    code = Bytecode::Create();
-    code->debugInformation = DebugInformation::Create(ast);
+    bytecode = Bytecode::Create();
+    bytecode->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;
     compileOptions = options;
     
@@ -1040,7 +1041,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         case TARGET_WINDOWS_x64:
         case TARGET_UNIX_x64: {
             program = X64Program::Create();
-            program->debugInformation = code->debugInformation;
+            program->debugInformation = bytecode->debugInformation;
         } break;
         default: Assert(false);
     }
@@ -1136,10 +1137,13 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     double time = engone::StopMeasure(tp);
     engone::log::out << "Compiled in "<<FormatTime(time)<<"\n";
 
-    code->print();
+    bytecode->print();
 
     // Interpreter interp{};
     // interp.execute(code, "main");
+
+    if(!options->useDebugInformation)
+        program->debugInformation = nullptr;
     
     switch(compileOptions->target){
         case TARGET_BYTECODE: {
@@ -1153,6 +1157,103 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
             Assert(false);
         } break;
     }
+
+    
+    std::string objPath = "test.o";
+    Path outPath = "test.exe";
+    
+    std::string cmd = "";
+    bool outputOtherDirectory = false;
+    switch(options->linker) {
+    case LINKER_MSVC: {
+        Assert(options->target == TARGET_WINDOWS_x64);
+        outputOtherDirectory = outPath.text.find("/") != std::string::npos;
+        
+        // TEMPORARY
+        if(options->useDebugInformation) {
+            log::out << log::RED << "You must use another linker than MSVC when compiling with debug information. Add the flag "<<log::LIME<<"--linker gcc"<<log::RED<<" (make sure to have gcc installed). The compiler does not support PDB debug information, it only supports DWARF. DWARF uses sections with long names but MSVC linker truncates those names. That's why you cannot use MVSC linker.\n";
+            return;
+        }
+
+        cmd = "link /nologo /INCREMENTAL:NO ";
+        if(options->useDebugInformation)
+            cmd += "/DEBUG ";
+        // else cmd += "/DEBUG "; // force debug info for now
+        cmd += objPath + " ";
+        #ifndef MINIMAL_DEBUG
+        cmd += "bin/NativeLayer.lib ";
+        cmd += "uuid.lib ";
+        cmd += "shell32.lib ";
+        // cmd += "Bcrypt.lib "; // random64 uses BCryptGenRandom, #link is used instead
+        #endif
+        // I don't know which of these we should use when. Sometimes the linker complains about 
+        // a certain default lib.
+        // cmd += "/NODEFAULTLIB:library";
+        // cmd += "/DEFAULTLIB:MSVCRT ";
+        cmd += "/DEFAULTLIB:LIBCMT ";
+        
+        for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
+            auto& dir = bytecode->linkDirectives[i];
+            cmd += dir + " ";
+        }
+        #define LINK_TEMP_EXE "temp_382.exe"
+        #define LINK_TEMP_PDB "temp_382.pdb"
+        if(outputOtherDirectory) {
+            // MSVC linker cannot output to another directory than the current.
+            cmd += "/OUT:" LINK_TEMP_EXE;
+        } else {
+            cmd += "/OUT:" + outPath.text+" ";
+        }
+        break;
+    }
+    case LINKER_CLANG:
+    case LINKER_GCC: {
+        switch(options->linker) {
+            case LINKER_GCC: cmd += "g++ "; break;
+            case LINKER_CLANG: cmd += "clang++ "; break;
+            default: break;
+        }
+        
+        if(options->useDebugInformation)
+            cmd += "-g ";
+
+        cmd += objPath + " ";
+        #ifndef MINIMAL_DEBUG
+        cmd += "bin/NativeLayer_gcc.lib "; // NOTE: Do we need one for clang too?
+        // cmd += "uuid.lib ";
+        // cmd += "shell32.lib ";
+        #endif
+        // cmd += "/DEFAULTLIB:MSVCRT ";
+        // cmd += "/DEFAULTLIB:LIBCMT ";
+        
+        for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
+            auto& dir = bytecode->linkDirectives[i];
+            cmd += dir + " ";
+        }
+        // if(outputOtherDirectory) {
+        cmd += "-o " + outPath.text;
+        // } else {
+            // cmd += "/OUT:" + outPath.text+" ";
+        // }
+        break;
+    }
+    default: {
+        Assert(false);
+        break;
+    }
+    }
+
+    int exitCode = 0;
+    {
+        ZoneNamedNC(zone0,"Linker",tracy::Color::Blue2, true);
+        // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
+        engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+    }
+    options->compileStats.end_linker = StartMeasure();
+    
+    if(exitCode != 0) {
+
+    }    
     
     if(compileOptions->executeOutput) {
         Assert(false);

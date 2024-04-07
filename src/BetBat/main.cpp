@@ -48,6 +48,7 @@ int main(int argc, const char** argv){
 
     CompileOptions options{};
     options.target = TARGET_WINDOWS_x64;
+    // options.useDebugInformation = true;
     
     Compiler compiler{};
     compiler.importDirectories.add(Path("modules/").getAbsolute());

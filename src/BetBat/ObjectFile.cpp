@@ -25,19 +25,28 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
     }
 
     DynamicArray<u32> tinyprog_offsets;
+    auto text_stream = objectFile.getStreamFromSection(section_text);
     if(to - from > 0) {
-        auto stream = objectFile.getStreamFromSection(section_text);
-        
         Assert(from == 0 && to == -1);
+        tinyprog_offsets.resize(program->tinyPrograms.size());
+        {
+            // main function should be first in the text section
+            int i = program->index_of_main;
+            auto p = program->tinyPrograms[i];
+            tinyprog_offsets[i] = text_stream->getWriteHead();
+            text_stream->write(p->text, p->head);
+        }
         
         bool messaged = false;
-        tinyprog_offsets.resize(program->tinyPrograms.size());
         for(int i=0;i<program->tinyPrograms.size(); i++) {
             auto p = program->tinyPrograms[i];
-            tinyprog_offsets[i] = stream->getWriteHead();
-            stream->write(p->text, p->head);
+            if(i == program->index_of_main)
+                continue;
 
-            if(stream->getWriteHead() > 0x4000'0000 && !messaged) {
+            tinyprog_offsets[i] = text_stream->getWriteHead();
+            text_stream->write(p->text, p->head);
+
+            if(text_stream->getWriteHead() > 0x4000'0000 && !messaged) {
                 messaged = true;
                 engone::log::out << engone::log::RED << "ABOUT TO REACH 4 GB LIMIT IN TEXT SECTION. THE COMPILER ASSUMES THAT 32-bit INTEGERS IS ENOUGH.\n";
             }
@@ -69,6 +78,15 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
 
         u32 real_offset = tinyprog_offsets[namedRelocation.tinyprog_index] + namedRelocation.textOffset;
         objectFile.addRelocation(section_text, RELOCA_REL32, real_offset, sym, 0);
+    }
+
+    for(int i=0;i<program->internalFuncRelocations.size();i++){
+        auto& rel = program->internalFuncRelocations[i];
+
+        u32 from_real_offset = tinyprog_offsets[rel.from_tinyprog_index] + rel.textOffset;
+        u32 to_real_offset = tinyprog_offsets[rel.to_tinyprog_index];
+        
+        text_stream->write_at<u32>(from_real_offset, to_real_offset);
     }
 
     for(int i=0;i<program->exportedSymbols.size();i++) {
@@ -151,19 +169,22 @@ bool ObjectFile::writeFile_coff(const std::string& path) {
         sheader->VirtualSize = 0;
         sheader->Characteristics = (Section_Flags)(0);
         
-        if(section->flags & FLAG_READ_ONLY)
+        if(section->flags == FLAG_READ_ONLY) {
             sheader->Characteristics = (Section_Flags)(sheader->Characteristics
             | IMAGE_SCN_MEM_READ);
-        else
-            sheader->Characteristics = (Section_Flags)(sheader->Characteristics
-            | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE | IMAGE_SCN_CNT_INITIALIZED_DATA);
-        if(section->flags & FLAG_CODE)
-            sheader->Characteristics = (Section_Flags)(sheader->Characteristics
-            | IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
-        if(section->flags & FLAG_DEBUG)
+        } else if(section->flags == FLAG_CODE) {
+            //   CONTENTS, ALLOC, LOAD, RELOC, READONLY, CODE
+            sheader->Characteristics = (Section_Flags)(sheader->Characteristics | 0x60500020);
+            // | IMAGE_SCN_CNT_CODE | IMAGE_SCN_MEM_EXECUTE);
+            // | IMAGE_SCN_MEM_EXECUTE);
+            // | IMAGE_SCN_MEM_EXECUTE | IMAGE_SCN_MEM_READ);
+        } else if(section->flags == FLAG_DEBUG) {
             sheader->Characteristics = (Section_Flags)(sheader->Characteristics
             | IMAGE_SCN_MEM_DISCARDABLE | IMAGE_SCN_MEM_READ | IMAGE_SCN_CNT_INITIALIZED_DATA);
-
+        } else { // assume data section
+            sheader->Characteristics = (Section_Flags)(sheader->Characteristics
+            | IMAGE_SCN_MEM_READ | IMAGE_SCN_MEM_WRITE | IMAGE_SCN_CNT_INITIALIZED_DATA);
+        }
         // Assert(IMAGE_SCN_ALIGN_8192BYTES/IMAGE_SCN_ALIGN_1BYTES == 16);
         sheader->Characteristics = (Section_Flags)(sheader->Characteristics
             | (IMAGE_SCN_ALIGN_1BYTES * (u32)(1 + log2(section->alignment))));
@@ -370,13 +391,14 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
         sheader->sh_addralign = section->alignment; // check if alignment is 2**x
         sheader->sh_entsize = 0;
 
-        sheader->sh_flags = SHF_ALLOC | SHF_WRITE;
-        if(section->flags & FLAG_READ_ONLY)
+        if(section->flags == FLAG_READ_ONLY)
             sheader->sh_flags = 0;
-        if(section->flags & FLAG_DEBUG)
+        else if(section->flags == FLAG_DEBUG)
             sheader->sh_flags = 0;
-        if(section->flags & FLAG_CODE)
+        else if(section->flags == FLAG_CODE)
             sheader->sh_flags = SHF_ALLOC | SHF_EXECINSTR;
+        else
+            sheader->sh_flags = SHF_ALLOC | SHF_WRITE;
     }
 
     Elf64_Shdr* s_sectionStringTable = nullptr;

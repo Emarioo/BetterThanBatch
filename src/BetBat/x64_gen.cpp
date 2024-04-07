@@ -289,7 +289,9 @@ void GenerateX64_finalize(Compiler* compiler) {
     Assert(compiler->program->debugInformation); // we expect debug information?
 
     auto prog = compiler->program;
-    auto bytecode = compiler->code;
+    auto bytecode = compiler->bytecode;
+
+    prog->index_of_main = bytecode->index_of_main;
 
     // prog->debugInformation = bytecode->debugInformation;
     // bytecode->debugInformation = nullptr;
@@ -304,8 +306,8 @@ void GenerateX64_finalize(Compiler* compiler) {
         // OutputAsHex("data.txt", (char*)prog->globalData, prog->globalSize);
     }
 
-    for(int i=0;i<compiler->code->exportedFunctions.size();i++) {
-        auto& sym = compiler->code->exportedFunctions[i];
+    for(int i=0;i<compiler->bytecode->exportedFunctions.size();i++) {
+        auto& sym = compiler->bytecode->exportedFunctions[i];
         prog->addExportedSymbol(sym.name, sym.tinycode_index);
         // X64Program::ExportedSymbol tmp{};
         // tmp.name = sym.name;
@@ -325,7 +327,7 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
     // bytecode->debugInformation = nullptr;
     
     // make sure dependencies have been fixed first
-    bool yes = tinycode->applyRelocations(compiler->code);
+    bool yes = tinycode->applyRelocations(compiler->bytecode);
     if(!yes) {
         log::out << "Incomplete call relocation\n";
         return;
@@ -333,10 +335,11 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
 
     X64Builder builder{};
     builder.init(compiler->program);
-    builder.bytecode = compiler->code;
+    builder.bytecode = compiler->bytecode;
     builder.tinycode = tinycode;
     builder.tinyprog = compiler->program->createProgram();
-    
+    builder.current_tinyprog_index = tinycode->index;
+
     builder.generateFromTinycode(builder.bytecode, builder.tinycode);
     // bool fast = true;
     // if(fast) {
@@ -1580,6 +1583,13 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     env->reg1.reg = RESERVED_REG0;
                     emit_pop(env->reg1.reg);
                 }
+                // nocheckin TODO: When using 1-byte moves
+                //   registers such as X64_REG_DI represents
+                //   upper bits of DX register instead of
+                //   lower bits of DI register (not exactly these registers but you get the pointer).
+                //   This is a bad bug and should be fixed.
+                //   Read intel manual for how to
+                //   specify the correct registers.
 
                 if (IS_REG_XMM(env->reg0.reg)) {
                     if(GET_CONTROL_SIZE(n->control) == CONTROL_32B)
@@ -1875,10 +1885,19 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     // prog->namedUndefinedRelocations.add(namedReloc);
                     // prog->add4((u32)0);
                 } else if (n->link == LinkConventions::NONE){ // or export
-                    Assert(false);
-                    // prog->add(OPCODE_CALL_IMM);
-                    // prog->add4((u32)0);
+                    // Assert(false);
+                    emit1(OPCODE_CALL_IMM);
+                    int offset = size();
+                    emit4((u32)0);
                     
+                    prog->addInternalFuncRelocation(current_tinyprog_index, offset, n->imm);
+
+                    // RelativeRelocation reloc{};
+                    // reloc.currentIP = size();
+                    // reloc.bcAddress = n->bc_index + n->imm + BYTE_OF_BC_JZ;
+                    // reloc.immediateToModify = size()-4; // NOTE: RelativeRelocation assumes 32-bit integer JMP_IMM8 would not work without changes
+                    // relativeRelocations.add(reloc);
+
                     // RelativeRelocation reloc{};
                     // reloc.currentIP = prog->size();
                     // reloc.bcAddress = imm;
@@ -1924,14 +1943,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                         call   QWORD PTR [rip+0x0]          # WriteFile(...)
                         add    rsp,0x38
                         */
-                        // Assert(false); // is the assembly wrong?
                         // rdx should be buffer and r8 length
-                        // X64Program::NamedUndefinedRelocation reloc0{};
-                        // reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
-                        // reloc0.textOffset = prog->size() + 0xB;
-                        // X64Program::NamedUndefinedRelocation reloc1{};
-                        // reloc1.name = "__imp_WriteFile";
-                        // reloc1.textOffset = prog->size() + 0x26;
                         u32 start_addr = size();
                         u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xD8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
                         emit_bytes(arr,sizeof(arr));
@@ -1971,23 +1983,22 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     #endif
                         break;
                     }
-                    #ifdef gone
                     case NATIVE_printc: {
                     #ifdef OS_WINDOWS
                         // char = [rsp + 7]
-                        prog->add(PREFIX_REXW);
-                        prog->add(OPCODE_MOV_REG_RM);
-                        prog->addModRM(MODE_REG, REG_SI, REG_SP);
+                        emit1(PREFIX_REXW);
+                        emit1(OPCODE_MOV_REG_RM);
+                        emit_modrm(MODE_REG, X64_REG_SI, X64_REG_SP);
 
-                        prog->add(PREFIX_REXW);
-                        prog->add(OPCODE_ADD_RM_IMM_SLASH_0);
-                        prog->addModRM(MODE_REG, 0, REG_SI);
-                        prog->add4((u32)0);
+                        emit1(PREFIX_REXW);
+                        emit1(OPCODE_ADD_RM_IMM_SLASH_0);
+                        emit_modrm_slash(MODE_REG, 0, X64_REG_SI);
+                        emit4((u32)0);
 
-                        prog->add((u8)(PREFIX_REXW));
-                        prog->add(OPCODE_MOV_RM_IMM32_SLASH_0);
-                        prog->addModRM(MODE_REG, 0, REG_B);
-                        prog->add4((u32)1);
+                        emit1(PREFIX_REXW);
+                        emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                        emit_modrm_slash(MODE_REG, 0, X64_REG_B);
+                        emit4((u32)1);
 
                         // TODO: You may want to save registers. This is not needed right
                         //   now since we basically handle everything through push and pop.
@@ -2004,17 +2015,13 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                         call   QWORD PTR [rip+0x0]          # WriteFile(...)
                         add    rsp,0x38
                         */
-                        X64Program::NamedUndefinedRelocation reloc0{};
-                        reloc0.name = "__imp_GetStdHandle"; // C creates these symbol names in it's object file
-                        reloc0.textOffset = prog->size() + 0xB;
-                        X64Program::NamedUndefinedRelocation reloc1{};
-                        reloc1.name = "__imp_WriteFile";
-                        reloc1.textOffset = prog->size() + 0x26;
+                        int offset = size();
                         u8 arr[]={ 0x48, 0x83, 0xEC, 0x38, 0xB9, 0xF5, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x49, 0x89, 0xD8, 0x48, 0x89, 0xF2, 0x48, 0x89, 0xC1, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x38 };
-                        prog->addRaw(arr,sizeof(arr));
+                        emit_bytes(arr,sizeof(arr));
 
-                        prog->namedUndefinedRelocations.add(reloc0);
-                        prog->namedUndefinedRelocations.add(reloc1);
+                        // C creates these symbol names in it's object file
+                        prog->addNamedUndefinedRelocation("__imp_GetStdHandle",offset + 0xB, current_tinyprog_index);
+                        prog->addNamedUndefinedRelocation("__imp_WriteFile",offset + 0x26, current_tinyprog_index);
 
                     #else
                         // char = [rsp + 7]
@@ -2054,7 +2061,6 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                     #endif
                         break;
                     }
-                    #endif
                     default: {
                         // failure = true;
                         // Assert(bytecode->nativeRegistry);

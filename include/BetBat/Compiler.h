@@ -167,7 +167,7 @@ struct Compiler {
     lexer::Lexer lexer{};
     preproc::Preprocessor preprocessor{};
     AST* ast = nullptr;
-    Bytecode* code = nullptr;
+    Bytecode* bytecode = nullptr;
     
     X64Program* program = nullptr;
     

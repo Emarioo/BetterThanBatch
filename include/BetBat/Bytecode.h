@@ -56,6 +56,14 @@ enum InstructionType : u8 {
     BC_LI32,
     BC_LI64,
     BC_INCR, // usually used with stack pointer
+    
+    // here to deprecate stack pointer
+    // BC_ALLOC_LOCAL,      // opcode, ref16, size16         - allocate local memory (max 64KB)
+    // BC_FREE_LOCAL,       // opcode, ref16                 - free local memory
+    // BC_LOCALPTR,         // opcode, reg16, ref16          - pointer to local
+    // BC_LOCALPTR_DISP16,  // opcode, reg16, ref16, disp16  - pointer to local
+    
+    BC_ALLOC_LOCAL,      // opcode, size16         - allocate local memory (max 64KB)
 
     BC_JMP,
     BC_CALL,
@@ -137,10 +145,39 @@ enum BCRegister : u8 {
     BC_REG_E,
     BC_REG_F,
     
-     // temporary registers
+    // temporary registers
     BC_REG_T0,
     BC_REG_T1,
     
+    // argument registers
+    BC_REG_A0,
+    BC_REG_A1,
+    BC_REG_A2,
+    BC_REG_A3,
+    BC_REG_A4,
+    BC_REG_A5,
+    BC_REG_A6,
+    BC_REG_A7,
+
+    // parameter registers
+    BC_REG_P0,
+    BC_REG_P1,
+    BC_REG_P2,
+    BC_REG_P3,
+    BC_REG_P4,
+    BC_REG_P5,
+    BC_REG_P6,
+    BC_REG_P7,
+
+    // return registers
+    BC_REG_R0,
+    BC_REG_R1,
+    BC_REG_R2,
+    BC_REG_R3,
+
+    BC_REG_LP, // local pointer (similar to base/frame pointer)
+    
+    // BELOW SHOULD BE DEPRECATED
     // special registers
     BC_REG_SP, // stack pointer
     BC_REG_BP, // base pointer
@@ -159,7 +196,12 @@ enum BCRegister : u8 {
     BC_REG_XMM2,
     BC_REG_XMM3,
 
+
+
     BC_REG_MAX,
+};
+enum LocalRef : u16 {
+    LOCAL_REF_INVALID = 0,
 };
 extern const char* control_names[];
 extern const char* cast_names[];
@@ -219,6 +261,7 @@ struct Bytecode {
     u32 getMemoryUsage();
     
     DynamicArray<TinyBytecode*> tinyBytecodes;
+    int index_of_main = 0;
 
     QuickArray<u8> dataSegment{};
     engone::Mutex lock_global_data;
@@ -345,6 +388,7 @@ struct Bytecode {
     
     void print();
 };
+    
 struct BytecodeBuilder {
     Bytecode* code=nullptr;
     TinyBytecode* tinycode=nullptr;
@@ -366,6 +410,13 @@ struct BytecodeBuilder {
     void emit_li64(BCRegister reg, i64 imm);
     
     void emit_incr(BCRegister reg, i32 imm, bool no_modification = false);
+
+    // list of available local references
+    // DynamicArray<bool> local_references{};
+    void emit_alloc_local(u16 size);
+    // void emit_free_local(LocalRef ref);
+    // void emit_localptr(BCRegister reg, LocalRef ref);
+    // void emit_localptr_disp16(BCRegister reg, LocalRef ref, u16 disp);
     
     void emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm = 0);
     void emit_ret();

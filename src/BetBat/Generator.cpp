@@ -1561,6 +1561,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                     
                     // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
                     generatePop(BC_REG_B, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+                    // generatePop(BC_REG_B, funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
                     
                     // TODO: Use this instead?
                     // int baseOffset = virtualArgumentSpace - info.virtualStackPointer;
@@ -5713,7 +5714,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, DynamicArray<TinyBytecod
     GenContext context{};
     // 
     context.ast = compiler->ast;
-    context.code = compiler->code;
+    context.code = compiler->bytecode;
     context.compiler = compiler;
     context.reporter = &compiler->reporter;
     context.out_codes = out_codes;
@@ -5729,6 +5730,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, DynamicArray<TinyBytecod
             // TODO: Code here
             TinyBytecode* tb_main = context.code->createTiny();
             tb_main->name = "main";
+            context.code->index_of_main = tb_main->index;
 
             // TODO: Code below should be the same as the one in generateFunction.
             //   If we change the code in generateFunction but forget to here then

@@ -64,7 +64,7 @@ struct ObjectFile {
     struct Section {
         SectionNr number = 0;
         std::string name;
-        u32 flags;
+        SectionFlags flags; // it's more of a section type
         u32 alignment;
         int symbolIndex = -1;
 

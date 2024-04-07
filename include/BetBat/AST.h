@@ -395,25 +395,20 @@ struct Identifier {
 };
 struct VariableInfo {
     enum Type : u8 {
-        LOCAL, GLOBAL, MEMBER
+        LOCAL, ARGUMENT, GLOBAL, MEMBER
     };
     // you could do a union on memberIndex and dataOffset if you want to save space
     i32 memberIndex = -1; // only used with MEMBER type
+    int argument_index = 0;
 
-    // i32 dataOffset = 0;
-    // TypeId typeId{};
     PolyVersions<i32> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
     Type type = LOCAL;
-    // bool globalData = false; // false
-    // ScopeId scopeId = 0; // do you really need this variable? can you get the identifier instead?
 
-    // We use getters here because the implementation changes a lot
-    // i32 getDataOffset() { return dataOffset; }
-    // TypeId getTypeId() { return typeId; }
-    bool isMember() { return type == MEMBER; }
     bool isLocal() { return type == LOCAL; }
+    bool isArgument() { return type == ARGUMENT; }
     bool isGlobal() { return type == GLOBAL; }
+    bool isMember() { return type == MEMBER; }
 };
 struct ScopeInfo {
     ScopeInfo(ScopeId id) : id(id) {}

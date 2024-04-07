@@ -2164,6 +2164,8 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
     for(int i=0;i<(int)function->arguments.size();i++){
         auto& arg = function->arguments[i];
         auto var = info.ast->addVariable(function->scopeId, arg.name, CONTENT_ORDER_ZERO, &arg.identifier, nullptr);
+        // var->type = VariableInfo::ARGUMENT;
+        // var->argument_index = i;
     }
     if(parentStruct) {
         function->memberIdentifiers.resize(parentStruct->members.size());

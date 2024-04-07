@@ -90,6 +90,8 @@ struct X64Program {
     u8* globalData = nullptr;
     u64 globalSize = 0;
 
+    int index_of_main = 0;
+
     struct DataRelocation {
         u32 dataOffset; // offset in data segment
         u32 textOffset; // where to modify       
@@ -110,11 +112,17 @@ struct X64Program {
         // u32 textOffset; // where to modify?
         i32 tinyprog_index;
     };
+    struct InternalFuncRelocation {
+        i32 from_tinyprog_index;
+        u32 textOffset;
+        i32 to_tinyprog_index;
+    };
 
     // DynamicArray<PtrDataRelocation> ptrDataRelocations;
     DynamicArray<DataRelocation> dataRelocations;
     DynamicArray<ExportedSymbol> exportedSymbols;
     DynamicArray<NamedUndefinedRelocation> namedUndefinedRelocations;
+    DynamicArray<InternalFuncRelocation> internalFuncRelocations;
 
     void addDataRelocation(u32 dataOffset, u32 textOffset, i32 tinyprog_index) {
         dataRelocations.add({dataOffset, textOffset, tinyprog_index});
@@ -124,6 +132,9 @@ struct X64Program {
     }
     void addExportedSymbol(const std::string& name, i32 tinyprog_index) {
         exportedSymbols.add({name, tinyprog_index});
+    }
+    void addInternalFuncRelocation(i32 from_func, u32 text_offset, i32 to_func) {
+        internalFuncRelocations.add({from_func, text_offset, to_func});
     }
 
 
