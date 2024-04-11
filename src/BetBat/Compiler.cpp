@@ -1139,7 +1139,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
 
     bytecode->print();
 
-    // Interpreter interp{};
+    // VirtualMachine interp{};
     // interp.execute(code, "main");
 
     if(!options->useDebugInformation)

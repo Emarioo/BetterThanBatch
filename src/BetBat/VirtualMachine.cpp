@@ -1,4 +1,4 @@
-#include "BetBat/Interpreter.h"
+#include "BetBat/VirtualMachine.h"
 
 // needed for FRAME_SIZE
 #include "BetBat/Generator.h"
@@ -16,7 +16,7 @@
 // #define DECODE_TYPE(ptr) (*((u8*)ptr+1))
 
 
-void Interpreter::cleanup(){
+void VirtualMachine::cleanup(){
     stack.resize(0);
     cmdArgsBuffer.resize(0);
     engone::Free(cmdArgs.ptr, sizeof(Language::Slice<char>)*cmdArgs.len);
@@ -24,11 +24,11 @@ void Interpreter::cleanup(){
     cmdArgs.len = 0;
     reset();
 }
-void Interpreter::reset(){
+void VirtualMachine::reset(){
     memset((void*)registers, 0, sizeof(registers));
     memset(stack.data, 0, stack.max);
 }
-void Interpreter::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
+void VirtualMachine::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
     using namespace engone;
     // cmdArgs.resize(inCmdArgs.size());
     // cmdArgs.ptr = TRACK_ARRAY_ALLOC(Language::Slice<char>);
@@ -50,7 +50,7 @@ void Interpreter::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
         cmdArgsBuffer.used = inCmdArgs[i].length() + 1;
     }
 }
-void Interpreter::printRegisters(){
+void VirtualMachine::printRegisters(){
     using namespace engone;
     // void* pa = (void*)&rax;
     // void* pb = (void*)&rbx;
@@ -65,7 +65,7 @@ void Interpreter::printRegisters(){
     // log::out << "FP: "<<fp<<"\n";
     // log::out << "PC: "<<pc<<"\n";
 }
-// volatile void* Interpreter::getReg(u8 id){
+// volatile void* VirtualMachine::getReg(u8 id){
 //     // #define CASE(K,V) case BC_REG_##K: return V;
 //     #define CASER(K,V) case BC_REG_R##K##X: return &r##V##x;\
 //     case BC_REG_E##K##X: return &r##V##x;\
@@ -94,7 +94,7 @@ void Interpreter::printRegisters(){
 //     Assert("tried to access bad register");
 //     return 0;
 // }
-// void Interpreter::moveMemory(u8 reg, volatile void* from, volatile void* to){
+// void VirtualMachine::moveMemory(u8 reg, volatile void* from, volatile void* to){
 //     using namespace engone;
 //     int size = DECODE_REG_BITS(reg);
 //     if(from != to) {
@@ -131,10 +131,10 @@ void PrintPointer(volatile void* ptr){
     }
 }
 
-// void Interpreter::execute(Bytecode* bytecode){
+// void VirtualMachine::execute(Bytecode* bytecode){
 //     executePart(bytecode, 0, bytecode->length());
 // }
-void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
+void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_name){
     using namespace engone; 
 
     for(auto& t : bytecode->tinyBytecodes) {
@@ -154,18 +154,18 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
     // }
 
     if(bytecode->externalRelocations.size()>0){
-        log::out << log::RED << "Interpreter does not support symbol relocations! Don't use function with @import annotation.\n";
+        log::out << log::RED << "VirtualMachine does not support symbol relocations! Don't use function with @import annotation.\n";
         return;
     }
     // _VLOG(
     //     if(!silent){
     //     if(startInstruction==0 && endInstruction == bytecode->length())
-    //         log::out <<log::BLUE<< "##   Interpreter  ##\n";
+    //         log::out <<log::BLUE<< "##   VirtualMachine  ##\n";
     //     else
-    //         log::out <<log::BLUE<< "##   Interpreter ("<<startInstruction<<" - "<<endInstruction<<")  ##\n";
+    //         log::out <<log::BLUE<< "##   VirtualMachine ("<<startInstruction<<" - "<<endInstruction<<")  ##\n";
     //     }
     // )
-    log::out << log::GOLD << "Interpreter:\n";
+    log::out << log::GOLD << "VirtualMachine:\n";
 
     TinyBytecode* tinycode = nullptr;
     int tiny_index = -1;
@@ -186,16 +186,17 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
     memset((void*)registers, 0, sizeof(registers));
     
     i64 pc = 0;
-    registers[BC_REG_SP] = (i64)(stack.data+stack.max);
-    registers[BC_REG_BP] = registers[BC_REG_SP];
+    registers[BC_REG_LP] = 0;
+    stack_pointer = (i64)(stack.data + stack.used);
+    // registers[BC_REG_BP] = registers[BC_REG_SP];
     
     auto CHECK_STACK = [&]() {
-        if(registers[BC_REG_SP] < (i64)stack.data || registers[BC_REG_SP] > (i64)(stack.data+stack.max)) {
-            log::out << log::RED << "Interpreter: Stack overflow\n";
+        if(stack_pointer < (i64)stack.data || stack_pointer > (i64)(stack.data+stack.max)) {
+            log::out << log::RED << "VirtualMachine: Stack overflow\n";
         }
     };
 
-    u64 expectedStackPointer = registers[BC_REG_SP];
+    u64 expectedStackPointer = stack_pointer;
 
     auto tp = StartMeasure();
 
@@ -212,7 +213,7 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
     u64 executedInstructions = 0;
     // u64 length = bytecode->instructionSegment.used;
     // if(length==0)
-    //     log::out << log::YELLOW << "Interpreter ran bytecode with zero instructions. Bug?\n";
+    //     log::out << log::YELLOW << "VirtualMachine ran bytecode with zero instructions. Bug?\n";
     // Instruction* codePtr = (Instruction*)bytecode->instructionSegment.data;
     // Bytecode::Location* prevLocation = nullptr;
     int prev_tinyindex = -1;
@@ -273,73 +274,91 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
         case BC_HALT: {
             running = false;
             log::out << "HALT\n";
-            break;
-        }
+        } break;
         case BC_NOP: {
-            break;
-        }
+        } break;
+        case BC_ALLOC_LOCAL: {
+            imm = *(u16*)(instructions.data() + pc);
+            pc += 2;
+            // TODO: Ensure that no push instructions executed before
+            stack_pointer -= imm;
+            registers[BC_REG_LP] = stack_pointer;
+        } break;
+        case BC_ALLOC_ARGS: {
+            imm = *(u16*)(instructions.data() + pc);
+            pc += 2;
+            // TODO: Ensure that no push instructions executed before
+            stack_pointer -= imm;
+            args_pointer = stack_pointer;
+        } break;
         case BC_MOV_RR: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             
             registers[op0] = registers[op1];
         } break;
-        case BC_MOV_RM: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            
-            if(control & CONTROL_8B) registers[op0] = *(i8*)registers[op1];
-            else if(control & CONTROL_16B) registers[op0] = *(i16*)registers[op1];
-            else if(control & CONTROL_32B) registers[op0] = *(i32*)registers[op1];
-            else if(control & CONTROL_64B) registers[op0] = *(i64*)registers[op1];
-        } break;
-        case BC_MOV_MR: {
-            op0 = (BCRegister)instructions[pc++];
-            op1 = (BCRegister)instructions[pc++];
-            control = (InstructionControl)instructions[pc++];
-            
-            if(control & CONTROL_8B) *(i8*)registers[op0] = registers[op1];
-            else if(control & CONTROL_16B) *(i16*)registers[op0] = registers[op1];
-            else if(control & CONTROL_32B) *(i32*)registers[op0] = registers[op1];
-            else if(control & CONTROL_64B) *(i64*)registers[op0] = registers[op1];
-        } break;
+        case BC_MOV_RM:
         case BC_MOV_RM_DISP16: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
-            imm = *(i16*)(instructions.data() + pc);
-            pc += 2;
+            if(opcode == BC_MOV_RM_DISP16) {
+                imm = *(i16*)(instructions.data() + pc);
+                pc += 2;
+            } else {
+                imm = 0;
+            }
             
-            if(control & CONTROL_8B) registers[op0] = *(i8*)(registers[op1] + imm);
-            else if(control & CONTROL_16B) registers[op0] = *(i16*)(registers[op1] + imm);
-            else if(control & CONTROL_32B) registers[op0] = *(i32*)(registers[op1] + imm);
-            else if(control & CONTROL_64B) registers[op0] = *(i64*)(registers[op1] + imm);
+            void* ptr = (void*)(registers[op1] + imm);
+            if(control & CONTROL_8B)       registers[op0] = *(i8*) ptr;
+            else if(control & CONTROL_16B) registers[op0] = *(i16*)ptr;
+            else if(control & CONTROL_32B) registers[op0] = *(i32*)ptr;
+            else if(control & CONTROL_64B) registers[op0] = *(i64*)ptr;
         } break;
+        case BC_MOV_MR:
         case BC_MOV_MR_DISP16: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
-            imm = *(i16*)(instructions.data() + pc);
-            pc += 2;
-            
-            if(control & CONTROL_8B) *(i8*)(registers[op0] + imm) = registers[op1];
-            else if(control & CONTROL_16B) *(i16*)(registers[op0] + imm) = registers[op1];
-            else if(control & CONTROL_32B) *(i32*)(registers[op0] + imm) = registers[op1];
-            else if(control & CONTROL_64B) *(i64*)(registers[op0] + imm) = registers[op1];
+            if(opcode == BC_MOV_MR_DISP16) {
+                imm = *(i16*)(instructions.data() + pc);
+                pc += 2;
+            } else {
+                imm = 0;
+            }
+            int size = 1 << GET_CONTROL_SIZE(control);
+            void* ptr = nullptr;
+            if(IS_REG_ARG(op0)) {
+                // registers[op0] + imm
+                // ptr = 
+                static BCRegister last_op = BC_REG_INVALID;
+                static int appended_data = 0;
+                appended_data = 0;
+                last_op = BC_REG_INVALID;
+                
+                ptr = (void*)(args_pointer + imm);
+                
+                appended_data += size;
+            } else {
+                ptr = (void*)(registers[op0] + imm);
+            }
+            if(control & CONTROL_8B)       *(i8*) ptr = registers[op1];
+            else if(control & CONTROL_16B) *(i16*)ptr = registers[op1];
+            else if(control & CONTROL_32B) *(i32*)ptr = registers[op1];
+            else if(control & CONTROL_64B) *(i64*)ptr = registers[op1];
         } break;
         case BC_PUSH: {
             op0 = (BCRegister)instructions[pc++];
             
-            registers[BC_REG_SP] -= 8;
+            stack_pointer -= 8;
             CHECK_STACK();
-            *(i64*)registers[BC_REG_SP] = registers[op0];
+            *(i64*)stack_pointer = registers[op0];
         } break;
         case BC_POP: {
             op0 = (BCRegister)instructions[pc++];
             
-            registers[op0] = *(i64*)registers[BC_REG_SP];
-            registers[BC_REG_SP] += 8;
+            registers[op0] = *(i64*)stack_pointer;
+            stack_pointer += 8;
             CHECK_STACK();
         } break;
         case BC_LI32: {
@@ -387,33 +406,33 @@ void Interpreter::execute(Bytecode* bytecode, const std::string& tinycode_name){
             imm = *(i32*)&instructions[pc];
             pc+=4;
 
-            registers[BC_REG_SP] -= 8;
+            stack_pointer -= 8;
             CHECK_STACK();
-            *(i64*)registers[BC_REG_SP] = pc | ((i64)tiny_index << 32);
+            *(i64*)stack_pointer = pc | ((i64)tiny_index << 32);
 
-            registers[BC_REG_SP] -= 8;
+            stack_pointer -= 8;
             CHECK_STACK();
-            *(i64*)registers[BC_REG_SP] = registers[BC_REG_BP];
+            *(i64*)stack_pointer = registers[BC_REG_LP];
             
-            registers[BC_REG_BP] = registers[BC_REG_SP];
+            // registers[BC_REG_BP] = registers[BC_REG_SP];
 
             pc = 0;
             tiny_index = imm-1;
             tinycode = bytecode->tinyBytecodes[tiny_index];
         } break;
         case BC_RET: {
-            i64 diff = registers[BC_REG_SP] - (i64)stack.data;
+            i64 diff = stack_pointer - (i64)stack.data;
             if(diff == (i64)(stack.max)) {
                 running = false;
                 break;
             }
 
-            registers[BC_REG_BP] = *(i64*)registers[BC_REG_SP];
-            registers[BC_REG_SP] += 8;
+            registers[BC_REG_LP] = *(i64*)stack_pointer;
+            stack_pointer += 8;
             CHECK_STACK();
 
-            i64 encoded_pc = *(i64*)registers[BC_REG_SP];
-            registers[BC_REG_SP] += 8;
+            i64 encoded_pc = *(i64*)stack_pointer;
+            stack_pointer += 8;
             CHECK_STACK();
 
             pc = encoded_pc & 0xFFFF'FFFF;

@@ -6,7 +6,7 @@
 #include "BetBat/old_Parser.h"
 #include "BetBat/TypeChecker.h"
 #include "BetBat/Generator.h"
-#include "BetBat/Interpreter.h"
+#include "BetBat/VirtualMachine.h"
 #include "BetBat/NativeRegistry.h"
 
 #include "BetBat/UserProfile.h"

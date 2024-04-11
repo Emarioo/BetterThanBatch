@@ -2018,7 +2018,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
             offset += asize - offset%asize;
         }
         // }
-        argImpl.offset = offset;
+        // argImpl.offset = offset;
         // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
         offset += size;
     }
@@ -2082,7 +2082,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
         if ((offset)%asize != 0){
             offset += asize - (offset)%asize;
         }
-        retImpl.offset = offset;
+        // retImpl.offset = offset;
         offset += size;
         // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
         if(outTypes)
@@ -2164,8 +2164,8 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
     for(int i=0;i<(int)function->arguments.size();i++){
         auto& arg = function->arguments[i];
         auto var = info.ast->addVariable(function->scopeId, arg.name, CONTENT_ORDER_ZERO, &arg.identifier, nullptr);
-        // var->type = VariableInfo::ARGUMENT;
-        // var->argument_index = i;
+        var->type = VariableInfo::ARGUMENT;
+        var->argument_index = i;
     }
     if(parentStruct) {
         function->memberIdentifiers.resize(parentStruct->members.size());

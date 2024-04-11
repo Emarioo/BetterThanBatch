@@ -820,9 +820,9 @@ extern const char* instruction_names[] {
     "li64", // BC_LI
     "incr", // BC_INCR
     "alloc_local", // BC_ALLOC_LOCAL
-    "free_local", // BC_FREE_LOCAL
-    "localptr", // BC_LOCALPTR
-    "localptr_disp", // BC_LOCALPTR_DISP16
+    // "free_local", // BC_FREE_LOCAL
+    // "localptr", // BC_LOCALPTR
+    // "localptr_disp", // BC_LOCALPTR_DISP16
     "jmp", // BC_JMP
     "call", // BC_CALL
     "ret", // BC_RET
@@ -872,6 +872,30 @@ extern const char* register_names[] {
     "f", // BC_REG_F
     "t0", // BC_REG_T0
     "t1", // BC_REG_T1
+    
+    "a0",
+    "a1",
+    "a2",
+    "a3",
+    "a4",
+    "a5",
+    "a6",
+    "a7",
+
+    "p0",
+    "p1",
+    "p2",
+    "p3",
+    "p4",
+    "p5",
+    "p6",
+    "p7",
+
+    "r0",
+    "r1",
+    "r2",
+    "r3",
+
     "sp", // BC_REG_SP
     "bp", // BC_REG_BP
     "rax", // BC_REG_RAX

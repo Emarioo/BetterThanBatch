@@ -5,17 +5,21 @@
 #include "Native/NativeLayer.h"
 
 /*
-    Interpreter may not be the accurate term for executing bytecode.
-    Interpreter is more executing high level code, statement by statement.
+    VirtualMachine may not be the accurate term for executing bytecode.
+    VirtualMachine is more executing high level code, statement by statement.
     A virtual machine or bytecode runner would be more accurate.
 */
-struct Interpreter {
-    ~Interpreter(){
+struct VirtualMachine {
+    ~VirtualMachine(){
         cleanup();
     }
     
     volatile i64 registers[BC_REG_MAX];
     engone::Memory<u8> stack{};
+
+    i64 stack_pointer = 0;
+    i64 args_pointer = 0;
+    
 
     bool expectValuesOnStack = false;
     bool silent = false;

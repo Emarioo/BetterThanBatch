@@ -64,6 +64,7 @@ enum InstructionType : u8 {
     // BC_LOCALPTR_DISP16,  // opcode, reg16, ref16, disp16  - pointer to local
     
     BC_ALLOC_LOCAL,      // opcode, size16         - allocate local memory (max 64KB)
+    BC_ALLOC_ARGS,      // opcode, size16         - allocate args memory (max 64KB)
 
     BC_JMP,
     BC_CALL,
@@ -179,8 +180,8 @@ enum BCRegister : u8 {
     
     // BELOW SHOULD BE DEPRECATED
     // special registers
-    BC_REG_SP, // stack pointer
-    BC_REG_BP, // base pointer
+    // BC_REG_SP, // stack pointer
+    // BC_REG_BP, // base pointer
     
     // platform specific (we would prefer to be architecture independent but I am not sure how to deal with calling conventions without them here)
     BC_REG_RAX,
@@ -196,10 +197,12 @@ enum BCRegister : u8 {
     BC_REG_XMM2,
     BC_REG_XMM3,
 
-
-
     BC_REG_MAX,
 };
+#define IS_REG_PARAM(X) (X >= BC_REG_P0 && X <= BC_REG_P7)
+#define IS_REG_ARG(X) (X >= BC_REG_A0 && X <= BC_REG_A7)
+#define IS_REG_RET(X) (X >= BC_REG_R0 && X <= BC_REG_R3)
+
 enum LocalRef : u16 {
     LOCAL_REF_INVALID = 0,
 };

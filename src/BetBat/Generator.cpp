@@ -1846,7 +1846,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
     //         // TODO: Would it be better to put interpreter in GenContext. It would be possible to
     //         //   reuse allocations the interpreter made.
-    //         Interpreter interpreter{};
+    //         VirtualMachine interpreter{};
     //         interpreter.expectValuesOnStack = true;
     //         interpreter.silent = true;
     //         interpreter.executePart(info.code, startInstruction, endInstruction);
@@ -1998,24 +1998,27 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                         case VariableInfo::GLOBAL: {
                             builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             generatePush(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
-                            break; 
-                        }
+                        } break; 
                         case VariableInfo::LOCAL: {
-                            generatePush(BC_REG_BP, varinfo->versions_dataOffset[info.currentPolyVersion],
+                            generatePush(BC_REG_LP, varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
-                            break;
-                        }
+                        } break;
+                        case VariableInfo::ARGUMENT: {
+                            Assert(varinfo->argument_index < (BC_REG_A7 - BC_REG_A0 + 1));
+                            BCRegister reg = (BCRegister)(BC_REG_A0 + varinfo->argument_index);
+                            generatePush(reg, varinfo->versions_dataOffset[info.currentPolyVersion],
+                                varinfo->versions_typeId[info.currentPolyVersion]);
+                        } break;
                         case VariableInfo::MEMBER: {
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
-                            builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, 8, GenContext::FRAME_SIZE);
+                            builder.emit_mov_rm(BC_REG_B, BC_REG_A0, 8);
                             
                             // builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // builder.emit_({BC_ADDI, BC_REG_B, BC_REG_A, BC_REG_B});
 
                             generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
-                            break;
-                        }
+                        } break;
                         default: {
                             Assert(false);
                         }
@@ -3475,6 +3478,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                             dfun->localVariables.last().frameOffset = OFFSET;\
                             dfun->localVariables.last().typeId = TYPE;
 
+        // Why to we calculate var offsets here? Can't we do it in 
         switch(function->callConvention) {
         case BETCALL: {
             if (function->arguments.size() != 0) {
@@ -3496,8 +3500,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     // var->versions_typeId[info.currentPolyVersion] = argImpl.typeId;
                     // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
                     // var->globalData = false;
-                    varinfo->versions_dataOffset[info.currentPolyVersion] = GenContext::FRAME_SIZE + argImpl.offset;
-                    _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
+                    // varinfo->versions_dataOffset[info.currentPolyVersion] = GenContext::FRAME_SIZE + argImpl.offset;
+                    // _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
                     // DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
                 }
                 _GLOG(log::out << "\n";)

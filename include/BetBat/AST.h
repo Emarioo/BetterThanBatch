@@ -351,7 +351,7 @@ struct FuncImpl {
     ASTFunction* astFunction;
     struct Spot {
         TypeId typeId{};
-        int offset=0;
+        // int offset=0;
     };
     u32 usages = 0;
     bool isUsed() { return usages!=0; }
@@ -401,7 +401,7 @@ struct VariableInfo {
     i32 memberIndex = -1; // only used with MEMBER type
     int argument_index = 0;
 
-    PolyVersions<i32> versions_dataOffset{};
+    // PolyVersions<i32> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
     Type type = LOCAL;
 
