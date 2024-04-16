@@ -766,6 +766,12 @@ struct ASTFunction : ASTNode {
         return _impls;
     }
 
+    // one function name can link to multiple functions from different libraries
+    // if they use different aliases (or real names)
+    // linked_alias and -library should be PER FuncImpl instead of PER ASTFunction
+    std::string linked_alias;
+    std::string linked_library;
+
     struct PolyState {
         DynamicArray<TypeId> argTypes;
         DynamicArray<TypeId> structTypes;

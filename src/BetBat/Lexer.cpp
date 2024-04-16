@@ -813,6 +813,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
 
     // README: Seemingly strange tokens can appear if you miss a quote somewhere.
     //  This is not a bug. It happens since quoted tokens are allowed across lines.
+
+    // log::out << "Tokens/Sources: "<<last_chunk->tokens.size() << "/" <<last_chunk->sources.size() << "\n";
     
     Assert(last_chunk->tokens.used >= new_tokens_len); // I have a feeling there is a bug here.
     last_chunk->tokens.used -= new_tokens_len; // we didn't use all tokens we requested so we "give them back"
@@ -972,6 +974,7 @@ Token Lexer::appendToken(Import* imp, Token token) {
     }
     
     chunk->tokens.add({});
+    chunk->sources.add({});
     auto info = &chunk->tokens.last();
     auto& source = chunk->sources.last();
     auto from_info = getTokenInfo_unsafe(token);
@@ -1434,6 +1437,19 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
 
     #define ENSURE(N) if (written + N >= buffer_max) return written;
 
+    // auto memcpy = [&](char* dst, char* src, int len) {
+    //     for(int i=0;i<len;i++) {
+    //         char c = src[i];
+    //         if(c < 32) {
+
+    //         } else {
+    //             dst 
+    //         }
+    //     }
+    //                 memcpy(buffer + written, str, len);
+
+    // };
+
     int written = 0;
     while(true){
         if(iterator.file_token_index == iterator.end_file_token_index)
@@ -1468,19 +1484,69 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
             } else {
                 u8 len = real_len - (iterator.char_index-1); // -1 because "
                 str += (iterator.char_index-1);
-                if(written + len > buffer_max) {
-                    // clamp, not enough space in buffer
-                    len = buffer_max - written;
+
+                // OLD CODE THAT DID NOT CONVERT newlines to backslash + 'n'
+                // if(written + len > buffer_max) {
+                //     // clamp, not enough space in buffer
+                //     len = buffer_max - written;
+                // }
+                // if(len!=0){
+                //     memcpy(buffer + written, str, len);
+                //     iterator.char_index += len;
+                //     written += len;
+                // }
+                 // if(len != real_len) {
+                //     // return, caller needs to try again, buffer too small
+                //     return written;
+                // }
+                
+                for(int i=0;i<len;i++) {
+                    char c = str[i];
+                    if(written + 2 > buffer_max) {
+                        return written;
+                    }
+
+                    if(c == '\\') { // escape character?
+                        *(buffer + written) = '\\';
+                        *(buffer + written+1) = '\\';
+                        written+=2;
+                        iterator.char_index+=2;
+                    } else if(c == '\0') { // escape character?
+                        *(buffer + written) = '\\';
+                        *(buffer + written+1) = '0';
+                        written+=2;
+                        iterator.char_index+=2;
+                    } else if(c == '\t') {
+                        *(buffer + written) = '\\';
+                        *(buffer + written+1) = 't';
+                        written+=2;
+                        iterator.char_index+=2;
+                    } else if(c == '\n') {
+                        *(buffer + written) = '\\';
+                        *(buffer + written+1) = 'n';
+                        written+=2;
+                        iterator.char_index+=2;
+                    } else if(c == '\r') {
+                        *(buffer + written) = '\\';
+                        *(buffer + written+1) = 'r';
+                        written+=2;
+                        iterator.char_index+=2;
+                    } else if(c == '\x1b') { // escape character?
+                        *(buffer + written) = '\\';
+                        *(buffer + written+1) = 'e';
+                        written+=2;
+                        iterator.char_index+=2;
+                    } else if(c < 32){
+                        *(buffer + written) = '?';
+                        written++;
+                        iterator.char_index++;
+                    } else {
+                        *(buffer + written) = c;
+                        written++;
+                        iterator.char_index++;
+                    }
                 }
-                if(len!=0){
-                    memcpy(buffer + written, str, len);
-                    iterator.char_index += len;
-                    written += len;
-                }
-                if(len != real_len) {
-                    // return, caller needs to try again, buffer too small
-                    return written;
-                }
+               
             }
             
             ENSURE(1)
@@ -1842,7 +1908,9 @@ std::string Lexer::getline(SourceLocation location) {
         start--;
     }
     
-    int max = (imp->chunks.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + imp->chunks.last()->tokens.size();
+    auto last_chunk = imp->chunks.last();
+    int max = (imp->chunks.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + last_chunk->tokens.size();
+    Assert(last_chunk->tokens.size() == last_chunk->sources.size());
     int end = index;
     while(end + 1 < max) {
         auto tok = getsource(end + 1);

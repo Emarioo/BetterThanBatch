@@ -5,12 +5,13 @@
 #include "BetBat/PhaseContext.h"
 
 #include "BetBat/Lang.h"
-
+struct CompilerImport;
 struct GenContext : public PhaseContext {
     TinyBytecode* tinycode = nullptr;
     Bytecode* code=nullptr;
     AST* ast=nullptr;
     Reporter* reporter=nullptr;
+    CompilerImport* imp = nullptr;
     DynamicArray<TinyBytecode*>* out_codes = nullptr;
     
     GenContext() : info(*this) { } // well this is dumb
@@ -51,9 +52,9 @@ struct GenContext : public PhaseContext {
     // different from load immediate
     // void addImm(i32 value);
     // void addCall(LinkConventions linkConvention, CallConventions callConvention);
-    void addExternalRelocation(const std::string name, u32 codeAddress) {
+    void addExternalRelocation(const std::string& name, const std::string& lib_path, u32 codeAddress) {
         if(!disableCodeGeneration)
-            code->addExternalRelocation(name, tinycode->index, codeAddress);
+            code->addExternalRelocation(name, lib_path, tinycode->index, codeAddress);
     }
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
@@ -140,5 +141,4 @@ struct NodeScope {
     GenContext* info = nullptr;
 };
 // Bytecode* Generate(AST* ast, CompileInfo* compileInfo);
-
-bool GenerateScope(ASTScope* scope, Compiler* compiler, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import);
+bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import);

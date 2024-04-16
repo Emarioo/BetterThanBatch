@@ -163,6 +163,48 @@ struct CompileOptions {
     CompileStats compileStats{};
 };
 
+enum TaskType : u32 {
+    TASK_NONE = 0,
+    TASK_LEX                  = 0x1, // lex and import-preprocess
+    TASK_PREPROCESS_AND_PARSE = 0x2,
+
+    TASK_TYPE_ENUMS        = 0x10,
+    TASK_TYPE_STRUCTS      = 0x20,
+    TASK_TYPE_FUNCTIONS    = 0x40,
+    TASK_TYPE_BODIES       = 0x80,
+    
+    TASK_GEN_BYTECODE      = 0x100,
+    
+    // TASK_GENERATE_TARGET   = 0x200,
+};
+struct CompilerTask {
+    TaskType type;
+    u32 import_id;
+    ScopeId scopeId;
+    bool no_change = false;
+};
+struct CompilerImport {
+    // bool busy = false;
+    // bool finished = false;
+    TaskType state = TASK_NONE;
+    std::string path; // file path (sometimes name for preloaded imports)
+    
+    u32 import_id=0;
+    u32 preproc_import_id=0;
+
+    ScopeId scopeId = 0;
+    
+    struct Dep {
+        u32 id;
+        std::string as_name;
+    };
+    DynamicArray<Dep> dependencies;
+    struct Lib {
+        std::string path;
+        std::string named_as;
+    };
+    DynamicArray<Lib> libraries;
+};
 struct Compiler {
     lexer::Lexer lexer{};
     preproc::Preprocessor preprocessor{};
@@ -180,51 +222,11 @@ struct Compiler {
 
     bool have_generated_global_data = false; // move elsewhere?
     
-    enum TaskType : u32 {
-        TASK_NONE = 0,
-        TASK_LEX                  = 0x1, // lex and import-preprocess
-        TASK_PREPROCESS_AND_PARSE = 0x2,
-
-        TASK_TYPE_ENUMS        = 0x10,
-        TASK_TYPE_STRUCTS      = 0x20,
-        TASK_TYPE_FUNCTIONS    = 0x40,
-        TASK_TYPE_BODIES       = 0x80,
-        
-        TASK_GEN_BYTECODE      = 0x100,
-        
-        // TASK_GENERATE_TARGET   = 0x200,
-    };
-    struct Import {
-        // bool busy = false;
-        // bool finished = false;
-        TaskType state = TASK_NONE;
-        std::string path; // file path (sometimes name for preloaded imports)
-        
-        u32 import_id=0;
-        u32 preproc_import_id=0;
-
-        ScopeId scopeId = 0;
-        
-        struct Dep {
-            u32 id;
-            std::string as_name;
-        };
-        DynamicArray<Dep> dependencies;
-        struct Lib {
-            std::string path;
-            std::string named_as;
-        };
-        DynamicArray<Lib> libraries;
-    };
-    BucketArray<Import> imports{256};
     
-    struct Task {
-        TaskType type;
-        u32 import_id;
-        ScopeId scopeId;
-        bool no_change = false;
-    };
-    DynamicArray<Task> tasks;
+    BucketArray<CompilerImport> imports{256};
+    
+    
+    DynamicArray<CompilerTask> tasks;
     
     // DynamicArray<u32> queue_import_ids;
         
@@ -239,7 +241,7 @@ struct Compiler {
     u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "");
     u32 addImport(const std::string& path, const std::string& dir_of_origin_file = "");
     void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "");
-    void addLibrary(u32 import_id, const std::string& as_name = "");
+    void addLibrary(u32 import_id, const std::string& path, const std::string& as_name = "");
     
     DynamicArray<Path> importDirectories;
     Path findSourceFile(const Path& path, const Path& sourceDirectory = "");

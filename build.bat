@@ -102,7 +102,10 @@ if !USE_MSVC!==1 (
     cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! libs\tracy-0.10\public\TracyClient.cpp /Fobin/tracy.obj
     SET MSVC_COMPILE_OPTIONS=!MSVC_COMPILE_OPTIONS! /FI pch.h
 
-    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! bin\tracy.obj shell32.lib /OUT:!output!
+    @REM Used in Virtual Machine to programmatically pass arguments to a function pointer
+    ml64 /nologo /Fobin/hacky_stdcall.o /c src/BetBat/hacky_stdcall.asm > nul
+
+    cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Fobin/all.obj /link !MSVC_LINK_OPTIONS! bin\tracy.obj bin/hacky_stdcall.o shell32.lib /OUT:!output!
     SET compileSuccess=!errorlevel!
     @REM cl /c !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! /Ycpch.h src/pch.cpp
     @REM cl !MSVC_COMPILE_OPTIONS! !MSVC_INCLUDE_DIRS! !MSVC_DEFINITIONS! !srcfile! /Yupch.h /Fobin/all.obj /link !MSVC_LINK_OPTIONS! pch.obj shell32.lib /OUT:bin/program.exe

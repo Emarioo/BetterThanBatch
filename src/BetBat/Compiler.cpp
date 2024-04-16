@@ -712,10 +712,10 @@ void Compiler::processImports() {
         
         bool finished = true;
         bool found = false;
-        Task picked_task{};
+        CompilerTask picked_task{};
         int task_index=0;
         while(task_index < tasks.size()) {
-            Task& task = tasks[task_index];
+            CompilerTask& task = tasks[task_index];
             task_index++;
             // if(im->busy) {
             //     finished=false;
@@ -728,9 +728,9 @@ void Compiler::processImports() {
             // }
             bool missing_dependency = false;
             if(task.type == TASK_PREPROCESS_AND_PARSE) {
-                Import* im = imports.get(task.import_id-1);
+                CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
-                    Import* dep = imports.get(im->dependencies[j].id-1);
+                    CompilerImport* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
                     if(!dep || !(dep->state & TASK_LEX)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
@@ -739,9 +739,9 @@ void Compiler::processImports() {
                     }
                 }
             } else if (task.type == TASK_TYPE_ENUMS) { // when we are about to check functions
-                Import* im = imports.get(task.import_id-1);
+                CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
-                    Import* dep = imports.get(im->dependencies[j].id-1);
+                    CompilerImport* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
                     if(!dep || !(dep->state & TASK_PREPROCESS_AND_PARSE)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
@@ -750,9 +750,9 @@ void Compiler::processImports() {
                     }
                 }
             } else if (task.type == TASK_TYPE_STRUCTS) { // when we are about to check functions
-                Import* im = imports.get(task.import_id-1);
+                CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
-                    Import* dep = imports.get(im->dependencies[j].id-1);
+                    CompilerImport* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
                     if(!dep || !(dep->state & TASK_TYPE_STRUCTS)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
@@ -761,9 +761,9 @@ void Compiler::processImports() {
                     }
                 }
             } else if (task.type == TASK_TYPE_BODIES) {// when we should check bodies, functions must be available
-                Import* im = imports.get(task.import_id-1);
+                CompilerImport* im = imports.get(task.import_id-1);
                 for(int j=0;j<im->dependencies.size();j++) {
-                    Import* dep = imports.get(im->dependencies[j].id-1);
+                    CompilerImport* dep = imports.get(im->dependencies[j].id-1);
                     // nocheckin, I had a thought about a potential problem here but the bug I thought caused it didn't. So maybe there isn't a problem waiting for lexed and preprocessed? Of course, we will need to add parsed, type checked and generated in the future.
                     if(!dep || !(dep->state & TASK_TYPE_FUNCTIONS)) {
                         LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
@@ -778,7 +778,7 @@ void Compiler::processImports() {
                 // TODO: Optimize, store an integer of how many non-type checked tasks
                 //   we have left instead of iterating all tasks every time.
                 for(int i=0;i<tasks.size();i++) {
-                    Task& t = tasks[i];
+                    CompilerTask& t = tasks[i];
                     if(t.type != TASK_GEN_BYTECODE) {
                         // LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" depend: "<<im->import_id<<"->"<<im->dependencies[j].id<<" ("<<TrimCWD(im->path)<<"->"<<(dep?TrimCWD(dep->path):"?")<<")\n")
                         missing_dependency = true;
@@ -824,7 +824,7 @@ void Compiler::processImports() {
         
         if(found) {
             if(picked_task.type == TASK_LEX) {
-                Import* imp = imports.get(picked_task.import_id-1);
+                CompilerImport* imp = imports.get(picked_task.import_id-1);
                 LOG(CAT_PROCESSING, log::GREEN<<" Lexing and preprocessing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 // imp->import_id may zero but may also be pre-created
                 u32 old_id = imp->import_id;
@@ -854,7 +854,7 @@ void Compiler::processImports() {
                 
                 // imp->finished = true; // nocheckin, we're not actually done
             } else if(picked_task.type == TASK_PREPROCESS_AND_PARSE) {
-                Import* imp = imports.get(picked_task.import_id-1);
+                CompilerImport* imp = imports.get(picked_task.import_id-1);
                 LOG(CAT_PROCESSING, log::GREEN<<" Final preprocessing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
                 
                 imp->preproc_import_id = preprocessor.process(imp->import_id, true);
@@ -893,7 +893,7 @@ void Compiler::processImports() {
                 tasks.add(picked_task); // nocheckin, lock tasks
                 // imp->finished = true; // nocheckin, we're not actually done
             } else if(picked_task.type == TASK_TYPE_ENUMS) {
-                Import* imp = imports.get(picked_task.import_id-1);
+                CompilerImport* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
 
                 // nocheckin TODO: what if the dependencies haven't been parsed. This is ensured to happen with
@@ -914,7 +914,7 @@ void Compiler::processImports() {
                 picked_task.import_id = imp->import_id;
                 tasks.add(picked_task); // nocheckin, lock tasks
             } else if(picked_task.type == TASK_TYPE_STRUCTS) {
-                Import* imp = imports.get(picked_task.import_id-1);
+                CompilerImport* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
                 
                 bool ignore_errors = true;
@@ -938,7 +938,7 @@ void Compiler::processImports() {
                         tasks.add(picked_task); // nocheckin, lock tasks
                 }
             } else if(picked_task.type == TASK_TYPE_FUNCTIONS) {
-                Import* imp = imports.get(picked_task.import_id-1);
+                CompilerImport* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
                 
                 TypeCheckFunctions(ast, my_scope->astScope, this);
@@ -948,7 +948,7 @@ void Compiler::processImports() {
                 picked_task.import_id = imp->import_id;
                 tasks.add(picked_task); // nocheckin, lock tasks
             } else if(picked_task.type == TASK_TYPE_BODIES) {
-                Import* imp = imports.get(picked_task.import_id-1);
+                auto imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
                 
                 TypeCheckBodies(ast, my_scope->astScope, this);
@@ -958,7 +958,7 @@ void Compiler::processImports() {
                 picked_task.import_id = imp->import_id;
                 tasks.add(picked_task); // nocheckin, lock tasks
             } else if(picked_task.type == TASK_GEN_BYTECODE) {
-                Import* imp = imports.get(picked_task.import_id-1);
+                auto imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
 
                 if(!have_generated_global_data) { // cheap quick check
@@ -977,9 +977,9 @@ void Compiler::processImports() {
 
                 DynamicArray<TinyBytecode*> tinycodes{};
                 if(initial_import_id == imp->import_id) {
-                    auto yes = GenerateScope(my_scope->astScope, this, &tinycodes, true);
+                    auto yes = GenerateScope(my_scope->astScope, this, imp, &tinycodes, true);
                 } else {
-                    auto yes = GenerateScope(my_scope->astScope, this, &tinycodes, false);
+                    auto yes = GenerateScope(my_scope->astScope, this, imp, &tinycodes, false);
                 }
                 
                 
@@ -1091,14 +1091,14 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         preload_import_id = addImport(virtual_path);
         Assert(preload_import_id); // nocheckin
         
-        Task task{TASK_LEX};
+        CompilerTask task{TASK_LEX};
         task.import_id = preload_import_id;
         tasks.add(task);
         
         addDependency(import_id, preload_import_id);
     }
     
-    Task task{TASK_LEX};
+    CompilerTask task{TASK_LEX};
     task.import_id = import_id;
     tasks.add(task);
     
@@ -1271,7 +1271,7 @@ u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origi
     if(abs_path.text.empty()) {
         return 0; // file does not exist? caller should throw error
     }
-    Import imp{};
+    CompilerImport imp{};
     lock_imports.lock();
     // BucketArray<Import>::Iterator iter{};
     // while(imports.iterate(iter)) {
@@ -1298,9 +1298,9 @@ u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of
     if(abs_path.text.empty()) {
         return 0; // file does not exist? caller should throw error
     }
-    Import imp{};
+    CompilerImport imp{};
     lock_imports.lock();
-    BucketArray<Import>::Iterator iter{};
+    BucketArray<CompilerImport>::Iterator iter{};
     while(imports.iterate(iter)) {
         if(iter.ptr->path == abs_path.text) {
             u32 id = iter.ptr->import_id;
@@ -1334,12 +1334,42 @@ void Compiler::addDependency(u32 import_id, u32 dep_import_id, const std::string
         }
     }
     if(!found) {
-        Task task{TASK_LEX};
+        CompilerTask task{TASK_LEX};
         task.import_id = dep_import_id;
         tasks.add(task);
     }
     lock_imports.unlock();
     // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add depend: "<<import_id<<"->"<<dep_import_id<<" ("<<TrimCWD(imp->path)<<")\n")
+}
+void Compiler::addLibrary(u32 import_id, const std::string& path, const std::string& as_name) {
+    using namespace engone;
+    lock_imports.lock();
+    auto imp = imports.get(import_id-1);
+    Assert(imp);
+    // imports.requestSpot(dep_import_id-1,nullptr);
+    bool found = false;
+    for(int i=0;i<imp->libraries.size();i++) {
+        auto& lib = imp->libraries[i];
+        if(lib.path == path) {
+            // Multiple paths could possibly be the same.
+            // Imagine "src/math.lib" and "./math.lib" where the dot indicates
+            // the directory of the current source file ("src/main.btb")
+            found = true;
+            break;
+        }
+        if(lib.named_as == as_name) {
+            found = true;
+            // TODO: Improve error message
+            compileOptions->compileStats.errors++;
+            log::out << log::RED << "Multiple libraries cannot be named the same ("<<as_name<<").\n";
+            log::out << log::RED << " \""<<BriefString(path)<<"\" collides with \""<<lib.path<<"\"\n";
+            break;
+        }
+    }
+    if(!found) {
+        imp->libraries.add({path, as_name});
+    }
+    lock_imports.unlock();
 }
 void Compiler::addLinkDirective(const std::string& text){
     lock_miscellaneous.lock();

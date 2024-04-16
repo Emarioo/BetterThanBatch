@@ -1,0 +1,20 @@
+@TEST_CASE(dll_in_vm)
+
+// TODO: Make sure the .dll exists
+#load "examples/foreign/tiny_math.dll" as math
+
+// GOOD
+fn @import(math,alias="_Z3sumii") sum(start: i32, end: i32) -> i32;
+a := sum(1,5)
+
+fn @import(math,alias="_Z3sumii") _Z3sumii(start: i32, end: i32) -> i32;
+a := _Z3sumii(1,5)
+
+// TODO: Add error expectations
+
+// Errors
+fn @import(mathy,alias="_Z3sumii") sum(start: i32, end: i32) -> i32;
+fn @import(alias="_Z3sumii") sum(start: i32, end: i32) -> i32;
+
+// Error at init of virtual machine
+fn @import(math,alias="zoom") sum(start: i32, end: i32) -> i32;

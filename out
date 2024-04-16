@@ -1,1695 +1,755 @@
-
-examples/foreign/tiny_math.dll:     file format pei-x86-64
-
-
-Disassembly of section .text:
-
-000000026b7f1000 <pre_c_init>:
-   26b7f1000:	48 8d 0d f9 5f 00 00 	lea    0x5ff9(%rip),%rcx        # 26b7f7000 <__bss_start__>
-   26b7f1007:	e9 84 11 00 00       	jmp    26b7f2190 <_initialize_onexit_table>
-   26b7f100c:	0f 1f 40 00          	nopl   0x0(%rax)
-
-000000026b7f1010 <_CRT_INIT>:
-   26b7f1010:	41 55                	push   %r13
-   26b7f1012:	41 54                	push   %r12
-   26b7f1014:	55                   	push   %rbp
-   26b7f1015:	57                   	push   %rdi
-   26b7f1016:	56                   	push   %rsi
-   26b7f1017:	53                   	push   %rbx
-   26b7f1018:	48 83 ec 28          	sub    $0x28,%rsp
-   26b7f101c:	85 d2                	test   %edx,%edx
-   26b7f101e:	48 89 cf             	mov    %rcx,%rdi
-   26b7f1021:	4d 89 c5             	mov    %r8,%r13
-   26b7f1024:	75 7a                	jne    26b7f10a0 <_CRT_INIT+0x90>
-   26b7f1026:	8b 05 ec 5f 00 00    	mov    0x5fec(%rip),%eax        # 26b7f7018 <__proc_attached>
-   26b7f102c:	85 c0                	test   %eax,%eax
-   26b7f102e:	7e 59                	jle    26b7f1089 <_CRT_INIT+0x79>
-   26b7f1030:	83 e8 01             	sub    $0x1,%eax
-   26b7f1033:	48 8b 1d 06 32 00 00 	mov    0x3206(%rip),%rbx        # 26b7f4240 <.refptr.__native_startup_lock>
-   26b7f103a:	31 ed                	xor    %ebp,%ebp
-   26b7f103c:	bf 01 00 00 00       	mov    $0x1,%edi
-   26b7f1041:	4c 8b 25 dc 80 00 00 	mov    0x80dc(%rip),%r12        # 26b7f9124 <__imp_Sleep>
-   26b7f1048:	89 05 ca 5f 00 00    	mov    %eax,0x5fca(%rip)        # 26b7f7018 <__proc_attached>
-   26b7f104e:	eb 08                	jmp    26b7f1058 <_CRT_INIT+0x48>
-   26b7f1050:	b9 e8 03 00 00       	mov    $0x3e8,%ecx
-   26b7f1055:	41 ff d4             	call   *%r12
-   26b7f1058:	48 89 e8             	mov    %rbp,%rax
-   26b7f105b:	f0 48 0f b1 3b       	lock cmpxchg %rdi,(%rbx)
-   26b7f1060:	48 85 c0             	test   %rax,%rax
-   26b7f1063:	48 89 c6             	mov    %rax,%rsi
-   26b7f1066:	75 e8                	jne    26b7f1050 <_CRT_INIT+0x40>
-   26b7f1068:	48 8b 3d e1 31 00 00 	mov    0x31e1(%rip),%rdi        # 26b7f4250 <.refptr.__native_startup_state>
-   26b7f106f:	8b 07                	mov    (%rdi),%eax
-   26b7f1071:	83 f8 02             	cmp    $0x2,%eax
-   26b7f1074:	0f 84 c6 00 00 00    	je     26b7f1140 <_CRT_INIT+0x130>
-   26b7f107a:	b9 1f 00 00 00       	mov    $0x1f,%ecx
-   26b7f107f:	e8 84 12 00 00       	call   26b7f2308 <_amsg_exit>
-   26b7f1084:	ba 01 00 00 00       	mov    $0x1,%edx
-   26b7f1089:	89 d0                	mov    %edx,%eax
-   26b7f108b:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f108f:	5b                   	pop    %rbx
-   26b7f1090:	5e                   	pop    %rsi
-   26b7f1091:	5f                   	pop    %rdi
-   26b7f1092:	5d                   	pop    %rbp
-   26b7f1093:	41 5c                	pop    %r12
-   26b7f1095:	41 5d                	pop    %r13
-   26b7f1097:	c3                   	ret
-   26b7f1098:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
-   26b7f109f:	00 
-   26b7f10a0:	83 fa 01             	cmp    $0x1,%edx
-   26b7f10a3:	75 df                	jne    26b7f1084 <_CRT_INIT+0x74>
-   26b7f10a5:	65 48 8b 04 25 30 00 	mov    %gs:0x30,%rax
-   26b7f10ac:	00 00 
-   26b7f10ae:	48 8b 1d 8b 31 00 00 	mov    0x318b(%rip),%rbx        # 26b7f4240 <.refptr.__native_startup_lock>
-   26b7f10b5:	31 ed                	xor    %ebp,%ebp
-   26b7f10b7:	48 8b 70 08          	mov    0x8(%rax),%rsi
-   26b7f10bb:	4c 8b 25 62 80 00 00 	mov    0x8062(%rip),%r12        # 26b7f9124 <__imp_Sleep>
-   26b7f10c2:	eb 15                	jmp    26b7f10d9 <_CRT_INIT+0xc9>
-   26b7f10c4:	0f 1f 40 00          	nopl   0x0(%rax)
-   26b7f10c8:	48 39 c6             	cmp    %rax,%rsi
-   26b7f10cb:	0f 84 8f 00 00 00    	je     26b7f1160 <_CRT_INIT+0x150>
-   26b7f10d1:	b9 e8 03 00 00       	mov    $0x3e8,%ecx
-   26b7f10d6:	41 ff d4             	call   *%r12
-   26b7f10d9:	48 89 e8             	mov    %rbp,%rax
-   26b7f10dc:	f0 48 0f b1 33       	lock cmpxchg %rsi,(%rbx)
-   26b7f10e1:	48 85 c0             	test   %rax,%rax
-   26b7f10e4:	75 e2                	jne    26b7f10c8 <_CRT_INIT+0xb8>
-   26b7f10e6:	31 ed                	xor    %ebp,%ebp
-   26b7f10e8:	48 8b 35 61 31 00 00 	mov    0x3161(%rip),%rsi        # 26b7f4250 <.refptr.__native_startup_state>
-   26b7f10ef:	8b 06                	mov    (%rsi),%eax
-   26b7f10f1:	83 f8 01             	cmp    $0x1,%eax
-   26b7f10f4:	0f 84 c6 00 00 00    	je     26b7f11c0 <_CRT_INIT+0x1b0>
-   26b7f10fa:	8b 06                	mov    (%rsi),%eax
-   26b7f10fc:	85 c0                	test   %eax,%eax
-   26b7f10fe:	0f 84 7c 00 00 00    	je     26b7f1180 <_CRT_INIT+0x170>
-   26b7f1104:	8b 06                	mov    (%rsi),%eax
-   26b7f1106:	83 f8 01             	cmp    $0x1,%eax
-   26b7f1109:	0f 84 91 00 00 00    	je     26b7f11a0 <_CRT_INIT+0x190>
-   26b7f110f:	85 ed                	test   %ebp,%ebp
-   26b7f1111:	74 5d                	je     26b7f1170 <_CRT_INIT+0x160>
-   26b7f1113:	48 8b 05 e6 30 00 00 	mov    0x30e6(%rip),%rax        # 26b7f4200 <.refptr.__dyn_tls_init_callback>
-   26b7f111a:	48 8b 00             	mov    (%rax),%rax
-   26b7f111d:	48 85 c0             	test   %rax,%rax
-   26b7f1120:	74 0d                	je     26b7f112f <_CRT_INIT+0x11f>
-   26b7f1122:	4d 89 e8             	mov    %r13,%r8
-   26b7f1125:	ba 02 00 00 00       	mov    $0x2,%edx
-   26b7f112a:	48 89 f9             	mov    %rdi,%rcx
-   26b7f112d:	ff d0                	call   *%rax
-   26b7f112f:	83 05 e2 5e 00 00 01 	addl   $0x1,0x5ee2(%rip)        # 26b7f7018 <__proc_attached>
-   26b7f1136:	ba 01 00 00 00       	mov    $0x1,%edx
-   26b7f113b:	e9 49 ff ff ff       	jmp    26b7f1089 <_CRT_INIT+0x79>
-   26b7f1140:	48 8d 0d b9 5e 00 00 	lea    0x5eb9(%rip),%rcx        # 26b7f7000 <__bss_start__>
-   26b7f1147:	e8 44 11 00 00       	call   26b7f2290 <_execute_onexit_table>
-   26b7f114c:	c7 07 00 00 00 00    	movl   $0x0,(%rdi)
-   26b7f1152:	48 87 33             	xchg   %rsi,(%rbx)
-   26b7f1155:	e9 2a ff ff ff       	jmp    26b7f1084 <_CRT_INIT+0x74>
-   26b7f115a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
-   26b7f1160:	bd 01 00 00 00       	mov    $0x1,%ebp
-   26b7f1165:	eb 81                	jmp    26b7f10e8 <_CRT_INIT+0xd8>
-   26b7f1167:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f116e:	00 00 
-   26b7f1170:	31 c0                	xor    %eax,%eax
-   26b7f1172:	48 87 03             	xchg   %rax,(%rbx)
-   26b7f1175:	eb 9c                	jmp    26b7f1113 <_CRT_INIT+0x103>
-   26b7f1177:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f117e:	00 00 
-   26b7f1180:	48 8b 15 09 31 00 00 	mov    0x3109(%rip),%rdx        # 26b7f4290 <.refptr.__xi_z>
-   26b7f1187:	c7 06 01 00 00 00    	movl   $0x1,(%rsi)
-   26b7f118d:	48 8b 0d ec 30 00 00 	mov    0x30ec(%rip),%rcx        # 26b7f4280 <.refptr.__xi_a>
-   26b7f1194:	e8 77 11 00 00       	call   26b7f2310 <_initterm>
-   26b7f1199:	e9 66 ff ff ff       	jmp    26b7f1104 <_CRT_INIT+0xf4>
-   26b7f119e:	66 90                	xchg   %ax,%ax
-   26b7f11a0:	48 8b 15 c9 30 00 00 	mov    0x30c9(%rip),%rdx        # 26b7f4270 <.refptr.__xc_z>
-   26b7f11a7:	48 8b 0d b2 30 00 00 	mov    0x30b2(%rip),%rcx        # 26b7f4260 <.refptr.__xc_a>
-   26b7f11ae:	e8 5d 11 00 00       	call   26b7f2310 <_initterm>
-   26b7f11b3:	c7 06 02 00 00 00    	movl   $0x2,(%rsi)
-   26b7f11b9:	e9 51 ff ff ff       	jmp    26b7f110f <_CRT_INIT+0xff>
-   26b7f11be:	66 90                	xchg   %ax,%ax
-   26b7f11c0:	b9 1f 00 00 00       	mov    $0x1f,%ecx
-   26b7f11c5:	e8 3e 11 00 00       	call   26b7f2308 <_amsg_exit>
-   26b7f11ca:	e9 35 ff ff ff       	jmp    26b7f1104 <_CRT_INIT+0xf4>
-   26b7f11cf:	90                   	nop
-
-000000026b7f11d0 <__DllMainCRTStartup>:
-   26b7f11d0:	41 54                	push   %r12
-   26b7f11d2:	55                   	push   %rbp
-   26b7f11d3:	57                   	push   %rdi
-   26b7f11d4:	56                   	push   %rsi
-   26b7f11d5:	53                   	push   %rbx
-   26b7f11d6:	48 83 ec 20          	sub    $0x20,%rsp
-   26b7f11da:	4c 8b 25 4f 30 00 00 	mov    0x304f(%rip),%r12        # 26b7f4230 <.refptr.__native_dllmain_reason>
-   26b7f11e1:	85 d2                	test   %edx,%edx
-   26b7f11e3:	48 89 ce             	mov    %rcx,%rsi
-   26b7f11e6:	89 d3                	mov    %edx,%ebx
-   26b7f11e8:	41 89 14 24          	mov    %edx,(%r12)
-   26b7f11ec:	4c 89 c7             	mov    %r8,%rdi
-   26b7f11ef:	75 47                	jne    26b7f1238 <__DllMainCRTStartup+0x68>
-   26b7f11f1:	8b 05 21 5e 00 00    	mov    0x5e21(%rip),%eax        # 26b7f7018 <__proc_attached>
-   26b7f11f7:	85 c0                	test   %eax,%eax
-   26b7f11f9:	74 5f                	je     26b7f125a <__DllMainCRTStartup+0x8a>
-   26b7f11fb:	e8 30 05 00 00       	call   26b7f1730 <_pei386_runtime_relocator>
-   26b7f1200:	49 89 f8             	mov    %rdi,%r8
-   26b7f1203:	89 da                	mov    %ebx,%edx
-   26b7f1205:	48 89 f1             	mov    %rsi,%rcx
-   26b7f1208:	e8 53 0f 00 00       	call   26b7f2160 <DllMain>
-   26b7f120d:	89 c5                	mov    %eax,%ebp
-   26b7f120f:	85 db                	test   %ebx,%ebx
-   26b7f1211:	0f 84 b1 00 00 00    	je     26b7f12c8 <__DllMainCRTStartup+0xf8>
-   26b7f1217:	83 fb 03             	cmp    $0x3,%ebx
-   26b7f121a:	0f 84 a8 00 00 00    	je     26b7f12c8 <__DllMainCRTStartup+0xf8>
-   26b7f1220:	89 e8                	mov    %ebp,%eax
-   26b7f1222:	41 c7 04 24 ff ff ff 	movl   $0xffffffff,(%r12)
-   26b7f1229:	ff 
-   26b7f122a:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f122e:	5b                   	pop    %rbx
-   26b7f122f:	5e                   	pop    %rsi
-   26b7f1230:	5f                   	pop    %rdi
-   26b7f1231:	5d                   	pop    %rbp
-   26b7f1232:	41 5c                	pop    %r12
-   26b7f1234:	c3                   	ret
-   26b7f1235:	0f 1f 00             	nopl   (%rax)
-   26b7f1238:	e8 f3 04 00 00       	call   26b7f1730 <_pei386_runtime_relocator>
-   26b7f123d:	8d 43 ff             	lea    -0x1(%rbx),%eax
-   26b7f1240:	49 89 f8             	mov    %rdi,%r8
-   26b7f1243:	89 da                	mov    %ebx,%edx
-   26b7f1245:	83 f8 01             	cmp    $0x1,%eax
-   26b7f1248:	48 89 f1             	mov    %rsi,%rcx
-   26b7f124b:	0f 87 a7 00 00 00    	ja     26b7f12f8 <__DllMainCRTStartup+0x128>
-   26b7f1251:	e8 ba fd ff ff       	call   26b7f1010 <_CRT_INIT>
-   26b7f1256:	85 c0                	test   %eax,%eax
-   26b7f1258:	75 06                	jne    26b7f1260 <__DllMainCRTStartup+0x90>
-   26b7f125a:	31 ed                	xor    %ebp,%ebp
-   26b7f125c:	eb c2                	jmp    26b7f1220 <__DllMainCRTStartup+0x50>
-   26b7f125e:	66 90                	xchg   %ax,%ax
-   26b7f1260:	49 89 f8             	mov    %rdi,%r8
-   26b7f1263:	89 da                	mov    %ebx,%edx
-   26b7f1265:	48 89 f1             	mov    %rsi,%rcx
-   26b7f1268:	e8 e3 0e 00 00       	call   26b7f2150 <DllEntryPoint>
-   26b7f126d:	85 c0                	test   %eax,%eax
-   26b7f126f:	0f 84 93 00 00 00    	je     26b7f1308 <__DllMainCRTStartup+0x138>
-   26b7f1275:	83 fb 01             	cmp    $0x1,%ebx
-   26b7f1278:	75 86                	jne    26b7f1200 <__DllMainCRTStartup+0x30>
-   26b7f127a:	e8 e1 01 00 00       	call   26b7f1460 <__main>
-   26b7f127f:	49 89 f8             	mov    %rdi,%r8
-   26b7f1282:	ba 01 00 00 00       	mov    $0x1,%edx
-   26b7f1287:	48 89 f1             	mov    %rsi,%rcx
-   26b7f128a:	e8 d1 0e 00 00       	call   26b7f2160 <DllMain>
-   26b7f128f:	85 c0                	test   %eax,%eax
-   26b7f1291:	89 c5                	mov    %eax,%ebp
-   26b7f1293:	75 8b                	jne    26b7f1220 <__DllMainCRTStartup+0x50>
-   26b7f1295:	49 89 f8             	mov    %rdi,%r8
-   26b7f1298:	31 d2                	xor    %edx,%edx
-   26b7f129a:	48 89 f1             	mov    %rsi,%rcx
-   26b7f129d:	e8 be 0e 00 00       	call   26b7f2160 <DllMain>
-   26b7f12a2:	49 89 f8             	mov    %rdi,%r8
-   26b7f12a5:	31 d2                	xor    %edx,%edx
-   26b7f12a7:	48 89 f1             	mov    %rsi,%rcx
-   26b7f12aa:	e8 a1 0e 00 00       	call   26b7f2150 <DllEntryPoint>
-   26b7f12af:	49 89 f8             	mov    %rdi,%r8
-   26b7f12b2:	31 d2                	xor    %edx,%edx
-   26b7f12b4:	48 89 f1             	mov    %rsi,%rcx
-   26b7f12b7:	e8 54 fd ff ff       	call   26b7f1010 <_CRT_INIT>
-   26b7f12bc:	31 ed                	xor    %ebp,%ebp
-   26b7f12be:	e9 5d ff ff ff       	jmp    26b7f1220 <__DllMainCRTStartup+0x50>
-   26b7f12c3:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f12c8:	49 89 f8             	mov    %rdi,%r8
-   26b7f12cb:	89 da                	mov    %ebx,%edx
-   26b7f12cd:	48 89 f1             	mov    %rsi,%rcx
-   26b7f12d0:	e8 7b 0e 00 00       	call   26b7f2150 <DllEntryPoint>
-   26b7f12d5:	49 89 f8             	mov    %rdi,%r8
-   26b7f12d8:	89 da                	mov    %ebx,%edx
-   26b7f12da:	48 89 f1             	mov    %rsi,%rcx
-   26b7f12dd:	89 c5                	mov    %eax,%ebp
-   26b7f12df:	e8 2c fd ff ff       	call   26b7f1010 <_CRT_INIT>
-   26b7f12e4:	85 c0                	test   %eax,%eax
-   26b7f12e6:	0f 85 34 ff ff ff    	jne    26b7f1220 <__DllMainCRTStartup+0x50>
-   26b7f12ec:	31 ed                	xor    %ebp,%ebp
-   26b7f12ee:	e9 2d ff ff ff       	jmp    26b7f1220 <__DllMainCRTStartup+0x50>
-   26b7f12f3:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f12f8:	e8 63 0e 00 00       	call   26b7f2160 <DllMain>
-   26b7f12fd:	89 c5                	mov    %eax,%ebp
-   26b7f12ff:	e9 0b ff ff ff       	jmp    26b7f120f <__DllMainCRTStartup+0x3f>
-   26b7f1304:	0f 1f 40 00          	nopl   0x0(%rax)
-   26b7f1308:	83 fb 01             	cmp    $0x1,%ebx
-   26b7f130b:	74 a2                	je     26b7f12af <__DllMainCRTStartup+0xdf>
-   26b7f130d:	31 ed                	xor    %ebp,%ebp
-   26b7f130f:	e9 0c ff ff ff       	jmp    26b7f1220 <__DllMainCRTStartup+0x50>
-   26b7f1314:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
-   26b7f131b:	00 00 00 00 
-   26b7f131f:	90                   	nop
-
-000000026b7f1320 <DllMainCRTStartup>:
-   26b7f1320:	48 8b 05 f9 2e 00 00 	mov    0x2ef9(%rip),%rax        # 26b7f4220 <.refptr.__mingw_app_type>
-   26b7f1327:	c7 00 00 00 00 00    	movl   $0x0,(%rax)
-   26b7f132d:	e9 9e fe ff ff       	jmp    26b7f11d0 <__DllMainCRTStartup>
-   26b7f1332:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
-   26b7f1339:	00 00 00 00 
-   26b7f133d:	0f 1f 00             	nopl   (%rax)
-
-000000026b7f1340 <atexit>:
-   26b7f1340:	48 89 ca             	mov    %rcx,%rdx
-   26b7f1343:	48 8d 0d b6 5c 00 00 	lea    0x5cb6(%rip),%rcx        # 26b7f7000 <__bss_start__>
-   26b7f134a:	e9 61 0e 00 00       	jmp    26b7f21b0 <_register_onexit_function>
-   26b7f134f:	90                   	nop
-
-000000026b7f1350 <__gcc_register_frame>:
-   26b7f1350:	48 8d 0d 09 00 00 00 	lea    0x9(%rip),%rcx        # 26b7f1360 <__gcc_deregister_frame>
-   26b7f1357:	e9 e4 ff ff ff       	jmp    26b7f1340 <atexit>
-   26b7f135c:	0f 1f 40 00          	nopl   0x0(%rax)
-
-000000026b7f1360 <__gcc_deregister_frame>:
-   26b7f1360:	c3                   	ret
-   26b7f1361:	90                   	nop
-   26b7f1362:	90                   	nop
-   26b7f1363:	90                   	nop
-   26b7f1364:	90                   	nop
-   26b7f1365:	90                   	nop
-   26b7f1366:	90                   	nop
-   26b7f1367:	90                   	nop
-   26b7f1368:	90                   	nop
-   26b7f1369:	90                   	nop
-   26b7f136a:	90                   	nop
-   26b7f136b:	90                   	nop
-   26b7f136c:	90                   	nop
-   26b7f136d:	90                   	nop
-   26b7f136e:	90                   	nop
-   26b7f136f:	90                   	nop
-
-000000026b7f1370 <_Z3sumii>:
-   26b7f1370:	55                   	push   %rbp
-   26b7f1371:	48 89 e5             	mov    %rsp,%rbp
-   26b7f1374:	48 83 ec 10          	sub    $0x10,%rsp
-   26b7f1378:	89 4d 10             	mov    %ecx,0x10(%rbp)
-   26b7f137b:	89 55 18             	mov    %edx,0x18(%rbp)
-   26b7f137e:	c7 45 fc 00 00 00 00 	movl   $0x0,-0x4(%rbp)
-   26b7f1385:	8b 45 10             	mov    0x10(%rbp),%eax
-   26b7f1388:	89 45 f8             	mov    %eax,-0x8(%rbp)
-   26b7f138b:	eb 0a                	jmp    26b7f1397 <_Z3sumii+0x27>
-   26b7f138d:	8b 45 f8             	mov    -0x8(%rbp),%eax
-   26b7f1390:	01 45 fc             	add    %eax,-0x4(%rbp)
-   26b7f1393:	83 45 f8 01          	addl   $0x1,-0x8(%rbp)
-   26b7f1397:	8b 45 f8             	mov    -0x8(%rbp),%eax
-   26b7f139a:	3b 45 18             	cmp    0x18(%rbp),%eax
-   26b7f139d:	7e ee                	jle    26b7f138d <_Z3sumii+0x1d>
-   26b7f139f:	8b 45 fc             	mov    -0x4(%rbp),%eax
-   26b7f13a2:	48 83 c4 10          	add    $0x10,%rsp
-   26b7f13a6:	5d                   	pop    %rbp
-   26b7f13a7:	c3                   	ret
-   26b7f13a8:	90                   	nop
-   26b7f13a9:	90                   	nop
-   26b7f13aa:	90                   	nop
-   26b7f13ab:	90                   	nop
-   26b7f13ac:	90                   	nop
-   26b7f13ad:	90                   	nop
-   26b7f13ae:	90                   	nop
-   26b7f13af:	90                   	nop
-
-000000026b7f13b0 <__do_global_dtors>:
-   26b7f13b0:	48 83 ec 28          	sub    $0x28,%rsp
-   26b7f13b4:	48 8b 05 55 1c 00 00 	mov    0x1c55(%rip),%rax        # 26b7f3010 <p.0>
-   26b7f13bb:	48 8b 00             	mov    (%rax),%rax
-   26b7f13be:	48 85 c0             	test   %rax,%rax
-   26b7f13c1:	74 22                	je     26b7f13e5 <__do_global_dtors+0x35>
-   26b7f13c3:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f13c8:	ff d0                	call   *%rax
-   26b7f13ca:	48 8b 05 3f 1c 00 00 	mov    0x1c3f(%rip),%rax        # 26b7f3010 <p.0>
-   26b7f13d1:	48 8d 50 08          	lea    0x8(%rax),%rdx
-   26b7f13d5:	48 8b 40 08          	mov    0x8(%rax),%rax
-   26b7f13d9:	48 89 15 30 1c 00 00 	mov    %rdx,0x1c30(%rip)        # 26b7f3010 <p.0>
-   26b7f13e0:	48 85 c0             	test   %rax,%rax
-   26b7f13e3:	75 e3                	jne    26b7f13c8 <__do_global_dtors+0x18>
-   26b7f13e5:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f13e9:	c3                   	ret
-   26b7f13ea:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
-
-000000026b7f13f0 <__do_global_ctors>:
-   26b7f13f0:	56                   	push   %rsi
-   26b7f13f1:	53                   	push   %rbx
-   26b7f13f2:	48 83 ec 28          	sub    $0x28,%rsp
-   26b7f13f6:	48 8b 15 d3 2d 00 00 	mov    0x2dd3(%rip),%rdx        # 26b7f41d0 <.refptr.__CTOR_LIST__>
-   26b7f13fd:	48 8b 02             	mov    (%rdx),%rax
-   26b7f1400:	83 f8 ff             	cmp    $0xffffffff,%eax
-   26b7f1403:	89 c1                	mov    %eax,%ecx
-   26b7f1405:	74 39                	je     26b7f1440 <__do_global_ctors+0x50>
-   26b7f1407:	85 c9                	test   %ecx,%ecx
-   26b7f1409:	74 20                	je     26b7f142b <__do_global_ctors+0x3b>
-   26b7f140b:	89 c8                	mov    %ecx,%eax
-   26b7f140d:	83 e9 01             	sub    $0x1,%ecx
-   26b7f1410:	48 8d 1c c2          	lea    (%rdx,%rax,8),%rbx
-   26b7f1414:	48 29 c8             	sub    %rcx,%rax
-   26b7f1417:	48 8d 74 c2 f8       	lea    -0x8(%rdx,%rax,8),%rsi
-   26b7f141c:	0f 1f 40 00          	nopl   0x0(%rax)
-   26b7f1420:	ff 13                	call   *(%rbx)
-   26b7f1422:	48 83 eb 08          	sub    $0x8,%rbx
-   26b7f1426:	48 39 f3             	cmp    %rsi,%rbx
-   26b7f1429:	75 f5                	jne    26b7f1420 <__do_global_ctors+0x30>
-   26b7f142b:	48 8d 0d 7e ff ff ff 	lea    -0x82(%rip),%rcx        # 26b7f13b0 <__do_global_dtors>
-   26b7f1432:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f1436:	5b                   	pop    %rbx
-   26b7f1437:	5e                   	pop    %rsi
-   26b7f1438:	e9 03 ff ff ff       	jmp    26b7f1340 <atexit>
-   26b7f143d:	0f 1f 00             	nopl   (%rax)
-   26b7f1440:	31 c0                	xor    %eax,%eax
-   26b7f1442:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
-   26b7f1448:	44 8d 40 01          	lea    0x1(%rax),%r8d
-   26b7f144c:	89 c1                	mov    %eax,%ecx
-   26b7f144e:	4a 83 3c c2 00       	cmpq   $0x0,(%rdx,%r8,8)
-   26b7f1453:	4c 89 c0             	mov    %r8,%rax
-   26b7f1456:	75 f0                	jne    26b7f1448 <__do_global_ctors+0x58>
-   26b7f1458:	eb ad                	jmp    26b7f1407 <__do_global_ctors+0x17>
-   26b7f145a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
-
-000000026b7f1460 <__main>:
-   26b7f1460:	8b 05 ba 5b 00 00    	mov    0x5bba(%rip),%eax        # 26b7f7020 <initialized>
-   26b7f1466:	85 c0                	test   %eax,%eax
-   26b7f1468:	74 06                	je     26b7f1470 <__main+0x10>
-   26b7f146a:	c3                   	ret
-   26b7f146b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f1470:	c7 05 a6 5b 00 00 01 	movl   $0x1,0x5ba6(%rip)        # 26b7f7020 <initialized>
-   26b7f1477:	00 00 00 
-   26b7f147a:	e9 71 ff ff ff       	jmp    26b7f13f0 <__do_global_ctors>
-   26b7f147f:	90                   	nop
-
-000000026b7f1480 <__dyn_tls_dtor>:
-   26b7f1480:	48 83 ec 28          	sub    $0x28,%rsp
-   26b7f1484:	83 fa 03             	cmp    $0x3,%edx
-   26b7f1487:	74 17                	je     26b7f14a0 <__dyn_tls_dtor+0x20>
-   26b7f1489:	85 d2                	test   %edx,%edx
-   26b7f148b:	74 13                	je     26b7f14a0 <__dyn_tls_dtor+0x20>
-   26b7f148d:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f1492:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f1496:	c3                   	ret
-   26b7f1497:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f149e:	00 00 
-   26b7f14a0:	e8 5b 07 00 00       	call   26b7f1c00 <__mingw_TLScallback>
-   26b7f14a5:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f14aa:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f14ae:	c3                   	ret
-   26b7f14af:	90                   	nop
-
-000000026b7f14b0 <__dyn_tls_init>:
-   26b7f14b0:	56                   	push   %rsi
-   26b7f14b1:	53                   	push   %rbx
-   26b7f14b2:	48 83 ec 28          	sub    $0x28,%rsp
-   26b7f14b6:	48 8b 05 03 2d 00 00 	mov    0x2d03(%rip),%rax        # 26b7f41c0 <.refptr._CRT_MT>
-   26b7f14bd:	83 38 02             	cmpl   $0x2,(%rax)
-   26b7f14c0:	74 06                	je     26b7f14c8 <__dyn_tls_init+0x18>
-   26b7f14c2:	c7 00 02 00 00 00    	movl   $0x2,(%rax)
-   26b7f14c8:	83 fa 02             	cmp    $0x2,%edx
-   26b7f14cb:	74 13                	je     26b7f14e0 <__dyn_tls_init+0x30>
-   26b7f14cd:	83 fa 01             	cmp    $0x1,%edx
-   26b7f14d0:	74 4e                	je     26b7f1520 <__dyn_tls_init+0x70>
-   26b7f14d2:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f14d7:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f14db:	5b                   	pop    %rbx
-   26b7f14dc:	5e                   	pop    %rsi
-   26b7f14dd:	c3                   	ret
-   26b7f14de:	66 90                	xchg   %ax,%ax
-   26b7f14e0:	48 8d 1d 69 8b 00 00 	lea    0x8b69(%rip),%rbx        # 26b7fa050 <__xd_z>
-   26b7f14e7:	48 8d 35 62 8b 00 00 	lea    0x8b62(%rip),%rsi        # 26b7fa050 <__xd_z>
-   26b7f14ee:	48 39 de             	cmp    %rbx,%rsi
-   26b7f14f1:	74 df                	je     26b7f14d2 <__dyn_tls_init+0x22>
-   26b7f14f3:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f14f8:	48 8b 03             	mov    (%rbx),%rax
-   26b7f14fb:	48 85 c0             	test   %rax,%rax
-   26b7f14fe:	74 02                	je     26b7f1502 <__dyn_tls_init+0x52>
-   26b7f1500:	ff d0                	call   *%rax
-   26b7f1502:	48 83 c3 08          	add    $0x8,%rbx
-   26b7f1506:	48 39 de             	cmp    %rbx,%rsi
-   26b7f1509:	75 ed                	jne    26b7f14f8 <__dyn_tls_init+0x48>
-   26b7f150b:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f1510:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f1514:	5b                   	pop    %rbx
-   26b7f1515:	5e                   	pop    %rsi
-   26b7f1516:	c3                   	ret
-   26b7f1517:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f151e:	00 00 
-   26b7f1520:	e8 db 06 00 00       	call   26b7f1c00 <__mingw_TLScallback>
-   26b7f1525:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f152a:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f152e:	5b                   	pop    %rbx
-   26b7f152f:	5e                   	pop    %rsi
-   26b7f1530:	c3                   	ret
-   26b7f1531:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
-   26b7f1538:	00 00 00 00 
-   26b7f153c:	0f 1f 40 00          	nopl   0x0(%rax)
-
-000000026b7f1540 <__tlregdtor>:
-   26b7f1540:	31 c0                	xor    %eax,%eax
-   26b7f1542:	c3                   	ret
-   26b7f1543:	90                   	nop
-   26b7f1544:	90                   	nop
-   26b7f1545:	90                   	nop
-   26b7f1546:	90                   	nop
-   26b7f1547:	90                   	nop
-   26b7f1548:	90                   	nop
-   26b7f1549:	90                   	nop
-   26b7f154a:	90                   	nop
-   26b7f154b:	90                   	nop
-   26b7f154c:	90                   	nop
-   26b7f154d:	90                   	nop
-   26b7f154e:	90                   	nop
-   26b7f154f:	90                   	nop
-
-000000026b7f1550 <__report_error>:
-   26b7f1550:	56                   	push   %rsi
-   26b7f1551:	53                   	push   %rbx
-   26b7f1552:	48 83 ec 38          	sub    $0x38,%rsp
-   26b7f1556:	48 8d 44 24 58       	lea    0x58(%rsp),%rax
-   26b7f155b:	48 89 cb             	mov    %rcx,%rbx
-   26b7f155e:	b9 02 00 00 00       	mov    $0x2,%ecx
-   26b7f1563:	48 89 54 24 58       	mov    %rdx,0x58(%rsp)
-   26b7f1568:	4c 89 44 24 60       	mov    %r8,0x60(%rsp)
-   26b7f156d:	4c 89 4c 24 68       	mov    %r9,0x68(%rsp)
-   26b7f1572:	48 89 44 24 28       	mov    %rax,0x28(%rsp)
-   26b7f1577:	e8 f4 0b 00 00       	call   26b7f2170 <__acrt_iob_func>
-   26b7f157c:	41 b8 1b 00 00 00    	mov    $0x1b,%r8d
-   26b7f1582:	ba 01 00 00 00       	mov    $0x1,%edx
-   26b7f1587:	48 8d 0d d2 2a 00 00 	lea    0x2ad2(%rip),%rcx        # 26b7f4060 <.rdata>
-   26b7f158e:	49 89 c1             	mov    %rax,%r9
-   26b7f1591:	e8 aa 0d 00 00       	call   26b7f2340 <fwrite>
-   26b7f1596:	48 8b 74 24 28       	mov    0x28(%rsp),%rsi
-   26b7f159b:	b9 02 00 00 00       	mov    $0x2,%ecx
-   26b7f15a0:	e8 cb 0b 00 00       	call   26b7f2170 <__acrt_iob_func>
-   26b7f15a5:	48 89 da             	mov    %rbx,%rdx
-   26b7f15a8:	48 89 c1             	mov    %rax,%rcx
-   26b7f15ab:	49 89 f0             	mov    %rsi,%r8
-   26b7f15ae:	e8 ad 0d 00 00       	call   26b7f2360 <vfprintf>
-   26b7f15b3:	e8 70 0d 00 00       	call   26b7f2328 <abort>
-   26b7f15b8:	90                   	nop
-   26b7f15b9:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-
-000000026b7f15c0 <mark_section_writable>:
-   26b7f15c0:	57                   	push   %rdi
-   26b7f15c1:	56                   	push   %rsi
-   26b7f15c2:	53                   	push   %rbx
-   26b7f15c3:	48 83 ec 50          	sub    $0x50,%rsp
-   26b7f15c7:	48 63 35 96 5a 00 00 	movslq 0x5a96(%rip),%rsi        # 26b7f7064 <maxSections>
-   26b7f15ce:	85 f6                	test   %esi,%esi
-   26b7f15d0:	48 89 cb             	mov    %rcx,%rbx
-   26b7f15d3:	0f 8e 17 01 00 00    	jle    26b7f16f0 <mark_section_writable+0x130>
-   26b7f15d9:	48 8b 05 88 5a 00 00 	mov    0x5a88(%rip),%rax        # 26b7f7068 <the_secs>
-   26b7f15e0:	45 31 c9             	xor    %r9d,%r9d
-   26b7f15e3:	48 83 c0 18          	add    $0x18,%rax
-   26b7f15e7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f15ee:	00 00 
-   26b7f15f0:	4c 8b 00             	mov    (%rax),%r8
-   26b7f15f3:	4c 39 c3             	cmp    %r8,%rbx
-   26b7f15f6:	72 13                	jb     26b7f160b <mark_section_writable+0x4b>
-   26b7f15f8:	48 8b 50 08          	mov    0x8(%rax),%rdx
-   26b7f15fc:	8b 52 08             	mov    0x8(%rdx),%edx
-   26b7f15ff:	49 01 d0             	add    %rdx,%r8
-   26b7f1602:	4c 39 c3             	cmp    %r8,%rbx
-   26b7f1605:	0f 82 8a 00 00 00    	jb     26b7f1695 <mark_section_writable+0xd5>
-   26b7f160b:	41 83 c1 01          	add    $0x1,%r9d
-   26b7f160f:	48 83 c0 28          	add    $0x28,%rax
-   26b7f1613:	41 39 f1             	cmp    %esi,%r9d
-   26b7f1616:	75 d8                	jne    26b7f15f0 <mark_section_writable+0x30>
-   26b7f1618:	48 89 d9             	mov    %rbx,%rcx
-   26b7f161b:	e8 00 08 00 00       	call   26b7f1e20 <__mingw_GetSectionForAddress>
-   26b7f1620:	48 85 c0             	test   %rax,%rax
-   26b7f1623:	48 89 c7             	mov    %rax,%rdi
-   26b7f1626:	0f 84 e6 00 00 00    	je     26b7f1712 <mark_section_writable+0x152>
-   26b7f162c:	48 8b 05 35 5a 00 00 	mov    0x5a35(%rip),%rax        # 26b7f7068 <the_secs>
-   26b7f1633:	48 8d 1c b6          	lea    (%rsi,%rsi,4),%rbx
-   26b7f1637:	48 c1 e3 03          	shl    $0x3,%rbx
-   26b7f163b:	48 01 d8             	add    %rbx,%rax
-   26b7f163e:	48 89 78 20          	mov    %rdi,0x20(%rax)
-   26b7f1642:	c7 00 00 00 00 00    	movl   $0x0,(%rax)
-   26b7f1648:	e8 13 09 00 00       	call   26b7f1f60 <_GetPEImageBase>
-   26b7f164d:	8b 57 0c             	mov    0xc(%rdi),%edx
-   26b7f1650:	41 b8 30 00 00 00    	mov    $0x30,%r8d
-   26b7f1656:	48 8d 0c 10          	lea    (%rax,%rdx,1),%rcx
-   26b7f165a:	48 8b 05 07 5a 00 00 	mov    0x5a07(%rip),%rax        # 26b7f7068 <the_secs>
-   26b7f1661:	48 8d 54 24 20       	lea    0x20(%rsp),%rdx
-   26b7f1666:	48 89 4c 18 18       	mov    %rcx,0x18(%rax,%rbx,1)
-   26b7f166b:	ff 15 cb 7a 00 00    	call   *0x7acb(%rip)        # 26b7f913c <__imp_VirtualQuery>
-   26b7f1671:	48 85 c0             	test   %rax,%rax
-   26b7f1674:	0f 84 7d 00 00 00    	je     26b7f16f7 <mark_section_writable+0x137>
-   26b7f167a:	8b 44 24 44          	mov    0x44(%rsp),%eax
-   26b7f167e:	8d 50 c0             	lea    -0x40(%rax),%edx
-   26b7f1681:	83 e2 bf             	and    $0xffffffbf,%edx
-   26b7f1684:	74 08                	je     26b7f168e <mark_section_writable+0xce>
-   26b7f1686:	8d 50 fc             	lea    -0x4(%rax),%edx
-   26b7f1689:	83 e2 fb             	and    $0xfffffffb,%edx
-   26b7f168c:	75 12                	jne    26b7f16a0 <mark_section_writable+0xe0>
-   26b7f168e:	83 05 cf 59 00 00 01 	addl   $0x1,0x59cf(%rip)        # 26b7f7064 <maxSections>
-   26b7f1695:	48 83 c4 50          	add    $0x50,%rsp
-   26b7f1699:	5b                   	pop    %rbx
-   26b7f169a:	5e                   	pop    %rsi
-   26b7f169b:	5f                   	pop    %rdi
-   26b7f169c:	c3                   	ret
-   26b7f169d:	0f 1f 00             	nopl   (%rax)
-   26b7f16a0:	83 f8 02             	cmp    $0x2,%eax
-   26b7f16a3:	41 b8 40 00 00 00    	mov    $0x40,%r8d
-   26b7f16a9:	b8 04 00 00 00       	mov    $0x4,%eax
-   26b7f16ae:	48 8b 4c 24 20       	mov    0x20(%rsp),%rcx
-   26b7f16b3:	44 0f 44 c0          	cmove  %eax,%r8d
-   26b7f16b7:	48 8b 54 24 38       	mov    0x38(%rsp),%rdx
-   26b7f16bc:	48 03 1d a5 59 00 00 	add    0x59a5(%rip),%rbx        # 26b7f7068 <the_secs>
-   26b7f16c3:	49 89 d9             	mov    %rbx,%r9
-   26b7f16c6:	48 89 4b 08          	mov    %rcx,0x8(%rbx)
-   26b7f16ca:	48 89 53 10          	mov    %rdx,0x10(%rbx)
-   26b7f16ce:	ff 15 60 7a 00 00    	call   *0x7a60(%rip)        # 26b7f9134 <__imp_VirtualProtect>
-   26b7f16d4:	85 c0                	test   %eax,%eax
-   26b7f16d6:	75 b6                	jne    26b7f168e <mark_section_writable+0xce>
-   26b7f16d8:	ff 15 2e 7a 00 00    	call   *0x7a2e(%rip)        # 26b7f910c <__imp_GetLastError>
-   26b7f16de:	48 8d 0d f3 29 00 00 	lea    0x29f3(%rip),%rcx        # 26b7f40d8 <.rdata+0x78>
-   26b7f16e5:	89 c2                	mov    %eax,%edx
-   26b7f16e7:	e8 64 fe ff ff       	call   26b7f1550 <__report_error>
-   26b7f16ec:	0f 1f 40 00          	nopl   0x0(%rax)
-   26b7f16f0:	31 f6                	xor    %esi,%esi
-   26b7f16f2:	e9 21 ff ff ff       	jmp    26b7f1618 <mark_section_writable+0x58>
-   26b7f16f7:	48 8b 05 6a 59 00 00 	mov    0x596a(%rip),%rax        # 26b7f7068 <the_secs>
-   26b7f16fe:	48 8d 0d 9b 29 00 00 	lea    0x299b(%rip),%rcx        # 26b7f40a0 <.rdata+0x40>
-   26b7f1705:	8b 57 08             	mov    0x8(%rdi),%edx
-   26b7f1708:	4c 8b 44 18 18       	mov    0x18(%rax,%rbx,1),%r8
-   26b7f170d:	e8 3e fe ff ff       	call   26b7f1550 <__report_error>
-   26b7f1712:	48 8d 0d 67 29 00 00 	lea    0x2967(%rip),%rcx        # 26b7f4080 <.rdata+0x20>
-   26b7f1719:	48 89 da             	mov    %rbx,%rdx
-   26b7f171c:	e8 2f fe ff ff       	call   26b7f1550 <__report_error>
-   26b7f1721:	90                   	nop
-   26b7f1722:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
-   26b7f1729:	00 00 00 00 
-   26b7f172d:	0f 1f 00             	nopl   (%rax)
-
-000000026b7f1730 <_pei386_runtime_relocator>:
-   26b7f1730:	55                   	push   %rbp
-   26b7f1731:	41 57                	push   %r15
-   26b7f1733:	41 56                	push   %r14
-   26b7f1735:	41 55                	push   %r13
-   26b7f1737:	41 54                	push   %r12
-   26b7f1739:	57                   	push   %rdi
-   26b7f173a:	56                   	push   %rsi
-   26b7f173b:	53                   	push   %rbx
-   26b7f173c:	48 83 ec 48          	sub    $0x48,%rsp
-   26b7f1740:	48 8d 6c 24 40       	lea    0x40(%rsp),%rbp
-   26b7f1745:	8b 3d 15 59 00 00    	mov    0x5915(%rip),%edi        # 26b7f7060 <was_init.0>
-   26b7f174b:	85 ff                	test   %edi,%edi
-   26b7f174d:	74 11                	je     26b7f1760 <_pei386_runtime_relocator+0x30>
-   26b7f174f:	48 8d 65 08          	lea    0x8(%rbp),%rsp
-   26b7f1753:	5b                   	pop    %rbx
-   26b7f1754:	5e                   	pop    %rsi
-   26b7f1755:	5f                   	pop    %rdi
-   26b7f1756:	41 5c                	pop    %r12
-   26b7f1758:	41 5d                	pop    %r13
-   26b7f175a:	41 5e                	pop    %r14
-   26b7f175c:	41 5f                	pop    %r15
-   26b7f175e:	5d                   	pop    %rbp
-   26b7f175f:	c3                   	ret
-   26b7f1760:	c7 05 f6 58 00 00 01 	movl   $0x1,0x58f6(%rip)        # 26b7f7060 <was_init.0>
-   26b7f1767:	00 00 00 
-   26b7f176a:	e8 31 07 00 00       	call   26b7f1ea0 <__mingw_GetSectionCount>
-   26b7f176f:	48 98                	cltq
-   26b7f1771:	48 8d 04 80          	lea    (%rax,%rax,4),%rax
-   26b7f1775:	48 8d 04 c5 0f 00 00 	lea    0xf(,%rax,8),%rax
-   26b7f177c:	00 
-   26b7f177d:	48 83 e0 f0          	and    $0xfffffffffffffff0,%rax
-   26b7f1781:	e8 8a 09 00 00       	call   26b7f2110 <___chkstk_ms>
-   26b7f1786:	4c 8b 2d 53 2a 00 00 	mov    0x2a53(%rip),%r13        # 26b7f41e0 <.refptr.__RUNTIME_PSEUDO_RELOC_LIST_END__>
-   26b7f178d:	c7 05 cd 58 00 00 00 	movl   $0x0,0x58cd(%rip)        # 26b7f7064 <maxSections>
-   26b7f1794:	00 00 00 
-   26b7f1797:	48 8b 1d 52 2a 00 00 	mov    0x2a52(%rip),%rbx        # 26b7f41f0 <.refptr.__RUNTIME_PSEUDO_RELOC_LIST__>
-   26b7f179e:	48 29 c4             	sub    %rax,%rsp
-   26b7f17a1:	48 8d 44 24 30       	lea    0x30(%rsp),%rax
-   26b7f17a6:	48 89 05 bb 58 00 00 	mov    %rax,0x58bb(%rip)        # 26b7f7068 <the_secs>
-   26b7f17ad:	4c 89 e8             	mov    %r13,%rax
-   26b7f17b0:	48 29 d8             	sub    %rbx,%rax
-   26b7f17b3:	48 83 f8 07          	cmp    $0x7,%rax
-   26b7f17b7:	7e 96                	jle    26b7f174f <_pei386_runtime_relocator+0x1f>
-   26b7f17b9:	48 83 f8 0b          	cmp    $0xb,%rax
-   26b7f17bd:	8b 13                	mov    (%rbx),%edx
-   26b7f17bf:	0f 8f 83 01 00 00    	jg     26b7f1948 <_pei386_runtime_relocator+0x218>
-   26b7f17c5:	8b 03                	mov    (%rbx),%eax
-   26b7f17c7:	85 c0                	test   %eax,%eax
-   26b7f17c9:	0f 85 71 02 00 00    	jne    26b7f1a40 <_pei386_runtime_relocator+0x310>
-   26b7f17cf:	8b 43 04             	mov    0x4(%rbx),%eax
-   26b7f17d2:	85 c0                	test   %eax,%eax
-   26b7f17d4:	0f 85 66 02 00 00    	jne    26b7f1a40 <_pei386_runtime_relocator+0x310>
-   26b7f17da:	8b 53 08             	mov    0x8(%rbx),%edx
-   26b7f17dd:	83 fa 01             	cmp    $0x1,%edx
-   26b7f17e0:	0f 85 9c 02 00 00    	jne    26b7f1a82 <_pei386_runtime_relocator+0x352>
-   26b7f17e6:	48 83 c3 0c          	add    $0xc,%rbx
-   26b7f17ea:	4c 39 eb             	cmp    %r13,%rbx
-   26b7f17ed:	0f 83 5c ff ff ff    	jae    26b7f174f <_pei386_runtime_relocator+0x1f>
-   26b7f17f3:	4c 8b 25 16 2a 00 00 	mov    0x2a16(%rip),%r12        # 26b7f4210 <.refptr.__image_base__>
-   26b7f17fa:	49 bf ff ff ff 7f ff 	movabs $0xffffffff7fffffff,%r15
-   26b7f1801:	ff ff ff 
-   26b7f1804:	eb 5d                	jmp    26b7f1863 <_pei386_runtime_relocator+0x133>
-   26b7f1806:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
-   26b7f180d:	00 00 00 
-   26b7f1810:	41 0f b6 36          	movzbl (%r14),%esi
-   26b7f1814:	81 e1 c0 00 00 00    	and    $0xc0,%ecx
-   26b7f181a:	40 84 f6             	test   %sil,%sil
-   26b7f181d:	0f 89 05 02 00 00    	jns    26b7f1a28 <_pei386_runtime_relocator+0x2f8>
-   26b7f1823:	48 81 ce 00 ff ff ff 	or     $0xffffffffffffff00,%rsi
-   26b7f182a:	48 29 c6             	sub    %rax,%rsi
-   26b7f182d:	4c 01 ce             	add    %r9,%rsi
-   26b7f1830:	85 c9                	test   %ecx,%ecx
-   26b7f1832:	75 17                	jne    26b7f184b <_pei386_runtime_relocator+0x11b>
-   26b7f1834:	48 81 fe ff 00 00 00 	cmp    $0xff,%rsi
-   26b7f183b:	0f 8f 4e 01 00 00    	jg     26b7f198f <_pei386_runtime_relocator+0x25f>
-   26b7f1841:	48 83 fe 80          	cmp    $0xffffffffffffff80,%rsi
-   26b7f1845:	0f 8c 44 01 00 00    	jl     26b7f198f <_pei386_runtime_relocator+0x25f>
-   26b7f184b:	4c 89 f1             	mov    %r14,%rcx
-   26b7f184e:	e8 6d fd ff ff       	call   26b7f15c0 <mark_section_writable>
-   26b7f1853:	41 88 36             	mov    %sil,(%r14)
-   26b7f1856:	48 83 c3 0c          	add    $0xc,%rbx
-   26b7f185a:	4c 39 eb             	cmp    %r13,%rbx
-   26b7f185d:	0f 83 8d 00 00 00    	jae    26b7f18f0 <_pei386_runtime_relocator+0x1c0>
-   26b7f1863:	8b 4b 08             	mov    0x8(%rbx),%ecx
-   26b7f1866:	8b 03                	mov    (%rbx),%eax
-   26b7f1868:	44 8b 43 04          	mov    0x4(%rbx),%r8d
-   26b7f186c:	0f b6 d1             	movzbl %cl,%edx
-   26b7f186f:	4c 01 e0             	add    %r12,%rax
-   26b7f1872:	83 fa 20             	cmp    $0x20,%edx
-   26b7f1875:	4c 8b 08             	mov    (%rax),%r9
-   26b7f1878:	4f 8d 34 20          	lea    (%r8,%r12,1),%r14
-   26b7f187c:	0f 84 26 01 00 00    	je     26b7f19a8 <_pei386_runtime_relocator+0x278>
-   26b7f1882:	0f 87 e8 00 00 00    	ja     26b7f1970 <_pei386_runtime_relocator+0x240>
-   26b7f1888:	83 fa 08             	cmp    $0x8,%edx
-   26b7f188b:	74 83                	je     26b7f1810 <_pei386_runtime_relocator+0xe0>
-   26b7f188d:	83 fa 10             	cmp    $0x10,%edx
-   26b7f1890:	0f 85 e0 01 00 00    	jne    26b7f1a76 <_pei386_runtime_relocator+0x346>
-   26b7f1896:	41 0f b7 36          	movzwl (%r14),%esi
-   26b7f189a:	81 e1 c0 00 00 00    	and    $0xc0,%ecx
-   26b7f18a0:	66 85 f6             	test   %si,%si
-   26b7f18a3:	0f 89 67 01 00 00    	jns    26b7f1a10 <_pei386_runtime_relocator+0x2e0>
-   26b7f18a9:	48 81 ce 00 00 ff ff 	or     $0xffffffffffff0000,%rsi
-   26b7f18b0:	48 29 c6             	sub    %rax,%rsi
-   26b7f18b3:	4c 01 ce             	add    %r9,%rsi
-   26b7f18b6:	85 c9                	test   %ecx,%ecx
-   26b7f18b8:	75 1a                	jne    26b7f18d4 <_pei386_runtime_relocator+0x1a4>
-   26b7f18ba:	48 81 fe 00 80 ff ff 	cmp    $0xffffffffffff8000,%rsi
-   26b7f18c1:	0f 8c c8 00 00 00    	jl     26b7f198f <_pei386_runtime_relocator+0x25f>
-   26b7f18c7:	48 81 fe ff ff 00 00 	cmp    $0xffff,%rsi
-   26b7f18ce:	0f 8f bb 00 00 00    	jg     26b7f198f <_pei386_runtime_relocator+0x25f>
-   26b7f18d4:	4c 89 f1             	mov    %r14,%rcx
-   26b7f18d7:	48 83 c3 0c          	add    $0xc,%rbx
-   26b7f18db:	e8 e0 fc ff ff       	call   26b7f15c0 <mark_section_writable>
-   26b7f18e0:	4c 39 eb             	cmp    %r13,%rbx
-   26b7f18e3:	66 41 89 36          	mov    %si,(%r14)
-   26b7f18e7:	0f 82 76 ff ff ff    	jb     26b7f1863 <_pei386_runtime_relocator+0x133>
-   26b7f18ed:	0f 1f 00             	nopl   (%rax)
-   26b7f18f0:	8b 15 6e 57 00 00    	mov    0x576e(%rip),%edx        # 26b7f7064 <maxSections>
-   26b7f18f6:	85 d2                	test   %edx,%edx
-   26b7f18f8:	0f 8e 51 fe ff ff    	jle    26b7f174f <_pei386_runtime_relocator+0x1f>
-   26b7f18fe:	48 8b 35 2f 78 00 00 	mov    0x782f(%rip),%rsi        # 26b7f9134 <__imp_VirtualProtect>
-   26b7f1905:	4c 8d 65 fc          	lea    -0x4(%rbp),%r12
-   26b7f1909:	31 db                	xor    %ebx,%ebx
-   26b7f190b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f1910:	48 8b 05 51 57 00 00 	mov    0x5751(%rip),%rax        # 26b7f7068 <the_secs>
-   26b7f1917:	48 01 d8             	add    %rbx,%rax
-   26b7f191a:	44 8b 00             	mov    (%rax),%r8d
-   26b7f191d:	45 85 c0             	test   %r8d,%r8d
-   26b7f1920:	74 0d                	je     26b7f192f <_pei386_runtime_relocator+0x1ff>
-   26b7f1922:	48 8b 50 10          	mov    0x10(%rax),%rdx
-   26b7f1926:	4d 89 e1             	mov    %r12,%r9
-   26b7f1929:	48 8b 48 08          	mov    0x8(%rax),%rcx
-   26b7f192d:	ff d6                	call   *%rsi
-   26b7f192f:	83 c7 01             	add    $0x1,%edi
-   26b7f1932:	48 83 c3 28          	add    $0x28,%rbx
-   26b7f1936:	3b 3d 28 57 00 00    	cmp    0x5728(%rip),%edi        # 26b7f7064 <maxSections>
-   26b7f193c:	7c d2                	jl     26b7f1910 <_pei386_runtime_relocator+0x1e0>
-   26b7f193e:	e9 0c fe ff ff       	jmp    26b7f174f <_pei386_runtime_relocator+0x1f>
-   26b7f1943:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f1948:	85 d2                	test   %edx,%edx
-   26b7f194a:	0f 85 f0 00 00 00    	jne    26b7f1a40 <_pei386_runtime_relocator+0x310>
-   26b7f1950:	8b 43 04             	mov    0x4(%rbx),%eax
-   26b7f1953:	89 c2                	mov    %eax,%edx
-   26b7f1955:	0b 53 08             	or     0x8(%rbx),%edx
-   26b7f1958:	0f 85 74 fe ff ff    	jne    26b7f17d2 <_pei386_runtime_relocator+0xa2>
-   26b7f195e:	48 83 c3 0c          	add    $0xc,%rbx
-   26b7f1962:	e9 5e fe ff ff       	jmp    26b7f17c5 <_pei386_runtime_relocator+0x95>
-   26b7f1967:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f196e:	00 00 
-   26b7f1970:	83 fa 40             	cmp    $0x40,%edx
-   26b7f1973:	0f 85 fd 00 00 00    	jne    26b7f1a76 <_pei386_runtime_relocator+0x346>
-   26b7f1979:	49 8b 36             	mov    (%r14),%rsi
-   26b7f197c:	48 29 c6             	sub    %rax,%rsi
-   26b7f197f:	4c 01 ce             	add    %r9,%rsi
-   26b7f1982:	81 e1 c0 00 00 00    	and    $0xc0,%ecx
-   26b7f1988:	75 66                	jne    26b7f19f0 <_pei386_runtime_relocator+0x2c0>
-   26b7f198a:	48 85 f6             	test   %rsi,%rsi
-   26b7f198d:	78 61                	js     26b7f19f0 <_pei386_runtime_relocator+0x2c0>
-   26b7f198f:	48 89 74 24 20       	mov    %rsi,0x20(%rsp)
-   26b7f1994:	48 8d 0d cd 27 00 00 	lea    0x27cd(%rip),%rcx        # 26b7f4168 <.rdata+0x108>
-   26b7f199b:	4d 89 f0             	mov    %r14,%r8
-   26b7f199e:	e8 ad fb ff ff       	call   26b7f1550 <__report_error>
-   26b7f19a3:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f19a8:	41 8b 36             	mov    (%r14),%esi
-   26b7f19ab:	81 e1 c0 00 00 00    	and    $0xc0,%ecx
-   26b7f19b1:	85 f6                	test   %esi,%esi
-   26b7f19b3:	79 4b                	jns    26b7f1a00 <_pei386_runtime_relocator+0x2d0>
-   26b7f19b5:	49 bb 00 00 00 00 ff 	movabs $0xffffffff00000000,%r11
-   26b7f19bc:	ff ff ff 
-   26b7f19bf:	4c 09 de             	or     %r11,%rsi
-   26b7f19c2:	48 29 c6             	sub    %rax,%rsi
-   26b7f19c5:	4c 01 ce             	add    %r9,%rsi
-   26b7f19c8:	85 c9                	test   %ecx,%ecx
-   26b7f19ca:	75 0f                	jne    26b7f19db <_pei386_runtime_relocator+0x2ab>
-   26b7f19cc:	4c 39 fe             	cmp    %r15,%rsi
-   26b7f19cf:	7e be                	jle    26b7f198f <_pei386_runtime_relocator+0x25f>
-   26b7f19d1:	b8 ff ff ff ff       	mov    $0xffffffff,%eax
-   26b7f19d6:	48 39 c6             	cmp    %rax,%rsi
-   26b7f19d9:	7f b4                	jg     26b7f198f <_pei386_runtime_relocator+0x25f>
-   26b7f19db:	4c 89 f1             	mov    %r14,%rcx
-   26b7f19de:	e8 dd fb ff ff       	call   26b7f15c0 <mark_section_writable>
-   26b7f19e3:	41 89 36             	mov    %esi,(%r14)
-   26b7f19e6:	e9 6b fe ff ff       	jmp    26b7f1856 <_pei386_runtime_relocator+0x126>
-   26b7f19eb:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f19f0:	4c 89 f1             	mov    %r14,%rcx
-   26b7f19f3:	e8 c8 fb ff ff       	call   26b7f15c0 <mark_section_writable>
-   26b7f19f8:	49 89 36             	mov    %rsi,(%r14)
-   26b7f19fb:	e9 56 fe ff ff       	jmp    26b7f1856 <_pei386_runtime_relocator+0x126>
-   26b7f1a00:	48 29 c6             	sub    %rax,%rsi
-   26b7f1a03:	4c 01 ce             	add    %r9,%rsi
-   26b7f1a06:	85 c9                	test   %ecx,%ecx
-   26b7f1a08:	74 c2                	je     26b7f19cc <_pei386_runtime_relocator+0x29c>
-   26b7f1a0a:	eb cf                	jmp    26b7f19db <_pei386_runtime_relocator+0x2ab>
-   26b7f1a0c:	0f 1f 40 00          	nopl   0x0(%rax)
-   26b7f1a10:	48 29 c6             	sub    %rax,%rsi
-   26b7f1a13:	4c 01 ce             	add    %r9,%rsi
-   26b7f1a16:	85 c9                	test   %ecx,%ecx
-   26b7f1a18:	0f 84 9c fe ff ff    	je     26b7f18ba <_pei386_runtime_relocator+0x18a>
-   26b7f1a1e:	e9 b1 fe ff ff       	jmp    26b7f18d4 <_pei386_runtime_relocator+0x1a4>
-   26b7f1a23:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f1a28:	48 29 c6             	sub    %rax,%rsi
-   26b7f1a2b:	4c 01 ce             	add    %r9,%rsi
-   26b7f1a2e:	85 c9                	test   %ecx,%ecx
-   26b7f1a30:	0f 84 fe fd ff ff    	je     26b7f1834 <_pei386_runtime_relocator+0x104>
-   26b7f1a36:	e9 10 fe ff ff       	jmp    26b7f184b <_pei386_runtime_relocator+0x11b>
-   26b7f1a3b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f1a40:	4c 39 eb             	cmp    %r13,%rbx
-   26b7f1a43:	0f 83 06 fd ff ff    	jae    26b7f174f <_pei386_runtime_relocator+0x1f>
-   26b7f1a49:	4c 8b 35 c0 27 00 00 	mov    0x27c0(%rip),%r14        # 26b7f4210 <.refptr.__image_base__>
-   26b7f1a50:	8b 73 04             	mov    0x4(%rbx),%esi
-   26b7f1a53:	48 83 c3 08          	add    $0x8,%rbx
-   26b7f1a57:	44 8b 63 f8          	mov    -0x8(%rbx),%r12d
-   26b7f1a5b:	4c 01 f6             	add    %r14,%rsi
-   26b7f1a5e:	44 03 26             	add    (%rsi),%r12d
-   26b7f1a61:	48 89 f1             	mov    %rsi,%rcx
-   26b7f1a64:	e8 57 fb ff ff       	call   26b7f15c0 <mark_section_writable>
-   26b7f1a69:	4c 39 eb             	cmp    %r13,%rbx
-   26b7f1a6c:	44 89 26             	mov    %r12d,(%rsi)
-   26b7f1a6f:	72 df                	jb     26b7f1a50 <_pei386_runtime_relocator+0x320>
-   26b7f1a71:	e9 7a fe ff ff       	jmp    26b7f18f0 <_pei386_runtime_relocator+0x1c0>
-   26b7f1a76:	48 8d 0d bb 26 00 00 	lea    0x26bb(%rip),%rcx        # 26b7f4138 <.rdata+0xd8>
-   26b7f1a7d:	e8 ce fa ff ff       	call   26b7f1550 <__report_error>
-   26b7f1a82:	48 8d 0d 77 26 00 00 	lea    0x2677(%rip),%rcx        # 26b7f4100 <.rdata+0xa0>
-   26b7f1a89:	e8 c2 fa ff ff       	call   26b7f1550 <__report_error>
-   26b7f1a8e:	90                   	nop
-   26b7f1a8f:	90                   	nop
-
-000000026b7f1a90 <__mingwthr_run_key_dtors.part.0>:
-   26b7f1a90:	41 54                	push   %r12
-   26b7f1a92:	55                   	push   %rbp
-   26b7f1a93:	57                   	push   %rdi
-   26b7f1a94:	56                   	push   %rsi
-   26b7f1a95:	53                   	push   %rbx
-   26b7f1a96:	48 83 ec 20          	sub    $0x20,%rsp
-   26b7f1a9a:	4c 8d 25 ff 55 00 00 	lea    0x55ff(%rip),%r12        # 26b7f70a0 <__mingwthr_cs>
-   26b7f1aa1:	4c 89 e1             	mov    %r12,%rcx
-   26b7f1aa4:	ff 15 5a 76 00 00    	call   *0x765a(%rip)        # 26b7f9104 <__imp_EnterCriticalSection>
-   26b7f1aaa:	48 8b 1d cf 55 00 00 	mov    0x55cf(%rip),%rbx        # 26b7f7080 <key_dtor_list>
-   26b7f1ab1:	48 85 db             	test   %rbx,%rbx
-   26b7f1ab4:	74 36                	je     26b7f1aec <__mingwthr_run_key_dtors.part.0+0x5c>
-   26b7f1ab6:	48 8b 2d 6f 76 00 00 	mov    0x766f(%rip),%rbp        # 26b7f912c <__imp_TlsGetValue>
-   26b7f1abd:	48 8b 3d 48 76 00 00 	mov    0x7648(%rip),%rdi        # 26b7f910c <__imp_GetLastError>
-   26b7f1ac4:	0f 1f 40 00          	nopl   0x0(%rax)
-   26b7f1ac8:	8b 0b                	mov    (%rbx),%ecx
-   26b7f1aca:	ff d5                	call   *%rbp
-   26b7f1acc:	48 89 c6             	mov    %rax,%rsi
-   26b7f1acf:	ff d7                	call   *%rdi
-   26b7f1ad1:	85 c0                	test   %eax,%eax
-   26b7f1ad3:	75 0e                	jne    26b7f1ae3 <__mingwthr_run_key_dtors.part.0+0x53>
-   26b7f1ad5:	48 85 f6             	test   %rsi,%rsi
-   26b7f1ad8:	74 09                	je     26b7f1ae3 <__mingwthr_run_key_dtors.part.0+0x53>
-   26b7f1ada:	48 8b 43 08          	mov    0x8(%rbx),%rax
-   26b7f1ade:	48 89 f1             	mov    %rsi,%rcx
-   26b7f1ae1:	ff d0                	call   *%rax
-   26b7f1ae3:	48 8b 5b 10          	mov    0x10(%rbx),%rbx
-   26b7f1ae7:	48 85 db             	test   %rbx,%rbx
-   26b7f1aea:	75 dc                	jne    26b7f1ac8 <__mingwthr_run_key_dtors.part.0+0x38>
-   26b7f1aec:	4c 89 e1             	mov    %r12,%rcx
-   26b7f1aef:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f1af3:	5b                   	pop    %rbx
-   26b7f1af4:	5e                   	pop    %rsi
-   26b7f1af5:	5f                   	pop    %rdi
-   26b7f1af6:	5d                   	pop    %rbp
-   26b7f1af7:	41 5c                	pop    %r12
-   26b7f1af9:	48 ff 25 1c 76 00 00 	rex.W jmp *0x761c(%rip)        # 26b7f911c <__imp_LeaveCriticalSection>
-
-000000026b7f1b00 <___w64_mingwthr_add_key_dtor>:
-   26b7f1b00:	57                   	push   %rdi
-   26b7f1b01:	56                   	push   %rsi
-   26b7f1b02:	53                   	push   %rbx
-   26b7f1b03:	48 83 ec 20          	sub    $0x20,%rsp
-   26b7f1b07:	8b 05 7b 55 00 00    	mov    0x557b(%rip),%eax        # 26b7f7088 <__mingwthr_cs_init>
-   26b7f1b0d:	85 c0                	test   %eax,%eax
-   26b7f1b0f:	89 cf                	mov    %ecx,%edi
-   26b7f1b11:	48 89 d6             	mov    %rdx,%rsi
-   26b7f1b14:	75 0a                	jne    26b7f1b20 <___w64_mingwthr_add_key_dtor+0x20>
-   26b7f1b16:	31 c0                	xor    %eax,%eax
-   26b7f1b18:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f1b1c:	5b                   	pop    %rbx
-   26b7f1b1d:	5e                   	pop    %rsi
-   26b7f1b1e:	5f                   	pop    %rdi
-   26b7f1b1f:	c3                   	ret
-   26b7f1b20:	ba 18 00 00 00       	mov    $0x18,%edx
-   26b7f1b25:	b9 01 00 00 00       	mov    $0x1,%ecx
-   26b7f1b2a:	e8 01 08 00 00       	call   26b7f2330 <calloc>
-   26b7f1b2f:	48 85 c0             	test   %rax,%rax
-   26b7f1b32:	48 89 c3             	mov    %rax,%rbx
-   26b7f1b35:	74 33                	je     26b7f1b6a <___w64_mingwthr_add_key_dtor+0x6a>
-   26b7f1b37:	48 89 70 08          	mov    %rsi,0x8(%rax)
-   26b7f1b3b:	48 8d 35 5e 55 00 00 	lea    0x555e(%rip),%rsi        # 26b7f70a0 <__mingwthr_cs>
-   26b7f1b42:	89 38                	mov    %edi,(%rax)
-   26b7f1b44:	48 89 f1             	mov    %rsi,%rcx
-   26b7f1b47:	ff 15 b7 75 00 00    	call   *0x75b7(%rip)        # 26b7f9104 <__imp_EnterCriticalSection>
-   26b7f1b4d:	48 8b 05 2c 55 00 00 	mov    0x552c(%rip),%rax        # 26b7f7080 <key_dtor_list>
-   26b7f1b54:	48 89 f1             	mov    %rsi,%rcx
-   26b7f1b57:	48 89 1d 22 55 00 00 	mov    %rbx,0x5522(%rip)        # 26b7f7080 <key_dtor_list>
-   26b7f1b5e:	48 89 43 10          	mov    %rax,0x10(%rbx)
-   26b7f1b62:	ff 15 b4 75 00 00    	call   *0x75b4(%rip)        # 26b7f911c <__imp_LeaveCriticalSection>
-   26b7f1b68:	eb ac                	jmp    26b7f1b16 <___w64_mingwthr_add_key_dtor+0x16>
-   26b7f1b6a:	83 c8 ff             	or     $0xffffffff,%eax
-   26b7f1b6d:	eb a9                	jmp    26b7f1b18 <___w64_mingwthr_add_key_dtor+0x18>
-   26b7f1b6f:	90                   	nop
-
-000000026b7f1b70 <___w64_mingwthr_remove_key_dtor>:
-   26b7f1b70:	56                   	push   %rsi
-   26b7f1b71:	53                   	push   %rbx
-   26b7f1b72:	48 83 ec 28          	sub    $0x28,%rsp
-   26b7f1b76:	8b 05 0c 55 00 00    	mov    0x550c(%rip),%eax        # 26b7f7088 <__mingwthr_cs_init>
-   26b7f1b7c:	85 c0                	test   %eax,%eax
-   26b7f1b7e:	89 cb                	mov    %ecx,%ebx
-   26b7f1b80:	75 0e                	jne    26b7f1b90 <___w64_mingwthr_remove_key_dtor+0x20>
-   26b7f1b82:	31 c0                	xor    %eax,%eax
-   26b7f1b84:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f1b88:	5b                   	pop    %rbx
-   26b7f1b89:	5e                   	pop    %rsi
-   26b7f1b8a:	c3                   	ret
-   26b7f1b8b:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f1b90:	48 8d 35 09 55 00 00 	lea    0x5509(%rip),%rsi        # 26b7f70a0 <__mingwthr_cs>
-   26b7f1b97:	48 89 f1             	mov    %rsi,%rcx
-   26b7f1b9a:	ff 15 64 75 00 00    	call   *0x7564(%rip)        # 26b7f9104 <__imp_EnterCriticalSection>
-   26b7f1ba0:	48 8b 0d d9 54 00 00 	mov    0x54d9(%rip),%rcx        # 26b7f7080 <key_dtor_list>
-   26b7f1ba7:	48 85 c9             	test   %rcx,%rcx
-   26b7f1baa:	74 27                	je     26b7f1bd3 <___w64_mingwthr_remove_key_dtor+0x63>
-   26b7f1bac:	31 d2                	xor    %edx,%edx
-   26b7f1bae:	eb 0b                	jmp    26b7f1bbb <___w64_mingwthr_remove_key_dtor+0x4b>
-   26b7f1bb0:	48 85 c0             	test   %rax,%rax
-   26b7f1bb3:	48 89 ca             	mov    %rcx,%rdx
-   26b7f1bb6:	74 1b                	je     26b7f1bd3 <___w64_mingwthr_remove_key_dtor+0x63>
-   26b7f1bb8:	48 89 c1             	mov    %rax,%rcx
-   26b7f1bbb:	8b 01                	mov    (%rcx),%eax
-   26b7f1bbd:	39 d8                	cmp    %ebx,%eax
-   26b7f1bbf:	48 8b 41 10          	mov    0x10(%rcx),%rax
-   26b7f1bc3:	75 eb                	jne    26b7f1bb0 <___w64_mingwthr_remove_key_dtor+0x40>
-   26b7f1bc5:	48 85 d2             	test   %rdx,%rdx
-   26b7f1bc8:	74 1e                	je     26b7f1be8 <___w64_mingwthr_remove_key_dtor+0x78>
-   26b7f1bca:	48 89 42 10          	mov    %rax,0x10(%rdx)
-   26b7f1bce:	e8 65 07 00 00       	call   26b7f2338 <free>
-   26b7f1bd3:	48 89 f1             	mov    %rsi,%rcx
-   26b7f1bd6:	ff 15 40 75 00 00    	call   *0x7540(%rip)        # 26b7f911c <__imp_LeaveCriticalSection>
-   26b7f1bdc:	31 c0                	xor    %eax,%eax
-   26b7f1bde:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f1be2:	5b                   	pop    %rbx
-   26b7f1be3:	5e                   	pop    %rsi
-   26b7f1be4:	c3                   	ret
-   26b7f1be5:	0f 1f 00             	nopl   (%rax)
-   26b7f1be8:	48 89 05 91 54 00 00 	mov    %rax,0x5491(%rip)        # 26b7f7080 <key_dtor_list>
-   26b7f1bef:	eb dd                	jmp    26b7f1bce <___w64_mingwthr_remove_key_dtor+0x5e>
-   26b7f1bf1:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
-   26b7f1bf8:	00 00 00 00 
-   26b7f1bfc:	0f 1f 40 00          	nopl   0x0(%rax)
-
-000000026b7f1c00 <__mingw_TLScallback>:
-   26b7f1c00:	53                   	push   %rbx
-   26b7f1c01:	48 83 ec 20          	sub    $0x20,%rsp
-   26b7f1c05:	83 fa 02             	cmp    $0x2,%edx
-   26b7f1c08:	0f 84 b2 00 00 00    	je     26b7f1cc0 <__mingw_TLScallback+0xc0>
-   26b7f1c0e:	77 30                	ja     26b7f1c40 <__mingw_TLScallback+0x40>
-   26b7f1c10:	85 d2                	test   %edx,%edx
-   26b7f1c12:	74 4c                	je     26b7f1c60 <__mingw_TLScallback+0x60>
-   26b7f1c14:	8b 05 6e 54 00 00    	mov    0x546e(%rip),%eax        # 26b7f7088 <__mingwthr_cs_init>
-   26b7f1c1a:	85 c0                	test   %eax,%eax
-   26b7f1c1c:	0f 84 be 00 00 00    	je     26b7f1ce0 <__mingw_TLScallback+0xe0>
-   26b7f1c22:	c7 05 5c 54 00 00 01 	movl   $0x1,0x545c(%rip)        # 26b7f7088 <__mingwthr_cs_init>
-   26b7f1c29:	00 00 00 
-   26b7f1c2c:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f1c31:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f1c35:	5b                   	pop    %rbx
-   26b7f1c36:	c3                   	ret
-   26b7f1c37:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f1c3e:	00 00 
-   26b7f1c40:	83 fa 03             	cmp    $0x3,%edx
-   26b7f1c43:	75 e7                	jne    26b7f1c2c <__mingw_TLScallback+0x2c>
-   26b7f1c45:	8b 05 3d 54 00 00    	mov    0x543d(%rip),%eax        # 26b7f7088 <__mingwthr_cs_init>
-   26b7f1c4b:	85 c0                	test   %eax,%eax
-   26b7f1c4d:	74 dd                	je     26b7f1c2c <__mingw_TLScallback+0x2c>
-   26b7f1c4f:	e8 3c fe ff ff       	call   26b7f1a90 <__mingwthr_run_key_dtors.part.0>
-   26b7f1c54:	eb d6                	jmp    26b7f1c2c <__mingw_TLScallback+0x2c>
-   26b7f1c56:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
-   26b7f1c5d:	00 00 00 
-   26b7f1c60:	8b 05 22 54 00 00    	mov    0x5422(%rip),%eax        # 26b7f7088 <__mingwthr_cs_init>
-   26b7f1c66:	85 c0                	test   %eax,%eax
-   26b7f1c68:	75 66                	jne    26b7f1cd0 <__mingw_TLScallback+0xd0>
-   26b7f1c6a:	8b 05 18 54 00 00    	mov    0x5418(%rip),%eax        # 26b7f7088 <__mingwthr_cs_init>
-   26b7f1c70:	83 f8 01             	cmp    $0x1,%eax
-   26b7f1c73:	75 b7                	jne    26b7f1c2c <__mingw_TLScallback+0x2c>
-   26b7f1c75:	48 8b 1d 04 54 00 00 	mov    0x5404(%rip),%rbx        # 26b7f7080 <key_dtor_list>
-   26b7f1c7c:	48 85 db             	test   %rbx,%rbx
-   26b7f1c7f:	74 18                	je     26b7f1c99 <__mingw_TLScallback+0x99>
-   26b7f1c81:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-   26b7f1c88:	48 89 d9             	mov    %rbx,%rcx
-   26b7f1c8b:	48 8b 5b 10          	mov    0x10(%rbx),%rbx
-   26b7f1c8f:	e8 a4 06 00 00       	call   26b7f2338 <free>
-   26b7f1c94:	48 85 db             	test   %rbx,%rbx
-   26b7f1c97:	75 ef                	jne    26b7f1c88 <__mingw_TLScallback+0x88>
-   26b7f1c99:	48 8d 0d 00 54 00 00 	lea    0x5400(%rip),%rcx        # 26b7f70a0 <__mingwthr_cs>
-   26b7f1ca0:	48 c7 05 d5 53 00 00 	movq   $0x0,0x53d5(%rip)        # 26b7f7080 <key_dtor_list>
-   26b7f1ca7:	00 00 00 00 
-   26b7f1cab:	c7 05 d3 53 00 00 00 	movl   $0x0,0x53d3(%rip)        # 26b7f7088 <__mingwthr_cs_init>
-   26b7f1cb2:	00 00 00 
-   26b7f1cb5:	ff 15 41 74 00 00    	call   *0x7441(%rip)        # 26b7f90fc <__IAT_start__>
-   26b7f1cbb:	e9 6c ff ff ff       	jmp    26b7f1c2c <__mingw_TLScallback+0x2c>
-   26b7f1cc0:	e8 3b 04 00 00       	call   26b7f2100 <_fpreset>
-   26b7f1cc5:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f1cca:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f1cce:	5b                   	pop    %rbx
-   26b7f1ccf:	c3                   	ret
-   26b7f1cd0:	e8 bb fd ff ff       	call   26b7f1a90 <__mingwthr_run_key_dtors.part.0>
-   26b7f1cd5:	eb 93                	jmp    26b7f1c6a <__mingw_TLScallback+0x6a>
-   26b7f1cd7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f1cde:	00 00 
-   26b7f1ce0:	48 8d 0d b9 53 00 00 	lea    0x53b9(%rip),%rcx        # 26b7f70a0 <__mingwthr_cs>
-   26b7f1ce7:	ff 15 27 74 00 00    	call   *0x7427(%rip)        # 26b7f9114 <__imp_InitializeCriticalSection>
-   26b7f1ced:	e9 30 ff ff ff       	jmp    26b7f1c22 <__mingw_TLScallback+0x22>
-   26b7f1cf2:	90                   	nop
-   26b7f1cf3:	90                   	nop
-   26b7f1cf4:	90                   	nop
-   26b7f1cf5:	90                   	nop
-   26b7f1cf6:	90                   	nop
-   26b7f1cf7:	90                   	nop
-   26b7f1cf8:	90                   	nop
-   26b7f1cf9:	90                   	nop
-   26b7f1cfa:	90                   	nop
-   26b7f1cfb:	90                   	nop
-   26b7f1cfc:	90                   	nop
-   26b7f1cfd:	90                   	nop
-   26b7f1cfe:	90                   	nop
-   26b7f1cff:	90                   	nop
-
-000000026b7f1d00 <_ValidateImageBase>:
-   26b7f1d00:	31 c0                	xor    %eax,%eax
-   26b7f1d02:	66 81 39 4d 5a       	cmpw   $0x5a4d,(%rcx)
-   26b7f1d07:	75 0f                	jne    26b7f1d18 <_ValidateImageBase+0x18>
-   26b7f1d09:	48 63 51 3c          	movslq 0x3c(%rcx),%rdx
-   26b7f1d0d:	48 01 d1             	add    %rdx,%rcx
-   26b7f1d10:	81 39 50 45 00 00    	cmpl   $0x4550,(%rcx)
-   26b7f1d16:	74 08                	je     26b7f1d20 <_ValidateImageBase+0x20>
-   26b7f1d18:	c3                   	ret
-   26b7f1d19:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-   26b7f1d20:	31 c0                	xor    %eax,%eax
-   26b7f1d22:	66 81 79 18 0b 02    	cmpw   $0x20b,0x18(%rcx)
-   26b7f1d28:	0f 94 c0             	sete   %al
-   26b7f1d2b:	c3                   	ret
-   26b7f1d2c:	0f 1f 40 00          	nopl   0x0(%rax)
-
-000000026b7f1d30 <_FindPESection>:
-   26b7f1d30:	48 63 41 3c          	movslq 0x3c(%rcx),%rax
-   26b7f1d34:	48 01 c1             	add    %rax,%rcx
-   26b7f1d37:	44 0f b7 41 06       	movzwl 0x6(%rcx),%r8d
-   26b7f1d3c:	0f b7 41 14          	movzwl 0x14(%rcx),%eax
-   26b7f1d40:	66 45 85 c0          	test   %r8w,%r8w
-   26b7f1d44:	48 8d 44 01 18       	lea    0x18(%rcx,%rax,1),%rax
-   26b7f1d49:	74 32                	je     26b7f1d7d <_FindPESection+0x4d>
-   26b7f1d4b:	41 8d 48 ff          	lea    -0x1(%r8),%ecx
-   26b7f1d4f:	48 8d 0c 89          	lea    (%rcx,%rcx,4),%rcx
-   26b7f1d53:	4c 8d 4c c8 28       	lea    0x28(%rax,%rcx,8),%r9
-   26b7f1d58:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
-   26b7f1d5f:	00 
-   26b7f1d60:	44 8b 40 0c          	mov    0xc(%rax),%r8d
-   26b7f1d64:	4c 39 c2             	cmp    %r8,%rdx
-   26b7f1d67:	4c 89 c1             	mov    %r8,%rcx
-   26b7f1d6a:	72 08                	jb     26b7f1d74 <_FindPESection+0x44>
-   26b7f1d6c:	03 48 08             	add    0x8(%rax),%ecx
-   26b7f1d6f:	48 39 ca             	cmp    %rcx,%rdx
-   26b7f1d72:	72 0b                	jb     26b7f1d7f <_FindPESection+0x4f>
-   26b7f1d74:	48 83 c0 28          	add    $0x28,%rax
-   26b7f1d78:	4c 39 c8             	cmp    %r9,%rax
-   26b7f1d7b:	75 e3                	jne    26b7f1d60 <_FindPESection+0x30>
-   26b7f1d7d:	31 c0                	xor    %eax,%eax
-   26b7f1d7f:	c3                   	ret
-
-000000026b7f1d80 <_FindPESectionByName>:
-   26b7f1d80:	57                   	push   %rdi
-   26b7f1d81:	56                   	push   %rsi
-   26b7f1d82:	53                   	push   %rbx
-   26b7f1d83:	48 83 ec 20          	sub    $0x20,%rsp
-   26b7f1d87:	48 89 ce             	mov    %rcx,%rsi
-   26b7f1d8a:	e8 c1 05 00 00       	call   26b7f2350 <strlen>
-   26b7f1d8f:	48 83 f8 08          	cmp    $0x8,%rax
-   26b7f1d93:	77 7b                	ja     26b7f1e10 <_FindPESectionByName+0x90>
-   26b7f1d95:	48 8b 15 74 24 00 00 	mov    0x2474(%rip),%rdx        # 26b7f4210 <.refptr.__image_base__>
-   26b7f1d9c:	31 db                	xor    %ebx,%ebx
-   26b7f1d9e:	66 81 3a 4d 5a       	cmpw   $0x5a4d,(%rdx)
-   26b7f1da3:	75 59                	jne    26b7f1dfe <_FindPESectionByName+0x7e>
-   26b7f1da5:	48 63 42 3c          	movslq 0x3c(%rdx),%rax
-   26b7f1da9:	48 01 d0             	add    %rdx,%rax
-   26b7f1dac:	81 38 50 45 00 00    	cmpl   $0x4550,(%rax)
-   26b7f1db2:	75 4a                	jne    26b7f1dfe <_FindPESectionByName+0x7e>
-   26b7f1db4:	66 81 78 18 0b 02    	cmpw   $0x20b,0x18(%rax)
-   26b7f1dba:	75 42                	jne    26b7f1dfe <_FindPESectionByName+0x7e>
-   26b7f1dbc:	0f b7 50 14          	movzwl 0x14(%rax),%edx
-   26b7f1dc0:	48 8d 5c 10 18       	lea    0x18(%rax,%rdx,1),%rbx
-   26b7f1dc5:	0f b7 50 06          	movzwl 0x6(%rax),%edx
-   26b7f1dc9:	66 85 d2             	test   %dx,%dx
-   26b7f1dcc:	74 42                	je     26b7f1e10 <_FindPESectionByName+0x90>
-   26b7f1dce:	8d 42 ff             	lea    -0x1(%rdx),%eax
-   26b7f1dd1:	48 8d 04 80          	lea    (%rax,%rax,4),%rax
-   26b7f1dd5:	48 8d 7c c3 28       	lea    0x28(%rbx,%rax,8),%rdi
-   26b7f1dda:	eb 0d                	jmp    26b7f1de9 <_FindPESectionByName+0x69>
-   26b7f1ddc:	0f 1f 40 00          	nopl   0x0(%rax)
-   26b7f1de0:	48 83 c3 28          	add    $0x28,%rbx
-   26b7f1de4:	48 39 fb             	cmp    %rdi,%rbx
-   26b7f1de7:	74 27                	je     26b7f1e10 <_FindPESectionByName+0x90>
-   26b7f1de9:	41 b8 08 00 00 00    	mov    $0x8,%r8d
-   26b7f1def:	48 89 f2             	mov    %rsi,%rdx
-   26b7f1df2:	48 89 d9             	mov    %rbx,%rcx
-   26b7f1df5:	e8 5e 05 00 00       	call   26b7f2358 <strncmp>
-   26b7f1dfa:	85 c0                	test   %eax,%eax
-   26b7f1dfc:	75 e2                	jne    26b7f1de0 <_FindPESectionByName+0x60>
-   26b7f1dfe:	48 89 d8             	mov    %rbx,%rax
-   26b7f1e01:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f1e05:	5b                   	pop    %rbx
-   26b7f1e06:	5e                   	pop    %rsi
-   26b7f1e07:	5f                   	pop    %rdi
-   26b7f1e08:	c3                   	ret
-   26b7f1e09:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-   26b7f1e10:	31 db                	xor    %ebx,%ebx
-   26b7f1e12:	48 89 d8             	mov    %rbx,%rax
-   26b7f1e15:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f1e19:	5b                   	pop    %rbx
-   26b7f1e1a:	5e                   	pop    %rsi
-   26b7f1e1b:	5f                   	pop    %rdi
-   26b7f1e1c:	c3                   	ret
-   26b7f1e1d:	0f 1f 00             	nopl   (%rax)
-
-000000026b7f1e20 <__mingw_GetSectionForAddress>:
-   26b7f1e20:	48 8b 15 e9 23 00 00 	mov    0x23e9(%rip),%rdx        # 26b7f4210 <.refptr.__image_base__>
-   26b7f1e27:	31 c0                	xor    %eax,%eax
-   26b7f1e29:	66 81 3a 4d 5a       	cmpw   $0x5a4d,(%rdx)
-   26b7f1e2e:	75 10                	jne    26b7f1e40 <__mingw_GetSectionForAddress+0x20>
-   26b7f1e30:	4c 63 42 3c          	movslq 0x3c(%rdx),%r8
-   26b7f1e34:	49 01 d0             	add    %rdx,%r8
-   26b7f1e37:	41 81 38 50 45 00 00 	cmpl   $0x4550,(%r8)
-   26b7f1e3e:	74 08                	je     26b7f1e48 <__mingw_GetSectionForAddress+0x28>
-   26b7f1e40:	c3                   	ret
-   26b7f1e41:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-   26b7f1e48:	66 41 81 78 18 0b 02 	cmpw   $0x20b,0x18(%r8)
-   26b7f1e4f:	75 ef                	jne    26b7f1e40 <__mingw_GetSectionForAddress+0x20>
-   26b7f1e51:	41 0f b7 40 14       	movzwl 0x14(%r8),%eax
-   26b7f1e56:	48 29 d1             	sub    %rdx,%rcx
-   26b7f1e59:	49 8d 44 00 18       	lea    0x18(%r8,%rax,1),%rax
-   26b7f1e5e:	45 0f b7 40 06       	movzwl 0x6(%r8),%r8d
-   26b7f1e63:	66 45 85 c0          	test   %r8w,%r8w
-   26b7f1e67:	74 34                	je     26b7f1e9d <__mingw_GetSectionForAddress+0x7d>
-   26b7f1e69:	41 8d 50 ff          	lea    -0x1(%r8),%edx
-   26b7f1e6d:	48 8d 14 92          	lea    (%rdx,%rdx,4),%rdx
-   26b7f1e71:	4c 8d 4c d0 28       	lea    0x28(%rax,%rdx,8),%r9
-   26b7f1e76:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
-   26b7f1e7d:	00 00 00 
-   26b7f1e80:	44 8b 40 0c          	mov    0xc(%rax),%r8d
-   26b7f1e84:	4c 39 c1             	cmp    %r8,%rcx
-   26b7f1e87:	4c 89 c2             	mov    %r8,%rdx
-   26b7f1e8a:	72 08                	jb     26b7f1e94 <__mingw_GetSectionForAddress+0x74>
-   26b7f1e8c:	03 50 08             	add    0x8(%rax),%edx
-   26b7f1e8f:	48 39 d1             	cmp    %rdx,%rcx
-   26b7f1e92:	72 ac                	jb     26b7f1e40 <__mingw_GetSectionForAddress+0x20>
-   26b7f1e94:	48 83 c0 28          	add    $0x28,%rax
-   26b7f1e98:	4c 39 c8             	cmp    %r9,%rax
-   26b7f1e9b:	75 e3                	jne    26b7f1e80 <__mingw_GetSectionForAddress+0x60>
-   26b7f1e9d:	31 c0                	xor    %eax,%eax
-   26b7f1e9f:	c3                   	ret
-
-000000026b7f1ea0 <__mingw_GetSectionCount>:
-   26b7f1ea0:	48 8b 05 69 23 00 00 	mov    0x2369(%rip),%rax        # 26b7f4210 <.refptr.__image_base__>
-   26b7f1ea7:	31 c9                	xor    %ecx,%ecx
-   26b7f1ea9:	66 81 38 4d 5a       	cmpw   $0x5a4d,(%rax)
-   26b7f1eae:	75 0f                	jne    26b7f1ebf <__mingw_GetSectionCount+0x1f>
-   26b7f1eb0:	48 63 50 3c          	movslq 0x3c(%rax),%rdx
-   26b7f1eb4:	48 01 d0             	add    %rdx,%rax
-   26b7f1eb7:	81 38 50 45 00 00    	cmpl   $0x4550,(%rax)
-   26b7f1ebd:	74 09                	je     26b7f1ec8 <__mingw_GetSectionCount+0x28>
-   26b7f1ebf:	89 c8                	mov    %ecx,%eax
-   26b7f1ec1:	c3                   	ret
-   26b7f1ec2:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
-   26b7f1ec8:	66 81 78 18 0b 02    	cmpw   $0x20b,0x18(%rax)
-   26b7f1ece:	75 ef                	jne    26b7f1ebf <__mingw_GetSectionCount+0x1f>
-   26b7f1ed0:	0f b7 48 06          	movzwl 0x6(%rax),%ecx
-   26b7f1ed4:	89 c8                	mov    %ecx,%eax
-   26b7f1ed6:	c3                   	ret
-   26b7f1ed7:	66 0f 1f 84 00 00 00 	nopw   0x0(%rax,%rax,1)
-   26b7f1ede:	00 00 
-
-000000026b7f1ee0 <_FindPESectionExec>:
-   26b7f1ee0:	4c 8b 05 29 23 00 00 	mov    0x2329(%rip),%r8        # 26b7f4210 <.refptr.__image_base__>
-   26b7f1ee7:	31 c0                	xor    %eax,%eax
-   26b7f1ee9:	66 41 81 38 4d 5a    	cmpw   $0x5a4d,(%r8)
-   26b7f1eef:	75 0f                	jne    26b7f1f00 <_FindPESectionExec+0x20>
-   26b7f1ef1:	49 63 50 3c          	movslq 0x3c(%r8),%rdx
-   26b7f1ef5:	4c 01 c2             	add    %r8,%rdx
-   26b7f1ef8:	81 3a 50 45 00 00    	cmpl   $0x4550,(%rdx)
-   26b7f1efe:	74 08                	je     26b7f1f08 <_FindPESectionExec+0x28>
-   26b7f1f00:	c3                   	ret
-   26b7f1f01:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-   26b7f1f08:	66 81 7a 18 0b 02    	cmpw   $0x20b,0x18(%rdx)
-   26b7f1f0e:	75 f0                	jne    26b7f1f00 <_FindPESectionExec+0x20>
-   26b7f1f10:	44 0f b7 42 06       	movzwl 0x6(%rdx),%r8d
-   26b7f1f15:	0f b7 42 14          	movzwl 0x14(%rdx),%eax
-   26b7f1f19:	66 45 85 c0          	test   %r8w,%r8w
-   26b7f1f1d:	48 8d 44 02 18       	lea    0x18(%rdx,%rax,1),%rax
-   26b7f1f22:	74 2c                	je     26b7f1f50 <_FindPESectionExec+0x70>
-   26b7f1f24:	41 8d 50 ff          	lea    -0x1(%r8),%edx
-   26b7f1f28:	48 8d 14 92          	lea    (%rdx,%rdx,4),%rdx
-   26b7f1f2c:	48 8d 54 d0 28       	lea    0x28(%rax,%rdx,8),%rdx
-   26b7f1f31:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-   26b7f1f38:	f6 40 27 20          	testb  $0x20,0x27(%rax)
-   26b7f1f3c:	74 09                	je     26b7f1f47 <_FindPESectionExec+0x67>
-   26b7f1f3e:	48 85 c9             	test   %rcx,%rcx
-   26b7f1f41:	74 bd                	je     26b7f1f00 <_FindPESectionExec+0x20>
-   26b7f1f43:	48 83 e9 01          	sub    $0x1,%rcx
-   26b7f1f47:	48 83 c0 28          	add    $0x28,%rax
-   26b7f1f4b:	48 39 d0             	cmp    %rdx,%rax
-   26b7f1f4e:	75 e8                	jne    26b7f1f38 <_FindPESectionExec+0x58>
-   26b7f1f50:	31 c0                	xor    %eax,%eax
-   26b7f1f52:	c3                   	ret
-   26b7f1f53:	66 66 2e 0f 1f 84 00 	data16 cs nopw 0x0(%rax,%rax,1)
-   26b7f1f5a:	00 00 00 00 
-   26b7f1f5e:	66 90                	xchg   %ax,%ax
-
-000000026b7f1f60 <_GetPEImageBase>:
-   26b7f1f60:	48 8b 05 a9 22 00 00 	mov    0x22a9(%rip),%rax        # 26b7f4210 <.refptr.__image_base__>
-   26b7f1f67:	31 d2                	xor    %edx,%edx
-   26b7f1f69:	66 81 38 4d 5a       	cmpw   $0x5a4d,(%rax)
-   26b7f1f6e:	75 0f                	jne    26b7f1f7f <_GetPEImageBase+0x1f>
-   26b7f1f70:	48 63 48 3c          	movslq 0x3c(%rax),%rcx
-   26b7f1f74:	48 01 c1             	add    %rax,%rcx
-   26b7f1f77:	81 39 50 45 00 00    	cmpl   $0x4550,(%rcx)
-   26b7f1f7d:	74 09                	je     26b7f1f88 <_GetPEImageBase+0x28>
-   26b7f1f7f:	48 89 d0             	mov    %rdx,%rax
-   26b7f1f82:	c3                   	ret
-   26b7f1f83:	0f 1f 44 00 00       	nopl   0x0(%rax,%rax,1)
-   26b7f1f88:	66 81 79 18 0b 02    	cmpw   $0x20b,0x18(%rcx)
-   26b7f1f8e:	48 0f 44 d0          	cmove  %rax,%rdx
-   26b7f1f92:	48 89 d0             	mov    %rdx,%rax
-   26b7f1f95:	c3                   	ret
-   26b7f1f96:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
-   26b7f1f9d:	00 00 00 
-
-000000026b7f1fa0 <_IsNonwritableInCurrentImage>:
-   26b7f1fa0:	48 8b 15 69 22 00 00 	mov    0x2269(%rip),%rdx        # 26b7f4210 <.refptr.__image_base__>
-   26b7f1fa7:	31 c0                	xor    %eax,%eax
-   26b7f1fa9:	66 81 3a 4d 5a       	cmpw   $0x5a4d,(%rdx)
-   26b7f1fae:	75 10                	jne    26b7f1fc0 <_IsNonwritableInCurrentImage+0x20>
-   26b7f1fb0:	4c 63 42 3c          	movslq 0x3c(%rdx),%r8
-   26b7f1fb4:	49 01 d0             	add    %rdx,%r8
-   26b7f1fb7:	41 81 38 50 45 00 00 	cmpl   $0x4550,(%r8)
-   26b7f1fbe:	74 08                	je     26b7f1fc8 <_IsNonwritableInCurrentImage+0x28>
-   26b7f1fc0:	c3                   	ret
-   26b7f1fc1:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-   26b7f1fc8:	66 41 81 78 18 0b 02 	cmpw   $0x20b,0x18(%r8)
-   26b7f1fcf:	75 ef                	jne    26b7f1fc0 <_IsNonwritableInCurrentImage+0x20>
-   26b7f1fd1:	45 0f b7 48 06       	movzwl 0x6(%r8),%r9d
-   26b7f1fd6:	48 29 d1             	sub    %rdx,%rcx
-   26b7f1fd9:	41 0f b7 50 14       	movzwl 0x14(%r8),%edx
-   26b7f1fde:	66 45 85 c9          	test   %r9w,%r9w
-   26b7f1fe2:	49 8d 54 10 18       	lea    0x18(%r8,%rdx,1),%rdx
-   26b7f1fe7:	74 d7                	je     26b7f1fc0 <_IsNonwritableInCurrentImage+0x20>
-   26b7f1fe9:	41 8d 41 ff          	lea    -0x1(%r9),%eax
-   26b7f1fed:	48 8d 04 80          	lea    (%rax,%rax,4),%rax
-   26b7f1ff1:	4c 8d 4c c2 28       	lea    0x28(%rdx,%rax,8),%r9
-   26b7f1ff6:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
-   26b7f1ffd:	00 00 00 
-   26b7f2000:	44 8b 42 0c          	mov    0xc(%rdx),%r8d
-   26b7f2004:	4c 39 c1             	cmp    %r8,%rcx
-   26b7f2007:	4c 89 c0             	mov    %r8,%rax
-   26b7f200a:	72 08                	jb     26b7f2014 <_IsNonwritableInCurrentImage+0x74>
-   26b7f200c:	03 42 08             	add    0x8(%rdx),%eax
-   26b7f200f:	48 39 c1             	cmp    %rax,%rcx
-   26b7f2012:	72 0c                	jb     26b7f2020 <_IsNonwritableInCurrentImage+0x80>
-   26b7f2014:	48 83 c2 28          	add    $0x28,%rdx
-   26b7f2018:	49 39 d1             	cmp    %rdx,%r9
-   26b7f201b:	75 e3                	jne    26b7f2000 <_IsNonwritableInCurrentImage+0x60>
-   26b7f201d:	31 c0                	xor    %eax,%eax
-   26b7f201f:	c3                   	ret
-   26b7f2020:	8b 42 24             	mov    0x24(%rdx),%eax
-   26b7f2023:	f7 d0                	not    %eax
-   26b7f2025:	c1 e8 1f             	shr    $0x1f,%eax
-   26b7f2028:	c3                   	ret
-   26b7f2029:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-
-000000026b7f2030 <__mingw_enum_import_library_names>:
-   26b7f2030:	4c 8b 1d d9 21 00 00 	mov    0x21d9(%rip),%r11        # 26b7f4210 <.refptr.__image_base__>
-   26b7f2037:	45 31 c9             	xor    %r9d,%r9d
-   26b7f203a:	66 41 81 3b 4d 5a    	cmpw   $0x5a4d,(%r11)
-   26b7f2040:	75 10                	jne    26b7f2052 <__mingw_enum_import_library_names+0x22>
-   26b7f2042:	4d 63 43 3c          	movslq 0x3c(%r11),%r8
-   26b7f2046:	4d 01 d8             	add    %r11,%r8
-   26b7f2049:	41 81 38 50 45 00 00 	cmpl   $0x4550,(%r8)
-   26b7f2050:	74 0e                	je     26b7f2060 <__mingw_enum_import_library_names+0x30>
-   26b7f2052:	4c 89 c8             	mov    %r9,%rax
-   26b7f2055:	c3                   	ret
-   26b7f2056:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
-   26b7f205d:	00 00 00 
-   26b7f2060:	66 41 81 78 18 0b 02 	cmpw   $0x20b,0x18(%r8)
-   26b7f2067:	75 e9                	jne    26b7f2052 <__mingw_enum_import_library_names+0x22>
-   26b7f2069:	41 8b 80 90 00 00 00 	mov    0x90(%r8),%eax
-   26b7f2070:	85 c0                	test   %eax,%eax
-   26b7f2072:	74 de                	je     26b7f2052 <__mingw_enum_import_library_names+0x22>
-   26b7f2074:	45 0f b7 50 06       	movzwl 0x6(%r8),%r10d
-   26b7f2079:	41 0f b7 50 14       	movzwl 0x14(%r8),%edx
-   26b7f207e:	66 45 85 d2          	test   %r10w,%r10w
-   26b7f2082:	49 8d 54 10 18       	lea    0x18(%r8,%rdx,1),%rdx
-   26b7f2087:	74 c9                	je     26b7f2052 <__mingw_enum_import_library_names+0x22>
-   26b7f2089:	45 8d 42 ff          	lea    -0x1(%r10),%r8d
-   26b7f208d:	4f 8d 04 80          	lea    (%r8,%r8,4),%r8
-   26b7f2091:	4e 8d 54 c2 28       	lea    0x28(%rdx,%r8,8),%r10
-   26b7f2096:	66 2e 0f 1f 84 00 00 	cs nopw 0x0(%rax,%rax,1)
-   26b7f209d:	00 00 00 
-   26b7f20a0:	44 8b 4a 0c          	mov    0xc(%rdx),%r9d
-   26b7f20a4:	4c 39 c8             	cmp    %r9,%rax
-   26b7f20a7:	4d 89 c8             	mov    %r9,%r8
-   26b7f20aa:	72 09                	jb     26b7f20b5 <__mingw_enum_import_library_names+0x85>
-   26b7f20ac:	44 03 42 08          	add    0x8(%rdx),%r8d
-   26b7f20b0:	4c 39 c0             	cmp    %r8,%rax
-   26b7f20b3:	72 13                	jb     26b7f20c8 <__mingw_enum_import_library_names+0x98>
-   26b7f20b5:	48 83 c2 28          	add    $0x28,%rdx
-   26b7f20b9:	4c 39 d2             	cmp    %r10,%rdx
-   26b7f20bc:	75 e2                	jne    26b7f20a0 <__mingw_enum_import_library_names+0x70>
-   26b7f20be:	45 31 c9             	xor    %r9d,%r9d
-   26b7f20c1:	4c 89 c8             	mov    %r9,%rax
-   26b7f20c4:	c3                   	ret
-   26b7f20c5:	0f 1f 00             	nopl   (%rax)
-   26b7f20c8:	4c 01 d8             	add    %r11,%rax
-   26b7f20cb:	eb 0a                	jmp    26b7f20d7 <__mingw_enum_import_library_names+0xa7>
-   26b7f20cd:	0f 1f 00             	nopl   (%rax)
-   26b7f20d0:	83 e9 01             	sub    $0x1,%ecx
-   26b7f20d3:	48 83 c0 14          	add    $0x14,%rax
-   26b7f20d7:	44 8b 40 04          	mov    0x4(%rax),%r8d
-   26b7f20db:	45 85 c0             	test   %r8d,%r8d
-   26b7f20de:	75 07                	jne    26b7f20e7 <__mingw_enum_import_library_names+0xb7>
-   26b7f20e0:	8b 50 0c             	mov    0xc(%rax),%edx
-   26b7f20e3:	85 d2                	test   %edx,%edx
-   26b7f20e5:	74 d7                	je     26b7f20be <__mingw_enum_import_library_names+0x8e>
-   26b7f20e7:	85 c9                	test   %ecx,%ecx
-   26b7f20e9:	7f e5                	jg     26b7f20d0 <__mingw_enum_import_library_names+0xa0>
-   26b7f20eb:	44 8b 48 0c          	mov    0xc(%rax),%r9d
-   26b7f20ef:	4d 01 d9             	add    %r11,%r9
-   26b7f20f2:	4c 89 c8             	mov    %r9,%rax
-   26b7f20f5:	c3                   	ret
-   26b7f20f6:	90                   	nop
-   26b7f20f7:	90                   	nop
-   26b7f20f8:	90                   	nop
-   26b7f20f9:	90                   	nop
-   26b7f20fa:	90                   	nop
-   26b7f20fb:	90                   	nop
-   26b7f20fc:	90                   	nop
-   26b7f20fd:	90                   	nop
-   26b7f20fe:	90                   	nop
-   26b7f20ff:	90                   	nop
-
-000000026b7f2100 <_fpreset>:
-   26b7f2100:	db e3                	fninit
-   26b7f2102:	c3                   	ret
-   26b7f2103:	90                   	nop
-   26b7f2104:	90                   	nop
-   26b7f2105:	90                   	nop
-   26b7f2106:	90                   	nop
-   26b7f2107:	90                   	nop
-   26b7f2108:	90                   	nop
-   26b7f2109:	90                   	nop
-   26b7f210a:	90                   	nop
-   26b7f210b:	90                   	nop
-   26b7f210c:	90                   	nop
-   26b7f210d:	90                   	nop
-   26b7f210e:	90                   	nop
-   26b7f210f:	90                   	nop
-
-000000026b7f2110 <___chkstk_ms>:
-   26b7f2110:	51                   	push   %rcx
-   26b7f2111:	50                   	push   %rax
-   26b7f2112:	48 3d 00 10 00 00    	cmp    $0x1000,%rax
-   26b7f2118:	48 8d 4c 24 18       	lea    0x18(%rsp),%rcx
-   26b7f211d:	72 19                	jb     26b7f2138 <___chkstk_ms+0x28>
-   26b7f211f:	48 81 e9 00 10 00 00 	sub    $0x1000,%rcx
-   26b7f2126:	48 83 09 00          	orq    $0x0,(%rcx)
-   26b7f212a:	48 2d 00 10 00 00    	sub    $0x1000,%rax
-   26b7f2130:	48 3d 00 10 00 00    	cmp    $0x1000,%rax
-   26b7f2136:	77 e7                	ja     26b7f211f <___chkstk_ms+0xf>
-   26b7f2138:	48 29 c1             	sub    %rax,%rcx
-   26b7f213b:	48 83 09 00          	orq    $0x0,(%rcx)
-   26b7f213f:	58                   	pop    %rax
-   26b7f2140:	59                   	pop    %rcx
-   26b7f2141:	c3                   	ret
-   26b7f2142:	90                   	nop
-   26b7f2143:	90                   	nop
-   26b7f2144:	90                   	nop
-   26b7f2145:	90                   	nop
-   26b7f2146:	90                   	nop
-   26b7f2147:	90                   	nop
-   26b7f2148:	90                   	nop
-   26b7f2149:	90                   	nop
-   26b7f214a:	90                   	nop
-   26b7f214b:	90                   	nop
-   26b7f214c:	90                   	nop
-   26b7f214d:	90                   	nop
-   26b7f214e:	90                   	nop
-   26b7f214f:	90                   	nop
-
-000000026b7f2150 <DllEntryPoint>:
-   26b7f2150:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f2155:	c3                   	ret
-   26b7f2156:	90                   	nop
-   26b7f2157:	90                   	nop
-   26b7f2158:	90                   	nop
-   26b7f2159:	90                   	nop
-   26b7f215a:	90                   	nop
-   26b7f215b:	90                   	nop
-   26b7f215c:	90                   	nop
-   26b7f215d:	90                   	nop
-   26b7f215e:	90                   	nop
-   26b7f215f:	90                   	nop
-
-000000026b7f2160 <DllMain>:
-   26b7f2160:	b8 01 00 00 00       	mov    $0x1,%eax
-   26b7f2165:	c3                   	ret
-   26b7f2166:	90                   	nop
-   26b7f2167:	90                   	nop
-   26b7f2168:	90                   	nop
-   26b7f2169:	90                   	nop
-   26b7f216a:	90                   	nop
-   26b7f216b:	90                   	nop
-   26b7f216c:	90                   	nop
-   26b7f216d:	90                   	nop
-   26b7f216e:	90                   	nop
-   26b7f216f:	90                   	nop
-
-000000026b7f2170 <__acrt_iob_func>:
-   26b7f2170:	53                   	push   %rbx
-   26b7f2171:	48 83 ec 20          	sub    $0x20,%rsp
-   26b7f2175:	89 cb                	mov    %ecx,%ebx
-   26b7f2177:	e8 84 01 00 00       	call   26b7f2300 <__iob_func>
-   26b7f217c:	89 d9                	mov    %ebx,%ecx
-   26b7f217e:	48 8d 14 49          	lea    (%rcx,%rcx,2),%rdx
-   26b7f2182:	48 c1 e2 04          	shl    $0x4,%rdx
-   26b7f2186:	48 01 d0             	add    %rdx,%rax
-   26b7f2189:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f218d:	5b                   	pop    %rbx
-   26b7f218e:	c3                   	ret
-   26b7f218f:	90                   	nop
-
-000000026b7f2190 <_initialize_onexit_table>:
-   26b7f2190:	48 85 c9             	test   %rcx,%rcx
-   26b7f2193:	74 12                	je     26b7f21a7 <_initialize_onexit_table+0x17>
-   26b7f2195:	31 c0                	xor    %eax,%eax
-   26b7f2197:	66 0f ef c0          	pxor   %xmm0,%xmm0
-   26b7f219b:	48 c7 41 10 00 00 00 	movq   $0x0,0x10(%rcx)
-   26b7f21a2:	00 
-   26b7f21a3:	0f 11 01             	movups %xmm0,(%rcx)
-   26b7f21a6:	c3                   	ret
-   26b7f21a7:	b8 ff ff ff ff       	mov    $0xffffffff,%eax
-   26b7f21ac:	c3                   	ret
-   26b7f21ad:	0f 1f 00             	nopl   (%rax)
-
-000000026b7f21b0 <_register_onexit_function>:
-   26b7f21b0:	55                   	push   %rbp
-   26b7f21b1:	57                   	push   %rdi
-   26b7f21b2:	56                   	push   %rsi
-   26b7f21b3:	53                   	push   %rbx
-   26b7f21b4:	48 83 ec 28          	sub    $0x28,%rsp
-   26b7f21b8:	48 85 c9             	test   %rcx,%rcx
-   26b7f21bb:	48 89 cb             	mov    %rcx,%rbx
-   26b7f21be:	48 89 d7             	mov    %rdx,%rdi
-   26b7f21c1:	0f 84 bb 00 00 00    	je     26b7f2282 <_register_onexit_function+0xd2>
-   26b7f21c7:	b9 08 00 00 00       	mov    $0x8,%ecx
-   26b7f21cc:	e8 47 01 00 00       	call   26b7f2318 <_lock>
-   26b7f21d1:	48 83 3b 00          	cmpq   $0x0,(%rbx)
-   26b7f21d5:	74 69                	je     26b7f2240 <_register_onexit_function+0x90>
-   26b7f21d7:	48 8b 53 08          	mov    0x8(%rbx),%rdx
-   26b7f21db:	48 8b 43 10          	mov    0x10(%rbx),%rax
-   26b7f21df:	48 39 d0             	cmp    %rdx,%rax
-   26b7f21e2:	74 24                	je     26b7f2208 <_register_onexit_function+0x58>
-   26b7f21e4:	48 8d 42 08          	lea    0x8(%rdx),%rax
-   26b7f21e8:	b9 08 00 00 00       	mov    $0x8,%ecx
-   26b7f21ed:	48 89 43 08          	mov    %rax,0x8(%rbx)
-   26b7f21f1:	48 89 3a             	mov    %rdi,(%rdx)
-   26b7f21f4:	e8 27 01 00 00       	call   26b7f2320 <_unlock>
-   26b7f21f9:	31 c0                	xor    %eax,%eax
-   26b7f21fb:	48 83 c4 28          	add    $0x28,%rsp
-   26b7f21ff:	5b                   	pop    %rbx
-   26b7f2200:	5e                   	pop    %rsi
-   26b7f2201:	5f                   	pop    %rdi
-   26b7f2202:	5d                   	pop    %rbp
-   26b7f2203:	c3                   	ret
-   26b7f2204:	0f 1f 40 00          	nopl   0x0(%rax)
-   26b7f2208:	48 8b 0b             	mov    (%rbx),%rcx
-   26b7f220b:	48 89 d6             	mov    %rdx,%rsi
-   26b7f220e:	48 29 ce             	sub    %rcx,%rsi
-   26b7f2211:	48 89 f5             	mov    %rsi,%rbp
-   26b7f2214:	48 c1 fd 03          	sar    $0x3,%rbp
-   26b7f2218:	48 c1 e5 04          	shl    $0x4,%rbp
-   26b7f221c:	48 89 ea             	mov    %rbp,%rdx
-   26b7f221f:	e8 24 01 00 00       	call   26b7f2348 <realloc>
-   26b7f2224:	48 85 c0             	test   %rax,%rax
-   26b7f2227:	74 4f                	je     26b7f2278 <_register_onexit_function+0xc8>
-   26b7f2229:	48 89 03             	mov    %rax,(%rbx)
-   26b7f222c:	48 8d 14 30          	lea    (%rax,%rsi,1),%rdx
-   26b7f2230:	48 01 e8             	add    %rbp,%rax
-   26b7f2233:	48 89 43 10          	mov    %rax,0x10(%rbx)
-   26b7f2237:	eb ab                	jmp    26b7f21e4 <_register_onexit_function+0x34>
-   26b7f2239:	0f 1f 80 00 00 00 00 	nopl   0x0(%rax)
-   26b7f2240:	ba 08 00 00 00       	mov    $0x8,%edx
-   26b7f2245:	b9 20 00 00 00       	mov    $0x20,%ecx
-   26b7f224a:	e8 e1 00 00 00       	call   26b7f2330 <calloc>
-   26b7f224f:	48 85 c0             	test   %rax,%rax
-   26b7f2252:	48 89 c2             	mov    %rax,%rdx
-   26b7f2255:	48 89 03             	mov    %rax,(%rbx)
-   26b7f2258:	74 1e                	je     26b7f2278 <_register_onexit_function+0xc8>
-   26b7f225a:	48 8d 80 00 01 00 00 	lea    0x100(%rax),%rax
-   26b7f2261:	66 48 0f 6e c2       	movq   %rdx,%xmm0
-   26b7f2266:	66 48 0f 6e c8       	movq   %rax,%xmm1
-   26b7f226b:	66 0f 6c c1          	punpcklqdq %xmm1,%xmm0
-   26b7f226f:	0f 11 43 08          	movups %xmm0,0x8(%rbx)
-   26b7f2273:	e9 67 ff ff ff       	jmp    26b7f21df <_register_onexit_function+0x2f>
-   26b7f2278:	b9 08 00 00 00       	mov    $0x8,%ecx
-   26b7f227d:	e8 9e 00 00 00       	call   26b7f2320 <_unlock>
-   26b7f2282:	83 c8 ff             	or     $0xffffffff,%eax
-   26b7f2285:	e9 71 ff ff ff       	jmp    26b7f21fb <_register_onexit_function+0x4b>
-   26b7f228a:	66 0f 1f 44 00 00    	nopw   0x0(%rax,%rax,1)
-
-000000026b7f2290 <_execute_onexit_table>:
-   26b7f2290:	57                   	push   %rdi
-   26b7f2291:	56                   	push   %rsi
-   26b7f2292:	53                   	push   %rbx
-   26b7f2293:	48 83 ec 20          	sub    $0x20,%rsp
-   26b7f2297:	48 89 cf             	mov    %rcx,%rdi
-   26b7f229a:	b9 08 00 00 00       	mov    $0x8,%ecx
-   26b7f229f:	e8 74 00 00 00       	call   26b7f2318 <_lock>
-   26b7f22a4:	48 8b 37             	mov    (%rdi),%rsi
-   26b7f22a7:	66 0f ef c0          	pxor   %xmm0,%xmm0
-   26b7f22ab:	48 c7 47 10 00 00 00 	movq   $0x0,0x10(%rdi)
-   26b7f22b2:	00 
-   26b7f22b3:	48 8b 5f 08          	mov    0x8(%rdi),%rbx
-   26b7f22b7:	b9 08 00 00 00       	mov    $0x8,%ecx
-   26b7f22bc:	0f 11 07             	movups %xmm0,(%rdi)
-   26b7f22bf:	e8 5c 00 00 00       	call   26b7f2320 <_unlock>
-   26b7f22c4:	48 85 f6             	test   %rsi,%rsi
-   26b7f22c7:	74 24                	je     26b7f22ed <_execute_onexit_table+0x5d>
-   26b7f22c9:	48 83 eb 08          	sub    $0x8,%rbx
-   26b7f22cd:	48 39 f3             	cmp    %rsi,%rbx
-   26b7f22d0:	72 13                	jb     26b7f22e5 <_execute_onexit_table+0x55>
-   26b7f22d2:	48 8b 03             	mov    (%rbx),%rax
-   26b7f22d5:	48 85 c0             	test   %rax,%rax
-   26b7f22d8:	74 ef                	je     26b7f22c9 <_execute_onexit_table+0x39>
-   26b7f22da:	ff d0                	call   *%rax
-   26b7f22dc:	48 83 eb 08          	sub    $0x8,%rbx
-   26b7f22e0:	48 39 f3             	cmp    %rsi,%rbx
-   26b7f22e3:	73 ed                	jae    26b7f22d2 <_execute_onexit_table+0x42>
-   26b7f22e5:	48 89 f1             	mov    %rsi,%rcx
-   26b7f22e8:	e8 4b 00 00 00       	call   26b7f2338 <free>
-   26b7f22ed:	31 c0                	xor    %eax,%eax
-   26b7f22ef:	48 83 c4 20          	add    $0x20,%rsp
-   26b7f22f3:	5b                   	pop    %rbx
-   26b7f22f4:	5e                   	pop    %rsi
-   26b7f22f5:	5f                   	pop    %rdi
-   26b7f22f6:	c3                   	ret
-   26b7f22f7:	90                   	nop
-   26b7f22f8:	90                   	nop
-   26b7f22f9:	90                   	nop
-   26b7f22fa:	90                   	nop
-   26b7f22fb:	90                   	nop
-   26b7f22fc:	90                   	nop
-   26b7f22fd:	90                   	nop
-   26b7f22fe:	90                   	nop
-   26b7f22ff:	90                   	nop
-
-000000026b7f2300 <__iob_func>:
-   26b7f2300:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f914c <__imp___iob_func>
-   26b7f2306:	90                   	nop
-   26b7f2307:	90                   	nop
-
-000000026b7f2308 <_amsg_exit>:
-   26b7f2308:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f9154 <__imp__amsg_exit>
-   26b7f230e:	90                   	nop
-   26b7f230f:	90                   	nop
-
-000000026b7f2310 <_initterm>:
-   26b7f2310:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f915c <__imp__initterm>
-   26b7f2316:	90                   	nop
-   26b7f2317:	90                   	nop
-
-000000026b7f2318 <_lock>:
-   26b7f2318:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f9164 <__imp__lock>
-   26b7f231e:	90                   	nop
-   26b7f231f:	90                   	nop
-
-000000026b7f2320 <_unlock>:
-   26b7f2320:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f916c <__imp__unlock>
-   26b7f2326:	90                   	nop
-   26b7f2327:	90                   	nop
-
-000000026b7f2328 <abort>:
-   26b7f2328:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f9174 <__imp_abort>
-   26b7f232e:	90                   	nop
-   26b7f232f:	90                   	nop
-
-000000026b7f2330 <calloc>:
-   26b7f2330:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f917c <__imp_calloc>
-   26b7f2336:	90                   	nop
-   26b7f2337:	90                   	nop
-
-000000026b7f2338 <free>:
-   26b7f2338:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f9184 <__imp_free>
-   26b7f233e:	90                   	nop
-   26b7f233f:	90                   	nop
-
-000000026b7f2340 <fwrite>:
-   26b7f2340:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f918c <__imp_fwrite>
-   26b7f2346:	90                   	nop
-   26b7f2347:	90                   	nop
-
-000000026b7f2348 <realloc>:
-   26b7f2348:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f9194 <__imp_realloc>
-   26b7f234e:	90                   	nop
-   26b7f234f:	90                   	nop
-
-000000026b7f2350 <strlen>:
-   26b7f2350:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f919c <__imp_strlen>
-   26b7f2356:	90                   	nop
-   26b7f2357:	90                   	nop
-
-000000026b7f2358 <strncmp>:
-   26b7f2358:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f91a4 <__imp_strncmp>
-   26b7f235e:	90                   	nop
-   26b7f235f:	90                   	nop
-
-000000026b7f2360 <vfprintf>:
-   26b7f2360:	ff 25 46 6e 00 00    	jmp    *0x6e46(%rip)        # 26b7f91ac <__imp_vfprintf>
-   26b7f2366:	90                   	nop
-   26b7f2367:	90                   	nop
-   26b7f2368:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
-   26b7f236f:	00 
-
-000000026b7f2370 <VirtualQuery>:
-   26b7f2370:	ff 25 c6 6d 00 00    	jmp    *0x6dc6(%rip)        # 26b7f913c <__imp_VirtualQuery>
-   26b7f2376:	90                   	nop
-   26b7f2377:	90                   	nop
-
-000000026b7f2378 <VirtualProtect>:
-   26b7f2378:	ff 25 b6 6d 00 00    	jmp    *0x6db6(%rip)        # 26b7f9134 <__imp_VirtualProtect>
-   26b7f237e:	90                   	nop
-   26b7f237f:	90                   	nop
-
-000000026b7f2380 <TlsGetValue>:
-   26b7f2380:	ff 25 a6 6d 00 00    	jmp    *0x6da6(%rip)        # 26b7f912c <__imp_TlsGetValue>
-   26b7f2386:	90                   	nop
-   26b7f2387:	90                   	nop
-
-000000026b7f2388 <Sleep>:
-   26b7f2388:	ff 25 96 6d 00 00    	jmp    *0x6d96(%rip)        # 26b7f9124 <__imp_Sleep>
-   26b7f238e:	90                   	nop
-   26b7f238f:	90                   	nop
-
-000000026b7f2390 <LeaveCriticalSection>:
-   26b7f2390:	ff 25 86 6d 00 00    	jmp    *0x6d86(%rip)        # 26b7f911c <__imp_LeaveCriticalSection>
-   26b7f2396:	90                   	nop
-   26b7f2397:	90                   	nop
-
-000000026b7f2398 <InitializeCriticalSection>:
-   26b7f2398:	ff 25 76 6d 00 00    	jmp    *0x6d76(%rip)        # 26b7f9114 <__imp_InitializeCriticalSection>
-   26b7f239e:	90                   	nop
-   26b7f239f:	90                   	nop
-
-000000026b7f23a0 <GetLastError>:
-   26b7f23a0:	ff 25 66 6d 00 00    	jmp    *0x6d66(%rip)        # 26b7f910c <__imp_GetLastError>
-   26b7f23a6:	90                   	nop
-   26b7f23a7:	90                   	nop
-
-000000026b7f23a8 <EnterCriticalSection>:
-   26b7f23a8:	ff 25 56 6d 00 00    	jmp    *0x6d56(%rip)        # 26b7f9104 <__imp_EnterCriticalSection>
-   26b7f23ae:	90                   	nop
-   26b7f23af:	90                   	nop
-
-000000026b7f23b0 <DeleteCriticalSection>:
-   26b7f23b0:	ff 25 46 6d 00 00    	jmp    *0x6d46(%rip)        # 26b7f90fc <__IAT_start__>
-   26b7f23b6:	90                   	nop
-   26b7f23b7:	90                   	nop
-   26b7f23b8:	0f 1f 84 00 00 00 00 	nopl   0x0(%rax,%rax,1)
-   26b7f23bf:	00 
-
-000000026b7f23c0 <register_frame_ctor>:
-   26b7f23c0:	e9 8b ef ff ff       	jmp    26b7f1350 <__gcc_register_frame>
-   26b7f23c5:	90                   	nop
-   26b7f23c6:	90                   	nop
-   26b7f23c7:	90                   	nop
-   26b7f23c8:	90                   	nop
-   26b7f23c9:	90                   	nop
-   26b7f23ca:	90                   	nop
-   26b7f23cb:	90                   	nop
-   26b7f23cc:	90                   	nop
-   26b7f23cd:	90                   	nop
-   26b7f23ce:	90                   	nop
-   26b7f23cf:	90                   	nop
-
-000000026b7f23d0 <__CTOR_LIST__>:
-   26b7f23d0:	ff                   	(bad)
-   26b7f23d1:	ff                   	(bad)
-   26b7f23d2:	ff                   	(bad)
-   26b7f23d3:	ff                   	(bad)
-   26b7f23d4:	ff                   	(bad)
-   26b7f23d5:	ff                   	(bad)
-   26b7f23d6:	ff                   	(bad)
-   26b7f23d7:	ff                   	.byte 0xff
-
-000000026b7f23d8 <.ctors.65535>:
-   26b7f23d8:	c0 23 7f             	shlb   $0x7f,(%rbx)
-   26b7f23db:	6b 02 00             	imul   $0x0,(%rdx),%eax
-	...
-
-000000026b7f23e8 <__DTOR_LIST__>:
-   26b7f23e8:	ff                   	(bad)
-   26b7f23e9:	ff                   	(bad)
-   26b7f23ea:	ff                   	(bad)
-   26b7f23eb:	ff                   	(bad)
-   26b7f23ec:	ff                   	(bad)
-   26b7f23ed:	ff                   	(bad)
-   26b7f23ee:	ff                   	(bad)
-   26b7f23ef:	ff 00                	incl   (%rax)
-   26b7f23f1:	00 00                	add    %al,(%rax)
-   26b7f23f3:	00 00                	add    %al,(%rax)
-   26b7f23f5:	00 00                	add    %al,(%rax)
-	...
+Microsoft (R) COFF/PE Dumper Version 14.36.32535.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file examples\foreign\tiny_math.dll
+
+File Type: DLL
+
+COFF SYMBOL TABLE
+000 00000028 DEBUG  notype       Filename     | .file
+    crtdll.c
+002 00000000 SECT1  notype ()    Static       | pre_c_init
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+004 00000000 SECT6  notype       Static       | atexit_table
+005 00000010 SECT1  notype ()    External     | _CRT_INIT
+006 00000018 SECT6  notype       Static       | __proc_attached
+007 00000240 SECT3  notype       Static       | .rdata$.refptr.__native_startup_lock
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+009 00000250 SECT3  notype       Static       | .rdata$.refptr.__native_startup_state
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+00B 00000200 SECT3  notype       Static       | .rdata$.refptr.__dyn_tls_init_callback
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+00D 00000290 SECT3  notype       Static       | .rdata$.refptr.__xi_z
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+00F 00000280 SECT3  notype       Static       | .rdata$.refptr.__xi_a
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+011 00000270 SECT3  notype       Static       | .rdata$.refptr.__xc_z
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+013 00000260 SECT3  notype       Static       | .rdata$.refptr.__xc_a
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+015 000001D0 SECT1  notype ()    Static       | __DllMainCRTStartup
+016 00000230 SECT3  notype       Static       | .rdata$.refptr.__native_dllmain_reason
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+018 00000320 SECT1  notype ()    External     | DllMainCRTStartup
+019 00000220 SECT3  notype       Static       | .rdata$.refptr.__mingw_app_type
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+01B 00000340 SECT1  notype ()    External     | atexit
+01C 00000000 SECT1  notype       Static       | .text
+    Section length  34F, #relocs   25, #linenums    0, checksum        0
+01E 00000000 SECT2  notype       Static       | .data
+    Section length    1, #relocs    0, #linenums    0, checksum        0
+020 00000000 SECT6  notype       Static       | .bss
+    Section length   1C, #relocs    0, #linenums    0, checksum        0
+022 00000000 SECT5  notype       Static       | .xdata
+    Section length   30, #relocs    0, #linenums    0, checksum        0
+024 00000000 SECT4  notype       Static       | .pdata
+    Section length   3C, #relocs    F, #linenums    0, checksum        0
+026 00000018 SECT9  notype       Static       | .CRT$XIAA
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+028 00000037 DEBUG  notype       Filename     | .file
+    cygming-crtbeg
+02A 00000350 SECT1  notype ()    External     | __gcc_register_frame
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+02C 00000360 SECT1  notype ()    External     | __gcc_deregister_frame
+02D 00000350 SECT1  notype       Static       | .text
+    Section length   11, #relocs    1, #linenums    0, checksum        0
+02F 00000010 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+031 00000020 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+033 00000030 SECT5  notype       Static       | .xdata
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+035 0000003C SECT4  notype       Static       | .pdata
+    Section length   18, #relocs    6, #linenums    0, checksum        0
+037 00000047 DEBUG  notype       Filename     | .file
+    tiny_math.cpp
+039 00000370 SECT1  notype ()    External     | _Z3sumii
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+03B 00000370 SECT1  notype       Static       | .text
+    Section length   17, #relocs    0, #linenums    0, checksum        0
+03D 00000010 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+03F 00000020 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+041 00000038 SECT5  notype       Static       | .xdata
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+043 00000054 SECT4  notype       Static       | .pdata
+    Section length    C, #relocs    3, #linenums    0, checksum        0
+045 000002A0 SECT3  notype       Static       | .rdata$zzz
+    Section length   43, #relocs    0, #linenums    0, checksum        0
+047 0000005B DEBUG  notype       Filename     | .file
+    gccmain.c
+049 00000390 SECT1  notype ()    External     | __do_global_dtors
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+04B 00000010 SECT2  notype       Static       | p.0
+04C 000003D0 SECT1  notype ()    External     | __do_global_ctors
+04D 000001D0 SECT3  notype       Static       | .rdata$.refptr.__CTOR_LIST__
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+04F 00000440 SECT1  notype ()    External     | __main
+050 00000020 SECT6  notype       Static       | initialized
+051 00000390 SECT1  notype       Static       | .text
+    Section length   CF, #relocs    7, #linenums    0, checksum        0
+053 00000010 SECT2  notype       Static       | .data
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+055 00000020 SECT6  notype       Static       | .bss
+    Section length    4, #relocs    0, #linenums    0, checksum        0
+057 00000040 SECT5  notype       Static       | .xdata
+    Section length   18, #relocs    0, #linenums    0, checksum        0
+059 00000060 SECT4  notype       Static       | .pdata
+    Section length   24, #relocs    9, #linenums    0, checksum        0
+05B 00000063 DEBUG  notype       Filename     | .file
+    natstart.c
+05D 00000460 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+05F 00000020 SECT2  notype       Static       | .data
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+061 00000030 SECT6  notype       Static       | .bss
+    Section length    C, #relocs    0, #linenums    0, checksum        0
+063 00000089 DEBUG  notype       Filename     | .file
+    tlssup.c
+065 00000460 SECT1  notype ()    Static       | __dyn_tls_dtor
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+067 00000490 SECT1  notype ()    External     | __dyn_tls_init
+068 000001C0 SECT3  notype       Static       | .rdata$.refptr._CRT_MT
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+06A 00000048 SECT9  notype       Static       | __xd_a
+06B 00000050 SECT9  notype       Static       | __xd_z
+06C 00000520 SECT1  notype ()    External     | __tlregdtor
+06D 00000460 SECT1  notype       Static       | .text
+    Section length   C3, #relocs    5, #linenums    0, checksum        0
+06F 00000030 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+071 00000040 SECT6  notype       Static       | .bss
+    Section length   10, #relocs    0, #linenums    0, checksum        0
+073 00000058 SECT5  notype       Static       | .xdata
+    Section length   18, #relocs    0, #linenums    0, checksum        0
+075 00000084 SECT4  notype       Static       | .pdata
+    Section length   24, #relocs    9, #linenums    0, checksum        0
+077 00000038 SECT9  notype       Static       | .CRT$XLD
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+079 00000030 SECT9  notype       Static       | .CRT$XLC
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+07B 00000000 SECT3  notype       Static       | .rdata
+    Section length   48, #relocs    5, #linenums    0, checksum        0
+07D 00000050 SECT9  notype       Static       | .CRT$XDZ
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+07F 00000048 SECT9  notype       Static       | .CRT$XDA
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+081 00000040 SECT9  notype       Static       | .CRT$XLZ
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+083 00000028 SECT9  notype       Static       | .CRT$XLA
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+085 00000008 SECTA  notype       Static       | .tls$ZZZ
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+087 00000000 SECTA  notype       Static       | .tls
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+089 00000099 DEBUG  notype       Filename     | .file
+    cinitexe.c
+08B 00000530 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+08D 00000030 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+08F 00000050 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+091 00000008 SECT9  notype       Static       | .CRT$XCZ
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+093 00000000 SECT9  notype       Static       | .CRT$XCA
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+095 00000020 SECT9  notype       Static       | .CRT$XIZ
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+097 00000010 SECT9  notype       Static       | .CRT$XIA
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+099 000000A1 DEBUG  notype       Filename     | .file
+    mingw_helpers.
+09B 00000530 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+09D 00000030 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+09F 00000050 SECT6  notype       Static       | .bss
+    Section length    4, #relocs    0, #linenums    0, checksum        0
+0A1 000000BC DEBUG  notype       Filename     | .file
+    pseudo-reloc.c
+0A3 00000530 SECT1  notype ()    Static       | __report_error
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+0A5 000005A0 SECT1  notype ()    Static       | mark_section_writable
+0A6 00000064 SECT6  notype       Static       | maxSections
+0A7 00000068 SECT6  notype       Static       | the_secs
+0A8 00000710 SECT1  notype ()    External     | _pei386_runtime_relocator
+0A9 00000060 SECT6  notype       Static       | was_init.0
+0AA 000001E0 SECT3  notype       Static       | .rdata$.refptr.__RUNTIME_PSEUDO_RELOC_LIST_END__
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+0AC 000001F0 SECT3  notype       Static       | .rdata$.refptr.__RUNTIME_PSEUDO_RELOC_LIST__
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+0AE 00000210 SECT3  notype       Static       | .rdata$.refptr.__image_base__
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+0B0 00000530 SECT1  notype       Static       | .text
+    Section length  53F, #relocs   26, #linenums    0, checksum        0
+0B2 00000030 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0B4 00000060 SECT6  notype       Static       | .bss
+    Section length   10, #relocs    0, #linenums    0, checksum        0
+0B6 00000060 SECT3  notype       Static       | .rdata
+    Section length  15B, #relocs    0, #linenums    0, checksum        0
+0B8 00000070 SECT5  notype       Static       | .xdata
+    Section length   30, #relocs    0, #linenums    0, checksum        0
+0BA 000000A8 SECT4  notype       Static       | .pdata
+    Section length   24, #relocs    9, #linenums    0, checksum        0
+0BC 000000D0 DEBUG  notype       Filename     | .file
+    tlsthrd.c
+0BE 00000A70 SECT1  notype ()    Static       | __mingwthr_run_key_dtors.part.0
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+0C0 000000A0 SECT6  notype       Static       | __mingwthr_cs
+0C1 00000080 SECT6  notype       Static       | key_dtor_list
+0C2 00000AE0 SECT1  notype ()    External     | ___w64_mingwthr_add_key_dtor
+0C3 00000088 SECT6  notype       Static       | __mingwthr_cs_init
+0C4 00000B50 SECT1  notype ()    External     | ___w64_mingwthr_remove_key_dtor
+0C5 00000BE0 SECT1  notype ()    External     | __mingw_TLScallback
+0C6 00000A70 SECT1  notype       Static       | .text
+    Section length  262, #relocs   22, #linenums    0, checksum        0
+0C8 00000030 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0CA 00000080 SECT6  notype       Static       | .bss
+    Section length   48, #relocs    0, #linenums    0, checksum        0
+0CC 000000A0 SECT5  notype       Static       | .xdata
+    Section length   30, #relocs    0, #linenums    0, checksum        0
+0CE 000000CC SECT4  notype       Static       | .pdata
+    Section length   30, #relocs    C, #linenums    0, checksum        0
+0D0 000000D8 DEBUG  notype       Filename     | .file
+    tlsmcrt.c
+0D2 00000CE0 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0D4 00000030 SECT2  notype       Static       | .data
+    Section length    4, #relocs    0, #linenums    0, checksum        0
+0D6 000000E0 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0D8 000000E0 DEBUG  notype       Filename     | .file
+    
+0DA 00000CE0 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0DC 00000040 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0DE 000000E0 SECT6  notype       Static       | .bss
+    Section length    2, #relocs    0, #linenums    0, checksum        0
+0E0 000000F6 DEBUG  notype       Filename     | .file
+    pesect.c
+0E2 00000CE0 SECT1  notype ()    External     | _ValidateImageBase
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+0E4 00000D10 SECT1  notype ()    External     | _FindPESection
+0E5 00000D60 SECT1  notype ()    External     | _FindPESectionByName
+0E6 00000E00 SECT1  notype ()    External     | __mingw_GetSectionForAddress
+0E7 00000E80 SECT1  notype ()    External     | __mingw_GetSectionCount
+0E8 00000EC0 SECT1  notype ()    External     | _FindPESectionExec
+0E9 00000F40 SECT1  notype ()    External     | _GetPEImageBase
+0EA 00000F80 SECT1  notype ()    External     | _IsNonwritableInCurrentImage
+0EB 00001010 SECT1  notype ()    External     | __mingw_enum_import_library_names
+0EC 00000CE0 SECT1  notype       Static       | .text
+    Section length  3F6, #relocs    9, #linenums    0, checksum        0
+0EE 00000040 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0F0 000000F0 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0F2 000000D0 SECT5  notype       Static       | .xdata
+    Section length   2C, #relocs    0, #linenums    0, checksum        0
+0F4 000000FC SECT4  notype       Static       | .pdata
+    Section length   6C, #relocs   1B, #linenums    0, checksum        0
+0F6 00000105 DEBUG  notype       Filename     | .file
+    CRT_fp10.c
+0F8 000010E0 SECT1  notype ()    External     | _fpreset
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+0FA 000010E0 SECT1  notype ()    External     | fpreset
+0FB 000010E0 SECT1  notype       Static       | .text
+    Section length    3, #relocs    0, #linenums    0, checksum        0
+0FD 00000040 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+0FF 000000F0 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+101 000000FC SECT5  notype       Static       | .xdata
+    Section length    4, #relocs    0, #linenums    0, checksum        0
+103 00000168 SECT4  notype       Static       | .pdata
+    Section length    C, #relocs    3, #linenums    0, checksum        0
+105 0000011B DEBUG  notype       Filename     | .file
+    fake
+107 00000000 SECTD  notype       Static       | .debug_info
+    Section length   28, #relocs    6, #linenums    0, checksum        0
+109 00000000 SECTE  notype       Static       | .debug_abbrev
+    Section length   14, #relocs    0, #linenums    0, checksum        0
+10B 00000000 SECTF  notype       Static       | .debug_line
+    Section length   5C, #relocs    5, #linenums    0, checksum        0
+10D 000010F0 SECT1  notype       Static       | .text
+    Section length   32, #relocs    0, #linenums    0, checksum        0
+10F 00000040 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+111 000000F0 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+113 00000000 SECT12 notype       Static       | .debug_line_str
+    Section length   99, #relocs    0, #linenums    0, checksum        0
+115 00000000 SECTC  notype       Static       | .debug_aranges
+    Section length   30, #relocs    2, #linenums    0, checksum        0
+117 00000000 SECT11 notype       Static       | .debug_str
+    Section length   A5, #relocs    0, #linenums    0, checksum        0
+119 00000000 SECT10 notype       Static       | .debug_frame
+    Section length   48, #relocs    2, #linenums    0, checksum        0
+11B 0000012D DEBUG  notype       Filename     | .file
+    libgcc2.c
+11D 00001130 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+11F 00000040 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+121 000000F0 SECT6  notype       Static       | .bss
+    Section length   20, #relocs    0, #linenums    0, checksum        0
+123 00000028 SECTD  notype       Static       | .debug_info
+    Section length  FB5, #relocs    6, #linenums    0, checksum        0
+125 00000014 SECTE  notype       Static       | .debug_abbrev
+    Section length   9B, #relocs    0, #linenums    0, checksum        0
+127 00000030 SECTC  notype       Static       | .debug_aranges
+    Section length   20, #relocs    1, #linenums    0, checksum        0
+129 0000005C SECTF  notype       Static       | .debug_line
+    Section length   48, #relocs    7, #linenums    0, checksum        0
+12B 00000099 SECT12 notype       Static       | .debug_line_str
+    Section length  165, #relocs    0, #linenums    0, checksum        0
+12D 0000013B DEBUG  notype       Filename     | .file
+    dllentry.c
+12F 00001130 SECT1  notype ()    External     | DllEntryPoint
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+131 00001130 SECT1  notype       Static       | .text
+    Section length    6, #relocs    0, #linenums    0, checksum        0
+133 00000040 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+135 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+137 00000100 SECT5  notype       Static       | .xdata
+    Section length    4, #relocs    0, #linenums    0, checksum        0
+139 00000174 SECT4  notype       Static       | .pdata
+    Section length    C, #relocs    3, #linenums    0, checksum        0
+13B 00000149 DEBUG  notype       Filename     | .file
+    dllmain.c
+13D 00001140 SECT1  notype ()    External     | DllMain
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+13F 00001140 SECT1  notype       Static       | .text
+    Section length    6, #relocs    0, #linenums    0, checksum        0
+141 00000040 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+143 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+145 00000104 SECT5  notype       Static       | .xdata
+    Section length    4, #relocs    0, #linenums    0, checksum        0
+147 00000180 SECT4  notype       Static       | .pdata
+    Section length    C, #relocs    3, #linenums    0, checksum        0
+149 00000157 DEBUG  notype       Filename     | .file
+    acrt_iob_func.
+14B 00001150 SECT1  notype ()    External     | __acrt_iob_func
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+14D 00001150 SECT1  notype       Static       | .text
+    Section length   1F, #relocs    1, #linenums    0, checksum        0
+14F 00000040 SECT2  notype       Static       | .data
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+151 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+153 00000108 SECT5  notype       Static       | .xdata
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+155 0000018C SECT4  notype       Static       | .pdata
+    Section length    C, #relocs    3, #linenums    0, checksum        0
+157 000001C2 DEBUG  notype       Filename     | .file
+    onexit_table.c
+159 00001170 SECT1  notype ()    External     | _initialize_onexit_table
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+15B 00001190 SECT1  notype ()    External     | _register_onexit_function
+15C 00001270 SECT1  notype ()    External     | _execute_onexit_table
+15D 00001170 SECT1  notype       Static       | .text
+    Section length  167, #relocs    8, #linenums    0, checksum        0
+15F 00000050 SECT2  notype       Static       | .data
+    Section length   18, #relocs    3, #linenums    0, checksum        0
+161 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+163 00000110 SECT5  notype       Static       | .xdata
+    Section length   20, #relocs    0, #linenums    0, checksum        0
+165 00000198 SECT4  notype       Static       | .pdata
+    Section length   24, #relocs    9, #linenums    0, checksum        0
+167 000012E0 SECT1  notype       Static       | .text
+168 00000070 SECT2  notype       Static       | .data
+169 00000110 SECT6  notype       Static       | .bss
+16A 00000324 SECT8  notype       Static       | .idata$7
+16B 0000014C SECT8  notype       Static       | .idata$5
+16C 0000008C SECT8  notype       Static       | .idata$4
+16D 00000268 SECT8  notype       Static       | .idata$6
+16E 000012E8 SECT1  notype       Static       | .text
+16F 00000070 SECT2  notype       Static       | .data
+170 00000110 SECT6  notype       Static       | .bss
+171 00000328 SECT8  notype       Static       | .idata$7
+172 00000154 SECT8  notype       Static       | .idata$5
+173 00000094 SECT8  notype       Static       | .idata$4
+174 00000276 SECT8  notype       Static       | .idata$6
+175 000012F0 SECT1  notype       Static       | .text
+176 00000070 SECT2  notype       Static       | .data
+177 00000110 SECT6  notype       Static       | .bss
+178 0000032C SECT8  notype       Static       | .idata$7
+179 0000015C SECT8  notype       Static       | .idata$5
+17A 0000009C SECT8  notype       Static       | .idata$4
+17B 00000284 SECT8  notype       Static       | .idata$6
+17C 000012F8 SECT1  notype       Static       | .text
+17D 00000070 SECT2  notype       Static       | .data
+17E 00000110 SECT6  notype       Static       | .bss
+17F 00000330 SECT8  notype       Static       | .idata$7
+180 00000164 SECT8  notype       Static       | .idata$5
+181 000000A4 SECT8  notype       Static       | .idata$4
+182 00000290 SECT8  notype       Static       | .idata$6
+183 00001300 SECT1  notype       Static       | .text
+184 00000070 SECT2  notype       Static       | .data
+185 00000110 SECT6  notype       Static       | .bss
+186 00000334 SECT8  notype       Static       | .idata$7
+187 0000016C SECT8  notype       Static       | .idata$5
+188 000000AC SECT8  notype       Static       | .idata$4
+189 00000298 SECT8  notype       Static       | .idata$6
+18A 00001308 SECT1  notype       Static       | .text
+18B 00000070 SECT2  notype       Static       | .data
+18C 00000110 SECT6  notype       Static       | .bss
+18D 00000338 SECT8  notype       Static       | .idata$7
+18E 00000174 SECT8  notype       Static       | .idata$5
+18F 000000B4 SECT8  notype       Static       | .idata$4
+190 000002A2 SECT8  notype       Static       | .idata$6
+191 00001310 SECT1  notype       Static       | .text
+192 00000070 SECT2  notype       Static       | .data
+193 00000110 SECT6  notype       Static       | .bss
+194 0000033C SECT8  notype       Static       | .idata$7
+195 0000017C SECT8  notype       Static       | .idata$5
+196 000000BC SECT8  notype       Static       | .idata$4
+197 000002AA SECT8  notype       Static       | .idata$6
+198 00001318 SECT1  notype       Static       | .text
+199 00000070 SECT2  notype       Static       | .data
+19A 00000110 SECT6  notype       Static       | .bss
+19B 00000340 SECT8  notype       Static       | .idata$7
+19C 00000184 SECT8  notype       Static       | .idata$5
+19D 000000C4 SECT8  notype       Static       | .idata$4
+19E 000002B4 SECT8  notype       Static       | .idata$6
+19F 00001320 SECT1  notype       Static       | .text
+1A0 00000070 SECT2  notype       Static       | .data
+1A1 00000110 SECT6  notype       Static       | .bss
+1A2 00000344 SECT8  notype       Static       | .idata$7
+1A3 0000018C SECT8  notype       Static       | .idata$5
+1A4 000000CC SECT8  notype       Static       | .idata$4
+1A5 000002BC SECT8  notype       Static       | .idata$6
+1A6 00001328 SECT1  notype       Static       | .text
+1A7 00000070 SECT2  notype       Static       | .data
+1A8 00000110 SECT6  notype       Static       | .bss
+1A9 00000348 SECT8  notype       Static       | .idata$7
+1AA 00000194 SECT8  notype       Static       | .idata$5
+1AB 000000D4 SECT8  notype       Static       | .idata$4
+1AC 000002C6 SECT8  notype       Static       | .idata$6
+1AD 00001330 SECT1  notype       Static       | .text
+1AE 00000070 SECT2  notype       Static       | .data
+1AF 00000110 SECT6  notype       Static       | .bss
+1B0 0000034C SECT8  notype       Static       | .idata$7
+1B1 0000019C SECT8  notype       Static       | .idata$5
+1B2 000000DC SECT8  notype       Static       | .idata$4
+1B3 000002D0 SECT8  notype       Static       | .idata$6
+1B4 00001338 SECT1  notype       Static       | .text
+1B5 00000070 SECT2  notype       Static       | .data
+1B6 00000110 SECT6  notype       Static       | .bss
+1B7 00000350 SECT8  notype       Static       | .idata$7
+1B8 000001A4 SECT8  notype       Static       | .idata$5
+1B9 000000E4 SECT8  notype       Static       | .idata$4
+1BA 000002DA SECT8  notype       Static       | .idata$6
+1BB 00001340 SECT1  notype       Static       | .text
+1BC 00000070 SECT2  notype       Static       | .data
+1BD 00000110 SECT6  notype       Static       | .bss
+1BE 00000354 SECT8  notype       Static       | .idata$7
+1BF 000001AC SECT8  notype       Static       | .idata$5
+1C0 000000EC SECT8  notype       Static       | .idata$4
+1C1 000002E4 SECT8  notype       Static       | .idata$6
+1C2 000001D0 DEBUG  notype       Filename     | .file
+    fake
+1C4 0000008C SECT8  notype       Static       | hname
+1C5 0000014C SECT8  notype       Static       | fthunk
+1C6 00001350 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+1C8 00000070 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+1CA 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+1CC 00000014 SECT8  notype       Static       | .idata$2
+    Section length   14, #relocs    3, #linenums    0, checksum        0
+1CE 0000008C SECT8  notype       Static       | .idata$4
+1CF 0000014C SECT8  notype       Static       | .idata$5
+1D0 0000021D DEBUG  notype       Filename     | .file
+    fake
+1D2 00001350 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+1D4 00000070 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+1D6 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+1D8 000000F4 SECT8  notype       Static       | .idata$4
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+1DA 000001B4 SECT8  notype       Static       | .idata$5
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+1DC 00000358 SECT8  notype       Static       | .idata$7
+    Section length    B, #relocs    0, #linenums    0, checksum        0
+1DE 00001350 SECT1  notype       Static       | .text
+1DF 00000070 SECT2  notype       Static       | .data
+1E0 00000110 SECT6  notype       Static       | .bss
+1E1 00000310 SECT8  notype       Static       | .idata$7
+1E2 0000013C SECT8  notype       Static       | .idata$5
+1E3 0000007C SECT8  notype       Static       | .idata$4
+1E4 00000258 SECT8  notype       Static       | .idata$6
+1E5 00001358 SECT1  notype       Static       | .text
+1E6 00000070 SECT2  notype       Static       | .data
+1E7 00000110 SECT6  notype       Static       | .bss
+1E8 0000030C SECT8  notype       Static       | .idata$7
+1E9 00000134 SECT8  notype       Static       | .idata$5
+1EA 00000074 SECT8  notype       Static       | .idata$4
+1EB 00000246 SECT8  notype       Static       | .idata$6
+1EC 00001360 SECT1  notype       Static       | .text
+1ED 00000070 SECT2  notype       Static       | .data
+1EE 00000110 SECT6  notype       Static       | .bss
+1EF 00000308 SECT8  notype       Static       | .idata$7
+1F0 0000012C SECT8  notype       Static       | .idata$5
+1F1 0000006C SECT8  notype       Static       | .idata$4
+1F2 00000238 SECT8  notype       Static       | .idata$6
+1F3 00001368 SECT1  notype       Static       | .text
+1F4 00000070 SECT2  notype       Static       | .data
+1F5 00000110 SECT6  notype       Static       | .bss
+1F6 00000304 SECT8  notype       Static       | .idata$7
+1F7 00000124 SECT8  notype       Static       | .idata$5
+1F8 00000064 SECT8  notype       Static       | .idata$4
+1F9 00000230 SECT8  notype       Static       | .idata$6
+1FA 00001370 SECT1  notype       Static       | .text
+1FB 00000070 SECT2  notype       Static       | .data
+1FC 00000110 SECT6  notype       Static       | .bss
+1FD 00000300 SECT8  notype       Static       | .idata$7
+1FE 0000011C SECT8  notype       Static       | .idata$5
+1FF 0000005C SECT8  notype       Static       | .idata$4
+200 00000218 SECT8  notype       Static       | .idata$6
+201 00001378 SECT1  notype       Static       | .text
+202 00000070 SECT2  notype       Static       | .data
+203 00000110 SECT6  notype       Static       | .bss
+204 000002FC SECT8  notype       Static       | .idata$7
+205 00000114 SECT8  notype       Static       | .idata$5
+206 00000054 SECT8  notype       Static       | .idata$4
+207 000001FC SECT8  notype       Static       | .idata$6
+208 00001380 SECT1  notype       Static       | .text
+209 00000070 SECT2  notype       Static       | .data
+20A 00000110 SECT6  notype       Static       | .bss
+20B 000002F8 SECT8  notype       Static       | .idata$7
+20C 0000010C SECT8  notype       Static       | .idata$5
+20D 0000004C SECT8  notype       Static       | .idata$4
+20E 000001EC SECT8  notype       Static       | .idata$6
+20F 00001388 SECT1  notype       Static       | .text
+210 00000070 SECT2  notype       Static       | .data
+211 00000110 SECT6  notype       Static       | .bss
+212 000002F4 SECT8  notype       Static       | .idata$7
+213 00000104 SECT8  notype       Static       | .idata$5
+214 00000044 SECT8  notype       Static       | .idata$4
+215 000001D4 SECT8  notype       Static       | .idata$6
+216 00001390 SECT1  notype       Static       | .text
+217 00000070 SECT2  notype       Static       | .data
+218 00000110 SECT6  notype       Static       | .bss
+219 000002F0 SECT8  notype       Static       | .idata$7
+21A 000000FC SECT8  notype       Static       | .idata$5
+21B 0000003C SECT8  notype       Static       | .idata$4
+21C 000001BC SECT8  notype       Static       | .idata$6
+21D 0000022B DEBUG  notype       Filename     | .file
+    fake
+21F 0000003C SECT8  notype       Static       | hname
+220 000000FC SECT8  notype       Static       | fthunk
+221 000013A0 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+223 00000070 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+225 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+227 00000000 SECT8  notype       Static       | .idata$2
+    Section length   14, #relocs    3, #linenums    0, checksum        0
+229 0000003C SECT8  notype       Static       | .idata$4
+22A 000000FC SECT8  notype       Static       | .idata$5
+22B 00000239 DEBUG  notype       Filename     | .file
+    fake
+22D 000013A0 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+22F 00000070 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+231 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+233 00000084 SECT8  notype       Static       | .idata$4
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+235 00000144 SECT8  notype       Static       | .idata$5
+    Section length    8, #relocs    0, #linenums    0, checksum        0
+237 00000314 SECT8  notype       Static       | .idata$7
+    Section length    D, #relocs    0, #linenums    0, checksum        0
+239 0000024B DEBUG  notype       Filename     | .file
+    cygming-crtend
+23B 000013A0 SECT1  notype ()    Static       | register_frame_ctor
+    tag index 00000000 size 00000000 lines 00000000 next function 00000000
+23D 000013A0 SECT1  notype       Static       | .text
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+23F 00000070 SECT2  notype       Static       | .data
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+241 00000110 SECT6  notype       Static       | .bss
+    Section length    0, #relocs    0, #linenums    0, checksum        0
+243 000013A0 SECT1  notype       Static       | .text.startup
+    Section length    5, #relocs    1, #linenums    0, checksum        0
+245 00000130 SECT5  notype       Static       | .xdata.startup
+    Section length    4, #relocs    0, #linenums    0, checksum        0
+247 000001BC SECT4  notype       Static       | .pdata.startup
+    Section length    C, #relocs    3, #linenums    0, checksum        0
+249 000013B8 SECT1  notype       Static       | .ctors.65535
+    Section length    8, #relocs    1, #linenums    0, checksum        0
+24B 00000008 SECT9  notype       External     | __xc_z
+24C 000002F0 SECT3  notype       External     | ___RUNTIME_PSEUDO_RELOC_LIST__
+24D 00000174 SECT8  notype       External     | __imp_abort
+24E 00000314 SECT8  notype       External     | __lib64_libkernel32_a_iname
+24F 00000000 SECT2  notype       External     | __data_start__
+250 000013C8 SECT1  notype       External     | ___DTOR_LIST__
+251 00000164 SECT8  notype       External     | __imp__lock
+252 00000014 SECT8  notype       External     | _head_lib64_libmsvcrt_def_a
+253 0000017C SECT8  notype       External     | __imp_calloc
+254 000012F8 SECT1  notype ()    External     | _lock
+255 00000000 SECTA  notype       External     | ___tls_start__
+256 00000250 SECT3  notype       External     | .refptr.__native_startup_state
+257 00000028 SECT9  notype       External     | __xl_a
+258 00001380 SECT1  notype       External     | GetLastError
+259 000002F0 SECT3  notype       External     | __rt_psrelocs_start
+25A 00000160 ABS    notype       External     | __dll_characteristics__
+25B 00001000 ABS    notype       External     | __size_of_stack_commit__
+25C 00000000 SECT2  notype       External     | __mingw_module_is_dll
+25D 000012E0 SECT1  notype ()    External     | __iob_func
+25E 00200000 ABS    notype       External     | __size_of_stack_reserve__
+25F 00000005 ABS    notype       External     | __major_subsystem_version__
+260 00000028 SECT9  notype       External     | ___crt_xl_start__
+261 000000FC SECT8  notype       External     | __imp_DeleteCriticalSection
+262 00000038 SECT9  notype       External     | __xl_d
+263 00000008 SECTA  notype       External     | _tls_end
+264 000001D0 SECT3  notype       External     | .refptr.__CTOR_LIST__
+265 00001350 SECT1  notype       External     | VirtualQuery
+266 00000010 SECT9  notype       External     | ___crt_xi_start__
+267 00000154 SECT8  notype       External     | __imp__amsg_exit
+268 00000028 SECT9  notype       External     | ___crt_xi_end__
+269 00000000 SECTA  notype       External     | _tls_start
+26A 000001F0 SECT3  notype       External     | .refptr.__RUNTIME_PSEUDO_RELOC_LIST__
+26B 00000030 SECT2  notype       External     | _CRT_MT
+26C 00001360 SECT1  notype       External     | TlsGetValue
+26D 00000000 SECT6  notype       External     | __bss_start__
+26E 000002F0 SECT3  notype       External     | ___RUNTIME_PSEUDO_RELOC_LIST_END__
+26F 00001000 ABS    notype       External     | __size_of_heap_commit__
+270 0000010C SECT8  notype       External     | __imp_GetLastError
+271 00000048 SECT6  notype       External     | __mingw_initltsdrot_force
+272 00000184 SECT8  notype       External     | __imp_free
+273 00000220 SECT3  notype       External     | .refptr.__mingw_app_type
+274 00000040 SECT6  notype       External     | __mingw_initltssuo_force
+275 00001358 SECT1  notype       External     | VirtualProtect
+276 00000048 SECT9  notype       External     | ___crt_xp_start__
+277 0000011C SECT8  notype       External     | __imp_LeaveCriticalSection
+278 00001308 SECT1  notype ()    External     | abort
+279 000001E0 SECT3  notype       External     | .refptr.__RUNTIME_PSEUDO_RELOC_LIST_END__
+27A 00000048 SECT9  notype       External     | ___crt_xp_end__
+27B 00000000 ABS    notype       External     | __dll__
+27C 00000000 ABS    notype       External     | __minor_os_version__
+27D 00001388 SECT1  notype       External     | EnterCriticalSection
+27E 00000280 SECT3  notype       External     | .refptr.__xi_a
+27F 000001C0 SECT3  notype       External     | .refptr._CRT_MT
+280 00001000 ABS    notype       External     | __section_alignment__
+281 00000024 SECT2  notype       External     | __native_dllmain_reason
+282 00001310 SECT1  notype ()    External     | calloc
+283 00000020 SECT3  notype       External     | _tls_used
+284 000001BC SECT8  notype       External     | __IAT_end__
+285 000002F0 SECT3  notype       External     | __RUNTIME_PSEUDO_RELOC_LIST__
+286 00000358 SECT8  notype       External     | __lib64_libmsvcrt_def_a_iname
+287 00001368 SECT1  notype       External     | Sleep
+288 00000070 SECT2  notype       External     | __data_end__
+289 0000018C SECT8  notype       External     | __imp_fwrite
+28A 000013B0 SECT1  notype       External     | __CTOR_LIST__
+28B 00000000 SECT8  notype       External     | _head_lib64_libkernel32_a
+28C 00000110 SECT6  notype       External     | __bss_end__
+28D 00000020 SECT9  notype       External     | __xi_z
+28E 00000018 SECT9  notype       External     | pcinit
+28F 00000020 SECT2  notype       External     | __native_vcclrit_reason
+290 00000010 SECT9  notype       External     | ___crt_xc_end__
+291 00000240 SECT3  notype       External     | .refptr.__native_startup_lock
+292 00000104 SECT8  notype       External     | __imp_EnterCriticalSection
+293 0000004C SECT6  notype       External     | _tls_index
+294 00000038 SECT6  notype       External     | __native_startup_state
+295 00000000 SECT9  notype       External     | ___crt_xc_start__
+296 00001338 SECT1  notype ()    External     | strncmp
+297 000013B0 SECT1  notype       External     | ___CTOR_LIST__
+298 00000200 SECT3  notype       External     | .refptr.__dyn_tls_init_callback
+299 00000058 SECT2  notype       External     | __imp__register_onexit_function
+29A 00001328 SECT1  notype ()    External     | realloc
+29B 00000000 ABS    notype       External     | __rt_psrelocs_size
+29C 0000019C SECT8  notype       External     | __imp_strlen
+29D 00000200 ABS    notype       External     | __file_alignment__
+29E 00000114 SECT8  notype       External     | __imp_InitializeCriticalSection
+29F 00000194 SECT8  notype       External     | __imp_realloc
+2A0 00001378 SECT1  notype       External     | InitializeCriticalSection
+2A1 000001AC SECT8  notype       External     | __imp_vfprintf
+2A2 00000004 ABS    notype       External     | __major_os_version__
+2A3 000000FC SECT8  notype       External     | __IAT_start__
+2A4 00000040 SECT9  notype       External     | __xl_z
+2A5 00000000 UNDEF  notype       External     | __end__
+2A6 000013C8 SECT1  notype       External     | __DTOR_LIST__
+2A7 00000060 SECT2  notype       External     | __imp__initialize_onexit_table
+2A8 00000010 SECT9  notype       External     | __xi_a
+2A9 00000124 SECT8  notype       External     | __imp_Sleep
+2AA 00001370 SECT1  notype       External     | LeaveCriticalSection
+2AB 00000000 SECT9  notype       External     | __xc_a
+2AC 00100000 ABS    notype       External     | __size_of_heap_reserve__
+2AD 00000048 SECT9  notype       External     | ___crt_xt_start__
+2AE 00000003 ABS    notype       External     | __subsystem__
+2AF 000012E8 SECT1  notype ()    External     | _amsg_exit
+2B0 0000012C SECT8  notype       External     | __imp_TlsGetValue
+2B1 00000050 SECT2  notype       External     | __imp__execute_onexit_table
+2B2 00000134 SECT8  notype       External     | __imp_VirtualProtect
+2B3 00000030 SECT9  notype       External     | __xl_c
+2B4 00000010 SECTA  notype       External     | ___tls_end__
+2B5 0000013C SECT8  notype       External     | __imp_VirtualQuery
+2B6 0000015C SECT8  notype       External     | __imp__initterm
+2B7 00000044 SECT6  notype       External     | __mingw_initltsdyn_force
+2B8 0000014C SECT8  notype       External     | __imp___iob_func
+2B9 00000000 SECT3  notype       External     | __dyn_tls_init_callback
+2BA 00000210 SECT3  notype       External     | .refptr.__image_base__
+2BB 000012F0 SECT1  notype ()    External     | _initterm
+2BC 00001320 SECT1  notype ()    External     | fwrite
+2BD 000001A4 SECT8  notype       External     | __imp_strncmp
+2BE 00000040 SECT2  notype       External     | __imp___acrt_iob_func
+2BF 00000000 ABS    notype       External     | __major_image_version__
+2C0 00000000 ABS    notype       External     | __loader_flags__
+2C1 000010F0 SECT1  notype       External     | ___chkstk_ms
+2C2 00000030 SECT6  notype       External     | __native_startup_lock
+2C3 00000230 SECT3  notype       External     | .refptr.__native_dllmain_reason
+2C4 000002F0 SECT3  notype       External     | __rt_psrelocs_end
+2C5 00000002 ABS    notype       External     | __minor_subsystem_version__
+2C6 00000000 ABS    notype       External     | __minor_image_version__
+2C7 0000016C SECT8  notype       External     | __imp__unlock
+2C8 00000260 SECT3  notype       External     | .refptr.__xc_a
+2C9 00001330 SECT1  notype ()    External     | strlen
+2CA 00000290 SECT3  notype       External     | .refptr.__xi_z
+2CB 00001390 SECT1  notype       External     | DeleteCriticalSection
+2CC 000002F0 SECT3  notype       External     | __RUNTIME_PSEUDO_RELOC_LIST_END__
+2CD 00001300 SECT1  notype ()    External     | _unlock
+2CE 00000270 SECT3  notype       External     | .refptr.__xc_z
+2CF 00000048 SECT9  notype       External     | ___crt_xt_end__
+2D0 00001340 SECT1  notype ()    External     | vfprintf
+2D1 00001318 SECT1  notype ()    External     | free
+2D2 00000050 SECT6  notype       External     | __mingw_app_type
+
+String Table Size = 0xED3 bytes
+
+  Summary
+
+        1000 .CRT
+        1000 .bss
+        1000 .data
+        1000 .debug_abbrev
+        1000 .debug_aranges
+        1000 .debug_frame
+        1000 .debug_info
+        1000 .debug_line
+        1000 .debug_line_str
+        1000 .debug_str
+        1000 .edata
+        1000 .idata
+        1000 .pdata
+        1000 .rdata
+        1000 .reloc
+        2000 .text
+        1000 .tls
+        1000 .xdata

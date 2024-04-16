@@ -47,3 +47,10 @@ struct VirtualMachine {
     char cwdBuffer[CWD_LIMIT]{0};
     u32 usedCwd=0;
 };
+
+// defined in hacky_stdcall_asm
+#ifdef OS_WINDOWS
+extern "C" void __stdcall Makeshift_stdcall(engone::VoidFunction func, void* stack_pointer);
+#else
+// extern "C"  void Makeshift_stdcall(engone::VoidFunction func, void* stack_pointer);
+#endif

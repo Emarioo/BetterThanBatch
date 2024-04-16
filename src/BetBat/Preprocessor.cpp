@@ -274,30 +274,7 @@ SignalIO PreprocContext::parseLoad(){
     }
     
     if(evaluateTokens) {
-        preprocessor->lock_imports.lock();
-        auto imp = preprocessor->imports.get(import_id-1);
-        preprocessor->lock_imports.unlock();
-        
-        auto lexer_imp = lexer->getImport_unsafe(import_id);
-        std::string orig_dir = TrimLastFile(lexer_imp->path);
-        
-        u32 dep_id = compiler->addOrFindImport(path, orig_dir);
-        
-        if(dep_id == 0) {
-            Assert(false); // nocheckin, fix error   
-        } else {
-            // preprocessor->lock_imports.lock();
-            // preprocessor->imports.requestSpot(dep_id-1,nullptr);
-            // preprocessor->lock_imports.unlock();
-            
-            imp->import_dependencies.add(dep_id);
-            if(has_as)
-                compiler->addDependency(import_id, dep_id, view_as);
-            else
-                compiler->addDependency(import_id, dep_id);
-        }
-        // std::string name = lexer->getStdStringFromToken(name_token);
-        // preprocessor->compiler->addLinkDirective(name);
+        compiler->addLibrary(import_id, path, view_as);
     }
     
     return SIGNAL_SUCCESS;
@@ -846,6 +823,7 @@ SignalIO PreprocContext::parseOne() {
     return SIGNAL_SUCCESS;
 }
 u32 Preprocessor::process(u32 import_id, bool phase2) {
+    using namespace engone;
     ZoneScopedC(tracy::Color::Gold3);
  
     PreprocContext context{};
@@ -888,6 +866,11 @@ u32 Preprocessor::process(u32 import_id, bool phase2) {
         default: Assert(false);
         }
     }
+
+    // if(context.evaluateTokens && context.new_lexer_import->chunks.size() > 0) {
+    //     auto c = context.new_lexer_import->chunks.last();
+    //     log::out << "preproc toks/srcs " << c->tokens.size() << "/" << c->sources.size()<<"\n";
+    // }
     
     return context.new_import_id;
 }

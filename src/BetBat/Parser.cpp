@@ -2978,6 +2978,62 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 }
                 specifiedConvention = true;
                 function->linkConvention = LinkConventions::IMPORT;
+
+                info.advance();
+                
+                StringView token_str{};
+                auto token = info.getinfo(&token_str);
+                if(token->type == '(') {
+                    info.advance();
+                    while(true) {
+                        token = info.getinfo(&token_str);
+                        if(token->type == lexer::TOKEN_EOF) {
+                            Assert("missing paranthesis with @import"); // bug
+                            break;
+                        }
+                        if(token->type == ')') {
+                            info.advance();
+                            break;
+                        }
+                        auto token2 = info.getinfo(1);
+                        if(token->type == lexer::TOKEN_IDENTIFIER && token2->type == '=') {
+                            if(token_str == "alias") {
+                                info.advance(2);
+                                token = info.getinfo(&token_str);
+                                
+                                if(token->type == lexer::TOKEN_LITERAL_STRING) {
+                                    info.advance();
+                                    function->linked_alias = token_str;
+                                } else {
+                                    // nocheckin, error
+                                }
+                            } else {
+                                // nocheckin, error
+                            }
+                        } else if(token->type == lexer::TOKEN_IDENTIFIER) {
+                            info.advance();
+                            function->linked_library = token_str;
+                        } else {
+                            // nocheckin error
+                        }
+
+                        token = info.getinfo();
+                        if(token->type == ',') {
+                            info.advance();
+                            continue;
+                        } else if(token->type == ')') {
+                            info.advance();
+                            break;
+                        } else{
+                            // nocheckin, error
+                            info.advance();
+                            continue;
+                        }
+                    }
+                }
+
+                info.advance(-1);
+                
                 needsExplicitCallConvention = true;
                 // linkToken = name;
             } else if (view_fn_name == "stdcall"){

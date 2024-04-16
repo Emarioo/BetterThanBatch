@@ -50,8 +50,9 @@
 #else
 #define ERR_HEAD(TR,...) err_type += ToCompileErrorString({true __VA_OPT__(,) __VA_ARGS__}); PrintHead(ERR_HEADER_COLOR, TR, err_type, &prevStream); info.compileInfo->compileOptions->compileStats.addError(TR __VA_OPT__(,) __VA_ARGS__);
 #endif
-#define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n";
-#define ERR_MSG_LOG(STR) engone::log::out << STR ;
+#define ERR_MSG(STR) engone::log::out << (StringBuilder{} + STR) << "\n\n";
+#define ERR_MSG_LOG(STR) engone::log::out << STR;
+#define ERR_MSG_COLORED(STR) engone::log::out << STR << "\n\n";
 // #define ERR_MSG(STR) log::out << (StringBuilder{} + STR) << "\n\n";
 #define ERR_LINE(TR, STR) PrintCode(TR, StringBuilder{} + STR, &prevStream, &base_column);
 #define ERR_EXAMPLE_TINY(STR) engone::log::out << engone::log::LIME << "Example: " << MESSAGE_COLOR << (StringBuilder{} + STR)<<"\n";

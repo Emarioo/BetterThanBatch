@@ -185,6 +185,12 @@ extern const char* register_names[];
 
 #define MISALIGNMENT(X,ALIGNMENT) ((ALIGNMENT - (X) % ALIGNMENT) % ALIGNMENT)
 
+struct ExternalRelocation {
+    std::string name;
+    std::string library_path;
+    int tinycode_index=0;
+    int pc=0;
+};
 struct Bytecode;
 // Look at me I'm tiny bytecode! 
 struct TinyBytecode {
@@ -218,10 +224,12 @@ struct TinyBytecode {
         call_relocations.last().funcImpl = impl;
     }
     
-    void print(int low_index, int high_index, Bytecode* code = nullptr, bool force_newline = false);
+    void print(int low_index, int high_index, Bytecode* code = nullptr, DynamicArray<std::string>* dll_functions = nullptr, bool force_newline = false);
 };
 
 struct Bytecode {
+    static const i32 BEGIN_DLL_FUNC_INDEX = 0x800'0000;
+
     static Bytecode* Create();
     static void Destroy(Bytecode*);
     void cleanup();
@@ -296,14 +304,10 @@ struct Bytecode {
     // returns false if a symbol with 'name' has been exported already
     bool addExportedFunction(const std::string& name, int tinycode_index);
 
-    struct ExternalRelocation {
-        std::string name;
-        int tinycode_index=0;
-        int pc=0;
-    };
+    
     // Relocation for external functions
     DynamicArray<ExternalRelocation> externalRelocations;
-    void addExternalRelocation(const std::string& name,  int tinycode_index, int pc);
+    void addExternalRelocation(const std::string& name,const std::string& library_path,  int tinycode_index, int pc);
 
     // struct PtrDataRelocation {
     //     u32 referer_dataOffset;

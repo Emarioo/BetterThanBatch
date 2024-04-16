@@ -275,12 +275,13 @@ namespace engone {
 	bool SetStandardIn(APIFile file);
 	APIFile GetStandardIn();
 
+	typedef void* DynamicLibrary;
 	typedef void(*VoidFunction)();
 	// @return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 
-	void* LoadDynamicLibrary(const std::string& path);
-	void UnloadDynamicLibrary(void* library);
+	DynamicLibrary LoadDynamicLibrary(const std::string& path);
+	void UnloadDynamicLibrary(DynamicLibrary library);
 	// You may need to cast the function pointer to the appropriate function
-	VoidFunction GetFunctionPointer(void* library, const std::string& name);
+	VoidFunction GetFunctionPointer(DynamicLibrary library, const std::string& name);
 
 	// Converts arguments from WinMain into simpler arguments. Not unicode.
 	// note that argc and argv are references and the outputs of this function.

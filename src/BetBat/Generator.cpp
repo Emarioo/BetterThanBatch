@@ -1292,7 +1292,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 } else{
                     ERR_SECTION(
                         ERR_HEAD2(arg->location)
-                        ERR_MSG_LOG("Named argument is not a parameter of '"; funcImpl->print(info.ast,astFunc); engone::log::out << "'\n")
+                        ERR_MSG_COLORED("Named argument is not a parameter of '"; funcImpl->print(info.ast,astFunc); engone::log::out << "'.")
                         ERR_LINE2(arg->location,"not valid")
                     )
                     // continue like nothing happened
@@ -1583,7 +1583,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             }
         } break; 
         case STDCALL: {
-            if(all_arguments.size() > 4) {
+            // if(all_arguments.size() > 4) {
                 // Assert(virtualArgumentSpace - builder.getStackPointer() == all_arguments.size()*8);
                 // int argOffset = all_arguments.size()*8;
                 // builder.emit_mov_rr(BC_REG_B, BC_REG_SP);
@@ -1599,7 +1599,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                     // u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
                     // generatePop(BC_REG_B, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
                 }
-            }
+            // }
             // Hmmm... we don't have x64 registers.
             // The call instruction must store the calling convention and
             // somehow recognize which registers we use.
@@ -1631,13 +1631,21 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
                 || astFunc->linkConvention == LinkConventions::VARIMPORT){
                 builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, code->externalRelocations.size());
+                std::string alias = astFunc->linked_alias.size() == 0 ? astFunc->name : astFunc->linked_alias;
+                std::string lib_path = "";
+                for(auto& lib : info.imp->libraries) {
+                    if(astFunc->linked_library == lib.named_as) {
+                        lib_path = lib.path;
+                        break;
+                    }
+                }
                 if(astFunc->linkConvention == DLLIMPORT){
-                    addExternalRelocation("__imp_"+funcImpl->astFunction->name, reloc);
+                    addExternalRelocation("__imp_"+alias, lib_path, reloc);
                 } else if(astFunc->linkConvention == VARIMPORT){
                     Assert(false); // importing variables as function calls makes no since?
-                    addExternalRelocation(funcImpl->astFunction->name, reloc);
+                    addExternalRelocation(alias, lib_path, reloc);
                 } else {
-                    addExternalRelocation(funcImpl->astFunction->name, reloc);
+                    addExternalRelocation(alias, lib_path, reloc);
                 }
             } else {
                 builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
@@ -1736,18 +1744,37 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             //         builder.emit_pop(normal_regs[--used_normals]);
             //     }
             // }
+            
             int reloc = 0;
             if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
                 || astFunc->linkConvention == LinkConventions::VARIMPORT){
                 builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, code->externalRelocations.size());
-                if(astFunc->linkConvention == DLLIMPORT){
-                    info.addExternalRelocation(funcImpl->astFunction->name, reloc);
-                    // info.addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
-                } else if(astFunc->linkConvention == VARIMPORT){
-                    info.addExternalRelocation(funcImpl->astFunction->name, reloc);
-                } else {
-                    info.addExternalRelocation(funcImpl->astFunction->name, reloc);
+                std::string alias = astFunc->linked_alias.size() == 0 ? astFunc->name : astFunc->linked_alias;
+                std::string lib_path = "";
+                for(auto& lib : info.imp->libraries) {
+                    if(astFunc->linked_library == lib.named_as) {
+                        lib_path = lib.path;
+                        break;
+                    }
                 }
+                if(astFunc->linkConvention == DLLIMPORT){
+                    // addExternalRelocation("__imp_"+alias, lib_path, reloc);
+                    addExternalRelocation(alias, lib_path, reloc);
+                } else if(astFunc->linkConvention == VARIMPORT){
+                    Assert(false); // importing variables as function calls makes no since?
+                    addExternalRelocation(alias, lib_path, reloc);
+                } else {
+                    addExternalRelocation(alias, lib_path, reloc);
+                }
+
+                // if(astFunc->linkConvention == DLLIMPORT){
+                //     info.addExternalRelocation(funcImpl->astFunction->name, reloc);
+                //     // info.addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
+                // } else if(astFunc->linkConvention == VARIMPORT){
+                //     info.addExternalRelocation(funcImpl->astFunction->name, reloc);
+                // } else {
+                //     info.addExternalRelocation(funcImpl->astFunction->name, reloc);
+                // }
             } else {
                 builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc);
                 // linkin == native, none or export should be fine
@@ -2503,7 +2530,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 auto str = info.ast->typeToString(castType);
                 ERR_SECTION(
                     ERR_HEAD2(expression->location)
-                    ERR_MSG_LOG("Cannot do initializer on type '" << log::YELLOW << str << log::NO_COLOR << "'\n")
+                    ERR_MSG_COLORED("Cannot do initializer on type '" << log::YELLOW << str << log::NO_COLOR << "'.")
                     ERR_LINE2(expression->location, "bad")
                 )
                 return SIGNAL_FAILURE;
@@ -2513,7 +2540,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 auto str = info.ast->typeToString(castType);
                 ERR_SECTION(
                     ERR_HEAD2(expression->location)
-                    ERR_MSG_LOG("The type '" << log::YELLOW << str << log::NO_COLOR << "' is not a struct and cannot have more than one value/expression in the initializer.\n")
+                    ERR_MSG_COLORED("The type '" << log::YELLOW << str << log::NO_COLOR << "' is not a struct and cannot have more than one value/expression in the initializer.")
                     ERR_LINE2(expression->args[1]->location, "not allowed")
                 )
                 return SIGNAL_FAILURE;
@@ -3312,11 +3339,35 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 }
             } else {
                 if(function->linkConvention != NATIVE){
-                    ERR_SECTION(
-                        ERR_HEAD2(function->location)
-                        ERR_MSG("The virtual machine does not support imported functions! You specified this '"<<function->name<<"' to be one. Consider switching target.")
-                        ERR_LINE2(function->location, "bad");
-                    )
+                    if(function->linked_library.size() != 0) {
+                        bool found = false;
+                        for(int i=0;i<imp->libraries.size();i++) {
+                            auto& lib = imp->libraries[i];
+                            if(lib.named_as == function->linked_library) {
+                                found = true;
+                                break;
+                            }
+                        }
+                        if(found) {
+
+                        } else {
+                            ERR_SECTION(
+                                ERR_HEAD2(function->location)
+                                ERR_MSG_COLORED("The imported function refers to the library '"<<log::LIME<<function->linked_library<<log::NO_COLOR<<"' but it does not exist in the file. (loaded/linked libraries are scoped per file).")
+                                ERR_LINE2(function->location, "unknown '"+function->linked_library+"' in @import");
+                                ERR_EXAMPLE(1,"#load \"path_to_library.dll\" as your_lib\n"
+                                            "fn @import(your_lib) func_in_library();")
+                            )
+                        }
+                    } else {
+                        ERR_SECTION(
+                            ERR_HEAD2(function->location)
+                            ERR_MSG("Imported functions must come from a library which is specified in the annotation.")
+                            ERR_LINE2(function->location, "missing library");
+                            ERR_EXAMPLE(1,"#load \"path_to_library.dll\" as your_lib\n"
+                                            "fn @import(your_lib) func_in_library();")
+                        )
+                    }
                 } else {
                     ERR_SECTION(
                         ERR_HEAD2(function->location)
@@ -4059,7 +4110,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
         if (lastOffset != info.currentFrameOffset) {
             _GLOG(log::out << "fix sp when exiting body\n";)
-            builder.emit_free_local(info.currentFrameOffset - lastOffset);
+            builder.emit_free_local(lastOffset - info.currentFrameOffset);
             // builder.restoreStackMoment(savedMoment); // -8 to not include BC_REG_BP
             // info.code->addDebugText("fix sp when exiting body\n");
             
@@ -5744,7 +5795,7 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
 }
 #endif
 
-bool GenerateScope(ASTScope* scope, Compiler* compiler, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import) {
+bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue);
 
@@ -5756,8 +5807,9 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, DynamicArray<TinyBytecod
     context.code = compiler->bytecode;
     context.compiler = compiler;
     context.reporter = &compiler->reporter;
+    context.imp = imp;
     context.out_codes = out_codes;
-    
+
     context.generateFunctions(scope);
     
     if(is_initial_import) {

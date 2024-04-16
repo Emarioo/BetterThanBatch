@@ -7,9 +7,10 @@ g++ -shared examples/foreign/tiny_math.cpp -o examples/foreign/tiny_math.dll
 */
 
 int sum(int start, int end) {
-    int n = 0;
-    for(int i=start;i<=end;i++) {
-        n += i;
-    }
-    return n;
+    // int n = 0;
+    // for(int i=start;i<=end;i++) {
+    //     n += i;
+    // }
+    // return n;
+    return start + end + 10;
 }

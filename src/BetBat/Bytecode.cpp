@@ -26,9 +26,10 @@ bool Bytecode::addExportedFunction(const std::string& name, int tinycode_index) 
     exportedFunctions.last().tinycode_index = tinycode_index;
     return true;
 }
-void Bytecode::addExternalRelocation(const std::string& name, int tinycode_index, int pc){
+void Bytecode::addExternalRelocation(const std::string& name, const std::string& library_path, int tinycode_index, int pc){
     ExternalRelocation tmp{};
     tmp.name = name;
+    tmp.library_path = library_path;
     tmp.tinycode_index = tinycode_index;
     tmp.pc = pc;
     externalRelocations.add(tmp);
@@ -864,7 +865,7 @@ extern const char* register_names[] {
     "xmm3", // BC_REG_XMM3
 };
 
-void TinyBytecode::print(int low_index, int high_index, Bytecode* code, bool force_newline) {
+void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicArray<std::string>* dll_functions, bool force_newline) {
     using namespace engone;
     if(high_index == -1 || high_index > instructionSegment.size())
         high_index = instructionSegment.size();
@@ -972,7 +973,24 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, bool for
             imm = *(i32*)&instructionSegment[pc];
             pc+=4;
             
-            log::out << " " << l << ", " << c <<  ", "<<log::GREEN<<imm;
+            log::out << " " << l << ", " << c <<  ", ";
+            if(imm >= Bytecode::BEGIN_DLL_FUNC_INDEX && dll_functions) {
+                int ind = imm - Bytecode::BEGIN_DLL_FUNC_INDEX;
+                log::out << log::LIME << dll_functions->get(ind);
+            } else if(imm < 0) {
+                auto r = NativeRegistry::GetGlobal();
+                auto f = r->findFunction(imm);
+                if(f) {
+                    log::out << log::LIME << f->name;
+                } else
+                    log::out << log::LIME << "?";
+            } else {
+                int ind = imm - 1;
+                if(imm != 0)
+                    log::out << log::LIME << code->tinyBytecodes[ind]->name;
+                else
+                    log::out << log::LIME << "?";
+            }
         } break;
         case BC_JMP: {
             imm = *(i32*)&instructionSegment[pc];
@@ -1073,6 +1091,6 @@ void Bytecode::print() {
     using namespace engone;
     for(auto& t : tinyBytecodes) {
         log::out <<log::GOLD<< "Tinycode: "<<t->name<<"\n";
-        t->print(0,t->instructionSegment.size(),this, true);
+        t->print(0,t->instructionSegment.size(),this, nullptr, true);
     }
 }

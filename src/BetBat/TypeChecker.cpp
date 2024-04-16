@@ -1907,6 +1907,8 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
 
     funcImpl->polyVersion = func->polyVersionCount++;
 
+    // log::out << "IMPL " << func->name<<"\n";
+
     Assert(funcImpl->polyArgs.size() == func->polyArgs.size());
     // for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
     //     TypeId id = funcImpl->polyArgs[i];
@@ -2011,6 +2013,8 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
             
         int size = info.ast->getTypeSize(argImpl.typeId);
         int asize = info.ast->getTypeAlignedSize(argImpl.typeId);
+        if(func->callConvention == STDCALL || func->callConvention == UNIXCALL)
+            asize = 8;
         // Assert(size != 0 && asize != 0);
         // Actually, don't continue here. argImpl.offset shouldn't be uninitialized.
         if(size ==0 || asize == 0) // Probably due to an error which was logged. We don't want to assert and crash the compiler.
@@ -2076,6 +2080,8 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
         }
         int size = info.ast->getTypeSize(retImpl.typeId);
         int asize = info.ast->getTypeAlignedSize(retImpl.typeId);
+        if(func->callConvention == STDCALL || func->callConvention == UNIXCALL)
+            asize = 8;
         // Assert(size != 0 && asize != 0);
         if(size == 0 || asize == 0){ // We don't want to crash the compiler with assert.
             continue;

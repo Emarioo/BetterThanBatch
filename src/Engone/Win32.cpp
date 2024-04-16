@@ -1122,7 +1122,7 @@ namespace engone {
 		}
 		return true;
 	}
-	void* LoadDynamicLibrary(const std::string& path){
+	DynamicLibrary LoadDynamicLibrary(const std::string& path){
 		HMODULE module = LoadLibraryA(path.c_str());
 		if (module == NULL) {
 			DWORD err = GetLastError();
@@ -1130,14 +1130,14 @@ namespace engone {
 		}
 		return module;
 	}
-	void UnloadDynamicLibrary(void* library){
+	void UnloadDynamicLibrary(DynamicLibrary library){
 		int yes = FreeLibrary((HMODULE)library);
 		if (!yes) {
 			DWORD err = GetLastError();
 			printf("[WinError %lu] UnloadDynamicLibrary\n",err);
 		}
 	}
-	VoidFunction GetFunctionPointer(void* library, const std::string& name){
+	VoidFunction GetFunctionPointer(DynamicLibrary library, const std::string& name){
 		FARPROC proc = GetProcAddress((HMODULE)library, name.c_str());
 		if (proc == NULL) {
 			int err = GetLastError();
