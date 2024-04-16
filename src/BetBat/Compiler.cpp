@@ -716,6 +716,7 @@ void Compiler::processImports() {
         int task_index=0;
         while(task_index < tasks.size()) {
             Task& task = tasks[task_index];
+            task_index++;
             // if(im->busy) {
             //     finished=false;
             //     LOG(CAT_PROCESSING_DETAILED, log::GRAY<<" busy: "<<im->import_id<<" ("<<TrimCWD(im->path)<<")\n")
@@ -792,7 +793,7 @@ void Compiler::processImports() {
                 continue;
             }
             picked_task = task;
-            tasks.removeAt(task_index);
+            tasks.removeAt(task_index - 1);
             finished=false;
             found = true;
             break;
@@ -963,13 +964,13 @@ void Compiler::processImports() {
                 if(!have_generated_global_data) { // cheap quick check
                     lock_miscellaneous.lock();
                     if(!have_generated_global_data) { // thread safe check
-                        have_generated_global_data = true;
                         GenContext c{};
                         c.ast = ast;
                         c.code = bytecode;
                         c.reporter = &reporter;
                         c.compiler = this;
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
+                        have_generated_global_data = true;
                     }
                     lock_miscellaneous.unlock();
                 }
@@ -1070,6 +1071,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         "}\n"
         "fn @native prints(str: char[]);\n"
         "fn @native printc(str: char);\n"
+        "fn @native printi(n: i32);\n"
         // "#macro Assert(X) { prints(#quoted X); }"
         // "#macro Assert(X) { prints(#quoted X); *cast<char>null; }"
         ;
@@ -1142,12 +1144,12 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     // VirtualMachine interp{};
     // interp.execute(code, "main");
 
-    if(!options->useDebugInformation)
+    if(!options->useDebugInformation && program)
         program->debugInformation = nullptr;
     
     switch(compileOptions->target){
         case TARGET_BYTECODE: {
-            Assert(false);
+            // Assert(false);
         } break;
         case TARGET_WINDOWS_x64: {
             // TODO: not finished
@@ -1158,102 +1160,102 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         } break;
     }
 
-    
-    std::string objPath = "test.o";
-    Path outPath = "test.exe";
-    
-    std::string cmd = "";
-    bool outputOtherDirectory = false;
-    switch(options->linker) {
-    case LINKER_MSVC: {
-        Assert(options->target == TARGET_WINDOWS_x64);
-        outputOtherDirectory = outPath.text.find("/") != std::string::npos;
+    if(compileOptions->target != TARGET_BYTECODE) {
+        std::string objPath = "test.o";
+        Path outPath = "test.exe";
         
-        // TEMPORARY
-        if(options->useDebugInformation) {
-            log::out << log::RED << "You must use another linker than MSVC when compiling with debug information. Add the flag "<<log::LIME<<"--linker gcc"<<log::RED<<" (make sure to have gcc installed). The compiler does not support PDB debug information, it only supports DWARF. DWARF uses sections with long names but MSVC linker truncates those names. That's why you cannot use MVSC linker.\n";
-            return;
-        }
-
-        cmd = "link /nologo /INCREMENTAL:NO ";
-        if(options->useDebugInformation)
-            cmd += "/DEBUG ";
-        // else cmd += "/DEBUG "; // force debug info for now
-        cmd += objPath + " ";
-        #ifndef MINIMAL_DEBUG
-        cmd += "bin/NativeLayer.lib ";
-        cmd += "uuid.lib ";
-        cmd += "shell32.lib ";
-        // cmd += "Bcrypt.lib "; // random64 uses BCryptGenRandom, #link is used instead
-        #endif
-        // I don't know which of these we should use when. Sometimes the linker complains about 
-        // a certain default lib.
-        // cmd += "/NODEFAULTLIB:library";
-        // cmd += "/DEFAULTLIB:MSVCRT ";
-        cmd += "/DEFAULTLIB:LIBCMT ";
-        
-        for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
-            auto& dir = bytecode->linkDirectives[i];
-            cmd += dir + " ";
-        }
-        #define LINK_TEMP_EXE "temp_382.exe"
-        #define LINK_TEMP_PDB "temp_382.pdb"
-        if(outputOtherDirectory) {
-            // MSVC linker cannot output to another directory than the current.
-            cmd += "/OUT:" LINK_TEMP_EXE;
-        } else {
-            cmd += "/OUT:" + outPath.text+" ";
-        }
-        break;
-    }
-    case LINKER_CLANG:
-    case LINKER_GCC: {
+        std::string cmd = "";
+        bool outputOtherDirectory = false;
         switch(options->linker) {
-            case LINKER_GCC: cmd += "g++ "; break;
-            case LINKER_CLANG: cmd += "clang++ "; break;
-            default: break;
+        case LINKER_MSVC: {
+            Assert(options->target == TARGET_WINDOWS_x64);
+            outputOtherDirectory = outPath.text.find("/") != std::string::npos;
+            
+            // TEMPORARY
+            if(options->useDebugInformation) {
+                log::out << log::RED << "You must use another linker than MSVC when compiling with debug information. Add the flag "<<log::LIME<<"--linker gcc"<<log::RED<<" (make sure to have gcc installed). The compiler does not support PDB debug information, it only supports DWARF. DWARF uses sections with long names but MSVC linker truncates those names. That's why you cannot use MVSC linker.\n";
+                return;
+            }
+
+            cmd = "link /nologo /INCREMENTAL:NO ";
+            if(options->useDebugInformation)
+                cmd += "/DEBUG ";
+            // else cmd += "/DEBUG "; // force debug info for now
+            cmd += objPath + " ";
+            #ifndef MINIMAL_DEBUG
+            cmd += "bin/NativeLayer.lib ";
+            cmd += "uuid.lib ";
+            cmd += "shell32.lib ";
+            // cmd += "Bcrypt.lib "; // random64 uses BCryptGenRandom, #link is used instead
+            #endif
+            // I don't know which of these we should use when. Sometimes the linker complains about 
+            // a certain default lib.
+            // cmd += "/NODEFAULTLIB:library";
+            // cmd += "/DEFAULTLIB:MSVCRT ";
+            cmd += "/DEFAULTLIB:LIBCMT ";
+            
+            for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
+                auto& dir = bytecode->linkDirectives[i];
+                cmd += dir + " ";
+            }
+            #define LINK_TEMP_EXE "temp_382.exe"
+            #define LINK_TEMP_PDB "temp_382.pdb"
+            if(outputOtherDirectory) {
+                // MSVC linker cannot output to another directory than the current.
+                cmd += "/OUT:" LINK_TEMP_EXE;
+            } else {
+                cmd += "/OUT:" + outPath.text+" ";
+            }
+            break;
         }
-        
-        if(options->useDebugInformation)
-            cmd += "-g ";
+        case LINKER_CLANG:
+        case LINKER_GCC: {
+            switch(options->linker) {
+                case LINKER_GCC: cmd += "g++ "; break;
+                case LINKER_CLANG: cmd += "clang++ "; break;
+                default: break;
+            }
+            
+            if(options->useDebugInformation)
+                cmd += "-g ";
 
-        cmd += objPath + " ";
-        #ifndef MINIMAL_DEBUG
-        cmd += "bin/NativeLayer_gcc.lib "; // NOTE: Do we need one for clang too?
-        // cmd += "uuid.lib ";
-        // cmd += "shell32.lib ";
-        #endif
-        // cmd += "/DEFAULTLIB:MSVCRT ";
-        // cmd += "/DEFAULTLIB:LIBCMT ";
-        
-        for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
-            auto& dir = bytecode->linkDirectives[i];
-            cmd += dir + " ";
+            cmd += objPath + " ";
+            #ifndef MINIMAL_DEBUG
+            cmd += "bin/NativeLayer_gcc.lib "; // NOTE: Do we need one for clang too?
+            // cmd += "uuid.lib ";
+            // cmd += "shell32.lib ";
+            #endif
+            // cmd += "/DEFAULTLIB:MSVCRT ";
+            // cmd += "/DEFAULTLIB:LIBCMT ";
+            
+            for (int i = 0;i<(int)bytecode->linkDirectives.size();i++) {
+                auto& dir = bytecode->linkDirectives[i];
+                cmd += dir + " ";
+            }
+            // if(outputOtherDirectory) {
+            cmd += "-o " + outPath.text;
+            // } else {
+                // cmd += "/OUT:" + outPath.text+" ";
+            // }
+            break;
         }
-        // if(outputOtherDirectory) {
-        cmd += "-o " + outPath.text;
-        // } else {
-            // cmd += "/OUT:" + outPath.text+" ";
-        // }
-        break;
-    }
-    default: {
-        Assert(false);
-        break;
-    }
-    }
+        default: {
+            Assert(false);
+            break;
+        }
+        }
 
-    int exitCode = 0;
-    {
-        ZoneNamedNC(zone0,"Linker",tracy::Color::Blue2, true);
-        // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
-        engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
-    }
-    options->compileStats.end_linker = StartMeasure();
-    
-    if(exitCode != 0) {
+        int exitCode = 0;
+        {
+            ZoneNamedNC(zone0,"Linker",tracy::Color::Blue2, true);
+            // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
+            engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
+        }
+        options->compileStats.end_linker = StartMeasure();
+        if(exitCode != 0) {
 
-    }    
+        }    
+    }
     
     if(compileOptions->executeOutput) {
         Assert(false);
@@ -1324,6 +1326,18 @@ void Compiler::addDependency(u32 import_id, u32 dep_import_id, const std::string
     Assert(imp);
     // imports.requestSpot(dep_import_id-1,nullptr);
     imp->dependencies.add({dep_import_id, as_name});
+    bool found = false;
+    for(int i=0;i<tasks.size();i++) {
+        if(tasks[i].import_id == dep_import_id) {
+            found = true;
+            break;
+        }
+    }
+    if(!found) {
+        Task task{TASK_LEX};
+        task.import_id = dep_import_id;
+        tasks.add(task);
+    }
     lock_imports.unlock();
     // LOG(CAT_PROCESSING,engone::log::CYAN<<"Add depend: "<<import_id<<"->"<<dep_import_id<<" ("<<TrimCWD(imp->path)<<")\n")
 }

@@ -11,6 +11,51 @@ bool streq(const char* a, const char* b) {
     }
     return true;
 }
+std::string NumberToHex_signed(i64 number, bool withPrefix) {
+    if(number < 0)
+        return "-"+NumberToHex(-number,withPrefix);
+    else
+        return NumberToHex(number,withPrefix);
+}
+std::string NumberToHex(u64 number, bool withPrefix) {
+    if(number == 0) {
+        if (withPrefix)
+            return "0x0";
+        else
+            return "0";
+    }
+
+    std::string out = "";
+    while(true) {
+        u64 part = number & 0xF;
+        number = number >> 4;
+        // TODO: Optimize
+        out.insert(out.begin() + 0, (char)(part < 10 ? part + '0' : part - 10 + 'a'));
+        if(number == 0)
+            break;
+    }
+    if(withPrefix)
+        out = "0x" + out;
+
+    return out;
+}
+u64 ConvertHexadecimal_content(char* str, int length){
+    Assert(str && length > 0);
+    u64 hex = 0;
+    for(int i=0;i<length;i++){
+        char chr = str[i];
+        if(chr>='0' && chr <='9'){
+            hex = 16*hex + chr-'0';
+            continue;
+        }
+        chr = chr&(~32); // what is this for? chr = chr&0x20 ?
+        if(chr>='A' && chr<='F'){
+            hex = 16*hex + chr-'A' + 10;
+            continue;
+        }
+    }
+    return hex;
+}
 
 engone::Memory<char> ReadFile(const char* path){
     engone::Memory<char> buffer{};

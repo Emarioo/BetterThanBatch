@@ -39,7 +39,7 @@ struct GenContext : public PhaseContext {
 
     QuickArray<ASTNode*> nodeStack; // kind of like a stack trace
     // ASTNode* prevNode=nullptr;
-    TokenStream* lastStream=nullptr;
+    // TokenStream* lastStream=nullptr;
     u32 lastLine = 0;
     u32 lastLocationIndex = (u32)-1;
     void pushNode(ASTNode* node);
@@ -96,7 +96,7 @@ struct GenContext : public PhaseContext {
     #define VAR_MEMBERS 1
     #define VAR_STRINGS 2
     #define VAR_COUNT 3
-    VariableInfo* varInfos[VAR_COUNT];
+    VariableInfo* varInfos[VAR_COUNT]{nullptr};
     int dataOffset_types = -1;
     int dataOffset_members = -1;
     int dataOffset_strings = -1;

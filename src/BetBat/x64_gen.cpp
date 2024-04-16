@@ -273,8 +273,8 @@ About x64:
 #define PREFIX_LOCK (u8)0xF0
 
 X64Register ToNativeRegister(BCRegister reg) {
-    if(reg == BC_REG_SP) return X64_REG_SP;
-    if(reg == BC_REG_BP) return X64_REG_BP;
+    // if(reg == BC_REG_SP) return X64_REG_SP; // nocheckin
+    // if(reg == BC_REG_BP) return X64_REG_BP;
     return X64_REG_INVALID;
 }
 bool IsNativeRegister(BCRegister reg) {
@@ -1650,7 +1650,7 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
             } break;
             case BC_MOV_MR:
             case BC_MOV_MR_DISP16: {
-                Assert(n->op1 != BC_REG_SP && n->op1 != BC_REG_BP);
+                // Assert(n->op1 != BC_REG_SP && n->op1 != BC_REG_BP); // nocheckin
                 // Assert(n->control == CONTROL_32B);
                 
                 // Pre-work

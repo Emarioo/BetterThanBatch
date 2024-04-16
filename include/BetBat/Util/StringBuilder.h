@@ -157,8 +157,8 @@ struct StringBuilder {
         StringBuilder& operator <<(T t){append(t);return *this;}
 
     OP_METHOD_CREF(StringView)
-    OP_METHOD_CREF(TokenRange)
-    OP_METHOD_CREF(Token)
+    // OP_METHOD_CREF(TokenRange)
+    // OP_METHOD_CREF(Token)
     OP_METHOD_CREF(std::string)
     OP_METHOD(const char*)
     OP_METHOD(u8)
@@ -174,8 +174,8 @@ struct StringBuilder {
 
     #undef OP_METHOD
 
-    void append(const TokenRange& tokenRange);
-    void append(const Token& token);
+    // void append(const TokenRange& tokenRange);
+    // void append(const Token& token);
     void append(const std::string& str){
         append(str.c_str(), str.length());
     }

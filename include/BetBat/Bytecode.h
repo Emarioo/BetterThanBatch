@@ -1,5 +1,5 @@
 #pragma once
-#include "BetBat/Tokenizer.h"
+// #include "BetBat/Tokenizer.h"
 #include "BetBat/NativeRegistry.h"
 #include "BetBat/DebugInformation.h"
 
@@ -57,14 +57,8 @@ enum InstructionType : u8 {
     BC_LI64,
     BC_INCR, // usually used with stack pointer
     
-    // here to deprecate stack pointer
-    // BC_ALLOC_LOCAL,      // opcode, ref16, size16         - allocate local memory (max 64KB)
-    // BC_FREE_LOCAL,       // opcode, ref16                 - free local memory
-    // BC_LOCALPTR,         // opcode, reg16, ref16          - pointer to local
-    // BC_LOCALPTR_DISP16,  // opcode, reg16, ref16, disp16  - pointer to local
-    
     BC_ALLOC_LOCAL,      // opcode, size16         - allocate local memory (max 64KB)
-    BC_ALLOC_ARGS,      // opcode, size16         - allocate args memory (max 64KB)
+    BC_FREE_LOCAL,       // opcode, size16         - allocate args memory (max 64KB)
 
     BC_JMP,
     BC_CALL,
@@ -149,34 +143,12 @@ enum BCRegister : u8 {
     // temporary registers
     BC_REG_T0,
     BC_REG_T1,
-    
-    // argument registers
-    BC_REG_A0,
-    BC_REG_A1,
-    BC_REG_A2,
-    BC_REG_A3,
-    BC_REG_A4,
-    BC_REG_A5,
-    BC_REG_A6,
-    BC_REG_A7,
 
-    // parameter registers
-    BC_REG_P0,
-    BC_REG_P1,
-    BC_REG_P2,
-    BC_REG_P3,
-    BC_REG_P4,
-    BC_REG_P5,
-    BC_REG_P6,
-    BC_REG_P7,
-
-    // return registers
-    BC_REG_R0,
-    BC_REG_R1,
-    BC_REG_R2,
-    BC_REG_R3,
-
-    BC_REG_LP, // local pointer (similar to base/frame pointer)
+    BC_REG_LOCALS, // local pointer (similar to base/frame pointer)
+    BC_REG_ARGS, // pointer to arguments (se by caller)
+    BC_REG_VALS, // pointer to return values (retrieved by caller)
+    BC_REG_PARAMS, // pointer to parameters (accessed by callee)
+    BC_REG_RETS, // pointer to return values (set by callee)
     
     // BELOW SHOULD BE DEPRECATED
     // special registers
@@ -199,9 +171,9 @@ enum BCRegister : u8 {
 
     BC_REG_MAX,
 };
-#define IS_REG_PARAM(X) (X >= BC_REG_P0 && X <= BC_REG_P7)
-#define IS_REG_ARG(X) (X >= BC_REG_A0 && X <= BC_REG_A7)
-#define IS_REG_RET(X) (X >= BC_REG_R0 && X <= BC_REG_R3)
+// #define IS_REG_PARAM(X) (X >= BC_REG_P0 && X <= BC_REG_P7)
+// #define IS_REG_ARG(X) (X >= BC_REG_A0 && X <= BC_REG_A7)
+// #define IS_REG_RET(X) (X >= BC_REG_R0 && X <= BC_REG_R3)
 
 enum LocalRef : u16 {
     LOCAL_REF_INVALID = 0,
@@ -396,16 +368,16 @@ struct BytecodeBuilder {
     Bytecode* code=nullptr;
     TinyBytecode* tinycode=nullptr;
     
-    int getStackPointer() const { return virtualStackPointer; }
+    // int getStackPointer() const { return virtualStackPointer; }
     // in the future, this function may differ from getStackPointer
-    int saveStackMoment() const { return virtualStackPointer; }
-    void restoreStackMoment(int saved_sp, bool no_modification = false, bool no_instruction = false);
+    // int saveStackMoment() const { return virtualStackPointer; }
+    // void restoreStackMoment(int saved_sp, bool no_modification = false, bool no_instruction = false);
     
     void init(Bytecode* code, TinyBytecode* tinycode);
     
     // make space for local variables
-    void emit_stack_space(int size);
-    void emit_stack_alignment(int alignment);
+    // void emit_stack_space(int size);
+    // void emit_stack_alignment(int alignment);
     
     void emit_push(BCRegister reg, bool without_instruction = false);
     void emit_pop(BCRegister reg);
@@ -414,12 +386,8 @@ struct BytecodeBuilder {
     
     void emit_incr(BCRegister reg, i32 imm, bool no_modification = false);
 
-    // list of available local references
-    // DynamicArray<bool> local_references{};
     void emit_alloc_local(u16 size);
-    // void emit_free_local(LocalRef ref);
-    // void emit_localptr(BCRegister reg, LocalRef ref);
-    // void emit_localptr_disp16(BCRegister reg, LocalRef ref, u16 disp);
+    void emit_free_local(u16 size);
     
     void emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm = 0);
     void emit_ret();
@@ -506,7 +474,7 @@ private:
     //     int size=0;
     // };
     // DynamicArray<AlignInfo> stackAlignment;
-    int virtualStackPointer = 0;
+    // int virtualStackPointer = 0;
     int index_of_last_instruction = -1;
 };
 

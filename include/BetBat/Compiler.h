@@ -1,7 +1,7 @@
 #pragma once
 
 // Compiler v2
-#include "BetBat/Tokenizer.h"
+// #include "BetBat/Tokenizer.h"
 #include "BetBat/old_Preprocessor.h"
 #include "BetBat/old_Parser.h"
 #include "BetBat/TypeChecker.h"
@@ -166,6 +166,7 @@ struct CompileOptions {
 struct Compiler {
     lexer::Lexer lexer{};
     preproc::Preprocessor preprocessor{};
+    TypeChecker typeChecker{};
     AST* ast = nullptr;
     Bytecode* bytecode = nullptr;
     
@@ -209,6 +210,11 @@ struct Compiler {
             std::string as_name;
         };
         DynamicArray<Dep> dependencies;
+        struct Lib {
+            std::string path;
+            std::string named_as;
+        };
+        DynamicArray<Lib> libraries;
     };
     BucketArray<Import> imports{256};
     
@@ -233,6 +239,7 @@ struct Compiler {
     u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "");
     u32 addImport(const std::string& path, const std::string& dir_of_origin_file = "");
     void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "");
+    void addLibrary(u32 import_id, const std::string& as_name = "");
     
     DynamicArray<Path> importDirectories;
     Path findSourceFile(const Path& path, const Path& sourceDirectory = "");

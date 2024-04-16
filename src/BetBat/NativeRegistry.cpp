@@ -27,7 +27,7 @@ void NativeRegistry::DestroyGlobal(){
         // NativeRegistry::Destroy(s_globalRegistry);
 }
 
-NativeRegistry::NativeFunction* NativeRegistry::findFunction(const Token& name){
+NativeRegistry::NativeFunction* NativeRegistry::findFunction(const std::string& name){
     Assert(initialized);
     auto pair = nativeFunctionMap.find(name);
     if(pair == nativeFunctionMap.end()){

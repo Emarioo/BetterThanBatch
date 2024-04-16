@@ -239,6 +239,69 @@ SignalIO PreprocContext::parseLink(){
     
     return SIGNAL_SUCCESS;
 }
+SignalIO PreprocContext::parseLoad(){
+    using namespace engone;
+    // ZoneScopeC(tracy::Color::Wheat);
+
+    StringView path{};
+    lexer::Token name_token = gettok(&path);
+    if(name_token.type != lexer::TOKEN_LITERAL_STRING){
+        ERR_SECTION(
+            ERR_HEAD2(name_token)
+            ERR_MSG("Expected a string not "<<lexer->tostring(name_token)<<".")
+        )
+        return SIGNAL_COMPLETE_FAILURE;
+    }
+    advance();
+
+    StringView view_as{};
+    bool has_as = false;
+    lexer::Token tok = gettok(&view_as);
+    if(tok.type == lexer::TOKEN_IDENTIFIER && view_as == "as") {
+        advance();
+
+        tok = gettok(&view_as);
+        if(tok.type != lexer::TOKEN_IDENTIFIER) {
+            ERR_SECTION(
+                ERR_HEAD2(tok)
+                ERR_MSG("Expected a string not "<<lexer->tostring(tok)<<".")
+            )
+            return SIGNAL_COMPLETE_FAILURE;
+        } else {
+            has_as = true;
+            advance();
+        }
+    }
+    
+    if(evaluateTokens) {
+        preprocessor->lock_imports.lock();
+        auto imp = preprocessor->imports.get(import_id-1);
+        preprocessor->lock_imports.unlock();
+        
+        auto lexer_imp = lexer->getImport_unsafe(import_id);
+        std::string orig_dir = TrimLastFile(lexer_imp->path);
+        
+        u32 dep_id = compiler->addOrFindImport(path, orig_dir);
+        
+        if(dep_id == 0) {
+            Assert(false); // nocheckin, fix error   
+        } else {
+            // preprocessor->lock_imports.lock();
+            // preprocessor->imports.requestSpot(dep_id-1,nullptr);
+            // preprocessor->lock_imports.unlock();
+            
+            imp->import_dependencies.add(dep_id);
+            if(has_as)
+                compiler->addDependency(import_id, dep_id, view_as);
+            else
+                compiler->addDependency(import_id, dep_id);
+        }
+        // std::string name = lexer->getStdStringFromToken(name_token);
+        // preprocessor->compiler->addLinkDirective(name);
+    }
+    
+    return SIGNAL_SUCCESS;
+}
 
 SignalIO PreprocContext::parseIf(){
     using namespace engone;
@@ -286,7 +349,8 @@ SignalIO PreprocContext::parseIf(){
             token = gettok(1);
             // If !yes we can skip these tokens, otherwise we will have
             //  to skip them later which is unnecessary computation
-            if(lexer->equals_identifier(token, "if")){
+            // if(lexer->equals_identifier(token, "if")){
+            if(token.type == lexer::TOKEN_IF){
                 if(!active){
                     // inactive means we skip current tokens
                     advance(); // hashtag
@@ -340,7 +404,8 @@ SignalIO PreprocContext::parseIf(){
                 // log::out << log::GRAY<< "   endif - new depth "<<depth<<"\n";
                 depth--;
                 continue;
-            } else if(lexer->equals_identifier(token,"else")){ // we allow multiple elses, they toggle active and inactive sections
+            } else if(token.type == lexer::TOKEN_ELSE){ // we allow multiple elses, they toggle active and inactive sections
+            // } else if(lexer->equals_identifier(token,"else")){ // we allow multiple elses, they toggle active and inactive sections
                 if(depth==0){
                     advance();
                     advance();
@@ -429,7 +494,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     
     if(!evaluateTokens) {
         advance(); // skip, is this okay?
-        return SIGNAL_SUCCESS;
+        return SIGNAL_NO_MATCH;
     }
     
     lexer::Token macro_token = gettok();
@@ -438,7 +503,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     std::string macro_name = lexer->getStdStringFromToken(macro_token);
     MacroRoot* root = preprocessor->matchMacro(import_id,macro_name);
     if(!root)
-        return SIGNAL_SUCCESS;
+        return SIGNAL_NO_MATCH;
     advance();
     
     typedef DynamicArray<lexer::Token> TokenList;
@@ -715,10 +780,16 @@ SignalIO PreprocContext::parseOne() {
         return SIGNAL_COMPLETE_FAILURE;
     
     if(token->type != '#' || (token->flags & (lexer::TOKEN_FLAG_NEWLINE|lexer::TOKEN_FLAG_SPACE))) {
-        advance();
         if(evaluateTokens) {
+            if(tok.type == lexer::TOKEN_IDENTIFIER) {
+                auto signal = parseMacroEvaluation();
+                if(signal == SIGNAL_SUCCESS) {
+                    return SIGNAL_SUCCESS;
+                }
+            }
             lexer->appendToken(new_lexer_import, tok, &string);
         }
+        advance();
         return SIGNAL_SUCCESS;
     }
     // handle directive
@@ -727,12 +798,15 @@ SignalIO PreprocContext::parseOne() {
     // TODO: Create token types for non-user directives (#import, #include, #macro...)
     auto macro_token = getinfo(&string);
     auto macro_tok = gettok();
-    if(macro_token->type == lexer::TOKEN_IDENTIFIER) {
+    if(macro_token->type == lexer::TOKEN_IDENTIFIER || macro_token->type == lexer::TOKEN_IF) {
         const char* str = string.ptr;
         u32 len = string.len; // lexer->getStringFromToken(token,&str);
         
         SignalIO signal=SIGNAL_NO_MATCH;
-        if(!strcmp(str, "macro")) {
+        if(macro_token->type == lexer::TOKEN_IF) {
+            advance();
+            signal = parseIf();
+        } else if(!strcmp(str, "macro")) {
             advance();
             signal = parseMacroDefinition();
         } else if(!strcmp(str, "import")) {
@@ -741,6 +815,9 @@ SignalIO PreprocContext::parseOne() {
         } else if(!strcmp(str, "link")) {
             advance();
             signal = parseLink();
+        } else if(!strcmp(str, "load")) {
+            advance();
+            signal = parseLoad();
         } else if(!strcmp(str, "if")) {
             advance();
             signal = parseIf();

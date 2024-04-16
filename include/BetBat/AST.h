@@ -1,7 +1,7 @@
 #pragma once
 
-#include "BetBat/Tokenizer.h"
 #include "BetBat/Lexer.h"
+#include "BetBat/MessageTool.h"
 #include "BetBat/Signals.h"
 
 typedef u32 ScopeId;
@@ -351,7 +351,7 @@ struct FuncImpl {
     ASTFunction* astFunction;
     struct Spot {
         TypeId typeId{};
-        // int offset=0;
+        int offset=0;
     };
     u32 usages = 0;
     bool isUsed() { return usages!=0; }
@@ -361,7 +361,8 @@ struct FuncImpl {
     int returnSize=0;
     // i64 address = ADDRESS_INVALID; // Set by generator
     int tinycode_id = 0; // 0 is invalid, set by generator
-    u32 polyVersion=-1;
+    // u32 polyVersion=0;
+    u32 polyVersion=-1; // We can catch mistakes if we use -1 as default value
     QuickArray<TypeId> polyArgs;
     StructImpl* structImpl = nullptr;
     void print(AST* ast, ASTFunction* astFunc);
@@ -401,7 +402,7 @@ struct VariableInfo {
     i32 memberIndex = -1; // only used with MEMBER type
     int argument_index = 0;
 
-    // PolyVersions<i32> versions_dataOffset{};
+    PolyVersions<i32> versions_dataOffset{};
     PolyVersions<TypeId> versions_typeId{};
     Type type = LOCAL;
 
@@ -748,7 +749,7 @@ struct ASTFunction : ASTNode {
     };
     struct Ret {
         lexer::SourceLocation location;
-        TokenRange valueToken{}; // for error messages
+        // TokenRange valueToken{}; // for error messages
         TypeId stringType;
     };
 

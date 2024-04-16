@@ -3,7 +3,7 @@
 
 #include "BetBat/Lexer.h"
 
-#include "BetBat/Tokenizer.h"
+// #include "BetBat/Tokenizer.h"
 #include "BetBat/PhaseContext.h"
 #include "Engone/Util/BucketArray.h"
 
@@ -194,6 +194,7 @@ struct PreprocContext {
     SignalIO parseMacroDefinition();
     SignalIO parseMacroEvaluation();
     SignalIO parseLink();
+    SignalIO parseLoad();
     SignalIO parseImport();
     SignalIO parseIf();
 

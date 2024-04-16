@@ -44,9 +44,18 @@ mov a, [p0] // access first parameter
 mov a, [p1 + 8] // access second parameter with an offset of 8 into the value of the argument (accessing second field of a struct)
 
 
-mov [a0], 4
+alloc_local 256
+
+alloc_local 32
+push 4
+push 9
+
+pop
+mov [ap], 1
+pop
+mov [ap + 8], 2
 call hey
-mov t0, [r0]
+mov t0, [rv - 8]
 push t0
 
 mov [a0], 9

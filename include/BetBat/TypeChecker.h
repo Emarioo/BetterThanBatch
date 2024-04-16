@@ -3,18 +3,21 @@
 #include "BetBat/AST.h"
 #include "BetBat/PhaseContext.h"
 
-struct CompileInfo;
-struct CheckInfo : public PhaseContext {
-    AST* ast = nullptr;
-    Reporter* reporter = nullptr;
-    
+struct TypeChecker {
     struct CheckImpl {
         ASTFunction* astFunc=nullptr;
         FuncImpl* funcImpl=nullptr;
         // ASTScope* scope = nullptr; // scope where function came from
     };
     QuickArray<CheckImpl> checkImpls{};
+};
 
+struct CompileInfo;
+struct CheckInfo : public PhaseContext {
+    AST* ast = nullptr;
+    Reporter* reporter = nullptr;
+    TypeChecker* typeChecker = nullptr;
+    
     int funcDepth=0; // FUNC_ENTER
     bool ignoreErrors = false; // not thread safe, you need one of these per thread
     

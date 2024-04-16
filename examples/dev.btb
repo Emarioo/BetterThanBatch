@@ -6,9 +6,11 @@
 
 // prints("Hey")
 
-fn ret() -> char { return 'F' }
+#import "examples/foreign/main.btb"
 
-printc(ret())
+// fn ret() -> char { return 'F' }
+
+// printc(ret())
 // printc('c')
 // printc('\n')
 

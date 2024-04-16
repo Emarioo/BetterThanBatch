@@ -27,19 +27,15 @@
 //     if(!result)
 //     printf("Gotcha!\n");
 // }
+int one(int a) {
+    return 1 + a;
+}
+int two(int a, int b,int c,int d,int e,int f,int g,int h,int j, int k) {
+    return 1 + a * b;
+}
 int main() {
-    int glob=0;
-    {
-        int inner = 92;
-        inner += glob;
-        {
-            int innenras = 923;
-            inner += innenras;
-        }
-    }
-    {
-        int sibling = 222;
-        sibling += 23;   
-    }
-    return 0;
+    int a = 23,b=12,c=92,d=11;
+    c += one(23);
+    int aa = two(2,b+c+d,1,2,3,4,5,6,7,8);
+    return aa;
 }

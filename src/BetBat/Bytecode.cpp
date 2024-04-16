@@ -262,31 +262,31 @@ int Bytecode::appendData(const void* data, int size){
 
 
 void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode) {
-    Assert(virtualStackPointer == 0);
+    // Assert(virtualStackPointer == 0);
     // Assert(stackAlignment.size() == 0);
-    virtualStackPointer = 0;
+    // virtualStackPointer = 0;
     index_of_last_instruction = -1;
     // stackAlignment.cleanup();
     
     this->code = code;
     this->tinycode = tinycode;
 }
-void BytecodeBuilder::emit_stack_space(int size) {
-    size = (size + 0x7) & ~0x7; // ensure 8-byte alignment
-    emit_incr(BC_REG_SP, -size);
-}
-void BytecodeBuilder::emit_stack_alignment(int alignment) {
-    int dx = virtualStackPointer & alignment;
-    if(dx != 0) {
-        emit_incr(BC_REG_SP, alignment - dx);
-    }
-}
+// void BytecodeBuilder::emit_stack_space(int size) {
+//     size = (size + 0x7) & ~0x7; // ensure 8-byte alignment
+//     emit_incr(BC_REG_SP, -size);
+// }
+// void BytecodeBuilder::emit_stack_alignment(int alignment) {
+//     int dx = virtualStackPointer & alignment;
+//     if(dx != 0) {
+//         emit_incr(BC_REG_SP, alignment - dx);
+//     }
+// }
 void BytecodeBuilder::emit_push(BCRegister reg, bool without_instruction) {
     if(!without_instruction) {
         emit_opcode(BC_PUSH);
         emit_operand(reg);
     }
-    virtualStackPointer -= 8;
+    // virtualStackPointer -= 8;
 }
 void BytecodeBuilder::emit_pop(BCRegister reg) {
 #ifdef ENABLE_BYTECODE_OPTIMIZATIONS
@@ -302,7 +302,7 @@ void BytecodeBuilder::emit_pop(BCRegister reg) {
 
     emit_opcode(BC_POP);
     emit_operand(reg);
-    virtualStackPointer += 8;
+    // virtualStackPointer += 8;
 }
 void BytecodeBuilder::emit_li32(BCRegister reg, i32 imm){
     emit_opcode(BC_LI32);
@@ -339,49 +339,21 @@ void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm, bool no_modification) {
     emit_operand(reg);
     emit_imm32(imm);
     
-    if(reg == BC_REG_SP && !no_modification)
-        virtualStackPointer += imm;
+    // if(reg == BC_REG_SP && !no_modification)
+    //     virtualStackPointer += imm;
 }
 void BytecodeBuilder::emit_alloc_local(u16 size) {
     Assert(size > 0);
-    // LocalRef ref = LOCAL_REF_INVALID;
-    // for(int i = 1; i < local_references.size();i++) {
-    //     if (!local_references[i]) {
-    //         ref = (LocalRef)i;
-    //     }
-    // }
-    // if(ref == LOCAL_REF_INVALID) {
-    //     Assert(local_references.size() <= 0xFFFF);
-    //     if(local_references.size() == 0) // first local ref is interpreted as invalid
-    //         local_references.add(true);
-    //     ref = (LocalRef)local_references.size();
-    //     local_references.add(true);
-    // }
     emit_opcode(BC_ALLOC_LOCAL);
-    // emit_imm16(ref);
     emit_imm16(size);
-    // return ref;
 }
-// void BytecodeBuilder::emit_free_local(LocalRef ref) {
-//     Assert(ref < local_references.size());
-//     Assert(local_references[ref]);
-//     emit_opcode(BC_FREE_LOCAL);
-//     emit_imm16(ref);
-//     local_references[ref] = false;
-// }
-// void BytecodeBuilder::emit_localptr(BCRegister reg, LocalRef ref) {
-//     Assert(local_references[ref]);
-//     emit_opcode(BC_LOCALPTR);
-//     emit_operand(reg);
-//     emit_imm16(ref);
-// }
-// void BytecodeBuilder::emit_localptr_disp16(BCRegister reg, LocalRef ref, u16 disp) {
-//     Assert(local_references[ref]);
-//     emit_opcode(BC_LOCALPTR);
-//     emit_operand(reg);
-//     emit_imm16(ref);
-//     emit_imm16(disp);
-// }
+void BytecodeBuilder::emit_free_local(u16 size) {
+    // If size=0 is passed then it's probably a bug.
+    // We should not do "if(size==0) return;" because then we won't catch those bugs.
+    Assert(size > 0);
+    emit_opcode(BC_FREE_LOCAL);
+    emit_imm16(size);
+}
 void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm) {
     emit_opcode(BC_CALL);
     emit_imm8(l);
@@ -458,10 +430,10 @@ void BytecodeBuilder::emit_mov_mr(BCRegister to, BCRegister from, int size){
 
 void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size, int displacement){
     Assert(to != BC_REG_T1 && from != BC_REG_T1);
-    // TODO: Create a displacement instruction instead of li + add
-    // emit_li32(BC_REG_T1, displacement);
-    // emit_add(BC_REG_T1, from, false);
-    // from = BC_REG_T1;
+    if(displacement == 0) {
+        emit_mov_rm(to, from, size);
+        return;
+    }
     
     emit_opcode(BC_MOV_RM_DISP16);
     emit_operand(to);
@@ -478,10 +450,10 @@ void BytecodeBuilder::emit_mov_rm_disp(BCRegister to, BCRegister from, int size,
 }
 void BytecodeBuilder::emit_mov_mr_disp(BCRegister to, BCRegister from, int size, int displacement){
     Assert(to != BC_REG_T1 && from != BC_REG_T1);
-    // TODO: Create a displacement instruction instead of li + add
-    // emit_li32(BC_REG_T1, displacement);
-    // emit_add(BC_REG_T1, to, false);
-    // to = BC_REG_T1;
+    if(displacement == 0) {
+        emit_mov_mr(to, from, size);
+        return;
+    }
     
     emit_opcode(BC_MOV_MR_DISP16);
     emit_operand(to);
@@ -737,38 +709,38 @@ void BytecodeBuilder::emit_imm64(i64 imm) {
     i64* ptr = (i64*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 8);
     *ptr = imm;
 }
- void BytecodeBuilder::restoreStackMoment(int saved_sp, bool no_modification, bool no_instruction) {
-    using namespace engone;
-    int offset = saved_sp - virtualStackPointer;
-    if (offset == 0)
-        return;
-    if(!no_modification || no_instruction) {
-        // int at = saved_sp - virtualStackPointer;
-        // while (at > 0 && stackAlignment.size() > 0) {
-        //     auto align = stackAlignment.last();
-        //     // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
-        //     stackAlignment.pop();
-        //     at -= align.size;
-        //     at -= align.diff;
-        //     if(!hasErrors()) {
-        //         Assert(at >= 0);
-        //     }
-        // }
-    } 
-    // else {
-    //     _GLOG(log::out << "relsp "<<moment<<"\n";)
-    // }
-    if(!no_instruction){
-        emit_incr(BC_REG_SP, offset, no_modification);
-    } else {
-        virtualStackPointer = saved_sp;
-    }
-    if(no_modification) {
-        _GLOG(log::out << "relsp (temp) "<<saved_sp<<"\n";)
-    } else {
-        _GLOG(log::out << "relsp "<<saved_sp<<"\n";)
-    }
-}
+//  void BytecodeBuilder::restoreStackMoment(int saved_sp, bool no_modification, bool no_instruction) {
+//     using namespace engone;
+//     int offset = saved_sp - virtualStackPointer;
+//     if (offset == 0)
+//         return;
+//     if(!no_modification || no_instruction) {
+//         // int at = saved_sp - virtualStackPointer;
+//         // while (at > 0 && stackAlignment.size() > 0) {
+//         //     auto align = stackAlignment.last();
+//         //     // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
+//         //     stackAlignment.pop();
+//         //     at -= align.size;
+//         //     at -= align.diff;
+//         //     if(!hasErrors()) {
+//         //         Assert(at >= 0);
+//         //     }
+//         // }
+//     } 
+//     // else {
+//     //     _GLOG(log::out << "relsp "<<moment<<"\n";)
+//     // }
+//     if(!no_instruction){
+//         emit_incr(BC_REG_SP, offset, no_modification);
+//     } else {
+//         virtualStackPointer = saved_sp;
+//     }
+//     if(no_modification) {
+//         _GLOG(log::out << "relsp (temp) "<<saved_sp<<"\n";)
+//     } else {
+//         _GLOG(log::out << "relsp "<<saved_sp<<"\n";)
+//     }
+// }
 bool TinyBytecode::applyRelocations(Bytecode* code) {
     bool suc = true;
     for(int i=0;i<call_relocations.size();i++) {
@@ -820,9 +792,7 @@ extern const char* instruction_names[] {
     "li64", // BC_LI
     "incr", // BC_INCR
     "alloc_local", // BC_ALLOC_LOCAL
-    // "free_local", // BC_FREE_LOCAL
-    // "localptr", // BC_LOCALPTR
-    // "localptr_disp", // BC_LOCALPTR_DISP16
+    "free_local", // BC_FREE_LOCAL
     "jmp", // BC_JMP
     "call", // BC_CALL
     "ret", // BC_RET
@@ -872,32 +842,14 @@ extern const char* register_names[] {
     "f", // BC_REG_F
     "t0", // BC_REG_T0
     "t1", // BC_REG_T1
-    
-    "a0",
-    "a1",
-    "a2",
-    "a3",
-    "a4",
-    "a5",
-    "a6",
-    "a7",
+    "locals",
+    "args",
+    "vals",
+    "params",
+    "rets",
 
-    "p0",
-    "p1",
-    "p2",
-    "p3",
-    "p4",
-    "p5",
-    "p6",
-    "p7",
-
-    "r0",
-    "r1",
-    "r2",
-    "r3",
-
-    "sp", // BC_REG_SP
-    "bp", // BC_REG_BP
+    // "sp", // BC_REG_SP
+    // "bp", // BC_REG_BP
     "rax", // BC_REG_RAX
     "rbx", // BC_REG_RBX
     "rcx", // BC_REG_RCX
@@ -960,12 +912,14 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, bool for
                 case BC_MOV_MR: log::out << " [" << register_names[op0] << "], " << register_names[op1]; break;
                 case BC_MOV_RM_DISP16: log::out << " " << register_names[op0] << ", [" << register_names[op1]; if(imm >= 0) log::out << "+"; log::out << imm << "]"; break;
                 case BC_MOV_MR_DISP16: log::out << " [" << register_names[op0]; if(imm >= 0) log::out << "+"; log::out << imm << "], " << register_names[op1]; break;
+                default: Assert(false);
             }
             
-            if(control & CONTROL_8B)       log::out << ", byte";
-            else if(control & CONTROL_16B) log::out << ", word";
-            else if(control & CONTROL_32B) log::out << ", dword";
-            else if(control & CONTROL_64B) log::out << ", qword";
+            int size = GET_CONTROL_SIZE(control);
+            if(size == CONTROL_8B)       log::out << ", byte";
+            else if(size == CONTROL_16B) log::out << ", word";
+            else if(size == CONTROL_32B) log::out << ", dword";
+            else if(size == CONTROL_64B) log::out << ", qword";
         } break;
         case BC_PUSH:
         case BC_POP: {
@@ -1001,6 +955,16 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, bool for
             imm = *(i32*)&instructionSegment[pc];
             pc+=4;
             log::out << " " << register_names[op0] << ", " << log::GREEN << imm;
+        } break;
+        case BC_ALLOC_LOCAL: {
+            imm = *(u16*)&instructionSegment[pc];
+            pc+=2;
+            log::out << " " << log::GREEN << imm;
+        } break;
+        case BC_FREE_LOCAL: {
+            imm = *(u16*)&instructionSegment[pc];
+            pc+=2;
+            log::out << " " << log::GREEN << imm;
         } break;
         case BC_CALL: {
             LinkConventions l = (LinkConventions)instructionSegment[pc++];

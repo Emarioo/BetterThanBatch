@@ -742,10 +742,10 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
             return SIGNAL_NO_MATCH;
         if(overload){
             if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                CheckInfo::CheckImpl checkImpl{};
+                TypeChecker::CheckImpl checkImpl{};
                 checkImpl.astFunc = overload->astFunc;
                 checkImpl.funcImpl = overload->funcImpl;
-                info.checkImpls.add(checkImpl);
+                info.typeChecker->checkImpls.add(checkImpl);
             }
             overload->funcImpl->usages++;
 
@@ -1254,11 +1254,11 @@ SignalIO CheckFncall(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, Quic
 
     FnOverloads::Overload* newOverload = fnOverloads->addPolyImplOverload(polyFunc, funcImpl);
     
-    CheckInfo::CheckImpl checkImpl{};
+    TypeChecker::CheckImpl checkImpl{};
     checkImpl.astFunc = polyFunc;
     checkImpl.funcImpl = funcImpl;
     funcImpl->usages++;
-    info.checkImpls.add(checkImpl);
+    info.typeChecker->checkImpls.add(checkImpl);
 
     // Can overload be null since we generate a new func impl?
     overload = fnOverloads->getOverload(info.ast, argTypes, fnPolyArgs, parentStructImpl, expr);
@@ -1346,10 +1346,10 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                             if(outTypes) outTypes->add(AST_VOID);
                         } else {
                             if(overload->astFunc->body && overload->funcImpl->usages == 0){
-                                CheckInfo::CheckImpl checkImpl{};
+                                TypeChecker::CheckImpl checkImpl{};
                                 checkImpl.astFunc = overload->astFunc;
                                 checkImpl.funcImpl = overload->funcImpl;
-                                info.checkImpls.add(checkImpl);
+                                info.typeChecker->checkImpls.add(checkImpl);
                             }
                             overload->funcImpl->usages++;
                             if(outTypes) outTypes->add(AST_FUNC_REFERENCE);
@@ -1905,6 +1905,8 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
     ZoneScopedC(tracy::Color::Purple4);
     _TCLOG_ENTER(FUNC_ENTER)
 
+    funcImpl->polyVersion = func->polyVersionCount++;
+
     Assert(funcImpl->polyArgs.size() == func->polyArgs.size());
     // for(int i=0;i<(int)funcImpl->polyArgs.size();i++){
     //     TypeId id = funcImpl->polyArgs[i];
@@ -2018,7 +2020,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
             offset += asize - offset%asize;
         }
         // }
-        // argImpl.offset = offset;
+        argImpl.offset = offset;
         // log::out << " Arg "<<arg.offset << ": "<<arg.name<<" ["<<size<<"]\n";
         offset += size;
     }
@@ -2082,7 +2084,7 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
         if ((offset)%asize != 0){
             offset += asize - (offset)%asize;
         }
-        // retImpl.offset = offset;
+        retImpl.offset = offset;
         offset += size;
         // log::out << " Ret "<<ret.offset << ": ["<<size<<"]\n";
         if(outTypes)
@@ -2288,10 +2290,10 @@ SignalIO CheckFunction(CheckInfo& info, ASTFunction* function, ASTStruct* parent
 
                 if(function->name == "main") {
                     funcImpl->usages = 1;
-                    CheckInfo::CheckImpl checkImpl{};
+                    TypeChecker::CheckImpl checkImpl{};
                     checkImpl.astFunc = fnOverloads->overloads[overload_i].astFunc;
                     checkImpl.funcImpl = fnOverloads->overloads[overload_i].funcImpl;
-                    info.checkImpls.add(checkImpl);
+                    info.typeChecker->checkImpls.add(checkImpl);
                 }
                 // implementation isn't checked/generated
                 // if(function->body){
@@ -2404,11 +2406,11 @@ SignalIO CheckFuncImplScope(CheckInfo& info, ASTFunction* func, FuncImpl* funcIm
     _TCLOG_ENTER(FUNC_ENTER) // if(func->body->nativeCode)
     //     return true;
 
-    funcImpl->polyVersion = func->polyVersionCount++; // New poly version
+    
     info.currentPolyVersion = funcImpl->polyVersion;
     // log::out << log::YELLOW << __FILE__<<":"<<__LINE__ << ": Fix methods\n";
     // Where does ASTStruct come from. Arguments? FuncImpl?
-
+    // log::out << " " <<funcImpl->polyVersion << " " << func->polyVersionCount<<"\n";
     info.currentFuncImpl = funcImpl;
     info.currentAstFunc = func;
 
@@ -3409,6 +3411,7 @@ void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
     info.ast = ast;
     info.compiler = compiler;
     info.reporter = &compiler->reporter;
+    info.typeChecker = &compiler->typeChecker;
 
     _VLOG(log::out << log::BLUE << "Type check enums:\n";)
     // Check enums first since they don't depend on anything.
@@ -3422,6 +3425,7 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     info.ast = ast;
     info.compiler = compiler;
     info.reporter = &compiler->reporter;
+    info.typeChecker = &compiler->typeChecker;
     _VLOG(log::out << log::BLUE << "Type check structs:\n";)
 
     
@@ -3455,6 +3459,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {
     info.ast = ast;
     info.compiler = compiler;
     info.reporter = &compiler->reporter;
+    info.typeChecker = &compiler->typeChecker;
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 
     
@@ -3475,16 +3480,16 @@ void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
     info.ast = ast;
     info.compiler = compiler;
     info.reporter = &compiler->reporter;
+    info.typeChecker = &compiler->typeChecker;
     _VLOG(log::out << log::BLUE << "Type check functions:\n";)
 
     // Check rest will go through scopes and create polymorphic implementations if necessary.
     // This includes structs and functions.
     SignalIO result = CheckRest(info, scope); // nocheckin
 
-
-    while(info.checkImpls.size()!=0){
-        auto checkImpl = info.checkImpls[info.checkImpls.size()-1];
-        info.checkImpls.pop();
+    while(info.typeChecker->checkImpls.size()!=0){
+        auto checkImpl = info.typeChecker->checkImpls[info.typeChecker->checkImpls.size()-1];
+        info.typeChecker->checkImpls.pop();
         Assert(checkImpl.astFunc->body); // impl should not have been added if there was no body
         
         CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin

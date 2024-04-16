@@ -3,7 +3,7 @@
 
 #include "BetBat/Lexer.h"
 
-#include "BetBat/Tokenizer.h"
+#include "BetBat/__old_Tokenizer.h"
 #include "BetBat/PhaseContext.h"
 #include "Engone/Util/BucketArray.h"
 

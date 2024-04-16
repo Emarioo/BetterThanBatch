@@ -59,7 +59,7 @@
             "args": [
                 
             ],
-            "stopAtEntry": true,
+            "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "console": "integratedTerminal",
@@ -72,6 +72,19 @@
                     "ignoreFailures": true
                 }
             ]
+        },
+        {
+            "name": "(Windows) Test VS",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/wa.exe",
+            "args": [
+                
+            ],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal",
         },
         {
             "name": "(btb) Launch",

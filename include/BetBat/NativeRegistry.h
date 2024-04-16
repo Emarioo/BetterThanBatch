@@ -1,6 +1,6 @@
 #pragma once
 
-#include "BetBat/Tokenizer.h"
+// #include "BetBat/Tokenizer.h"
 #include "Engone/Util/Array.h"
 
 // TODO: Use enum instead? If there is a benefit.
@@ -125,7 +125,7 @@ struct NativeRegistry {
     void initNativeContent();
 
     // TODO: Returned pointer can become invalid if array is resized. Use a bucket array to fix it.
-    NativeFunction* findFunction(const Token& name);
+    NativeFunction* findFunction(const std::string& name);
     NativeFunction* findFunction(i64 jumpAddress);
 
     void _addFunction(const std::string& name, const NativeFunction& func);

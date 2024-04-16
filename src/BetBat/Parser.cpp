@@ -2214,8 +2214,8 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         // TODO: detect more ::
                     } else {
                         ASTExpression* tmp = info.ast->createExpression(TypeId(AST_ID));
-                        tmp->location = info.getloc();
-                        info.advance();
+                        tmp->location = loc;
+                        // info.advance();
 
                         std::string nsToken = "";
                         int nsOps = 0;
@@ -2932,19 +2932,50 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             if(view_fn_name == "hide"){
                 function->setHidden(true);
             } else if (view_fn_name == "dllimport"){
-                function->callConvention = CallConventions::STDCALL;
+                // TODO: dllimport should probably be limited to Windows only.
+                if(info.compiler->compileOptions->target == TARGET_WINDOWS_x64) {
+                    function->callConvention = CallConventions::STDCALL;
+                } else if(info.compiler->compileOptions->target == TARGET_UNIX_x64) {
+                    function->callConvention = CallConventions::UNIXCALL;
+                } else {
+                    #ifdef OS_WINDOWS
+                    function->callConvention = CallConventions::STDCALL;
+                    #else
+                    function->callConvention = CallConventions::UNIXCALL;
+                    #endif
+                }
                 specifiedConvention = true;
                 function->linkConvention = LinkConventions::DLLIMPORT;
                 needsExplicitCallConvention = true;
                 // linkToken = name;
             } else if (view_fn_name == "varimport"){
-                function->callConvention = CallConventions::STDCALL;
+                if(info.compiler->compileOptions->target == TARGET_WINDOWS_x64) {
+                    function->callConvention = CallConventions::STDCALL;
+                } else if(info.compiler->compileOptions->target == TARGET_UNIX_x64) {
+                    function->callConvention = CallConventions::UNIXCALL;
+                } else {
+                    #ifdef OS_WINDOWS
+                    function->callConvention = CallConventions::STDCALL;
+                    #else
+                    function->callConvention = CallConventions::UNIXCALL;
+                    #endif
+                }
                 specifiedConvention = true;
                 function->linkConvention = LinkConventions::VARIMPORT;
                 needsExplicitCallConvention = true;
                 // linkToken = name;
             } else if (view_fn_name == "import"){
-                function->callConvention = CallConventions::STDCALL;
+                if(info.compiler->compileOptions->target == TARGET_WINDOWS_x64) {
+                    function->callConvention = CallConventions::STDCALL;
+                } else if(info.compiler->compileOptions->target == TARGET_UNIX_x64) {
+                    function->callConvention = CallConventions::UNIXCALL;
+                } else {
+                    #ifdef OS_WINDOWS
+                    function->callConvention = CallConventions::STDCALL;
+                    #else
+                    function->callConvention = CallConventions::UNIXCALL;
+                    #endif
+                }
                 specifiedConvention = true;
                 function->linkConvention = LinkConventions::IMPORT;
                 needsExplicitCallConvention = true;
@@ -3163,7 +3194,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
     info.advance(); // skip (
     bool printedErrors=false;
     bool mustHaveDefault=false;
-    TokenRange prevDefault={};
+    // TokenRange prevDefault={};
     WHILE_TRUE {
         StringView view_arg{};
         auto arg = info.getinfo(&view_arg);
@@ -3261,7 +3292,8 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             // well log this error since it's probably a "real" error not caused by a cascade.
             ERR_SECTION(
                 ERR_HEAD2(tok)
-                ERR_MSG("Expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<".")
+                ERR_MSG("Expected a default argument because of previous default argument "<<"? at ?"<<".")
+                // ERR_MSG("Expected a default argument because of previous default argument "<<prevDefault<<" at "<<prevDefault.firstToken.line<<":"<<prevDefault.firstToken.column<<".")
                 ERR_LINE2(tok,"bad")
             )
             // continue; we don't continue since we want to parse comma if it exists
@@ -3750,6 +3782,9 @@ SignalIO ParseBody(ParseInfo& info, ASTScope*& bodyLoc, ScopeId parentScope, Par
             }  else if(view == "nodeid") {
                 log_nodeid = true;
                 info.advance();
+            } else {
+                // error
+                break;
             }
             token = info.getinfo(&view);
         }

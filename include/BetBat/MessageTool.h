@@ -3,9 +3,10 @@
 #include "Engone/Util/Stream.h"
 #include "BetBat/Util/StringBuilder.h"
 #include "BetBat/Lexer.h"
+// #include "BetBat/__old_Tokenizer.h"
 
-struct TokenRange;
-struct TokenStream;
+// struct TokenRange;
+// struct TokenStream;
 
 /*
     Settings
@@ -67,12 +68,12 @@ struct TokenStream;
 
 // TODO: Color support in string builder?
 
-void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode , TokenStream** prevStream = nullptr);
-void PrintHead(engone::log::Color color, const Token& token,           const StringBuilder& errorCode, TokenStream** prevStream = nullptr);
+// void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode , TokenStream** prevStream = nullptr);
+// void PrintHead(engone::log::Color color, const Token& token,           const StringBuilder& errorCode, TokenStream** prevStream = nullptr);
 
-void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
-void PrintCode(const Token& token,           const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
-void PrintCode(const TokenRange& tokenRange, const char* message,                TokenStream** prevStream);
+// void PrintCode(const TokenRange& tokenRange, const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
+// void PrintCode(const Token& token,           const StringBuilder& stringBuilder, TokenStream** prevStream = nullptr, int* base_column = nullptr);
+// void PrintCode(const TokenRange& tokenRange, const char* message,                TokenStream** prevStream);
 
 void PrintExample(int line, const StringBuilder& stringBuilder);
 
@@ -128,8 +129,8 @@ struct temp_compile_error {
 CompileError ToCompileError(const char* str);
 const char* ToCompileErrorString(temp_compile_error stuff);
 
-void PrintCode(const TokenRange& tokenRange, const char* message = nullptr);
-void PrintCode(int index, TokenStream* stream, const char* message = nullptr);
+// void PrintCode(const TokenRange& tokenRange, const char* message = nullptr);
+// void PrintCode(int index, TokenStream* stream, const char* message = nullptr);
 
 struct Reporter {
     lexer::Lexer* lexer=nullptr;

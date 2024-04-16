@@ -1,7 +1,8 @@
 #include "BetBat/MessageTool.h"
-#include "BetBat/Tokenizer.h"
+// #include "BetBat/__old_Tokenizer.h"
 #include "BetBat/Lexer.h"
 
+#ifdef gone
 void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const StringBuilder& errorCode, TokenStream** prevStream) {
     // , const StringBuilder& stringBuilder) {
     using namespace engone;
@@ -34,81 +35,6 @@ void PrintHead(engone::log::Color color, const TokenRange& tokenRange, const Str
     if(prevStream)
         *prevStream = tokenRange.tokenStream();
     //  << stringBuilder;
-}
-CompileError ToCompileError(const char* str){
-    Assert(str);
-    int len = strlen(str);
-    Assert(len > 1);
-    
-    if(*str == 'E' && str[1] >= '0' && str[1] <= '9') {
-        int num = atoi(str + 1);
-        // TODO: Hnadle potential error with atoi
-        return (CompileError)num;   
-    }
-    #define CASE(ERR) if(!strcmp(str, #ERR)) return ERR;
-    CASE(ERROR_NONE)
-    CASE(ERROR_UNSPECIFIED)
-    CASE(ERROR_CASTING_TYPES)
-    CASE(ERROR_UNDECLARED)
-    CASE(ERROR_TYPE_MISMATCH)
-    CASE(ERROR_INVALID_TYPE)
-    CASE(ERROR_TOO_MANY_VARIABLES)
-
-    CASE(ERROR_INCOMPLETE_FIELD)
-
-    CASE(ERROR_AMBIGUOUS_PARSING)
-    
-    CASE(ERROR_DUPLICATE_CASE)
-    CASE(ERROR_DUPLICATE_DEFAULT_CASE)
-    CASE(ERROR_C_STYLED_DEFAULT_CASE)
-    CASE(ERROR_BAD_TOKEN_IN_SWITCH)
-    CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
-    CASE(ERROR_OVERLOAD_MISMATCH)
-    #undef CASE
-    
-    Assert(false);
-    
-    return ERROR_UNKNOWN;
-}
-const char* ToCompileErrorString(temp_compile_error stuff) {
-    // if(stuff.err == ERROR_NONE)
-    //     return "";
-    if(!stuff.shortVersion) {
-        #define CASE(ERR) if(stuff.err == ERR) return #ERR;
-        CASE(ERROR_NONE)
-        CASE(ERROR_UNSPECIFIED)
-        
-        CASE(ERROR_CASTING_TYPES)
-        CASE(ERROR_UNDECLARED)
-        CASE(ERROR_TYPE_MISMATCH)
-        CASE(ERROR_INVALID_TYPE)
-        CASE(ERROR_TOO_MANY_VARIABLES)
-
-        CASE(ERROR_INCOMPLETE_FIELD)
-
-        CASE(ERROR_AMBIGUOUS_PARSING)
-    
-        CASE(ERROR_DUPLICATE_CASE)
-        CASE(ERROR_DUPLICATE_DEFAULT_CASE)
-        CASE(ERROR_C_STYLED_DEFAULT_CASE)
-        CASE(ERROR_BAD_TOKEN_IN_SWITCH)
-        CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
-        CASE(ERROR_OVERLOAD_MISMATCH)
-        
-        CASE(ERROR_UNKNOWN)
-        #undef CASE
-    }
-    
-    static std::unordered_map<CompileError,std::string*> errorStrings;
-    auto pair = errorStrings.find(stuff.err);
-    if(pair != errorStrings.end())
-        return pair->second->c_str();
-        
-    auto str = new std::string();
-    errorStrings[stuff.err] = str;
-    str->append("E");
-    str->append(std::to_string((u32)stuff.err));
-    return str->c_str();
 }
 void PrintHead(engone::log::Color color, const Token& token, const StringBuilder& errorCode, TokenStream** prevStream) {
     PrintHead(color, token.operator TokenRange(), errorCode, prevStream);
@@ -286,6 +212,7 @@ void PrintCode(int index, TokenStream* stream, const char* message){
     // range.tokenStream = stream;
     PrintCode(range, message);
 }
+#endif
 void PrintExample(int line, const StringBuilder& stringBuilder){
     using namespace engone;
 
@@ -445,6 +372,7 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
     for(int i=start;i<end;i++){
         lexer::TokenSource* src;
         auto tok = lexer->getTokenInfoFromImport(imp->file_id,i, &src);
+        if(!src) continue;
         int numlen = src->line>0 ? ((int)log10(src->line)+1) : 1;
         if(numlen>lineDigits)
             lineDigits = numlen;
@@ -609,4 +537,80 @@ void Reporter::err_mark(lexer::Token token, const StringBuilder& text) {
     }
     r.token_index_end = r.token_index_start + 1;
     err_mark(r, text);
+}
+
+CompileError ToCompileError(const char* str){
+    Assert(str);
+    int len = strlen(str);
+    Assert(len > 1);
+    
+    if(*str == 'E' && str[1] >= '0' && str[1] <= '9') {
+        int num = atoi(str + 1);
+        // TODO: Hnadle potential error with atoi
+        return (CompileError)num;   
+    }
+    #define CASE(ERR) if(!strcmp(str, #ERR)) return ERR;
+    CASE(ERROR_NONE)
+    CASE(ERROR_UNSPECIFIED)
+    CASE(ERROR_CASTING_TYPES)
+    CASE(ERROR_UNDECLARED)
+    CASE(ERROR_TYPE_MISMATCH)
+    CASE(ERROR_INVALID_TYPE)
+    CASE(ERROR_TOO_MANY_VARIABLES)
+
+    CASE(ERROR_INCOMPLETE_FIELD)
+
+    CASE(ERROR_AMBIGUOUS_PARSING)
+    
+    CASE(ERROR_DUPLICATE_CASE)
+    CASE(ERROR_DUPLICATE_DEFAULT_CASE)
+    CASE(ERROR_C_STYLED_DEFAULT_CASE)
+    CASE(ERROR_BAD_TOKEN_IN_SWITCH)
+    CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+    CASE(ERROR_OVERLOAD_MISMATCH)
+    #undef CASE
+    
+    Assert(false);
+    
+    return ERROR_UNKNOWN;
+}
+const char* ToCompileErrorString(temp_compile_error stuff) {
+    // if(stuff.err == ERROR_NONE)
+    //     return "";
+    if(!stuff.shortVersion) {
+        #define CASE(ERR) if(stuff.err == ERR) return #ERR;
+        CASE(ERROR_NONE)
+        CASE(ERROR_UNSPECIFIED)
+        
+        CASE(ERROR_CASTING_TYPES)
+        CASE(ERROR_UNDECLARED)
+        CASE(ERROR_TYPE_MISMATCH)
+        CASE(ERROR_INVALID_TYPE)
+        CASE(ERROR_TOO_MANY_VARIABLES)
+
+        CASE(ERROR_INCOMPLETE_FIELD)
+
+        CASE(ERROR_AMBIGUOUS_PARSING)
+    
+        CASE(ERROR_DUPLICATE_CASE)
+        CASE(ERROR_DUPLICATE_DEFAULT_CASE)
+        CASE(ERROR_C_STYLED_DEFAULT_CASE)
+        CASE(ERROR_BAD_TOKEN_IN_SWITCH)
+        CASE(ERROR_MISSING_ENUM_MEMBERS_IN_SWITCH)
+        CASE(ERROR_OVERLOAD_MISMATCH)
+        
+        CASE(ERROR_UNKNOWN)
+        #undef CASE
+    }
+    
+    static std::unordered_map<CompileError,std::string*> errorStrings;
+    auto pair = errorStrings.find(stuff.err);
+    if(pair != errorStrings.end())
+        return pair->second->c_str();
+        
+    auto str = new std::string();
+    errorStrings[stuff.err] = str;
+    str->append("E");
+    str->append(std::to_string((u32)stuff.err));
+    return str->c_str();
 }

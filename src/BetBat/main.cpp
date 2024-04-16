@@ -47,12 +47,16 @@ int main(int argc, const char** argv){
             // GenerateFuzzedFiles(opts,"main.btb");
 
     CompileOptions options{};
-    options.target = TARGET_WINDOWS_x64;
+    options.target = TARGET_BYTECODE;
+    // options.target = TARGET_WINDOWS_x64;
     // options.useDebugInformation = true;
     
     Compiler compiler{};
     compiler.importDirectories.add(Path("modules/").getAbsolute());
     compiler.compileSource("examples/dev.btb", &options);
+
+    VirtualMachine vm{};
+    vm.execute(compiler.bytecode,"main");
 
     u32 lines=0;
     u32 filesize=0;
@@ -299,6 +303,8 @@ int main(int argc, const char** argv){
         if (compileOptions.sourceFile.text.size() == 0) {
             log::out << log::RED << "You must specify a file when using --preproc\n";
         } else {
+            Assert(false);
+            #ifdef gone
             auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
             
             if(!stream) {
@@ -333,6 +339,7 @@ int main(int argc, const char** argv){
                 // TokenStream::Destroy(stream);
                 // TokenStream::Destroy(stream2);
             }
+            #endif
         }
     } else if(performTests) {
         if(pattern_for_files.length() != 0) {

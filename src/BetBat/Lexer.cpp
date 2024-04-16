@@ -287,7 +287,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     index++;
                     inComment=false;
                     inEnclosedComment=false;
-                    _TLOG(log::out << "// : End comment\n";)
+                    // _TLOG(log::out << "// : End comment\n";)
                 }
             }else{
                 // I tried to optimize comment parsing at one point but it wasn't any faster.
@@ -304,7 +304,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     //     outStream->get(outStream->length()-1).flags |= TOKEN_SUFFIX_LINE_FEED;
                     update_flags(TOKEN_FLAG_NEWLINE);
                     inComment=false;
-                    _TLOG(log::out << "// : End comment\n";)
+                    // _TLOG(log::out << "// : End comment\n";)
                 }
             }
             continue;
@@ -626,7 +626,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             lexer_import->comment_lines++;
             // outStream->commentCount++;
             index++; // skip the next slash
-            _TLOG(log::out << "// : Begin comment\n";)
+            // _TLOG(log::out << "// : Begin comment\n";)
             continue;
         } else if(isQuotes){
             inQuotes = true;

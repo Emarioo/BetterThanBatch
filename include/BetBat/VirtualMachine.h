@@ -17,9 +17,11 @@ struct VirtualMachine {
     volatile i64 registers[BC_REG_MAX];
     engone::Memory<u8> stack{};
 
+    bool has_return_values_on_stack = false;
+    int ret_offset = 0;
+    int push_offset = 0;
     i64 stack_pointer = 0;
-    i64 args_pointer = 0;
-    
+    i64 base_pointer = 0;
 
     bool expectValuesOnStack = false;
     bool silent = false;
@@ -31,6 +33,7 @@ struct VirtualMachine {
     void cleanup();
     void printRegisters();
 
+    void executeNative(int tiny_index);
 
     void moveMemory(u8 reg, volatile void* from, volatile void* to);
     volatile void* getReg(u8 id);

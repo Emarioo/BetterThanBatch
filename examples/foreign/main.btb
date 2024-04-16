@@ -1,0 +1,26 @@
+/*
+    Bindings for tiny_math.lib
+*/
+
+// #load "examples/foreign/tiny_math.lib" as math
+
+// #load "examples/foreign/tiny_math.dll" as math
+
+// fn @import(math,alias="_Z3sumii") sum(start: i32, end: i32) -> i32;
+fn @import sum(start: i32, end: i32) -> i32;
+
+
+// @multi_import(tiny_math)
+// fn @import(alias="_Z3sumii")      my_sum(start: i32, end: i32) -> i32;
+// fn @import(alias="_Z9factoriali") my_factorial(n: i32) -> i32;
+
+
+/*
+    Main program
+*/
+
+fn main() {
+    a := sum(1,5)
+
+    printi(a) printc('\n')
+}

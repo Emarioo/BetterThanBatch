@@ -25,10 +25,10 @@ struct DebugInformation {
             AST::Destroy(ast);
         ownerOfAST = false;
         ast = nullptr;
-        for(auto& stream : tokenStreams) {
-            TokenStream::Destroy(stream);
-        }
-        tokenStreams.cleanup();
+        // for(auto& stream : tokenStreams) {
+        //     TokenStream::Destroy(stream);
+        // }
+        // tokenStreams.cleanup();
     }
 
     struct Line {
@@ -85,7 +85,7 @@ struct DebugInformation {
         // DynamicArray<LexicalScope> scopes;
 
         u32 fileIndex;
-        TokenStream* tokenStream;
+        // TokenStream* tokenStream;
 
         DynamicArray<Line> lines;
 
@@ -105,5 +105,5 @@ struct DebugInformation {
 
     bool ownerOfAST = false;
     AST* ast = nullptr; // make sure you don't destroy the AST while debug information is using it
-    DynamicArray<TokenStream*> tokenStreams;
+    // DynamicArray<TokenStream*> tokenStreams;
 };

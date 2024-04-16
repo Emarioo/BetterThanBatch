@@ -32,7 +32,9 @@ const char* FormatBytes(u64 bytes);
 const char* FormatTime(double seconds);
 
 bool streq(const char* a, const char* b);
-
+std::string NumberToHex_signed(i64 number, bool withPrefix=false);
+std::string NumberToHex(u64 number, bool withPrefix=false);
+u64 ConvertHexadecimal_content(char* str, int length);
 // src/util/base.btb -> src/util/
 // base.btb -> /
 // src -> /
