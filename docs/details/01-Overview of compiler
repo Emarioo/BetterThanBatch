@@ -1,5 +1,5 @@
 # Overview of the compiler
-These chapters, in `docs/details`, describes the implementation of the compiler. The chapters do not cover everything but the most noteworthy parts.
+These chapters, in `docs/details`, describes the implementation of the compiler. The chapters cover the most noteworthy parts.
 
 **NOTE**: CHAPTERS ARE WORK IN PROGRESS
 
@@ -13,11 +13,21 @@ values are put in registers and pushed to the stack.
 Some preprocessing is done after the parser like
 \_FUNCTION\_ which isn't know until after parsing.
 
-- Tokenizer     (text -> tokens)
-- Preprocessor  (tokens -> tokens)
-- Parser        (tokens -> AST)
-- Type checker  (modifies types in AST)
-- Generator     (AST -> bytecode)
-- Optimizer     (bytecode -> faster and smaller bytecode)
-- Interpreter   (runs the bytecode, compile time execution)
-- x64 Generator (bytecode -> object file)
+- Lexer             (text -> tokens)
+- Preprocessor      (tokens -> tokens)
+- Parser            (tokens -> AST)
+- Type checker      (modifies types in AST)
+- Generator         (AST -> bytecode)
+- Virtual Machine   (runs the bytecode, compile time execution)
+- x64 Generator     (bytecode -> object file -> executable)
+<!-- - Optimizer         (bytecode -> faster and smaller bytecode) -->
+
+
+## First step
+The first step in the compiler parses the command line arguments.
+- Which file to compile?
+- What file to output, what platform?
+- Running tests?
+- Should the executable (or bytecode) be executed after compilation?
+- How much log information? (verbose, silent)
+

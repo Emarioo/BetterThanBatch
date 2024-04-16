@@ -3437,7 +3437,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             auto imp = compiler->lexer.getImport_unsafe(function->body->statements[0]->location);
             dfun->fileIndex = di->addOrGetFile(imp->path);
         } else {
-            dfun->fileIndex = di->addOrGetFile(info.compiler->compileOptions->sourceFile.text);
+            dfun->fileIndex = di->addOrGetFile(info.compiler->compileOptions->source_file);
         }
         dfun->funcImpl = funcImpl;
         dfun->funcAst = function;
@@ -3623,8 +3623,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             //  This could be bad.
         } break;
         case STDCALL: {
-            Assert(false);
-            #ifdef gone
             if (function->arguments.size() != 0) {
                 _GLOG(log::out << "set " << function->arguments.size() << " args\n");
                 // int offset = 0;
@@ -3654,13 +3652,14 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     // TypeInfo *typeInfo = info.ast->getTypeInfo(argImpl.typeId.baseType());
                     // stdcall should put first 4 args in registers but the function will put
                     // the arguments onto the stack automatically so in the end 8*i will work fine.
-                    varinfo->versions_dataOffset[info.currentPolyVersion] = GenContext::FRAME_SIZE + 8 * i;
+                    varinfo->versions_dataOffset[info.currentPolyVersion] = 8 * i;
+                    // varinfo->versions_dataOffset[info.currentPolyVersion] = GenContext::FRAME_SIZE + 8 * i;
                     _GLOG(log::out << " " <<"["<<varinfo->versions_dataOffset[info.currentPolyVersion]<<"] "<< arg.name << ": " << info.ast->typeToString(argImpl.typeId) << "\n";)
                     // DFUN_ADD_VAR(arg.name, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion])
                 }
                 _GLOG(log::out << "\n";)
             }
-            // todo: Member variables for stdcall.
+            // TODO: Member variables for stdcall.
             Assert(!function->parentStruct);
             
             // HELLO READ THIS!
@@ -3695,30 +3694,31 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 arg.virtualType->id = funcImpl->polyArgs[i];
             }
 
-            const BCRegister normal_regs[4]{
-                BC_REG_RCX,
-                BC_REG_RDX,
-                BC_REG_R8,
-                BC_REG_R9,
-            };
-            const BCRegister float_regs[4] {
-                BC_REG_XMM0,
-                BC_REG_XMM1,
-                BC_REG_XMM2,
-                BC_REG_XMM3,
-            };
-            auto& argTypes = funcImpl->argumentTypes;
-            for(int i=argTypes.size()-1;i>=0;i--) {
-                auto argType = argTypes[i].typeId;
+            // TODO: WE NEED AN INSTRUCTION TO MOVE RCX,RDX... TO THE ARGUMENT STACK AREA
+            // const BCRegister normal_regs[4]{
+            //     BC_REG_RCX,
+            //     BC_REG_RDX,
+            //     BC_REG_R8,
+            //     BC_REG_R9,
+            // };
+            // const BCRegister float_regs[4] {
+            //     BC_REG_XMM0,
+            //     BC_REG_XMM1,
+            //     BC_REG_XMM2,
+            //     BC_REG_XMM3,
+            // };
+            // auto& argTypes = funcImpl->argumentTypes;
+            // for(int i=argTypes.size()-1;i>=0;i--) {
+            //     auto argType = argTypes[i].typeId;
 
-                u8 size = info.ast->getTypeSize(argType);
-                if(AST::IsDecimal(argType)) {
-                    Assert(false);
-                    builder.emit_mov_mr_disp(BC_REG_BP, float_regs[i], size, GenContext::FRAME_SIZE + i * 8);
-                } else {
-                    builder.emit_mov_mr_disp(BC_REG_BP, normal_regs[i], size, GenContext::FRAME_SIZE + i * 8);
-                }
-            }
+            //     u8 size = info.ast->getTypeSize(argType);
+            //     if(AST::IsDecimal(argType)) {
+            //         Assert(false);
+            //         builder.emit_mov_mr_disp(BC_REG_BP, float_regs[i], size, GenContext::FRAME_SIZE + i * 8);
+            //     } else {
+            //         builder.emit_mov_mr_disp(BC_REG_BP, normal_regs[i], size, GenContext::FRAME_SIZE + i * 8);
+            //     }
+            // }
 
             // TODO: MAKE SURE SP IS ALIGNED TO 8 BYTES
             // SHOULD stackAlignment, virtualStackPointer be reset and then restored?
@@ -3729,7 +3729,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             //  Generating them multiple times for each function is bad.
             // NOTE: virtualTypes from this function may be accessed from a function within it's body.
             //  This could be bad.
-            #endif
         } break;
         case UNIXCALL: {
             Assert(false);
@@ -3926,8 +3925,6 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
         } break;
         case STDCALL: {
-            Assert(false);
-            #ifdef gone
             for(int i=0;i<(int)function->polyArgs.size();i++){
                 auto& arg = function->polyArgs[i];
                 arg.virtualType->id = {}; // disable types
@@ -3938,7 +3935,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     arg.virtualType->id = {}; // disable types
                 }
             }
-            Assert(funcImpl->returnTypes.size() < 2);
+            Assert(funcImpl->returnTypes.size() <= 1);
             // log::out << *function->name<<" " <<function->returnTypes.size()<<"\n";
             if (funcImpl->returnTypes.size() != 0) {
                 // check last statement for a return and "exit" early
@@ -3970,10 +3967,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 // builder.emit_pop(BC_REG_BP);
                 builder.emit_ret();
             } else {
-                builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
+                // builder.restoreStackMoment(GenContext::VIRTUAL_STACK_START, false, true);
             }
-            Assert(builder.getStackPointer() == 0);
-            #endif
         } break;
         case UNIXCALL: {
             Assert(false);
@@ -4031,11 +4026,12 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         }
         }
         
-        // dfun->funcEnd = info.code->length();
-        // dfun->bc_end = info.code->length();
-
+        // TODO: Assert that we haven't allocated more stack space than we freed!
         // Assert(builder.getStackPointer() == 0);
         // Assert(info.currentFrameOffset == 0);
+
+        // dfun->funcEnd = info.code->length();
+        // dfun->bc_end = info.code->length();
         // needs to be done after frame pop
         // builder.restoreStackMoment(functionStackMoment, false, true);
     }

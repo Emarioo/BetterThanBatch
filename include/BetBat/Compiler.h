@@ -93,7 +93,7 @@ struct CompileStats {
 struct CompilerVersion {
     static const char* global_version;
     static const int MAX_STRING_VERSION_LENGTH = 4*4 + 19 + 4 + 2 + 2; // integers are limited to 9999 and 99
-    u16 major; // once a year
+    u16 major; // 1-3 year
     u16 minor; // 1-3 months
     u16 patch; // 3 - 10 days
     u16 revision; // 0 - 24 hours (optional)
@@ -129,8 +129,8 @@ struct CompileOptions {
         compileStats.errorTypes.cleanup();
     }
 
-    Path sourceFile{};
-    Path outputFile{};
+    std::string source_file{};
+    std::string output_file{};
     TargetPlatform target = CONFIG_DEFAULT_TARGET;
     LinkerChoice linker = CONFIG_DEFAULT_LINKER;
     std::string linker_cmd = "";
@@ -139,8 +139,13 @@ struct CompileOptions {
     bool silent=false;
     bool verbose=false;
     bool instant_report = true;
+    bool devmode = false;
+    bool only_preprocess = false;
+    bool performTests = false;
+    bool show_profiling = false;
+    std::string pattern_for_files;
 
-    Path modulesDirectory{"./modules/"}; // Where the standard library can be found. Typically "modules"
+    std::string modulesDirectory{"./modules/"}; // Where the standard library can be found. Typically "modules"
 
     bool executeOutput = false;
     DynamicArray<std::string> userArguments; // Ignored if output isn't executed. Arguments to pass to the interpreter or executable

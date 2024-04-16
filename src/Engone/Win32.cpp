@@ -1122,6 +1122,17 @@ namespace engone {
 		}
 		return true;
 	}
+	std::string GetPathToExecutable() {
+		std::string out{};
+		out.resize(0x180);
+		u32 len = GetModuleFileNameA(NULL, (char*)out.data(), out.size());
+		out.resize(len);
+		for(int i=0;i<out.length();i++){
+			if(out[i] == '\\')
+				((char*)out.data())[i] = '/';
+		}
+		return out;
+	}
 	DynamicLibrary LoadDynamicLibrary(const std::string& path){
 		HMODULE module = LoadLibraryA(path.c_str());
 		if (module == NULL) {

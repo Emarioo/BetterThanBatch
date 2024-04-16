@@ -275,6 +275,8 @@ namespace engone {
 	bool SetStandardIn(APIFile file);
 	APIFile GetStandardIn();
 
+	std::string GetPathToExecutable();
+
 	typedef void* DynamicLibrary;
 	typedef void(*VoidFunction)();
 	// @return null on error (library not found?). Pass returned value into GetFunctionAdress to get function pointer. 

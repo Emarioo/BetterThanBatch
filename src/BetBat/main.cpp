@@ -7,11 +7,12 @@
 #include "BetBat/Help.h"
 
 #include <math.h>
-// #include "BetBat/glfwtest.h"
 
 #include "BetBat/Fuzzer.h"
 #include "BetBat/Lexer.h"
 
+// I was experimenting GLFW and OpenGL which is why STB_IMAGE is here. It should probably be removed in the future.
+// #include "BetBat/glfwtest.h"
 #define STB_IMAGE_IMPLEMENTATION
 #define STB_IMAGE_WRITE_IMPLEMENTATION
 #include "stb/stb_image.h"
@@ -19,118 +20,249 @@
 #undef STB_IMAGE_IMPLEMENTATION
 #undef STB_IMAGE_WRITE_IMPLEMENTATION
 
-#define EXIT_CODE_NOTHING 0
-#define EXIT_CODE_SUCCESS 0
-#define EXIT_CODE_FAILURE 1
 
-int hm() {
-    int a[20];
-    int b = a[1] + (a[2] + (a[3] + (a[4] + (4 + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (2 + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
-    
-    return b;
+void garbage() {
+    // int a[20];
+    // int b = a[1] + (a[2] + (a[3] + (a[4] + (hm() + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (hm() + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
 }
+
+bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions* out_options);
 
 int main(int argc, const char** argv){
     using namespace engone;
+    #define EXIT_CODE_SUCCESS 0
+    #define EXIT_CODE_FAILURE 1
     
-    int a[20];
-    int b = a[1] + (a[2] + (a[3] + (a[4] + (hm() + (a[6] + (a[7] + (a[8] + (a[9] + (a[10] + (a[11] + (a[12] + (a[13] + (a[14] + (a[15] + (a[16] + (hm() + (a[18] + (a[19] + (a[20] + a[21])))))))))))))))))));
-    
-    
+    // garbage(); // experimentation
+
     log::out.enableReport(false);
     // MeasureInit();
     ProfilerInitialize();
-    
-            // FuzzerOptions opts{};
-            // opts.node_iterations_per_file = 5000;
-            // opts.file_count = 20;
-            // GenerateFuzzedFiles(opts,"main.btb");
+
+    DynamicArray<std::string> arguments{};
+    for(int i=1;i<argc;i++) // is the first argument always the executable?
+        arguments.add(argv[i]);
 
     CompileOptions options{};
-    options.target = TARGET_BYTECODE;
-    // options.target = TARGET_WINDOWS_x64;
-    // options.useDebugInformation = true;
-    
-    Compiler compiler{};
-    compiler.importDirectories.add(Path("modules/").getAbsolute());
-    compiler.compileSource("examples/dev.btb", &options);
+    bool valid = InterpretCommands(arguments, &options);
+    if(!valid)
+        return EXIT_CODE_FAILURE;
 
-    VirtualMachine vm{};
-    vm.execute(compiler.bytecode,"main");
+    if(options.devmode) {
+        log::out << log::BLACK<<"[DEVMODE]\n";
 
-    u32 lines=0;
-    u32 filesize=0;
-    // for(auto& it : compiler.lexer.getImports()) {
-    //     lines+=it->lines;
-    //     filesize+=it->fileSize;
-    // }
-    auto iter = compiler.lexer.getImports().iterator();
-    while(compiler.lexer.getImports().iterate(iter)) {
-        lines+=iter.ptr->lines;
-        filesize+=iter.ptr->fileSize;
+        // FuzzerOptions opts{};
+        // opts.node_iterations_per_file = 5000;
+        // opts.file_count = 20;
+        // GenerateFuzzedFiles(opts,"main.btb");
+
+        options.target = TARGET_BYTECODE;
+        // options.target = TARGET_WINDOWS_x64;
+        // options.useDebugInformation = true;
+        Compiler compiler{};
+        compiler.compileSource("examples/dev.btb", &options);
+
+        VirtualMachine vm{};
+        vm.execute(compiler.bytecode,"main");
+
+        // DynamicArray<std::string> tests;
+        // tests.add("tests/simple/operations.btb");
+        // tests.add("tests/flow/switch.btb");
+        // tests.add("tests/funcs/overloading.btb");
+        // tests.add("tests/simple/garb.btb");
+        // tests.add("tests/flow/loops.btb");
+        // tests.add("tests/what/struct.btb");
+        // VerifyTests(&options, tests);
         
-        // log::out << log::GOLD << "---- "<<TrimCWD(iter.ptr->path)<<" -----\n";
-        // compiler.lexer.print(iter.index+1);
+        #ifdef RUN_TEST_SUITE
+        DynamicArray<std::string> tests;
+        // tests.add("tests/simple/operations.btb");
+        // tests.add("tests/flow/switch.btb");
+        tests.add("tests/funcs/overloading.btb");
+        // tests.add("tests/simple/garb.btb");
+        // tests.add("tests/flow/loops.btb");
+        // tests.add("tests/what/struct.btb");
+        VerifyTests(tests);
+        #elif defined(RUN_TESTS)
+        auto strs = {RUN_TESTS};
+        DynamicArray<std::string> tests;
+        for(auto s : strs) {
+            tests.add(s);
+        }
+        VerifyTests(tests);
+        #else
+        // if(options.target == TARGET_BYTECODE){
+        //     options.executeOutput = true;
+        //     // CompileAll(&compileOptions);
+        // } else {
+        //     #define EXE_FILE "dev.exe"
+            
+        //     // FuzzerOptions opts{};
+        //     // opts.node_iterations_per_file = 5000;
+        //     // opts.file_count = 20;
+        //     // GenerateFuzzedFiles(opts,"main.btb");
+            
+        //     options.useDebugInformation = true;
+        //     options.executeOutput = true;
+        //     options.output_file = EXE_FILE;
+        //     // CompileAll(&compileOptions);
+        // }
+        // compilerExitCode = compileOptions.compileStats.errors;
+        #endif
+
+        return EXIT_CODE_SUCCESS;
     }
-    log::out << "size: "<<FormatBytes(filesize) << ", lines: "<<lines<<"\n";
-    
+
+    if(options.only_preprocess) {
+        Assert(options.source_file.size() != 0);
+        Assert(("Solely running preprocessor is incomplete",false));
+        #ifdef gone
+        auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
+        
+        if(!stream) {
+            log::out << log::RED << "Cannot read file '"<< compileOptions.sourceFile.text<<"'\n";
+        } else {
+            // TODO: Don't skip imports.
+            if(stream->importList.size() > 0) {
+                log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
+                log::out << log::GRAY << "Imports: ";
+                for(int i=0;i<stream->importList.size();i++) {
+                    if(i!=0) log::out << ", ";
+                    log::out << stream->importList[i].name;
+                }
+                log::out<<"\n";
+            }
+            Assert(false);
+            // CompileInfo compileInfo{};
+            // compileInfo.compileOptions = &compileOptions;
+            // auto stream2 = Preprocess(&compileInfo, stream);
+            // Assert(stream2);
+            // if(compileOptions.outputFile.text.size() == 0) {
+            //     log::out << log::AQUA << "## "<<compileOptions.sourceFile.text<<" ##\n";
+            //     stream2->print();
+            //     // TODO: Output to a default file like preproc.btb
+            //     // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
+            //     compilerExitCode = compileOptions.compileStats.errors;
+            // } else{
+            //     log::out << "Preprocessor output written to '"<<compileOptions.outputFile.text<<"'\n";
+            //     stream2->writeToFile(compileOptions.outputFile.text);
+            //     compilerExitCode = compileOptions.compileStats.errors;
+            // }
+            // TokenStream::Destroy(stream);
+            // TokenStream::Destroy(stream2);
+        }
+        #endif
+    } else if(options.performTests) {
+        if(options.pattern_for_files.length() != 0) {
+            DynamicArray<std::string> tests;
+            int matches = PatternMatchFiles(options.pattern_for_files, &tests);
+            if(matches == 0) {
+                log::out << log::RED << "The pattern '"<<options.pattern_for_files << "' did not match with any files\n";
+            } else {
+                int failures = VerifyTests(&options, tests);
+                // compilerExitCode = failures;
+                return failures != 0;
+            }
+        } else {
+            // DynamicArray<std::string> tests;
+            // tests.add("tests/simple/operations.btb");
+            int failures = TestSuite(&options, TEST_ALL);
+            // int failures = VerifyTests(tests);
+            return failures != 0;
+        }
+    }
+
+    if(options.useDebugInformation) {
+        log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
+        // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
+    }
+
+    Compiler compiler{};
+    compiler.compileSource(options.source_file, &options);
+
+    if(options.executeOutput) {
+        switch(options.target) {
+            case TARGET_BYTECODE: {
+                VirtualMachine vm{};
+                vm.execute(compiler.bytecode,"main");
+            } break;
+        }
+    }
+
+    // ###### CLEANUP STUFF ######
+
+    options.cleanup();
+    ProfilerCleanup();
+
+    NativeRegistry::DestroyGlobal();
+    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage();
+    // int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
+    if(finalMemory!=0){
+        log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";
+        PrintRemainingTrackTypes();
+        Tracker::PrintTrackedTypes();
+    }
+    // log::out << "Total allocated bytes: "<<GetTotalAllocatedBytes() << "\n";
+    log::out.cleanup();
+    // bad stuff happens when global data of tracker is deallocated before
+    // other global structures like arrays still track their allocations afterward.
+    Tracker::SetTracking(false); 
+    Tracker::DestroyGlobal();
+
     {
         ZoneNamedN(zone0,"sleep",true);
         engone::Sleep(0.5); // give time for program to connect and send data to tracy profiler
     }
     log::out << "Finished\n";
-    return 0;
 
-    CompileOptions compileOptions{};
-    compileOptions.threadCount = 1;
-    int compilerExitCode = EXIT_CODE_NOTHING;
-    std::string compilerPath = argv[0];
-    Path compilerDir = compilerPath;
-    compilerDir = compilerDir.getAbsolute().getDirectory();
-    if(compilerDir.text.length()>4){
-        if(compilerDir.text.substr(compilerDir.text.length()-5,5) == "/bin/")
-            compilerDir = compilerDir.text.substr(0,compilerDir.text.length() - 4);
-    }
-    compileOptions.modulesDirectory = compilerDir.text + "modules/";
-    bool devmode=false;
-    
-    // UserProfile* userProfile = UserProfile::CreateDefault();
-
-    #ifdef CONFIG_DEFAULT_TARGET
-    compileOptions.target = CONFIG_DEFAULT_TARGET;
-    #endif
-
-    bool onlyPreprocess = false;
-    bool performTests = false; // could be one or more
-    bool show_profiling = false;
-    bool search_for_source = false;
-
-    std::string pattern_for_files = ""; // used with --test --search-for-files
-
-    if (argc < 2) {
+    return EXIT_CODE_SUCCESS;
+}
+bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions* options) {
+    using namespace engone;
+    if (commands.size() == 0) {
         print_version();
         print_help();
-        return EXIT_CODE_NOTHING;
+        return true;
     }
 
+    std::string path_to_exe = TrimLastFile(engone::GetPathToExecutable());
+    std::string dir_of_exe = TrimLastFile(path_to_exe);
+    // log::out << path_to_exe<<"\n";
+
+    if(dir_of_exe.size() >= 5 &&
+    dir_of_exe.substr(dir_of_exe.length()-5,5) == "/bin/") {
+        // TODO: If exe exists in a bin directory then we assume the modules
+        //   directory can be found in the parent directory. This is true
+        //   in the repository right now but maybe not in the future.
+        //   If a user wants to put their compiler executable in a bin
+        //   folder along with the modules folder then they are out of luck.
+        std::string without_bin = dir_of_exe.substr(0,dir_of_exe.size() - 4);
+        options->modulesDirectory = without_bin + "modules/";
+    } else {
+        options->modulesDirectory = dir_of_exe + "modules/";
+    }
+
+    // TODO: User profiles
+    // UserProfile* userProfile = UserProfile::CreateDefault();
+
+    bool search_for_source = false;
     bool invalidArguments = false;
-    for(int i=1;i<argc;i++){
-        const char* arg = argv[i];
-        int len = strlen(argv[i]);
+
+    for(int i=0;i<commands.size();i++){
+        const std::string& arg = commands[i];
         // log::out << "arg["<<i<<"] "<<arg<<"\n";
-        if(streq(arg,"--help")||streq(arg,"-help")) {
+        if(arg == "--help" || arg == "-help" || arg == "-?") {
             print_help();
-            return EXIT_CODE_NOTHING;
-        } else if (streq(arg,"--run") || streq(arg,"-r")) {
-            compileOptions.executeOutput = true;
-        } else if (streq(arg,"--preproc") || streq(arg,"-p")) {
-            onlyPreprocess = true;
-        } else if (streq(arg,"--out") || streq(arg,"-o")) {
+            return true;
+        } else if (arg == "--run" || arg == "-r") {
+            options->executeOutput = true;
+        } else if (arg == "--preproc" || arg == "-p") {
+            options->only_preprocess = true;
+        } else if (arg == "--out" || arg == "-o") {
             i++;
-            if(i<argc){
-                arg = argv[i];
-                compileOptions.outputFile = arg;
+            if(i<commands.size()){
                 // TODO: Disallow paths that start with a dash since they resemble arguments
+                options->output_file = commands[i];
             } else {
                 invalidArguments = true;
                 log::out << log::RED << "You must specify a file path after '-out'.\n";
@@ -138,39 +270,36 @@ int main(int argc, const char** argv){
                 // for(int j=0;j<){
                 // }
             }
-        } else if (streq(arg,"-dev")) {
-            devmode = true;
-        } else if (streq(arg,"--test") || streq(arg,"-ts")) {
-            performTests = true;
-            compileOptions.instant_report = false;
-            if(i+1 < argc && argv[i+1][0] != '-'){
+        } else if (arg == "-dev") {
+            options->devmode = true;
+        } else if (arg == "--test" || arg == "-ts") {
+            options->performTests = true;
+            options->instant_report = false;
+            if(i+1 < commands.size() && commands[i+1][0] != '-'){
                 i++;
-                arg = argv[i];
-                pattern_for_files = arg;
+                options->pattern_for_files = commands[i];
             }
-        } else if (streq(arg,"--test-with-errors") || streq(arg,"-twe")) {
-            performTests = true;
-            compileOptions.instant_report = true;
-            if(i+1 < argc && argv[i+1][0] != '-'){
+        } else if (arg == "--test-with-errors" || arg == "-twe") {
+            options->performTests = true;
+            options->instant_report = true;
+            if(i+1 < commands.size() && commands[i+1][0] != '-'){
                 i++;
-                arg = argv[i];
-                pattern_for_files = arg;
+                options->pattern_for_files = commands[i];
             }
-        } else if (streq(arg,"--debug") || streq(arg, "-g")) {
-            compileOptions.useDebugInformation = true;
-        } else if (streq(arg,"--silent")) {
-            compileOptions.silent = true;
-        } else if (streq(arg,"--verbose")) {
-            compileOptions.verbose = true;
+        } else if (arg == "--debug" || arg == "-g") {
+            options->useDebugInformation = true;
+        } else if (arg == "--silent") {
+            options->silent = true;
+        } else if (arg == "--verbose") {
+            options->verbose = true;
             log::out << log::RED << "Verbose option (--verbose) is not used anywhere yet\n";
-        } else if (streq(arg,"--profiling")) {
-            show_profiling = true;
-        } else if (streq(arg,"--target") || streq(arg, "-t")){
+        } else if (arg == "--profiling") {
+            options->show_profiling = true;
+        } else if (arg == "--target" || arg == "-t"){
             i++;
-            if(i<argc){
-                arg = argv[i];
-                compileOptions.target = ToTarget(arg);
-                if(compileOptions.target == TARGET_UNKNOWN) {
+            if(i<commands.size()){
+                options->target = ToTarget(commands[i]);
+                if(options->target == TARGET_UNKNOWN) {
                     invalidArguments = true;
                     log::out << log::RED << arg << " is not a valid target.\n";
                     // TODO: print list of targets
@@ -182,12 +311,11 @@ int main(int argc, const char** argv){
                 // for(int j=0;j<){
                 // }
             }
-        } else if (streq(arg,"--linker") || streq(arg, "-l")){
+        } else if (arg == "--linker" || arg == "-l") {
             i++;
-            if(i<argc){
-                arg = argv[i];
-                compileOptions.linker = ToLinker(arg);
-                if(compileOptions.linker == LINKER_UNKNOWN) {
+            if(i<commands.size()){
+                options->linker = ToLinker(commands[i]);
+                if(options->linker == LINKER_UNKNOWN) {
                     invalidArguments = true;
                     log::out << log::RED << arg << " is not a valid linker.\n";
                     // TODO: print list of targets
@@ -208,265 +336,69 @@ int main(int argc, const char** argv){
         //         invalidArguments = true;
         //         log::out << log::RED << "You must specify a command line linker after '"<<arg<<"'.\n";
         //     }
-        }else if (streq(arg,"--pattern-match") || streq(arg, "-pm")){
+        } else if (arg == "--pattern-match" || arg == "-pm") {
             search_for_source = true;
             i++;
-            if(i<argc){
-                arg = argv[i];
-                pattern_for_files = arg;
+            if(i<commands.size()){
+                options->pattern_for_files = commands[i];
             } else {
                 invalidArguments = true;
                 log::out << log::RED << "You must specify a pattern after '"<<arg<<"'.\n";
                 // TODO: print list of targets
             }
-        } else if(streq(arg,"--user-args") || streq(arg,"-ua")) {
+        } else if(arg == "--user-args" || arg == "-ua") {
             i++;
-            for(;i<argc;i++) {
-                const char* arg = argv[i];
-                int len = strlen(argv[i]);
-                compileOptions.userArguments.add(arg);
+            for(;i<commands.size();i++) {
+                options->userArguments.add(commands[i]);
             }
         } else {
-            if(*arg == '-') {
+            if(arg[0] == '-') {
                 log::out << log::RED << "Invalid argument '"<<arg<<"' (see -help)\n";
                 invalidArguments = true;
             } else {
                 // arg = argv[i];
                 // pattern_for_files = arg;
-                compileOptions.sourceFile = arg;
+                if(options->source_file.size() != 0) {
+                    log::out << log::RED << "You cannot specify initial source file twice ("<<arg<<")\n";
+                    return false;
+                }
+                options->source_file = arg;
             }
         }
     }
-    
-    if(!devmode && !performTests && !search_for_source && compileOptions.sourceFile.text.empty()) {
-        log::out << log::RED << "Specify a source file\n";
-        return EXIT_CODE_NOTHING;
-    }
-
-    compileOptions.threadCount = 1;
-
     if(invalidArguments) {
-        return EXIT_CODE_NOTHING; // not a compiler failure so we use "NOTHING" instead of "FAILURE"
+        return false;
     }
-    if(compileOptions.useDebugInformation) {
-        log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
-        // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
+
+    if(!options->devmode && !options->performTests && !search_for_source && options->source_file.empty()) {
+        log::out << log::RED << "Specify a source file\n";
+        return false;
     }
+
     if(search_for_source) {
         DynamicArray<std::string> files{};
-        int num = PatternMatchFiles(pattern_for_files, &files);
+        int num = PatternMatchFiles(options->pattern_for_files, &files);
         if(files.size() == 0) {
-            log::out << log::RED << "Pattern '"<<pattern_for_files<<"' did not match any files\n";
-            return EXIT_CODE_NOTHING;
+            log::out << log::RED << "Pattern '"<<options->pattern_for_files<<"' did not match any files\n";
+            return false;
         } else if(files.size() > 1) {
-            log::out << log::RED << "Pattern '"<<pattern_for_files<<"' matched more than one file:\n";
+            log::out << log::RED << "Pattern '"<<options->pattern_for_files<<"' matched more than one file:\n";
             for(int i=0;i<files.size();i++) {
                 log::out << " "<<files[i]<<"\n";
             }
-            return EXIT_CODE_NOTHING;
+            return false;
         } else {
-            compileOptions.sourceFile = files[0];
-            // ok
+            options->source_file = files[0];
             // for(int i=0;i<files.size();i++) {
             //     log::out << log::GRAY<< " "<<files[i]<<"\n";
             // }
         }
-        // if(!compileOptions.sourceFile.isAbsolute()) {
-        //     const char* path = compileOptions.sourceFile.text.c_str();
-        //     int pathlen = compileOptions.sourceFile.text.length();
-        //     Assert(pathlen != 0);
-        //     auto iter = engone::DirectoryIteratorCreate(".",1);
-        //     engone::DirectoryIteratorData data{};
-        //     defer { engone::DirectoryIteratorDestroy(iter, &data); };
-        //     while(engone::DirectoryIteratorNext(iter, &data)) {
-        //         // log::out << data.name<< "\n";
-        //         if(data.isDirectory) {
-        //             if(data.namelen >= 3 && !strncmp(data.name, "./.", 3)) { // ignore folders like .git, .vscode, .vs
-        //                 engone::DirectoryIteratorSkip(iter);
-        //             }
-        //             continue;
-        //         }
-        //         if(data.namelen >= pathlen && !strcmp(data.name + data.namelen - pathlen, path)) {
-        //             Assert(data.namelen >= 2);
-        //             if(data.name[0] == '.' && data.name[1] == '/')
-        //                 compileOptions.sourceFile.text = data.name + 2;
-        //             else
-        //                 compileOptions.sourceFile.text = data.name;
-        //             break;
-        //         }
-        //     }
-        // }
     }
-    
-    // #ifdef gone
-    if(onlyPreprocess){
-        if (compileOptions.sourceFile.text.size() == 0) {
-            log::out << log::RED << "You must specify a file when using --preproc\n";
-        } else {
-            Assert(false);
-            #ifdef gone
-            auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
-            
-            if(!stream) {
-                log::out << log::RED << "Cannot read file '"<< compileOptions.sourceFile.text<<"'\n";
-            } else {
-                // TODO: Don't skip imports.
-                if(stream->importList.size() > 0) {
-                    log::out << log::RED << "All imports are skipped with the '--preproc' flag.\n";
-                    log::out << log::GRAY << "Imports: ";
-                    for(int i=0;i<stream->importList.size();i++) {
-                        if(i!=0) log::out << ", ";
-                        log::out << stream->importList[i].name;
-                    }
-                    log::out<<"\n";
-                }
-                Assert(false);
-                // CompileInfo compileInfo{};
-                // compileInfo.compileOptions = &compileOptions;
-                // auto stream2 = Preprocess(&compileInfo, stream);
-                // Assert(stream2);
-                // if(compileOptions.outputFile.text.size() == 0) {
-                //     log::out << log::AQUA << "## "<<compileOptions.sourceFile.text<<" ##\n";
-                //     stream2->print();
-                //     // TODO: Output to a default file like preproc.btb
-                //     // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
-                //     compilerExitCode = compileOptions.compileStats.errors;
-                // } else{
-                //     log::out << "Preprocessor output written to '"<<compileOptions.outputFile.text<<"'\n";
-                //     stream2->writeToFile(compileOptions.outputFile.text);
-                //     compilerExitCode = compileOptions.compileStats.errors;
-                // }
-                // TokenStream::Destroy(stream);
-                // TokenStream::Destroy(stream2);
-            }
-            #endif
-        }
-    } else if(performTests) {
-        if(pattern_for_files.length() != 0) {
-            DynamicArray<std::string> tests;
-            int matches = PatternMatchFiles(pattern_for_files, &tests);
-            if(matches == 0) {
-                log::out << log::RED << "The pattern '"<<pattern_for_files << "' did not match with any files\n";
-            } else {
-                int failures = VerifyTests(&compileOptions, tests);
-                compilerExitCode = failures;
-            }
-        } else {
-            // DynamicArray<std::string> tests;
-            // tests.add("tests/simple/operations.btb");
-            int failures = TestSuite(&compileOptions, TEST_ALL);
-            // int failures = VerifyTests(tests);
-            compilerExitCode = failures;
-        }
-    } else if(!devmode){
-        if(compileOptions.outputFile.text.size()==0) {
-            // CompileAll(&compileOptions);
-        } else {
-            // CompileAll(&compileOptions);
-        }
-        compilerExitCode = compileOptions.compileStats.errors;
-    } else if(devmode){
-        log::out << log::BLACK<<"[DEVMODE]\n";
-        #ifndef DEV_FILE
-        compileOptions.sourceFile = "examples/dev.btb";
-        #else
-        compileOptions.sourceFile = DEV_FILE;
-        #endif
 
-        // #define RUN_TESTS "tests/simple/operations.btb"
-        // #define RUN_TESTS "tests/simple/assignment.btb"
-        // #define RUN_TESTS "tests/flow/defer.btb"
-        // #define RUN_TESTS "tests/flow/loops.btb"
-        // #define RUN_TESTS "tests/flow/switch.btb"
-        // #define RUN_TESTS "tests/funcs/overloading.btb"
-        // #define RUN_TESTS "tests/macro/defines.btb"
-        // #define RUN_TESTS "tests/macro/recur.btb"
-        // #define RUN_TESTS "tests/macro/spacing.btb"
-        // #define RUN_TESTS "tests/inline-asm/simple.btb"
-
-        #ifdef RUN_TEST_SUITE
-        DynamicArray<std::string> tests;
-        // tests.add("tests/simple/operations.btb");
-        // tests.add("tests/flow/switch.btb");
-        tests.add("tests/funcs/overloading.btb");
-        // tests.add("tests/simple/garb.btb");
-        // tests.add("tests/flow/loops.btb");
-        // tests.add("tests/what/struct.btb");
-        VerifyTests(tests);
-        #elif defined(RUN_TESTS)
-        auto strs = {RUN_TESTS};
-        DynamicArray<std::string> tests;
-        for(auto s : strs) {
-            tests.add(s);
-        }
-        VerifyTests(tests);
-        #else
-        if(compileOptions.target == TARGET_BYTECODE){
-            compileOptions.executeOutput = true;
-            // CompileAll(&compileOptions);
-        } else {
-            #define EXE_FILE "dev.exe"
-            
-            // FuzzerOptions opts{};
-            // opts.node_iterations_per_file = 5000;
-            // opts.file_count = 20;
-            // GenerateFuzzedFiles(opts,"main.btb");
-            
-            compileOptions.useDebugInformation = true;
-            compileOptions.executeOutput = true;
-            compileOptions.outputFile = EXE_FILE;
-            // CompileAll(&compileOptions);
-        }
-        compilerExitCode = compileOptions.compileStats.errors;
-        #endif
-
-        // DeconstructPDB("bin/dev.pdb");
-        // auto pdb = PDBFile::Deconstruct("bin/dev.pdb");
-        // PDBFile::Destroy(pdb);
-        // DeconstructPDB("test.pdb");
-
-        // Bytecode::Destroy(bytecode);
-        
-        // PerfTestTokenize("example/build_fast.btb",200);
+    if(options->only_preprocess && !options->source_file.size() == 0) {
+        // this should never run because we detect missing source file earlier
+        log::out << log::RED << "You must specify a file when using --preproc\n";
     }
-    // #endif
-    // compileOptions.compileStats.generatedFiles.add("Yoo!");
-    // {
-    //     Path yoo = "haha";
-    //     yoo.~Path();
-    // }
-    compileOptions.cleanup();
-    // compileOptions.~CompileOptions(); // options has memory which needs to be freed before checking for memory leaks.
-    // std::string msg = "I am a rainbow, wahoooo!";
-    // for(int i=0;i<(int)msg.size();i++){
-    //     char chr = msg[i];
-    //     log::out << (log::Color)(i%16);
-    //     log::out << chr;
-    // }
-    // if(show_profiling)
-    //     PrintMeasures();
-    // MeasureCleanup();
 
-    // ProfilerPrint();
-    // ProfilerExport("profiled.dat");
-
-    ProfilerCleanup();
-
-    NativeRegistry::DestroyGlobal();
-    int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage();
-    // int finalMemory = GetAllocatedBytes() - log::out.getMemoryUsage() - Tracker::GetMemoryUsage() - MeasureGetMemoryUsage();
-    if(finalMemory!=0){
-        log::out << log::RED<< "Final memory: "<<finalMemory<<"\n";
-        PrintRemainingTrackTypes();
-
-        Tracker::PrintTrackedTypes();
-    }
-    // log::out << "Total allocated bytes: "<<GetTotalAllocatedBytes() << "\n";
-    log::out.cleanup();
-    // system("pause");
-
-    Tracker::SetTracking(false); // bad stuff happens when global data of tracker is deallocated before other global structures like arrays still track their allocations afterward.
-    Tracker::DestroyGlobal();
-
-    return compilerExitCode;
+    return true;
 }

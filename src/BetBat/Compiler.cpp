@@ -344,7 +344,7 @@ void CompileStats::printSuccess(CompileOptions* opts){
             log::out << " text buffer: "<<opts->initialSourceBuffer.origin<<"\n";
         } else {
             // log::out << " initial file: "<< opts->initialSourceFile.getFileName().text<<"\n";
-            log::out << " initial file: "<< BriefString(opts->sourceFile.getAbsolute().text,30)<<"\n";
+            log::out << " initial file: "<< BriefString(opts->source_file,30)<<"\n";
         }
         log::out << " target: "<<log::AQUA<<opts->target<<log::NO_COLOR<<", linker: " << log::AQUA<< opts->linker<<log::NO_COLOR << ", output: ";
         if(opts->compileStats.generatedFiles.size() == 0) {
@@ -1025,6 +1025,8 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Gray19);
     auto tp = engone::StartMeasure();
+
+    importDirectories.add(options->modulesDirectory);
     
     lock_wait_for_imports.init(1,1);
     signaled = true;

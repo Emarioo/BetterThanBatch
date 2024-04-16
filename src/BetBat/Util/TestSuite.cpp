@@ -466,7 +466,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                 // interpreter.silent = true;
                 // interpreter.execute(bytecode);
             } else {
-                options.outputFile = "bin/temp.exe";
+                options.output_file = "bin/temp.exe";
                 bool yes = false;
                 Assert(false);
                 // bool yes = ExportTarget(&options, bytecode);
@@ -479,7 +479,7 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                 //   the program runs to prevent this.
                 
                 std::string hoho{};
-                hoho += options.outputFile.text;
+                hoho += options.output_file;
                 int errorCode = 0;
                 // auto file = engone::FileOpen("ya",nullptr, engone::FILE_CLEAR_AND_WRITE);
                 {
