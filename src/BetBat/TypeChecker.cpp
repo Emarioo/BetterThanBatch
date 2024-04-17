@@ -3,7 +3,7 @@
 
 // Old logging
 #undef WARN_HEAD3
-#define WARN_HEAD3(R,M) info.compileInfo->compileOptions->compileStats.warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
+#define WARN_HEAD3(R,M) info.compileInfo->options->compileStats.warnings++; engone::log::out << WARN_DEFAULT_R(R,"Type warning","W0000") << M
 
 #undef ERR_SECTION
 #define ERR_SECTION(CONTENT) BASE_SECTION2(CONTENT)
@@ -344,11 +344,19 @@ TypeId CheckType(CheckInfo& info, ScopeId scopeId, StringView typeString, lexer:
             } else if(!printedError) {
             //     // ERR_SECTION(
             // ERR_HEAD2(err_location, "Type '"<<info.ast->typeToString(id)<<"' for polymorphic argument was not valid.\n\n";
-                ERR_SECTION(
-                    ERR_HEAD2(err_location)
-                    ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
-                    ERR_LINE2(err_location,"here somewhere")
-                )
+                if(polyTokens[i] == "int") {
+                    ERR_SECTION(
+                        ERR_HEAD2(err_location)
+                        ERR_MSG("Type '"<<polyTokens[i]<<"' does not exist. Use i32.")
+                        ERR_LINE2(err_location,"here somewhere")
+                    )
+                } else {
+                    ERR_SECTION(
+                        ERR_HEAD2(err_location)
+                        ERR_MSG("Type '"<<polyTokens[i]<<"' for polymorphic argument was not valid.")
+                        ERR_LINE2(err_location,"here somewhere")
+                    )
+                }
             }
             // baseInfo->astStruct->polyArgs[i].virtualType->id = polyInfo->id;
         }
@@ -1333,9 +1341,9 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     if(iden->funcOverloads.overloads.size() == 1) {
                         auto overload = &iden->funcOverloads.overloads[0];
                         CallConventions expected_convention = CallConventions::UNIXCALL;
-                        if(info.compiler->compileOptions->target == TARGET_WINDOWS_x64)
+                        if(info.compiler->options->target == TARGET_WINDOWS_x64)
                             expected_convention = CallConventions::STDCALL;
-                        if(info.compiler->compileOptions->target == TARGET_UNIX_x64)
+                        if(info.compiler->options->target == TARGET_UNIX_x64)
                             expected_convention = CallConventions::UNIXCALL;
                         if (overload->astFunc->callConvention != expected_convention) {
                             ERR_SECTION(
@@ -3405,7 +3413,7 @@ int TypeCheck(AST* ast, ASTScope* scope, CompileInfo* compileInfo){
         CheckFuncImplScope(info, checkImpl.astFunc, checkImpl.funcImpl); // nocheckin
     }
     
-    info.compileInfo->compileOptions->compileStats.errors += info.errors;
+    info.compileInfo->options->compileStats.errors += info.errors;
     return info.errors;
 }
 #endif
@@ -3422,7 +3430,7 @@ void TypeCheckEnums(AST* ast, ASTScope* scope, Compiler* compiler) {
     _VLOG(log::out << log::BLUE << "Type check enums:\n";)
     // Check enums first since they don't depend on anything.
     SignalIO result = CheckEnums(info, scope); // nocheckin
-    info.compiler->compileOptions->compileStats.errors += info.errors;
+    info.compiler->options->compileStats.errors += info.errors;
 }
 SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ignore_errors, bool* changed) {
     using namespace engone;
@@ -3447,7 +3455,7 @@ SignalIO TypeCheckStructs(AST* ast, ASTScope* scope, Compiler* compiler, bool ig
     CheckStructs(info, scope);
     
     if(!info.showErrors)
-        info.compiler->compileOptions->compileStats.errors += info.errors;
+        info.compiler->options->compileStats.errors += info.errors;
 
     if(info.completedStruct) {
         *changed = true;
@@ -3476,7 +3484,7 @@ void TypeCheckFunctions(AST* ast, ASTScope* scope, Compiler* compiler) {
     // So instead of that mess, we check headers first to ensure that all references will work.
     SignalIO result = CheckFunctions(info, scope); // nocheckin
 
-    info.compiler->compileOptions->compileStats.errors += info.errors;
+    info.compiler->options->compileStats.errors += info.errors;
 }
 
 void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
@@ -3493,6 +3501,7 @@ void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
     // This includes structs and functions.
     SignalIO result = CheckRest(info, scope); // nocheckin
 
+    // nocheckin TODO: NOT THREAD SAFE
     while(info.typeChecker->checkImpls.size()!=0){
         auto checkImpl = info.typeChecker->checkImpls[info.typeChecker->checkImpls.size()-1];
         info.typeChecker->checkImpls.pop();
@@ -3502,6 +3511,6 @@ void TypeCheckBodies(AST* ast, ASTScope* scope, Compiler* compiler) {
     }
     
     
-    info.compiler->compileOptions->compileStats.errors += info.errors;
+    info.compiler->options->compileStats.errors += info.errors;
     // return info.errors;
 }

@@ -51,6 +51,8 @@ enum X64Register : u8 {
     X64_REG_XMM7,
     X64_REG_END,
 };
+extern const char* x64_register_names[];
+engone::Logger& operator <<(engone::Logger&, X64Register);
 #define IS_REG_XMM(R) (R >= X64_REG_XMM0 && R <= X64_REG_XMM7)
 #define IS_REG_EXTENDED(R) (R >= X64_REG_R8 && R <= X64_REG_R15)
 #define IS_REG_NORM(R) (R >= X64_REG_A && R <= X64_REG_DI)
@@ -62,6 +64,13 @@ struct X64TinyProgram {
     u8* text=nullptr;
     u64 _allocationSize=0;
     u64 head=0;
+
+    // We use InternalFuncRelocation instead of this
+    // struct TinyProgramRelocation {
+    //     int text_offset; // offset within this program
+    //     int tinyprogram_index; // index to other program
+    // };
+    // DynamicArray<TinyProgramRelocation> relocations;
 };
 struct X64Program {
     ~X64Program(){
@@ -79,9 +88,13 @@ struct X64Program {
     }
     
     DynamicArray<X64TinyProgram*> tinyPrograms;
-    X64TinyProgram* createProgram() {
+    X64TinyProgram* createProgram(int requested_index) {
+        if(tinyPrograms.size() <= requested_index) {
+            tinyPrograms.resize(requested_index+1);
+        }
         auto ptr = new X64TinyProgram();
-        tinyPrograms.add(ptr);
+        tinyPrograms[requested_index] = ptr;
+        // tinyPrograms.add(ptr);
         return ptr;
     }
     
@@ -186,8 +199,10 @@ struct X64Builder {
     
     // QuickArray<u32> instruction_indices;
     
+    DynamicArray<OPNode*> all_nodes; // TODO: Bucket array
     OPNode* createNode(u32 bc_index, InstructionType opcode) {
         auto ptr = new OPNode(bc_index, opcode);
+        all_nodes.add(ptr);
         return ptr;
     }
     
@@ -257,6 +272,9 @@ struct X64Builder {
     
     bool _reserve(u32 size);
 
+    void emit_mov_reg_rm(X64Register reg, X64Register rm, InstructionControl control, int disp32);
+    void emit_mov_rm_reg(X64Register reg, X64Register rm, InstructionControl control, int disp32);
+
     // only emits if non-zero
     void emit_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
     void emit_push(X64Register reg);
@@ -266,6 +284,16 @@ struct X64Builder {
     // REXW prefixed
     void emit_sub_imm32(X64Register reg, i32 imm32);
 
+    static const int FRAME_SIZE = 16;
+    int push_offset = 0;
+    int ret_offset = 0;
+
+    OPNode* last_call = nullptr;
+
+    struct Arg {
+        InstructionControl control = CONTROL_NONE;
+    };
+    DynamicArray<Arg> recent_set_args;
 
     void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
 

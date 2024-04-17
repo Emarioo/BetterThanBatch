@@ -21,27 +21,27 @@ bool CompileInfo::removeRootMacro(const Token& name) {
 }
 void CompileInfo::addStats(i32 errors, i32 warnings){
     #ifdef OS_WINDOWS
-    _interlockedadd(&compileOptions->compileStats.errors, errors);
-    _interlockedadd(&compileOptions->compileStats.warnings, warnings);
+    _interlockedadd(&options->compileStats.errors, errors);
+    _interlockedadd(&options->compileStats.warnings, warnings);
     #else
     otherLock.lock();
-    compileOptions->compileStats.errors += errors;
-    compileOptions->compileStats.warnings += warnings;
+    options->compileStats.errors += errors;
+    options->compileStats.warnings += warnings;
     otherLock.unlock();
     #endif
 }
 void CompileInfo::addStats(i32 lines, i32 blankLines, i32 commentCount, i32 readBytes){
     #ifdef OS_WINDOWS
-    _interlockedadd(&compileOptions->compileStats.lines, lines);
-    _interlockedadd(&compileOptions->compileStats.blankLines, blankLines);
-    _interlockedadd(&compileOptions->compileStats.commentCount, commentCount);
-    _interlockedadd(&compileOptions->compileStats.readBytes, readBytes);
+    _interlockedadd(&options->compileStats.lines, lines);
+    _interlockedadd(&options->compileStats.blankLines, blankLines);
+    _interlockedadd(&options->compileStats.commentCount, commentCount);
+    _interlockedadd(&options->compileStats.readBytes, readBytes);
     #else
     otherLock.lock();
-    compileOptions->compileStats.lines += lines;
-    compileOptions->compileStats.blankLines += blankLines;
-    compileOptions->compileStats.commentCount += commentCount;
-    compileOptions->compileStats.readBytes += readBytes;
+    options->compileStats.lines += lines;
+    options->compileStats.blankLines += blankLines;
+    options->compileStats.commentCount += commentCount;
+    options->compileStats.readBytes += readBytes;
     otherLock.unlock();
     #endif
 }
@@ -173,10 +173,10 @@ StreamToProcess* CompileInfo::addStream(const Path& path, StreamToProcess** exis
     stream->index = streams.size()-1;
 
     // TODO: Atomic add here? I haven't because we need a lock here for the streams anyway.
-    // compileOptions->compileStats.lines += tokenStream->lines;
-    // compileOptions->compileStats.blankLines += tokenStream->blankLines;
-    // compileOptions->compileStats.commentCount += tokenStream->commentCount;
-    // compileOptions->compileStats.readBytes += tokenStream->readBytes;
+    // options->compileStats.lines += tokenStream->lines;
+    // options->compileStats.blankLines += tokenStream->blankLines;
+    // options->compileStats.commentCount += tokenStream->commentCount;
+    // options->compileStats.readBytes += tokenStream->readBytes;
     streamLock.unlock();
     return stream;
 }
@@ -194,10 +194,10 @@ StreamToProcess* CompileInfo::addStream(const Path& path, StreamToProcess** exis
 //     streams.add(stream);
 
 //     // TODO: Atomic add here? I haven't because we need a lock here for the streams anyway.
-//     compileOptions->compileStats.lines += tokenStream->lines;
-//     compileOptions->compileStats.blankLines += tokenStream->blankLines;
-//     compileOptions->compileStats.commentCount += tokenStream->commentCount;
-//     compileOptions->compileStats.readBytes += tokenStream->readBytes;
+//     options->compileStats.lines += tokenStream->lines;
+//     options->compileStats.blankLines += tokenStream->blankLines;
+//     options->compileStats.commentCount += tokenStream->commentCount;
+//     options->compileStats.readBytes += tokenStream->readBytes;
 //     streamLock.unlock();
 //     return stream;
 // }
@@ -398,7 +398,7 @@ u32 ProcessSource(void* ptr) {
         // info->waitingThreads++;
         // // If the last thread finished and there are no sources we are done.
         // // We must signal the lock that we are done so that all thread doesn't freeze.
-        // if(info->waitingThreads == info->compileOptions->threadCount && info->sourcesToProcess.size() == 0) {
+        // if(info->waitingThreads == info->options->threadCount && info->sourcesToProcess.size() == 0) {
         //     info->sourceWaitLock.signal();
         // }
         // info->sourceLock.unlock();
@@ -444,7 +444,7 @@ u32 ProcessSource(void* ptr) {
             auto pathp = info->findSourceFile(source.path);
             if(pathp.text.empty()) {
                 log::out << log::RED << "Could not find '" << BriefString(source.path.text) <<"'\n";
-                info->compileOptions->compileStats.errors++;
+                info->options->compileStats.errors++;
                 
                 info->sourceLock.lock();
                 if(info->waitingThreads == info->availableThreads-1 || info->sourcesToProcess.size()>0) {
@@ -481,7 +481,7 @@ u32 ProcessSource(void* ptr) {
         }
         if(!tokenStream){
             log::out << log::RED << "Failed tokenization: " << BriefString(source.path.text) <<" (probably not found)\n";
-            info->compileOptions->compileStats.errors++;
+            info->options->compileStats.errors++;
             
             info->sourceLock.lock();
             if(info->waitingThreads == info->availableThreads-1 || info->sourcesToProcess.size()>0) {
@@ -615,7 +615,7 @@ u32 ProcessSource(void* ptr) {
     //     StreamToProcess* stream = info->streams[i];
     //     log::out << BriefString(stream->initialStream->streamName,10)<<"\n";
     // }
-    // if(info->waitingThreads == info->compileOptions->threadCount)
+    // if(info->waitingThreads == info->options->threadCount)
     //     info->sourceWaitLock.signal(); // we must signal to prevent all threads from waiting
     info->sourceLock.unlock();
     // Another solution would be to have a list of dependencies for each stream but you would need
@@ -761,7 +761,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     // compileInfo.nativeRegistry = NativeRegistry::Create();
     // compileInfo.nativeRegistry->initNativeContent();
     // compileInfo.targetPlatform = options->target;
-    compileInfo.compileOptions = options;
+    compileInfo.options = options;
     compileInfo.reporter.instant_report = options->instant_report;
     
     compileInfo.ast = AST::Create();
@@ -935,7 +935,7 @@ Bytecode* CompileSource(CompileOptions* options) {
     // bytecode = Generate(compileInfo.ast, &compileInfo);
     // log::out << "TIM: "<<StopMeasure(tp)*1000<<"\n";
     if(bytecode) {
-        compileInfo.compileOptions->compileStats.bytecodeSize = bytecode->getMemoryUsage();
+        compileInfo.options->compileStats.bytecodeSize = bytecode->getMemoryUsage();
         bytecode->linkDirectives.stealFrom(compileInfo.linkDirectives);
 
         if(!options->useDebugInformation && bytecode->debugInformation) {
@@ -970,18 +970,18 @@ Bytecode* CompileSource(CompileOptions* options) {
 
     options->compileStats.end_bytecode = StartMeasure();
 
-    if(compileInfo.compileOptions->compileStats.errors!=0){ 
+    if(compileInfo.options->compileStats.errors!=0){ 
         if(!options->silent)
-            compileInfo.compileOptions->compileStats.printFailed();
+            compileInfo.options->compileStats.printFailed();
         // if(compileInfo.nativeRegistry == bytecode->nativeRegistry) {
         //     bytecode->nativeRegistry = nullptr;
         // }
         Bytecode::Destroy(bytecode);
         bytecode = nullptr;
     }
-    if(compileInfo.compileOptions->compileStats.warnings!=0){
+    if(compileInfo.options->compileStats.warnings!=0){
         if(!options->silent)
-            compileInfo.compileOptions->compileStats.printWarnings();
+            compileInfo.options->compileStats.printWarnings();
     }
 
     return bytecode;

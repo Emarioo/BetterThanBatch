@@ -2,19 +2,13 @@
     Bindings for tiny_math.lib
 */
 
-// #load "examples/foreign/tiny_math.lib" as math
-
-// #load "examples/foreign/tiny_math.dll" as math
-// fn @import(alias="_Z3sumii") sum(start: i32, end: i32) -> i32;
-// fn @import(maths,alias="_Z3sumii") sum(start: i32, end: i32) -> i32;
+#load "examples/foreign/tiny_math.dll" as math
+fn @import(math,alias="_Z3sumii") sum(start: i32, end: i32) -> i32;
 
 #load "Kernel32.dll" as Kernel32
 
 #macro HANDLE void*
 #macro STD_OUTPUT_HANDLE (-11)
-
-// a: HANDLE;
-// b: HANDLE;
 
 fn @import(Kernel32, alias="GetStdHandle") GetStdHandle(nStdHandle: u32) -> HANDLE;
 fn @import(Kernel32, alias="WriteFile") WriteFile(
@@ -25,27 +19,14 @@ fn @import(Kernel32, alias="WriteFile") WriteFile(
     lpOverlapped: void* = null,
 ) -> bool;
 
-// h: HANDLE
-// a := STD_OUTPUT_HANDLE
-
-fn main() {
-    s := "Hello World!\n";
-    // prints(s)
-    h := GetStdHandle(STD_OUTPUT_HANDLE)
-    yes := WriteFile(h, s.ptr, s.len)
-}
-// @multi_import(tiny_math)
-// fn @import(alias="_Z3sumii")      my_sum(start: i32, end: i32) -> i32;
-// fn @import(alias="_Z9factoriali") my_factorial(n: i32) -> i32;
-
-// fn @import sum(start: i32, end: i32) -> i32;
-
 /*
     Main program
 */
 
-// fn main() {
-//     a := sum(1,5)
+fn main() {
+    printi(sum(1,6)) printc('\n')
 
-    // printi(a) printc('\n')
-// }
+    s := "Hello World!\n";
+    h := GetStdHandle(STD_OUTPUT_HANDLE)
+    yes := WriteFile(h, s.ptr, s.len)
+}

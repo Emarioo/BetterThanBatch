@@ -30,6 +30,7 @@ void VirtualMachine::reset(){
 }
 void VirtualMachine::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
     using namespace engone;
+    Assert(false); // this needs a rewrite
     // cmdArgs.resize(inCmdArgs.size());
     // cmdArgs.ptr = TRACK_ARRAY_ALLOC(Language::Slice<char>);
     cmdArgs.ptr = (Language::Slice<char>*)engone::Allocate(sizeof(Language::Slice<char>)*inCmdArgs.size());
@@ -50,73 +51,6 @@ void VirtualMachine::setCmdArgs(const DynamicArray<std::string>& inCmdArgs){
         cmdArgsBuffer.used = inCmdArgs[i].length() + 1;
     }
 }
-void VirtualMachine::printRegisters(){
-    using namespace engone;
-    // void* pa = (void*)&rax;
-    // void* pb = (void*)&rbx;
-    // void* pc = (void*)&rcx;
-    // void* pd = (void*)&rdx;
-    // log::out << "RAX: "<<(i64)rax<<" "<<*(float*)pa<<"\n";
-    // log::out << "RBX: "<<(i64)rbx<<" "<<*(float*)pb<<"\n";
-    // log::out << "RCX: "<<(i64)rcx<<" "<<*(float*)pc<<"\n";
-    // log::out << "RDX: "<<(i64)rdx<<" "<<*(float*)pd<<"\n";
-    // log::out << "xmm?\n";
-    // log::out << "SP: "<<sp<<"\n";
-    // log::out << "FP: "<<fp<<"\n";
-    // log::out << "PC: "<<pc<<"\n";
-}
-// volatile void* VirtualMachine::getReg(u8 id){
-//     // #define CASE(K,V) case BC_REG_##K: return V;
-//     #define CASER(K,V) case BC_REG_R##K##X: return &r##V##x;\
-//     case BC_REG_E##K##X: return &r##V##x;\
-//     case BC_REG_##K##X: return &r##V##x;\
-//     case BC_REG_##K##L: return &r##V##x;
-//     // case BC_REG_##K##H: return (void*)((u8*)&r##V##x+1);
-//     switch(id){
-//         CASER(A,a)
-//         CASER(B,b)
-//         CASER(C,c)
-//         CASER(D,d)
-
-//         case BC_REG_SP: return &sp;
-//         case BC_REG_BP: return &fp;
-//         // case BC_REG_DP: return &dp;
-//         case BC_REG_RDI: return &rdi;
-//         case BC_REG_RSI: return &rsi;
-
-//         case BC_REG_XMM0f: return &xmm0d;
-//         case BC_REG_XMM1f: return &xmm1d;
-//         case BC_REG_XMM2f: return &xmm2d;
-//         case BC_REG_XMM3f: return &xmm3d;
-//     }
-//     #undef CASER
-//     engone::log::out <<"(RegID: "<<id<<")\n";
-//     Assert("tried to access bad register");
-//     return 0;
-// }
-// void VirtualMachine::moveMemory(u8 reg, volatile void* from, volatile void* to){
-//     using namespace engone;
-//     int size = DECODE_REG_BITS(reg);
-//     if(from != to) {
-//         *((u64*) to) = 0;
-//     }
-//     if(size==BC_REG_8){
-//         *((u8* ) to) = *((u8* ) from);
-//         _ILOG(if(!silent) {log::out << (*(i8*)to);})
-//     }else if(size==BC_REG_16) {
-//         *((u16*) to) = *((u16*) from);
-//         _ILOG(if(!silent) {log::out << (*(i16*)to);})
-//     }else if(size==BC_REG_32)   { 
-//          *((u32*) to) = *((u32*) from);
-//          _ILOG(if(!silent) {log::out << (*(i32*)to);})
-//     }else if(size==BC_REG_64){
-//          *((u64*) to) = *((u64*) from);
-//         _ILOG(if(!silent) {log::out << (*(i64*)to);})
-//     }else 
-//         log::out <<log::RED <<"bad set to from\n";
-        
-//     // _ILOG(log::out << (*(i64*)to)<<"\n";)
-// }
 void PrintPointer(volatile void* ptr){
     u64 v = (u64)ptr;
     engone::log::out << "0x";
@@ -251,12 +185,14 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     stack.resize(0x10'0000);
     memset(stack.data, 0, stack.max);
     memset((void*)registers, 0, sizeof(registers));
+
+    // TODO: Setup argc, argv on the stack with betcall convention
     
+    push_offsets.add(0);
+
     i64 pc = 0;
-    // registers[BC_REG_LP] = 0;
     stack_pointer = (i64)(stack.data + stack.max);
     base_pointer = stack_pointer;
-    // registers[BC_REG_BP] = registers[BC_REG_SP];
     
     auto CHECK_STACK = [&]() {
         if(stack_pointer < (i64)stack.data || stack_pointer > (i64)(stack.data+stack.max)) {
@@ -265,6 +201,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     };
 
     u64 expectedStackPointer = stack_pointer;
+
 
     auto tp = StartMeasure();
 
@@ -359,7 +296,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         case BC_NOP: {
         } break;
         case BC_ALLOC_LOCAL: {
-            Assert(push_offset == 0); // Ensure that no push instructions executed before
+            // Assert(push_offset == 0); // Ensure that no push instructions executed before nocheckin
             op0 = (BCRegister)instructions[pc++];
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
@@ -373,7 +310,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             ret_offset = 0;
         } break;
         case BC_FREE_LOCAL: {
-            Assert(push_offset == 0); // Ensure that no push instructions executed before
+            // Assert(push_offset == 0); // Ensure that no push instructions executed before nocheckin
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
             stack_pointer += imm;
@@ -430,7 +367,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             control = (InstructionControl)instructions[pc++];
             int size = GET_CONTROL_SIZE(control);
 
-            void* ptr = (void*)(stack_pointer + push_offset + imm);
+            void* ptr = (void*)(stack_pointer + push_offsets.last() + imm);
 
             if(size == CONTROL_8B)       *(i8*) ptr = registers[op0];
             else if(size == CONTROL_16B) *(i16*)ptr = registers[op0];
@@ -480,12 +417,19 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             Assert(imm < 0);
             int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
             // NOTE: push_offset makes sure push and pop instructions doesn't mess with vals/args registers/references
-            void* ptr = (void*)(stack_pointer + ret_offset + push_offset + imm - FRAME_SIZE);
+            void* ptr = (void*)(stack_pointer + ret_offset + push_offsets.last() + imm - FRAME_SIZE);
 
             if(size == CONTROL_8B)       registers[op0] = *(i8*) ptr;
             else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
             else if(size == CONTROL_32B) registers[op0] = *(i32*)ptr;
             else if(size == CONTROL_64B) registers[op0] = *(i64*)ptr;
+        } break;
+        case BC_GET_LOCAL: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+
+            registers[op0] = registers[BC_REG_LOCALS] + imm;
         } break;
         case BC_PUSH: {
             op0 = (BCRegister)instructions[pc++];
@@ -493,7 +437,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             stack_pointer -= 8;
             CHECK_STACK();
             *(i64*)stack_pointer = registers[op0];
-            push_offset += 8;
+            push_offsets.last() += 8;
 
             has_return_values_on_stack = false;
             ret_offset = 0;
@@ -504,7 +448,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             registers[op0] = *(i64*)stack_pointer;
             stack_pointer += 8;
             CHECK_STACK();
-            push_offset -= 8;
+            push_offsets.last() -= 8;
         } break;
         case BC_LI32: {
             op0 = (BCRegister)instructions[pc++];
@@ -573,9 +517,11 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                     Assert(false); 
                 }
                 has_return_values_on_stack = true; // NOTE: potential return values
+                ret_offset = 0;
             } else if(imm < 0) {
                 executeNative(imm);
                 has_return_values_on_stack = true; // NOTE: potential return values
+                ret_offset = 0;
             } else {
                 int new_tiny_index = imm-1;
                 stack_pointer -= 8;
@@ -591,6 +537,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 pc = 0;
                 tiny_index = new_tiny_index;
                 tinycode = bytecode->tinyBytecodes[tiny_index];
+
+                push_offsets.add(0);
             }
 
         } break;
@@ -617,6 +565,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             pc = encoded_pc & 0xFFFF'FFFF;
             tiny_index = encoded_pc >> 32;
             tinycode = bytecode->tinyBytecodes[tiny_index];
+
+            push_offsets.pop();
         } break;
         case BC_DATAPTR: {
             // Assert(false);

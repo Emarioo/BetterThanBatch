@@ -19,7 +19,8 @@ struct VirtualMachine {
 
     bool has_return_values_on_stack = false;
     int ret_offset = 0;
-    int push_offset = 0;
+    // int push_offset = 0;
+    DynamicArray<int> push_offsets;
     i64 stack_pointer = 0;
     i64 base_pointer = 0;
 

@@ -274,7 +274,7 @@ About x64:
 
 X64Register ToNativeRegister(BCRegister reg) {
     // if(reg == BC_REG_SP) return X64_REG_SP; // nocheckin
-    // if(reg == BC_REG_BP) return X64_REG_BP;
+    if(reg == BC_REG_LOCALS) return X64_REG_BP;
     return X64_REG_INVALID;
 }
 bool IsNativeRegister(BCRegister reg) {
@@ -314,7 +314,7 @@ void GenerateX64_finalize(Compiler* compiler) {
         // tmp.textOffset = addressTranslation[sym.location];
         // prog->exportedSymbols.add(tmp);
     }
-
+    
     Assert(compiler->bytecode->externalRelocations.size() == 0);
 }
 
@@ -339,17 +339,14 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
     builder.init(compiler->program);
     builder.bytecode = compiler->bytecode;
     builder.tinycode = tinycode;
-    builder.tinyprog = compiler->program->createProgram();
+    builder.tinyprog = compiler->program->createProgram(tinycode->index);
     builder.current_tinyprog_index = tinycode->index;
 
-
     builder.generateFromTinycode(builder.bytecode, builder.tinycode);
-    // bool fast = true;
-    // if(fast) {
-    // } else {
-    //     Assert(false);
-    //     builder.generateInstructions_slow();
-    // }
+
+    for(auto n : builder.all_nodes)
+        delete n;
+    builder.all_nodes.cleanup();
 }
 
 void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode) {
@@ -363,6 +360,8 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
     
     // log::out << log::GOLD << "Code gen\n";
     
+    DynamicArray<Arg> accessed_params;
+
     bool find_push = false;
     int push_level = 0;
     bool complete = false;
@@ -500,10 +499,14 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
             auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
             node->imm = imm;
-
-            reg_values[op0] = node;
-            
-            nodes.add(node);
+            if(op0 == BC_REG_INVALID) {
+                nodes.add(node);
+            } else {
+                // Assert(false);
+                // nochecking, alloc local is a side effect and must be ordered correctly
+                // but it gives an output so we can't really?
+                reg_values[op0] = node;
+            }
         } break;
         case BC_FREE_LOCAL: {
             imm = *(i16*)&instructions[pc];
@@ -543,8 +546,26 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
             node->control = control;
 
             reg_values[op0] = node;
+
+            // this code is only relevant for STDCALL and UNIXCALL
+            if(opcode == BC_GET_PARAM) {
+                int param_index = imm / 8;
+                if(param_index >= accessed_params.size()) {
+                    accessed_params.resize(param_index+1);
+                }
+                accessed_params[param_index].control = control;
+            }
+        } break;
+        case BC_GET_LOCAL: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
             
-            nodes.add(node);
+            auto node = createNode(prev_pc, opcode);
+            node->op0 = op0;
+            node->imm = imm;
+
+            reg_values[op0] = node;
         } break;
         case BC_PUSH: {
             op0 = (BCRegister)instructions[pc++];
@@ -820,12 +841,74 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         return e;
     };
 
-    emit1(OPCODE_PUSH_RM_SLASH_6);
-    emit_modrm_slash(MODE_REG, 6, X64_REG_BP);
+    #define INHERIT_REG(R)                                                \
+        e->reg0 = env->R;                                                 \
+        if(e->reg0.invalid()) {                                           \
+            if(IS_CONTROL_FLOAT(n->control)) {                            \
+                e->reg0.reg = alloc_register(X64_REG_INVALID, true);      \
+                if(e->reg0.reg == X64_REG_INVALID)                        \
+                    e->reg0.on_stack = true;                              \
+            } else {                                                      \
+            }                                                             \
+        }                                                                               
+
+    emit_push(X64_REG_BP);
+    push_offset -= 8; // BP does not count
 
     emit1(PREFIX_REXW);
     emit1(OPCODE_MOV_REG_RM);
     emit_modrm(MODE_REG, X64_REG_BP, X64_REG_SP);
+
+    const X64Register stdcall_normal_regs[4]{
+        X64_REG_C,
+        X64_REG_D,
+        X64_REG_R8,
+        X64_REG_R9,
+    };
+    const X64Register stdcall_float_regs[4] {
+        X64_REG_XMM0,
+        X64_REG_XMM1,
+        X64_REG_XMM2,
+        X64_REG_XMM3,
+    };
+
+    const X64Register unixcall_normal_regs[6]{
+        X64_REG_DI,
+        X64_REG_SI,
+        X64_REG_D,
+        X64_REG_C,
+        X64_REG_R8,
+        X64_REG_R9,
+    };
+    const X64Register unixcall_float_regs[8] {
+        X64_REG_XMM0,
+        X64_REG_XMM1,
+        X64_REG_XMM2,
+        X64_REG_XMM3,
+        // BC_REG_XMM4,
+        // BC_REG_XMM5,
+        // BC_REG_XMM6,
+        // BC_REG_XMM7,
+    };
+
+    // TODO: If the function (tinycode) has parameters and is stdcall or unixcall
+    //   then we need the args will be passed through registers and we must
+    //   move them to the stack space.
+    if(tinycode->call_convention == STDCALL) {
+        for(int i=0;i<accessed_params.size() && i < 4; i++) {
+            auto control = accessed_params[i].control;
+
+            int off = i * 8 + FRAME_SIZE;
+            X64Register reg_args = X64_REG_BP;
+            X64Register reg = stdcall_normal_regs[i];
+            if(IS_CONTROL_FLOAT(control))
+                reg = stdcall_float_regs[i];
+
+            emit_mov_rm_reg(reg_args,reg,control,off);
+        }
+    } else if(tinycode->call_convention == UNIXCALL) {
+        Assert(false);
+    }
 
     while(true) {
         if(envs.size() == 0) {
@@ -845,23 +928,23 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         //  address first BUT it should all be correct in the end.
         bc_to_x64_translation[n->bc_index] = size();
 
-        if(IsNativeRegister(n->op0)) {
-            env->reg0.reg = ToNativeRegister(n->op0);
-        }
-        if(IsNativeRegister(n->op1)) {
-            env->reg1.reg = ToNativeRegister(n->op1);
-        }
+        // if(IsNativeRegister(n->op0)) {
+        //     env->reg0.reg = ToNativeRegister(n->op0);
+        // }
+        // if(IsNativeRegister(n->op1)) {
+        //     env->reg1.reg = ToNativeRegister(n->op1);
+        // }
         
         switch(n->opcode) {
             case BC_BXOR: {
                 if(n->opcode == BC_BXOR && n->op0 == n->op1) {
                     // xor clear on register
-                    Assert(!IsNativeRegister(n->op0));
-
-                    env->reg0.reg = alloc_register();
-                    if(env->reg0.reg == X64_REG_INVALID) {
-                        env->reg0.on_stack = true;
-                        env->reg0.reg = RESERVED_REG0;
+                    if(env->reg0.invalid()) {
+                        env->reg0.reg = alloc_register();
+                        if(env->reg0.reg == X64_REG_INVALID) {
+                            env->reg0.on_stack = true;
+                            env->reg0.reg = RESERVED_REG0;
+                        }
                     }
                     emit_prefix(PREFIX_REXW,env->reg0.reg, env->reg0.reg);
                     emit1(OPCODE_XOR_REG_RM);
@@ -902,62 +985,30 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     int depth1 = get_node_depth(n->in1);
 
                     if(depth0 < depth1) {
-                        if(!env->env_in0 && !IsNativeRegister(n->op0)) {
+                        if(!env->env_in0) {
                             auto e = push_env0(); // TODO: request xmm register on floats
-                            if(IS_CONTROL_FLOAT(n->control)) {
-                                e->reg0.reg = alloc_register(X64_REG_INVALID, true);
-                                if(e->reg0.reg == X64_REG_INVALID)
-                                    e->reg0.on_stack = true;
-                            } else {
-                                // let someone else allocate register
-                            }
+                            INHERIT_REG(reg0)
                         }
-                        if(!env->env_in1 && !IsNativeRegister(n->op1)) {
+                        if(!env->env_in1) {
                             auto e = push_env1();
-                            if(IS_CONTROL_FLOAT(n->control)) {
-                                e->reg0.reg = alloc_register(X64_REG_INVALID, true);
-                                if(e->reg0.reg == X64_REG_INVALID)
-                                    e->reg0.on_stack = true;
-                            } else {
-                                // let someone else allocate register
-                            }
+                            INHERIT_REG(reg1)
                         }
                     } else {
-                        if(!env->env_in1 && !IsNativeRegister(n->op1)) {
+                        if(!env->env_in1) {
                             auto e = push_env1();
-                            if(IS_CONTROL_FLOAT(n->control)) {
-                                e->reg0.reg = alloc_register(X64_REG_INVALID, true);
-                                if(e->reg0.reg == X64_REG_INVALID)
-                                    e->reg0.on_stack = true;
-                            } else {
-                                // let someone else allocate register
-                            }
+                            INHERIT_REG(reg1)
                         }
-                        if(!env->env_in0 && !IsNativeRegister(n->op0)) {
+                        if(!env->env_in0) {
                             auto e = push_env0();
-                            if(IS_CONTROL_FLOAT(n->control)) {
-                                e->reg0.reg = alloc_register(X64_REG_INVALID, true);
-                                if(e->reg0.reg == X64_REG_INVALID)
-                                    e->reg0.on_stack = true;
-                            } else {
-                                // let someone else allocate register
-                            }
+                            INHERIT_REG(reg0)
                         }
                     }
                     Assert(!pop_env);
                     break;
                 }
 
-                if(!IsNativeRegister(n->op0)) {
-                    env->reg0 = env->env_in0->reg0;
-                } else {
-                    env->reg1.reg = ToNativeRegister(n->op0);
-                }
-                if(!IsNativeRegister(n->op1)) {
-                    env->reg1 = env->env_in1->reg0;
-                } else {
-                    env->reg1.reg = ToNativeRegister(n->op1);
-                }
+                env->reg0 = env->env_in0->reg0;
+                env->reg1 = env->env_in1->reg0;
 
                 if(env->reg1.on_stack) {
                     env->reg1.reg = RESERVED_REG0;
@@ -993,12 +1044,10 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                             //     bool d_is_free = is_register_free(X64_REG_D);
                             //     bool a_is_free = is_register_free(X64_REG_A);
                             //     if(!d_is_free) {
-                            //         emit1(OPCODE_PUSH_RM_SLASH_6);
-                            //         emit_modrm_slash(MODE_REG, 6, X64_REG_D);
+                            //         emit_push(X64_REG_D);
                             //     }
                             //     if(!a_is_free) {
-                            //         emit1(OPCODE_PUSH_RM_SLASH_6);
-                            //         emit_modrm_slash(MODE_REG, 6, X64_REG_A);
+                            //         emit_push(64_REG_A);
                             //     }
                             //     emit1(PREFIX_REXW);
                             //     emit1(OPCODE_MOV_REG_RM);
@@ -1013,12 +1062,10 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                             //     emit_modrm(MODE_REG, env->reg0, X64_REG_A);
                                 
                             //     if(!a_is_free) {
-                            //         emit1(OPCODE_POP_RM_SLASH_0);
-                            //         emit_modrm_slash(MODE_REG, 0, X64_REG_A);
+                            //         emit_pop(X64_REG_A);
                             //     }
                             //     if(!d_is_free) {
-                            //         emit1(OPCODE_POP_RM_SLASH_0);
-                            //         emit_modrm_slash(MODE_REG, 0, X64_REG_D);
+                            //         emit_pop(X64_REG_D);
                             //     }
                             // } else {
                             //     emit1(PREFIX_REXW);
@@ -1059,8 +1106,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                             bool c_was_used = false;
                             if(!is_register_free(X64_REG_C)) {
                                 c_was_used = true;
-                                emit1(OPCODE_PUSH_RM_SLASH_6);
-                                emit_modrm_slash(MODE_REG, 6, X64_REG_C);
+                                emit_push(X64_REG_C);
 
                                 emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg1.reg);
                                 emit1(OPCODE_MOV_REG_RM);
@@ -1357,34 +1403,31 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     int depth1 = get_node_depth(n->in1);
 
                     if(depth0 < depth1) {
-                        if(!env->env_in0 && !IsNativeRegister(n->op0)) {
-                            push_env0();
+                        if(!env->env_in0) {
+                            auto e = push_env0();
+                            INHERIT_REG(reg0)
+
                         }
-                        if(!env->env_in1  && !IsNativeRegister(n->op1)) {
-                            push_env1();
+                        if(!env->env_in1) {
+                            auto e = push_env1();
+                            INHERIT_REG(reg1)
                         }
                     } else {
-                        if(!env->env_in1  && !IsNativeRegister(n->op1)) {
-                            push_env1();
+                        if(!env->env_in1) {
+                            auto e = push_env1();
+                            INHERIT_REG(reg1)
                         }
-                        if(!env->env_in0  && !IsNativeRegister(n->op0)) {
-                            push_env0();
+                        if(!env->env_in0) {
+                            auto e = push_env0();
+                            INHERIT_REG(reg0)
                         }
                     }
                     Assert(!pop_env);
                     break;
                 }
                 
-                if(!IsNativeRegister(n->op0)) {
-                    env->reg0 = env->env_in0->reg0;
-                } else {
-                    env->reg0.reg = ToNativeRegister(n->op0);
-                }
-                if(!IsNativeRegister(n->op1)) {
-                    env->reg1 = env->env_in1->reg0;
-                } else {
-                    env->reg1.reg = ToNativeRegister(n->op0);
-                }
+                env->reg0 = env->env_in0->reg0;
+                env->reg1 = env->env_in1->reg0;
 
                 if(env->reg1.on_stack) {
                     env->reg1.reg = RESERVED_REG0;
@@ -1395,86 +1438,90 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     emit_pop(env->reg0.reg);
                 }
                 
-                switch(n->opcode) {
-                    case BC_DIV: {
-                        // TODO: Handled signed/unsigned
+                if(IS_CONTROL_FLOAT(n->control)) {
+                    Assert(false);
+                } else {
+                    switch(n->opcode) {
+                        case BC_DIV: {
+                            // TODO: Handled signed/unsigned
 
-                        bool d_is_free = is_register_free(X64_REG_D);
-                        if(!d_is_free) {
-                            emit_push(X64_REG_D);
-                        }
-                        emit_prefix(PREFIX_REXW, X64_REG_INVALID, X64_REG_INVALID);
-                        emit1(OPCODE_XOR_REG_RM);
-                        emit_modrm(MODE_REG, X64_REG_D, X64_REG_D);
-                        
-                        bool a_is_free = true;
-                        if(env->reg0.reg != X64_REG_A) {
-                            a_is_free = is_register_free(X64_REG_A);
-                            if(!a_is_free) {
-                                emit_push(X64_REG_A);
+                            bool d_is_free = is_register_free(X64_REG_D);
+                            if(!d_is_free) {
+                                emit_push(X64_REG_D);
                             }
-                            emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg0.reg);
-                            emit1(OPCODE_MOV_REG_RM);
-                            emit_modrm(MODE_REG, X64_REG_A, env->reg0.reg);
-                        }
+                            emit_prefix(PREFIX_REXW, X64_REG_INVALID, X64_REG_INVALID);
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, X64_REG_D, X64_REG_D);
+                            
+                            bool a_is_free = true;
+                            if(env->reg0.reg != X64_REG_A) {
+                                a_is_free = is_register_free(X64_REG_A);
+                                if(!a_is_free) {
+                                    emit_push(X64_REG_A);
+                                }
+                                emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg0.reg);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, X64_REG_A, env->reg0.reg);
+                            }
 
-                        emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg1.reg);
-                        emit1(OPCODE_DIV_AX_RM_SLASH_6);
-                        emit_modrm_slash(MODE_REG, 6, env->reg1.reg);
-                        
-                        if(env->reg0.reg != X64_REG_A) {
+                            emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg1.reg);
+                            emit1(OPCODE_DIV_AX_RM_SLASH_6);
+                            emit_modrm_slash(MODE_REG, 6, env->reg1.reg);
+                            
+                            if(env->reg0.reg != X64_REG_A) {
+                                emit_prefix(PREFIX_REXW, env->reg0.reg, X64_REG_INVALID);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, CLAMP_EXT_REG(env->reg0.reg), X64_REG_A);
+                            }
+                            if(!a_is_free) {
+                                emit_pop(X64_REG_A);
+                            }
+                            if(!d_is_free) {
+                                emit_pop(X64_REG_D);
+                            }
+                        } break;
+                        case BC_MOD: {
+                            // TODO: Handled signed/unsigned
+
+                            bool d_is_free = is_register_free(X64_REG_D);
+                            if(!d_is_free) {
+                                emit_push(X64_REG_D);
+                            }
+                            emit_prefix(PREFIX_REXW, X64_REG_INVALID, X64_REG_INVALID);
+                            emit1(OPCODE_XOR_REG_RM);
+                            emit_modrm(MODE_REG, X64_REG_D, X64_REG_D);
+                            
+                            bool a_is_free = true;
+                            if(env->reg0.reg != X64_REG_A) {
+                                a_is_free = is_register_free(X64_REG_A);
+                                if(!a_is_free) {
+                                    emit_push(X64_REG_A);
+                                }
+                                emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg0.reg);
+                                emit1(OPCODE_MOV_REG_RM);
+                                emit_modrm(MODE_REG, X64_REG_A, CLAMP_EXT_REG(env->reg0.reg));
+                            }
+
+                            emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg1.reg);
+                            emit1(OPCODE_DIV_AX_RM_SLASH_6);
+                            emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(env->reg1.reg)); 
+                            
                             emit_prefix(PREFIX_REXW, env->reg0.reg, X64_REG_INVALID);
                             emit1(OPCODE_MOV_REG_RM);
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(env->reg0.reg), X64_REG_A);
-                        }
-                        if(!a_is_free) {
-                            emit_pop(X64_REG_A);
-                        }
-                        if(!d_is_free) {
-                            emit_pop(X64_REG_D);
-                        }
-                    } break;
-                    case BC_MOD: {
-                        // TODO: Handled signed/unsigned
-
-                        bool d_is_free = is_register_free(X64_REG_D);
-                        if(!d_is_free) {
-                            emit_push(X64_REG_D);
-                        }
-                        emit_prefix(PREFIX_REXW, X64_REG_INVALID, X64_REG_INVALID);
-                        emit1(OPCODE_XOR_REG_RM);
-                        emit_modrm(MODE_REG, X64_REG_D, X64_REG_D);
-                        
-                        bool a_is_free = true;
-                        if(env->reg0.reg != X64_REG_A) {
-                            a_is_free = is_register_free(X64_REG_A);
+                            emit_modrm(MODE_REG, CLAMP_EXT_REG(env->reg0.reg), X64_REG_D);
+                            // }
                             if(!a_is_free) {
-                                emit_push(X64_REG_A);
+                                emit_pop(X64_REG_A);
                             }
-                            emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg0.reg);
-                            emit1(OPCODE_MOV_REG_RM);
-                            emit_modrm(MODE_REG, X64_REG_A, CLAMP_EXT_REG(env->reg0.reg));
-                        }
-
-                        emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg1.reg);
-                        emit1(OPCODE_DIV_AX_RM_SLASH_6);
-                        emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(env->reg1.reg)); 
-                        
-                        emit_prefix(PREFIX_REXW, env->reg0.reg, X64_REG_INVALID);
-                        emit1(OPCODE_MOV_REG_RM);
-                        emit_modrm(MODE_REG, CLAMP_EXT_REG(env->reg0.reg), X64_REG_D);
-                        // }
-                        if(!a_is_free) {
-                            emit_pop(X64_REG_A);
-                        }
-                        if(!d_is_free) {
-                            emit_pop(X64_REG_D);
-                        }
-                    } break;
-                    default: Assert(false);
+                            if(!d_is_free) {
+                                emit_pop(X64_REG_D);
+                            }
+                        } break;
+                        default: Assert(false);
+                    }
                 }
                 
-                if(!env->reg1.on_stack && !IsNativeRegister(n->op1))
+                if(!env->reg1.on_stack)
                     free_register(env->reg1.reg);
                     
                 if(env->reg0.on_stack) {
@@ -1486,7 +1533,17 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 Assert(!ToNativeRegister(n->op0));
 
                 if(!env->env_in1 && !IsNativeRegister(n->op1)) {
-                    push_env1();
+                    auto e = push_env1();
+                    e->reg0 = env->reg1;
+                    if(e->reg0.invalid()) {
+                        if(IS_CONTROL_FLOAT(n->control)) {
+                            e->reg0.reg = alloc_register(X64_REG_INVALID, true);
+                            if(e->reg0.reg == X64_REG_INVALID)
+                                e->reg0.on_stack = true;
+                        } else {
+                            // let someone else allocate register
+                        }
+                    }
                     break;
                 }
                 if(env->reg0.invalid()) {
@@ -1497,9 +1554,9 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     }
                 }
 
-                if(!IsNativeRegister(n->op1)) {
-                    env->reg1 = env->env_in1->reg0;
-                }
+                
+                env->reg1 = env->env_in1->reg0;
+                
 
                 if(env->reg1.on_stack) {
                     env->reg1.reg = RESERVED_REG0;
@@ -1534,7 +1591,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     default: Assert(false);
                 }
                 
-                if(!env->reg1.on_stack && !IsNativeRegister(n->op1))
+                if(!env->reg1.on_stack)
                     free_register(env->reg1.reg);
                     
                 if(env->reg0.on_stack) {
@@ -1542,16 +1599,22 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 }
             } break;
             case BC_MOV_RR: {
-                Assert(IsNativeRegister(n->op0) || IsNativeRegister(n->op1)); // if a native register is involved then we have a side effect, otherwise the register move instruction should have been abstracted.
-                
-                if(!env->env_in1 && !IsNativeRegister(n->op1)) {
-                    push_env1();
+                if(!env->env_in1) {
+                    auto e = push_env1();
+                    e->reg0 = env->reg1;
+                    if(e->reg0.invalid()) {
+                        if(IS_CONTROL_FLOAT(n->control)) {
+                            e->reg0.reg = alloc_register(X64_REG_INVALID, true);
+                            if(e->reg0.reg == X64_REG_INVALID)
+                                e->reg0.on_stack = true;
+                        } else {
+                            // let someone else allocate register
+                        }
+                    }
                     break;
                 }
 
-                if(IsNativeRegister(n->op0)) {
-                    env->reg0.reg = ToNativeRegister(n->op0);
-                }
+                env->reg0.reg = ToNativeRegister(n->op0);
 
                 if(env->reg0.invalid()) {
                     env->reg0.reg = alloc_register();
@@ -1561,9 +1624,9 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     }
                 }
 
-                if(!IsNativeRegister(n->op1)) {
+                // if(!IsNativeRegister(n->op1)) {
                     env->reg1 = env->env_in1->reg0;
-                }
+                // }
 
                 if(env->reg1.on_stack) {
                     env->reg1.reg = RESERVED_REG0;
@@ -1597,11 +1660,12 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
             } break;
             case BC_MOV_RM:
             case BC_MOV_RM_DISP16: {
-                Assert(!ToNativeRegister(n->op0));
-                env->reg1.reg = ToNativeRegister(n->op1);
+                // Assert(!ToNativeRegister(n->op0));
+                env->reg1.reg = ToNativeRegister(n->op1); // NATIVE MEANS LOCALS -> BASE POINTER
                 
                 if(!env->env_in1 && !IsNativeRegister(n->op1)) {
-                    push_env1();
+                    auto e = push_env1();
+                    INHERIT_REG(reg1)
                     break;
                 }
 
@@ -1698,12 +1762,23 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 
                 // TODO: Check node depth, do the most register allocs first
                 if(!env->env_in0 && !IsNativeRegister(n->op0)) {
-                    push_env0();
+                    auto e = push_env0();
+                    INHERIT_REG(reg0)
                     break;
                 }
 
                 if(!env->env_in1 && !IsNativeRegister(n->op1)) {
-                    push_env1();
+                    auto e = push_env1();
+                    e->reg0 = env->reg1;
+                    if(e->reg0.invalid()) {
+                        if(IS_CONTROL_FLOAT(n->control)) {
+                            e->reg0.reg = alloc_register(X64_REG_INVALID, true);
+                            if(e->reg0.reg == X64_REG_INVALID)
+                                e->reg0.on_stack = true;
+                        } else {
+                            // let someone else allocate register
+                        }
+                    }
                     break;
                 }
 
@@ -1788,16 +1863,446 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     free_register(env->reg1.reg);
             } break;
             case BC_ALLOC_LOCAL: {
-                emit_sub_imm32(X64_REG_SP, (i32)-n->imm);
+                Assert(push_offset == 0);
+                if(n->op0 != BC_REG_INVALID) {
+                    if(env->reg0.invalid()) {
+                        env->reg0.reg = alloc_register();
+                        if(env->reg0.reg == X64_REG_INVALID) {
+                            env->reg0.on_stack = true;
+                            env->reg0.reg = RESERVED_REG0;
+                        }
+                    } else {
+                        // already allocated
+                    }
+                }
+
+                emit_sub_imm32(X64_REG_SP, (i32)n->imm);
+                if(n->op0 != BC_REG_INVALID) {
+                    emit_prefix(PREFIX_REXW, env->reg0.reg, X64_REG_SP);
+                    emit1(OPCODE_MOV_REG_RM);
+                    emit_modrm(MODE_REG, env->reg0.reg, X64_REG_SP);
+                    if(env->reg0.on_stack) {
+                        Assert(false);
+                        // Potential bug here. If alloc_local is pushed and some expression is
+                        // evaluated and more values are pushed then that expression has
+                        // to be popped before instructions can get the value from alloc_local
+                        // I don't know if this will ever happen since things are generally pushed
+                        // and popped in the right order. Alloc local is also a root instruction
+                        // so there will always be registers available. But still, possibly a bug.
+
+                        emit_push(env->reg0.reg);
+                    }
+                }
+
             } break;
             case BC_FREE_LOCAL: {
+                // Assert(push_offset == 0); nocheckin
                 emit_add_imm32(X64_REG_SP, (i32)n->imm);
+                ret_offset -= n->imm;
+            } break;
+            case BC_SET_ARG: {
+                if(!env->env_in0 && !IsNativeRegister(n->op0)) {
+                    auto e = push_env0();
+                    INHERIT_REG(reg0)
+                    break;
+                }
+
+                if(!IsNativeRegister(n->op0)) {
+                    env->reg0 = env->env_in0->reg0;
+                }
+                
+                if(env->reg0.on_stack) {
+                    env->reg0.reg = RESERVED_REG1;
+                    emit_pop(env->reg0.reg);
+                }
+
+                int off = n->imm + push_offset;
+
+                // this code is required with stdcall or unixcall
+                // betcall ignores this
+                int arg_index = n->imm / 8;
+                if(arg_index >= recent_set_args.size()) {
+                    recent_set_args.resize(arg_index + 1);
+                }
+                recent_set_args[arg_index].control = n->control;
+
+                // Emit actual instruction
+                if (IS_REG_XMM(env->reg0.reg)) {
+                    Assert(false);
+                    // if(GET_CONTROL_SIZE(n->control) == CONTROL_32B)
+                    //     emit3(OPCODE_3_MOVSS_RM_REG);
+                    // else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B)
+                    //     emit3(OPCODE_3_MOVSD_RM_REG);
+                    // else Assert(false);
+
+                    // u8 mode = MODE_DEREF_DISP32;
+                    // if(n->imm == 0 || n->opcode == BC_MOV_MR) {
+                    //     mode = MODE_DEREF;
+                    // } else if(n->imm < 0x80 && n->imm >= -0x80) {
+                    //     mode = MODE_DEREF_DISP8;
+                    // }
+                    // emit_modrm(mode, CLAMP_XMM(env->reg1.reg), CLAMP_EXT_REG(env->reg0.reg));
+                    // if(mode == MODE_DEREF) {
+
+                    // } else if(mode == MODE_DEREF_DISP8)
+                    //     emit1((u8)(i8)n->imm);
+                    // else
+                    //     emit4((u32)(i32)n->imm);
+                } else {
+                    X64Register reg_args = X64_REG_SP;
+                    if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
+                        emit1(PREFIX_16BIT);
+                    }
+                    if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
+                        emit_prefix(PREFIX_REXW, reg_args, env->reg0.reg);
+                    } else {
+                        emit_prefix(0, reg_args, env->reg0.reg);
+                    }
+                    if(GET_CONTROL_SIZE(n->control) == CONTROL_8B) {
+                        emit1(OPCODE_MOV_RM_REG8);
+                    } else if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
+                        emit1(OPCODE_MOV_RM_REG);
+                    } else if(GET_CONTROL_SIZE(n->control) == CONTROL_32B) {
+                        emit1(OPCODE_MOV_RM_REG);
+                    } else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
+                        emit1(OPCODE_MOV_RM_REG);
+                    }
+
+
+                    u8 mode = MODE_DEREF_DISP32;
+                    if(off == 0) {
+                        mode = MODE_DEREF;
+                    } else if(off < 0x80 && off >= -0x80) {
+                        mode = MODE_DEREF_DISP8;
+                    }
+                    emit_modrm(mode, CLAMP_EXT_REG(env->reg0.reg), CLAMP_EXT_REG(reg_args));
+                    if(mode == MODE_DEREF) {
+
+                    } else if(mode == MODE_DEREF_DISP8)
+                        emit1((u8)(i8)off);
+                    else
+                        emit4((u32)(i32)off);
+                }
+                
+                // Late fixing
+                if(!env->reg0.on_stack && !IsNativeRegister(env->reg0.reg))
+                    free_register(env->reg0.reg);
+            } break;
+            case BC_SET_RET: {
+                switch(tinycode->call_convention) {
+                    case BETCALL: {
+                        if(!env->env_in0) {
+                            auto e = push_env0();
+                            if(IS_CONTROL_FLOAT(n->control)) {
+                                e->reg0.reg = alloc_register(X64_REG_INVALID, true);
+                                if(e->reg0.reg == X64_REG_INVALID)
+                                    e->reg0.on_stack = true;
+                            } else {
+                                // let someone else allocate register
+                            }
+                            break;
+                        }
+
+                        if(!IsNativeRegister(n->op0)) {
+                            env->reg0 = env->env_in0->reg0;
+                        }
+                        
+                        if(env->reg0.on_stack) {
+                            env->reg0.reg = RESERVED_REG1;
+                            emit_pop(env->reg0.reg);
+                        }
+
+                        // Emit actual instruction
+                        if (IS_REG_XMM(env->reg0.reg)) {
+                            Assert(false);
+                            // if(GET_CONTROL_SIZE(n->control) == CONTROL_32B)
+                            //     emit3(OPCODE_3_MOVSS_RM_REG);
+                            // else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B)
+                            //     emit3(OPCODE_3_MOVSD_RM_REG);
+                            // else Assert(false);
+
+                            // u8 mode = MODE_DEREF_DISP32;
+                            // if(n->imm == 0 || n->opcode == BC_MOV_MR) {
+                            //     mode = MODE_DEREF;
+                            // } else if(n->imm < 0x80 && n->imm >= -0x80) {
+                            //     mode = MODE_DEREF_DISP8;
+                            // }
+                            // emit_modrm(mode, CLAMP_XMM(env->reg1.reg), CLAMP_EXT_REG(env->reg0.reg));
+                            // if(mode == MODE_DEREF) {
+
+                            // } else if(mode == MODE_DEREF_DISP8)
+                            //     emit1((u8)(i8)n->imm);
+                            // else
+                            //     emit4((u32)(i32)n->imm);
+                        } else {
+                            X64Register reg_rets = X64_REG_BP;
+                            if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
+                                emit1(PREFIX_16BIT);
+                            }
+                            if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
+                                emit_prefix(PREFIX_REXW, reg_rets, env->reg0.reg);
+                            } else {
+                                emit_prefix(0, reg_rets, env->reg0.reg);
+                            }
+                            if(GET_CONTROL_SIZE(n->control) == CONTROL_8B) {
+                                emit1(OPCODE_MOV_RM_REG8);
+                            } else if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
+                                emit1(OPCODE_MOV_RM_REG);
+                            } else if(GET_CONTROL_SIZE(n->control) == CONTROL_32B) {
+                                emit1(OPCODE_MOV_RM_REG);
+                            } else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
+                                emit1(OPCODE_MOV_RM_REG);
+                            }
+
+                            int off = n->imm;
+
+                            u8 mode = MODE_DEREF_DISP32;
+                            if(off == 0 || n->opcode == BC_MOV_MR) {
+                                mode = MODE_DEREF;
+                            } else if(off < 0x80 && off >= -0x80) {
+                                mode = MODE_DEREF_DISP8;
+                            }
+                            emit_modrm(mode, CLAMP_EXT_REG(env->reg0.reg), CLAMP_EXT_REG(reg_rets));
+                            if(mode == MODE_DEREF) {
+
+                            } else if(mode == MODE_DEREF_DISP8)
+                                emit1((u8)(i8)off);
+                            else
+                                emit4((u32)(i32)off);
+                        }
+                        
+                        // Late fixing
+                        if(!env->reg0.on_stack && !IsNativeRegister(env->reg0.reg))
+                            free_register(env->reg0.reg);
+                    } break;
+                    case STDCALL:
+                    case UNIXCALL: {
+                        if(!env->env_in0) {
+                            auto e = push_env0();
+                            if(IS_CONTROL_FLOAT(n->control)) {
+                                e->reg0.reg = alloc_register(X64_REG_XMM0, true);
+                                Assert(e->reg0.reg != X64_REG_INVALID);
+                                // if(e->reg0.reg == X64_REG_INVALID)
+                                //     e->reg0.on_stack = true;
+                            } else {
+                                // e->reg0.reg = alloc_register(X64_REG_A, false);
+                                e->reg0.reg = X64_REG_A;
+                                // Assert(e->reg0.reg != X64_REG_INVALID);
+                                    // e->reg0.on_stack = true;
+                                // let someone else allocate register
+                            }
+                            break;
+                        }
+
+                        if(!IsNativeRegister(n->op0)) {
+                            env->reg0 = env->env_in0->reg0;
+                        }
+                        
+                        // RAX has been reserved as return value until we return
+                        // when ret is encountered we free RAX because the return
+                        // may have exist inside while- or if-statement in which case
+                        // RAX will be used for other rets
+                        // if(!env->reg0.on_stack && !IsNativeRegister(env->reg0.reg))
+                        //     free_register(env->reg0.reg);
+                    } break;
+                }
+            } break;
+            case BC_GET_PARAM: {
+                if(env->reg0.invalid()) {
+                    env->reg0.reg = alloc_register(X64_REG_INVALID, IS_CONTROL_FLOAT(n->control));
+                    if(env->reg0.invalid()) {
+                        env->reg0.on_stack = true;
+                        env->reg0.reg = RESERVED_REG0;
+                    }
+                }
+
+                if (IS_REG_XMM(env->reg0.reg)) {
+                    Assert(false);
+                    // if(GET_CONTROL_SIZE(n->control) == CONTROL_32B)
+                    //     emit3(OPCODE_3_MOVSS_REG_RM);
+                    // else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B)
+                    //     emit3(OPCODE_3_MOVSD_REG_RM);
+                    // else Assert(false);
+
+                    // u8 mode = MODE_DEREF_DISP32;
+                    // if(n->imm == 0 || n->opcode == BC_MOV_RM) {
+                    //     mode = MODE_DEREF;
+                    // } else if(n->imm < 0x80 && n->imm >= -0x80) {
+                    //     mode = MODE_DEREF_DISP8;
+                    // }
+                    // emit_modrm(mode, CLAMP_XMM(env->reg0.reg), CLAMP_EXT_REG(env->reg1.reg));
+                    // if(mode == MODE_DEREF_DISP8)
+                    //     emit1((u8)(i8)n->imm);
+                    // else if(mode == MODE_DEREF_DISP32)
+                    //     emit4((u32)(i32)n->imm);
+                } else {
+                    X64Register reg_params = X64_REG_BP;
+                    if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
+                        emit1(PREFIX_16BIT);
+                    }
+                    if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
+                        emit_prefix(PREFIX_REXW, env->reg0.reg, reg_params);
+                    } else {
+                        emit_prefix(0, env->reg0.reg, reg_params);
+                    }
+                    if(GET_CONTROL_SIZE(n->control) == CONTROL_8B) {
+                        emit1(OPCODE_MOV_REG8_RM);
+                    } else if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
+                        emit1(OPCODE_MOV_REG_RM);
+                    } else if(GET_CONTROL_SIZE(n->control) == CONTROL_32B) {
+                        emit1(OPCODE_MOV_REG_RM);
+                    } else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
+                        emit1(OPCODE_MOV_REG_RM);
+                    }
+
+                    int off = n->imm + FRAME_SIZE;
+
+                    u8 mode = MODE_DEREF_DISP32;
+                    if(off == 0 || n->opcode == BC_MOV_RM) {
+                        mode = MODE_DEREF;
+                    } else if(off < 0x80 && off >= -0x80) {
+                        mode = MODE_DEREF_DISP8;
+                    }
+                    emit_modrm(mode, CLAMP_EXT_REG(env->reg0.reg), CLAMP_EXT_REG(reg_params));
+                    if(mode == MODE_DEREF_DISP8)
+                        emit1((u8)(i8)off);
+                    else if(mode == MODE_DEREF_DISP32)
+                        emit4((u32)(i32)off);
+                }
+                
+                if(env->reg0.on_stack) {
+                    emit_push(env->reg0.reg);
+                }
+            } break;
+            case BC_GET_VAL: {
+                switch(last_call->call) {
+                    case BETCALL: {
+                        if(env->reg0.invalid()) {
+                            env->reg0.reg = alloc_register(X64_REG_INVALID, IS_CONTROL_FLOAT(n->control));
+                            if(env->reg0.invalid()) {
+                                env->reg0.on_stack = true;
+                                env->reg0.reg = RESERVED_REG0;
+                            }
+                        }
+
+                        if (IS_REG_XMM(env->reg0.reg)) {
+                            Assert(false);
+                            // if(GET_CONTROL_SIZE(n->control) == CONTROL_32B)
+                            //     emit3(OPCODE_3_MOVSS_REG_RM);
+                            // else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B)
+                            //     emit3(OPCODE_3_MOVSD_REG_RM);
+                            // else Assert(false);
+
+                            // u8 mode = MODE_DEREF_DISP32;
+                            // if(n->imm == 0 || n->opcode == BC_MOV_RM) {
+                            //     mode = MODE_DEREF;
+                            // } else if(n->imm < 0x80 && n->imm >= -0x80) {
+                            //     mode = MODE_DEREF_DISP8;
+                            // }
+                            // emit_modrm(mode, CLAMP_XMM(env->reg0.reg), CLAMP_EXT_REG(env->reg1.reg));
+                            // if(mode == MODE_DEREF_DISP8)
+                            //     emit1((u8)(i8)n->imm);
+                            // else if(mode == MODE_DEREF_DISP32)
+                            //     emit4((u32)(i32)n->imm);
+                        } else {
+                            X64Register reg_params = X64_REG_SP;
+                            if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
+                                emit1(PREFIX_16BIT);
+                            }
+                            if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
+                                emit_prefix(PREFIX_REXW, env->reg0.reg, reg_params);
+                            } else {
+                                emit_prefix(0, env->reg0.reg, reg_params);
+                            }
+                            if(GET_CONTROL_SIZE(n->control) == CONTROL_8B) {
+                                emit1(OPCODE_MOV_REG8_RM);
+                            } else if(GET_CONTROL_SIZE(n->control) == CONTROL_16B) {
+                                emit1(OPCODE_MOV_REG_RM);
+                            } else if(GET_CONTROL_SIZE(n->control) == CONTROL_32B) {
+                                emit1(OPCODE_MOV_REG_RM);
+                            } else if(GET_CONTROL_SIZE(n->control) == CONTROL_64B) {
+                                emit1(OPCODE_MOV_REG_RM);
+                            }
+
+                            int off = n->imm + push_offset - FRAME_SIZE + ret_offset;
+
+                            u8 mode = MODE_DEREF_DISP32;
+                            if(off == 0 || n->opcode == BC_MOV_RM) {
+                                mode = MODE_DEREF;
+                            } else if(off < 0x80 && off >= -0x80) {
+                                mode = MODE_DEREF_DISP8;
+                            }
+                            emit_modrm(mode, CLAMP_EXT_REG(env->reg0.reg), CLAMP_EXT_REG(reg_params));
+                            if(mode == MODE_DEREF_DISP8)
+                                emit1((u8)(i8)off);
+                            else if(mode == MODE_DEREF_DISP32)
+                                emit4((u32)(i32)off);
+                        }
+                        
+                        if(env->reg0.on_stack) {
+                            emit_push(env->reg0.reg);
+                        }
+                    } break;
+                    case STDCALL:
+                    case UNIXCALL: {
+                        // TODO: We hope that an instruction after a call didn't
+                        //   overwrite the return value in RAX. We assert if it did.
+                        //   Should we reserve RAX after a call until we reach BC_GET_VAL
+                        //   and use the return value? No because some function do not
+                        //   anything so we would have wasted rax. Then what do we do?
+
+                        // For now we assume RAX has been reserved
+                        env->reg0.reg = X64_REG_A;
+                        // if(env->reg0.invalid()) {
+                        //     if(IS_CONTROL_FLOAT(n->control)) {
+                        //         env->reg0.reg = alloc_register(X64_REG_XMM0, true);
+                        //         Assert(!env->reg0.invalid());
+                        //     } else {
+                                
+                        //         env->reg0.reg = alloc_register(X64_REG_A, false);
+                        //         Assert(!env->reg0.invalid());
+                        //     }
+                        // }
+                    } break;
+                }
+            } break;
+            case BC_GET_LOCAL: {
+                if(env->reg0.invalid()) {
+                    env->reg0.reg = alloc_register(X64_REG_INVALID, false);
+                    if(env->reg0.invalid()) {
+                        env->reg0.on_stack = true;
+                        env->reg0.reg = RESERVED_REG0;
+                    }
+                }
+
+                X64Register reg_local = X64_REG_BP;
+
+                emit_prefix(PREFIX_REXW, X64_REG_INVALID, env->reg0.reg);
+                emit1(OPCODE_MOV_RM_IMM32_SLASH_0);
+                emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(env->reg0.reg));
+
+                emit_prefix(PREFIX_REXW, env->reg0.reg, reg_local);
+                emit1(OPCODE_ADD_REG_RM);
+                emit_modrm(MODE_REG, CLAMP_EXT_REG(env->reg0.reg), reg_local);
+
+                if(env->reg0.on_stack) {
+                    emit_push(env->reg0.reg);
+                }
             } break;
             case BC_INCR: {
-                env->reg0.reg = ToNativeRegister(n->op0);
                 if(env->reg0.reg == X64_REG_INVALID) {
                     if(!env->env_in0) {
-                        push_env0();
+                        auto e = push_env0();
+                        e->reg0 = env->reg0;
+                        if(e->reg0.invalid()) {
+                            if(IS_CONTROL_FLOAT(n->control)) {
+                                e->reg0.reg = alloc_register(X64_REG_INVALID, true);
+                                if(e->reg0.reg == X64_REG_INVALID)
+                                    e->reg0.on_stack = true;
+                            } else {
+                                // let someone else allocate register
+                            }
+                        }
                         break;
                     }
                     env->reg0 = env->env_in0->reg0;
@@ -1806,8 +2311,6 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 if(env->reg0.on_stack) {
                     env->reg0.reg = RESERVED_REG0;
                     emit_pop(env->reg0.reg);
-                    // emit1(OPCODE_POP_RM_SLASH_0);
-                    // emit_modrm_slash(MODE_REG, 0, env->reg0.reg);
                 }
                 if(n->imm < 0) {
                     emit_sub_imm32(env->reg0.reg, (i32)-n->imm);
@@ -1910,6 +2413,38 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 }
             } break;
             case BC_CALL: {
+                last_call = n;
+                // Setup arguments
+                // Arguments are pushed onto the stack by set_arg instructions.
+                // Some calling conventions require the first four arguments in registers
+                // We move the args on stack to registers.
+                // TODO: We could improve by directly moving args to registers
+                //  but it's more complicated.
+                switch(n->call) {
+                    case BETCALL: break;
+                    case STDCALL: {
+                        // recent_set_args
+                        for(int i=0;i<recent_set_args.size() && i < 4;i++) {
+                            auto& arg = recent_set_args[i];
+                            auto control = arg.control;
+
+                            int off = i * 8 + push_offset;
+                            X64Register reg_args = X64_REG_SP;
+                            X64Register reg = stdcall_normal_regs[i];
+                            if(IS_CONTROL_FLOAT(control))
+                                reg = stdcall_float_regs[i];
+
+                            emit_mov_reg_rm(reg,reg_args,control,off);
+                        }
+                    } break;
+                    case UNIXCALL: {
+                        Assert(false);
+                        // unixcall_normal_regs
+                    } break;
+                    default: Assert(false);
+                }
+                recent_set_args.resize(0);
+                ret_offset = 0;
                 if(n->link == LinkConventions::DLLIMPORT || n->link == LinkConventions::VARIMPORT) {
                     Assert(false);
                     // Assert(bytecode->externalRelocations[imm].location == bcIndex);
@@ -1934,7 +2469,10 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     int offset = size();
                     emit4((u32)0);
                     
-                    prog->addInternalFuncRelocation(current_tinyprog_index, offset, n->imm);
+                    // necessary when adding internal func relocations
+                    // +3 = 1 (opcode) + 1 (link) + 1 (convention)
+                    bc_to_x64_translation[n->bc_index + 3] = offset;
+                    // prog->addInternalFuncRelocation(current_tinyprog_index, offset, n->imm);
 
                     // RelativeRelocation reloc{};
                     // reloc.currentIP = size();
@@ -2121,13 +2659,32 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 } else {
                     Assert(false);
                 }
+                switch(n->call) {
+                    case BETCALL: break;
+                    case STDCALL:
+                    case UNIXCALL: {
+                        auto r = alloc_register(X64_REG_A, false);
+                        Assert(r != X64_REG_INVALID);
+                    } break;
+                }
                 break;
             } break;
             case BC_RET: {
-                emit1(OPCODE_POP_RM_SLASH_0);
-                emit_modrm_slash(MODE_REG, 0, X64_REG_BP);
-
+                // TODO: push_offset gets messed up on return, continue and break inside while, for, if statements. We need to store a push_offset per code path
+                emit_pop(X64_REG_BP);
                 emit1(OPCODE_RET);
+
+                switch(tinycode->call_convention) {
+                    case BETCALL: break;
+                    case STDCALL:
+                    case UNIXCALL:
+                        if(!is_register_free(X64_REG_A))
+                            free_register(X64_REG_A);
+                        if(!is_register_free(X64_REG_XMM0))
+                            free_register(X64_REG_XMM0);
+                    break;
+                    default: Assert(false);
+                }
             } break;
             case BC_MEMZERO: {
                 Assert(!ToNativeRegister(n->op1));
@@ -2135,12 +2692,23 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 
                 // TODO: Check node depth, do the most register allocs first
                 if(!env->env_in0 && !IsNativeRegister(n->op0)) {
-                    push_env0();
+                    auto e = push_env0();
+                    INHERIT_REG(reg0)
                     break;
                 }
 
                 if(!env->env_in1 && !IsNativeRegister(n->op1)) {
-                    push_env1();
+                    auto e = push_env1();
+                    e->reg0 = env->reg1;
+                    if(e->reg0.invalid()) {
+                        if(IS_CONTROL_FLOAT(n->control)) {
+                            e->reg0.reg = alloc_register(X64_REG_INVALID, true);
+                            if(e->reg0.reg == X64_REG_INVALID)
+                                e->reg0.on_stack = true;
+                        } else {
+                            // let someone else allocate register
+                        }
+                    }
                     break;
                 }
 
@@ -2251,7 +2819,8 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 
                 // TODO: Check node depth, do the most register allocs first
                 if(!env->env_in0 && !IsNativeRegister(n->op0)) {
-                    push_env0();
+                    auto e = push_env0();
+                    INHERIT_REG(reg0)
                     break;
                 }
                 
@@ -2310,7 +2879,8 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 
                 // TODO: Check node depth, do the most register allocs first
                 if(!env->env_in0 && !IsNativeRegister(n->op0)) {
-                    push_env0();
+                    auto e = push_env0();
+                    INHERIT_REG(reg0)
                     break;
                 }
                 
@@ -2363,7 +2933,8 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 
                 // TODO: Check node depth, do the most register allocs first
                 if(!env->env_in0 && !IsNativeRegister(n->op0)) {
-                    push_env0();
+                    auto e = push_env0();
+                    INHERIT_REG(reg0)
                     break;
                 }
                 
@@ -2587,8 +3158,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                                 */
 
                                 u8 temp_reg = REG_DI;
-                                emit1(OPCODE_PUSH_RM_SLASH_6);
-                                emit_modrm(MODE_REG, 6, temp_reg);
+                                emit_push(temp_reg);
 
                                 // Check signed bit
                                 emit1(PREFIX_REXW);
@@ -2642,8 +3212,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
 
                                 prog->set(jmp_offset_end, prog->size() - (jmp_offset_end +1));
 
-                                emit1(OPCODE_POP_RM_SLASH_0);
-                                emit_modrm(MODE_REG, 0, temp_reg);
+                                emit_pop(temp_reg);
 
                                 if(!toXmm) {
                                     prog->add3(OPCODE_3_MOVSS_RM_REG);
@@ -2672,8 +3241,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                             end:
                                 */
                                 u8 temp_reg = REG_DI;
-                                emit1(OPCODE_PUSH_RM_SLASH_6);
-                                emit_modrm(MODE_REG, 6, temp_reg);
+                                emit_push(temp_reg);
 
                                 // Check signed bit
                                 emit1(PREFIX_REXW);
@@ -2727,8 +3295,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
 
                                 prog->set(jmp_offset_end, prog->size() - (jmp_offset_end +1));
 
-                                emit1(OPCODE_POP_RM_SLASH_0);
-                                emit_modrm(MODE_REG, 0, temp_reg);
+                                emit_pop(temp_reg);
 
                                 if(!toXmm) {
                                     prog->add3(OPCODE_3_MOVSD_RM_REG);
@@ -3221,32 +3788,45 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         }
     }
 
+    for(int i=0;i<tinycode->call_relocations.size();i++) {
+        auto& r = tinycode->call_relocations[i];
+        int ind = r.funcImpl->tinycode_id - 1;
+        prog->addInternalFuncRelocation(current_tinyprog_index,bc_to_x64_translation[r.pc], ind);
+    }
+
+    for(auto e : envs)
+        delete e;
+    envs.cleanup();
+
     // last instruction should be a return
     Assert(tinyprog->text[tinyprog->head-1] == OPCODE_RET);
 }
 X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
+    using namespace engone;
     if(!is_float) {
         if(reg != X64_REG_INVALID) {
             auto pair = registers.find(reg);
             if(pair == registers.end()) {
                 registers[reg] = {};
                 registers[reg].used = true;
+                log::out << "alloc " << reg<<"\n";
                 return reg;
             } else if(!pair->second.used) {
                 pair->second.used = true;
+                log::out << "alloc " << reg<<"\n";
                 return reg;
             }
         } else {
             static const X64Register regs[]{
-                // X64_REG_A,
                 X64_REG_C,
-                // X64_REG_D,
+                X64_REG_D,
                 X64_REG_B,
-                X64_REG_SI,
-                X64_REG_DI,
+                // X64_REG_SI,
+                // X64_REG_DI,
+                // X64_REG_A,
 
-                // X64_REG_R8, 
-                // X64_REG_R9, 
+                X64_REG_R8,
+                X64_REG_R9,
                 // X64_REG_R10,
                 // X64_REG_R11,
                 // X64_REG_R12,
@@ -3260,9 +3840,13 @@ X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
                 if(pair == registers.end()) {
                     registers[reg] = {};
                     registers[reg].used = true;
+                    Assert(reg != RESERVED_REG0 && reg != RESERVED_REG1);
+                    log::out << "alloc " << reg<<"\n";
                     return reg;
                 } else if(!pair->second.used) {
                     pair->second.used = true;
+                    Assert(reg != RESERVED_REG0 && reg != RESERVED_REG1);
+                    log::out << "alloc " << reg<<"\n";
                     return reg;
                 }
             }
@@ -3841,12 +4425,14 @@ X64Program* X64Program::Create() {
 void X64Builder::emit_push(X64Register reg) {
     emit_prefix(0, X64_REG_INVALID, reg);
     emit1(OPCODE_PUSH_RM_SLASH_6);
-    emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
+    emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(reg));
+    push_offset += 8;
 }
 void X64Builder::emit_pop(X64Register reg) {
     emit_prefix(0, X64_REG_INVALID, reg);
     emit1(OPCODE_POP_RM_SLASH_0);
     emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
+    push_offset -= 8;
 }
 void X64Builder::emit_add_imm32(X64Register reg, i32 imm32) {
     emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg);
@@ -3877,4 +4463,143 @@ void X64Builder::emit_prefix(u8 inherited_prefix, X64Register reg, X64Register r
     }
     if(inherited_prefix)
         emit1(inherited_prefix);
+}
+
+void X64Builder::emit_mov_reg_rm(X64Register reg, X64Register rm, InstructionControl control, int disp) {
+    int size = GET_CONTROL_SIZE(control);
+    if (IS_CONTROL_FLOAT(control)) {
+        emit_prefix(0, reg, rm);
+        if(size == CONTROL_32B)
+            emit3(OPCODE_3_MOVSS_REG_RM);
+        else if(size == CONTROL_64B)
+            emit3(OPCODE_3_MOVSD_REG_RM);
+        else Assert(false);
+
+        u8 mode = MODE_DEREF_DISP32;
+        if(disp == 0) {
+            mode = MODE_DEREF;
+        } else if(disp >= -0x80 && disp < 0x7F) {
+            mode = MODE_DEREF_DISP8;
+        }
+        emit_modrm(mode, CLAMP_XMM(reg), CLAMP_EXT_REG(rm));
+        if(mode == MODE_DEREF) {
+
+        } else if(mode == MODE_DEREF_DISP8)
+            emit1((u8)(i8)disp);
+        else
+            emit4((u32)(i32)disp);
+    } else {
+        if(size == CONTROL_16B) {
+            emit1(PREFIX_16BIT);
+        }
+        if(size == CONTROL_64B) {
+            emit_prefix(PREFIX_REXW, reg, rm);
+        } else {
+            emit_prefix(0, reg, rm);
+        }
+        if(size == CONTROL_8B) {
+            emit1(OPCODE_MOV_REG8_RM);
+        } else {
+            emit1(OPCODE_MOV_REG_RM);
+        }
+
+        u8 mode = MODE_DEREF_DISP32;
+        if(disp == 0) {
+            mode = MODE_DEREF;
+        } else if(disp >= -0x80 && disp < 0x7F) {
+            mode = MODE_DEREF_DISP8;
+        }
+        emit_modrm(mode, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(rm));
+        if(mode == MODE_DEREF) {
+
+        } else if(mode == MODE_DEREF_DISP8)
+            emit1((u8)(i8)disp);
+        else
+            emit4((u32)(i32)disp);
+    }
+}
+void X64Builder::emit_mov_rm_reg(X64Register rm, X64Register reg, InstructionControl control, int disp) {
+    int size = GET_CONTROL_SIZE(control);
+    if (IS_CONTROL_FLOAT(control)) {
+        emit_prefix(0, reg, rm);
+        if(size == CONTROL_32B)
+            emit3(OPCODE_3_MOVSS_RM_REG);
+        else if(size == CONTROL_64B)
+            emit3(OPCODE_3_MOVSD_RM_REG);
+        else Assert(false);
+
+        u8 mode = MODE_DEREF_DISP32;
+        if(disp == 0) {
+            mode = MODE_DEREF;
+        } else if(disp >= -0x80 && disp < 0x7F) {
+            mode = MODE_DEREF_DISP8;
+        }
+        emit_modrm(mode, CLAMP_XMM(reg), CLAMP_EXT_REG(rm));
+        if(mode == MODE_DEREF) {
+
+        } else if(mode == MODE_DEREF_DISP8)
+            emit1((u8)(i8)disp);
+        else
+            emit4((u32)(i32)disp);
+    } else {
+        if(size == CONTROL_16B) {
+            emit1(PREFIX_16BIT);
+        }
+        if(size == CONTROL_64B) {
+            emit_prefix(PREFIX_REXW, reg, rm);
+        } else {
+            emit_prefix(0, reg, rm);
+        }
+        if(size == CONTROL_8B) {
+            emit1(OPCODE_MOV_RM_REG8);
+        } else {
+            emit1(OPCODE_MOV_RM_REG);
+        }
+
+        u8 mode = MODE_DEREF_DISP32;
+        if(disp == 0) {
+            mode = MODE_DEREF;
+        } else if(disp >= -0x80 && disp < 0x7F) {
+            mode = MODE_DEREF_DISP8;
+        }
+        emit_modrm(mode, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(rm));
+        if(mode == MODE_DEREF) {
+
+        } else if(mode == MODE_DEREF_DISP8)
+            emit1((u8)(i8)disp);
+        else
+            emit4((u32)(i32)disp);
+    }
+}
+
+static const char* x64_register_names[]{
+    "INVALID",// X64_REG_INVALID = 0,
+    "A",// X64_REG_A,
+    "C",// X64_REG_C,
+    "D",// X64_REG_D,
+    "B",// X64_REG_B,
+    "SP",// X64_REG_SP,
+    "BP",// X64_REG_BP,
+    "SI",// X64_REG_SI,
+    "DI",// X64_REG_DI,
+    "R8",// X64_REG_R8, 
+    "R9",// X64_REG_R9, 
+    "R10",// X64_REG_R10,
+    "R11",// X64_REG_R11,
+    "R12",// X64_REG_R12,
+    "R13",// X64_REG_R13,
+    "R14",// X64_REG_R14,
+    "R15",// X64_REG_R15,
+    "XMM0",// X64_REG_XMM0,
+    "XMM1",// X64_REG_XMM1,
+    "XMM2",// X64_REG_XMM2,
+    "XMM3",// X64_REG_XMM3,
+    "XMM4",// X64_REG_XMM4,
+    "XMM5",// X64_REG_XMM5,
+    "XMM6",// X64_REG_XMM6,
+    "XMM7",// X64_REG_XMM7,
+};
+engone::Logger& operator <<(engone::Logger& l, X64Register r) {
+    l << x64_register_names[r];
+    return l;
 }

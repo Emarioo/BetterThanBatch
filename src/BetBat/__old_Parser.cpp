@@ -2,7 +2,7 @@
 #include "BetBat/Compiler.h"
 
 // #undef WARN_HEAD3
-// #define WARN_HEAD3(T, M) info.compileInfo->compileOptions->compileStats.warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
+// #define WARN_HEAD3(T, M) info.compileInfo->options->compileStats.warnings++;engone::log::out << WARN_CUSTOM(info.tokens->streamName,T.line,T.column,"Parse warning","W0000") << M
 
 // #undef WARN_LINE2
 // #define WARN_LINE2(I, M) PrintCode(I, info.tokens, M)
@@ -4139,7 +4139,7 @@ ASTScope* ParseTokenStream(TokenStream* tokens, AST* ast, CompileInfo* compileIn
     // SignalDefault result = ParseBody(info, body, ast->globalScopeId, PARSE_TRULY_GLOBAL);
     info.functionScopes.pop();
     
-    info.compileInfo->compileOptions->compileStats.errors += info.errors;
+    info.compileInfo->options->compileStats.errors += info.errors;
     
     return body;
 }

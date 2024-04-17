@@ -2592,8 +2592,8 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
             info.advance();
             
             statement = info.ast->createStatement(ASTStatement::RETURN);
-            token = info.getinfo();
             if((token->flags & lexer::TOKEN_FLAG_NEWLINE) == 0) {
+                token = info.getinfo();
                 WHILE_TRUE {
                     ASTExpression* expr=0;
                     auto tok = info.gettok();
@@ -2933,9 +2933,9 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 function->setHidden(true);
             } else if (view_fn_name == "dllimport"){
                 // TODO: dllimport should probably be limited to Windows only.
-                if(info.compiler->compileOptions->target == TARGET_WINDOWS_x64) {
+                if(info.compiler->options->target == TARGET_WINDOWS_x64) {
                     function->callConvention = CallConventions::STDCALL;
-                } else if(info.compiler->compileOptions->target == TARGET_UNIX_x64) {
+                } else if(info.compiler->options->target == TARGET_UNIX_x64) {
                     function->callConvention = CallConventions::UNIXCALL;
                 } else {
                     #ifdef OS_WINDOWS
@@ -2949,9 +2949,9 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 needsExplicitCallConvention = true;
                 // linkToken = name;
             } else if (view_fn_name == "varimport"){
-                if(info.compiler->compileOptions->target == TARGET_WINDOWS_x64) {
+                if(info.compiler->options->target == TARGET_WINDOWS_x64) {
                     function->callConvention = CallConventions::STDCALL;
-                } else if(info.compiler->compileOptions->target == TARGET_UNIX_x64) {
+                } else if(info.compiler->options->target == TARGET_UNIX_x64) {
                     function->callConvention = CallConventions::UNIXCALL;
                 } else {
                     #ifdef OS_WINDOWS
@@ -2965,9 +2965,9 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 needsExplicitCallConvention = true;
                 // linkToken = name;
             } else if (view_fn_name == "import"){
-                if(info.compiler->compileOptions->target == TARGET_WINDOWS_x64) {
+                if(info.compiler->options->target == TARGET_WINDOWS_x64) {
                     function->callConvention = CallConventions::STDCALL;
-                } else if(info.compiler->compileOptions->target == TARGET_UNIX_x64) {
+                } else if(info.compiler->options->target == TARGET_UNIX_x64) {
                     function->callConvention = CallConventions::UNIXCALL;
                 } else {
                     #ifdef OS_WINDOWS
@@ -4106,7 +4106,7 @@ ASTScope* ParseImport(u32 import_id, Compiler* compiler){
     
     info.functionScopes.pop();
     
-    info.compiler->compileOptions->compileStats.errors += info.errors;
+    info.compiler->options->compileStats.errors += info.errors;
     
     return body;
 }

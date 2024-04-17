@@ -86,7 +86,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         u32 from_real_offset = tinyprog_offsets[rel.from_tinyprog_index] + rel.textOffset;
         u32 to_real_offset = tinyprog_offsets[rel.to_tinyprog_index];
         
-        text_stream->write_at<u32>(from_real_offset, to_real_offset);
+        text_stream->write_at<u32>(from_real_offset, to_real_offset - from_real_offset - 4);
     }
 
     for(int i=0;i<program->exportedSymbols.size();i++) {

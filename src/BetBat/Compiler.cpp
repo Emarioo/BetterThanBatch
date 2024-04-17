@@ -906,13 +906,15 @@ void Compiler::processImports() {
                     // TODO: Handle named import. We can't just add it like this. nameScopeMap won't work either because it's
                     //   not seen as a dependency I think.
                 }
-
+                int prev_errors = options->compileStats.errors;
                 TypeCheckEnums(ast, my_scope->astScope, this);
-
-                imp->state = (TaskType)(imp->state | picked_task.type);
-                picked_task.type = TASK_TYPE_STRUCTS;
-                picked_task.import_id = imp->import_id;
-                tasks.add(picked_task); // nocheckin, lock tasks
+                bool had_errors = options->compileStats.errors > prev_errors;
+                if(!had_errors) {
+                    imp->state = (TaskType)(imp->state | picked_task.type);
+                    picked_task.type = TASK_TYPE_STRUCTS;
+                    picked_task.import_id = imp->import_id;
+                    tasks.add(picked_task); // nocheckin, lock tasks
+                }
             } else if(picked_task.type == TASK_TYPE_STRUCTS) {
                 CompilerImport* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
@@ -941,22 +943,38 @@ void Compiler::processImports() {
                 CompilerImport* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
                 
+                int prev_errors = options->compileStats.errors;
                 TypeCheckFunctions(ast, my_scope->astScope, this);
+                bool had_errors = options->compileStats.errors > prev_errors;
 
-                imp->state = (TaskType)(imp->state | picked_task.type);
-                picked_task.type = TASK_TYPE_BODIES;
-                picked_task.import_id = imp->import_id;
-                tasks.add(picked_task); // nocheckin, lock tasks
+                if(!had_errors) {
+                    imp->state = (TaskType)(imp->state | picked_task.type);
+                    picked_task.type = TASK_TYPE_BODIES;
+                    picked_task.import_id = imp->import_id;
+                    tasks.add(picked_task); // nocheckin, lock tasks
+                }
             } else if(picked_task.type == TASK_TYPE_BODIES) {
                 auto imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
                 
+                int prev_errors = options->compileStats.errors;
                 TypeCheckBodies(ast, my_scope->astScope, this);
+                bool had_errors = options->compileStats.errors > prev_errors;
 
-                imp->state = (TaskType)(imp->state | picked_task.type);
-                picked_task.type = TASK_GEN_BYTECODE;
-                picked_task.import_id = imp->import_id;
-                tasks.add(picked_task); // nocheckin, lock tasks
+                if(had_errors) {
+                    // TODO: This is a temporary fix where we stop if we encounter an error.
+                    //  We do this because TypeCheckBodies will check all scopes even
+                    //  if they don't belong to this task's scope.
+                    //  We need to fix TypeCheckBodies basically.
+                    tasks.cleanup();
+                }
+
+                if(!had_errors) {
+                    imp->state = (TaskType)(imp->state | picked_task.type);
+                    picked_task.type = TASK_GEN_BYTECODE;
+                    picked_task.import_id = imp->import_id;
+                    tasks.add(picked_task); // nocheckin, lock tasks
+                }
             } else if(picked_task.type == TASK_GEN_BYTECODE) {
                 auto imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
@@ -975,26 +993,39 @@ void Compiler::processImports() {
                     lock_miscellaneous.unlock();
                 }
 
+                int prev_errors = options->compileStats.errors;
+
                 DynamicArray<TinyBytecode*> tinycodes{};
                 if(initial_import_id == imp->import_id) {
                     auto yes = GenerateScope(my_scope->astScope, this, imp, &tinycodes, true);
                 } else {
                     auto yes = GenerateScope(my_scope->astScope, this, imp, &tinycodes, false);
                 }
-                
-                
-                switch(compileOptions->target) {
-                    case TARGET_BYTECODE: {
-                        // do nothing
-                    } break;
-                    case TARGET_WINDOWS_x64:
-                    case TARGET_UNIX_x64: {
-                        for(auto t : tinycodes)
-                            GenerateX64(this, t);
-                    } break;
+
+                bool new_errors = false;
+                if(prev_errors < options->compileStats.errors) {
+                    new_errors = true;
                 }
                 
-                imp->state = (TaskType)(imp->state | picked_task.type);
+                if(!new_errors) {
+                    for(auto t : tinycodes) {
+                        log::out << log::GOLD << t->name << "\n";
+                        t->print(0,-1,bytecode);
+                    }
+                    
+                    switch(options->target) {
+                        case TARGET_BYTECODE: {
+                            // do nothing
+                        } break;
+                        case TARGET_WINDOWS_x64:
+                        case TARGET_UNIX_x64: {
+                            for(auto t : tinycodes)
+                                GenerateX64(this, t);
+                        } break;
+                    }
+                    
+                    imp->state = (TaskType)(imp->state | picked_task.type);
+                }
                 // imp->state = TASK_NONE;
             } else {
                 // LOG(CAT_PROCESSING, log::GREEN<<" Finished: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
@@ -1021,23 +1052,82 @@ u32 Thread_process(void* self) {
     ((Compiler*)self)->processImports();
     return 0;
 }
-void Compiler::compileSource(const std::string& path, CompileOptions* options) {
+void Compiler::run(CompileOptions* options) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Gray19);
     auto tp = engone::StartMeasure();
 
+    Assert(!this->options);
+    this->options = options;
+
+    // ################################
+    // What are we trying to generate?
+    // #################################
+    
+    std::string obj_file = "bin/main.o";
+    std::string exe_file = "bin/main.exe";
+    std::string bc_file = "bin/main.bc";
+
+    bool generate_obj_file = false;
+    bool generate_exe_file = false;
+    bool generate_bc_file = false;
+
+    if(options->output_file.size() == 0) {
+        switch(options->target){
+            case TARGET_BYTECODE: {
+                options->output_file = bc_file;
+            } break;
+            case TARGET_WINDOWS_x64:
+            case TARGET_UNIX_x64: {
+                options->output_file = exe_file;
+            } break;
+            default: Assert(false);
+        }
+    }
+
+    int last_dot = options->output_file.find_last_of(".");
+    if(last_dot != -1) {
+        std::string format = options->output_file.substr(last_dot);
+        if(format == ".o" || format == ".obj") {
+            obj_file = options->output_file;
+            generate_obj_file = true;
+        } else if(format == ".exe") {
+            generate_exe_file = true;
+            exe_file = options->output_file;
+        } else if(format == ".bc"){
+            Assert(false);
+            generate_bc_file = true;
+            bc_file = options->output_file;
+        } else {
+            log::out << "You specified '"<<format<<"' as format for the output file but it I the compiler have no idea what to generate.\n";
+            #define PRINT_FORMAT_OPTIONS\
+                log::out << log::RED << "  Specify .o (or .obj) for object file\n";             \
+                log::out << log::RED << "          .exe for executable\n";                      \
+                log::out << log::RED << "          .bc for bytecode\n";                      \
+                log::out << log::RED << "  or no output file for the default "<<exe_file<<"\n"; 
+            PRINT_FORMAT_OPTIONS
+            return;
+        }
+    } else {
+        if(options->target == TARGET_UNIX_x64) {
+            exe_file = options->output_file;
+        } else {
+            log::out << log::RED << "The specified output file '"<<options->output_file<<"' does not have a format. This is assumed to be an executable when targeting Linux but you are not ("<<options->target<<")\n";
+            PRINT_FORMAT_OPTIONS
+            return;
+        }
+    }
+
+
     importDirectories.add(options->modulesDirectory);
     
-    lock_wait_for_imports.init(1,1);
-    signaled = true;
     preprocessor.init(&lexer, this);
     ast = AST::Create();
     bytecode = Bytecode::Create();
     bytecode->debugInformation = DebugInformation::Create(ast);
     reporter.lexer = &lexer;
-    compileOptions = options;
     
-    switch(compileOptions->target) {
+    switch(options->target) {
         case TARGET_BYTECODE: {
             // do nothing
         } break;
@@ -1049,7 +1139,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         default: Assert(false);
     }
 
-    u32 import_id = addImport(path);
+    u32 import_id = addImport(options->source_file);
     Assert(import_id); // nocheckin
 
     initial_import_id = import_id;
@@ -1108,6 +1198,9 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
     DynamicArray<engone::Thread> threads{};
     threads.resize(thread_count-1);
     
+    lock_wait_for_imports.init(1,1);
+    signaled = true;
+
     // Threaded compilation section
     for(int i=0;i<thread_count-1;i++) {
         threads[i].init(Thread_process, this); // Thread_process just calls processImports
@@ -1117,7 +1210,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         threads[i].join();
     }
 
-    switch(compileOptions->target) {
+    switch(options->target) {
         case TARGET_BYTECODE: {
             // do nothing
         } break;
@@ -1128,50 +1221,49 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         default: Assert(false);
     }
     
-    if(compileOptions->compileStats.errors!=0){ 
+    if(options->compileStats.errors!=0){ 
         if(!options->silent)
-            compileOptions->compileStats.printFailed();
+            options->compileStats.printFailed();
         return;
     }
-    if(compileOptions->compileStats.warnings!=0){
+    if(options->compileStats.warnings!=0){
         if(!options->silent)
-            compileOptions->compileStats.printWarnings();
+            options->compileStats.printWarnings();
     }
 
     double time = engone::StopMeasure(tp);
     engone::log::out << "Compiled in "<<FormatTime(time)<<"\n";
 
-    bytecode->print();
-
-    // VirtualMachine interp{};
-    // interp.execute(code, "main");
+    // bytecode->print();
 
     if(!options->useDebugInformation && program)
         program->debugInformation = nullptr;
     
-    switch(compileOptions->target){
+
+    switch(options->target){
         case TARGET_BYTECODE: {
-            // Assert(false);
+            // if(generate_obj_file) {
+            //     log::out << log::RED << "Options specified object file as output but that is not possible when target is bytecode.\n";
+            //     return;
+            // } else {
+
+            // }
         } break;
         case TARGET_WINDOWS_x64: {
-            // TODO: not finished
-            ObjectFile::WriteFile(OBJ_COFF, "test.o", program);
+            ObjectFile::WriteFile(OBJ_COFF, obj_file, program);
         } break;
         case TARGET_UNIX_x64: {
-            Assert(false);
+            ObjectFile::WriteFile(OBJ_ELF, obj_file, program);
         } break;
     }
 
-    if(compileOptions->target != TARGET_BYTECODE) {
-        std::string objPath = "test.o";
-        Path outPath = "test.exe";
-        
+    if(generate_exe_file && options->target != TARGET_BYTECODE) {
         std::string cmd = "";
         bool outputOtherDirectory = false;
         switch(options->linker) {
         case LINKER_MSVC: {
             Assert(options->target == TARGET_WINDOWS_x64);
-            outputOtherDirectory = outPath.text.find("/") != std::string::npos;
+            outputOtherDirectory = exe_file.find("/") != std::string::npos;
             
             // TEMPORARY
             if(options->useDebugInformation) {
@@ -1183,7 +1275,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
             if(options->useDebugInformation)
                 cmd += "/DEBUG ";
             // else cmd += "/DEBUG "; // force debug info for now
-            cmd += objPath + " ";
+            cmd += obj_file + " ";
             #ifndef MINIMAL_DEBUG
             cmd += "bin/NativeLayer.lib ";
             cmd += "uuid.lib ";
@@ -1206,7 +1298,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
                 // MSVC linker cannot output to another directory than the current.
                 cmd += "/OUT:" LINK_TEMP_EXE;
             } else {
-                cmd += "/OUT:" + outPath.text+" ";
+                cmd += "/OUT:" + exe_file+" ";
             }
             break;
         }
@@ -1221,7 +1313,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
             if(options->useDebugInformation)
                 cmd += "-g ";
 
-            cmd += objPath + " ";
+            cmd += obj_file + " ";
             #ifndef MINIMAL_DEBUG
             cmd += "bin/NativeLayer_gcc.lib "; // NOTE: Do we need one for clang too?
             // cmd += "uuid.lib ";
@@ -1235,7 +1327,7 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
                 cmd += dir + " ";
             }
             // if(outputOtherDirectory) {
-            cmd += "-o " + outPath.text;
+            cmd += "-o " + exe_file;
             // } else {
                 // cmd += "/OUT:" + outPath.text+" ";
             // }
@@ -1255,16 +1347,62 @@ void Compiler::compileSource(const std::string& path, CompileOptions* options) {
         }
         options->compileStats.end_linker = StartMeasure();
         if(exitCode != 0) {
-
+            log::out << log::RED << "linker failed\n";
         }    
+    } else {
+        // TODO: If bytecode is the target and the user specified
+        //   app.bc as outputfile should we write out a bytecode file format?
     }
     
-    if(compileOptions->executeOutput) {
-        Assert(false);
-    }
-    // auto prog = X64Program::ConvertFromBytecode(code);
+    if(options->executeOutput) {
+        switch(options->target) {
+            case TARGET_WINDOWS_x64: {
+                #ifdef OS_WINDOWS
+                int exitCode;
+                engone::StartProgram("test.exe",PROGRAM_WAIT, &exitCode);
+                log::out << log::LIME <<"Exit code: " << exitCode << "\n";
 
-    if(compileOptions->compileStats.errors==0) {
+                // Some user friendly information about crashes
+                    // from winnt.h
+                #define _STATUS_ACCESS_VIOLATION         0xC0000005
+                #define _STATUS_ILLEGAL_INSTRUCTION      0xC000001D
+                #define _STATUS_FLOAT_DIVIDE_BY_ZERO     0xC000008E
+                #define _STATUS_INTEGER_DIVIDE_BY_ZERO   0xC0000094
+                #define _STATUS_STACK_OVERFLOW           0xC00000FD
+                #define _STATUS_DLL_NOT_FOUND            0xC0000135
+                switch(exitCode) {
+                break; case _STATUS_ACCESS_VIOLATION:       log::out << log::RED << " Access violation\n";                  
+                break; case _STATUS_ILLEGAL_INSTRUCTION:    log::out << log::RED << " Illegal instruction\n";               
+                break; case _STATUS_FLOAT_DIVIDE_BY_ZERO:   log::out << log::RED << " Division by zero (float)\n";          
+                break; case _STATUS_INTEGER_DIVIDE_BY_ZERO: log::out << log::RED << " Division by zero (integer)\n";        
+                break; case _STATUS_STACK_OVERFLOW:         log::out << log::RED << " Stack overflow\n";        
+                break; case _STATUS_DLL_NOT_FOUND:          log::out << log::RED << " Missing DLL\n";                       
+                break; default: break;
+                }
+                #else
+                log::out << log::RED << "You cannot run a Windows program on Linux. Consider changing target when compiling (--target unix-x64)\n";
+                #endif
+            } break;
+            case TARGET_UNIX_x64: {
+                #ifdef OS_UNIX
+                int exitCode;
+                engone::StartProgram("test.exe",PROGRAM_WAIT, &exitCode);
+                log::out << log::LIME <<"Exit code: " << exitCode << "\n";
+                #else
+                log::out << log::RED << "You cannot run a Unix program on Windows. Consider changing target when compiling (--target win-x64)\n";
+                #endif
+            } break;
+            case TARGET_BYTECODE: {
+                VirtualMachine vm{};
+                vm.execute(bytecode, "main");
+            } break;
+            default: Assert(false);
+        }
+    } else {
+        log::out << log::BLACK << "not executing program\n";
+    }
+
+    if(options->compileStats.errors==0) {
         options->compileStats.printSuccess(options);
     }
 }
@@ -1362,7 +1500,7 @@ void Compiler::addLibrary(u32 import_id, const std::string& path, const std::str
         if(lib.named_as == as_name) {
             found = true;
             // TODO: Improve error message
-            compileOptions->compileStats.errors++;
+            options->compileStats.errors++;
             log::out << log::RED << "Multiple libraries cannot be named the same ("<<as_name<<").\n";
             log::out << log::RED << " \""<<BriefString(path)<<"\" collides with \""<<lib.path<<"\"\n";
             break;

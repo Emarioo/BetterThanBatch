@@ -88,7 +88,7 @@ struct CompileInfo {
     void addStats(i32 errors, i32 warnings);
     void addStats(i32 lines, i32 blankLines, i32 commentCount, i32 readBytes);
 
-    CompileOptions* compileOptions = nullptr;
+    CompileOptions* options = nullptr;
     
     Reporter reporter{};
 

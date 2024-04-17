@@ -129,15 +129,17 @@ struct CompileOptions {
         compileStats.errorTypes.cleanup();
     }
 
-    std::string source_file{};
-    std::string output_file{};
+    std::string source_file;
+    std::string output_file = "main.exe"; // Should .exe be default on Unix too?
     TargetPlatform target = CONFIG_DEFAULT_TARGET;
     LinkerChoice linker = CONFIG_DEFAULT_LINKER;
-    std::string linker_cmd = "";
+    // std::string linker_cmd = "";
 
     bool useDebugInformation = false;
     bool silent=false;
     bool verbose=false;
+    bool executeOutput = false;
+
     bool instant_report = true;
     bool devmode = false;
     bool only_preprocess = false;
@@ -147,7 +149,6 @@ struct CompileOptions {
 
     std::string modulesDirectory{"./modules/"}; // Where the standard library can be found. Typically "modules"
 
-    bool executeOutput = false;
     DynamicArray<std::string> userArguments; // Ignored if output isn't executed. Arguments to pass to the interpreter or executable
 
     TextBuffer initialSourceBuffer;
@@ -221,7 +222,7 @@ struct Compiler {
     
     Reporter reporter{};
 
-    CompileOptions* compileOptions;
+    CompileOptions* options = nullptr;
 
     u32 initial_import_id = 0;
 
@@ -240,7 +241,8 @@ struct Compiler {
     // processing faster.
     void processImports();
     
-    void compileSource(const std::string& path, CompileOptions* options);
+    // does stuff based on options (compiling, executing...)
+    void run(CompileOptions* options);
     
     // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
     u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "");

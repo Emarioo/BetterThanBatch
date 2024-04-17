@@ -102,10 +102,10 @@ struct GenContext : public PhaseContext {
     int dataOffset_members = -1;
     int dataOffset_strings = -1;
 
-    static const int FRAME_SIZE=16; // pc, fp
+    // static const int FRAME_SIZE=16; // pc, fp
     // what the relative stack pointer should be right after a funtion call.
     // frame pointer should be pushed afterwards which will result in -16 as virtualStackPointer
-    static const int VIRTUAL_STACK_START = 0;
+    // static const int VIRTUAL_STACK_START = 0;
 
     // Extra details
     // FuncImpl* recentFuncImpl=nullptr; // used by fncall

@@ -63,9 +63,10 @@ enum InstructionType : u8 {
     // BC_REG_LOCALS, // local pointer (similar to base/frame pointer)
 
     BC_SET_ARG,   // opcode, op, disp
-    BC_GET_VAL,   // pointer, op, disp
-    BC_GET_PARAM, // pointer, op, disp
-    BC_SET_RET,   // pointer, op, disp
+    BC_GET_PARAM, // opcode, op, disp
+    BC_GET_VAL,   // opcode, op, disp
+    BC_SET_RET,   // opcode, op, disp
+    BC_GET_LOCAL,
 
     BC_JMP,
     BC_CALL,
@@ -203,6 +204,7 @@ struct Bytecode;
 struct TinyBytecode {
     std::string name;
     QuickArray<u8> instructionSegment{};
+    CallConventions call_convention = CallConventions::BETCALL;
     int index = 0;
     // debug information
     QuickArray<u32> index_of_lines{};
@@ -216,15 +218,15 @@ struct TinyBytecode {
     struct Relocation{
         i32 pc=0; // index of the 32-bit integer to relocate
         FuncImpl* funcImpl = nullptr;
-        std::string func_name;
+        // std::string func_name;
     };
     DynamicArray<Relocation> call_relocations;
     bool applyRelocations(Bytecode* code);
-    void addRelocation(int pc, const std::string& name) {
-        call_relocations.add({});
-        call_relocations.last().pc = pc;
-        call_relocations.last().func_name = name;
-    }
+    // void addRelocation(int pc, const std::string& name) {
+    //     call_relocations.add({});
+    //     call_relocations.last().pc = pc;
+    //     call_relocations.last().func_name = name;
+    // }
     void addRelocation(int pc, FuncImpl* impl) {
         call_relocations.add({});
         call_relocations.last().pc = pc;
@@ -241,8 +243,9 @@ struct Bytecode {
     static void Destroy(Bytecode*);
     void cleanup();
     
-    TinyBytecode* createTiny() {
+    TinyBytecode* createTiny(CallConventions convention) {
         auto ptr = new TinyBytecode();
+        ptr->call_convention = convention;
         tinyBytecodes.add(ptr);
         ptr->index = tinyBytecodes.size()-1;
         return ptr;
@@ -251,7 +254,7 @@ struct Bytecode {
     u32 getMemoryUsage();
     
     DynamicArray<TinyBytecode*> tinyBytecodes;
-    int index_of_main = 0;
+    int index_of_main = -1;
 
     QuickArray<u8> dataSegment{};
     engone::Mutex lock_global_data;
@@ -406,6 +409,8 @@ struct BytecodeBuilder {
     void emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float);
     void emit_get_val(BCRegister reg, i16 imm, int size, bool is_float); // get return value
     
+    void emit_get_local(BCRegister reg, int imm16);
+
     void emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm = 0);
     void emit_ret();
     

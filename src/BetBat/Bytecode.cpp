@@ -424,6 +424,12 @@ void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index
     *index_of_relocation = tinycode->instructionSegment.used;
     emit_imm32(imm);
 }
+void BytecodeBuilder::emit_get_local(BCRegister reg, int imm16) {
+    emit_opcode(BC_GET_LOCAL);
+    emit_operand(reg);
+    Assert(imm16 >= -0x8000 && imm16 <= 0x7FFF); // imm16 is int and not i16 so that we catch mistakes
+    emit_imm16(imm16);
+}
 void BytecodeBuilder::emit_ret() {
     emit_opcode(BC_RET);
 }
@@ -808,21 +814,23 @@ bool TinyBytecode::applyRelocations(Bytecode* code) {
     bool suc = true;
     for(int i=0;i<call_relocations.size();i++) {
         auto& rel = call_relocations[i];
-        if(rel.funcImpl && rel.funcImpl->tinycode_id) {
-            *(i32*)&instructionSegment[rel.pc] = rel.funcImpl->tinycode_id;
-        } else if(rel.func_name.size()) {
-            bool found = false;
-            for(int j=0;j<code->tinyBytecodes.size();j++){
-                if(rel.func_name == code->tinyBytecodes[j]->name) {
-                    *(i32*)&instructionSegment[rel.pc] = j + 1;
-                    found = true;
-                    break;
-                }
-            }
-            if(!found) suc = false;
-        } else {
-            suc = false;
-        }
+        Assert(rel.funcImpl && rel.funcImpl->tinycode_id);
+        *(i32*)&instructionSegment[rel.pc] = rel.funcImpl->tinycode_id;
+
+        // if(rel.funcImpl && rel.funcImpl->tinycode_id) {
+        // } else if(rel.func_name.size()) {
+        //     bool found = false;
+        //     for(int j=0;j<code->tinyBytecodes.size();j++){
+        //         if(rel.func_name == code->tinyBytecodes[j]->name) {
+        //             *(i32*)&instructionSegment[rel.pc] = j + 1;
+        //             found = true;
+        //             break;
+        //         }
+        //     }
+        //     if(!found) suc = false;
+        // } else {
+        //     suc = false;
+        // }
     }
     return suc;
 }
@@ -860,6 +868,7 @@ extern const char* instruction_names[] {
     "get_param", // 
     "get_val", // 
     "set_ret", // 
+    "get_local",
     "jmp", // BC_JMP
     "call", // BC_CALL
     "ret", // BC_RET
@@ -935,7 +944,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
     using namespace engone;
     if(high_index == -1 || high_index > instructionSegment.size())
         high_index = instructionSegment.size();
-      
+    
     int pc=low_index;
     while(pc<high_index) {
         int prev_pc = pc;
@@ -1018,6 +1027,12 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             else if(size == CONTROL_32B) log::out << ", dword";
             else if(size == CONTROL_64B) log::out << ", qword";
         } break;
+        case BC_GET_LOCAL: {
+            op0 = (BCRegister)instructionSegment[pc++];
+            imm = *(i16*)&instructionSegment[pc];
+            pc+=2;
+            log::out << " " << register_names[op0] << ", " << log::GREEN <<  imm;
+        } break;
         case BC_PUSH:
         case BC_POP: {
             op0 = (BCRegister)instructionSegment[pc++];
@@ -1054,7 +1069,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             log::out << " " << register_names[op0] << ", " << log::GREEN << imm;
         } break;
         case BC_ALLOC_LOCAL: {
-            op0 = (BCRegister)instructionSegment[pc];
+            op0 = (BCRegister)instructionSegment[pc++];
             imm = *(u16*)&instructionSegment[pc];
             pc+=2;
             if(op0 == BC_REG_INVALID)

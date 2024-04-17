@@ -56,14 +56,17 @@ int main(int argc, const char** argv){
         // opts.file_count = 20;
         // GenerateFuzzedFiles(opts,"main.btb");
 
-        options.target = TARGET_BYTECODE;
-        // options.target = TARGET_WINDOWS_x64;
+        // options.target = TARGET_BYTECODE;
+        options.output_file = "test.exe";
+        options.source_file = "examples/dev.btb";
+        options.target = TARGET_WINDOWS_x64;
+        options.executeOutput = true;
         // options.useDebugInformation = true;
         Compiler compiler{};
-        compiler.compileSource("examples/dev.btb", &options);
+        compiler.run(&options);
 
-        VirtualMachine vm{};
-        vm.execute(compiler.bytecode,"main");
+        // VirtualMachine vm{};
+        // vm.execute(compiler.bytecode,"main");
 
         // DynamicArray<std::string> tests;
         // tests.add("tests/simple/operations.btb");
@@ -93,7 +96,7 @@ int main(int argc, const char** argv){
         #else
         // if(options.target == TARGET_BYTECODE){
         //     options.executeOutput = true;
-        //     // CompileAll(&compileOptions);
+        //     // CompileAll(&options);
         // } else {
         //     #define EXE_FILE "dev.exe"
             
@@ -105,9 +108,9 @@ int main(int argc, const char** argv){
         //     options.useDebugInformation = true;
         //     options.executeOutput = true;
         //     options.output_file = EXE_FILE;
-        //     // CompileAll(&compileOptions);
+        //     // CompileAll(&options);
         // }
-        // compilerExitCode = compileOptions.compileStats.errors;
+        // compilerExitCode = options.compileStats.errors;
         #endif
 
         return EXIT_CODE_SUCCESS;
@@ -117,10 +120,10 @@ int main(int argc, const char** argv){
         Assert(options.source_file.size() != 0);
         Assert(("Solely running preprocessor is incomplete",false));
         #ifdef gone
-        auto stream = TokenStream::Tokenize(compileOptions.sourceFile.text);
+        auto stream = TokenStream::Tokenize(options.sourceFile.text);
         
         if(!stream) {
-            log::out << log::RED << "Cannot read file '"<< compileOptions.sourceFile.text<<"'\n";
+            log::out << log::RED << "Cannot read file '"<< options.sourceFile.text<<"'\n";
         } else {
             // TODO: Don't skip imports.
             if(stream->importList.size() > 0) {
@@ -134,19 +137,19 @@ int main(int argc, const char** argv){
             }
             Assert(false);
             // CompileInfo compileInfo{};
-            // compileInfo.compileOptions = &compileOptions;
+            // compileInfo.options = &options;
             // auto stream2 = Preprocess(&compileInfo, stream);
             // Assert(stream2);
-            // if(compileOptions.outputFile.text.size() == 0) {
-            //     log::out << log::AQUA << "## "<<compileOptions.sourceFile.text<<" ##\n";
+            // if(options.outputFile.text.size() == 0) {
+            //     log::out << log::AQUA << "## "<<options.sourceFile.text<<" ##\n";
             //     stream2->print();
             //     // TODO: Output to a default file like preproc.btb
             //     // log::out << log::RED << "You must specify an output file (use -out) when using -preproc.\n";
-            //     compilerExitCode = compileOptions.compileStats.errors;
+            //     compilerExitCode = options.compileStats.errors;
             // } else{
-            //     log::out << "Preprocessor output written to '"<<compileOptions.outputFile.text<<"'\n";
-            //     stream2->writeToFile(compileOptions.outputFile.text);
-            //     compilerExitCode = compileOptions.compileStats.errors;
+            //     log::out << "Preprocessor output written to '"<<options.outputFile.text<<"'\n";
+            //     stream2->writeToFile(options.outputFile.text);
+            //     compilerExitCode = options.compileStats.errors;
             // }
             // TokenStream::Destroy(stream);
             // TokenStream::Destroy(stream2);
@@ -178,7 +181,7 @@ int main(int argc, const char** argv){
     }
 
     Compiler compiler{};
-    compiler.compileSource(options.source_file, &options);
+    compiler.run(&options);
 
     if(options.executeOutput) {
         switch(options.target) {
@@ -331,7 +334,7 @@ bool InterpretCommands(const DynamicArray<std::string>& commands, CompileOptions
         //     i++;
         //     if(i<argc){
         //         arg = argv[i];
-        //         compileOptions.linker_cmd = arg;
+        //         options.linker_cmd = arg;
         //     } else {
         //         invalidArguments = true;
         //         log::out << log::RED << "You must specify a command line linker after '"<<arg<<"'.\n";

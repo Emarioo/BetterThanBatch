@@ -6,7 +6,26 @@
 
 // prints("Hey")
 
-#import "examples/foreign/main.btb"
+// fn @stdcall yoo(a: i32, b: i32) -> i64 {
+
+fn n() -> i32 {
+    return 923
+}
+
+fn @stdcall yoo(a: i32, b: i32) -> i32 {
+    return a + b*2 + n()
+    // return 1
+}
+
+fn main() -> i32 {
+    // arr: i32[256];
+    // a,c,d,e,f,g,h: i64;
+    // main();
+    a := yoo(9, 2)
+    return a;
+}
+
+// #import "examples/foreign/main.btb"
 
 // fn ret() -> char { return 'F' }
 
