@@ -261,13 +261,15 @@ struct X64Builder {
     void emit_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
     void emit_push(X64Register reg);
     void emit_pop(X64Register reg);
+    // REXW prefixed
     void emit_add_imm32(X64Register reg, i32 imm32);
+    // REXW prefixed
     void emit_sub_imm32(X64Register reg, i32 imm32);
 
 
     void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
 
-    void generateInstructions_slow();
+    // void generateInstructions_slow();
 
     int get_node_depth(OPNode* n) {
         if(!n) return 0;
@@ -285,7 +287,7 @@ struct X64Builder {
     
 private:
     // recursively
-    void generateInstructions(int depth = 0, BCRegister find_reg = BC_REG_INVALID, int inst_index = 0, X64Register* out_reg = nullptr);
+    // void generateInstructions(int depth = 0, BCRegister find_reg = BC_REG_INVALID, int inst_index = 0, X64Register* out_reg = nullptr);
     
     struct Operand {
         X64Register reg{};

@@ -360,12 +360,14 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         case BC_ALLOC_LOCAL: {
             Assert(push_offset == 0); // Ensure that no push instructions executed before
+            op0 = (BCRegister)instructions[pc++];
             imm = *(i16*)(instructions.data() + pc);
             pc += 2;
             registers[BC_REG_LOCALS] = base_pointer;
             stack_pointer -= imm;
-
-            registers[BC_REG_ARGS] = stack_pointer;
+            
+            if(op0 != BC_REG_INVALID)
+                registers[op0] = stack_pointer;
 
             has_return_values_on_stack = false; // alloc_local overwrites return values
             ret_offset = 0;
@@ -405,26 +407,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             } else {
                 imm = 0;
             }
-            void* ptr = nullptr;
-            if(mop == BC_REG_PARAMS) {
-                int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
-                ptr = (void*)(base_pointer + FRAME_SIZE + imm);
-            } else if(mop == BC_REG_VALS) {
-                Assert(has_return_values_on_stack);
-                Assert(imm < 0);
-                int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
-                // NOTE: push_offset makes sure push and pop instructions doesn't mess with vals/args registers/references
-                ptr = (void*)(stack_pointer + ret_offset + push_offset + imm - FRAME_SIZE);
-            } else if(mop == BC_REG_ARGS) {
-                ptr = (void*)(stack_pointer + push_offset + imm);
-            } else if(mop == BC_REG_RETS) {
-                Assert(imm < 0);
-                // int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
-                ptr = (void*)(base_pointer + imm);
-            } else {
-                ptr = (void*)(registers[mop] + imm);
-            }
+            void* ptr = ptr = (void*)(registers[mop] + imm);
             ptr_from_mov = ptr;
+            
             int size = GET_CONTROL_SIZE(control);
             if(opcode == BC_MOV_MR || opcode == BC_MOV_MR_DISP16) {
                 if(size == CONTROL_8B)       *(i8*) ptr = registers[op1];
@@ -437,6 +422,70 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 else if(size == CONTROL_32B) registers[op0] = *(i32*)ptr;
                 else if(size == CONTROL_64B) registers[op0] = *(i64*)ptr;
             }
+        } break;
+        case BC_SET_ARG: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            control = (InstructionControl)instructions[pc++];
+            int size = GET_CONTROL_SIZE(control);
+
+            void* ptr = (void*)(stack_pointer + push_offset + imm);
+
+            if(size == CONTROL_8B)       *(i8*) ptr = registers[op0];
+            else if(size == CONTROL_16B) *(i16*)ptr = registers[op0];
+            else if(size == CONTROL_32B) *(i32*)ptr = registers[op0];
+            else if(size == CONTROL_64B) *(i64*)ptr = registers[op0];
+        } break;
+        case BC_GET_PARAM: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            control = (InstructionControl)instructions[pc++];
+            int size = GET_CONTROL_SIZE(control);
+            
+            int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
+            void* ptr = (void*)(base_pointer + FRAME_SIZE + imm);
+
+            if(size == CONTROL_8B)       registers[op0] = *(i8*) ptr;
+            else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
+            else if(size == CONTROL_32B) registers[op0] = *(i32*)ptr;
+            else if(size == CONTROL_64B) registers[op0] = *(i64*)ptr;
+        } break;
+         case BC_SET_RET: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            control = (InstructionControl)instructions[pc++];
+            int size = GET_CONTROL_SIZE(control);
+            
+            Assert(imm < 0);
+            // int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
+            void* ptr = (void*)(base_pointer + imm);
+            
+            if(size == CONTROL_8B)       *(i8*) ptr = registers[op0];
+            else if(size == CONTROL_16B) *(i16*)ptr = registers[op0];
+            else if(size == CONTROL_32B) *(i32*)ptr = registers[op0];
+            else if(size == CONTROL_64B) *(i64*)ptr = registers[op0];
+
+        } break;
+        case BC_GET_VAL: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            control = (InstructionControl)instructions[pc++];
+            int size = GET_CONTROL_SIZE(control);
+            
+            Assert(has_return_values_on_stack);
+            Assert(imm < 0);
+            int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
+            // NOTE: push_offset makes sure push and pop instructions doesn't mess with vals/args registers/references
+            void* ptr = (void*)(stack_pointer + ret_offset + push_offset + imm - FRAME_SIZE);
+
+            if(size == CONTROL_8B)       registers[op0] = *(i8*) ptr;
+            else if(size == CONTROL_16B) registers[op0] = *(i16*)ptr;
+            else if(size == CONTROL_32B) registers[op0] = *(i32*)ptr;
+            else if(size == CONTROL_64B) registers[op0] = *(i64*)ptr;
         } break;
         case BC_PUSH: {
             op0 = (BCRegister)instructions[pc++];

@@ -314,6 +314,8 @@ void GenerateX64_finalize(Compiler* compiler) {
         // tmp.textOffset = addressTranslation[sym.location];
         // prog->exportedSymbols.add(tmp);
     }
+
+    Assert(compiler->bytecode->externalRelocations.size() == 0);
 }
 
 void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
@@ -340,6 +342,7 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
     builder.tinyprog = compiler->program->createProgram();
     builder.current_tinyprog_index = tinycode->index;
 
+
     builder.generateFromTinycode(builder.bytecode, builder.tinycode);
     // bool fast = true;
     // if(fast) {
@@ -351,32 +354,19 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
 
 void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode) {
     using namespace engone;
-    bool logging = false;
-    // instruction_indices.clear();
-    
     this->bytecode = bytecode;
     this->tinycode = tinycode;
-    
-    generateInstructions();
-}
+    // instruction_indices.clear();
 
-
-void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin_inst_index, X64Register* out_reg) {
-    using namespace engone;
     auto& instructions = tinycode->instructionSegment;
     bool logging = false;
-    bool gen_forward = depth == 0;
     
-    if(logging && gen_forward)
-        log::out << log::GOLD << "Code gen\n";
-    
-    // log::out << "GEN depth: "<<depth << " " << find_reg << "\n"; 
+    // log::out << log::GOLD << "Code gen\n";
     
     bool find_push = false;
     int push_level = 0;
     bool complete = false;
     i64 pc = 0;
-    int next_inst_index = origin_inst_index;
     while(!complete) {
         if(!(pc < instructions.size()))
             break;
@@ -384,19 +374,13 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
         // i64 inst_index = next_inst_index;
         
         InstructionType opcode{};
-        // if(gen_forward) {
-            opcode = (InstructionType)instructions[pc];
-            pc++;
-        //     instruction_indices.add(prev_pc);
-        // } else {
-        //     opcode = (InstructionType)instructions[instruction_indices[inst_index]];
-        //     next_inst_index--;
-        // }
-        
         BCRegister op0=BC_REG_INVALID, op1=BC_REG_INVALID, op2=BC_REG_INVALID;
         InstructionControl control;
         InstructionCast cast;
         i64 imm;
+
+        opcode = (InstructionType)instructions[pc];
+        pc++;
         
         // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
         if(logging) {
@@ -505,6 +489,60 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
                 node->in0 = reg_values[op0];
             }
             node->in1 = reg_values[op1];
+            
+            nodes.add(node);
+        } break;
+        case BC_ALLOC_LOCAL: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            
+            auto node = createNode(prev_pc, opcode);
+            node->op0 = op0;
+            node->imm = imm;
+
+            reg_values[op0] = node;
+            
+            nodes.add(node);
+        } break;
+        case BC_FREE_LOCAL: {
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            
+            auto node = createNode(prev_pc, opcode);
+            node->imm = imm;
+            
+            nodes.add(node);
+        } break;
+        case BC_SET_ARG:
+        case BC_SET_RET: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            control = (InstructionControl)instructions[pc++];
+            
+            auto node = createNode(prev_pc, opcode);
+            node->op0 = op0;
+            node->imm = imm;
+            node->control = control;
+
+            node->in0 = reg_values[op0];
+            
+            nodes.add(node);
+        } break;
+        case BC_GET_PARAM:
+        case BC_GET_VAL: {
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
+            pc+=2;
+            control = (InstructionControl)instructions[pc++];
+            
+            auto node = createNode(prev_pc, opcode);
+            node->op0 = op0;
+            node->imm = imm;
+            node->control = control;
+
+            reg_values[op0] = node;
             
             nodes.add(node);
         } break;
@@ -1748,6 +1786,12 @@ void X64Builder::generateInstructions(int depth, BCRegister find_reg, int origin
 
                 if(!env->reg1.on_stack && !IsNativeRegister(env->reg1.reg))
                     free_register(env->reg1.reg);
+            } break;
+            case BC_ALLOC_LOCAL: {
+                emit_sub_imm32(X64_REG_SP, (i32)-n->imm);
+            } break;
+            case BC_FREE_LOCAL: {
+                emit_add_imm32(X64_REG_SP, (i32)n->imm);
             } break;
             case BC_INCR: {
                 env->reg0.reg = ToNativeRegister(n->op0);

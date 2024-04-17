@@ -343,9 +343,10 @@ void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm, bool no_modification) {
     // if(reg == BC_REG_SP && !no_modification)
     //     virtualStackPointer += imm;
 }
-void BytecodeBuilder::emit_alloc_local(u16 size) {
+void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
     Assert(size > 0);
     emit_opcode(BC_ALLOC_LOCAL);
+    emit_operand(reg);
     emit_imm16(size);
 }
 void BytecodeBuilder::emit_free_local(u16 size) {
@@ -354,6 +355,67 @@ void BytecodeBuilder::emit_free_local(u16 size) {
     Assert(size > 0);
     emit_opcode(BC_FREE_LOCAL);
     emit_imm16(size);
+}
+
+void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float) {
+    emit_opcode(BC_SET_ARG);
+    emit_operand(reg);
+    emit_imm16(imm);
+    
+    InstructionControl control=CONTROL_NONE;
+    if(is_float)
+        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    if(size == 1)      control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    else Assert(false);
+    emit_control(control);
+}
+void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_float){
+    emit_opcode(BC_GET_PARAM);
+    emit_operand(reg);
+    emit_imm16(imm);
+    
+    InstructionControl control=CONTROL_NONE;
+    if(is_float)
+        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    if(size == 1)      control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    else Assert(false);
+    emit_control(control);
+}
+void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float){
+    emit_opcode(BC_SET_RET);
+    emit_operand(reg);
+    emit_imm16(imm);
+    
+    InstructionControl control=CONTROL_NONE;
+    if(is_float)
+        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    if(size == 1)      control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    else Assert(false);
+    emit_control(control);
+}
+void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_float){
+    emit_opcode(BC_GET_VAL);
+    emit_operand(reg);
+    emit_imm16(imm);
+    
+    InstructionControl control=CONTROL_NONE;
+    if(is_float)
+        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    if(size == 1)      control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    else Assert(false);
+    emit_control(control);
 }
 void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm) {
     emit_opcode(BC_CALL);
@@ -794,6 +856,10 @@ extern const char* instruction_names[] {
     "incr", // BC_INCR
     "alloc_local", // BC_ALLOC_LOCAL
     "free_local", // BC_FREE_LOCAL
+    "set_arg", // 
+    "get_param", // 
+    "get_val", // 
+    "set_ret", // 
     "jmp", // BC_JMP
     "call", // BC_CALL
     "ret", // BC_RET
@@ -844,25 +910,25 @@ extern const char* register_names[] {
     "t0", // BC_REG_T0
     "t1", // BC_REG_T1
     "locals",
-    "args",
-    "vals",
-    "params",
-    "rets",
+    // "args",
+    // "vals",
+    // "params",
+    // "rets",
 
     // "sp", // BC_REG_SP
     // "bp", // BC_REG_BP
-    "rax", // BC_REG_RAX
-    "rbx", // BC_REG_RBX
-    "rcx", // BC_REG_RCX
-    "rdx", // BC_REG_RDX
-    "rsi", // BC_REG_RSI
-    "rdi", // BC_REG_RDI
-    "r8", // BC_REG_R8
-    "r9", // BC_REG_R9
-    "xmm0", // BC_REG_XMM0
-    "xmm1", // BC_REG_XMM1
-    "xmm2", // BC_REG_XMM2
-    "xmm3", // BC_REG_XMM3
+    // "rax", // BC_REG_RAX
+    // "rbx", // BC_REG_RBX
+    // "rcx", // BC_REG_RCX
+    // "rdx", // BC_REG_RDX
+    // "rsi", // BC_REG_RSI
+    // "rdi", // BC_REG_RDI
+    // "r8", // BC_REG_R8
+    // "r9", // BC_REG_R9
+    // "xmm0", // BC_REG_XMM0
+    // "xmm1", // BC_REG_XMM1
+    // "xmm2", // BC_REG_XMM2
+    // "xmm3", // BC_REG_XMM3
 };
 
 void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicArray<std::string>* dll_functions, bool force_newline) {
@@ -922,6 +988,36 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             else if(size == CONTROL_32B) log::out << ", dword";
             else if(size == CONTROL_64B) log::out << ", qword";
         } break;
+        case BC_SET_ARG:
+        case BC_GET_PARAM:
+        case BC_GET_VAL:
+        case BC_SET_RET: {
+            op0 = (BCRegister)instructionSegment[pc++];
+            imm = *(i16*)&instructionSegment[pc];
+            pc+=2;
+            control = (InstructionControl)instructionSegment[pc++];
+            
+            // switch(opcode) {
+            //     case BC_GET_VAL:   log::out << " " << register_names[op0] << ", [val"; if(imm >= 0) log::out << "+"; log::out << imm << "]"; break;
+            //     case BC_GET_PARAM: log::out << " " << register_names[op0] << ", [param"; if(imm >= 0) log::out << "+"; log::out << imm << "]"; break;
+            //     case BC_SET_ARG:   log::out << " [arg"; if(imm >= 0) log::out << "+"; log::out << imm << "], " << register_names[op0]; break;
+            //     case BC_SET_RET:   log::out << " [ret"; if(imm >= 0) log::out << "+"; log::out << imm << "], " << register_names[op0]; break;
+            //     default: Assert(false);
+            // }
+            switch(opcode) {
+                case BC_GET_VAL:   log::out << " " << register_names[op0] << ", ["; if(imm > 0) log::out << "+"; log::out << imm << "]"; break;
+                case BC_GET_PARAM: log::out << " " << register_names[op0] << ", ["; if(imm > 0) log::out << "+"; log::out << imm << "]"; break;
+                case BC_SET_ARG:   log::out << " ["; if(imm > 0) log::out << "+"; log::out << imm << "], " << register_names[op0]; break;
+                case BC_SET_RET:   log::out << " ["; if(imm > 0) log::out << "+"; log::out << imm << "], " << register_names[op0]; break;
+                default: Assert(false);
+            }
+            
+            int size = GET_CONTROL_SIZE(control);
+            if(size == CONTROL_8B)       log::out << ", byte";
+            else if(size == CONTROL_16B) log::out << ", word";
+            else if(size == CONTROL_32B) log::out << ", dword";
+            else if(size == CONTROL_64B) log::out << ", qword";
+        } break;
         case BC_PUSH:
         case BC_POP: {
             op0 = (BCRegister)instructionSegment[pc++];
@@ -958,9 +1054,13 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             log::out << " " << register_names[op0] << ", " << log::GREEN << imm;
         } break;
         case BC_ALLOC_LOCAL: {
+            op0 = (BCRegister)instructionSegment[pc];
             imm = *(u16*)&instructionSegment[pc];
             pc+=2;
-            log::out << " " << log::GREEN << imm;
+            if(op0 == BC_REG_INVALID)
+                log::out << " " << log::GREEN << imm;
+            else
+                log::out << " " << register_names[op0]<<", "<<log::GREEN << imm;
         } break;
         case BC_FREE_LOCAL: {
             imm = *(u16*)&instructionSegment[pc];

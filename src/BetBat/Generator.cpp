@@ -671,26 +671,9 @@ SignalIO GenContext::generatePush(BCRegister baseReg, int offset, TypeId typeId)
     }
 
     if(!typeInfo || !typeInfo->astStruct) {
-        // enum works here too
         BCRegister reg = BC_REG_T0;
-        if(offset == 0){
-            // If you are here to optimize some instructions then you are out of luck.
-            // I checked where GeneratePush is used whether ADDI can LI can be removed and
-            // replaced with a MOV_MR_DISP32 but those instructions come from GenerateReference.
-            // What you need is a system to optimise away instructions while adding them (like pop after push)
-            // or an optimizer which runs after the generator.
-            // You need something more sophisticated to optimize further basically.
-            builder.emit_mov_rm(reg, baseReg, size);
-        }else{
-            // IMPORTANT: Understand the issue before changing code here. We always use
-            // disp32 because the converter asserts when using frame pointer.
-            // "Use addModRM_disp32 instead". We always use disp32 to avoid the assert.
-            // Well, the assert occurs anyway.
-            
-            builder.emit_mov_rm_disp(reg, baseReg, size, offset);
-        }
+        builder.emit_mov_rm_disp(reg, baseReg, size, offset);
         builder.emit_push(reg);
-        // builder.emit_push(reg);
     } else {
         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
             auto& member = typeInfo->astStruct->members[i];
@@ -718,9 +701,8 @@ SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
         _GLOG(log::out << "move return value\n";)
         BCRegister reg = BC_REG_T0;
         builder.emit_pop(reg);
-        if(baseReg==0) {
-            // 0 as register will just pop and ignore the value.
-            // We want this when an error occurs and we need to pop disallowed types.
+        if(baseReg==BC_REG_INVALID) {
+            // throw away value
         } else {
             if(offset == 0){
                 // The x64 architecture has a special meaning when using fp.
@@ -738,6 +720,118 @@ SignalIO GenContext::generatePop(BCRegister baseReg, int offset, TypeId typeId){
             auto memdata = typeInfo->getMember(i);
             _GLOG(log::out << "move return value member " << member.name << "\n";)
             generatePop(baseReg, offset + memdata.offset, memdata.typeId);
+        }
+    }    
+    return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::generatePush_get_param (int offset, TypeId typeId) {
+    using namespace engone;
+    if(typeId == AST_VOID) {
+        return SIGNAL_FAILURE;
+    }
+    
+    TypeInfo *typeInfo = 0;
+    if(typeId.isNormalType())
+        typeInfo = ast->getTypeInfo(typeId);
+    u32 size = ast->getTypeSize(typeId);
+    if(size == 0) {
+        Assert(hasForeignErrors());
+        return SIGNAL_FAILURE;
+    }
+
+    if(!typeInfo || !typeInfo->astStruct) {
+        BCRegister reg = BC_REG_T0;
+        builder.emit_get_param(reg, offset, size, AST::IsDecimal(typeId));
+        builder.emit_push(reg);
+    } else {
+        for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
+            auto& member = typeInfo->astStruct->members[i];
+            auto memdata = typeInfo->getMember(i);
+            
+            _GLOG(log::out << "push " << member.name << "\n";)
+            generatePush_get_param(offset + memdata.offset, memdata.typeId);
+        }
+    }
+    return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::generatePop_set_arg    (int offset, TypeId typeId) {
+    using namespace engone;
+    // Assert(baseReg!=BC_REG_RCX);
+    TypeInfo *typeInfo = 0;
+    if(typeId.isNormalType())
+        typeInfo = ast->getTypeInfo(typeId);
+    u8 size = ast->getTypeSize(typeId);
+    if(size == 0) {
+        Assert(hasForeignErrors());
+        return SIGNAL_FAILURE;
+    }
+    if (!typeInfo || !typeInfo->astStruct) {
+        _GLOG(log::out << "move return value\n";)
+        BCRegister reg = BC_REG_T0;
+        builder.emit_pop(reg);
+        builder.emit_set_arg(reg, offset, size, AST::IsDecimal(typeId));
+    } else {
+        for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
+            auto &member = typeInfo->astStruct->members[i];
+            auto memdata = typeInfo->getMember(i);
+            _GLOG(log::out << "move return value member " << member.name << "\n";)
+            generatePop_set_arg(offset + memdata.offset, memdata.typeId);
+        }
+    }    
+    return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::generatePush_get_val   (int offset, TypeId typeId) {
+    using namespace engone;
+    if(typeId == AST_VOID) {
+        return SIGNAL_FAILURE;
+    }
+    
+    TypeInfo *typeInfo = nullptr;
+    if(typeId.isNormalType())
+        typeInfo = ast->getTypeInfo(typeId);
+    u32 size = ast->getTypeSize(typeId);
+    if(size == 0) {
+        Assert(hasForeignErrors());
+        return SIGNAL_FAILURE;
+    }
+
+    if(!typeInfo || !typeInfo->astStruct) {
+        BCRegister reg = BC_REG_T0;
+        builder.emit_get_val(reg, offset, size, AST::IsDecimal(typeId));
+        builder.emit_push(reg);
+    } else {
+        for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
+            auto& member = typeInfo->astStruct->members[i];
+            auto memdata = typeInfo->getMember(i);
+            
+            _GLOG(log::out << "push " << member.name << "\n";)
+            generatePush_get_val(offset + memdata.offset, memdata.typeId);
+        }
+    }
+    return SIGNAL_SUCCESS;
+}
+SignalIO GenContext::generatePop_set_ret    (int offset, TypeId typeId) {
+    using namespace engone;
+    // Assert(baseReg!=BC_REG_RCX);
+    TypeInfo *typeInfo = 0;
+    if(typeId.isNormalType())
+        typeInfo = ast->getTypeInfo(typeId);
+    u8 size = ast->getTypeSize(typeId);
+    if(size == 0) {
+        Assert(hasForeignErrors());
+        return SIGNAL_FAILURE;
+    }
+    if (!typeInfo || !typeInfo->astStruct) {
+        _GLOG(log::out << "move return value\n";)
+        BCRegister reg = BC_REG_T0;
+        builder.emit_pop(reg);
+        builder.emit_set_ret(reg, offset, size, AST::IsDecimal(typeId));
+    } else {
+        for (int i = 0; i < (int)typeInfo->astStruct->members.size(); i++) {
+            auto &member = typeInfo->astStruct->members[i];
+            auto memdata = typeInfo->getMember(i);
+            _GLOG(log::out << "move return value member " << member.name << "\n";)
+            generatePop_set_ret(offset + memdata.offset, memdata.typeId);
         }
     }    
     return SIGNAL_SUCCESS;
@@ -896,17 +990,18 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
         int diff = asize - (-info.currentFrameOffset) % asize; // how much to fix alignment
         if (diff != asize) {
             info.currentFrameOffset -= diff; // align
-            builder.emit_alloc_local(diff);
+            builder.emit_alloc_local(BC_REG_INVALID, diff);
             // info.builder.emit_incr(BC_REG_SP, -diff);
         }
         info.currentFrameOffset -= size;
         *outFrameOffset = info.currentFrameOffset;
         
-        builder.emit_alloc_local(size);
+        BCRegister reg = BC_REG_F; // TODO: Is F register in use?
+        builder.emit_alloc_local(reg, size);
         // builder.emit_incr(BC_REG_SP, -size);
 
         if(genDefault){
-            SignalIO result = info.generateDefaultValue(BC_REG_ARGS, info.currentFrameOffset, typeId);
+            SignalIO result = info.generateDefaultValue(reg, info.currentFrameOffset, typeId);
             if(result!=SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
         }
@@ -997,7 +1092,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 case VariableInfo::MEMBER: {
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
                     Assert(info.currentFunction->callConvention == BETCALL);
-                    builder.emit_mov_rm_disp(BC_REG_B, BC_REG_PARAMS, 8, 0);
+                    builder.emit_get_param(BC_REG_B, 0, 8, false);
                     // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, 8, GenContext::FRAME_SIZE);
                     
                     builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
@@ -1318,7 +1413,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
         case BETCALL: {
             int stackSpace = funcImpl->argSize;
             if(stackSpace)
-                builder.emit_alloc_local(stackSpace);
+                builder.emit_alloc_local(BC_REG_INVALID, stackSpace);
             allocated_stack_space = stackSpace;
         } break;
         case STDCALL: {
@@ -1340,7 +1435,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 stackSpace = 32;
             if(stackSpace % 16 != 0) // 16-byte alignment
                 stackSpace += 16 - (stackSpace%16);
-            builder.emit_alloc_local(stackSpace);
+            builder.emit_alloc_local(BC_REG_INVALID, stackSpace);
             allocated_stack_space = stackSpace;
         } break;
         case UNIXCALL: {
@@ -1358,7 +1453,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             }
             Assert(astFunc->arguments.size() <= 4); // INCOMPLETE, we need to allocate proper stack space
             int stackSpace = 0;
-            builder.emit_alloc_local(stackSpace);
+            builder.emit_alloc_local(BC_REG_INVALID, stackSpace);
             allocated_stack_space = stackSpace;
         } break;
         case CDECL_CONVENTION: {
@@ -1380,7 +1475,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             Assert(info.currentFunction->callConvention == BETCALL);
             // NOTE: Is member variable/argument always at this offset with all calling conventions?
             // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, 8, GenContext::FRAME_SIZE);
-            builder.emit_mov_rm_disp(BC_REG_B, BC_REG_PARAMS, 8, 0);
+            builder.emit_get_param(BC_REG_B, 0, 8, false);
             builder.emit_push(BC_REG_B);
             continue;
         } else {
@@ -1540,7 +1635,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                     auto arg = all_arguments[i];
                     
                     // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-                    generatePop(BC_REG_ARGS, funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+                    generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
                     // generatePop(BC_REG_ARGS, baseOffset + funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
                     
                     // TODO: Use this instead?
@@ -1576,7 +1671,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                     auto &ret = funcImpl->returnTypes[i];
                     TypeId typeId = ret.typeId;
 
-                    generatePush(BC_REG_VALS, ret.offset - funcImpl->returnSize, typeId);
+                    generatePush_get_val(ret.offset - funcImpl->returnSize, typeId);
                     // generatePush(BC_REG_B, -GenContext::FRAME_SIZE + ret.offset - funcImpl->returnSize, typeId);
                     outTypeIds->add(ret.typeId);
                 }
@@ -1591,8 +1686,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 for(int i=all_arguments.size()-1;i>=0;i--){
                     auto arg = all_arguments[i];
 
-                    // TODO: stdcall puts value in different registers if they are floats. We must therefore pass that information somewhere.
-                    generatePop(BC_REG_ARGS, funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+                    generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
                     
                     // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
                     // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
@@ -1671,7 +1765,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 
                 // TODO: Return value is passed in a special register if it's a float. We need to pass a bool is_float. Or perhaps a special instruction for floats.
                 auto &ret = funcImpl->returnTypes[0];
-                generatePush(BC_REG_VALS, 0 - 8, ret.typeId);
+                generatePush_get_val(0 - 8, ret.typeId);
 
                 // int size = info.ast->getTypeSize(ret.typeId);
                 // if(AST::IsDecimal(ret.typeId)) {
@@ -1700,8 +1794,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             for(int i=all_arguments.size()-1;i>=0;i--){
                 auto arg = all_arguments[i];
 
-                // TODO: stdcall puts value in different registers if they are floats. We must therefore pass that information somewhere.
-                generatePop(BC_REG_ARGS, funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+                generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
             }
             // TODO IMPORTANT: Do we need to do something about the "red zone" (128 bytes below stack pointer).
             //   What does the red zone imply? No pushing, popping?
@@ -1798,7 +1891,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
                 
                 // TODO: Return value is passed in a special register if it's a float. We need to pass a bool is_float. Or perhaps a special instruction for floats.
                 auto &ret = funcImpl->returnTypes[0];
-                generatePush(BC_REG_VALS, 0 - 8, ret.typeId);
+                generatePush_get_val(0 - 8, ret.typeId);
                 
                 // auto &ret = funcImpl->returnTypes[0];
                 // int size = info.ast->getTypeSize(ret.typeId);
@@ -2023,16 +2116,14 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                                 varinfo->versions_typeId[info.currentPolyVersion]);
                         } break;
                         case VariableInfo::ARGUMENT: {
-                            generatePush(BC_REG_PARAMS, varinfo->versions_dataOffset[info.currentPolyVersion],
+                            generatePush_get_param(varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
                         } break;
                         case VariableInfo::MEMBER: {
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
-                            builder.emit_mov_rm(BC_REG_B, BC_REG_PARAMS, 8);
-                            
-                            // builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                            // builder.emit_({BC_ADDI, BC_REG_B, BC_REG_A, BC_REG_B});
-
+                            auto type = varinfo->versions_typeId[info.currentPolyVersion];
+                            builder.emit_get_param(BC_REG_B, 0, 8, AST::IsDecimal(type));
+                        
                             generatePush(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion],
                                 varinfo->versions_typeId[info.currentPolyVersion]);
                         } break;
@@ -3584,7 +3675,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 // _GLOG(log::out << "space for " << funcImpl->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
                 
                 // info.code->addDebugText("ZERO init return values\n");
-                builder.emit_alloc_local(funcImpl->returnSize);
+                builder.emit_alloc_local(BC_REG_B, funcImpl->returnSize);
                 allocated_stack_space += funcImpl->returnSize;
                 info.currentFrameOffset -= funcImpl->returnSize; // TODO: size can be uneven like 13. FIX IN EVALUATETYPES
                 
@@ -3592,7 +3683,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 // builder.emit_li32(BC_REG_B, -funcImpl->returnSize);
                 // builder.emit_add(BC_REG_B, BC_REG_BP, false, 8);
                 // builder.emit_mov_rr(BC_REG_B, BC_REG_ARGS); // nocheckin TODO: We use BC_REG_ARGS here because it refers the stack pointer in the virtual machine. BUT it's kind of strange to use REG_ARGS here.
-                genMemzero(BC_REG_ARGS, BC_REG_C, funcImpl->returnSize);
+                genMemzero(BC_REG_B, BC_REG_C, funcImpl->returnSize);
                 #endif
                 // builder.emit_stack_space(funcImpl->returnSize);
                 _GLOG(log::out << "Return values:\n";)
@@ -4294,7 +4385,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     
                     info.currentFrameOffset -= arraySize;
                     arrayFrameOffset = info.currentFrameOffset;
-                    builder.emit_alloc_local(arraySize);
+                    BCRegister reg_data = BC_REG_C;
+                    builder.emit_alloc_local(reg_data, arraySize);
                     // builder.emit_incr(BC_REG_SP, -arraySize);
                     if(i == (int)statement->varnames.size()-1){
                         frameOffsetOfLastVarname = arrayFrameOffset;
@@ -4305,7 +4397,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // builder.emit_({BC_MEMZERO, BC_REG_SP, BC_REG_RDX});
                     // builder.emit_mov_rr(BC_REG_D, BC_REG_SP);
                     // builder.emit_mov_rr(BC_REG_D, BC_REG_ARGS);
-                    genMemzero(BC_REG_ARGS, BC_REG_B, arraySize);
+                    genMemzero(reg_data, BC_REG_B, arraySize);
                     #endif
                     TypeInfo* elementInfo = info.ast->getTypeInfo(elementType);
                     if(elementInfo->astStruct) {
@@ -4313,7 +4405,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         // TODO: Create a loop with cmp, je, jmp instructions instead of
                         //  "unrolling" the loop like this. We generate a lot of instructions from this.
                         for(int j = 0;j<varname.arrayLength;j++) {
-                            SignalIO result = generateDefaultValue(BC_REG_ARGS, elementSize * j, elementType);
+                            SignalIO result = generateDefaultValue(reg_data, elementSize * j, elementType);
                             // SignalIO result = generateDefaultValue(BC_REG_BP, arrayFrameOffset + elementSize * j, elementType);
                             if(result!=SIGNAL_SUCCESS)
                                 return SIGNAL_FAILURE;
@@ -4509,27 +4601,28 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         case VariableInfo::GLOBAL: {
                             builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             generatePop(BC_REG_B, 0, varinfo->versions_typeId[info.currentPolyVersion]);
-                            break; 
-                        }
+                        } break; 
                         case VariableInfo::LOCAL: {
                             // builder.emit_li32(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // builder.emit_({BC_ADDI, BC_REG_BP, BC_REG_B, BC_REG_B});
                             generatePop(BC_REG_LOCALS, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                             // generatePop(BC_REG_BP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
-                            break;
-                        }
+                        } break;
                         case VariableInfo::MEMBER: {
                             Assert(info.currentFunction && info.currentFunction->parentStruct);
                             // TODO: Verify that  you
                             // NOTE: Is member variable/argument always at this offset with all calling conventions?
-                            builder.emit_mov_rm_disp(BC_REG_B, BC_REG_PARAMS, 8, 0);
+                            auto type = varinfo->versions_typeId[info.currentPolyVersion];
+                            builder.emit_get_param(BC_REG_B, 0, 8, AST::IsDecimal(type));
                             // builder.emit_mov_rm_disp(BC_REG_B, BC_REG_BP, 8, GenContext::FRAME_SIZE);
                             
                             // builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
                             // builder.emit_({BC_ADDI, BC_REG_B, BC_REG_A, BC_REG_B});
                             generatePop(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
-                            break;
-                        }
+                        } break;
+                        case VariableInfo::ARGUMENT: {
+                            Assert(false);
+                        } break;
                         default: {
                             Assert(false);
                         }
@@ -5124,7 +5217,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     
                     builder.emit_li32(BC_REG_B,itemsize);
                     // builder.emit_mov_rr(BC_REG_A, BC_REG_B}); // BC_MEMCPY USES AL
-                    builder.emit_memcpy(BC_REG_RDI, ptr_reg, BC_REG_B);
+                    builder.emit_memcpy(BC_REG_E, ptr_reg, BC_REG_B);
                     
 
                     // info.code->add({BC_MOV_RR, ptr_reg, BC_REG_A});
@@ -5249,7 +5342,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                             
                             generatePop(BC_REG_INVALID, 0, dtype);
                         } else {
-                            generatePop(BC_REG_RETS, retType.offset - info.currentFuncImpl->returnSize, retType.typeId);
+                            generatePop_set_ret(retType.offset - info.currentFuncImpl->returnSize, retType.typeId);
                             // generatePop(BC_REG_BP, retType.offset - info.currentFuncImpl->returnSize, retType.typeId);
                         }
                     } else {
@@ -5261,6 +5354,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
             } break;
             case STDCALL: {
+                Assert(false);
+                #ifdef gone
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
                     ASTExpression *expr = statement->arrayValues.get(argi);
                     // nextExpr = nextExpr->next;
@@ -5297,12 +5392,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         generatePop(BC_REG_INVALID, 0, dtype); // throw away value to prevent cascading bugs
                     }
                 }
+                #endif
                 if(statement->arrayValues.size()==0){
                     builder.emit_bxor(BC_REG_A,BC_REG_A);
                 }
-                break;
-            }
+            } break;
             case UNIXCALL: {
+                Assert(false);
+                #ifdef gone
                 for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
                     ASTExpression *expr = statement->arrayValues.get(argi);
                     // nextExpr = nextExpr->next;
@@ -5339,6 +5436,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         generatePop(BC_REG_INVALID, 0, dtype); // throw away value to prevent cascading bugs
                     }
                 }
+                #endif
                 if(statement->arrayValues.size()==0){
                     builder.emit_bxor(BC_REG_A,BC_REG_A);
                 }

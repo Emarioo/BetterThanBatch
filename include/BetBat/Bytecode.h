@@ -57,8 +57,15 @@ enum InstructionType : u8 {
     BC_LI64,
     BC_INCR, // usually used with stack pointer
     
-    BC_ALLOC_LOCAL,      // opcode, size16         - allocate local memory (max 64KB)
+    BC_ALLOC_LOCAL,      // opcode, op, size16         - allocate local memory (max 64KB)
     BC_FREE_LOCAL,       // opcode, size16         - allocate args memory (max 64KB)
+
+    // BC_REG_LOCALS, // local pointer (similar to base/frame pointer)
+
+    BC_SET_ARG,   // opcode, op, disp
+    BC_GET_VAL,   // pointer, op, disp
+    BC_GET_PARAM, // pointer, op, disp
+    BC_SET_RET,   // pointer, op, disp
 
     BC_JMP,
     BC_CALL,
@@ -145,10 +152,10 @@ enum BCRegister : u8 {
     BC_REG_T1,
 
     BC_REG_LOCALS, // local pointer (similar to base/frame pointer)
-    BC_REG_ARGS, // pointer to arguments (se by caller)
-    BC_REG_VALS, // pointer to return values (retrieved by caller)
-    BC_REG_PARAMS, // pointer to parameters (accessed by callee)
-    BC_REG_RETS, // pointer to return values (set by callee)
+    // BC_REG_ARGS, // pointer to arguments (se by caller)
+    // BC_REG_VALS, // pointer to return values (retrieved by caller)
+    // BC_REG_PARAMS, // pointer to parameters (accessed by callee)
+    // BC_REG_RETS, // pointer to return values (set by callee)
     
     // BELOW SHOULD BE DEPRECATED
     // special registers
@@ -156,18 +163,18 @@ enum BCRegister : u8 {
     // BC_REG_BP, // base pointer
     
     // platform specific (we would prefer to be architecture independent but I am not sure how to deal with calling conventions without them here)
-    BC_REG_RAX,
-    BC_REG_RBX,
-    BC_REG_RCX,
-    BC_REG_RDX,
-    BC_REG_RSI,
-    BC_REG_RDI,
-    BC_REG_R8,
-    BC_REG_R9,
-    BC_REG_XMM0,
-    BC_REG_XMM1,
-    BC_REG_XMM2,
-    BC_REG_XMM3,
+    // BC_REG_RAX,
+    // BC_REG_RBX,
+    // BC_REG_RCX,
+    // BC_REG_RDX,
+    // BC_REG_RSI,
+    // BC_REG_RDI,
+    // BC_REG_R8,
+    // BC_REG_R9,
+    // BC_REG_XMM0,
+    // BC_REG_XMM1,
+    // BC_REG_XMM2,
+    // BC_REG_XMM3,
 
     BC_REG_MAX,
 };
@@ -390,8 +397,14 @@ struct BytecodeBuilder {
     
     void emit_incr(BCRegister reg, i32 imm, bool no_modification = false);
 
-    void emit_alloc_local(u16 size);
+    // reg may be invalid
+    void emit_alloc_local(BCRegister reg, u16 size);
     void emit_free_local(u16 size);
+
+    void emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float);
+    void emit_get_param(BCRegister reg, i16 imm, int size, bool is_float);
+    void emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float);
+    void emit_get_val(BCRegister reg, i16 imm, int size, bool is_float); // get return value
     
     void emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm = 0);
     void emit_ret();
