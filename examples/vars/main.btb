@@ -1,0 +1,60 @@
+/*
+    Hotloaded settings/variables
+
+    You have game with a struct.
+    struct Settings {
+        gravity: float;
+        jump_power: float;
+    }
+    You start game. Settings are written to a file.
+    You edit file.
+    Game detects it and reloads the settings.
+    The file is not overwritten when game is restarted.
+*/
+
+#import "OS"
+#import "Array"
+#import "Lang"
+#import "Logger"
+
+struct Settings {
+    version: i32;
+    power: i32;
+}
+
+struct LoadableItem {
+    type_id: lang_TypeId;
+    info: lang_TypeInfo*;
+    data: void*;
+}
+struct HotloadedVariables {
+    items: DynamicArray<LoadableItem>;
+    path: StringBuilder;
+
+    fn submit<T>(t: T*) {
+        std__print_any(t);
+    }
+    fn init(path: Slice<char>) {
+        log(path)
+    }
+}
+
+fn main() -> i32 {
+    // File monitor
+
+    settings: Settings
+    vars: HotloadedVariables
+
+    vars.submit(&settings)
+
+    vars.init("examples/vars/settings.txt")
+
+
+    // while {
+
+    //     vars.reload()
+
+    //     NativeSleep(0.5)
+    // }
+    return 0
+}
