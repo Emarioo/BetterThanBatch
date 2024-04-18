@@ -1172,6 +1172,7 @@ SignalIO ParseArguments(ParseInfo& info, ASTExpression* fncall, int* count){
             ERR_SECTION(
                 ERR_HEAD2(tok)
                 ERR_MSG("Expected ',' to supply more arguments or ')' to end fncall (found "<<info.lexer->tostring(tok)<<" instead).")
+                ERR_LINE2(tok, "here")
             )
             return SIGNAL_COMPLETE_FAILURE;
         }
@@ -2450,8 +2451,9 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
     // TODO: It would be smart if you could bit mask the token type to
     //   know whether the token is a flow keyword or not.
 
-    StringView view{};
-    auto token = info.getinfo(&view); // used for "test"
+    // StringView view{};
+    // auto token = info.getinfo(&view); // used for "test"
+    auto token = info.getinfo();
     
     if(token->type >= lexer::TOKEN_KEYWORD_FLOW_BEGIN && token->type <= lexer::TOKEN_KEYWORD_FLOW_END) {
         if(token->type == lexer::TOKEN_IF){
@@ -2850,8 +2852,7 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
         // statement->tokenRange.endIndex = info.at()+1;
         return SIGNAL_SUCCESS;        
     } 
-    #ifdef gone
-    else if(token->type == lexer::TOKEN_IDENTIFIER && view == "test") {
+    else if(token->type == lexer::TOKEN_TEST) {
         info.advance();
         
         // test4 {type} {value} {expression}
@@ -2904,7 +2905,6 @@ SignalIO ParseFlow(ParseInfo& info, ASTStatement*& statement){
         
         return SIGNAL_SUCCESS;  
     }
-    #endif
     return SIGNAL_NO_MATCH;
 }
 SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* parentStruct, bool is_operator){

@@ -26,8 +26,15 @@ fn @intrinsic strlen(ptr: char*) -> u32;
 // returns time stamp counter and IA32_TSC_AUX 
 fn @intrinsic rdtsc() -> u64;
 // fn @intrinsic rdtscp() -> u64, u32;
-fn @intrinsic compare_swap(ptr: i32*, old: i32, new: i32) -> bool;
-fn @intrinsic atomic_add(ptr: i32*, value: i32);
+/*
+if *ptr == old
+    *ptr = new
+    return old
+else
+    return *ptr
+*/
+fn @intrinsic atomic_compare_swap(ptr: i32*, old: i32, new: i32) -> i32;
+fn @intrinsic atomic_add(ptr: i32*, value: i32) -> i32;
 // TODO: atomic_add64?
 
 // fn @native printi(num: i64) ;

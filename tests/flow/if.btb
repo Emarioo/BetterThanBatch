@@ -2,21 +2,21 @@
 @TEST_CASE(if_else)
 
 if true
-    test 1; 1;
+    _test 1; 1;
 else
-    test 1; 0;
+    _test 1; 0;
 
 @TEST_CASE(if_edge_case)
 
 n = 1
 if n > 0
     if n == 1 // bad, ambiguous
-        test n; 1;
+        _test n; 1;
 else
-    test 1; 0;
+    _test 1; 0;
 
 if n > 0
     if n == 1 // bad, ambiguous
-        test n; 1;
+        _test n; 1;
     else
-        test 0; 0;
+        _test 0; 0;

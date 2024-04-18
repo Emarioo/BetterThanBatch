@@ -7,19 +7,19 @@ struct Apple {
 }
 apple := Apple{32, 1.2, "Your name"};
 
-test 32; apple.red;
-test 1.2; apple.size;
+_test 32; apple.red;
+_test 1.2; apple.size;
 s := "Your name"
 for apple.name
-    test s.ptr[nr]; it;
+    _test s.ptr[nr]; it;
 
 apple2 := Apple{13, name = "My fruit", size = 0.3};
 
-test 13; apple2.red;
-test 0.3; apple2.size;
+_test 13; apple2.red;
+_test 0.3; apple2.size;
 s2 := "My fruit"
 for apple2.name
-    test s2.ptr[nr]; it;
+    _test s2.ptr[nr]; it;
 
 @TEST_CASE(unions_in_structs)
 

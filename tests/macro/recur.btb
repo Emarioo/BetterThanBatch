@@ -3,17 +3,17 @@
 #macro ADD(X,...) X + ADD(...)
 #macro ADD(X) X
 
-test 1+2; ADD(1,2);
-test 4+9; ADD(4,9,);
+_test 1+2; ADD(1,2);
+_test 4+9; ADD(4,9,);
 ADD() // should not cause an error
 
 #macro REV(F,...) REV(...), F
 #macro REV(F) F
 
 arr: i32[] { REV(0,1,2) }
-test arr.ptr[0]; 2;
-test arr.ptr[1]; 1;
-test arr.ptr[2]; 0;
+_test arr.ptr[0]; 2;
+_test arr.ptr[1]; 1;
+_test arr.ptr[2]; 0;
 
 // #macro CHAOS(F,S,...) S CHAOS(...) F
 // #macro CHAOS
@@ -21,13 +21,13 @@ test arr.ptr[2]; 0;
 #macro NOR(X,...) !X || NOR(...)
 #macro NOR(X) !X
 
-test 1; NOR(0);
-test 1; NOR(1,0,1,0);
+_test 1; NOR(0);
+_test 1; NOR(1,0,1,0);
 
-test 1; NOR(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
-test 1; NOR(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1);
-test 0; NOR(1);
-test 0; NOR(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
+_test 1; NOR(1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0);
+_test 1; NOR(0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1);
+_test 0; NOR(1);
+_test 0; NOR(1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1);
 
 // TODO: More and better tests
 

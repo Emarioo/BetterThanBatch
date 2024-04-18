@@ -18,7 +18,7 @@ switch msg {
         out = 10
     }
 }
-test 10; out;
+_test 10; out;
 msg = 1
 out = 0
 switch msg {
@@ -27,7 +27,7 @@ switch msg {
     case 7: out = 7
     case: out = 10
 }
-test 1; out;
+_test 1; out;
 msg = 5
 out = 0
 switch msg {
@@ -36,7 +36,7 @@ switch msg {
     case 7: out = 7
     case: out = 10
 }
-test 5; out;
+_test 5; out;
 msg = 7
 out = 0
 switch msg {
@@ -45,7 +45,7 @@ switch msg {
     case 7: out = 7
     case: out = 10
 }
-test 7; out;
+_test 7; out;
 
 @TEST_CASE(switch_enums)
 

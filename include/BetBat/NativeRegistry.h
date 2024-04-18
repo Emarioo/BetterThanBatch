@@ -20,9 +20,6 @@ enum NativeFunctionType {
 #define NATIVE_Reallocate -6
 #define NATIVE_Free -7
 
-#define NATIVE_memcpy -8
-#define NATIVE_memzero -9
-
 #define NATIVE_FileOpen -10
 #define NATIVE_FileRead -11
 #define NATIVE_FileWrite -12
@@ -38,20 +35,6 @@ enum NativeFunctionType {
 #define NATIVE_StopMeasure -26
 
 #define NATIVE_CmdLineArgs -27
-
-// #define NATIVE_rdtscp -34
-#define NATIVE_rdtsc -35
-#define NATIVE_compare_swap -36
-#define NATIVE_atomic_add -37
-
-#define NATIVE_strlen -38
-
-#define NATIVE_sin -40
-#define NATIVE_cos -41
-#define NATIVE_tan -42
-
-#define NATIVE_sqrt -43
-#define NATIVE_round -44
 
 #define NATIVE_NativeSleep -50
 

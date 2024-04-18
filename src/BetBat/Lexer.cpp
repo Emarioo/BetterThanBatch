@@ -525,6 +525,7 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             
                 StringView temp{text + str_start, str_end - str_start};
                 // TODO: Optimize. For example, if first character isn't one of these 'tfsenu' then it's not a special token and we don't have to run all ifs.
+                // log::out << "check " << temp << "\n";
                 
                 #define CASE(S, STR, TOK)  if(S-1 == temp.len && temp == STR+1) {\
                     new_tokens->type = TOK; has_data = false; }
@@ -569,6 +570,8 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
                     CASE(8, "operator",    TOKEN_OPERATOR)
                 } else if(f == 'a') {
                     CASE(3, "asm",         TOKEN_ASM)
+                } else if(f == '_') {
+                    CASE(5, "_test",         TOKEN_TEST)
                 }
                 // Non-optimize version
                 // #define CASE(STR, TOK)  if(temp == STR) { new_tokens->type = TOK; has_data = false; }
@@ -939,13 +942,17 @@ void Lexer::appendToken(Import* imp, Token tok, StringView* string) {
     // tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     // return tok;
 }
-Token Lexer::appendToken(Import* imp, Token token) {
+Token Lexer::appendToken(Import* imp, Token token, bool compute_source) {
     // ZoneScoped;
     // lock_imports.lock();
     // Import* imp = imports.get(fileId-1);
     // lock_imports.unlock();
     Assert(imp);
     
+    TokenInfo* prev_token = nullptr;
+    TokenSource* prev_source = nullptr;
+    Token prev_tok = {};
+
     Chunk* chunk = nullptr;
     u32 cindex = 0;
     if(imp->chunk_indices.size() > 0) {
@@ -956,6 +963,11 @@ Token Lexer::appendToken(Import* imp, Token token) {
         // chunk = chunks.get(cindex);
         lock_chunks.unlock();
         
+        if(compute_source) {
+            prev_token = &chunk->tokens.last();
+            prev_source = &chunk->sources.last();
+            prev_tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
+        }
         if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
             chunk = nullptr; // chunk is full!
             cindex = 0;
@@ -972,6 +984,24 @@ Token Lexer::appendToken(Import* imp, Token token) {
         imp->chunk_indices.add(cindex);
         imp->chunks.add(chunk);
     }
+
+    int line = 1;
+    int column = 1;
+    if(prev_token) {
+        column = prev_source->column;
+        line = prev_source->line;
+        if(prev_token->flags & TOKEN_FLAG_NEWLINE) {
+            line++;
+            column = 1;
+        } else {
+            if(prev_token->flags & TOKEN_FLAG_SPACE) {
+                column++;
+            }
+            // Optimize?
+            std::string name_of_prev = tostring(prev_tok);
+            column += name_of_prev.size();
+        }
+    }
     
     chunk->tokens.add({});
     chunk->sources.add({});
@@ -984,7 +1014,10 @@ Token Lexer::appendToken(Import* imp, Token token) {
     info->flags |= token.flags&(TOKEN_FLAG_NEWLINE|TOKEN_FLAG_SPACE);
     info->data_offset = 0;
 
-    {
+    if(prev_token) {
+        source.line = line;
+        source.column = column;
+    } else {
         u32 cindex, tindex;
         decode_origin(token.origin, &cindex, &tindex);
         Chunk* fc = getChunk_unsafe(cindex);
@@ -1014,9 +1047,10 @@ Token Lexer::appendToken(Import* imp, Token token) {
     tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     return tok;
 }
-Token Lexer::appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column){
+Token Lexer::appendToken_auto_source(Import* imp, TokenType type, u32 flags){
     // ZoneScoped;
-    Assert(flags < 0x10000 && line < 0x10000 && column < 0x10000);
+    Assert(flags < 0x10000);
+    // Assert(flags < 0x10000 && line < 0x10000 && column < 0x10000);
 
     // Make sure we don't add an identifier that is quoted.
     // shouldn't happen, bug in the code if it happens.
@@ -1027,6 +1061,9 @@ Token Lexer::appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 c
     // lock_imports.unlock();
     Assert(imp);
     
+    TokenInfo* prev_token = nullptr;
+    TokenSource* prev_source = nullptr;
+    Token prev_tok = {};
     Chunk* chunk = nullptr;
     u32 cindex = 0;
     if(imp->chunk_indices.size() > 0) {
@@ -1036,6 +1073,9 @@ Token Lexer::appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 c
         chunk = _chunks.get(cindex);
         lock_chunks.unlock();
         
+        prev_token = &chunk->tokens.last();
+        prev_source = &chunk->sources.last();
+        prev_tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
         if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
             chunk = nullptr; // chunk is full!
             cindex = 0;
@@ -1053,6 +1093,32 @@ Token Lexer::appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 c
         imp->chunks.add(chunk);
     }
     
+    int line = 1;
+    int column = 1;
+    // This function appends a new token from the preprocessor.
+    // The token has no source information because it does not belong
+    // to the original file. Therefore, we inherit the source information
+    // from previous token. If we don't have a previous token then
+    // we can't inherit source information and so the token will
+    // be put at line 1. Which makes no sense when the user
+    // looks at line 1. So we assert. - Emarioo, 2024-04-18
+    Assert(prev_token);
+    if(prev_token) {
+        column = prev_source->column;
+        line = prev_source->line;
+        if(prev_token->flags & TOKEN_FLAG_NEWLINE) {
+            line++;
+            column = 1;
+        } else {
+            if(prev_token->flags & TOKEN_FLAG_SPACE) {
+                column++;
+            }
+            // Optimize?
+            std::string name_of_prev = tostring(prev_tok);
+            column += name_of_prev.size();
+        }
+    }
+
     chunk->tokens.add({});
     chunk->sources.add({});
     auto& info = chunk->tokens.last();
@@ -1328,7 +1394,7 @@ Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
     if(out.flags & TOKEN_FLAG_HAS_DATA) {
         u32 str_len = getStringFromToken(out,&out.s);
     } else if(out.type < 256) {
-        out.c = (char)out.type;
+        // out.c = (char)out.type;
     }
     #endif
     return out;
@@ -1422,6 +1488,7 @@ const char* token_type_names[] {
     "namespace", // TOKEN_NAMESPACE,
     "union", // TOKEN_UNION,
     "asm", // TOKEN_ASM,
+    "_test", // TOKEN_TEST,
 
     "::", // TOKEN_NAMESPACE_DELIM,
 
@@ -1450,6 +1517,17 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
 
     // };
 
+    #define APPEND(C){\
+        ENSURE(1);\
+        *(buffer + written) = (char)(C);\
+        written++;\
+        iterator.char_index++;}
+    #define APPENDS(SRC,N){\
+        ENSURE(N);\
+        memcpy(buffer + written, SRC, N);\
+        iterator.char_index += N;\
+        written += N;}
+
     int written = 0;
     while(true){
         if(iterator.file_token_index == iterator.end_file_token_index)
@@ -1461,19 +1539,22 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
         
         if(tok.type < TOKEN_TYPE_BEGIN) { // ascii
             // TODO: What if character is a control character? (value 0-31)
-            ENSURE(1)
-            *(buffer + written) = (char)tok.type;
-            written++;
-            iterator.char_index++;
+            APPEND(tok.type)
+            // ENSURE(1)
+            // *(buffer + written) = (char)tok.type;
+            // written++;
+            // iterator.char_index++;
         } else if(tok.type == TOKEN_LITERAL_STRING) {
             Assert(tok.flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED));
-            ENSURE(1)
+            // ENSURE(1)
             if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
-                *(buffer + written) = '\'';
+                APPEND('\'')
+                // *(buffer + written) = '\'';
             else
-                *(buffer + written) = '"';
-            written++;
-            iterator.char_index++;
+                APPEND('"')
+            //     *(buffer + written) = '"';
+            // written++;
+            // iterator.char_index++;
             
             const char* str;
             u8 real_len = getStringFromToken(tok,&str);
@@ -1502,65 +1583,80 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
                 
                 for(int i=0;i<len;i++) {
                     char c = str[i];
-                    if(written + 2 > buffer_max) {
-                        return written;
-                    }
+                    ENSURE(2)
 
                     if(c == '\\') { // escape character?
-                        *(buffer + written) = '\\';
-                        *(buffer + written+1) = '\\';
-                        written+=2;
-                        iterator.char_index+=2;
+                        APPEND('\\')
+                        APPEND('\\')
+                        // *(buffer + written) = '\\';
+                        // *(buffer + written+1) = '\\';
+                        // written+=2;
+                        // iterator.char_index+=2;
                     } else if(c == '\0') { // escape character?
-                        *(buffer + written) = '\\';
-                        *(buffer + written+1) = '0';
-                        written+=2;
-                        iterator.char_index+=2;
+                        APPEND('\\')
+                        APPEND('0')
+                        // *(buffer + written) = '\\';
+                        // *(buffer + written+1) = '0';
+                        // written+=2;
+                        // iterator.char_index+=2;
                     } else if(c == '\t') {
-                        *(buffer + written) = '\\';
-                        *(buffer + written+1) = 't';
-                        written+=2;
-                        iterator.char_index+=2;
+                        APPEND('\\')
+                        APPEND('t')
+                        // *(buffer + written) = '\\';
+                        // *(buffer + written+1) = 't';
+                        // written+=2;
+                        // iterator.char_index+=2;
                     } else if(c == '\n') {
-                        *(buffer + written) = '\\';
-                        *(buffer + written+1) = 'n';
-                        written+=2;
-                        iterator.char_index+=2;
+                        APPEND('\\')
+                        APPEND('n')
+                        // *(buffer + written) = '\\';
+                        // *(buffer + written+1) = 'n';
+                        // written+=2;
+                        // iterator.char_index+=2;
                     } else if(c == '\r') {
-                        *(buffer + written) = '\\';
-                        *(buffer + written+1) = 'r';
-                        written+=2;
-                        iterator.char_index+=2;
+                        APPEND('\\')
+                        APPEND('r')
+                        // *(buffer + written) = '\\';
+                        // *(buffer + written+1) = 'r';
+                        // written+=2;
+                        // iterator.char_index+=2;
                     } else if(c == '\x1b') { // escape character?
-                        *(buffer + written) = '\\';
-                        *(buffer + written+1) = 'e';
-                        written+=2;
-                        iterator.char_index+=2;
+                        APPEND('\\')
+                        APPEND('e')
+                        // *(buffer + written) = '\\';
+                        // *(buffer + written+1) = 'e';
+                        // written+=2;
+                        // iterator.char_index+=2;
                     } else if(c < 32){
-                        *(buffer + written) = '?';
-                        written++;
-                        iterator.char_index++;
+                        APPEND('?')
+                        // *(buffer + written) = '?';
+                        // written++;
+                        // iterator.char_index++;
                     } else {
-                        *(buffer + written) = c;
-                        written++;
-                        iterator.char_index++;
+                        APPEND(c)
+                        // *(buffer + written) = c;
+                        // written++;
+                        // iterator.char_index++;
                     }
                 }
                
             }
             
-            ENSURE(1)
+            // ENSURE(1)
             if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
-                *(buffer + written) = '\'';
+                APPEND('\'')
+                // *(buffer + written) = '\'';
             else
-                *(buffer + written) = '"';
-            iterator.char_index++;
-            written++;
+                APPEND('"')
+            //     *(buffer + written) = '"';
+            // iterator.char_index++;
+            // written++;
         } else if(tok.type == TOKEN_ANNOTATION) {
-            ENSURE(1)
-            *(buffer + written) = '@';
-            written++;
-            iterator.char_index++;
+            // ENSURE(1)
+            APPEND('@')
+            // *(buffer + written) = '@';
+            // written++;
+            // iterator.char_index++;
             
             const char* str;
             u8 real_len = getStringFromToken(tok,&str);
@@ -1576,9 +1672,10 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
                     len = buffer_max - written;
                 }
                 if(len!=0){
-                    memcpy(buffer + written, str, len);
-                    iterator.char_index += len;
-                    written += len;
+                    APPENDS(str,len)
+                    // memcpy(buffer + written, str, len);
+                    // iterator.char_index += len;
+                    // written += len;
                 }
                 if(len != real_len) {
                     // return, caller needs to try again, buffer too small
@@ -1600,9 +1697,10 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
                     len = buffer_max - written;
                 }
                 if(len!=0){
-                    memcpy(buffer + written, str, len);
-                    iterator.char_index += len;
-                    written += len;
+                    APPENDS(str,len)
+                    // memcpy(buffer + written, str, len);
+                    // iterator.char_index += len;
+                    // written += len;
                 }
                 if(len != real_len) {
                     // return, caller needs to try again, buffer too small
@@ -1624,9 +1722,10 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
                     len = buffer_max - written;
                 }
                 if(len!=0){
-                    memcpy(buffer + written, str, len);
-                    iterator.char_index += len;
-                    written += len;
+                    APPENDS(str,len)
+                    // memcpy(buffer + written, str, len);
+                    // iterator.char_index += len;
+                    // written += len;
                 }
                 if(len != real_len) {
                     // return, caller needs to try again, buffer too small
@@ -1634,23 +1733,29 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
                 }
             }
         } else {
-            Assert(false);
+            APPENDS("<EOF>",5)
+            // *(buffer + written) = '@';
+            // written++;
+            // iterator.char_index++;
+            // Assert(false);
         }
         // TODO: Don't do suffix if we processed the last token or if suffix should be skipped (skipSuffix)
         
         if(!skipSuffix || iterator.file_token_index+1 != iterator.end_file_token_index) {
             if(tok.flags & TOKEN_FLAG_NEWLINE) {
-                ENSURE(1)
                 // TODO: Check iterator.char_index, we may already have written this suffix
-                *(buffer + written) = '\n';
-                written++;
-                iterator.char_index++;
+                APPEND('\n')
+                // ENSURE(1)
+                // *(buffer + written) = '\n';
+                // written++;
+                // iterator.char_index++;
             } else if(tok.flags & TOKEN_FLAG_SPACE) {
-                ENSURE(1)
                 // TODO: Check iterator.char_index, we may already have written this suffix
-                *(buffer + written) = ' ';
-                written++;
-                iterator.char_index++;
+                // ENSURE(1)
+                APPEND(' ')
+                // *(buffer + written) = ' ';
+                // written++;
+                // iterator.char_index++;
                 // TODO: Calculate space based on the token's column
             }
         }
@@ -1741,6 +1846,8 @@ u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipS
         // written = written_temp;
     }
     #undef ENSURE
+    #undef APPEND
+    #undef APPENDS
     return written;
 
 }

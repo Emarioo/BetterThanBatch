@@ -14,8 +14,6 @@
 #include "BetBat/Util/Perf.h"
 #include "BetBat/Util/StringBuilder.h"
 
-// #define LEXER_DEBUG_DETAILS
-
 namespace lexer {
 
     enum TokenFlags : u16 {
@@ -53,7 +51,7 @@ namespace lexer {
         TOKEN_NAMEOF,
         TOKEN_TYPEID,
 
-        TOKEN_KEYWORD_FLOW_BEGIN,
+        TOKEN_KEYWORD_FLOW_BEGIN, // Parser can quickly check if token is a flow type keyword
         TOKEN_IF = TOKEN_KEYWORD_FLOW_BEGIN,
         TOKEN_ELSE,
         TOKEN_WHILE,
@@ -73,6 +71,7 @@ namespace lexer {
         TOKEN_NAMESPACE,
         TOKEN_UNION,
         TOKEN_ASM,
+        TOKEN_TEST,
 
         TOKEN_NAMESPACE_DELIM,
 
@@ -106,7 +105,6 @@ namespace lexer {
         TokenOrigin origin={}; // decode to get chunk and token index
         #ifdef LEXER_DEBUG_DETAILS
         const char* s = nullptr;
-        char c = 0;
         #endif
     };
     struct TokenRange {
@@ -129,7 +127,9 @@ namespace lexer {
         };
         u16 flags;
         u32 data_offset; // can we move this elsewhere? hashmap with the token index? We use data_offset quite often (StringView) so it might slow us done?
-
+        #ifdef LEXER_DEBUG_DETAILS
+        const char* s;
+        #endif
         // TODO: Optimize by moving line and column out of TokenInfo to fit more tokens into cache lines when we parse/read tokens. However, the lexer and preprocessor would need to write two distant memory locations per token which would be slower. Perhaps that is worth since write is generally faster than read?
         // u16 line;
         // u16 column;
@@ -223,9 +223,9 @@ namespace lexer {
         void destroyImport_unsafe(u32 import_id);
         
         // void appendToken(Import* imp, TokenInfo* token, StringView* string);
-        Token appendToken(Import* imp, Token token);
+        Token appendToken(Import* imp, Token token, bool compute_source = false);
         // Token appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column);
-        Token appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column);
+        Token appendToken_auto_source(Import* imp, TokenType type, u32 flags);
         void appendToken(Import* imp, Token tok, StringView* string);
         
         bool equals_identifier(Token token, const char* str);

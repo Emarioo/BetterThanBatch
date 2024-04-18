@@ -111,6 +111,12 @@ struct PreprocContext {
                 // out.type = lexer::TOKEN_EOF;
                 return lexer_import->geteof();
             }
+
+            #ifdef LEXER_DEBUG_DETAILS
+            if(info->flags & lexer::TOKEN_FLAG_HAS_DATA) {
+                out.s = (char*)chunk->aux_data + info->data_offset + 1;
+            }
+            #endif
     
             out.flags = info->flags;
             out.type = info->type;
@@ -139,8 +145,12 @@ struct PreprocContext {
                 return lexer_import->geteof();
             }
 
-            if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
+            if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
                 *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+                #ifdef LEXER_DEBUG_DETAILS
+                out.s = (char*)chunk->aux_data + info->data_offset + 1;
+                #endif
+            }
     
             out.flags = info->flags;
             out.type = info->type;
@@ -157,9 +167,9 @@ struct PreprocContext {
             lexer->decode_import_token_index(head + off,&fcindex,&tindex);
         
         
-            lexer::Token out{};
+            // lexer::Token out{};
             if(lexer_chunks.size() <= fcindex) {
-                out.type = lexer::TOKEN_EOF;
+                // out.type = lexer::TOKEN_EOF;
                 if(string)
                     *string = {"",1};
                 return &eof;
@@ -172,8 +182,12 @@ struct PreprocContext {
                     *string = {"",1};
                 return &eof;
             }
-            if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA))
+            if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
                 *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+                #ifdef LEXER_DEBUG_DETAILS
+                info->s = (char*)chunk->aux_data + info->data_offset + 1;
+                #endif
+            }
             return info;
         }
         // return lexer->getTokenFromImport(import_id, head + off);

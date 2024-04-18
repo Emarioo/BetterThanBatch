@@ -61,8 +61,7 @@ void NativeRegistry::initNativeContent(){
     ADD(Allocate)
     ADD(Reallocate)
     ADD(Free)
-    ADD(memcpy)
-    ADD(memzero)
+
     ADD(FileOpen)
     ADD(FileRead)
     ADD(FileWrite)
@@ -78,18 +77,6 @@ void NativeRegistry::initNativeContent(){
     ADD(StopMeasure)
 
     ADD(CmdLineArgs)
-
-    ADD(rdtsc)
-    // ADD(rdtscp)
-    ADD(compare_swap)
-    ADD(atomic_add)
-    ADD(strlen)
-    
-    ADD(sin)
-    ADD(cos)
-    ADD(tan)
-    ADD(sqrt)
-    ADD(round)
 
     ADD(NativeSleep)
 

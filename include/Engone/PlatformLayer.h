@@ -299,9 +299,9 @@ namespace engone {
     // returns the result
 	i32 atomic_add(volatile i32* ptr, i32 value);
 	// these should be intrinsics
-	// bool compare_swap(i32* ptr, i32 oldValue, i32 newValue);
+	// bool atomic_compare_swap(i32* ptr, i32 oldValue, i32 newValue);
     
-	// #define compare_swap(ptr, oldValue, newValue)
+	// #define atomic_compare_swap(ptr, oldValue, newValue)
 	// #define atomic_add
 	
 	// Monitor a directory or file where any changes to files will call the callback with certain path.

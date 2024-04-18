@@ -272,6 +272,14 @@ void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode) {
     this->code = code;
     this->tinycode = tinycode;
 }
+
+void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 test_location) {
+    emit_opcode(BC_TEST_VALUE);
+    emit_operand(to);
+    emit_operand(from);
+    emit_imm8(size);
+    emit_imm32(test_location);
+}
 // void BytecodeBuilder::emit_stack_space(int size) {
 //     size = (size + 0x7) & ~0x7; // ensure 8-byte alignment
 //     emit_incr(BC_REG_SP, -size);
@@ -707,6 +715,37 @@ void BytecodeBuilder::emit_memcpy(BCRegister dst, BCRegister src, BCRegister siz
     emit_operand(src);   
     emit_operand(size_reg);
 }
+void BytecodeBuilder::emit_strlen(BCRegister len_reg, BCRegister src_reg){
+    emit_opcode(BC_STRLEN);
+    emit_operand(len_reg);
+    emit_operand(src_reg);
+}
+void BytecodeBuilder::emit_rdtsc(BCRegister to){
+    emit_opcode(BC_RDTSC);
+    emit_operand(to);
+}
+void BytecodeBuilder::emit_atomic_cmp_swap(BCRegister ptr, BCRegister old, BCRegister new_reg){
+    emit_opcode(BC_ATOMIC_CMP_SWAP);
+    emit_operand(ptr);
+    emit_operand(old);
+    emit_operand(new_reg);
+}
+void BytecodeBuilder::emit_atomic_add(BCRegister to, BCRegister from, InstructionControl control){
+    Assert(!IS_CONTROL_FLOAT(control));
+    emit_opcode(BC_ATOMIC_ADD);
+    emit_operand(to);
+    emit_operand(from);
+    emit_control(control);
+}
+void BytecodeBuilder::emit_sqrt(BCRegister to){
+    emit_opcode(BC_SQRT);
+    emit_operand(to);
+}
+void BytecodeBuilder::emit_round(BCRegister to){
+    emit_opcode(BC_ROUND);
+    emit_operand(to);
+}
+
 void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType, u8 from_size, u8 to_size) {
     InstructionControl control = InstructionControl::CONTROL_NONE;
     switch(from_size) {
@@ -945,6 +984,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
     if(high_index == -1 || high_index > instructionSegment.size())
         high_index = instructionSegment.size();
     
+    auto& instructions = instructionSegment;
+
     int pc=low_index;
     while(pc<high_index) {
         int prev_pc = pc;
@@ -965,8 +1006,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_NOP: break;
         case BC_RET: break;
         case BC_MOV_RR: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            op1 = (BCRegister)instructionSegment[pc++];
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
             
             log::out << " " << register_names[op0] << ", " << register_names[op1];
         } break;
@@ -974,12 +1015,12 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_MOV_MR:
         case BC_MOV_RM_DISP16:
         case BC_MOV_MR_DISP16: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            op1 = (BCRegister)instructionSegment[pc++];
-            control = (InstructionControl)instructionSegment[pc++];
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             
             if(opcode == BC_MOV_RM_DISP16 || opcode == BC_MOV_MR_DISP16) {
-                imm = *(i16*)(instructionSegment.data() + pc);
+                imm = *(i16*)(instructions.data() + pc);
                 pc += 2;
             }
             
@@ -1001,10 +1042,10 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_GET_PARAM:
         case BC_GET_VAL:
         case BC_SET_RET: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            imm = *(i16*)&instructionSegment[pc];
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
             pc+=2;
-            control = (InstructionControl)instructionSegment[pc++];
+            control = (InstructionControl)instructions[pc++];
             
             // switch(opcode) {
             //     case BC_GET_VAL:   log::out << " " << register_names[op0] << ", [val"; if(imm >= 0) log::out << "+"; log::out << imm << "]"; break;
@@ -1028,19 +1069,19 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             else if(size == CONTROL_64B) log::out << ", qword";
         } break;
         case BC_GET_LOCAL: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            imm = *(i16*)&instructionSegment[pc];
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i16*)&instructions[pc];
             pc+=2;
             log::out << " " << register_names[op0] << ", " << log::GREEN <<  imm;
         } break;
         case BC_PUSH:
         case BC_POP: {
-            op0 = (BCRegister)instructionSegment[pc++];
+            op0 = (BCRegister)instructions[pc++];
             log::out << " " << register_names[op0];
         } break;
         case BC_LI32: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            imm = *(i32*)&instructionSegment[pc];
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
             pc+=4;
             log::out << " " << register_names[op0] << ", "<<log::GREEN;
             int expo = (0xFF & (imm >> 23)) - 127; // 8 bits exponent (0xFF), 23 mantissa, 127 bias
@@ -1051,8 +1092,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 log::out << imm;
         } break;
         case BC_LI64: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            imm = *(i64*)&instructionSegment[pc];
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i64*)&instructions[pc];
             pc+=8;
             log::out << " " << register_names[op0] << ", "<<log::GREEN;
             int expo = (0x7FF & (imm >> 52)) - 1023; // 11 bits exponent (0x7FF), 52 mantissa, 1023 bias
@@ -1063,14 +1104,14 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 log::out << imm;
         } break;
         case BC_INCR: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            imm = *(i32*)&instructionSegment[pc];
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
             pc+=4;
             log::out << " " << register_names[op0] << ", " << log::GREEN << imm;
         } break;
         case BC_ALLOC_LOCAL: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            imm = *(u16*)&instructionSegment[pc];
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(u16*)&instructions[pc];
             pc+=2;
             if(op0 == BC_REG_INVALID)
                 log::out << " " << log::GREEN << imm;
@@ -1078,14 +1119,14 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
                 log::out << " " << register_names[op0]<<", "<<log::GREEN << imm;
         } break;
         case BC_FREE_LOCAL: {
-            imm = *(u16*)&instructionSegment[pc];
+            imm = *(u16*)&instructions[pc];
             pc+=2;
             log::out << " " << log::GREEN << imm;
         } break;
         case BC_CALL: {
-            LinkConventions l = (LinkConventions)instructionSegment[pc++];
-            CallConventions c = (CallConventions)instructionSegment[pc++];
-            imm = *(i32*)&instructionSegment[pc];
+            LinkConventions l = (LinkConventions)instructions[pc++];
+            CallConventions c = (CallConventions)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
             pc+=4;
             
             log::out << " " << l << ", " << c <<  ", ";
@@ -1108,7 +1149,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             }
         } break;
         case BC_JMP: {
-            imm = *(i32*)&instructionSegment[pc];
+            imm = *(i32*)&instructions[pc];
             pc+=4;
             
             int addr = pc + imm;
@@ -1117,8 +1158,8 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         } break;
         case BC_JNZ:
         case BC_JZ: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            imm = *(i32*)&instructionSegment[pc];
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
             pc+=4;
             
             int addr = pc + imm;
@@ -1137,9 +1178,9 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_GT:
         case BC_GTE:
         {
-            op0 = (BCRegister)instructionSegment[pc++];
-            op1 = (BCRegister)instructionSegment[pc++];
-            control = (InstructionControl)instructionSegment[pc++];
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             
             log::out << " "<<register_names[op0] <<", "<< register_names[op1];
             // we don't care about sizes
@@ -1161,22 +1202,22 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_LOR:
         case BC_LNOT:
         {
-            op0 = (BCRegister)instructionSegment[pc++];
-            op1 = (BCRegister)instructionSegment[pc++];
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
             
             log::out << " "<<register_names[op0] <<", "<< register_names[op1];
         } break;
         case BC_DATAPTR:
         case BC_CODEPTR: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            imm = *(i32*)&instructionSegment[pc];
+            op0 = (BCRegister)instructions[pc++];
+            imm = *(i32*)&instructions[pc];
             pc+=4;
             log::out << " " << register_names[op0] << ", "<<log::GREEN<<imm;
         } break;
         case BC_CAST: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            control = (InstructionControl)instructionSegment[pc++];
-            cast = (InstructionCast)instructionSegment[pc++];
+            op0 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            cast = (InstructionCast)instructions[pc++];
             
             u8 from_size = 1 << GET_CONTROL_SIZE(control);
             u8 to_size = 1 << GET_CONTROL_CONVERT_SIZE(control);
@@ -1184,16 +1225,44 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             log::out << " " << register_names[op0] << ", "<< cast_names[cast] <<", "<<from_size<<"b->"<<to_size<<"b";
         } break;
         case BC_MEMZERO: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            op1 = (BCRegister)instructionSegment[pc++];
-            imm = *(i8*)&instructionSegment[pc]; pc+=1;
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            imm = *(i8*)&instructions[pc]; pc+=1;
             log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", "<<log::GREEN<<imm;
         } break;
         case BC_MEMCPY: {
-            op0 = (BCRegister)instructionSegment[pc++];
-            op1 = (BCRegister)instructionSegment[pc++];
-            op2 = (BCRegister)instructionSegment[pc++];
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            op2 = (BCRegister)instructions[pc++];
             log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", " << register_names[op2];
+        } break;
+        case BC_RDTSC:
+        case BC_SQRT:
+        case BC_ROUND: {
+            op0 = (BCRegister)instructions[pc++];
+            log::out << " " << register_names[op0];
+        } break;
+        case BC_ATOMIC_CMP_SWAP: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            op2 = (BCRegister)instructions[pc++];
+            log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", " << register_names[op2];
+        } break;
+        case BC_STRLEN:
+        case BC_ATOMIC_ADD: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", " << control;
+        } break;
+        case BC_TEST_VALUE: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            u8 size = (u8)instructions[pc++];
+            imm = *(u32*)&instructions[pc];
+            pc+=4;
+
+            log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", " << log::GREEN << size << ", "<<imm;
         } break;
         default: Assert(false);
         }

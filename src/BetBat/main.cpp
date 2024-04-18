@@ -49,6 +49,7 @@ int main(int argc, const char** argv){
         return EXIT_CODE_FAILURE;
 
     if(options.devmode) {
+        // This code is only used during development
         log::out << log::BLACK<<"[DEVMODE]\n";
 
         // FuzzerOptions opts{};

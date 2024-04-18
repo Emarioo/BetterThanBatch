@@ -2,9 +2,9 @@
 
 n := 0;
 for 0..1 {
-    defer { test n; 1; n++; }
+    defer { _test n; 1; n++; }
     {
-        defer { test n; 0; n++; }
+        defer { _test n; 0; n++; }
         continue;
     }
 }
@@ -17,8 +17,8 @@ global fun_step: i32 = 0;
 global while_step: i32 = 0;
 
 // turn on/off printing
-// #macro step(V, N, ...) { test V; N; V = N + 1; prints(...); }
-#macro step(V, N, ...) { test V; N; V = N + 1; }
+// #macro step(V, N, ...) { _test V; N; V = N + 1; prints(...); }
+#macro step(V, N, ...) { _test V; N; V = N + 1; }
 
 fn fun(i: i32){
     fun_step = 0;

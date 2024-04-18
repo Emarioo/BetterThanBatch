@@ -748,6 +748,78 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
                 #undef OP
             }
         } break;
+        case BC_RDTSC: {
+            op0 = (BCRegister)instructions[pc++];
+            #ifdef OS_WINDOWS
+            auto time = __rdtsc();
+            registers[op0] = time;
+            #else
+            Assert(("RDTSC not implemented in VM on Linux",false));
+            #endif
+        } break;
+        case BC_STRLEN: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+
+            registers[op0] = strlen((char*)registers[op1]);
+        } break;
+        case BC_ATOMIC_ADD: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+
+            Assert(GET_CONTROL_SIZE(control) == CONTROL_32B);
+            Assert(!IS_CONTROL_FLOAT(control));
+            registers[op0] = atomic_add((volatile i32*)registers[op0], registers[op1]);
+        } break;
+        case BC_ATOMIC_CMP_SWAP: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            op2 = (BCRegister)instructions[pc++];
+
+            #ifdef OS_WINDOWS
+            // NOTE: op1 is old value (comparand), op2 is new value (exchange)
+            long original_value = _InterlockedCompareExchange((volatile long*)registers[op0], registers[op2], registers[op1]);
+            registers[op0] = original_value;
+            #else
+            Assert(("ATOMIC_CMP_SWAP not implemented in VM on Linux",false));
+            #endif
+        } break;
+        case BC_SQRT: {
+            op0 = (BCRegister)instructions[pc++];
+            float t = sqrtf(*(float*)&registers[op0]);
+            registers[op0] = *(i32*)&t;
+        } break;
+        case BC_ROUND: {
+            op0 = (BCRegister)instructions[pc++];
+            float t = roundf(*(float*)&registers[op0]);
+            registers[op0] = *(i32*)&t;
+        } break;
+        case BC_TEST_VALUE: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            u8 size = (u8)instructions[pc++];
+            u32 data = *(u32*)&instructions[pc];
+            pc+=4;
+            
+            u8* testValue = (u8*)&registers[op0];
+            u8* computedValue = (u8*)&registers[op1];
+
+            bool same = !strncmp((char*)testValue, (char*)computedValue, size);
+
+            char tmp[]{
+                same ? '_' : 'x',
+                '-',
+                (char)((data>>8)&0xFF),
+                (char)(data&0xFF)
+            };
+            // fwrite(&tmp, 1, 1, stderr);
+
+            auto out = engone::GetStandardErr();
+            engone::FileWrite(out, &tmp, 4);
+
+            _ILOG(log::out << "\n";)
+        } break;
         #ifdef gone
         // case BC_CALL: {
         //     i32 addr = *(i32*)(codePtr + pc);
@@ -1046,34 +1118,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         //     break;
         // }
        
-        // break; case BC_TEST_VALUE: {
-        //     u8 r0 = DECODE_REG0(inst); // bytes
-        //     u8 r1 = DECODE_REG1(inst); // test value
-        //     u8 r2 = DECODE_REG2(inst); // computed value
-        //     // TODO: Strings don't work yet
-
-        //     u32 data = *(u32*)(codePtr + pc);
-        //     pc++;
-
-        //     u8* testValue = (u8*)getReg(r1);
-        //     u8* computedValue = (u8*)getReg(r2);
-
-        //     bool same = !strncmp((char*)testValue, (char*)computedValue, r0);
-
-        //     char tmp[]{
-        //         same ? '_' : 'x',
-        //         '-',
-        //         (char)((data>>8)&0xFF),
-        //         (char)(data&0xFF)
-        //     };
-        //     // fwrite(&tmp, 1, 1, stderr);
-
-        //     auto out = engone::GetStandardErr();
-        //     engone::FileWrite(out, &tmp, 4);
-
-        //     _ILOG(log::out << "\n";)
-        //     break;
-        // }
         #endif
         default: {
             log::out << log::RED << "Implement "<< log::PURPLE<< opcode << "\n";

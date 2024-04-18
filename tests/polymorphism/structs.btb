@@ -39,8 +39,8 @@ b: Poly<i64>;
 // b.first();
 
 // There was a bug that generated 8 for both
-test 4; a.first();
-test 8; b.first();
+_test 4; a.first();
+_test 8; b.first();
 
 @TEST_CASE(poly_other)
 
@@ -78,4 +78,4 @@ struct Main {
 
 ma: Main;
 
-test 24; ma.init();
+_test 24; ma.init();

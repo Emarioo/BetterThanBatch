@@ -1,5 +1,9 @@
-// #include "na.cpp"
+/*
+    This file is purely for experimentation
+    (comparing g++, MSVC with my x64 generator)
+*/
 
+// #include "na.cpp"
 
 // struct Cake {
 //     int n;

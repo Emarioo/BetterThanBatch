@@ -322,11 +322,14 @@ engone::Logger& operator<<(engone::Logger& logger,LinkerChoice v) {
     return logger << ToString(v);
 }
 
-int CompileOptions::addTestLocation(TokenRange& range){
+int CompileOptions::addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer){
+    auto imp = lexer->getImport_unsafe(loc);
+    auto info = lexer->getTokenSource_unsafe(loc);
+    
     testLocations.add({});
-    testLocations.last().line = range.firstToken.line;
-    testLocations.last().column = range.firstToken.column;
-    testLocations.last().file = Path{range.tokenStream()->streamName}.getFileName().text;
+    testLocations.last().line = info->line;
+    testLocations.last().column = info->column;
+    testLocations.last().file = imp->path;
     return testLocations.size()-1;
 }
 CompileOptions::TestLocation* CompileOptions::getTestLocation(int index) {
@@ -340,8 +343,8 @@ void CompileStats::printSuccess(CompileOptions* opts){
             details: win-x64, gcc
             files: examples/dev.btb, bin/dev.obj, dev.exe
         */
-        if(opts->initialSourceBuffer.buffer) {
-            log::out << " text buffer: "<<opts->initialSourceBuffer.origin<<"\n";
+        if(opts->source_buffer.buffer) {
+            log::out << " text buffer: "<<opts->source_buffer.origin<<"\n";
         } else {
             // log::out << " initial file: "<< opts->initialSourceFile.getFileName().text<<"\n";
             log::out << " initial file: "<< BriefString(opts->source_file,30)<<"\n";
@@ -402,296 +405,7 @@ void CompileStats::printWarnings(){
     using namespace engone;
     log::out << log::YELLOW<<"Compiler had "<<warnings<<" warning(s)\n";
 }
-// returns the amount of errors
-int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, X64Program* program) {
-    using namespace engone;
-    Assert(program);
-    
-    struct ErrorInfo {
-        std::string func;
-        std::string textOffset_hex;
-        std::string message;
-        int textOffset;
-        bool no_location = false;
-        // std::string symbolName;
-    };
-    DynamicArray<ErrorInfo> errors{};
-    ErrorInfo errorInfo{};
 
-    switch(linker) {
-    case LINKER_MSVC: {
-    // NOTE: MSVC linker may sometimes provide hints about potential functions you meant to use.
-    //  We ignore those at the moment. Perhaps we shouldn't?
-
-    enum State {
-        BEGIN, // beginning of a new error
-        MESSAGE, // the error message
-    };
-    State state = BEGIN;
-    std::string lastSymbol = "";
-    std::string lastFunc = "";
-    int msg_start = 0;
-    int index = 0;
-    int colon_count = 0;
-    while(index < inBuffer.size()) {
-        char chr = inBuffer[index];
-        char chr1 = 0;
-        if(index+1<inBuffer.size())
-            chr1 = inBuffer[index+1];
-        char chr2 = 0;
-        if(index+2<inBuffer.size())
-            chr2 = inBuffer[index+2];
-        index++;
-        
-        switch(state) {
-            case BEGIN: {
-                if(chr == ' ' && chr1 == ':' && chr2 == ' ') {
-                    index+=2; // skip ': '
-                    state = MESSAGE;
-                    msg_start = index;
-                }
-                break;
-            }
-            case MESSAGE: {
-                if(chr == '\n') {
-                    int msg_end = index-1; // -1 to exclude newline
-                    state = BEGIN;
-                    errorInfo.message = std::string(inBuffer.data() + msg_start, msg_end - msg_start);
-                    
-                    int extras = 0;
-                    if(program && !lastSymbol.empty()) {
-                        // this is really slow
-                        for(int i=0;i<program->namedUndefinedRelocations.size();i++) {
-                            auto& rel = program->namedUndefinedRelocations[i];
-                            if(rel.name == lastSymbol) {
-                                errorInfo.textOffset = rel.textOffset;
-                                errorInfo.textOffset_hex = NumberToHex(rel.textOffset);
-                                errorInfo.func = lastFunc;
-                                errorInfo.no_location = false;
-                                errors.add(errorInfo);
-                                extras++;
-                            }
-                        }
-                    }
-                    if(extras == 0) {
-                        errorInfo.no_location = true;
-                        errors.add(errorInfo);
-                    }
-                    lastFunc = "";
-                    lastSymbol = "";
-                    break;
-                }
-                const char* symbol_str = "external symbol ";
-                int symbol_len = strlen(symbol_str);
-                int correct = 0;
-                for(;correct<symbol_len && index+correct < inBuffer.size();correct++) {
-                    char c = inBuffer[index + correct];
-                    if(c != symbol_str[correct])
-                        break;
-                }
-                if(correct == symbol_len) {
-                    index += symbol_len;
-                    int symbol_start = index;
-                    while(index<inBuffer.size()) {
-                        char chr = inBuffer[index];
-                        index++;
-                        if(chr == ' ')
-                            break;
-                    }   
-                    int symbol_end = index-1;
-                    lastSymbol = std::string(inBuffer.data() + symbol_start, symbol_end - symbol_start);
-                }
-                const char* func_str = "in function ";
-                int func_len = strlen(func_str);
-                correct = 0;
-                for(;correct<func_len && index+correct < inBuffer.size();correct++) {
-                    char c = inBuffer[index + correct];
-                    if(c != func_str[correct])
-                        break;
-                }
-                if(correct == func_len) {
-                    index += func_len;
-                    int func_start = index;
-                    while(index<inBuffer.size()) {
-                        char chr = inBuffer[index];
-                        index++;
-                        if(chr == ' ' || chr == '\n') {
-                            index--;
-                            break;
-                        }
-                    }
-                    int func_end = index-1;
-                    lastFunc = std::string(inBuffer.data() + func_start, func_end - func_start);
-                }
-                break;
-            }
-            default: {
-                Assert(false);
-                break;
-            }
-        }
-    }
-    break;
-    }
-    case LINKER_GCC: {
-    // HOLY CRAP THIS CODE IS BEAUTIFUL AND SIMPLE
-    enum State {
-        BEGIN, // beginning of a new error
-        FUNCTION,
-        OFFSET, // parse text offset
-        MESSAGE, // the error message
-    };
-    State state = BEGIN;
-    int hex_start = 0;
-    int msg_start = 0;
-    int func_start = 0;
-    int index = 0;
-    while(index < inBuffer.size()) {
-        char chr = inBuffer[index];
-        char chr1 = 0;
-        if(index+1<inBuffer.size())
-            chr1 = inBuffer[index+1];
-        char chr2 = 0;
-        if(index+2<inBuffer.size())
-            chr2 = inBuffer[index+2];
-        index++;
-        
-        switch(state) {
-            case BEGIN: {
-                if(chr == '+' && chr1 == '0' && chr2 == 'x') {
-                    state = OFFSET;
-                    index+=2;
-                    hex_start = index;
-                }
-                // This catches the usr/bin/ld message which may contain good info such as: /usr/bin/ld: DWARF error: offset (4294967292) greater than or equal to .debug_abbrev size (117)
-                
-                if(chr == 'l' && chr1 == 'd' && chr2 == ':') {
-                    state = MESSAGE;
-                    errorInfo.no_location = true;
-                    index+=3; // skip "d: "
-                    msg_start = index;
-                }
-                if(chr == ':') {
-                    static const char* const func_msg = " in function";
-                    static const int func_msg_len = strlen(func_msg);
-                    int correct = 0;
-                    for(;correct<func_msg_len && index+correct < inBuffer.size();correct++) {
-                        char c = inBuffer[index + correct];
-                        if(c != func_msg[correct])
-                            break;
-                    }
-                    if(correct == func_msg_len) {
-                        index += func_msg_len +2; // +2 to skip ' `'
-                        state = FUNCTION;
-                        func_start = index;
-                    }
-                }
-                break;
-            }
-            case FUNCTION: {
-                if(chr == '\'') {
-                    int func_end = index-1;
-                    index++; // skip :
-                    state = BEGIN;
-                    errorInfo.func = std::string(inBuffer.data() + func_start, func_end - func_start);
-                }
-                break;
-            }
-            case OFFSET: {
-                // Parse hexidecimal
-                if(chr == ')') {
-                    int hex_end = index-1; // exclusive, -1 since index is at : right now
-
-                    u64 off = ConvertHexadecimal_content(inBuffer.data() + hex_start, hex_end - hex_start);
-                    errorInfo.no_location = false;
-                    errorInfo.textOffset = off;
-                    errorInfo.textOffset_hex = std::string(inBuffer.data() + hex_start, hex_end - hex_start);
-
-                    index+=2; // skip ': '
-
-                    state = MESSAGE;
-                    msg_start = index;
-                }
-                break;
-            }
-            case MESSAGE: {
-                if(chr == '\n') {
-                    int msg_end = index-1; // -1 to exclude newline
-                    state = BEGIN;
-                    errorInfo.message = std::string(inBuffer.data() + msg_start, msg_end - msg_start);
-                    errors.add(errorInfo);
-                }
-                break;
-            }
-            default: {
-                Assert(false);
-                break;
-            }
-        }
-    }
-    break;
-    }
-    default: {
-        log::out << log::GOLD << "Reformat of linker errors for "<<ToString(linker) << " is incomplete. Printing direct errors from linker.\n";
-        log::out.print(inBuffer.data(), inBuffer.size());
-        log::out.flush();
-        break;
-    }
-    }
-    
-    if(errors.size() > 0 && (!program || !program->debugInformation)) {
-        // NOTE: program == nullptr shouldn't really happen
-        log::out << log::GOLD << "Enabling debug information will display "<<log::RED<<"file:line"<<log::GOLD<<" instead of "<<log::RED<<".text+0x0"<<log::GOLD<<"\n";
-    }
-    FOR(errors) {
-        bool found = false;
-        if(!it.no_location && program && program->debugInformation) {
-            auto d = program->debugInformation;
-            int lineNumber = 0;
-            int fileIndex = 0;
-            // TODO: This will be slow with many functions
-            for(int k=0;k<d->functions.size();k++) {
-                auto& func = d->functions[k];
-                if(func.funcStart <= it.textOffset && it.textOffset < func.funcEnd) {
-                    fileIndex = func.fileIndex;
-                    if(func.lines.size()>0)
-                        lineNumber = func.lines[0].lineNumber;
-                    for(int i=0;i < func.lines.size();i++) {
-                        auto& line = func.lines[i];
-                        if(it.textOffset < line.asm_address) { // NOTE: Is funcStart + funcOffset correct?
-                        // if(it.textOffset < func.funcStart + line.funcOffset) { // NOTE: Is funcStart + funcOffset correct?
-                            found = true;
-                            break;
-                        }
-                        lineNumber = line.lineNumber;
-                    }
-                    if(!found) {
-                        if(func.lines.size()>0)
-                            lineNumber = func.lines.last().lineNumber;
-                        found = true;
-                    }
-                    if(found)
-                        break;
-                }
-            }
-            if(found) {
-                log::out << log::RED << TrimCWD(d->files[fileIndex])<<":" << lineNumber<<": ";
-                log::out << log::NO_COLOR << it.message << "\n";
-            }
-        }
-        if(!found) {
-            if(it.no_location) {
-                log::out << log::RED << "linker: ";
-            } else if(it.func.empty()) {
-                log::out << log::RED << ".text+0x" << it.textOffset_hex<<": ";
-            } else {
-                log::out << log::RED << ".text+0x" << it.textOffset_hex<<" ("<<it.func<<"): ";
-            }
-            log::out << log::NO_COLOR << it.message << "\n";
-        }
-    }
-    return errors.size();
-}
 void Compiler::processImports() {
     using namespace engone;
     lock_imports.lock();
@@ -1010,7 +724,7 @@ void Compiler::processImports() {
                 if(!new_errors) {
                     for(auto t : tinycodes) {
                         log::out << log::GOLD << t->name << "\n";
-                        t->print(0,-1,bytecode);
+                        t->print(0,-1,bytecode,nullptr,true);
                     }
                     
                     switch(options->target) {
@@ -1139,8 +853,32 @@ void Compiler::run(CompileOptions* options) {
         default: Assert(false);
     }
 
-    u32 import_id = addImport(options->source_file);
-    Assert(import_id); // nocheckin
+    
+    if(options->source_buffer.buffer && options->source_file.size()) {
+        log::out << log::RED << "A source buffer and source file was specified. You can only specify one\n";
+        options->compileStats.errors++;
+        return;
+    }
+    u32 import_id = 0;
+    if(options->source_buffer.buffer) {
+        StringBuilder builder{};
+        // We ignore source_buffer.startColumn
+        for(int i=0;i<options->source_buffer.startLine-1;i++){
+            builder.append("\n");
+        }
+        builder.append(options->source_buffer.buffer, options->source_buffer.size);
+        auto virtual_path = options->source_buffer.origin;
+        lexer.createVirtualFile(virtual_path, &builder);
+        import_id = addImport(virtual_path);
+    } else {
+        import_id = addImport(options->source_file);
+    }
+
+    if(import_id == 0) {
+        log::out << log::RED << "Could not find '"<<options->source_file << "'\n";
+        options->compileStats.errors++;
+        return;
+    }
 
     initial_import_id = import_id;
     

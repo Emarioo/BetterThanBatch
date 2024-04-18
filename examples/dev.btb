@@ -8,22 +8,29 @@
 
 // fn @stdcall yoo(a: i32, b: i32) -> i64 {
 
-fn n() -> i32 {
-    return 923
-}
+// TODO: Recursive macros are broken
+// #macro R(T,...) T + R(...)
+// R(a,b,c)
 
-fn @stdcall yoo(a: i32, b: i32) -> i32 {
-    return a + b*2 + n()
-    // return 1
-}
+// 1.0 + 2.0
+_test 1.0 + 2.0; 1.0
 
-fn main() -> i32 {
-    // arr: i32[256];
-    // a,c,d,e,f,g,h: i64;
-    // main();
-    a := yoo(9, 2)
-    return a;
-}
+// fn n() -> i32 {
+//     return 923
+// }
+
+// fn @stdcall yoo(a: i32, b: i32) -> i32 {
+//     return a + b*2 + n()
+//     // return 1
+// }
+
+// fn main() -> i32 {
+//     // arr: i32[256];
+//     // a,c,d,e,f,g,h: i64;
+//     // main();
+//     a := yoo(9, 2)
+//     return a;
+// }
 
 // #import "examples/foreign/main.btb"
 

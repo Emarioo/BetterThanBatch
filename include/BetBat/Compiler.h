@@ -134,6 +134,7 @@ struct CompileOptions {
     TargetPlatform target = CONFIG_DEFAULT_TARGET;
     LinkerChoice linker = CONFIG_DEFAULT_LINKER;
     // std::string linker_cmd = "";
+    TextBuffer source_buffer; // pure text instead of a path to some file
 
     bool useDebugInformation = false;
     bool silent=false;
@@ -151,7 +152,6 @@ struct CompileOptions {
 
     DynamicArray<std::string> userArguments; // Ignored if output isn't executed. Arguments to pass to the interpreter or executable
 
-    TextBuffer initialSourceBuffer;
     DynamicArray<Path> importDirectories; // Directories to look for imports (source files)
     int threadCount=1;
 
@@ -164,7 +164,8 @@ struct CompileOptions {
     DynamicArray<TestLocation> testLocations;
     // returns index of the newly added test location
     TestLocation* getTestLocation(int index);
-    int addTestLocation(TokenRange& range);
+    // int addTestLocation(TokenRange& range);
+    int addTestLocation(lexer::SourceLocation loc, lexer::Lexer* lexer);
 
     CompileStats compileStats{};
 };

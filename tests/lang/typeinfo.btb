@@ -37,16 +37,16 @@ for @ptr lang_typeInfos {
 
     if name == "Milkshake" {
         found_struct = true;
-        test 12; it.size;
-        test 3; it.members.end - it.members.beg;
+        _test 12; it.size;
+        _test 3; it.members.end - it.members.beg;
     } else if name == "Flavour" {
         found_enum = true;
-        test 2; it.size;
+        _test 2; it.size;
     }
 }
 
-test true; found_enum;
-test true; found_struct;
+_test true; found_enum;
+_test true; found_struct;
 
 @TEST_CASE(printing_types)
 #import "Logger"

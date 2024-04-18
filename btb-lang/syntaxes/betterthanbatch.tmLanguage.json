@@ -50,7 +50,7 @@
 		"keywords": {
 			"patterns": [{
 				"name": "keyword.control",
-				"match": "\\b(if|else|while|switch|case|default|for|break|namespace|continue|global|fn|enum|union|struct|return|asm|defer|each|operator|cast|test|using|as)\\b"
+				"match": "\\b(if|else|while|switch|case|default|for|break|namespace|continue|global|fn|enum|union|struct|return|asm|defer|each|operator|cast|_test|using|as)\\b"
 			}
 			
 			]

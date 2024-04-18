@@ -5,35 +5,35 @@ while i < 5 {
     sum += i
     i++
 }
-test 5; i;
-test 10; sum;
+_test 5; i;
+_test 10; sum;
 @TEST_CASE(for)
 i := 0
 for 0..5 {
-    test i; it;
-    test i; nr;
+    _test i; it;
+    _test i; nr;
     i++
 }
-test 5; i;
+_test 5; i;
 @TEST_CASE(for_rev)
 i := 0
 N := 5
 for @rev (-2)..N {
-    test N - 1 - i; it;
-    test N - 1 - i; nr;
+    _test N - 1 - i; it;
+    _test N - 1 - i; nr;
     i++
 }
-test 7; i;
+_test 7; i;
 @TEST_CASE(for_ptr)
 arr: i32[] {
     0,1,2,3,4
 }
 for @ptr arr {
-    test nr; *it;
+    _test nr; *it;
     *it = nr*2
 }
 for arr {
-    test 2*nr; it;
+    _test 2*nr; it;
 }
 
 @TEST_CASE(for_str)

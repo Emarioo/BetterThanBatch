@@ -123,7 +123,7 @@ enum InstructionType : u8 {
     BC_RDTSC,
     // #define BC_RDTSCP 109
     // compare and swap, atomic
-    BC_CMP_SWAP,
+    BC_ATOMIC_CMP_SWAP,
     BC_ATOMIC_ADD,
 
     BC_SQRT,
@@ -137,6 +137,10 @@ enum InstructionType : u8 {
     // The stack must be aligned to 16 bytes because
     // there are some functions being called inside which reguire it.
     BC_TEST_VALUE,
+
+    BC_EXTEND1 = 253, // extend opcode by 1 byte
+    BC_EXTEND2 = 254, // extend opcode by 2 bytes
+    BC_RESERVED = 255,
 };
 enum BCRegister : u8 {
     BC_REG_INVALID = 0,
@@ -459,16 +463,18 @@ struct BytecodeBuilder {
     
     void emit_memzero(BCRegister dst, BCRegister size_reg, u8 batch);
     void emit_memcpy(BCRegister dst, BCRegister src, BCRegister size_reg);
-    // void emit_strlen(BCRegister len_reg, BCRegister src_len);
-    // void emit_rdtsc(BCRegister to, BCRegister from, u8 batch);
+    void emit_strlen(BCRegister len_reg, BCRegister src_reg);
+    void emit_rdtsc(BCRegister to);
     
-    // void emit_cmp_swap(BCRegister to, BCRegister from, u8 batch);
-    // void emit_atomic_add(BCRegister to, BCRegister from, u8 batch);
+    void emit_atomic_cmp_swap(BCRegister ptr_dst, BCRegister old, BCRegister new_reg);
+    void emit_atomic_add(BCRegister to, BCRegister from, InstructionControl control);
     
-    // void emit_sqrt(BCRegister to, BCRegister from, u8 batch);
-    // void emit_round(BCRegister to, BCRegister from, u8 batch);
+    void emit_sqrt(BCRegister to);
+    void emit_round(BCRegister to);
+    // TODO: double version of sqrt, round...
+    // TODO: sin, cos, tan...
     
-    // void emit_test(BCRegister to, BCRegister from, u8 size);
+    void emit_test(BCRegister to, BCRegister from, u8 size, i32 test_location);
     
     int get_pc() { return tinycode->instructionSegment.size(); }
     void fix_jump_imm32_here(int imm_index);

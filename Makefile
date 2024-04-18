@@ -1,3 +1,6 @@
+# This file is for Linux
+# Not Windows, use build.bat for Windows
+
 .SILENT:
 all: build build_native
 

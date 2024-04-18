@@ -256,7 +256,7 @@ struct X64Builder {
     void emit_modrm_sib(u8 mod, X64Register reg, u8 scale, u8 index, X64Register base_reg);
     void emit_modrm_sib_slash(u8 mod, u8 reg, u8 scale, u8 index, X64Register base_reg);
 
-    void emit_bytes(u8* arr, u64 len);
+    void emit_bytes(const u8* arr, u64 len);
 
     // These are here to prevent implicit casting
     // of arguments which causes mistakes.
@@ -267,13 +267,17 @@ struct X64Builder {
     void emit8(i8 _);
     void emit_modrm_rip(u8, i64);
     
-    void fix_relative_jump_imm8(u32 offset, u8 value);
+    // void fix_jump_imm8(u32 offset, u8 value);
+    void emit_jmp_imm8(u32 offset);
+    void fix_jump_here_imm8(u32 offset);
     void set_imm32(u32 offset, u32 value);
+    void set_imm8(u32 offset, u8 value);
     
     bool _reserve(u32 size);
 
-    void emit_mov_reg_rm(X64Register reg, X64Register rm, InstructionControl control, int disp32);
-    void emit_mov_rm_reg(X64Register reg, X64Register rm, InstructionControl control, int disp32);
+    void emit_mov_reg_reg(X64Register reg, X64Register rm);
+    void emit_mov_reg_mem(X64Register reg, X64Register rm, InstructionControl control, int disp32);
+    void emit_mov_mem_reg(X64Register reg, X64Register rm, InstructionControl control, int disp32);
 
     // only emits if non-zero
     void emit_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
@@ -310,8 +314,9 @@ struct X64Builder {
         return b + 1;
     }
     
-    static const X64Register RESERVED_REG0 = X64_REG_DI;
+    static const X64Register RESERVED_REG0 = X64_REG_DI; // You cannot change these because code in x64_gen assume that other registers are available and that DI and SI are reserved
     static const X64Register RESERVED_REG1 = X64_REG_SI;
+    static const X64Register RESERVED_REG2 = X64_REG_R11;
     
 private:
     // recursively
@@ -329,12 +334,11 @@ private:
 
         Env* env_in0=nullptr;
         Env* env_in1=nullptr;
+        Env* env_in2=nullptr;
 
-        union {
-            Operand reg0{};
-            // Operand out;
-        };
+        Operand reg0{};
         Operand reg1{};
+        Operand reg2{};
     };
 };
 

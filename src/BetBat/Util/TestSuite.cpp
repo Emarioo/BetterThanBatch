@@ -375,12 +375,11 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         options.linker = user_options->linker;
         options.verbose = user_options->verbose;
         options.modulesDirectory = user_options->modulesDirectory;
-        if(!useInterp)
+        if(!useInterp) {
             options.target = user_options->target;
-        // options.initialSourceFile = testcase.textBuffer.origin;
-        options.initialSourceBuffer = testcase.textBuffer;
-        // options.initialSourceBufferSize = testcase.size
-        
+            options.output_file = "bin/temp.exe";
+        }
+        options.source_buffer = testcase.textBuffer;
         
         if(!options.instant_report) {
             // log::out << log::GOLD << "Remaining tests: "<<(testCases.size()-i)<<" " << log::LIME << BriefString(testcase.testName,20) <<"                               \r"; // <- extra space to cover over previous large numbers
@@ -407,15 +406,18 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         // TODO: Run bytecode and x64 version by default.
         //   An argument can be passed to this function if you just want one target.
 
-        Bytecode* bytecode = nullptr;
-        Assert(false);
+        Compiler compiler{};
+        compiler.run(&options);
+        // Bytecode* bytecode = nullptr;
+        // Assert(false);
         // CompileSource(&options);
-        defer {
-            if(bytecode) {
-                Bytecode::Destroy(bytecode);
-                bytecode = nullptr;
-            }
-        };
+
+        // defer {
+        //     if(bytecode) {
+        //         Bytecode::Destroy(bytecode);
+        //         bytecode = nullptr;
+        //     }
+        // };
 
         u64 failedTests = 0;
         u64 totalTests = 0;
@@ -454,25 +456,21 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
             }
         }
         
-        if(!bytecode) {
+        if(options.compileStats.errors > 0) {
             // errors will be smaller than errorTypes since errors isn't incremented when doing TEST_ERROR(
             if(options.compileStats.errorTypes.size() < options.compileStats.errors) {
                 log::out << log::YELLOW << "TestSuite: errorTypes: "<< options.compileStats.errorTypes.size() << ", errors: "<<options.compileStats.errors <<", they should be equal\n";
             }
         } else {
             if(useInterp) {
-                Assert(false);
+                VirtualMachine vm{};
+                vm.execute(compiler.bytecode,"main");
+                // Assert(false);
                 // interpreter.reset();
                 // interpreter.silent = true;
                 // interpreter.execute(bytecode);
             } else {
-                options.output_file = "bin/temp.exe";
-                bool yes = false;
-                Assert(false);
-                // bool yes = ExportTarget(&options, bytecode);
-                
-                if(!yes)
-                    continue;
+                // TODO: Check if x64 failed, check if exe was produced
 
                 // IMPORTANT: The program will freeze if the pipe buffer is filled since there ise
                 //   no space to write to. You would need a thread which processes the buffer while

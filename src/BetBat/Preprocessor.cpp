@@ -652,9 +652,6 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     continue;
                 }
             }
-            // if(token.type == '#') {
-            //     // ?
-            // }
             
             layer->step();
             if(layer->callee->input_arguments.size() == 0)
@@ -676,38 +673,6 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 continue;
             }
             
-            if(token.type == '#') {
-                lexer::Token mac_tok = layer->get(lexer,1);
-                if(mac_tok.type == lexer::TOKEN_IDENTIFIER) {
-                    std::string name = lexer->getStdStringFromToken(mac_tok);
-                    MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
-                    if (macroroot) {
-                        layer->step(); // hashtag
-                        layer->step(); // name
-                        
-                        Layer* layer_macro = new Layer(true);
-                        layer_macro->root = macroroot;
-                        layer_macro->sethead((u32)0);
-                        stack.add(layer_macro);
-                        
-                        token = layer->get(lexer);
-                        if(token.type == '(') {
-                            layer->step();
-                            
-                            Layer* layer_arg = new Layer(false);
-                            layer_arg->caller = layer;
-                            layer_arg->callee = layer_macro;
-                            layer_arg->specific = layer->specific;
-                            layer_arg->sethead(layer->ref_head);
-                            
-                            stack.add(layer_arg);
-                        }
-                        
-                        continue;
-                    }
-                }
-            }
-            
             if(token.type == lexer::TOKEN_IDENTIFIER) {
                 int param_index = layer->specific->matchArg(token,lexer);
                 if(param_index!=-1) {
@@ -726,20 +691,46 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     for(int i = real_index; i < real_index + real_count;i++) {
                         auto& list = layer->input_arguments[i];
                         for(int j=0;j<list.size();j++) {
-                            lexer->appendToken(new_lexer_import, list[j]);
+                            lexer->appendToken(new_lexer_import, list[j], true);
                         }
                         if(i+1 != real_index + real_count && list.size() != 0) {
                             // nocheckin, fix line and column.
-                            lexer->appendToken(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE, 0, 0);
+                            lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
                             // lexer->appendToken(new_import_id, list[j]);
                         }
                     }
                     
                     continue;
                 }
+                std::string name = lexer->getStdStringFromToken(token);
+                MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
+                if (macroroot) {
+                    layer->step(); // hashtag
+                    layer->step(); // name
+                    
+                    Layer* layer_macro = new Layer(true);
+                    layer_macro->root = macroroot;
+                    layer_macro->sethead((u32)0);
+                    stack.add(layer_macro);
+                    
+                    token = layer->get(lexer);
+                    if(token.type == '(') {
+                        layer->step();
+                        
+                        Layer* layer_arg = new Layer(false);
+                        layer_arg->caller = layer;
+                        layer_arg->callee = layer_macro;
+                        layer_arg->specific = layer->specific;
+                        layer_arg->sethead(layer->ref_head);
+                        
+                        stack.add(layer_arg);
+                    }
+                    
+                    continue;
+                }
             }
             layer->step();
-            lexer->appendToken(new_lexer_import, token);
+            lexer->appendToken(new_lexer_import, token, true);
         }
     }
     #undef gettok
@@ -795,11 +786,11 @@ SignalIO PreprocContext::parseOne() {
         } else if(!strcmp(str, "load")) {
             advance();
             signal = parseLoad();
-        } else if(!strcmp(str, "if")) {
-            advance();
-            signal = parseIf();
+        // } else if(!strcmp(str, "if")) {
+        //     advance();
+        //     signal = parseIf();
         } else {
-            signal =  parseMacroEvaluation();
+            signal = parseMacroEvaluation();
             if(signal != SIGNAL_SUCCESS) {
                 // the macro was not a macro
                 if(evaluateTokens) {

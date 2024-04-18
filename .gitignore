@@ -1,6 +1,8 @@
+# ignore lib and dll unless they are from libs
 *.lib
 *.dll
 !libs/**
+
 bin
 logs
 *.exe
@@ -8,6 +10,10 @@ logs
 *.ilk
 *.obj
 *.o
+*.obj
 *.pdb
 tracy
 !libs/tracy-0.10/**
+
+# I often name stdout output from program 'out', no need to commit that
+out

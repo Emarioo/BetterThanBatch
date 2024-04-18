@@ -198,7 +198,7 @@ struct MasterInfo {
             return Slice<char>{null,0};
         while true {
             oldVal = usedFiles;
-            if !compare_swap(cast<void*>&usedFiles, oldVal, oldVal + 1) {
+            if !atomic_compare_swap(cast<void*>&usedFiles, oldVal, oldVal + 1) {
                 // log("Retry")
                 continue;
             }

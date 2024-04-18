@@ -23,7 +23,7 @@ say2(32) // should be fine, i32 is casted to i16
 operator +(a: i32, b: i32) -> i32 {
     return a * b;
 }
-test 20; 4 + 5;
+_test 20; 4 + 5;
 
 struct i128 {
     x: i64;
@@ -36,14 +36,14 @@ operator |(a: i128, b: i128) -> i128 {
 flag0 := i128{5,8}
 flag1 := i128{3,9}
 result := i128{5,8} | i128{3,9}
-test flag0.x | flag1.x; result.x;
-test flag0.y | flag1.y; result.y;
+_test flag0.x | flag1.x; result.x;
+_test flag0.y | flag1.y; result.y;
 
 @TEST_CASE(index_operator)
 operator [](slice: Slice<char>, index: i64) -> i32 {
     return slice.ptr[index];
 }
 str := "Hello";
-test 'H'; str[0];
+_test 'H'; str[0];
 
 // str[2] = 'S'; // Not possible at the moment, how do we make it possible?

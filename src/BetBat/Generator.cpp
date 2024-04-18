@@ -1534,85 +1534,79 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             // TODO: You could do some special optimisations when using intrinsics.
             //  If the arguments are strictly variables or constants then you can use a mov instruction 
             //  instead messing with push and pop.
-            Assert(false); // nocheckin I messed these up in the rewrite.
-            // auto& name = funcImpl->astFunction->name;
-            // if(name == "memcpy"){
-            //     builder.emit_pop(BC_REG_B);
-            //     builder.emit_pop(BC_REG_C);
-            //     builder.emit_pop(BC_REG_D);
-            //     builder.emit_memcpy(BC_REG_D, BC_REG_C, BC_REG_B);
-            // } else if(name == "strlen"){
-            //     builder.emit_pop(BC_REG_F);
-            //     builder.emit_strlen(BC_REG_A, BC_REG_F);
-            //     builder.emit_push(BC_REG_A); // len
-            //     outTypeIds->add(AST_UINT32);
-            // } else if(name == "memzero"){
-            //     builder.emit_pop(BC_REG_B); // ptr
-            //     builder.emit_pop(BC_REG_RDI);
-            //     builder.emit_memzero(BC_REG_RDI, BC_REG_B, 0);
-            // } else if(name == "rdtsc"){
-            //     // no input
-            //     builder.emit_({BC_RDTSC, BC_REG_A, BC_REG_RDX});
+            auto& name = funcImpl->astFunction->name;
+            if(name == "memcpy"){
+                builder.emit_pop(BC_REG_C);
+                builder.emit_pop(BC_REG_B);
+                builder.emit_pop(BC_REG_A);
+                builder.emit_memcpy(BC_REG_A, BC_REG_B, BC_REG_C);
+            } else if(name == "strlen"){
+                builder.emit_pop(BC_REG_B);
+                builder.emit_strlen(BC_REG_A, BC_REG_B);
+                builder.emit_push(BC_REG_A); // len
+                outTypeIds->add(AST_UINT32);
+            } else if(name == "memzero"){
+                builder.emit_pop(BC_REG_B); // ptr
+                builder.emit_pop(BC_REG_A);
+                builder.emit_memzero(BC_REG_A, BC_REG_B, 0);
+            } else if(name == "rdtsc"){
+                builder.emit_rdtsc(BC_REG_A);
+                builder.emit_push(BC_REG_A); // timestamp counter
+                outTypeIds->add(AST_UINT64);
+            // } else if(funcImpl->name == "rdtscp"){
+            //     builder.emit_({BC_RDTSC, BC_REG_A, BC_REG_ECX, BC_REG_RDX});
             //     builder.emit_push(BC_REG_A); // timestamp counter
+            //     builder.emit_push(BC_REG_ECX); // processor thing?
                 
             //     outTypeIds->add(AST_UINT64);
-            // // } else if(funcImpl->name == "rdtscp"){
-            // //     builder.emit_({BC_RDTSC, BC_REG_A, BC_REG_ECX, BC_REG_RDX});
-            // //     builder.emit_push(BC_REG_A); // timestamp counter
-            // //     builder.emit_push(BC_REG_ECX); // processor thing?
-                
-            // //     outTypeIds->add(AST_UINT64);
-            // //     outTypeIds->add(AST_UINT32);
-            // } else if(name == "compare_swap"){
-            //     Assert(false);
-            //     // builder.emit_pop(BC_REG_D); // new
-            //     // builder.emit_pop(BC_REG_A); // old
-            //     // builder.emit_pop(BC_REG_B); // ptr
-            //     // builder.emit_({BC_CMP_SWAP, BC_REG_B, BC_REG_A, BC_REG_EDX});
-            //     // builder.emit_push(BC_REG_AL);
-                
-            //     outTypeIds->add(AST_BOOL);
-            // } else if(name == "atomic_add"){
-            //     Assert(false);
-            //     // builder.emit_pop(BC_REG_A);
-            //     // builder.emit_pop(BC_REG_B);
-            //     // builder.emit_({BC_ATOMIC_ADD, BC_REG_B, BC_REG_A});
-            // } else if(name == "sqrt"){
-            //     Assert(false);
-            //     // builder.emit_pop(BC_REG_XMM0f);
-            //     // builder.emit_({BC_SQRT, BC_REG_XMM0f});
-            //     // builder.emit_push(BC_REG_XMM0f);
+            //     outTypeIds->add(AST_UINT32);
+            } else if(name == "atomic_compare_swap"){
+                builder.emit_pop(BC_REG_C); // new
+                builder.emit_pop(BC_REG_B); // old
+                builder.emit_pop(BC_REG_A); // ptr
+                builder.emit_atomic_cmp_swap(BC_REG_A, BC_REG_B, BC_REG_C);
+                builder.emit_push(BC_REG_A);
+                outTypeIds->add(AST_INT32);
+            } else if(name == "atomic_add"){
+                builder.emit_pop(BC_REG_B);
+                builder.emit_pop(BC_REG_A);
+                builder.emit_atomic_add(BC_REG_A, BC_REG_B, CONTROL_32B);
+                builder.emit_push(BC_REG_A);
+                outTypeIds->add(AST_INT32);
+            } else if(name == "sqrt"){
+                builder.emit_pop(BC_REG_A);
+                builder.emit_sqrt(BC_REG_A);
+                builder.emit_push(BC_REG_A);
+                outTypeIds->add(AST_FLOAT32);
+            } else if(name == "round"){
+                builder.emit_pop(BC_REG_A);
+                builder.emit_round(BC_REG_A);
+                builder.emit_push(BC_REG_A);
+                outTypeIds->add(AST_FLOAT32);
+            } 
+            // else if(funcImpl->name == "sin"){
+            //     builder.emit_pop(BC_REG_A);
+            //     builder.emit_({BC_SIN, BC_REG_A});
+            //     builder.emit_push(BC_REG_A);
             //     outTypeIds->add(AST_FLOAT32);
-            // } else if(name == "round"){
-            //     Assert(false);
-            //     // builder.emit_pop(BC_REG_XMM0f);
-            //     // builder.emit_({BC_ROUND, BC_REG_XMM0f});
-            //     // builder.emit_push(BC_REG_XMM0f);
+            // } else if(funcImpl->name == "cos"){
+            //     builder.emit_pop(BC_REG_A);
+            //     builder.emit_({BC_COS, BC_REG_A});
+            //     builder.emit_push(BC_REG_A);
             //     outTypeIds->add(AST_FLOAT32);
-            // } 
-            // // else if(funcImpl->name == "sin"){
-            // //     builder.emit_pop(BC_REG_A);
-            // //     builder.emit_({BC_SIN, BC_REG_A});
-            // //     builder.emit_push(BC_REG_A);
-            // //     outTypeIds->add(AST_FLOAT32);
-            // // } else if(funcImpl->name == "cos"){
-            // //     builder.emit_pop(BC_REG_A);
-            // //     builder.emit_({BC_COS, BC_REG_A});
-            // //     builder.emit_push(BC_REG_A);
-            // //     outTypeIds->add(AST_FLOAT32);
-            // // } else if(funcImpl->name == "tan"){
-            // //     builder.emit_pop(BC_REG_A);
-            // //     builder.emit_({BC_TAN, BC_REG_A});
-            // //     builder.emit_push(BC_REG_A);
-            // //     outTypeIds->add(AST_FLOAT32);
-            // // }
-            // else {
-            //     ERR_SECTION(
-            //         ERR_HEAD2(expression->location)
-            //         ERR_MSG("'"<<name<<"' is not an intrinsic function.")
-            //         ERR_LINE2(expression->location,"not an intrinsic")
-            //     )
+            // } else if(funcImpl->name == "tan"){
+            //     builder.emit_pop(BC_REG_A);
+            //     builder.emit_({BC_TAN, BC_REG_A});
+            //     builder.emit_push(BC_REG_A);
+            //     outTypeIds->add(AST_FLOAT32);
             // }
+            else {
+                ERR_SECTION(
+                    ERR_HEAD2(expression->location)
+                    ERR_MSG("'"<<name<<"' is not an intrinsic function.")
+                    ERR_LINE2(expression->location,"not an intrinsic")
+                )
+            }
             return SIGNAL_SUCCESS;
         } break; 
         case BETCALL: {
@@ -5560,9 +5554,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             Assert(currentFrameOffset % 16 == 0);
             // TODO: we may need to alloc_local to align stack, then test, then free_local
             // builder.emit_stack_alignment(16); 
-            Assert(false);
-            // int loc = info.compileInfo->options->addTestLocation(statement->location);
-            // builder.emit_test(BC_REG_D, BC_REG_A, 8, loc);
+            // Assert(false);
+            int loc = compiler->options->addTestLocation(statement->location, &compiler->lexer);
+            builder.emit_test(BC_REG_D, BC_REG_A, 8, loc);
             
             // builder.restoreStackMoment(moment);
             

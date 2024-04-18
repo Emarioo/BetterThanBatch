@@ -97,6 +97,11 @@ struct ParseInfo : public PhaseContext {
         if(!info) {
             return &eof;
         }
+        #ifdef LEXER_DEBUG_DETAILS
+        lexer::Chunk* chunk = lexer_chunks[fcindex];
+        if(info->flags & lexer::TOKEN_FLAG_HAS_DATA)
+            info->s = (char*)chunk->aux_data + info->data_offset + 1;
+        #endif
 
         return info;
     }
@@ -140,8 +145,11 @@ struct ParseInfo : public PhaseContext {
             //     *string = {"",1};
             return &eof;
         }
-        if((info->flags & lexer::TOKEN_FLAG_HAS_DATA))
-            *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+        if((info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
+            *string = {(char*)chunk->aux_data + info->data_offset + 1, 
+            chunk->aux_data[info->data_offset]};
+            info->s = (char*)chunk->aux_data + info->data_offset + 1;
+        }
 
         return info;
     }
@@ -172,6 +180,11 @@ struct ParseInfo : public PhaseContext {
             // return out;
         }
 
+        #ifdef LEXER_DEBUG_DETAILS
+        if(info->flags & lexer::TOKEN_FLAG_HAS_DATA)
+            out.s= (char*)chunk->aux_data + info->data_offset + 1;
+        #endif
+
         out.flags = info->flags;
         out.type = info->type;
         out.origin = lexer->encode_origin(chunk->chunk_index,tindex);
@@ -200,8 +213,12 @@ struct ParseInfo : public PhaseContext {
             return lexer_import->geteof();
             // return out;
         }
-        if((info->flags & lexer::TOKEN_FLAG_HAS_DATA))
+        if((info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
             *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+            #ifdef LEXER_DEBUG_DETAILS
+            out.s = (char*)chunk->aux_data + info->data_offset + 1;
+            #endif
+        }
 
         out.flags = info->flags;
         out.type = info->type;

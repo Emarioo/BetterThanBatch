@@ -116,9 +116,9 @@ fn TestMapString(tableSize: u32, count: u32) {
 
 // TestMapString(5,10)
 
-test 0; TestMap(400,200);
-test 0; TestMap(4000,4000);
-test 0; TestMap(100,1000);
+_test 0; TestMap(400,200);
+_test 0; TestMap(4000,4000);
+_test 0; TestMap(100,1000);
 
 // fn TestDistribution(tableSize: u32, values: i32) {
 //     map: Map<i32, i32>;
