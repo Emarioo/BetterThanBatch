@@ -156,7 +156,7 @@ SignalIO PreprocContext::parseMacroDefinition() {
             token = gettok();
             if(lexer->equals_identifier(token, "endmacro")){
                 advance();
-                endToken = gethead()-3;
+                endToken = gethead()-2;
                 break;
             }
             if(lexer->equals_identifier(token, "macro")){
@@ -182,6 +182,7 @@ SignalIO PreprocContext::parseMacroDefinition() {
                 ERR_LINE2(name_token, "this needs #endmacro somewhere")
                 ERR_LINE2(gettok(-1),"macro content ends here!")
             )
+            invalidContent = true;
         }
     }
     // }
@@ -199,6 +200,7 @@ SignalIO PreprocContext::parseMacroDefinition() {
     if(!evaluateTokens) {
         MacroRoot* rootMacro = preprocessor->create_or_get_macro(import_id, name_token, localMacro.isVariadic() && localMacro.parameters.size() > 1);
         
+        localMacro.location = { name_token };
         preprocessor->insertCertainMacro(import_id, rootMacro, &localMacro);
 
         std::string name = lexer->getStdStringFromToken(name_token);
@@ -467,6 +469,7 @@ SignalIO PreprocContext::parseImport() {
     return SIGNAL_SUCCESS;
 }
 SignalIO PreprocContext::parseMacroEvaluation() {
+    using namespace engone;
     ZoneScopedC(tracy::Color::Goldenrod2);
     
     if(!evaluateTokens) {
@@ -513,6 +516,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         u32 _head = 0;
         u32 start_head = 0;
         u32* ref_head = nullptr;
+        u16 ending_suffix = 0;
         bool eval_content = true;
         MacroSpecific* specific;
         MacroRoot* root;
@@ -542,6 +546,22 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 return lexer->getTokenFromImport(specific->content.importId, specific->content.token_index_start + *ref_head + off);
             }
         }
+        bool is_last(lexer::Lexer* lexer, int off = 0) {
+            Assert(specific || id != 0);
+            lexer::Token token{};
+            if(id!=0 && !eval_content) {
+                u32 index = *ref_head + off;
+                // if(index >= specific->content.token_index_end)
+                //     return {lexer::TOKEN_EOF};
+                token = lexer->getTokenFromImport(id, *ref_head + off);
+            } else {
+                u32 index = specific->content.token_index_start + *ref_head + off;
+                if(index >= specific->content.token_index_end)
+                    return true;
+                token = lexer->getTokenFromImport(specific->content.importId, specific->content.token_index_start + *ref_head + off);
+            }
+            return token.type == lexer::TOKEN_EOF;
+        }
         void step(int n = 1) {
             *ref_head+=n;
         }
@@ -558,24 +578,28 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             return *ref_head;
         }
     };
-    DynamicArray<Layer*> stack{};
+    DynamicArray<Layer*> layers{};
     Layer* first = new Layer(true);
-    stack.add(first);
+    layers.add(first);
     first->root = root;
     first->sethead((u32)0);
+    
+    // u16 ending_suffix = macro_token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
     
     lexer::Token tok = gettok();
     if(!(macro_token.flags & (lexer::TOKEN_FLAG_ANY_SUFFIX)) && tok.type == '(') {
         advance();
         Layer* second = new Layer(false);
-        stack.add(second);
+        layers.add(second);
         second->callee = first;
         second->id = import_id;
-        second->sethead(&head);
+        second->sethead(&head); // head is the preprocessors head
     }
+
+    #define SET_SUFFIX(VAR,FROM) VAR = (VAR & ~lexer::TOKEN_FLAG_ANY_SUFFIX) | (FROM & lexer::TOKEN_FLAG_ANY_SUFFIX)
     
-    while(stack.size() != 0) {
-        if(stack.size() >= PREPROC_REC_LIMIT) {
+    while(layers.size() != 0) {
+        if(layers.size() >= PREPROC_REC_LIMIT) {
             // TODO: Better error message, maybe provide macro call stack with arguments?
             ERR_SECTION(
                 ERR_HEAD2(macro_token)
@@ -585,11 +609,13 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             return SIGNAL_COMPLETE_FAILURE;
         }
         
-        Layer* layer = stack.last();
-        if(!layer->eval_content) {
+        Layer* layer = layers.last();
+        if(!layer->eval_content) { // evaluate arguments
             
             lexer::Token token = layer->get(lexer);
             if(token.type == lexer::TOKEN_EOF) {
+                // TODO: Assert happens if ) wasn't found
+                // this can happen at the end of the file
                 Assert(false);
             }
             
@@ -605,52 +631,87 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 if(token.type == ')') {
                     layer->step();
                     delete layer;
-                    stack.pop();
+                    layers.pop();
+                    // nocheckin TODO: Can the last layer be argument layer and
+                    //   not macro body? Perhaps with macros within argument layer?
+                    layers.last()->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
                     continue;
                 }
-                Assert(false);
+                Assert(false); // unreachable
             }
             
             if(token.type == '(') {
                 layer->paren_depth++;
-                layer->step();
-                continue;
+                // NOTE: We used to skip parenthesis but I don't know why since
+                //   you can't pass function calls to macros which you want to do.
+                //   - Emarioo, 2024-04-19
+                // layer->step();
+                // continue;
             } else if(token.type == ')') {
                 layer->paren_depth--;
-                layer->step();
-                continue;
+                // layer->step();
+                // continue;
             }
             
-            if(token.type == lexer::TOKEN_IDENTIFIER && layer->caller) { // we don't have a caller if it's arguments for the first layer
-                MacroSpecific* caller_spec = layer->caller->specific;
-                int param_index = caller_spec->matchArg(token,lexer);
-                
-                if(param_index!=-1) {
-                    layer->step();
+            if(token.type == lexer::TOKEN_IDENTIFIER) {
+                if(layer->caller) { // we can't match argument unless we have a caller
+                    MacroSpecific* caller_spec = layer->caller->specific;
+                    int param_index = caller_spec->matchArg(token,lexer);
                     
-                    int real_index = param_index;
-                    int real_count = 1;
-                    if(caller_spec->isVariadic()) {
-                        if(param_index == caller_spec->indexOfVariadic) {
-                            real_count = layer->caller->input_arguments.size() - caller_spec->nonVariadicArguments();
-                        } else if(param_index > caller_spec->indexOfVariadic) {
-                            real_index = param_index - 1 + layer->caller->input_arguments.size() - caller_spec->nonVariadicArguments();
+                    if(param_index!=-1) {
+                        layer->step();
+                        
+                        int real_index = param_index;
+                        int real_count = 1;
+                        if(caller_spec->isVariadic()) {
+                            if(param_index == caller_spec->indexOfVariadic) {
+                                real_count = layer->caller->input_arguments.size() - caller_spec->nonVariadicArguments();
+                            } else if(param_index > caller_spec->indexOfVariadic) {
+                                real_index = param_index - 1 + layer->caller->input_arguments.size() - caller_spec->nonVariadicArguments();
+                            }
                         }
-                    }
-                    
-                    for(int i = real_index; i < real_index + real_count;i++) {
-                        auto& list = layer->caller->input_arguments[i];
-                        for(int j=0;j<list.size();j++) {
-                            auto& token = list[j];
-                            if(layer->callee->input_arguments.size() == 0)
+                        
+                        for(int i = real_index; i < real_index + real_count;i++) {
+                            auto& list = layer->caller->input_arguments[i];
+                            for(int j=0;j<list.size();j++) {
+                                auto& token = list[j];
+                                if(layer->callee->input_arguments.size() == 0)
+                                    layer->callee->input_arguments.add({});
+                                layer->callee->input_arguments.last().add(token);
+                            }
+                            if(i != real_index + real_count - 1)
                                 layer->callee->input_arguments.add({});
-                            layer->callee->input_arguments.last().add(token);
                         }
-                        if(i != real_index + real_count - 1)
-                            layer->callee->input_arguments.add({});
+                        continue;
                     }
-                    continue;
                 }
+                // std::string name = lexer->getStdStringFromToken(token);
+                // MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
+                // if (macroroot) {
+                //     layer->step(); // name
+                    
+                //     Layer* layer_macro = new Layer(true);
+                //     layer_macro->root = macroroot;
+                //     layer_macro->sethead((u32)0);
+                //     layers.add(layer_macro);
+                //     // we need to specify that when we do eval_content
+                //     // the tokens should be appended to input_arguments
+                    
+                //     token = layer->get(lexer);
+                //     if(token.type == '(') {
+                //         layer->step();
+                        
+                //         Layer* layer_arg = new Layer(false);
+                //         layer_arg->caller = layer;
+                //         layer_arg->callee = layer_macro;
+                //         layer_arg->specific = layer->specific;
+                //         layer_arg->sethead(layer->ref_head);
+                        
+                //         layers.add(layer_arg);
+                //     }
+                    
+                //     continue;
+                // }
             }
             
             layer->step();
@@ -662,14 +723,25 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 layer->specific = preprocessor->matchArgCount(layer->root, layer->input_arguments.size());
             
                 if(!layer->specific) {
-                    Assert(false); // nocheckin, fix error
+                    ERR_SECTION(
+                        ERR_HEAD2(macro_token)
+                        ERR_MSG_COLORED("MACRO MADNESS! While processing the macro '"<<log::GREEN<<macro_name <<log::NO_COLOR<<"', the evaluation of macro '"<<log::GREEN<<layer->root->name<<log::NO_COLOR<<"' with '"<<log::GREEN<<(layer->input_arguments.size())<<log::NO_COLOR<<"' arguments occurred. This is not allowed since '"<<log::GREEN <<layer->root->name<<log::NO_COLOR<<"' is not defined for that amount of arguments. Below are the definitions")
+                        ERR_LINE2(macro_token,"macro evaluation started here")
+                        for(auto& pair : layer->root->specificMacros) {
+                            ERR_LINE2(pair.second->location, "" << (int)pair.second->parameters.size() << " arguments");
+                        }
+                        if(layer->root->hasVariadic) {
+                            ERR_LINE2(layer->root->variadicMacro.location, "variadic");
+                        }
+                    )
+                    break;
                 }
             }
         
             lexer::Token token = layer->get(lexer);
             if(token.type == lexer::TOKEN_EOF) {
                 delete layer;
-                stack.pop();
+                layers.pop();
                 continue;
             }
             
@@ -691,12 +763,17 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     for(int i = real_index; i < real_index + real_count;i++) {
                         auto& list = layer->input_arguments[i];
                         for(int j=0;j<list.size();j++) {
-                            lexer->appendToken(new_lexer_import, list[j], true);
+                            bool end = i+1 == real_index + real_count && j+1 == list.size();
+                            if(end) {
+                                list[j].flags = (list[j].flags & ~lexer::TOKEN_FLAG_ANY_SUFFIX) | (token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX);
+                            }
+                            if(end && layer->is_last(lexer)) {
+                                SET_SUFFIX(list[j].flags, layer->ending_suffix);
+                            }
+                            auto t = lexer->appendToken(new_lexer_import, list[j], true);
                         }
                         if(i+1 != real_index + real_count && list.size() != 0) {
-                            // nocheckin, fix line and column.
                             lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
-                            // lexer->appendToken(new_import_id, list[j]);
                         }
                     }
                     
@@ -705,13 +782,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 std::string name = lexer->getStdStringFromToken(token);
                 MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
                 if (macroroot) {
-                    layer->step(); // hashtag
                     layer->step(); // name
                     
                     Layer* layer_macro = new Layer(true);
                     layer_macro->root = macroroot;
                     layer_macro->sethead((u32)0);
-                    stack.add(layer_macro);
+                    layers.add(layer_macro);
                     
                     token = layer->get(lexer);
                     if(token.type == '(') {
@@ -723,18 +799,20 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                         layer_arg->specific = layer->specific;
                         layer_arg->sethead(layer->ref_head);
                         
-                        stack.add(layer_arg);
+                        layers.add(layer_arg);
                     }
                     
                     continue;
                 }
             }
             layer->step();
-            lexer->appendToken(new_lexer_import, token, true);
+            if(layer->is_last(lexer)) {
+                SET_SUFFIX(token.flags, layer->ending_suffix);
+            }
+            auto t = lexer->appendToken(new_lexer_import, token, true);
         }
     }
-    #undef gettok
-    #undef advance
+    #undef SET_SUFFIX
     return SIGNAL_SUCCESS;
 }
 

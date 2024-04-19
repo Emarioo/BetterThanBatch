@@ -255,7 +255,8 @@ namespace lexer {
             lock_chunks.unlock();
             return imp;
         }
-        TokenInfo* getTokenInfo_unsafe(Token token);
+        TokenInfo* getTokenInfo_unsafe(Token token) { return getTokenInfo_unsafe(token.origin); }
+        TokenInfo* getTokenInfo_unsafe(TokenOrigin origin);
         TokenInfo* getTokenInfo_unsafe(SourceLocation location);
         TokenSource* getTokenSource_unsafe(SourceLocation location);
         

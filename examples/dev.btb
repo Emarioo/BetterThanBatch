@@ -6,14 +6,46 @@
 
 // prints("Hey")
 
-// fn @stdcall yoo(a: i32, b: i32) -> i64 {
 
-// TODO: Recursive macros are broken
-// #macro R(T,...) T + R(...)
+#macro A(X) X
+
+// #macro B A(A(X))
+
+A(A(1))
+
+// #macro R(T,...) 
+// T + R(...)
+//  + T
+// #endmacro
+// // R(a)
+
+// R(a)
 // R(a,b,c)
 
+// #macro outer(X) inner(X, R(a))
+// #macro inner(X) <X>
+
+// outer(a)
+
+// #import "Logger"
+
+
+// #macro log(...) { log_inner(...) }
+// #macro log_inner(X, ...) std_print(X); std_print(' '); log_inner(...)
+// #macro log_inner(X) std_print(X); std_print('\n')
+
+// log_inner(a,b,c)
+
+// fn poly<T>(n: T*, yes: bool = false) {
+//     log("nameof n: ",nameof n, " ",yes)
+// }
+
+// a: i32 = 9235;
+// poly(&a)
+
+
 // 1.0 + 2.0
-_test 1.0 + 2.0; 1.0
+// _test 1.0 + 2.0; 1.0
 
 // fn n() -> i32 {
 //     return 923

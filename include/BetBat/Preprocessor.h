@@ -14,6 +14,7 @@ struct Compiler;
 
 namespace preproc {
 struct MacroSpecific {
+    lexer::SourceLocation location;
     lexer::TokenRange content;
     
     DynamicArray<lexer::Token> parameters;

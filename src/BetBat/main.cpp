@@ -57,11 +57,12 @@ int main(int argc, const char** argv){
         // opts.file_count = 20;
         // GenerateFuzzedFiles(opts,"main.btb");
 
-        // options.target = TARGET_BYTECODE;
-        options.output_file = "test.exe";
+        options.target = TARGET_BYTECODE;
+        // options.output_file = "test.exe";
         options.source_file = "examples/dev.btb";
-        options.target = TARGET_WINDOWS_x64;
+        // options.target = TARGET_WINDOWS_x64;
         options.executeOutput = true;
+        options.only_preprocess = true;
         // options.useDebugInformation = true;
         Compiler compiler{};
         compiler.run(&options);

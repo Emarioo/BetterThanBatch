@@ -593,19 +593,20 @@ void Compiler::processImports() {
                     << ", tokens: "<<tokens
                     << "\n")
                 
-                auto what = parser::ParseImport(imp->preproc_import_id, this);
-                // TODO: Handle return value?
-                // ast->appendToMainBody(what); // nocheckin
-                ast->shareWithGlobalScope(what);
-                
-                // ast->print();
-                imp->scopeId = what->scopeId;
+                if(!options->only_preprocess) {
+                    auto what = parser::ParseImport(imp->preproc_import_id, this);
+                    // TODO: Handle return value?
+                    // ast->appendToMainBody(what); // nocheckin
+                    ast->shareWithGlobalScope(what);
+                    
+                    // ast->print();
+                    imp->scopeId = what->scopeId;
 
-                imp->state = (TaskType)(imp->state | picked_task.type);
-                picked_task.type = TASK_TYPE_ENUMS;
-                picked_task.import_id = imp->import_id;
-                tasks.add(picked_task); // nocheckin, lock tasks
-                // imp->finished = true; // nocheckin, we're not actually done
+                    imp->state = (TaskType)(imp->state | picked_task.type);
+                    picked_task.type = TASK_TYPE_ENUMS;
+                    picked_task.import_id = imp->import_id;
+                    tasks.add(picked_task); // nocheckin, lock tasks
+                }
             } else if(picked_task.type == TASK_TYPE_ENUMS) {
                 CompilerImport* imp = imports.get(picked_task.import_id-1);
                 auto my_scope = ast->getScope(imp->scopeId);
@@ -909,6 +910,8 @@ void Compiler::run(CompileOptions* options) {
             preload += "#macro OS_WINDOWS #endmacro\n";
         } else if(options->target == TARGET_UNIX_x64) {
             preload += "#macro OS_UNIX #endmacro\n";
+        } else if(options->target == TARGET_BYTECODE) {
+            preload += "#macro OS_BYTECODE #endmacro\n";
         }
         if(options->linker == LINKER_MSVC) {
             preload += "#macro LINKER_MSVC #endmacro\n";
@@ -967,6 +970,25 @@ void Compiler::run(CompileOptions* options) {
     if(options->compileStats.warnings!=0){
         if(!options->silent)
             options->compileStats.printWarnings();
+    }
+
+    if(options->only_preprocess) {
+        auto imps = lexer.getImports();
+        auto iter = imps.iterator();
+        std::unordered_map<std::string,bool> printed_imps;
+
+        while(imps.iterate_reverse(iter)) {
+            auto pair = printed_imps.find(iter.ptr->path);
+            if(pair == printed_imps.end()) {
+                // print first occurence of import (from preprocessor)
+                log::out << log::GOLD << iter.ptr->path<<"\n";
+                lexer.print(iter.ptr->file_id);
+                printed_imps[iter.ptr->path] = true;
+            } else {
+                // skip second occurence of import (from lexer)
+            }
+        }
+        return;
     }
 
     double time = engone::StopMeasure(tp);

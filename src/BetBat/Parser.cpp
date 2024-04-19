@@ -934,7 +934,7 @@ SignalIO ParseEnum(ParseInfo& info, ASTEnum*& astEnum){
             )
             return SIGNAL_COMPLETE_FAILURE;
         }
-        // name->flags &= ~TOKEN_MASK_SUFFIX;
+        // name->flags &= ~lexer::TOKEN_FLAG_ANY_SUFFIX;
 
         // bool semanticError = false;
         // if there was an error you could skip adding the member but that
@@ -3057,7 +3057,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
                 function->linkConvention = NATIVE;
             } else if (view_fn_name == "intrinsic"){
                 function->callConvention = CallConventions::INTRINSIC;
-                function->linkConvention = NATIVE;
+                // function->linkConvention = NATIVE;
             } else {
                 auto tok = info.gettok();
                 // It should not warn you because it is quite important that you use the right annotations with functions
@@ -3158,6 +3158,8 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
 
         function->name = name;
     }
+    
+    // log::out << "begin " <<function->name<<"\n";
 
     function->location = info.srcloc(tok_name);
 
@@ -3468,10 +3470,10 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
         info.functionScopes.add({});
         ASTScope* body = 0;
         auto signal = ParseBody(info,body, function->scopeId);
+        function->body = body;
         info.functionScopes.pop();
         SIGNAL_SWITCH_LAZY()
 
-        function->body = body;
     } else {
         if(is_operator) {
             ERR_SECTION(
@@ -3489,6 +3491,7 @@ SignalIO ParseFunction(ParseInfo& info, ASTFunction*& function, ASTStruct* paren
             }
         }
     }
+    // log::out << function->name<<" "<<function->body<<"\n";
     return SIGNAL_SUCCESS;
 }
 

@@ -3346,7 +3346,9 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
     
     MAKE_NODE_SCOPE(function);
 
-    Assert(!function->body == !function->needsBody());
+    if(!hasForeignErrors()) {
+        Assert(!function->body == !function->needsBody());
+    }
     // Assert(function->body || function->external || function->native ||info.compileInfo->errors!=0);
     // if(!function->body && !function->external && !function->native) return PARSE_ERROR;
     

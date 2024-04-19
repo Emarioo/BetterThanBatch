@@ -276,16 +276,43 @@ struct BucketArray {
     u32 getCount() {
         return m_valueCount;
     }
-
+	
     struct Iterator {
         int index=-1;
         T* ptr=nullptr;
+		void reset() { index = -1; ptr = nullptr; }
     };
     BucketArray<T>::Iterator iterator() const { return {}; }
     // Returns false if nothing more to iterate. Values in iterator are reset
     bool iterate(Iterator& iterator) const {
 		while (true) {
             iterator.index++;
+			u32 bucketIndex = iterator.index / m_valuesPerBucket;
+			u32 valueIndex = iterator.index % m_valuesPerBucket;
+
+			if (bucketIndex >= m_buckets_max)
+				break;
+			Bucket& bucket = m_buckets[bucketIndex];
+			if (valueIndex >= bucket.m_max)
+				break;
+
+			bool yes = bucket.getBool(valueIndex);
+			if (!yes)
+				continue;
+
+			iterator.ptr = (T*)bucket.getValue(valueIndex, sizeof(T), m_valuesPerBucket);
+			return true;
+		}
+		iterator.index = -1;
+		iterator.ptr = nullptr;
+		return false;
+	}
+	bool iterate_reverse(Iterator& iterator) const {
+		if(iterator.index == -1) {
+			iterator.index = m_buckets_max * m_valuesPerBucket;
+		}
+		while (true) {
+            iterator.index--;
 			u32 bucketIndex = iterator.index / m_valuesPerBucket;
 			u32 valueIndex = iterator.index % m_valuesPerBucket;
 

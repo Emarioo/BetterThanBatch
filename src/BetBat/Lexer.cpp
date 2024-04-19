@@ -1010,8 +1010,8 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source) {
     auto from_info = getTokenInfo_unsafe(token);
     
     *info = *from_info;
-    info->flags = (from_info->flags & (TOKEN_FLAG_HAS_DATA|TOKEN_FLAG_NULL_TERMINATED|TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED));
-    info->flags |= token.flags&(TOKEN_FLAG_NEWLINE|TOKEN_FLAG_SPACE);
+    info->flags = (from_info->flags & ~TOKEN_FLAG_ANY_SUFFIX);
+    info->flags |= token.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
     info->data_offset = 0;
 
     if(prev_token) {
@@ -1135,11 +1135,11 @@ Token Lexer::appendToken_auto_source(Import* imp, TokenType type, u32 flags){
     tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     return tok;
 }
-TokenInfo* Lexer::getTokenInfo_unsafe(Token token){
+TokenInfo* Lexer::getTokenInfo_unsafe(TokenOrigin origin){
     // ZoneScoped;
     u32 cindex;
     u32 tindex;
-    decode_origin(token.origin, &cindex, &tindex);
+    decode_origin(origin, &cindex, &tindex);
     
     lock_chunks.lock();
     Chunk* chunk = _chunks.get(cindex);
