@@ -62,6 +62,7 @@ struct ObjectFile {
         };
     };
     struct Section {
+        void cleanup() { this->~Section(); }
         SectionNr number = 0;
         std::string name;
         SectionFlags flags; // it's more of a section type

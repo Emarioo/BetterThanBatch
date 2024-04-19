@@ -348,8 +348,9 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
 
     builder.generateFromTinycode(builder.bytecode, builder.tinycode);
 
-    for(auto n : builder.all_nodes)
-        delete n;
+    for(auto n : builder.all_nodes) {
+        builder.destroyNode(n);
+    }
     builder.all_nodes.cleanup();
 }
 
@@ -907,9 +908,19 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
     Env* env = nullptr;
     OPNode* n = nullptr;
 
+    auto createEnv = [&]() {
+        auto ptr = TRACK_ALLOC(Env);
+        new(ptr)Env();
+        return ptr;
+    };
+    auto destroyEnv = [&](Env* env) {
+        env->~Env();
+        TRACK_FREE(env, Env);
+    };
+
     auto push_env0 = [&]() {
         Assert(n->in0);
-        auto e = new Env();
+        auto e = createEnv();
         env->env_in0 = e;
         e->node = n->in0;
 
@@ -919,7 +930,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
     };
     auto push_env1 = [&]() {
         Assert(n->in1);
-        auto e = new Env();
+        auto e = createEnv();
         env->env_in1 = e;
         e->node = n->in1;
 
@@ -929,7 +940,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
     };
      auto push_env2 = [&]() {
         Assert(n->in2);
-        auto e = new Env();
+        auto e = createEnv();
         env->env_in2 = e;
         e->node = n->in2;
 
@@ -1076,7 +1087,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
             if(node_i >= nodes.size())
                 break;
                 
-            envs.add(new Env());
+            envs.add(createEnv());
             envs.last()->node = nodes[node_i];
             node_i++;
         }
@@ -3730,7 +3741,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
     }
 
     for(auto e : envs)
-        delete e;
+        destroyEnv(e);
     envs.cleanup();
 
     // last instruction should be a return

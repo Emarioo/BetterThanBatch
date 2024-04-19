@@ -721,7 +721,8 @@ bool ObjectFile::writeFile_elf(const std::string& path) {
 }
 
 SectionNr ObjectFile::createSection(const std::string& name, ObjectFile::SectionFlags flags, u32 alignment) {
-    auto ptr = new Section(); // nocheckin, use allocator instead of new
+    auto ptr = TRACK_ALLOC(Section);
+    new(ptr) Section(); // nocheckin, use allocator instead of new
     _sections.add(ptr);
 
     ptr->number = _sections.size();
@@ -825,7 +826,9 @@ void ObjectFile::cleanup() {
     _symbolMap.clear();
     for(int i = 0; i < _sections.size();i++) {
         auto& section = _sections[i];
-        delete section; // TODO: Don't use delete keyword
+        section->cleanup();
+        TRACK_FREE(section,Section);
+        // delete section; // TODO: Don't use delete keyword
     }
     _sections.cleanup();
 }

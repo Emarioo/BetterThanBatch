@@ -4,38 +4,37 @@
 
 // a := 2.5 + 4.5
 
-// prints("Hey")
+#import "Logger"
 
 
-// #macro R(T,...) 
-// T + R(...)
-//  + T
-// #endmacro
-// // R(a)
+fn poly<T>(n: T*, yes: bool = false) {
+    log("nameof n: ",nameof n, " ",yes,"\n")
+}
+a: i32 = 9235;
+poly(&a)
 
-// R(a)
-// R(a,b,c)
+// fn @intrinsic strlen(str: char*) -> u32;
 
-// #macro outer(X) inner(X, R(a))
-// #macro inner(X) <X>
+/*
+    The reason functions are named "print" and not "log"
+    is because you might want your own log function.
+    Altough, log is a smaller name than print so it would be unfortunate
+    if the language took that name from you.
+*/
 
-// outer(a)
+// #macro log(...) { log_inner(...) }
+// #macro log_inner(X, ...) std_print(X); std_print(' '); log_inner(...)
+// #macro log_inner(X) std_print(X); std_print('\n')
 
-// #file #filename
+// #macro std_prints(X,...) std_print(X); std_prints(...)
 
-#macro yoo #line #filename
-// #macro yoo #line ok #column
-yoo
+// fn std_print<T>(a: T) {}
 
-// #import "Logger"
+// log("YOO!")
 
+// fn @native printc(c: char);
 
-// fn poly<T>(n: T*, yes: bool = false) {
-//     log("nameof n: ",nameof n, " ",yes)
-// }
-
-// a: i32 = 9235;
-// poly(&a)
+// printc('2')
 
 
 // 1.0 + 2.0

@@ -573,8 +573,17 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             return *ref_head;
         }
     };
+    auto createLayer = [&](bool eval_content) {
+        auto ptr = TRACK_ALLOC(Layer);
+        new(ptr)Layer(eval_content);
+        return ptr;
+    };
+    auto deleteLayer = [&](Layer* layer) {
+        layer->~Layer();
+        TRACK_FREE(layer,Layer);
+    };
     DynamicArray<Layer*> layers{};
-    Layer* first = new Layer(true);
+    Layer* first = createLayer(true);
     layers.add(first);
     first->root = root;
     first->sethead((u32)0);
@@ -583,7 +592,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     lexer::Token tok = gettok();
     if(!(macro_token.flags & (lexer::TOKEN_FLAG_ANY_SUFFIX)) && tok.type == '(') {
         advance();
-        Layer* second = new Layer(false);
+        Layer* second = createLayer(false);
         layers.add(second);
         second->adjacent_callee = first;
         second->import_id = import_id;
@@ -627,7 +636,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 }
                 if(token.type == ')') {
                     layer->step();
-                    delete layer;
+
+                    deleteLayer(layer);
                     layers.pop();
                     // nocheckin TODO: Can the last layer be argument layer and
                     //   not macro body? Perhaps with macros within argument layer?
@@ -692,7 +702,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 if (macroroot) {
                     layer->step(); // name
                     
-                    Layer* layer_macro = new Layer(true);
+                    Layer* layer_macro = createLayer(true);
                     layer_macro->root = macroroot;
                     layer_macro->sethead((u32)0);
                     layer_macro->adjacent_callee = layer->adjacent_callee;
@@ -705,7 +715,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     if(token.type == '(') {
                         layer->step();
                         
-                        Layer* layer_arg = new Layer(false);
+                        Layer* layer_arg = createLayer(false);
                         layer_arg->top_caller = layer->top_caller;
                         layer_arg->adjacent_callee = layer_macro;
                         // layer_arg->specific = layer->specific;
@@ -746,7 +756,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         
             lexer::Token token = layer->get(lexer);
             if(token.type == lexer::TOKEN_EOF) {
-                delete layer;
+                deleteLayer(layer);
                 layers.pop();
                 continue;
             }
@@ -809,7 +819,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 if (macroroot) {
                     layer->step(); // name
                     
-                    Layer* layer_macro = new Layer(true);
+                    Layer* layer_macro = createLayer(true);
                     layer_macro->root = macroroot;
                     layer_macro->adjacent_callee = layer->adjacent_callee;
                     layer_macro->sethead((u32)0);
@@ -820,7 +830,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     if(token.type == '(') {
                         layer->step();
                         
-                        Layer* layer_arg = new Layer(false);
+                        Layer* layer_arg = createLayer(false);
                         layer_arg->top_caller = layer;
                         layer_arg->adjacent_callee = layer_macro;
                         // layer_arg->specific = layer->specific;

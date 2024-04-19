@@ -108,6 +108,7 @@ struct ParseInfo : public PhaseContext {
     lexer::TokenInfo* getinfo(StringView* string, int off = 0) {
         static lexer::TokenInfo eof{lexer::TOKEN_EOF, };
         u32 fcindex,tindex;
+        if(string) *string = {};
 
         u32 ind = head + off;
         fcindex = ind >> TOKEN_ORIGIN_TOKEN_BITS;
@@ -195,7 +196,9 @@ struct ParseInfo : public PhaseContext {
     lexer::Token gettok(StringView* string, int off = 0) {
         u32 fcindex,tindex;
         lexer->decode_import_token_index(head + off,&fcindex,&tindex);
-    
+        if(string) *string = {};
+
+
         lexer::Token out{};
         if(lexer_chunks.size() <= fcindex) {
             // out.type = lexer::TOKEN_EOF;

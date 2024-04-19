@@ -92,7 +92,9 @@ struct X64Program {
         if(tinyPrograms.size() <= requested_index) {
             tinyPrograms.resize(requested_index+1);
         }
-        auto ptr = new X64TinyProgram();
+
+        auto ptr = TRACK_ALLOC(X64TinyProgram);
+        new(ptr)X64TinyProgram();
         tinyPrograms[requested_index] = ptr;
         // tinyPrograms.add(ptr);
         return ptr;
@@ -201,9 +203,14 @@ struct X64Builder {
     
     DynamicArray<OPNode*> all_nodes; // TODO: Bucket array
     OPNode* createNode(u32 bc_index, InstructionType opcode) {
-        auto ptr = new OPNode(bc_index, opcode);
+        auto ptr = TRACK_ALLOC(OPNode);
+        new(ptr)OPNode(bc_index, opcode);
         all_nodes.add(ptr);
         return ptr;
+    }
+    void destroyNode(OPNode* node) {
+        node->~OPNode();
+        TRACK_FREE(node, OPNode);
     }
     
     // struct ValueLocation {

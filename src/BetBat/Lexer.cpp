@@ -2063,7 +2063,8 @@ std::string Lexer::getline(SourceLocation location) {
 }
 
 bool Lexer::createVirtualFile(const std::string& virtual_path, StringBuilder* builder) {
-    auto vfile = new VirtualFile();
+    auto vfile = TRACK_ALLOC(VirtualFile);
+    new(vfile) VirtualFile();
     vfile->virtual_path = virtual_path;
     vfile->builder.steal(builder);
     virtual_files.add(vfile);

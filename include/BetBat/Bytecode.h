@@ -248,7 +248,8 @@ struct Bytecode {
     void cleanup();
     
     TinyBytecode* createTiny(CallConventions convention) {
-        auto ptr = new TinyBytecode();
+        auto ptr = TRACK_ALLOC(TinyBytecode);
+        new(ptr)TinyBytecode();
         ptr->call_convention = convention;
         tinyBytecodes.add(ptr);
         ptr->index = tinyBytecodes.size()-1;

@@ -1457,7 +1457,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // tmp->constantValue = tmp->left->constantValue;// nocheckin
 
                 continue;
-            } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "++"){ // TODO: Optimize
+            } else if(token->type == lexer::TOKEN_IDENTIFIER && view == "--"){ // TODO: Optimize
 
                 ASTExpression* tmp = info.ast->createExpression(TypeId(AST_DECREMENT));
                 tmp->location = info.getloc();
@@ -1624,15 +1624,16 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 }
                 bool unsignedSuffix = false;
                 bool signedSuffix = false;
-                auto tok_suffix = info.gettok();
-                if((token->flags&(lexer::TOKEN_FLAG_ANY_SUFFIX))==0) {
-                    if(tok_suffix.type == 'u') {
+                StringView suffix{};
+                auto tok_suffix = info.gettok(&suffix);
+                if(tok_suffix.type == lexer::TOKEN_IDENTIFIER && (token->flags&(lexer::TOKEN_FLAG_ANY_SUFFIX))==0) {
+                    if(suffix == "u") {
                         info.advance();
                         unsignedSuffix  = true;
-                    } else if(tok_suffix.type == 's') {
+                    } else if(suffix == "s") {
                         info.advance();
                         signedSuffix  = true;
-                    } else if(tok_suffix.type == lexer::TOKEN_IDENTIFIER || (tok_suffix.type|32) >= 'a' && (tok_suffix.type|32) <= 'z'){
+                    } else if((suffix.ptr[0]|32) >= 'a' && (suffix.ptr[0]|32) <= 'z'){
                         ERR_SECTION(
                             ERR_HEAD2(tok_suffix)
                             ERR_MSG("'"<<info.lexer->tostring(tok_suffix)<<"' is not a known suffix for integers. The available ones are: 92u (unsigned), 31924s (signed).")
@@ -2168,10 +2169,10 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         count++;
                         
                         tok = info.gettok();
-                        if(token->type == ','){
+                        if(tok.type == ','){
                             info.advance();
                             continue;
-                        }else if(token->type == '}'){
+                        }else if(tok.type == '}'){
                            info.advance();
                            break;
                         } else {

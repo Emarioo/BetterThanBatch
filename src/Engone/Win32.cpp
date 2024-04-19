@@ -670,7 +670,7 @@ namespace engone {
 			allocTracking[bytes] = {name,0};	
 		} else {
 			pair->second.name += "|";
-			pair->second.name += name;
+			pair->second.name += name; 
 		}
 	}
 	#define ENGONE_TRACK_ALLOC 0
@@ -709,10 +709,12 @@ namespace engone {
 		s_trackerEnabled = on;
 	}
 	void* Allocate(u64 bytes){
-		if(bytes==0) return nullptr;
+		Assert(bytes);
+		// if(bytes==0) return nullptr;
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
         void* ptr = malloc(bytes);
-		if(!ptr) return nullptr;
+		Assert(ptr);
+		// if(!ptr) return nullptr;
 		TracyAlloc(ptr,bytes);
 		// PrintTracking(bytes,ENGONE_TRACK_ALLOC);
 		
@@ -742,21 +744,7 @@ namespace engone {
                 if(oldBytes==0){
                     PL_PRINTF("Reallocate : oldBytes is zero while the ptr isn't!?\n");   
                 }
-                // void* newPtr = HeapReAlloc(GetProcessHeap(),0,ptr,newBytes);
-                void* newPtr = realloc(ptr,newBytes);
-				if(!newPtr) {
-					printf("Err %d\n",errno);
-                    return nullptr;
-				}
-                TracyFree(ptr);
-                TracyAlloc(newPtr,newBytes);
-
-				// PrintTracking(newBytes,ENGONE_TRACK_REALLOC);
-                // s_allocStatsMutex.lock();
-                s_allocatedBytes+=newBytes-oldBytes;
-                s_totalAllocatedBytes+=newBytes;
-                s_totalNumberAllocations++;			
-
+				
 				#ifdef LOG_ALLOCATIONS
 				printf("%p -> %p - Reallocate %lld -> %lld\n",ptr,newPtr, oldBytes, newBytes);
 				#endif
@@ -766,8 +754,25 @@ namespace engone {
 					Assert(("pointer does not exist",false));
 				} else {
 					ptr_map.erase(ptr);
-					ptr_map[newPtr] = newBytes;
 				}
+
+                // void* newPtr = HeapReAlloc(GetProcessHeap(),0,ptr,newBytes);
+                void* newPtr = realloc(ptr,newBytes);
+				if(!newPtr) {
+					printf("Err %d\n",errno);
+                    return nullptr;
+				}
+                TracyFree(ptr);
+                TracyAlloc(newPtr,newBytes);
+
+				ptr_map[newPtr] = newBytes;
+
+				// PrintTracking(newBytes,ENGONE_TRACK_REALLOC);
+                // s_allocStatsMutex.lock();
+                s_allocatedBytes+=newBytes-oldBytes;
+                s_totalAllocatedBytes+=newBytes;
+                s_totalNumberAllocations++;			
+
 
                 // s_allocStatsMutex.unlock();
                 return newPtr;

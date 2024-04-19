@@ -156,5 +156,5 @@ struct Reporter {
     }
 
 
-    ByteStream stream{new engone::HeapAllocator()};
+    ByteStream stream{engone::GlobalHeapAllocator()};
 };

@@ -3411,6 +3411,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         if(function->linkConvention == NATIVE ||
             info.compiler->options->target == TARGET_BYTECODE
         ){
+            // #ifdef gone
             // Assert(info.compileInfo->nativeRegistry);
             auto nativeRegistry = NativeRegistry::GetGlobal();
             auto nativeFunction = nativeRegistry->findFunction(function->name);
@@ -3463,6 +3464,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                 }
                 return SIGNAL_FAILURE;
             }
+            // #endif
             _GLOG(log::out << "Native function "<<function->name<<"\n";)
         } else {
             // exports not handled

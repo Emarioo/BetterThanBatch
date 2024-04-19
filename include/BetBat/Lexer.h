@@ -288,15 +288,6 @@ namespace lexer {
         u32 addChunk(Chunk** out) {
             // Assert(lock_chunks.getOwner() != 0); // make sure we locked first
             return _chunks.add(nullptr, out);
-
-            // Chunk* ptr = new Chunk(); // nocheckin
-            // // lock_chunks.lock();
-            // u32 index = _chunks.size();
-            // _chunks.add(ptr);
-            // // lock_chunks.unlock();
-            // if(out)
-            //     *out = ptr;
-            // return index;
         }
         
         MUTEX(lock_imports);

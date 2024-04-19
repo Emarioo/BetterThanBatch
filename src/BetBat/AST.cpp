@@ -1685,7 +1685,6 @@ void AST::destroy(ASTStatement *statement) {
         if (statement->alias){
             statement->alias->~basic_string<char>();
             TRACK_FREE(statement->alias,std::string);
-            // engone::Free(statement->alias, sizeof(std::string));
             statement->alias = nullptr;
         }
         // NOTE: hasNodes isn't used properly anywhere.

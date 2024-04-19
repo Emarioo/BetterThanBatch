@@ -608,7 +608,8 @@ const char* ToCompileErrorString(temp_compile_error stuff) {
     if(pair != errorStrings.end())
         return pair->second->c_str();
         
-    auto str = new std::string();
+    auto str = TRACK_ALLOC(std::string);
+    new(str)std::string();
     errorStrings[stuff.err] = str;
     str->append("E");
     str->append(std::to_string((u32)stuff.err));

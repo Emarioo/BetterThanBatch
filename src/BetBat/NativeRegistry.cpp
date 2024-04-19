@@ -8,19 +8,25 @@
 
 int NativeRegistry::initializations = 0;
 
-// NativeRegistry* s_globalRegistry = nullptr;
-NativeRegistry s_globalRegistry{};
+NativeRegistry* s_globalRegistry = nullptr;
+// NativeRegistry s_globalRegistry{};
 NativeRegistry* NativeRegistry::GetGlobal(){
-    if(!s_globalRegistry.initialized) {
-        // s_globalRegistry = Create();
-        // s_globalRegistry->initNativeContent();
-        s_globalRegistry.initNativeContent();
+    if(!s_globalRegistry){
+        s_globalRegistry = TRACK_ALLOC(NativeRegistry);
+        new(s_globalRegistry) NativeRegistry();
+        s_globalRegistry->initNativeContent();
     }
-    // return s_globalRegistry;
-    return &s_globalRegistry;
+    // if(!s_globalRegistry.initialized) {
+    //     // s_globalRegistry = Create();
+    //     // s_globalRegistry->initNativeContent();
+    //     s_globalRegistry.initNativeContent();
+    // }
+    return s_globalRegistry;
+    // return &s_globalRegistry;
 }
 void NativeRegistry::DestroyGlobal(){
-    s_globalRegistry.nativeFunctions.cleanup();
+    s_globalRegistry->nativeFunctions.cleanup();
+    // s_globalRegistry.nativeFunctions.cleanup();
     // s_globalRegistry.nativeFunctions.clear();
     // s_globalRegistry.nativeFunctions.shrink_to_fit();
     // if(s_globalRegistry)
