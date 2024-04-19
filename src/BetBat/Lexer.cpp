@@ -942,7 +942,7 @@ void Lexer::appendToken(Import* imp, Token tok, StringView* string) {
     // tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     // return tok;
 }
-Token Lexer::appendToken(Import* imp, Token token, bool compute_source) {
+Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringView* string) {
     // ZoneScoped;
     // lock_imports.lock();
     // Import* imp = imports.get(fileId-1);
@@ -1009,22 +1009,45 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source) {
     auto& source = chunk->sources.last();
     auto from_info = getTokenInfo_unsafe(token);
     
-    *info = *from_info;
-    info->flags = (from_info->flags & ~TOKEN_FLAG_ANY_SUFFIX);
-    info->flags |= token.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+    // *info = *from_info;
+    // info->flags = (from_info->flags & ~TOKEN_FLAG_ANY_SUFFIX);
+    // info->flags |= token.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+    info->type = token.type;
+    info->flags = token.flags;
     info->data_offset = 0;
 
     if(prev_token) {
         source.line = line;
         source.column = column;
     } else {
-        u32 cindex, tindex;
-        decode_origin(token.origin, &cindex, &tindex);
-        Chunk* fc = getChunk_unsafe(cindex);
-        source = fc->sources[tindex];
+        if(string) {
+            // can't set source, token was created by preprocessor
+        } else {
+            u32 cindex, tindex;
+            decode_origin(token.origin, &cindex, &tindex);
+            Chunk* fc = getChunk_unsafe(cindex);
+            source = fc->sources[tindex];
+        }
     }
     
-    if(from_info->flags & TOKEN_FLAG_HAS_DATA) {
+    if(string) {
+        Assert(token.flags & TOKEN_FLAG_HAS_DATA);
+        Assert(string);
+        const void* ptr=string->ptr;
+        u32 size = string->len;
+        
+        info->data_offset = chunk->aux_used;
+        if(token.flags & TOKEN_FLAG_NULL_TERMINATED) {
+            chunk->alloc_aux_space(size + 2);
+            chunk->aux_data[info->data_offset] = size;
+            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+            chunk->aux_data[info->data_offset + 1 + size] = '\0';
+        } else {
+            chunk->alloc_aux_space(size + 1);
+            chunk->aux_data[info->data_offset] = size;
+            memcpy(chunk->aux_data + info->data_offset+1, ptr, size);
+        }
+    } else if(from_info->flags & TOKEN_FLAG_HAS_DATA) {
         const void* ptr=nullptr;
         u32 size = getDataFromToken(token, &ptr);
         
@@ -1355,7 +1378,7 @@ TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import
         *src = chunk->sources.getPtr(tindex);
     return info;
 }
-Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
+Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file, StringView* string) {
     // ZoneScoped;
     Token out{};
     
@@ -1386,17 +1409,18 @@ Token Lexer::getTokenFromImport(u32 fileid, u32 token_index_into_file) {
         // out.type = TOKEN_EOF;
         return imp->geteof();
     }
+
+    if(string && (info->flags & lexer::TOKEN_FLAG_HAS_DATA)) {
+        *string = {(char*)chunk->aux_data + info->data_offset + 1, chunk->aux_data[info->data_offset]};
+        #ifdef LEXER_DEBUG_DETAILS
+        out.s = (char*)chunk->aux_data + info->data_offset + 1;
+        #endif
+    }
     
+    out.c_type = out.type;
     out.flags = info->flags;
     out.type = info->type;
     out.origin = encode_origin(cindex,tindex);
-    #ifdef LEXER_DEBUG_DETAILS
-    if(out.flags & TOKEN_FLAG_HAS_DATA) {
-        u32 str_len = getStringFromToken(out,&out.s);
-    } else if(out.type < 256) {
-        // out.c = (char)out.type;
-    }
-    #endif
     return out;
 }
 Lexer::FeedIterator Lexer::createFeedIterator(Import* imp, u32 start, u32 end) {

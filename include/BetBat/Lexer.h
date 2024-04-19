@@ -206,7 +206,7 @@ namespace lexer {
         void print(u32 fileid);
 
         TokenInfo* getTokenInfoFromImport(u32 fileid, u32 token_index_into_import, TokenSource** src);
-        Token getTokenFromImport(u32 fileid, u32 token_index_into_import);
+        Token getTokenFromImport(u32 fileid, u32 token_index_into_import, StringView* string = nullptr);
         // same as getDataFromToken but char instead of void
         u32 getStringFromToken(Token tok, const char** ptr);
         u32 getDataFromToken(Token tok, const void** ptr);
@@ -223,7 +223,7 @@ namespace lexer {
         void destroyImport_unsafe(u32 import_id);
         
         // void appendToken(Import* imp, TokenInfo* token, StringView* string);
-        Token appendToken(Import* imp, Token token, bool compute_source = false);
+        Token appendToken(Import* imp, Token token, bool compute_source = false, StringView* string = nullptr);
         // Token appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column);
         Token appendToken_auto_source(Import* imp, TokenType type, u32 flags);
         void appendToken(Import* imp, Token tok, StringView* string);

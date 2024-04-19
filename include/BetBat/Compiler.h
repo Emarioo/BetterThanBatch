@@ -231,7 +231,8 @@ struct Compiler {
     
     
     BucketArray<CompilerImport> imports{256};
-    
+    long volatile globalUniqueCounter = 0; // type must be long volatile because of _InterlockedIncrement
+    engone::Mutex otherLock{};
     
     DynamicArray<CompilerTask> tasks;
     

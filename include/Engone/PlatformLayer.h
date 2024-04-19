@@ -65,6 +65,7 @@ namespace engone {
 	void TrackType(u64 bytes, const std::string& name);
 	void SetTracker(bool on);
 
+	// heap
 	void* Allocate(u64 bytes);
     void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes);
 	void Free(void* ptr, u64 bytes);

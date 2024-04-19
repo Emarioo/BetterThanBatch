@@ -37,3 +37,32 @@ l1(#unwrap AB)
 #macro log(x,y) base(x,y, LOG_TYPE)
 #macro ENTER yoo, hi
 log(ENTER,other) // should produce   if(flags & LOG_TYPE) { yoo, hi - other }
+
+// #macro CONST_ARG(Y) Yoo! Y
+// #macro CONST hey
+// #macro TRY(X) X
+// TRY(CONST) // we expect hey
+// TRY(CONST_ARG(23)) // Yoo! 23
+// TRY(CONST_ARG(23,LAST))
+// TRY(CONST_ARG(CONST_ARG(23,92),LAST))
+// #macro WOW A(CONST_ARG(CONST_ARG(23,92),LAST))
+// WOW
+// #macro OK(A) A(CONST_ARG(CONST_ARG(23,92),A))
+// OK(COOL)
+
+// #macro WOW(F) A(CONST_ARG(CONST_ARG(23,92),F))
+// WOW(WOW(COOL))
+
+// <Yoo!
+//     <Yoo! 23 - 92 + 23> - 
+//     <Yoo! 
+//         <Yoo! 23 - 92 + 23> - COOL + <Yoo! 23 - 92 + 23>
+//     > + <Yoo! 23 - 92 + 23>
+// >
+
+
+// THIS IS CRAZY, passing macros to other macros
+// #macro MAP(X,Y,Z) X(Y,Z)
+// #macro FORMAT(A,B) A == B
+// MAP(FORMAT, 9, 8) // currently does not work because FORMAT is evaluated right away.
+// MAP(#raw FORMAT, 9, 8) // maybe this is fine

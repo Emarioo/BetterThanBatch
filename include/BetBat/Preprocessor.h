@@ -126,6 +126,29 @@ struct PreprocContext {
         }
         return lexer->getTokenFromImport(import_id, head + off);
     }
+    lexer::TokenSource* getsource(int off = 0) {
+        if(quick_iterator) {
+            u32 fcindex,tindex;
+            lexer->decode_import_token_index(head + off,&fcindex,&tindex);
+        
+            lexer::Token out{};
+            if(lexer_chunks.size() <= fcindex) {
+                // out.type = lexer::TOKEN_EOF;
+                return nullptr;
+            }
+            lexer::Chunk* chunk = lexer_chunks[fcindex];
+
+            auto info = chunk->sources.getPtr(tindex);
+            if(!info) {
+                // out.type = lexer::TOKEN_EOF;
+                return nullptr;
+            }
+            return info;
+        }
+        lexer::TokenSource* src = nullptr;
+        lexer->getTokenInfoFromImport(import_id, head + off, &src);
+        return src;
+    }
     lexer::Token gettok(StringView* string, int off = 0) {
         if(quick_iterator) {
             u32 fcindex,tindex;
@@ -212,10 +235,10 @@ struct PreprocContext {
     SignalIO parseLoad();
     SignalIO parseImport();
     SignalIO parseIf();
+    SignalIO parseInformational(lexer::Token hashtag_tok, lexer::Token directive_tok, StringView directive_str, lexer::Token* out_tok, std::string* out_str);
 
     // incomplete
     SignalIO parseUndef();
     SignalIO parseInclude();
-    SignalIO parsePredefinedMacros();
 };
 }

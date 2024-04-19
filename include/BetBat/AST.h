@@ -798,7 +798,7 @@ struct ASTFunction : ASTNode {
     // When function should have a body or not has changed a lot recently
     // and I have needed to rewrite a lot. Having the requirement abstracted in
     // a function will prevent some of the changes you would need to make.
-    bool needsBody() { return linkConvention == LinkConventions::NONE;}
+    bool needsBody() { return linkConvention == LinkConventions::NONE && callConvention != INTRINSIC; }
 
     void print(AST* ast, int depth);
 };

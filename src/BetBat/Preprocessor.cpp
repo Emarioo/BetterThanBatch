@@ -153,24 +153,24 @@ SignalIO PreprocContext::parseMacroDefinition() {
                 // )
                 // return SignalAttempt::FAILURE;
             }
-            token = gettok();
-            if(lexer->equals_identifier(token, "endmacro")){
+            lexer::Token mac_tok = gettok();
+            if(lexer->equals_identifier(mac_tok, "endmacro")){
                 advance();
                 endToken = gethead()-2;
                 break;
             }
-            if(lexer->equals_identifier(token, "macro")){
+            if(lexer->equals_identifier(mac_tok, "macro")){
                 ERR_SECTION(
-                    ERR_HEAD2(token)
+                    ERR_HEAD2(mac_tok)
                     ERR_MSG("Macro definitions inside macros are not allowed.")
-                    ERR_LINE2(token,"not allowed")
+                    ERR_LINE2(mac_tok,"not allowed")
                 )
                 invalidContent = true;
             }
             //not end, continue
         }
         if(!multiline){
-            if(token.flags&TOKEN_SUFFIX_LINE_FEED){
+            if(token.flags&lexer::TOKEN_FLAG_NEWLINE){
                 endToken = gethead();
                 break;
             }
@@ -472,14 +472,20 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     using namespace engone;
     ZoneScopedC(tracy::Color::Goldenrod2);
     
-    if(!evaluateTokens) {
-        advance(); // skip, is this okay?
-        return SIGNAL_NO_MATCH;
-    }
+    Assert(evaluateTokens); // We shouldn't call this function unless it's to evaluate macros, it's just waste of CPU time
+    
     
     lexer::Token macro_token = gettok();
     Assert(macro_token.type == lexer::TOKEN_IDENTIFIER);
     
+    // TODO: Optimize macro matching. One way is to have a table of 256 bools per character which represent
+    //   Whether there exists a macro with that character as the first character. This is probably faster
+    //   than directly looking into a hash table. The question is the overhead of managing the table.
+    //   The table would exist per thread and we need to load macros into the table
+    //   based on which files have been imported and which macros should be visible.
+    // static bool early_match_table[256];
+    // if(!early_match_table[macro_name[0]]) return SIGNAL_NO_MATCH;
+
     std::string macro_name = lexer->getStdStringFromToken(macro_token);
     MacroRoot* root = preprocessor->matchMacro(import_id,macro_name);
     if(!root)
@@ -496,13 +502,14 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     
     struct Layer {
         Layer(bool eval_content) : eval_content(eval_content) {
+            // Assert(eval_content);
             specific = nullptr;
             root = nullptr;
             if(eval_content) {
                 new(&input_arguments)DynamicArray<TokenList>();
             } else {
-                id = 0;
-                caller = nullptr;
+                import_id = 0;
+                top_caller = nullptr;
                 paren_depth = 0;
             }
         }
@@ -520,47 +527,35 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         bool eval_content = true;
         MacroSpecific* specific;
         MacroRoot* root;
-        union {
-            struct {
-                DynamicArray<TokenList> input_arguments;
-            };
-            struct {
-                u32 id;
-                Layer* caller;
-                Layer* callee; // rename, can easily be confused
-                int paren_depth;
-            };
-        };
+        // union {
+        //     struct {
+                DynamicArray<TokenList> input_arguments{};
+            // };
+            // struct {
+                u32 import_id = 0;
+                Layer* top_caller=nullptr; // the parent macro that called this macro (used by argument parsing or body parsing)
+                Layer* adjacent_callee=nullptr; // when this layer is parsing arguments, callee refers to the layer (macro) that uses the arguments
+                int paren_depth=0;
+            // };
+        // };
         
-        lexer::Token get(lexer::Lexer* lexer, int off = 0) {
-            Assert(specific || id != 0);
-            if(id!=0 && !eval_content) {
+        lexer::Token get(lexer::Lexer* lexer, int off = 0, StringView* string = nullptr) {
+            if(import_id!=0 && !eval_content) {
                 u32 index = *ref_head + off;
-                // if(index >= specific->content.token_index_end)
-                //     return {lexer::TOKEN_EOF};
-                return lexer->getTokenFromImport(id, *ref_head + off);
+                return lexer->getTokenFromImport(import_id, *ref_head + off, string);
             } else {
-                u32 index = specific->content.token_index_start + *ref_head + off;
-                if(index >= specific->content.token_index_end)
+                auto spec = specific;
+                if(top_caller)
+                    spec = top_caller->specific; // for arguments
+                Assert(specific);
+                u32 index = spec->content.token_index_start + *ref_head + off;
+                if(index >= spec->content.token_index_end)
                     return {lexer::TOKEN_EOF};
-                return lexer->getTokenFromImport(specific->content.importId, specific->content.token_index_start + *ref_head + off);
+                return lexer->getTokenFromImport(spec->content.importId, index, string);
             }
         }
         bool is_last(lexer::Lexer* lexer, int off = 0) {
-            Assert(specific || id != 0);
-            lexer::Token token{};
-            if(id!=0 && !eval_content) {
-                u32 index = *ref_head + off;
-                // if(index >= specific->content.token_index_end)
-                //     return {lexer::TOKEN_EOF};
-                token = lexer->getTokenFromImport(id, *ref_head + off);
-            } else {
-                u32 index = specific->content.token_index_start + *ref_head + off;
-                if(index >= specific->content.token_index_end)
-                    return true;
-                token = lexer->getTokenFromImport(specific->content.importId, specific->content.token_index_start + *ref_head + off);
-            }
-            return token.type == lexer::TOKEN_EOF;
+            return get(lexer,off).type == lexer::TOKEN_EOF;
         }
         void step(int n = 1) {
             *ref_head+=n;
@@ -583,16 +578,15 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     layers.add(first);
     first->root = root;
     first->sethead((u32)0);
-    
-    // u16 ending_suffix = macro_token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
+    first->ending_suffix = macro_token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
     
     lexer::Token tok = gettok();
     if(!(macro_token.flags & (lexer::TOKEN_FLAG_ANY_SUFFIX)) && tok.type == '(') {
         advance();
         Layer* second = new Layer(false);
         layers.add(second);
-        second->callee = first;
-        second->id = import_id;
+        second->adjacent_callee = first;
+        second->import_id = import_id;
         second->sethead(&head); // head is the preprocessors head
     }
 
@@ -611,7 +605,10 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         
         Layer* layer = layers.last();
         if(!layer->eval_content) { // evaluate arguments
-            
+            Assert(layer->adjacent_callee);
+            if(layer->top_caller)
+                // the top caller makes it's content visible to arge evaulator
+                layer->specific = layer->top_caller->specific;
             lexer::Token token = layer->get(lexer);
             if(token.type == lexer::TOKEN_EOF) {
                 // TODO: Assert happens if ) wasn't found
@@ -621,7 +618,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             
             if(layer->paren_depth==0 && (token.type == ',' || token.type == ')')) {
                 if(token.type == ',') {
-                    layer->callee->input_arguments.add({});
+                    layer->adjacent_callee->input_arguments.add({});
                 }
                 
                 if(token.type == ',') {
@@ -654,70 +651,79 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             }
             
             if(token.type == lexer::TOKEN_IDENTIFIER) {
-                if(layer->caller) { // we can't match argument unless we have a caller
-                    MacroSpecific* caller_spec = layer->caller->specific;
-                    int param_index = caller_spec->matchArg(token,lexer);
+                // nochecking TODO: Should we auto set the specific like when evaluating content or not?
+                Assert(!layer->top_caller || layer->top_caller->specific);
+                if(layer->top_caller && layer->top_caller->specific) { // we can't match argument unless we have a top_caller
+                    Assert(layer->top_caller->specific);
+                    MacroSpecific* top_caller_spec = layer->top_caller->specific;
+                    int param_index = top_caller_spec->matchArg(token,lexer);
                     
                     if(param_index!=-1) {
                         layer->step();
                         
                         int real_index = param_index;
                         int real_count = 1;
-                        if(caller_spec->isVariadic()) {
-                            if(param_index == caller_spec->indexOfVariadic) {
-                                real_count = layer->caller->input_arguments.size() - caller_spec->nonVariadicArguments();
-                            } else if(param_index > caller_spec->indexOfVariadic) {
-                                real_index = param_index - 1 + layer->caller->input_arguments.size() - caller_spec->nonVariadicArguments();
+                        if(top_caller_spec->isVariadic()) {
+                            if(param_index == top_caller_spec->indexOfVariadic) {
+                                real_count = layer->top_caller->input_arguments.size() - top_caller_spec->nonVariadicArguments();
+                            } else if(param_index > top_caller_spec->indexOfVariadic) {
+                                real_index = param_index - 1 + layer->top_caller->input_arguments.size() - top_caller_spec->nonVariadicArguments();
                             }
                         }
                         
                         for(int i = real_index; i < real_index + real_count;i++) {
-                            auto& list = layer->caller->input_arguments[i];
+                            auto& list = layer->top_caller->input_arguments[i];
                             for(int j=0;j<list.size();j++) {
                                 auto& token = list[j];
-                                if(layer->callee->input_arguments.size() == 0)
-                                    layer->callee->input_arguments.add({});
-                                layer->callee->input_arguments.last().add(token);
+                                if(layer->adjacent_callee->input_arguments.size() == 0)
+                                    layer->adjacent_callee->input_arguments.add({});
+                                layer->adjacent_callee->input_arguments.last().add(token);
                             }
                             if(i != real_index + real_count - 1)
-                                layer->callee->input_arguments.add({});
+                                layer->adjacent_callee->input_arguments.add({});
                         }
                         continue;
                     }
                 }
-                // std::string name = lexer->getStdStringFromToken(token);
-                // MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
-                // if (macroroot) {
-                //     layer->step(); // name
+                // #ifdef gone 
+                #ifndef gone 
+                std::string name = lexer->getStdStringFromToken(token);
+                MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
+                if (macroroot) {
+                    layer->step(); // name
                     
-                //     Layer* layer_macro = new Layer(true);
-                //     layer_macro->root = macroroot;
-                //     layer_macro->sethead((u32)0);
-                //     layers.add(layer_macro);
-                //     // we need to specify that when we do eval_content
-                //     // the tokens should be appended to input_arguments
-                    
-                //     token = layer->get(lexer);
-                //     if(token.type == '(') {
-                //         layer->step();
+                    Layer* layer_macro = new Layer(true);
+                    layer_macro->root = macroroot;
+                    layer_macro->sethead((u32)0);
+                    layer_macro->adjacent_callee = layer->adjacent_callee;
+                    layers.add(layer_macro);
+                    // we need to specify that when we do eval_content
+                    // the tokens should be appended to input_arguments
+                    layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
+
+                    token = layer->get(lexer);
+                    if(token.type == '(') {
+                        layer->step();
                         
-                //         Layer* layer_arg = new Layer(false);
-                //         layer_arg->caller = layer;
-                //         layer_arg->callee = layer_macro;
-                //         layer_arg->specific = layer->specific;
-                //         layer_arg->sethead(layer->ref_head);
+                        Layer* layer_arg = new Layer(false);
+                        layer_arg->top_caller = layer->top_caller;
+                        layer_arg->adjacent_callee = layer_macro;
+                        // layer_arg->specific = layer->specific;
+                        layer_arg->import_id = layer->import_id;
+                        layer_arg->sethead(layer->ref_head);
                         
-                //         layers.add(layer_arg);
-                //     }
+                        layers.add(layer_arg);
+                    }
                     
-                //     continue;
-                // }
+                    continue;
+                }
+                #endif
             }
             
             layer->step();
-            if(layer->callee->input_arguments.size() == 0)
-                layer->callee->input_arguments.add({});
-            layer->callee->input_arguments.last().add(token);
+            if(layer->adjacent_callee->input_arguments.size() == 0)
+                layer->adjacent_callee->input_arguments.add({});
+            layer->adjacent_callee->input_arguments.last().add(token);
         } else {
             if(!layer->specific) {
                 layer->specific = preprocessor->matchArgCount(layer->root, layer->input_arguments.size());
@@ -770,10 +776,29 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                             if(end && layer->is_last(lexer)) {
                                 SET_SUFFIX(list[j].flags, layer->ending_suffix);
                             }
-                            auto t = lexer->appendToken(new_lexer_import, list[j], true);
+                            if(layer->adjacent_callee) {
+                                // TODO: What about commas
+                                if(layer->adjacent_callee->input_arguments.size() == 0)
+                                    layer->adjacent_callee->input_arguments.add({});
+                                layer->adjacent_callee->input_arguments.last().add(list[j]);
+                            } else {
+                                auto t = lexer->appendToken(new_lexer_import, list[j], true);
+                            }
                         }
                         if(i+1 != real_index + real_count && list.size() != 0) {
-                            lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
+                            if(layer->adjacent_callee) {
+                                lexer::Token com{};
+                                com.c_type = ',';
+                                com.type = (lexer::TokenType)',';
+                                com.flags = lexer::TOKEN_FLAG_SPACE;
+                                com.origin = 0; // no origin, is this fine?
+                                // TODO: What about commas
+                                if(layer->adjacent_callee->input_arguments.size() == 0)
+                                    layer->adjacent_callee->input_arguments.add({});
+                                layer->adjacent_callee->input_arguments.last().add(com);
+                            } else {
+                                lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
+                            }
                         }
                     }
                     
@@ -786,17 +811,19 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     
                     Layer* layer_macro = new Layer(true);
                     layer_macro->root = macroroot;
+                    layer_macro->adjacent_callee = layer->adjacent_callee;
                     layer_macro->sethead((u32)0);
                     layers.add(layer_macro);
+                    layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
                     
                     token = layer->get(lexer);
                     if(token.type == '(') {
                         layer->step();
                         
                         Layer* layer_arg = new Layer(false);
-                        layer_arg->caller = layer;
-                        layer_arg->callee = layer_macro;
-                        layer_arg->specific = layer->specific;
+                        layer_arg->top_caller = layer;
+                        layer_arg->adjacent_callee = layer_macro;
+                        // layer_arg->specific = layer->specific;
                         layer_arg->sethead(layer->ref_head);
                         
                         layers.add(layer_arg);
@@ -805,17 +832,187 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     continue;
                 }
             }
+            if(token.type == '#') {
+                StringView directive_str;
+                lexer::Token directive_tok = layer->get(lexer, 1, &directive_str);
+                lexer::Token some_tok{};
+                std::string some_str{};
+                SignalIO signal = parseInformational(token, directive_tok, directive_str, &some_tok, &some_str);
+                // SignalIO signal = SIGNAL_SUCCESS;
+                if(signal == SIGNAL_SUCCESS) {
+                    layer->step(2); // hashtag + directive name
+                    if(layer->is_last(lexer)) {
+                        SET_SUFFIX(token.flags, layer->ending_suffix);
+                    }
+                    StringView tmp = some_str;
+                    if(layer->adjacent_callee) {
+                        // TODO: Fix this
+                        Assert(("can't use directives like #line as arguments to macros",false));
+                        // TODO: What about commas
+                        if(layer->adjacent_callee->input_arguments.size() == 0)
+                            layer->adjacent_callee->input_arguments.add({});
+                        layer->adjacent_callee->input_arguments.last().add(token);
+                    } else {
+                        // lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)'_', (u32)lexer::TOKEN_FLAG_SPACE);
+                        lexer->appendToken(new_lexer_import, some_tok, true, &tmp);
+                    }
+                    continue;
+                }
+            }
             layer->step();
             if(layer->is_last(lexer)) {
                 SET_SUFFIX(token.flags, layer->ending_suffix);
             }
-            auto t = lexer->appendToken(new_lexer_import, token, true);
+            if(layer->adjacent_callee) {
+                // TODO: What about commas
+                if(layer->adjacent_callee->input_arguments.size() == 0)
+                    layer->adjacent_callee->input_arguments.add({});
+                layer->adjacent_callee->input_arguments.last().add(token);
+            } else {
+                lexer->appendToken(new_lexer_import, token, true);
+            }
         }
     }
     #undef SET_SUFFIX
     return SIGNAL_SUCCESS;
 }
+SignalIO PreprocContext::parseInformational(lexer::Token hashtag_tok, lexer::Token directive_tok, StringView string, lexer::Token* out_tok, std::string* out_str) {
+    #define advance advance_not_allowed
+    // StringView string{};
+    // auto hashtag_tok = gettok(-1);
+    // auto macro_token = getinfo(&string);
+    // we expect a hashtag to have been parsed
+    Assert(evaluateTokens);
+    SignalIO signal = SIGNAL_NO_MATCH;
+    if(string == "line") {
+        // advance();
+        auto src = lexer->getTokenSource_unsafe({hashtag_tok});
+        // auto src = getsource(-2);
+        Assert(src);
+        std::string temp = std::to_string(src->line);
 
+        lexer::Token tok{};
+        tok.type = lexer::TOKEN_LITERAL_INTEGER;
+        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
+        string.ptr = (char*)temp.data();
+        string.len = temp.size();
+        
+        *out_str = temp;
+        *out_tok = tok;
+        // lexer->appendToken(new_lexer_import, tok, &string);
+        signal = SIGNAL_SUCCESS;
+    } else if(string == "column") {
+        // advance();
+        auto src = lexer->getTokenSource_unsafe({hashtag_tok});
+        // auto src = getsource(-2);
+        Assert(src);
+        std::string temp = std::to_string(src->column);
+
+        lexer::Token tok{};
+        tok.type = lexer::TOKEN_LITERAL_INTEGER;
+        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
+        string.ptr = (char*)temp.data();
+        string.len = temp.size();
+        
+        
+        *out_str = temp;
+        *out_tok = tok;
+        // lexer->appendToken(new_lexer_import, tok, &string);
+        signal = SIGNAL_SUCCESS;
+    } else if(string == "file") {
+        // advance();
+        std::string temp = new_lexer_import->path;
+
+        lexer::Token tok{};
+        tok.type = lexer::TOKEN_LITERAL_STRING;
+        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED | lexer::TOKEN_FLAG_DOUBLE_QUOTED;
+        string.ptr = (char*)temp.data();
+        string.len = temp.size();
+        
+        
+        *out_str = temp;
+        *out_tok = tok;
+        // lexer->appendToken(new_lexer_import, tok, &string);
+        signal = SIGNAL_SUCCESS;
+    } else if(string == "filename") {
+        // advance();
+        std::string temp = TrimDir(new_lexer_import->path);
+
+        lexer::Token tok{};
+        tok.type = lexer::TOKEN_LITERAL_STRING;
+        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED | lexer::TOKEN_FLAG_DOUBLE_QUOTED;
+        string.ptr = (char*)temp.data();
+        string.len = temp.size();
+        
+        *out_str = temp;
+        *out_tok = tok;
+        // lexer->appendToken(new_lexer_import, tok, &string);
+        signal = SIGNAL_SUCCESS;
+    } else if(string == "unique") { // rename to counter? unique makes you think aboout UUID
+        // advance();
+        
+        #ifdef OS_WINDOWS
+        i32 num = _InterlockedIncrement(&compiler->globalUniqueCounter) - 1;
+        #else
+        compiler->otherLock.lock();
+        i32 num = compiler->globalUniqueCounter++;
+        compiler->otherLock.unlock();
+        #endif
+        // NOTE: This would have been another alternative but x64 inline assembly doesn't work very well
+        // i32* ptr = &info.compileInfo->globalUniqueCounter; 
+        // i32 num = 0;
+        // __asm {
+        //     mov rbx, ptr
+        //     mov eax, 1
+        //     lock xadd DWORD PTR [rbx], eax
+        //     mov num, eax
+        // }
+        
+        std::string temp = std::to_string(num);
+
+        lexer::Token tok{};
+        tok.type = lexer::TOKEN_LITERAL_INTEGER;
+        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
+        string.ptr = (char*)temp.data();
+        string.len = temp.size();
+        
+        *out_str = temp;
+        *out_tok = tok;
+        // lexer->appendToken(new_lexer_import, tok, &string);
+        signal = SIGNAL_SUCCESS;
+    } else if(string == "date") {
+        // advance();
+        
+        time_t timer;
+        time(&timer);
+        auto date = localtime(&timer);
+        
+        std::string temp{};
+        temp.resize(200); // TODO: Use a static buffer somewhere instead of allocating on the heap.
+        int len = snprintf((char*)temp.data(), temp.size(), "%d-%d-%d",1900+date->tm_year, 1 + date->tm_mon, date->tm_mday);
+        Assert(len != 0);
+        temp.resize(len);
+
+        lexer::Token tok{};
+        tok.type = lexer::TOKEN_LITERAL_STRING;
+        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED | lexer::TOKEN_FLAG_DOUBLE_QUOTED;
+        string.ptr = (char*)temp.data();
+        string.len = temp.size();
+        
+        *out_str = temp;
+        *out_tok = tok;
+        // lexer->appendToken(new_lexer_import, tok, &string);
+        signal = SIGNAL_SUCCESS;
+    }
+    #undef advance
+    return signal;
+}
 SignalIO PreprocContext::parseOne() {
     StringView string{};
     // lexer::Token token = gettok();
@@ -852,30 +1049,40 @@ SignalIO PreprocContext::parseOne() {
         if(macro_token->type == lexer::TOKEN_IF) {
             advance();
             signal = parseIf();
-        } else if(!strcmp(str, "macro")) {
+        } else if(string == "macro") {
             advance();
             signal = parseMacroDefinition();
-        } else if(!strcmp(str, "import")) {
+        } else if(string == "import") {
             advance();
             signal = parseImport();
-        } else if(!strcmp(str, "link")) {
+        } else if(string == "link") {
             advance();
             signal = parseLink();
-        } else if(!strcmp(str, "load")) {
+        } else if(string == "load") {
             advance();
             signal = parseLoad();
         // } else if(!strcmp(str, "if")) {
         //     advance();
         //     signal = parseIf();
         } else {
-            signal = parseMacroEvaluation();
+            if(evaluateTokens) {
+                lexer::Token some_tok{};
+                std::string some_str{};
+                signal = parseInformational(tok, macro_tok, string, &some_tok, &some_str);
+                if(signal == SIGNAL_SUCCESS) {
+                    advance();
+                    StringView view = some_str;
+                    lexer->appendToken(new_lexer_import, some_tok, &view);
+                }
+            }
             if(signal != SIGNAL_SUCCESS) {
-                // the macro was not a macro
                 if(evaluateTokens) {
                     lexer->appendToken(new_lexer_import, tok, nullptr); // hashtag
                     lexer->appendToken(new_lexer_import, macro_tok, &string);
-                    advance();
+                } else {
+                    signal = SIGNAL_SUCCESS;
                 }
+                advance();
             }
         }
         switch(signal) {

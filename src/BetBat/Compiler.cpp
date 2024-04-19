@@ -973,7 +973,7 @@ void Compiler::run(CompileOptions* options) {
     }
 
     if(options->only_preprocess) {
-        auto imps = lexer.getImports();
+        auto& imps = lexer.getImports();
         auto iter = imps.iterator();
         std::unordered_map<std::string,bool> printed_imps;
 

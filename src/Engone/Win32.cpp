@@ -700,25 +700,21 @@ namespace engone {
 	static u64 s_allocatedBytes=0;
 	static u64 s_numberAllocations=0;
 
-	struct Allocation {
-		void* ptr=nullptr;
-		u64 size=0;
-	};
-	static Allocation allocationsSlots[5000]; // nullptr indicates empty slot
-	
+	// The map cannot be global because it will get destroyed before we are done
+	// using with in engone::Free. A pointer is fine
+	std::unordered_map<void*,int>* my_ptr_map = new std::unordered_map<void*,int>();
+	#define ptr_map (*my_ptr_map)
+
 	void SetTracker(bool on){
 		s_trackerEnabled = on;
 	}
 	void* Allocate(u64 bytes){
 		if(bytes==0) return nullptr;
-		#ifndef NO_PERF
-		// MEASURE
-		#endif
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
         void* ptr = malloc(bytes);
 		if(!ptr) return nullptr;
 		TracyAlloc(ptr,bytes);
-		// Pri+ntTracking(bytes,ENGONE_TRACK_ALLOC);
+		// PrintTracking(bytes,ENGONE_TRACK_ALLOC);
 		
 		// s_allocStatsMutex.lock();
 		s_allocatedBytes+=bytes;
@@ -727,24 +723,15 @@ namespace engone {
 		s_totalNumberAllocations++;			
 		// s_allocStatsMutex.unlock();
 
-		// for(auto& slot : allocationsSlots){
-		// 	if(slot.ptr)
-		// 		continue;
-		// 	slot.ptr = ptr;
-		// 	slot.size = bytes;
-		// 	break;
-		// }
+		ptr_map[ptr] = bytes;
 
 		#ifdef LOG_ALLOCATIONS
-		printf("* Allocate %lld, %p\n",bytes, ptr);
+		printf("%p - Allocate %lld\n",ptr,bytes);
 		#endif
 		
 		return ptr;
 	}
     void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes){
-		#ifndef NO_PERF
-		// MEASURE
-		#endif
         if(newBytes==0){
             Free(ptr,oldBytes);
             return nullptr;   
@@ -761,29 +748,28 @@ namespace engone {
 					printf("Err %d\n",errno);
                     return nullptr;
 				}
-                // if(newPtr == ptr) {
                 TracyFree(ptr);
                 TracyAlloc(newPtr,newBytes);
-				if(allocTracking.size()!=0)
-					printf("%s %llu -> %llu\n","realloc", oldBytes, newBytes);
+
 				// PrintTracking(newBytes,ENGONE_TRACK_REALLOC);
                 // s_allocStatsMutex.lock();
                 s_allocatedBytes+=newBytes-oldBytes;
-                
                 s_totalAllocatedBytes+=newBytes;
                 s_totalNumberAllocations++;			
 
-				// for(auto& slot : allocationsSlots){
-				// 	if(slot.ptr != ptr)
-				// 		continue;
-				// 	slot.ptr = newPtr;
-				// 	slot.size = newBytes;
-				// }
+				#ifdef LOG_ALLOCATIONS
+				printf("%p -> %p - Reallocate %lld -> %lld\n",ptr,newPtr, oldBytes, newBytes);
+				#endif
+
+				auto pair = ptr_map.find(ptr);
+				if(pair == ptr_map.end()) {
+					Assert(("pointer does not exist",false));
+				} else {
+					ptr_map.erase(ptr);
+					ptr_map[newPtr] = newBytes;
+				}
 
                 // s_allocStatsMutex.unlock();
-				#ifdef LOG_ALLOCATIONS
-				printf("* Reallocate %lld -> %lld\n",oldBytes, newBytes);
-				#endif
                 return newPtr;
             }
         }
@@ -793,6 +779,14 @@ namespace engone {
 		#ifndef NO_PERF
 		// MEASURE
 		#endif
+		#ifdef LOG_ALLOCATIONS
+		printf("%p - Free %lld\n",ptr,bytes);
+		#endif
+
+		auto pair = ptr_map.find(ptr);
+		Assert(pair != ptr_map.end());
+		ptr_map.erase(ptr);
+
 		free(ptr);
         TracyFree(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
@@ -812,9 +806,6 @@ namespace engone {
 		// }
 
 		// s_allocStatsMutex.unlock();
-		#ifdef LOG_ALLOCATIONS
-		printf("* Free %lld\n",bytes);
-		#endif
 	}
 	u64 GetTotalAllocatedBytes(){
 		return s_totalAllocatedBytes;
@@ -833,11 +824,11 @@ namespace engone {
 			if(pair.second.count!=0)
 				printf(" %s (%llu bytes): %d left\n",pair.second.name.c_str(),pair.first,pair.second.count);	
 		}
-		for(auto& slot : allocationsSlots){
-			if(slot.ptr){
-				printf(" %p: %llu bytes\n",slot.ptr, slot.size);
-			}
-		}
+		// for(auto& slot : allocationsSlots){
+		// 	if(slot.ptr){
+		// 		printf(" %p: %llu bytes\n",slot.ptr, slot.size);
+		// 	}
+		// }
 	}
 	static HANDLE m_consoleHandle = NULL; // possibly a bad idea
     void SetConsoleColor(uint16 color){

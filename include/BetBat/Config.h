@@ -73,7 +73,7 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 // #define DUMP_ALL_ASM
 #endif
 
-// #define LOG_ALLOC
+// #define LOG_ALLOCATIONS
 // Config.h is included in Alloc.cpp for alloc to see the macro.
 // #define DEBUG_RESIZE
 
@@ -130,7 +130,7 @@ enum LoggingSection : u64 {
     LOG_OVERVIEW        = 0x100,
     LOG_MACRO_MATCH     = 0x200,
 
-    LOG_ALLOCATIONS     = 0x400,
+   //  LOG_ALLOCATIONS     = 0x400,
     LOG_AST             = 0x800,
     LOG_IMPORTS         = 0x1000,
     LOG_INCLUDES        = 0x2000,

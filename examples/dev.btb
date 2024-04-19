@@ -7,12 +7,6 @@
 // prints("Hey")
 
 
-#macro A(X) X
-
-// #macro B A(A(X))
-
-A(A(1))
-
 // #macro R(T,...) 
 // T + R(...)
 //  + T
@@ -27,14 +21,14 @@ A(A(1))
 
 // outer(a)
 
+// #file #filename
+
+#macro yoo #line #filename
+// #macro yoo #line ok #column
+yoo
+
 // #import "Logger"
 
-
-// #macro log(...) { log_inner(...) }
-// #macro log_inner(X, ...) std_print(X); std_print(' '); log_inner(...)
-// #macro log_inner(X) std_print(X); std_print('\n')
-
-// log_inner(a,b,c)
 
 // fn poly<T>(n: T*, yes: bool = false) {
 //     log("nameof n: ",nameof n, " ",yes)
