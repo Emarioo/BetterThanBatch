@@ -20,28 +20,23 @@ struct StringView {
     StringView(const char* cstr) {
         ptr = cstr;
         len = strlen(cstr);
-        // owner = false;
     }
     StringView(const char* cstr, int len) {
         ptr = cstr;
         this->len = len;
-        // owner = false;
     }
     StringView(const std::string& str) {
-        ptr = str.c_str();
-        len = str.length();
-        // owner = false;
-        // ptr = (char*)malloc(str.length() + 1);
+        // TODO: Memory leak. Some part of the code damaged the heap. I believe this could be a culprit.
+        //   There may be more though so I am leaving it like this.
+        std::string* s = new std::string(str);
+        ptr = s->c_str();
+        len = s->length();
+        // ptr = str.c_str();
         // len = str.length();
-        // strcpy((char*)ptr, str.c_str());
-        // owner = true;
     }
-
 
     const char* ptr=nullptr;
     u16 len=0;
-    // u16 max=0;
-    // bool owner=false;
     bool equals(const char* str) const {
         int slen = strlen(str);
         if(len!=slen) return false;

@@ -1741,6 +1741,8 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
             case BC_MOV_RM_DISP16: {
                 if(n->op1 != BC_REG_LOCALS) {
                     COMPUTE_INPUTS(INPUT1);
+                } else {
+                    env->reg0.reg = ToNativeRegister(n->op1);
                 }
                 REQUEST_REG0(IS_CONTROL_FLOAT(n->control));
 
@@ -1758,11 +1760,13 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 int inputs = INPUT1;
                 if(n->op0 != BC_REG_LOCALS)
                     inputs |= INPUT0;
+                else
+                    env->reg0.reg = ToNativeRegister(n->op0);
                 COMPUTE_INPUTS(inputs);
 
                 emit_mov_mem_reg(env->reg0.reg, env->reg1.reg, n->control, n->imm);
                 
-                if(!env->reg0.on_stack) free_register(env->reg0.reg);
+                if(!env->reg0.on_stack && !IsNativeRegister(env->reg1.reg)) free_register(env->reg0.reg);
                 if(!env->reg1.on_stack) free_register(env->reg1.reg);
             } break;
             case BC_ALLOC_LOCAL: {
@@ -4223,7 +4227,7 @@ void X64Builder::emit_mov_reg_mem(X64Register reg, X64Register rm, InstructionCo
         else
             emit4((u32)(i32)disp);
     } else {
-        Assert(IS_CONTROL_FLOAT(control));
+        Assert(!IS_CONTROL_FLOAT(control));
         if(size == CONTROL_16B) {
             emit1(PREFIX_16BIT);
         }
@@ -4278,7 +4282,7 @@ void X64Builder::emit_mov_mem_reg(X64Register rm, X64Register reg, InstructionCo
         else
             emit4((u32)(i32)disp);
     } else {
-        Assert(IS_CONTROL_FLOAT(control));
+        Assert(!IS_CONTROL_FLOAT(control));
         if(size == CONTROL_16B) {
             emit1(PREFIX_16BIT);
         }

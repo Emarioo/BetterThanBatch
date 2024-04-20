@@ -398,12 +398,12 @@ struct BytecodeBuilder {
     // void emit_stack_space(int size);
     // void emit_stack_alignment(int alignment);
     
-    void emit_push(BCRegister reg, bool without_instruction = false);
+    void emit_push(BCRegister reg);
     void emit_pop(BCRegister reg);
     void emit_li32(BCRegister reg, i32 imm);
     void emit_li64(BCRegister reg, i64 imm);
     
-    void emit_incr(BCRegister reg, i32 imm, bool no_modification = false);
+    void emit_incr(BCRegister reg, i32 imm);
 
     // reg may be invalid
     void emit_alloc_local(BCRegister reg, u16 size);
@@ -482,8 +482,13 @@ struct BytecodeBuilder {
     
     // int opcode_count() { return tinycode->index_of_opcodes.size(); }
     // InstructionType get_opcode(int opcode_index) { return (InstructionType)tinycode->instructionSegment[tinycode->index_of_opcodes[opcode_index]]; }
-    InstructionType get_last_opcode() { if(tinycode->instructionSegment.size() == 0) return (InstructionType)0; return (InstructionType)tinycode->instructionSegment[index_of_last_instruction]; }
-    
+    InstructionType get_last_opcode() {
+        int i = get_index_of_previous_instruction();
+        if(i==-1)
+            return (InstructionType)0; 
+        return (InstructionType)tinycode->instructionSegment[i];
+    }
+
     void push_line(int line, const std::string& text) {
         tinycode->lines.add({line, text});
     }
@@ -498,13 +503,30 @@ private:
     void emit_imm32(i32 imm);
     void emit_imm64(i64 imm);
     
-    // struct AlignInfo {
-    //     int diff=0;
-    //     int size=0;
-    // };
-    // DynamicArray<AlignInfo> stackAlignment;
-    // int virtualStackPointer = 0;
-    int index_of_last_instruction = -1;
+    // call the functions, don't access the fields directly
+    static const int PREVIOUS_INSTRUCTIONS_MAX = 5;
+    int index_of_previous_instructions[PREVIOUS_INSTRUCTIONS_MAX]; // circular buffer
+    int previous_instructions_head = 0; // points to next index to use
+    int previous_instructions_count = 0;
+
+    // off = 0 means previous, off = 1 means the previous previous inst. and so on.
+    // returns -1 if out of bounds
+    int get_index_of_previous_instruction(int off = 0) {
+        if(off >= previous_instructions_count)
+            return -1;
+        return index_of_previous_instructions[(previous_instructions_head + off) % PREVIOUS_INSTRUCTIONS_MAX];
+    }
+    void append_previous_instruction(int index) {
+        index_of_previous_instructions[previous_instructions_head] = index;
+        previous_instructions_head = (previous_instructions_head + 1) % PREVIOUS_INSTRUCTIONS_MAX;
+        if(previous_instructions_count < PREVIOUS_INSTRUCTIONS_MAX)
+            previous_instructions_count++;
+    }
+    void remove_previous_instruction() {
+        Assert(previous_instructions_count > 0); // can't remove if there's nothing there
+        previous_instructions_count--;
+        previous_instructions_head = (previous_instructions_head - 1 + PREVIOUS_INSTRUCTIONS_MAX) % PREVIOUS_INSTRUCTIONS_MAX;
+    }
 };
 
 // BC FILE FORMAT

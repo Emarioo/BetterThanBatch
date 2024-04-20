@@ -486,11 +486,12 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             }
             if(!(chr>='0'&&chr<='9') && chr!='.') // TODO: how does it work with hexidecimals?
                 canBeDot=false;
-            if(!isNumber || chr!='_') {
+            // if(!isNumber || chr!='_') {
+            // if(!isNumber) {
                 // outStream->addData(chr);
                 str_end++;
                 // token.length++;
-            }
+            // }
         }
         
         bool nextLiteralSuffix = false;
@@ -516,10 +517,10 @@ u32 Lexer::tokenize(char* text, u64 length, const std::string& path_name, u32 ex
             bool has_data = true;
             if(isDecimal)
                 new_tokens->type = TOKEN_LITERAL_DECIMAL;
-            else if(isNumber)
-                new_tokens->type = TOKEN_LITERAL_INTEGER;
             else if(inHexidecimal)
                 new_tokens->type = TOKEN_LITERAL_HEXIDECIMAL;
+            else if(isNumber) // should come after hexidecimal
+                new_tokens->type = TOKEN_LITERAL_INTEGER;
             else {
                 new_tokens->type = TOKEN_IDENTIFIER;
             
@@ -1995,6 +1996,8 @@ u64 ConvertHexadecimal(const StringView& view) {
     u64 hex = 0;
     for(int i=start;i<view.len;i++){
         char chr = view.ptr[i];
+        if(chr == '_')
+            continue;
         if(chr>='0' && chr <='9'){
             hex = 16*hex + chr-'0';
             continue;

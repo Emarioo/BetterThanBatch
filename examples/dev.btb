@@ -6,12 +6,42 @@
 
 #import "Logger"
 
+// if true 
+//     prints("Y")
+// else
+//     prints("N")
 
-fn poly<T>(n: T*, yes: bool = false) {
-    log("nameof n: ",nameof n, " ",yes,"\n")
-}
-a: i32 = 9235;
-poly(&a)
+// for 0..5 {
+//     log(nr)
+    // 923
+// }
+
+std_print(5u);
+// std_print(119);
+
+// fn ok(a: i32) {
+//     a = 23;
+// }
+
+// ok(2)
+
+// 0x1234_5678_1234_5678
+// 0x1234_5678_1234_5678_ABCD
+
+// 13_o_kay
+
+// fn poly<T>(n: T*, yes: bool = false) {
+//     // prints("nameof n: ");
+//     // prints(" ");
+//     // prints(nameof n);
+//     // prints(" ");
+//     // prints(yes); 
+//     // prints("\n")
+
+//     log("nameof n:",nameof n,yes)
+// }
+// a: i32 = 9235;
+// poly(&a)
 
 // fn @intrinsic strlen(str: char*) -> u32;
 

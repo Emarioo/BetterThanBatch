@@ -708,11 +708,133 @@ namespace engone {
 	void SetTracker(bool on){
 		s_trackerEnabled = on;
 	}
+
+	// #define ENABLE_MEMORY_CORRUPTION_DETECTION
+
+	int VERIFICATION_SPACING = 0x100;
+	const int SAFE_MEMORY_MAX = 0x100'0000;
+	const char VERIFICATION_CHAR = 0x11;
+	u64 VERIFICATION_CHAR64 = 0x1111'1111'1111'1111;
+	const int SAFE_ALLOCATIONS_MAX = 4000; // tweak this as you need
+
+	void* safe_memory = nullptr;
+	u64 safe_memory_max = SAFE_MEMORY_MAX;
+	u64 safe_memory_used = 0;
+	bool init_safe_memory = false;
+	int safe_allocations_used = 0; // tweak this as you need
+	struct SafeInfo {
+		void* ptr = nullptr;
+		int size;
+		int size_plus_align;
+		bool freed;
+	};
+	SafeInfo safe_allocations[SAFE_ALLOCATIONS_MAX];
+	int FindIndexOfSafeInfo(void* ptr) {
+		for(int i=0;i<safe_allocations_used;i++) {
+			if(safe_allocations[i].ptr == ptr)
+				return i;
+		}
+		return -1;
+	}
+	bool VerifyAllocHeap() {
+		u8* ptr = (u8*)safe_memory;
+		ptr += VERIFICATION_SPACING;
+		for(int i=0;i<safe_allocations_used;i++) {
+			auto info = &safe_allocations[i];
+			ptr += info->size_plus_align;
+			for(int j=0;j<VERIFICATION_SPACING/8;j++) {
+				if(*(u64*)ptr != VERIFICATION_CHAR64) {
+					Assert(false);
+				}
+				ptr += 8;
+			}
+		}
+		return true;
+	}
+	void* AllocHeap(u64 new_bytes, void* ptr, u64 old_bytes) {
+		if(!init_safe_memory) {
+			init_safe_memory = true;
+			// TODO: Allocate pages so that we hopefully recieve an access violation if we write beyond the page.
+			safe_memory = malloc(safe_memory_max);
+			safe_memory_used = 0;
+			memset(safe_memory, VERIFICATION_CHAR, VERIFICATION_SPACING);
+			safe_memory_used += VERIFICATION_SPACING;
+			void* hehe = safe_allocations; // NOTE: C++ compiler warns you about memset on safe_allocations because it's an array of structs but I know what i'm doing so it's fine.
+			memset(hehe, 0, SAFE_ALLOCATIONS_MAX * sizeof(*safe_allocations));
+			Assert((u64)safe_memory%8 == 0);
+			Assert((u64)VERIFICATION_SPACING%8 == 0);
+		}
+
+		Assert(safe_memory_used + VERIFICATION_SPACING + new_bytes + 8 < safe_memory_max); // +8 because of possible alignment
+
+		VerifyAllocHeap();
+
+		void* new_ptr = nullptr;
+		SafeInfo* new_info = nullptr;
+		if(!ptr) {
+			Assert(new_bytes);
+			// new_ptr = malloc(new_bytes);
+			int alignment = safe_memory_used % 8;
+			if(alignment != 0)
+				alignment = 8 - alignment;
+			new_ptr = (char*)safe_memory + safe_memory_used + alignment;
+			safe_memory_used += new_bytes + alignment;
+
+			new_info = &safe_allocations[safe_allocations_used++];
+			new_info->ptr = new_ptr;
+			new_info->size = new_bytes;
+			new_info->size_plus_align = new_bytes + alignment;
+			new_info->freed = false;
+		} else if (new_bytes) {
+			// new_ptr = realloc(ptr, new_bytes);
+			int alignment = safe_memory_used % 8;
+			if(alignment != 0)
+				alignment = 8 - alignment;
+			new_ptr = (char*)safe_memory + safe_memory_used + alignment;
+			safe_memory_used += new_bytes + alignment;
+			memcpy(new_ptr, ptr, old_bytes); // make sure old bytes is correct?
+
+			int index = FindIndexOfSafeInfo(ptr);
+			Assert(index != -1);
+			auto& old_info = safe_allocations[index];
+			old_info.freed = true;
+			Assert(old_info.size == old_bytes);
+
+			new_info = &safe_allocations[safe_allocations_used++];
+			new_info->ptr = new_ptr;
+			new_info->size = new_bytes;
+			new_info->size_plus_align = new_bytes + alignment;
+			new_info->freed = false;
+
+		} else {
+			// free(ptr);
+			int index = FindIndexOfSafeInfo(ptr);
+			Assert(index != -1);
+			auto& old_info = safe_allocations[index];
+			old_info.freed = true;
+			Assert(old_info.size == old_bytes);
+		}
+
+		if(new_ptr) {
+			// create verification space
+			int space = 0x100;
+			memset((u8*)safe_memory + safe_memory_used, VERIFICATION_CHAR, space);
+			safe_memory_used += space;
+		}
+
+		return new_ptr;
+	}
+
+
 	void* Allocate(u64 bytes){
 		Assert(bytes);
 		// if(bytes==0) return nullptr;
 		// void* ptr = HeapAlloc(GetProcessHeap(),0,bytes);
+		#ifdef ENABLE_MEMORY_CORRUPTION_DETECTION
+		void* ptr = AllocHeap(bytes, 0,0);
+		#else
         void* ptr = malloc(bytes);
+		#endif
 		Assert(ptr);
 		// if(!ptr) return nullptr;
 		TracyAlloc(ptr,bytes);
@@ -730,6 +852,8 @@ namespace engone {
 		#ifdef LOG_ALLOCATIONS
 		printf("%p - Allocate %lld\n",ptr,bytes);
 		#endif
+
+		// printf("%llu : %llu\n",bytes,s_allocatedBytes);
 		
 		return ptr;
 	}
@@ -753,11 +877,16 @@ namespace engone {
 				if(pair == ptr_map.end()) {
 					Assert(("pointer does not exist",false));
 				} else {
+					Assert(pair->second == oldBytes);
 					ptr_map.erase(ptr);
 				}
 
                 // void* newPtr = HeapReAlloc(GetProcessHeap(),0,ptr,newBytes);
+				#ifdef ENABLE_MEMORY_CORRUPTION_DETECTION
+				void* newPtr = AllocHeap(newBytes, ptr, oldBytes);
+				#else
                 void* newPtr = realloc(ptr,newBytes);
+				#endif
 				if(!newPtr) {
 					printf("Err %d\n",errno);
                     return nullptr;
@@ -765,6 +894,7 @@ namespace engone {
                 TracyFree(ptr);
                 TracyAlloc(newPtr,newBytes);
 
+				
 				ptr_map[newPtr] = newBytes;
 
 				// PrintTracking(newBytes,ENGONE_TRACK_REALLOC);
@@ -790,10 +920,16 @@ namespace engone {
 
 		auto pair = ptr_map.find(ptr);
 		Assert(pair != ptr_map.end());
+		Assert(pair->second == bytes);
 		ptr_map.erase(ptr);
+	
+		#ifdef ENABLE_MEMORY_CORRUPTION_DETECTION
+		AllocHeap(0, ptr, bytes);
+		#else
+		free(ptr); // nocheckin
+		#endif
+        // TracyFree(ptr);
 
-		free(ptr);
-        TracyFree(ptr);
 		// HeapFree(GetProcessHeap(),0,ptr);
 		// PrintTracking(bytes,ENGONE_TRACK_FREE);
 		// s_allocStatsMutex.lock();
@@ -857,6 +993,38 @@ namespace engone {
 		}
 		return info.dwSize.X;
 	}
+	
+	void GetConsoleSize(int* w, int* h) {
+		HANDLE ha = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO info;
+		GetConsoleScreenBufferInfo(ha, &info);
+		*w = info.dwSize.X;
+		*h = info.dwSize.Y;
+	}
+	void GetConsoleCursorPos(int* x, int* y) {
+		HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+		CONSOLE_SCREEN_BUFFER_INFO info;
+		GetConsoleScreenBufferInfo(h, &info);
+		*x = info.dwCursorPosition.X;
+		*y = info.dwCursorPosition.Y;
+	}
+	void SetConsoleCursorPos(int x, int y) {
+		HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+		COORD pos;
+		pos.X = x;
+		pos.Y = y;
+		SetConsoleCursorPosition(h, pos);
+	}
+	void FillConsoleAt(char chr, int x, int y, int length) {
+		HANDLE h = GetStdHandle(STD_OUTPUT_HANDLE);
+		DWORD garb;
+		COORD pos;
+		pos.X = x;
+		pos.Y = y;
+		FillConsoleOutputCharacter(h, ' ', length, pos, &garb);
+	}
+
+
     i32 atomic_add(volatile i32* ptr, i32 value) {
         i32 res = InterlockedAdd((volatile long*)ptr, value);
         return res;

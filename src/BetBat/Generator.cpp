@@ -610,6 +610,7 @@ SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, 
     }
     return SIGNAL_SUCCESS;
 }
+// This function is useless since rewrite 0.2.1. Remove it?
 SignalIO GenContext::generateArtificialPush(TypeId typeId) {
     using namespace engone;
     if(typeId == AST_VOID) {
@@ -642,7 +643,7 @@ SignalIO GenContext::generateArtificialPush(TypeId typeId) {
         //     info.addImm(offset);
         //     }
         // }
-        builder.emit_push(reg, true);
+        // builder.emit_push(reg, true);
     } else {
         for(int i = (int) typeInfo->astStruct->members.size() - 1; i>=0; i--){
             auto& member = typeInfo->astStruct->members[i];
@@ -1081,13 +1082,11 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             switch(varinfo->type) {
                 case VariableInfo::GLOBAL: {
                     builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
-                    break; 
-                }
+                } break; 
                 case VariableInfo::LOCAL: {
                     builder.emit_get_local(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     // builder.emit_add(BC_REG_B, BC_REG_BP, false, 8);
-                    break; 
-                }
+                } break; 
                 case VariableInfo::MEMBER: {
                     // NOTE: Is member variable/argument always at this offset with all calling conventions?
                     Assert(info.currentFunction->callConvention == BETCALL);
@@ -1096,8 +1095,27 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     
                     builder.emit_li32(BC_REG_A, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
-                    break;
-                }
+                } break;
+                case VariableInfo::ARGUMENT: {
+                    // TODO: I see two solutions:
+                    //   1 - We create an instruction like BC_GET_PTR_OF_PARAM and use it here.
+                    //   2 - We create a BC_SET_PARAM instruction. This could be more optimized since
+                    //       we can directly set the paramater instead of first getting a pointer and
+                    //       then setting the parameter. An optimize could fix that up but it's better
+                    //       to produce optimized instructions from the start. It does mean that we have
+                    //       to return a special value from generateReference that describe that set_param
+                    //       should be used. Note that we still need BC_GET_PTR_OF_PARAM in case you
+                    //       take a pointer to a paramater in the code.
+                    //
+                    //       To summarize, implement BC_GET_PTR_OF_PARAM similar to BC_GET_LOCAL.
+                    //       Optimized solutions can be done later.
+
+                    ERR_SECTION(
+                        ERR_HEAD2(now->location)
+                        ERR_MSG("You cannot change the value of parameters. More specifically, you cannot take a reference to them.")
+                        ERR_LINE2(now->location,"can't reference parameters")
+                    )
+                } break;
                 default: {
                     Assert(false);
                 }
@@ -4687,7 +4705,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 if (result != SIGNAL_SUCCESS)
                     continue;
 
-                builder.fix_jump_imm32_here(skipIfBodyIndex);
+                builder.fix_jump_imm32_here(skipElseBodyIndex);
             }
         } else if (statement->type == ASTStatement::SWITCH) {
             _GLOG(SCOPE_LOG("SWITCH"))
@@ -4938,7 +4956,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
             int stackBeforeLoop = currentFrameOffset;
             // int stackBeforeLoop = builder.saveStackMoment(); // nocheckin, i have remove saveStackMoment, is that okay or does it break things?
-            int frameBeforeLoop = info.currentFrameOffset;
 
             // TODO: Save stack moment here?
 
@@ -5245,6 +5262,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // info.ast->removeIdentifier(scopeForVariables, "nr");
                 // info.ast->removeIdentifier(scopeForVariables, itemvar);
             }
+
+            
+            builder.emit_free_local(stackBeforeLoop - info.currentFrameOffset);
+            info.currentFrameOffset = stackBeforeLoop;
             
             auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
             fun.addVar(varnameIt.name,
@@ -5269,7 +5290,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // fun.localVariables.last().typeId = varinfo_index->versions_typeId[info.currentPolyVersion];
 
             // builder.restoreStackMoment(stackBeforeLoop);
-            info.currentFrameOffset = frameBeforeLoop;
 
             // pop loop happens in defer
         } else if(statement->type == ASTStatement::BREAK) {

@@ -3,7 +3,7 @@
 // included to get CallConventions
 #include "BetBat/x64_gen.h"
 
-// #define ENABLE_BYTECODE_OPTIMIZATIONS
+#define ENABLE_BYTECODE_OPTIMIZATIONS
 
 u32 Bytecode::getMemoryUsage(){
     Assert(false);
@@ -96,7 +96,7 @@ int Bytecode::appendData(const void* data, int size){
     lock_global_data.lock();
     if(dataSegment.max < dataSegment.used + size){
         int oldMax = dataSegment.max;
-        dataSegment.resize(dataSegment.max*2 + 2*size);
+        dataSegment._reserve(dataSegment.max*2 + 2*size);
         memset(dataSegment.data() + oldMax, '_', dataSegment.max - oldMax);
     }
     int index = dataSegment.used;
@@ -266,7 +266,6 @@ void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode) {
     // Assert(virtualStackPointer == 0);
     // Assert(stackAlignment.size() == 0);
     // virtualStackPointer = 0;
-    index_of_last_instruction = -1;
     // stackAlignment.cleanup();
     
     this->code = code;
@@ -290,22 +289,23 @@ void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 tes
 //         emit_incr(BC_REG_SP, alignment - dx);
 //     }
 // }
-void BytecodeBuilder::emit_push(BCRegister reg, bool without_instruction) {
-    if(!without_instruction) {
-        emit_opcode(BC_PUSH);
-        emit_operand(reg);
-    }
+void BytecodeBuilder::emit_push(BCRegister reg) {
+    emit_opcode(BC_PUSH);
+    emit_operand(reg);
     // virtualStackPointer -= 8;
 }
 void BytecodeBuilder::emit_pop(BCRegister reg) {
 #ifdef ENABLE_BYTECODE_OPTIMIZATIONS
-    if(index_of_last_instruction != -1 && tinycode->instructionSegment[index_of_last_instruction] == BC_PUSH && tinycode->instructionSegment[index_of_last_instruction+1] == reg) {
-        // remove redundant push and pop
-        index_of_last_instruction = -1;
-        tinycode->instructionSegment.pop();
-        tinycode->instructionSegment.pop();
-        virtualStackPointer -= 8;
-        return;
+    int i = get_index_of_previous_instruction();
+    if(i != -1) {
+        if(tinycode->instructionSegment[i] == BC_POP) {
+            if(tinycode->instructionSegment[i + 1] == reg) {
+                tinycode->instructionSegment.pop();
+                tinycode->instructionSegment.pop();
+                remove_previous_instruction();
+                return;
+            }
+        }
     }
 #endif
 
@@ -323,25 +323,25 @@ void BytecodeBuilder::emit_li64(BCRegister reg, i64 imm){
     emit_operand(reg);
     emit_imm64(imm);
 }
-void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm, bool no_modification) {
+void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm) {
     Assert(imm != 0); // incrementing by 0 is dumb
 
 #ifdef ENABLE_BYTECODE_OPTIMIZATIONS
-    if(index_of_last_instruction != -1 && tinycode->instructionSegment[index_of_last_instruction] == BC_INCR && tinycode->instructionSegment[index_of_last_instruction+1] == reg) {
-        // modify immediate of previous incr
-        i32* prev_imm = (i32*)&tinycode->instructionSegment[index_of_last_instruction + 2];
-        *prev_imm += imm;
+    // if(index_of_last_instruction != -1 && tinycode->instructionSegment[index_of_last_instruction] == BC_INCR && tinycode->instructionSegment[index_of_last_instruction+1] == reg) {
+    //     // modify immediate of previous incr
+    //     i32* prev_imm = (i32*)&tinycode->instructionSegment[index_of_last_instruction + 2];
+    //     *prev_imm += imm;
 
-        if(*prev_imm == 0) {
-            index_of_last_instruction = -1;
-            tinycode->instructionSegment.used -= 6;
-        }
+    //     if(*prev_imm == 0) {
+    //         index_of_last_instruction = -1;
+    //         tinycode->instructionSegment.used -= 6;
+    //     }
 
-        Assert(no_modification); // we don't know if previous incr had modification or not, it probably did
-        if(reg == BC_REG_SP)
-            virtualStackPointer += imm;
-        return;
-    }
+    //     Assert(no_modification); // we don't know if previous incr had modification or not, it probably did
+    //     if(reg == BC_REG_SP)
+    //         virtualStackPointer += imm;
+    //     return;
+    // }
 #endif
     // Assert(reg != BC_REG_SP && reg != BC_REG_BP); // these are deprecated
     emit_opcode(BC_INCR);
@@ -770,7 +770,7 @@ void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType, u8 fro
 }
 
 void BytecodeBuilder::emit_opcode(InstructionType type) {
-    index_of_last_instruction = tinycode->instructionSegment.size();
+    append_previous_instruction(tinycode->instructionSegment.size());
     tinycode->instructionSegment.add((u8)type);
     tinycode->index_of_lines.resize(tinycode->instructionSegment.size());
     tinycode->index_of_lines[tinycode->instructionSegment.size()-1] = tinycode->lines.size();

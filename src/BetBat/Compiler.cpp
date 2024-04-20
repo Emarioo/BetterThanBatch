@@ -880,11 +880,11 @@ void Compiler::run(CompileOptions* options) {
         options->compileStats.errors++;
         return;
     }
-
     initial_import_id = import_id;
     
-    u32 preload_import_id = 0;
-    {
+    bool skip_preload = false;
+    // bool skip_preload = true;
+    if(!skip_preload) {
         StringBuilder preload{};
         preload +=
         "struct Slice<T> {"
@@ -921,6 +921,7 @@ void Compiler::run(CompileOptions* options) {
         
         auto virtual_path = "<preload>";
         lexer.createVirtualFile(virtual_path, &preload); // add before creating import
+        u32 preload_import_id = 0; // move to function scope in case other parts of this function need preload_import_id?
         preload_import_id = addImport(virtual_path);
         Assert(preload_import_id); // nocheckin
         

@@ -6,6 +6,10 @@
 
 // TODO: Thread safety
 // TODO: Optimize string manipulation
+// TODO: Memory saftety (tools to detect it)
+//   - ENABLE_MEMORY_CORRUPTION_DETECTION
+//   - Allocation logging
+//   - Double freeing of pointers
 
 // TODO: Get last modified date of a file
 // TODO: Check if file exists.
@@ -16,6 +20,8 @@
 // You can only disable this if you don't use any important code in the expression.
 // Like a resize or something.
 // #define Assert(expression)
+
+// #define ENABLE_MEMORY_CORRUPTION_DETECTION
 
 #define PL_PRINT_ERRORS
 
@@ -65,10 +71,14 @@ namespace engone {
 	void TrackType(u64 bytes, const std::string& name);
 	void SetTracker(bool on);
 
+	// allocates, reallocates and frees
+	void* AllocHeap(u64 new_bytes, void* ptr, u64 old_bytes);
+
 	// heap
 	void* Allocate(u64 bytes);
     void* Reallocate(void* ptr, u64 oldBytes, u64 newBytes);
 	void Free(void* ptr, u64 bytes);
+
 	// These are thread safe
 	// Successful calls to Allocate
 	u64 GetTotalNumberAllocations();
@@ -150,6 +160,12 @@ namespace engone {
 	void SetConsoleColor(uint16 color);
 	// returns 0 if something went wrong
 	int GetConsoleWidth();
+
+	// TODO: Implement Unix equivalent
+	void GetConsoleSize(int* w, int* h);
+	void GetConsoleCursorPos(int* x, int* y);
+	void SetConsoleCursorPos(int x, int y);
+	void FillConsoleAt(char chr, int x, int y, int length);
 
 	struct PlatformError{
 		uint32 errorType;

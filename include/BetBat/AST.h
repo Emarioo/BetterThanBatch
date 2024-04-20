@@ -939,7 +939,7 @@ struct AST {
 
     void initLinear(){
         Assert(!linearAllocation);
-        linearAllocationMax = 0x10000000;
+        linearAllocationMax = 0x100000; // tweak this
         linearAllocationUsed = 0;
         linearAllocation = TRACK_ARRAY_ALLOC(char, linearAllocationMax);
          // (char*)engone::Allocate(linearAllocationMax);

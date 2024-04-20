@@ -3,6 +3,8 @@
 // needed for FRAME_SIZE
 #include "BetBat/Generator.h"
 
+#include <iostream>
+
 #define BITS(P,B,E,S) ((P<<(S-E))>>B)
 
 #define DECODE_OPCODE(I) I->opcode
@@ -211,8 +213,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     #endif
     
     // _ILOG(log::out << "sp = "<<sp<<"\n";)
-    // bool logging = false;
-    bool logging = true;
 
     // auto& instructions = tinycode->instructionSegment;
     #define instructions tinycode->instructionSegment
@@ -226,7 +226,49 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
     int prev_tinyindex = -1;
     int prev_line = -1;
     bool running = true;
+
+    // bool logging = false;
+    bool logging = true;
+    bool interactive = false;
+    // bool interactive = true;
     while(running) {
+        if(interactive) {
+            printf("> ");
+            std::string line;
+            std::getline(std::cin, line);
+            
+            // Remove what the user just typed  (it bloats the screen)
+            #ifdef OS_WINDOWS
+            int w,h;
+            GetConsoleSize(&w,&h);
+            int x,y;
+            GetConsoleCursorPos(&x,&y);
+            x = 0;
+            y--;
+            SetConsoleCursorPos(x,y);
+            FillConsoleAt(' ', x, y, w);
+            #elif defined(OS_UNIX)
+            int new_y_pos = ?;
+            printf("\033[0,%d", new_y_pos);
+            #endif
+            
+            if(line.empty()) {
+                // nothing
+            } else if(line == "l") {
+                // print_registers(true);
+            } else if(line == "f") {
+                // print_frame(4,4);
+            } else if(line == "s") {
+                // print_stack();
+            } else if(line == "c") {
+                interactive = false;
+            } else if(line == "q") {
+                interactive = false;
+            } else if(line == "help") {
+                // printf("log registers\n");
+            }
+        }
+
         i64 prev_pc = pc;
         if(pc>=(u64)tinycode->instructionSegment.used)
             break;
@@ -290,8 +332,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         switch (opcode) {
         case BC_HALT: {
             running = false;
-            if(logging)
-                log::out << "HALT\n";
+            // if(logging)
+            log::out << log::GREEN << "HALT (instruction)\n";
         } break;
         case BC_NOP: {
         } break;
@@ -478,7 +520,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            if(op0 == 0)
+            if(registers[op0] == 0)
                 pc += imm;
         } break;
         case BC_JNZ: {
@@ -486,7 +528,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
             imm = *(i32*)&instructions[pc];
             pc+=4;
             
-            if(op0 != 0)
+            if(registers[op0] != 0)
                 pc += imm;
         } break;
         case BC_CALL: {
@@ -662,6 +704,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         case BC_MEMZERO: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
+            u8 batchsize = (u8)instructions[pc++];
             memset((void*)registers[op0],0, registers[op1]);
         } break;
         case BC_MEMCPY: {

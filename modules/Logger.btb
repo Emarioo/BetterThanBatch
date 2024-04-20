@@ -40,14 +40,15 @@ fn @hide std_print(t: u64){
     }
     str: char[20];
     used := 19;
-    while t > 0u && used > 0 {
-        num: u32 = t % 10u;
+    value := t;
+    while value > 0u && used > 0 {
+        num: u32 = value % 10u;
         // log('A','0'+num)
         // log(,num)
         str.ptr[used] = num + '0';
         used--;
         
-        t = t / 10u;
+        value = value / 10u;
     }
     str.ptr += used + 1;
     // str.len -= used - 1;

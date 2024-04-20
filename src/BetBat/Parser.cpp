@@ -1609,8 +1609,29 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 
                 bool printedError = false;
                 u64 num=0;
+                // log::out << view << "\n";
+                bool unsignedSuffix = false;
+                bool signedSuffix = false;
                 for(int i=0;i<view.len;i++){
                     char c = view.ptr[i];
+                    if(c == 'u') {
+                        unsignedSuffix = true;
+                        continue;
+                    } else if(c == 's') {
+                        signedSuffix = true;
+                        continue;
+                    } else if(c == '_') {
+                        continue;
+                    } else if(c < '0' || c > '9') {
+                        printedError = true;
+                        ERR_SECTION(
+                            ERR_HEAD2(token_tiny)
+                            // TODO: Show the limit? pow(2,64)-1
+                            ERR_MSG("Invalid suffix on number! Suffixes such as 92u (unsigned), 2s (signed) are allowed but '"<<info.lexer->tostring(token_tiny)<<"' does not contain those.")
+                            ERR_LINE2(token_tiny,"remove trailing letters");
+                        )
+                        break;
+                    }
                     if(num * 10 < num && !printedError) {
                         ERR_SECTION(
                             ERR_HEAD2(token_tiny)
@@ -1619,35 +1640,38 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                             ERR_LINE2(token_tiny,"to large!");
                         )
                         printedError = true;
+                        break;
                     }
                     num = num*10 + (c-'0');
                 }
-                bool unsignedSuffix = false;
-                bool signedSuffix = false;
-                StringView suffix{};
-                auto tok_suffix = info.gettok(&suffix);
-                if(tok_suffix.type == lexer::TOKEN_IDENTIFIER && (token->flags&(lexer::TOKEN_FLAG_ANY_SUFFIX))==0) {
-                    if(suffix == "u") {
-                        info.advance();
-                        unsignedSuffix  = true;
-                    } else if(suffix == "s") {
-                        info.advance();
-                        signedSuffix  = true;
-                    } else if((suffix.ptr[0]|32) >= 'a' && (suffix.ptr[0]|32) <= 'z'){
-                        ERR_SECTION(
-                            ERR_HEAD2(tok_suffix)
-                            ERR_MSG("'"<<info.lexer->tostring(tok_suffix)<<"' is not a known suffix for integers. The available ones are: 92u (unsigned), 31924s (signed).")
-                            ERR_LINE2(tok_suffix,"invalid suffix")
-                        )
-                    }
-                }
+                // NOTE: OLD suffix code when suffix wasn't a part of the integer.
+                //   The lexer combines integer and trailing letters into an integer token.
+                //   Don't remove code below in case we switch back to separating them.
+                // StringView suffix{};
+                // auto tok_suffix = info.gettok(&suffix);
+                // if(tok_suffix.type == lexer::TOKEN_IDENTIFIER && (token->flags&(lexer::TOKEN_FLAG_ANY_SUFFIX))==0) {
+                //     if(suffix == "u") {
+                //         info.advance();
+                //         unsignedSuffix  = true;
+                //     } else if(suffix == "s") {
+                //         info.advance();
+                //         signedSuffix  = true;
+                //     } else if((suffix.ptr[0]|32) >= 'a' && (suffix.ptr[0]|32) <= 'z'){
+                //         ERR_SECTION(
+                //             ERR_HEAD2(token_tiny)
+                //             // TODO: Show the limit? pow(2,64)-1
+                //             ERR_MSG("Invalid suffix on number! Suffixes such as 92u (unsigned), 2s (signed) are allowed but '"<<info.lexer->tostring(token_tiny)<<"' does not contain those.")
+                //             ERR_LINE2(token_tiny,"remove trailing letters");
+                //         )
+                //     }
+                // }
                 ASTExpression* tmp = 0;
                 if(unsignedSuffix) {
                     if(negativeNumber) {
                         ERR_SECTION(
-                            ERR_HEAD2(tok_suffix)
+                            ERR_HEAD2(token_tiny)
                             ERR_MSG("You cannot use an unsigned suffix and a minus at the same time. They collide.")
-                            ERR_LINE2(tok_suffix,"remove?")
+                            ERR_LINE2(token_tiny,"remove suffix")
                         )
                     }
                     if ((num&0xFFFFFFFF00000000) == 0) {
@@ -1685,59 +1709,11 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                         tmp = info.ast->createExpression(TypeId(AST_UINT64));
                     }
                 }
-                // if(negativeNumber) {
-                //     if(unsignedSuffix) {
-                //         ERR_SECTION(
-                //             ERR_HEAD2(tok)
-                //             ERR_MSG("You cannot use an unsigned suffix and a minus at the same time. They collide.")
-                //             ERR_LINE2(tok,"remove?")
-                //         )
-                //     }
-                //     if ((num&0xFFFFFFFF80000000) == 0) {
-                //         tmp = info.ast->createExpression(TypeId(AST_INT32));
-                //     } else if((num&0x8000000000000000) == 0) {
-                //         tmp = info.ast->createExpression(TypeId(AST_INT64));
-                //     } else {
-                //         tmp = info.ast->createExpression(TypeId(AST_INT64));
-                //         if(!printedError){
-                //             ERR_SECTION(
-                        // ERR_HEAD2(token,"Number overflow! '"<<token<<"' is to large for 64-bit integers!\n\n";
-                //                 ERR_LINE2(token->tokenIndex,"to large!");
-                //             )
-                //         }
-                //     }
-                // }else{
-                //     // we default to signed but we use unsigned if the number doesn't fit
-                //     if(unsignedSuffix && (num&0x8000000000000000)!=0) {
-                //         if(signedSuffix) {
-                //             ERR_SECTION(
-                //                 ERR_HEAD2(tok)
-                //                 ERR_MSG("You cannot use an unsigned suffix and a minus at the same time. They collide.")
-                //                 ERR_LINE2(tok,"remove?")
-                //             )
-                //         }
-                //         if ((num&0xFFFFFFFF00000000) == 0) {
-                //             tmp = info.ast->createExpression(TypeId(AST_UINT32));
-                //         } else {
-                //             tmp = info.ast->createExpression(TypeId(AST_UINT64));
-                //         }
-                //     } else {
-                //         if ((num&0xFFFFFFFF00000000) == 0) {
-                //             tmp = info.ast->createExpression(TypeId(AST_INT32));
-                //         } else {
-                //             tmp = info.ast->createExpression(TypeId(AST_INT64));
-                //         }
-                //     }
-                // }
                 tmp->location = info.srcloc(token_tiny);
                 tmp->i64Value = negativeNumber ? -num : num;
                 
                 // tmp->constantValue = true;// nocheckin
                 values.add(tmp);
-                // tmp->tokenRange.firstToken = token;
-                // tmp->tokenRange.startIndex = info.at();
-                // tmp->tokenRange.endIndex = info.at()+1;
-                // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_LITERAL_DECIMAL){
                 auto loc = info.getloc();
 
@@ -1767,11 +1743,6 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 tmp->location = loc;
                 values.add(tmp);
                 // tmp->constantValue = true;// nocheckin
-                // tmp->tokenRange.firstToken = token;
-                // tmp->tokenRange.startIndex = info.at();
-                // tmp->tokenRange.endIndex = info.at()+1;
-                
-                // tmp->tokenRange.tokenStream = info.tokens;
             } else if(token->type == lexer::TOKEN_LITERAL_HEXIDECIMAL){
                 auto token_tiny = info.gettok();
                 info.advance();
@@ -1788,11 +1759,19 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 // zero for that exact reason.
                 ASTExpression* tmp = nullptr;
                 int hex_prefix = 0;
-                if(view.len>=2 && *(u16*)view.ptr == '0x')
+                if(view.len>=2 && *(u16*)view.ptr == 'x0') // 'x0' and not '0x' because of little endian or something like that
                     hex_prefix = 2;
-                if(view.len-hex_prefix<=8) {
+                int significant_digits = 0;
+                for(int i=hex_prefix;i<view.len;i++) {
+                    char c = view.ptr[i];
+                    if(c == '_') {
+                        continue;
+                    }
+                    significant_digits ++;
+                }
+                if(significant_digits<=8) {
                     tmp = info.ast->createExpression(TypeId(AST_UINT32));
-                } else if(view.len-hex_prefix<=16) {
+                } else if(significant_digits<=16) {
                     tmp = info.ast->createExpression(TypeId(AST_UINT64));
                 } else {
                     tmp = info.ast->createExpression(TypeId(AST_UINT64));
@@ -3505,21 +3484,28 @@ SignalIO ParseDeclaration(ParseInfo& info, ASTStatement*& statement){
 
     StringView view{};
     auto token0 = info.getinfo(&view);
-    auto token1 = info.getinfo(1);
-    if(token0->type != lexer::TOKEN_IDENTIFIER) {
-        return SIGNAL_NO_MATCH;
-    } else if(view == "global") {
+
+    if(token0->type == lexer::TOKEN_IDENTIFIER && view == "global") {
         globalDeclaration = true;
         info.advance();
-    } else if (token1->type == ',' || token1->type == ':' || token1->type == '=') {
+    }
+
+    token0 = info.getinfo(&view);
+    auto token1 = info.getinfo(1);
+    if(token0->type != lexer::TOKEN_IDENTIFIER) {
+        // early exit
+        return SIGNAL_NO_MATCH;
+    } else if (token1->type == ',' || token1->type == ':') {
         // Note that 'a, b: i32;' is a variable declaration.
         // But 'a, 34, 9' may be some form of syntax for a list or something else in the future.
     } else {
+        // early exit
         return SIGNAL_NO_MATCH;
     }
+    // at this point we can't 100% sure it's a declaration in case ',' represents a list of some sort.
+    // It doesn't right now but maybe in the future. - Emarioo, 2024-04-20
 
     statement = info.ast->createStatement(ASTStatement::DECLARATION);
-    // statement->varnames.stealFrom(varnames);
     statement->firstExpression = nullptr;
     statement->globalDeclaration = globalDeclaration;
 
