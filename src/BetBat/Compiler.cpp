@@ -1011,10 +1011,10 @@ void Compiler::run(CompileOptions* options) {
             // }
         } break;
         case TARGET_WINDOWS_x64: {
-            ObjectFile::WriteFile(OBJ_COFF, obj_file, program);
+            ObjectFile::WriteFile(OBJ_COFF, obj_file, program, this);
         } break;
         case TARGET_UNIX_x64: {
-            ObjectFile::WriteFile(OBJ_ELF, obj_file, program);
+            ObjectFile::WriteFile(OBJ_ELF, obj_file, program, this);
         } break;
     }
 

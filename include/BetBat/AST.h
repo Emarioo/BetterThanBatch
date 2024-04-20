@@ -89,7 +89,7 @@ enum OperationType : u16 {
     AST_SUB,
     AST_MUL,
     AST_DIV,
-    AST_MODULUS,
+    AST_MODULO,
     AST_UNARY_SUB,
     
     AST_EQUAL,
@@ -429,7 +429,7 @@ struct ScopeInfo {
     ASTScope* astScope = nullptr; // may be null, some scopes don't belong to ASTScope
 
     // TODO: Move these elsewhere?
-    u32 bc_start;
+    u32 bc_start; // we need tinycode id too
     u32 bc_end;
     u32 asm_start;
     u32 asm_end;

@@ -75,7 +75,7 @@ const char* prim_op_names[]{
      "-",                   // AST_SUB
      "*",                   // AST_MUL
      "/",                   // AST_DIV
-     "%",                   // AST_MODULUS
+     "%",                   // AST_MODULO
      "-",                   // AST_UNARY_SUB
 
      "==",                  // AST_EQUAL
@@ -1574,10 +1574,11 @@ std::string AST::typeToString(TypeId typeId){
     const char* cstr = OP_NAME(typeId.getId());
     if(cstr)
         return cstr;
-    cstr = PRIM_NAME(typeId.getId());
-    if(cstr)
-        return cstr;
+        
     std::string out="";
+    // cstr = PRIM_NAME(typeId.getId());
+    // if(cstr)
+    //     out = cstr;
     TypeInfo* ti = getBaseTypeInfo(typeId);
     if(!ti)
         return "";

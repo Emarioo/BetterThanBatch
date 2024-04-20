@@ -2,3 +2,40 @@
 struct Big { a: u64; b: u64; }
 // Should throw error
 fn @stdcall a(b: Big) {}
+
+
+// return values are overwritten by push instructions
+fn n() -> u8, u8, u8 { return 1, 2, 3 }
+n();
+// but not here
+fn da() -> u8, u8 { return 1, 2 }
+da();
+
+// arguments give more space for pushed values
+fn n(a: i32, b: i32) -> u8, u8, u8 { return 1, 2, 4 }
+n(1,2);
+
+// more complications
+struct Big {
+    a: i8;
+    b: i8;
+    c: i8;
+}
+fn n(a: i32, b: i32) -> Big { return Big{5,8,3} }
+
+n(1,2);
+
+
+// fn n() -> u8, u8, u8 { return 1, 2, 3 }
+
+// struct Big {
+//     a: i8;
+//     b: i8;
+//     c: i8;
+//     // d: i8;
+// }
+// // fn n() -> Big { return Big{5,8,3,23} }
+// fn n() -> Big { return Big{5,8,3} }
+// n();
+// fn a() -> u8, u8, u8 { return 1,6,4 }
+// a()

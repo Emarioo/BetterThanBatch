@@ -1,153 +1,62 @@
 
-// a := 1 + (2 + (3 + (4 + 5)))
-// a := 1 % (2 % (3 / (4 / (5 / (6 / 7)))))
-
-// a := 2.5 + 4.5
-
-#import "Logger"
-
-// if true 
-//     prints("Y")
-// else
-//     prints("N")
-
-// for 0..5 {
-//     log(nr)
-    // 923
+// fn std_print(t: i64){
+//     // If you are worried that this language will be filled with ifdefs like C/C++
+//     // then you can calm down. This is just temporary.
+    
+//     // optimise by using a log10 function to know how many characters you need.
+//     // then allocate some memory for that space
+//     // run a while looop filling up that memory
+//     // then print all characters at once
+//     // free memory
+//     // One last thing, the memory should be allocated using a linear allocator
+//     // or some other temporary allocator. Perhaps you can allocate it on the
+//     // stack or something?
+//     // log("int")
+//     if t == 0 {
+//         printc('0')
+//         return;
+//     }
+//     str: char[20];
+//     used := 19;
+//     value := t;
+//     while value > 0 && used > 0 {
+//         num: u32 = value % 10;
+//         // log('A','0'+num)
+//         // log(,num)
+//         str.ptr[used] = num + '0';
+//         used--;
+        
+//         value = value / 10;
+//     }
+//     str.ptr += used + 1;
+//     // str.len -= used - 1;
+//     str.len -= used + 1;
+//     prints(str);
 // }
+// std_print(5)
 
-std_print(5u);
-// std_print(119);
+printc('a')
+printc('a')
+printc('a')
+printc('a')
+printc('a')
 
-// fn ok(a: i32) {
-//     a = 23;
+// t: i64 = 0x234
+
+// str: char[20];
+// used := 19;
+// value := t;
+// while used > 0 {
+//     num: u32 = value % 10;
+//     // log('A','0'+num)
+//     // log(,num)
+//     str.ptr[used] = num + '0';
+//     used--;
+    
+//     value = value / 10;
+//     printc(str.ptr[used])
 // }
-
-// ok(2)
-
-// 0x1234_5678_1234_5678
-// 0x1234_5678_1234_5678_ABCD
-
-// 13_o_kay
-
-// fn poly<T>(n: T*, yes: bool = false) {
-//     // prints("nameof n: ");
-//     // prints(" ");
-//     // prints(nameof n);
-//     // prints(" ");
-//     // prints(yes); 
-//     // prints("\n")
-
-//     log("nameof n:",nameof n,yes)
-// }
-// a: i32 = 9235;
-// poly(&a)
-
-// fn @intrinsic strlen(str: char*) -> u32;
-
-/*
-    The reason functions are named "print" and not "log"
-    is because you might want your own log function.
-    Altough, log is a smaller name than print so it would be unfortunate
-    if the language took that name from you.
-*/
-
-// #macro log(...) { log_inner(...) }
-// #macro log_inner(X, ...) std_print(X); std_print(' '); log_inner(...)
-// #macro log_inner(X) std_print(X); std_print('\n')
-
-// #macro std_prints(X,...) std_print(X); std_prints(...)
-
-// fn std_print<T>(a: T) {}
-
-// log("YOO!")
-
-// fn @native printc(c: char);
-
-// printc('2')
-
-
-// 1.0 + 2.0
-// _test 1.0 + 2.0; 1.0
-
-// fn n() -> i32 {
-//     return 923
-// }
-
-// fn @stdcall yoo(a: i32, b: i32) -> i32 {
-//     return a + b*2 + n()
-//     // return 1
-// }
-
-// fn main() -> i32 {
-//     // arr: i32[256];
-//     // a,c,d,e,f,g,h: i64;
-//     // main();
-//     a := yoo(9, 2)
-//     return a;
-// }
-
-// #import "examples/foreign/main.btb"
-
-// fn ret() -> char { return 'F' }
-
-// printc(ret())
-// printc('c')
-// printc('\n')
-
-
-
-// a: i32 = -5;
-// b: u32 = 9;
-
-// n := a + b;
-
-// i: i32 = 0;
-// while i < 5 {
-//     i++;   
-// }
-
-
-// struct A {
-//     a: i32;
-//     b: i32;
-//     c: i32;
-// }
-// a: A;
-// a.a = 4;
-
-
-// a := ya()*2;
-
-// fn ya() -> i32 {
-//     return 5+2;
-// }
-
-// OKay
-
-// "eaeae"
-
-// 2 + okay(1,3)
-
-// struct okay {
-//     nah: Math::Vec<Math::float32>;
-// }
-
-// enum Soup : i32 {
-//     Shoof = 923,
-//     Hihi = 9,
-// }
-// a :i32[32] = 9;
-
-// a[3] = 9
-
-// fn yea(ad: N::i32){
-//     a = 923
-// }
-
-// operator +(n: i32, k: i32) -> f32 {
-//     return n - k;
-// }
-
-// #import "tests/fuzzer_gen/main"
-// #import "tests/fuzzer_gen/f19"
+// str.ptr += used + 1;
+// // str.len -= used - 1;
+// str.len -= used + 1;
+// prints(str);

@@ -75,16 +75,16 @@ fn std_print(t: f32){
     bits: u32 = *cast<u32*>cast<void*>&t;
     // log("float")
     
-    sign := (bits >> 31) & 1u;
-    exp := (bits >> 23) & 0xFF
+    sign := (bits >> 31u) & 1u;
+    exp := (bits >> 23u) & 0xFFu;
     mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
 
-// 0x8000_0000_0000_0000
+    // 0x8000_0000_0000_0000
 
     // printBits(bits);
     if sign
         std_print('-');
-// 01011111000000000000000000000000
+    // 01011111000000000000000000000000
     intPart: u64 = 0;
     decimalBits: i32 = 23 - (exp-127);
     // log(decimalBits)

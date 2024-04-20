@@ -34,7 +34,6 @@
                 }
             ]
         },
-        
         {
             "name": "(Windows) Launch",
             "type": "cppvsdbg",
@@ -45,6 +44,22 @@
             // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],
             // "args": ["-pm", "dev*"],
             "args": ["-dev"],
+            // "args": ["oi.btb"],
+            "stopAtEntry": false,
+            "cwd": "${workspaceFolder}",
+            "environment": [],
+            "console": "integratedTerminal"
+        },
+        {
+            "name": "(Windows) Launch test",
+            "type": "cppvsdbg",
+            "request": "launch",
+            "program": "${workspaceFolder}/bin/btb.exe",
+            "args": ["--test"],
+            // "args": ["--test"],
+            // "args": ["-pm","*typeinfo.btb","-g","-r","-o","dev.exe"],
+            // "args": ["-pm", "dev*"],
+            // "args": ["-dev"],
             // "args": ["oi.btb"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
@@ -93,7 +108,7 @@
             // "program": "${workspaceFolder}/bin/temp.exe",
             "program": "${workspaceFolder}/test.exe",
             "args": [],
-            "stopAtEntry": true,
+            "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],
             "console": "integratedTerminal",

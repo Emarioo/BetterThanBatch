@@ -176,7 +176,7 @@ struct ByteStream {
         writtenBytes += size;
         unknown_state = false;
     }
-    bool read(u32 offset, void* ptr, u32 size) {
+    bool read(u32 offset, void* ptr, u32 size) const {
         Assert(size != 0);
         int head = 0;
         for(int i=0;i<allocations.size();i++) {
@@ -284,7 +284,7 @@ struct ByteStream {
     // Iterates thorugh all allocations in a contiguous fashion.
     // Do not use a write operation such as write, write_late, finalize
     // while iterating. The iterator may crash.
-    bool iterate(Iterator& iterator, u32 byteLimit = -1) {
+    bool iterate(Iterator& iterator, u32 byteLimit = -1) const {
         iterator.ptr = nullptr;
         iterator.size = 0;
         
@@ -429,28 +429,28 @@ struct ByteStream {
         memcpy(reserved_ptr, ptr, size);
         return true;
     }
-    u64 read8(u32 offset, bool* success = nullptr) {
+    u64 read8(u32 offset, bool* success = nullptr) const {
         u64 val = 0;
         bool suc = read(offset, &val, 8);
         if(success)
             *success = suc;
         return val;
     }
-    u32 read4(u32 offset, bool* success = nullptr) {
+    u32 read4(u32 offset, bool* success = nullptr) const {
         u32 val = 0;
         bool suc = read(offset, &val, 4);
         if(success)
             *success = suc;
         return val;
     }
-    u16 read2(u32 offset, bool* success = nullptr) {
+    u16 read2(u32 offset, bool* success = nullptr) const {
         u16 val = 0;
         bool suc = read(offset, &val, 2);
         if(success)
             *success = suc;
         return val;
     }
-    u8 read1(u32 offset, bool* success = nullptr) {
+    u8 read1(u32 offset, bool* success = nullptr) const {
         u8 val = 0;
         bool suc = read(offset, &val, 1);
         if(success)

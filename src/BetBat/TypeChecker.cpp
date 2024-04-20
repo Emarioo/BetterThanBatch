@@ -1638,8 +1638,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     outTypes->add(AST_VOID);
                 return SIGNAL_FAILURE;
             }
-            break;
-        }
+        } break;
         case AST_INDEX: {
             // TODO: THE COMMENTED CODE CAN BE REMOVED. IT'S OLD. SOMETHING WITH OPERATOR OVERLOADING
             // BUT WE DO THAT ABOVE.
@@ -1688,7 +1687,18 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             
             // if(outTypes) outTypes->add(AST_VOID);
             // DynamicArray<TypeId> temp{};
-            if(leftType.getPointerLevel()==0){
+            TypeInfo* linfo = nullptr;
+            if(leftType.isNormalType()) {
+                linfo = info.ast->getTypeInfo(leftType);
+            }
+            if(linfo && linfo->astStruct && linfo->astStruct->name == "Slice") {
+                auto& mem = linfo->structImpl->members[0];
+                Assert(linfo->astStruct->members[0].name == "ptr"); // generator checks this too
+                if(outTypes){
+                    outTypes->add(mem.typeId);
+                    outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
+                }
+            } else  if(leftType.getPointerLevel()==0){
                 if(!attempt) {
                     ERR_SECTION(
                         ERR_HEAD2(expr->left->location)
@@ -1704,8 +1714,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     outTypes->last().setPointerLevel(outTypes->last().getPointerLevel()-1);
                 }
             }
-            break;
-        }
+        } break;
         case AST_RANGE: {
             // DynamicArray<TypeId> temp={};
             // if(expr->left) {
@@ -1818,7 +1827,7 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
         case AST_SUB:
         case AST_MUL:
         case AST_DIV:
-        case AST_MODULUS:
+        case AST_MODULO:
         case AST_UNARY_SUB: {
             if(outTypes) {
                 if(!rightType.isValid() || rightType == AST_VOID) {
@@ -1860,11 +1869,11 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
             if(outTypes) {
                 outTypes->add(TypeId(AST_BOOL));
             }
-            break;
-        }
+        } break;
         case AST_BAND:
         case AST_BOR:
         case AST_BXOR: {
+            // TODO: Signed unsigned doesn't matter, the size and integer does
             if(leftType != rightType) {
                 ERR_SECTION(
                     ERR_HEAD2(expr->location)
@@ -1881,23 +1890,20 @@ SignalIO CheckExpression(CheckInfo& info, ScopeId scopeId, ASTExpression* expr, 
                     outTypes->add(leftType);
                 }
             }
-            break;
-        }
+        } break;
         case AST_BNOT:
         case AST_BLSHIFT:
         case AST_BRSHIFT: {
             if(outTypes) {
                 outTypes->add(leftType);
             }
-            break;
-        }
+        } break;
         case AST_INCREMENT:
         case AST_DECREMENT: {
             if(outTypes) {
                 outTypes->add(leftType);
             }
-            break;
-        }
+        } break;
         default: {
             Assert(false);
         }
@@ -2060,7 +2066,8 @@ SignalIO CheckFunctionImpl(CheckInfo& info, ASTFunction* func, FuncImpl* funcImp
         Assert(outTypes->size()==0);
     }
     
-    for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
+    // for(int i=0;i<(int)funcImpl->returnTypes.size();i++){
+    for(int i=(int)funcImpl->returnTypes.size()-1;i>=0;i--){
         auto& retImpl = funcImpl->returnTypes[i];
         auto& retStringType = func->returnValues[i].stringType;
         // TypeInfo* typeInfo = 0;

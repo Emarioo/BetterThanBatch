@@ -4,7 +4,7 @@
 #include "BetBat/ELF.h"
 #include "BetBat/COFF.h"
 
-bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64Program* program, u32 from, u32 to) {
+bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64Program* program, Compiler* compiler, u32 from, u32 to) {
     ZoneScopedC(tracy::Color::Blue4);
     ObjectFile objectFile{};
     objectFile.init(objType);
@@ -21,7 +21,7 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         // We need to do this first because it adds more sections.
         // Sections have symbols that should be local with the ELF formats.
         // All local symbols MUST be added first (that's how elf works).
-        dwarf::ProvideSections(&objectFile, program);
+        dwarf::ProvideSections(&objectFile, program, compiler);
     }
 
     DynamicArray<u32> tinyprog_offsets;

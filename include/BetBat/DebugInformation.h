@@ -48,13 +48,13 @@ struct DebugInformation {
     //     ScopeId scopeId;
     // };
     struct Function {
-        u32 bc_start;
-        u32 bc_end; // exclusive
+        // u32 bc_start;
+        // u32 bc_end; // exclusive
         
         u32 funcStart; // first instruction in the function
         u32 funcEnd; // the byte after the last instruction (also called exclusive)
-        u32 codeStart; // the instruction where actual source code starts, funcStart includes setup of frame pointer and stack, this member does not include that.
-        u32 codeEnd; // exclusive
+        // u32 codeStart; // the instruction where actual source code starts, funcStart includes setup of frame pointer and stack, this member does not include that.
+        // u32 codeEnd; // exclusive
 
         u32 entry_line; // line where function was declared
         // u32 returning_line; // line where function ends/returns
@@ -64,6 +64,7 @@ struct DebugInformation {
 
         ASTFunction* funcAst = nullptr; // needed for name of arguments
         FuncImpl* funcImpl = nullptr; // needed for type information (arguments, return values)
+        // TinyBytecode* code = nullptr;
 
         void addVar(const std::string& name, int frameOffset, TypeId typeId, int scopeLevel, ScopeId scopeId) {
             localVariables.add({});

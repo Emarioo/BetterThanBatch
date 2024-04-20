@@ -33,6 +33,10 @@ int main(int argc, const char** argv){
     #define EXIT_CODE_SUCCESS 0
     #define EXIT_CODE_FAILURE 1
     
+
+    // int a=5,b=8;
+    // int c = a && b;
+
     // garbage(); // experimentation
 
     log::out.enableReport(false);
@@ -57,15 +61,17 @@ int main(int argc, const char** argv){
         // opts.file_count = 20;
         // GenerateFuzzedFiles(opts,"main.btb");
 
-        options.target = TARGET_BYTECODE;
-        // options.output_file = "test.exe";
+        options.output_file = "test.exe";
         options.source_file = "examples/dev.btb";
-        // options.target = TARGET_WINDOWS_x64;
+        // options.target = TARGET_BYTECODE;
+        options.target = TARGET_WINDOWS_x64;
         options.executeOutput = true;
         // options.only_preprocess = true;
         // options.useDebugInformation = true;
         Compiler compiler{};
         compiler.run(&options);
+
+        // fmo
 
         // VirtualMachine vm{};
         // vm.execute(compiler.bytecode,"main");

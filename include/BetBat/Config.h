@@ -62,7 +62,7 @@ Try to edit Config.cpp instead of this file because you will have to compile all
 // output.
 // #define OPTIMIZED
 // #define SINGLE_THREADED
-#define ENABLE_MEMORY_CORRUPTION_DETECTION
+// #define ENABLE_MEMORY_CORRUPTION_DETECTION
 
 #define LOG_MEASURES
 // Silent is not used at the moment.

@@ -24,3 +24,10 @@ base = Base{2}
 
 base2: Base = .{3}
 base2 = .{7}
+
+
+@TEST_CASE(indexing_slice)
+
+// move test case elsewhere
+fn get() -> Slice<i32> { return Slice<i32>{null,5}; }
+_test 8; ptr := &(get()[2])

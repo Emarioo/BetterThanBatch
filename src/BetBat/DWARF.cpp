@@ -1,7 +1,8 @@
 #include "BetBat/DWARF.h"
+#include "BetBat/Compiler.h"
 
 namespace dwarf {
-    void ProvideSections(ObjectFile* objectFile, X64Program* program) {
+    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler) {
         using namespace engone;
         SectionNr section_info = objectFile->createSection(".debug_info", ObjectFile::FLAG_DEBUG);  
         SectionNr section_line = objectFile->createSection(".debug_line", ObjectFile::FLAG_DEBUG);  
@@ -16,6 +17,7 @@ namespace dwarf {
 
         SectionNr section_text = objectFile->findSection(".text");
         Assert(section_text != -1);
+        auto stream_text = (const ByteStream*)objectFile->getStreamFromSection(section_text);
 
         auto debug = program->debugInformation;
         ByteStream* stream = nullptr;
@@ -256,7 +258,7 @@ namespace dwarf {
             relocs._reserve(debug->functions.size() * 2 + 4);
 
             WRITE_LEB(abbrev_compUnit) // abbrev code
-            stream->write("BTB Compiler 0.2.0");
+            stream->write("BTB Compiler 0.2.1");
             // stream->write1(0); // language
             if(debug->files.size() == 0) {
                 log::out << "debug->files is zero, can't correctly generate DWARF\n";
@@ -272,9 +274,9 @@ namespace dwarf {
             // stream->write("project/src"); // project dir
             relocs.add({ stream->getWriteHead() - offset_section, 0 });
             stream->write8(0); // start address of code
-            Assert(false);
-            // relocs.add({ stream->getWriteHead() - offset_section, (u32)program->size() });
-            // stream->write8(program->size()); // end address of text code
+            // Assert(false);
+            relocs.add({ stream->getWriteHead() - offset_section, (u32)stream_text->getWriteHead() });
+            stream->write8(stream_text->getWriteHead()); // end address of text code
             int reloc_statement_list = stream->getWriteHead() - offset_section;
             stream->write4(0); // statement list, address/pointer to reloc thing
 
@@ -549,12 +551,13 @@ namespace dwarf {
                         // stream->write(arg_ast.name.ptr, arg_ast.name.len); // arg_ast.name is a Token and not zero terminated
                         stream->write1(0); // we must zero terminate here
 
-                        INCOMPLETE // nocheckin, arg_ast.name.line doesn't exist!
-                        // stream->write2((file_index)); // file
-                        // Assert(arg_ast.name.line < 0x10000); // make sure we don't overflow
-                        // stream->write2((arg_ast.name.line)); // line
-                        // Assert(arg_ast.name.column < 0x10000); // make sure we don't overflow
-                        // stream->write2((arg_ast.name.column)); // column
+                        auto src = compiler->lexer.getTokenSource_unsafe(arg_ast.location);
+                        Assert(src->line < 0x10000); // make sure we don't overflow
+                        Assert(src->column < 0x10000); // make sure we don't overflow
+
+                        stream->write2((file_index)); // file
+                        stream->write2((src->line)); // line
+                        stream->write2((src->column)); // column
 
                         int typeref = allTypes[arg_impl.typeId.getId()].reference[arg_impl.typeId.getPointerLevel()];
                         Assert(typeref != 0);
@@ -647,6 +650,7 @@ namespace dwarf {
                             log::out << "scope "<<curLevel<<"\n";
                         }
                         
+                        // Why is this ifdef gone here? - Emarioo, 2024-04-20
                         #ifdef gone
                         // The condition is a bit crazy, it makes sure that two variables that are on
                         // the same level but in different scopes doesn't end up in the same lexical
@@ -974,9 +978,9 @@ namespace dwarf {
                 // add_row(fun.funcEnd, fun.lines.last().lineNumber);
             }
 
-            Assert(false);
-            // int dt = program->size() - reg_address;
-            int dt = 0;
+            // Assert(false);
+            int dt = stream_text->getWriteHead() - reg_address;
+            // int dt = 0;
             if(dt) {
                 WRITE_LEB(DW_LNS_advance_pc)
                 reg_address += dt;

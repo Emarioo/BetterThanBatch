@@ -26,7 +26,7 @@ enum DWARF_ObjectFileType {
     DWARF_OBJ_COFF,
     DWARF_OBJ_ELF,
 };
-
+struct Compiler;
 namespace dwarf {
     // IMPORTANT: All structs assume 32-bit DWARF format
     #pragma pack(push, 1)
@@ -134,7 +134,7 @@ namespace dwarf {
         X64Program* program = nullptr; // DWARF needs to know the size of the program code
     };
 
-    void ProvideSections(ObjectFile* objectFile, X64Program* program);
+    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler);
     
     // returns number of written bytes
     // return a negative number indicating how many bytes are missing

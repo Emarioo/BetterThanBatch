@@ -54,7 +54,7 @@ OperationType IsOp(lexer::TokenInfo* token, lexer::TokenInfo* token1, const Stri
     case '-':  return AST_SUB;
     case '*':  return AST_MUL;
     case '/':  return AST_DIV;
-    case '%':  return AST_MODULUS;
+    case '%':  return AST_MODULO;
     case '&':  return AST_BAND;
     case '|':  return AST_BOR;
     case '^':  return AST_BXOR;
@@ -136,7 +136,7 @@ int OpPrecedence(int op){
             return 8;
         case AST_SUB:
             return 9;
-        case AST_MODULUS:
+        case AST_MODULO:
             return 10;
         case AST_MUL:
             return 11;
@@ -167,7 +167,7 @@ int OpPrecedence(int op){
     //     ||op==AST_EQUAL||op==AST_NOT_EQUAL) return 5;
     // if(op==AST_RANGE) return 8;
     // if(op==AST_ADD||op==AST_SUB) return 9;
-    // if(op==AST_MUL||op==AST_DIV||op==AST_MODULUS) return 10;
+    // if(op==AST_MUL||op==AST_DIV||op==AST_MODULO) return 10;
     // if(op==AST_BAND||op==AST_BOR||op==AST_BXOR||
     //     op==AST_BLSHIFT||op==AST_BRSHIFT) return 13;
     // if(op==AST_BNOT || op==AST_NOT || op==AST_CAST) return 15;

@@ -5,6 +5,7 @@
 
 #include "BetBat/AST.h"
 
+struct Compiler; // check for errors
 enum InstructionControl : u8 {
     CONTROL_NONE,
     CONTROL_MASK_SIZE         = 0x3,
@@ -66,7 +67,8 @@ enum InstructionType : u8 {
     BC_GET_PARAM, // opcode, op, disp
     BC_GET_VAL,   // opcode, op, disp
     BC_SET_RET,   // opcode, op, disp
-    BC_GET_LOCAL,
+    BC_PTR_TO_LOCALS,
+    BC_PTR_TO_PARAMS,
 
     BC_JMP,
     BC_CALL,
@@ -384,6 +386,7 @@ struct Bytecode {
 };
     
 struct BytecodeBuilder {
+    Compiler* compiler = nullptr;
     Bytecode* code=nullptr;
     TinyBytecode* tinycode=nullptr;
     
@@ -392,7 +395,7 @@ struct BytecodeBuilder {
     // int saveStackMoment() const { return virtualStackPointer; }
     // void restoreStackMoment(int saved_sp, bool no_modification = false, bool no_instruction = false);
     
-    void init(Bytecode* code, TinyBytecode* tinycode);
+    void init(Bytecode* code, TinyBytecode* tinycode, Compiler* compiler);
     
     // make space for local variables
     // void emit_stack_space(int size);
@@ -414,7 +417,8 @@ struct BytecodeBuilder {
     void emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float);
     void emit_get_val(BCRegister reg, i16 imm, int size, bool is_float); // get return value
     
-    void emit_get_local(BCRegister reg, int imm16);
+    void emit_ptr_to_locals(BCRegister reg, int imm16);
+    void emit_ptr_to_params(BCRegister reg, int imm16);
 
     void emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm = 0);
     void emit_ret();
@@ -446,12 +450,12 @@ struct BytecodeBuilder {
     void emit_blshift(BCRegister to, BCRegister from);
     void emit_brshift(BCRegister to, BCRegister from);
     
-    void emit_eq(BCRegister to, BCRegister from, bool is_float);
-    void emit_neq(BCRegister to, BCRegister from, bool is_float);
-    void emit_lt(BCRegister to, BCRegister from, bool is_float, bool is_signed);
-    void emit_lte(BCRegister to, BCRegister from, bool is_float, bool is_signed);
-    void emit_gt(BCRegister to, BCRegister from, bool is_float, bool is_signed);
-    void emit_gte(BCRegister to, BCRegister from, bool is_float, bool is_signed);
+    void emit_eq    (BCRegister to, BCRegister from, bool is_float, int size);
+    void emit_neq   (BCRegister to, BCRegister from, bool is_float, int size);
+    void emit_lt    (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
+    void emit_lte   (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
+    void emit_gt    (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
+    void emit_gte   (BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     
     void emit_land(BCRegister to, BCRegister from);
     void emit_lor(BCRegister to, BCRegister from);
@@ -514,7 +518,7 @@ private:
     int get_index_of_previous_instruction(int off = 0) {
         if(off >= previous_instructions_count)
             return -1;
-        return index_of_previous_instructions[(previous_instructions_head + off) % PREVIOUS_INSTRUCTIONS_MAX];
+        return index_of_previous_instructions[(previous_instructions_head - 1 - off + PREVIOUS_INSTRUCTIONS_MAX) % PREVIOUS_INSTRUCTIONS_MAX];
     }
     void append_previous_instruction(int index) {
         index_of_previous_instructions[previous_instructions_head] = index;
@@ -524,9 +528,19 @@ private:
     }
     void remove_previous_instruction() {
         Assert(previous_instructions_count > 0); // can't remove if there's nothing there
+        int ind = index_of_previous_instructions[(previous_instructions_head - 1 + PREVIOUS_INSTRUCTIONS_MAX) % PREVIOUS_INSTRUCTIONS_MAX];
+        if(tinycode->instructionSegment[ind] == BC_PUSH) {
+            pushed_offset += 8;
+        } else Assert(false); // TODO: Handle remove logic for other instructions
         previous_instructions_count--;
         previous_instructions_head = (previous_instructions_head - 1 + PREVIOUS_INSTRUCTIONS_MAX) % PREVIOUS_INSTRUCTIONS_MAX;
     }
+
+    // used to detect bc_push overwriting values accessed by bc_get_val
+    int pushed_offset = 0; // grows down
+    int pushed_offset_max = 0; // grows down
+    int ret_offset = 0; // grows down
+    bool has_return_values = false;
 };
 
 // BC FILE FORMAT

@@ -38,6 +38,20 @@ _test 1; cast<i32>sqrt(1);
 _test 1; cast<i32>sqrt(2);
 _test 2; cast<i32>sqrt(3.9999999);
 
+_test 0; 0 && 0
+_test 0; 1 && 0
+_test 0; 0 && 1
+_test 1; 2 && 1
+
+_test 0; 0 || 0
+_test 1; 1 || 0
+_test 1; 0 || 1
+_test 1; 2 || 1
+
+_test 1; !0
+_test 0; !2
+_test 0; !1
+
 @TEST_CASE(many_math_ops)
 // The test below is a little scuffed because of issues with precision.
 // Python evaluates the math to this: -2159226 while this compiler gives this result: -2158333.
@@ -45,6 +59,10 @@ _test -2158333; cast<i32>(100000*(5. / 6. - 7. )* 7. / 8. * 4. + (1. / 4. / (1. 
 _test 69; 8+1*(5-8%6+4*3%1%7-4-7+7+(8+7))*4+5%(6/2+(6+8/4*1*5*2*6));
 
 @TEST_CASE(special)
+
+
+_test (5u - 9u) % 7u; 3
+_test (5.2 - 9.3) % 6.0; 1.9
 
 var: u32 = 2;
 varf: f32 = -12415.92913

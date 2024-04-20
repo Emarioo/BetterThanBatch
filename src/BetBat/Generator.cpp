@@ -3,7 +3,7 @@
 
 #undef ERRTYPE
 #undef ERRTYPE1
-#define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD2(R, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE2(R,"expects "+info.ast->typeToString(RT)))
+#define ERRTYPE1(R, LT, RT, M) ERR_SECTION(ERR_HEAD2(R, ERROR_TYPE_MISMATCH) ERR_MSG_LOG("Types do not match! This was found '" << engone::log::GREEN<< info.ast->typeToString(LT) <<engone::log::NO_COLOR<< "' while this was expected '" << engone::log::GREEN<<info.ast->typeToString(RT) << engone::log::NO_COLOR<< "' " << M << "\n\n") ERR_LINE2(R,"expects "+info.ast->typeToString(RT)))
 
 // #define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD2(L, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << info.ast->typeToString(LT) << " - " << info.ast->typeToString(RT) << " " << M) ERR_LINE2(L,info.ast->typeToString(LT)) ERR_LINE2(R,info.ast->typeToString(RT)))
 #define ERRTYPE(L, R, LT, RT, M) ERR_SECTION(ERR_HEAD2(L, ERROR_TYPE_MISMATCH) ERR_MSG("Type mismatch " << ast->typeToString(LT) << " - " << ast->typeToString(RT) << " " << M) ERR_LINE2(L,ast->typeToString(LT)) ERR_LINE2(R,ast->typeToString(RT)))
@@ -551,7 +551,7 @@ InstructionType ASTOpToBytecode(TypeId astOp, bool floatVersion){
     CASE(AST_SUB, BC_SUB)
     CASE(AST_MUL, BC_MUL)
     CASE(AST_DIV, BC_DIV) 
-    CASE(AST_MODULUS, BC_MOD)
+    CASE(AST_MODULO, BC_MOD)
     CASE(AST_EQUAL, BC_EQ)
     CASE(AST_NOT_EQUAL, BC_NEQ) 
     CASE(AST_LESS, BC_LT) 
@@ -1002,7 +1002,7 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
         // builder.emit_incr(BC_REG_SP, -size);
 
         if(genDefault){
-            SignalIO result = info.generateDefaultValue(reg, info.currentFrameOffset, typeId);
+            SignalIO result = info.generateDefaultValue(reg, 0, typeId);
             if(result!=SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
         }
@@ -1046,7 +1046,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
     DynamicArray<ASTExpression*> exprs;
     DynamicArray<TypeId> tempTypes;
     TypeId endType = {};
-    bool pointerType=false;
+    bool pointerType=false; // if the value on the stack is a direct pointer, false means a pointer to a pointer
     ASTExpression* next=_expression;
     while(next){
         ASTExpression* now = next;
@@ -1084,7 +1084,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     builder.emit_dataptr(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                 } break; 
                 case VariableInfo::LOCAL: {
-                    builder.emit_get_local(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
+                    builder.emit_ptr_to_locals(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
                     // builder.emit_add(BC_REG_B, BC_REG_BP, false, 8);
                 } break; 
                 case VariableInfo::MEMBER: {
@@ -1097,24 +1097,17 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                     builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
                 } break;
                 case VariableInfo::ARGUMENT: {
-                    // TODO: I see two solutions:
-                    //   1 - We create an instruction like BC_GET_PTR_OF_PARAM and use it here.
-                    //   2 - We create a BC_SET_PARAM instruction. This could be more optimized since
-                    //       we can directly set the paramater instead of first getting a pointer and
-                    //       then setting the parameter. An optimize could fix that up but it's better
-                    //       to produce optimized instructions from the start. It does mean that we have
-                    //       to return a special value from generateReference that describe that set_param
-                    //       should be used. Note that we still need BC_GET_PTR_OF_PARAM in case you
-                    //       take a pointer to a paramater in the code.
-                    //
-                    //       To summarize, implement BC_GET_PTR_OF_PARAM similar to BC_GET_LOCAL.
-                    //       Optimized solutions can be done later.
+                    builder.emit_ptr_to_params(BC_REG_B, varinfo->versions_dataOffset[info.currentPolyVersion]);
 
-                    ERR_SECTION(
-                        ERR_HEAD2(now->location)
-                        ERR_MSG("You cannot change the value of parameters. More specifically, you cannot take a reference to them.")
-                        ERR_LINE2(now->location,"can't reference parameters")
-                    )
+                    // Crazy idea:
+                    //   BC_SET_PARAM and force the caller of this generateReference to directly set
+                    //   instead of retrieving a pointer. It saves one instruction or so.
+
+                    // ERR_SECTION(
+                    //     ERR_HEAD2(now->location)
+                    //     ERR_MSG("You cannot change the value of parameters. More specifically, you cannot take a reference to them.")
+                    //     ERR_LINE2(now->location,"can't reference parameters")
+                    // )
                 } break;
                 default: {
                     Assert(false);
@@ -1137,16 +1130,19 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             if(result!=SIGNAL_SUCCESS || tempTypes.size()!=1){
                 return SIGNAL_FAILURE;
             }
-            if(!tempTypes.last().isPointer()){
-                ERR_SECTION(
-                    ERR_HEAD2(now->location)
-                    ERR_MSG("'"<<compiler->lexer.tostring(now->location)<<
-                    "' must be a reference to some memory. "
-                    "A variable, member or expression resulting in a dereferenced pointer would be.")
-                    ERR_LINE2(now->location, "must be a reference")
-                )
-                return SIGNAL_FAILURE;
-            }
+            // TODO: This does not work Slice<char>{null,4}[0] but it is technically possible.
+            //   It becomes a problem here get_my_slice()[3].
+            //   We need to move this error else where.
+            // if(!tempTypes.last().isPointer()){
+            //     ERR_SECTION(
+            //         ERR_HEAD2(now->location)
+            //         ERR_MSG("'"<<compiler->lexer.tostring(now->location)<<
+            //         "' must be a reference to some memory. "
+            //         "A variable, member or expression resulting in a dereferenced pointer would be.")
+            //         ERR_LINE2(now->location, "must be a reference")
+            //     )
+            //     return SIGNAL_FAILURE;
+            // }
             endType = tempTypes.last();
             pointerType=true;
             break;
@@ -1159,6 +1155,17 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
         if(now->typeId == AST_MEMBER){
             if(pointerType){
                 pointerType=false;
+                if(!endType.isPointer()) {
+                    auto prev = exprs[i+1];
+                    ERR_SECTION(
+                        ERR_HEAD2(prev->location)
+                        ERR_MSG("'"<<compiler->lexer.tostring(prev->location)<<
+                        "' must be a reference to some memory. "
+                        "A variable, member or expression resulting in a dereferenced pointer would be. The type was '"<<ast->typeToString(endType)<<"'")
+                        ERR_LINE2(prev->location, "must be a reference")
+                    )
+                    return SIGNAL_FAILURE;
+                }
                 endType.setPointerLevel(endType.getPointerLevel()-1);
             }
             if(endType.getPointerLevel()>1){ // one level of pointer is okay.
@@ -1230,6 +1237,17 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             if(pointerType){
                 // PROTECTIVE BARRIER took a hit
                 pointerType=false;
+                if(!endType.isPointer()) {
+                    auto prev = exprs[i+1];
+                    ERR_SECTION(
+                        ERR_HEAD2(prev->location)
+                        ERR_MSG("'"<<compiler->lexer.tostring(prev->location)<<
+                        "' must be a reference to some memory. "
+                        "A variable, member or expression resulting in a dereferenced pointer would be. The type was '"<<ast->typeToString(endType)<<"'")
+                        ERR_LINE2(prev->location, "must be a reference")
+                    )
+                    return SIGNAL_FAILURE;
+                }
                 endType.setPointerLevel(endType.getPointerLevel()-1);
                 continue;
             }
@@ -1271,30 +1289,14 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 return SIGNAL_FAILURE;
             }
 
-            if(pointerType){
-                pointerType=false;
-                endType.setPointerLevel(endType.getPointerLevel()-1);
-                
-                u32 typesize = info.ast->getTypeSize(endType);
-                u32 rsize = info.ast->getTypeSize(tempTypes.last());
-                BCRegister reg = BC_REG_C;
-                builder.emit_pop(reg); // integer
-                builder.emit_pop(BC_REG_B); // reference
-
-                if(typesize>1){
-                    builder.emit_li32(BC_REG_A, typesize);
-                    // builder.emit_li32(BC_REG_A, typesize);
-                    builder.emit_mul(BC_REG_A, reg, false, 8, false);
-                    // builder.emit_({BC_MULI, ARITHMETIC_SINT, reg, BC_REG_A});
-                }
-                builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
-                // builder.emit_({BC_ADDI, BC_REG_B, BC_REG_A, BC_REG_B});
-                builder.emit_push(BC_REG_B);
-                // builder.emit_push(BC_REG_B);
-                continue;
+            TypeInfo* linfo = nullptr;
+            if(endType.isNormalType()) {
+                linfo = ast->getTypeInfo(endType);
             }
+            bool is_slice = linfo && linfo->astStruct && linfo->astStruct->name == "Slice";
+            if(is_slice) {
 
-            if(!endType.isPointer()){
+            } else if(!endType.isPointer()){
                 if(!info.hasForeignErrors()){
                     std::string strtype = info.ast->typeToString(endType);
                     ERR_SECTION(
@@ -1306,24 +1308,105 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
                 return SIGNAL_FAILURE;
             }
 
-            endType.setPointerLevel(endType.getPointerLevel()-1);
+            if(pointerType){
+                pointerType=false;
+                if(is_slice) {
+                    auto& mem = linfo->structImpl->members[0];
+                    Assert(linfo->astStruct->members[0].name == "ptr");
 
-            u32 typesize = info.ast->getTypeSize(endType);
-            u32 rsize = info.ast->getTypeSize(tempTypes.last());
-            BCRegister reg = BC_REG_D;
-            builder.emit_pop(reg); // integer
-            builder.emit_pop(BC_REG_B); // reference
-            // dereference pointer to pointer
-            builder.emit_mov_rm(BC_REG_C, BC_REG_B, 8);
-            
-            if(typesize>1){
-                builder.emit_li32(BC_REG_A, typesize);
-                builder.emit_mul(BC_REG_A, reg, false, 8, false);
+                    endType = mem.typeId;
+                    endType.setPointerLevel(endType.getPointerLevel()-1);
+                    u32 typesize = info.ast->getTypeSize(endType);
+                    u32 rsize = info.ast->getTypeSize(tempTypes.last());
+                    BCRegister reg = BC_REG_D;
+
+                    builder.emit_pop(reg); // integer
+
+                    builder.emit_pop(BC_REG_B); // slice.ptr
+                    builder.emit_pop(BC_REG_F); // slice.len
+                    
+                    // TODO: BOUNDS CHECK
+                    if(typesize>1){
+                        builder.emit_li32(BC_REG_A, typesize);
+                        builder.emit_mul(reg, BC_REG_A, false, 8, false);
+                    }
+                    builder.emit_add(BC_REG_C, reg, false, 8);
+
+                    builder.emit_push(BC_REG_C);
+                    continue;
+                } else {
+                    if(!endType.isPointer()) {
+                        auto prev = exprs[i+1];
+                        ERR_SECTION(
+                            ERR_HEAD2(prev->location)
+                            ERR_MSG("'"<<compiler->lexer.tostring(prev->location)<<
+                            "' must be a reference to some memory. "
+                            "A variable, member or expression resulting in a dereferenced pointer would be. The type was '"<<ast->typeToString(endType)<<"'")
+                            ERR_LINE2(prev->location, "must be a reference")
+                        )
+                        return SIGNAL_FAILURE;
+                    }
+                    endType.setPointerLevel(endType.getPointerLevel()-1);
+                    
+                    u32 typesize = info.ast->getTypeSize(endType);
+                    u32 rsize = info.ast->getTypeSize(tempTypes.last());
+                    BCRegister reg = BC_REG_C;
+                    builder.emit_pop(reg); // integer
+                    builder.emit_pop(BC_REG_B); // reference
+
+                    if(typesize>1){
+                        builder.emit_li32(BC_REG_A, typesize);
+                        builder.emit_mul(reg, BC_REG_A, false, 8, false);
+                    }
+                    builder.emit_add(BC_REG_B, reg, false, 8);
+                    builder.emit_push(BC_REG_B);
+                    continue;
+                }
             }
-            builder.emit_add(BC_REG_C, BC_REG_A, false, 8);
-            // builder.emit_({BC_ADDI, BC_REG_RCX, BC_REG_A, BC_REG_RCX});
 
-            builder.emit_push(BC_REG_C);
+            if(is_slice) {
+                auto& mem = linfo->structImpl->members[0];
+                Assert(linfo->astStruct->members[0].name == "ptr");
+
+                endType = mem.typeId;
+                endType.setPointerLevel(endType.getPointerLevel()-1);
+                u32 typesize = info.ast->getTypeSize(endType);
+                u32 rsize = info.ast->getTypeSize(tempTypes.last());
+                BCRegister reg = BC_REG_D;
+
+                builder.emit_pop(reg); // integer
+
+                builder.emit_pop(BC_REG_B); // reference to slice
+                
+                builder.emit_mov_rm_disp(BC_REG_C, BC_REG_B, 8, mem.offset); // dereference slice to pointer
+                // builder.emit_mov_rm(BC_REG_C, BC_REG_B, 8, ); // dereference len
+                
+                // TODO: BOUNDS CHECK
+                if(typesize>1){
+                    builder.emit_li32(BC_REG_A, typesize);
+                    builder.emit_mul(reg, BC_REG_A, false, 8, false);
+                }
+                builder.emit_add(BC_REG_C, reg, false, 8);
+
+                builder.emit_push(BC_REG_C);
+            } else {
+                endType.setPointerLevel(endType.getPointerLevel()-1);
+
+                u32 typesize = info.ast->getTypeSize(endType);
+                u32 rsize = info.ast->getTypeSize(tempTypes.last());
+                BCRegister reg = BC_REG_D;
+                builder.emit_pop(reg); // integer
+                builder.emit_pop(BC_REG_B); // reference
+                builder.emit_mov_rm(BC_REG_C, BC_REG_B, 8); // dereference pointer to pointer
+                
+                if(typesize>1){
+                    builder.emit_li32(BC_REG_A, typesize);
+                    builder.emit_mul(reg, BC_REG_A, false, 8, false);
+                }
+                builder.emit_add(BC_REG_C, reg, false, 8);
+
+                builder.emit_push(BC_REG_C);
+            }
         }
     }
     if(pointerType && !wasNonReference){
@@ -2892,7 +2975,6 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             if(operatorImpl){
                 return generateFnCall(expression, outTypeIds, true);
             }
-            // TOKENINFO(expression->location);
             SignalIO err = generateExpression(expression->left, &tmp_types);
             if(tmp_types.size()) ltype = tmp_types.last();
             if (err != SIGNAL_SUCCESS)
@@ -2904,17 +2986,6 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             if (err != SIGNAL_SUCCESS)
                 return SIGNAL_FAILURE;
 
-            if(!ltype.isPointer()){
-                if(!info.hasForeignErrors()){
-                    std::string strtype = info.ast->typeToString(ltype);
-                    ERR_SECTION(
-                        ERR_HEAD2(expression->right->location)
-                        ERR_MSG("Index operator ( array[23] ) requires pointer type in the outer expression. '"<<strtype<<"' is not a pointer.")
-                        ERR_LINE2(expression->right->location,strtype.c_str())
-                    )
-                }
-                return SIGNAL_FAILURE;
-            }
             if(!AST::IsInteger(rtype)){
                 std::string strtype = info.ast->typeToString(rtype);
                 ERR_SECTION(
@@ -2924,22 +2995,89 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 )
                 return SIGNAL_FAILURE;
             }
-            ltype.setPointerLevel(ltype.getPointerLevel()-1);
-
-            u32 lsize = info.ast->getTypeSize(ltype);
-            u32 rsize = info.ast->getTypeSize(rtype);
-            BCRegister reg = BC_REG_D;
-            builder.emit_pop(reg); // integer
-            builder.emit_pop(BC_REG_B); // reference
-            if(lsize>1){
-                builder.emit_li32(BC_REG_A, lsize);
-                builder.emit_mul(BC_REG_A, reg, false, 8, false);
+            // NOTE: I had an idea about implicit dereference of Slice with index operator similar to 
+            //   struct_ptr.member but this is ambiguous since you may have an array of slices you want to access.
+            // bool implicit_deref = false;
+            TypeInfo* linfo = nullptr;
+            if(ltype.isNormalType()) {
+                linfo = ast->getTypeInfo(ltype);
             }
-            builder.emit_add(BC_REG_B, BC_REG_A, false, 8);
+            //  else if (ltype.getPointerLevel() == 1){
+            //     linfo = ast->getTypeInfo(ltype.baseType());
+            //     implicit_deref = true;
+            // }
+            if(linfo && linfo->astStruct && linfo->astStruct->name == "Slice") {
+                auto& ptr_mem = linfo->structImpl->members[0];
+                Assert(linfo->astStruct->members[0].name == "ptr");
 
-            SignalIO result = generatePush(BC_REG_B, 0, ltype);
+                TypeId out_type = ptr_mem.typeId;
+                out_type.setPointerLevel(out_type.getPointerLevel()-1);
 
-            outTypeIds->add(ltype);
+                u32 lsize = info.ast->getTypeSize(out_type);
+                u32 rsize = info.ast->getTypeSize(out_type);
+
+                if(!out_type.isValid()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->left->location)
+                        ERR_MSG("The type contained by "<<ast->typeToString(ltype)<<" is invalid (void). You cannot retrieve a value of void.")
+                        ERR_LINE2(expression->left->location,"invalid type")
+                    )
+                    return SIGNAL_FAILURE;
+                }
+                if(lsize == 0) {
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->left->location)
+                        ERR_MSG("The type contained by "<<ast->typeToString(ltype)<<" is of size zero. You cannot retrieve a value of a type that is zero in size.")
+                        ERR_LINE2(expression->left->location,"invalid type")
+                    )
+                    return SIGNAL_FAILURE;
+                }
+
+                BCRegister reg = BC_REG_D;
+                builder.emit_pop(reg); // integer
+
+                builder.emit_pop(BC_REG_B); // reference
+                builder.emit_pop(BC_REG_C); // len
+
+                // TODO: BOUNDS CHECK builder.emit_bounds_check
+
+                if(lsize>1){
+                    builder.emit_li32(BC_REG_A, lsize);
+                    builder.emit_mul(reg, BC_REG_A, false, 8, false);
+                }
+                builder.emit_add(BC_REG_B, reg, false, 8);
+
+                SignalIO result = generatePush(BC_REG_B, 0, out_type);
+
+                outTypeIds->add(out_type);
+            } else if(ltype.isPointer()){
+                ltype.setPointerLevel(ltype.getPointerLevel()-1);
+
+                u32 lsize = info.ast->getTypeSize(ltype);
+                u32 rsize = info.ast->getTypeSize(rtype);
+                BCRegister reg = BC_REG_D;
+                builder.emit_pop(reg); // integer
+                builder.emit_pop(BC_REG_B); // reference
+                if(lsize>1){
+                    builder.emit_li32(BC_REG_A, lsize);
+                    builder.emit_mul(reg,BC_REG_A, false, 8, false);
+                }
+                builder.emit_add(BC_REG_B, reg, false, 8);
+
+                SignalIO result = generatePush(BC_REG_B, 0, ltype);
+
+                outTypeIds->add(ltype);
+            } else {
+                if(!info.hasForeignErrors()){
+                    std::string strtype = info.ast->typeToString(ltype);
+                    ERR_SECTION(
+                        ERR_HEAD2(expression->right->location)
+                        ERR_MSG("Index operator ( array[23] ) requires pointer or Slice type in the outer expression. '"<<strtype<<"' is neither.")
+                        ERR_LINE2(expression->right->location,strtype.c_str())
+                    )
+                }
+                return SIGNAL_FAILURE;
+            }
         }
         else if(expression->typeId == AST_INCREMENT || expression->typeId == AST_DECREMENT){
             SignalIO result = generateReference(expression->left, &ltype, idScope);
@@ -3113,7 +3251,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     operationType = expression->assignOpType;
                 }
                 
-                bool is_arithmetic = operationType == AST_ADD || operationType == AST_SUB || operationType == AST_MUL || operationType == AST_DIV || operationType == AST_MODULUS;
+                bool is_arithmetic = operationType == AST_ADD || operationType == AST_SUB || operationType == AST_MUL || operationType == AST_DIV || operationType == AST_MODULO;
                 bool is_comparison = operationType == AST_LESS || operationType == AST_LESS_EQUAL || operationType == AST_GREATER || operationType == AST_GREATER_EQUAL;
                 bool is_equality = operationType == AST_EQUAL || operationType == AST_NOT_EQUAL;
                 bool is_signed = AST::IsSigned(ltype) || AST::IsSigned(rtype);
@@ -3125,6 +3263,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 builder.emit_pop(left_reg);
                 
                 u8 outSize = 0;
+                u8 operand_size = 0;
                 
                 /*###########################
                  Validation operations on types
@@ -3162,6 +3301,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     if(rtype.isPointer()) {
                         outType = rtype; // Make sure '1 + ptr' results in a pointer type and not an int while 'ptr + 1' would be a pointer.
                         outSize = ast->getTypeSize(outType);
+                        operand_size = outSize;
                     }
                 } else if ((AST::IsInteger(ltype) || ltype == AST_CHAR || left_info->astEnum) && (AST::IsInteger(rtype) || rtype == AST_CHAR || right_info->astEnum)){
                     // TODO: WE DON'T CHECK SIGNEDNESS WITH ENUMS.
@@ -3187,7 +3327,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             )
                             return SIGNAL_FAILURE;
                         }
-                    }  else if(operationType == AST_MODULUS) {
+                    }  else if(operationType == AST_MODULO) {
                         if(AST::IsSigned(ltype) != AST::IsSigned(rtype)) {
                             ERR_SECTION(
                                 ERR_HEAD2(expression->location)
@@ -3209,39 +3349,47 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                         }
                     }
                     u8 outSize = lsize > rsize ? lsize : rsize;
-                    
-                    if(lsize != outSize || (!AST::IsSigned(ltype) && AST::IsSigned(rtype))) {
-                        if(!AST::IsSigned(ltype) && !AST::IsSigned(rtype))
-                            builder.emit_cast(left_reg, CAST_UINT_UINT, lsize, outSize);
-                        if(!AST::IsSigned(ltype) && AST::IsSigned(rtype))
-                            builder.emit_cast(left_reg, CAST_UINT_SINT, lsize, outSize);
-                        if(AST::IsSigned(ltype) && !AST::IsSigned(rtype))
-                            builder.emit_cast(left_reg, CAST_SINT_UINT, lsize, outSize);
-                        if(AST::IsSigned(ltype) && AST::IsSigned(rtype))
-                            builder.emit_cast(left_reg, CAST_SINT_SINT, lsize, outSize);
+                    if(is_comparison || is_equality) {
+                        operand_size = outSize;
                     }
-                    if(rsize != outSize || (!AST::IsSigned(rtype) && AST::IsSigned(ltype))) {
-                        if(!AST::IsSigned(rtype) && !AST::IsSigned(ltype))
-                            builder.emit_cast(right_reg, CAST_UINT_UINT, rsize, outSize);
-                        if(!AST::IsSigned(rtype) && AST::IsSigned(ltype))
-                            builder.emit_cast(right_reg, CAST_UINT_SINT, rsize, outSize);
-                        if(AST::IsSigned(rtype) && !AST::IsSigned(ltype))
-                            builder.emit_cast(right_reg, CAST_SINT_UINT, rsize, outSize);
-                        if(AST::IsSigned(rtype) && AST::IsSigned(ltype))
-                            builder.emit_cast(right_reg, CAST_SINT_SINT, rsize, outSize);
+                    if(operationType == AST_BLSHIFT || operationType == AST_BRSHIFT) {
+                        
+                    } else {
+                        if(lsize != outSize || (!AST::IsSigned(ltype) && AST::IsSigned(rtype))) {
+                            if(!AST::IsSigned(ltype) && !AST::IsSigned(rtype))
+                                builder.emit_cast(left_reg, CAST_UINT_UINT, lsize, outSize);
+                            if(!AST::IsSigned(ltype) && AST::IsSigned(rtype))
+                                builder.emit_cast(left_reg, CAST_UINT_SINT, lsize, outSize);
+                            if(AST::IsSigned(ltype) && !AST::IsSigned(rtype))
+                                builder.emit_cast(left_reg, CAST_SINT_UINT, lsize, outSize);
+                            if(AST::IsSigned(ltype) && AST::IsSigned(rtype))
+                                builder.emit_cast(left_reg, CAST_SINT_SINT, lsize, outSize);
+                        }
+                        if(rsize != outSize || (!AST::IsSigned(rtype) && AST::IsSigned(ltype))) {
+                            if(!AST::IsSigned(rtype) && !AST::IsSigned(ltype))
+                                builder.emit_cast(right_reg, CAST_UINT_UINT, rsize, outSize);
+                            if(!AST::IsSigned(rtype) && AST::IsSigned(ltype))
+                                builder.emit_cast(right_reg, CAST_UINT_SINT, rsize, outSize);
+                            if(AST::IsSigned(rtype) && !AST::IsSigned(ltype))
+                                builder.emit_cast(right_reg, CAST_SINT_UINT, rsize, outSize);
+                            if(AST::IsSigned(rtype) && AST::IsSigned(ltype))
+                                builder.emit_cast(right_reg, CAST_SINT_SINT, rsize, outSize);
+                        }
                     }
                     if(lsize < rsize) {
                         outType = rtype;
                     } else {
                         outType = ltype;
                     }
-                    if(AST::IsSigned(ltype) || AST::IsSigned(rtype)) {
-                        if(!AST::IsSigned(outType))
-                            outType._infoIndex0 += 4;
-                        Assert(AST::IsSigned(outType));
+                    if(operationType != AST_BLSHIFT && operationType != AST_BRSHIFT) {
+                        if(AST::IsSigned(ltype) || AST::IsSigned(rtype)) {
+                            if(!AST::IsSigned(outType))
+                                outType._infoIndex0 += 4;
+                            Assert(AST::IsSigned(outType));
+                        }
                     }
                 } else if ((AST::IsDecimal(ltype) || AST::IsInteger(ltype)) && (AST::IsDecimal(rtype) || AST::IsInteger(rtype))){
-                    if(!is_arithmetic && !is_comparison) {
+                    if(!is_arithmetic && !is_comparison && !is_equality) {
                         // We may allow bitwise operation like 'num & 0x8000_0000' to check if a decimal is decimal or not.
                         // Or 'num & 0x7F_FFFF, num & > 23' to extract the exponent and mantissa.
                         ERR_SECTION(
@@ -3260,7 +3408,6 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     InstructionType bytecodeOp = ASTOpToBytecode(operationType,true);
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
-
                     u8 finalSize = 0;
                     if(AST::IsDecimal(ltype)) {
                         finalSize = lsize;
@@ -3271,6 +3418,9 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                             finalSize = rsize;
                             outType = rtype;
                         }
+                    }
+                    if(is_comparison || is_equality) {
+                        operand_size = finalSize;
                     }
 
                     if(AST::IsInteger(rtype)){
@@ -3308,13 +3458,13 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 case AST_SUB:           builder.emit_sub(    left_reg, right_reg, is_float, outSize); break;
                 case AST_MUL:           builder.emit_mul(    left_reg, right_reg, is_float, outSize, is_signed); break;
                 case AST_DIV:           builder.emit_div(    left_reg, right_reg, is_float, outSize, is_signed); break;
-                case AST_MODULUS:       builder.emit_mod(    left_reg, right_reg, is_float, outSize, is_signed); break;
-                case AST_EQUAL:         builder.emit_eq(     left_reg, right_reg, is_float); break;
-                case AST_NOT_EQUAL:     builder.emit_neq(    left_reg, right_reg, is_float); break;
-                case AST_LESS:          builder.emit_lt(     left_reg, right_reg, is_float, is_signed); break;
-                case AST_LESS_EQUAL:    builder.emit_lte(    left_reg, right_reg, is_float, is_signed); break;
-                case AST_GREATER:       builder.emit_gt(     left_reg, right_reg, is_float, is_signed); break;
-                case AST_GREATER_EQUAL: builder.emit_gte(    left_reg, right_reg, is_float, is_signed); break;
+                case AST_MODULO:       builder.emit_mod(    left_reg, right_reg, is_float, outSize, is_signed); break;
+                case AST_EQUAL:         builder.emit_eq(     left_reg, right_reg, is_float, operand_size); break;
+                case AST_NOT_EQUAL:     builder.emit_neq(    left_reg, right_reg, is_float, operand_size); break;
+                case AST_LESS:          builder.emit_lt(     left_reg, right_reg, is_float, operand_size, is_signed); break;
+                case AST_LESS_EQUAL:    builder.emit_lte(    left_reg, right_reg, is_float, operand_size, is_signed); break;
+                case AST_GREATER:       builder.emit_gt(     left_reg, right_reg, is_float, operand_size, is_signed); break;
+                case AST_GREATER_EQUAL: builder.emit_gte(    left_reg, right_reg, is_float, operand_size, is_signed); break;
                 case AST_AND:           builder.emit_land(   left_reg, right_reg); break;
                 case AST_OR:            builder.emit_lor(    left_reg, right_reg); break;
                 case AST_BAND:          builder.emit_band(   left_reg, right_reg); break;
@@ -3402,6 +3552,10 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         //     // error already printed?
         //     return SIGNAL_FAILURE;
         // }
+    }
+    if(function->callConvention == CallConventions::INTRINSIC) {
+        // is this okay?
+        return SIGNAL_SUCCESS;
     }
     if(function->linkConvention != LinkConventions::NONE){
         if(function->polyArgs.size()!=0 || (astStruct && astStruct->polyArgs.size()!=0)){
@@ -3592,7 +3746,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         auto tiny = code->createTiny(function->callConvention);
         out_codes->add(tiny);
         tinycode = tiny;
-        builder.init(code, tiny);
+        builder.init(code, tiny, compiler);
         tiny->name = function->name; // what about poly types?
         funcImpl->tinycode_id = tiny->index + 1;
         if(tiny->name == "main") {
@@ -4457,7 +4611,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // push ptr
                     // builder.emit_li32(BC_REG_B, arrayFrameOffset);
                     // builder.emit_add(BC_REG_B, BC_REG_BP, false, 8);
-                    builder.emit_get_local(BC_REG_B, arrayFrameOffset);
+                    builder.emit_ptr_to_locals(BC_REG_B, arrayFrameOffset);
                     builder.emit_push(BC_REG_B);
 
                     generatePop(BC_REG_LOCALS, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
@@ -4577,6 +4731,11 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     std::string a1 = info.ast->typeToString(rightTypes[i]);
                     // Assert(typesFromExpr[i] == rightTypes[i]);
                     if(typesFromExpr[i] != rightTypes[i]) {
+                        ERR_SECTION(
+                            ERR_HEAD2(statement->firstExpression->location)
+                            ERR_MSG("Compiler bug sorry! Type checker and generator produced different types '"<<a0<<"' != '"<<a1<<"' (type checker != generator.")
+                            ERR_LINE2(statement->firstExpression->location, "here")
+                        )
                         Assert(info.hasForeignErrors());
                         cont=true;
                         continue;
@@ -4814,7 +4973,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 builder.emit_mov_rm_disp(switchValueReg, BC_REG_LOCALS, (u8)size, switchValueOffset);
                 // builder.emit_mov_rm_disp(switchValueReg, BC_REG_BP, (u8)size, switchValueOffset);
                 
-                builder.emit_eq(caseValueReg, switchValueReg, false);
+                builder.emit_eq(caseValueReg, switchValueReg, false, size);
                 caseData[nr].caseJumpAddress = builder.emit_jnz(caseValueReg);
             }
             if(statement->firstBody) {
@@ -4905,6 +5064,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 if(tmp_types.size()) dtype = tmp_types.last();
                 if (result != SIGNAL_SUCCESS) {
                     // generate body anyway or not?
+                    continue;
+                }
+                if(!(AST::IsInteger(dtype) || dtype == AST_CHAR || dtype == AST_BOOL)) {
+                    ERR_SECTION(
+                        ERR_HEAD2(statement->firstExpression->location)
+                        ERR_MSG_COLORED("The condition of while loops is limited to char, integer, and bool. '"<<log::GREEN<<ast->typeToString(dtype)<<log::NO_COLOR<<"' is not one of them.")
+                        ERR_LINE2(statement->firstExpression->location,"here")
+                    )
                     continue;
                 }
                 u32 size = info.ast->getTypeSize(dtype);
@@ -5049,6 +5216,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 }
                 BCRegister index_reg = BC_REG_C;
                 BCRegister length_reg = BC_REG_D;
+                int int_size = 4;
 
                 if(statement->isReverse()){
                     builder.emit_pop(length_reg); // range.now we care about
@@ -5057,8 +5225,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     builder.emit_pop(BC_REG_A); // throw range.now
                     builder.emit_pop(length_reg); // range.end we care about
                 }
-
-                builder.emit_mov_rm_disp(index_reg, BC_REG_LOCALS, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+        
+                builder.emit_mov_rm_disp(index_reg, BC_REG_LOCALS, int_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
                 // builder.emit_mov_rm_disp(index_reg, BC_REG_BP, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->isReverse()){
@@ -5067,15 +5235,15 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     builder.emit_incr(index_reg, 1);
                 }
                 
-                builder.emit_mov_mr_disp(BC_REG_LOCALS, index_reg, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+                builder.emit_mov_mr_disp(BC_REG_LOCALS, index_reg, int_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
                 // builder.emit_mov_mr_disp(BC_REG_BP, index_reg, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->isReverse()){
                     // info.code->addDebugText("For condition (reversed)\n");
-                    builder.emit_gte(index_reg,length_reg, false, true);
+                    builder.emit_gte(index_reg,length_reg, false, int_size, true);
                 } else {
                     // info.code->addDebugText("For condition\n");
-                    builder.emit_lt(index_reg,length_reg, false, true);
+                    builder.emit_lt(index_reg,length_reg, false, int_size, true);
                 }
                 loopScope->resolveBreaks.add(builder.emit_jz(index_reg));
 
@@ -5183,6 +5351,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 
                 u8 ptr_size = ast->getTypeSize(memdata_ptr.typeId);
                 u8 index_size = ast->getTypeSize(memdata_len.typeId);
+                Assert(ptr_size == 8);
 
                 builder.emit_mov_rm_disp(index_reg, BC_REG_LOCALS, index_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
                 // builder.emit_mov_rm_disp(index_reg, BC_REG_BP, index_size, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
@@ -5199,10 +5368,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 if(statement->isReverse()){
                     // info.code->addDebugText("For condition (reversed)\n");
                     builder.emit_li32(length_reg, 0); // length reg is not used with reversed
-                    builder.emit_gte(index_reg,length_reg, false, true);
+                    builder.emit_gte(index_reg,length_reg, false, index_size, true);
                 } else {
                     // info.code->addDebugText("For condition\n");
-                    builder.emit_lt(index_reg,length_reg, false, true);
+                    builder.emit_lt(index_reg,length_reg, false, index_size, true);
                 }
                 // resolve end, not break, resolveBreaks is bad naming
                 // builder.emit_({BC_JZ, BC_REG_A});
@@ -5232,7 +5401,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     }
                     builder.emit_add(ptr_reg, BC_REG_A, false, 8);
 
-                    builder.emit_get_local(BC_REG_E, varinfo_item->versions_dataOffset[info.currentPolyVersion]);
+                    builder.emit_ptr_to_locals(BC_REG_E, varinfo_item->versions_dataOffset[info.currentPolyVersion]);
                     // builder.emit_add(BC_REG_E, BC_REG_BP, false, 8);
                     
                     // builder.emit_({BC_BXOR, BC_REG_A, BC_REG_A}); // BC_MEMCPY USES AL
@@ -5326,43 +5495,51 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             _GLOG(SCOPE_LOG("RETURN"))
 
             if (!info.currentFunction) {
-                ERR_SECTION(
-                    ERR_HEAD2(statement->location)
-                    ERR_MSG("Return only allowed in function.")
-                    ERR_LINE2(statement->location, "bad")
-                )
-                continue;
-                // return SIGNAL_FAILURE;
-            }
-            if ((int)statement->arrayValues.size() != (int)info.currentFuncImpl->returnTypes.size()) {
-                // std::string msg = 
-                ERR_SECTION(
-                    ERR_HEAD2(statement->location)
-                    ERR_MSG("Found " << statement->arrayValues.size() << " return value(s) but should have " << info.currentFuncImpl->returnTypes.size() << " for '" << info.currentFunction->name << "'.")
-                    ERR_LINE2(info.currentFunction->location, "X return values")
-                    ERR_LINE2(statement->location, "Y values")
-                )
+                if(info.tinycode->name != "main") {
+                    ERR_SECTION(
+                        ERR_HEAD2(statement->location)
+                        ERR_MSG("Return only allowed in function.")
+                        ERR_LINE2(statement->location, "bad")
+                    )
+                    continue;
+                }
+                if ((int)statement->arrayValues.size() > 1) {
+                    ERR_SECTION(
+                        ERR_HEAD2(statement->location)
+                        ERR_MSG("Found " << statement->arrayValues.size() << " return value(s) but only one is allowed when using the global scope as the main function body..")
+                        ERR_LINE2(statement->location, "Y values")
+                    )
+                    continue;
+                }
+            } else {
+                if ((int)statement->arrayValues.size() != (int)info.currentFuncImpl->returnTypes.size()) {
+                    ERR_SECTION(
+                        ERR_HEAD2(statement->location)
+                        ERR_MSG("Found " << statement->arrayValues.size() << " return value(s) but should have " << info.currentFuncImpl->returnTypes.size() << " for '" << info.currentFunction->name << "'.")
+                        ERR_LINE2(info.currentFunction->location, "X return values")
+                        ERR_LINE2(statement->location, "Y values")
+                    )
+                }
             }
 
-            if(info.currentFunction->callConvention == STDCALL || info.currentFunction->callConvention == UNIXCALL) {
+            if(info.currentFunction && (info.currentFunction->callConvention == STDCALL || info.currentFunction->callConvention == UNIXCALL)) {
                 Assert(statement->arrayValues.size() <= 1);
                 // stdcall and unixcall can only have one return value
                 // error message should be handled in type checker
             }
 
             //-- Evaluate return values
-            // switch(info.currentFunction->callConvention){
-            // case BETCALL: {
-                for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
-                    ASTExpression *expr = statement->arrayValues.get(argi);
-                    // nextExpr = nextExpr->next;
-                    // argi++;
+            for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
+                ASTExpression *expr = statement->arrayValues.get(argi);
+                // nextExpr = nextExpr->next;
+                // argi++;
 
-                    TypeId dtype = {};
-                    SignalIO result = generateExpression(expr, &dtype);
-                    if (result != SIGNAL_SUCCESS) {
-                        continue;
-                    }
+                TypeId dtype = {};
+                SignalIO result = generateExpression(expr, &dtype);
+                if (result != SIGNAL_SUCCESS) {
+                    continue;
+                }
+                if(info.currentFuncImpl) {
                     if (argi < (int)info.currentFuncImpl->returnTypes.size()) {
                         // auto a = info.ast->typeToString(dtype);
                         // auto b = info.ast->typeToString(info.currentFuncImpl->returnTypes[argi].typeId);
@@ -5382,102 +5559,23 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         // we don't become desyncrhonized.
                         generatePop(BC_REG_INVALID, 0, dtype);
                     }
+                } else {
+                    TypeId retType = AST_VOID;
+                    if(compiler->options->target == TARGET_UNIX_x64) {
+                        retType = AST_UINT8;
+                    } else {
+                        retType = AST_INT32;
+                    }
+                    if (!performSafeCast(dtype, retType)) {
+                        ERRTYPE1(expr->location, dtype, retType, ".");
+                        generatePop(BC_REG_INVALID, 0, dtype);
+                    } else {
+                        generatePop_set_ret(0-8, retType);
+                    }
                 }
-            // } break;
-            // case STDCALL: {
-            //     for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
-            //         ASTExpression *expr = statement->arrayValues.get(argi);
-            //         // nextExpr = nextExpr->next;
-            //         // argi++;
-
-            //         TypeId dtype = {};
-            //         SignalIO result = generateExpression(expr, &dtype);
-            //         if (result != SIGNAL_SUCCESS) {
-            //             continue;
-            //         }
-            //         if (argi < (int)info.currentFuncImpl->returnTypes.size()) {
-            //             // auto a = info.ast->typeToString(dtype);
-            //             // auto b = info.ast->typeToString(info.currentFuncImpl->returnTypes[argi].typeId);
-            //             auto& retType = info.currentFuncImpl->returnTypes[argi];
-            //             if (!performSafeCast(dtype, retType.typeId)) {
-            //                 // if(info.currentFunction->returnTypes[argi]!=dtype){
-
-            //                 ERRTYPE1(expr->location, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)");
-
-            //                 generatePop(BC_REG_INVALID, 0, dtype); // throw away value to prevent cascading bugs
-            //             }
-            //             u8 size = info.ast->getTypeSize(retType.typeId);
-            //             if(size<=8){
-            //                 if(AST::IsDecimal(retType.typeId)) {
-            //                     Assert(false); // what size on the float?
-            //                     builder.emit_pop(BC_REG_XMM0);
-            //                 } else {
-            //                     builder.emit_pop(BC_REG_A);
-            //                 }
-            //             } else {
-            //                 generatePop(BC_REG_INVALID, 0, retType.typeId); // throw away value to prevent cascading bugs
-            //             }
-            //         } else {
-            //             generatePop(BC_REG_INVALID, 0, dtype); // throw away value to prevent cascading bugs
-            //         }
-            //     }
-            //     // if(statement->arrayValues.size()==0){
-            //     //     builder.emit_bxor(BC_REG_A,BC_REG_A);
-            //     // }
-            // } break;
-            // case UNIXCALL: {
-            //     Assert(false);
-            //     #ifdef gone
-            //     for (int argi = 0; argi < (int)statement->arrayValues.size(); argi++) {
-            //         ASTExpression *expr = statement->arrayValues.get(argi);
-            //         // nextExpr = nextExpr->next;
-            //         // argi++;
-
-            //         TypeId dtype = {};
-            //         SignalIO result = generateExpression(expr, &dtype);
-            //         if (result != SIGNAL_SUCCESS) {
-            //             continue;
-            //         }
-            //         if (argi < (int)info.currentFuncImpl->returnTypes.size()) {
-            //             // auto a = info.ast->typeToString(dtype);
-            //             // auto b = info.ast->typeToString(info.currentFuncImpl->returnTypes[argi].typeId);
-            //             auto& retType = info.currentFuncImpl->returnTypes[argi];
-            //             if (!performSafeCast(dtype, retType.typeId)) {
-            //                 // if(info.currentFunction->returnTypes[argi]!=dtype){
-
-            //                 ERRTYPE1(expr->location, dtype, info.currentFuncImpl->returnTypes[argi].typeId, "(return values)");
-
-            //                 generatePop(BC_REG_INVALID, 0, dtype); // throw away value to prevent cascading bugs
-            //             }
-            //             u8 size = info.ast->getTypeSize(retType.typeId);
-            //             if(size<=8){
-            //                 if(AST::IsDecimal(retType.typeId)) {
-            //                     Assert(false),
-            //                     builder.emit_pop(BC_REG_XMM0);
-            //                 } else {
-            //                     builder.emit_pop(BC_REG_A);
-            //                 }
-            //             } else {
-            //                 generatePop(BC_REG_INVALID, 0, retType.typeId); // throw away value to prevent cascading bugs
-            //             }
-            //         } else {
-            //             generatePop(BC_REG_INVALID, 0, dtype); // throw away value to prevent cascading bugs
-            //         }
-            //     }
-            //     #endif
-            //     // if(statement->arrayValues.size()==0){
-            //     //     builder.emit_bxor(BC_REG_A,BC_REG_A);
-            //     // }
-            //     break;
-            // }
-            // default: {
-            //     INCOMPLETE
-            // }
-            // }
-            // builder.emit_pop(BC_REG_BP);
+            }
             if(currentFrameOffset != 0)
                 builder.emit_free_local(-currentFrameOffset);
-            // builder.restoreStackMoment(VIRTUAL_STACK_START, true);
             builder.emit_ret();
             info.currentFrameOffset = lastOffset; // nochecking TODO: Should we reset frame like this? If so, should we not break this loop and skip the rest of the statements too?
         }
@@ -5957,15 +6055,18 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
             //   we will be in trouble. So, how do we combine the code?
 
             context.tinycode = tb_main;
-            context.builder.init(context.code, context.tinycode);
+            context.builder.init(context.code, context.tinycode, compiler);
             context.currentScopeId = context.ast->globalScopeId;
             context.currentFrameOffset = 0;
+            context.currentScopeDepth = -1;
+            context.currentPolyVersion = 0;
 
             out_codes->add(tb_main);
 
             auto di = context.code->debugInformation;
             context.debugFunctionIndex = di->functions.size();
             DebugInformation::Function* dfun = di->addFunction(context.tinycode->name);
+            di->addOrGetFile(imp->path);
             context.code->addExportedFunction("main", context.tinycode->index);
             
             context.generateBody(scope);
