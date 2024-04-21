@@ -65,9 +65,10 @@ int main(int argc, const char** argv){
         options.source_file = "examples/dev.btb";
         // options.target = TARGET_BYTECODE;
         options.target = TARGET_WINDOWS_x64;
+        options.linker = LINKER_GCC;
         options.executeOutput = true;
         // options.only_preprocess = true;
-        // options.useDebugInformation = true;
+        options.useDebugInformation = true;
         Compiler compiler{};
         compiler.run(&options);
 
@@ -183,10 +184,7 @@ int main(int argc, const char** argv){
         }
     }
 
-    if(options.useDebugInformation) {
-        log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
-        // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
-    }
+  
 
     Compiler compiler{};
     compiler.run(&options);

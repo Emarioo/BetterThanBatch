@@ -971,8 +971,8 @@ SignalIO GenContext::framePush(TypeId typeId, i32* outFrameOffset, bool genDefau
         return SIGNAL_FAILURE;
     
     if(staticData) {
-        info.code->ensureAlignmentInData(asize);
-        int offset = info.code->appendData(nullptr,size);
+        bytecode->ensureAlignmentInData(asize);
+        int offset = bytecode->appendData(nullptr,size);
         
         info.builder.emit_dataptr(BC_REG_D, offset);
 
@@ -1072,7 +1072,7 @@ SignalIO GenContext::generateReference(ASTExpression* _expression, TypeId* outTy
             // TOKENINFO(now->location)
             // char buf[100];
             // int len = sprintf(buf,"  expr push %s",now->name->c_str());
-            // info.code->addDebugText(buf,len);
+            // bytecode->addDebugText(buf,len);
 
             TypeInfo *typeInfo = 0;
             if(varinfo->versions_typeId[info.currentPolyVersion].isNormalType())
@@ -1772,53 +1772,22 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             }
         } break; 
         case STDCALL: {
-            // if(all_arguments.size() > 4) {
-                // Assert(virtualArgumentSpace - builder.getStackPointer() == all_arguments.size()*8);
-                // int argOffset = all_arguments.size()*8;
-                // builder.emit_mov_rr(BC_REG_B, BC_REG_SP);
-                // for(int i=all_arguments.size()-1;i>=4;i--){
-                for(int i=all_arguments.size()-1;i>=0;i--){
-                    auto arg = all_arguments[i];
+            for(int i=all_arguments.size()-1;i>=0;i--){
+                auto arg = all_arguments[i];
 
-                    generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
-                    
-                    // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
-                    // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
-                    // u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
-                    // generatePop(BC_REG_B, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
-                }
-            // }
-            // Hmmm... we don't have x64 registers.
-            // The call instruction must store the calling convention and
-            // somehow recognize which registers we use.
-            // const BCRegister normal_regs[4]{
-            //     BC_REG_RCX,
-            //     BC_REG_RDX,
-            //     BC_REG_R8,
-            //     BC_REG_R9,
-            // };
-            // const BCRegister float_regs[4] {
-            //     BC_REG_XMM0, // nocheckin, 32-bit or 64-bit floats?
-            //     BC_REG_XMM1,
-            //     BC_REG_XMM2,
-            //     BC_REG_XMM3,
-            // };
-            // auto& argTypes = funcImpl->argumentTypes;
-            // for(int i=fullArgs.size()-1;i>=0;i--) {
-            //     auto argType = argTypes[i].typeId;
-            //     if(AST::IsDecimal(argType)) {
-            //         Assert(false); // broken, 32-bit or 64-bit floats?
-            //         builder.emit_pop(float_regs[i]);
-            //     } else {
-            //         builder.emit_pop(normal_regs[i]);
-            //     }
-            // }
+                generatePop_set_arg(funcImpl->argumentTypes[i].offset, funcImpl->argumentTypes[i].typeId);
+                
+                // log::out << "POP ARG "<<info.ast->typeToString(funcImpl->argumentTypes[i].typeId)<<"\n";
+                // NOTE: funcImpl->argumentTypes[i].offset SHOULD NOT be used 8*i is correct
+                // u32 size = info.ast->getTypeSize(funcImpl->argumentTypes[i].typeId);
+                // generatePop(BC_REG_B, argOffset + i*8, funcImpl->argumentTypes[i].typeId);
+            }
 
             // native function can be handled normally
             int reloc = 0;
             if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
                 || astFunc->linkConvention == LinkConventions::VARIMPORT){
-                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, code->externalRelocations.size());
+                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
                 std::string alias = astFunc->linked_alias.size() == 0 ? astFunc->name : astFunc->linked_alias;
                 std::string lib_path = "";
                 for(auto& lib : info.imp->libraries) {
@@ -1935,7 +1904,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
             int reloc = 0;
             if(astFunc->linkConvention == LinkConventions::IMPORT || astFunc->linkConvention == LinkConventions::DLLIMPORT
                 || astFunc->linkConvention == LinkConventions::VARIMPORT){
-                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, code->externalRelocations.size());
+                builder.emit_call(astFunc->linkConvention, astFunc->callConvention, &reloc, bytecode->externalRelocations.size());
                 std::string alias = astFunc->linked_alias.size() == 0 ? astFunc->name : astFunc->linked_alias;
                 std::string lib_path = "";
                 for(auto& lib : info.imp->libraries) {
@@ -1956,7 +1925,7 @@ SignalIO GenContext::generateFnCall(ASTExpression* expression, DynamicArray<Type
 
                 // if(astFunc->linkConvention == DLLIMPORT){
                 //     info.addExternalRelocation(funcImpl->astFunction->name, reloc);
-                //     // info.addExternalRelocation("__imp_"+funcImpl->name, info.code->length());
+                //     // info.addExternalRelocation("__imp_"+funcImpl->name, bytecode->length());
                 // } else if(astFunc->linkConvention == VARIMPORT){
                 //     info.addExternalRelocation(funcImpl->astFunction->name, reloc);
                 // } else {
@@ -2032,7 +2001,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
     // if(expression->computeWhenPossible) {
     //     if(expression->constantValue){
-    //         u32 startInstruction = info.code->length();
+    //         u32 startInstruction = bytecode->length();
 
     //         int moment = builder.saveStackMoment();
     //         int startVirual = info.virtualStackPointer;
@@ -2046,26 +2015,26 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
     //         builder.restoreStackMoment(moment, false, true);
 
-    //         u32 endInstruction = info.code->length();
+    //         u32 endInstruction = bytecode->length();
 
     //         // TODO: Would it be better to put interpreter in GenContext. It would be possible to
     //         //   reuse allocations the interpreter made.
     //         VirtualMachine interpreter{};
     //         interpreter.expectValuesOnStack = true;
     //         interpreter.silent = true;
-    //         interpreter.executePart(info.code, startInstruction, endInstruction);
+    //         interpreter.executePart(bytecode, startInstruction, endInstruction);
     //         log::out.flush();
     //         // interpreter.printRegisters();
     //         // this won't work with the stack
     //         info.popInstructions(endInstruction-startInstruction);
 
     //         if(!info.disableCodeGeneration) {
-    //             info.code->ensureAlignmentInData(8);
+    //             bytecode->ensureAlignmentInData(8);
 
     //             void* pushedValues = (void*)interpreter.sp;
     //             int pushedSize = -(endVirtual - startVirual);
                 
-    //             int offset = info.code->appendData(pushedValues, pushedSize);
+    //             int offset = bytecode->appendData(pushedValues, pushedSize);
     //             builder.emit_dataptr(BC_REG_B, );
     //             info.addImm(offset);
     //             for(int i=0;i<(int)outTypeIds->size();i++){
@@ -2092,7 +2061,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             // Assert(!(val&0xFFFFFFFF00000000));
 
             // TODO: immediate only allows 32 bits. What about larger values?
-            // info.code->addDebugText("  expr push int");
+            // bytecode->addDebugText("  expr push int");
             // TOKENINFO(expression->location)
 
             // TODO: Int types should come from global scope. Is it a correct assumption?
@@ -2110,7 +2079,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             bool val = expression->boolValue;
 
             // TOKENINFO(expression->location)
-            // info.code->addDebugText("  expr push bool");
+            // bytecode->addDebugText("  expr push bool");
             builder.emit_li32(BC_REG_A, val);
             builder.emit_push(BC_REG_A);
         }
@@ -2118,7 +2087,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             char val = expression->charValue;
 
             // TOKENINFO(expression->location)
-            // info.code->addDebugText("  expr push char");
+            // bytecode->addDebugText("  expr push char");
             builder.emit_li32(BC_REG_A, val);
             builder.emit_push(BC_REG_A);
         }
@@ -2126,7 +2095,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             float val = expression->f32Value;
 
             // TOKENINFO(expression->location)
-            // info.code->addDebugText("  expr push float");
+            // bytecode->addDebugText("  expr push float");
             builder.emit_li32(BC_REG_A, *(u32*)&val);
             builder.emit_push(BC_REG_A);
             
@@ -2137,7 +2106,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             double val = expression->f64Value;
 
             // TOKENINFO(expression->location)
-            // info.code->addDebugText("  expr push float");
+            // bytecode->addDebugText("  expr push float");
             builder.emit_li64(BC_REG_A, *(u64*)&val);
             builder.emit_push(BC_REG_A);
             
@@ -2195,7 +2164,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
                     // char buf[100];
                     // int len = sprintf(buf,"  expr push %s",expression->name->c_str());
-                    // info.code->addDebugText(buf,len);
+                    // bytecode->addDebugText(buf,len);
                     // log::out << "AST_VAR: "<<id->name<<", "<<id->varIndex<<", "<<var->frameOffset<<"\n";
                     
                     switch(varinfo->type) {
@@ -2234,10 +2203,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     if(id->funcOverloads.overloads.size()==1){
                         Assert(false); // nocheckin
                         // builder.emit_codeptr(BC_REG_A, );
-                        // info.addCallToResolve(info.code->length(), id->funcOverloads.overloads[0].funcImpl);
+                        // info.addCallToResolve(bytecode->length(), id->funcOverloads.overloads[0].funcImpl);
                         // info.addImm(id->funcOverloads.overloads[0].funcImpl->address);
 
-                        // info.code->exportSymbol(expression->name, id->funcOverloads.overloads[0].funcImpl->address);
+                        // bytecode->exportSymbol(expression->name, id->funcOverloads.overloads[0].funcImpl->address);
                     } else {
                         ERR_SECTION(
                             ERR_HEAD2(expression->location)
@@ -2362,7 +2331,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             // TODO: How does polymorphism complicated this?
             //   You don't want duplicate inline assembly.
             if(!info.disableCodeGeneration) {
-                u32 start = info.code->rawInlineAssembly.used;
+                u32 start = bytecode->rawInlineAssembly.used;
                 Assert(false); // nocheckin, rewrite removed token range
                 // +2 and -1 to avoid adding "asm { }"
                 #ifdef gone
@@ -2371,10 +2340,10 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 range.endIndex = expression->tokenRange.endIndex-1;
                 
                 int size = range.queryFeedSize();
-                info.code->rawInlineAssembly._reserve(info.code->rawInlineAssembly.used + size);
-                int feed_size = range.feed(info.code->rawInlineAssembly.data() + info.code->rawInlineAssembly.size(), size);
+                bytecode->rawInlineAssembly._reserve(bytecode->rawInlineAssembly.used + size);
+                int feed_size = range.feed(bytecode->rawInlineAssembly.data() + bytecode->rawInlineAssembly.size(), size);
                 // Assert(feed_size == size);
-                info.code->rawInlineAssembly.used+=size;
+                bytecode->rawInlineAssembly.used+=size;
                 
                 // This doesn't output the tokens correctly. feed is built to accurately output the tokens
                 // to their original form (except contiguous spacing)
@@ -2386,25 +2355,25 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 //     Token& tok = stream->get(i);
                 //     // OPTIMIZE: TODO: You can compute the character length of the inline assembly in the parser and
                 //     //  resize in advance instead of resizing per token.
-                //     info.code->rawInlineAssembly._reserve(info.code->rawInlineAssembly.used + tok.length + 2); // +2 for space or line feed
-                //     memcpy(info.code->rawInlineAssembly._ptr + info.code->rawInlineAssembly.used,
+                //     bytecode->rawInlineAssembly._reserve(bytecode->rawInlineAssembly.used + tok.length + 2); // +2 for space or line feed
+                //     memcpy(bytecode->rawInlineAssembly._ptr + bytecode->rawInlineAssembly.used,
                 //         tok.str, tok.length);
-                //     info.code->rawInlineAssembly.used += tok.length;
+                //     bytecode->rawInlineAssembly.used += tok.length;
                 //     if(tok.flags&TOKEN_SUFFIX_LINE_FEED) {
-                //         info.code->rawInlineAssembly._ptr[info.code->rawInlineAssembly.used] = '\n';
-                //         info.code->rawInlineAssembly.used += 1;
+                //         bytecode->rawInlineAssembly._ptr[bytecode->rawInlineAssembly.used] = '\n';
+                //         bytecode->rawInlineAssembly.used += 1;
                 //     } else if(tok.flags&TOKEN_SUFFIX_SPACE) {
-                //         info.code->rawInlineAssembly._ptr[info.code->rawInlineAssembly.used] = ' ';
-                //         info.code->rawInlineAssembly.used += 1;
+                //         bytecode->rawInlineAssembly._ptr[bytecode->rawInlineAssembly.used] = ' ';
+                //         bytecode->rawInlineAssembly.used += 1;
                 //     }
                 //     Assert(0==(tok.flags&TOKEN_MASK_QUOTED));
                 // }
 
-                u32 end = info.code->rawInlineAssembly.used;
+                u32 end = bytecode->rawInlineAssembly.used;
 
-                int asmInstanceIndex = info.code->asmInstances.size();
-                info.code->asmInstances.add({start, end});
-                auto& inst = info.code->asmInstances.last();
+                int asmInstanceIndex = bytecode->asmInstances.size();
+                bytecode->asmInstances.add({start, end});
+                auto& inst = bytecode->asmInstances.last();
                 inst.lineStart = range.firstToken.line;
                 inst.lineEnd = range.tokenStream()->get(range.endIndex-1).line;
                 inst.file = range.tokenStream()->streamName;
@@ -2458,7 +2427,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             return SIGNAL_SUCCESS;
         } else if (expression->typeId == AST_NULL) {
             // TODO: Move into the type checker?
-            // info.code->addDebugText("  expr push null");
+            // bytecode->addDebugText("  expr push null");
             builder.emit_li32(BC_REG_A, 0);
             builder.emit_push(BC_REG_A);
 
@@ -2652,7 +2621,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             }
         }
         else if (expression->typeId == AST_FROM_NAMESPACE) {
-            // info.code->addDebugText("ast-namespaced expr\n");
+            // bytecode->addDebugText("ast-namespaced expr\n");
 
             auto si = info.ast->findScope(expression->name, info.currentScopeId, true);
             SignalIO result = generateExpression(expression->left, &tmp_types, si->id);
@@ -2668,7 +2637,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             // TODO: if propfrom is a variable we can directly take the member from it
             //  instead of pushing struct to the stack and then getting it.
 
-            // info.code->addDebugText("ast-member expr\n");
+            // bytecode->addDebugText("ast-member expr\n");
             TypeId exprId;
 
             if(expression->left->typeId == AST_ID){
@@ -3658,76 +3627,9 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         //  that the type checker checked this function body. It won't if
         //  the implementation isn't used.
         if(!funcImpl->isUsed())
-            // Skips implementation if it isn't used
-            continue;
+            continue; // Skips implementation if it isn't used
         Assert(("func has already been generated!",funcImpl->tinycode_id == 0));
-        // This happens with functions inside of polymorphic function.
-        // if(function->callConvention != BETCALL) {
-        //     ERR_SECTION(
-        //         ERR_HEAD2(function->location)
-        //         ERR_MSG("The convention '" << function->callConvention << "' has not been implemented for user functions. The normal convention (betcall) is the only one that works.")
-        //         ERR_LINE2(function->location,"use betcall");
-        //     )
-        //     continue;
-        // }
-        // if(function->callConvention == UNIXCALL) {
-        //     ERR_SECTION(
-        //         ERR_HEAD2(function->location)
-        //         ERR_MSG("Unix calling convention is not implemented for user defined functions. You can however declare functions with unix convention and call them if they come from an external library.")
-        //         ERR_LINE2(function->location,"unixcall not implemented")
-        //     )
-        //     continue;
-        // }
-        // Assert(("Unix calling convention not implemented for user defined functions.",false));
 
-        // Assert(!info.compileInfo->options->useDebugInformation);
-        // IMPORTANT: How to deal with overloading and polymorphism?
-        // add #0 at the end of the function name?
-        // DebugInformation::Function* dfun = &di->functions.last();
-        // dfun->name = "main";
-        // dfun->fileIndex = di->files.size();
-        // di->files.add(info.compileInfo->options->initialSourceFile.text);
-        DebugInformation* di = info.code->debugInformation;
-        Assert(di);
-        
-        info.debugFunctionIndex = di->functions.size();
-        DebugInformation::Function* dfun = di->addFunction(funcImpl->astFunction->name);
-        if(function->body->statements.size()>0) {
-            // nocheckin, no tokenrange
-            auto imp = compiler->lexer.getImport_unsafe(function->body->statements[0]->location);
-            dfun->fileIndex = di->addOrGetFile(imp->path);
-        } else {
-            dfun->fileIndex = di->addOrGetFile(info.compiler->options->source_file);
-        }
-        dfun->funcImpl = funcImpl;
-        dfun->funcAst = function;
-        // dfun->tokenStream = function->body->tokenRange.tokenStream(); // nocheckin, replace with import
-        info.currentScopeDepth = -1; // incremented to 0 in GenerateBody
-        // dfun->scopeId = function->body->scopeId;
-
-        _GLOG(log::out << "Function " << function->name << "\n";)
-
-        info.currentPolyVersion = funcImpl->polyVersion;
-
-        // TODO: Export function symbol if annotated with @export
-        //  Perhaps force functions named main to be annotated with @export in parser
-        //  instead of handling the special case for main here?
-        
-
-        auto prevFunc = info.currentFunction;
-        auto prevFuncImpl = info.currentFuncImpl;
-        auto prevScopeId = info.currentScopeId;
-        info.currentFunction = function;
-        info.currentFuncImpl = funcImpl;
-        info.currentScopeId = function->scopeId;
-        defer { info.currentFunction = prevFunc;
-            info.currentFuncImpl = prevFuncImpl;
-            info.currentScopeId = prevScopeId; };
-
-        // int functionStackMoment = builder.saveStackMoment();
-        // -8 since the start of the frame is 0 and after the program counter is -8
-        // info.virtualStackPointer = GenContext::VIRTUAL_STACK_START;
-        
         if(funcImpl->astFunction->name == "main") {
             switch(info.compiler->options->target) { // this is really cheeky
             case TARGET_WINDOWS_x64:
@@ -3743,18 +3645,14 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             }
         }
 
-        auto tiny = code->createTiny(function->callConvention);
-        out_codes->add(tiny);
-        tinycode = tiny;
-        builder.init(code, tiny, compiler);
-        tiny->name = function->name; // what about poly types?
-        funcImpl->tinycode_id = tiny->index + 1;
-        if(tiny->name == "main") {
-            code->index_of_main = tiny->index;
-        }
-
-        if(funcImpl->astFunction->name == "main") {
-            bool yes = info.code->addExportedFunction(funcImpl->astFunction->name, tiny->index);
+        tinycode = bytecode->createTiny(function->name, function->callConvention);
+        out_codes->add(tinycode);
+        builder.init(bytecode, tinycode, compiler);
+        
+        funcImpl->tinycode_id = tinycode->index + 1;
+        if(tinycode->name == "main") {
+            bytecode->index_of_main = tinycode->index;
+            bool yes = info.bytecode->addExportedFunction(funcImpl->astFunction->name, tinycode->index);
             if(!yes) {
                 ERR_SECTION(
                     ERR_HEAD2(function->location)
@@ -3763,25 +3661,36 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
                     // TODO: Show all functions named main
                 )
             }
-        } else {
-            // bool yes = info.code->addExportedSymbol(funcImpl->name, funcImpl->address);
-            // if(!yes) {
-            //     ERR_SECTION(
-            //         ERR_HEAD2(function->location)
-            //         ERR_MSG("Exporting two functions with the same name is not possible.\n")
-            //         ERR_LINE2(function->location,"second function, same name")
-            //         // TODO: Show all functions named main
-            //     )
-            // }
         }
+
+        DebugInformation* di = bytecode->debugInformation;
+        Assert(di);
+        auto src = compiler->lexer.getTokenSource_unsafe(function->location);
+        auto dfun = di->addFunction(funcImpl, tinycode, imp->path, src->line);
+        debugFunction = dfun;
+        // debugFunctionIndex = di->functions.size();
+        
+        currentScopeDepth = -1; // incremented to 0 in GenerateBody
+        currentPolyVersion = funcImpl->polyVersion;
+
+        _GLOG(log::out << "Function " << function->name << "\n";)
+
+        // TODO: Export function symbol if annotated with @export
+        //  Perhaps force functions named main to be annotated with @export in parser
+        //  instead of handling the special case for main here?
+
+        auto prevFunc = info.currentFunction;
+        auto prevFuncImpl = info.currentFuncImpl;
+        auto prevScopeId = info.currentScopeId;
+        info.currentFunction = function;
+        info.currentFuncImpl = funcImpl;
+        info.currentScopeId = function->scopeId;
+        defer { info.currentFunction = prevFunc;
+            info.currentFuncImpl = prevFuncImpl;
+            info.currentScopeId = prevScopeId; };
 
         // reset frame offset at beginning of function
         currentFrameOffset = 0;
-
-        // dfun->funcStart = info.code->length(); // nocheckin
-        // dfun->bc_start = info.code->length();
-        auto tokinfo = compiler->lexer.getTokenSource_unsafe(function->location);
-        dfun->entry_line = tokinfo->line;
 
         #define DFUN_ADD_VAR(NAME, OFFSET, TYPE) dfun->localVariables.add({});\
                             dfun->localVariables.last().name = NAME;\
@@ -3848,7 +3757,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
             // builder.emit_mov_rr(BC_REG_BP, BC_REG_SP);
             if (funcImpl->returnTypes.size() != 0) {
                 // _GLOG(log::out << "space for " << funcImpl->returnTypes.size() << " return value(s) (struct may cause multiple push)\n");
-                // info.code->addDebugText("ZERO init return values\n");
+                // info.bytecode->addDebugText("ZERO init return values\n");
                 
                 // We don't need to zero initialize return value.
                 // You cannot return without specifying what to return.
@@ -4133,7 +4042,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         }
         }
         
-        // dfun->codeStart = info.code->length();
+        // dfun->codeStart = info.bytecode->length();
 
         if(funcImpl->astFunction->name == "main") {
             generatePreload();
@@ -4141,7 +4050,7 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         
         SignalIO result = generateBody(function->body);
 
-        // dfun->codeEnd = info.code->length();
+        // dfun->codeEnd = info.bytecode->length();
 
         switch(function->callConvention) {
         case BETCALL: {
@@ -4299,8 +4208,8 @@ SignalIO GenContext::generateFunction(ASTFunction* function, ASTStruct* astStruc
         // Assert(builder.getStackPointer() == 0);
         // Assert(info.currentFrameOffset == 0);
 
-        // dfun->funcEnd = info.code->length();
-        // dfun->bc_end = info.code->length();
+        // dfun->funcEnd = info.bytecode->length();
+        // dfun->bc_end = info.bytecode->length();
         // needs to be done after frame pop
         // builder.restoreStackMoment(functionStackMoment, false, true);
     }
@@ -4356,13 +4265,13 @@ SignalIO GenContext::generateBody(ASTScope *body) {
     if(body->flags & ASTNode::DUMP_BC) {
         debugDump.dumpBytecode = true;
     }
-    // debugDump.bc_startIndex = info.code->length();
+    // debugDump.bc_startIndex = bytecode->length();
     
     bool codeWasDisabled = info.disableCodeGeneration;
     bool errorsWasIgnored = info.ignoreErrors;
     ScopeId savedScope = info.currentScopeId;
     ScopeInfo* body_scope = info.ast->getScope(body->scopeId);
-    // body_scope->bc_start = info.code->length();
+    // body_scope->bc_start = bytecode->length();
     info.currentScopeDepth++;
 
     info.currentScopeId = body->scopeId;
@@ -4377,7 +4286,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             _GLOG(log::out << "fix sp when exiting body\n";)
             builder.emit_free_local(lastOffset - info.currentFrameOffset);
             // builder.restoreStackMoment(savedMoment); // -8 to not include BC_REG_BP
-            // info.code->addDebugText("fix sp when exiting body\n");
+            // bytecode->addDebugText("fix sp when exiting body\n");
             
             info.currentFrameOffset = lastOffset;
         } else {
@@ -4385,7 +4294,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         }
 
         info.currentScopeDepth--;
-        // body_scope->bc_end = info.code->length();
+        // body_scope->bc_end = bytecode->length();
         info.currentScopeId = savedScope; 
         info.ignoreErrors = errorsWasIgnored;
         if(debugDump.dumpAsm || debugDump.dumpBytecode) {
@@ -4393,9 +4302,9 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             Assert(false); // nocheckin, no token range
             // debugDump.description = body->tokenRange.tokenStream()->streamName + ":"+std::to_string(body->tokenRange.firstToken.line);
             // debugDump.description = TrimDir(body->tokenRange.tokenStream()->streamName) + ":"+std::to_string(body->tokenRange.firstToken.line);
-            // debugDump.bc_endIndex = info.code->length();
+            // debugDump.bc_endIndex = bytecode->length();
             Assert(debugDump.bc_startIndex <= debugDump.bc_endIndex);
-            info.code->debugDumps.add(debugDump);
+            info.bytecode->debugDumps.add(debugDump);
         }
     };
 
@@ -4406,8 +4315,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
     for (auto statement : body->statements) {
         MAKE_NODE_SCOPE(statement);
 
-        auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
-        // fun.addLine(statement->tokenRange.firstToken.line, info.code->length(), statement->tokenRange.firstToken.tokenIndex); // nocheckin, token is gone
+        auto srcinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
+        debugFunction->addLine(srcinfo->line, tinycode->instructionSegment.size(), statement->location.tok.origin);
         
         info.disableCodeGeneration = codeWasDisabled;
         info.ignoreErrors = errorsWasIgnored;
@@ -4425,8 +4334,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             // prev_currentFrameOffset = info.currentFrameOffset;
         } else {
             std::string line = compiler->lexer.getline(statement->location);
-            auto tokinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
-            builder.push_line(tokinfo->line, line);
+            // auto tokinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
+            builder.push_line(srcinfo->line, line);
         }
 
         defer {
@@ -4617,8 +4526,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     generatePop(BC_REG_LOCALS, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
                     // generatePop(BC_REG_BP, varinfo->versions_dataOffset[info.currentPolyVersion], varinfo->versions_typeId[info.currentPolyVersion]);
 
-                    auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
-                    fun.addVar(varname.name,
+                    debugFunction->addVar(varname.name,
                         varinfo->versions_dataOffset[info.currentPolyVersion],
                         varinfo->versions_typeId[info.currentPolyVersion],
                         info.currentScopeDepth,
@@ -4629,8 +4537,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                         SignalIO result = framePush(varinfo->versions_typeId[info.currentPolyVersion], &varinfo->versions_dataOffset[info.currentPolyVersion],
                             !statement->firstExpression, false);
 
-                        auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
-                        fun.addVar(varname.name,
+                        debugFunction->addVar(varname.name,
                             varinfo->versions_dataOffset[info.currentPolyVersion],
                             varinfo->versions_typeId[info.currentPolyVersion],
                             info.currentScopeDepth,
@@ -4641,7 +4548,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     // NOTE: inconsistent
                     // char buf[100];
                     // int len = sprintf(buf," ^ was assigned %s",statement->name->c_str());
-                    // info.code->addDebugText(buf,len);
+                    // bytecode->addDebugText(buf,len);
                 // }
                 if(varinfo){
                     _GLOG(log::out << " " << varname.name << " : " << info.ast->typeToString(varinfo->versions_typeId[info.currentPolyVersion]) << "\n";)
@@ -5005,7 +4912,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 builder.fix_jump_imm32_here(caseData[nr].caseJumpAddress);
                
                 // if(address_prevFallJump != -1) {
-                //     info.code->getIm(address_prevFallJump) = info.code->length();
+                //     bytecode->getIm(address_prevFallJump) = bytecode->length();
                 // }
                 
                 // TODO: break statements in body should jump to here
@@ -5024,7 +4931,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     //  Perhaps we won't be in the future?
                     
                     // builder.emit_({BC_JMP});
-                    // address_prevFallJump = info.code->length();
+                    // address_prevFallJump = bytecode->length();
                     // info.addImm(0);
                 }
             }
@@ -5122,7 +5029,6 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             };
 
             int stackBeforeLoop = currentFrameOffset;
-            // int stackBeforeLoop = builder.saveStackMoment(); // nocheckin, i have remove saveStackMoment, is that okay or does it break things?
 
             // TODO: Save stack moment here?
 
@@ -5208,7 +5114,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // put them in a temporary variable or something.
                 TypeId dtype = {};
                 DynamicArray<TypeId> tmp_types;
-                // info.code->addDebugText("Generate and push range\n");
+                // bytecode->addDebugText("Generate and push range\n");
                 SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
                 if(tmp_types.size()) dtype = tmp_types.last();
                 if (result != SIGNAL_SUCCESS) {
@@ -5239,10 +5145,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // builder.emit_mov_mr_disp(BC_REG_BP, index_reg, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
 
                 if(statement->isReverse()){
-                    // info.code->addDebugText("For condition (reversed)\n");
+                    // bytecode->addDebugText("For condition (reversed)\n");
                     builder.emit_gte(index_reg,length_reg, false, int_size, true);
                 } else {
-                    // info.code->addDebugText("For condition\n");
+                    // bytecode->addDebugText("For condition\n");
                     builder.emit_lt(index_reg,length_reg, false, int_size, true);
                 }
                 loopScope->resolveBreaks.add(builder.emit_jz(index_reg));
@@ -5326,7 +5232,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // put them in a temporary variable or something.
                 TypeId dtype = {};
                 DynamicArray<TypeId> tmp_types{};
-                // info.code->addDebugText("Generate and push slice\n");
+                // bytecode->addDebugText("Generate and push slice\n");
                 SignalIO result = generateExpression(statement->firstExpression, &tmp_types);
                 if(tmp_types.size()) dtype = tmp_types.last();
                 if (result != SIGNAL_SUCCESS) {
@@ -5343,11 +5249,11 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 BCRegister length_reg = BC_REG_B;
                 BCRegister index_reg = BC_REG_C;
 
-                // info.code->addDebugText("extract ptr and length\n");
+                // bytecode->addDebugText("extract ptr and length\n");
                 builder.emit_pop(ptr_reg);
                 builder.emit_pop(length_reg);
 
-                // info.code->addDebugText("Index increment/decrement\n");
+                // bytecode->addDebugText("Index increment/decrement\n");
                 
                 u8 ptr_size = ast->getTypeSize(memdata_ptr.typeId);
                 u8 index_size = ast->getTypeSize(memdata_len.typeId);
@@ -5366,11 +5272,11 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // u8 cond_reg = BC_REG_EBX;
                 // u8 cond_reg = BC_REG_R9;
                 if(statement->isReverse()){
-                    // info.code->addDebugText("For condition (reversed)\n");
+                    // bytecode->addDebugText("For condition (reversed)\n");
                     builder.emit_li32(length_reg, 0); // length reg is not used with reversed
                     builder.emit_gte(index_reg,length_reg, false, index_size, true);
                 } else {
-                    // info.code->addDebugText("For condition\n");
+                    // bytecode->addDebugText("For condition\n");
                     builder.emit_lt(index_reg,length_reg, false, index_size, true);
                 }
                 // resolve end, not break, resolveBreaks is bad naming
@@ -5411,8 +5317,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                     builder.emit_memcpy(BC_REG_E, ptr_reg, BC_REG_B);
                     
 
-                    // info.code->add({BC_MOV_RR, ptr_reg, BC_REG_A});
-                    // info.code->add({BC_SUBI, BC_REG_A, BC_REG_RDI, BC_REG_A});
+                    // bytecode->add({BC_MOV_RR, ptr_reg, BC_REG_A});
+                    // bytecode->add({BC_SUBI, BC_REG_A, BC_REG_RDI, BC_REG_A});
                 }
 
                 result = generateBody(statement->firstBody);
@@ -5431,32 +5337,20 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                 // info.ast->removeIdentifier(scopeForVariables, "nr");
                 // info.ast->removeIdentifier(scopeForVariables, itemvar);
             }
-
             
             builder.emit_free_local(stackBeforeLoop - info.currentFrameOffset);
             info.currentFrameOffset = stackBeforeLoop;
             
-            auto& fun = info.code->debugInformation->functions[info.debugFunctionIndex];
-            fun.addVar(varnameIt.name,
+            debugFunction->addVar(varnameIt.name,
                 varinfo_item->versions_dataOffset[info.currentPolyVersion],
                 varinfo_item->versions_typeId[info.currentPolyVersion],
                 info.currentScopeDepth + 1, // +1 because variables exist within stmt->firstBody, not the current scope
                 varnameIt.identifier->scopeId);
-            fun.addVar(varnameNr.name,
+            debugFunction->addVar(varnameNr.name,
                 varinfo_index->versions_dataOffset[info.currentPolyVersion],
                 varinfo_index->versions_typeId[info.currentPolyVersion],
                 info.currentScopeDepth + 1,
                 varnameNr.identifier->scopeId);
-                
-            // fun.localVariables.add({});
-            // fun.localVariables.last().name = varnameIt.name;
-            // fun.localVariables.last().frameOffset = varinfo_item->versions_dataOffset[info.currentPolyVersion];
-            // fun.localVariables.last().typeId = varinfo_item->versions_typeId[info.currentPolyVersion];
-            
-            // fun.localVariables.add({});
-            // fun.localVariables.last().name = varnameNr.name;
-            // fun.localVariables.last().frameOffset = varinfo_index->versions_dataOffset[info.currentPolyVersion];
-            // fun.localVariables.last().typeId = varinfo_index->versions_typeId[info.currentPolyVersion];
 
             // builder.restoreStackMoment(stackBeforeLoop);
 
@@ -5718,7 +5612,7 @@ SignalIO GenContext::generateData() {
     // type checker requested some space for global variables
     // (at the time of writing this at least)
     if(info.ast->preallocatedGlobalSpace())
-        info.code->appendData(nullptr, info.ast->preallocatedGlobalSpace());
+        bytecode->appendData(nullptr, info.ast->preallocatedGlobalSpace());
 
     // IMPORTANT: TODO: Some data like 64-bit integers needs alignment.
     //   Strings don's so it's fine for now but don't forget about fixing this.
@@ -5726,9 +5620,9 @@ SignalIO GenContext::generateData() {
         Assert(pair.first.size()!=0);
         int offset = 0;
         if(pair.first.back()=='\0')
-            offset = info.code->appendData(pair.first.data(), pair.first.length());
+            offset = bytecode->appendData(pair.first.data(), pair.first.length());
         else
-            offset = info.code->appendData(pair.first.data(), pair.first.length() + 1); // +1 to include null termination, this is to prevent mistakes when using C++ functions which expect it.
+            offset = bytecode->appendData(pair.first.data(), pair.first.length() + 1); // +1 to include null termination, this is to prevent mistakes when using C++ functions which expect it.
         if(offset == -1){
             continue;
         }
@@ -5770,15 +5664,15 @@ SignalIO GenContext::generateData() {
                 }
             }
         }
-        info.code->ensureAlignmentInData(8); // just to be safe
-        int off_typedata   = info.code->appendData(nullptr, count_types * sizeof(lang::TypeInfo));
-        info.code->ensureAlignmentInData(8); // just to be safe
-        int off_memberdata = code->appendData(nullptr, count_members * sizeof(lang::TypeMember));
-        int off_stringdata = code->appendData(nullptr, count_stringdata);
+        bytecode->ensureAlignmentInData(8); // just to be safe
+        int off_typedata   = bytecode->appendData(nullptr, count_types * sizeof(lang::TypeInfo));
+        bytecode->ensureAlignmentInData(8); // just to be safe
+        int off_memberdata = bytecode->appendData(nullptr, count_members * sizeof(lang::TypeMember));
+        int off_stringdata = bytecode->appendData(nullptr, count_stringdata);
         
-        lang::TypeInfo* typedata = (lang::TypeInfo*)(info.code->dataSegment.data() + off_typedata);
-        lang::TypeMember* memberdata = (lang::TypeMember*)(info.code->dataSegment.data() + off_memberdata);
-        char* stringdata = (char*)(info.code->dataSegment.data() + off_stringdata);
+        lang::TypeInfo* typedata = (lang::TypeInfo*)(bytecode->dataSegment.data() + off_typedata);
+        lang::TypeMember* memberdata = (lang::TypeMember*)(bytecode->dataSegment.data() + off_memberdata);
+        char* stringdata = (char*)(bytecode->dataSegment.data() + off_stringdata);
 
         // TODO: Zero initialize memory? Or use '_'?
 
@@ -5847,9 +5741,9 @@ SignalIO GenContext::generateData() {
 
         int polyVersion = 0;
 
-        lang::Slice* slice_types = (lang::Slice*)(code->dataSegment.data() + info.varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
-        lang::Slice* slice_members = (lang::Slice*)(code->dataSegment.data() + info.varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
-        lang::Slice* slice_strings = (lang::Slice*)(code->dataSegment.data() + info.varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
+        lang::Slice* slice_types = (lang::Slice*)(bytecode->dataSegment.data() + info.varInfos[VAR_INFOS]->versions_dataOffset[polyVersion]);
+        lang::Slice* slice_members = (lang::Slice*)(bytecode->dataSegment.data() + info.varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion]);
+        lang::Slice* slice_strings = (lang::Slice*)(bytecode->dataSegment.data() + info.varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion]);
         slice_types->len = count_types;
         slice_members->len = count_members;
         slice_strings->len = count_stringdata;
@@ -5859,13 +5753,13 @@ SignalIO GenContext::generateData() {
         // log::out << "types "<<count_types<<", members "<<count_members << ", strings "<<count_stringdata <<"\n";
 
         // This is scrap
-        // info.code->ptrDataRelocations.add({
+        // bytecode->ptrDataRelocations.add({
         //     (u32)varInfos[VAR_INFOS]->versions_dataOffset[polyVersion],
         //     (u32)off_typedata});
-        // info.code->ptrDataRelocations.add({
+        // bytecode->ptrDataRelocations.add({
         //     (u32)varInfos[VAR_MEMBERS]->versions_dataOffset[polyVersion],
         //     (u32)off_memberdata});
-        // info.code->ptrDataRelocations.add({
+        // bytecode->ptrDataRelocations.add({
         //     (u32)varInfos[VAR_STRINGS]->versions_dataOffset[polyVersion],
         //     (u32)off_stringdata});
     }
@@ -5887,51 +5781,51 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
     // _VLOG(log::out <<log::BLUE<<  "##   Generator   ##\n";)
 
     GenContext info{};
-    info.code = Bytecode::Create();
+    bytecode = Bytecode::Create();
     info.ast = ast;
     info.compileInfo = compileInfo;
     info.currentScopeId = ast->globalScopeId;
-    // info.code->nativeRegistry = info.compileInfo->nativeRegistry;
+    // bytecode->nativeRegistry = info.compileInfo->nativeRegistry;
 
     // SignalIO result = GenerateData(info); // nocheckin
 
     // TODO: No need to create debug information if the compile options
     //  doesn't specify it.
-    info.code->debugInformation = DebugInformation::Create(ast);
+    bytecode->debugInformation = DebugInformation::Create(ast);
 
     // TODO: Skip function generation if there are no functions.
     //   We would need to go through every scope to know that though.
     //   Maybe the type checker can inform the generator?
-    // info.code->addDebugText("FUNCTION SEGMENT\n");
-    info.code->setLocationInfo("FUNCTION SEGMENT");
+    // bytecode->addDebugText("FUNCTION SEGMENT\n");
+    bytecode->setLocationInfo("FUNCTION SEGMENT");
     // _GLOG(log::out << "Jump to skip functions\n";)
-    // info.code->add_notabug({BC_JMP});
-    // int skipIndex = info.code->length();
+    // bytecode->add_notabug({BC_JMP});
+    // int skipIndex = bytecode->length();
     // info.addImm(0);
     // IMPORTANT: Functions are generated before the code because
     //  compile time execution will need these functions to exist.
     //  There is still a dependency problem if you use compile time execution
     //  in a function which uses a function which hasn't been generated yet.
     // result = GenerateFunctions(info, info.ast->mainBody); // nocheckin
-    // if(skipIndex == info.code->length() -1) {
+    // if(skipIndex == bytecode->length() -1) {
     //     // skip jump instruction if no functions where generated
     //     // info.popInstructions(2); // pop JMP and immediate
-    //     info.code->instructionSegment.used = 0;
+    //     bytecode->instructionSegment.used = 0;
     //     _GLOG(log::out << "Delete jump instruction\n";)
     // } else {
-    //     info.code->getIm(skipIndex) = info.code->length();
+    //     bytecode->getIm(skipIndex) = bytecode->length();
     // }
 
-    info.code->setLocationInfo("GLOBAL CODE SEGMENT");
-    // info.code->addDebugText("GLOBAL CODE SEGMENT\n");
+    bytecode->setLocationInfo("GLOBAL CODE SEGMENT");
+    // bytecode->addDebugText("GLOBAL CODE SEGMENT\n");
 
     // It is dangerous to take a pointer to an element of an array that may reallocate the elements
     // but the array should only reallocate when generating new functions which we have already done.
     // this function is the last function we are adding. Taking the pointer is therefore not dangerous.
     
     bool hasMain = false;
-    for(int i=0;i<info.code->exportedSymbols.size();i++) {
-        auto& sym = info.code->exportedSymbols[i];
+    for(int i=0;i<bytecode->exportedSymbols.size();i++) {
+        auto& sym = bytecode->exportedSymbols[i];
         if(sym.name == "main") {
             hasMain = true;
             break;
@@ -5939,10 +5833,10 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
     }
 
     if(!hasMain) {
-        auto di = info.code->debugInformation;
+        auto di = bytecode->debugInformation;
         info.debugFunctionIndex = di->functions.size();
         DebugInformation::Function* dfun = di->addFunction("main");
-        info.code->addExportedSymbol("main", info.code->length());
+        bytecode->addExportedSymbol("main", bytecode->length());
         
         if(info.ast->mainBody->statements.size()>0) {
             dfun->fileIndex = di->addOrGetFile(info.ast->mainBody->statements[0]->tokenRange.tokenStream()->streamName);
@@ -5953,8 +5847,8 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
         //  encapsulates the global code which doesn't have a function with arguments.
         dfun->funcImpl = nullptr;
         dfun->funcAst = nullptr;
-        dfun->funcStart = info.code->length();
-        dfun->bc_start = info.code->length();
+        dfun->funcStart = bytecode->length();
+        dfun->bc_start = bytecode->length();
         // IMPORTANT TODO: A global main body does not have one tokenstream...
         dfun->tokenStream = info.ast->mainBody->tokenRange.tokenStream();
         info.currentScopeDepth = -1;
@@ -5966,7 +5860,7 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
         builder.emit_push(BC_REG_BP);
         builder.emit_mov_rr(BC_REG_BP, BC_REG_SP);
         
-        dfun->codeStart = info.code->length();
+        dfun->codeStart = bytecode->length();
         dfun->entry_line = info.ast->mainBody->tokenRange.firstToken.line;
 
         // GeneratePreload(info); // nocheckin
@@ -5974,18 +5868,18 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
         // TODO: What to do about result? nothing?
         // result = GenerateBody(info, info.ast->mainBody); // nocheckin
         
-        dfun->codeEnd = info.code->length();
+        dfun->codeEnd = bytecode->length();
 
         builder.emit_pop(BC_REG_BP);
 
         builder.emit_({BC_RET});
-        dfun->funcEnd = info.code->length();
-        dfun->bc_end = info.code->length();
+        dfun->funcEnd = bytecode->length();
+        dfun->bc_end = bytecode->length();
     }
 
     std::unordered_map<FuncImpl*, int> resolveFailures;
     for(auto& e : info.callsToResolve){
-        auto& inst = info.code->get(e.bcIndex);
+        auto& inst = bytecode->get(e.bcIndex);
         // Assert(e.funcImpl->address != Identifier::ADDRESS_INVALID);
         if(e.funcImpl->address != FuncImpl::ADDRESS_INVALID){
             *((i32*)&inst) = e.funcImpl->address;
@@ -6011,7 +5905,7 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
     info.callsToResolve.cleanup();
 
     info.compileInfo->options->compileStats.errors += info.errors;
-    return info.code;
+    return bytecode;
 }
 #endif
 
@@ -6024,7 +5918,7 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
     GenContext context{};
     // 
     context.ast = compiler->ast;
-    context.code = compiler->bytecode;
+    context.bytecode = compiler->bytecode;
     context.compiler = compiler;
     context.reporter = &compiler->reporter;
     context.imp = imp;
@@ -6046,16 +5940,15 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
                 case TARGET_BYTECODE: main_conv = BETCALL; break;
                 default: Assert(false);
             }
-            TinyBytecode* tb_main = context.code->createTiny(main_conv);
-            tb_main->name = "main";
-            context.code->index_of_main = tb_main->index;
+            TinyBytecode* tb_main = context.bytecode->createTiny("main",main_conv);
+            context.bytecode->index_of_main = tb_main->index;
 
             // TODO: Code below should be the same as the one in generateFunction.
             //   If we change the code in generateFunction but forget to here then
             //   we will be in trouble. So, how do we combine the code?
 
             context.tinycode = tb_main;
-            context.builder.init(context.code, context.tinycode, compiler);
+            context.builder.init(context.bytecode, context.tinycode, compiler);
             context.currentScopeId = context.ast->globalScopeId;
             context.currentFrameOffset = 0;
             context.currentScopeDepth = -1;
@@ -6063,11 +5956,10 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
 
             out_codes->add(tb_main);
 
-            auto di = context.code->debugInformation;
-            context.debugFunctionIndex = di->functions.size();
-            DebugInformation::Function* dfun = di->addFunction(context.tinycode->name);
-            di->addOrGetFile(imp->path);
-            context.code->addExportedFunction("main", context.tinycode->index);
+            auto di = context.bytecode->debugInformation;
+            auto dfun = di->addFunction(nullptr, context.tinycode, imp->path, 1);
+            context.debugFunction = dfun;
+            context.bytecode->addExportedFunction("main", context.tinycode->index);
             
             context.generateBody(scope);
             

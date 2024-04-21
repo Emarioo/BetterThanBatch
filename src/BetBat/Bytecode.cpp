@@ -40,10 +40,10 @@ void Bytecode::cleanup(){
     dataSegment.resize(0);
     // debugSegment.resize(0);
     // debugLocations.cleanup();
-    if(debugInformation) {
-        DebugInformation::Destroy(debugInformation);
-        debugInformation = nullptr;
-    }
+    // if(debugInformation) {
+    //     DebugInformation::Destroy(debugInformation);
+    //     debugInformation = nullptr;
+    // }
     // if(nativeRegistry && nativeRegistry != NativeRegistry::GetGlobal()){
     //     NativeRegistry::Destroy(nativeRegistry);
     //     nativeRegistry = nullptr;

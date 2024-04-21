@@ -471,30 +471,32 @@ int ReformatLinkerError(LinkerChoice linker, QuickArray<char>& inBuffer, X64Prog
             int lineNumber = 0;
             int fileIndex = 0;
             // TODO: This will be slow with many functions
-            for(int k=0;k<d->functions.size();k++) {
-                auto& func = d->functions[k];
-                if(func.funcStart <= it.textOffset && it.textOffset < func.funcEnd) {
-                    fileIndex = func.fileIndex;
-                    if(func.lines.size()>0)
-                        lineNumber = func.lines[0].lineNumber;
-                    for(int i=0;i < func.lines.size();i++) {
-                        auto& line = func.lines[i];
-                        if(it.textOffset < line.asm_address) { // NOTE: Is funcStart + funcOffset correct?
-                        // if(it.textOffset < func.funcStart + line.funcOffset) { // NOTE: Is funcStart + funcOffset correct?
-                            found = true;
-                            break;
-                        }
-                        lineNumber = line.lineNumber;
-                    }
-                    if(!found) {
-                        if(func.lines.size()>0)
-                            lineNumber = func.lines.last().lineNumber;
-                        found = true;
-                    }
-                    if(found)
-                        break;
-                }
-            }
+
+            Assert(false); // nocheckin, uncomment code and fix
+            // for(int k=0;k<d->functions.size();k++) {
+            //     auto& func = d->functions[k];
+            //     if(func-.funcStart <= it.textOffset && it.textOffset < func.funcEnd) {
+            //         fileIndex = func.fileIndex;
+            //         if(func.lines.size()>0)
+            //             lineNumber = func.lines[0].lineNumber;
+            //         for(int i=0;i < func.lines.size();i++) {
+            //             auto& line = func.lines[i];
+            //             if(it.textOffset < line.asm_address) { // NOTE: Is funcStart + funcOffset correct?
+            //             // if(it.textOffset < func.funcStart + line.funcOffset) { // NOTE: Is funcStart + funcOffset correct?
+            //                 found = true;
+            //                 break;
+            //             }
+            //             lineNumber = line.lineNumber;
+            //         }
+            //         if(!found) {
+            //             if(func.lines.size()>0)
+            //                 lineNumber = func.lines.last().lineNumber;
+            //             found = true;
+            //         }
+            //         if(found)
+            //             break;
+            //     }
+            // }
             if(found) {
                 log::out << log::RED << TrimCWD(d->files[fileIndex])<<":" << lineNumber<<": ";
                 log::out << log::NO_COLOR << it.message << "\n";

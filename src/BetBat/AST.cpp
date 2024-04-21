@@ -2012,6 +2012,34 @@ void AST::DecomposePolyTypes(StringView typeString, StringView* out_base, QuickA
     // }
     // return out;
 }
+std::string AST::nameOfFuncImpl(FuncImpl* impl) {
+    std::string name = impl->astFunction->name;
+    if(impl->polyArgs.size()) {
+        name+="<";
+        for(int i=0;i<impl->polyArgs.size();i++) {
+            if(i!=0)
+                name+=",";
+            name+=typeToString(impl->polyArgs[i]);
+        }
+        name+=">";
+    }
+    name+="(";
+    for(int i=0;i<impl->argumentTypes.size();i++){
+         if(i!=0)
+            name+=",";
+        name+=typeToString(impl->argumentTypes[i].typeId);
+    }
+    name+=")";
+    if(impl->returnTypes.size()) {
+        name+="->";
+        for(int i=0;i<impl->returnTypes.size();i++){
+            if(i!=0)
+                name+=",";
+            name+=typeToString(impl->returnTypes[i].typeId);
+        }
+    }
+    return name;
+}
 u32 AST::getTypeSize(TypeId typeId){
     if(typeId.isPointer()) return 8; // TODO: Magic number! Is pointer always 8 bytes? Probably but who knows!
     if(!typeId.isNormalType()) return 0;

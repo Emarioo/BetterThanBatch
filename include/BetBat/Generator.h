@@ -3,12 +3,13 @@
 #include "BetBat/AST.h"
 #include "BetBat/Bytecode.h"
 #include "BetBat/PhaseContext.h"
+#include "BetBat/DebugInformation.h"
 
 #include "BetBat/Lang.h"
 struct CompilerImport;
 struct GenContext : public PhaseContext {
     TinyBytecode* tinycode = nullptr;
-    Bytecode* code=nullptr;
+    Bytecode* bytecode=nullptr;
     AST* ast=nullptr;
     Reporter* reporter=nullptr;
     CompilerImport* imp = nullptr;
@@ -54,11 +55,12 @@ struct GenContext : public PhaseContext {
     // void addCall(LinkConventions linkConvention, CallConventions callConvention);
     void addExternalRelocation(const std::string& name, const std::string& lib_path, u32 codeAddress) {
         if(!disableCodeGeneration)
-            code->addExternalRelocation(name, lib_path, tinycode->index, codeAddress);
+            bytecode->addExternalRelocation(name, lib_path, tinycode->index, codeAddress);
     }
     QuickArray<u32> indexOfNonImmediates{}; // this list is probably inefficient but other solutions are tedious.
 
-    u32 debugFunctionIndex = (u32)-1;
+    DebugFunction* debugFunction = nullptr;
+    // u32 debugFunctionIndex = (u32)-1;
     ASTFunction* currentFunction=nullptr;
     FuncImpl* currentFuncImpl=nullptr;
     ScopeId currentScopeId = 0;

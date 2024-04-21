@@ -5,6 +5,7 @@
 
 bin
 logs
+*.log
 *.exe
 .vs
 *.ilk

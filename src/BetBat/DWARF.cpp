@@ -2,13 +2,27 @@
 #include "BetBat/Compiler.h"
 
 namespace dwarf {
-    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler) {
+    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler, bool provide_section_data) {
         using namespace engone;
-        SectionNr section_info = objectFile->createSection(".debug_info", ObjectFile::FLAG_DEBUG);  
-        SectionNr section_line = objectFile->createSection(".debug_line", ObjectFile::FLAG_DEBUG);  
-        SectionNr section_abbrev = objectFile->createSection(".debug_abbrev", ObjectFile::FLAG_DEBUG);  
-        SectionNr section_aranges = objectFile->createSection(".debug_aranges", ObjectFile::FLAG_DEBUG);    
-        SectionNr section_frame = objectFile->createSection(".debug_frame", ObjectFile::FLAG_DEBUG);                
+        SectionNr section_info    = -1;
+        SectionNr section_line    = -1;
+        SectionNr section_abbrev  = -1;
+        SectionNr section_aranges = -1;
+        SectionNr section_frame   = -1;
+        if(!provide_section_data) {
+            section_info = objectFile->createSection(".debug_info", ObjectFile::FLAG_DEBUG);  
+            section_line = objectFile->createSection(".debug_line", ObjectFile::FLAG_DEBUG);  
+            section_abbrev = objectFile->createSection(".debug_abbrev", ObjectFile::FLAG_DEBUG);  
+            section_aranges = objectFile->createSection(".debug_aranges", ObjectFile::FLAG_DEBUG);    
+            section_frame = objectFile->createSection(".debug_frame", ObjectFile::FLAG_DEBUG);                
+            return;
+        } else {
+            section_info = objectFile->findSection(".debug_info");
+            section_line = objectFile->findSection(".debug_line");
+            section_abbrev = objectFile->findSection(".debug_abbrev");
+            section_aranges = objectFile->findSection(".debug_aranges");
+            section_frame = objectFile->findSection(".debug_frame");
+        }
         Assert(section_info != -1);
         Assert(section_line != -1);
         Assert(section_abbrev != -1);
@@ -313,19 +327,19 @@ namespace dwarf {
             // TODO: Holy snap the polymorphism will actually end me.
             //  How do we make this work with polymorphism? Maybe it does work?
             for(int i=0;i<debug->functions.size();i++) {
-                auto func = debug->functions[i];
-                for(int vi=0;vi<func.localVariables.size();vi++) {
-                    auto& var = func.localVariables[vi];
+                auto fun = debug->functions[i];
+                for(int vi=0;vi<fun->localVariables.size();vi++) {
+                    auto& var = fun->localVariables[vi];
                     addType(var.typeId);
                 }
                 
-                if(!func.funcImpl)
+                if(!fun->funcImpl)
                     continue;
 
                 // TODO: Add return values, types
 
-                for(int pi=0;pi<func.funcImpl->argumentTypes.size();pi++){
-                    auto& arg_impl = func.funcImpl->argumentTypes[pi];
+                for(int pi=0;pi<fun->funcImpl->argumentTypes.size();pi++){
+                    auto& arg_impl = fun->funcImpl->argumentTypes[pi];
                     addType(arg_impl.typeId);
                 }
             }
@@ -511,26 +525,26 @@ namespace dwarf {
             #define RBP_CONSTANT_OFFSET (-16)
 
             for(int i=0;i<debug->functions.size();i++) {
-                auto func = debug->functions[i];
+                auto fun = debug->functions[i];
 
                 WRITE_LEB(abbrev_func) // abbrev code
                 bool global_func = false;
                 WRITE_LEB(global_func) // external or not
-                stream->write(func.name.c_str(), func.name.length() + 1); // name
+                stream->write(fun->name.c_str(), fun->name.length() + 1); // name
 
                 // Assert(func.lines.size() > 0);
 
-                int file_index = func.fileIndex + 1;
+                int file_index = fun->fileIndex + 1;
                 Assert(file_index < 0x10000); // make sure we don't overflow
                 stream->write2((u16)(file_index)); // file
-                int line = func.entry_line;
+                int line = fun->declared_at_line;
                 Assert(line < 0x10000); // make sure we don't overflow
                 stream->write2((u16)(line)); // line
                 stream->write2((u16)(1)); // column
 
                 // TODO: We skip the return type for now. Can we have multiple?
-                u32 proc_low = func.funcStart;
-                u32 proc_high = func.funcEnd;
+                u32 proc_low = fun->asm_start;
+                u32 proc_high = fun->asm_end;
                 relocs.add({ stream->getWriteHead() - offset_section, proc_low });
                 stream->write8(proc_low); // pc low
                 relocs.add({ stream->getWriteHead() - offset_section, proc_high });
@@ -541,11 +555,11 @@ namespace dwarf {
                 
                 u32* sibling_ref4 = nullptr;
                 stream->write_late((void**)&sibling_ref4, sizeof(u32));
-                if(func.funcImpl) {
-                    Assert(func.funcImpl->argumentTypes.size() == func.funcAst->arguments.size());
-                    for(int pi=0;pi<func.funcImpl->argumentTypes.size();pi++){
-                        auto& arg_ast = func.funcAst->arguments[pi];
-                        auto& arg_impl = func.funcImpl->argumentTypes[pi];
+                if(fun->funcImpl) {
+                    Assert(fun->funcImpl->argumentTypes.size() == fun->funcAst->arguments.size());
+                    for(int pi=0;pi<fun->funcImpl->argumentTypes.size();pi++){
+                        auto& arg_ast = fun->funcAst->arguments[pi];
+                        auto& arg_impl = fun->funcImpl->argumentTypes[pi];
                         WRITE_LEB(abbrev_param)
                         stream->write(arg_ast.name.c_str(), arg_ast.name.length()); // arg_ast.name is a Token and not zero terminated
                         // stream->write(arg_ast.name.ptr, arg_ast.name.len); // arg_ast.name is a Token and not zero terminated
@@ -585,14 +599,14 @@ namespace dwarf {
                 bool left_scope_once = false;
                 
                 DynamicArray<ScopeId> scopeStack{};
-                if(func.funcAst)
-                    scopeStack.add(func.funcAst->scopeId);
+                if(fun->funcAst)
+                    scopeStack.add(fun->funcAst->scopeId);
                 else
                     scopeStack.add(ast->globalScopeId);
                 int curLevel = 0;
                 
-                for(int vi=0;vi<func.localVariables.size();vi++) {
-                    auto& var = func.localVariables[vi];
+                for(int vi=0;vi<fun->localVariables.size();vi++) {
+                    auto& var = fun->localVariables[vi];
                     // ScopeId curScope = scopeStack.last();
                     
                     // make sure we have the right lexical scope for the variable
@@ -849,10 +863,11 @@ namespace dwarf {
                 u64 lowest_address = -1;
                 int lowest_index = -1;
                 for(int j=0;j<debug->functions.size();j++) {
+                    auto fun = debug->functions[j];
                     if(used_functions[j])
                         continue;
-                    if(debug->functions[j].funcStart < lowest_address || lowest_address == -1) {
-                        lowest_address = debug->functions[j].funcStart;
+                    if(fun->asm_start < lowest_address || lowest_address == -1) {
+                        lowest_address = fun->asm_start;
                         lowest_index = j;
                     }
                 }
@@ -897,8 +912,8 @@ namespace dwarf {
 
 
             if(functions_in_order.size()>0) {
-                auto& fun = debug->functions[functions_in_order[0]];
-                reg_file = fun.fileIndex + 1;
+                auto fun = debug->functions[functions_in_order[0]];
+                reg_file = fun->fileIndex + 1;
                 WRITE_LEB(DW_LNS_set_file)
                 WRITE_LEB(reg_file)
             }
@@ -949,7 +964,7 @@ namespace dwarf {
             // WRITE_LEB(DW_LNS_copy)
             for(int fi : functions_in_order) {
                 auto& fun = debug->functions[fi];
-                int file_index = fun.fileIndex + 1;
+                int file_index = fun->fileIndex + 1;
                 if(reg_file != file_index) {
                     reg_file = file_index;
                     WRITE_LEB(DW_LNS_set_file)
@@ -957,12 +972,12 @@ namespace dwarf {
                 }
 
                 // TODO: Set column
-                add_row(fun.funcStart, fun.entry_line);
+                add_row(fun->asm_start, fun->declared_at_line);
 
                 int lastOffset = 0;
                 int lastLine = 0;
-                for(int i=0;i<fun.lines.size();i++) {
-                    auto& line = fun.lines[i];
+                for(int i=0;i<fun->lines.size();i++) {
+                    auto& line = fun->lines[i];
                     // Ensure that the lines are stored in ascending order
                     Assert(lastOffset <= line.asm_address);
                     // Assert(lastLine <= line.lineNumber);
@@ -1022,8 +1037,7 @@ namespace dwarf {
             
             int reloc_text_start = stream->getWriteHead() - offset_section;
             stream->write8(0);
-            Assert(false);
-            // stream->write8(program->size());
+            stream->write8(stream_text->getWriteHead());
 
             stream->write8(0);
             stream->write8(0);
@@ -1106,9 +1120,9 @@ namespace dwarf {
                 header->CIE_pointer = 0; // common information entry can be found at offset 0 in the section, may not be true in the future
                 
                 relocs.add({symindex_text, offset_fde_start - offset_section  + (u64)&header->initial_location - (u64)header, 
-                    fun.funcStart });
-                header->initial_location = fun.funcStart;
-                header->address_range = fun.funcEnd - fun.funcStart;
+                    fun->asm_start });
+                header->initial_location = fun->asm_start;
+                header->address_range = fun->asm_end - fun->asm_start;
 
                 // instructions, based on what g++ generates and a little from DWARF specification
                 stream->write1(DW_CFA_advance_loc4);
@@ -1127,7 +1141,7 @@ namespace dwarf {
                 WRITE_LEB(DW_rbp)
 
                 stream->write1(DW_CFA_advance_loc4);
-                stream->write4(fun.funcEnd - fun.funcStart - 1 - 4);
+                stream->write4(fun->asm_end - fun->asm_start - 1 - 4);
 
                 stream->write1(DW_CFA_restore(DW_rbp));
 

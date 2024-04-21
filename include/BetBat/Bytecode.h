@@ -25,7 +25,7 @@ enum InstructionControl : u8 {
     CONTROL_FLOAT_OP    = 0x10,
     CONTROL_UNSIGNED_OP = 0x20,
 };
-
+struct DebugInformation;
 #define GET_CONTROL_SIZE(x) (InstructionControl)(CONTROL_MASK_SIZE & x)
 #define GET_CONTROL_CONVERT_SIZE(x) (InstructionControl)((CONTROL_MASK_CONVERT_SIZE & x) >> 2)
 #define IS_CONTROL_SIGNED(x) (!(CONTROL_UNSIGNED_OP & x))
@@ -206,6 +206,7 @@ struct ExternalRelocation {
     int pc=0;
 };
 struct Bytecode;
+typedef u32 TinyBytecodeID;
 // Look at me I'm tiny bytecode! 
 struct TinyBytecode {
     std::string name;
@@ -219,9 +220,10 @@ struct TinyBytecode {
         std::string text;  
     };
     DynamicArray<Line> lines{};
+    DebugFunction* debugFunction = nullptr;
     // QuickArray<u32> index_of_opcodes{};
 
-    struct Relocation{
+    struct Relocation {
         i32 pc=0; // index of the 32-bit integer to relocate
         FuncImpl* funcImpl = nullptr;
         // std::string func_name;
@@ -241,7 +243,15 @@ struct TinyBytecode {
     
     void print(int low_index, int high_index, Bytecode* code = nullptr, DynamicArray<std::string>* dll_functions = nullptr, bool force_newline = false);
 };
-
+struct BytecodeLocation {
+    TinyBytecodeID id; // id-1 to get index
+    u32 address;
+};
+struct BytecodeRange {
+    TinyBytecodeID id; // id-1 to get index
+    u32 start_address;
+    u32 end_address;
+};
 struct Bytecode {
     static const i32 BEGIN_DLL_FUNC_INDEX = 0x800'0000;
 
@@ -249,10 +259,11 @@ struct Bytecode {
     static void Destroy(Bytecode*);
     void cleanup();
     
-    TinyBytecode* createTiny(CallConventions convention) {
+    TinyBytecode* createTiny(const std::string& name, CallConventions convention) {
         auto ptr = TRACK_ALLOC(TinyBytecode);
         new(ptr)TinyBytecode();
         ptr->call_convention = convention;
+        ptr->name = name;
         tinyBytecodes.add(ptr);
         ptr->index = tinyBytecodes.size()-1;
         return ptr;

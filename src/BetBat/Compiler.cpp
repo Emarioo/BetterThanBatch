@@ -699,7 +699,7 @@ void Compiler::processImports() {
                     if(!have_generated_global_data) { // thread safe check
                         GenContext c{};
                         c.ast = ast;
-                        c.code = bytecode;
+                        c.bytecode = bytecode;
                         c.reporter = &reporter;
                         c.compiler = this;
                         c.generateData(); // make sure this function doesn't call lock_miscellaneous
@@ -779,6 +779,11 @@ void Compiler::run(CompileOptions* options) {
     // What are we trying to generate?
     // #################################
     
+    if(options->useDebugInformation) {
+        log::out << log::YELLOW << "Debug information was recently added and is not complete. Only DWARF with COFF (on Windows) and GCC is supported. ELF for Unix systems is on the way.\n";
+        // return EXIT_CODE_NOTHING; // debug is used with linker errors (.text+0x32 -> file:line)
+    }
+
     std::string obj_file = "bin/main.o";
     std::string exe_file = "bin/main.exe";
     std::string bc_file = "bin/main.bc";
@@ -992,8 +997,8 @@ void Compiler::run(CompileOptions* options) {
         return;
     }
 
-    double time = engone::StopMeasure(tp);
-    engone::log::out << "Compiled in "<<FormatTime(time)<<"\n";
+    // double time = engone::StopMeasure(tp);
+    // engone::log::out << "Compiled in "<<FormatTime(time)<<"\n";
 
     // bytecode->print();
 
@@ -1103,6 +1108,9 @@ void Compiler::run(CompileOptions* options) {
         int exitCode = 0;
         {
             ZoneNamedNC(zone0,"Linker",tracy::Color::Blue2, true);
+            
+            if(!options->silent)
+                log::out << log::LIME<<"Linker command: "<<cmd<<"\n";
             // engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode, {}, linkerLog, linkerLog);
             engone::StartProgram((char*)cmd.c_str(),PROGRAM_WAIT, &exitCode);
         }

@@ -134,7 +134,7 @@ namespace dwarf {
         X64Program* program = nullptr; // DWARF needs to know the size of the program code
     };
 
-    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler);
+    void ProvideSections(ObjectFile* objectFile, X64Program* program, Compiler* compiler, bool provide_section_data);
     
     // returns number of written bytes
     // return a negative number indicating how many bytes are missing

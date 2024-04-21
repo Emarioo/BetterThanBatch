@@ -3,6 +3,7 @@
 #include "BetBat/DWARF.h"
 #include "BetBat/ELF.h"
 #include "BetBat/COFF.h"
+#include "BetBat/Compiler.h"
 
 bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64Program* program, Compiler* compiler, u32 from, u32 to) {
     ZoneScopedC(tracy::Color::Blue4);
@@ -21,30 +22,40 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         // We need to do this first because it adds more sections.
         // Sections have symbols that should be local with the ELF formats.
         // All local symbols MUST be added first (that's how elf works).
-        dwarf::ProvideSections(&objectFile, program, compiler);
+        dwarf::ProvideSections(&objectFile, program, compiler, false);
     }
 
-    DynamicArray<u32> tinyprog_offsets;
+    DynamicArray<u32> tinyprogram_offsets;
     auto text_stream = objectFile.getStreamFromSection(section_text);
     if(to - from > 0) {
         Assert(from == 0 && to == -1);
-        tinyprog_offsets.resize(program->tinyPrograms.size());
+        tinyprogram_offsets.resize(program->tinyPrograms.size());
         {
             // main function should be first in the text section
             int i = program->index_of_main;
-            auto p = program->tinyPrograms[i];
-            tinyprog_offsets[i] = text_stream->getWriteHead();
-            text_stream->write(p->text, p->head);
+            auto tinyprog = program->tinyPrograms[i];
+
+            tinyprogram_offsets[i] = text_stream->getWriteHead();
+            text_stream->write(tinyprog->text, tinyprog->head);
+            
+            auto tinycode = compiler->bytecode->tinyBytecodes[i];
+            tinycode->debugFunction->asm_start = tinyprogram_offsets[i];
+            tinycode->debugFunction->asm_end = text_stream->getWriteHead();
         }
         
         bool messaged = false;
         for(int i=0;i<program->tinyPrograms.size(); i++) {
-            auto p = program->tinyPrograms[i];
             if(i == program->index_of_main)
                 continue;
 
-            tinyprog_offsets[i] = text_stream->getWriteHead();
-            text_stream->write(p->text, p->head);
+            auto tinyprog = program->tinyPrograms[i];
+
+            tinyprogram_offsets[i] = text_stream->getWriteHead();
+            text_stream->write(tinyprog->text, tinyprog->head);
+            
+            auto tinycode = compiler->bytecode->tinyBytecodes[i];
+            tinycode->debugFunction->asm_start = tinyprogram_offsets[i];
+            tinycode->debugFunction->asm_end = text_stream->getWriteHead();
 
             if(text_stream->getWriteHead() > 0x4000'0000 && !messaged) {
                 messaged = true;
@@ -58,10 +69,19 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         // suc = stream->write(program->text + from, to - from);
         // CHECK
     }
+    if(program->debugInformation) {
+        for(int i=0;i<program->debugInformation->functions.size();i++)  {
+            auto f = program->debugInformation->functions[i];
+            for(int i=0;i<f->lines.size();i++)  {
+                auto& l = f->lines[i];
+                l.asm_address += tinyprogram_offsets[f->tinycode->index];
+            }
+        }
+    }
     
     for(int i=0;i<program->dataRelocations.size();i++){
         auto& rel = program->dataRelocations[i];
-        u32 real_offset = tinyprog_offsets[rel.tinyprog_index] + rel.textOffset;
+        u32 real_offset = tinyprogram_offsets[rel.tinyprog_index] + rel.textOffset;
         objectFile.addRelocation_data(section_text, real_offset, section_data, rel.dataOffset);
     }
     // for(int i=0;i<program->ptrDataRelocations.size();i++){
@@ -76,15 +96,15 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         if(sym == -1)
             sym = objectFile.addSymbol(SYM_FUNCTION, namedRelocation.name, 0, 0);
 
-        u32 real_offset = tinyprog_offsets[namedRelocation.tinyprog_index] + namedRelocation.textOffset;
+        u32 real_offset = tinyprogram_offsets[namedRelocation.tinyprog_index] + namedRelocation.textOffset;
         objectFile.addRelocation(section_text, RELOCA_REL32, real_offset, sym, 0);
     }
 
     for(int i=0;i<program->internalFuncRelocations.size();i++){
         auto& rel = program->internalFuncRelocations[i];
 
-        u32 from_real_offset = tinyprog_offsets[rel.from_tinyprog_index] + rel.textOffset;
-        u32 to_real_offset = tinyprog_offsets[rel.to_tinyprog_index];
+        u32 from_real_offset = tinyprogram_offsets[rel.from_tinyprog_index] + rel.textOffset;
+        u32 to_real_offset = tinyprogram_offsets[rel.to_tinyprog_index];
         
         text_stream->write_at<u32>(from_real_offset, to_real_offset - from_real_offset - 4);
     }
@@ -93,8 +113,8 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         auto& sym = program->exportedSymbols[i];
 
         // Assert(false); // text offset was broken in rewrite 0.2.1, we use text offset + offset of tiny program
-        // u32 real_offset = tinyprog_offsets[sym.tinyprog_index] + sym.textOffset;
-        u32 real_offset = tinyprog_offsets[sym.tinyprog_index];
+        // u32 real_offset = tinyprogram_offsets[sym.tinyprog_index] + sym.textOffset;
+        u32 real_offset = tinyprogram_offsets[sym.tinyprog_index];
         objectFile.addSymbol(SYM_FUNCTION, sym.name, section_text, real_offset);
     }
 
@@ -106,6 +126,11 @@ bool ObjectFile::WriteFile(ObjectFileType objType, const std::string& path, X64P
         if(program->globalSize > 8000'0000) {
             engone::log::out << engone::log::RED << "THE COMPILER CANNOT HANDLE GLOBAL DATA OF MORE THAN 2 GB (maybe 4 GB, haven't checked thoroughly)\n";
         }
+    }
+
+    if(program->debugInformation) {
+        // Now we write the debug data
+        dwarf::ProvideSections(&objectFile, program, compiler, true);
     }
 
     // if(program->debugInformation) {

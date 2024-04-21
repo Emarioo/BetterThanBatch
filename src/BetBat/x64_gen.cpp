@@ -3688,6 +3688,22 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         // log::out << r.funcImpl->astFunction->name<<" pc: "<<r.pc<<" codeid: "<<ind<<"\n";
         prog->addInternalFuncRelocation(current_tinyprog_index,bc_to_x64_translation[r.pc], ind);
     }
+    // TODO: Don't iterate like this
+    auto di = bytecode->debugInformation;
+    DebugFunction* fun = nullptr;
+    for(int i=0;i<di->functions.size();i++) {
+        if(di->functions[i]->tinycode == tinycode) {
+            fun = di->functions[i];
+            break;
+        }
+    }
+    Assert(fun);
+
+    for(int i=0;i<fun->lines.size();i++) {
+        auto& ln = fun->lines[i];
+        ln.asm_address = bc_to_x64_translation[ln.bc_address];
+        Assert(ln.asm_address != 0); // very suspicious if it is zero
+    }
 
     for(auto e : envs)
         destroyEnv(e);

@@ -35,28 +35,29 @@
 // }
 // std_print(5)
 
-printc('a')
-printc('a')
-printc('a')
-printc('a')
-printc('a')
+// printc('a')
+// printc('a')
+// printc('a')
+// printc('a')
+// printc('\n')
 
-// t: i64 = 0x234
+t: i64 = 0x234
 
-// str: char[20];
-// used := 19;
-// value := t;
-// while used > 0 {
-//     num: u32 = value % 10;
-//     // log('A','0'+num)
-//     // log(,num)
-//     str.ptr[used] = num + '0';
-//     used--;
+str: char[20];
+used := 19;
+value := t;
+while used > 0 {
+    num: u32 = value % 10;
+    // log('A','0'+num)
+    // log(,num)
+    str.ptr[used] = num + '0';
+    used--;
     
-//     value = value / 10;
-//     printc(str.ptr[used])
-// }
-// str.ptr += used + 1;
-// // str.len -= used - 1;
-// str.len -= used + 1;
-// prints(str);
+    value = value / 10;
+    printc(str.ptr[used])
+}
+// printc('0' + str.len)
+str.ptr += used + 1; // TODO: Program crashes here. Probably in x64 generator.
+// str.len -= used - 1;
+str.len -= used + 1;
+prints(str);

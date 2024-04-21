@@ -13,7 +13,7 @@
             // "args": ["-ss", "dev.btb","-p"],
             // "args": ["-ss", "operations.btb"],
             // // "args": ["--test", "tests/simple/assignment.btb"],
-            "args": ["tests/simple/operations.btb"],
+            // "args": ["tests/simple/operations.btb"],
             // "args": ["-p", "examples/dev.btb"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",

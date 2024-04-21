@@ -936,6 +936,7 @@ struct AST {
         return globalDataOffset;
     }
     
+    std::string nameOfFuncImpl(FuncImpl* impl);
 
     void initLinear(){
         Assert(!linearAllocation);
