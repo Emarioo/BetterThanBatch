@@ -527,6 +527,9 @@ namespace dwarf {
             for(int i=0;i<debug->functions.size();i++) {
                 auto fun = debug->functions[i];
 
+                // NOTE: It's really important that the function has a name
+                //   Local variables does not show up in debugger otherwise.
+                Assert(fun->name.size() != 0);
                 WRITE_LEB(abbrev_func) // abbrev code
                 bool global_func = false;
                 WRITE_LEB(global_func) // external or not
@@ -537,6 +540,7 @@ namespace dwarf {
                 int file_index = fun->fileIndex + 1;
                 Assert(file_index < 0x10000); // make sure we don't overflow
                 stream->write2((u16)(file_index)); // file
+
                 int line = fun->declared_at_line;
                 Assert(line < 0x10000); // make sure we don't overflow
                 stream->write2((u16)(line)); // line
@@ -601,8 +605,23 @@ namespace dwarf {
                 DynamicArray<ScopeId> scopeStack{};
                 if(fun->funcAst)
                     scopeStack.add(fun->funcAst->scopeId);
-                else
-                    scopeStack.add(ast->globalScopeId);
+                else {
+                    // Previously we added ast->globalScopeId
+                    // But with rewrite-0.2.1 we changed so that we have import
+                    // scopes and only them can be in global scope
+                    // Temporarily, we will find the highest used scope
+                    // This only runs on the main function so it's not really
+                    // going to slow things down.
+                    ScopeId highest = -1;
+                    for(int vi=0;vi<fun->localVariables.size();vi++) {
+                        auto& var = fun->localVariables[vi];
+                        if(highest == -1 || var.scopeId < highest) {
+                            highest = var.scopeId;
+                        }
+                    }
+                    scopeStack.add(highest);
+                    // scopeStack.add(ast->globalScopeId);
+                }
                 int curLevel = 0;
                 
                 for(int vi=0;vi<fun->localVariables.size();vi++) {

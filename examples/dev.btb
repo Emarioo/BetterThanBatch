@@ -1,39 +1,190 @@
 
-// fn std_print(t: i64){
-//     // If you are worried that this language will be filled with ifdefs like C/C++
-//     // then you can calm down. This is just temporary.
+// #import "Logger"
+// std_print(5.3)
+
+for @rev 0..5 {
+    // printc('5' + nr)
+}
+
+
+// return -1 >= cast<i8>-1
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// t: f32 = 5.3
     
-//     // optimise by using a log10 function to know how many characters you need.
-//     // then allocate some memory for that space
-//     // run a while looop filling up that memory
-//     // then print all characters at once
-//     // free memory
-//     // One last thing, the memory should be allocated using a linear allocator
-//     // or some other temporary allocator. Perhaps you can allocate it on the
-//     // stack or something?
-//     // log("int")
-//     if t == 0 {
+// bits: u32 = *cast<u32*>cast<void*>&t;
+// // log("float")
+
+// sign := (bits >> 31u) & 1u;
+// exp := (bits >> 23u) & 0xFFu;
+// mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
+
+// // 0x8000_0000_0000_0000
+
+// // printBits(bits);
+// // if sign
+// //     std_print('-');
+// // 01011111000000000000000000000000
+// intPart: u64 = 0;
+// decimalBits: i32 = 23 - (exp-127);
+// // log(decimalBits)
+// // std_print('\n')
+// // std_print(exp)
+// // std_print('\n')
+// if decimalBits < 1 {
+//     // log(mantissa);
+//     intPart = (mantissa) << (0-decimalBits);
+//     // log("herea");
+//     // printBits(intPart);
+//     if intPart == 0 {
 //         printc('0')
-//         return;
+//     } else {
+//         str: char[23];
+//         used := 22;
+//         while intPart > 0u && used > 0 {
+//             digit: u8 = intPart % 10u;
+//             // log("i",intPart);
+//             // log("d",digit);
+//             str.ptr[used] = digit + '0';
+//             used--;
+//             intPart = intPart / 10u;
+//         }
+//         str.ptr += used + 1;
+//         str.len -= used + 1;
+//         prints(str);
 //     }
-//     str: char[20];
-//     used := 19;
-//     value := t;
-//     while value > 0 && used > 0 {
-//         num: u32 = value % 10;
-//         // log('A','0'+num)
-//         // log(,num)
-//         str.ptr[used] = num + '0';
-//         used--;
-        
-//         value = value / 10;
+//     // std_print(intPart);
+//     // std_print('.');
+//     // std_print('0');
+// } else {
+//     if exp > 126u
+//         intPart = (mantissa) >> decimalBits;
+//     // std_print(cast<i64>intPart);
+//     // std_print('.');
+
+//     decimals: char[24];
+
+//     acc: u64 = 0;
+//     mul: u64 = 1;
+//     // std_print(decimalBits); std_print('\n')
+//     precision := 19; // digits u64 can contain (18446744073709551615)
+//     minBits := decimalBits - precision;
+//     if minBits < 0
+//         minBits = 0;
+//     for @rev minBits..decimalBits {
+//         mul *= 5u;
+//         acc = acc*10u
+//         // log("nr", nr)
+//         if nr < 24 {
+//             bit := cast<u64>1 & (mantissa >> nr)
+//             if bit {
+//                 acc += mul;
+//             }
+//             // std_print(acc); std_print('\n')
+//         }
 //     }
-//     str.ptr += used + 1;
-//     // str.len -= used - 1;
-//     str.len -= used + 1;
-//     prints(str);
+//     // std_print(acc);
+//     // if acc == 0
+//     //     std_print('0');
+//     blank := true;
+//     lastZero := 0
+//     limit := precision;
+//     if decimalBits < precision;
+//         limit = decimalBits;
+//     for @rev 0..limit {
+//         digit := acc % 10u;
+//         acc = acc / 10u;
+//         if !blank || digit != 0 {
+//             decimals.ptr[nr] = digit + '0';
+//             if blank
+//                 lastZero = nr+1
+//             blank = false;
+//         }
+//     }
+//     decimals.len = lastZero;
+//     // std_print(decimals)
 // }
-// std_print(5)
+
+    // fn printBits(bits: u64) {
+    //     for @reverse 0..64 {
+    //         if bits & (cast<u64>1 << nr) {
+    //             std_print('1')
+    //         } else 
+    //             std_print('0')
+    //     }
+    //     std_print('\n')
+    // }
+    // fn printBits(bits: u32) {
+    //     for @reverse 0..32 {
+    //         if bits & (cast<u64>1 << nr) {
+    //             std_print('1')
+    //         } else 
+    //             std_print('0')
+    //     }
+    //     std_print('\n')
+    // }
+
+// return 177838496 == 0
+
+// printc('2')
+// fn t(a: T) -> i64 { return a.a + a.b }
+
+// struct T {
+//     a: i64;
+//     b: i64;
+// }
+// a := "Yoo"
+// prints(a);
+
+// return t(T{9,4})
+// t :u64= 2
+
+// str: char[20];
+// used := 19;
+// value := t;
+
+// while value > 0u && used > 0 {
+//     num: u32 = value % 10u;
+//     // log('A','0'+num)
+//     // log(,num)
+//     str.ptr[used] = num + '0';
+//     used--;
+    
+//     value = value / 10u;
+// }
+// str.ptr += used + 1;
+// // str.len -= used - 1;
+// str.len -= used + 1;
+// prints(str);
 
 // printc('a')
 // printc('a')
@@ -41,23 +192,37 @@
 // printc('a')
 // printc('\n')
 
-t: i64 = 0x234
 
-str: char[20];
-used := 19;
-value := t;
-while used > 0 {
-    num: u32 = value % 10;
-    // log('A','0'+num)
-    // log(,num)
-    str.ptr[used] = num + '0';
-    used--;
+
+// used := 19
+// used >0 {
+
+// }
+// while used >0 {
+//     n := 12
+
+//     used--;
+// }
+
+// t: i64 = 0x234
+
+// str: char[20];
+// used := 19;
+// value := t;
+// while used > 0 && value > 0 {
+// // s := 2
+// // while false {
+//     num: u32 = value % 10;
+//     // log('A','0'+num)
+//     // log(,num)
+//     str.ptr[used] = num + '0';
+//     used--;
     
-    value = value / 10;
-    printc(str.ptr[used])
-}
-// printc('0' + str.len)
-str.ptr += used + 1; // TODO: Program crashes here. Probably in x64 generator.
-// str.len -= used - 1;
-str.len -= used + 1;
-prints(str);
+//     value = value / 10;
+//     // printc(str.ptr[used])
+// }
+// // // printc('0' + str.len)
+// str.ptr += used + 1; // TODO: Program crashes here. Probably in x64 generator.
+// // // str.len -= used - 1;
+// str.len -= used + 1;
+// prints(str);

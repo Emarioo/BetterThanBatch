@@ -1051,6 +1051,9 @@ extern const char* register_names[] {
     // "xmm2", // BC_REG_XMM2
     // "xmm3", // BC_REG_XMM3
 };
+engone::Logger& operator<<(engone::Logger& l, InstructionType t) {
+    return l << instruction_names[t];
+}
 
 void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicArray<std::string>* dll_functions, bool force_newline) {
     using namespace engone;

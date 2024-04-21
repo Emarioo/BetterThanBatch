@@ -144,6 +144,7 @@ enum InstructionType : u8 {
     BC_EXTEND2 = 254, // extend opcode by 2 bytes
     BC_RESERVED = 255,
 };
+engone::Logger& operator<<(engone::Logger&, InstructionType);
 enum BCRegister : u8 {
     BC_REG_INVALID = 0,
     // general purpose registers
@@ -213,6 +214,7 @@ struct TinyBytecode {
     QuickArray<u8> instructionSegment{};
     CallConventions call_convention = CallConventions::BETCALL;
     int index = 0;
+    int size() const { return instructionSegment.size(); }
     // debug information
     QuickArray<u32> index_of_lines{};
     struct Line {

@@ -1262,7 +1262,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
         
         if(expectOperator){
             int extraOpNext=0;
-            auto token1 = info.getinfo();
+            auto token1 = info.getinfo(1);
             if(token->type == ')'){
                 // token = info.advance();
                 ending = true;
@@ -1356,7 +1356,7 @@ SignalIO ParseExpression(ParseInfo& info, ASTExpression*& expression){
                 assignOps.add((OperationType)0);
 
                 _PLOG(log::out << "Operator "<<token<<"\n";)
-            } else if((opType = IsAssignOp(token)) && info.gettok(1).type  == '=') {
+            } else if((opType = IsAssignOp(token)) && token1->type  == '=') {
                 saved_locations.add(info.getloc());
                 info.advance(2);
 

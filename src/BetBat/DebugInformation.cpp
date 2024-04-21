@@ -25,6 +25,7 @@ DebugFunction* DebugInformation::addFunction(FuncImpl* impl, TinyBytecode* tinyc
     u32 fi = addOrGetFile(from_file);
     auto ptr = TRACK_ALLOC(DebugFunction);
     new(ptr)DebugFunction(impl,tinycode,fi);
+    ptr->name = name;
     ptr->declared_at_line = declared_at_line;
     functions.add(ptr);
     tinycode->debugFunction = ptr;

@@ -272,7 +272,9 @@ struct X64Builder {
     void emit3(i64 _);
     void emit4(i64 _);
     void emit8(i8 _);
-    void emit_modrm_rip(u8, i64);
+    void emit_modrm_rip32(X64Register, i64);
+    void emit_modrm_slash(u8 mod, X64Register reg, X64Register rm);
+    void emit_modrm_sib_slash(u8 mod, X64Register reg, u8 scale, u8 index, X64Register base_reg);
     
     // void fix_jump_imm8(u32 offset, u8 value);
     void emit_jmp_imm8(u32 offset);
@@ -285,6 +287,8 @@ struct X64Builder {
     void emit_mov_reg_reg(X64Register reg, X64Register rm);
     void emit_mov_reg_mem(X64Register reg, X64Register rm, InstructionControl control, int disp32);
     void emit_mov_mem_reg(X64Register reg, X64Register rm, InstructionControl control, int disp32);
+    void emit_movsx(X64Register reg, X64Register rm, InstructionControl control);
+    void emit_movzx(X64Register reg, X64Register rm, InstructionControl control);
 
     // only emits if non-zero
     void emit_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
@@ -296,7 +300,7 @@ struct X64Builder {
     void emit_sub_imm32(X64Register reg, i32 imm32);
 
     static const int FRAME_SIZE = 16;
-    int push_offset = 0;
+    int push_offset = 0; // used when set arguments while values are pushed and popped
     int ret_offset = 0;
 
     OPNode* last_call = nullptr;

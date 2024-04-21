@@ -3440,7 +3440,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 case AST_BOR:           builder.emit_bor(    left_reg, right_reg); break;
                 case AST_BXOR:          builder.emit_bxor(   left_reg, right_reg); break;
                 case AST_BLSHIFT:       builder.emit_blshift(left_reg, right_reg); break;
-                case AST_BRSHIFT:       builder.emit_blshift(left_reg, right_reg); break;
+                case AST_BRSHIFT:       builder.emit_brshift(left_reg, right_reg); break;
                 default: Assert(("Operation not implemented",false));
                 }
                 
@@ -4271,13 +4271,12 @@ SignalIO GenContext::generateBody(ASTScope *body) {
     bool errorsWasIgnored = info.ignoreErrors;
     ScopeId savedScope = info.currentScopeId;
     ScopeInfo* body_scope = info.ast->getScope(body->scopeId);
-    // body_scope->bc_start = bytecode->length();
+    body_scope->bc_start = builder.get_pc();
     info.currentScopeDepth++;
 
     info.currentScopeId = body->scopeId;
 
     int lastOffset = info.currentFrameOffset;
-    // int savedMoment = builder.saveStackMoment();
 
     defer {
         info.disableCodeGeneration = codeWasDisabled;
@@ -4290,11 +4289,11 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             
             info.currentFrameOffset = lastOffset;
         } else {
-            // builder.restoreStackMoment(savedMoment);
+            
         }
 
         info.currentScopeDepth--;
-        // body_scope->bc_end = bytecode->length();
+        body_scope->bc_end = builder.get_pc();
         info.currentScopeId = savedScope; 
         info.ignoreErrors = errorsWasIgnored;
         if(debugDump.dumpAsm || debugDump.dumpBytecode) {
@@ -4316,7 +4315,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         MAKE_NODE_SCOPE(statement);
 
         auto srcinfo = compiler->lexer.getTokenSource_unsafe(statement->location);
-        debugFunction->addLine(srcinfo->line, tinycode->instructionSegment.size(), statement->location.tok.origin);
+        debugFunction->addLine(srcinfo->line, builder.get_pc(), statement->location.tok.origin);
         
         info.disableCodeGeneration = codeWasDisabled;
         info.ignoreErrors = errorsWasIgnored;
