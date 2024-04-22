@@ -1,6 +1,6 @@
 #pragma once
-#include "BetBat/Bytecode.h"
 
+#include "BetBat/Bytecode.h"
 #include "BetBat/Util/StringBuilder.h"
 #include "BetBat/CompilerEnums.h"
 
@@ -168,6 +168,7 @@ private:
     
 };
 
+struct X64Env;
 // This structure is WAY to large, how to minimize it?
 struct OPNode {
     OPNode(u32 bc_index, InstructionType type) : bc_index(bc_index), opcode(type) {}
@@ -188,7 +189,61 @@ struct OPNode {
     OPNode* in0 = nullptr;
     OPNode* in1 = nullptr;
     OPNode* in2 = nullptr;
+
+    X64Env* computed_env = nullptr;
 };
+
+struct X64Operand {
+    X64Register reg{};
+    bool on_stack = false;
+
+    // meaning no register/value is set
+    bool invalid() const { return reg == X64_REG_INVALID && !on_stack; }
+};
+struct X64Env {
+    OPNode* node=nullptr;
+
+    X64Env* env_in0=nullptr;
+    X64Env* env_in1=nullptr;
+    X64Env* env_in2=nullptr;
+
+    X64Operand reg0{};
+    X64Operand reg1{};
+    X64Operand reg2{};
+};
+
+struct X64Inst {
+    // OPNode(u32 bc_index, InstructionType type) : bc_index(bc_index), opcode(type) {}
+    u32 bc_index = 0;
+    InstructionType opcode = BC_HALT;
+    i64 imm = 0;
+    union {
+        struct {
+            BCRegister op0;
+            BCRegister op1;
+            BCRegister op2;
+        };
+        BCRegister ops[3]{BC_REG_INVALID,BC_REG_INVALID,BC_REG_INVALID};
+    };
+    
+    // TODO: Union on these?
+    InstructionControl control = CONTROL_NONE;
+    InstructionCast cast = CAST_UINT_UINT;
+    
+    LinkConventions link = LinkConventions::NONE;
+    CallConventions call = CallConventions::BETCALL;
+
+    int id=0;
+    union {
+        struct {
+            X64Operand reg0;
+            X64Operand reg1;
+            X64Operand reg2;
+        };
+        X64Operand regs[3]{{},{},{}};
+    };
+};
+engone::Logger& operator<<(engone::Logger& l, X64Inst& i);
 
 struct X64Builder {
     X64Program* prog = nullptr;
@@ -233,6 +288,14 @@ struct X64Builder {
     std::unordered_map<X64Register, RegisterInfo> registers;
     
     std::unordered_map<BCRegister, OPNode*> reg_values;
+    
+    // void set_reg_value(BCRegister reg, OPNode* n) {
+
+    // }
+    // void get_reg_value() {
+
+    // }
+    
     QuickArray<OPNode*> stack_values;
     
     X64Register alloc_register(X64Register reg = X64_REG_INVALID, bool is_float = false);
@@ -311,6 +374,7 @@ struct X64Builder {
     DynamicArray<Arg> recent_set_args;
 
     void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
+    void generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode);
 
     // void generateInstructions_slow();
 
@@ -333,24 +397,38 @@ private:
     // recursively
     // void generateInstructions(int depth = 0, BCRegister find_reg = BC_REG_INVALID, int inst_index = 0, X64Register* out_reg = nullptr);
     
-    struct Operand {
-        X64Register reg{};
-        bool on_stack = false;
+public:
+    // experimental
 
-        // meaning no register/value is set
-        bool invalid() const { return reg == X64_REG_INVALID && !on_stack; }
+    int inst_id = 0;
+    DynamicArray<X64Inst*> inst_list;
+    
+    struct ValueUsage {
+        X64Inst* used_by = nullptr;
+        int reg_nr = 0;
     };
-    struct Env {
-        OPNode* node=nullptr;
+    ValueUsage bc_register_map[BC_REG_MAX]{0};
+    DynamicArray<ValueUsage> bc_push_list{};
 
-        Env* env_in0=nullptr;
-        Env* env_in1=nullptr;
-        Env* env_in2=nullptr;
+    void map_reg(X64Inst* n, int nr) {
+        bc_register_map[n->ops[nr]].used_by = n;
+        bc_register_map[n->ops[nr]].reg_nr = nr;
+    }
+    void free_map_reg(X64Inst* n, int nr) {
+        bc_register_map[n->ops[nr]].used_by = nullptr;
+        bc_register_map[n->ops[nr]].reg_nr = 0;
+    }
 
-        Operand reg0{};
-        Operand reg1{};
-        Operand reg2{};
-    };
+    X64Inst* createInst(InstructionType opcode) {
+        auto ptr = new X64Inst();
+        ptr->id = inst_id++;
+        ptr->opcode = opcode;
+        return ptr;
+    }
+    void insert_inst(X64Inst* inst) {
+        inst_list.add(inst);
+    }
+
 };
 
 // X64Program* ConvertTox64(Bytecode* bytecode);

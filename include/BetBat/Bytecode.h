@@ -154,38 +154,27 @@ enum BCRegister : u8 {
     BC_REG_D,
     BC_REG_E,
     BC_REG_F,
+    BC_REG_G,
+    BC_REG_H,
+    BC_REG_I,
+    BC_REG_J,
+    BC_REG_K,
+    BC_REG_L,
+    BC_REG_M,
+    BC_REG_N,
+    BC_REG_O,
+    BC_REG_P,
     
-    // temporary registers
+    // temporary registers, used in small parts when most other registers are in use
     BC_REG_T0,
     BC_REG_T1,
 
-    BC_REG_LOCALS, // local pointer (similar to base/frame pointer)
-    // BC_REG_ARGS, // pointer to arguments (se by caller)
-    // BC_REG_VALS, // pointer to return values (retrieved by caller)
-    // BC_REG_PARAMS, // pointer to parameters (accessed by callee)
-    // BC_REG_RETS, // pointer to return values (set by callee)
-    
-    // BELOW SHOULD BE DEPRECATED
-    // special registers
-    // BC_REG_SP, // stack pointer
-    // BC_REG_BP, // base pointer
-    
-    // platform specific (we would prefer to be architecture independent but I am not sure how to deal with calling conventions without them here)
-    // BC_REG_RAX,
-    // BC_REG_RBX,
-    // BC_REG_RCX,
-    // BC_REG_RDX,
-    // BC_REG_RSI,
-    // BC_REG_RDI,
-    // BC_REG_R8,
-    // BC_REG_R9,
-    // BC_REG_XMM0,
-    // BC_REG_XMM1,
-    // BC_REG_XMM2,
-    // BC_REG_XMM3,
+    BC_REG_LOCALS, // local pointer, can only be used with mov_rm/mr (similar to base/frame pointer)
 
     BC_REG_MAX,
 };
+
+engone::Logger& operator<<(engone::Logger&, BCRegister);
 // #define IS_REG_PARAM(X) (X >= BC_REG_P0 && X <= BC_REG_P7)
 // #define IS_REG_ARG(X) (X >= BC_REG_A0 && X <= BC_REG_A7)
 // #define IS_REG_RET(X) (X >= BC_REG_R0 && X <= BC_REG_R3)

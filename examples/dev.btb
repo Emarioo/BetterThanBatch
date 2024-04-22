@@ -5,7 +5,9 @@
 for @rev 0..5 {
     // printc('5' + nr)
 }
+// a := 2
 
+// a = a++
 
 // return -1 >= cast<i8>-1
 

@@ -5908,6 +5908,8 @@ Bytecode* Generate(AST *ast, CompileInfo* compileInfo) {
 }
 #endif
 
+void TestGenerate(BytecodeBuilder& b);
+
 bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, DynamicArray<TinyBytecode*>* out_codes, bool is_initial_import) {
     using namespace engone;
     ZoneScopedC(tracy::Color::Blue);
@@ -5960,7 +5962,8 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
             context.debugFunction = dfun;
             context.bytecode->addExportedFunction("main", context.tinycode->index);
             
-            context.generateBody(scope);
+            // context.generateBody(scope);
+            TestGenerate(context.builder);
             
             if(context.builder.get_last_opcode() != BC_RET) {
                 if(context.currentFrameOffset != 0)
@@ -5979,4 +5982,85 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
 
     // return tb_main;
     return true;
+}
+
+void TestGenerate(BytecodeBuilder& b) {
+    // Tests for x64 generator. How well does it convert the code?
+    
+    // #############3
+    // Complex code, good test for x64 generator
+    // #############
+
+    // b.emit_alloc_local(BC_REG_INVALID, 8);
+
+    // b.emit_li32(BC_REG_B,9);
+    // b.emit_mov_rm_disp(BC_REG_A,BC_REG_LOCALS,4,-8);
+
+    // // b.emit_add(BC_REG_A,BC_REG_A,false,4);
+    // b.emit_add(BC_REG_A,BC_REG_B,false,4);
+    // b.emit_push(BC_REG_B);
+    // b.emit_add(BC_REG_B,BC_REG_B,false,4);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
+    // // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
+
+    // b.emit_pop(BC_REG_D);
+    // // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_D,4,-8);
+    
+    // b.emit_jz(BC_REG_A);
+
+    // b.emit_free_local(8);
+
+    // #############
+    // Efficient register usage
+    // #################
+    // b.emit_alloc_local(BC_REG_INVALID, 8);
+
+    // b.emit_li32(BC_REG_A,9);
+    // b.emit_li32(BC_REG_B,9);
+    // b.emit_li32(BC_REG_C,9);
+
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_C,4,-8);
+
+    // // will x64 reuse registers since we overwrite the values?
+    // b.emit_li32(BC_REG_E,9);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_E,4,-8);
+
+    // b.emit_li32(BC_REG_C,9);
+    // b.emit_li32(BC_REG_B,9);
+
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_C,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
+    
+    // b.emit_free_local(8);
+
+    // #############
+    // Push and pop management
+    // (bytecode push/pop and x64 automatic push/pop or other way of dealing wi)
+    // #################
+    
+    b.emit_alloc_local(BC_REG_INVALID, 8);
+
+    b.emit_li32(BC_REG_A,9);
+    b.emit_li32(BC_REG_B,9);
+    b.emit_li32(BC_REG_C,9);
+    b.emit_li32(BC_REG_D,9);
+    b.emit_li32(BC_REG_E,9);
+    b.emit_li32(BC_REG_F,9);
+    b.emit_li32(BC_REG_G,9);
+    b.emit_li32(BC_REG_H,9);
+    b.emit_li32(BC_REG_I,9);
+
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_C,4,-8);
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_D,4,-8);
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_E,4,-8);
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_F,4,-8);
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_G,4,-8);
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_H,4,-8);
+    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_I,4,-8);
+    
+    b.emit_free_local(8);
 }
