@@ -557,6 +557,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         u16 ending_suffix = 0;
         bool eval_content = true;
         bool unwrapped = false;
+        bool concat_next_token = false;
         MacroSpecific* specific;
         MacroRoot* root;
         // union {
@@ -638,6 +639,53 @@ SignalIO PreprocContext::parseMacroEvaluation() {
 
     #define SET_SUFFIX(VAR,FROM) VAR = (VAR & ~lexer::TOKEN_FLAG_ANY_SUFFIX) | (FROM & lexer::TOKEN_FLAG_ANY_SUFFIX)
     
+    auto apply_concat=[&](Layer* layer, lexer::Token token, StringView* view = nullptr, bool compute_source = true) {
+        if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
+            int token_count = new_lexer_import->getTokenCount();
+            
+            // TODO: Allow binary and hexidecimal literals
+            auto tok = lexer->getTokenFromImport(new_import_id, token_count-1);
+            auto prev_src = lexer->getTokenSource_unsafe({tok});
+            if((tok.type == lexer::TOKEN_LITERAL_BINARY || tok.type == lexer::TOKEN_LITERAL_HEXIDECIMAL || tok.type == lexer::TOKEN_LITERAL_INTEGER || tok.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(tok.type)) &&
+            (token.type == lexer::TOKEN_LITERAL_BINARY ||token.type == lexer::TOKEN_LITERAL_HEXIDECIMAL ||token.type == lexer::TOKEN_LITERAL_INTEGER || token.type == lexer::TOKEN_IDENTIFIER || TOKEN_IS_KEYWORD(token.type))) {
+                // TODO: There is bug if we concat two identifiers which become a keyword
+                std::string new_data{};
+                if(TOKEN_IS_KEYWORD(tok.type)) {
+                    new_data += TOK_KEYWORD_NAME(tok.type);
+                } else {
+                    new_data += lexer->getStdStringFromToken(tok);
+                }
+                if(view) {
+                    new_data += std::string(*view);
+                } else if(TOKEN_IS_KEYWORD(token.type)) {
+                    new_data += TOK_KEYWORD_NAME(token.type);
+                } else {
+                    new_data += lexer->getStdStringFromToken(token);
+                }
+                int ln = prev_src->line;
+                int col = prev_src->column; // prev_src is destroyed by pop so we must save line and column here
+                lexer->popTokenFromImport(new_lexer_import);
+
+                StringView new_view = new_data;
+                lexer::Token new_token{};
+                new_token.type = lexer::TOKEN_IDENTIFIER;
+                new_token.flags = lexer::TOKEN_FLAG_HAS_DATA | lexer::TOKEN_FLAG_NULL_TERMINATED;
+                new_token.flags |= token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
+                lexer->appendToken(new_lexer_import, new_token, compute_source, &new_view, 0, ln, col);
+                layer->concat_next_token = false;
+                return true;
+            } else {
+                layer->concat_next_token = false;
+                return false;
+                // lexer->appendToken(new_lexer_import, token, true);
+            }
+        } else {
+            // lexer->appendToken(new_lexer_import, token, true);
+        }
+        layer->concat_next_token = false;
+        return false;
+    };
+
     while(layers.size() != 0) {
         if(layers.size() >= PREPROC_REC_LIMIT) {
             // TODO: Better error message, maybe provide macro call stack with arguments?
@@ -800,6 +848,11 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         
             lexer::Token token = layer->get(lexer);
             if(token.type == lexer::TOKEN_EOF) {
+                // NOTE: Concat can't be handled here because an argument may append more
+                //   than one tokens. It's easy to concat two tokens at the end of a token stream
+                //   but hard to do in the middle of one. Since an argument may have multiple tokens
+                //   and it's the first one we want to concat we must do so directly before or after
+                //   the token was added to the token stream.
                 deleteLayer(layer);
                 layers.pop();
                 continue;
@@ -840,6 +893,17 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                 }
                             } else {
                                 auto t = lexer->appendToken(new_lexer_import, list[j], true);
+
+                                // TODO: Concat logic has not been tested!
+                                //   What do we expect/want this to do?
+                                // if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
+                                //     if(!apply_concat(layer, list[j])) {
+                                //         auto t = lexer->appendToken(new_lexer_import, list[j], true);
+                                //     }
+                                // } else {
+                                //     auto t = lexer->appendToken(new_lexer_import, list[j], true);
+                                // }
+                                layer->concat_next_token = false;
                             }
                         }
                         if(i+1 != real_index + real_count && list.size() != 0) {
@@ -855,6 +919,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                 layer->adjacent_callee->input_arguments.last().add(com);
                             } else {
                                 lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)',', (u32)lexer::TOKEN_FLAG_SPACE);
+                                // TODO: Concat logic?
+                                layer->concat_next_token = false;
                             }
                         }
                     }
@@ -870,6 +936,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     layer_macro->root = macroroot;
                     layer_macro->adjacent_callee = layer->adjacent_callee;
                     layer_macro->sethead((u32)0);
+                    layer_macro->concat_next_token = layer->concat_next_token;
+                    layer->concat_next_token = false; // carry over the concatenation
                     layers.add(layer_macro);
                     layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
                     
@@ -897,63 +965,78 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 lexer::Token directive_tok = layer->get(lexer, 1, &directive_str);
                 lexer::Token some_tok{};
                 std::string some_str{};
-                
-                SignalIO signal = SIGNAL_NO_MATCH;
-                if(directive_str == "line") {
-                    auto src = macro_source;
-                    std::string temp = std::to_string(src->line);
 
-                    lexer::Token tok{};
-                    tok.type = lexer::TOKEN_LITERAL_INTEGER;
-                    tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
-                    tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
-                    
-                    some_str = temp;
-                    some_tok = tok;
-                    signal = SIGNAL_SUCCESS;
-                } else if(directive_str == "column") {
-                    auto src = macro_source;
-                    Assert(src);
-                    std::string temp = std::to_string(src->column);
-
-                    lexer::Token tok{};
-                    tok.type = lexer::TOKEN_LITERAL_INTEGER;
-                    tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
-                    tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
-                    
-                    some_str = temp;
-                    some_tok = tok;
-                    signal = SIGNAL_SUCCESS;
-                }
-                bool is_line_or_column = signal != SIGNAL_NO_MATCH;
-                bool compute_source = signal == SIGNAL_NO_MATCH;
-                if(signal == SIGNAL_NO_MATCH)
-                    signal = parseInformational(token, directive_tok, directive_str, &some_tok, &some_str);
-                // SignalIO signal = SIGNAL_SUCCESS;
-                if(signal == SIGNAL_SUCCESS) {
-                    layer->step(2); // hashtag + directive name
-                    if(layer->is_last(lexer)) {
-                        SET_SUFFIX(token.flags, layer->ending_suffix);
-                    }
-                    StringView tmp = some_str;
-                    if(layer->adjacent_callee) {
-                        if(is_line_or_column) {
-                            if(layer->adjacent_callee->input_arguments.size() == 0)
-                                layer->adjacent_callee->input_arguments.add({});
-                            layer->adjacent_callee->input_arguments.last().add(some_tok);
-                        } else {
-                            // TODO: We can't pass custom text such as file name as input_argument.
-                            //    We would need another array to store that information.
-                            Assert(("can't use directives like #line as arguments to macros",false));
-                            if(layer->adjacent_callee->input_arguments.size() == 0)
-                                layer->adjacent_callee->input_arguments.add({});
-                            layer->adjacent_callee->input_arguments.last().add(token);
-                        }
-                    } else {
-                        // lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)'_', (u32)lexer::TOKEN_FLAG_SPACE);
-                        lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
-                    }
+                if(directive_tok.type == '#' && (token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX) == 0) {
+                    layer->concat_next_token = true;
+                    layer->step(2);
                     continue;
+                } else {
+                    SignalIO signal = SIGNAL_NO_MATCH;
+                    if(directive_str == "line") {
+                        auto src = macro_source;
+                        std::string temp = std::to_string(src->line);
+
+                        lexer::Token tok{};
+                        tok.type = lexer::TOKEN_LITERAL_INTEGER;
+                        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+                        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
+                        
+                        some_str = temp;
+                        some_tok = tok;
+                        signal = SIGNAL_SUCCESS;
+                    } else if(directive_str == "column") {
+                        auto src = macro_source;
+                        Assert(src);
+                        std::string temp = std::to_string(src->column);
+
+                        lexer::Token tok{};
+                        tok.type = lexer::TOKEN_LITERAL_INTEGER;
+                        tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+                        tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
+                        
+                        some_str = temp;
+                        some_tok = tok;
+                        signal = SIGNAL_SUCCESS;
+                    }
+                    bool is_line_or_column = signal != SIGNAL_NO_MATCH;
+                    bool compute_source = signal == SIGNAL_NO_MATCH;
+                    if(signal == SIGNAL_NO_MATCH)
+                        signal = parseInformational(token, directive_tok, directive_str, &some_tok, &some_str);
+                    // SignalIO signal = SIGNAL_SUCCESS;
+                    if(signal == SIGNAL_SUCCESS) {
+                        layer->step(2); // hashtag + directive name
+                        if(layer->is_last(lexer)) {
+                            SET_SUFFIX(token.flags, layer->ending_suffix);
+                        }
+                        StringView tmp = some_str;
+                        if(layer->adjacent_callee) {
+                            if(is_line_or_column) {
+                                if(layer->adjacent_callee->input_arguments.size() == 0)
+                                    layer->adjacent_callee->input_arguments.add({});
+                                layer->adjacent_callee->input_arguments.last().add(some_tok);
+                            } else {
+                                // TODO: We can't pass custom text such as file name as input_argument.
+                                //    We would need another array to store that information.
+                                Assert(("can't use directives like #line as arguments to macros",false));
+                                if(layer->adjacent_callee->input_arguments.size() == 0)
+                                    layer->adjacent_callee->input_arguments.add({});
+                                layer->adjacent_callee->input_arguments.last().add(token);
+                            }
+                        } else {
+                            // lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)'_', (u32)lexer::TOKEN_FLAG_SPACE);
+                            // lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
+
+                            if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
+                                if(!apply_concat(layer, some_tok, &tmp, compute_source)) {
+                                    lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
+                                }
+                            } else {
+                                lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
+                            }
+                            layer->concat_next_token = false;
+                        }
+                        continue;
+                    }
                 }
             }
             layer->step();
@@ -969,7 +1052,15 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     layer->adjacent_callee->input_arguments.last().add(token);
                 }
             } else {
-                lexer->appendToken(new_lexer_import, token, true);
+
+                if(layer->concat_next_token && new_lexer_import->chunks.size() > 0) {
+                    if(!apply_concat(layer, token)) {
+                        lexer->appendToken(new_lexer_import, token, true);
+                    }
+                } else {
+                    lexer->appendToken(new_lexer_import, token, true);
+                }
+                layer->concat_next_token = false;
             }
         }
     }

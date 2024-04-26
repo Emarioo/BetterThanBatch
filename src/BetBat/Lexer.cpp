@@ -943,7 +943,7 @@ void Lexer::appendToken(Import* imp, Token tok, StringView* string) {
     // tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     // return tok;
 }
-Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringView* string, int inherited_column) {
+Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringView* string, int inherited_column, int backup_line, int backup_column) {
     // ZoneScoped;
     // lock_imports.lock();
     // Import* imp = imports.get(fileId-1);
@@ -965,9 +965,11 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
         lock_chunks.unlock();
         
         if(compute_source) {
-            prev_token = &chunk->tokens.last();
-            prev_source = &chunk->sources.last();
-            prev_tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
+            if(chunk->tokens.size()) {
+                prev_token = &chunk->tokens.last();
+                prev_source = &chunk->sources.last();
+                prev_tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
+            }
         }
         if(chunk->tokens.size()+1 >= TOKEN_ORIGIN_TOKEN_MAX) {
             chunk = nullptr; // chunk is full!
@@ -1024,6 +1026,10 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
     } else {
         if(string) {
             // can't set source, token was created by preprocessor
+            if(backup_line != 0) {
+                source.line = backup_line;
+                source.column = backup_column;
+            }
         } else {
             u32 cindex, tindex;
             decode_origin(token.origin, &cindex, &tindex);
@@ -1350,6 +1356,34 @@ bool Lexer::equals_identifier(Token token, const char* str) {
         return false;   
     }
 }
+void Lexer::popTokenFromImport(Import* imp) {
+    while(imp->chunks.size() > 0) {
+        if(imp->chunks.last()->tokens.size() == 0) {
+            u32 cindex = imp->chunk_indices.last();
+            Chunk* chunk = _chunks.get(cindex);
+            chunk->~Chunk();
+            _chunks.removeAt(cindex);
+
+            imp->chunks.pop();
+            imp->chunk_indices.pop();
+            continue;
+        }
+        auto chunk = imp->chunks.last();
+        auto& info = chunk->tokens.last();
+        // info.data_offset
+        u8 len = (u8)chunk->aux_data[info.data_offset];
+        int size = info.data_offset + 1 + len + (info.flags&TOKEN_FLAG_NULL_TERMINATED?1:0);
+        if(chunk->aux_used == size) {
+            chunk->aux_used -= size;
+        } else {
+            Assert(false); // the math is wrong
+        }
+
+        imp->chunks.last()->tokens.pop();
+        imp->chunks.last()->sources.pop();
+        break;
+    }
+}
 TokenInfo* Lexer::getTokenInfoFromImport(u32 fileid, u32 token_index_into_import, TokenSource** src) {
     static TokenInfo eof{TOKEN_EOF};
     // NOTE: We assume that the content inside the imports won't be modified.
@@ -1477,7 +1511,7 @@ Lexer::FeedIterator Lexer::createFeedIterator(Token start_token, Token end_token
     }
     return iter;
 }
-#define TOK_KEYWORD_NAME(TYPE) ((TYPE) < TOKEN_KEYWORD_BEGIN ? nullptr : lexer::token_type_names[TYPE - TOKEN_KEYWORD_BEGIN])
+
 const char* token_type_names[] {
     // "tok_eof",      // TOKEN_EOF,
     // "tok_id",       // TOKEN_IDENTIFIER,
@@ -1653,8 +1687,8 @@ u32 Lexer::getStringFromToken(Token tok, const char** ptr) {
     return getDataFromToken(tok, (const void**)ptr);
 }
 std::string Lexer::getStdStringFromToken(Token tok) {
-    const void* ptr;
-    u32 len = getDataFromToken(tok, &ptr);
+    const char* ptr;
+    u32 len = getStringFromToken(tok, &ptr);
     return std::string((const char*)ptr, len);
 }
 u32 Lexer::getDataFromToken(Token tok, const void** ptr){

@@ -11,11 +11,24 @@
 
 // #macro ARGS 1,2,3
 
-#macro OK(...) #line ...
-#macro A #line
+#macro concat(A) A ## #column
+    concat(ea)
+
+// #macro concat2(A) concat(A ## #line ## _)
+
+// #macro STUFF #endmacro
+// #macro content this_ ## STUFF ok
+
+// concat(okay###line)
+// okay15
+
+// okay ## #line
+
+// #macro OK(...) #line ...
+// #macro A #line
 
 
-OK(A)
+// OK(A)
 
 // switch(X) {
 //     #define CASE(X,Y) case X: { print(Y) }

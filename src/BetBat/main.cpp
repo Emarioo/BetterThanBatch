@@ -67,7 +67,7 @@ int main(int argc, const char** argv){
         options.target = TARGET_WINDOWS_x64;
         // options.linker = LINKER_GCC;
         // options.executeOutput = true;
-        // options.only_preprocess = true;
+        options.only_preprocess = true;
         // options.useDebugInformation = true;
         Compiler compiler{};
         compiler.run(&options);

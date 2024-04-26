@@ -42,7 +42,6 @@ namespace lexer {
         TOKEN_LITERAL_BINARY,
 
         TOKEN_KEYWORD_BEGIN,
-
         TOKEN_NULL = TOKEN_KEYWORD_BEGIN,
         TOKEN_TRUE,
         TOKEN_FALSE,
@@ -72,11 +71,14 @@ namespace lexer {
         TOKEN_UNION,
         TOKEN_ASM,
         TOKEN_TEST,
+        TOKEN_KEYWORD_END = TOKEN_TEST, // inclusive
 
         TOKEN_NAMESPACE_DELIM,
 
         TOKEN_TYPE_END,
     };
+    #define TOK_KEYWORD_NAME(TYPE) ((TYPE) < lexer::TOKEN_KEYWORD_BEGIN ? nullptr : lexer::token_type_names[TYPE - lexer::TOKEN_KEYWORD_BEGIN])
+    #define TOKEN_IS_KEYWORD(T) (T >= lexer::TOKEN_KEYWORD_BEGIN && T <= lexer::TOKEN_KEYWORD_END)
     extern const char* token_type_names[];
     TokenType StringToTokenType(const char* str, int len);
 
@@ -140,8 +142,13 @@ namespace lexer {
     };
     struct Chunk {
         ~Chunk() {
-            engone::Allocator* allocator = engone::GlobalHeapAllocator();
-            allocator->allocate(0, aux_data, aux_max);
+            if(aux_data) {
+                engone::Allocator* allocator = engone::GlobalHeapAllocator();
+                allocator->allocate(0, aux_data, aux_max);
+                aux_data = nullptr;
+                aux_max = 0;
+                aux_used = 0;
+            }
         }
         u32 import_id;
         u32 chunk_index; // handy when you only have a chunk pointer
@@ -170,6 +177,10 @@ namespace lexer {
         DynamicArray<Chunk*> chunks; // chunk pointers are stored here so we don't have to lock the chunks bucket array everytime we need a chunk.
 
         Token geteof();
+
+        int getTokenCount() {
+            return (chunks.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + chunks.last()->tokens.size();
+        }
         
         // Token getToken(u32 token_index_into_import);
 
@@ -184,6 +195,9 @@ namespace lexer {
         
         Should be thread safe as long as you don't read from imports that are being
         lexed. After imports/chunks have been lexed you can read as many tokens as you want.
+
+        TODO: This class is awfully complicated. Measure current performance of
+          lexer, then try to optimize while simplifiying things.
     */
     struct Lexer {
 
@@ -226,7 +240,8 @@ namespace lexer {
         // same as getDataFromToken but char instead of void
         u32 getStringFromToken(Token tok, const char** ptr);
         u32 getDataFromToken(Token tok, const void** ptr);
-        
+
+        void popTokenFromImport(Import* imp);
         std::string getStdStringFromToken(Token tok);
 
         std::string getline(SourceLocation location);
@@ -239,7 +254,7 @@ namespace lexer {
         void destroyImport_unsafe(u32 import_id);
         
         // void appendToken(Import* imp, TokenInfo* token, StringView* string);
-        Token appendToken(Import* imp, Token token, bool compute_source = false, StringView* string = nullptr, int inherited_column = 0);
+        Token appendToken(Import* imp, Token token, bool compute_source = false, StringView* string = nullptr, int inherited_column = 0, int backup_line = 0, int backup_column = 0);
         // Token appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column);
         Token appendToken_auto_source(Import* imp, TokenType type, u32 flags);
         void appendToken(Import* imp, Token tok, StringView* string);
