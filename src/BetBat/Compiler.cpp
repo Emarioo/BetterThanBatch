@@ -520,7 +520,15 @@ void Compiler::processImports() {
                 signaled = true;
             }
         } else if(!finished && !signaled && waiting_threads+1 == total_threads) {
-            Assert(false); // we are blocked?
+            if(options->compileStats.errors > 0) {
+                // error should have been reported
+                lock_imports.unlock();
+                break;
+            } else {
+                log::out << log::RED << "ERROR: Some tasks have dependencies that cannot be computed. Bug in compiler?\n";
+                lock_imports.unlock();
+                break;
+            }
         }
         if(finished) {
             if(!signaled) {
@@ -543,30 +551,33 @@ void Compiler::processImports() {
                 // imp->import_id may zero but may also be pre-created
                 u32 old_id = imp->import_id;
                 imp->import_id = lexer.tokenize(imp->path, old_id);
-                u32 new_id = preprocessor.process(imp->import_id,false);
-                Assert(new_id == 0); // first preprocessor phase should not create an import
-                
-                // lexer.print(old_id);
-                
-                auto intern_imp = lexer.getImport_unsafe(imp->import_id);
-                
-                u32 tokens = 0;
-                if(intern_imp->chunk_indices.size() > 0) {
-                    tokens = (intern_imp->chunk_indices.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + lexer.getChunk_unsafe(intern_imp->chunk_indices.last())->tokens.size();
+                if(!imp->import_id) {
+                    options->compileStats.errors++; // TODO: Temporary. We should call a function that reports an error since we may need to do more things than just incrementing a counter.
+                    log::out << log::RED << "ERROR: Could not find "<<imp->path << "\n"; // TODO: Improve error message
+                } else {
+                    u32 new_id = preprocessor.process(imp->import_id,false);
+                    Assert(new_id == 0); // first preprocessor phase should not create an import
+                    
+                    // lexer.print(old_id);
+                    
+                    auto intern_imp = lexer.getImport_unsafe(imp->import_id);
+                    
+                    u32 tokens = 0;
+                    if(intern_imp->chunk_indices.size() > 0) {
+                        tokens = (intern_imp->chunk_indices.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + lexer.getChunk_unsafe(intern_imp->chunk_indices.last())->tokens.size();
+                    }
+                    
+                    LOG(CAT_PROCESSING_DETAILED, log::GRAY
+                        << " lines: "<<intern_imp->lines
+                        << ", tokens: "<<tokens
+                        << ", file_size: "<<FormatBytes(intern_imp->fileSize)
+                        << "\n")
+                    
+                    imp->state = (TaskType)(imp->state | picked_task.type);
+                    picked_task.type = TASK_PREPROCESS_AND_PARSE;
+                    picked_task.import_id = imp->import_id;
+                    tasks.add(picked_task); // nocheckin, lock tasks
                 }
-                
-                LOG(CAT_PROCESSING_DETAILED, log::GRAY
-                    << " lines: "<<intern_imp->lines
-                    << ", tokens: "<<tokens
-                    << ", file_size: "<<FormatBytes(intern_imp->fileSize)
-                    << "\n")
-                
-                imp->state = (TaskType)(imp->state | picked_task.type);
-                picked_task.type = TASK_PREPROCESS_AND_PARSE;
-                picked_task.import_id = imp->import_id;
-                tasks.add(picked_task); // nocheckin, lock tasks
-                
-                // imp->finished = true; // nocheckin, we're not actually done
             } else if(picked_task.type == TASK_PREPROCESS_AND_PARSE) {
                 CompilerImport* imp = imports.get(picked_task.import_id-1);
                 LOG(CAT_PROCESSING, log::GREEN<<" Final preprocessing: "<<imp->import_id <<" ("<<TrimCWD(imp->path)<<")\n")
@@ -888,7 +899,7 @@ void Compiler::run(CompileOptions* options) {
     initial_import_id = import_id;
     
     bool skip_preload = false;
-    // bool skip_preload = true;
+    skip_preload = true;
     if(!skip_preload) {
         StringBuilder preload{};
         preload +=
@@ -987,8 +998,10 @@ void Compiler::run(CompileOptions* options) {
             auto pair = printed_imps.find(iter.ptr->path);
             if(pair == printed_imps.end()) {
                 // print first occurence of import (from preprocessor)
-                log::out << log::GOLD << iter.ptr->path<<"\n";
-                lexer.print(iter.ptr->file_id);
+                if(TrimDir(iter.ptr->path) == "macros.btb") { // TODO: Temporary if
+                    log::out << log::GOLD << iter.ptr->path<<"\n";
+                    lexer.print(iter.ptr->file_id);
+                }
                 printed_imps[iter.ptr->path] = true;
             } else {
                 // skip second occurence of import (from lexer)
@@ -1202,8 +1215,8 @@ u32 Compiler::addImport(const std::string& path, const std::string& dir_of_origi
     
     return imp.import_id;
 }
-u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file) {
-    Path abs_path = findSourceFile(path, dir_of_origin_file);
+u32 Compiler::addOrFindImport(const std::string& path, const std::string& dir_of_origin_file, std::string* assumed_path_on_error) {
+    Path abs_path = findSourceFile(path, dir_of_origin_file, assumed_path_on_error);
     if(abs_path.text.empty()) {
         return 0; // file does not exist? caller should throw error
     }
@@ -1292,7 +1305,7 @@ void Compiler::addLinkDirective(const std::string& text){
     linkDirectives.add(text);
     lock_miscellaneous.unlock();
 }
-Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory) {
+Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory, std::string* assumed_path_on_error) {
     using namespace engone;
     // absolute
     // ./path always from sourceDirectory
@@ -1321,6 +1334,11 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory) {
             fullPath = sourceDirectory.text + fullPath.text.substr(1);
         }
         fullPath = fullPath.getAbsolute();
+        if(!engone::FileExist(fullPath.text)) {
+            if(assumed_path_on_error)
+                *assumed_path_on_error = fullPath.text;
+            return {};
+        }
     } 
     //-- Search cwd or absolute path
     else if(engone::FileExist(fullPath.text)){
@@ -1355,6 +1373,9 @@ Path Compiler::findSourceFile(const Path& path, const Path& sourceDirectory) {
                 }
             }
             if(!yes) {
+                // no path was assumed
+                // if(assumed_path_on_error)
+                //     *assumed_path_on_error = fullPath.text;
                 fullPath = "";
             }
         }

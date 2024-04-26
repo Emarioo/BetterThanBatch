@@ -278,7 +278,12 @@ void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 tes
     emit_opcode(BC_TEST_VALUE);
     emit_operand(to);
     emit_operand(from);
-    emit_imm8(size);
+    
+    if(size == 1) emit_control(CONTROL_8B);
+    else if(size == 2) emit_control(CONTROL_16B);
+    else if(size == 4) emit_control(CONTROL_32B);
+    else if(size == 8) emit_control(CONTROL_64B);
+    else Assert(false);
     emit_imm32(test_location);
 }
 void BytecodeBuilder::emit_push(BCRegister reg) {
@@ -374,7 +379,6 @@ void BytecodeBuilder::emit_free_local(u16 size) {
 void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float) {
     emit_opcode(BC_SET_ARG);
     emit_operand(reg);
-    emit_imm16(imm);
     
     InstructionControl control=CONTROL_NONE;
     if(is_float)
@@ -385,11 +389,12 @@ void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_fl
     else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
     else Assert(false);
     emit_control(control);
+    
+    emit_imm16(imm);
 }
 void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_float){
     emit_opcode(BC_GET_PARAM);
     emit_operand(reg);
-    emit_imm16(imm);
     
     InstructionControl control=CONTROL_NONE;
     if(is_float)
@@ -400,11 +405,11 @@ void BytecodeBuilder::emit_get_param(BCRegister reg, i16 imm, int size, bool is_
     else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
     else Assert(false);
     emit_control(control);
+    emit_imm16(imm);
 }
 void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_float){
     emit_opcode(BC_SET_RET);
     emit_operand(reg);
-    emit_imm16(imm);
     
     InstructionControl control=CONTROL_NONE;
     if(is_float)
@@ -415,6 +420,7 @@ void BytecodeBuilder::emit_set_ret(BCRegister reg, i16 imm, int size, bool is_fl
     else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
     else Assert(false);
     emit_control(control);
+    emit_imm16(imm);
 }
 void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_float){
     Assert(has_return_values);
@@ -435,7 +441,6 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
 
     emit_opcode(BC_GET_VAL);
     emit_operand(reg);
-    emit_imm16(imm);
     
     InstructionControl control=CONTROL_NONE;
     if(is_float)
@@ -446,6 +451,7 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
     else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
     else Assert(false);
     emit_control(control);
+    emit_imm16(imm);
 }
 void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm) {
     emit_opcode(BC_CALL);
@@ -837,11 +843,11 @@ void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType, u8 fro
     
     emit_opcode(BC_CAST);
     emit_operand(reg);
-    emit_imm8(control);
+    emit_control(control);
     emit_imm8(castType);
 }
 
-void BytecodeBuilder::emit_opcode(InstructionType type) {
+void BytecodeBuilder::emit_opcode(InstructionOpcode type) {
     append_previous_instruction(tinycode->instructionSegment.size());
     tinycode->instructionSegment.add((u8)type);
     tinycode->index_of_lines.resize(tinycode->instructionSegment.size());
@@ -1020,6 +1026,91 @@ extern const char* instruction_names[] {
     "asm", // BC_ASM
     "test", // BC_TEST_VALUE
 };
+InstBaseType operator|(InstBaseType a, InstBaseType b) {
+    return (InstBaseType)((int)a | (int)b);
+}
+#define BASE_op3 (BASE_op3 | BASE_op2 | BASE_op1)
+#define BASE_op2 (BASE_op2 | BASE_op1)
+extern InstBaseType instruction_contents[256] {
+    BASE_NONE, // BC_HALT
+    BASE_NONE, // BC_NOP
+    
+    BASE_op2,                           // BC_MOV_RR,
+    BASE_op2 | BASE_ctrl,               // BC_MOV_RM,
+    BASE_op2 | BASE_ctrl,               // BC_MOV_MR,
+    BASE_op2 | BASE_ctrl | BASE_imm16,  // BC_MOV_RM_DISP16,
+    BASE_op2 | BASE_ctrl | BASE_imm16,  // BC_MOV_MR_DISP16,
+    
+    BASE_op1,                   // BC_PUSH,
+    BASE_op1,                   // BC_POP,
+    BASE_op1 | BASE_imm32,      // BC_LI32,
+    BASE_op1 | BASE_imm64,      // BC_LI64,
+    BASE_op1 | BASE_imm32,      // BC_INCR,
+    BASE_op1 | BASE_imm16,      // BC_ALLOC_LOCAL,
+    BASE_op1,                   // BC_FREE_LOCAL,
+
+    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_SET_ARG,
+    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_GET_PARAM,
+    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_GET_VAL,
+    BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_SET_RET,
+    BASE_op1 | BASE_imm16,  // BC_PTR_TO_LOCALS,
+    BASE_op1 | BASE_imm16,  // BC_PTR_TO_PARAMS,
+
+    BASE_imm32,                         // BC_JMP,
+    BASE_link | BASE_call | BASE_imm32, // BC_CALL
+    BASE_NONE,                          // BC_RET,
+    BASE_op1 | BASE_imm32,              // BC_JNZ,
+    BASE_op1 | BASE_imm32,              // BC_JZ,
+
+    BASE_op1 | BASE_imm32,  // BC_DATAPTR,
+    BASE_op1 | BASE_imm32,  // BC_CODEPTR,
+
+    BASE_op2 | BASE_ctrl,   // BC_ADD,
+    BASE_op2 | BASE_ctrl,   // BC_SUB,
+    BASE_op2 | BASE_ctrl,   // BC_MUL,
+    BASE_op2 | BASE_ctrl,   // BC_DIV,
+    BASE_op2 | BASE_ctrl,   // BC_MOD,
+    
+    BASE_op2 | BASE_ctrl,   // BC_EQ,
+    BASE_op2 | BASE_ctrl,   // BC_NEQ,
+    BASE_op2 | BASE_ctrl,   // BC_LT,
+    BASE_op2 | BASE_ctrl,   // BC_LTE,
+    BASE_op2 | BASE_ctrl,   // BC_GT,
+    BASE_op2 | BASE_ctrl,   // BC_GTE,
+
+    BASE_op2,   // BC_LAND,
+    BASE_op2,   // BC_LOR,
+    BASE_op2,   // BC_LNOT,
+
+    BASE_op2,   // BC_BAND,
+    BASE_op2,   // BC_BOR,
+    BASE_op2,   // BC_BNOT,
+    BASE_op2,   // BC_BXOR,
+    BASE_op2,   // BC_BLSHIFT,
+    BASE_op2,   // BC_BRSHIFT,
+
+    BASE_op1 | BASE_ctrl | BASE_cast, // BC_CAST,
+
+    BASE_op2 | BASE_ctrl,   // BC_MEMZERO,
+    BASE_op3,               // BC_MEMCPY,
+    BASE_op2,               // BC_STRLEN,
+    BASE_op1,               // BC_RDTSC,
+    BASE_op3,               // BC_ATOMIC_CMP_SWAP,
+    BASE_op2 | BASE_ctrl,   // BC_ATOMIC_ADD,
+
+    BASE_op1, // BC_SQRT,
+    BASE_op1, // BC_ROUND,
+
+    BASE_NONE, // BC_ASM,
+
+    BASE_op2 | BASE_ctrl, BASE_imm32, // BC_TEST_VALUE,
+
+    // BASE_NONE, // BC_EXTEND1 = 253,
+    // BASE_NONE, // BC_EXTEND2 = 254,
+    // BASE_NONE, // BC_RESERVED = 255,
+};
+#undef BASE_op2
+#undef BASE_op3
 extern const char* register_names[] {
     "invalid", // BC_REG_INVALID
     "a", // BC_REG_A
@@ -1028,6 +1119,16 @@ extern const char* register_names[] {
     "d", // BC_REG_D
     "e", // BC_REG_E
     "f", // BC_REG_F
+    "g",
+    "h",
+    "i",
+    "j",
+    "k",
+    "l",
+    "m",
+    "n",
+    "o",
+    "p",
     "t0", // BC_REG_T0
     "t1", // BC_REG_T1
     "locals",
@@ -1051,7 +1152,7 @@ extern const char* register_names[] {
     // "xmm2", // BC_REG_XMM2
     // "xmm3", // BC_REG_XMM3
 };
-engone::Logger& operator<<(engone::Logger& l, InstructionType t) {
+engone::Logger& operator<<(engone::Logger& l, InstructionOpcode t) {
     return l << instruction_names[t];
 }
 engone::Logger& operator<<(engone::Logger& l, BCRegister r){
@@ -1068,7 +1169,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
     int pc=low_index;
     while(pc<high_index) {
         int prev_pc = pc;
-        InstructionType opcode = (InstructionType)instructionSegment[pc++];
+        InstructionOpcode opcode = (InstructionOpcode)instructionSegment[pc++];
         
         BCRegister op0, op1, op2;
         InstructionControl control;

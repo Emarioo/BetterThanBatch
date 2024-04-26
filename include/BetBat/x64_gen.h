@@ -171,9 +171,9 @@ private:
 struct X64Env;
 // This structure is WAY to large, how to minimize it?
 struct OPNode {
-    OPNode(u32 bc_index, InstructionType type) : bc_index(bc_index), opcode(type) {}
+    OPNode(u32 bc_index, InstructionOpcode type) : bc_index(bc_index), opcode(type) {}
     u32 bc_index = 0;
-    InstructionType opcode = BC_HALT;
+    InstructionOpcode opcode = BC_HALT;
     i64 imm = 0;
     BCRegister op0 = BC_REG_INVALID;
     BCRegister op1 = BC_REG_INVALID;
@@ -213,25 +213,26 @@ struct X64Env {
 };
 
 struct X64Inst {
-    // OPNode(u32 bc_index, InstructionType type) : bc_index(bc_index), opcode(type) {}
+    // OPNode(u32 bc_index, InstructionOpcode type) : bc_index(bc_index), opcode(type) {}
     u32 bc_index = 0;
-    InstructionType opcode = BC_HALT;
-    i64 imm = 0;
-    union {
-        struct {
-            BCRegister op0;
-            BCRegister op1;
-            BCRegister op2;
-        };
-        BCRegister ops[3]{BC_REG_INVALID,BC_REG_INVALID,BC_REG_INVALID};
-    };
+    InstBase* base = nullptr;
+    // InstructionOpcode opcode = BC_HALT;
+    // i64 imm = 0;
+    // union {
+    //     struct {
+    //         BCRegister op0;
+    //         BCRegister op1;
+    //         BCRegister op2;
+    //     };
+    //     BCRegister ops[3]{BC_REG_INVALID,BC_REG_INVALID,BC_REG_INVALID};
+    // };
     
-    // TODO: Union on these?
-    InstructionControl control = CONTROL_NONE;
-    InstructionCast cast = CAST_UINT_UINT;
+    // // TODO: Union on these?
+    // InstructionControl control = CONTROL_NONE;
+    // InstructionCast cast = CAST_UINT_UINT;
     
-    LinkConventions link = LinkConventions::NONE;
-    CallConventions call = CallConventions::BETCALL;
+    // LinkConventions link = LinkConventions::NONE;
+    // CallConventions call = CallConventions::BETCALL;
 
     int id=0;
     union {
@@ -257,7 +258,7 @@ struct X64Builder {
     // QuickArray<u32> instruction_indices;
     
     DynamicArray<OPNode*> all_nodes; // TODO: Bucket array
-    OPNode* createNode(u32 bc_index, InstructionType opcode) {
+    OPNode* createNode(u32 bc_index, InstructionOpcode opcode) {
         auto ptr = TRACK_ALLOC(OPNode);
         new(ptr)OPNode(bc_index, opcode);
         all_nodes.add(ptr);
@@ -402,6 +403,7 @@ public:
 
     int inst_id = 0;
     DynamicArray<X64Inst*> inst_list;
+    X64Inst* last_inst_call = nullptr;
     
     struct ValueUsage {
         X64Inst* used_by = nullptr;
@@ -410,19 +412,34 @@ public:
     ValueUsage bc_register_map[BC_REG_MAX]{0};
     DynamicArray<ValueUsage> bc_push_list{};
 
+    void clear_register_map() {
+        memset(bc_register_map, 0, sizeof bc_register_map);
+    }
     void map_reg(X64Inst* n, int nr) {
-        bc_register_map[n->ops[nr]].used_by = n;
-        bc_register_map[n->ops[nr]].reg_nr = nr;
+        InstBase_op3* base = (InstBase_op3*)n->base;
+        
+        Assert(nr != 0 || (instruction_contents[base->opcode] & BASE_op1));
+        Assert(nr != 1 || (instruction_contents[base->opcode] & BASE_op2));
+        Assert(nr != 2 || (instruction_contents[base->opcode] & BASE_op3));
+        
+        bc_register_map[base->ops[nr]].used_by = n;
+        bc_register_map[base->ops[nr]].reg_nr = nr;
     }
     void free_map_reg(X64Inst* n, int nr) {
-        bc_register_map[n->ops[nr]].used_by = nullptr;
-        bc_register_map[n->ops[nr]].reg_nr = 0;
+        InstBase_op3* base = (InstBase_op3*)n->base;
+        
+        Assert(nr != 0 || (instruction_contents[base->opcode] & BASE_op1));
+        Assert(nr != 1 || (instruction_contents[base->opcode] & BASE_op2));
+        Assert(nr != 2 || (instruction_contents[base->opcode] & BASE_op3));
+        
+        bc_register_map[base->ops[nr]].used_by = nullptr;
+        bc_register_map[base->ops[nr]].reg_nr = 0;
     }
 
-    X64Inst* createInst(InstructionType opcode) {
+    X64Inst* createInst(InstructionOpcode opcode) {
         auto ptr = new X64Inst();
         ptr->id = inst_id++;
-        ptr->opcode = opcode;
+        // ptr->opcode = opcode;
         return ptr;
     }
     void insert_inst(X64Inst* inst) {

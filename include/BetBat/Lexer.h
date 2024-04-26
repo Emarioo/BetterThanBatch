@@ -193,15 +193,31 @@ namespace lexer {
 
         struct FeedIterator {
             u32 file_id=0;
-
-            u32 char_index=0;
             u32 file_token_index=0;
-            
             u32 end_file_token_index=0; // exclusive
+            
+            void clear() {
+                buffer.resize(0);
+            }
+            void append(char chr) {
+                buffer += chr;
+            }
+            void append(const char* ptr, int size) {
+                buffer.append(ptr, size);
+            }
+            char* data() const {
+                return (char*)buffer.data();
+            }
+            u32 len() const {
+                return buffer.size();
+            }
+        private:
+            // This is private because we may want to change it to something faster later.
+            std::string buffer{};
         };
         FeedIterator createFeedIterator(Token start_token, Token end_token = {});
         FeedIterator createFeedIterator(Import* imp, u32 start, u32 end);
-        u32 feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipSuffix = false);
+        bool feed(FeedIterator& iterator, bool skipSuffix = false, bool apply_indent = false);
 
         void print(u32 fileid);
 
@@ -223,7 +239,7 @@ namespace lexer {
         void destroyImport_unsafe(u32 import_id);
         
         // void appendToken(Import* imp, TokenInfo* token, StringView* string);
-        Token appendToken(Import* imp, Token token, bool compute_source = false, StringView* string = nullptr);
+        Token appendToken(Import* imp, Token token, bool compute_source = false, StringView* string = nullptr, int inherited_column = 0);
         // Token appendToken(Import* imp, TokenType type, u32 flags, u32 line, u32 column);
         Token appendToken_auto_source(Import* imp, TokenType type, u32 flags);
         void appendToken(Import* imp, Token tok, StringView* string);

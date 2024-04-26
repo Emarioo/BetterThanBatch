@@ -41,11 +41,13 @@ SignalIO PreprocContext::parseMacroDefinition() {
         //   We should do a complete failure here stopping preprocessing because
         //   everything else could be wrong. All imports which import the current
         //   will not be preprocessed or parsed minimizing meaningless errors.
-        ERR_SECTION(
-            ERR_HEAD2(name_token)
-            ERR_MSG("'"<<lexer->tostring(name_token)<<"' is not a valid name for macros. All characters must be one of a-Z or 0-9 except for the first character which must be a-Z. No special characters like: $@?,:;.")
-            ERR_LINE2(name_token, "bad");
-        )
+        if(!evaluateTokens) { // don't print message twice
+            ERR_SECTION(
+                ERR_HEAD2(name_token)
+                ERR_MSG("'"<<lexer->tostring(name_token)<<"' is not a valid name for macros. All characters must be one of a-Z or 0-9 except for the first character which must be a-Z. No special characters like: $@?,:;.")
+                ERR_LINE2(name_token, "bad");
+            )
+        }
         return SIGNAL_COMPLETE_FAILURE;
     }
     
@@ -62,11 +64,13 @@ SignalIO PreprocContext::parseMacroDefinition() {
     } else {
         lexer::Token token = gettok();
         if(token.type != '('){
-            ERR_SECTION(
-                ERR_HEAD2(token)
-                ERR_MSG("'"<<lexer->tostring(token)<<"' is not allowed directly after a macro's name. Either use a '(' to specify macro arguments or a space to indicate no arguments and then the content of the macro.")
-                ERR_LINE2(token,"bad");
-            )
+            if(!evaluateTokens) { // don't print message twice
+                ERR_SECTION(
+                    ERR_HEAD2(token)
+                    ERR_MSG("'"<<lexer->tostring(token)<<"' is not allowed directly after a macro's name. Either use a '(' to specify macro arguments or a space to indicate no arguments and then the content of the macro.")
+                    ERR_LINE2(token,"bad");
+                )
+            }
             return SIGNAL_COMPLETE_FAILURE;
         }
         advance();
@@ -85,23 +89,27 @@ SignalIO PreprocContext::parseMacroDefinition() {
                     localMacro.addParam(token, true);
                 } else {
                     if(!hadError){
-                        ERR_SECTION(
-                            ERR_HEAD2(token)
-                            ERR_MSG("Macros can only have 1 variadic argument.")
-                            ERR_LINE2(localMacro.parameters[localMacro.indexOfVariadic], "previous")
-                            ERR_LINE2(token, "not allowed")
-                        )
+                        if(!evaluateTokens) { // don't print message twice
+                            ERR_SECTION(
+                                ERR_HEAD2(token)
+                                ERR_MSG("Macros can only have 1 variadic argument.")
+                                ERR_LINE2(localMacro.parameters[localMacro.indexOfVariadic], "previous")
+                                ERR_LINE2(token, "not allowed")
+                            )
+                        }
                     }
                     
                     hadError=true;
                 }
             } else if(token.type != lexer::TOKEN_IDENTIFIER){
                 if(!hadError){
-                    ERR_SECTION(
-                        ERR_HEAD2(token)
-                        ERR_MSG("'"<<lexer->tostring(token)<<"' is not a valid name for arguments. The first character must be an alpha (a-Z) letter, the rest can be alpha and numeric (0-9). '...' is also available to specify a variadic argument.")
-                        ERR_LINE2(token, "bad");
-                    )
+                    if(!evaluateTokens) { // don't print message twice
+                        ERR_SECTION(
+                            ERR_HEAD2(token)
+                            ERR_MSG("'"<<lexer->tostring(token)<<"' is not a valid name for arguments. The first character must be an alpha (a-Z) letter, the rest can be alpha and numeric (0-9). '...' is also available to specify a variadic argument.")
+                            ERR_LINE2(token, "bad");
+                        )
+                    }
                 }
                 hadError=true;
             } else {
@@ -117,11 +125,13 @@ SignalIO PreprocContext::parseMacroDefinition() {
                 // cool
             } else{
                 if(!hadError){
-                    ERR_SECTION(
-                        ERR_HEAD2(token)
-                        ERR_MSG("'"<<lexer->tostring(token)<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.")
-                        ERR_LINE2(token, "bad");
-                    )
+                    if(!evaluateTokens) { // don't print message twice
+                        ERR_SECTION(
+                            ERR_HEAD2(token)
+                            ERR_MSG("'"<<lexer->tostring(token)<< "' is not okay. You use ',' to specify more arguments and ')' to finish parsing of argument.")
+                            ERR_LINE2(token, "bad");
+                        )
+                    }
                     return SIGNAL_COMPLETE_FAILURE;
                 }
                 hadError = true;
@@ -160,11 +170,13 @@ SignalIO PreprocContext::parseMacroDefinition() {
                 break;
             }
             if(lexer->equals_identifier(mac_tok, "macro")){
-                ERR_SECTION(
-                    ERR_HEAD2(mac_tok)
-                    ERR_MSG("Macro definitions inside macros are not allowed.")
-                    ERR_LINE2(mac_tok,"not allowed")
-                )
+                if(!evaluateTokens) { // don't print message twice
+                    ERR_SECTION(
+                        ERR_HEAD2(mac_tok)
+                        ERR_MSG("Macro definitions inside macros are not allowed.")
+                        ERR_LINE2(mac_tok,"not allowed")
+                    )
+                }
                 invalidContent = true;
             }
             //not end, continue
@@ -176,13 +188,16 @@ SignalIO PreprocContext::parseMacroDefinition() {
             }
         }
         if(token.type == lexer::TOKEN_EOF&&multiline){
-            ERR_SECTION(
-                ERR_HEAD2(gettok(-1))
-                ERR_MSG("Missing '#endmacro' for macro '"<<lexer->tostring(name_token)<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments)")
-                ERR_LINE2(name_token, "this needs #endmacro somewhere")
-                ERR_LINE2(gettok(-1),"macro content ends here!")
-            )
+            if(!evaluateTokens) { // don't print message twice
+                ERR_SECTION(
+                    ERR_HEAD2(gettok(-1))
+                    ERR_MSG("Missing '#endmacro' for macro '"<<lexer->tostring(name_token)<<"' ("<<(localMacro.isVariadic() ? "variadic" : std::to_string(localMacro.parameters.size()))<<" arguments). Note that you must specify the end for empty macros. They are otherwise assumed to be multi-line macros.")
+                    ERR_LINE2(name_token, "this needs #endmacro somewhere")
+                    ERR_LINE2(gettok(-1),"macro content ends here!")
+                )
+            }
             invalidContent = true;
+            break;
         }
     }
     // }
@@ -408,13 +423,13 @@ SignalIO PreprocContext::parseIf(){
     return SIGNAL_SUCCESS;
 }
 SignalIO PreprocContext::parseImport() {
-    
+    using namespace engone;
     StringView path;
-    lexer::Token token = gettok(&path);
-    if(token.type != lexer::TOKEN_LITERAL_STRING) {
+    lexer::Token str_token = gettok(&path);
+    if(str_token.type != lexer::TOKEN_LITERAL_STRING) {
         ERR_SECTION(
-            ERR_HEAD2(token)
-            ERR_MSG("Expected a string not "<<lexer->tostring(token)<<".")
+            ERR_HEAD2(str_token)
+            ERR_MSG("Expected a string not '"<<lexer->tostring(str_token)<<"'.")
         )
         return SIGNAL_COMPLETE_FAILURE;
     }
@@ -422,7 +437,7 @@ SignalIO PreprocContext::parseImport() {
 
     StringView view_as{};
     bool has_as = false;
-    token = gettok(&view_as);
+    lexer::Token token = gettok(&view_as);
     if(token.type == lexer::TOKEN_IDENTIFIER && view_as == "as") {
         advance();
 
@@ -450,10 +465,25 @@ SignalIO PreprocContext::parseImport() {
         auto lexer_imp = lexer->getImport_unsafe(import_id);
         std::string orig_dir = TrimLastFile(lexer_imp->path);
         
-        u32 dep_id = compiler->addOrFindImport(path, orig_dir);
+        std::string assumed_path{};
+        u32 dep_id = compiler->addOrFindImport(path, orig_dir, &assumed_path);
         
         if(dep_id == 0) {
-            Assert(false); // nocheckin, fix error   
+            if(assumed_path.size()) {
+                ERR_SECTION(
+                    ERR_HEAD2(str_token)   
+                    ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. It was assumed to exist here '"<<log::GREEN<<assumed_path<<log::NO_COLOR<<"' due to the './' which indicates a relative directory to the current import ('"<<log::GREEN<<TrimLastFile(lexer_import->path)<<log::NO_COLOR<<"' in this case).")
+                    ERR_LINE2(str_token,"here")
+                )
+            } else {
+                ERR_SECTION(
+                    ERR_HEAD2(str_token)   
+                    ERR_MSG_COLORED("The import '"<<log::GREEN<<path<<log::NO_COLOR<<"' could not be found. Did you setup default modules directory correctly? Does the file exist in current working directory of the compiler or from import directories through command line options?")
+                    ERR_LINE2(str_token,"here")
+                    // TODO: List the import directories?
+                )
+            }
+            return SIGNAL_SUCCESS; // we failed semantically, but not syntactically
         } else {
             // preprocessor->lock_imports.lock();
             // preprocessor->imports.requestSpot(dep_id-1,nullptr);
@@ -476,6 +506,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
     
     
     lexer::Token macro_token = gettok();
+    lexer::TokenSource* macro_source = getsource();
     Assert(macro_token.type == lexer::TOKEN_IDENTIFIER);
     
     // TODO: Optimize macro matching. One way is to have a table of 256 bools per character which represent
@@ -525,6 +556,7 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         u32* ref_head = nullptr;
         u16 ending_suffix = 0;
         bool eval_content = true;
+        bool unwrapped = false;
         MacroSpecific* specific;
         MacroRoot* root;
         // union {
@@ -583,6 +615,11 @@ SignalIO PreprocContext::parseMacroEvaluation() {
         TRACK_FREE(layer,Layer);
     };
     DynamicArray<Layer*> layers{};
+    defer {
+        for(auto& l : layers)
+            deleteLayer(l);
+        layers.cleanup();
+    };
     Layer* first = createLayer(true);
     layers.add(first);
     first->root = root;
@@ -627,11 +664,12 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             
             if(layer->paren_depth==0 && (token.type == ',' || token.type == ')')) {
                 if(token.type == ',') {
-                    layer->adjacent_callee->input_arguments.add({});
-                }
-                
-                if(token.type == ',') {
                     layer->step();
+                    layer->adjacent_callee->input_arguments.add({});
+                    if(layer->unwrapped) {
+                        // unused unwrap, would this be a feature? or an error?
+                    }
+                    layer->unwrapped = false;
                     continue;
                 }
                 if(token.type == ')') {
@@ -649,15 +687,18 @@ SignalIO PreprocContext::parseMacroEvaluation() {
             
             if(token.type == '(') {
                 layer->paren_depth++;
-                // NOTE: We used to skip parenthesis but I don't know why since
-                //   you can't pass function calls to macros which you want to do.
-                //   - Emarioo, 2024-04-19
-                // layer->step();
-                // continue;
             } else if(token.type == ')') {
                 layer->paren_depth--;
-                // layer->step();
-                // continue;
+            }
+            
+            if(token.type == '#') {
+                StringView unwrap_str{};
+                lexer::Token unwrap_token = layer->get(lexer,1,&unwrap_str);
+                if(unwrap_token.type == lexer::TOKEN_IDENTIFIER && unwrap_str == "unwrap") {
+                    layer->unwrapped = true;
+                    layer->step(2);
+                    continue;   
+                }
             }
             
             if(token.type == lexer::TOKEN_IDENTIFIER) {
@@ -669,6 +710,11 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     int param_index = top_caller_spec->matchArg(token,lexer);
                     
                     if(param_index!=-1) {
+                        if(layer->unwrapped) {
+                            // TODO: unwrapped for arguments not implemented. Do we care?
+                            //   Do error message?
+                            layer->unwrapped = false;   
+                        }
                         layer->step();
                         
                         int real_index = param_index;
@@ -695,8 +741,6 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                         continue;
                     }
                 }
-                // #ifdef gone 
-                #ifndef gone 
                 std::string name = lexer->getStdStringFromToken(token);
                 MacroRoot* macroroot = preprocessor->matchMacro(origin_import_id, name);
                 if (macroroot) {
@@ -706,6 +750,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     layer_macro->root = macroroot;
                     layer_macro->sethead((u32)0);
                     layer_macro->adjacent_callee = layer->adjacent_callee;
+                    layer_macro->unwrapped = layer->unwrapped;
+                    layer->unwrapped = false;
                     layers.add(layer_macro);
                     // we need to specify that when we do eval_content
                     // the tokens should be appended to input_arguments
@@ -724,10 +770,8 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                         
                         layers.add(layer_arg);
                     }
-                    
                     continue;
                 }
-                #endif
             }
             
             layer->step();
@@ -787,10 +831,13 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                                 SET_SUFFIX(list[j].flags, layer->ending_suffix);
                             }
                             if(layer->adjacent_callee) {
-                                // TODO: What about commas
-                                if(layer->adjacent_callee->input_arguments.size() == 0)
+                                if (layer->unwrapped && list[j].type == ',') {
                                     layer->adjacent_callee->input_arguments.add({});
-                                layer->adjacent_callee->input_arguments.last().add(list[j]);
+                                } else {
+                                    if(layer->adjacent_callee->input_arguments.size() == 0)
+                                        layer->adjacent_callee->input_arguments.add({});
+                                    layer->adjacent_callee->input_arguments.last().add(list[j]);
+                                }
                             } else {
                                 auto t = lexer->appendToken(new_lexer_import, list[j], true);
                             }
@@ -826,6 +873,9 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     layers.add(layer_macro);
                     layer_macro->ending_suffix = token.flags & lexer::TOKEN_FLAG_ANY_SUFFIX;
                     
+                    // NOTE: Should unwrap be inherited?
+                    layer_macro->unwrapped = layer->unwrapped;
+                    
                     token = layer->get(lexer);
                     if(token.type == '(') {
                         layer->step();
@@ -847,7 +897,38 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 lexer::Token directive_tok = layer->get(lexer, 1, &directive_str);
                 lexer::Token some_tok{};
                 std::string some_str{};
-                SignalIO signal = parseInformational(token, directive_tok, directive_str, &some_tok, &some_str);
+                
+                SignalIO signal = SIGNAL_NO_MATCH;
+                if(directive_str == "line") {
+                    auto src = macro_source;
+                    std::string temp = std::to_string(src->line);
+
+                    lexer::Token tok{};
+                    tok.type = lexer::TOKEN_LITERAL_INTEGER;
+                    tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+                    tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
+                    
+                    some_str = temp;
+                    some_tok = tok;
+                    signal = SIGNAL_SUCCESS;
+                } else if(directive_str == "column") {
+                    auto src = macro_source;
+                    Assert(src);
+                    std::string temp = std::to_string(src->column);
+
+                    lexer::Token tok{};
+                    tok.type = lexer::TOKEN_LITERAL_INTEGER;
+                    tok.flags = directive_tok.flags&lexer::TOKEN_FLAG_ANY_SUFFIX;
+                    tok.flags |= lexer::TOKEN_FLAG_HAS_DATA;
+                    
+                    some_str = temp;
+                    some_tok = tok;
+                    signal = SIGNAL_SUCCESS;
+                }
+                bool is_line_or_column = signal != SIGNAL_NO_MATCH;
+                bool compute_source = signal == SIGNAL_NO_MATCH;
+                if(signal == SIGNAL_NO_MATCH)
+                    signal = parseInformational(token, directive_tok, directive_str, &some_tok, &some_str);
                 // SignalIO signal = SIGNAL_SUCCESS;
                 if(signal == SIGNAL_SUCCESS) {
                     layer->step(2); // hashtag + directive name
@@ -856,15 +937,21 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                     }
                     StringView tmp = some_str;
                     if(layer->adjacent_callee) {
-                        // TODO: Fix this
-                        Assert(("can't use directives like #line as arguments to macros",false));
-                        // TODO: What about commas
-                        if(layer->adjacent_callee->input_arguments.size() == 0)
-                            layer->adjacent_callee->input_arguments.add({});
-                        layer->adjacent_callee->input_arguments.last().add(token);
+                        if(is_line_or_column) {
+                            if(layer->adjacent_callee->input_arguments.size() == 0)
+                                layer->adjacent_callee->input_arguments.add({});
+                            layer->adjacent_callee->input_arguments.last().add(some_tok);
+                        } else {
+                            // TODO: We can't pass custom text such as file name as input_argument.
+                            //    We would need another array to store that information.
+                            Assert(("can't use directives like #line as arguments to macros",false));
+                            if(layer->adjacent_callee->input_arguments.size() == 0)
+                                layer->adjacent_callee->input_arguments.add({});
+                            layer->adjacent_callee->input_arguments.last().add(token);
+                        }
                     } else {
                         // lexer->appendToken_auto_source(new_lexer_import, (lexer::TokenType)'_', (u32)lexer::TOKEN_FLAG_SPACE);
-                        lexer->appendToken(new_lexer_import, some_tok, true, &tmp);
+                        lexer->appendToken(new_lexer_import, some_tok, compute_source, &tmp);
                     }
                     continue;
                 }
@@ -874,10 +961,13 @@ SignalIO PreprocContext::parseMacroEvaluation() {
                 SET_SUFFIX(token.flags, layer->ending_suffix);
             }
             if(layer->adjacent_callee) {
-                // TODO: What about commas
-                if(layer->adjacent_callee->input_arguments.size() == 0)
+                if (layer->unwrapped && token.type == ',') {
                     layer->adjacent_callee->input_arguments.add({});
-                layer->adjacent_callee->input_arguments.last().add(token);
+                } else {
+                    if(layer->adjacent_callee->input_arguments.size() == 0)
+                        layer->adjacent_callee->input_arguments.add({});
+                    layer->adjacent_callee->input_arguments.last().add(token);
+                }
             } else {
                 lexer->appendToken(new_lexer_import, token, true);
             }
@@ -1089,6 +1179,7 @@ SignalIO PreprocContext::parseOne() {
                 if(evaluateTokens) {
                     lexer->appendToken(new_lexer_import, tok, nullptr); // hashtag
                     lexer->appendToken(new_lexer_import, macro_tok, &string);
+                    signal = SIGNAL_SUCCESS;
                 } else {
                     signal = SIGNAL_SUCCESS;
                 }

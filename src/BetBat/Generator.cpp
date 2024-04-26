@@ -541,7 +541,7 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
 //     // Assert(("IsSafeCast not handled case",0));
 //     // return false;
 // }
-InstructionType ASTOpToBytecode(TypeId astOp, bool floatVersion){
+InstructionOpcode ASTOpToBytecode(TypeId astOp, bool floatVersion){
     
 // #define CASE(X, Y) case X: return Y;
 #define CASE(X, Y) else if(op == X) return Y;
@@ -568,7 +568,7 @@ InstructionType ASTOpToBytecode(TypeId astOp, bool floatVersion){
     CASE(AST_BLSHIFT, BC_BLSHIFT) 
     CASE(AST_BRSHIFT, BC_BRSHIFT) 
 #undef CASE
-    return (InstructionType)0;
+    return (InstructionOpcode)0;
 }
 SignalIO GenContext::generatePushFromValues(BCRegister baseReg, int baseOffset, TypeId typeId, int* movingOffset){
     using namespace engone;
@@ -3374,7 +3374,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     floats should be converted to the biggest float
                     */
 
-                    InstructionType bytecodeOp = ASTOpToBytecode(operationType,true);
+                    InstructionOpcode bytecodeOp = ASTOpToBytecode(operationType,true);
                     u8 lsize = info.ast->getTypeSize(ltype);
                     u8 rsize = info.ast->getTypeSize(rtype);
                     u8 finalSize = 0;
@@ -6036,31 +6036,94 @@ void TestGenerate(BytecodeBuilder& b) {
     // b.emit_free_local(8);
 
     // #############
+    // Calls and register allocation
+    // #################
+    
+    // b.emit_alloc_local(BC_REG_INVALID, 8);
+    
+    // b.emit_li32(BC_REG_A,9);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
+
+    // b.emit_alloc_local(BC_REG_INVALID, 8);
+    // b.emit_mov_rm_disp(BC_REG_A,BC_REG_LOCALS,4,-8);
+    // b.emit_set_arg(BC_REG_A, 0, 4, false);
+    // int n;
+    // b.emit_call(LinkConventions::NONE, CallConventions::BETCALL, &n);
+    // b.emit_free_local(8);
+    // b.emit_get_val(BC_REG_B, -8, 4, false);
+    
+    // b.emit_push(BC_REG_B);
+    
+    // b.emit_alloc_local(BC_REG_INVALID, 8);
+    // b.emit_mov_rm_disp(BC_REG_A,BC_REG_LOCALS,4,-8);
+    // b.emit_set_arg(BC_REG_A, 0, 4, false);
+    // b.emit_call(LinkConventions::NONE, CallConventions::BETCALL, &n);
+    // b.emit_free_local(8);
+    // b.emit_get_val(BC_REG_C, -8, 4, false);
+    
+    // b.emit_pop(BC_REG_B);
+    
+    // b.emit_alloc_local(BC_REG_INVALID, 8);
+    // b.emit_set_arg(BC_REG_B, 0, 4, false);
+    // b.emit_set_arg(BC_REG_C, 4, 4, false);
+    // b.emit_call(LinkConventions::NONE, CallConventions::BETCALL, &n);
+    // b.emit_free_local(8);
+    
+    // b.emit_free_local(8);
+
+    // #############
     // Push and pop management
     // (bytecode push/pop and x64 automatic push/pop or other way of dealing wi)
     // #################
     
-    b.emit_alloc_local(BC_REG_INVALID, 8);
+    // b.emit_alloc_local(BC_REG_INVALID, 8);
 
-    b.emit_li32(BC_REG_A,9);
-    b.emit_li32(BC_REG_B,9);
-    b.emit_li32(BC_REG_C,9);
-    b.emit_li32(BC_REG_D,9);
-    b.emit_li32(BC_REG_E,9);
-    b.emit_li32(BC_REG_F,9);
-    b.emit_li32(BC_REG_G,9);
-    b.emit_li32(BC_REG_H,9);
-    b.emit_li32(BC_REG_I,9);
+    // b.emit_li32(BC_REG_A,9);
+    // b.emit_li32(BC_REG_B,9);
+    // b.emit_li32(BC_REG_C,9);
+    // b.emit_li32(BC_REG_D,9);
+    // b.emit_li32(BC_REG_E,9);
+    // b.emit_li32(BC_REG_F,9);
+    // b.emit_li32(BC_REG_G,9);
+    // b.emit_li32(BC_REG_H,9);
+    // b.emit_li32(BC_REG_I,9);
 
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_C,4,-8);
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_D,4,-8);
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_E,4,-8);
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_F,4,-8);
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_G,4,-8);
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_H,4,-8);
-    b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_I,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_A,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_B,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_C,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_D,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_E,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_F,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_G,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_H,4,-8);
+    // b.emit_mov_mr_disp(BC_REG_LOCALS,BC_REG_I,4,-8);
     
-    b.emit_free_local(8);
+    // b.emit_free_local(8);
+    
+    // #############
+    // Read / write ordering
+    // #################
+
+    b.emit_li32(BC_REG_A, 2);
+    b.emit_li32(BC_REG_D, 5);
+    b.emit_push(BC_REG_D);
+    b.emit_push(BC_REG_A);
+    
+    b.emit_pop(BC_REG_A); // throw range.now
+    b.emit_pop(BC_REG_D); // range.end we care about
+
+    b.emit_mov_rm_disp(BC_REG_C, BC_REG_LOCALS, 4, -8);
+    // builder.emit_mov_rm_disp(index_reg, BC_REG_BP, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+
+    b.emit_incr(BC_REG_C, 1);
+    
+    b.emit_mov_mr_disp(BC_REG_LOCALS, BC_REG_C, 4, -8);
+    // builder.emit_mov_mr_disp(BC_REG_BP, index_reg, 4, varinfo_index->versions_dataOffset[info.currentPolyVersion]);
+
+    // bytecode->addDebugText("For condition\n");
+    b.emit_add(BC_REG_C, BC_REG_D, false, 4);
+
+    b.emit_jz(BC_REG_C);
+
+    b.emit_jmp(0);
 }

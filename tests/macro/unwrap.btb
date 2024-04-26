@@ -1,0 +1,15 @@
+#macro OK(X,...) X + ...
+#macro rup(...) ..., 25
+#macro ARGS 1,2,3
+
+#macro CONST ARGS
+// #macro CONST rup(#unwrap ARGS)
+
+// OK(#unwrap rup(#unwrap ARGS), 2)
+OK(#unwrap CONST, 2)
+
+
+
+#macro SO(X) X
+#macro A #line
+SO(A)

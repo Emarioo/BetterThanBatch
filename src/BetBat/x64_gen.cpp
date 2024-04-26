@@ -28,7 +28,7 @@ Notes:
 */
 
 #include "BetBat/x64_gen.h"
-#include "BetBat/x64_terms.h"
+#include "BetBat/x64_defs.h"
 
 #include "BetBat/CompilerEnums.h"
 #include "BetBat/Compiler.h"
@@ -139,13 +139,13 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         i64 prev_pc = pc;
         // i64 inst_index = next_inst_index;
         
-        InstructionType opcode{};
+        InstructionOpcode opcode{};
         BCRegister op0=BC_REG_INVALID, op1=BC_REG_INVALID, op2=BC_REG_INVALID;
         InstructionControl control;
         InstructionCast cast;
         i64 imm = 0;
 
-        opcode = (InstructionType)instructions[pc];
+        opcode = (InstructionOpcode)instructions[pc];
         pc++;
         
         // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
@@ -258,9 +258,9 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         case BC_SET_ARG:
         case BC_SET_RET: {
             op0 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
-            control = (InstructionControl)instructions[pc++];
             
             auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
@@ -274,9 +274,9 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         case BC_GET_PARAM:
         case BC_GET_VAL: {
             op0 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
-            control = (InstructionControl)instructions[pc++];
             
             auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
@@ -2235,6 +2235,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     prefix |= PREFIX_REXB;
                 }
                 emit1(prefix);
+                // TODO: We could replace CMP with TEST, no need for 8-bit immediate
                 emit1(OPCODE_CMP_RM_IMM8_SLASH_7);
                 emit_modrm_slash(MODE_REG, 7, CLAMP_EXT_REG(env->reg0.reg));
                 emit1((u8)0);
@@ -2273,6 +2274,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     prefix |= PREFIX_REXB;
                 }
                 emit1(prefix);
+                // TODO: We could replace CMP with TEST, no need for 8-bit immediate
                 emit1(OPCODE_CMP_RM_IMM8_SLASH_7);
                 emit_modrm_slash(MODE_REG, 7, CLAMP_EXT_REG(env->reg0.reg));
                 emit1((u8)0);

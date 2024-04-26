@@ -943,7 +943,7 @@ void Lexer::appendToken(Import* imp, Token tok, StringView* string) {
     // tok.origin = encode_origin(cindex, chunk->tokens.size()-1);
     // return tok;
 }
-Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringView* string) {
+Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringView* string, int inherited_column) {
     // ZoneScoped;
     // lock_imports.lock();
     // Import* imp = imports.get(fileId-1);
@@ -993,7 +993,8 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
         line = prev_source->line;
         if(prev_token->flags & TOKEN_FLAG_NEWLINE) {
             line++;
-            column = 1;
+            if(inherited_column != 0)
+                column = inherited_column;
         } else {
             if(prev_token->flags & TOKEN_FLAG_SPACE) {
                 column++;
@@ -1017,7 +1018,7 @@ Token Lexer::appendToken(Import* imp, Token token, bool compute_source, StringVi
     info->flags = token.flags;
     info->data_offset = 0;
 
-    if(prev_token) {
+    if(prev_token || compute_source) {
         source.line = line;
         source.column = column;
     } else {
@@ -1523,358 +1524,121 @@ TokenType StringToTokenType(const char* str, int len) {
 
     return TOKEN_NONE;
 }
-u32 Lexer::feed(char* buffer, u32 buffer_max, FeedIterator& iterator, bool skipSuffix) {
+bool Lexer::feed(FeedIterator& iterator, bool skipSuffix, bool apply_indent) {
     using namespace engone;
     Assert(iterator.file_id != 0);
+    iterator.clear();
 
-    #define ENSURE(N) if (written + N >= buffer_max) return written;
-
-    // auto memcpy = [&](char* dst, char* src, int len) {
-    //     for(int i=0;i<len;i++) {
-    //         char c = src[i];
-    //         if(c < 32) {
-
-    //         } else {
-    //             dst 
-    //         }
-    //     }
-    //                 memcpy(buffer + written, str, len);
-
-    // };
-
-    #define APPEND(C){\
-        ENSURE(1);\
-        *(buffer + written) = (char)(C);\
-        written++;\
-        iterator.char_index++;}
-    #define APPENDS(SRC,N){\
-        ENSURE(N);\
-        memcpy(buffer + written, SRC, N);\
-        iterator.char_index += N;\
-        written += N;}
-
-    int written = 0;
+    // macros in case the implementation changes
+    #define APPEND(C) iterator.append(C);
+    #define APPENDS(SRC,N) iterator.append(SRC,N);
+    
+    if(iterator.file_token_index == iterator.end_file_token_index)
+        return false;
+    
+    int prev_column = 1;
     while(true){
         if(iterator.file_token_index == iterator.end_file_token_index)
-            return written;
+            return true;
+        // TOOD: Refactor, getting token twice is dumb
         Token tok = getTokenFromImport(iterator.file_id, iterator.file_token_index);
+        TokenSource* src;
+        TokenInfo* token = getTokenInfoFromImport(iterator.file_id, iterator.file_token_index, &src);
         
-        // TODO: Add indent spacing. We need the previous token and it's length which makes
-        //   it a little tedious to implement.
+        if(apply_indent && prev_column == 1) {
+            // TODO: Macros mess up the indentation. The content of the macros are
+            //   recomputed with new correct line/column information BUT any
+            //   tokens after the macros will be incorrect. Those tokens will
+            //   correctly map to the original file but will look strange when printed.
+            //   This is currently solved by only allowing indentation on column 1.
+            int indent = src->column - prev_column;
+            for(int i=0;i<indent;i++) {
+                APPEND(' ')
+                prev_column++;
+            }
+        }
+        
+        int prev_written = iterator.len();
         
         if(tok.type < TOKEN_TYPE_BEGIN) { // ascii
             // TODO: What if character is a control character? (value 0-31)
             APPEND(tok.type)
-            // ENSURE(1)
-            // *(buffer + written) = (char)tok.type;
-            // written++;
-            // iterator.char_index++;
         } else if(tok.type == TOKEN_LITERAL_STRING) {
             Assert(tok.flags & (TOKEN_FLAG_DOUBLE_QUOTED|TOKEN_FLAG_SINGLE_QUOTED));
-            // ENSURE(1)
             if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
                 APPEND('\'')
-                // *(buffer + written) = '\'';
             else
                 APPEND('"')
-            //     *(buffer + written) = '"';
-            // written++;
-            // iterator.char_index++;
             
             const char* str;
-            u8 real_len = getStringFromToken(tok,&str);
+            u8 len = getStringFromToken(tok,&str);
             
-            if(iterator.char_index >= real_len + 1) { // +1 because "
-                // we wrote the content last feed
-                // len = 0;
-            } else {
-                u8 len = real_len - (iterator.char_index-1); // -1 because "
-                str += (iterator.char_index-1);
+            for(int i=0;i<len;i++) {
+                char c = str[i];
 
-                // OLD CODE THAT DID NOT CONVERT newlines to backslash + 'n'
-                // if(written + len > buffer_max) {
-                //     // clamp, not enough space in buffer
-                //     len = buffer_max - written;
-                // }
-                // if(len!=0){
-                //     memcpy(buffer + written, str, len);
-                //     iterator.char_index += len;
-                //     written += len;
-                // }
-                 // if(len != real_len) {
-                //     // return, caller needs to try again, buffer too small
-                //     return written;
-                // }
-                
-                for(int i=0;i<len;i++) {
-                    char c = str[i];
-                    ENSURE(2)
-
-                    if(c == '\\') { // escape character?
-                        APPEND('\\')
-                        APPEND('\\')
-                        // *(buffer + written) = '\\';
-                        // *(buffer + written+1) = '\\';
-                        // written+=2;
-                        // iterator.char_index+=2;
-                    } else if(c == '\0') { // escape character?
-                        APPEND('\\')
-                        APPEND('0')
-                        // *(buffer + written) = '\\';
-                        // *(buffer + written+1) = '0';
-                        // written+=2;
-                        // iterator.char_index+=2;
-                    } else if(c == '\t') {
-                        APPEND('\\')
-                        APPEND('t')
-                        // *(buffer + written) = '\\';
-                        // *(buffer + written+1) = 't';
-                        // written+=2;
-                        // iterator.char_index+=2;
-                    } else if(c == '\n') {
-                        APPEND('\\')
-                        APPEND('n')
-                        // *(buffer + written) = '\\';
-                        // *(buffer + written+1) = 'n';
-                        // written+=2;
-                        // iterator.char_index+=2;
-                    } else if(c == '\r') {
-                        APPEND('\\')
-                        APPEND('r')
-                        // *(buffer + written) = '\\';
-                        // *(buffer + written+1) = 'r';
-                        // written+=2;
-                        // iterator.char_index+=2;
-                    } else if(c == '\x1b') { // escape character?
-                        APPEND('\\')
-                        APPEND('e')
-                        // *(buffer + written) = '\\';
-                        // *(buffer + written+1) = 'e';
-                        // written+=2;
-                        // iterator.char_index+=2;
-                    } else if(c < 32){
-                        APPEND('?')
-                        // *(buffer + written) = '?';
-                        // written++;
-                        // iterator.char_index++;
-                    } else {
-                        APPEND(c)
-                        // *(buffer + written) = c;
-                        // written++;
-                        // iterator.char_index++;
-                    }
+                if(c == '\\') { // escape character?
+                    APPEND('\\')
+                    APPEND('\\')
+                } else if(c == '\0') { // escape character?
+                    APPEND('\\')
+                    APPEND('0')
+                } else if(c == '\t') {
+                    APPEND('\\')
+                    APPEND('t')
+                } else if(c == '\n') {
+                    APPEND('\\')
+                    APPEND('n')
+                } else if(c == '\r') {
+                    APPEND('\\')
+                    APPEND('r')
+                } else if(c == '\x1b') { // escape character?
+                    APPEND('\\')
+                    APPEND('e')
+                } else if(c < 32){
+                    APPEND('?')
+                } else {
+                    APPEND(c)
                 }
-               
             }
             
-            // ENSURE(1)
             if(tok.flags & TOKEN_FLAG_SINGLE_QUOTED)
                 APPEND('\'')
-                // *(buffer + written) = '\'';
             else
                 APPEND('"')
-            //     *(buffer + written) = '"';
-            // iterator.char_index++;
-            // written++;
         } else if(tok.type == TOKEN_ANNOTATION) {
-            // ENSURE(1)
             APPEND('@')
-            // *(buffer + written) = '@';
-            // written++;
-            // iterator.char_index++;
-            
             const char* str;
-            u8 real_len = getStringFromToken(tok,&str);
+            u8 len = getStringFromToken(tok,&str);
             
-            if(iterator.char_index >= real_len + 1) { // +1 because @
-                // we wrote the content last feed
-                // len = 0;
-            } else {
-                u8 len = real_len - (iterator.char_index-1); // -1 because @
-                str += (iterator.char_index-1);
-                if(written + len > buffer_max) {
-                    // clamp, not enough space in buffer
-                    len = buffer_max - written;
-                }
-                if(len!=0){
-                    APPENDS(str,len)
-                    // memcpy(buffer + written, str, len);
-                    // iterator.char_index += len;
-                    // written += len;
-                }
-                if(len != real_len) {
-                    // return, caller needs to try again, buffer too small
-                    return written;
-                }
-            }
+            APPENDS(str,len)
         } else if(tok.type == TOKEN_IDENTIFIER || tok.type == TOKEN_LITERAL_INTEGER || tok.type == TOKEN_LITERAL_HEXIDECIMAL || tok.type == TOKEN_LITERAL_DECIMAL) {
             const char* str;
-            u8 real_len = getStringFromToken(tok,&str);
-
-            if(iterator.char_index >= real_len) {
-                // we wrote the content last feed
-                // len = 0;
-            } else {
-                u8 len = real_len - iterator.char_index;
-                str += iterator.char_index;
-                if(written + len > buffer_max) {
-                    // clamp, not enough space in buffer
-                    len = buffer_max - written;
-                }
-                if(len!=0){
-                    APPENDS(str,len)
-                    // memcpy(buffer + written, str, len);
-                    // iterator.char_index += len;
-                    // written += len;
-                }
-                if(len != real_len) {
-                    // return, caller needs to try again, buffer too small
-                    return written;
-                }
-            }
+            u8 len = getStringFromToken(tok,&str);
+            APPENDS(str,len)
         } else if(tok.type >= TOKEN_KEYWORD_BEGIN) {
             auto str = TOK_KEYWORD_NAME(tok.type);
-            u8 real_len = strlen(str);
-
-            if(iterator.char_index >= real_len) {
-                // we wrote the content last feed
-                // len = 0;
-            } else {
-                u8 len = real_len - iterator.char_index;
-                str += iterator.char_index;
-                if(written + len > buffer_max) {
-                    // clamp, not enough space in buffer
-                    len = buffer_max - written;
-                }
-                if(len!=0){
-                    APPENDS(str,len)
-                    // memcpy(buffer + written, str, len);
-                    // iterator.char_index += len;
-                    // written += len;
-                }
-                if(len != real_len) {
-                    // return, caller needs to try again, buffer too small
-                    return written;
-                }
-            }
+            u8 len = strlen(str);
+            APPENDS(str,len)
         } else {
             APPENDS("<EOF>",5)
-            // *(buffer + written) = '@';
-            // written++;
-            // iterator.char_index++;
-            // Assert(false);
         }
         // TODO: Don't do suffix if we processed the last token or if suffix should be skipped (skipSuffix)
         
-        if(!skipSuffix || iterator.file_token_index+1 != iterator.end_file_token_index) {
-            if(tok.flags & TOKEN_FLAG_NEWLINE) {
-                // TODO: Check iterator.char_index, we may already have written this suffix
-                APPEND('\n')
-                // ENSURE(1)
-                // *(buffer + written) = '\n';
-                // written++;
-                // iterator.char_index++;
-            } else if(tok.flags & TOKEN_FLAG_SPACE) {
-                // TODO: Check iterator.char_index, we may already have written this suffix
-                // ENSURE(1)
+        if((tok.flags & TOKEN_FLAG_NEWLINE) && (!skipSuffix || iterator.file_token_index+1 != iterator.end_file_token_index)) {
+            APPEND('\n')
+            prev_column = 1;
+        } else {
+            if((tok.flags & TOKEN_FLAG_SPACE)) {
                 APPEND(' ')
-                // *(buffer + written) = ' ';
-                // written++;
-                // iterator.char_index++;
-                // TODO: Calculate space based on the token's column
             }
+            prev_column += iterator.len() - prev_written;
         }
-
-        iterator.char_index = 0;
         iterator.file_token_index++;
-
-        // // ENSURE(2) // queryFeedSize makes the caller use a specific bufferSize.
-        // //  Ensuring and returning when we THINK we can't fit characters would skip some remaining tokens even though they would actually fit if we tried.
-        // if(*charIndex == 0) {
-        //     if(tok.flags&TOKEN_DOUBLE_QUOTED){
-        //         if(quoted_environment) {
-        //             ENSURE(1)
-        //             *(outBuffer + written_temp++) = '\\';
-        //         }
-        //         ENSURE(1)
-        //         *(outBuffer + written_temp++) = '"';
-        //     }
-        //     else if(tok.flags&TOKEN_SINGLE_QUOTED){
-        //         if(quoted_environment) {
-        //             ENSURE(1)
-        //             *(outBuffer + written_temp++) = '\\';
-        //         }
-        //         ENSURE(1)
-        //         *(outBuffer + written_temp++) = '\'';
-        //     }
-        // }
-        // for(int j=*charIndex;j<tok.length;j++){
-        //     char chr = *(tok.str+j);
-        //     // ENSURE(4) // 0x03 may occur which needs 4 bytes
-        //     if(chr=='\n'){
-        //         ENSURE(2)
-        //         *(outBuffer + written_temp++) = '\\';
-        //         *(outBuffer + written_temp++) = 'n';
-        //     } else if(chr=='\t'){
-        //         ENSURE(2)
-        //         *(outBuffer + written_temp++) = '\\';
-        //         *(outBuffer + written_temp++) = 't';
-        //     } else if(chr=='\r'){
-        //         ENSURE(2)
-        //         *(outBuffer + written_temp++) = '\\';
-        //         *(outBuffer + written_temp++) = 'r';
-        //     } else if(chr=='\0'){
-        //         ENSURE(2)
-        //         *(outBuffer + written_temp++) = '\\';
-        //         *(outBuffer + written_temp++) = '0';
-        //     } else if(chr=='\x1b'){ // '\e' becomes 'e' in some compilers (MSVC, sigh)
-        //         ENSURE(2)
-        //         *(outBuffer + written_temp++) = '\\';
-        //         *(outBuffer + written_temp++) = 'e';
-        //     } else if(0 == (chr&0xE0)){ // chr < 32
-        //         ENSURE(4)
-        //         *(outBuffer + written_temp++) = '\\';
-        //         *(outBuffer + written_temp++) = 'x';
-        //         *(outBuffer + written_temp++) = (chr >> 4) < 10 ? (chr >> 4) + '0' : (chr >> 4) + 'a';
-        //         *(outBuffer + written_temp++) = (chr & 0xF) < 10 ? (chr & 0xF) + '0' : (chr & 0xF) + 'a';;
-        //     } else {
-        //         ENSURE(1)
-        //         *(outBuffer + written_temp++) = chr;
-        //     }
-        // }
-        // // ENSURE(4)
-        // if(tok.flags&TOKEN_DOUBLE_QUOTED){
-        //     if(quoted_environment) {
-        //         ENSURE(1)
-        //         *(outBuffer + written_temp++) = '\\';
-        //     }
-        //     ENSURE(1)
-        //     *(outBuffer + written_temp++) = '"';
-        // } else if(tok.flags&TOKEN_SINGLE_QUOTED){
-        //     if(quoted_environment) {
-        //         ENSURE(1)
-        //         *(outBuffer + written_temp++) = '\\';
-        //     }
-        //     ENSURE(1)
-        //     *(outBuffer + written_temp++) = '\'';
-        // }
-        // if(!skipSuffix || i+1 != endIndex) {
-        //     if((tok.flags&TOKEN_SUFFIX_LINE_FEED)){
-        //         ENSURE(1)
-        //         *(outBuffer + written_temp++) = '\n';
-        //     } else if((tok.flags&TOKEN_SUFFIX_SPACE)){ // don't write space if we wrote newline
-        //         ENSURE(1)
-        //         *(outBuffer + written_temp++) = ' ';
-        //     }
-        // }
-        // *charIndex = 0;
-        // written = written_temp;
     }
     #undef ENSURE
     #undef APPEND
     #undef APPENDS
-    return written;
-
+    return true;
 }
 Token Import::geteof(){
     Token out{};
@@ -1929,20 +1693,16 @@ void Lexer::print(u32 fileid) {
     // you are free to use the encode function instead.
     iter.end_file_token_index = (imp->chunk_indices.size()-1) * TOKEN_ORIGIN_TOKEN_MAX + last->tokens.size();
 
-    char buffer[256];
-    u32 written = 0;
-    while((written = feed(buffer,sizeof(buffer),iter))) {
-        log::out.print(buffer,written);
+    while(feed(iter, false, true)) {
+        log::out.print(iter.data(),iter.len());
     }
 }
 std::string Lexer::tostring(Token token) {
     auto iter = createFeedIterator(token);
     std::string out{};
-    out.resize(15);
-    char buffer[256];
-    int written = 0;
-    while((written = feed(buffer,sizeof buffer,iter, true))) {
-        out.append(buffer,written);
+    // TODO: Optimize
+    while(feed(iter, true)) {
+        out.append(iter.data(),iter.len());
     }
     return out;
 }
@@ -2057,10 +1817,8 @@ std::string Lexer::getline(SourceLocation location) {
     // This is a stupid iterator but I am also lazy.
     std::string yeet="";
     auto iter = createFeedIterator(imp, start, end);
-    char crazybuffer[256];
-    int written = 0;
-    while((written = feed(crazybuffer, sizeof(crazybuffer), iter, true))) {
-        yeet.append(crazybuffer, written);
+    while(feed(iter, true)) {
+        yeet.append(iter.data(), iter.len());
     }
     return yeet;
 }

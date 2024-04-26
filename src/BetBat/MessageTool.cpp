@@ -430,18 +430,16 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
             for(int j=0;j<src->column-baseColumn;j++) log::out << " ";
         }
         // log::out.flush();
-        char buffer[256];
         auto iter = lexer->createFeedIterator(tok_tiny);
-        int written=0;
         if(i<range.token_index_start){
             // pos += tok.calcLength();
             log::out << codeColor;
             bool skip_newline = false;
             if(possible_eof.type == lexer::TOKEN_EOF)
                 skip_newline = true;
-            while((written = lexer->feed(buffer,sizeof(buffer),iter,skip_newline))){
-                pos += written;
-                log::out.print(buffer,written);
+            while(lexer->feed(iter,skip_newline)){
+                pos += iter.len();
+                log::out.print(iter.data(),iter.len());
             }
             
             // if(tok.flags&TOKEN_SUFFIX_SPACE)
@@ -451,9 +449,9 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
         } else if(i>=range.token_index_end){
             // pos += tok.calcLength();
             log::out << codeColor;
-            while((written = lexer->feed(buffer,sizeof(buffer),iter))){
-                pos += written;
-                log::out.print(buffer,written);
+            while(lexer->feed(iter)){
+                pos += iter.len();
+                log::out.print(iter.data(),iter.len());
             }
             // if(tok.flags&TOKEN_SUFFIX_SPACE)
             //     pos += 1;
@@ -464,9 +462,9 @@ void Reporter::err_mark(lexer::TokenRange range, const StringBuilder& text) {
             if(i==start)
                 pos = minPos;
             // pos += tok.calcLength();
-            while((written = lexer->feed(buffer,sizeof(buffer),iter))){
-                pos += written;
-                log::out.print(buffer,written);
+            while(lexer->feed(iter)){
+                pos += iter.len();
+                log::out.print(iter.data(),iter.len());
             }
             if(tok->flags&(lexer::TOKEN_FLAG_ANY_SUFFIX))
                 pos--;

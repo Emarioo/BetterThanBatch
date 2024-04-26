@@ -42,7 +42,8 @@ enum InstructionCast : u8 {
     CAST_SINT_FLOAT,
     CAST_FLOAT_FLOAT,
 };
-enum InstructionType : u8 {
+enum InstructionOpcode : u8 {
+    // DO NOT REARRAGNE THESE INSTRUCTIONS, instructions_names and instruction_contents depend on the order!
     BC_HALT = 0,
     BC_NOP,
     
@@ -59,7 +60,7 @@ enum InstructionType : u8 {
     BC_INCR, // usually used with stack pointer
     
     BC_ALLOC_LOCAL,      // opcode, op, size16         - allocate local memory (max 64KB)
-    BC_FREE_LOCAL,       // opcode, size16         - allocate args memory (max 64KB)
+    BC_FREE_LOCAL,       // opcode,  size16         - allocate args memory (max 64KB)
 
     // BC_REG_LOCALS, // local pointer (similar to base/frame pointer)
 
@@ -96,14 +97,6 @@ enum InstructionType : u8 {
     BC_GT,
     BC_GTE,
 
-    // Don't rearrange these. You can use the bits to tell
-    // whether the left or right type is signed/unsigned.
-    #define CMP_UINT_UINT 0
-    #define CMP_UINT_SINT 1
-    #define CMP_SINT_UINT 2
-    #define CMP_SINT_SINT 3
-    #define CMP_DECODE(L,R,...) (u8)(((u8)__VA_ARGS__(ltype)<<1) | (u8)__VA_ARGS__(rtype)) 
-
     // logical operations
     BC_LAND,
     BC_LOR,
@@ -132,8 +125,6 @@ enum InstructionType : u8 {
     BC_ROUND,
 
     BC_ASM,
-    #define ASM_ENCODE_INDEX(ind) (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)
-    #define ASM_DECODE_INDEX(op0,op1,op2) (u32)(op0 | (op1<<8) | (op2<<16))
 
     // used when running test cases
     // The stack must be aligned to 16 bytes because
@@ -144,7 +135,9 @@ enum InstructionType : u8 {
     BC_EXTEND2 = 254, // extend opcode by 2 bytes
     BC_RESERVED = 255,
 };
-engone::Logger& operator<<(engone::Logger&, InstructionType);
+#define ASM_ENCODE_INDEX(ind) (u8)(asmInstanceIndex&0xFF), (u8)((asmInstanceIndex>>8)&0xFF), (u8)((asmInstanceIndex>>16)&0xFF)
+#define ASM_DECODE_INDEX(op0,op1,op2) (u32)(op0 | (op1<<8) | (op2<<16))
+engone::Logger& operator<<(engone::Logger&, InstructionOpcode);
 enum BCRegister : u8 {
     BC_REG_INVALID = 0,
     // general purpose registers
@@ -173,15 +166,114 @@ enum BCRegister : u8 {
 
     BC_REG_MAX,
 };
+enum InstBaseType : u16 {
+    BASE_NONE,
+    BASE_op1     = 0x1,
+    BASE_op2     = 0x2,
+    BASE_op3     = 0x4,
+    BASE_imm8    = 0x8,
+    BASE_imm16   = 0x10,
+    BASE_imm32   = 0x20,
+    BASE_imm64   = 0x40,
+    BASE_ctrl    = 0x80,
+    BASE_cast    = 0x100,
+    BASE_link    = 0x200,
+    BASE_call    = 0x400,
+};
+extern InstBaseType instruction_contents[256];
+#pragma pack(push)
+#pragma pack(1)
+struct InstBase {
+    InstructionOpcode opcode;
+};
+struct InstBase_imm16 {
+    InstructionOpcode opcode;
+    i16 imm16;
+};
+struct InstBase_op1 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+};
+struct InstBase_op1_imm16 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    i16 imm16;
+};
+struct InstBase_op1_imm32 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    i32 imm32;
+};
+struct InstBase_op1_imm64 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    i64 imm64;
+};
+struct InstBase_op1_ctrl_imm16 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    InstructionControl control;
+    i16 imm16;
+};
+struct InstBase_op2 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    BCRegister op1;
+};
+struct InstBase_op2_imm8 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    BCRegister op2;
+    i8 imm8;
+};
+struct InstBase_op2_ctrl {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    BCRegister op1;
+    InstructionControl control;
+};
+struct InstBase_op2_ctrl_imm16 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    BCRegister op1;
+    InstructionControl control;
+    i16 imm16;
+};
+struct InstBase_op2_ctrl_imm32 {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    BCRegister op1;
+    InstructionControl control;
+    i32 imm32;
+};
+struct InstBase_op2_ctrl_cast {
+    InstructionOpcode opcode;
+    BCRegister op0;
+    BCRegister op1;
+    InstructionControl control;
+    InstructionCast cast;
+};
+struct InstBase_op3 {
+    InstructionOpcode opcode;
+    union {
+        struct {
+            BCRegister op0;
+            BCRegister op1;
+            BCRegister op2;
+        };
+        BCRegister ops[3];
+    };
+};
+struct InstBase_link_call_imm32 {
+    InstructionOpcode opcode;
+    LinkConventions link;
+    CallConventions call;
+    i32 imm32;
+};
+#pragma pack(pop)
 
 engone::Logger& operator<<(engone::Logger&, BCRegister);
-// #define IS_REG_PARAM(X) (X >= BC_REG_P0 && X <= BC_REG_P7)
-// #define IS_REG_ARG(X) (X >= BC_REG_A0 && X <= BC_REG_A7)
-// #define IS_REG_RET(X) (X >= BC_REG_R0 && X <= BC_REG_R3)
 
-enum LocalRef : u16 {
-    LOCAL_REF_INVALID = 0,
-};
 extern const char* control_names[];
 extern const char* cast_names[];
 extern const char* instruction_names[];
@@ -392,16 +484,7 @@ struct BytecodeBuilder {
     Bytecode* code=nullptr;
     TinyBytecode* tinycode=nullptr;
     
-    // int getStackPointer() const { return virtualStackPointer; }
-    // in the future, this function may differ from getStackPointer
-    // int saveStackMoment() const { return virtualStackPointer; }
-    // void restoreStackMoment(int saved_sp, bool no_modification = false, bool no_instruction = false);
-    
     void init(Bytecode* code, TinyBytecode* tinycode, Compiler* compiler);
-    
-    // make space for local variables
-    // void emit_stack_space(int size);
-    // void emit_stack_alignment(int alignment);
     
     void emit_push(BCRegister reg);
     void emit_pop(BCRegister reg);
@@ -487,12 +570,12 @@ struct BytecodeBuilder {
     void fix_jump_imm32_here(int imm_index);
     
     // int opcode_count() { return tinycode->index_of_opcodes.size(); }
-    // InstructionType get_opcode(int opcode_index) { return (InstructionType)tinycode->instructionSegment[tinycode->index_of_opcodes[opcode_index]]; }
-    InstructionType get_last_opcode() {
+    // InstructionOpcode get_opcode(int opcode_index) { return (InstructionOpcode)tinycode->instructionSegment[tinycode->index_of_opcodes[opcode_index]]; }
+    InstructionOpcode get_last_opcode() {
         int i = get_index_of_previous_instruction();
         if(i==-1)
-            return (InstructionType)0; 
-        return (InstructionType)tinycode->instructionSegment[i];
+            return (InstructionOpcode)0; 
+        return (InstructionOpcode)tinycode->instructionSegment[i];
     }
 
     void push_line(int line, const std::string& text) {
@@ -501,7 +584,7 @@ struct BytecodeBuilder {
     
 private:
     // building blocks for every instruction
-    void emit_opcode(InstructionType type);
+    void emit_opcode(InstructionOpcode type);
     void emit_operand(BCRegister reg);
     void emit_control(InstructionControl control);
     void emit_imm8(i8 imm);

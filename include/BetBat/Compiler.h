@@ -247,13 +247,13 @@ struct Compiler {
     void run(CompileOptions* options);
     
     // path can be absolute, relative to CWD, relative to the file's directory where the import was specified, or available in the import directories
-    u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "");
+    u32 addOrFindImport(const std::string& path, const std::string& dir_of_origin_file = "", std::string* assumed_path_on_error = nullptr);
     u32 addImport(const std::string& path, const std::string& dir_of_origin_file = "");
     void addDependency(u32 import_id, u32 dep_import_id, const std::string& as_name = "");
     void addLibrary(u32 import_id, const std::string& path, const std::string& as_name = "");
     
     DynamicArray<Path> importDirectories;
-    Path findSourceFile(const Path& path, const Path& sourceDirectory = "");
+    Path findSourceFile(const Path& path, const Path& sourceDirectory = "", std::string* assumed_path_on_error = nullptr);
     
     DynamicArray<std::string> linkDirectives; // no duplicates, passed to the linker, not with interpreter
     engone::Mutex lock_miscellaneous;

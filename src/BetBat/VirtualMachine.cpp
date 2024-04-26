@@ -273,7 +273,7 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         if(pc>=(u64)tinycode->instructionSegment.used)
             break;
 
-        InstructionType opcode = (InstructionType)instructions[pc++];
+        InstructionOpcode opcode = (InstructionOpcode)instructions[pc++];
         executedInstructions++;
         
         BCRegister op0=BC_REG_INVALID, op1, op2;
@@ -405,9 +405,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         case BC_SET_ARG: {
             op0 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
-            control = (InstructionControl)instructions[pc++];
             int size = GET_CONTROL_SIZE(control);
 
             void* ptr = (void*)(stack_pointer + push_offsets.last() + imm);
@@ -420,9 +420,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         case BC_GET_PARAM: {
             op0 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
-            control = (InstructionControl)instructions[pc++];
             int size = GET_CONTROL_SIZE(control);
             
             int FRAME_SIZE = 8 + 8; // nochecking TODO: Do not assume frame size, maybe we disable base pointer!
@@ -435,9 +435,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
          case BC_SET_RET: {
             op0 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
-            control = (InstructionControl)instructions[pc++];
             int size = GET_CONTROL_SIZE(control);
             
             Assert(imm < 0);
@@ -453,9 +453,9 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         case BC_GET_VAL: {
             op0 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
-            control = (InstructionControl)instructions[pc++];
             int size = GET_CONTROL_SIZE(control);
             
             Assert(has_return_values_on_stack);
