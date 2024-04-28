@@ -36,7 +36,11 @@ struct MacroRoot {
     MacroSpecific variadicMacro;
 };
 struct Preprocessor {
-    
+    void cleanup() {
+        imports.cleanup();
+
+    }
+
     void init(lexer::Lexer* lexer, Compiler* compiler) { this->lexer = lexer; this->compiler = compiler; }
     
     // returns preprocessed import_id (unsigned 32-bit integer where 0 means failure)

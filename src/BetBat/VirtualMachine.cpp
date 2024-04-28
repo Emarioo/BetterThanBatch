@@ -278,7 +278,6 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         
         BCRegister op0=BC_REG_INVALID, op1, op2;
         InstructionControl control;
-        InstructionCast cast;
         i64 imm;
         
         // _ILOG(log::out <<log::GRAY<<" sp: "<< sp <<" fp: "<<fp<<"\n";)
@@ -644,79 +643,67 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
-            cast = (InstructionCast)instructions[pc++];
             u8 fsize = 1 << GET_CONTROL_SIZE(control);
             u8 tsize = 1 << GET_CONTROL_CONVERT_SIZE(control);
 
-            switch(cast){
-            case CAST_UINT_UINT:
-            case CAST_UINT_SINT:
-            case CAST_SINT_UINT:
-            case CAST_SINT_SINT: {
-                u64 tmp = registers[op0];
+            if(!IS_CONTROL_FLOAT(control) && !IS_CONTROL_CONVERT_FLOAT(control)) {
+                u64 tmp = registers[op1];
                 if(tsize == 1) *(u8*)&registers[op0] = tmp;
                 else if(tsize == 2) *(u16*)&registers[op0] = tmp;
                 else if(tsize == 4) *(u32*)&registers[op0] = tmp;
                 else if(tsize == 8) *(u64*)&registers[op0] = tmp;
                 else Assert(false);
-            } break;
-            case CAST_UINT_FLOAT: {
-                u64 tmp = registers[op0];
+            } else if(IS_CONTROL_UNSIGNED(control) && IS_CONTROL_CONVERT_FLOAT(control)) {
+                u64 tmp = registers[op1];
                 if(tsize == 4) *(float*)&registers[op0] = tmp;
                 else if(tsize == 8) *(double*)&registers[op0] = tmp;
                 else Assert(false);
-            } break;
-            case CAST_SINT_FLOAT: {
-                i64 tmp = registers[op0];
+            } else if(IS_CONTROL_SIGNED(control) && IS_CONTROL_CONVERT_FLOAT(control)) {
+                i64 tmp = registers[op1];
                 if(tsize == 4) *(float*)&registers[op0] = tmp;
                 else if(tsize == 8) *(double*)&registers[op0] = tmp;
                 else Assert(false);
-            } break;
-            case CAST_FLOAT_UINT: {
+            } else if(IS_CONTROL_FLOAT(control) && IS_CONTROL_CONVERT_UNSIGNED(control)) {
                 if(fsize == 4){
-                    float tmp = *(float*)&registers[op0];
+                    float tmp = *(float*)&registers[op1];
                     if(tsize == 1) *(u8*)&registers[op0] = tmp;
                     else if(tsize == 2) *(u16*)&registers[op0] = tmp;
                     else if(tsize == 4) *(u32*)&registers[op0] = tmp;
                     else if(tsize == 8) *(u64*)&registers[op0] = tmp;
                     else Assert(false);
                 } else if(fsize == 8) {
-                    double tmp = *(double*)&registers[op0];
+                    double tmp = *(double*)&registers[op1];
                     if(tsize == 1) *(u8*)&registers[op0] = tmp;
                     else if(tsize == 2) *(u16*)&registers[op0] = tmp;
                     else if(tsize == 4) *(u32*)&registers[op0] = tmp;
                     else if(tsize == 8) *(u64*)&registers[op0] = tmp;
                     else Assert(false);
                 } else Assert(false);
-            } break;
-            case CAST_FLOAT_SINT: {
+            } else if(IS_CONTROL_FLOAT(control) && IS_CONTROL_CONVERT_SIGNED(control)) {
                 if(fsize == 4){
-                    float tmp = *(float*)&registers[op0];
+                    float tmp = *(float*)&registers[op1];
                     if(tsize == 1) *(i8*)&registers[op0] = tmp;
                     else if(tsize == 2) *(i16*)&registers[op0] = tmp;
                     else if(tsize == 4) *(i32*)&registers[op0] = tmp;
                     else if(tsize == 8) *(i64*)&registers[op0] = tmp;
                     else Assert(false);
                 } else if(fsize == 8) {
-                    double tmp = *(double*)&registers[op0];
+                    double tmp = *(double*)&registers[op1];
                     if(tsize == 1) *(i8*)&registers[op0] = tmp;
                     else if(tsize == 2) *(i16*)&registers[op0] = tmp;
                     else if(tsize == 4) *(i32*)&registers[op0] = tmp;
                     else if(tsize == 8) *(i64*)&registers[op0] = tmp;
                     else Assert(false);
                 } else Assert(false);
-            } break;
-            case CAST_FLOAT_FLOAT: {
-                if(fsize == 4 && tsize == 4) *(float*)&registers[op0] = *(float*)registers[op0];
-                else if(fsize == 4 && tsize == 8) *(double*)&registers[op0] = *(float*)registers[op0];
-                else if(fsize == 8 && tsize == 4) *(float*)&registers[op0] = *(double*)registers[op0];
-                else if(fsize == 8 && tsize == 8) *(double*)&registers[op0] = *(double*)registers[op0];
+            } else if(IS_CONTROL_FLOAT(control) && IS_CONTROL_CONVERT_FLOAT(control)) {
+                if(fsize == 4 && tsize == 4)      *(float*)&registers[op0] = *(float*)registers[op1];
+                else if(fsize == 4 && tsize == 8) *(double*)&registers[op0] = *(float*)registers[op1];
+                else if(fsize == 8 && tsize == 4) *(float*)&registers[op0] = *(double*)registers[op1];
+                else if(fsize == 8 && tsize == 8) *(double*)&registers[op0] = *(double*)registers[op1];
                 else Assert(false);
-            } break;
-            default: Assert(false);
-            }
-            
+            }  else Assert(false);
         } break;
         case BC_MEMZERO: {
             op0 = (BCRegister)instructions[pc++];
@@ -852,7 +839,8 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         case BC_BRSHIFT: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
-            
+            control = (InstructionControl)instructions[pc++];
+            // TODO: Handle sizes, don't always to 64-bit operation
             switch(opcode){
                 #define OP(P) registers[op0] = registers[op0] P registers[op1]; break;
                 case BC_BXOR: OP(^)

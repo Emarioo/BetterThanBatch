@@ -1,5 +1,111 @@
 
 
-#import "./demo/macros"
+// #import "./demo/macros"
+
+#import "Logger"
+
+log(823.32)
 
 
+// a: u8 = 255;
+// b: i32 = 0
+// return a + 1 == b
+
+// IMPORTANT: This function does not print accurate
+//  floats. It has some precision issues.
+// t: f32 = 823.32
+    
+//     bits: u32 = *cast<u32*>cast<void*>&t;
+//     // log("float")
+    
+//     sign := (bits >> 31u) & 1u;
+//     exp := (bits >> 23u) & 0xFFu;
+//     mantissa: u64 = 0x80_0000 | (bits & 0x7FFFFF)
+
+//     // 0x8000_0000_0000_0000
+
+//     // printBits(bits);
+//     if sign
+//         std_print('-');
+//     // 01011111000000000000000000000000
+//     intPart: u64 = 0;
+//     decimalBits: i32 = 23 - (exp-127);
+//     // log(decimalBits)
+//     // std_print('\n')
+//     // std_print(exp)
+//     // std_print('\n')
+//     if decimalBits < 1 {
+//         // log(mantissa);
+//         intPart = (mantissa) << (0-decimalBits);
+//         // log("herea");
+//         // printBits(intPart);
+//         if intPart == 0 {
+//             printc('0')
+//         } else {
+//             str: char[23];
+//             used := 22;
+//             while intPart > 0u && used > 0 {
+//                 digit: u8 = intPart % 10u;
+//                 // log("i",intPart);
+//                 // log("d",digit);
+//                 str.ptr[used] = digit + '0';
+//                 used--;
+//                 intPart = intPart / 10u;
+//             }
+//             str.ptr += used + 1;
+//             str.len -= used + 1;
+//             prints(str);
+//         }
+//         // std_print(intPart);
+//         std_print('.');
+//         std_print('0');
+//     } else {
+//         if exp > 126u
+//             intPart = (mantissa) >> decimalBits;
+//         std_print(cast<i64>intPart);
+//         std_print('.');
+
+//         decimals: char[24];
+
+//         acc: u64 = 0;
+//         mul: u64 = 1;
+//         // std_print(decimalBits); std_print('\n')
+//         precision := 19; // digits u64 can contain (18446744073709551615)
+//         minBits :i32= decimalBits - precision;
+//         if minBits < 0 {
+//             minBits = 0;
+//         }
+//         // log(minBits, decimalBits)
+//         for @rev minBits..decimalBits {
+//             mul *= 5u;
+//             acc = acc*10u
+//             // log("nr", nr)
+//             if nr < 24 {
+//                 bit := cast<u64>1 & (mantissa >> nr)
+//                 if bit {
+//                     acc += mul;
+//                 }
+//                 // std_print(acc); std_print('\n')
+//             }
+//         }
+//         // std_print(acc);
+//         if acc == 0
+//             std_print('0');
+//         blank := true;
+//         lastZero := 0
+//         limit := precision;
+//         if decimalBits < precision;
+//             limit = decimalBits;
+//         for @rev 0..limit {
+//             digit := acc % 10u;
+//             acc = acc / 10u;
+//             if !blank || digit != 0 {
+//                 decimals.ptr[nr] = digit + '0';
+//                 if blank
+//                     lastZero = nr+1
+//                 blank = false;
+//             }
+//         }
+//         decimals.len = lastZero;
+//         std_print(decimals)
+//     }

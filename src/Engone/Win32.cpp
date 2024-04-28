@@ -869,9 +869,6 @@ namespace engone {
                     PL_PRINTF("Reallocate : oldBytes is zero while the ptr isn't!?\n");   
                 }
 				
-				#ifdef LOG_ALLOCATIONS
-				printf("%p -> %p - Reallocate %lld -> %lld\n",ptr,newPtr, oldBytes, newBytes);
-				#endif
 
 				auto pair = ptr_map.find(ptr);
 				if(pair == ptr_map.end()) {
@@ -887,6 +884,10 @@ namespace engone {
 				#else
                 void* newPtr = realloc(ptr,newBytes);
 				#endif
+				#ifdef LOG_ALLOCATIONS
+				printf("%p -> %p - Reallocate %lld -> %lld\n",ptr,newPtr, oldBytes, newBytes);
+				#endif
+
 				if(!newPtr) {
 					printf("Err %d\n",errno);
                     return nullptr;

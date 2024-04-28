@@ -53,6 +53,7 @@ enum X64Register : u8 {
 };
 extern const char* x64_register_names[];
 engone::Logger& operator <<(engone::Logger&, X64Register);
+// NOTE: XMM8-15 requires special handling with prefix I think? Similar to extended general registers with R8-R15
 #define IS_REG_XMM(R) (R >= X64_REG_XMM0 && R <= X64_REG_XMM7)
 #define IS_REG_EXTENDED(R) (R >= X64_REG_R8 && R <= X64_REG_R15)
 #define IS_REG_NORM(R) (R >= X64_REG_A && R <= X64_REG_DI)
@@ -181,7 +182,6 @@ struct OPNode {
     
     // TODO: Union on these?
     InstructionControl control = CONTROL_NONE;
-    InstructionCast cast = CAST_UINT_UINT;
     
     LinkConventions link = LinkConventions::NONE;
     CallConventions call = CallConventions::BETCALL;
@@ -211,38 +211,20 @@ struct X64Env {
     X64Operand reg1{};
     X64Operand reg2{};
 };
-
+typedef int ArtificalRegister;
 struct X64Inst {
-    // OPNode(u32 bc_index, InstructionOpcode type) : bc_index(bc_index), opcode(type) {}
+    // int id=0;
     u32 bc_index = 0;
-    InstBase* base = nullptr;
-    // InstructionOpcode opcode = BC_HALT;
-    // i64 imm = 0;
-    // union {
-    //     struct {
-    //         BCRegister op0;
-    //         BCRegister op1;
-    //         BCRegister op2;
-    //     };
-    //     BCRegister ops[3]{BC_REG_INVALID,BC_REG_INVALID,BC_REG_INVALID};
-    // };
-    
-    // // TODO: Union on these?
-    // InstructionControl control = CONTROL_NONE;
-    // InstructionCast cast = CAST_UINT_UINT;
-    
-    // LinkConventions link = LinkConventions::NONE;
-    // CallConventions call = CallConventions::BETCALL;
 
-    int id=0;
     union {
         struct {
-            X64Operand reg0;
-            X64Operand reg1;
-            X64Operand reg2;
+            ArtificalRegister reg0;
+            ArtificalRegister reg1;
+            ArtificalRegister reg2;
         };
-        X64Operand regs[3]{{},{},{}};
+        ArtificalRegister regs[3]{};
     };
+    InstBase* base = nullptr;
 };
 engone::Logger& operator<<(engone::Logger& l, X64Inst& i);
 
@@ -302,8 +284,9 @@ struct X64Builder {
     X64Register alloc_register(X64Register reg = X64_REG_INVALID, bool is_float = false);
     bool is_register_free(X64Register reg);
     void free_register(X64Register reg);
+    void free_all_registers();
     
-    int size() const { return tinyprog->head; }
+    int code_size() const { return tinyprog->head; }
     void ensure_bytes(int size) {
         if(tinyprog->head + size >= tinyprog->_allocationSize ){
             bool yes = _reserve(tinyprog->_allocationSize * 2 + 50 + size);
@@ -348,20 +331,26 @@ struct X64Builder {
     
     bool _reserve(u32 size);
 
-    void emit_mov_reg_reg(X64Register reg, X64Register rm);
+    // float registers require size, general registers will always use REXW
+    void emit_mov_reg_reg(X64Register reg, X64Register rm, int size = 0);
     void emit_mov_reg_mem(X64Register reg, X64Register rm, InstructionControl control, int disp32);
     void emit_mov_mem_reg(X64Register reg, X64Register rm, InstructionControl control, int disp32);
+    // always sign extends TO 64-bit but may extend FROM 8/16/32/64 bit based on control
     void emit_movsx(X64Register reg, X64Register rm, InstructionControl control);
     void emit_movzx(X64Register reg, X64Register rm, InstructionControl control);
 
     // only emits if non-zero
     void emit_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
+    u8 construct_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
     void emit_push(X64Register reg);
     void emit_pop(X64Register reg);
     // REXW prefixed
     void emit_add_imm32(X64Register reg, i32 imm32);
     // REXW prefixed
     void emit_sub_imm32(X64Register reg, i32 imm32);
+
+    // don't assume all opcodes will work
+    void emit_operation(u8 opcode, X64Register reg, X64Register rm, InstructionControl control);
 
     static const int FRAME_SIZE = 16;
     int push_offset = 0; // used when set arguments while values are pushed and popped
@@ -374,7 +363,7 @@ struct X64Builder {
     };
     DynamicArray<Arg> recent_set_args;
 
-    void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
+    // void generateFromTinycode(Bytecode* code, TinyBytecode* tinycode);
     void generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode);
 
     // void generateInstructions_slow();
@@ -401,7 +390,6 @@ private:
 public:
     // experimental
 
-    int inst_id = 0;
     DynamicArray<X64Inst*> inst_list;
     X64Inst* last_inst_call = nullptr;
     
@@ -411,10 +399,59 @@ public:
     };
     ValueUsage bc_register_map[BC_REG_MAX]{0};
     DynamicArray<ValueUsage> bc_push_list{};
+    struct ArtificalValue { // artifical register/value
+        X64Register reg = X64_REG_INVALID; // may be invalid until it's time to generate x64, or some instruction could suggest a register to reserve
+        // bool stacked = false;
+        bool floaty = false;
+        int started_by_bc_index = false; // responsible for freeing register
+
+    };
+    DynamicArray<ArtificalValue> artificalRegisters{};
+    // int alloc_artifical_stack() {
+    //     artificalRegisters.add({});
+    //     artificalRegisters.last().stacked = true;
+    //     return artificalRegisters.size()-1;
+    // }
+    bool lock_register_resize = false;
+    int alloc_artifical_reg(int bc_index, X64Register reg = X64_REG_INVALID) {
+        Assert(!lock_register_resize); // make sure we don't invalidate pointers
+        artificalRegisters.add({});
+        if(artificalRegisters.size() == 1) // first id is invalid so we add an extra
+            artificalRegisters.add({});
+
+        Assert(reg == X64_REG_BP || reg == X64_REG_INVALID);
+        // TODO: Don't alloc new register, we can reuse artifical register for BP.
+        artificalRegisters.last().reg = reg;
+        artificalRegisters.last().started_by_bc_index = bc_index;
+        return artificalRegisters.size()-1;
+    }
+    void suggest_artifical(int id, X64Register reg) {
+        artificalRegisters[id].reg = reg;
+    }
+    void suggest_artifical_float(int id) {
+        artificalRegisters[id].floaty = true;
+    }
+    ArtificalValue* get_and_alloc_artifical_reg(int id) {
+        lock_register_resize = true;
+        if(artificalRegisters[id].reg == X64_REG_INVALID) {
+            artificalRegisters[id].reg = alloc_register(X64_REG_INVALID, artificalRegisters[id].floaty);
+            Assert(artificalRegisters[id].reg != X64_REG_INVALID);
+        }
+        return &artificalRegisters[id];
+    }
+    ArtificalValue* get_artifical_reg(int id) {
+        lock_register_resize = true;
+        // if(artificalRegisters[id].reg == X64_REG_INVALID) {
+        //     artificalRegisters[id].reg = alloc_register(X64_REG_INVALID, artificalRegisters[id].floaty);
+        //     Assert(artificalRegisters[id].reg != X64_REG_INVALID);
+        // }
+        return &artificalRegisters[id];
+    }
 
     void clear_register_map() {
         memset(bc_register_map, 0, sizeof bc_register_map);
     }
+    
     void map_reg(X64Inst* n, int nr) {
         InstBase_op3* base = (InstBase_op3*)n->base;
         
@@ -438,7 +475,7 @@ public:
 
     X64Inst* createInst(InstructionOpcode opcode) {
         auto ptr = new X64Inst();
-        ptr->id = inst_id++;
+        // ptr->id = inst_id++;
         // ptr->opcode = opcode;
         return ptr;
     }

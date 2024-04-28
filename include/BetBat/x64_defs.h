@@ -37,11 +37,13 @@ About x64:
 #define OPCODE_NOP (u8)0x90
 
 
+#define OPCODE_ADD_REG8_RM8 (u8)0x02
 #define OPCODE_ADD_REG_RM (u8)0x03
 #define OPCODE_ADD_RM_REG (u8)0x01
 #define OPCODE_ADD_RM_IMM_SLASH_0 (u8)0x81
 #define OPCODE_ADD_RM_IMM8_SLASH_0 (u8)0x83
 
+#define OPCODE_SUB_REG8_RM8 (u8)0x2A
 #define OPCODE_SUB_REG_RM (u8)0x2B
 #define OPCODE_SUB_RM_IMM_SLASH_5 (u8)0x81
 
@@ -82,9 +84,11 @@ About x64:
 #define OPCODE_XOR_REG_RM (u8)0x33
 #define OPCODE_XOR_RM_IMM8_SLASH_6 (u8)0x83
 
-#define OPCODE_AND_RM_REG (u8)0x21
+#define OPCODE_AND_REG8_RM8 (u8)0x22
+#define OPCODE_AND_REG_RM (u8)0x23
 
-#define OPCODE_OR_RM_REG (u8)0x09
+#define OPCODE_OR_REG8_RM8 (u8)0x0A
+#define OPCODE_OR_REG_RM (u8)0x0B
 
 #define OPCODE_SHL_RM_CL_SLASH_4 (u8)0xD3
 #define OPCODE_SHR_RM_CL_SLASH_5 (u8)0xD3

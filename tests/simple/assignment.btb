@@ -68,4 +68,9 @@ a, b, c = many() // all return values
 {
     str: char[20];
     str.ptr[0] = 5 // crashed at one point
+
+    
+    s: char[20];
+    n: u64 = 5;
+    s.ptr[10] = n + '0'; // push and pop was messed up where a ptr was moved instead of n+'0' at one point
 }

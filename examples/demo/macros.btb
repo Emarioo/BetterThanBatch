@@ -1,5 +1,7 @@
 
 
+// a := 2
+
 // #macro OR(X,Y,...) X == Y || OR(X, ...)
 // #macro OR(X,Y)  X == Y
 // OR(type, 1, 5, 9 , 2)
@@ -11,8 +13,8 @@
 
 // #macro ARGS 1,2,3
 
-#macro concat(A) A ## #column
-    concat(ea)
+// #macro concat(A) A ## #column
+//     concat(ea)
 
 // #macro concat2(A) concat(A ## #line ## _)
 

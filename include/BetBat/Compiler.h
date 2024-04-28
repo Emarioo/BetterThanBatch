@@ -213,6 +213,22 @@ struct CompilerImport {
     DynamicArray<Lib> libraries;
 };
 struct Compiler {
+    void cleanup() {
+        X64Program::Destroy(program);
+        program = nullptr;
+        AST::Destroy(ast);
+        ast = nullptr;
+        Bytecode::Destroy(bytecode);
+        bytecode = nullptr;
+        lexer.cleanup();
+        preprocessor.cleanup();
+        typeChecker.cleanup();
+
+        imports.cleanup();
+        tasks.cleanup();
+        importDirectories.cleanup();
+        linkDirectives.cleanup();
+    }
     lexer::Lexer lexer{};
     preproc::Preprocessor preprocessor{};
     TypeChecker typeChecker{};

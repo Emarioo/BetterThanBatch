@@ -34,6 +34,9 @@ int main(int argc, const char** argv){
     #define EXIT_CODE_FAILURE 1
     
 
+    float k = 2.32;
+    u64 n = k;
+
     // int a=5,b=8;
     // int c = a && b;
 
@@ -66,9 +69,9 @@ int main(int argc, const char** argv){
         options.target = TARGET_BYTECODE;
         options.target = TARGET_WINDOWS_x64;
         // options.linker = LINKER_GCC;
-        // options.executeOutput = true;
-        options.only_preprocess = true;
-        // options.useDebugInformation = true;
+        options.executeOutput = true;
+        // options.only_preprocess = true;
+        options.useDebugInformation = true;
         Compiler compiler{};
         compiler.run(&options);
 
@@ -184,8 +187,6 @@ int main(int argc, const char** argv){
         }
     }
 
-  
-
     Compiler compiler{};
     compiler.run(&options);
 
@@ -197,6 +198,7 @@ int main(int argc, const char** argv){
             } break;
         }
     }
+    compiler.cleanup();
 
     // ###### CLEANUP STUFF ######
 

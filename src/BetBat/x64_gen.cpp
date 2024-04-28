@@ -114,7 +114,7 @@ void GenerateX64(Compiler* compiler, TinyBytecode* tinycode) {
     }
     builder.all_nodes.cleanup();
 }
-
+#ifdef gone
 void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode) {
     using namespace engone;
     this->bytecode = bytecode;
@@ -142,7 +142,6 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         InstructionOpcode opcode{};
         BCRegister op0=BC_REG_INVALID, op1=BC_REG_INVALID, op2=BC_REG_INVALID;
         InstructionControl control;
-        InstructionCast cast;
         i64 imm = 0;
 
         opcode = (InstructionOpcode)instructions[pc];
@@ -431,13 +430,13 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
-            cast = (InstructionCast)instructions[pc++];
 
             auto node = createNode(prev_pc, opcode);
             node->op0 = op0;
+            node->op1 = op1;
             node->control = control;
-            node->cast = cast;
             
             node->in0 = reg_values[op0];
             reg_values[op0] = node;
@@ -890,14 +889,14 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
             envs.last()->node = nodes[node_i];
             node_i++;
 
-            root_pc = size();
+            root_pc = code_size();
             root = true;
         }
         
         env = envs.last();
         n = env->node;
         pop_env = true;
-        last_pc = size();
+        last_pc = code_size();
 
         Assert(!n->computed_env);
         
@@ -1282,12 +1281,14 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                         } break;
                         case BC_BAND: {
                             emit_prefix(PREFIX_REXW, env->reg1.reg, env->reg0.reg);
-                            emit1(OPCODE_AND_RM_REG);
+                            Assert(false);
+                            // emit1(OPCODE_AND_RM_REG);
                             emit_modrm(MODE_REG, CLAMP_EXT_REG(env->reg1.reg), CLAMP_EXT_REG(env->reg0.reg));
                         } break;
                         case BC_BOR: {
                             emit_prefix(PREFIX_REXW, env->reg1.reg, env->reg0.reg);
-                            emit1(OPCODE_OR_RM_REG);
+                            Assert(false);
+                            // emit1(OPCODE_OR_RM_REG);
                             emit_modrm(MODE_REG, CLAMP_EXT_REG(env->reg1.reg), CLAMP_EXT_REG(env->reg0.reg));
                         } break;
                         case BC_BXOR: {
@@ -2305,6 +2306,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     INHERIT_REG(reg0)
                     break;
                 }
+                Assert(false); // cast now uses two operands, this code needs to be fixed
                 
                 env->reg0 = env->env_in0->reg0;
 
@@ -2319,7 +2321,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                 u8 minSize = fsize < tsize ? fsize : tsize;
                 
                 X64Register origin_reg = env->reg0.reg;
-
+                #ifdef gone
                 switch(n->cast) {
                     case CAST_FLOAT_SINT: {
                         Assert(fsize == 4 || fsize == 8);
@@ -2988,6 +2990,7 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
                     } break;
                     default: Assert(("Cast type not implemented in x64 backend, Compiler bug",false));
                 }
+                #endif
                 
                 if(env->reg0.on_stack) {
                     emit_push(env->reg0.reg);
@@ -3325,12 +3328,12 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
 
                 if(env->reg0.reg == X64_REG_D) {
                     emit1(PREFIX_REXW);
-                    emit1(OPCODE_OR_RM_REG);
-                    emit_modrm(MODE_REG, X64_REG_D, X64_REG_A);
+                    emit1(OPCODE_OR_REG_RM);
+                    emit_modrm(MODE_REG, X64_REG_A, X64_REG_D);
                 } else {
                     emit1(PREFIX_REXW);
-                    emit1(OPCODE_OR_RM_REG);
-                    emit_modrm(MODE_REG, X64_REG_A, X64_REG_D);
+                    emit1(OPCODE_OR_REG_RM);
+                    emit_modrm(MODE_REG, X64_REG_D, X64_REG_A);
                     emit_pop(X64_REG_D);
                     if(env->reg0.on_stack)
                         emit_push(X64_REG_A);
@@ -3663,6 +3666,10 @@ void X64Builder::generateFromTinycode(Bytecode* bytecode, TinyBytecode* tinycode
     // last instruction should be a return
     Assert(tinyprog->text[tinyprog->head-1] == OPCODE_RET);
 }
+#endif
+void X64Builder::free_all_registers() {
+    registers.clear();
+}
 X64Register X64Builder::alloc_register(X64Register reg, bool is_float) {
     using namespace engone;
     // #define DO_LOG(X) X
@@ -3866,10 +3873,10 @@ void X64Builder::emit8(u64 qword){
     tinyprog->head += 8;
 }
 void X64Builder::fix_jump_here_imm8(u32 offset) {
-    *(u8*)(tinyprog->text + offset) = (size() - (offset + 1));
+    *(u8*)(tinyprog->text + offset) = (code_size() - (offset + 1));
 }
 void X64Builder::emit_jmp_imm8(u32 offset) {
-    emit1((u8)(offset - (size() + 1)));
+    emit1((u8)(offset - (code_size() + 1)));
 }
 void X64Builder::set_imm32(u32 offset, u32 value) {
     *(u32*)(tinyprog->text + offset) = value;
@@ -3940,10 +3947,7 @@ void X64Builder::emit_modrm_sib(u8 mod, X64Register _reg, u8 scale, u8 index, X6
 void X64Builder::emit_movsx(X64Register reg, X64Register rm, InstructionControl control) {
     Assert(!IS_REG_XMM(reg) && !IS_REG_XMM(rm));
     Assert(!IS_CONTROL_FLOAT(control));
-    Assert(IS_CONTROL_SIGNED(control)); // why would we sign extend unsigned operand?
-
-    if(GET_CONTROL_SIZE(control) == CONTROL_64B)
-        return; // do nothing
+    Assert(!IS_CONTROL_UNSIGNED(control)); // why would we sign extend unsigned operand?
 
     emit_prefix(PREFIX_REXW, reg, rm);
     if(GET_CONTROL_SIZE(control) == CONTROL_8B) {
@@ -3953,7 +3957,30 @@ void X64Builder::emit_movsx(X64Register reg, X64Register rm, InstructionControl 
         emit2(OPCODE_2_MOVSX_REG_RM8);
     }  else if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
         emit1(OPCODE_MOVSXD_REG_RM);
+    } else {
+        emit1(OPCODE_MOV_REG_RM);
     }
+    emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(rm));
+}
+void X64Builder::emit_operation(u8 opcode, X64Register reg, X64Register rm, InstructionControl control) {
+    int size = 1 << GET_CONTROL_SIZE(control);
+    if(size == 1) {
+        emit_prefix(0, reg, rm);
+        // 8-bit instructions are usually one less than the regular instruction
+        // assuming this is perhaps not a great idea
+        u8 opcode_8bit = opcode - 1;
+        emit1(opcode_8bit);
+    } else if(size == 2) {
+        emit1(PREFIX_16BIT);
+        emit_prefix(0, reg, rm);
+        emit1(opcode);
+    } else if(size == 4) {
+        emit_prefix(0, reg, rm);
+        emit1(opcode);
+    } else if(size == 8) {
+        emit_prefix(PREFIX_REXW, reg, rm);
+        emit1(opcode);
+    } else Assert(false);
     emit_modrm(MODE_REG, CLAMP_EXT_REG(reg), CLAMP_EXT_REG(rm));
 }
 void X64Builder::emit_movzx(X64Register reg, X64Register rm, InstructionControl control) {
@@ -4116,15 +4143,27 @@ X64Program* X64Program::Create() {
 }
 
 void X64Builder::emit_push(X64Register reg) {
-    emit_prefix(0, X64_REG_INVALID, reg);
-    emit1(OPCODE_PUSH_RM_SLASH_6);
-    emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(reg));
+    if(IS_REG_XMM(reg)) {
+        emit_sub_imm32(X64_REG_SP, 8);
+        emit3(OPCODE_3_MOVSS_RM_REG);
+        emit_modrm(MODE_DEREF, CLAMP_XMM(reg), X64_REG_SP);
+    } else {
+        emit_prefix(0, X64_REG_INVALID, reg);
+        emit1(OPCODE_PUSH_RM_SLASH_6);
+        emit_modrm_slash(MODE_REG, 6, CLAMP_EXT_REG(reg));
+    }
     push_offset += 8;
 }
 void X64Builder::emit_pop(X64Register reg) {
-    emit_prefix(0, X64_REG_INVALID, reg);
-    emit1(OPCODE_POP_RM_SLASH_0);
-    emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
+    if(IS_REG_XMM(reg)) {
+        emit3(OPCODE_3_MOVSS_REG_RM);
+        emit_modrm(MODE_DEREF, CLAMP_XMM(reg), X64_REG_SP);
+        emit_add_imm32(X64_REG_SP, 8);
+    } else {
+        emit_prefix(0, X64_REG_INVALID, reg);
+        emit1(OPCODE_POP_RM_SLASH_0);
+        emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg));
+    }
     push_offset -= 8;
 }
 void X64Builder::emit_add_imm32(X64Register reg, i32 imm32) {
@@ -4140,6 +4179,11 @@ void X64Builder::emit_sub_imm32(X64Register reg, i32 imm32) {
     emit4((u32)imm32);
 }
 void X64Builder::emit_prefix(u8 inherited_prefix, X64Register reg, X64Register rm) {
+    inherited_prefix = construct_prefix(inherited_prefix, reg, rm);
+    if(inherited_prefix)
+        emit1(inherited_prefix);
+}
+u8 X64Builder::construct_prefix(u8 inherited_prefix, X64Register reg, X64Register rm) {
     if(reg != X64_REG_INVALID) {
         if(IS_REG_EXTENDED(reg)) {
             inherited_prefix |= PREFIX_REXR;
@@ -4154,10 +4198,8 @@ void X64Builder::emit_prefix(u8 inherited_prefix, X64Register reg, X64Register r
             
         } else Assert(false); // float register not allowed like this
     }
-    if(inherited_prefix)
-        emit1(inherited_prefix);
+    return inherited_prefix;
 }
-
 void X64Builder::emit_mov_reg_mem(X64Register reg, X64Register rm, InstructionControl control, int disp) {
     int size = GET_CONTROL_SIZE(control);
     // if (IS_CONTROL_FLOAT(control)) {
@@ -4268,13 +4310,14 @@ void X64Builder::emit_mov_mem_reg(X64Register rm, X64Register reg, InstructionCo
             emit4((u32)(i32)disp);
     }
 }
-void X64Builder::emit_mov_reg_reg(X64Register reg, X64Register rm) {
+void X64Builder::emit_mov_reg_reg(X64Register reg, X64Register rm, int size) {
     if(IS_REG_XMM(reg) && IS_REG_XMM(rm)) {
-        engone::log::out << engone::log::YELLOW << "We always use movsd for floats, even 32-bit, is that fine?\n";
-        // we would need to pass size otherwise
-        emit3(OPCODE_3_MOVSD_RM_REG);
+        if(size == 4) emit3(OPCODE_3_MOVSS_RM_REG);
+        else if(size == 8) emit3(OPCODE_3_MOVSD_RM_REG);
+        else Assert(false);
         emit_modrm(MODE_REG, CLAMP_XMM(reg), CLAMP_XMM(rm));
     } else if(IS_REG_XMM(reg) && !IS_REG_XMM(rm)) {
+        Assert(false); // did you mean do move xmm to general?
         emit_prefix(PREFIX_REXW, rm, X64_REG_SP);
         emit1(OPCODE_MOV_RM_REG);
         emit_modrm(MODE_DEREF_DISP8, CLAMP_EXT_REG(rm), X64_REG_SP);
@@ -4284,6 +4327,7 @@ void X64Builder::emit_mov_reg_reg(X64Register reg, X64Register rm) {
         emit_modrm(MODE_DEREF_DISP8, CLAMP_XMM(reg), X64_REG_SP);
         emit1((u8)-8);
     } else if(!IS_REG_XMM(reg) && IS_REG_XMM(rm)) {
+        Assert(false); // did you mean do move xmm to general?
         emit3(OPCODE_3_MOVSD_RM_REG);
         emit_modrm(MODE_DEREF_DISP8, CLAMP_XMM(rm), X64_REG_SP);
         emit1((u8)-8);

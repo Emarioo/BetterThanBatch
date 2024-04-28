@@ -614,7 +614,7 @@ void BytecodeBuilder::emit_mul(BCRegister to, BCRegister from, bool is_float, in
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(!is_signed) control = (InstructionControl)(control | CONTROL_UNSIGNED_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
     if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
     else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
     else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
@@ -627,7 +627,7 @@ void BytecodeBuilder::emit_div(BCRegister to, BCRegister from, bool is_float, in
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(!is_signed) control = (InstructionControl)(control | CONTROL_UNSIGNED_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
     if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
     else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
     else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
@@ -640,7 +640,7 @@ void BytecodeBuilder::emit_mod(BCRegister to, BCRegister from, bool is_float, in
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(!is_signed) control = (InstructionControl)(control | CONTROL_UNSIGNED_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
     if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
     else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
     else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
@@ -648,35 +648,72 @@ void BytecodeBuilder::emit_mod(BCRegister to, BCRegister from, bool is_float, in
     emit_control(control);
 }
 
-void BytecodeBuilder::emit_band(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_band(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_BAND);
     emit_operand(to);
-    emit_operand(from);   
+    emit_operand(from);
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
-void BytecodeBuilder::emit_bor(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_bor(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_BOR);
     emit_operand(to);
     emit_operand(from);   
+    
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
-void BytecodeBuilder::emit_bxor(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_bxor(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_BXOR);
     emit_operand(to);
     emit_operand(from);
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
-void BytecodeBuilder::emit_bnot(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_bnot(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_BNOT);
     emit_operand(to);
     emit_operand(from);   
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
-void BytecodeBuilder::emit_blshift(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_blshift(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_BLSHIFT);
     emit_operand(to);
     emit_operand(from);   
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
-void BytecodeBuilder::emit_brshift(BCRegister to, BCRegister from) {
+void BytecodeBuilder::emit_brshift(BCRegister to, BCRegister from, int size) {
     emit_opcode(BC_BRSHIFT);
     emit_operand(to);
     emit_operand(from);   
+    InstructionControl control = CONTROL_NONE;
+    if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
+    else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
+    else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
+    else if(size == 8) control = (InstructionControl)(control | CONTROL_64B);
+    emit_control(control);
 }
 
 void BytecodeBuilder::emit_eq(BCRegister to, BCRegister from, bool is_float,int size){
@@ -709,7 +746,7 @@ void BytecodeBuilder::emit_lt(BCRegister to, BCRegister from, bool is_float, int
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(!is_signed) control = (InstructionControl)(control | CONTROL_UNSIGNED_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
     if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
     else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
     else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
@@ -722,7 +759,7 @@ void BytecodeBuilder::emit_lte(BCRegister to, BCRegister from, bool is_float,int
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(!is_signed) control = (InstructionControl)(control | CONTROL_UNSIGNED_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
     if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
     else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
     else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
@@ -735,7 +772,7 @@ void BytecodeBuilder::emit_gt(BCRegister to, BCRegister from, bool is_float,int 
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(!is_signed) control = (InstructionControl)(control | CONTROL_UNSIGNED_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
     if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
     else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
     else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
@@ -748,7 +785,7 @@ void BytecodeBuilder::emit_gte(BCRegister to, BCRegister from, bool is_float,int
     emit_operand(from);
     InstructionControl control = CONTROL_NONE;
     if(is_float) control = (InstructionControl)(control | CONTROL_FLOAT_OP);
-    if(!is_signed) control = (InstructionControl)(control | CONTROL_UNSIGNED_OP);
+    if(is_signed) control = (InstructionControl)(control | CONTROL_SIGNED_OP);
     if(size == 1) control = (InstructionControl)(control | CONTROL_8B);
     else if(size == 2) control = (InstructionControl)(control | CONTROL_16B);
     else if(size == 4) control = (InstructionControl)(control | CONTROL_32B);
@@ -824,7 +861,7 @@ void BytecodeBuilder::emit_round(BCRegister to){
     emit_operand(to);
 }
 
-void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType, u8 from_size, u8 to_size) {
+void BytecodeBuilder::emit_cast(BCRegister to, BCRegister from, InstructionControl _control, u8 from_size, u8 to_size) {
     InstructionControl control = InstructionControl::CONTROL_NONE;
     switch(from_size) {
         case 1: control = (InstructionControl)(control | CONTROL_8B); break;
@@ -840,11 +877,19 @@ void BytecodeBuilder::emit_cast(BCRegister reg, InstructionCast castType, u8 fro
         case 8: control = (InstructionControl)(control | CONTROL_CONVERT_64B); break;
         Assert(false);
     }
+    if(IS_CONTROL_FLOAT(_control))
+        control = (InstructionControl)(control | CONTROL_FLOAT_OP);
+    else if(IS_CONTROL_SIGNED(_control))
+        control = (InstructionControl)(control | CONTROL_SIGNED_OP);
+    if(IS_CONTROL_CONVERT_FLOAT(_control))
+        control = (InstructionControl)(control | CONTROL_CONVERT_FLOAT_OP);
+    else if(IS_CONTROL_CONVERT_SIGNED(_control))
+        control = (InstructionControl)(control | CONTROL_CONVERT_SIGNED_OP);
     
     emit_opcode(BC_CAST);
-    emit_operand(reg);
+    emit_operand(to);
+    emit_operand(from);
     emit_control(control);
-    emit_imm8(castType);
 }
 
 void BytecodeBuilder::emit_opcode(InstructionOpcode type) {
@@ -1047,7 +1092,7 @@ extern InstBaseType instruction_contents[256] {
     BASE_op1 | BASE_imm64,      // BC_LI64,
     BASE_op1 | BASE_imm32,      // BC_INCR,
     BASE_op1 | BASE_imm16,      // BC_ALLOC_LOCAL,
-    BASE_op1,                   // BC_FREE_LOCAL,
+    BASE_imm16,                   // BC_FREE_LOCAL,
 
     BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_SET_ARG,
     BASE_op1 | BASE_ctrl | BASE_imm16,  // BC_GET_PARAM,
@@ -1082,14 +1127,14 @@ extern InstBaseType instruction_contents[256] {
     BASE_op2,   // BC_LOR,
     BASE_op2,   // BC_LNOT,
 
-    BASE_op2,   // BC_BAND,
-    BASE_op2,   // BC_BOR,
-    BASE_op2,   // BC_BNOT,
-    BASE_op2,   // BC_BXOR,
-    BASE_op2,   // BC_BLSHIFT,
-    BASE_op2,   // BC_BRSHIFT,
+    BASE_op2 | BASE_ctrl,   // BC_BAND,
+    BASE_op2 | BASE_ctrl,   // BC_BOR,
+    BASE_op2 | BASE_ctrl,   // BC_BNOT,
+    BASE_op2 | BASE_ctrl,   // BC_BXOR,
+    BASE_op2 | BASE_ctrl,   // BC_BLSHIFT,
+    BASE_op2 | BASE_ctrl,   // BC_BRSHIFT,
 
-    BASE_op1 | BASE_ctrl | BASE_cast, // BC_CAST,
+    BASE_op2 | BASE_ctrl, // BC_CAST,
 
     BASE_op2 | BASE_ctrl,   // BC_MEMZERO,
     BASE_op3,               // BC_MEMCPY,
@@ -1166,6 +1211,12 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
     
     auto& instructions = instructionSegment;
 
+    bool print_debug_info = true;
+    auto tinycode = this;
+    auto tiny_index = index;
+    int prev_tinyindex = -1;
+    int prev_line = -1;
+
     int pc=low_index;
     while(pc<high_index) {
         int prev_pc = pc;
@@ -1173,8 +1224,30 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         
         BCRegister op0, op1, op2;
         InstructionControl control;
-        InstructionCast cast;
         i64 imm;
+
+        if(print_debug_info) {
+            // TODO: Code was copied from Virtual Machine. Can we abstract debug printing
+            //   to a function which we can use in both places?
+            //   Perhaps an argument 'enable_debug_printing'
+            auto line_index = tinycode->index_of_lines[prev_pc] - 1;
+            if(line_index != -1) {
+                auto& line = tinycode->lines[line_index];
+
+                if(line.line_number != prev_line || tiny_index != prev_tinyindex) {
+                    if(tiny_index != prev_tinyindex) {
+                        log::out << log::GOLD  << tinycode->name <<"\n";
+                        prev_tinyindex = tiny_index;
+                    }
+                    prev_tinyindex = tiny_index;
+                    log::out << log::CYAN << line.line_number << "| " << line.text<<"\n";
+                    prev_line = line.line_number;
+                }
+            } else if(tiny_index != prev_tinyindex) {
+                log::out << log::GOLD  << tinycode->name <<"\n";
+                prev_tinyindex = tiny_index;
+            }
+        }
         
         char buf[8];
         sprintf(buf, "%3d", prev_pc);
@@ -1223,9 +1296,9 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_GET_VAL:
         case BC_SET_RET: {
             op0 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             imm = *(i16*)&instructions[pc];
             pc+=2;
-            control = (InstructionControl)instructions[pc++];
             
             // switch(opcode) {
             //     case BC_GET_VAL:   log::out << " " << register_names[op0] << ", [val"; if(imm >= 0) log::out << "+"; log::out << imm << "]"; break;
@@ -1369,7 +1442,7 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
             log::out << log::CYAN;
             if(IS_CONTROL_FLOAT(control))
                 log::out << ", float";
-            if(!IS_CONTROL_SIGNED(control))
+            if(IS_CONTROL_UNSIGNED(control))
                 log::out << ", unsigned";
             int size = GET_CONTROL_SIZE(control);
             if(size == CONTROL_8B)       log::out << ", byte";
@@ -1383,11 +1456,16 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_BXOR:
         case BC_BNOT:
         case BC_BLSHIFT:
-        case BC_BRSHIFT:
+        case BC_BRSHIFT: {
+            op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
+            
+            log::out << " "<<register_names[op0] <<", "<< register_names[op1] << ", "<<control;
+        } break;
         case BC_LAND:
         case BC_LOR:
-        case BC_LNOT:
-        {
+        case BC_LNOT: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
             
@@ -1402,13 +1480,13 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         } break;
         case BC_CAST: {
             op0 = (BCRegister)instructions[pc++];
+            op1 = (BCRegister)instructions[pc++];
             control = (InstructionControl)instructions[pc++];
-            cast = (InstructionCast)instructions[pc++];
             
             u8 from_size = 1 << GET_CONTROL_SIZE(control);
             u8 to_size = 1 << GET_CONTROL_CONVERT_SIZE(control);
             
-            log::out << " " << register_names[op0] << ", "<< cast_names[cast] <<", "<<from_size<<"b->"<<to_size<<"b";
+            log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", "<< "cast?" <<", "<<from_size<<"b->"<<to_size<<"b";
         } break;
         case BC_MEMZERO: {
             op0 = (BCRegister)instructions[pc++];

@@ -200,6 +200,16 @@ namespace lexer {
           lexer, then try to optimize while simplifiying things.
     */
     struct Lexer {
+        void cleanup() {
+            imports.cleanup();
+            _chunks.cleanup();
+            for(auto f : virtual_files) {
+                f->~VirtualFile();
+                TRACK_FREE(f,VirtualFile);
+            }
+            virtual_files.cleanup();
+
+        }
 
         // returns file id, 0 means failure
         u32 tokenize(char* text, u64 length, const std::string& path_name, u32 prepared_import_id = 0);

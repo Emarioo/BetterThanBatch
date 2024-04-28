@@ -899,7 +899,10 @@ void Compiler::run(CompileOptions* options) {
     initial_import_id = import_id;
     
     bool skip_preload = false;
-    skip_preload = true;
+    // skip_preload = true;
+    if(skip_preload) {
+        log::out << log::YELLOW << "Preload is skipped!\n";
+    }
     if(!skip_preload) {
         StringBuilder preload{};
         preload +=

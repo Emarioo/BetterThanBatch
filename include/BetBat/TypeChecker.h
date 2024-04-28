@@ -4,6 +4,9 @@
 #include "BetBat/PhaseContext.h"
 
 struct TypeChecker {
+    void cleanup() {
+        checkImpls.cleanup();
+    }
     struct CheckImpl {
         ASTFunction* astFunc=nullptr;
         FuncImpl* funcImpl=nullptr;

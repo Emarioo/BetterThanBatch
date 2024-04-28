@@ -22,8 +22,6 @@ fn @intrinsic strlen(str: char*) -> u32;
 // IMPORTANT: SAFE_CONVERSIONS in x64_Converter must be defined for this function to work properly.
 //  There will be some unexpected bits otherwise.
 fn @hide std_print(t: u64){
-    // If you are worried that this language will be filled with ifdefs like C/C++
-    // then you can calm down. This is just temporary.
     
     // optimise by using a log10 function to know how many characters you need.
     // then allocate some memory for that space
@@ -51,7 +49,6 @@ fn @hide std_print(t: u64){
         value = value / 10u;
     }
     str.ptr += used + 1;
-    // str.len -= used - 1;
     str.len -= used + 1;
     prints(str);
 }
@@ -128,9 +125,11 @@ fn std_print(t: f32){
         mul: u64 = 1;
         // std_print(decimalBits); std_print('\n')
         precision := 19; // digits u64 can contain (18446744073709551615)
-        minBits := decimalBits - precision;
-        if minBits < 0
+        minBits :i32= decimalBits - precision;
+        if minBits < 0 {
             minBits = 0;
+        }
+        // log(minBits, decimalBits)
         for @rev minBits..decimalBits {
             mul *= 5u;
             acc = acc*10u

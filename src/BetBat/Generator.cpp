@@ -438,59 +438,60 @@ bool GenContext::performSafeCast(TypeId from, TypeId to) {
     // auto tti = info.ast->getTypeInfo(to);
     auto from_size = ast->getTypeSize(from);
     auto to_size = ast->getTypeSize(to);
-    BCRegister reg = BC_REG_T0;
+    BCRegister from_reg = BC_REG_T0;
+    BCRegister to_reg = BC_REG_T1;
     if (AST::IsDecimal(from) && AST::IsInteger(to)) {
-        builder.emit_pop(reg);
+        builder.emit_pop(from_reg);
         // if(AST::IsSigned(to))
-        builder.emit_cast(reg, CAST_FLOAT_SINT, from_size, to_size);
+        builder.emit_cast(to_reg, from_reg, CAST_FLOAT_SINT, from_size, to_size);
             // builder.emit_({BC_CAST, CAST_FLOAT_UINT, reg0, reg1});
-        builder.emit_push(reg);
+        builder.emit_push(to_reg);
         return true;
     }
     if (AST::IsInteger(from) && AST::IsDecimal(to)) {
-        builder.emit_pop(reg);
+        builder.emit_pop(from_reg);
         if(AST::IsSigned(from))
-            builder.emit_cast(reg, CAST_SINT_FLOAT, from_size, to_size);
+            builder.emit_cast(to_reg,from_reg, CAST_SINT_FLOAT, from_size, to_size);
         else
-            builder.emit_cast(reg, CAST_UINT_FLOAT, from_size, to_size);
-        builder.emit_push(reg);
+            builder.emit_cast(to_reg,from_reg, CAST_UINT_FLOAT, from_size, to_size);
+        builder.emit_push(to_reg);
         return true;
     }
     if (AST::IsDecimal(from) && AST::IsDecimal(to)) {
-        builder.emit_pop(reg);
-        builder.emit_cast(reg, CAST_FLOAT_FLOAT, from_size, to_size);
-        builder.emit_push(reg);
+        builder.emit_pop(from_reg);
+        builder.emit_cast(to_reg,from_reg, CAST_FLOAT_FLOAT, from_size, to_size);
+        builder.emit_push(to_reg);
         return true;
     }
     if ((AST::IsInteger(from) && to == AST_CHAR) ||
         (from == AST_CHAR && AST::IsInteger(to))) {
         // if(fti->size() != tti->size()){
-        builder.emit_pop(reg);
-        builder.emit_cast(reg, CAST_SINT_SINT, from_size, to_size);
-        builder.emit_push(reg);
+        builder.emit_pop(from_reg);
+        builder.emit_cast(to_reg,from_reg, CAST_SINT_SINT, from_size, to_size);
+        builder.emit_push(to_reg);
         // }
         return true;
     }
     if ((AST::IsInteger(from) && to == AST_BOOL) ||
         (from == AST_BOOL && AST::IsInteger(to))) {
         // if(fti->size() != tti->size()){
-        builder.emit_pop(reg);
-        builder.emit_cast(reg, CAST_SINT_SINT, from_size, to_size);
-        builder.emit_push(reg);
+        builder.emit_pop(from_reg);
+        builder.emit_cast(to_reg,from_reg, CAST_SINT_SINT, from_size, to_size);
+        builder.emit_push(to_reg);
         // }
         return true;
     }
     if (AST::IsInteger(from) && AST::IsInteger(to)) {
-        builder.emit_pop(reg);
+        builder.emit_pop(from_reg);
         if (AST::IsSigned(from) && AST::IsSigned(to))
-            builder.emit_cast(reg, CAST_SINT_SINT, from_size, to_size);
+            builder.emit_cast(to_reg,from_reg, CAST_SINT_SINT, from_size, to_size);
         if (AST::IsSigned(from) && !AST::IsSigned(to))
-            builder.emit_cast(reg, CAST_SINT_UINT, from_size, to_size);
+            builder.emit_cast(to_reg, from_reg,CAST_SINT_UINT, from_size, to_size);
         if (!AST::IsSigned(from) && AST::IsSigned(to))
-            builder.emit_cast(reg, CAST_UINT_SINT, from_size, to_size);
+            builder.emit_cast(to_reg, from_reg,CAST_UINT_SINT, from_size, to_size);
         if (!AST::IsSigned(from) && !AST::IsSigned(to))
-            builder.emit_cast(reg, CAST_SINT_UINT, from_size, to_size);
-        builder.emit_push(reg);
+            builder.emit_cast(to_reg, from_reg,CAST_SINT_UINT, from_size, to_size);
+        builder.emit_push(to_reg);
         return true;
     }
     TypeInfo* from_typeInfo = nullptr;
@@ -841,7 +842,7 @@ void GenContext::genMemzero(BCRegister ptr_reg, BCRegister size_reg, int size) {
     // TODO: Move this logic into BytecodeBuilder? (emit_memzero)
     if(size <= 8) {
         Assert(size == 1 || size == 2 || size == 4 || size == 8);
-        builder.emit_bxor(size_reg, size_reg);
+        builder.emit_bxor(size_reg, size_reg, size);
         builder.emit_mov_mr(ptr_reg, size_reg, size);
     } else {
         u8 batch = 1;
@@ -939,7 +940,7 @@ SignalIO GenContext::generateDefaultValue(BCRegister baseReg, int offset, TypeId
         #ifndef DISABLE_ZERO_INITIALIZATION
         // only structs have default values, otherwise zero is the default
         if(baseReg == 0){
-            builder.emit_bxor(BC_REG_A, BC_REG_A);
+            builder.emit_bxor(BC_REG_A, BC_REG_A, 8);
             builder.emit_push(BC_REG_A);
         } else {
             // we generate memzero above which zero initializes
@@ -2564,7 +2565,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
             BCRegister reg = BC_REG_A;
 
             builder.emit_pop(reg);
-            builder.emit_bnot(reg, reg);
+            builder.emit_bnot(reg, reg, size);
             builder.emit_push(reg);
 
             outTypeIds->add(ltype);
@@ -3096,7 +3097,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 BCRegister regFinal = BC_REG_A;
                 BCRegister regValue = BC_REG_D;
 
-                builder.emit_bxor(regFinal, regFinal);
+                builder.emit_bxor(regFinal, regFinal, size);
                 builder.emit_pop(regValue);
                 builder.emit_sub(regFinal, regValue, false, 8); // assuming 64-bit integer
                 builder.emit_push(regFinal);
@@ -3110,7 +3111,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 else
                     builder.emit_li32(regMask, 0x80000000);
                 builder.emit_pop(regValue);
-                builder.emit_bxor(regValue, regMask);
+                builder.emit_bxor(regValue, regMask, size);
                 builder.emit_push(regValue);
                 outTypeIds->add(ltype);
             } else {
@@ -3326,23 +3327,23 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                     } else {
                         if(lsize != outSize || (!AST::IsSigned(ltype) && AST::IsSigned(rtype))) {
                             if(!AST::IsSigned(ltype) && !AST::IsSigned(rtype))
-                                builder.emit_cast(left_reg, CAST_UINT_UINT, lsize, outSize);
+                                builder.emit_cast(left_reg,left_reg, CAST_UINT_UINT, lsize, outSize);
                             if(!AST::IsSigned(ltype) && AST::IsSigned(rtype))
-                                builder.emit_cast(left_reg, CAST_UINT_SINT, lsize, outSize);
+                                builder.emit_cast(left_reg,left_reg, CAST_UINT_SINT, lsize, outSize);
                             if(AST::IsSigned(ltype) && !AST::IsSigned(rtype))
-                                builder.emit_cast(left_reg, CAST_SINT_UINT, lsize, outSize);
+                                builder.emit_cast(left_reg,left_reg, CAST_SINT_UINT, lsize, outSize);
                             if(AST::IsSigned(ltype) && AST::IsSigned(rtype))
-                                builder.emit_cast(left_reg, CAST_SINT_SINT, lsize, outSize);
+                                builder.emit_cast(left_reg,left_reg, CAST_SINT_SINT, lsize, outSize);
                         }
                         if(rsize != outSize || (!AST::IsSigned(rtype) && AST::IsSigned(ltype))) {
                             if(!AST::IsSigned(rtype) && !AST::IsSigned(ltype))
-                                builder.emit_cast(right_reg, CAST_UINT_UINT, rsize, outSize);
+                                builder.emit_cast(right_reg,right_reg, CAST_UINT_UINT, rsize, outSize);
                             if(!AST::IsSigned(rtype) && AST::IsSigned(ltype))
-                                builder.emit_cast(right_reg, CAST_UINT_SINT, rsize, outSize);
+                                builder.emit_cast(right_reg,right_reg, CAST_UINT_SINT, rsize, outSize);
                             if(AST::IsSigned(rtype) && !AST::IsSigned(ltype))
-                                builder.emit_cast(right_reg, CAST_SINT_UINT, rsize, outSize);
+                                builder.emit_cast(right_reg,right_reg, CAST_SINT_UINT, rsize, outSize);
                             if(AST::IsSigned(rtype) && AST::IsSigned(ltype))
-                                builder.emit_cast(right_reg, CAST_SINT_SINT, rsize, outSize);
+                                builder.emit_cast(right_reg,right_reg, CAST_SINT_SINT, rsize, outSize);
                         }
                     }
                     if(lsize < rsize) {
@@ -3394,21 +3395,21 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
 
                     if(AST::IsInteger(rtype)){
                         if(AST::IsSigned(rtype)){
-                            builder.emit_cast(right_reg, CAST_SINT_FLOAT, rsize, finalSize);
+                            builder.emit_cast(right_reg,right_reg, CAST_SINT_FLOAT, rsize, finalSize);
                         } else {
-                            builder.emit_cast(right_reg, CAST_UINT_FLOAT, rsize, finalSize);
+                            builder.emit_cast(right_reg,right_reg, CAST_UINT_FLOAT, rsize, finalSize);
                         }
                     } else if(rsize != finalSize) {
-                        builder.emit_cast(right_reg, CAST_FLOAT_FLOAT, rsize, finalSize);
+                        builder.emit_cast(right_reg,right_reg, CAST_FLOAT_FLOAT, rsize, finalSize);
                     }
                     if(AST::IsInteger(ltype)){
                         if(AST::IsSigned(ltype)){
-                            builder.emit_cast(left_reg, CAST_SINT_FLOAT, lsize, finalSize);
+                            builder.emit_cast(left_reg,left_reg, CAST_SINT_FLOAT, lsize, finalSize);
                         } else {
-                            builder.emit_cast(left_reg, CAST_UINT_FLOAT, lsize, finalSize);
+                            builder.emit_cast(left_reg,left_reg, CAST_UINT_FLOAT, lsize, finalSize);
                         }
                     } else if(lsize != finalSize) {
-                        builder.emit_cast(left_reg, CAST_FLOAT_FLOAT, lsize, finalSize);
+                        builder.emit_cast(left_reg,left_reg, CAST_FLOAT_FLOAT, lsize, finalSize);
                     }
                 }
                 
@@ -3427,7 +3428,7 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 case AST_SUB:           builder.emit_sub(    left_reg, right_reg, is_float, outSize); break;
                 case AST_MUL:           builder.emit_mul(    left_reg, right_reg, is_float, outSize, is_signed); break;
                 case AST_DIV:           builder.emit_div(    left_reg, right_reg, is_float, outSize, is_signed); break;
-                case AST_MODULO:       builder.emit_mod(    left_reg, right_reg, is_float, outSize, is_signed); break;
+                case AST_MODULO:        builder.emit_mod(    left_reg, right_reg, is_float, outSize, is_signed); break;
                 case AST_EQUAL:         builder.emit_eq(     left_reg, right_reg, is_float, operand_size); break;
                 case AST_NOT_EQUAL:     builder.emit_neq(    left_reg, right_reg, is_float, operand_size); break;
                 case AST_LESS:          builder.emit_lt(     left_reg, right_reg, is_float, operand_size, is_signed); break;
@@ -3436,11 +3437,11 @@ SignalIO GenContext::generateExpression(ASTExpression *expression, DynamicArray<
                 case AST_GREATER_EQUAL: builder.emit_gte(    left_reg, right_reg, is_float, operand_size, is_signed); break;
                 case AST_AND:           builder.emit_land(   left_reg, right_reg); break;
                 case AST_OR:            builder.emit_lor(    left_reg, right_reg); break;
-                case AST_BAND:          builder.emit_band(   left_reg, right_reg); break;
-                case AST_BOR:           builder.emit_bor(    left_reg, right_reg); break;
-                case AST_BXOR:          builder.emit_bxor(   left_reg, right_reg); break;
-                case AST_BLSHIFT:       builder.emit_blshift(left_reg, right_reg); break;
-                case AST_BRSHIFT:       builder.emit_brshift(left_reg, right_reg); break;
+                case AST_BAND:          builder.emit_band(   left_reg, right_reg, outSize); break;
+                case AST_BOR:           builder.emit_bor(    left_reg, right_reg, outSize); break;
+                case AST_BXOR:          builder.emit_bxor(   left_reg, right_reg, outSize); break;
+                case AST_BLSHIFT:       builder.emit_blshift(left_reg, right_reg, outSize); break;
+                case AST_BRSHIFT:       builder.emit_brshift(left_reg, right_reg, outSize); break;
                 default: Assert(("Operation not implemented",false));
                 }
                 
@@ -5185,8 +5186,8 @@ SignalIO GenContext::generateBody(ASTScope *body) {
                             continue;
                         }
                         builder.emit_pop(BC_REG_D); // throw ptr
-                        builder.emit_pop(BC_REG_A); // keep len
-                        builder.emit_cast(BC_REG_A, CAST_UINT_SINT, 4,4);
+                        builder.emit_pop(BC_REG_T0); // keep len
+                        builder.emit_cast(BC_REG_A, BC_REG_T0, CAST_UINT_SINT, 4,4);
                     }else{
                         builder.emit_li32(BC_REG_A,-1);
                     }
@@ -5962,8 +5963,8 @@ bool GenerateScope(ASTScope* scope, Compiler* compiler, CompilerImport* imp, Dyn
             context.debugFunction = dfun;
             context.bytecode->addExportedFunction("main", context.tinycode->index);
             
-            // context.generateBody(scope);
-            TestGenerate(context.builder);
+            context.generateBody(scope);
+            // TestGenerate(context.builder);
             
             if(context.builder.get_last_opcode() != BC_RET) {
                 if(context.currentFrameOffset != 0)

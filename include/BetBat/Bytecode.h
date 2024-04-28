@@ -10,7 +10,7 @@ enum InstructionControl : u8 {
     CONTROL_NONE,
     CONTROL_MASK_SIZE         = 0x3,
     CONTROL_MASK_CONVERT_SIZE = 0xC,
-    CONTROL_MASK_OTHER        = 0xF0,
+    CONTROL_MASK_TYPE         = 0xF0,
     
     CONTROL_8B  = 0x0,
     CONTROL_16B = 0x1,
@@ -23,25 +23,34 @@ enum InstructionControl : u8 {
     CONTROL_CONVERT_64B = 0xC,
     
     CONTROL_FLOAT_OP    = 0x10,
-    CONTROL_UNSIGNED_OP = 0x20,
+    CONTROL_SIGNED_OP = 0x20,
+
+    CONTROL_CONVERT_FLOAT_OP = 0x40,
+    CONTROL_CONVERT_SIGNED_OP = 0x80,
+
+    // shorts
+    CAST_UINT_UINT = 0 | 0,
+    CAST_UINT_SINT = 0 | CONTROL_CONVERT_SIGNED_OP,
+    CAST_SINT_UINT = CONTROL_SIGNED_OP | 0,
+    CAST_SINT_SINT = CONTROL_SIGNED_OP | CONTROL_CONVERT_SIGNED_OP,
+    CAST_FLOAT_UINT = CONTROL_FLOAT_OP | 0,
+    CAST_FLOAT_SINT = CONTROL_FLOAT_OP | CONTROL_CONVERT_SIGNED_OP,
+    CAST_UINT_FLOAT = 0 | CONTROL_CONVERT_FLOAT_OP,
+    CAST_SINT_FLOAT = CONTROL_SIGNED_OP | CONTROL_CONVERT_FLOAT_OP,
+    CAST_FLOAT_FLOAT = CONTROL_FLOAT_OP | CONTROL_CONVERT_FLOAT_OP,
 };
 struct DebugInformation;
 #define GET_CONTROL_SIZE(x) (InstructionControl)(CONTROL_MASK_SIZE & x)
 #define GET_CONTROL_CONVERT_SIZE(x) (InstructionControl)((CONTROL_MASK_CONVERT_SIZE & x) >> 2)
-#define IS_CONTROL_SIGNED(x) (!(CONTROL_UNSIGNED_OP & x))
+#define GET_CONTROL_CAST(x) (x & CONTROL_MASK_TYPE)
+#define IS_CONTROL_UNSIGNED(x) (!((CONTROL_SIGNED_OP|CONTROL_FLOAT_OP) & x))
+#define IS_CONTROL_SIGNED(x) ((CONTROL_SIGNED_OP & x))
 #define IS_CONTROL_FLOAT(x) (CONTROL_FLOAT_OP & x)
+#define IS_CONTROL_CONVERT_UNSIGNED(x) (!((CONTROL_CONVERT_SIGNED_OP|CONTROL_CONVERT_FLOAT_OP) & x))
+#define IS_CONTROL_CONVERT_SIGNED(x) ((CONTROL_CONVERT_SIGNED_OP & x))
+#define IS_CONTROL_CONVERT_FLOAT(x) (CONTROL_CONVERT_FLOAT_OP & x)
 // from -> to (CAST_FROM_TO)
-enum InstructionCast : u8 {
-    CAST_UINT_UINT = 0,
-    CAST_UINT_SINT,
-    CAST_SINT_UINT,
-    CAST_SINT_SINT,
-    CAST_FLOAT_UINT,
-    CAST_FLOAT_SINT,
-    CAST_UINT_FLOAT,
-    CAST_SINT_FLOAT,
-    CAST_FLOAT_FLOAT,
-};
+
 enum InstructionOpcode : u8 {
     // DO NOT REARRAGNE THESE INSTRUCTIONS, instructions_names and instruction_contents depend on the order!
     BC_HALT = 0,
@@ -176,9 +185,8 @@ enum InstBaseType : u16 {
     BASE_imm32   = 0x20,
     BASE_imm64   = 0x40,
     BASE_ctrl    = 0x80,
-    BASE_cast    = 0x100,
-    BASE_link    = 0x200,
-    BASE_call    = 0x400,
+    BASE_link    = 0x100,
+    BASE_call    = 0x200,
 };
 extern InstBaseType instruction_contents[256];
 #pragma pack(push)
@@ -189,6 +197,10 @@ struct InstBase {
 struct InstBase_imm16 {
     InstructionOpcode opcode;
     i16 imm16;
+};
+struct InstBase_imm32 {
+    InstructionOpcode opcode;
+    i32 imm32;
 };
 struct InstBase_op1 {
     InstructionOpcode opcode;
@@ -245,13 +257,6 @@ struct InstBase_op2_ctrl_imm32 {
     BCRegister op1;
     InstructionControl control;
     i32 imm32;
-};
-struct InstBase_op2_ctrl_cast {
-    InstructionOpcode opcode;
-    BCRegister op0;
-    BCRegister op1;
-    InstructionControl control;
-    InstructionCast cast;
 };
 struct InstBase_op3 {
     InstructionOpcode opcode;
@@ -528,12 +533,12 @@ struct BytecodeBuilder {
     void emit_mod(BCRegister to, BCRegister from, bool is_float, int size, bool is_signed);
     
     // nocheckin TODO: These should have size arguments too!
-    void emit_band(BCRegister to, BCRegister from);
-    void emit_bor(BCRegister to, BCRegister from);
-    void emit_bxor(BCRegister to, BCRegister from);
-    void emit_bnot(BCRegister to, BCRegister from);
-    void emit_blshift(BCRegister to, BCRegister from);
-    void emit_brshift(BCRegister to, BCRegister from);
+    void emit_band(BCRegister to, BCRegister from, int size);
+    void emit_bor(BCRegister to, BCRegister from, int size);
+    void emit_bxor(BCRegister to, BCRegister from, int size);
+    void emit_bnot(BCRegister to, BCRegister from, int size);
+    void emit_blshift(BCRegister to, BCRegister from, int size);
+    void emit_brshift(BCRegister to, BCRegister from, int size);
     
     void emit_eq    (BCRegister to, BCRegister from, bool is_float, int size);
     void emit_neq   (BCRegister to, BCRegister from, bool is_float, int size);
@@ -549,7 +554,7 @@ struct BytecodeBuilder {
     void emit_dataptr(BCRegister reg, i32 imm);
     void emit_codeptr(BCRegister reg, i32 imm);
     
-    void emit_cast(BCRegister reg, InstructionCast castType, u8 from_size, u8 to_size);
+    void emit_cast(BCRegister to, BCRegister from, InstructionControl control, u8 from_size, u8 to_size);
     
     void emit_memzero(BCRegister dst, BCRegister size_reg, u8 batch);
     void emit_memcpy(BCRegister dst, BCRegister src, BCRegister size_reg);
