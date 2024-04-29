@@ -6,6 +6,10 @@
 // NativeSleep(0.383);
 // t := StopMeasure(tp)
 // log("Time: ",t)
+// tp := StartMeasure()
+// NativeSleep(0.383);
+// t := StopMeasure(tp)
+// log("Time: ",t)
 
 
 // #import "examples/graphics/perf"
@@ -35,3 +39,4 @@
 // }
 
 // k := 23;
+// // #import "examples/random/test_randoms.btb"
