@@ -905,20 +905,22 @@ void VirtualMachine::execute(Bytecode* bytecode, const std::string& tinycode_nam
         case BC_TEST_VALUE: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
-            u8 size = (u8)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             u32 data = *(u32*)&instructions[pc];
             pc+=4;
             
             u8* testValue = (u8*)&registers[op0];
             u8* computedValue = (u8*)&registers[op1];
 
+            int size = 1 << GET_CONTROL_SIZE(control);
+
             bool same = !strncmp((char*)testValue, (char*)computedValue, size);
 
             char tmp[]{
-                same ? '_' : 'x',
-                '-',
+                same ? 'x' : '_',
+                (char)((data)&0xFF),
                 (char)((data>>8)&0xFF),
-                (char)(data&0xFF)
+                (char)((data>>16)&0xFF)
             };
             // fwrite(&tmp, 1, 1, stderr);
 

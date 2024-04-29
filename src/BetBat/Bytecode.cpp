@@ -110,158 +110,6 @@ int Bytecode::appendData(const void* data, int size){
     lock_global_data.unlock();
     return index;
 }
-// int Bytecode::appendData_late(void** out_ptr, int size) {
-//     Assert(size > 0);
-//     Assert(out_ptr);
-//     if(dataSegment.max < dataSegment.used + size){
-//         int oldMax = dataSegment.max;
-//         dataSegment.resize(dataSegment.max*2 + 2*size);
-//         memset(dataSegment.data + oldMax, '_', dataSegment.max - oldMax);
-//     }
-//     int index = dataSegment.used;
-//     if(data) {
-//         memcpy((char*)dataSegment.data + index,data,size);
-//     } else {
-//         memset((char*)dataSegment.data + index,0,size);
-//     }
-//     dataSegment.used+=size;
-//     return index;
-// }
-// void Bytecode::addDebugText(Token& token, u32 instructionIndex){
-//     addDebugText(token.str,token.length,instructionIndex);
-// }
-// void Bytecode::addDebugText(const std::string& text, u32 instructionIndex){
-//     addDebugText(text.data(),text.length(),instructionIndex);
-// }
-// void Bytecode::addDebugText(const char* str, int length, u32 instructionIndex){
-//     using namespace engone;
-//     if(instructionIndex==(u32)-1){
-//         instructionIndex = instructionSegment.used;
-//     }
-//     if(instructionIndex>=debugSegment.max){
-//         int newSize = instructionSegment.max*1.5+20;
-//         newSize += (instructionIndex-debugSegment.max)*2;
-//         int oldmax = debugSegment.max;
-//         if(!debugSegment.resize(newSize))
-//             return;
-//         memset((char*)debugSegment.data + oldmax*debugSegment.getTypeSize(),0,(debugSegment.max-oldmax)*debugSegment.getTypeSize());
-//     }
-//     int oldIndex = *((u32*)debugSegment.data + instructionIndex);
-//     if(oldIndex==0){
-//         int index = debugText.size();
-//         debugText.push_back(std::string(str,length));
-//         // debugText.push_back({});
-//         // debugText.resize(length);
-        // // Assert(false); MISSING BOUNDS CHECK ON STRCPY
-//         // strcpy((char*)debugText.data(),str,length);
-//         *((u32*)debugSegment.data + instructionIndex) = index + 1;
-//     }else{
-//         Assert((int)debugText.size()<=oldIndex);
-//         // debugText[oldIndex-1] += "\n"; // should line feed be forced?
-//         debugText[oldIndex-1] += std::string(str,length);
-//     }
-// }
-// const Bytecode::Location* Bytecode::getLocation(u32 instructionIndex, u32* locationIndex){
-//     using namespace engone;
-//     return nullptr;
-//     // if(instructionIndex>=debugSegment.used)
-//     //     return nullptr;
-//     // u32 index = *((u32*)debugSegment.data() + instructionIndex);
-//     // if(locationIndex)
-//     //     *locationIndex = index;
-//     // return debugLocations.getPtr(index); // may return nullptr;
-// }
-// Bytecode::Location* Bytecode::setLocationInfo(const char* str, u32 instructionIndex){
-//     return setLocationInfo((Token)str);
-// }
-// Bytecode::Location* Bytecode::setLocationInfo(u32 locationIndex, u32 instructionIndex){
-//     using namespace engone;
-//     return nullptr;
-    
-    // if(instructionIndex == (u32)-1){
-    //     instructionIndex = instructionSegment.used;
-    // }
-    // if(instructionIndex>=debugSegment.max) {
-    //     int newSize = instructionSegment.max*1.5+20;
-    //     newSize += (instructionIndex-debugSegment.max)*2;
-    //     int oldmax = debugSegment.max;
-    //     bool yes = debugSegment.resize(newSize);
-    //     Assert(yes);
-    //     memset((char*)debugSegment.data + oldmax*debugSegment.getTypeSize(),0xFF,(debugSegment.max-oldmax)*debugSegment.getTypeSize());
-    // }
-    // u32& index = *((u32*)debugSegment.data + instructionIndex);
-    // if(debugSegment.used <= instructionIndex) {
-    //     debugSegment.used = instructionIndex + 1;
-    // }
-    
-    // index = locationIndex;
-    // auto ptr = debugLocations.getPtr(index); // may return nullptr;
-    // // if(ptr){
-    // //     *locationIndex = index;
-    // //     if(tokenRange.tokenStream())
-    // //         ptr->file = TrimDir(tokenRange.tokenStream()->streamName);
-    // //     else
-    // //         ptr->desc = tokenRange.firstToken; // TODO: Don't just use the first token.
-    // //     ptr->line = tokenRange.firstToken.line;
-    // //     ptr->column = tokenRange.firstToken.column;
-    // // }
-    // return ptr;
-// }
-// Bytecode::Location* Bytecode::setLocationInfo(const TokenRange& tokenRange, u32 instructionIndex, u32* locationIndex){
-//     using namespace engone;
-//     return nullptr;
-    // if(instructionIndex == (u32)-1){
-    //     instructionIndex = instructionSegment.used;
-    // }
-    // if(instructionIndex>=debugSegment.max) {
-    //     int newSize = instructionSegment.max*1.5+20;
-    //     newSize += (instructionIndex-debugSegment.max)*2;
-    //     int oldmax = debugSegment.max;
-    //     bool yes = debugSegment.resize(newSize);
-    //     Assert(yes);
-    //     memset((char*)debugSegment.data + oldmax*debugSegment.getTypeSize(),0xFF,(debugSegment.max-oldmax)*debugSegment.getTypeSize());
-    // }
-    // u32& index = *((u32*)debugSegment.data + instructionIndex);
-    // if(debugSegment.used <= instructionIndex) {
-    //     debugSegment.used = instructionIndex + 1;
-    // }
-    // if((int)index == -1){
-    //     bool yes = debugLocations.add({});
-    //     Assert(yes);
-    //     index = debugLocations.size()-1;
-    // }
-    // auto ptr = debugLocations.getPtr(index); // may return nullptr;
-    // if(ptr){
-    //     if(locationIndex)
-    //         *locationIndex = index;
-    //     if(tokenRange.tokenStream()) {
-    //         // ptr->file = TrimDir(tokenRange.tokenStream()->streamName);
-    //         // ptr->line = tokenRange.firstToken.line;
-    //         // ptr->column = tokenRange.firstToken.column;
-    //     } else {
-    //         // ptr->preDesc = tokenRange.firstToken; // TODO: Don't just use the first token.
-    //     }
-    // }
-    // return ptr;
-// }
-// const char* Bytecode::getDebugText(u32 instructionIndex){
-//     using namespace engone;
-//     if(instructionIndex>=debugSegment.max){
-//         // log::out<<log::RED << "out of bounds on debug text\n";
-//         return 0;
-//     }
-//     u32 index = *((u32*)debugSegment.data + instructionIndex);
-//     if(!index)
-//         return 0;
-//     index = index - 1; // little offset
-//     if(index>=debugText.size()){
-//         // This would be bad. The debugSegment shouldn't contain invalid values
-//         log::out<<log::RED << __FILE__ << ":"<<__LINE__<<", instruction index out of bounds\n";
-//         return 0;   
-//     }
-//     return debugText[index].c_str();
-// }
-
 
 void BytecodeBuilder::init(Bytecode* code, TinyBytecode* tinycode, Compiler* compiler) {
     // Assert(virtualStackPointer == 0);
@@ -287,6 +135,8 @@ void BytecodeBuilder::emit_test(BCRegister to, BCRegister from, u8 size, i32 tes
     emit_imm32(test_location);
 }
 void BytecodeBuilder::emit_push(BCRegister reg) {
+    if(disable_code_gen) return;
+
     emit_opcode(BC_PUSH);
     emit_operand(reg);
     pushed_offset -= 8;
@@ -294,6 +144,8 @@ void BytecodeBuilder::emit_push(BCRegister reg) {
         pushed_offset_max = pushed_offset;
 }
 void BytecodeBuilder::emit_pop(BCRegister reg) {
+    if(disable_code_gen) return;
+
 #ifdef ENABLE_BYTECODE_OPTIMIZATIONS
     int i = get_index_of_previous_instruction();
     if(i != -1) {
@@ -325,32 +177,12 @@ void BytecodeBuilder::emit_li64(BCRegister reg, i64 imm){
 void BytecodeBuilder::emit_incr(BCRegister reg, i32 imm) {
     Assert(imm != 0); // incrementing by 0 is dumb
 
-#ifdef ENABLE_BYTECODE_OPTIMIZATIONS
-    // if(index_of_last_instruction != -1 && tinycode->instructionSegment[index_of_last_instruction] == BC_INCR && tinycode->instructionSegment[index_of_last_instruction+1] == reg) {
-    //     // modify immediate of previous incr
-    //     i32* prev_imm = (i32*)&tinycode->instructionSegment[index_of_last_instruction + 2];
-    //     *prev_imm += imm;
-
-    //     if(*prev_imm == 0) {
-    //         index_of_last_instruction = -1;
-    //         tinycode->instructionSegment.used -= 6;
-    //     }
-
-    //     Assert(no_modification); // we don't know if previous incr had modification or not, it probably did
-    //     if(reg == BC_REG_SP)
-    //         virtualStackPointer += imm;
-    //     return;
-    // }
-#endif
-    // Assert(reg != BC_REG_SP && reg != BC_REG_BP); // these are deprecated
     emit_opcode(BC_INCR);
     emit_operand(reg);
     emit_imm32(imm);
-    
-    // if(reg == BC_REG_SP && !no_modification)
-    //     virtualStackPointer += imm;
 }
 void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
+    if(disable_code_gen) return;
     if(compiler->options->compileStats.errors == 0) {
         // We would need an array of pushed offsets
         // Assert(pushed_offset == 0);
@@ -364,16 +196,19 @@ void BytecodeBuilder::emit_alloc_local(BCRegister reg, u16 size) {
     // pushed_offset = 0;
 }
 void BytecodeBuilder::emit_free_local(u16 size) {
+    if(disable_code_gen) return;
+
     if(compiler->options->compileStats.errors == 0) {
         // Assert(pushed_offset == 0); // We have some pushed values in the way and can't free local variables
     }
-    if(has_return_values)
-        ret_offset -= size;
     // If size=0 is passed then it's probably a bug.
     // We should not do "if(size==0) return;" because then we won't catch those bugs.
     Assert(size > 0);
     emit_opcode(BC_FREE_LOCAL);
     emit_imm16(size);
+
+    if(has_return_values)
+        ret_offset -= size;
 }
 
 void BytecodeBuilder::emit_set_arg(BCRegister reg, i16 imm, int size, bool is_float) {
@@ -454,6 +289,8 @@ void BytecodeBuilder::emit_get_val(BCRegister reg, i16 imm, int size, bool is_fl
     emit_imm16(imm);
 }
 void BytecodeBuilder::emit_call(LinkConventions l, CallConventions c, i32* index_of_relocation, i32 imm) {
+    if(disable_code_gen) return;
+
     emit_opcode(BC_CALL);
     emit_imm8(l);
     emit_imm8(c);
@@ -514,6 +351,8 @@ int BytecodeBuilder::emit_jnz(BCRegister reg) {
     return tmp;
 }
 void BytecodeBuilder::fix_jump_imm32_here(int imm_index) {
+    if(disable_code_gen) return;
+
     *(int*)&tinycode->instructionSegment[imm_index] = get_pc() - (imm_index + 4); // +4 because immediate should be relative to the end of the instruction, not relative to the offset within the instruction
 }
 void BytecodeBuilder::emit_mov_rr(BCRegister to, BCRegister from){
@@ -893,25 +732,30 @@ void BytecodeBuilder::emit_cast(BCRegister to, BCRegister from, InstructionContr
 }
 
 void BytecodeBuilder::emit_opcode(InstructionOpcode type) {
+    if(disable_code_gen) return;
     append_previous_instruction(tinycode->instructionSegment.size());
     tinycode->instructionSegment.add((u8)type);
     tinycode->index_of_lines.resize(tinycode->instructionSegment.size());
     tinycode->index_of_lines[tinycode->instructionSegment.size()-1] = tinycode->lines.size();
 }
 void BytecodeBuilder::emit_operand(BCRegister reg) {
+    if(disable_code_gen) return;
     tinycode->instructionSegment.add((u8)reg);
 }
 void BytecodeBuilder::emit_control(InstructionControl control) {
+    if(disable_code_gen) return;
     tinycode->instructionSegment.add((u8)control);
 }
 
 void BytecodeBuilder::emit_imm8(i8 imm) {
+    if(disable_code_gen) return;
     tinycode->instructionSegment.add(0);
     // get the pointer after add() because of reallocations
     i8* ptr = (i8*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 1);
     *ptr = imm;
 }
 void BytecodeBuilder::emit_imm16(i16 imm) {
+    if(disable_code_gen) return;
     tinycode->instructionSegment.add(0);
     tinycode->instructionSegment.add(0);
     // get the pointer after add() because of reallocations
@@ -919,6 +763,7 @@ void BytecodeBuilder::emit_imm16(i16 imm) {
     *ptr = imm;
 }
 void BytecodeBuilder::emit_imm32(i32 imm) {
+    if(disable_code_gen) return;
     tinycode->instructionSegment.add(0); // TODO: OPTIMIZE
     tinycode->instructionSegment.add(0);
     tinycode->instructionSegment.add(0);
@@ -928,6 +773,7 @@ void BytecodeBuilder::emit_imm32(i32 imm) {
     *ptr = imm;
 }
 void BytecodeBuilder::emit_imm64(i64 imm) {
+    if(disable_code_gen) return;
     tinycode->instructionSegment.add(0); // TODO: OPTIMIZE
     tinycode->instructionSegment.add(0);
     tinycode->instructionSegment.add(0);
@@ -940,66 +786,16 @@ void BytecodeBuilder::emit_imm64(i64 imm) {
     i64* ptr = (i64*)(tinycode->instructionSegment.data() + tinycode->instructionSegment.size() - 8);
     *ptr = imm;
 }
-//  void BytecodeBuilder::restoreStackMoment(int saved_sp, bool no_modification, bool no_instruction) {
-//     using namespace engone;
-//     int offset = saved_sp - virtualStackPointer;
-//     if (offset == 0)
-//         return;
-//     if(!no_modification || no_instruction) {
-//         // int at = saved_sp - virtualStackPointer;
-//         // while (at > 0 && stackAlignment.size() > 0) {
-//         //     auto align = stackAlignment.last();
-//         //     // log::out << "pop stackalign "<<align.diff<<":"<<align.size<<"\n";
-//         //     stackAlignment.pop();
-//         //     at -= align.size;
-//         //     at -= align.diff;
-//         //     if(!hasErrors()) {
-//         //         Assert(at >= 0);
-//         //     }
-//         // }
-//     } 
-//     // else {
-//     //     _GLOG(log::out << "relsp "<<moment<<"\n";)
-//     // }
-//     if(!no_instruction){
-//         emit_incr(BC_REG_SP, offset, no_modification);
-//     } else {
-//         virtualStackPointer = saved_sp;
-//     }
-//     if(no_modification) {
-//         _GLOG(log::out << "relsp (temp) "<<saved_sp<<"\n";)
-//     } else {
-//         _GLOG(log::out << "relsp "<<saved_sp<<"\n";)
-//     }
-// }
 bool TinyBytecode::applyRelocations(Bytecode* code) {
     bool suc = true;
     for(int i=0;i<call_relocations.size();i++) {
         auto& rel = call_relocations[i];
         Assert(rel.funcImpl && rel.funcImpl->tinycode_id);
         *(i32*)&instructionSegment[rel.pc] = rel.funcImpl->tinycode_id;
-
-        // if(rel.funcImpl && rel.funcImpl->tinycode_id) {
-        // } else if(rel.func_name.size()) {
-        //     bool found = false;
-        //     for(int j=0;j<code->tinyBytecodes.size();j++){
-        //         if(rel.func_name == code->tinyBytecodes[j]->name) {
-        //             *(i32*)&instructionSegment[rel.pc] = j + 1;
-        //             found = true;
-        //             break;
-        //         }
-        //     }
-        //     if(!found) suc = false;
-        // } else {
-        //     suc = false;
-        // }
     }
     return suc;
 }
 
-// extern const char* control_names[] {
-    
-// };
 extern const char* cast_names[] {
     "uint->uint",
     "uint->sint",
@@ -1148,7 +944,7 @@ extern InstBaseType instruction_contents[256] {
 
     BASE_NONE, // BC_ASM,
 
-    BASE_op2 | BASE_ctrl, BASE_imm32, // BC_TEST_VALUE,
+    BASE_op2 | BASE_ctrl | BASE_imm32, // BC_TEST_VALUE,
 
     // BASE_NONE, // BC_EXTEND1 = 253,
     // BASE_NONE, // BC_EXTEND2 = 254,
@@ -1522,11 +1318,11 @@ void TinyBytecode::print(int low_index, int high_index, Bytecode* code, DynamicA
         case BC_TEST_VALUE: {
             op0 = (BCRegister)instructions[pc++];
             op1 = (BCRegister)instructions[pc++];
-            u8 size = (u8)instructions[pc++];
+            control = (InstructionControl)instructions[pc++];
             imm = *(u32*)&instructions[pc];
             pc+=4;
 
-            log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", " << log::GREEN << size << ", "<<imm;
+            log::out << " " << register_names[op0] << ", "<< register_names[op1] << ", " << log::GREEN << control << ", "<<imm;
         } break;
         default: Assert(false);
         }

@@ -11,7 +11,7 @@
 
 void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode) {
     using namespace engone;
-    log::out <<log::GOLD<< "RUNNING EXPERIMENTAL X64 GEN.\n";
+
     this->bytecode = bytecode;
     this->tinycode = tinycode;
     
@@ -20,7 +20,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
     //  - registers aren't saved between calls and jumps
     
     bool logging = false;
-    // #define GET_INST(TYPE) (TYPE*)&instructions[pc]; pc += sizeof(TYPE);
     
     DynamicArray<Arg> accessed_params;
 
@@ -205,8 +204,18 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 n->reg0 = recipient->regs[reg_nr];
                 map_reg(n,0);
 
-                if(base->control & CONTROL_CONVERT_FLOAT_OP)
+                // if(IS_CONTROL_FLOAT(base->control)) {
+                //     suggest_artifical_float(n->reg1);
+                //     suggest_artifical_size(n->reg1, 1 << GET_CONTROL_SIZE(base->control));
+                //     Assert(n->reg0 != n->reg1);
+                // }
+                if(IS_CONTROL_CONVERT_FLOAT(base->control)) {
                     suggest_artifical_float(n->reg0);
+                    suggest_artifical_size(n->reg0, 1 << GET_CONTROL_CONVERT_SIZE(base->control));
+                    // Assert(n->reg0 != n->reg1);
+                    // one artifical register can't store how the value changed and was casted over  time. We must cast from one artifical to another.
+                    // Actually, same BC register is fine, we just create a new artifical register
+                }
 
                 if(IS_START(n->base->opcode)) {
                     // TODO: Handle mov_rr, delete it if it isn't necessary
@@ -220,13 +229,15 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             auto& v = bc_register_map[base->op1];
             auto recipient = v.used_by;
             auto reg_nr = v.reg_nr;
-            if(recipient) {
+            if(recipient && base->op0 != base->op1) { // we can't share artifical register hence, op0 != op1
                 n->reg1 = recipient->regs[reg_nr];
                 map_reg(n,1);
             } else {
                 n->reg1 = alloc_artifical_reg(n->bc_index);
-                if(base->control & CONTROL_FLOAT_OP)
+                if(IS_CONTROL_FLOAT(base->control)) {
                     suggest_artifical_float(n->reg1);
+                    suggest_artifical_size(n->reg1, 1 << GET_CONTROL_SIZE(base->control));
+                }
                 map_reg(n,1);
             }
             }
@@ -334,39 +345,33 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
             InstructionControl control = (InstructionControl)*((u8*)n->base + off);
             if(control & CONTROL_FLOAT_OP) {
                 // TODO: Is this fine? Should we suggest float for all registers if control is float?
+                int size = 1 << GET_CONTROL_SIZE(control);
                 if(instruction_contents[n->base->opcode] & BASE_op1) {
                     suggest_artifical_float(n->reg0);
+                    suggest_artifical_size(n->reg0, size);
                 }
                 if(instruction_contents[n->base->opcode] & BASE_op2) {
                     suggest_artifical_float(n->reg1);
+                    suggest_artifical_size(n->reg1, size);
                 }
                 if(instruction_contents[n->base->opcode] & BASE_op3) {
                     suggest_artifical_float(n->reg2);
+                    suggest_artifical_size(n->reg2, size);
                 }
             }
         }
     }
 
-    for(auto i : insts_to_delete) {
-        auto n = inst_list[i];
-        log::out <<log::RED<<"del "<<n->bc_index<<": "<< *n <<"\n";
+    // for(auto i : insts_to_delete) {
+    //     auto n = inst_list[i];
+    //     log::out <<log::RED<<"del "<<n->bc_index<<": "<< *n <<"\n";
 
-        inst_list.removeAt(i);
-    }
+    //     inst_list.removeAt(i);
+    // }
 
-    for(auto n : inst_list) {
-        log::out << *n << "\n";
-        // log::out << log::GRAY <<" "<< n->base->opcode << " ";
-        // for(int i=0;i<3;i++){
-        //     if(n->regs[i] != 0) continue;
-        //     if(i!=0) log::out << ", ";
-        //     // if(n->regs[i])
-        //     //     log::out << "op"<<i<<" on stack";
-        //     // else
-        //         log::out << n->regs[i];
-        // }
-        // log::out << "\n";
-    }
+    // for(auto n : inst_list) {
+    //     log::out << *n << "\n";
+    // }
     
     // TODO: Assert that we don't allocate in operands
     #define FIX_PRE_IN_OPERAND(N) auto reg##N = get_and_alloc_artifical_reg(n->reg##N);
@@ -526,7 +531,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 FIX_PRE_IN_OPERAND(0)
                 // if(!n->reg0.on_stack) {
                     // don't push if already on stack
-                    emit_push(reg0->reg);
+                    emit_push(reg0->reg, reg0->size);
                 // }
                 FIX_POST_IN_OPERAND(0)
             } break;
@@ -534,7 +539,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 FIX_PRE_OUT_OPERAND(0)
                 // if(!n->reg0.on_stack) {
                     // don't pop if it's supposed to be on stack
-                    emit_pop(reg0->reg);
+                    emit_pop(reg0->reg, reg0->size);
                 // }
                 FIX_POST_OUT_OPERAND(0)
             } break;
@@ -1166,60 +1171,33 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                     control = base->control;
                     size = 1 << GET_CONTROL_SIZE(control);
                 }
-                bool is_unsigned = IS_CONTROL_UNSIGNED(control);
+                bool is_signed = IS_CONTROL_SIGNED(control);
                 
                 if(IS_CONTROL_FLOAT(control)) {
                     switch(opcode) {
                         case BC_ADD: {
-                            // InstructionControl size = GET_CONTROL_SIZE(control);
-                            // Assert(size == 4 || size == 8);
-                            Assert(size == 4);
-                            // TODO: We assume 32-bit float NOT GOOD
-                            emit3(OPCODE_3_ADDSS_REG_RM);
-                            // TODO: verify float register
-                            emit_modrm(MODE_REG, CLAMP_XMM(reg1->reg), CLAMP_XMM(reg0->reg));
+                            if(size == 4)
+                                emit3(OPCODE_3_ADDSS_REG_RM);
+                            else if(size == 8)
+                                emit3(OPCODE_3_ADDSD_REG_RM);
+                            else Assert(false);
+                            emit_modrm(MODE_REG, CLAMP_XMM(reg0->reg), CLAMP_XMM(reg1->reg));
                         } break;
                         case BC_SUB: {
-                            Assert(false);
-                            // emit1(PREFIX_REXW);
-                            // emit1(OPCODE_SUB_REG_RM);
-                            // emit_modrm(MODE_REG, n->reg0, n->reg1);
+                            if(size == 4)
+                                emit3(OPCODE_3_SUBSS_REG_RM);
+                            else if(size == 8)
+                                emit3(OPCODE_3_SUBSD_REG_RM);
+                            else Assert(false);
+                            emit_modrm(MODE_REG, CLAMP_XMM(reg0->reg), CLAMP_XMM(reg1->reg));
                         } break;
                         case BC_MUL: {
-                            Assert(false);
-                            // // TODO: Handle signed/unsigned multiplication (using InstructionControl)
-                            // if(is_unsigned) {
-                            //     bool d_is_free = is_register_free(X64_REG_D);
-                            //     bool a_is_free = is_register_free(X64_REG_A);
-                            //     if(!d_is_free) {
-                            //         emit_push(X64_REG_D);
-                            //     }
-                            //     if(!a_is_free) {
-                            //         emit_push(64_REG_A);
-                            //     }
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_MOV_REG_RM);
-                            //     emit_modrm(MODE_REG, X64_REG_A, n->reg0);
-                                
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_MUL_AX_RM_SLASH_4);
-                            //     emit_modrm_slash(MODE_REG, 4, n->reg1);
-                                
-                            //     emit1(PREFIX_REXW);
-                            //     emit1(OPCODE_MOV_REG_RM);
-                            //     emit_modrm(MODE_REG, n->reg0, X64_REG_A);
-                                
-                            //     if(!a_is_free) {
-                            //         emit_pop(X64_REG_A);
-                            //     }
-                            //     if(!d_is_free) {
-                            //         emit_pop(X64_REG_D);
-                            //     }
-                            // } else {
-                            //     emit1(PREFIX_REXW);
-                            //     emit2(OPCODE_2_IMUL_REG_RM);
-                            //     emit_modrm(MODE_REG, n->reg1, n->reg0);
-                            // }
+                            if(size == 4)
+                                emit3(OPCODE_3_MULSS_REG_RM);
+                            else if(size == 8)
+                                emit3(OPCODE_3_MULSD_REG_RM);
+                            else Assert(false);
+                            emit_modrm(MODE_REG, CLAMP_XMM(reg0->reg), CLAMP_XMM(reg1->reg));
                         } break;
                         case BC_LAND: {
                             Assert(false);
@@ -1242,108 +1220,90 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         case BC_BLSHIFT:
                         case BC_BRSHIFT: {
                             Assert(false);
-                            bool c_was_used = false;
-                            if(!is_register_free(X64_REG_C)) {
-                                c_was_used = true;
-                                emit_push(X64_REG_C);
+                            // bool c_was_used = false;
+                            // if(!is_register_free(X64_REG_C)) {
+                            //     c_was_used = true;
+                            //     emit_push(X64_REG_C);
 
-                                emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg1->reg);
-                                emit1(OPCODE_MOV_REG_RM);
-                                emit_modrm(MODE_REG, X64_REG_C, CLAMP_EXT_REG(reg1->reg));
-                            }
+                            //     emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg1->reg);
+                            //     emit1(OPCODE_MOV_REG_RM);
+                            //     emit_modrm(MODE_REG, X64_REG_C, CLAMP_EXT_REG(reg1->reg));
+                            // }
 
-                            emit1(PREFIX_REXW);
-                            switch(opcode) {
-                                case BC_BLSHIFT: {
-                                    emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
-                                    emit1(OPCODE_SHL_RM_CL_SLASH_4);
-                                    emit_modrm_slash(MODE_REG, 4, CLAMP_EXT_REG(reg0->reg));
-                                } break;
-                                case BC_BRSHIFT: {
-                                    emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
-                                    emit1(OPCODE_SHR_RM_CL_SLASH_5);
-                                    emit_modrm_slash(MODE_REG, 5, CLAMP_EXT_REG(reg0->reg));
-                                } break;
-                                default: Assert(false);
-                            }
+                            // emit1(PREFIX_REXW);
+                            // switch(opcode) {
+                            //     case BC_BLSHIFT: {
+                            //         emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
+                            //         emit1(OPCODE_SHL_RM_CL_SLASH_4);
+                            //         emit_modrm_slash(MODE_REG, 4, CLAMP_EXT_REG(reg0->reg));
+                            //     } break;
+                            //     case BC_BRSHIFT: {
+                            //         emit_prefix(PREFIX_REXW, X64_REG_INVALID, reg0->reg);
+                            //         emit1(OPCODE_SHR_RM_CL_SLASH_5);
+                            //         emit_modrm_slash(MODE_REG, 5, CLAMP_EXT_REG(reg0->reg));
+                            //     } break;
+                            //     default: Assert(false);
+                            // }
 
-                            if(c_was_used) {
-                                emit_pop(X64_REG_C);
-                            }
+                            // if(c_was_used) {
+                            //     emit_pop(X64_REG_C);
+                            // }
                         } break;
-                        case BC_EQ: {
-                            Assert(false);
-                            emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
-                            emit1(OPCODE_CMP_REG_RM);
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
-                            
-                            emit_prefix(0,X64_REG_INVALID, reg0->reg);
-                            emit2(OPCODE_2_SETE_RM8);
-                            emit_modrm_slash(MODE_REG, 0, reg0->reg);
-
-                            emit_prefix(PREFIX_REXW, reg0->reg, reg0->reg);
-                            emit2(OPCODE_2_MOVZX_REG_RM8);
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg0->reg));
-                        } break;
-                        case BC_NEQ: {
-                            Assert(false);
-                            // IMPORTANT: THERE MAY BE BUGS IF YOU COMPARE OPERANDS OF DIFFERENT SIZES.
-                            //  SOME BITS MAY BE UNINITIALZIED.
-                            emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
-                            emit1(OPCODE_XOR_REG_RM);
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
-                        } break;
+                        case BC_EQ:
+                        case BC_NEQ:
                         case BC_LT:
                         case BC_LTE:
                         case BC_GT:
                         case BC_GTE: {
-                            Assert(false);
-                            emit_prefix(PREFIX_REXW,reg0->reg, reg1->reg);
-                            emit1(OPCODE_CMP_REG_RM);
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
+                            // TODO: Prefix for XMM8-15
+                            if(size == 4) {
+                                emit2(OPCODE_2_COMISS_REG_RM);
+                            } else {
+                                emit3(OPCODE_3_COMISD_REG_RM);
+                            }
+                            emit_modrm(MODE_REG, CLAMP_XMM(reg0->reg), CLAMP_XMM(reg1->reg));
 
                             u16 setType = 0;
-                            if(!is_unsigned) {
-                                switch(opcode) {
-                                    case BC_LT: {
-                                        setType = OPCODE_2_SETL_RM8;
-                                    } break;
-                                    case BC_LTE: {
-                                        setType = OPCODE_2_SETLE_RM8;
-                                    } break;
-                                    case BC_GT: {
-                                        setType = OPCODE_2_SETG_RM8;
-                                    } break;
-                                    case BC_GTE: {
-                                        setType = OPCODE_2_SETGE_RM8;
-                                    } break;
-                                    default: Assert(false);
-                                }
-                            } else {
-                                switch(opcode) {
-                                    case BC_LT: {
-                                        setType = OPCODE_2_SETB_RM8;
-                                    } break;
-                                    case BC_LTE: {
-                                        setType = OPCODE_2_SETBE_RM8;
-                                    } break;
-                                    case BC_GT: {
-                                        setType = OPCODE_2_SETA_RM8;
-                                    } break;
-                                    case BC_GTE: {
-                                        setType = OPCODE_2_SETAE_RM8;
-                                    } break;
-                                    default: Assert(false);
-                                }
+                            switch(opcode) {
+                                case BC_LT: {
+                                    setType = is_signed ? OPCODE_2_SETL_RM8 : OPCODE_2_SETB_RM8;
+                                } break;
+                                case BC_LTE: {
+                                    setType = is_signed ? OPCODE_2_SETLE_RM8 : OPCODE_2_SETBE_RM8;
+                                } break;
+                                case BC_GT: {
+                                    setType = is_signed ? OPCODE_2_SETG_RM8 : OPCODE_2_SETA_RM8;
+                                } break;
+                                case BC_GTE: {
+                                    setType = is_signed ? OPCODE_2_SETGE_RM8 : OPCODE_2_SETAE_RM8;
+                                } break;
+                                case BC_EQ: {
+                                    setType = OPCODE_2_SETE_RM8;
+                                } break;
+                                case BC_NEQ: {
+                                    setType = OPCODE_2_SETNE_RM8;
+                                } break;
+                                default: Assert(false);
                             }
+                            
+                            // TODO: OH NO, reg0 and reg1 are XMM registers. We can't output bools that way.
+                            //   So we modify the artifical register here and free the old XMM and 
+                            //   reserve a general register. There may be scenarios I haven't thought about.
+                            //   Things might break?
+                            free_register(reg0->reg);
+                            reg0->reg = X64_REG_INVALID;
+                            reg0->floaty = false;
+                            reg0->size = 0;
+                            FIX_PRE_IN_OPERAND(0);
                             
                             emit_prefix(0, X64_REG_INVALID, reg0->reg);
                             emit2(setType);
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                             
                             // do we need more stuff or no? I don't think so?
-                            // prog->add2(OPCODE_2_MOVZX_REG_RM8);
-                            // emit_modrm(MODE_REG, reg2, reg2);
+                            emit_prefix(0, X64_REG_INVALID, reg0->reg);
+                            emit2(OPCODE_2_MOVZX_REG_RM8);
+                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg0->reg));
 
                         } break;
                         default: Assert(false);
@@ -1358,7 +1318,11 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         } break;
                         case BC_MUL: {
                             // TODO: Handle signed/unsigned multiplication (using InstructionControl)
-                            if(is_unsigned) {
+                            if(is_signed) {
+                                emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
+                                emit2(OPCODE_2_IMUL_REG_RM);
+                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
+                            } else {
                                 X64Register real_reg1 = reg1->reg;
 
                                 bool pushed_a = false;
@@ -1401,10 +1365,6 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                                 if(pushed_d) {
                                     emit_pop(X64_REG_D);
                                 }
-                            } else {
-                                emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
-                                emit2(OPCODE_2_IMUL_REG_RM);
-                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
                             }
                         } break;
                         case BC_LAND: {
@@ -1540,55 +1500,18 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                                 }
                             }
                         } break;
-                        case BC_EQ: {
-                            if(GET_CONTROL_SIZE(control) == CONTROL_8B) {
-                                emit_prefix(0, reg0->reg, reg1->reg);
-                                emit1(OPCODE_CMP_REG8_RM8);
-                            } else {
-                                if(GET_CONTROL_SIZE(control) == CONTROL_16B) {
-                                    emit1(PREFIX_16BIT);
-                                    emit_prefix(0, reg0->reg, reg1->reg);
-                                } else if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
-                                    emit_prefix(0, reg0->reg, reg1->reg);
-                                }  else if(GET_CONTROL_SIZE(control) == CONTROL_64B) {
-                                    emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
-                                }
-                                emit1(OPCODE_CMP_REG_RM);
-                            }
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
-
-                            emit_prefix(0,X64_REG_INVALID, reg0->reg);
-                            emit2(OPCODE_2_SETE_RM8);
-                            emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
-
-                            emit_movzx(reg0->reg,reg0->reg,CONTROL_8B);
-                        } break;
-                        case BC_NEQ: {
-                            if(GET_CONTROL_SIZE(control) == CONTROL_8B) {
-                                emit_prefix(0, reg0->reg, reg1->reg);
-                                emit1(OPCODE_XOR_REG8_RM8);
-                            } else {
-                                if(GET_CONTROL_SIZE(control) == CONTROL_16B) {
-                                    emit1(PREFIX_16BIT);
-                                    emit_prefix(0, reg0->reg, reg1->reg);
-                                } else if(GET_CONTROL_SIZE(control) == CONTROL_32B) {
-                                    emit_prefix(0, reg0->reg, reg1->reg);
-                                }  else if(GET_CONTROL_SIZE(control) == CONTROL_64B) {
-                                    emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
-                                }
-                                emit1(OPCODE_XOR_REG_RM);
-                            }
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
-                        } break;
+                        case BC_EQ:
+                        case BC_NEQ:
                         case BC_LT:
                         case BC_LTE:
                         case BC_GT:
                         case BC_GTE: {
+                            // TODO: There is an optimization for NOT EQUAL where we use XOR.
+                            //   BUT, that would kind of be a 64-bit bool so we don't do that.
                             if(GET_CONTROL_SIZE(control) == CONTROL_8B) {
-                                // we used REXW so that we access low bits of R8-R15 and not high bits of ax, cx (ah,ch)
+                                // we used REXW so that we access low bits of R8-R15 and not high bits of ax, cx (ah,ch) i think?
                                 emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
                                 emit1(OPCODE_CMP_REG8_RM8);
-                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
                             } else {
                                 if(GET_CONTROL_SIZE(control) == CONTROL_16B) {
                                     emit1(PREFIX_16BIT);
@@ -1599,52 +1522,37 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                                     emit_prefix(PREFIX_REXW, reg0->reg, reg1->reg);
                                 }
                                 emit1(OPCODE_CMP_REG_RM);
-                                emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
                             }
+                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg1->reg));
 
                             u16 setType = 0;
-                            if(!is_unsigned) {
-                                switch(opcode) {
-                                    case BC_LT: {
-                                        setType = OPCODE_2_SETL_RM8;
-                                    } break;
-                                    case BC_LTE: {
-                                        setType = OPCODE_2_SETLE_RM8;
-                                    } break;
-                                    case BC_GT: {
-                                        setType = OPCODE_2_SETG_RM8;
-                                    } break;
-                                    case BC_GTE: {
-                                        setType = OPCODE_2_SETGE_RM8;
-                                    } break;
-                                    default: Assert(false);
-                                }
-                            } else {
-                                switch(opcode) {
-                                    case BC_LT: {
-                                        setType = OPCODE_2_SETB_RM8;
-                                    } break;
-                                    case BC_LTE: {
-                                        setType = OPCODE_2_SETBE_RM8;
-                                    } break;
-                                    case BC_GT: {
-                                        setType = OPCODE_2_SETA_RM8;
-                                    } break;
-                                    case BC_GTE: {
-                                        setType = OPCODE_2_SETAE_RM8;
-                                    } break;
-                                    default: Assert(false);
-                                }
+                            switch(opcode) {
+                                case BC_LT: {
+                                    setType = is_signed ? OPCODE_2_SETL_RM8 : OPCODE_2_SETB_RM8;
+                                } break;
+                                case BC_LTE: {
+                                    setType = is_signed ? OPCODE_2_SETLE_RM8 : OPCODE_2_SETBE_RM8;
+                                } break;
+                                case BC_GT: {
+                                    setType = is_signed ? OPCODE_2_SETG_RM8 : OPCODE_2_SETA_RM8;
+                                } break;
+                                case BC_GTE: {
+                                    setType = is_signed ? OPCODE_2_SETGE_RM8 : OPCODE_2_SETAE_RM8;
+                                } break;
+                                case BC_EQ: {
+                                    setType = OPCODE_2_SETE_RM8;
+                                } break;
+                                case BC_NEQ: {
+                                    setType = OPCODE_2_SETNE_RM8;
+                                } break;
+                                default: Assert(false);
                             }
                             
                             emit_prefix(0, X64_REG_INVALID, reg0->reg);
                             emit2(setType);
                             emit_modrm_slash(MODE_REG, 0, CLAMP_EXT_REG(reg0->reg));
                             
-                            // do we need more stuff or no? I don't think so?
-                            emit_prefix(PREFIX_REXW, reg0->reg, reg0->reg);
-                            emit2(OPCODE_2_MOVZX_REG_RM8);
-                            emit_modrm(MODE_REG, CLAMP_EXT_REG(reg0->reg), CLAMP_EXT_REG(reg0->reg));
+                            emit_movzx(reg0->reg, reg0->reg, CONTROL_8B);
                         } break;
                         default: Assert(false);
                     }
@@ -1665,7 +1573,66 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 bool is_signed = IS_CONTROL_SIGNED(base->control);
                 
                 if(IS_CONTROL_FLOAT(base->control)) {
-                    Assert(false);
+                    // Assert(false);
+                    int size = 1 << GET_CONTROL_SIZE(base->control);
+                    if(opcode == BC_DIV) {
+                        if(size ==  4)
+                            emit3(OPCODE_3_DIVSS_REG_RM);
+                        else if(size == 8)
+                            emit3(OPCODE_3_DIVSD_REG_RM);
+                        else Assert(false);
+                        emit_modrm(MODE_REG, CLAMP_XMM(reg0->reg), CLAMP_XMM(reg1->reg));
+                    } else if (opcode == BC_MOD) {
+                        X64Register tmp_reg = X64_REG_XMM7;
+                        if(!is_register_free(tmp_reg)) {
+                            emit_push(tmp_reg, size);
+                        }
+                        // out = a - round(a/b) * b
+                        if(size ==  4) {
+                            // movss xmm2, xmm0
+                            // divss xmm2, xmm1
+                            // roundss xmm2, xmm2, 1
+                            // mulss xmm2, xmm1
+                            // subss xmm0, xmm2
+                            
+                            emit3(OPCODE_3_MOVSS_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(tmp_reg), CLAMP_XMM(reg0->reg));
+
+                            emit3(OPCODE_3_DIVSS_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(tmp_reg), CLAMP_XMM(reg1->reg));
+
+                            emit4(OPCODE_4_ROUNDSS_REG_RM_IMM8);
+                            emit_modrm(MODE_REG,CLAMP_XMM(tmp_reg),CLAMP_XMM(tmp_reg));
+                            emit1((u8)1); // determines rounding mode, i chose "1" for a good reason, not sure why right now though (internet is out...)
+
+                            emit3(OPCODE_3_MULSS_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(tmp_reg), CLAMP_XMM(reg1->reg));
+
+                            emit3(OPCODE_3_SUBSS_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(reg0->reg), CLAMP_XMM(tmp_reg));
+                        } else if(size == 8) {
+                            // NOTE: Emit same instructions as "size==4" BUT _SD instead of _SS
+                            //   Careful when copy pasting stuff!
+                            emit3(OPCODE_3_MOVSD_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(tmp_reg), CLAMP_XMM(reg0->reg));
+
+                            emit3(OPCODE_3_DIVSD_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(tmp_reg), CLAMP_XMM(reg1->reg));
+
+                            emit4(OPCODE_4_ROUNDSD_REG_RM_IMM8);
+                            emit_modrm(MODE_REG,CLAMP_XMM(tmp_reg),CLAMP_XMM(tmp_reg));
+                            emit1((u8)1); // determines rounding mode, i chose "1" for a good reason, not sure why right now though (internet is out...)
+
+                            emit3(OPCODE_3_MULSD_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(tmp_reg), CLAMP_XMM(reg1->reg));
+
+                            emit3(OPCODE_3_SUBSD_REG_RM);
+                            emit_modrm(MODE_REG, CLAMP_XMM(reg0->reg), CLAMP_XMM(tmp_reg));
+                        } else Assert(false);
+                        if(!is_register_free(tmp_reg)) {
+                            emit_pop(tmp_reg, size);
+                        }
+                    } else Assert(false);
                 } else {
                     // TODO: Handled signed/unsigned
                     // TODO: Optimize
@@ -1910,7 +1877,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                         Assert(IS_REG_XMM(to_reg));
                         
                         // TODO: Sign extend
-                        u8 prefix = construct_prefix(tsize == 8 ? PREFIX_REXW | 0 : 0, X64_REG_INVALID, from_reg);
+                        u8 prefix = construct_prefix(tsize == 8 ? PREFIX_REXW : 0, X64_REG_INVALID, from_reg);
                         if(tsize == 4) {
                             if(prefix)
                                 emit4((OPCODE_4_REXW_CVTSI2SS_REG_RM & ~0xFF00) | (prefix << 8));
@@ -2828,10 +2795,10 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 sub rsp, 8
                 mov rbx, rsp
                 sub rsp, 0x28
-                mov DWORD PTR [rbx], 0x99993057
+                mov DWORD PTR [rbx], 0x99999978
                 cmp rsi, rdi
                 je hop
-                mov BYTE PTR [rbx], 0x78
+                mov BYTE PTR [rbx], 0x5f
                 hop:
                 mov    ecx,0xfffffff4
                 call   QWORD PTR [rip+0x0]
@@ -2846,7 +2813,7 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 0:  48 83 ec 08             sub    rsp,0x8
                 4:  48 89 e3                mov    rbx,rsp
                 7:  48 83 ec 28             sub    rsp,0x28
-                b:  c7 03 57 30 99 99       mov    DWORD PTR [rbx],0x99993057
+                b:  c7 03 5f 99 99 99       mov    DWORD PTR [rbx],0x9999995f
                 11: 48 39 fe                cmp    rsi,rdi
                 14: 74 03                   je     19 <hop>
                 16: c6 03 78                mov    BYTE PTR [rbx],0x78
@@ -2869,13 +2836,14 @@ void X64Builder::generateFromTinycode_v2(Bytecode* code, TinyBytecode* tinycode)
                 //   A subroutine scales much better.
 
                 int start_addr = code_size();
-                const u8 arr[] { 0x48, 0x83, 0xEC, 0x08, 0x48, 0x89, 0xE3, 0x48, 0x83, 0xEC, 0x28, 0xC7, 0x03, 0x57, 0x30, 0x99, 0x99, 0x48, 0x39, 0xFE, 0x74, 0x03, 0xC6, 0x03, 0x78, 0xB9, 0xF4, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x89, 0xC1, 0x48, 0x89, 0xDA, 0x49, 0xC7, 0xC0, 0x04, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x30 };
+                const u8 arr[] { 0x48, 0x83, 0xEC, 0x08, 0x48, 0x89, 0xE3, 0x48, 0x83, 0xEC, 0x28, 0xC7, 0x03, 0x78, 0x99, 0x99, 0x99, 0x48, 0x39, 0xFE, 0x74, 0x03, 0xC6, 0x03, 0x5f, 0xB9, 0xF4, 0xFF, 0xFF, 0xFF, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x89, 0xC1, 0x48, 0x89, 0xDA, 0x49, 0xC7, 0xC0, 0x04, 0x00, 0x00, 0x00, 0x4D, 0x31, 0xC9, 0x48, 0xC7, 0x44, 0x24, 0x20, 0x00, 0x00, 0x00, 0x00, 0xFF, 0x15, 0x00, 0x00, 0x00, 0x00, 0x48, 0x83, 0xC4, 0x30 };
                 emit_bytes(arr, sizeof(arr));
 
                 int imm = base->imm32;
                 Assert((imm & ~0xFFFF) == 0);
-                set_imm8(start_addr + 0xd, imm&0xFF);
-                set_imm8(start_addr + 0xe, (imm>>8)&0xFF);
+                set_imm8(start_addr + 0xe, imm&0xFF);
+                set_imm8(start_addr + 0xf, (imm>>8)&0xFF);
+                set_imm8(start_addr + 0x10, (imm>>16)&0xFF);
 
                 prog->addNamedUndefinedRelocation("__imp_GetStdHandle", start_addr + 0x20, current_tinyprog_index);
                 prog->addNamedUndefinedRelocation("__imp_WriteFile", start_addr + 0x3F, current_tinyprog_index);

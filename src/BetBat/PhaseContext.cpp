@@ -14,6 +14,7 @@ bool PhaseContext::hasErrors() {
 // Is it a problem if both use the latter one.
 // bool PhaseContext::hasForeignErrors() { Assert(compileInfo); return compileInfo->options->compileStats.errors != 0; }
 bool PhaseContext::hasForeignErrors() {
+    if(disableCodeGeneration) return true;
     if(compiler) {
         return compiler->options->compileStats.errors != 0;
     } else {

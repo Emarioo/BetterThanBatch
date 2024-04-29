@@ -25,6 +25,7 @@ NativeRegistry* NativeRegistry::GetGlobal(){
     // return &s_globalRegistry;
 }
 void NativeRegistry::DestroyGlobal(){
+    if(!s_globalRegistry) return;;
     s_globalRegistry->nativeFunctions.cleanup();
     // s_globalRegistry.nativeFunctions.cleanup();
     // s_globalRegistry.nativeFunctions.clear();

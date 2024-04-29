@@ -4281,6 +4281,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
     defer {
         info.disableCodeGeneration = codeWasDisabled;
+        builder.disable_builder(info.disableCodeGeneration);
 
         if (lastOffset != info.currentFrameOffset) {
             _GLOG(log::out << "fix sp when exiting body\n";)
@@ -4319,6 +4320,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         debugFunction->addLine(srcinfo->line, builder.get_pc(), statement->location.tok.origin);
         
         info.disableCodeGeneration = codeWasDisabled;
+        builder.disable_builder(info.disableCodeGeneration);
         info.ignoreErrors = errorsWasIgnored;
         
         int prev_stackAlignment_size = 0;
@@ -4326,9 +4328,10 @@ SignalIO GenContext::generateBody(ASTScope *body) {
         int prev_currentFrameOffset = 0;
         if(statement->isNoCode()) {
             info.disableCodeGeneration = true;
+            builder.disable_builder(info.disableCodeGeneration);
             info.ignoreErrors = true;
             
-            Assert(false); // nocheckin, broken
+            // Assert(false); // nocheckin, broken
             // prev_stackAlignment_size = info.stackAlignment.size();
             // prev_virtualStackPointer = info.virtualStackPointer;
             // prev_currentFrameOffset = info.currentFrameOffset;
@@ -4340,7 +4343,7 @@ SignalIO GenContext::generateBody(ASTScope *body) {
 
         defer {
             if(statement->isNoCode()) {
-                Assert(false); // nocheckin, broken
+                // Assert(false); // nocheckin, broken
                 // Assert(prev_stackAlignment_size <= info.stackAlignment.size()); // We lost information, the no code remove stack elements which we can't get back. We would need to save the elements not just the size of stack alignment
                 // info.stackAlignment.resize(prev_stackAlignment_size);
                 // info.virtualStackPointer = prev_virtualStackPointer;
@@ -5567,15 +5570,14 @@ SignalIO GenContext::generateBody(ASTScope *body) {
             builder.emit_pop(BC_REG_D);
             
             // TEST_VALUE calls stdcall functions which needs 16-byte alignment
-            Assert(currentFrameOffset % 16 == 0);
-            // TODO: we may need to alloc_local to align stack, then test, then free_local
-            // builder.emit_stack_alignment(16); 
-            // Assert(false);
+            int alignment = (16 - (currentFrameOffset % 16)) % 16;
+            if(alignment != 0)
+                builder.emit_alloc_local(BC_REG_INVALID, alignment);
+            // Assert(currentFrameOffset % 16 == 0);
             int loc = compiler->options->addTestLocation(statement->location, &compiler->lexer);
             builder.emit_test(BC_REG_D, BC_REG_A, 8, loc);
-            
-            // builder.restoreStackMoment(moment);
-            
+            if(alignment != 0)
+                builder.emit_free_local(alignment);
         } else {
             Assert(("You forgot to implement statement type!",false));
         }

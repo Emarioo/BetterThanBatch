@@ -342,8 +342,8 @@ struct X64Builder {
     // only emits if non-zero
     void emit_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
     u8 construct_prefix(u8 inherited_prefix, X64Register reg, X64Register rm);
-    void emit_push(X64Register reg);
-    void emit_pop(X64Register reg);
+    void emit_push(X64Register reg, int size = 0);
+    void emit_pop(X64Register reg, int size = 0);
     // REXW prefixed
     void emit_add_imm32(X64Register reg, i32 imm32);
     // REXW prefixed
@@ -403,6 +403,7 @@ public:
         X64Register reg = X64_REG_INVALID; // may be invalid until it's time to generate x64, or some instruction could suggest a register to reserve
         // bool stacked = false;
         bool floaty = false;
+        u8 size = 0;
         int started_by_bc_index = false; // responsible for freeing register
 
     };
@@ -430,6 +431,11 @@ public:
     }
     void suggest_artifical_float(int id) {
         artificalRegisters[id].floaty = true;
+    }
+    void suggest_artifical_size(int id, u8 size) {
+        artificalRegisters[id].floaty = true;
+        Assert(artificalRegisters[id].size == 0 || artificalRegisters[id].size == size); // suggesting contradictory sizes indicates a bug
+        artificalRegisters[id].size = size;
     }
     ArtificalValue* get_and_alloc_artifical_reg(int id) {
         lock_register_resize = true;

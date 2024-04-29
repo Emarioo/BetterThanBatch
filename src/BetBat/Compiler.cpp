@@ -734,10 +734,10 @@ void Compiler::processImports() {
                 }
                 
                 if(!new_errors) {
-                    for(auto t : tinycodes) {
-                        log::out << log::GOLD << t->name << "\n";
-                        t->print(0,-1,bytecode,nullptr,true);
-                    }
+                    // for(auto t : tinycodes) {
+                    //     log::out << log::GOLD << t->name << "\n";
+                    //     t->print(0,-1,bytecode,nullptr,true);
+                    // }
                     
                     switch(options->target) {
                         case TARGET_BYTECODE: {

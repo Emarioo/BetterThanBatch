@@ -1107,6 +1107,7 @@ void AST::cleanup() {
     using namespace engone;
 
     for (auto &scope : _scopeInfos) {
+        if(!scope) continue;
         scope->nameTypeMap.clear();
         scope->~ScopeInfo();
         // engone::Free(scope, sizeof(ScopeInfo));

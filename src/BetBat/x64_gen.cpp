@@ -4142,10 +4142,12 @@ X64Program* X64Program::Create() {
     return program;
 }
 
-void X64Builder::emit_push(X64Register reg) {
+void X64Builder::emit_push(X64Register reg, int size) {
     if(IS_REG_XMM(reg)) {
         emit_sub_imm32(X64_REG_SP, 8);
-        emit3(OPCODE_3_MOVSS_RM_REG);
+        if(size == 4) emit3(OPCODE_3_MOVSS_RM_REG);
+        else if(size == 8) emit3(OPCODE_3_MOVSD_RM_REG);
+        else Assert(false);
         emit_modrm(MODE_DEREF, CLAMP_XMM(reg), X64_REG_SP);
     } else {
         emit_prefix(0, X64_REG_INVALID, reg);
@@ -4154,9 +4156,11 @@ void X64Builder::emit_push(X64Register reg) {
     }
     push_offset += 8;
 }
-void X64Builder::emit_pop(X64Register reg) {
+void X64Builder::emit_pop(X64Register reg, int size) {
     if(IS_REG_XMM(reg)) {
-        emit3(OPCODE_3_MOVSS_REG_RM);
+        if(size == 4) emit3(OPCODE_3_MOVSS_REG_RM);
+        else if(size == 8) emit3(OPCODE_3_MOVSD_REG_RM);
+        else Assert(false);
         emit_modrm(MODE_DEREF, CLAMP_XMM(reg), X64_REG_SP);
         emit_add_imm32(X64_REG_SP, 8);
     } else {

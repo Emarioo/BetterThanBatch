@@ -2,10 +2,13 @@
 
 // #import "./demo/macros"
 
-#import "Logger"
+// #import "Logger"
 
-log(823.32)
+// log(823.32)
+// @TEST_CASE(rand)
+// _test 4; 45
 
+// return '_'
 
 // a: u8 = 255;
 // b: i32 = 0

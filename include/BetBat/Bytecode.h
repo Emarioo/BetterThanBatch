@@ -586,6 +586,9 @@ struct BytecodeBuilder {
     void push_line(int line, const std::string& text) {
         tinycode->lines.add({line, text});
     }
+
+    // returns whether enabled previously
+    bool disable_builder(bool yes) { bool tmp = disable_code_gen; disable_code_gen = yes; return tmp; }
     
 private:
     // building blocks for every instruction
@@ -602,6 +605,8 @@ private:
     int index_of_previous_instructions[PREVIOUS_INSTRUCTIONS_MAX]; // circular buffer
     int previous_instructions_head = 0; // points to next index to use
     int previous_instructions_count = 0;
+
+    bool disable_code_gen = false;
 
     // off = 0 means previous, off = 1 means the previous previous inst. and so on.
     // returns -1 if out of bounds

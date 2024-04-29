@@ -1,4 +1,4 @@
-#include "BetBat/Util/TestSuite.h"
+#include "BetBat/TestSuite.h"
 
 #include "Engone/Logger.h"
 
@@ -517,9 +517,9 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
                     totalTests += (readBytes-sizeof(tinyBuffer))/4;
                     int j = sizeof(tinyBuffer);
                     while(j<readBytes){
-                        failedTests += buffer[j] == 'x';
-                        if(buffer[j] == 'x'){
-                            u16 index = ((u16)buffer[j+2]<<8) | ((u16)buffer[j+3]);
+                        failedTests += buffer[j] != 'x';
+                        if(buffer[j] != 'x'){
+                            u32 index = ((u32)buffer[j+3]<<16) | ((u32)buffer[j+2]<<8) | ((u32)buffer[j+1]);
                             result.failedLocations.add(index);
                         }
                         j+=4;
@@ -586,6 +586,10 @@ u32 VerifyTests(CompileOptions* user_options, DynamicArray<std::string>& filesTo
         
         for(auto& ind : result.failedLocations){
             auto loc = result.testLocations.getPtr(ind);
+            if(!loc) {
+                log::out << log::RED<<"Test tools are broken. (BC_TEST_VALUE may be converted to bad x64, or VirtualMachine doesn't handle them properly)\n";
+                break;
+            }
             log::out <<log::RED<< "   "<<loc->file<<":"<<loc->line<<":"<<loc->column<<"\n";
         }
     }

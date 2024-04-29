@@ -1,6 +1,6 @@
 
 #include "BetBat/Compiler.h"
-#include "BetBat/Util/TestSuite.h"
+#include "BetBat/TestSuite.h"
 #include "BetBat/PDB.h"
 #include "BetBat/DWARF.h"
 
@@ -75,7 +75,6 @@ int main(int argc, const char** argv){
         Compiler compiler{};
         compiler.run(&options);
 
-        // fmo
 
         // VirtualMachine vm{};
         // vm.execute(compiler.bytecode,"main");

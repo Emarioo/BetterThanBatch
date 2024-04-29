@@ -70,7 +70,7 @@ struct GenContext : public PhaseContext {
     int currentScopeDepth = 0; // necessary for scoped variables in debug information
 
     // won't work with multiple threads
-    bool disableCodeGeneration = false; // used with @no-code
+    // bool disableCodeGeneration = false; // used with @no-code
     bool ignoreErrors = false; // used with @no-code
 
     int funcDepth=0;
