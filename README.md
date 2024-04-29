@@ -15,6 +15,8 @@ Inspiration from:
 Example of errors with named arguments
 ![](/docs/img/err-named-arg.png)
 
+**NOTE:** A rewrite of the compiler is in progress. See rewrite-2.1 for the latest work. The dev branch is the most stable however.
+
 ## Where is the focus
 - Actually good somewhat complete standard library (graphics, audio, file formats, networking)
 - Fast compiler with a smooth user experience. You don't need to setup a project folder and a build system to compile a single file.
@@ -41,14 +43,17 @@ Example of errors with named arguments
 - Some examples: Astroids like game
 
 ## Disclaimer
-The compiler has mysterious bugs and as such is very unstable and should not be used for serious projects. Recently, proper tests have been implemented and some major bugs have been resolved making the compiler a little more useful.
+The compiler is not ready for use in serious projects. Both because the bug list isn't empty but also because the language isn't complete. New features will be added, old features will be removed and so on. Recently, a convenient system for testing was implemented which has ensured that the compiler is working in simple situations.
 
 You can compile the compiler for Windows and Ubuntu (probably most Unix systems, only tested on Ubuntu though).
 
 The documentation and guide is being worked on but there are examples and `examples/dev.btb` usually contain the new additions in each commit.
 
-## Guide and examples
+## Guide
 [Full Guide](/docs/guide/00-Introduction.md) (work in progress).
+
+## Examples
+**NOTE:** These have been tested on my computer with my environment which means that it might not work on your computer. You may need to clone the repo, build the compiler with MSVC, and run `compiler.exe --run examples/graphics/quad.btb` to make it work. You have to build the repo because there is no release yet.
 
 [Rendering test](/examples/graphics/quad.btb) rendering with GLEW, GLFW, and OpenGL
 
@@ -57,7 +62,6 @@ The documentation and guide is being worked on but there are examples and `examp
 [Binary viewer](/examples/binary_viewer/main.btb) parsing/reading binary files, lexing
 
 [Recent random code](/examples/dev.btb)
-
 
 # Usage
 The official usage of the compiler has not been established yet. `btb --help` will show the current way of compiling files and describe useful flags.
